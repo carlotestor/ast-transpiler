@@ -1,0 +1,318 @@
+=== STATE ===
+last_reviewed_sha: 326b02c0976a9d38ff732663a16a3d1773debcb3
+already_processed: True
+rerequested_events: ['30275:2026-09-08T07:12:52Z']
+
+=== PR ===
+title: test: public trade takerOrMaker & sides & etc
+state: OPEN
+isDraft: True
+additions: 284
+deletions: 42
+changedFiles: 10
+headRefOid: 3537f2b8f67b5a602f6429d2a27d92e9a4353472
+headRefName: test-trades-better-2
+baseRefName: master
+author: ttodua
+labels: ['bug', 'ws']
+
+=== MY PRIOR REVIEWS ===
+--- review 5121230525 state=COMMENTED commit=ce745c47 at=2026-09-05T12:07:16Z
+## Summary
+
+Threads a new `isPublicTrade` flag through `testTrade` so public feeds (`fetchTrades`/`watchTrades`/`watchTradesForSymbols`) only accept `takerOrMaker` in `[ 'taker', undefined ]` while private ones also allow `'maker'`, and adds two new `fetchTrades` assertions (`requireBothSides`, `sideSequence`). All 6 `testTrade` call sites are updated, so the new required 7th parameter is consistently supplied — good.
+
+I reproduced the branch's test files on top of `master` in a scratch worktree and ran the real toolchain against `ce745c47`.
+
+### Verification
+
+| check | result |
+|---|---|
+| `npx tsc --noEmit` (head) | ✅ exit 0 |
+| `npx tsc --noEmit` (master, same tree) | ✅ exit 0 |
+| `eslint` on the changed test files | ✅ clean |
+| `build/transpileWS.ts --force` → Python | ✅ `ast.parse` OK |
+| `build/transpileWS.ts --force` → PHP | ✅ `php -l` clean |
+| `build/goTranspiler.ts --test --force` + `go build ./tests/base/` | ✅ exit 0, `go vet` clean |
+| `build/csharpTranspiler.ts --test --force` | ✅ emits, `PanicOnError` / `Task` shapes correct |
+
+Note: I started on `6be515a5`, where `tsc` failed with `TS6133: 'Str' is declared but its value is never read` (orphaned import after the `let symbol: Str` removal) and line 13 packed two statements onto one line. Both are already fixed in `ce745c47` — flagging only so the earlier CI red is explained.
+
+### Findings (in scope, non-blocking)
+
+**1. `watchTradesForSymbols` termination.** The loop bound changed from `now < ends` to `(now < end
+--- review 5121846034 state=CHANGES_REQUESTED commit=0f372e67 at=2026-09-05T15:31:07Z
+Follow-up on `0f372e67`.
+
+This commit addresses three of the four notes from the previous review. Notes 1 (`hardEnds` ceiling), 4 (`return true` restored on `testFetchTrades`) and the `requireBothSides` threshold bump are clean. The `symbol` cast → explicit `assert` swap in `test.watchTradesForSymbols.ts` is a strict improvement over the silent `as string`.
+
+One of the fixes, however, introduces a **hard cross-language break**.
+
+### 🔴 `trades.slice ()` does not transpile
+
+`ts/src/test/Exchange/test.fetchTrades.ts:73` now reads:
+
+```ts
+const sortedTrades = exchange.sortBy (trades.slice (), 'timestamp');
+```
+
+`build/transpile.ts` only rewrites `.slice ()` when it has **arguments** — the Python rules at lines 523–524 are `\.slice \(([^\,\)]+)\,…\)` and `\.slice \(([^\)\:]+)\)`, and the PHP rules at 757–758 likewise require a first argument. A zero-arg `.slice ()` matches neither, so the call passes through verbatim into every generated target.
+
+I ran the real toolchain on this head (branch files applied over `origin/master`, `d8d3ad37`):
+
+| check | result |
+|---|---|
+| `npx tsc --noEmit` | ✅ exit 0 — TS is happy, which is why CI type-check will not catch this |
+| `build/transpile.ts --test --force` → Python | ⚠️ emits `exchange.sort_by(trades.slice(), 'timestamp')` |
+| `build/transpile.ts --test --force` → PHP | ⚠️ emits `$exchange->sort_by($trades->slice(), 'timestamp')` |
+| `build/goTranspiler.ts --test --force` | ⚠️ emits `exchange.SortBy(trades.Slice(), "timestamp")` |
+| `as
+--- review 5138575125 state=COMMENTED commit=326b02c0 at=2026-09-08T07:19:41Z
+Follow-up on `326b02c0` (merge of master into `test-trades-better-2`, bringing in `703471eb` / `8624da1c` / `6c81679c` / `54fd9cb1`).
+
+**The `.slice ()` transpile break from my last review is resolved, and fixed at the right level.** Instead of copying at the call site, `sortBy`/`sortBy2` were made non-mutating in the base:
+
+- `ts/src/base/functions/generic.ts` — `array.sort (…)` → `array.slice ().sort (…)` for both `sortBy` and `sortBy2` (`703471eb`). This is base JS, not transpiled test code, so the zero-arg `.slice ()` never reaches the regex transpiler.
+- `go/v4/exchange_generic.go` — `SortBy`/`SortBy2` now `make` + `copy` before `sort.Slice` (`8624da1c`).
+- `ts/src/test/Exchange/test.fetchTrades.ts:73` reverted to `exchange.sortBy (trades, 'timestamp')` (`6c81679c`) — I confirmed no `.slice ()` remains in that file or in `test.sortBy.ts` at this head.
+- `ts/src/test/base/test.sortBy.ts` gained 61 lines of immutability coverage (`54fd9cb1`) — ascending, descending, and numeric-index (orderbook-row) cases all assert the input array is unchanged.
+
+I checked the other five backends at this head to confirm the new contract already holds there, so the ports agree without further edits:
+
+| backend | `sortBy` copy semantics at `326b02c0` |
+|---|---|
+| Python `sort_by` (`base/exchange.py:1157`) | `sorted(...)` — already returns a new list |
+| PHP `sort_by` (`Exchange.php:890`) | `usort` on a by-value array param — caller unaffected |
+| C# `sortBy` (`Exchange.Generic.cs:10`) | `Or
+--- review 5138661309 state=COMMENTED commit=326b02c0 at=2026-09-08T07:30:13Z
+Re-request on `326b02c0`.
+
+The previous 🔴 is **resolved**, and by a better fix than the one I suggested. Instead of copying at the call site, `sortBy`/`sortBy2` are now non-mutating at the base, and the immutability contract is pinned by new base tests. The blocking `trades.slice ()` is gone — `test.fetchTrades.ts:79` is now plain `exchange.sortBy (trades, 'timestamp')`, so nothing untranspilable reaches Python/PHP/Go.
+
+The zero-arg `.slice ()` moved to `ts/src/base/functions/generic.ts`, where it is **safe**: that path is outside every transpiler's read surface (`transpile.ts`/`goTranspiler.ts`/`csharpTranspiler.ts`/`javaTranspiler.ts` only import from it — each port ships a hand-written `sortBy`). That is exactly why the same token was fatal in the test file and is fine here.
+
+### Verification (branch files over `origin/master` @ `ed182c5c`, all 13 files, +355/-46)
+
+| check | result |
+|---|---|
+| `npx tsc --noEmit` | ✅ exit 0 |
+| `npm run tsBuild` | ✅ exit 0 |
+| JS base `test.sortBy` | ✅ PASS |
+| `transpile.ts --baseTests --force` | ✅ exit 0 |
+| Python `test_sort_by` | ✅ PASS |
+| PHP `test_sort_by` (`zend.assertions=1`) | ✅ PASS |
+| `goTranspiler.ts --test --force` → `go build ./tests/base/` | ✅ exit 0 |
+| `go vet ./tests/base/` | ✅ exit 0 |
+| Go `TestSortBy` runtime | ✅ PASS |
+| `npm run test-base-rest-js` | ✅ `base REST tests passed!` |
+
+### The Go base change is load-bearing — A/B proof
+
+`test.sortBy.ts` sits in the flat `ts/src/test/base/` folder, so the new assertions 
+
+=== MY PRIOR INLINE COMMENTS ===
+- ts/src/pro/test/Exchange/test.watchTradesForSymbols.ts:18 (commit 3537f2b8) :: This can spin past the intended budget. `idle` only flips when a *single* `watchTradesForSymbols` call exceeds `maxIdleTime` (5000 ms). If one symbol streams briskly while another stays quiet, every iteration returns under 5 s — so `idle` stays `false`, `returnedSymbols.length < symbols.length` stays `true`, and the 15 s `ends` ceiling no longer bounds the loop; it runs until the CI job's own time
+- ts/src/pro/test/Exchange/test.watchTradesForSymbols.ts:39 (commit 3537f2b8) :: Dropping the `if (symbol === undefined) { continue; }` guard changes behaviour beyond the cast. `trade['symbol'] as string` is erased at compile time, so an undefined `symbol` now flows into `testTrade` and into `returnedSymbols.push (symbol)`.  That matters because `returnedSymbols.length` is the coverage signal in the new loop condition above — a feed emitting symbol-less trades could satisfy th
+- ts/src/test/Exchange/test.fetchTrades.ts:None (commit ce745c47) :: This heuristic assumes `trades` is ascending by timestamp — that is what makes "same ts, same side, rising price ⇒ buy" hold. But it runs independently of the `timestampSort` skip, so on an exchange returning trades newest-first the exact same buy sweep reads as *decreasing* price and the assertion inverts, failing correct data.  Gating `sideSequence` behind the same ordering guarantee `timestampS
+- ts/src/test/Exchange/test.fetchTrades.ts:None (commit ce745c47) :: `requireBothSides` only runs when `trades.length > 50`, but the `12000` limit on line 10 means a thin market can legitimately return, say, 60 trades that are genuinely all one side within the window. The assertion message already hedges with "if this error happens consistently", which suggests the check is expected to be occasionally flaky.  Worth considering whether the threshold should scale wit
+- ts/src/test/Exchange/test.fetchTrades.ts:None (commit 0f372e67) :: `trades.slice ()` does not survive transpile. `build/transpile.ts` only rewrites `.slice (...)` **with arguments** (Python rules L523-524, PHP L757-758), so a zero-arg call passes through literally: Python gets `trades.slice()` (`AttributeError: 'list' object has no attribute 'slice'`), PHP gets `$trades->slice()` (`Call to a member function slice() on array`), and Go emits `trades.Slice()` which 
+- ts/src/base/functions/generic.ts:118 (commit 326b02c0) :: Good call moving the copy here rather than to the call site — this fixes every caller at once instead of one test.  Worth knowing for the future: `slice()` runs `ArraySpeciesCreate`, so when `array` is one of the `Array` subclasses (`BaseCache`/`ArrayCache`/`OrderBookSide`) this allocates a *subclass* instance and re-runs its constructor, the same cost `ws/Cache.ts:24-28` deliberately avoids for `
+- go/v4/exchange_generic.go:62 (commit 326b02c0) :: Verified this is load-bearing, not cosmetic: reverting only this file to master in an otherwise-identical tree makes the new branch test panic at `tests/base/test.sortBy.go:117` (`AssertDeepEqual` in `TestSortBy1`), and restoring the `copy()` makes `go build`, `go vet` and the runtime test all pass. Python/PHP/C#/Java/Rust already return fresh sequences, so JS + Go were exactly the two ports that 
+
+=== OTHER ISSUE COMMENTS ===
+
+=== FULL PR FILE LIST ===
+modified  +174  -21   skip-tests.json
+modified  +1    -1    ts/src/prediction/kalshi.ts
+modified  +1    -1    ts/src/prediction/limitless.ts
+modified  +1    -1    ts/src/pro/test/Exchange/test.watchMyTrades.ts
+modified  +1    -1    ts/src/pro/test/Exchange/test.watchTrades.ts
+modified  +8    -8    ts/src/pro/test/Exchange/test.watchTradesForSymbols.ts
+modified  +1    -1    ts/src/test/Exchange/base/test.order.ts
+modified  +8    -2    ts/src/test/Exchange/base/test.trade.ts
+modified  +1    -1    ts/src/test/Exchange/test.fetchMyTrades.ts
+modified  +88   -5    ts/src/test/Exchange/test.fetchTrades.ts
+
+=== COMPARE (last reviewed -> current head) ===
+status=ahead ahead=43 behind=0 total_commits=43
+  commit 256e9df1 [Pablo Criado-Perez] fix(build): pick the previous ccxt tag for release notes, not any tag (#30313)
+  commit 546857f5 [Roman Cuhari] docs(modetrade): update Orderly doc links to new URL structure (#30308)
+  commit b5f6740b [Roman Cuhari] fix(okx): correct watchLiquidationsForSymbols option-key casing (#30305)
+  commit 32e5ab7a [ccxt-release[bot]] [Automated changes] Python files
+  commit ecdb41ec [ccxt-release[bot]] [Automated changes] PHP files
+  commit e7965f40 [ccxt-release[bot]] [Automated changes] JS files
+  commit 2d8e2267 [ccxt-release[bot]] [Automated changes] C# files
+  commit 8f72d600 [ccxt-release[bot]] [Automated changes] Java files
+  commit 424e6fc5 [ccxt-release[bot]] [Automated changes] GO files
+  commit 98a94aa9 [carlotestor] fix(pro): close the socket when the keepalive timeout fires so the abandoned connection stops feeding the cach
+  commit cecd0ab8 [ccxt-release[bot]] [Automated changes] JS files
+  commit 9bc6bd65 [Slav Ivanov] fix(kucoin): invalidate futures websocket URLs on token expiry (#30292)
+  commit 9d1100bc [Roman Cuhari] chore(okx): remove dead watchOrderBook checksum option (#30299)
+  commit ec6931c1 [ccxt-release[bot]] [Automated changes] PHP files
+  commit 9421028f [ccxt-release[bot]] [Automated changes] Python files
+  commit 38ae281d [ccxt-release[bot]] [Automated changes] JS files
+  commit 2501e94f [ccxt-release[bot]] [Automated changes] C# files
+  commit 9e8a6b3f [ccxt-release[bot]] [Automated changes] Java files
+  commit 59a6bfa1 [ccxt-release[bot]] [Automated changes] GO files
+  commit 7885c81a [T. Todua] fix(js,go): sortBy mutation (#30312)
+  commit a5ed9fc1 [T. Todua] perf(python): sort_by (#30270)
+  commit 6779ee95 [ccxt-release[bot]] [Automated changes] JS files
+  commit 4a579ad7 [ccxt-release[bot]] [Automated changes] PHP files
+  commit 594a4674 [ccxt-release[bot]] [Automated changes] Python files
+  commit 0cf29a8a [ccxt-release[bot]] [Automated changes] C# files
+  commit 66fe0a1b [ccxt-release[bot]] [Automated changes] GO files
+  commit 0a462343 [carlotestor] fix(deepcoin): send the public-stream heartbeat inside the venue's 20 s window so sockets stop dying every ~50
+  commit 87e740c5 [ccxt-release[bot]] [Automated changes] JS files
+  commit 70693441 [ccxt-release[bot]] [Automated changes] PHP files
+  commit a3569f1c [ccxt-release[bot]] [Automated changes] Python files
+  commit 0fbec9ae [ccxt-release[bot]] [Automated changes] C# files
+  commit 0b039c78 [ccxt-release[bot]] [Automated changes] Java files
+  commit 18596d1a [ccxt-release[bot]] [Automated changes] GO files
+  commit 602cbf25 [carlotestor] fix(base): drop the 10ms happy-eyeballs attempt timeout, keep autoSelectFamily (#30319)
+  commit 75da1fc3 [ccxt-release[bot]] [Automated changes] JS files
+  commit 0a5fa6d4 [carlotestor] chore(build): batch 4 merge-gate-green small fixes (#30292, #30187, #30178, #30163) (#30302)
+  commit 69eeeb81 [ccxt-release[bot]] [Automated changes] PHP files
+  commit 1173c22c [ccxt-release[bot]] [Automated changes] C# files
+  commit 83326fb7 [ccxt-release[bot]] [Automated changes] JS files
+  commit b21bf6c9 [ccxt-release[bot]] [Automated changes] Java files
+  commit 3eb13427 [ccxt-release[bot]] [Automated changes] Python files
+  commit d5d047ec [ccxt-release[bot]] [Automated changes] GO files
+  commit 3537f2b8 [T. Todua] Merge branch 'ccxt:master' into test-trades-better-2
+
+--- DELTA FILES ---
+modified  +11   -0    .github/workflows/post-release.yml
+modified  +6    -1    .github/workflows/release.yml
+modified  +1    -1    README.md
+modified  +8    -5    cs/ccxt/exchanges/bingx.cs
+modified  +38   -38   cs/ccxt/exchanges/blofin.cs
+modified  +3    -3    cs/ccxt/exchanges/deepcoin.cs
+modified  +1    -1    cs/ccxt/exchanges/hibachi.cs
+modified  +49   -48   cs/ccxt/exchanges/modetrade.cs
+modified  +1    -0    cs/ccxt/exchanges/pro/deepcoin.cs
+modified  +6    -1    cs/ccxt/exchanges/pro/kucoin.cs
+modified  +12   -12   cs/ccxt/exchanges/pro/modetrade.cs
+modified  +1    -2    cs/ccxt/exchanges/pro/okx.cs
+modified  +118  -0    cs/tests/Generated/Base/test.sortBy.cs
+modified  +140  -114  dist/ccxt.browser.js
+modified  +1    -1    dist/ccxt.browser.min.js
+modified  +1    -1    dist/ccxt.browser.min.js.map
+modified  +4    -1    dist/cjs/src/base/Exchange.js
+modified  +2    -2    dist/cjs/src/base/functions/generic.js
+modified  +10   -0    dist/cjs/src/base/ws/Client.js
+modified  +8    -5    dist/cjs/src/bingx.js
+modified  +38   -38   dist/cjs/src/blofin.js
+modified  +3    -3    dist/cjs/src/deepcoin.js
+modified  +1    -1    dist/cjs/src/hibachi.js
+modified  +51   -48   dist/cjs/src/modetrade.js
+modified  +8    -0    dist/cjs/src/pro/deepcoin.js
+modified  +4    -0    dist/cjs/src/pro/kucoin.js
+modified  +12   -12   dist/cjs/src/pro/modetrade.js
+modified  +1    -2    dist/cjs/src/pro/okx.js
+modified  +118  -0    go/tests/base/test.sortBy.go
+modified  +72   -69   go/v4/bingx.go
+modified  +4    -2    go/v4/bingx_wrapper.go
+modified  +38   -38   go/v4/blofin.go
+modified  +3    -3    go/v4/deepcoin.go
+modified  +212  -212  go/v4/exchange_generated.go
+modified  +1    -1    go/v4/hibachi.go
+modified  +1    -1    go/v4/hibachi_wrapper.go
+modified  +133  -132  go/v4/modetrade.go
+modified  +48   -48   go/v4/modetrade_wrapper.go
+modified  +56   -55   go/v4/pro/deepcoin.go
+modified  +5    -1    go/v4/pro/kucoin.go
+modified  +12   -12   go/v4/pro/modetrade.go
+modified  +12   -12   go/v4/pro/modetrade_wrapper.go
+modified  +135  -136  go/v4/pro/okx.go
+modified  +8    -5    java/lib/src/main/java/io/github/ccxt/exchanges/BingxCore.java
+modified  +38   -38   java/lib/src/main/java/io/github/ccxt/exchanges/BlofinCore.java
+modified  +3    -3    java/lib/src/main/java/io/github/ccxt/exchanges/DeepcoinCore.java
+modified  +1    -1    java/lib/src/main/java/io/github/ccxt/exchanges/HibachiCore.java
+modified  +49   -48   java/lib/src/main/java/io/github/ccxt/exchanges/ModetradeCore.java
+modified  +1    -0    java/lib/src/main/java/io/github/ccxt/exchanges/pro/DeepcoinCore.java
+modified  +5    -0    java/lib/src/main/java/io/github/ccxt/exchanges/pro/KucoinCore.java
+modified  +12   -12   java/lib/src/main/java/io/github/ccxt/exchanges/pro/ModetradeCore.java
+modified  +1    -2    java/lib/src/main/java/io/github/ccxt/exchanges/pro/OkxCore.java
+modified  +4    -1    js/src/base/Exchange.js
+modified  +2    -2    js/src/base/functions/generic.js
+modified  +10   -0    js/src/base/ws/Client.js
+modified  +4    -2    js/src/bingx.d.ts
+modified  +8    -5    js/src/bingx.js
+modified  +38   -38   js/src/blofin.js
+modified  +3    -3    js/src/deepcoin.js
+modified  +1    -1    js/src/hibachi.d.ts
+modified  +1    -1    js/src/hibachi.js
+modified  +48   -48   js/src/modetrade.d.ts
+modified  +51   -48   js/src/modetrade.js
+modified  +8    -0    js/src/pro/deepcoin.js
+modified  +4    -0    js/src/pro/kucoin.js
+modified  +12   -12   js/src/pro/modetrade.d.ts
+modified  +12   -12   js/src/pro/modetrade.js
+modified  +1    -2    js/src/pro/okx.js
+added     +2    -0    js/src/pro/test/base/test.heartbeat.deepcoin.d.ts
+added     +34   -0    js/src/pro/test/base/test.heartbeat.deepcoin.js
+added     +2    -0    js/src/pro/test/base/test.keepAliveTimeout.d.ts
+added     +98   -0    js/src/pro/test/base/test.keepAliveTimeout.js
+modified  +4    -0    js/src/pro/test/base/tests.init.js
+modified  +56   -0    js/src/test/base/test.sortBy.js
+modified  +74   -74   php/abstract/blofin.php
+modified  +74   -74   php/async/abstract/blofin.php
+modified  +8    -5    php/async/bingx.php
+modified  +38   -38   php/async/blofin.php
+modified  +3    -3    php/async/deepcoin.php
+modified  +1    -1    php/async/hibachi.php
+modified  +51   -48   php/async/modetrade.php
+modified  +8    -5    php/bingx.php
+modified  +38   -38   php/blofin.php
+modified  +3    -3    php/deepcoin.php
+modified  +1    -1    php/hibachi.php
+modified  +51   -48   php/modetrade.php
+modified  +8    -0    php/pro/deepcoin.php
+modified  +4    -0    php/pro/kucoin.php
+modified  +12   -12   php/pro/modetrade.php
+modified  +1    -2    php/pro/okx.php
+modified  +118  -0    php/test/base/test_sort_by.php
+modified  +1    -1    python/README.md
+modified  +37   -37   python/ccxt/abstract/blofin.py
+modified  +8    -5    python/ccxt/async_support/bingx.py
+modified  +38   -38   python/ccxt/async_support/blofin.py
+modified  +3    -3    python/ccxt/async_support/deepcoin.py
+modified  +1    -1    python/ccxt/async_support/hibachi.py
+modified  +51   -48   python/ccxt/async_support/modetrade.py
+modified  +26   -2    python/ccxt/base/exchange.py
+modified  +8    -5    python/ccxt/bingx.py
+modified  +38   -38   python/ccxt/blofin.py
+modified  +3    -3    python/ccxt/deepcoin.py
+modified  +1    -1    python/ccxt/hibachi.py
+modified  +51   -48   python/ccxt/modetrade.py
+modified  +8    -0    python/ccxt/pro/deepcoin.py
+modified  +3    -0    python/ccxt/pro/kucoin.py
+modified  +12   -12   python/ccxt/pro/modetrade.py
+modified  +1    -2    python/ccxt/pro/okx.py
+modified  +7    -3    python/ccxt/test/base/language_specific/test_language_specific.py
+added     +76   -0    python/ccxt/test/base/language_specific/test_sort_by_fallback.py
+modified  +118  -0    python/ccxt/test/base/test_sort_by.py
+modified  +4    -1    ts/src/base/Exchange.ts
+modified  +10   -0    ts/src/base/ws/Client.ts
+modified  +11   -1    ts/src/base/ws/ws.d.ts
+modified  +8    -5    ts/src/bingx.ts
+modified  +38   -38   ts/src/blofin.ts
+modified  +3    -3    ts/src/deepcoin.ts
+modified  +51   -48   ts/src/modetrade.ts
+modified  +8    -0    ts/src/pro/deepcoin.ts
+modified  +4    -0    ts/src/pro/kucoin.ts
+modified  +12   -12   ts/src/pro/modetrade.ts
+modified  +1    -2    ts/src/pro/okx.ts
+added     +32   -0    ts/src/pro/test/base/test.heartbeat.deepcoin.ts
+added     +97   -0    ts/src/pro/test/base/test.keepAliveTimeout.ts
+modified  +4    -0    ts/src/pro/test/base/tests.init.ts
+modified  +28   -0    ts/src/test/static/request/bingx.json
+modified  +76   -0    ts/src/test/static/response/deepcoin.json
+modified  +1    -1    wiki/Exchange-Markets-By-Country.md
+modified  +1    -1    wiki/Exchange-Markets.md
+modified  +1    -1    wiki/Manual.md
+modified  +1    -1    wiki/ccxt.pro.manual.md
+modified  +37   -37   wiki/exchanges-implicit/blofin.md
+modified  +1    -1    wiki/exchanges-implicit/modetrade.md
+modified  +4    -2    wiki/exchanges/bingx.md
+modified  +1    -1    wiki/exchanges/hibachi.md
+modified  +60   -60   wiki/exchanges/modetrade.md
