@@ -1715,6 +1715,9 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             // Add keeps its own int/int64 rows: its box carries the operand kind
             return operands;
         }
+        if ((op === ts.SyntaxKind.SlashToken) && this.isNonZeroIntegerLiteral(rightNode)) {
+            return 'float64'; // JS division: goNativeArithmetic converts the operands to float64
+        }
         if ((operands === 'int') && this.goInsideTypedDeclarationInitializer(node)) {
             // the declared-local table names this position int64 when its int-kind
             // proof holds, and the `int` an operator would yield is not that type
@@ -1728,7 +1731,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         if ((op === ts.SyntaxKind.SlashToken) && !this.isNonZeroIntegerLiteral(rightNode)) {
             return undefined; // Divide returns nil on a zero divisor, the operator panics
         }
-        // int64 in, int64 out: Subtract goes through ParseInt, Multiply/Divide/Mod use reflect Int()
+        // int64 in, int64 out: Subtract goes through ParseInt, Multiply/Mod use reflect Int()
         return operands;
     }
 
@@ -1811,6 +1814,10 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         if (goType === undefined) {
             return undefined;
         }
+        const isIntKind = (kind: string) => (kind === 'int') || (kind === 'int64') || (kind === 'const-int');
+        if ((op === ts.SyntaxKind.SlashToken) && isIntKind(leftType) && isIntKind(rightType)) {
+            return { goType, 'text': this.goFloatDivisionText(node, leftType, rightType, leftText, rightText) };
+        }
         return { goType, 'text': this.goNativeBinaryText(node, this.SupportedKindNames[op], leftText, rightText) };
     }
 
@@ -1830,6 +1837,17 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
                 this.goNativeArithmeticTypeCache = undefined;
             }
         }
+    }
+
+    // int / int is a float64 division as in JS: typed operands convert, and with two constants
+    // the left one does (an untyped constant operand then converts implicitly)
+    goFloatDivisionText(node, leftType: string, rightType: string, leftText: string, rightText: string): string {
+        const castLeft = (leftType !== 'const-int') || (rightType === 'const-int');
+        const castRight = rightType !== 'const-int';
+        const cast = (printed: string) => 'float64(' + this.goUnwrapPrintedParens(printed.trim()) + ')';
+        const left = castLeft ? cast(leftText) : this.goNativeOperandText(node.left, leftText);
+        const right = castRight ? cast(rightText) : this.goNativeOperandText(node.right, rightText);
+        return left + ' / ' + right;
     }
 
     // the operator line gofmt prints for a natively emitted arithmetic expression: the
@@ -7807,8 +7825,7 @@ ${tryBodyBlock}
         case ts.SyntaxKind.BinaryExpression: {
             const op = node.operatorToken?.kind;
             if ((op === ts.SyntaxKind.PlusToken) || (op === ts.SyntaxKind.MinusToken)
-                || (op === ts.SyntaxKind.AsteriskToken) || (op === ts.SyntaxKind.SlashToken)
-                || (op === ts.SyntaxKind.PercentToken)) {
+                || (op === ts.SyntaxKind.AsteriskToken) || (op === ts.SyntaxKind.PercentToken)) {
                 return this.goIntIndexExpression(node.left) && this.goIntIndexExpression(node.right);
             }
             return false;

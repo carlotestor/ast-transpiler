@@ -1,7 +1,7 @@
 import { assert } from 'console';
 import { Transpiler, alignGoTrailingComments } from '../src/transpiler';
 
-import { SyntaxKind } from 'typescript';
+import { SyntaxKind } from 'typescript/unstable/ast';
 import { readFileSync } from 'fs';
 import * as nodefs from 'fs';
 import * as nodepath from 'path';
@@ -1733,7 +1733,7 @@ describe('go inline equality', () => {
         const shippedBinary = go.printBinaryExpression.bind(go);
         // a write-site rule asks the same question from the assignment, mid-body
         go.printBinaryExpression = function (node: any, identation: number) {
-            const param: any = this.getChecker().getSymbolAtLocation(node.left)?.valueDeclaration;
+            const param: any = this.getChecker().getSymbolAtLocation(node.left)?.valueDeclaration?.resolve();
             if (param?.initializer !== undefined) {
                 answers.push(shipped(this.goEnclosingFunction(param), param, 'nil'));
             }
@@ -3022,7 +3022,7 @@ describe('go native element assignment', () => {
         "    }\n" +
         "}\n"
         const output = transpiler.transpileGo(input).content;
-        expect(output).toContain("var q any = this.Milliseconds() / 2");
+        expect(output).toContain("var q any = float64(this.Milliseconds()) / 2");
         expect(output).toContain("var z any = Divide(this.Milliseconds(), 0)");
     });
     test('Mod inlines an int64 value with a nonzero literal, a zero divisor or a float operand keeps the helper', () => {
@@ -4165,6 +4165,21 @@ describe('go string concat chains -> native +', () => {
         expect(output).toContain('var auth string = "/u" + "GET" + method + "" + nonce');
         expect(output).not.toContain('Add(');
     });
+    test('a long concat chain prints in linear time', () => {
+        const leaves = Array.from({ length: 40 }, (_, i) => `'p${i}'`).join(' + ');
+        const input =
+        "class Exchange {\n" +
+        "    main (method = 'GET') {\n" +
+        `        const auth = method + ${leaves};\n` +
+        "        return auth;\n" +
+        "    }\n" +
+        "}\n";
+        const started = Date.now();
+        const output = squash(transpiler.transpileGo(input).content);
+        const expected = Array.from({ length: 40 }, (_, i) => `"p${i}"`).join(' + ');
+        expect(output).toContain(`var auth string = method + ${expected}`);
+        expect(Date.now() - started).toBeLessThan(5000);
+    });
     test('an any parameter or unproven *string leaf keeps the Add declaration any', () => {
         const input =
         "class Exchange {\n" +
@@ -4389,7 +4404,7 @@ describe('go string concat operands -> declared Go string', () => {
         const printer: any = inst.goTranspiler;
         const upstream = printer.printParameterType;
         printer.printParameterType = function (node) {
-            return (node?.name?.escapedText === 'symbol') ? 'string' : upstream.call(this, node);
+            return (node?.name?.text === 'symbol') ? 'string' : upstream.call(this, node);
         };
         const input =
         "class Exchange {\n" +
@@ -5107,7 +5122,7 @@ describe('go native arithmetic result rows (Divide/Multiply/Subtract/Mod)', () =
     });
     test('literal-only integer expressions fold to the operator', () => {
         expect(body(main("        return { 'a': 10 * 1000, 'b': 1440 * 3, 'c': 10 / 3 };\n")))
-            .toContain("\"a\": 10 * 1000, \"b\": 1440 * 3, \"c\": 10 / 3");
+            .toContain("\"a\": 10 * 1000, \"b\": 1440 * 3, \"c\": float64(10) / 3");
     });
     test('float64 operands next to a float literal use the float operator', () => {
         expect(body(main("        const floor = Math.floor(value);\n        const half = floor * 2.5;\n        const less = floor - 0.5;\n        const part = floor / 2.5;\n        return [half, less, part];\n")))
@@ -5138,6 +5153,20 @@ describe('go native arithmetic result rows (Divide/Multiply/Subtract/Mod)', () =
     test('a literal product folds natively (exact Go constant); literal Subtract keeps the helper', () => {
         expect(body(main("        return { 'a': 2.5 * 1.5, 'b': 2.5 - 1.5, 'c': 7 * 24 * 60 };\n")))
             .toContain("\"a\": 2.5 * 1.5, \"b\": Subtract(2.5, 1.5), \"c\": (7 * 24) * 60");
+    });
+    test('int / int divides as float64 like JS', () => {
+        expect(body(main("        return { 'cost': 20 / 15, 'b': 2 / 3 };\n")))
+            .toContain("\"cost\": float64(20) / 15, \"b\": float64(2) / 3");
+        expect(body(main("        const now = this.milliseconds();\n        const days = now / 86400000;\n        return days;\n")))
+            .toContain("float64(now) / 86400000");
+        expect(body(main("        const a = this.milliseconds();\n        const b = this.milliseconds() + 1;\n        const r = a / (b * 2);\n        return r;\n")))
+            .toContain("Divide(a, (Multiply(b, 2)))");
+        expect(body(main("        const floor = Math.floor(value);\n        return floor / 2.5;\n")))
+            .toContain("floor / 2.5");
+    });
+    test('a float64 local receives int / int', () => {
+        expect(body(main("        const ratio = 20 / 15;\n        return ratio;\n")))
+            .toMatch(/var ratio (any|float64) = float64\(20\) \/ 15/);
     });
     test('float64 modulo keeps the helper: Go has no float operator', () => {
         expect(body(main("        const floor = Math.floor(value);\n        const rest = floor % 2.5;\n        return rest;\n")))
