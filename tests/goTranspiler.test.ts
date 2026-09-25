@@ -5127,17 +5127,17 @@ describe('go native arithmetic result rows (Divide/Multiply/Subtract/Mod)', () =
         expect(body(main("        const last = arr.length - 1;\n        const rest = arr.length % 7;\n        return [last, rest];\n")))
             .toContain("var last any = Subtract(GetArrayLength(arr), 1) var rest any = Mod(GetArrayLength(arr), 7)");
         expect(body(main("        const scaled = 10 * 1000;\n        return scaled;\n")))
-            .toContain("var scaled any = Multiply(10, 1000)");
+            .toContain("var scaled any = 10 * 1000");
     });
-    test('an int literal next to a float64 operand keeps the helper frontend int path', () => {
+    test('an int literal next to a float64 operand keeps the helper; two literals fold natively', () => {
         expect(body(main("        const floor = Math.floor(value);\n        const scaled = floor * 1000;\n        return scaled;\n")))
             .toContain("var scaled any = Multiply(floor, 1000)");
         expect(body(main("        return { 'a': 100 * 1.1, 'b': 5 * 1.67 };\n")))
-            .toContain("\"a\": Multiply(100, 1.1), \"b\": Multiply(5, 1.67)");
+            .toContain("\"a\": 100 * 1.1, \"b\": 5 * 1.67");
     });
-    test('two float literals keep the helper: Go folds them exactly, the helper rounds', () => {
-        expect(body(main("        return { 'a': 2.5 * 1.5, 'b': 2.5 - 1.5 };\n")))
-            .toContain("\"a\": Multiply(2.5, 1.5), \"b\": Subtract(2.5, 1.5)");
+    test('a literal product folds natively (exact Go constant); literal Subtract keeps the helper', () => {
+        expect(body(main("        return { 'a': 2.5 * 1.5, 'b': 2.5 - 1.5, 'c': 7 * 24 * 60 };\n")))
+            .toContain("\"a\": 2.5 * 1.5, \"b\": Subtract(2.5, 1.5), \"c\": (7 * 24) * 60");
     });
     test('float64 modulo keeps the helper: Go has no float operator', () => {
         expect(body(main("        const floor = Math.floor(value);\n        const rest = floor % 2.5;\n        return rest;\n")))
