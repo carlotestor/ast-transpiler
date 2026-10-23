@@ -4038,12 +4038,18 @@ describe('hx4 R04: native Vec push on typed array locals', () => {
         const out2 = transpiler.transpileRust(wrap('        const hashes = [];\n        hashes.push (1);\n        const r = this.filterBy (hashes, 1);\n        return r;')).content;
         expect(out2).toContain('self.filterBy(Value::from(hashes), Value::Int(1))');
     });
-    test('negative: alias, non-return argument, element read or non-empty init keep the box', () => {
+    test('a non-empty literal seed types as a Vec with the native literal', () => {
+        const out = transpiler.transpileRust(wrap('        const out = [ 1 ];\n        out.push (2);\n        return out;')).content;
+        expect(out).toContain('let mut out: Vec<Value> = vec![Value::Int(1)];');
+        expect(out).toContain('out.push(Value::Int(2));');
+        expect(out).toContain('return Value::from(out);');
+        expect(out).not.toContain('append_to_array');
+    });
+    test('negative: alias, non-return argument or element read keep the box', () => {
         for (const body of [
             '        const out = [];\n        out.push (1);\n        const other = out;\n        return other;',
             '        const out = [];\n        for (let i = 0; i < 2; i++) {\n            out.push (i);\n            this.parseX (out);\n        }\n        return 1;',
             '        const out = [];\n        out.push (1);\n        return this.filterBy (out, out);',
-            '        const out = [ 1 ];\n        out.push (2);\n        return out;',
             '        const out = [];\n        out.push (out.length);\n        return out;',
             '        let out = [];\n        out.push (1);\n        out = [];\n        return out;',
         ]) {
@@ -4663,5 +4669,41 @@ describe('hx4 R26 tuple slot-1 params of base handle*AndParams helpers', () => {
     test('pro: a parameter source keeps the helper, a plain local source goes native', () => {
         expect(pro).toContain('add_element_to_object(&mut paramsStock');
         expect(pro).not.toContain('add_element_to_object(&mut paramsLocal');
+    });
+});
+
+describe('hx10 w4 PR01 typed locals: Vec literal seeds and Arr-only index reads', () => {
+    const wrap = (body: string, params = 'items: any[]') => `class T {
+    parseX (x) { return x; }
+    f (${params}) {
+${body}
+    }
+}`;
+    const rs = (body: string, params?: string) => transpiler.transpileRust(wrap(body, params)).content;
+    test('a non-empty literal seed is a Vec with the native literal', () => {
+        const out = rs("        const out = [ 1 ];\n        out.push (2);\n        return out;");
+        expect(out).toContain('let mut out: Vec<Value> = vec![Value::Int(1)];');
+        expect(out).toContain('out.push(Value::Int(2));');
+        expect(out).toContain('return Value::from(out);');
+        expect(out).not.toContain('append_to_array');
+    });
+    test('a bare local element of a typed literal seed is cloned', () => {
+        const out = rs("        const x = items[0];\n        const out = [ x ];\n        out.push (1);\n        return out;");
+        expect(out).toContain('let mut out: Vec<Value> = vec![x.clone()];');
+        expect(out).toContain('return Value::from(out);');
+    });
+    test('a literal index read on an Arr-only local is native', () => {
+        const out = rs("        const parts = s.split ('-');\n        parts.push ('x');\n        const first = parts[0];\n        return first;", 's: string');
+        expect(out).toContain('parts.as_array().and_then(|__arr| __arr.get(0)).cloned().unwrap_or(Value::Null)');
+        expect(out).not.toContain('get_value(&parts');
+    });
+    test('a dynamic index read on an Arr-only local is native', () => {
+        const out = rs("        const parts = s.split ('-');\n        parts.push ('x');\n        for (let i = 0; i < parts.length; i++) {\n            const v = parts[i];\n            if (v !== undefined) { return v; }\n        }\n        return undefined;", 's: string');
+        expect(out).toContain('parts.as_array().and_then(|__arr| match &i {');
+        expect(out).not.toContain('get_value(&parts');
+    });
+    test('negative: a string receiver or a dict keeps the helper', () => {
+        expect(rs("        const v = items[0];\n        return v;", 'items: string')).toContain('get_value(&items');
+        expect(rs("        const d = { 'a': 1 };\n        return d[0];")).toContain('get_value(&d');
     });
 });

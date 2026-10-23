@@ -1708,7 +1708,10 @@ export class RustTranspiler extends BaseTranspiler {
         if (declaration.initializer.kind === SyntaxKind.NewExpression) {
             return `${indent}let mut ${varName} = ${parsedValue}`;
         }
-        if (node.declarations.length === 1 && this.rustVecLocalIsTyped(declaration)) return `${indent}let mut ${varName}: Vec<Value> = Vec::new()`;
+        if (node.declarations.length === 1 && this.rustVecLocalIsTyped(declaration)) {
+            const native = this.rustVecNativeLiteral(declaration);
+            return `${indent}let mut ${varName}: Vec<Value> = ${native ?? 'Vec::new()'}`;
+        }
         const boolValue = this.getRustBoolLocalInitializer(declaration, parsedValue);
         if (boolValue !== undefined) {
             return `${indent}let mut ${varName}: bool = ${boolValue}`;
@@ -3056,7 +3059,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (isNumericLiteral(keyNode)) {
             const index = Number(keyNode.text);
             if (!Number.isInteger(index) || index < 0) return undefined;
-            if (!this.isProvenListExpression(receiverNode)) return undefined;
+            if (this.rustVecLocalDeclarationOf(receiverNode) !== undefined) {
+                // A typed `Vec<Value>` local reads through the slice.
+                return `${receiverText}.get(${index}).cloned().unwrap_or(Value::Null)`;
+            }
+            if (!this.isProvenListExpression(receiverNode) && !this.r18ArrReadLocal(receiverNode)) return undefined;
             return this.printNativeListIndex(receiverText, index);
         }
         const dictRead = this.printNativeDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.printNativeThisFieldDynamicMapAccess(receiverText, receiverNode, keyNode)
@@ -3074,7 +3081,14 @@ export class RustTranspiler extends BaseTranspiler {
      *  `Int` index by value (a negative or out-of-range index misses), a
      *  numeric string by parse, anything else a miss. */
     printNativeDynamicListIndex(receiverText: string, receiverNode: Node, keyNode: Node): string | undefined {
-        if (!this.isProvenListExpression(receiverNode)) return undefined;
+        if (!this.isProvenListExpression(receiverNode) && !this.r18ArrReadLocal(receiverNode)) return undefined;
+        if (this.rustVecLocalDeclarationOf(receiverNode) !== undefined) {
+            // A typed `Vec<Value>` local reads through the slice.
+            if (!this.isRustValueIndexKey(keyNode) || this.isWriteBackBindRead(keyNode.parent)) return undefined;
+            const place = this.printNode(keyNode, 0).trim();
+            if (!place || place.startsWith('&')) return undefined;
+            return `${receiverText}.get((${place}).as_i64().map_or(usize::MAX, |__n| __n as usize)).cloned().unwrap_or(Value::Null)`;
+        }
         if (!this.isRustValueIndexKey(keyNode)) return undefined;
         // The ccxt `writeBackIndexedMutations` pass matches the `let x = get_value(&C, &K)` text to
         // write a mutated `x` back into `C[K]`; native text is invisible to it, so a bind the next
@@ -4789,7 +4803,8 @@ export class RustTranspiler extends BaseTranspiler {
     rustVecLocalIsTypedUncached(declaration): boolean {
         const init = declaration.initializer;
         if (declaration.name?.kind !== SyntaxKind.Identifier || init === undefined
-            || !isArrayLiteralExpression(init) || init.elements.length !== 0) return false;
+            || !isArrayLiteralExpression(init)
+            || init.elements.some((element) => element.kind === SyntaxKind.SpreadElement)) return false;
         const checker: any = this.checkerOrUndefined();
         const type = checker?.getTypeAtLocation(declaration.name);
         if (type === undefined || !checker.isArrayType(type)) return false;
@@ -4821,6 +4836,19 @@ export class RustTranspiler extends BaseTranspiler {
             return this.rustVecValueUse(n, name) || this.r11VecUse(n) || this.r15VecPropertyUse(n);
         });
         return safe && pushes > 0;
+    }
+
+    /** The array literal's native `vec![..]`: elements are `Value`s taken by move, so a
+     *  bare local is cloned (the boxed form relied on ccxt's argument-clone pass). */
+    rustVecNativeLiteral(declaration): string | undefined {
+        const initializer: any = declaration?.initializer;
+        if (!isArrayLiteralExpression(initializer) || initializer.elements.length === 0) return undefined;
+        const parts = initializer.elements.map((element) => {
+            const text = this.printNode(element, 0).trim();
+            const bare = /^[A-Za-z_][A-Za-z0-9_]*$/.test(text) && text !== 'self' && text !== 'true' && text !== 'false';
+            return bare ? `${text}.clone()` : text;
+        });
+        return `vec![${parts.join(', ')}]`;
     }
 
     // `x.push(v);` as a whole statement, one non-spread argument not naming `x`.
@@ -6149,6 +6177,29 @@ export class RustTranspiler extends BaseTranspiler {
                 && (parent.operator === SyntaxKind.PlusPlusToken || parent.operator === SyntaxKind.MinusMinusToken)) return false;
         }
         return true;
+    }
+
+    /** `x[i]` on an Arr-only local, except the initializer shapes ccxt's `hx10w2-R01`
+     *  post-pass already retypes to `Vec<Value>`/native reads (it owns those). */
+    r18ArrReadLocal(ident: any): boolean {
+        if (!this.r18ArrLocal(ident, true)) return false;
+        const declaration: any = this.rustSingleLocalDeclaration(ident);
+        const initializer: any = declaration?.initializer;
+        if (initializer === undefined) return false;
+        return !this.r01OwnedArrayInitializer(initializer);
+    }
+
+    private r01OwnedArrayInitializer(initializer: any): boolean {
+        if (isArrayLiteralExpression(initializer)) return true;
+        if (!isCallExpression(initializer) || !isPropertyAccessExpression(initializer.expression)) return false;
+        const callee: any = initializer.expression;
+        const member = String(callee.name.text);
+        if (member === 'split') return true;
+        if (callee.expression.kind === SyntaxKind.ThisKeyword) return /^(?:safeList|arrayConcat)/.test(member);
+        if (isIdentifier(callee.expression) && String(callee.expression.text) === 'Object') {
+            return member === 'keys' || member === 'values';
+        }
+        return false;
     }
 
     /** `x.length` on an Arr-only local: `get_array_length`'s marker arms need a Dict. */
