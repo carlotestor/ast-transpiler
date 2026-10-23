@@ -107,6 +107,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Operands this unit owns: `safeBool`/`safeBool2`/`safeBoolN` calls (a
      *  `Value` in the port) and element accesses (printed as `get_value`). */
     isBooleanValueFamilyOperand(node: any): boolean;
+    /** Declarations `printVariableDeclarationList` emitted as `let mut x: bool`. */
+    private rustBoolDeclaredLocals;
+    /** A bare identifier whose reads still hold a `Value` box: every declaration
+     *  this printer emits as `Value` (param, destructured element, local) minus
+     *  the ones the declaration site retypes to a native Rust type. */
+    isBooleanValueIdentifier(node: any): boolean;
+    /** The declaration site emits `let mut x: bool = …` (see
+     *  `getRustBoolLocalInitializer`): its reads are native bools, not `Value`. */
+    rustDeclarationPrintsNativeBool(declaration: any): boolean;
     /** The emitted `matches!` is a bare Rust `bool`: it is only valid where the
      *  whole enclosing boolean expression already sits in a bool slot. A logical
      *  expression stored in a `Value` slot gets its `Value::Bool(..)` box from the
@@ -118,6 +127,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustConditionBoolSlot(node: any): boolean;
     /** Native truthiness text of the operand, or undefined to keep `is_true`. */
     printNativeTruthiness(node: any): string | undefined;
+    /** Same native truthiness for a bare `Value`-boxed identifier of boolean type.
+     *  Prints the R12 text (`x.as_bool() == Some(true)`) so the typed-locals pass
+     *  keeps rewriting it; runs after R12 so that arm stays byte-identical. */
+    printNativeIdentifierTruthiness(node: any): string | undefined;
     literalKindOfNode(node: any): string;
     printsValueExpression(node: any): boolean;
     callExpressionName(node: any): string;
@@ -245,6 +258,27 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustIdentifierUseIsCondition(node: any): boolean;
     private rustLocalUsesAll;
     rustLocalUsesAcceptBool(declaration: any, sourceName: string): boolean;
+    private rustBoolParamDecisions;
+    rustParamPrintsBool(param: any): boolean;
+    rustParamPrintsBoolUncached(param: any): boolean;
+    /** True when `this.<name>` is read as a value (not called) in the method's own file. */
+    rustMethodReferencedAsValue(method: any): boolean;
+    private rustValueReferencedMethods;
+    rustValueReferenceCensus(file: any): Set<string>;
+    /** Native type text of a parameter in the emitted signature. */
+    rustParamType(param: any): string;
+    rustBoolParamUseAccepted(node: any): boolean;
+    /** Parameter declarations of a call's resolved callee, when the checker has them. */
+    rustCalleeParams(call: any): any[] | undefined;
+    /** `bool` text for an argument in a native-`bool` parameter slot. */
+    rustBoolArgumentText(node: any, identation: any): string;
+    /** True when the call's `at`-th argument lands in a required native-`bool` slot. */
+    rustNativeBoolArgumentSlot(params: any, at: number): boolean;
+    /** Argument shapes the printer already emits as a Rust `bool`. */
+    rustNativeBoolArgumentText(node: any): string | undefined;
+    rustDeclaredNode(node: any): Node | undefined;
+    /** Condition text for a bare identifier of native-`bool` type, else undefined. */
+    printNativeBoolParamCondition(node: any): string | undefined;
     private static readonly RUST_STRING_LOCAL_HELPERS;
     private rustStringLocalDecisions;
     rustSafeStringLocalInitializer(declaration: any): boolean;
@@ -361,6 +395,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     printFunctionDefinition(node: any, identation: any): string;
     printFunctionDeclaration(node: any, identation: any): string;
     printOutOfOrderCallExpressionIfAny(node: any, identation: any): string;
+    printArgsForCallExpression(node: any, identation: any): any;
     printCallExpression(node: any, identation: any): string;
     printThisKeyword(node: any, identation: any): string;
     private static readonly RUST_ERROR_CONSTRUCTOR_ARGS;
@@ -596,7 +631,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): any;
+    printLogicalInBooleanContext(node: any): string;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -691,6 +726,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustVecLocalDecisions;
     rustVecLocalIsTyped(declaration: any): boolean;
     rustVecLocalIsTypedUncached(declaration: any): boolean;
+    /** The array literal's native `vec![..]`: elements are `Value`s taken by move, so a
+     *  bare local is cloned (the boxed form relied on ccxt's argument-clone pass). */
+    rustVecNativeLiteral(declaration: any): string | undefined;
     rustVecPushShape(call: any, name: string): boolean;
     rustVecValueUse(n: any, name: string): boolean;
     rustVecIsFinalUse(n: any, name: string): boolean;
@@ -724,6 +762,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     printNativeStringSplit(node: any, receiverText: string): string | undefined;
     printNativeStringReplace(node: any, receiverText: string): string | undefined;
     printNativeStringPadStart(node: any, receiverText: string): string | undefined;
+    printNativeStringPadEnd(node: any, receiverText: string): string | undefined;
+    printNativeToFixed(node: any, receiverText: string): string | undefined;
     printNativeStringIndexOfString(node: any, receiverText: string): string | undefined;
     printNativeStringJoin(node: any, receiverText: string): string | undefined;
     rustOperandKind(node: any): string | undefined;
@@ -844,6 +884,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A local whose every write (declaration included) is an `r18ArrSource`, never captured by
      *  a closure: its `Value` is a plain `Value::Arr` (the runtime never tags an array). */
     r18ArrLocal(ident: any, allowNull: boolean): boolean;
+    /** `x[i]` on an Arr-only local, except the initializer shapes ccxt's `hx10w2-R01`
+     *  post-pass already retypes to `Vec<Value>`/native reads (it owns those). */
+    r18ArrReadLocal(ident: any): boolean;
+    private r01OwnedArrayInitializer;
     /** `x.length` on an Arr-only local: `get_array_length`'s marker arms need a Dict. */
     r18ArrLength(node: any, receiver: string): string | undefined;
     /** `x.push(v)` statement on an Arr-only local: `append_to_array`'s cache-push arm needs a Dict. */

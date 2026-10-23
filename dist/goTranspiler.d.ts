@@ -129,7 +129,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     printMethodParameters(node: any): any;
     printParameter(node: any, defaultValue?: boolean): string;
     printParameterType(node: any): string;
-    printFunctionType(node: any): string;
+    printFunctionType(node: any): any;
     isWholePrintedCall(value: string, open: number): boolean;
     goTypeOfInitializer(initializer: any, printedValue: string): string | undefined;
     goUnwrapPrintedParens(printedText: string): string;
@@ -222,6 +222,18 @@ export declare class GoTranspiler extends BaseTranspiler {
     goSafeListLocalUnbox(declaration: any): string | undefined;
     goSafeListLocalUnboxUncached(declaration: any): string | undefined;
     goSafeListUnboxValue(declaration: any, identation: number): string | undefined;
+    goContainerTypeOfTsType(type: any): string | undefined;
+    goContainerCandidateType(declaration: any): string | undefined;
+    goContainerInitializerConversion(initializer: any, goType: string): 'direct' | undefined;
+    goStringListLiteralIsProven(node: any): boolean;
+    goPrintsAsPlainString(node: any): boolean;
+    goContainerUseReadsAs(node: any, goType: string): boolean;
+    goStringListUseReadsAs(node: any): boolean;
+    goContainerWriteConversion(right: any, goType: string): 'direct' | undefined;
+    goContainerLocalCache: Map<any, string>;
+    goContainerLocalType(declaration: any): string | undefined;
+    goContainerLocalTypeUncached(declaration: any): string | undefined;
+    goStringListLiteralNode: any;
     getGoLocalType(declaration: any, parsedValue: string): string;
     goLocalSafeVerdicts: WeakMap<object, Map<string, string>>;
     goAwaitReceiveUnbox(awaitNode: any, printedInitializer: string): {
