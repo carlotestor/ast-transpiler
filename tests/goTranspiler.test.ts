@@ -7047,3 +7047,88 @@ describe('go GetValue on currency rows (hx4 X02)', () => {
         expect(out).not.toContain('c["id"] ==');
     });
 });
+
+describe('go container locals from the checker type', () => {
+    const squash = (output: string) => output.replace(/[\t\n ]+/g, ' ').trim();
+    const dictPrefix = "type Dict = { [key: string]: any };\n";
+    const transpile = (input: string) => squash(transpiler.transpileGo(dictPrefix + input).content);
+
+    test('a Dict local written from a helper call keeps the box (no conversion helper)', () => {
+        const out = transpile(
+            "class Exchange {\n" +
+            "    helper (a: any): any { return a; }\n" +
+            "    main (params: Dict) {\n" +
+            "        let selected: Dict;\n" +
+            "        if (params['a'] === undefined) {\n" +
+            "            selected = this.helper (params['b']) as Dict;\n" +
+            "        } else {\n" +
+            "            selected = params['c'];\n" +
+            "        }\n" +
+            "        return selected['info'];\n" +
+            "    }\n" +
+            "}");
+        expect(out).toContain('var selected any = nil');
+        expect(out).not.toContain('MapTyped(');
+        expect(out).toContain('GetValue(selected, "info")');
+    });
+    test('a Dict local handed on as a value keeps the box', () => {
+        const out = transpile(
+            "class Exchange {\n" +
+            "    helper (a: any): any { return a; }\n" +
+            "    main (params: Dict) {\n" +
+            "        let selected: Dict;\n" +
+            "        selected = this.helper (params) as Dict;\n" +
+            "        return this.helper (selected);\n" +
+            "    }\n" +
+            "}");
+        expect(out).toContain('var selected any = nil');
+        expect(out).toContain('selected = this.Helper(params)');
+    });
+    test('a string[] literal local prints []string', () => {
+        const out = transpile(
+            "class Exchange {\n" +
+            "    main (items: any) {\n" +
+            "        const fields: string[] = [ 'free', 'used', 'total' ];\n" +
+            "        return fields.length;\n" +
+            "    }\n" +
+            "}");
+        expect(out).toContain('var fields []string = []string{"free", "used", "total"}');
+        expect(out).toContain('len(fields)');
+    });
+    test('a string[] local written back from a safe list accessor keeps the box', () => {
+        const out = transpile(
+            "class Exchange {\n" +
+            "    safeList (a, b, c) { return c; }\n" +
+            "    main (items: any) {\n" +
+            "        let types: string[] = [ 'spot' ];\n" +
+            "        types = this.safeList (items, 'types', types);\n" +
+            "        return types.length;\n" +
+            "    }\n" +
+            "}");
+        expect(out).toContain('var types any = []any{"spot"}');
+    });
+    test('a Dict local written from a list accessor keeps the box', () => {
+        const out = transpile(
+            "class Exchange {\n" +
+            "    safeList (a, b, c): any[] { return c; }\n" +
+            "    main (params: Dict) {\n" +
+            "        let data: Dict;\n" +
+            "        data = this.safeList (params, 'data', []);\n" +
+            "        return data['id'];\n" +
+            "    }\n" +
+            "}");
+        expect(out).toContain('var data any = nil');
+        expect(out).not.toContain('MapTyped(this.SafeList');
+    });
+    test('a string[] local that is pushed keeps the box', () => {
+        const out = transpile(
+            "class Exchange {\n" +
+            "    main (items: any) {\n" +
+            "        const fields: string[] = [ 'free' ];\n" +
+            "        fields.push (items);\n" +
+            "        return fields.length;\n" +
+            "    }\n" +
+            "}");
+        expect(out).not.toContain('[]string{');
+    });
+});

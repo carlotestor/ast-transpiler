@@ -296,6 +296,10 @@ const GO_MARKET_READ_COMPARISON_OPERATORS = [
 // same length and elements (every array kind IsArray admits is converted), nil when the member is
 const GO_SAFE_LIST_LOCAL_TYPE = '[]any';
 
+// a local whose TS type is `string[]`: the printer opens the literal as []string, and every
+// element/len read is the native Go slice op on Go strings
+const GO_STRING_LIST_LOCAL_TYPE = '[]string';
+
 // the boundary comment ccxt's base sources (ts/src/base/Exchange.ts, PredictionExchange.ts)
 // carry and build/goTranspiler.ts re-assembles the generated file around
 
@@ -2678,8 +2682,236 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         return `SafeListTyped(${container}, ${key})`;
     }
 
+    // ---- container locals from the checker type (Dict / List / string[]) ---------------
+    // The TS type of a declaration names the Go container the printer already builds for
+    // that value: a Dict-shaped object is the map the Go side keeps rows in, a List is the
+    // []any box, and a `string[]` is a []string (never the []any the literal used to open).
+    // A local is typed only when its initializer and every write already produce that
+    // container (or convert through MapTyped/ListTyped) and every read reads it as one.
+
+    // the Go container a TS type names, or undefined when the type is anything else
+    goContainerTypeOfTsType(type): string | undefined {
+        const checker: any = this.checkerOrUndefined();
+        if ((type === undefined) || (checker === undefined)) {
+            return undefined;
+        }
+        let parts = ((typeof type.isUnionType === 'function') && type.isUnionType()) ? type.getTypes().slice() : [type];
+        parts = parts.filter((p) => !(p.flags & (TypeFlags.Undefined | TypeFlags.Null)));
+        if (parts.length !== 1) {
+            return undefined;
+        }
+        const inner: any = parts[0];
+        if ((inner.flags & TypeFlags.Object) === 0) {
+            return undefined;
+        }
+        if ((typeof checker.isArrayType === 'function') && checker.isArrayType(inner)) {
+            const element = checker.getIndexTypeOfType(inner, IndexKind.Number);
+            if (element === undefined) {
+                return undefined;
+            }
+            if (element.flags & (TypeFlags.Any | TypeFlags.Unknown)) {
+                // a []any element read is the guarded DerefScalar literal, i.e. the same helper
+                // work under another name: leave those locals boxed
+                return undefined;
+            }
+            const elementParts = ((typeof element.isUnionType === 'function') && element.isUnionType()) ? element.getTypes().slice() : [element];
+            const real = elementParts.filter((p) => !(p.flags & (TypeFlags.Undefined | TypeFlags.Null)));
+            if ((real.length > 0) && real.every((p) => (p.flags & (TypeFlags.String | TypeFlags.StringLiteral)) !== 0)) {
+                return GO_STRING_LIST_LOCAL_TYPE;
+            }
+            return undefined;
+        }
+        // a pure dictionary: a string index signature and no named member of its own (a
+        // Market/Order interface carries named fields, and its rows are not plain maps)
+        if (!this.goParameterTypeIsDict(inner)) {
+            return undefined;
+        }
+        let properties = [];
+        try {
+            properties = inner.getProperties() ?? [];
+        } catch (e) {
+            properties = [];
+        }
+        return (properties.length === 0) ? GO_SAFE_DICT_LOCAL_TYPE : undefined;
+    }
+
+    // the container Go type the declaration's own TS type names
+    goContainerCandidateType(declaration): string | undefined {
+        const checker: any = this.checkerOrUndefined();
+        if ((checker === undefined) || (declaration?.name?.kind !== SyntaxKind.Identifier)) {
+            return undefined;
+        }
+        let type;
+        try {
+            type = checker.getTypeAtLocation(declaration.name);
+        } catch (e) {
+            return undefined;
+        }
+        return this.goContainerTypeOfTsType(type);
+    }
+
+    // how the initializer reaches the candidate container: already that type, or (map/list)
+    // through the typed readers; undefined keeps the box
+    goContainerInitializerConversion(initializer, goType: string): 'direct' | undefined {
+        if ((initializer === undefined) || (initializer.kind === SyntaxKind.NullKeyword) || (initializer.kind === SyntaxKind.UndefinedKeyword)
+            || ((initializer.kind === SyntaxKind.Identifier) && (initializer.text === 'undefined'))) {
+            return 'direct'; // `var x T = nil`: a nil map/slice is the absent value the box held
+        }
+        if (goType === GO_STRING_LIST_LOCAL_TYPE) {
+            // the printer opens the literal as []string only when every element is a Go string
+            return ((initializer.kind === SyntaxKind.ArrayLiteralExpression) && this.goStringListLiteralIsProven(initializer))
+                ? 'direct' : undefined;
+        }
+        if (initializer.kind === SyntaxKind.ConditionalExpression) {
+            return undefined; // the ternary prints its own immediately-called literal
+        }
+        if (initializer.kind === SyntaxKind.Identifier) {
+            return (this.goDeclaredTypeOfIdentifier(initializer) === goType) ? 'direct' : undefined;
+        }
+        // any other expression (a call, an await, a member read) keeps the box: the host's
+        // post-print pass types the producers it knows, and a conversion here would add a
+        // second call where that pass already names the type
+        return undefined;
+    }
+
+    // every element of the literal prints as a Go string, so `[]string{…}` holds them all
+    goStringListLiteralIsProven(node): boolean {
+        return (node?.elements ?? []).every((element) => {
+            if ((element.kind === SyntaxKind.SpreadElement) || (element.kind === SyntaxKind.OmittedExpression)) {
+                return false;
+            }
+            const printed = this.printNode(element, 0);
+            return this.goOperandStaticType(element, printed) === 'string';
+        });
+    }
+
+    // one later use of a container local: a read through the container, or a write of a value
+    // that reaches it (directly or through the typed reader)
+    // the node prints as a plain Go `string` (a nilable `*string` accessor does not)
+    goPrintsAsPlainString(node): boolean {
+        return this.goOperandStaticType(node, this.printNode(node, 0)) === 'string';
+    }
+
+    goContainerUseReadsAs(node, goType: string): boolean {
+        const parent: any = node.parent;
+        if (parent === undefined) {
+            return false;
+        }
+        if (parent.kind === SyntaxKind.BinaryExpression && parent.left === node) {
+            return (parent.operatorToken?.kind === SyntaxKind.EqualsToken)
+                && (this.goContainerWriteConversion(parent.right, goType) !== undefined);
+        }
+        if (goType === GO_SAFE_DICT_LOCAL_TYPE) {
+            if ((parent.kind === SyntaxKind.BinaryExpression) && (parent.operatorToken?.kind === SyntaxKind.InKeyword)) {
+                // `key in x` on a typed map prints the native membership test; a `*string` key
+                // would instead emit the printer's nil-guarded literal, so that key keeps the box
+                return (parent.right === node) && this.goPrintsAsPlainString(parent.left);
+            }
+            // `x[k] = v` on a typed map prints the native element assignment (the helper's
+            // own nil-map panic is the native one); every other write shape keeps the box
+            const access: any = node.parent;
+            if ((access?.kind === SyntaxKind.ElementAccessExpression) && (access.expression === node)) {
+                const above: any = access.parent;
+                if ((above?.kind === SyntaxKind.BinaryExpression) && (above.left === access)
+                    && (above.operatorToken?.kind === SyntaxKind.EqualsToken)) {
+                    return true;
+                }
+            }
+            return this.goSafeDictUseReadsTheMap(node);
+        }
+        if (goType === GO_SAFE_LIST_LOCAL_TYPE) {
+            return this.goSafeListUseReadsTheList(node);
+        }
+        return this.goStringListUseReadsAs(node);
+    }
+
+    // a `[]string` local reads as a list of strings: its length, an element, a membership
+    // test. push keeps the box (the append arm of the []any rule takes an `any` element).
+    goStringListUseReadsAs(node): boolean {
+        const parent: any = node.parent;
+        if (parent === undefined) {
+            return false;
+        }
+        if ((parent.kind === SyntaxKind.PropertyAccessExpression) && (parent.name === node)) {
+            return true; // a member name, not a reference
+        }
+        if (parent.kind === SyntaxKind.PropertyAccessExpression) {
+            return (parent.expression === node) && (parent.name?.text === 'length');
+        }
+        if (parent.kind === SyntaxKind.ElementAccessExpression) {
+            if (parent.expression !== node) {
+                return false; // the local as the index
+            }
+            return !this.isGoElementAccessAssignmentTarget(parent);
+        }
+        if (parent.kind === SyntaxKind.BinaryExpression) {
+            return (parent.operatorToken?.kind === SyntaxKind.InKeyword) && (parent.right === node);
+        }
+        return false;
+    }
+
+    // a write only keeps a container local typed when the value already IS that container:
+    // a conversion through MapTyped/ListTyped would be another helper call, not a native op
+    goContainerWriteConversion(right, goType: string): 'direct' | undefined {
+        if ((right === undefined) || (right.kind === SyntaxKind.AwaitExpression)) {
+            return undefined; // the await arm prints the receive and its PanicOnError pair
+        }
+        if ((right.kind === SyntaxKind.NullKeyword) || (right.kind === SyntaxKind.UndefinedKeyword)
+            || ((right.kind === SyntaxKind.Identifier) && (right.text === 'undefined'))) {
+            return 'direct'; // `= nil` is the absent value a nil map/slice holds
+        }
+        const printed = this.printNode(right, 0);
+        if (printed.startsWith('<-this.callInternal(')) {
+            return undefined;
+        }
+        return (this.goTypeOfInitializer(right, printed) === goType) ? 'direct' : undefined;
+    }
+
+    goContainerLocalCache = new Map<any, string | undefined>();
+
+    goContainerLocalType(declaration): string | undefined {
+        return this.goCachedLocalUnbox(this.goContainerLocalCache, declaration, () => this.goContainerLocalTypeUncached(declaration));
+    }
+
+    goContainerLocalTypeUncached(declaration): string | undefined {
+        // the accessor families already name their own result more precisely (SafeMapTyped /
+        // SafeListTyped read the member in one call); leave those declarations to them
+        if ((this.goSafeDictLocalUnbox(declaration) !== undefined)
+            || (this.goSafeListLocalUnbox(declaration) !== undefined)
+            || (this.goMarketLocalUnbox(declaration) !== undefined)) {
+            return undefined;
+        }
+        const candidate = this.goContainerCandidateType(declaration);
+        if (candidate === undefined) {
+            return undefined;
+        }
+        // the scan below prints the local's own expressions; a nested declared-type query must
+        // not memoise the in-flight answer
+        this.goDeclaredTypeInProgress.add(declaration);
+        try {
+            if (this.goContainerInitializerConversion(declaration.initializer, candidate) === undefined) {
+                return undefined;
+            }
+            return this.goDeclaredLocalTypeIfSafe(declaration, candidate, (n) => this.goContainerUseReadsAs(n, candidate));
+        } finally {
+            this.goDeclaredTypeInProgress.delete(declaration);
+        }
+    }
+
+    // the array literal a `string[]` local is declared with, opened as a []string
+    goStringListLiteralNode: any = undefined;
+
     getGoLocalType(declaration, parsedValue: string): string {
         const goType = this.goTypeOfInitializer(declaration.initializer, parsedValue);
+        if ((goType === undefined) || (goType === GO_SAFE_LIST_LOCAL_TYPE)) {
+            // the initializer's own shape named nothing, or named the []any it opens every
+            // literal with: the declaration's TS type may still name the container it holds
+            // (Dict / string[]), with every use reading it as one
+            const containerType = this.goContainerLocalType(declaration);
+            if (containerType !== undefined) {
+                return containerType;
+            }
+        }
         if (goType === undefined) {
             return this.goSafeDictLocalUnbox(declaration) ?? this.goSafeListLocalUnbox(declaration) ?? this.goMarketLocalUnbox(declaration) ?? 'any';
         }
@@ -2757,9 +2989,19 @@ ${this.getIden(identation)}PanicOnError(${parsedName})`;
 
         const isNew = declaration.initializer && (declaration.initializer.kind === SyntaxKind.NewExpression);
 
+        const containerType = this.goContainerLocalType(declaration);
+        const stringListLiteral = ((containerType === GO_STRING_LIST_LOCAL_TYPE)
+            && (declaration.initializer?.kind === SyntaxKind.ArrayLiteralExpression)) ? declaration.initializer : undefined;
+        if (stringListLiteral !== undefined) {
+            this.goStringListLiteralNode = stringListLiteral;
+        }
         const parsedValue = (declaration.initializer) ? this.printNode(declaration.initializer, identation) : this.NULL_TOKEN;
+        this.goStringListLiteralNode = undefined;
 
         if (parsedValue === this.UNDEFINED_TOKEN) {
+            if ((containerType !== undefined) && (node?.parent?.kind === SyntaxKind.FirstStatement)) {
+                return this.getIden(identation) + "var " + this.printNode(declaration.name) + " " + containerType + " = " + parsedValue;
+            }
             return this.getIden(identation) + "var " + this.printNode(declaration.name) + " any = " + parsedValue;
         }
 
@@ -2768,7 +3010,7 @@ ${this.getIden(identation)}PanicOnError(${parsedName})`;
                 return this.getIden(identation) + this.printNode(declaration.name) + " := " + parsedValue;
             }
             const varName = this.printNode(declaration.name);
-            const declaredType = this.getGoLocalType(declaration, parsedValue);
+            const declaredType = (containerType !== undefined) ? containerType : this.getGoLocalType(declaration, parsedValue);
             // a typed dict/list local is declared with the typed reader rather than the `any`
             // accessor, so the declaration compiles against the map/slice type
             const unboxValue = this.goMarketUnboxValue(declaration, parsedValue)
@@ -4413,7 +4655,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             // B-02: a parameter the call-site proof typed prints its native Go type
             return this.goNativeParameterType(decl);
         }
-        if (decl.kind !== SyntaxKind.VariableDeclaration || decl.initializer === undefined || decl.name?.kind !== SyntaxKind.Identifier) {
+        if (decl.kind !== SyntaxKind.VariableDeclaration || decl.name?.kind !== SyntaxKind.Identifier) {
             return undefined;
         }
         if (this.goDeclaredTypeCache.has(decl)) {
@@ -4425,7 +4667,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         this.goDeclaredTypeInProgress.add(decl);
         let goType;
         try {
-            goType = this.getGoLocalType(decl, this.printNode(decl.initializer, 0));
+            // a `let x: Dict;` declaration has no initializer and prints `= nil`
+            const printed = (decl.initializer === undefined) ? this.UNDEFINED_TOKEN : this.printNode(decl.initializer, 0);
+            goType = this.getGoLocalType(decl, printed);
         } finally {
             this.goDeclaredTypeInProgress.delete(decl);
         }
@@ -6927,8 +7171,9 @@ ${this.getIden(identation)}${returnStatement}`;
         // a list of calls (promises included) always opens as `[]any{`; getFunctionType is kept for its
         // checker side effect (it caches a signature on the call node)
         const first = node.elements[0];
-        const arrayOpen = (first?.kind === SyntaxKind.CallExpression) && (this.getFunctionType(first) || true)
-            ? '[]any{' : this.ARRAY_OPENING_TOKEN;
+        const arrayOpen = (node === this.goStringListLiteralNode)
+            ? '[]string{' : (((first?.kind === SyntaxKind.CallExpression) && (this.getFunctionType(first) || true))
+                ? '[]any{' : this.ARRAY_OPENING_TOKEN);
         return arrayOpen + elements + this.ARRAY_CLOSING_TOKEN;
     }
 
