@@ -1679,6 +1679,80 @@ describe('go inline equality', () => {
         expect(output).toContain("if force == true {");
         expect(output).not.toContain("EvalTruthy(force)");
     });
+    test('a bool parameter every caller passes as a bool prints a Go bool', () => {
+        const input =
+        "class Base {\n" +
+        "    f (x: any): any { return x; }\n" +
+        "}\n" +
+        "class Ex extends Base {\n" +
+        "    run (enable: boolean): any {\n" +
+        "        if (enable) { return 1; }\n" +
+        "        return 0;\n" +
+        "    }\n" +
+        "    call (): any {\n" +
+        "        return this.run (true);\n" +
+        "    }\n" +
+        "}\n"
+        const output = transpiler.transpileGo(input).content;
+        expect(output).toContain("func (this *Ex) Run(enable bool) any");
+        expect(output).toContain("if enable {");
+        expect(output).not.toContain("EvalTruthy(enable)");
+    });
+    test('one caller passing an unproven box keeps the bool parameter boxed', () => {
+        const input =
+        "class Base {\n" +
+        "    f (x: any): any { return x; }\n" +
+        "}\n" +
+        "class Ex extends Base {\n" +
+        "    run (enable: boolean): any {\n" +
+        "        if (enable) { return 1; }\n" +
+        "        return 0;\n" +
+        "    }\n" +
+        "    call (box: any): any {\n" +
+        "        return this.run (box);\n" +
+        "    }\n" +
+        "}\n"
+        const output = transpiler.transpileGo(input).content;
+        expect(output).toContain("func (this *Ex) Run(enable any) any");
+        expect(output).toContain("if EvalTruthy(enable) {");
+    });
+    test('a nullable bool parameter the body nil-tests keeps the box', () => {
+        const input =
+        "type Bool = boolean | undefined;\n" +
+        "class Base {\n" +
+        "    f (x: any): any { return x; }\n" +
+        "}\n" +
+        "class Ex extends Base {\n" +
+        "    run (enable: Bool): any {\n" +
+        "        if (enable === undefined) { return 0; }\n" +
+        "        if (enable) { return 1; }\n" +
+        "        return 0;\n" +
+        "    }\n" +
+        "    call (): any {\n" +
+        "        return this.run (true);\n" +
+        "    }\n" +
+        "}\n"
+        const output = transpiler.transpileGo(input).content;
+        expect(output).toContain("func (this *Ex) Run(enable any) any");
+        expect(output).toContain("if enable == nil {");
+    });
+    test('a number parameter whose only caller passes a literal keeps the box', () => {
+        const input =
+        "class Base {\n" +
+        "    f (x: any): any { return x; }\n" +
+        "}\n" +
+        "class Ex extends Base {\n" +
+        "    run (n: number): any {\n" +
+        "        return n + 1;\n" +
+        "    }\n" +
+        "    call (): any {\n" +
+        "        return this.run (3);\n" +
+        "    }\n" +
+        "}\n"
+        const output = transpiler.transpileGo(input).content;
+        expect(output).toContain("func (this *Ex) Run(n any) any");
+        expect(output).toContain("Add(n, 1)");
+    });
     test('the params slot of sign keeps the GetArg box', () => {
         const input =
         "class T {\n" +

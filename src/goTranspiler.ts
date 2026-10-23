@@ -3945,6 +3945,15 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         if (this.isAsyncFunction(fn)) {
             return undefined;
         }
+        // hx10 PG01: the parse* path used to offer only `*string`; a non-nullable `string` whose
+        // callers all pass one is the plain value type the local methods already take
+        const parseString = this.goRequiredStringParameterType(param);
+        if ((parseString !== undefined)
+            && this.goParameterCallSitesPassType(fn, index, parseString)
+            && this.goLocalIsSafeToType(fn.body, param, param.name.text, parseString)
+            && this.goParameterKeepsNilCompareNative(fn.body, param, parseString)) {
+            return parseString;
+        }
         for (const goType of this.goNativeParameterTypeCandidates(param, handlerParam)) {
             if (this.goParameterCallSitesPassType(fn, index, goType)
                 && this.goLocalIsSafeToType(fn.body, param, param.name.text, goType)
@@ -4068,14 +4077,28 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         if (type === undefined) {
             return [];
         }
+        // a plain `boolean` is the checker's true|false union: the bit is set on the type itself
+        if ((type.flags & TypeFlags.Boolean) !== 0) {
+            return isHandler ? [] : ['bool'];
+        }
         let parts = ((typeof type.isUnionType === 'function') && type.isUnionType()) ? type.getTypes().slice() : [type];
         parts = parts.filter(p => !(p.flags & (TypeFlags.Undefined | TypeFlags.Null)));
+        // `Bool` is `boolean | undefined`: the union splits into the two boolean literals
+        if ((parts.length > 0) && parts.every(p => (p.flags & TypeFlags.BooleanLiteral) !== 0)) {
+            return isHandler ? [] : ['bool'];
+        }
         if (parts.length !== 1) {
             return [];
         }
         const inner: any = parts[0];
         if (inner.flags & TypeFlags.String) {
             return isHandler ? [] : ['*string'];
+        }
+        // `Int`/`Num`/`number` params: the pointer twin the GetArg bound form already uses, or
+        // the plain value type its callers pass (g13's table decides by the declared annotation)
+        const numeric = this.g13NumericParameterCandidates(param);
+        if (numeric.length > 0) {
+            return numeric;
         }
         if (isHandler && this.goParameterTypeIsDict(inner)) {
             return ['map[string]any'];
