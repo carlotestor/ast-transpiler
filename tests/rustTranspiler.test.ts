@@ -4147,6 +4147,29 @@ describe('hx4 R06 native string methods on proven strings', () => {
     });
 });
 
+describe('w4 PR06 padEnd / toFixed native arms on proven operands', () => {
+    const m = (body: string, params = 'a: string') => `class A {\n    run(${params}) {\n${body}\n    }\n}`;
+    const out = (body: string, params?: string) => transpiler.transpileRust(m(body, params)).content;
+
+    test('padEnd with a one-char pad and a literal width', () => {
+        expect(out("        return a.padEnd(8, '0');")).toContain('return a.as_str().map(|__s| Value::Str(format!("{:0<8}", __s).into())).unwrap_or(Value::Null);');
+        expect(out("        return a.padEnd(5, ' ');")).toContain('format!("{: <5}", __s)');
+    });
+    test('padEnd keeps the helper for a multi-char pad, a dynamic width or an unproven receiver', () => {
+        expect(out("        return a.padEnd(8, '00');")).toContain('pad_end(&a,');
+        expect(out("        return a.padEnd(w, '0');", 'a: string, w: number')).toContain('pad_end(&a,');
+        expect(out("        return a.padEnd(8, '0');", 'a: any')).toContain('pad_end(&a,');
+    });
+    test('toFixed on a proven number with a literal digit count', () => {
+        expect(out('        return a.toFixed(10);', 'a: number')).toContain('return Value::str(format!("{:.*}", 10, a.as_f64().unwrap_or(0.0)));');
+    });
+    test('toFixed keeps the helper for a string payload, a dynamic count or an any receiver', () => {
+        expect(out('        return a.toFixed(2);', 'a: string')).toContain('to_fixed(&a,');
+        expect(out('        return a.toFixed(d);', 'a: number, d: number')).toContain('to_fixed(&a,');
+        expect(out('        return a.toFixed(2);', 'a: any')).toContain('to_fixed(&a,');
+    });
+});
+
 // hx4 R07 — numeric/string helpers go native on checker-proven operands
 describe('rust R07 native numeric/string helpers', () => {
     const rust = (ts: string) => transpiler.transpileRust(ts).content;

@@ -1685,7 +1685,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printPadEndCall(node, identation, name, parsedArg, parsedArg2) {
-        return `pad_end(${this.ensureRef(name)}, ${this.ensureRef(parsedArg)}, ${this.ensureRef(parsedArg2)})`;
+        return this.printNativeStringPadEnd(node, name) ?? `pad_end(${this.ensureRef(name)}, ${this.ensureRef(parsedArg)}, ${this.ensureRef(parsedArg2)})`;
     }
 
     printVariableDeclarationList(node, identation) {
@@ -4401,7 +4401,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printToFixedCall(node, identation, name = undefined, parsedArg = undefined) {
-        return `to_fixed(&${name}, &${parsedArg})`;
+        return this.printNativeToFixed(node, name) ?? `to_fixed(&${name}, &${parsedArg})`;
     }
 
     printToStringCall(node, identation, name = undefined) {
@@ -5110,6 +5110,33 @@ export class RustTranspiler extends BaseTranspiler {
         if (width === undefined || width < 0 || width > 4096) return undefined;
         if ((!isStringLiteral(pad) && !isNoSubstitutionTemplateLiteral(pad)) || !/^[A-Za-z0-9 ]$/.test(pad.text)) return undefined;
         return `${receiver}.as_str().map(|__s| Value::Str(format!("{:${pad.text}>${width}}", __s).into())).unwrap_or(Value::Null)`;
+    }
+
+    // `x.padEnd(N, "c")` — the padStart arm with right padding (`<`): the helper appends
+    // `repeat(need)` of a one-char pad, which `format!` width reproduces exactly.
+    printNativeStringPadEnd(node, receiverText: string): string | undefined {
+        const receiver = this.rustNativeStringReceiver(node, receiverText);
+        if (receiver === undefined || node.arguments?.length !== 2) return undefined;
+        const width = this.rustSliceLiteralBound(node.arguments[0]);
+        const pad = node.arguments[1];
+        if (width === undefined || width < 0 || width > 4096) return undefined;
+        if ((!isStringLiteral(pad) && !isNoSubstitutionTemplateLiteral(pad)) || !/^[A-Za-z0-9 ]$/.test(pad.text)) return undefined;
+        return `${receiver}.as_str().map(|__s| Value::Str(format!("{:${pad.text}<${width}}", __s).into())).unwrap_or(Value::Null)`;
+    }
+
+    // `x.toFixed(N)` on a checker-proven number and a literal digit count: the helper's Int/Float
+    // arms are exactly `format!("{:.*}")` over the f64 payload. A string payload (which the helper
+    // parses) is not proven here, so it keeps the helper. `Value::str` matches the shape the
+    // ccxt-side string-helper pass already emits for the same site.
+    printNativeToFixed(node, receiverText: string): string | undefined {
+        if (node === undefined || !isCallExpression(node) || !isPropertyAccessExpression(node.expression)) return undefined;
+        if (node.arguments?.length !== 1) return undefined;
+        if (this.primitiveKindOfType(this.typeOfNodeIfAny(node.expression.expression)) !== 'number') return undefined;
+        const receiver = this.rustNativeStringReceiver(node, receiverText, 'number');
+        if (receiver === undefined) return undefined;
+        const digits = this.rustSliceLiteralBound(node.arguments[0]);
+        if (digits === undefined || digits < 0 || digits > 100) return undefined;
+        return `Value::str(format!("{:.*}", ${digits}, ${receiver}.as_f64().unwrap_or(0.0)))`;
     }
 
     // `x.indexOf(y)` with a proven-string needle: `-1` when either side is not a `Str` (byte index).
