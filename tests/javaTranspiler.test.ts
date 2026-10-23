@@ -5976,6 +5976,12 @@ describe('java override parameters move with the base declaration (d-10)', () =>
             "    }\n" +
             "}\n");
         const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        // mirrors build/java-local-types.js publishJavaDeclaredLocalTypes: the emitted declaration
+        // type of a local the build layer retyped (Map for `result`, List<Object> for `rows`,
+        // List<String> for `strings`)
+        const published = { 'result': 'java.util.Map<String, Object>', 'rows': 'List<Object>', 'strings': 'List<String>' };
+        (byPath as any).javaTranspiler.javaDeclaredLocalTypeResolver = (declaration) =>
+            declaration?.name === undefined ? undefined : published[String(declaration.name.text)];
         output = byPath.transpileJavaByPath(VENUE_FIXTURE).content;
     });
 
@@ -6174,6 +6180,12 @@ describe('java native return types of internal methods (d09)', () => {
         fs.writeFileSync(TYPES_FIXTURE, TYPES_SOURCE);
         fs.writeFileSync(VENUE_FIXTURE, VENUE_SOURCE);
         const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        // mirrors build/java-local-types.js publishJavaDeclaredLocalTypes: the emitted declaration
+        // type of a local the build layer retyped (Map for `result`, List<Object> for `rows`,
+        // List<String> for `strings`)
+        const published = { 'result': 'java.util.Map<String, Object>', 'rows': 'List<Object>', 'strings': 'List<String>' };
+        (byPath as any).javaTranspiler.javaDeclaredLocalTypeResolver = (declaration) =>
+            declaration?.name === undefined ? undefined : published[String(declaration.name.text)];
         output = byPath.transpileJavaByPath(VENUE_FIXTURE).content;
     });
 
@@ -7410,5 +7422,130 @@ describe('java plain-annotation parameters (PJ01)', () => {
 
     test('a call into the typed parameter carries the checkcast', () => {
         expect(venueOutput).toContain('this.localString((String) (raw));');
+    });
+});
+
+// PJ03: generated methods whose TS return is an array (element slots not strings) declare
+// `java.util.List<Object>` when every return site already prints a List<Object>; a method whose
+// annotation proves nothing (`any`) still declares the Map/List its body provably returns.
+// `string[]`/`Strings` returns keep the boxed declaration (their slots print List<String>).
+describe('java native list and body-proven returns (pj03)', () => {
+    const TMP = path.join(__dirname, 'files', 'tmp-javapj03');
+    const TYPES_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'types.ts');
+    const BASE_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'Exchange.ts');
+    const VENUE_FIXTURE = path.join(TMP, 'ts', 'src', 'venuepj03.ts');
+    const TYPES_SOURCE = 'export type Dict = Record<string, any>;\n';
+    const BASE_SOURCE =
+        'export class Exchange {\n' +
+        '    toArray (a: any): any[] { return a; }\n' +
+        '    safeValue (a: any, k: any, d: any = undefined): any { return d; }\n' +
+        '    safeList (a: any, k: any, d: any = undefined): any { return d; }\n' +
+        '    safeDict (a: any, k: any, d: any = undefined): any { return d; }\n' +
+        '}\n';
+    const VENUE_SOURCE =
+        "import { Dict } from './base/types';\n" +
+        "import { Exchange } from './base/Exchange';\n" +
+        'export default class venuepj03 extends Exchange {\n' +
+        '    parseRows (data: Dict): any[] { return [ data ]; }\n' +
+        '    parseRowsChain (data: Dict): any[] { return this.parseRows (data); }\n' +
+        '    parseRowsValues (data: Dict): any[] { return Object.values (data); }\n' +
+        '    parseRowsToArray (data: Dict): any[] { return this.toArray (data); }\n' +
+        '    parseRowsStrings (): string[] { return [ "a" ]; }\n' +
+        '    parseRowsAlias (): Strings { return [ "a" ]; }\n' +
+        '    parseRowsMixed (data: Dict): any[] { return this.safeList (data, "x", []); }\n' +
+        '    parseTuple (data: Dict): [Bool, Dict] { return [ true, data ]; }\n' +
+        '    parseDeclaredMap (data: Dict): Dict { const result = this.safeDict (data, "m", {}); return result; }\n' +
+        '    parseDeclaredList (data: Dict): any[] { const rows = this.safeValue (data, "rows"); return rows; }\n' +
+        '    parseDeclaredStrings (data: Dict): any[] { const strings = this.safeValue (data, "s"); return strings; }\n' +
+        '    parseBodyMap (data: Dict): any { return { "a": data }; }\n' +
+        '    parseBodyList (data: Dict): any { return [ data ]; }\n' +
+        '    parseBodyUnproven (data: Dict): any { return this.safeValue (data, "k"); }\n' +
+        '    async parseAsyncRows (data: Dict): Promise<any[]> { return [ data ]; }\n' +
+        '}\n' +
+        'type Strings = string[];\n';
+
+    let output: string;
+
+    beforeAll(() => {
+        fs.mkdirSync(path.dirname(TYPES_FIXTURE), { recursive: true });
+        fs.writeFileSync(TYPES_FIXTURE, TYPES_SOURCE);
+        fs.writeFileSync(BASE_FIXTURE, BASE_SOURCE);
+        fs.writeFileSync(VENUE_FIXTURE, VENUE_SOURCE);
+        const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        // mirrors build/java-local-types.js publishJavaDeclaredLocalTypes: the emitted declaration
+        // type of a local the build layer retyped (Map for `result`, List<Object> for `rows`,
+        // List<String> for `strings`)
+        const published = { 'result': 'java.util.Map<String, Object>', 'rows': 'List<Object>', 'strings': 'List<String>' };
+        (byPath as any).javaTranspiler.javaDeclaredLocalTypeResolver = (declaration) =>
+            declaration?.name === undefined ? undefined : published[String(declaration.name.text)];
+        output = byPath.transpileJavaByPath(VENUE_FIXTURE).content;
+    });
+
+    afterAll(() => {
+        fs.rmSync(TMP, { recursive: true, force: true });
+    });
+
+    test('an array-literal return of an array annotation is native List<Object>', () => {
+        expect(output).toContain('public java.util.List<Object> parseRows(java.util.Map<String, Object> data)');
+        expect(output).not.toContain('public Object parseRows(');
+    });
+
+    test('an internal call that already returns a list chains the annotation', () => {
+        expect(output).toContain('public java.util.List<Object> parseRowsChain(');
+    });
+
+    test('Object.values is a List<Object> producer', () => {
+        expect(output).toContain('public java.util.List<Object> parseRowsValues(');
+        expect(output).toContain('Helpers.objectValues(data)');
+    });
+
+    test('this.toArray is a List<Object> producer', () => {
+        expect(output).toContain('public java.util.List<Object> parseRowsToArray(');
+    });
+
+    test('a string[] return keeps the boxed declaration', () => {
+        expect(output).toContain('public Object parseRowsStrings(');
+        expect(output).not.toContain('public java.util.List<Object> parseRowsStrings(');
+    });
+
+    test('a Strings alias return keeps the boxed declaration', () => {
+        expect(output).toContain('public Object parseRowsAlias(');
+    });
+
+    test('an unproven list producer keeps the boxed declaration', () => {
+        expect(output).toContain('public Object parseRowsMixed(');
+    });
+
+    test('an any-annotated body that only returns a map is native Map', () => {
+        expect(output).toContain('public java.util.Map<String, Object> parseBodyMap(');
+    });
+
+    test('an any-annotated body that only returns a list is native List<Object>', () => {
+        expect(output).toContain('public java.util.List<Object> parseBodyList(');
+    });
+
+    test('an any-annotated body with an unproven return keeps the boxed declaration', () => {
+        expect(output).toContain('public Object parseBodyUnproven(');
+    });
+
+    test('a tuple annotation keeps the boxed declaration', () => {
+        expect(output).toContain('public Object parseTuple(');
+        expect(output).not.toContain('public java.util.List<Object> parseTuple(');
+    });
+
+    test('a return of a local the build layer declared Map is native Map', () => {
+        expect(output).toContain('public java.util.Map<String, Object> parseDeclaredMap(');
+    });
+
+    test('a return of a local the build layer declared List<Object> is native List<Object>', () => {
+        expect(output).toContain('public java.util.List<Object> parseDeclaredList(');
+    });
+
+    test('a return of a local declared List<String> does not prove List<Object>', () => {
+        expect(output).toContain('public Object parseDeclaredStrings(');
+    });
+
+    test('an async method keeps the Object future', () => {
+        expect(output).toContain('public java.util.concurrent.CompletableFuture<Object> parseAsyncRows(');
     });
 });

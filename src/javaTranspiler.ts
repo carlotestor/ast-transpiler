@@ -1,6 +1,6 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
 import { NodeFlags, SyntaxKind, type Expression, type Node } from "typescript/unstable/ast";
-import { isArrayLiteralExpression, isArrowFunction, isAsExpression, isBinaryExpression, isBlock, isBooleanLiteral, isCallExpression, isBreakStatement, isClassDeclaration, isConditionalExpression, isContinueStatement, isElementAccessExpression, isExpressionStatement, isForInStatement, isForOfStatement, isFunctionDeclaration, isFunctionExpression, isIdentifier, isIfStatement, isMethodDeclaration, isNonNullExpression, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPostfixUnaryExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isPropertyAssignment, isReturnStatement, isShorthandPropertyAssignment, isSourceFile, isSpreadAssignment, isSpreadElement, isStringLiteral, isStringLiteralLikeNode, isThrowStatement, isTypeAssertion, isTypeOfExpression, isTypeReferenceNode, isVariableDeclaration, isVariableDeclarationList } from "typescript/unstable/ast/is";
+import { isArrayLiteralExpression, isArrayTypeNode, isTupleTypeNode, isArrowFunction, isAsExpression, isBinaryExpression, isBlock, isBooleanLiteral, isCallExpression, isBreakStatement, isClassDeclaration, isConditionalExpression, isContinueStatement, isElementAccessExpression, isExpressionStatement, isForInStatement, isForOfStatement, isFunctionDeclaration, isFunctionExpression, isIdentifier, isIfStatement, isMethodDeclaration, isNonNullExpression, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPostfixUnaryExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isPropertyAssignment, isReturnStatement, isShorthandPropertyAssignment, isSourceFile, isSpreadAssignment, isSpreadElement, isStringLiteral, isStringLiteralLikeNode, isThrowStatement, isTypeAssertion, isTypeOfExpression, isTypeReferenceNode, isVariableDeclaration, isVariableDeclarationList } from "typescript/unstable/ast/is";
 import { createIdentifier } from "typescript/unstable/ast/factory";
 import { API, ElementFlags, IndexKind, SymbolFlags, TypeFlags, type Checker } from "typescript/unstable/sync";
 import { Logger } from "./logger.js";
@@ -345,6 +345,14 @@ const JAVA_NATIVE_PARAMETER_BASE_FILES = /(^|[\\/])ts[\\/]src[\\/]base[\\/](Pred
 //
 // The printer declares every generated method `Object` (BaseTranspiler.printFunctionType
 const JAVA_NATIVE_RETURN_MAP_TYPE = 'java.util.Map<String, Object>';
+// list target: a generated method whose TS return annotation is an array (every element type
+// but `string`, whose slots print List<String>) declares `java.util.List<Object>` when every
+// return site already prints a List<Object>.
+const JAVA_NATIVE_RETURN_LIST_TYPE = 'java.util.List<Object>';
+// `this.<name> (...)` returns whose printed Java call already answers a List<Object>: the
+// hand-written `toArray` (BaseExchange.java) and Object.keys/values (Helpers.objectKeys/Values).
+const JAVA_LIST_RETURN_BASE_METHODS: Set<string> = new Set<string>(['toArray']);
+const JAVA_OBJECT_LIST_CALL_NAMES: Set<string> = new Set<string>(['keys', 'values']);
 
 // the hand-written `public String` producers of the base tier a `this.<name> (...)` return
 // may print: the safeString* family, decimalToPrecision / numberToString (BaseExchange.java)
@@ -3089,7 +3097,12 @@ export class JavaTranspiler extends BaseTranspiler {
         if ((!generated && !baseTier) || this.isAsyncFunction(node)) {
             return undefined;
         }
-        const target = this.javaNativeReturnTypeTarget(node);
+        let target = this.javaNativeReturnTypeTarget(node);
+        // an annotation the checker cannot carry (`any`, an unmodelled structure) still prints a
+        // native return when EVERY return site prints the same carriable type
+        if (target === undefined && !baseTier) {
+            target = this.javaReturnTypeFromBody(node);
+        }
         if (target === undefined || (baseTier && target !== 'Boolean')) {
             return undefined;
         }
@@ -3207,7 +3220,59 @@ export class JavaTranspiler extends BaseTranspiler {
         if (aliasSymbol === undefined && (type.flags & TypeFlags.Boolean) !== 0) {
             return 'Boolean';
         }
+        // an array annotation prints List<Object> slots from its own elements; a `string[]`
+        // prints List<String> slots, so its own return keeps the boxed declaration
+        if (!this.javaStringArrayAnnotation(node) && this.javaArrayReturnType(type)) {
+            return JAVA_NATIVE_RETURN_LIST_TYPE;
+        }
         return this.isJavaMapStructureType(type) ? JAVA_NATIVE_RETURN_MAP_TYPE : undefined;
+    }
+
+    // a return annotation that names a string array: `string[]`, `Str[]`, or the `Strings`
+    // alias. Its printed slots are java.util.List<String>, so the List<Object> target never
+    // fits, whatever the body returns.
+    javaStringArrayAnnotation(node): boolean {
+        const annotation = node?.type;
+        if (annotation === undefined) {
+            return false;
+        }
+        if (isArrayTypeNode(annotation)) {
+            const element = annotation.elementType;
+            if (element.kind === SyntaxKind.StringKeyword) {
+                return true;
+            }
+            return isTypeReferenceNode(element) && isIdentifier(element.typeName)
+                && (/^(?:Str|string)$/).test(String(element.typeName.text));
+        }
+        return isTypeReferenceNode(annotation) && isIdentifier(annotation.typeName)
+            && (/^Strings$/).test(String(annotation.typeName.text));
+    }
+
+    // a tuple annotation (`[Bool, Dict]`, `[Str, Str, Bool]`): its destructured slots print as
+    // Pair/List pairs at the call sites, so the return keeps the boxed declaration
+    javaTupleAnnotation(node): boolean {
+        return isTupleTypeNode(node?.type);
+    }
+
+    // the checker type of an array annotation whose element slots are not strings. A tuple
+    // annotation stays out: its slots print as Pair/List pairs the return proof cannot see.
+    javaArrayReturnType(type): boolean {
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined || !checker.isArrayType(type) || checker.isTupleType(type)) {
+            return false;
+        }
+        let element;
+        try {
+            element = checker.getTypeArguments(type)?.[0] ?? type.typeArguments?.[0];
+        } catch (e) {
+            element = undefined;
+        }
+        if (element === undefined) {
+            return false;
+        }
+        const flags = (element as any).flags;
+        // a plain string element keeps Object: the printed slots are java.util.List<String>
+        return (flags & TypeFlags.StringLike) === 0;
     }
 
     // every `return` of the method body (nested functions are separate scopes) prints the
@@ -3234,6 +3299,22 @@ export class JavaTranspiler extends BaseTranspiler {
             && this.javaExpressionPrintsType(r.expression, target));
     }
 
+    // the carriable target every return site of the body prints, when the annotation names
+    // none (`any`, an unmodelled structure): a body that only ever returns a fresh map is a
+    // Map at runtime, one that only ever returns a fresh list is a List. A string-array
+    // annotation keeps its boxed declaration (its slots are java.util.List<String>).
+    javaReturnTypeFromBody(method): string | undefined {
+        const candidates = (this.javaStringArrayAnnotation(method) || this.javaTupleAnnotation(method))
+            ? [JAVA_NATIVE_RETURN_MAP_TYPE]
+            : [JAVA_NATIVE_RETURN_MAP_TYPE, JAVA_NATIVE_RETURN_LIST_TYPE];
+        for (const target of candidates) {
+            if (this.javaReturnSitesPrintType(method, target)) {
+                return target;
+            }
+        }
+        return undefined;
+    }
+
     javaExpressionPrintsType(expression, target: string): boolean {
         const node = this.javaUnwrapReturnExpression(expression);
         if (node === undefined) {
@@ -3252,6 +3333,9 @@ export class JavaTranspiler extends BaseTranspiler {
         let literal: boolean;
         if (target === JAVA_NATIVE_RETURN_MAP_TYPE) {
             literal = isObjectLiteralExpression(node); // a fresh HashMap literal
+        } else if (target === JAVA_NATIVE_RETURN_LIST_TYPE) {
+            // a fresh ArrayList<Object> literal; any other List producer is proven below
+            literal = isArrayLiteralExpression(node);
         } else if (target === 'String') {
             literal = isStringLiteralLikeNode(node);
         } else if (target === 'Boolean') {
@@ -3265,7 +3349,61 @@ export class JavaTranspiler extends BaseTranspiler {
         return literal
             || this.javaReturnedParameterType(node) === target
             || this.javaReturnedCallType(node) === target
+            || this.javaDeclaredReturnTarget(node, target)
+            || (target === JAVA_NATIVE_RETURN_LIST_TYPE && this.javaReturnedObjectListCall(node))
             || (target === 'String' && this.javaStringCallReturn(node));
+    }
+
+    // a local whose emitted declaration the build layer already typed with the target Java
+    // type (javaDeclaredLocalTypeResolver publishes exactly the printed `Map<String, Object> x`
+    // / `List<Object> x` lines), so the return prints the target on that path
+    javaDeclaredReturnTarget(node, target: string): boolean {
+        if (!isIdentifier(node) || typeof this.javaDeclaredLocalTypeResolver !== 'function') {
+            return false;
+        }
+        const declaration = this.javaDeclarationOfIdentifier(node);
+        if (declaration === undefined) {
+            return false;
+        }
+        let declared;
+        try {
+            declared = this.javaDeclaredLocalTypeResolver(declaration);
+        } catch (e) {
+            return false;
+        }
+        if (declared === undefined) {
+            return false;
+        }
+        const normalize = (type) => String(type).replace(/^final\s+/, '').replace(/\s+/g, '').replace(/^java\.util\./, '');
+        return normalize(declared) === normalize(target);
+    }
+
+    // `this.toArray (x)` and `Object.keys/values (x)` print calls the hand-written runtime
+    // declares `java.util.List<Object>` (BaseExchange.toArray, Helpers.objectKeys/objectValues)
+    javaReturnedObjectListCall(node): boolean {
+        if (!isCallExpression(node)) {
+            return false;
+        }
+        const callee = node.expression;
+        if (!isPropertyAccessExpression(callee)) {
+            return false;
+        }
+        const name = String(callee.name.text);
+        if (JAVA_OBJECT_LIST_CALL_NAMES.has(name) && isIdentifier(callee.expression)
+            && callee.expression.text === 'Object') {
+            return true;
+        }
+        if (!JAVA_LIST_RETURN_BASE_METHODS.has(name) || callee.expression.kind !== SyntaxKind.ThisKeyword) {
+            return false;
+        }
+        let declaration;
+        try {
+            declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+        } catch (e) {
+            return false;
+        }
+        const fileName = declaration?.getSourceFile?.()?.fileName;
+        return fileName !== undefined && JAVA_STRING_RETURN_BASE_FILES.test(fileName);
     }
 
     javaUnwrapReturnExpression(expression) {
