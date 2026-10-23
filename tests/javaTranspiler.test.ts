@@ -2543,7 +2543,7 @@ describe('OrderType/OrderSide parameters print String', () => {
 
     test('fixed and optional positions print String; an Object argument is cast', () => {
         expect(out).toContain('public void place(String type, String side)');
-        expect(out).toContain('public void later(Object id, String type, String side)');
+        expect(out).toContain('public void later(String id, String type, String side)');
         expect(out).toContain('this.place((String) (t), "buy")');
     });
 });
@@ -2585,7 +2585,7 @@ describe('declared-map element reads (d-11): a retyped Dict parameter consumes t
     });
 
     test('the Dict parameter prints the native Java type', () => {
-        expect(venueOutput).toContain('public void parseAccounts(java.util.Map<String, Object> data, Object code)');
+        expect(venueOutput).toContain('public void parseAccounts(java.util.Map<String, Object> data, String code)');
         expect(venueOutput).toContain('public void parseAny(java.util.Map<String, Object> data, Object code)');
     });
 
@@ -7345,5 +7345,70 @@ describe('hx4 J16: implicit-API response is a non-shared put source', () => {
 
     test('a response later reassigned from a field keeps the helper', () => {
         expect(out).toContain('Helpers.addElementToObject(data, "n2"');
+    });
+});
+
+// hx10 wave-4 PJ01: a generated venue method's PLAIN annotation (`string`, a string-indexed
+// dict) prints its Java type, while a declaration whose heritage reaches the hand-written
+// base tier keeps `Object` (Java overrides are invariant).
+describe('java plain-annotation parameters (PJ01)', () => {
+    const TMP = path.join(__dirname, 'files', 'tmp-pj01-plain-params');
+    const BASE_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'Exchange.ts');
+    const VENUE_FIXTURE = path.join(TMP, 'ts', 'src', 'pjprobe.ts');
+
+    let venueOutput: string;
+
+    beforeAll(() => {
+        fs.mkdirSync(path.dirname(BASE_FIXTURE), { recursive: true });
+        fs.writeFileSync(BASE_FIXTURE,
+            "export default class Exchange {\n" +
+            "    legacy (symbol: string): void {\n" +
+            "    }\n" +
+            "}\n");
+        fs.writeFileSync(VENUE_FIXTURE,
+            "import Exchange from './base/Exchange';\n" +
+            "class Venue extends Exchange {\n" +
+            "    localString (symbol: string): string {\n" +
+            "        return symbol;\n" +
+            "    }\n" +
+            "    localDict (data: { [key: string]: any }, code: string): void {\n" +
+            "        const id = data[code];\n" +
+            "    }\n" +
+            "    localNumber (count: number): void {\n" +
+            "        const n = count;\n" +
+            "    }\n" +
+            "    legacy (symbol: string): void {\n" +
+            "    }\n" +
+            "    use (raw: any): void {\n" +
+            "        this.localString (raw);\n" +
+            "    }\n" +
+            "}\n");
+        const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        venueOutput = byPath.transpileJavaByPath(VENUE_FIXTURE).content;
+    });
+
+    afterAll(() => {
+        fs.rmSync(TMP, { recursive: true, force: true });
+    });
+
+    test('a venue-local `string` parameter prints String', () => {
+        expect(venueOutput).toContain('public String localString(String symbol)');
+    });
+
+    test('a venue-local string-indexed dict parameter prints the native map', () => {
+        expect(venueOutput).toContain('public void localDict(java.util.Map<String, Object> data, String code)');
+        expect(venueOutput).toContain('data.get(code)');
+    });
+
+    test('a `number` parameter keeps Object (a TS number is an Integer/Long/Double box)', () => {
+        expect(venueOutput).toContain('public void localNumber(Object count)');
+    });
+
+    test('an override of a hand-written base declaration keeps Object', () => {
+        expect(venueOutput).toContain('public void legacy(Object symbol)');
+    });
+
+    test('a call into the typed parameter carries the checkcast', () => {
+        expect(venueOutput).toContain('this.localString((String) (raw));');
     });
 });

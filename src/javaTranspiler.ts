@@ -3380,18 +3380,43 @@ export class JavaTranspiler extends BaseTranspiler {
         if (type === undefined) {
             return undefined;
         }
-        const symbol = this.javaParameterAliasSymbol(node, type, checker);
-        const name = symbol?.name;
-        if (name === undefined || JAVA_NATIVE_PARAMETER_TYPES[name] === undefined) {
-            return undefined;
-        }
         const excluded = JAVA_NATIVE_PARAMETER_EXCLUDED_POSITIONS[(method.name as any)?.text];
         if (excluded !== undefined && excluded.includes(method.parameters.indexOf(node))) {
             return undefined;
         }
+        const symbol = this.javaParameterAliasSymbol(node, type, checker);
+        const name = symbol?.name;
+        if (name === undefined || JAVA_NATIVE_PARAMETER_TYPES[name] === undefined) {
+            return this.javaPlainParameterTypeOf(node, type, checker);
+        }
         const declaration = symbol?.declarations?.[0]?.resolve();
         const fileName = declaration?.getSourceFile?.()?.fileName;
-        return JAVA_NATIVE_PARAMETER_SOURCE_FILES.test(fileName ?? '') ? JAVA_NATIVE_PARAMETER_TYPES[name] : undefined;
+        return JAVA_NATIVE_PARAMETER_SOURCE_FILES.test(fileName ?? '')
+            ? JAVA_NATIVE_PARAMETER_TYPES[name] : this.javaPlainParameterTypeOf(node, type, checker);
+    }
+
+    // a generated venue method's PLAIN annotation prints its Java type: a TS `string` is always a
+    // String box, a string-indexed dict a HashMap. Base-tier declarations are hand-written Java
+    // (`Object`), so the heritage walk keeps the box for anything overriding them.
+    javaPlainParameterTypeOf(node, type, checker): string | undefined {
+        const fileName = node.getSourceFile().fileName.replace(/\\/g, '/');
+        if (!JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName)) {
+            return undefined;
+        }
+        if ((type as any).getAliasSymbol?.() !== undefined || (type as any).isUnionType?.()) {
+            return undefined;
+        }
+        if ((type.flags & TypeFlags.String) !== 0) {
+            return this.STRING_KEYWORD;
+        }
+        if ((type.flags & TypeFlags.Object) === 0) {
+            return undefined;
+        }
+        const value = checker.getIndexTypeOfType(type, IndexKind.String);
+        if (value === undefined || (value.flags & (TypeFlags.Any | TypeFlags.Unknown)) === 0) {
+            return undefined;
+        }
+        return this.OBJECT_KEYWORD;
     }
 
     // `k` where the consumer declares k as a Java String: the helper's String branch (the
