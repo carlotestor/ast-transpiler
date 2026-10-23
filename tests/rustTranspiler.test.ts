@@ -4730,3 +4730,50 @@ ${body}
         expect(rs("        const d = { 'a': 1 };\n        return d[0];")).toContain('get_value(&d');
     });
 });
+
+describe('hx10 PR02 native `bool` parameters', () => {
+    let base = '';
+    let venue = '';
+    beforeAll(() => {
+        const fresh = new Transpiler({
+            'verbose': false,
+            'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } }
+        } as any);
+        base = fresh.transpileRustByPath('./tests/files/input/hx10w4pr02/ts/src/base/Exchange.ts').content;
+        venue = fresh.transpileRustByPath('./tests/files/input/hx10w4pr02/ts/src/venue.ts').content;
+    });
+
+    test('a required `boolean` read only in condition slots prints `bool`', () => {
+        expect(venue).toContain('pub fn settlementData(&self, isBuy: bool, amount: Value) -> Value {');
+        expect(venue).toContain('if isBuy {');
+        expect(venue).not.toContain('is_true(&isBuy)');
+    });
+
+    test('an optional `boolean` binds the truthiness the use sites applied', () => {
+        expect(venue).toContain('let roundUp: bool = get_arg(optional_args, 0, Value::Bool(false)).is_truthy();');
+        expect(venue).toContain('if roundUp {');
+        expect(venue).not.toContain('is_true(&roundUp)');
+    });
+
+    test('a call into a native-`bool` slot passes the bare bool, a `Value` coerces', () => {
+        expect(venue).toContain('return self.settlementData(on, Value::Int(1));');
+        expect(venue).toContain('return self.settlementData(raw.is_truthy(), Value::Int(2));');
+    });
+
+    test('a bool parameter read outside a bool sink keeps the box', () => {
+        expect(venue).toContain('pub fn boxed(&self, flag: Value) -> Value {');
+        expect(venue).toContain('let mut held: Value = flag;');
+    });
+
+    test('the base tier and base overrides keep the `Value` ABI', () => {
+        expect(base).toContain('pub fn setSandboxMode(&self, enabled: Value)');
+        expect(base).toContain('pub fn isPostOnly(&self, isMarketOrder: Value, optional_args: &[Value]) -> Value {');
+        expect(base).toContain('if is_true(&enabled) {');
+        expect(venue).toContain('pub fn setSandboxMode(&self, enabled: Value)');
+    });
+
+    test('a method passed as a value keeps the `Value` signature', () => {
+        expect(venue).toContain('pub fn channelB(&self, flag: Value) -> Value {');
+        expect(venue).toContain('if is_true(&flag) {');
+    });
+});

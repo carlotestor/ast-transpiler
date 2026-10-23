@@ -1947,6 +1947,214 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustLocalUsesAll(declaration, sourceName, false, (n) => this.rustIdentifierUseIsCondition(n));
     }
 
+    // ── native `bool` parameters ──────────────────────────────────────────────
+    //
+    // A `boolean` parameter of a venue-local generated method prints `bool`
+    // (required) or is bound with `.is_truthy()` (optional) when the checker
+    // proves the type and every body read is a bool sink. Call sites and the
+    // name-based dispatch arms coerce with `Value::is_truthy`, which is exactly
+    // what the per-use `is_true(&x)` did, so the ABI stays a superset.
+
+    private rustBoolParamDecisions = new Map<any, boolean>();
+
+    rustParamPrintsBool(param): boolean {
+        if (param?.kind !== SyntaxKind.Parameter) {
+            return false;
+        }
+        let decision = this.rustBoolParamDecisions.get(param);
+        if (decision === undefined) {
+            this.rustBoolParamDecisions.set(param, false); // re-entrancy guard
+            decision = this.rustParamPrintsBoolUncached(param);
+            this.rustBoolParamDecisions.set(param, decision);
+        }
+        return decision;
+    }
+
+    rustParamPrintsBoolUncached(param): boolean {
+        const method: any = param.parent;
+        if (!isMethodDeclaration(method) || method.body === undefined) {
+            return false;
+        }
+        if (param.name?.kind !== SyntaxKind.Identifier || param.dotDotDotToken !== undefined) {
+            return false;
+        }
+        if ((method.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.StaticKeyword)) {
+            return false;
+        }
+        // The base tier and every base override keep the fixed `Value` ABI that
+        // the hand-written trait declares.
+        const baseFile = RustTranspiler.RUST_BASE_TIER_FILE;
+        if (baseFile.test(param.getSourceFile().fileName)) {
+            return false;
+        }
+        const hidden: any = this.getMethodOverride(method);
+        if (hidden !== undefined && baseFile.test(hidden.getSourceFile().fileName)) {
+            return false;
+        }
+        if (!this.rustTypeIsBoolean(param.name)) {
+            return false;
+        }
+        // A method reference handed to `this.spawn(...)` / `.bind` keeps the
+        // function-pointer shape, so the whole method stays boxed.
+        if (this.rustMethodReferencedAsValue(method)) {
+            return false;
+        }
+        return this.rustLocalUsesAll(param, param.name.text, true, (n) => this.rustBoolParamUseAccepted(n));
+    }
+
+    /** True when `this.<name>` is read as a value (not called) in the method's own file. */
+    rustMethodReferencedAsValue(method): boolean {
+        const name = method.name?.text;
+        if (name === undefined) {
+            return false;
+        }
+        const cached = this.rustValueReferencedMethods.get(method.getSourceFile().fileName);
+        if (cached !== undefined) {
+            return cached.has(name);
+        }
+        return this.rustValueReferenceCensus(method.getSourceFile()).has(name);
+    }
+
+    // Per-file, so the decision never depends on program membership (farm and
+    // scoped regens must agree). A same-class reference is the shape that would
+    // force a function pointer instead of the printed call.
+    private rustValueReferencedMethods = new Map<string, Set<string>>();
+
+    rustValueReferenceCensus(file): Set<string> {
+        const names = new Set<string>();
+        if (file === undefined) {
+            return names;
+        }
+        const visit = (n: any) => {
+            if (n.kind === SyntaxKind.PropertyAccessExpression && n.name?.kind === SyntaxKind.Identifier) {
+                const parent = n.parent;
+                const called = parent?.kind === SyntaxKind.CallExpression && parent.expression === n;
+                if (!called) {
+                    names.add(n.name.text);
+                }
+            }
+            n.forEachChild(visit);
+        };
+        visit(file);
+        this.rustValueReferencedMethods.set(file.fileName, names);
+        return names;
+    }
+
+    /** Native type text of a parameter in the emitted signature. */
+    rustParamType(param): string {
+        return this.rustParamPrintsBool(param) ? 'bool' : 'Value';
+    }
+
+    // A read of a native-`bool` parameter that still compiles: a condition slot,
+    // or an argument of a call whose own parameter prints `bool`.
+    rustBoolParamUseAccepted(node): boolean {
+        if (this.rustIdentifierUseIsCondition(node)) {
+            return true;
+        }
+        const call: any = node.parent;
+        if (call?.kind !== SyntaxKind.CallExpression) {
+            return false;
+        }
+        const at = Array.from(call.arguments).indexOf(node);
+        if (at < 0) {
+            return false;
+        }
+        const params = this.rustCalleeParams(call);
+        return params !== undefined && this.rustNativeBoolArgumentSlot(params, at);
+    }
+
+    /** Parameter declarations of a call's resolved callee, when the checker has them. */
+    rustCalleeParams(call): any[] | undefined {
+        let declaration: any = this.rustCallDeclarations.get(call);
+        if (declaration === undefined) {
+            try {
+                declaration = signatureDeclaration((this.getChecker() as any).getResolvedSignature(call)) ?? null;
+            } catch (e) {
+                return undefined;
+            }
+            this.rustCallDeclarations.set(call, declaration);
+        }
+        if (declaration === undefined || declaration === null) {
+            return undefined;
+        }
+        const resolved: any = declaration.resolve?.() ?? declaration;
+        return resolved.parameters === undefined ? undefined : Array.from(resolved.parameters);
+    }
+
+    /** `bool` text for an argument in a native-`bool` parameter slot. */
+    rustBoolArgumentText(node, identation): string {
+        const native = this.rustNativeBoolArgumentText(node);
+        if (native !== undefined) {
+            return native;
+        }
+        const printed = this.printNode(node, identation).trim();
+        const peeled = this.peelValueBoolBox(this.stripOuterParens(printed));
+        if (peeled !== undefined) {
+            return `(${peeled})`;
+        }
+        // A plain path reads without the wrapping parens.
+        return /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/.test(printed)
+            ? `${printed}.is_truthy()`
+            : `(${printed}).is_truthy()`;
+    }
+
+    /** True when the call's `at`-th argument lands in a required native-`bool` slot. */
+    rustNativeBoolArgumentSlot(params, at: number): boolean {
+        const param: any = params !== undefined && at < params.length ? params[at] : undefined;
+        if (param === undefined || param.initializer !== undefined || param.questionToken !== undefined) {
+            return false;
+        }
+        return this.rustParamPrintsBool(param);
+    }
+
+    /** Argument shapes the printer already emits as a Rust `bool`. */
+    rustNativeBoolArgumentText(node): string | undefined {
+        const inner: any = node?.kind === SyntaxKind.ParenthesizedExpression ? node.expression : node;
+        if (inner?.kind === SyntaxKind.TrueKeyword) {
+            return 'true';
+        }
+        if (inner?.kind === SyntaxKind.FalseKeyword) {
+            return 'false';
+        }
+        if (inner?.kind === SyntaxKind.Identifier) {
+            const declaration: any = this.rustDeclaredNode(inner);
+            if (declaration?.kind === SyntaxKind.Parameter && this.rustParamPrintsBool(declaration)) {
+                return this.printNode(inner, 0).trim();
+            }
+            if (declaration?.kind === SyntaxKind.VariableDeclaration
+                && this.getRustBoolLocalInitializer(declaration, this.printNode(inner, 0)) !== undefined) {
+                return this.printNode(inner, 0).trim();
+            }
+            return undefined;
+        }
+        if (inner?.kind === SyntaxKind.PrefixUnaryExpression && inner.operator === SyntaxKind.ExclamationToken) {
+            const operand = this.rustNativeBoolArgumentText(inner.operand);
+            return operand === undefined ? undefined : `!${operand}`;
+        }
+        return undefined;
+    }
+
+    rustDeclaredNode(node): Node | undefined {
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined) {
+            return undefined;
+        }
+        const symbol = checker.getSymbolAtLocation(node);
+        return symbol === undefined ? undefined : symbolValueDeclaration(symbol) ?? symbolDeclarations(symbol)[0];
+    }
+
+    /** Condition text for a bare identifier of native-`bool` type, else undefined. */
+    printNativeBoolParamCondition(node): string | undefined {
+        const inner: any = this.unwrapParens(node) ?? node;
+        if (inner?.kind !== SyntaxKind.Identifier) {
+            return undefined;
+        }
+        const declaration: any = this.rustDeclaredNode(inner);
+        return declaration?.kind === SyntaxKind.Parameter && this.rustParamPrintsBool(declaration)
+            ? this.printNode(inner, 0).trim()
+            : undefined;
+    }
+
     // Typed string locals: `let x: Value = self.safeString(..)` is declared `Option<String>` when
     // the checker proves a string and every use is a native sink (`x.is_none()`, `x.as_deref() ==
     // Some("lit")`). The helper's Value is unwrapped with `.as_str()`; any other sink keeps the box.
@@ -2592,7 +2800,7 @@ export class RustTranspiler extends BaseTranspiler {
         const name = (node.name as any).text;
         const params = node.parameters;
         const requiredParams = params.filter(p => !p.initializer && !p.questionToken);
-        let parsedArgs = ['&self', ...requiredParams.map(p => `${this.printNode(p.name, 0)}: Value`)].join(', ');
+        let parsedArgs = ['&self', ...requiredParams.map(p => `${this.printNode(p.name, 0)}: ${this.rustParamType(p)}`)].join(', ');
         if (requiredParams.length < params.length) {
             parsedArgs += ', optional_args: &[Value]';
         }
@@ -2625,7 +2833,12 @@ export class RustTranspiler extends BaseTranspiler {
         // Build optional param initializations
         const optionalInits = optionalParams.map((p, idx) => {
             const defaultVal = p.initializer ? this.printNode(p.initializer, 0) : 'Value::Null';
-            return `${this.getIden(identation + 2)}let ${this.printNode(p.name, 0)} = get_arg(optional_args, ${idx}, ${defaultVal});\n`;
+            const name = this.printNode(p.name, 0);
+            // A native-`bool` optional keeps the truthiness the use sites applied.
+            if (this.rustParamPrintsBool(p)) {
+                return `${this.getIden(identation + 2)}let ${name}: bool = get_arg(optional_args, ${idx}, ${defaultVal}).is_truthy();\n`;
+            }
+            return `${this.getIden(identation + 2)}let ${name} = get_arg(optional_args, ${idx}, ${defaultVal});\n`;
         }).join('');
 
         const blockOpen = this.getBlockOpen(identation);
@@ -2676,14 +2889,32 @@ export class RustTranspiler extends BaseTranspiler {
             const methodName = expr.name.text;
             const sig = this.methodSignatures[methodName];
             if (sig) {
-                const printArgs = (list) => list.map(a => this.printNode(a, 0)).join(', ');
+                const calleeParams = this.rustCalleeParams(node);
+                const printArg = (a, at) => this.rustNativeBoolArgumentSlot(calleeParams, at)
+                    ? this.rustBoolArgumentText(a, 0)
+                    : this.printNode(a, 0);
+                const printArgs = (list, from = 0) => list.map((a, i) => printArg(a, from + i)).join(', ');
                 const requiredArgs = printArgs(args.slice(0, sig.requiredCount));
                 const reqPart = requiredArgs ? `${requiredArgs}, ` : '';
-                return `self.${methodName}(${reqPart}&[${printArgs(args.slice(sig.requiredCount))}])`;
+                return `self.${methodName}(${reqPart}&[${printArgs(args.slice(sig.requiredCount), sig.requiredCount)}])`;
             }
         }
 
         return undefined;
+    }
+
+    // Arguments in a native-`bool` parameter slot print a Rust `bool`, carrying
+    // the truthiness the callee's own use sites applied.
+    printArgsForCallExpression(node, identation) {
+        const params = this.rustCalleeParams(node);
+        if (params === undefined) {
+            return super.printArgsForCallExpression(node, identation);
+        }
+        return Array.from(node.arguments).map((arg, at) => {
+            return this.rustNativeBoolArgumentSlot(params, at)
+                ? this.rustBoolArgumentText(arg, identation)
+                : this.printNode(arg, identation).trim();
+        }).join(', ');
     }
 
     printCallExpression(node, identation) {
@@ -4075,6 +4306,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (node.kind === SyntaxKind.PrefixUnaryExpression && node.operator === SyntaxKind.ExclamationToken) {
             return this.printPrefixUnaryExpression(node, identation);
         }
+        // A bare identifier of native-`bool` type: `is_true(&x)` is the identity.
+        const nativeBoolParam = this.printNativeBoolParamCondition(node);
+        if (nativeBoolParam !== undefined) return idn + nativeBoolParam;
         // A call to a hand-written `-> bool` fn is already a Rust bool.
         if (this.rustCallPrintsBool(node)) return idn + this.printNode(node, 0);
         // Checker-proved boolean Value (safe_bool / get_value): native matches!.
