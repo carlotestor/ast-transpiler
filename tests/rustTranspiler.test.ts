@@ -2369,8 +2369,10 @@ describe('rust is_true over a proven boolean Value', () => {
             '    }\n' +
             '}';
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('if isPrivate.as_bool() == Some(true) {');
-        expect(output).toContain('if !(isPrivate.as_bool() == Some(true)) {');
+        // PR02 prints a call-site-proven `boolean` parameter as a native `bool`, so the condition
+        // is the bare name (PR04's identifier arm applies only while the parameter stays boxed)
+        expect(output).toContain('if isPrivate {');
+        expect(output).toContain('if !isPrivate {');
         expect(output).not.toContain('is_true(&isPrivate)');
     });
 
@@ -4831,12 +4833,15 @@ describe('hx10 PR02 native `bool` parameters', () => {
     test('the base tier and base overrides keep the `Value` ABI', () => {
         expect(base).toContain('pub fn setSandboxMode(&self, enabled: Value)');
         expect(base).toContain('pub fn isPostOnly(&self, isMarketOrder: Value, optional_args: &[Value]) -> Value {');
-        expect(base).toContain('if is_true(&enabled) {');
+        // PR04 spells native truthiness of a boolean-typed `Value` as the `as_bool()` compare,
+        // so the boxed ABI still shows (no bare `if enabled {`)
+        expect(base).toContain('if enabled.as_bool() == Some(true) {');
         expect(venue).toContain('pub fn setSandboxMode(&self, enabled: Value)');
     });
 
     test('a method passed as a value keeps the `Value` signature', () => {
         expect(venue).toContain('pub fn channelB(&self, flag: Value) -> Value {');
-        expect(venue).toContain('if is_true(&flag) {');
+        // PR04's identifier arm: a boolean-typed `Value` prints the native `as_bool()` compare
+        expect(venue).toContain('if flag.as_bool() == Some(true) {');
     });
 });
