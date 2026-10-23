@@ -1,6 +1,6 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
 import { SyntaxKind, type Node, type ParameterDeclaration } from 'typescript/unstable/ast';
-import { IndexKind, TypeFlags, type Checker, type Symbol as TsSymbol, type UnionType } from 'typescript/unstable/sync';
+import { IndexKind, TypeFlags, type Checker, type Program, type Symbol as TsSymbol, type UnionType } from 'typescript/unstable/sync';
 import { isArrayLiteralExpression, isAsExpression, isBinaryExpression, isBlock, isBooleanLiteral, isBreakStatement, isCallExpression, isClassDeclaration, isClassExpression, isClassLikeDeclaration, isContinueStatement, isDeleteExpression, isElementAccessExpression, isExpressionStatement, isForStatement, isFunctionExpression, isIdentifier, isIfStatement, isMethodDeclaration, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPostfixUnaryExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isPropertyDeclaration, isPropertySignatureDeclaration, isReturnStatement, isSourceFile, isSpreadAssignment, isSpreadElement, isStringLiteral, isStringLiteralLikeNode, isThrowStatement, isTypeAssertion, isVariableDeclaration, isWhileStatement } from 'typescript/unstable/ast/is';
 import { findAncestor, getAllSuperTypeNodes, isFunctionLike } from './tsUtils.js';
 
@@ -3601,8 +3601,13 @@ export class CSharpTranspiler extends BaseTranspiler {
     // declaration's type (getCSharpLocalType, plus classifier retypes); unnamed operands keep isTrue.
     csharpConditionOperandType(node) {
         const declaration = this.csharpReceiverBinding(node);
+        if (declaration?.kind === SyntaxKind.Parameter) {
+            // a `bool?` signature this printer emitted for the parameter (csharpBooleanParamType):
+            // the recorded type is the printed one, so the condition is a lifted bool test
+            return (this.csharpPrintedParamType(node) === 'bool?') ? 'bool?' : undefined;
+        }
         if (declaration?.kind !== SyntaxKind.VariableDeclaration) {
-            return undefined; // a parameter / member read has no declaration this pass retypes
+            return undefined; // a member read has no declaration this pass retypes
         }
         if ((declaration.parent as any)?.declarations?.length !== 1) {
             return undefined; // `object a = ..., b = ...` is printed as one statement
@@ -3871,7 +3876,11 @@ export class CSharpTranspiler extends BaseTranspiler {
         const name = method === undefined || method.name === undefined ? undefined : method.name.getText().trim();
         const row = name === undefined ? undefined : CSHARP_OVERRIDE_PARAM_TYPES[name as string];
         const wanted = row === undefined ? undefined : row[method.parameters.indexOf(node)];
-        if (wanted === undefined || this.csharpOverrideParamSpelling(node) !== wanted) {
+        if (wanted === undefined) {
+            const booleanParam = this.csharpBooleanParamType(node);
+            return (booleanParam === undefined) ? super.printParameterType(node) : booleanParam;
+        }
+        if (this.csharpOverrideParamSpelling(node) !== wanted) {
             return super.printParameterType(node);
         }
         return wanted;
@@ -3919,6 +3928,228 @@ export class CSharpTranspiler extends BaseTranspiler {
         return 'IDictionary<string, object>';
     }
 
+    // A `boolean` parameter of a generated method prints `bool?` only when the whole-program
+    // call-site census proves every argument at that position is a C# bool (see the census
+    // below): C# is invariant on arguments, so a single caller passing `object` is CS1503 and
+    // that parameter has to stay `object`.
+    csharpBooleanParamType(node) {
+        if (node?.kind !== SyntaxKind.Parameter) {
+            return undefined;
+        }
+        if (this.checkerOrUndefined() === undefined) {
+            return undefined;
+        }
+        const method: any = findAncestor(node, (n) => isMethodDeclaration(n));
+        if (method === undefined) {
+            return undefined;
+        }
+        const index = method.parameters.indexOf(node);
+        if (index < 0) {
+            return undefined;
+        }
+        const accepted = this.csharpBooleanParamCensus().get(method);
+        return (accepted?.has(index) === true) ? this.BOOLEAN_KEYWORD + '?' : undefined;
+    }
+
+    // method node -> the parameter indexes this printer emits as `bool?`; keyed by the ts.Program
+    // the census walked, so a sticky batch program and an in-memory snippet never answer for
+    // each other
+    csharpBooleanParamProofs = new WeakMap<Program, Map<Node, Set<number>>>();
+
+    csharpBooleanParamCensus(): Map<Node, Set<number>> {
+        const program = this.getProgram();
+        const cached = this.csharpBooleanParamProofs.get(program);
+        if (cached !== undefined) {
+            return cached;
+        }
+        // installed before the walk: a census that throws leaves the printer on the untyped
+        // emission instead of retrying for every parameter
+        const accepted = new Map<Node, Set<number>>();
+        this.csharpBooleanParamProofs.set(program, accepted);
+        const candidates = [];
+        const byName = new Map<string, any[]>();
+        const blocked = new Set<Node>();
+        const collect = (node) => {
+            if (node?.kind === SyntaxKind.MethodDeclaration) {
+                this.csharpBooleanParamCandidateRows(node, candidates, byName);
+            }
+            node.forEachChild(collect);
+        };
+        const sources = program.getSourceFileNames().map((name) => program.getSourceFile(name)).filter((file) => file !== undefined);
+        for (const file of sources) {
+            if (file.isDeclarationFile) {
+                continue;
+            }
+            file.forEachChild(collect);
+        }
+        if (candidates.length === 0) {
+            return accepted;
+        }
+        // call sites: only the names a candidate declares reach the checker
+        const walk = (node) => {
+            if (node?.kind === SyntaxKind.CallExpression) {
+                const callee = node.expression;
+                const name = (callee?.kind === SyntaxKind.PropertyAccessExpression)
+                    ? this.csharpNodeText(callee.name)
+                    : this.csharpNodeText(callee);
+                const rows = (name === undefined) ? undefined : byName.get(name as string);
+                if (rows !== undefined) {
+                    const declaration: any = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+                    const key = this.csharpNodePositionKey(declaration);
+                    for (const row of rows) {
+                        if ((key !== undefined) && (row.key === key)) {
+                            row.calls.push(node);
+                        }
+                    }
+                }
+            }
+            node.forEachChild(walk);
+        };
+        for (const file of sources) {
+            if (file.isDeclarationFile) {
+                continue;
+            }
+            file.forEachChild(walk);
+        }
+        // a call this printer cannot bind (a spread, more arguments than the signature declares)
+        // blocks the whole method: the argument would not convert
+        for (const row of candidates) {
+            for (const call of row.calls) {
+                const args = call.arguments ?? [];
+                const spread = args.some((a) => a.kind === SyntaxKind.SpreadElement);
+                if (spread || (args.length > row.method.parameters.length)) {
+                    blocked.add(row.method);
+                }
+            }
+        }
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (const row of candidates) {
+                if (blocked.has(row.method) || (accepted.get(row.method)?.has(row.index) === true)) {
+                    continue;
+                }
+                // no call site in this program is no proof: a caller in another stage (rails that
+                // print in their own batch) would still have to convert
+                const proven = (row.calls.length > 0) && row.calls.every((call) => this.csharpBooleanArgumentProven(call, row.index, accepted));
+                if (!proven) {
+                    continue;
+                }
+                if (accepted.get(row.method) === undefined) {
+                    accepted.set(row.method, new Set());
+                }
+                accepted.get(row.method).add(row.index);
+                changed = true;
+            }
+        }
+        return accepted;
+    }
+
+    // an identifier's spelling in the ts7 ast (`text`; `escapedText` no longer exists)
+    csharpNodeText(node) {
+        if (node?.kind !== SyntaxKind.Identifier) {
+            return undefined;
+        }
+        const text = (node as any).text ?? (node as any).escapedText;
+        return (typeof text === 'string' && text.length > 0) ? text : undefined;
+    }
+
+    // a declaration resolved through the checker comes back as a fresh handle, so method identity
+    // is the source position, never the node object
+    csharpNodePositionKey(node) {
+        if (node === undefined) {
+            return undefined;
+        }
+        const source = node.getSourceFile?.();
+        return (source === undefined) ? undefined : `${source.fileName}:${node.pos}:${node.end}`;
+    }
+
+    // candidate rows of one method declaration: a body-carrying method that overrides nothing
+    // (C# is invariant on override parameter types, CS0115) and has a boolean parameter
+    csharpBooleanParamCandidateRows(node, candidates, byName) {
+        if (node.body === undefined || node.name?.kind !== SyntaxKind.Identifier) {
+            return;
+        }
+        if (!isClassDeclaration(node.parent) || (this.getMethodOverride(node) !== undefined)) {
+            return;
+        }
+        for (let index = 0; index < node.parameters.length; index++) {
+            const parameter = node.parameters[index];
+            if ((parameter.dotDotDotToken !== undefined) || !this.csharpParamIsBooleanTyped(parameter)) {
+                continue;
+            }
+            const row = { method: node, key: this.csharpNodePositionKey(node), index, calls: [] };
+            candidates.push(row);
+            const name = this.csharpNodeText(node.name);
+            const rows = byName.get(name);
+            if (rows === undefined) {
+                byName.set(name, [ row ]);
+            } else {
+                rows.push(row);
+            }
+        }
+    }
+
+    // `boolean`, `boolean | undefined` / `| null` and the literal-boolean unions; a mixed union
+    // or `any` keeps the parameter `object`
+    csharpParamIsBooleanTyped(parameter) {
+        if (parameter.type === undefined) {
+            return false;
+        }
+        const type = this.getChecker().getTypeFromTypeNode(parameter.type);
+        if (type === undefined) {
+            return false;
+        }
+        if (type.flags & TypeFlags.BooleanLike) {
+            return true;
+        }
+        if (!type.isUnionType()) {
+            return false;
+        }
+        let booleans = 0;
+        for (const member of type.getTypes()) {
+            if (member.flags & (TypeFlags.Undefined | TypeFlags.Null)) {
+                continue;
+            }
+            if ((member.flags & TypeFlags.BooleanLike) === 0) {
+                return false;
+            }
+            booleans += 1;
+        }
+        return booleans > 0;
+    }
+
+    // One call-site argument of a boolean parameter: a bool literal, `null` / `undefined`, a shape
+    // the printer already renders as a C# bool, or the caller's own proven `bool?` parameter.
+    // Locals keep the parameter `object`: their printed type is the build layer's decision and
+    // this census cannot see it (a `var` from a tuple element prints `object`).
+    csharpBooleanArgumentProven(call, index, accepted) {
+        let value = call.arguments[index];
+        if (value === undefined) {
+            return true;
+        }
+        while (value.kind === SyntaxKind.ParenthesizedExpression) {
+            value = value.expression;
+        }
+        if (value.kind === SyntaxKind.TrueKeyword || value.kind === SyntaxKind.FalseKeyword || value.kind === SyntaxKind.NullKeyword) {
+            return true;
+        }
+        if (value.kind === SyntaxKind.Identifier) {
+            if (this.csharpNodeText(value) === 'undefined') {
+                return true; // prints `null`, which a `bool?` accepts
+            }
+            const declaration: any = this.getChecker().getSymbolAtLocation(value)?.valueDeclaration?.resolve();
+            if (declaration?.kind !== SyntaxKind.Parameter) {
+                // a local: only a declaration printed `bool` converts (`var` boxes bool into object)
+                return this.csharpDeclaredLocalType(value) === 'bool';
+            }
+            const method: any = findAncestor(declaration, (n) => isMethodDeclaration(n));
+            const parameterIndex = (method === undefined) ? -1 : method.parameters.indexOf(declaration);
+            return (parameterIndex >= 0) && (accepted.get(method)?.has(parameterIndex) === true);
+        }
+        return this.csharpConditionPrintsBool(value);
+    }
+
     printParameter(node, defaultValue = true) {
         const name = this.printNode(node.name, 0);
         const initializer = node.initializer;
@@ -3937,7 +4168,7 @@ export class CSharpTranspiler extends BaseTranspiler {
             if (initializer) {
                 const customDefaultValue = this.printCustomDefaultValueIfNeeded(initializer);
                 const defaultValue = customDefaultValue ? customDefaultValue : this.printNode(initializer, 0);
-                type = (defaultValue === "null" && type !== "object") ? type + "? ": type + " ";
+                type = (defaultValue === "null" && type !== "object") ? (type.endsWith('?') ? type + " " : type + "? ") : type + " ";
                 return type + name + this.SPACE_DEFAULT_PARAM + "=" + this.SPACE_DEFAULT_PARAM + defaultValue;
             }
             return type + " " + name;

@@ -6078,3 +6078,75 @@ describe('hx4 L44 guarded nullable negation', () => {
         expect(output).toContain('prefixUnaryNeg(ref amount)');
     });
 });
+
+// PC04: a `boolean` parameter prints `bool?` only when every call site in the program passes a
+// C# bool at that position; the body condition then drops the `isTrue` wrapper.
+describe('boolean parameters become bool? on a proven call-site census', () => {
+    const method = (name, flag, body) =>
+        "    " + name + " (" + flag + "): number {\n" + body + "    }\n";
+    test('a parameter every caller passes a literal for prints bool? and loses isTrue', () => {
+        const input =
+        "class T {\n" +
+        method("f", "flag: boolean", "        if (flag) { return 1; }\n        return 0;\n") +
+        "    g (): number {\n        return this.f (true);\n    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(input).content;
+        expect(output).toContain("public virtual object f(bool? flag)");
+        expect(output).toContain("if (flag == true)");
+        expect(output).not.toContain("isTrue");
+    });
+    test('an untyped/object argument keeps the parameter object and the helper', () => {
+        const input =
+        "class T {\n" +
+        method("f", "flag: boolean", "        if (flag) { return 1; }\n        return 0;\n") +
+        "    g (x: any): number {\n        const box = x['k'];\n        return this.f (box);\n    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(input).content;
+        expect(output).toContain("public virtual object f(object flag)");
+        expect(output).toContain("if (isTrue(flag))");
+    });
+    test('a boolean the caller passes along is proven at the same time', () => {
+        const input =
+        "class T {\n" +
+        method("f", "flag: boolean", "        if (flag) { return 1; }\n        return 0;\n") +
+        method("g", "outer: boolean", "        return this.f (outer);\n") +
+        "    h (): number {\n        return this.g (false);\n    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(input).content;
+        expect(output).toContain("public virtual object f(bool? flag)");
+        expect(output).toContain("public virtual object g(bool? outer)");
+        expect(output).toContain("this.f(outer)");
+    });
+    test('a nilable boolean (`boolean | undefined`) is the same proof', () => {
+        const input =
+        "class T {\n" +
+        "    f (flag: boolean | undefined = undefined): number {\n        if (flag) { return 1; }\n        return 0;\n    }\n" +
+        "    g (): number {\n        return this.f (undefined);\n    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(input).content;
+        expect(output).toContain("public virtual object f(bool? flag = null)");
+        expect(output).toContain("if (flag == true)");
+    });
+    test('an override repeats its base parameter type, so it stays object', () => {
+        const input =
+        "class A {\n" +
+        method("f", "a1: boolean", "        if (a1) { return 1; }\n        return 0;\n") +
+        "}\n" +
+        "class B extends A {\n" +
+        method("f", "flag: boolean", "        if (flag) { return 1; }\n        return 0;\n") +
+        "    g (): number {\n        return this.f (true);\n    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(input).content;
+        expect(output).toContain("public override object f(object flag)");
+        expect(output).toContain("if (isTrue(flag))");
+    });
+    test('a parameter with no call site in the program keeps object', () => {
+        const input =
+        "class T {\n" +
+        method("f", "flag: boolean", "        if (flag) { return 1; }\n        return 0;\n") +
+        "}";
+        const output = transpiler.transpileCSharp(input).content;
+        expect(output).toContain("public virtual object f(object flag)");
+        expect(output).toContain("if (isTrue(flag))");
+    });
+});
