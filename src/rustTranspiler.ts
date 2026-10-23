@@ -537,6 +537,31 @@ export class RustTranspiler extends BaseTranspiler {
         return false;
     }
 
+    /** Declarations `printVariableDeclarationList` emitted as `let mut x: bool`. */
+    private rustBoolDeclaredLocals = new WeakSet<Node>();
+
+    /** A bare identifier whose reads still hold a `Value` box: every declaration
+     *  this printer emits as `Value` (param, destructured element, local) minus
+     *  the ones the declaration site retypes to a native Rust type. */
+    isBooleanValueIdentifier(node): boolean {
+        const inner = this.unwrapParens(node);
+        if (inner === undefined || !isIdentifier(inner) || !this.isDeclaredValueIdentifier(inner)) return false;
+        const declarations = symbolDeclarations((this.getChecker() as any).getSymbolAtLocation(inner));
+        return declarations.length > 0 && declarations.every((declaration) =>
+            !this.rustDeclarationPrintsNativeBool(declaration));
+    }
+
+    /** The declaration site emits `let mut x: bool = …` (see
+     *  `getRustBoolLocalInitializer`): its reads are native bools, not `Value`. */
+    rustDeclarationPrintsNativeBool(declaration): boolean {
+        if (declaration?.kind !== SyntaxKind.VariableDeclaration) return false;
+        if (this.rustBoolDeclaredLocals.has(declaration)) return true;
+        const initializer = declaration.initializer;
+        if (initializer === undefined || declaration.name?.kind !== SyntaxKind.Identifier) return false;
+        return this.rustTypeIsBoolean(initializer) &&
+            this.rustLocalUsesAcceptBool(declaration, declaration.name.text);
+    }
+
     /** The emitted `matches!` is a bare Rust `bool`: it is only valid where the
      *  whole enclosing boolean expression already sits in a bool slot. A logical
      *  expression stored in a `Value` slot gets its `Value::Bool(..)` box from the
@@ -593,6 +618,22 @@ export class RustTranspiler extends BaseTranspiler {
             return undefined;
         }
         return `matches!(${this.printNode(node, 0)}, Value::Bool(true))`;
+    }
+
+    /** Same native truthiness for a bare `Value`-boxed identifier of boolean type.
+     *  Prints the R12 text (`x.as_bool() == Some(true)`) so the typed-locals pass
+     *  keeps rewriting it; runs after R12 so that arm stays byte-identical. */
+    printNativeIdentifierTruthiness(node): string | undefined {
+        if (!this.isBooleanValueIdentifier(node) || !this.printsValueExpression(node) ||
+            !this.isBooleanOrUndefinedType(this.typeOfNodeIfAny(node)) || !this.isBareBoolEmissionSafe(node)) {
+            return undefined;
+        }
+        const text = `${this.printNode(node, 0)}.as_bool() == Some(true)`;
+        let current: any = node;
+        while (current.parent !== undefined && isParenthesizedExpression(current.parent)) current = current.parent;
+        const negated = current.parent?.kind === SyntaxKind.PrefixUnaryExpression &&
+            current.parent.operator === SyntaxKind.ExclamationToken;
+        return negated ? `(${text})` : text;
     }
 
     // Kind of a literal operand whose printed Value variant is exactly known.
@@ -1714,6 +1755,7 @@ export class RustTranspiler extends BaseTranspiler {
         }
         const boolValue = this.getRustBoolLocalInitializer(declaration, parsedValue);
         if (boolValue !== undefined) {
+            this.rustBoolDeclaredLocals.add(declaration);
             return `${indent}let mut ${varName}: bool = ${boolValue}`;
         }
         const typedStr = this.rustSafeStringLocalIsTyped(declaration);
@@ -4315,6 +4357,8 @@ export class RustTranspiler extends BaseTranspiler {
         const nativeTruthiness = this.printNativeTruthiness(node);
         if (nativeTruthiness !== undefined) return idn + nativeTruthiness;
         const r12Truthiness = this.rustR12NativeTruthiness(node); if (r12Truthiness !== undefined) return idn + r12Truthiness;
+        const identifierTruthiness = this.printNativeIdentifierTruthiness(node);
+        if (identifierTruthiness !== undefined) return idn + identifierTruthiness;
         // B-26: an operand whose printer emission is already a Rust `bool`.
         const nativeCondition = this.printNativeParenthesizedCondition(node);
         if (nativeCondition !== undefined && this.rustConditionBoolSlot(node)) return idn + nativeCondition;

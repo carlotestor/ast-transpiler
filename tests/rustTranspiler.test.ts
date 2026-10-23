@@ -2358,6 +2358,69 @@ describe('rust is_true over a proven boolean Value', () => {
         expect(output).toContain('is_true(&get_value(&options, &i))');
         expect(output).not.toContain('matches!(options');
     });
+
+    test('a boolean-typed parameter emits the native matches!', () => {
+        const ts =
+            'class D {\n' +
+            '    subscribe(name: string, isPrivate: boolean) {\n' +
+            '        if (isPrivate) { return 1; }\n' +
+            '        if (!isPrivate) { return 2; }\n' +
+            '        return 3;\n' +
+            '    }\n' +
+            '}';
+        const output = transpiler.transpileRust(ts).content;
+        expect(output).toContain('if isPrivate.as_bool() == Some(true) {');
+        expect(output).toContain('if !(isPrivate.as_bool() == Some(true)) {');
+        expect(output).not.toContain('is_true(&isPrivate)');
+    });
+
+    test('a boolean-typed local reassigned from a tuple emits the native matches!', () => {
+        const ts =
+            'class E {\n' +
+            '    handleOptionBoolAndParams(params: any, methodName: string, optionName: string, defaultValue?: boolean): [boolean, any] { return [true, params]; }\n' +
+            '    run(params: any) {\n' +
+            '        let uta: boolean = true;\n' +
+            "        [uta, params] = this.handleOptionBoolAndParams(params, 'fetchDepositAddress', 'uta', uta);\n" +
+            '        if (uta) { return 1; }\n' +
+            '        return 2;\n' +
+            '    }\n' +
+            '}';
+        const output = transpiler.transpileRust(ts).content;
+        expect(output).toContain('let mut uta: Value = Value::Bool(true);');
+        expect(output).toContain('if uta.as_bool() == Some(true) {');
+        expect(output).not.toContain('is_true(&uta)');
+    });
+
+    test('a local the printer declares native bool keeps the helper', () => {
+        const ts =
+            'class F {\n' +
+            '    safeBool(obj: any, key: any): boolean | undefined { return undefined; }\n' +
+            '    run() {\n' +
+            "        const flag = this.safeBool(this.options, 'a') === true;\n" +
+            '        if (flag) { return 1; }\n' +
+            '        return 2;\n' +
+            '    }\n' +
+            '}';
+        const output = transpiler.transpileRust(ts).content;
+        expect(output).toContain('let mut flag: bool =');
+        expect(output).not.toContain('matches!(flag');
+    });
+
+    test('a non-boolean identifier keeps the helper', () => {
+        const ts =
+            'class G {\n' +
+            '    run(name: string, params: any) {\n' +
+            '        if (name) { return 1; }\n' +
+            '        if (params) { return 2; }\n' +
+            '        return 3;\n' +
+            '    }\n' +
+            '}';
+        const output = transpiler.transpileRust(ts).content;
+        expect(output).toContain('is_true(&name)');
+        expect(output).toContain('is_true(&params)');
+        expect(output).not.toContain('matches!(name');
+        expect(output).not.toContain('matches!(params');
+    });
 });
 
 describe('rust declared-Dict locals', () => {
