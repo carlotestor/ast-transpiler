@@ -454,7 +454,8 @@ describe('csharp transpiling tests', () => {
         "object c = divide(3, 3);\n" +
         "object d = subtract(4, 4);\n" +
         "object e = mod(5, 5);\n" +
-        "object f = add(\"foo\", \"bar\");"
+        // two string literals: add(string, string) IS C# concatenation, nulls included
+        "object f = (\"foo\" + \"bar\");"
         const output = transpiler.transpileCSharp(ts).content;
         expect(output).toBe(csharp);
     })
@@ -1571,6 +1572,73 @@ describe('csharp typed body locals', () => {
         const output = transpiler.transpileCSharp(input).content;
         expect(output).toContain("public override bool? flag(object x)");
         expect(output).toContain("return ((bool?)((object)(true)));");
+    });
+    test('a method declared `: Str` returns string? and a `: string` one returns string', () => {
+        const input =
+        "type Str = string | undefined;\n" +
+        "class Exchange {\n" +
+        "    getWsUrl (type: any): Str {\n" +
+        "        return this.getId (type);\n" +
+        "    }\n" +
+        "    getId (type: any): string {\n" +
+        "        return 'x';\n" +
+        "    }\n" +
+        "    unproven (type: any): Str {\n" +
+        "        return this.safeString (type);\n" +
+        "    }\n" +
+        "    boxed (type: any): Str {\n" +
+        "        const value: any = this.safeString (type);\n" +
+        "        return value;\n" +
+        "    }\n" +
+        "    safeString (a: any, b?: any, c?: any) { return a; }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(input).content;
+        expect(output).toContain("public virtual string? getWsUrl(object type)");
+        expect(output).toContain("public virtual string? getId(object type)");
+        // a call to a method whose printed return already IS the declared string needs no unbox
+        expect(output).toContain("return this.getId(type);");
+        // a call whose printed return already IS string? needs no unbox
+        expect(output).toContain("return this.safeString(type);");
+        // an `object`-typed local keeps the unbox: the cast only names the box's type
+        expect(output).toContain("return ((string?)((object)(value)));");
+        // a `: string` method returning a literal needs no unbox either
+        expect(output).toContain("return \"x\";");
+    });
+    test('string return typing skips async, inferred and mixed-union methods', () => {
+        const input =
+        "class Exchange {\n" +
+        "    async later (x: any): Promise<string> { return 'a'; }\n" +
+        "    inferred (x: any) { return 'a'; }\n" +
+        "    mixed (x: any): string | number { return x; }\n" +
+        "    dict (x: any): Dict { return x; }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(input).content;
+        expect(output).toContain("public async virtual Task<object> later(object x)");
+        expect(output).toContain("public virtual object inferred(object x)");
+        expect(output).toContain("public virtual object mixed(object x)");
+        expect(output).toContain("public virtual object dict(object x)");
+    });
+    test('a proven string return concatenates natively, an unproven operand keeps add', () => {
+        const input =
+        "type Str = string | undefined;\n" +
+        "class Exchange {\n" +
+        "    getWsUrl (type: any): Str {\n" +
+        "        const baseUrl = this.safeValue (this.urls, type);\n" +
+        "        return this.wrap (baseUrl, 'ws');\n" +
+        "    }\n" +
+        "    wrap (base: any, tail: any): Str {\n" +
+        "        return this.suffix (tail);\n" +
+        "    }\n" +
+        "    suffix (s: any): string {\n" +
+        "        return s;\n" +
+        "    }\n" +
+        "    privateUrl (type: any, listenKey: any): Str {\n" +
+        "        return this.getWsUrl (type) + '?listenKey=' + listenKey;\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(input).content;
+        // the typed-return call and both literals prove; the untyped `listenKey` keeps the helper
+        expect(output).toContain("return ((string?)((object)(add((this.getWsUrl(type) + \"?listenKey=\"), listenKey))));");
     });
     test('guarded reads print the native dictionary indexer', () => {
         const guarded =

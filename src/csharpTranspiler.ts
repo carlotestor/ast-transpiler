@@ -172,6 +172,16 @@ const CSHARP_NATIVE_NUMERIC_THIS_KINDS: { [name: string]: string } = {
 // the `+` LEFT operand overload rebinding)
 const CSHARP_SAFE_ACCESSOR_NAMES = Object.keys(CSHARP_THIS_RETURN_TYPES).filter((name) => name.startsWith('safe'));
 
+// hand-written `cs/ccxt/base` producers whose C# signature is a string box (verified against the
+// declarations: decimalToPrecision/numberToString/implodeParams/totp/intToBase16/binaryToBase16/
+// stringToBase64/uuid22 -> `string`, the *ToPrecision trio -> `string?`). A call to one of them IS
+// that string, so a return needs no unbox and a `+` around it binds the same overload `add` does.
+// Kept apart from CSHARP_THIS_RETURN_TYPES so the local/condition families keep their behaviour.
+const CSHARP_PRINTED_STRING_HELPERS = new Set([
+    'decimalToPrecision', 'numberToString', 'implodeParams', 'totp', 'intToBase16',
+    'binaryToBase16', 'stringToBase64', 'uuid22', 'amountToPrecision', 'priceToPrecision', 'costToPrecision',
+]);
+
 // S62: calls whose C# signature is a hand-written `bool` (isTrue, isEqual, isGreaterThan, ...,
 // inOp in cs/ccxt/base/Exchange.TranspileHelpers.cs; emitted for the comparison operators, `in`
 // and TS `isTrue`) are already C# `bool`, so the condition printer's falsy wrapper is the identity.
@@ -408,6 +418,10 @@ export class CSharpTranspiler extends BaseTranspiler {
     binaryExpressionsWrappers;
     // method node -> 'bool' | 'bool?' | undefined (see csharpBooleanReturnType)
     csharpBooleanReturnTypes = new WeakMap<Node, string | undefined>();
+    // method node -> 'string' | 'string?' | undefined (see csharpStringReturnType)
+    csharpStringReturnTypes = new WeakMap<Node, string | undefined>();
+    // method node -> the type the composed printer writes into its signature
+    csharpPrintedReturnTypes = new WeakMap<Node, string | undefined>();
     // variable declaration -> getCSharpLocalType result, shared by the condition checks
     csharpLocalTypes = new WeakMap<Node, string>();
     // method node -> `key in recv` guards of that method, keyed by receiver text + key
@@ -3162,6 +3176,12 @@ export class CSharpTranspiler extends BaseTranspiler {
                 if (nativeConcat !== undefined) {
                     return nativeConcat;
                 }
+                // the printer's own proof (same-class typed returns + literals): the build layer's
+                // hook above answers only the declarations it retypes after printing
+                const printerConcat = this.csharpPrinterStringConcat(left, right, leftText, rightText);
+                if (printerConcat !== undefined) {
+                    return printerConcat;
+                }
             }
 
             if (op === SyntaxKind.AsteriskToken) {
@@ -4023,32 +4043,226 @@ export class CSharpTranspiler extends BaseTranspiler {
         return result;
     }
 
+    // A method declared `: string` / `: Str` returns a C# `string?` instead of `object`. Only
+    // non-async methods with an explicit annotation qualify; any other member of the annotation
+    // (or an inferred type) keeps the upstream `object`. The nullable spelling is deliberate:
+    // `string` and `string?` are one runtime type, and the nullable one keeps a caller's null test
+    // meaningful (a non-nullable return turns it into CS8073 under TreatWarningsAsErrors).
+    csharpStringReturnType(node): string | undefined {
+        if (node?.kind !== SyntaxKind.MethodDeclaration || this.isAsyncFunction(node)) {
+            return undefined;
+        }
+        if (this.csharpStringReturnTypes.has(node)) {
+            return this.csharpStringReturnTypes.get(node);
+        }
+        let result: string | undefined = undefined;
+        if (node.type) {
+            const type = this.getChecker().getTypeFromTypeNode(node.type);
+            const members = type.isUnionType() ? type.getTypes() : [ type ];
+            let stringMember = false;
+            let otherMember = false;
+            for (const member of members) {
+                if (member.flags & (TypeFlags.Undefined | TypeFlags.Null)) {
+                    continue;
+                } else if (this.isStringType(member.flags)) {
+                    stringMember = true;
+                } else {
+                    otherMember = true;
+                }
+            }
+            if (stringMember && !otherMember) {
+                result = this.STRING_KEYWORD + '?';
+            }
+        } else {
+            // an un-annotated override inherits the parent's printed return type
+            // (printMethodDefinition), so its returns need the same unboxing
+            result = this.csharpStringReturnType(this.getMethodOverride(node));
+        }
+        // netstandard2.x forbids a covariant return (CS8830): an override must print exactly the
+        // type its base prints, so it is typed only when the base method is typed too
+        if ((result !== undefined) && this.isOverrideMethod(node) && (this.csharpStringReturnType(this.getMethodOverride(node)) === undefined)) {
+            result = undefined;
+        }
+        this.csharpStringReturnTypes.set(node, result);
+        return result;
+    }
+
+    isOverrideMethod(node): boolean {
+        const override = this.getMethodOverride(node);
+        return (override !== undefined) && (override !== node);
+    }
+
+    // the C# string box a `this.<name>(...)` call hands back: the printer's own table of the
+    // hand-written base helpers first (that IS the emitted signature), then a method of the SAME
+    // class whose printed return this printer typed. Anything else keeps the helper.
+    csharpStringCallTyped(node): string | undefined {
+        if (node?.kind !== SyntaxKind.CallExpression) {
+            return undefined;
+        }
+        let declared;
+        try {
+            declared = this.csharpCallReturnType(node);
+        } catch (e) {
+            declared = undefined;
+        }
+        if ((declared === 'string') || (declared === 'string?')) {
+            return declared;
+        }
+        const expression = node.expression;
+        if (expression?.kind !== SyntaxKind.PropertyAccessExpression || expression.expression?.kind !== SyntaxKind.ThisKeyword) {
+            return undefined;
+        }
+        if (CSHARP_PRINTED_STRING_HELPERS.has(expression.name?.text) && this.csharpCalleeResolves(node)) {
+            return this.STRING_KEYWORD + '?';
+        }
+        let declaration;
+        try {
+            declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+        } catch (e) {
+            return undefined;
+        }
+        if ((declaration === undefined) || !isMethodDeclaration(declaration)) {
+            return undefined;
+        }
+        const owner = findAncestor(declaration, isClassLikeDeclaration);
+        if ((owner === undefined) || (owner !== findAncestor(node, isClassLikeDeclaration))) {
+            return undefined;
+        }
+        const printed = this.csharpPrintedReturnType(declaration);
+        return ((printed === 'string') || (printed === 'string?')) ? printed : undefined;
+    }
+
+    // the type the composed printer writes into a method's signature (the build layer's retype
+    // wins over the annotation rule), i.e. the static type of a call to it
+    csharpPrintedReturnType(declaration): string | undefined {
+        if (this.csharpPrintedReturnTypes.has(declaration)) {
+            return this.csharpPrintedReturnTypes.get(declaration);
+        }
+        let printed;
+        try {
+            printed = this.printFunctionType(declaration);
+        } catch (e) {
+            printed = undefined;
+        }
+        this.csharpPrintedReturnTypes.set(declaration, printed);
+        return printed;
+    }
+
+    // `add (x, y)` -> `(x + y)` when BOTH operands print a string, so the emitted call would bind
+    // add(string, string) / add(string, object) — both compute C# concatenation, nulls included.
+    // Absolute operands (a literal, an `as string` cast, a proven call, a proven concat) keep the helper.
+    csharpPrinterStringConcat(left, right, leftText, rightText): string | undefined {
+        if (!this.csharpConcatOperandPrintsString(left) || !this.csharpConcatOperandPrintsString(right)) {
+            return undefined;
+        }
+        return `(${leftText} + ${rightText})`;
+    }
+
+    csharpConcatOperandPrintsString(node, depth = 0, allowLocal = false): boolean {
+        if ((node === undefined) || (depth > 6)) {
+            return false;
+        }
+        switch (node.kind) {
+        case SyntaxKind.StringLiteral:
+        case SyntaxKind.NoSubstitutionTemplateLiteral:
+            return true;
+        case SyntaxKind.Identifier: {
+            // a local the classifier declares string/string? binds the same overload the concat does
+            if (!allowLocal) {
+                return false;
+            }
+            const local = this.csharpLocalTypeOf(node);
+            return (local === 'string') || (local === 'string?');
+        }
+        case SyntaxKind.ParenthesizedExpression:
+        case SyntaxKind.NonNullExpression:
+            return this.csharpConcatOperandPrintsString(node.expression, depth + 1, allowLocal);
+        case SyntaxKind.AsExpression: {
+            const target = this.getChecker().getTypeFromTypeNode(node.type);
+            const members = target.isUnionType() ? target.getTypes() : [ target ];
+            return members.every((member) => (member.flags & (TypeFlags.Undefined | TypeFlags.Null)) || this.isStringType(member.flags));
+        }
+        case SyntaxKind.BinaryExpression:
+            return (node.operatorToken?.kind === SyntaxKind.PlusToken)
+                && this.csharpConcatOperandPrintsString(node.left, depth + 1, allowLocal)
+                && this.csharpConcatOperandPrintsString(node.right, depth + 1, allowLocal);
+        case SyntaxKind.ConditionalExpression:
+            return this.csharpConcatOperandPrintsString(node.whenTrue, depth + 1, allowLocal)
+                && this.csharpConcatOperandPrintsString(node.whenFalse, depth + 1, allowLocal);
+        case SyntaxKind.CallExpression:
+            return this.csharpStringCallTyped(node) !== undefined;
+        }
+        return false;
+    }
+
     printFunctionType(node) {
         const booleanType = this.csharpBooleanReturnType(node);
         if (booleanType !== undefined) {
             return booleanType;
         }
+        const stringType = this.csharpStringReturnType(node);
+        if (stringType !== undefined) {
+            return stringType;
+        }
         return super.printFunctionType(node);
     }
 
-    // `return x;` inside a bool/bool? method: the printed expression is still the `object`
-    // box the rest of the printer produces, so unbox it through `object`. The nullable
-    // spelling `(bool?)((object)(x))` accepts null; the non-nullable one needs the
-    // null-forgiving `!` on the box (CS8605 under TreatWarningsAsErrors otherwise) — which is
-    // exactly the runtime NullReferenceException a `: boolean` method returning null deserves
+    // `return x;` inside a bool/bool?/string/string? method: the printed expression is still the
+    // `object` box the rest of the printer produces, so unbox it through `object`. The nullable
+    // spellings accept null; the non-nullable ones need the null-forgiving `!` on the box
+    // (CS8605 under TreatWarningsAsErrors otherwise) — which is exactly the runtime
+    // NullReferenceException a `: boolean` method returning null deserves (a `: string` one
+    // answers null, the reference-type cast the box already has)
     printReturnStatement(node, identation) {
         // nearest function-like: a `return` inside an arrow/function expression belongs to
-        // that callback, never to the enclosing bool method
-        const booleanType = this.csharpBooleanReturnType(findAncestor(node.parent, isFunctionLike));
-        if (booleanType === undefined || !node.expression) {
+        // that callback, never to the enclosing typed method
+        const owner = findAncestor(node.parent, isFunctionLike);
+        const booleanType = this.csharpBooleanReturnType(owner);
+        if (booleanType === undefined) {
+            const stringType = this.csharpStringReturnType(owner);
+            if ((stringType === undefined) || !node.expression || this.csharpReturnValuePrintsType(node.expression, stringType)) {
+                return super.printReturnStatement(node, identation);
+            }
+            return this.printUnboxedReturnStatement(node, identation, stringType, '');
+        }
+        if (!node.expression) {
             return super.printReturnStatement(node, identation);
         }
+        const forgiving = booleanType.endsWith('?') ? '' : '!';
+        return this.printUnboxedReturnStatement(node, identation, booleanType, forgiving);
+    }
+
+    // the value already carries the declared string type (a literal, a proven call/concat, a local
+    // the classifier declares string/string?): the unbox cast would be an identity conversion
+    csharpReturnValuePrintsType(expression, declared: string): boolean {
+        if ((expression.kind === SyntaxKind.NullKeyword)
+            || ((expression.kind === SyntaxKind.Identifier) && (expression.text === 'undefined'))) {
+            return true;
+        }
+        if (this.csharpConcatOperandPrintsString(expression, 0, true)) {
+            return true;
+        }
+        if (expression.kind === SyntaxKind.Identifier) {
+            const local = this.csharpLocalTypeOf(expression);
+            if ((local === 'string') || (local === 'string?') || (local === declared)) {
+                return true;
+            }
+        }
+        let printed;
+        try {
+            printed = this.csharpTypeOfInitializer(expression);
+        } catch (e) {
+            printed = undefined; // an initializer shape the local-type tables do not model
+        }
+        return (printed === 'string') || (printed === 'string?');
+    }
+
+    printUnboxedReturnStatement(node, identation, declaredType: string, forgiving: string) {
         const leadingComment = this.printLeadingComments(node, identation);
         let trailingComment = this.printTraillingComment(node, identation);
         trailingComment = trailingComment ? " " + trailingComment : trailingComment;
         const value = this.printNode(node.expression, identation).trim();
-        const forgiving = booleanType.endsWith('?') ? '' : '!';
-        return leadingComment + this.getIden(identation) + this.RETURN_TOKEN + ` ((${booleanType})((object)(${value}))${forgiving})` + this.LINE_TERMINATOR + trailingComment;
+        return leadingComment + this.getIden(identation) + this.RETURN_TOKEN + ` ((${declaredType})((object)(${value}))${forgiving})` + this.LINE_TERMINATOR + trailingComment;
     }
 
     printMethodDefinition(node, identation) {
