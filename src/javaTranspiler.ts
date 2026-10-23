@@ -258,6 +258,9 @@ const JAVA_LIST_BACKED_TS_CLASSES: Set<string> = new Set([
 // looks a key up when it is a String, and a String-typed operand is one on every path
 const JAVA_DECLARED_STRING_TYPE = /^(java\.util\.)?String$/;
 
+// the Java spellings a declaration publishes for the ws order book class (import-shortened included)
+const THIS_WS_ORDERBOOK_TYPE = /^(?:io\.github\.ccxt\.ws\.)?WsOrderBook$/;
+
 // TS parameter annotations (`Dict`, `Market`, `Currency`, `Str`, `OrderType`/`OrderSide`, `Bool`) print the native Java
 // type on the declaring method. `Int`/`Num` stay `Object`: a TS `number` is an Integer, Long or
 // Double box in generated code, so neither a `Long`/`Double` parameter nor a cast site is provable.
@@ -283,6 +286,27 @@ const JAVA_NATIVE_PARAMETER_TYPES_OPTIONAL: { [name: string]: string } = {
     'Int': 'Long',
     'Strings': 'java.util.List<String>',
 };
+
+// TS classes with a hand-written Java class carrying the same members. A parameter annotated with
+// one of these names prints that Java type: there is no box to keep, the annotation names the class
+// itself. Only the ws order book qualifies so far - its Java twin is a real class, and the members
+// the generated bodies read off it (get/put on its own keys) are the helper's own map branch.
+// ts/src/base/ws/OrderBook.ts exports the class both as `OrderBook` and as `WsOrderBook`, and the
+// checker keeps the CLASS name on the symbol, so both spellings map here; the class-declaration
+// file below is what separates it from the unrelated `types.OrderBook` map.
+const JAVA_NATIVE_PARAMETER_CLASS_TYPES: { [name: string]: string } = {
+    'OrderBook': 'io.github.ccxt.ws.WsOrderBook',
+    'WsOrderBook': 'io.github.ccxt.ws.WsOrderBook',
+};
+
+// a class-type annotation proves the printed class only when it resolves to that class declaration
+const JAVA_NATIVE_PARAMETER_CLASS_FILES = /(^|\/)ts\/src\/base\/ws\/OrderBook\.ts$/;
+
+// the keys WsOrderBook answers with its own `get` (its containsKey holds every one of them), so a
+// native read is exactly Helpers.GetValue's map branch - which answers null for a null receiver
+const JAVA_WS_ORDERBOOK_READ_KEYS: Set<string> = new Set([
+    'asks', 'bids', 'timestamp', 'datetime', 'nonce', 'cache',
+]);
 
 // `Strings` (and a `string[]` spelling of the same slot) is typed only on parameters named `symbols`
 const JAVA_STRINGS_OPTIONAL_PARAMETER_NAMES = new Set<string>(['symbols']);
@@ -1055,6 +1079,16 @@ export class JavaTranspiler extends BaseTranspiler {
         // an object literal prints a `HashMap<String, Object>` instance, already a Map
         if (type === JAVA_NATIVE_RETURN_MAP_TYPE && isObjectLiteralExpression(arg)) {
             return true;
+        }
+        // a parameter the printer itself declares as this very class needs no checkcast; a local
+        // keeps it: its declaration text is rewritten after printing, so what prints here as
+        // `Object` would not accept the argument
+        if (THIS_WS_ORDERBOOK_TYPE.test(type) && arg.kind === SyntaxKind.Identifier) {
+            const declaration = this.javaDeclarationOfIdentifier(arg);
+            if (declaration !== undefined && isParameterDeclaration(declaration)
+                && this.javaNativeParameterType(declaration) === type) {
+                return true;
+            }
         }
         if (type !== 'String') {
             return false;
@@ -3524,13 +3558,42 @@ export class JavaTranspiler extends BaseTranspiler {
         }
         const symbol = this.javaParameterAliasSymbol(node, type, checker);
         const name = symbol?.name;
-        if (name === undefined || JAVA_NATIVE_PARAMETER_TYPES[name] === undefined) {
+        if (name === undefined) {
             return this.javaPlainParameterTypeOf(node, type, checker);
+        }
+        const aliasType = JAVA_NATIVE_PARAMETER_TYPES[name];
+        const classType = aliasType === undefined ? this.javaNativeParameterClassType(name, symbol) : undefined;
+        if (aliasType === undefined && classType === undefined) {
+            return this.javaPlainParameterTypeOf(node, type, checker);
+        }
+        if (classType !== undefined) {
+            return classType; // the class declaration itself is the proof (see javaNativeParameterClassType)
         }
         const declaration = symbol?.declarations?.[0]?.resolve();
         const fileName = declaration?.getSourceFile?.()?.fileName;
-        return JAVA_NATIVE_PARAMETER_SOURCE_FILES.test(fileName ?? '')
-            ? JAVA_NATIVE_PARAMETER_TYPES[name] : this.javaPlainParameterTypeOf(node, type, checker);
+        return JAVA_NATIVE_PARAMETER_SOURCE_FILES.test(fileName ?? '') ? aliasType : this.javaPlainParameterTypeOf(node, type, checker);
+    }
+
+    // the Java class a class-typed annotation names: only a name in
+    // JAVA_NATIVE_PARAMETER_CLASS_TYPES whose symbol resolves to a CLASS declaration in the
+    // ts/src file that declares it (an interface, a type alias or a same-named class from
+    // another module is not that class)
+    javaNativeParameterClassType(name: string, symbol: any): string | undefined {
+        const javaType = JAVA_NATIVE_PARAMETER_CLASS_TYPES[name];
+        if (javaType === undefined) {
+            return undefined;
+        }
+        for (const declaration of symbol?.declarations ?? []) {
+            const resolved = declaration?.resolve?.() ?? declaration;
+            if (resolved === undefined || resolved.kind !== SyntaxKind.ClassDeclaration) {
+                continue;
+            }
+            const fileName = (resolved.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
+            if (JAVA_NATIVE_PARAMETER_CLASS_FILES.test(fileName)) {
+                return javaType;
+            }
+        }
+        return undefined;
     }
 
     // a generated venue method's PLAIN annotation prints its Java type: a TS `string` is always a
@@ -4110,6 +4173,10 @@ export class JavaTranspiler extends BaseTranspiler {
         }
         const type = this.getChecker().getTypeAtLocation(node.expression);
         if (isStringKey) {
+            const classRead = this.javaClassTypedElementRead(node);
+            if (classRead !== undefined) {
+                return classRead;
+            }
             if (!this.isJavaMapStructureType(type)) {
                 if (!this.javaDeclaredMapReceiver(node.expression)) {
                     // a literal key on a table field the checker does not type (balance is
@@ -4155,6 +4222,22 @@ export class JavaTranspiler extends BaseTranspiler {
 
     printElementAccessExpression(node, identation) {
         return this.printCheckerTypedElementAccessRead(node) ?? super.printElementAccessExpression(node, identation);
+    }
+
+    // `Helpers.GetValue(book, "asks")` on a receiver declared the ws order book class: the class's
+    // own `get` is the helper's map branch (containsKey holds every one of these keys), and GetValue
+    // answers null for a null receiver, so the native read carries the same guard
+    javaClassTypedElementRead(node) {
+        const key = node.argumentExpression;
+        if (!isStringLiteralLikeNode(key) || !JAVA_WS_ORDERBOOK_READ_KEYS.has(key.text)) {
+            return undefined;
+        }
+        const declared = this.javaDeclaredTypeOf(node.expression);
+        if (declared === undefined || !THIS_WS_ORDERBOOK_TYPE.test(declared.trim())) {
+            return undefined;
+        }
+        const target = this.printNode(node.expression, 0);
+        return `(${target} == null ? null : ${target}.get(${this.printNode(key, 0)}))`;
     }
 
 
