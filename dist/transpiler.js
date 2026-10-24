@@ -8592,6 +8592,8 @@ var GO_TYPE_NAMES = ["string", "int", "int64", "float64", "bool", "any"];
 var GO_SAFE_DICT_LOCAL_TYPE = "map[string]any";
 var GO_SAFE_DICT_READ_HELPERS = ["GetValue", "InOp", "ObjectKeys", "IsDictionary"];
 var GO_MARKET_LOCAL_TYPE = "map[string]any";
+var GO_MARKET_PRODUCER_METHODS = ["parseMarket", "getMarketFromSymbols", "getMarketFromClientAndMessage"];
+var GO_MARKET_MAP_CALLS = ["Market", "SafeMarket", "SafeMarketStructure", "Extend", "DeepExtend", "MapTyped", "MarketTyped"];
 var GO_MARKET_READ_COMPARISON_OPERATORS = [
   SyntaxKind5.EqualsEqualsToken,
   SyntaxKind5.ExclamationEqualsToken,
@@ -8979,6 +8981,15 @@ var GoTranspiler = class extends BaseTranspiler {
     // same member read, and every later use reads the local; with the absent case a nil map,
     // GetValue/InOp/ObjectKeys/IsDictionary and Safe* normalise a nil receiver. Else keep the box.
     this.goSafeDictLocalUnboxCache = /* @__PURE__ */ new Map();
+    // The `Market`-returning producers print `any` because their TS type names no Go type, so callers
+    // box the row and read it back through GetValue. A producer whose every path answers a dictionary
+    // prints `map[string]any`, and its caller's local is declared with it (reads go native).
+    // the producers retyped by this rule, by TS source name
+    this.goMarketProducerMethods = GO_MARKET_PRODUCER_METHODS;
+    // the base accessors/builders whose generated Go result is already that dictionary (the base
+    // signatures live in go/v4, so a body shape cannot prove them here)
+    this.goMarketMapCalls = GO_MARKET_MAP_CALLS;
+    this.goMethodReturnsMapCache = /* @__PURE__ */ new Map();
     // `var market any = this.Market(symbol)` -> `var market map[string]any = MapTyped(...)`.
     // The box holds the dictionary the checker proved and every later use reads it (SafeDict's scan),
     // so this is a pure refinement. A value position, nil test or map write keeps the box.
@@ -9604,7 +9615,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
   // or `printAsyncTrampolineBlock`) contributes the single space before `{`.
   printGoSignature(node, identation, receiver) {
     const name = this.printAsyncDeclarationName(node, this.transformMethodNameIfNeeded(node.name.text));
-    const returnType = this.printFunctionType(node).trim();
+    const returnType = (this.goMarketProducerReturnType(node) ?? this.printFunctionType(node)).trim();
     const parsedArgs = this.printMethodParameters(node);
     const methodToken = this.METHOD_TOKEN ? this.METHOD_TOKEN + " " : " ";
     const returnSignature = returnType ? " " + returnType : "";
@@ -10877,6 +10888,160 @@ func New${this.capitalize(this.className)}() *${this.className} {
     }
     return false;
   }
+  // every `return` the body itself reaches: the returns of a nested function literal are that
+  // literal's, and say nothing about this signature
+  goFunctionLevelReturns(body) {
+    const returns = [];
+    const walk = (n) => {
+      if (n === void 0) {
+        return;
+      }
+      if (n.kind === SyntaxKind5.ReturnStatement) {
+        returns.push(n);
+        return;
+      }
+      if (n.kind === SyntaxKind5.FunctionExpression || n.kind === SyntaxKind5.ArrowFunction || n.kind === SyntaxKind5.FunctionDeclaration || n.kind === SyntaxKind5.MethodDeclaration) {
+        return;
+      }
+      n.forEachChild(walk);
+    };
+    body?.forEachChild(walk);
+    return returns;
+  }
+  // true when every path of the method body answers a dictionary. Memoised; a recursive method
+  // (or a cycle of them) proves nothing and keeps its `any` signature.
+  goMethodBodyReturnsMap(method) {
+    const body = method?.body;
+    if (body === void 0 || method?.kind !== SyntaxKind5.MethodDeclaration) {
+      return false;
+    }
+    if (this.goMethodReturnsMapCache.has(method)) {
+      return this.goMethodReturnsMapCache.get(method);
+    }
+    this.goMethodReturnsMapCache.set(method, false);
+    let ok = true;
+    const returns = this.goFunctionLevelReturns(body);
+    for (let i = 0; i < returns.length && ok; i++) {
+      ok = this.goMarketReturnIsMap(returns[i].expression);
+    }
+    this.goMethodReturnsMapCache.set(method, ok);
+    return ok;
+  }
+  // an absent value, a map literal, or a call/local whose generated Go value is a map
+  goMarketReturnIsMap(expr) {
+    if (expr === void 0) {
+      return false;
+    }
+    switch (expr.kind) {
+      case SyntaxKind5.NullKeyword:
+      case SyntaxKind5.ObjectLiteralExpression:
+        return true;
+      case SyntaxKind5.ParenthesizedExpression:
+      case SyntaxKind5.AsExpression:
+      case SyntaxKind5.TypeAssertionExpression:
+      case SyntaxKind5.NonNullExpression:
+        return this.goMarketReturnIsMap(expr.expression);
+      case SyntaxKind5.Identifier:
+        return expr.text === "undefined" ? true : this.goMarketLocalInitializerIsMap(expr);
+      case SyntaxKind5.CallExpression:
+        return this.goMarketCallIsMap(expr);
+    }
+    return false;
+  }
+  goMarketCallIsMap(call) {
+    const callee = call?.expression;
+    const name = callee?.kind === SyntaxKind5.PropertyAccessExpression ? callee.name?.text : callee?.kind === SyntaxKind5.Identifier ? callee.text : void 0;
+    if (name === void 0) {
+      return false;
+    }
+    const printed = name.charAt(0).toUpperCase() + name.slice(1);
+    if (GO_MARKET_MAP_CALLS.indexOf(name) >= 0 || GO_MARKET_MAP_CALLS.indexOf(printed) >= 0) {
+      return true;
+    }
+    const declaration = this.goMethodDeclarationOfCallee(callee);
+    return declaration !== void 0 && this.goMethodBodyReturnsMap(declaration);
+  }
+  // the call's *printed Go* result is a map (a base accessor, or a producer this printer retypes);
+  // a method proved only by its body shape has no signature here and keeps its converter
+  goMarketCalleePrintsMap(call) {
+    const callee = call?.expression;
+    const name = callee?.kind === SyntaxKind5.PropertyAccessExpression ? callee.name?.text : callee?.kind === SyntaxKind5.Identifier ? callee.text : void 0;
+    if (name === void 0) {
+      return false;
+    }
+    const printed = name.charAt(0).toUpperCase() + name.slice(1);
+    if (GO_MARKET_MAP_CALLS.indexOf(name) >= 0 || GO_MARKET_MAP_CALLS.indexOf(printed) >= 0) {
+      return true;
+    }
+    if (GO_MARKET_PRODUCER_METHODS.indexOf(name) < 0) {
+      return false;
+    }
+    const declaration = this.goMethodDeclarationOfCallee(callee);
+    return declaration !== void 0 && this.goMethodBodyReturnsMap(declaration);
+  }
+  goMethodDeclarationOfCallee(callee) {
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return this.goMethodDeclarationByName(callee);
+    }
+    try {
+      const node = callee?.kind === SyntaxKind5.PropertyAccessExpression ? callee.name : callee;
+      const symbol = checker.getSymbolAtLocation(node);
+      const candidates = [];
+      const value = symbol?.valueDeclaration?.resolve?.() ?? symbol?.valueDeclaration;
+      if (value !== void 0) {
+        candidates.push(value);
+      }
+      for (const d of symbol?.declarations ?? []) {
+        candidates.push(d.resolve?.(d) ?? d);
+      }
+      const methods = candidates.filter((d) => d?.kind === SyntaxKind5.MethodDeclaration);
+      const withBody = methods.find((d) => d.body !== void 0);
+      return withBody ?? methods[0] ?? this.goMethodDeclarationByName(callee);
+    } catch (e) {
+      return this.goMethodDeclarationByName(callee);
+    }
+  }
+  // the method declaration a callee's NAME binds to in its own class (no checker needed)
+  goMethodDeclarationByName(callee) {
+    const name = callee?.kind === SyntaxKind5.PropertyAccessExpression ? callee.name?.text : callee?.kind === SyntaxKind5.Identifier ? callee.text : void 0;
+    if (name === void 0) {
+      return void 0;
+    }
+    let scope = callee?.parent;
+    while (scope !== void 0 && scope.kind !== SyntaxKind5.ClassDeclaration && scope.kind !== SyntaxKind5.SourceFile && scope.kind !== SyntaxKind5.ObjectLiteralExpression) {
+      scope = scope.parent;
+    }
+    const members = scope?.members ?? [];
+    const hits = members.filter((m) => m?.kind === SyntaxKind5.MethodDeclaration && m.name.text === name);
+    return hits.find((m) => m.body !== void 0) ?? hits[0];
+  }
+  // `return market` where the local was declared from a map-producing call: the local rule types
+  // that declaration with the same map, so the function hands on what it holds
+  goMarketLocalInitializerIsMap(identifier, knownDeclaration) {
+    const declaration = knownDeclaration ?? this.goDeclarationOfIdentifier(identifier);
+    const initializer = declaration?.initializer;
+    if (initializer === void 0) {
+      return false;
+    }
+    if (initializer.kind === SyntaxKind5.ObjectLiteralExpression) {
+      return true;
+    }
+    return initializer.kind === SyntaxKind5.CallExpression && this.goMarketCalleePrintsMap(initializer);
+  }
+  // the printed return type of a market producer, or undefined to keep the checker's answer
+  goMarketProducerReturnType(node) {
+    if (node?.kind !== SyntaxKind5.MethodDeclaration) {
+      return void 0;
+    }
+    if (GO_MARKET_PRODUCER_METHODS.indexOf(node.name?.text) < 0) {
+      return void 0;
+    }
+    if (this.isAsyncFunction(node)) {
+      return void 0;
+    }
+    return this.goMethodBodyReturnsMap(node) ? GO_MARKET_LOCAL_TYPE : void 0;
+  }
   goMarketLocalUnbox(declaration) {
     return this.goCachedLocalUnbox(this.goMarketLocalUnboxCache, declaration, () => this.goMarketLocalUnboxUncached(declaration));
   }
@@ -10898,7 +11063,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
   // one later use of the market local: the dictionary read shapes SafeDict proves (element read,
   // `in`, read-helper argument), plus — only when the accessor throws rather than answers absent —
   // a plain argument position, since Go re-boxes the map into the callee's `any` as the box did.
-  goMarketUseReadsTheValue(node, throwingAccessor) {
+  goMarketUseReadsTheValue(node, throwingAccessor, keepsMap = false) {
     if (this.goSafeDictUseReadsTheMap(node)) {
       return true;
     }
@@ -10906,10 +11071,51 @@ func New${this.capitalize(this.className)}() *${this.className} {
     if (parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === node && this.goIsComparedOperand(parent)) {
       return true;
     }
+    if (keepsMap && this.goMarketUseKeepsMap(node)) {
+      return true;
+    }
     if (!throwingAccessor) {
       return false;
     }
     return parent?.kind === SyntaxKind5.CallExpression && parent.expression !== node && parent.arguments.indexOf(node) >= 0;
+  }
+  // a use that answers what the boxed local answered even for a nil box: IsEqual derefScalars a
+  // typed nil map to an untyped nil, PanicOnError only inspects an error, a GetArg-bound slot folds
+  // a nil map to its default, and a map-returning body hands the map on.
+  goMarketUseKeepsMap(node) {
+    const parent = node.parent;
+    if (parent?.kind === SyntaxKind5.ReturnStatement) {
+      if (parent.expression !== node) {
+        return false;
+      }
+      return this.goMethodBodyReturnsMap(this.goEnclosingFunction(node));
+    }
+    if (parent?.kind === SyntaxKind5.BinaryExpression) {
+      const operand = parent.left === node ? parent.right : parent.right === node ? parent.left : void 0;
+      if (operand === void 0) {
+        return false;
+      }
+      const kind = parent.operatorToken?.kind;
+      const equality = kind === SyntaxKind5.EqualsEqualsToken || kind === SyntaxKind5.ExclamationEqualsToken || kind === SyntaxKind5.EqualsEqualsEqualsToken || kind === SyntaxKind5.ExclamationEqualsEqualsToken;
+      return equality && this.goIsNilLiteral(operand);
+    }
+    if (parent?.kind !== SyntaxKind5.CallExpression) {
+      return false;
+    }
+    const argIndex = parent.arguments.indexOf(node);
+    if (argIndex < 0 || parent.expression === node) {
+      return false;
+    }
+    const callee = parent.expression;
+    const name = callee?.kind === SyntaxKind5.PropertyAccessExpression ? callee.name?.text : callee?.kind === SyntaxKind5.Identifier ? callee.text : void 0;
+    if (name === "PanicOnError" || name === "panicOnError") {
+      return true;
+    }
+    if (name === "IsEqual" || name === "isEqual") {
+      const other = argIndex === 0 ? parent.arguments[1] : parent.arguments[0];
+      return this.goIsNilLiteral(other);
+    }
+    return this.goGetArgPositionIsDefaulted(callee, argIndex);
   }
   goMarketLocalUnboxUncached(declaration) {
     if (!this.goMarketCallReturnsDict(declaration.initializer)) {
@@ -10917,10 +11123,11 @@ func New${this.capitalize(this.className)}() *${this.className} {
     }
     const accessorName = declaration.initializer.expression?.name?.text;
     const throwingAccessor = accessorName === "market" || accessorName === "currency";
+    const keepsMap = this.goMarketCalleePrintsMap(declaration.initializer);
     return this.goDeclaredLocalTypeIfSafe(
       declaration,
       GO_MARKET_LOCAL_TYPE,
-      (n) => this.goMarketUseReadsTheValue(n, throwingAccessor),
+      (n) => this.goMarketUseReadsTheValue(n, throwingAccessor, keepsMap),
       (n) => n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n || !this.goIdentifierRefersToDeclaration(n, declaration)
     );
   }
@@ -10929,6 +11136,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
   goMarketUnboxValue(declaration, parsedValue) {
     if (this.goMarketLocalUnbox(declaration) !== GO_MARKET_LOCAL_TYPE) {
       return void 0;
+    }
+    if (this.goMarketLocalInitializerIsMap(declaration.name, declaration)) {
+      return parsedValue.trimStart();
     }
     return `MapTyped(${parsedValue.trimStart()})`;
   }
