@@ -7075,6 +7075,30 @@ describe('hx4 G02: IsEqual(x, nil) on any locals fed by base safeValue / ws cach
         expect(out).toContain('if v != nil {');
         expect(out).not.toContain('IsEqual(v, nil)');
     });
+    test('the base class transpiled from text compares natively', () => {
+        const base = "export class Exchange {\n" +
+            "    safeValue (o: any, k: any, d: any = undefined): any { return d; }\n" +
+            "    safeLedgerEntry (entry: any) {\n" +
+            "        const fee = this.safeValue (entry, 'fee');\n" +
+            "        if (fee !== undefined) { return fee; }\n" +
+            "        return entry;\n" +
+            "    }\n" +
+            "}\n";
+        const out = new Transpiler({ verbose: false, go: {} }).transpileGo(base).content;
+        expect(out).toContain('if fee != nil {');
+        expect(out).not.toContain('IsEqual(fee, nil)');
+    });
+    test('a class that declares the same accessor itself keeps the helper', () => {
+        const out = new Transpiler({ verbose: false, go: {} }).transpileGo("export class ex {\n" +
+            "    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n" +
+            "    f (p: any) {\n" +
+            "        const v = this.safeValue (p, 'a');\n" +
+            "        if (v === undefined) { return 1; }\n" +
+            "        return 0;\n" +
+            "    }\n" +
+            "}\n").content;
+        expect(out).toContain('IsEqual(v, nil)');
+    });
     test('safeValue2 with a literal default and a ws cache write compare natively', () => {
         const out = write("        let v = this.safeValue2 (p, 'a', 'b', {});\n        if (v === undefined) { v = new ArrayCache (5); }\n        if (v === undefined) { return 1; }\n");
         expect(out).not.toContain('IsEqual(v, nil)');

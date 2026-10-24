@@ -16760,7 +16760,11 @@ ${this.getIden(level)}}()`;
     if (!declarations || declarations.length === 0) {
       return false;
     }
-    return declarations.every((d) => /(^|\/)ts\/src\/base\/Exchange\.ts$/.test(String(d.getSourceFile()?.fileName ?? "").replace(/\\/g, "/")));
+    const baseFile = /(^|\/)ts\/src\/base\/Exchange(\.[\w.-]+)?\.ts$/;
+    if (declarations.every((d) => baseFile.test(String(d.getSourceFile()?.fileName ?? "").replace(/\\/g, "/")))) {
+      return true;
+    }
+    return false;
   }
   goG02LiteralDefault(node) {
     node = this.goUnwrapParenthesizedNode(node);

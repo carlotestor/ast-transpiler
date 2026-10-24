@@ -9633,8 +9633,14 @@ ${tryBodyBlock}
         if (!declarations || declarations.length === 0) {
             return false;
         }
-        // an exchange override would print its own Go body: only the base property qualifies
-        return declarations.every((d) => /(^|\/)ts\/src\/base\/Exchange\.ts$/.test(String(d.getSourceFile()?.fileName ?? '').replace(/\\/g, '/')));
+        // an exchange override would print its own Go body: only the base property qualifies.
+        // The base pass transpiles a stripped copy written beside the original as
+        // Exchange.nooverloads.<pid>.ts, so accept that suffix as the base file too.
+        const baseFile = /(^|\/)ts\/src\/base\/Exchange(\.[\w.-]+)?\.ts$/;
+        if (declarations.every((d) => baseFile.test(String(d.getSourceFile()?.fileName ?? '').replace(/\\/g, '/')))) {
+            return true;
+        }
+        return false;
     }
 
     goG02LiteralDefault(node): boolean {
