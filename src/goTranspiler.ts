@@ -5493,6 +5493,101 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             && this.goHasEnclosingNilGuard(keyNode);
     }
 
+    // hx10w8-GP03: a `*string` key of an `x in m` read that a nil test proves non-nil BEFORE the
+    // read runs. InOp derefs its key (nil answers false) and a Go map read of a nil pointer panics,
+    // so the comma-ok needs that proof; a `&&` conjunct of the read's own condition does not count
+    // when the read moves into an if init clause, which Go evaluates first.
+    goInOpPointerKeyProvenNonNil(statement, ident): boolean {
+        if ((ident?.kind !== SyntaxKind.Identifier) || (this.goDeclaredTypeOfIdentifier(ident) !== '*string')) {
+            return false;
+        }
+        const checker: any = this.checkerOrUndefined();
+        if ((checker === undefined) || (statement === undefined)) {
+            return false;
+        }
+        const declaration = checker.getSymbolAtLocation(ident)?.valueDeclaration?.resolve();
+        if (this.goLocalIsRebound(this.goEnclosingFunction(declaration ?? ident), ident)) {
+            return false; // a rebound pointer's guard may be stale at the read
+        }
+        let child = statement;
+        let parent = statement.parent;
+        while (parent !== undefined) {
+            const kind = parent.kind;
+            if (kind === SyntaxKind.Block) {
+                // an earlier statement that leaves the block on a nil test guards everything after it
+                if (this.goBlockExitsOnNilTest(parent, child, ident)) {
+                    return true;
+                }
+            }
+            const guard = this.goNilGuardFields[kind];
+            if ((guard !== undefined) && (child === parent[guard[0]]) && this.goConditionProvesNonNil(parent[guard[1]], ident)) {
+                return true;
+            }
+            if ((guard === undefined) && (kind !== SyntaxKind.Block) && (kind !== SyntaxKind.LabeledStatement)) {
+                return false; // the walk cannot carry a guard across anything else
+            }
+            child = parent;
+            parent = parent.parent;
+        }
+        return false;
+    }
+
+    // `if (k === undefined) { return }` earlier in the block: every path that reaches `statement`
+    // has k non-nil
+    goBlockExitsOnNilTest(block, statement, ident): boolean {
+        const statements = block?.statements;
+        if (statements === undefined) {
+            return false;
+        }
+        const index = statements.indexOf(statement);
+        if (index < 0) {
+            return false;
+        }
+        for (let i = 0; i < index; i++) {
+            const sibling: any = statements[i];
+            if ((sibling.kind !== SyntaxKind.IfStatement) || (sibling.elseStatement !== undefined)) {
+                continue;
+            }
+            const test = this.goUnwrapParenthesizedNode(sibling.expression);
+            if (this.goIsNilTestOf(test, ident) && this.goStatementAlwaysExits(sibling.thenStatement)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // `k === null/undefined` (the helper's false branch is the nil key)
+    goIsNilTestOf(node, ident): boolean {
+        if (node?.kind !== SyntaxKind.BinaryExpression) {
+            return false;
+        }
+        const op = node.operatorToken?.kind;
+        if ((op !== SyntaxKind.EqualsEqualsToken) && (op !== SyntaxKind.EqualsEqualsEqualsToken)) {
+            return false;
+        }
+        return (this.goIsSameSymbol(node.left, ident) && this.goIsNilLiteral(node.right))
+            || (this.goIsSameSymbol(node.right, ident) && this.goIsNilLiteral(node.left));
+    }
+
+    // the statement's own control flow always leaves the enclosing function or loop
+    goStatementAlwaysExits(statement): boolean {
+        if (statement === undefined) {
+            return false;
+        }
+        if (statement.kind === SyntaxKind.Block) {
+            const statements = statement.statements;
+            return (statements !== undefined) && (statements.length > 0) && this.goStatementAlwaysExits(statements[statements.length - 1]);
+        }
+        switch (statement.kind) {
+        case SyntaxKind.ReturnStatement:
+        case SyntaxKind.ThrowStatement:
+        case SyntaxKind.ContinueStatement:
+        case SyntaxKind.BreakStatement:
+            return true;
+        }
+        return false;
+    }
+
     // a local bound once to an object literal, never read by a nested function and not handed
     // out (anything but `m[k]`) before this write: no other goroutine can hold the map yet
     goIsFreshUnsharedMapLocal(node, writeSite): boolean {
@@ -5803,7 +5898,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         if ((parent?.kind !== SyntaxKind.IfStatement) || (parent.expression !== node)) {
             return undefined;
         }
-        const read = this.goIfInOpRead(node);
+        const read = this.goIfInOpRead(node, parent);
         if (read === undefined) {
             return undefined;
         }
@@ -5837,11 +5932,69 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return `_, ${name} := ${read.dictText}[${read.keyText}]; ${condition}`;
     }
 
+    // hx10w8-GP03: `(k !== undefined) && (k in m)` on a proven map. The nil test is a conjunct of
+    // the same condition, and Go evaluates an init clause before it, so the comma-ok read moves
+    // inside the guard as one nested statement: the body runs on exactly the same terms.
+    goInOpGuardedNestedIf(node, identation): string | undefined {
+        if ((node?.kind !== SyntaxKind.IfStatement) || (node.elseStatement !== undefined)
+            || (node.parent?.kind === SyntaxKind.IfStatement) || (node.thenStatement?.kind !== SyntaxKind.Block)) {
+            return undefined;
+        }
+        const condition = this.goUnwrapParenthesizedNode(node.expression);
+        if ((condition?.kind !== SyntaxKind.BinaryExpression) || (condition.operatorToken?.kind !== SyntaxKind.AmpersandAmpersandToken)) {
+            return undefined;
+        }
+        const guard = this.goUnwrapParenthesizedNode(condition.left);
+        let read = this.goUnwrapParenthesizedNode(condition.right);
+        let negated = false;
+        if (read?.kind === SyntaxKind.PrefixUnaryExpression) {
+            if (read.operator !== SyntaxKind.ExclamationToken) {
+                return undefined;
+            }
+            read = this.goUnwrapParenthesizedNode(read.operand);
+            negated = true;
+        }
+        if ((read?.kind !== SyntaxKind.BinaryExpression) || (read.operatorToken?.kind !== SyntaxKind.InKeyword)) {
+            return undefined;
+        }
+        const dict = this.goUnwrapParenthesizedNode(read.right);
+        const keyNode = this.goUnwrapParenthesizedNode(read.left);
+        // only the deref of a proved `*string` key: a `string` key needs no guard and an `any`
+        // box cannot be read as a map key at all
+        if ((keyNode?.kind !== SyntaxKind.Identifier) || (this.goDeclaredTypeOfIdentifier(keyNode) !== '*string')
+            || !this.goIsNonNilTestOf(guard, keyNode)) {
+            return undefined;
+        }
+        if (this.goInOpPointerKeyProvenNonNil(node, keyNode)) {
+            return undefined; // the init clause already reads it: keep the shorter form
+        }
+        if (this.goLocalIsRebound(this.goEnclosingFunction(keyNode), keyNode)) {
+            return undefined;
+        }
+        const dictText = this.printNode(dict, 0);
+        const dictMapType = (dict?.kind === SyntaxKind.Identifier ? this.goPrintedTypeOfExpression(dict, dictText) : undefined)
+            ?? this.goInOpDictMapType(dict, dictText);
+        const keyText = this.printNode(keyNode, 0);
+        if (dictText.includes('\n') || keyText.includes('\n')
+            || ((dictMapType !== 'map[string]any') && (dictMapType !== 'map[string]map[string]any'))) {
+            return undefined;
+        }
+        const name = this.goIfInOpBindingName(node);
+        const guardText = this.goUnwrapPrintedParens(this.printNode(guard, 0)).trim();
+        if ((name === undefined) || guardText.includes('\n')) {
+            return undefined;
+        }
+        const indent = this.getIden(identation);
+        const inner = `${this.getIden(identation + 1)}if _, ${name} := ${dictText}[*${keyText}]; ${negated ? '!' : ''}${name}`;
+        const body = this.printBlock(node.thenStatement, identation + 1, false);
+        return this.printNodeCommentsIfAny(node, identation, `${indent}if ${guardText} {\n${inner}${body}\n${indent}}`);
+    }
+
     // the single `key in dict` read the condition can bind: a map-typed identifier
     // receiver, a hand-written base map field or a pure book accessor, and a Go-string key.
     // The hoisted operands are identifiers/literals or side-effect-free getters, so moving the
     // read into the init clause cannot evaluate anything the condition would have skipped.
-    goIfInOpRead(condition): any {
+    goIfInOpRead(condition, statement?): any {
         const reads = [];
         const visit = (n) => {
             if ((n.kind === SyntaxKind.BinaryExpression) && (n.operatorToken?.kind === SyntaxKind.InKeyword)) {
@@ -5853,11 +6006,17 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
                 const identifier = (dict?.kind === SyntaxKind.Identifier);
                 if ((identifier || (dict?.kind === SyntaxKind.PropertyAccessExpression) || (dict?.kind === SyntaxKind.CallExpression)) && keyIsText) {
                     const dictText = this.printNode(dict, 0);
-                    const keyText = this.printNode(key, 0);
+                    let keyText = this.printNode(key, 0);
                     const dictMapType = (identifier ? this.goPrintedTypeOfExpression(dict, dictText) : undefined) ?? this.goInOpDictMapType(dict, dictText);
+                    // a `*string` key the enclosing control flow proved non-nil reads through the deref
+                    let keyType = this.goPrintedTypeOfExpression(key, keyText);
+                    if ((keyType !== 'string') && this.goInOpPointerKeyProvenNonNil(statement, key)) {
+                        keyText = '*' + keyText;
+                        keyType = 'string';
+                    }
                     if (!dictText.includes('\n') && !keyText.includes('\n')
                         && ((dictMapType === 'map[string]any') || (dictMapType === 'map[string]map[string]any'))
-                        && (this.goPrintedTypeOfExpression(key, keyText) === 'string')) {
+                        && (keyType === 'string')) {
                         reads.push({ inNode: n, dictText, keyText });
                     }
                 }
@@ -5878,6 +6037,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         'Features': 'map[string]any',
         'Trades': 'map[string]any',
         'Ohlcvs': 'map[string]map[string]any',
+        // hx10w8-GP03: declared `map[string]any` in go/v4/exchange.go
+        'Timeframes': 'map[string]any',
+        'Balance': 'map[string]any',
     };
 
     // the market/currency book accessors hand-written in go/v4/exchange_markets_book.go: each is a
@@ -6349,6 +6511,15 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         const objectBody = this.printObjectLiteralBody(node, level);
         const formattedObjectBody = objectBody ? "\n" + objectBody + "\n" + this.getIden(level) : objectBody;
         return this.OBJECT_OPENING + formattedObjectBody + this.OBJECT_CLOSING;
+    }
+
+    printIfStatement(node, identation) {
+        // hx10w8-GP03: a nil-guarded pointer key needs the read inside the guard
+        const nested = this.goInOpGuardedNestedIf(node, identation);
+        if (nested !== undefined) {
+            return nested;
+        }
+        return super.printIfStatement(node, identation);
     }
 
     printCondition(node, identation) {

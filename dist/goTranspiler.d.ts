@@ -360,6 +360,10 @@ export declare class GoTranspiler extends BaseTranspiler {
     printNativeMapWriteOnProvenLocal(containerNode: any, containerStr: string, keyNode: any, keyStr: string, valueStr: string, valueNode?: any, identation?: number): string | undefined;
     goMapWriteValueIsNotPointer(valueNode: any): boolean;
     goIsNilGuardedStringPointerKey(keyNode: any): boolean;
+    goInOpPointerKeyProvenNonNil(statement: any, ident: any): boolean;
+    goBlockExitsOnNilTest(block: any, statement: any, ident: any): boolean;
+    goIsNilTestOf(node: any, ident: any): boolean;
+    goStatementAlwaysExits(statement: any): boolean;
     goIsFreshUnsharedMapLocal(node: any, writeSite: any): boolean;
     goUseMayPrecede(use: any, writeSite: any, scope: any): boolean;
     goIsNonPointerValue(valueNode: any): boolean;
@@ -380,7 +384,8 @@ export declare class GoTranspiler extends BaseTranspiler {
     GO_IN_OP_SENTINEL: string;
     goInOpSubstitutedText(node: any): string | undefined;
     goInOpIfInitClause(node: any): string | undefined;
-    goIfInOpRead(condition: any): any;
+    goInOpGuardedNestedIf(node: any, identation: any): string | undefined;
+    goIfInOpRead(condition: any, statement?: any): any;
     GO_NATIVE_MAP_FIELDS: {
         [name: string]: string;
     };
@@ -410,6 +415,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goPrintBinaryMemoized(node: any, identation: number): string;
     printNode(node: any, identation?: number): string;
     printObjectLiteralExpression(node: any, identation: any): string;
+    printIfStatement(node: any, identation: any): string;
     printCondition(node: any, identation: any): any;
     goDerefComparableWith(ptrNode: any, ptrText: string, otherNode: any): boolean;
     goIsStringLiteralNode(node: any): boolean;

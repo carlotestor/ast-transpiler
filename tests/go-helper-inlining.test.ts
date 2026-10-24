@@ -381,6 +381,116 @@ describe('go `key in obj` -> map membership', () => {
         const output = transpile(ts);
         expect(output).toContain('InOp(m, k)');
     });
+    // hx10w8-GP03: InOp derefs its key (nil answers false) and a map read of a nil pointer
+    // panics, so a pointer key needs a nil proof that dominates the read
+    test('a nil test earlier in the block admits the pointer key read', () => {
+        const ts = pointerKeyFixture(
+        "        const m = { 'a': 1 }\n" +
+        "        const k = this.safeString(item, 'k')\n" +
+        "        if (k === undefined) {\n" +
+        "            return 0\n" +
+        "        }\n" +
+        "        if (k in m) {\n" +
+        "            return 1\n" +
+        "        }\n");
+        const output = transpile(ts);
+        expect(output).toContain('if _, ok := m[*k]; ok {');
+        expect(output).not.toContain('InOp(');
+        expect(output).not.toContain('func() bool');
+    });
+    test('an enclosing nil guard admits the pointer key read', () => {
+        const ts = pointerKeyFixture(
+        "        const m = { 'a': 1 }\n" +
+        "        const k = this.safeString(item, 'k')\n" +
+        "        if (k !== undefined) {\n" +
+        "            if (k in m) {\n" +
+        "                return 1\n" +
+        "            }\n" +
+        "        }\n");
+        const output = transpile(ts);
+        expect(output).toContain('if _, ok := m[*k]; ok {');
+        expect(output).not.toContain('func() bool');
+    });
+    test('a nil conjunct of the same condition reads inside the guard', () => {
+        const ts = pointerKeyFixture(
+        "        const m = { 'a': 1 }\n" +
+        "        const k = this.safeString(item, 'k')\n" +
+        "        if ((k !== undefined) && (k in m)) {\n" +
+        "            return 1\n" +
+        "        }\n");
+        const output = transpile(ts);
+        expect(output).toContain('if k != nil {\n\t\tif _, ok := m[*k]; ok {\n\t\t\treturn 1\n\t\t}\n\t}');
+        expect(output).not.toContain('InOp(');
+        expect(output).not.toContain('func() bool');
+    });
+    test('a nil-guarded pointer key with an else keeps the closure', () => {
+        const ts = pointerKeyFixture(
+        "        const m = { 'a': 1 }\n" +
+        "        const k = this.safeString(item, 'k')\n" +
+        "        if ((k !== undefined) && (k in m)) {\n" +
+        "            return 1\n" +
+        "        } else {\n" +
+        "            return 2\n" +
+        "        }\n");
+        const output = transpile(ts);
+        expect(output).toContain('func() bool');
+        expect(output).not.toContain('if _, ok := m[*k]');
+    });
+    test('a rebound pointer key keeps the closure', () => {
+        const ts = pointerKeyFixture(
+        "        const m = { 'a': 1 }\n" +
+        "        let k = this.safeString(item, 'k')\n" +
+        "        if (k !== undefined) {\n" +
+        "            k = this.safeString(item, 'j')\n" +
+        "            if (k in m) {\n" +
+        "                return 1\n" +
+        "            }\n" +
+        "        }\n");
+        const output = transpile(ts);
+        expect(output).not.toContain('if _, ok := m[*k]');
+    });
+    test('an any-typed key with a nil conjunct keeps the helper', () => {
+        const ts = pointerKeyFixture(
+        "        let k: any = item\n" +
+        "        const m = { 'a': 1 }\n" +
+        "        if ((k !== undefined) && (k in m)) {\n" +
+        "            return 1\n" +
+        "        }\n");
+        const output = transpile(ts);
+        expect(output).toContain('InOp(m, k)');
+        expect(output).not.toContain('[*k]');
+    });
+    test('a guard on another name keeps the closure', () => {
+        const ts = pointerKeyFixture(
+        "        const m = { 'a': 1 }\n" +
+        "        const k = this.safeString(item, 'k')\n" +
+        "        const j = this.safeString(item, 'j')\n" +
+        "        if ((j !== undefined) && (k in m)) {\n" +
+        "            return 1\n" +
+        "        }\n");
+        const output = transpile(ts);
+        expect(output).toContain('func() bool');
+        expect(output).not.toContain('if _, ok := m[*k]');
+    });
+    test('a hand-written map field outside the table keeps InOp', () => {
+        const ts = pointerKeyFixture(
+        "        const k = this.safeString(item, 'k')\n" +
+        "        if (k in this.orderbooks) {\n" +
+        "            return 1\n" +
+        "        }\n");
+        const output = transpile(ts);
+        expect(output).toContain('InOp(this.Orderbooks, k)');
+        expect(output).not.toContain('_, ok := this.Orderbooks');
+    });
+    test('a table map field binds a literal key in the init clause', () => {
+        const ts = pointerKeyFixture(
+        "        if (!('1m' in this.timeframes)) {\n" +
+        "            return 1\n" +
+        "        }\n");
+        const output = transpile(ts);
+        expect(output).toContain('if _, ok := this.Timeframes["1m"]; !ok {');
+        expect(output).not.toContain('InOp(');
+    });
 });
 
 describe('go unary minus -> -x', () => {

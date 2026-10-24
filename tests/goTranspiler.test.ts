@@ -7038,9 +7038,16 @@ describe('hx10w6 G16: `key in dict` as a native two-value map read', () => {
         expect(output).not.toContain('this.Orderbooks["tick"]');
     });
     test('an unproven receiver and an unlisted field keep the helper', () => {
-        const output = new Transpiler({ verbose: false }).transpileGo('class T {\n    balance = {};\n    f (trade) {\n        if (\'side\' in trade) {\n            return 1;\n        }\n        if (\'total\' in this.balance) {\n            return 2;\n        }\n        return 0;\n    }\n}\n').content;
+        const output = new Transpiler({ verbose: false }).transpileGo('class T {\n    positions = {};\n    f (trade) {\n        if (\'side\' in trade) {\n            return 1;\n        }\n        if (\'total\' in this.positions) {\n            return 2;\n        }\n        return 0;\n    }\n}\n').content;
         expect(output).toContain('InOp(trade, "side")');
-        expect(output).toContain('InOp(this.Balance, "total")');
+        expect(output).toContain('InOp(this.Positions, "total")');
+    });
+    test('Balance and Timeframes are hand-written maps: a comma-ok read', () => {
+        const output = new Transpiler({ verbose: false }).transpileGo('class T {\n    balance = {};\n    timeframes = {};\n    f () {\n        if (\'total\' in this.balance) {\n            return 1;\n        }\n        if (!(\'1m\' in this.timeframes)) {\n            return 2;\n        }\n        return 0;\n    }\n}\n').content;
+        expect(output).toContain('if _, ok := this.Balance["total"]; ok {');
+        expect(output).toContain('if _, ok := this.Timeframes["1m"]; !ok {');
+        expect(output).not.toContain('InOp(this.Balance');
+        expect(output).not.toContain('InOp(this.Timeframes');
     });
 });
 
