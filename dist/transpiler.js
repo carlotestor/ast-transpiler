@@ -11609,6 +11609,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
     switch (parent.kind) {
       case SyntaxKind5.BinaryExpression: {
         const operator = parent.operatorToken?.kind;
+        if (operator === SyntaxKind5.EqualsToken) {
+          return parent.right === current && parent.left?.kind === SyntaxKind5.ElementAccessExpression;
+        }
         return operator === SyntaxKind5.EqualsEqualsToken || operator === SyntaxKind5.ExclamationEqualsToken || operator === SyntaxKind5.EqualsEqualsEqualsToken || operator === SyntaxKind5.ExclamationEqualsEqualsToken || operator === SyntaxKind5.LessThanToken || operator === SyntaxKind5.GreaterThanToken || operator === SyntaxKind5.LessThanEqualsToken || operator === SyntaxKind5.GreaterThanEqualsToken || operator === SyntaxKind5.AmpersandAmpersandToken || operator === SyntaxKind5.BarBarToken;
       }
       case SyntaxKind5.PrefixUnaryExpression:
@@ -11621,6 +11624,10 @@ func New${this.capitalize(this.className)}() *${this.className} {
         return parent.condition === current;
       case SyntaxKind5.ConditionalExpression:
         return parent.condition === current;
+      case SyntaxKind5.PropertyAssignment:
+        return parent.initializer === current;
+      case SyntaxKind5.ShorthandPropertyAssignment:
+        return parent.name === current;
     }
     return false;
   }

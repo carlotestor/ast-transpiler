@@ -3500,6 +3500,10 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         switch (parent.kind) {
         case SyntaxKind.BinaryExpression: {
             const operator = parent.operatorToken?.kind;
+            // `request['type'] = x` stores the pointer into a map value: an `any` slot
+            if (operator === SyntaxKind.EqualsToken) {
+                return (parent.right === current) && (parent.left?.kind === SyntaxKind.ElementAccessExpression);
+            }
             return (operator === SyntaxKind.EqualsEqualsToken) || (operator === SyntaxKind.ExclamationEqualsToken)
                 || (operator === SyntaxKind.EqualsEqualsEqualsToken) || (operator === SyntaxKind.ExclamationEqualsEqualsToken)
                 || (operator === SyntaxKind.LessThanToken) || (operator === SyntaxKind.GreaterThanToken)
@@ -3516,6 +3520,11 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return parent.condition === current;
         case SyntaxKind.ConditionalExpression:
             return parent.condition === current;
+        // `{ 'min': x }` / `{ x }`: an object literal holds map[string]any values
+        case SyntaxKind.PropertyAssignment:
+            return parent.initializer === current;
+        case SyntaxKind.ShorthandPropertyAssignment:
+            return parent.name === current;
         }
         return false;
     }
