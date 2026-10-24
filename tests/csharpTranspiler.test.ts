@@ -4329,6 +4329,84 @@ describe('slice -> Substring / GetRange with the literal bounds clamped', () => 
     });
 });
 
+describe('slice bounds that are proven integers (and the explicit null end)', () => {
+    // a non-literal bound keeps the helper unless the printer can name its C# integer kind: the
+    // clamp repeats the read, so only a side-effect-free `int` / `Int64` operand qualifies, and
+    // `slice(x, a, null)` is the helper's "to the end" (the printer spells undefined as null).
+    // Two non-literal bounds would repeat both reads as four clamped operands, so they stay.
+    const withKinds = (kinds, input) => {
+        transpiler.csharpTranspiler.csharpExpressionTypeResolver = (node) => kinds[node?.text];
+        try {
+            return transpiler.transpileCSharp(input).content;
+        } finally {
+            transpiler.csharpTranspiler.csharpExpressionTypeResolver = undefined;
+        }
+    };
+    const clampInt = (name, length) => `Math.Max(Math.Min((${name} < 0 ? ${length} + (${name}) : ${name}), ${length}), 0)`;
+    test('a from-zero slice with an int end prints the clamped Substring range', () => {
+        const input =
+        "class Exchange {\n" +
+        "    cut(id: string, quoteLength: number) {\n" +
+        "        return id.slice(0, quoteLength);\n" +
+        "    }\n" +
+        "}\n";
+        const output = withKinds({ quoteLength: 'int' }, input);
+        const length = "((string)id).Length";
+        expect(output).toContain(`Substring(0, ${clampInt('quoteLength', length)})`);
+        expect(output).not.toContain("slice(id");
+    });
+    test('an explicit null end is the open-ended Substring', () => {
+        const input =
+        "class Exchange {\n" +
+        "    cut(id: string, start: number) {\n" +
+        "        return id.slice(start, null);\n" +
+        "    }\n" +
+        "}\n";
+        const output = withKinds({ start: 'int' }, input);
+        expect(output).toContain(`Substring(${clampInt('start', "((string)id).Length")})`);
+        expect(output).not.toContain("slice(id");
+    });
+    test('an Int64? bound is clamped in Int64, reads 0 when null and narrows after the clamp', () => {
+        const input =
+        "class Exchange {\n" +
+        "    cut(id: string, start: number) {\n" +
+        "        return id.slice(start, null);\n" +
+        "    }\n" +
+        "}\n";
+        const output = withKinds({ start: 'Int64?' }, input);
+        expect(output).toContain("((int)Math.Max(Math.Min(((start ?? 0L) < 0 ? ((Int64)((string)id).Length) + ((start ?? 0L)) : (start ?? 0L)), ((Int64)((string)id).Length)), 0L))");
+        expect(output).not.toContain("slice(id");
+    });
+    test('two non-literal bounds keep the helper (four clamped operands)', () => {
+        const input =
+        "class Exchange {\n" +
+        "    cut(id: string, start: number, end: number) {\n" +
+        "        return id.slice(start, end);\n" +
+        "    }\n" +
+        "}\n";
+        const output = withKinds({ start: 'int', end: 'int' }, input);
+        expect(output).toContain("slice(id, start, end)");
+    });
+    test('a double bound, a call bound and an unproven receiver keep the helper', () => {
+        const input =
+        "class Exchange {\n" +
+        "    cut(id: string, start: number, item) {\n" +
+        "        const one = id.slice(0, start);\n" +
+        "        const two = id.slice(0, this.getStart());\n" +
+        "        const three = item.slice(0, start);\n" +
+        "        return [one, two, three];\n" +
+        "    }\n" +
+        "    getStart() {\n" +
+        "        return 0;\n" +
+        "    }\n" +
+        "}\n";
+        const output = withKinds({ start: 'double' }, input);
+        expect(output).toContain("slice(id, 0, start)");
+        expect(output).toContain("slice(id, 0, this.getStart())");
+        expect(output).toContain("slice(item, 0, start)");
+    });
+});
+
 describe('csharp helper removal: parseInt / parseFloat / mod / prefix `-x`', () => {
     // the printer names the C# kind of int-range literals, `.length` and a few call results
     // itself; the locals the embedding build layer retypes come back through

@@ -224,6 +224,10 @@ const CSHARP_NATIVE_COMPARISON_TOKENS = {
 // same box. `double` keeps the helper (Math.Min propagates NaN, and -0/+0 differ).
 const CSHARP_MINMAX_NATIVE_KINDS = [ 'int', 'Int64' ];
 
+// kinds a native slice clamp can reproduce: the integer ones, and the nullable spellings whose
+// null the helper truncates to 0
+const CSHARP_SLICE_BOUND_KINDS = [ 'int', 'Int64', 'int?', 'Int64?' ];
+
 // every binary operator that writes its left operand (typescript6 has no First/LastAssignmentOperator
 // range to test against), used by the element-access loop guards below
 const CSHARP_ASSIGNMENT_OPERATOR_KINDS = [
@@ -389,6 +393,18 @@ function csharpParseFloatLiteralArgument(arg) {
     }
     const numeric = csharpLiteralNumericValue(arg);
     return (numeric === undefined) ? undefined : csharpDoubleLiteral(numeric);
+}
+
+// the value a non-literal slice bound contributes: a nullable one reads 0 when null, the number
+// the helper's truncation answers for a null bound
+function csharpSliceBoundValue(bound) {
+    if (bound.kind === 'int?') {
+        return `(${bound.text} ?? 0)`;
+    }
+    if (bound.kind === 'Int64?') {
+        return `(${bound.text} ?? 0L)`;
+    }
+    return bound.text;
 }
 
 // receivers the market-typed-local unit owns (market/currency rows); this printer's literal-key
@@ -4994,13 +5010,21 @@ export class CSharpTranspiler extends BaseTranspiler {
         if ((args.length < 1) || (args.length > 2)) {
             return undefined;
         }
-        const start = this.csharpSliceLiteralBound(args[0]);
-        if (start === undefined) {
+        const startBound = this.csharpSliceBoundOperand(args[0], false);
+        if (startBound === undefined) {
             return undefined;
         }
         const hasEnd = args.length === 2;
-        const end = hasEnd ? this.csharpSliceLiteralBound(args[1]) : undefined;
-        if (hasEnd && (end === undefined)) {
+        const endBound = hasEnd ? this.csharpSliceBoundOperand(args[1], true) : { kind: 'open' };
+        if (endBound === undefined) {
+            return undefined;
+        }
+        const openEnd = (endBound.kind === 'open');
+        const start = (startBound.kind === 'literal') ? startBound.value : undefined;
+        const end = (endBound.kind === 'literal') ? endBound.value : undefined;
+        // one clamped bound keeps the emitted line compact; two would repeat both reads as four
+        // clamped operands and push the line past the long-line profile the campaign gates on
+        if ((start === undefined) && (end === undefined) && !openEnd) {
             return undefined;
         }
         // x.slice (a, b) prints through this method for the CALL, so the receiver is `.expression.expression`
@@ -5016,29 +5040,36 @@ export class CSharpTranspiler extends BaseTranspiler {
         // `(id as string)` already prints `((string)id)`: a second cast would only add parens
         const cast = (isString && name.startsWith('((string)')) ? name : `((${isString ? 'string' : 'List<object>'})${name})`;
         const length = `${cast}.${isString ? 'Length' : 'Count'}`;
-        const from = this.csharpSliceBoundExpression(start, length);
+        const from = (start !== undefined) ? this.csharpSliceBoundExpression(start, length) : this.csharpSliceClampExpression(startBound, length);
         // the null guard reproduces the helper's null -> null result for a null receiver; the
         // whole emission is parenthesised because a ternary binds looser than the `+` / `+` chain
         // the printer may wrap this call in
         const guard = `(${this.csharpNullComparison(name, true)} ? null : `;
         const method = isString ? 'Substring' : 'GetRange';
-        if (!hasEnd) {
+        if (!hasEnd || openEnd) {
             // the open end is the length itself: `Substring (from)` and `GetRange (from, length - from)`
             const open = isString ? `Substring(${from})` : `GetRange(${from}, ${from === '0' ? length : `${length} - ${from}`})`;
             return `${guard}${cast}.${open})`;
         }
-        const to = this.csharpSliceBoundExpression(end, length);
-        // from <= to is proven per case: 0 is never above a clamp, and two literals clamp
-        // monotonically once they keep their order (non-negative, or both counting from the end)
-        const ordered = (start === 0) || ((start >= 0) && (end >= 0) && (start <= end)) || ((start < 0) && (end < 0) && (start <= end));
+        const to = (end !== undefined) ? this.csharpSliceBoundExpression(end, length) : this.csharpSliceClampExpression(endBound, length);
         let count;
-        if (from === to) {
-            count = '0'; // two bounds that clamp to the same index: an empty result
+        if ((start !== undefined) && (end !== undefined)) {
+            // from <= to is proven per case: 0 is never above a clamp, and two literals clamp
+            // monotonically once they keep their order (non-negative, or both counting from the end)
+            const ordered = (start === 0) || ((start >= 0) && (end >= 0) && (start <= end)) || ((start < 0) && (end < 0) && (start <= end));
+            if (from === to) {
+                count = '0'; // two bounds that clamp to the same index: an empty result
+            } else if (from === '0') {
+                count = to; // from 0: the clamped end IS the count
+            } else {
+                // an inverted pair yields an empty slice in JS, so the count never goes below 0
+                count = ordered ? `${to} - ${from}` : `Math.Max(${to} - ${from}, 0)`;
+            }
         } else if (from === '0') {
-            count = to; // from 0: the clamped end IS the count
+            count = to;
         } else {
-            // an inverted pair yields an empty slice in JS, so the count never goes below 0
-            count = ordered ? `${to} - ${from}` : `Math.Max(${to} - ${from}, 0)`;
+            // two clamped bounds keep no proven order: JS answers the empty slice, never a throw
+            count = `Math.Max(${to} - ${from}, 0)`;
         }
         return `${guard}${cast}.${method}(${from}, ${count}))`;
     }
@@ -5073,6 +5104,41 @@ export class CSharpTranspiler extends BaseTranspiler {
             return '0';
         }
         return value > 0 ? `Math.Min(${value}, ${length})` : `Math.Max(${length} - ${-value}, 0)`;
+    }
+
+    // The bound of a native slice, or undefined when the helper must stay: an integer literal,
+    // a read whose printed C# kind is `int` / `Int64`, and (end position only) an explicit
+    // null / undefined, which the helper answers as "to the end". The value is repeated by the
+    // clamp, so a call / assignment operand is refused; `double` is truncated by the helper.
+    csharpSliceBoundOperand(node, isEnd = false) {
+        const literal = this.csharpSliceLiteralBound(node);
+        if (literal !== undefined) {
+            return { kind: 'literal', value: literal };
+        }
+        if (isEnd && ((node?.kind === SyntaxKind.NullKeyword)
+            || ((node?.kind === SyntaxKind.Identifier) && (node.text === 'undefined')))) {
+            return { kind: 'open' };
+        }
+        if (!this.csharpSliceReceiverIsSideEffectFree(node)) {
+            return undefined;
+        }
+        const kind = this.csharpExpressionTypeOf(node);
+        if (CSHARP_SLICE_BOUND_KINDS.indexOf(kind) < 0) {
+            return undefined;
+        }
+        return { kind: kind, text: this.printNode(node, 0).trim() };
+    }
+
+    // JS clamps a bound into [0, length] the same way for any integer value: a non-negative one
+    // is min (bound, length), a negative one counts from the end. The length is an `int`, so a
+    // wider bound is clamped in Int64 and narrowed after the clamp (still inside [0, length]).
+    csharpSliceClampExpression(bound, length) {
+        const wide = (bound.kind === 'Int64') || (bound.kind === 'Int64?');
+        const value = csharpSliceBoundValue(bound);
+        const total = wide ? `((Int64)${length})` : length;
+        const ranged = `(${value} < 0 ? ${total} + (${value}) : ${value})`;
+        const clamped = `Math.Max(Math.Min(${ranged}, ${total}), ${wide ? '0L' : '0'})`;
+        return wide ? `((int)${clamped})` : clamped;
     }
 
     // The receiver of a native slice: a `List<object>` the printer / build layer declared (the only
