@@ -7132,3 +7132,41 @@ describe('go container locals from the checker type', () => {
         expect(out).not.toContain('[]string{');
     });
 });
+
+describe('hx10 G06: typed tuple slots from the producer', () => {
+    const run = (body: string) => new Transpiler({ verbose: false }).transpileGo(
+        "type Dict = { [key: string]: any };\n" +
+        "type Str = string | undefined;\n" +
+        "class T {\n" +
+        "    resolve (a: any, p: Dict): [Str, Dict] { return [ undefined, p ]; }\n" +
+        "    pick (a: any, p: Dict): [any, Dict] { return [ a, p ]; }\n" +
+        "    listy (a: any, p: Dict): [any[], Dict] { return [ [], p ]; }\n" +
+        "    handleOptionStringAndParams (a: any, b: any, c: any, d: any): [Str, Dict] { return [ undefined, d ]; }\n" +
+        "    f (params: Dict = {}) {\n" + body + "    }\n" +
+        "}\n").content;
+    test('a Str slot reads SafeStringPtr; a container slot stays boxed', () => {
+        const out = run("        const [ a, b ] = this.resolve ('x', params);\n        return [ a, b ];\n");
+        expect(out).toContain('var a *string = SafeStringPtr(abVariable[0])');
+        expect(out).toContain('GetValue(abVariable, 1)');
+    });
+    test('a list slot keeps GetValue', () => {
+        const out = run("        const [ a, b ] = this.listy ('x', params);\n        return [ a, b ];\n");
+        expect(out).toContain('a := GetValue(abVariable, 0)');
+    });
+    test('an any slot keeps GetValue', () => {
+        const out = run("        const [ a, b ] = this.pick ('x', params);\n        return [ a, b ];\n");
+        expect(out).toContain('a := GetValue(abVariable, 0)');
+    });
+    test('a slot that is written later keeps GetValue', () => {
+        const out = run("        let [ a, b ] = this.resolve ('x', params);\n        a = this.safeString (params, 'y');\n        return [ a, b ];\n");
+        expect(out).toContain('a := GetValue(abVariable, 0)');
+    });
+    test('a slot read through an index keeps GetValue', () => {
+        const out = run("        const [ b, c ] = this.resolve ('x', params);\n        return params[b];\n");
+        expect(out).toContain('b := GetValue(bcVariable, 0)');
+    });
+    test('a producer the build layer binds natively keeps the printed slots', () => {
+        const out = run("        const [ a, b ] = this.handleOptionStringAndParams (params, 'm', 'k', undefined);\n        return [ a, b ];\n");
+        expect(out).toContain('a := GetValue(abVariable, 0)');
+    });
+});

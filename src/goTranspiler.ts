@@ -641,6 +641,21 @@ const GO_PARAMS_TUPLE_HELPERS: { [name: string]: number } = {
     'handleTriggerPricesAndParams': 3,
 };
 
+// destructures the Go build layer already rewrites natively: the pair-result helpers print
+// `a, b := call` (their Go twin returns two values) and the payload helpers index the holder
+// directly. A typed slot here would defeat both, so those keep the printed form.
+const GO_TUPLE_NATIVE_BINDING_PRODUCERS = [
+    'HandleMarketTypeAndParams', 'HandleSubTypeAndParams', 'HandleOptionStringAndParams',
+    'HandleUntilOption', 'HandleMarginModeAndParams', 'HandleOptionBoolAndParams',
+    'HandleOptionBoolAndParams2', 'HandleOptionIntegerAndParams', 'HandleOptionIntegerAndParams2',
+    'HandleOptionStringAndParams2', 'HandleOptionAndParams', 'HandleOptionAndParams2',
+    'HandleOptionBoolAndParamsNullable', 'HandleOptionBoolAndParams2Nullable',
+    'HandleOptionIntegerAndParamsNullable', 'HandleOptionIntegerAndParams2Nullable',
+    'HandleNetworkCodeAndParams', 'HandleWithdrawTagAndParams', 'HandlePostOnly',
+    'HandleParamString', 'HandleParamString2', 'HandleParamInteger', 'HandleParamInteger2',
+    'HandleParamBool', 'HandleParamBool2',
+];
+
 // receivers that read a nil map exactly like an untyped nil (derefScalar + a missed lookup);
 // IsDictionary and IsEqual answer differently for a nil map, so they are not listed
 const GO_GETARG_NIL_MAP_READERS = [
@@ -2963,8 +2978,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             // newline-separated, so the joins below must not emit ';'
             let arrayBindingStatement =  `${this.getIden(identation)}${syntheticName} := ${this.printNode(declaration.initializer, 0)}\n`;
 
-            arrayBindingStatement += parsedArrayBindingElements
-                .map((e, index) => this.getIden(identation) + `${e} := GetValue(${syntheticName}, ${index})`).join("\n");
+            arrayBindingStatement += this.goTupleSlotBindingLines (arrayBindingPatternElements, syntheticName, identation, declaration);
 
             return arrayBindingStatement;
         }
@@ -6917,6 +6931,148 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         const element: any = checker.getTypeArguments(type)?.[index];
         return (element !== undefined) && !(element.flags & (TypeFlags.Any | TypeFlags.Unknown))
             && this.goParameterTypeIsDict(element);
+    }
+
+    // the Go unwrap for one slot of a destructured tuple: the checker names the element's Go type,
+    // so the slot reads as the same typed value the accessor families hand back (GetValue's own
+    // deref is what MapTyped/ListTyped/SafeStringPtr/SafeBoolPtr perform on their argument).
+    // undefined keeps the boxed `GetValue(holder, i)` for that slot.
+    goTupleSlotUnbox(element: any): { goType: string, conv: string } | undefined {
+        const checker: any = this.checkerOrUndefined();
+        if ((checker === undefined) || (element?.kind !== SyntaxKind.BindingElement)
+            || (element.dotDotDotToken !== undefined) || (element.initializer !== undefined)
+            || (element.name?.kind !== SyntaxKind.Identifier)) {
+            return undefined;
+        }
+        let type: any;
+        try {
+            type = checker.getTypeAtLocation(element.name);
+        } catch (e) {
+            return undefined;
+        }
+        if (type === undefined) {
+            return undefined;
+        }
+        let parts: any[] = ((typeof type.isUnionType === 'function') && type.isUnionType()) ? type.getTypes().slice() : [ type ];
+        parts = parts.filter((part: any) => !(part.flags & (TypeFlags.Undefined | TypeFlags.Null)));
+        if (parts.length === 0) {
+            return undefined;
+        }
+        if (parts.every((part: any) => (part.flags & TypeFlags.BooleanLiteral) !== 0)) {
+            return { 'goType': '*bool', 'conv': 'SafeBoolPtr' };
+        }
+        // a string, or a union of string literals: every path boxes a string or nothing
+        if (parts.every((part: any) => ((part.flags & TypeFlags.String) !== 0) || ((part.flags & TypeFlags.StringLiteral) !== 0))) {
+            return { 'goType': '*string', 'conv': 'SafeStringPtr' };
+        }
+        // a container slot already reads through the holder index (the build layer's own passes),
+        // so only the scalar slots are unboxed here
+        return undefined;
+    }
+
+    // a typed slot local is only printed when every later use reads it as that type: a write, an
+    // address, a switch/case subject or an element-access index all need the box
+    goTupleSlotNameIsSafe(nameNode: any, declaration: any): boolean {
+        const name = nameNode?.text;
+        const scope = this.goEnclosingFunction(declaration);
+        if ((name === undefined) || (scope === undefined)) {
+            return false;
+        }
+        const unwrapped = (node: any): any => ((node?.kind === SyntaxKind.ParenthesizedExpression) ? unwrapped(node.expression) : node);
+        return !this.hasNodeWhere(scope, (node: any) => {
+            if ((node?.kind !== SyntaxKind.Identifier) || (node.text !== name)) {
+                return false;
+            }
+            const parent: any = node.parent;
+            if (parent === undefined) {
+                return false;
+            }
+            if ((parent.kind === SyntaxKind.PropertyAccessExpression) && (parent.name === node)) {
+                return false;
+            }
+            if ((parent.kind === SyntaxKind.BindingElement) || (parent.kind === SyntaxKind.PropertyAssignment)) {
+                return false;
+            }
+            if ((parent.kind === SyntaxKind.VariableDeclaration) && (parent.name === node)) {
+                return parent !== declaration;
+            }
+            if ((parent.kind === SyntaxKind.Parameter) || (parent.kind === SyntaxKind.FunctionDeclaration)
+                || (parent.kind === SyntaxKind.MethodDeclaration)) {
+                return true;
+            }
+            if ((parent.kind === SyntaxKind.BinaryExpression) && (unwrapped(parent.left) === node)) {
+                return true; // an assignment or a compound write
+            }
+            if ((parent.kind === SyntaxKind.PrefixUnaryExpression) || (parent.kind === SyntaxKind.PostfixUnaryExpression)) {
+                return true; // ++, --, or an address-of `&x` the printer emits through a prefix form
+            }
+            if ((parent.kind === SyntaxKind.SwitchStatement) && (parent.expression === node)) {
+                return true;
+            }
+            if ((parent.kind === SyntaxKind.CaseClause) || (parent.kind === SyntaxKind.ElementAccessExpression)) {
+                return true;
+            }
+            if ((parent.kind === SyntaxKind.ForOfStatement) || (parent.kind === SyntaxKind.ForInStatement)) {
+                return true;
+            }
+            return false;
+        });
+    }
+
+    // slot reads of `const [ a, b ] = <tuple producer>(…)`: a proven slot becomes a typed local,
+    // every other slot keeps the boxed GetValue
+    // The holder of a destructured tuple is a Go slice only when this printer emits the callee in
+    // this same file (a tuple return prints []any). An awaited call's element type is the channel
+    // table's decision (AsyncResult[any]) and an inherited method may have a hand-written `any`
+    // twin, so both keep the boxed slots.
+    goTupleBindingProducerName(declaration: any): string | undefined {
+        const initializer: any = (declaration?.initializer?.kind === SyntaxKind.AwaitExpression)
+            ? declaration.initializer.expression
+            : declaration?.initializer;
+        const callee: any = (initializer?.kind === SyntaxKind.CallExpression) ? initializer.expression : undefined;
+        if ((callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)) {
+            return undefined;
+        }
+        const name = String(callee.name?.text ?? '');
+        return (name === '') ? undefined : (name.charAt(0).toUpperCase() + name.slice(1));
+    }
+
+    // the holder is a Go slice only when this printer emits the callee's tuple return: an awaited
+    // call's element type is the channel table's decision (AsyncResult[any]) and a
+    // `base/Exchange.ts` method has a hand-written `any` twin (go/v4/exchange.go)
+    goTupleBindingIsSliceHolder(declaration: any): boolean {
+        const initializer: any = declaration?.initializer;
+        if ((initializer?.kind !== SyntaxKind.CallExpression) || (initializer.expression?.kind !== SyntaxKind.PropertyAccessExpression)
+            || (initializer.expression.expression?.kind !== SyntaxKind.ThisKeyword)) {
+            return false;
+        }
+        const checker: any = this.checkerOrUndefined();
+        let declared: any;
+        try {
+            declared = checker?.getSymbolAtLocation(initializer.expression.name)?.valueDeclaration?.resolve();
+        } catch (e) {
+            declared = undefined;
+        }
+        if (declared === undefined) {
+            return false;
+        }
+        const calleeFile = String(declared.getSourceFile?.()?.fileName ?? '');
+        return (calleeFile !== '') && !/(^|[\/])base[\/]Exchange\.ts$/.test(calleeFile);
+    }
+
+    goTupleSlotBindingLines(elements: any[], holder: string, identation: number, declaration: any): string {
+        const iden = this.getIden(identation);
+        const producer = this.goTupleBindingProducerName(declaration);
+        const nativeBinding = (producer !== undefined) && GO_TUPLE_NATIVE_BINDING_PRODUCERS.includes(producer);
+        const sliceHolder = !nativeBinding && this.goTupleBindingIsSliceHolder(declaration);
+        return elements.map((element: any, index: number) => {
+            const name = this.printNode(element.name, 0);
+            const unbox = (element.name?.kind === SyntaxKind.Identifier) ? this.goTupleSlotUnbox(element) : undefined;
+            if (!sliceHolder || (unbox === undefined) || !this.goTupleSlotNameIsSafe(element.name, declaration)) {
+                return iden + name + ' := GetValue(' + holder + ', ' + index + ')';
+            }
+            return iden + 'var ' + name + ' ' + unbox.goType + ' = ' + unbox.conv + '(' + holder + '[' + index + '])';
+        }).join('\n');
     }
 
     // `this.handleXxx(…, params, …)` of a base helper typed `any[]` whose element holds the params
