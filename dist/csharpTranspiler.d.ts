@@ -1,6 +1,6 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
 import { type Node, type ParameterDeclaration } from 'typescript/unstable/ast';
-import { type Symbol as TsSymbol } from 'typescript/unstable/sync';
+import { type Program, type Symbol as TsSymbol } from 'typescript/unstable/sync';
 export declare class CSharpTranspiler extends BaseTranspiler {
     binaryExpressionsWrappers: any;
     csharpBooleanReturnTypes: WeakMap<Node, string>;
@@ -10,7 +10,9 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpGuardIndex: WeakMap<Node, Map<string, any[]>>;
     csharpExpressionTypeResolver?: (node: any) => string | undefined;
     csharpDeclaredLocalTypeResolver?: (declaration: any) => string | undefined;
+    csharpListParamExclusions?: (name: string, index: number) => boolean;
     csharpTypedLocals: WeakMap<Node, string>;
+    csharpListParamDeclarations: WeakSet<Node>;
     csharpHandlerMessageTypes: WeakMap<Node, string>;
     csharpHandlerCalled: WeakMap<Node, boolean>;
     csharpListRouteClasses: WeakMap<Node, boolean>;
@@ -22,7 +24,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     initConfig(): void;
     getBlockOpen(identation: any): string;
     printSuperCallInsideConstructor(node: any, identation: any): string;
-    csharpMethodOverrides: WeakMap<Node, any>;
+    csharpMethodOverrides: WeakMap<Node, Node>;
     csharpClassMethodsByName: WeakMap<Node, Map<string, Node>>;
     csharpMethodsByName(classDecl: any): Map<string, Node>;
     getMethodOverride(node: Node): Node;
@@ -47,7 +49,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpProvenDictionaryRead(node: any, expression: any, argumentExpression: any, isStringKey: any): string | undefined;
     csharpKeyPresenceGuarded(node: any, expression: any, key: any): boolean;
     csharpLoopIndexListRead(expression: any, argumentExpression: any): string | undefined;
-    csharpCounterRangeLoop(counter: any, receiver: any): any;
+    csharpCounterRangeLoop(counter: any, receiver: any): import("typescript/unstable/ast").ForStatement;
     csharpForBoundsCounter(loop: any, counter: any, receiver: any): boolean;
     csharpCounterStartsAtZero(loop: any, counter: any): boolean;
     csharpCounterAdvances(loop: any, counter: any): boolean;
@@ -120,6 +122,11 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpDeclaredReadEqualityKind(node: any, operandType: string | undefined): string | undefined;
     csharpNullComparison(text: string, isEquality: boolean): string;
     csharpNativeNumericCallEquality(left: any, right: any, leftText: string, rightText: string, isEquality: boolean): string | undefined;
+    csharpPrintedArithmeticKind(node: any, text: string): string | undefined;
+    csharpArithmeticOperandKind(csharpType: string | undefined): string | undefined;
+    csharpNativeArithmeticEquality(left: any, right: any, leftText: string, rightText: string, isEquality: boolean): string | undefined;
+    csharpScalarFieldKind(node: any): string | undefined;
+    csharpNativeScalarFieldEquality(left: any, right: any, leftText: string, rightText: string, isEquality: boolean): string | undefined;
     csharpNumericCallKind(node: any): string | undefined;
     csharpIntegerLiteralKind(node: any): string | undefined;
     csharpNumericKindHoldsLiteral(callKind: string, literalKind: string): boolean;
@@ -182,7 +189,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpIsClassThrowArgument(node: any): boolean;
     csharpIsDeleteKey(node: any): boolean;
     csharpIsLeftPlusOperand(node: any): boolean;
-    csharpReceiverBinding(receiver: any): any;
+    csharpReceiverBinding(receiver: any): import("typescript/unstable/ast").DeclarationBase;
     csharpStringReceiverType(receiver: any): string | undefined;
     csharpStringMethodReceiver(node: any, name: any): any;
     csharpDestructuringTempType(initializer: any): string | undefined;
@@ -197,11 +204,18 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     printFunctionBody(node: any, identation: any): string;
     printInstanceOfExpression(node: any, identation: any): string;
     printAsExpression(node: any, identation: any): string;
+    csharpArrayListParamType(node: any): string | undefined;
+    csharpListParamSpelling(node: any): string | undefined;
+    csharpListSpellingOfType(type: any, unionArms?: number): string | undefined;
+    csharpListParamCensus(): Map<string, boolean> | undefined;
+    csharpListParamIsWritten(parameter: any): boolean;
+    csharpListBindingIsWritten(declaration: any): boolean;
+    csharpListParamArgumentPrintsList(argument: any, decide?: (key: string) => boolean): boolean;
     printParameterType(node: any): any;
     csharpOverrideParamSpelling(node: any): string | undefined;
     csharpOverrideParamSpellingOfType(type: any, unionArms?: number): string | undefined;
     csharpBooleanParamType(node: any): string;
-    csharpBooleanParamProofs: WeakMap<Program, Map<Node, Set<number>>>;
+    csharpBooleanParamProofs: WeakMap<Program<import("typescript/unstable/sync").ProjectId>, Map<Node, Set<number>>>;
     csharpBooleanParamCensus(): Map<Node, Set<number>>;
     csharpNodeText(node: any): string;
     csharpNodePositionKey(node: any): string;
@@ -218,7 +232,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpPrintedReturnType(declaration: any): string | undefined;
     csharpPrinterStringConcat(left: any, right: any, leftText: any, rightText: any): string | undefined;
     csharpConcatOperandPrintsString(node: any, depth?: number, allowLocal?: boolean): boolean;
-    printFunctionType(node: any): any;
+    printFunctionType(node: any): string;
     printReturnStatement(node: any, identation: any): string;
     csharpReturnValuePrintsType(expression: any, declared: string): boolean;
     printUnboxedReturnStatement(node: any, identation: any, declaredType: string, forgiving: string): string;
@@ -272,7 +286,21 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpNativeSliceCall(node: any, name: any): string;
     csharpSliceLiteralBound(node: any): any;
     csharpSliceBoundExpression(value: any, length: any): string;
-    csharpSliceReceiverKind(expression: any): "string" | "list";
+    csharpSliceBoundOperand(node: any, isEnd?: boolean): {
+        kind: string;
+        value: any;
+        text?: undefined;
+    } | {
+        value?: undefined;
+        kind: string;
+        text?: undefined;
+    } | {
+        value?: undefined;
+        kind: string;
+        text: string;
+    };
+    csharpSliceClampExpression(bound: any, length: any): string;
+    csharpSliceReceiverKind(expression: any): "list" | "string";
     csharpSliceStringType(type: any): boolean;
     csharpSliceReceiverIsSideEffectFree(expression: any): boolean;
     printReplaceCall(node: any, identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;

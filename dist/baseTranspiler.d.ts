@@ -172,8 +172,8 @@ declare class BaseTranspiler {
     applyUserOverrides(config: any): void;
     getLineAndCharacterOfNode(node: any): [number, number];
     isComment(line: string): boolean;
-    isStringType(flags: TypeFlags): boolean;
-    isAnyType(flags: TypeFlags): boolean;
+    isStringType(flags: TypeFlags): flags is TypeFlags.String | TypeFlags.StringLiteral;
+    isAnyType(flags: TypeFlags): flags is TypeFlags.Any;
     warnIfAnyType(node: any, flags: any, variable: any, target: any): void;
     warn(node: any, target: any, message: any): void;
     hasAsyncModifier(node: any): any;
@@ -212,10 +212,10 @@ declare class BaseTranspiler {
     printNodeCommentsIfAny(node: any, identation: any, parsedNode: any): string;
     getType(node: any): any;
     getTypeFromRawType(type: any): string;
-    getFunctionType(node: any, async?: boolean): any;
+    getFunctionType(node: any, async?: boolean): string;
     printFunctionBody(node: any, identation: any): string;
     printParameterType(node: any): any;
-    printFunctionType(node: any): any;
+    printFunctionType(node: any): string;
     printFunctionDefinition(node: any, identation: any): string;
     transformFunctionNameIfNeeded(name: any): string;
     printFunctionDeclaration(node: any, identation: any): string;
@@ -230,7 +230,7 @@ declare class BaseTranspiler {
     printVariableStatement(node: any, identation: any): string;
     printOutOfOrderCallExpressionIfAny(node: any, identation: any): any;
     printSuperCallInsideConstructor(node: any, identation: any): string;
-    isBuiltInFunctionCall(node: any): any;
+    isBuiltInFunctionCall(node: any): boolean;
     getTypesFromCallExpressionParameters(node: any): any[];
     printArgsForCallExpression(node: any, identation: any): any;
     printArrayIsArrayCall(node: any, identation: any, parsedArg?: any): any;

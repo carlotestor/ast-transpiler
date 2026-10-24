@@ -129,7 +129,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     printMethodParameters(node: any): any;
     printParameter(node: any, defaultValue?: boolean): string;
     printParameterType(node: any): string;
-    printFunctionType(node: any): any;
+    printFunctionType(node: any): string;
     isWholePrintedCall(value: string, open: number): boolean;
     goTypeOfInitializer(initializer: any, printedValue: string): string | undefined;
     goUnwrapPrintedParens(printedText: string): string;
@@ -183,6 +183,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     goTypeNameIsShadowed(scope: any, goType: string): boolean;
     goIsNativeAppendShape(receiverNode: any, pushNode: any): boolean;
     goNativeAppendReceiver(pushNode: any): string | undefined;
+    goResolvedLocalGoType(receiver: any): string | undefined;
+    goStringListAppendsAString(pushNode: any): boolean;
+    goStringValueNodeIsProven(node: any): boolean;
     goLocalIsSafeToType(scope: any, declaration: any, varName: string, goType: string): boolean;
     goSelfConcatWriteIsString(node: any, varName: string): boolean;
     goSelfConcatIsString(node: any, varName: string): boolean;
@@ -347,6 +350,12 @@ export declare class GoTranspiler extends BaseTranspiler {
     goStripControlClauseParens(text: string): string;
     goPrintTernaryBranch(node: any, levels: number): string;
     printInlineInOp(dictNode: any, keyNode: any, dictText: string, keyText: string): string | undefined;
+    goInOpSubstitution: any;
+    GO_IN_OP_SENTINEL: string;
+    goInOpSubstitutedText(node: any): string | undefined;
+    goInOpIfInitClause(node: any): string | undefined;
+    goIfInOpRead(condition: any): any;
+    goIfInOpBindingName(statement: any): string | undefined;
     comparisonHelpers: string[];
     printInlineOpNeg(node: any, printedText: string): string | undefined;
     printInlineTruthy(node: any): string | undefined;
@@ -421,6 +430,14 @@ export declare class GoTranspiler extends BaseTranspiler {
     goGetArgPointerInHelperArithmetic(n: any): boolean;
     goGetArgPointerStoredAsValue(n: any, param: any): boolean;
     goTupleElementIsDict(right: any, index: number): boolean;
+    goTupleSlotUnbox(element: any): {
+        goType: string;
+        conv: string;
+    } | undefined;
+    goTupleSlotNameIsSafe(nameNode: any, declaration: any): boolean;
+    goTupleBindingProducerName(declaration: any): string | undefined;
+    goTupleBindingIsSliceHolder(declaration: any): boolean;
+    goTupleSlotBindingLines(elements: any[], holder: string, identation: number, declaration: any): string;
     goParamsTupleHelperIndex(call: any): number;
     goGetArgTupleWriteIsDict(declaration: any, right: any, index: number): boolean;
     goGetArgBindsDictElement(leftElement: any, right: any, index: number): boolean;

@@ -12,7 +12,7 @@ import {
   symbolValueDeclaration,
   typeParts,
   typeTarget
-} from "./chunk-CTKEJPGZ.js";
+} from "./chunk-PU4W7OZB.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -2785,6 +2785,7 @@ var CSHARP_NATIVE_COMPARISON_TOKENS = {
   [SyntaxKind4.GreaterThanEqualsToken]: ">="
 };
 var CSHARP_MINMAX_NATIVE_KINDS = ["int", "Int64"];
+var CSHARP_SLICE_BOUND_KINDS = ["int", "Int64", "int?", "Int64?"];
 var CSHARP_ASSIGNMENT_OPERATOR_KINDS = [
   SyntaxKind4.EqualsToken,
   SyntaxKind4.PlusEqualsToken,
@@ -2868,6 +2869,34 @@ var CSHARP_NATIVE_BOOL_FIELDS = [
   "substituteCommonCurrencyCodes",
   "verbose"
 ];
+var CSHARP_SCALAR_FIELD_KINDS = {
+  "rateLimit": "double",
+  "rollingWindowSize": "double"
+};
+var CSHARP_HELPER_ARITHMETIC_OPENERS = ["mod(", "add(", "subtract(", "multiply(", "divide(", "callDynamically("];
+function csharpStripOuterParens(text) {
+  let stripped = text.trim();
+  while (stripped.startsWith("(") && stripped.endsWith(")")) {
+    let depth = 0;
+    let whole = true;
+    for (let i = 0; i < stripped.length; i++) {
+      if (stripped[i] === "(") {
+        depth++;
+      } else if (stripped[i] === ")") {
+        depth--;
+        if (depth === 0 && i < stripped.length - 1) {
+          whole = false;
+          break;
+        }
+      }
+    }
+    if (!whole) {
+      break;
+    }
+    stripped = stripped.substring(1, stripped.length - 1).trim();
+  }
+  return stripped;
+}
 var CSHARP_MISSING_KEY_FIELDS_NATIVE = ["has", "options", "urls", "markets", "exceptions"];
 var CSHARP_NATIVE_COLLECTION_TYPES = ["List<object>", "IList<object>", "Dictionary<string, object>", "IDictionary<string, object>"];
 var CSHARP_SCALAR_ELEMENT_BOOL = 1;
@@ -2929,12 +2958,48 @@ function csharpParseFloatLiteralArgument(arg) {
   const numeric = csharpLiteralNumericValue(arg);
   return numeric === void 0 ? void 0 : csharpDoubleLiteral(numeric);
 }
+function csharpSliceBoundValue(bound) {
+  if (bound.kind === "int?") {
+    return `(${bound.text} ?? 0)`;
+  }
+  if (bound.kind === "Int64?") {
+    return `(${bound.text} ?? 0L)`;
+  }
+  return bound.text;
+}
 var CSHARP_MARKET_RECEIVER_NAMES = ["market", "currency"];
 var CSHARP_OVERRIDE_PARAM_TYPES = {
   ethRpc: { 2: "IList<object>" },
   parsePredictionOpenInterest: { 0: "IDictionary<string, object>" },
   signEvmTransaction: { 0: "IDictionary<string, object>" }
 };
+var csharpListParamCensuses = /* @__PURE__ */ new WeakMap();
+function csharpListParamFileIsPrintedAlone(node) {
+  const file = typeof node.getSourceFile === "function" ? node.getSourceFile() : void 0;
+  const fileName = String(file?.fileName ?? "");
+  return fileName.includes("/ts/src/base/");
+}
+function csharpSyntacticArrayType(node) {
+  if (node === void 0) {
+    return false;
+  }
+  if (node.kind === SyntaxKind4.ArrayType) {
+    return true;
+  }
+  if (node.kind === SyntaxKind4.UnionType || node.kind === SyntaxKind4.ParenthesizedType) {
+    const parts = node.types !== void 0 ? Array.from(node.types) : [node.type];
+    return parts.some((part) => part !== void 0 && csharpSyntacticArrayType(part));
+  }
+  return false;
+}
+function csharpListParamDeclaration(transpiler, expression) {
+  if (expression === void 0) {
+    return void 0;
+  }
+  const declarations = transpiler.csharpListParamDeclarations;
+  const declaration = transpiler.csharpReceiverBinding(expression);
+  return declarations !== void 0 && declaration !== void 0 && declarations.has(declaration) ? declaration : void 0;
+}
 var CSHARP_LENGTH_CAST = /^\(([A-Za-z_][\w.]*(?:<[^<>]*(?:<[^<>]*>)?[^<>]*>)?)\)/;
 var CSHARP_NULL_COMPARISON_REFERENCE_HEADS = ["string", "IDictionary<", "Dictionary<", "IList<", "List<", "ConcurrentDictionary<", "ccxt.pro.", "ArrayCache", "IOrderBook", "Future", "WebSocketClient", "Delegates"];
 var CSharpTranspiler = class extends BaseTranspiler {
@@ -2957,6 +3022,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
     // prefix is final, so every later read of the local is statically that type and its
     // members may replace inOp/getArrayLength
     this.csharpTypedLocals = /* @__PURE__ */ new WeakMap();
+    // parameter declarations this printer typed as `IList<object>` (csharpArrayListParamType), so
+    // their reads keep the helper's null branches (`(x?.Count ?? 0)`, the guarded indexer)
+    this.csharpListParamDeclarations = /* @__PURE__ */ new WeakSet();
     // ws handler `message` parameter -> the typed signature this printer prints for it (D-19)
     this.csharpHandlerMessageTypes = /* @__PURE__ */ new WeakMap();
     // method declaration -> a static call reference exists (a call binds its arguments)
@@ -4644,6 +4712,113 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     return isEquality ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
   }
+  // The C# numeric kind of an operand printed as `%` / `*` / `+` / `-` over two operands this
+  // printer can name in one family: C# types the result to that family. An operand that still
+  // prints an arithmetic helper (`mod(...)`, `add(...)`), a mixed int/double pair and an unnamed
+  // operand all answer undefined, so the helper stays.
+  csharpPrintedArithmeticKind(node, text) {
+    while (node?.kind === SyntaxKind4.ParenthesizedExpression) {
+      node = node.expression;
+    }
+    if (node?.kind !== SyntaxKind4.BinaryExpression) {
+      return void 0;
+    }
+    const op = node.operatorToken?.kind;
+    if (op !== SyntaxKind4.PercentToken && op !== SyntaxKind4.AsteriskToken && op !== SyntaxKind4.PlusToken && op !== SyntaxKind4.MinusToken) {
+      return void 0;
+    }
+    if (CSHARP_HELPER_ARITHMETIC_OPENERS.some((opener) => csharpStripOuterParens(text).startsWith(opener))) {
+      return void 0;
+    }
+    const leftKind = this.csharpArithmeticOperandKind(this.csharpExpressionTypeOf(node.left));
+    const rightKind = this.csharpArithmeticOperandKind(this.csharpExpressionTypeOf(node.right));
+    if (leftKind === void 0 || rightKind === void 0) {
+      return void 0;
+    }
+    if (leftKind === "double" || rightKind === "double") {
+      return leftKind === "double" && rightKind === "double" ? "double" : void 0;
+    }
+    return leftKind === "int" && rightKind === "int" ? "int" : "Int64";
+  }
+  // The numeric family of an arithmetic operand: a nullable spelling (`Int64?`) is the same
+  // family — the printed operator lifts, and null answers false in both `==` and isEqual. Any
+  // other type is not a number this printer named.
+  csharpArithmeticOperandKind(csharpType) {
+    switch (csharpType) {
+      case "Int64":
+      case "long":
+      case "Int64?":
+      case "long?":
+        return "Int64";
+      case "int":
+      case "int?":
+        return "int";
+      case "double":
+      case "double?":
+        return "double";
+    }
+    return void 0;
+  }
+  // `isEqual (<numeric arithmetic>, N)` -> `==` / `!=`: the printed expression is native C#
+  // arithmetic of one numeric kind, so an integer literal it holds exactly compares the way
+  // isEqual's ToInt64 / Convert.ToDouble branches do. Two such expressions of one kind compare by
+  // value in both; every other pair keeps the helper.
+  csharpNativeArithmeticEquality(left, right, leftText, rightText, isEquality) {
+    const leftKind = this.csharpPrintedArithmeticKind(left, leftText);
+    const rightKind = this.csharpPrintedArithmeticKind(right, rightText);
+    if (leftKind !== void 0 && rightKind !== void 0) {
+      if (leftKind !== rightKind) {
+        return void 0;
+      }
+      return isEquality ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
+    }
+    if (leftKind === void 0 && rightKind === void 0) {
+      return void 0;
+    }
+    const arithmeticKind = leftKind === void 0 ? rightKind : leftKind;
+    const literalKind = this.csharpIntegerLiteralKind(leftKind === void 0 ? left : right);
+    if (literalKind === void 0 || !this.csharpNumericKindHoldsLiteral(arithmeticKind, literalKind)) {
+      return void 0;
+    }
+    const arithmeticText = leftKind === void 0 ? csharpStripOuterParens(rightText) : csharpStripOuterParens(leftText);
+    const literalText = leftKind === void 0 ? leftText : rightText;
+    return isEquality ? `(${arithmeticText} == ${literalText})` : `(${arithmeticText} != ${literalText})`;
+  }
+  // the C# value kind of a `this.<field>` read of a hand-written numeric field
+  // (CSHARP_SCALAR_FIELD_KINDS), or undefined for every other read
+  csharpScalarFieldKind(node) {
+    while (node?.kind === SyntaxKind4.ParenthesizedExpression) {
+      node = node.expression;
+    }
+    if (!isPropertyAccessExpression(node) || node.expression?.kind !== SyntaxKind4.ThisKeyword) {
+      return void 0;
+    }
+    const named = CSHARP_SCALAR_FIELD_KINDS[node.name?.text];
+    return named === void 0 ? void 0 : this.csharpValueEqualityKind(named);
+  }
+  // `isEqual (this.<number>, N)` -> `==` / `!=`: the field's C# declaration is a non-nullable
+  // number, so the operator is isEqual's integer/double branch and a literal it holds converts
+  // exactly. Two such fields of one kind compare by value in both; every other shape keeps the
+  // helper (precisionMode is an `object` box, so it never reaches here).
+  csharpNativeScalarFieldEquality(left, right, leftText, rightText, isEquality) {
+    const leftKind = this.csharpScalarFieldKind(left);
+    const rightKind = this.csharpScalarFieldKind(right);
+    if (leftKind !== void 0 && rightKind !== void 0) {
+      if (leftKind !== rightKind) {
+        return void 0;
+      }
+      return isEquality ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
+    }
+    if (leftKind === void 0 && rightKind === void 0) {
+      return void 0;
+    }
+    const fieldKind = leftKind === void 0 ? rightKind : leftKind;
+    const literalKind = this.csharpIntegerLiteralKind(leftKind === void 0 ? left : right);
+    if (literalKind === void 0 || !this.csharpNumericKindHoldsLiteral(fieldKind, literalKind)) {
+      return void 0;
+    }
+    return isEquality ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
+  }
   // The C# value kind of a call operand (or `x.length`) when its printed signature is numeric:
   // `.indexOf`/`.length` (int) and safe* accessors from the printer's tables, `this.<name>()` from
   // CSHARP_NATIVE_NUMERIC_THIS_KINDS. undefined keeps the helper (an `object` box has no kind).
@@ -5145,6 +5320,12 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // `x.length` -> `x.Count`, same proof for the checker's array operands; strings keep
   // the `((string)x).Length` branch and every unproven operand keeps getArrayLength
   csharpNativeLengthExpression(expression) {
+    if (csharpListParamDeclaration(this, expression)) {
+      const declared = this.csharpDeclaredLengthExpression(expression);
+      if (declared !== void 0) {
+        return declared;
+      }
+    }
     if (this.csharpIsArrayType(this.getChecker().getTypeAtLocation(expression))) {
       const receiver = this.csharpNativeReceiver(expression);
       if (receiver !== void 0) {
@@ -5346,7 +5527,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
       const isDifference = op === SyntaxKind4.ExclamationEqualsToken || op === SyntaxKind4.ExclamationEqualsEqualsToken;
       if (isEquality || isDifference) {
         const nativeEquality = this.csharpStringLiteralEquality(op, left, right, leftText, rightText);
-        const native = nativeEquality ?? this.csharpNullLiteralEquality(op, left, right, leftText, rightText) ?? this.printInlineEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeElementLiteralEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeNumericCallEquality(left, right, leftText, rightText, isEquality);
+        const native = nativeEquality ?? this.csharpNullLiteralEquality(op, left, right, leftText, rightText) ?? this.printInlineEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeScalarFieldEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeArithmeticEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeElementLiteralEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeNumericCallEquality(left, right, leftText, rightText, isEquality);
         if (native !== void 0) {
           return native;
         }
@@ -5917,12 +6098,277 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     return this.printNode(node.expression, identation);
   }
+  // pc01: the array-parameter rule -- the type an array-annotated parameter prints with, or
+  // undefined when the whole-program census (csharpListParamCensus) has not admitted it
+  csharpArrayListParamType(node) {
+    if (node === void 0 || node.kind !== SyntaxKind4.Parameter || node.name === void 0) {
+      return void 0;
+    }
+    if (!csharpSyntacticArrayType(node.type)) {
+      return void 0;
+    }
+    if (csharpListParamFileIsPrintedAlone(node)) {
+      return void 0;
+    }
+    const method = findAncestor(node, (n) => isMethodDeclaration2(n));
+    if (method === void 0 || method.name === void 0 || method.parameters === void 0) {
+      return void 0;
+    }
+    const index = method.parameters.indexOf(node);
+    if (index < 0) {
+      return void 0;
+    }
+    const census = this.csharpListParamCensus();
+    const admitted = census === void 0 ? void 0 : census.get(method.name.getText().trim() + ":" + index);
+    return admitted === true ? "IList<object>" : void 0;
+  }
+  // The C# spelling an annotation proves, or undefined: an array (or a `T[] | undefined` union)
+  // whose cells the generated C# holds as `object` -- an `any` cell, a JSON dictionary, or a row
+  // class/interface (a TS object is a Dictionary<string, object> in every generated port). A
+  // `string`/`number`/`boolean` cell and a nested array keep their own C# type, so they decline.
+  csharpListParamSpelling(node) {
+    return this.csharpListSpellingOfType(this.getChecker().getTypeAtLocation(node), 1);
+  }
+  csharpListSpellingOfType(type, unionArms = 1) {
+    if (type === void 0 || unionArms !== 1) {
+      return void 0;
+    }
+    const checker = this.getChecker();
+    if (type.isUnionType && type.isUnionType()) {
+      const arms = (type.getTypes() ?? []).filter((arm) => (arm.flags & (TypeFlags3.Undefined | TypeFlags3.Null)) === 0);
+      return arms.length === 1 ? this.csharpListSpellingOfType(arms[0], arms.length) : void 0;
+    }
+    if (type.flags & (TypeFlags3.TypeParameter | TypeFlags3.Any | TypeFlags3.Unknown | TypeFlags3.EnumLike)) {
+      return void 0;
+    }
+    if (!checker.isArrayType(type) && !checker.isTupleType(type)) {
+      return void 0;
+    }
+    const element = (checker.getTypeArguments(type) || [])[0];
+    if (element === void 0) {
+      return void 0;
+    }
+    if (element.flags & (TypeFlags3.Any | TypeFlags3.Unknown)) {
+      return "IList<object>";
+    }
+    if (checker.isArrayType(element) || checker.isTupleType(element)) {
+      return void 0;
+    }
+    if (this.isStringType(element.flags) || element.flags & (TypeFlags3.NumberLike | TypeFlags3.BooleanLike)) {
+      return void 0;
+    }
+    const declarations = element.getSymbol?.()?.declarations ? element.getSymbol().declarations.map((declaration) => declaration.resolve()) : [];
+    if (declarations.some((declaration) => declaration.kind === SyntaxKind4.ClassDeclaration || declaration.kind === SyntaxKind4.InterfaceDeclaration)) {
+      return "IList<object>";
+    }
+    if (element.getCallSignatures && element.getCallSignatures().length > 0) {
+      return void 0;
+    }
+    return checker.getIndexTypeOfType(element, IndexKind.String) !== void 0 ? "IList<object>" : void 0;
+  }
+  // The (method, position) pairs the program proves, built once: every declaration of the pair
+  // spells a JSON-cell array, and every call the program resolves for it passes one (or omits it)
+  csharpListParamCensus() {
+    const program = this.getProgram();
+    if (program === void 0 || typeof program.getSourceFileNames !== "function") {
+      return void 0;
+    }
+    let census = csharpListParamCensuses.get(program);
+    if (census !== void 0) {
+      return census;
+    }
+    census = /* @__PURE__ */ new Map();
+    const declarations = /* @__PURE__ */ new Map();
+    const calls = /* @__PURE__ */ new Map();
+    const add = (table, key, value) => {
+      const row = table.get(key);
+      if (row === void 0) {
+        table.set(key, [value]);
+      } else {
+        row.push(value);
+      }
+    };
+    for (const name of program.getSourceFileNames()) {
+      const file = program.getSourceFile(name);
+      if (file === void 0) {
+        continue;
+      }
+      const fileName = String(file.fileName ?? name);
+      if (fileName.endsWith(".d.ts") || fileName.includes("node_modules")) {
+        continue;
+      }
+      const walk = (node) => {
+        if (isMethodDeclaration2(node) && node.name !== void 0 && node.parameters !== void 0 && node.parameters.length > 0) {
+          const methodName = node.name.getText().trim();
+          Array.from(node.parameters).forEach((parameter, index) => add(declarations, methodName + ":" + index, parameter));
+        } else if (isCallExpression3(node) && isPropertyAccessExpression(node.expression) && isIdentifier(node.expression.name)) {
+          add(calls, node.expression.name.getText().trim(), node);
+        }
+        node.forEachChild(walk);
+      };
+      file.forEachChild(walk);
+    }
+    const memo = /* @__PURE__ */ new Map();
+    const visiting = /* @__PURE__ */ new Set();
+    const decide = (key) => {
+      const cached = memo.get(key);
+      if (cached !== void 0) {
+        return cached;
+      }
+      if (visiting.has(key)) {
+        return false;
+      }
+      visiting.add(key);
+      const separator = key.lastIndexOf(":");
+      const methodName = key.substring(0, separator);
+      const index = Number(key.substring(separator + 1));
+      let admitted = !(typeof this.csharpListParamExclusions === "function" && this.csharpListParamExclusions(methodName, index));
+      for (const parameter of declarations.get(key) ?? []) {
+        if (this.csharpListParamSpelling(parameter) !== "IList<object>") {
+          admitted = false;
+          break;
+        }
+        if (csharpListParamFileIsPrintedAlone(parameter)) {
+          admitted = false;
+          break;
+        }
+        if (this.csharpListParamIsWritten(parameter)) {
+          admitted = false;
+          break;
+        }
+      }
+      if (admitted) {
+        for (const call of calls.get(methodName) ?? []) {
+          const args = Array.from(call.arguments ?? []);
+          if (index >= args.length) {
+            continue;
+          }
+          if (this.csharpListParamArgumentPrintsList(args[index], decide)) {
+            continue;
+          }
+          admitted = false;
+          break;
+        }
+      }
+      visiting.delete(key);
+      memo.set(key, admitted);
+      return admitted;
+    };
+    for (const key of declarations.keys()) {
+      census.set(key, decide(key));
+    }
+    csharpListParamCensuses.set(program, census);
+    return census;
+  }
+  // whether the method body rebinds the parameter (an assignment or ++/--): the declaration
+  // would then have to accept a value that is not a list
+  csharpListParamIsWritten(parameter) {
+    const name = parameter.name === void 0 || parameter.name.getText === void 0 ? "" : parameter.name.getText().trim();
+    if (name === "") {
+      return true;
+    }
+    const method = findAncestor(parameter, (n) => isMethodDeclaration2(n));
+    if (method === void 0 || method.body === void 0) {
+      return false;
+    }
+    let written = false;
+    const walk = (node) => {
+      if (written) {
+        return;
+      }
+      if (isBinaryExpression2(node) && isIdentifier(node.left) && node.left.text === name && this.csharpIsAssignmentOperator(node.operatorToken.kind)) {
+        written = true;
+        return;
+      }
+      if ((isPrefixUnaryExpression(node) || isPostfixUnaryExpression(node)) && isIdentifier(node.operand) && String(node.operand.getText()).trim() === name) {
+        written = true;
+        return;
+      }
+      node.forEachChild(walk);
+    };
+    method.body.forEachChild(walk);
+    return written;
+  }
+  // whether a variable binding is rebound anywhere in its function (assignment or ++/--)
+  csharpListBindingIsWritten(declaration) {
+    const name = declaration.name === void 0 || declaration.name.getText === void 0 ? "" : declaration.name.getText().trim();
+    if (name === "") {
+      return true;
+    }
+    const fn = findAncestor(declaration, (n) => isFunctionLike(n));
+    if (fn === void 0 || fn.body === void 0) {
+      return false;
+    }
+    let written = false;
+    const walk = (node) => {
+      if (written) {
+        return;
+      }
+      if (isBinaryExpression2(node) && isIdentifier(node.left) && node.left.text === name && this.csharpIsAssignmentOperator(node.operatorToken.kind)) {
+        written = true;
+        return;
+      }
+      if ((isPrefixUnaryExpression(node) || isPostfixUnaryExpression(node)) && isIdentifier(node.operand) && String(node.operand.getText()).trim() === name) {
+        written = true;
+        return;
+      }
+      node.forEachChild(walk);
+    };
+    fn.body.forEachChild(walk);
+    return written;
+  }
+  // whether the argument's own printed C# declaration holds a list: an array literal, an
+  // identifier whose declaration this printer types as a list (or a parameter this rule types
+  // for its own key), or an initializer the printer's local table names as one
+  csharpListParamArgumentPrintsList(argument, decide) {
+    let node = argument;
+    while (node !== void 0 && (isAsExpression(node) || isParenthesizedExpression(node))) {
+      node = node.expression;
+    }
+    if (node === void 0) {
+      return true;
+    }
+    if (isArrayLiteralExpression2(node)) {
+      return true;
+    }
+    if (isIdentifier(node)) {
+      const declaration = this.csharpReceiverBinding(node);
+      if (declaration === void 0) {
+        return false;
+      }
+      if (declaration.kind === SyntaxKind4.Parameter) {
+        const method = findAncestor(declaration, (n) => isMethodDeclaration2(n));
+        if (decide === void 0 || method === void 0 || method.name === void 0 || method.parameters === void 0) {
+          return false;
+        }
+        const position = method.parameters.indexOf(declaration);
+        return position < 0 ? false : decide(method.name.getText().trim() + ":" + position);
+      }
+      if (!isVariableDeclaration(declaration)) {
+        return false;
+      }
+      if ((declaration.parent?.declarations?.length ?? 1) !== 1) {
+        return false;
+      }
+      if (this.csharpListBindingIsWritten(declaration)) {
+        return false;
+      }
+      const type2 = this.getCSharpLocalType(declaration);
+      return type2 === "List<object>" || type2 === "IList<object>";
+    }
+    const type = this.csharpTypeOfInitializer(node);
+    return type === "List<object>" || type === "IList<object>";
+  }
   // A parameter of a method that participates in an override relation prints the spelling its
   // base member and every sibling override agree on (CSHARP_OVERRIDE_PARAM_TYPES; D8): C# is
   // invariant on override parameter types, so a half-retyped name is CS0115, while a name the
   printParameterType(node) {
     if (node === void 0 || node.kind !== SyntaxKind4.Parameter) {
       return super.printParameterType(node);
+    }
+    const listType = this.csharpArrayListParamType(node);
+    if (listType !== void 0) {
+      return listType;
     }
     const method = findAncestor(node, (n) => isMethodDeclaration2(n));
     const name = method === void 0 || method.name === void 0 ? void 0 : method.name.getText().trim();
@@ -6183,6 +6629,11 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const handlerType = this.csharpHandlerMessageType(node);
     if (handlerType !== void 0) {
       this.csharpTypedLocals.set(node, handlerType);
+    }
+    const listType = this.csharpArrayListParamType(node);
+    if (listType !== void 0) {
+      this.csharpTypedLocals.set(node, listType);
+      this.csharpListParamDeclarations.add(node);
     }
     let type = handlerType !== void 0 ? handlerType : this.printParameterType(node);
     type = type ? type : "";
@@ -6888,13 +7339,19 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (args.length < 1 || args.length > 2) {
       return void 0;
     }
-    const start = this.csharpSliceLiteralBound(args[0]);
-    if (start === void 0) {
+    const startBound = this.csharpSliceBoundOperand(args[0], false);
+    if (startBound === void 0) {
       return void 0;
     }
     const hasEnd = args.length === 2;
-    const end = hasEnd ? this.csharpSliceLiteralBound(args[1]) : void 0;
-    if (hasEnd && end === void 0) {
+    const endBound = hasEnd ? this.csharpSliceBoundOperand(args[1], true) : { kind: "open" };
+    if (endBound === void 0) {
+      return void 0;
+    }
+    const openEnd = endBound.kind === "open";
+    const start = startBound.kind === "literal" ? startBound.value : void 0;
+    const end = endBound.kind === "literal" ? endBound.value : void 0;
+    if (start === void 0 && end === void 0 && !openEnd) {
       return void 0;
     }
     const receiver = isPropertyAccessExpression(node?.expression) ? node.expression.expression : void 0;
@@ -6908,22 +7365,28 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const isString = kind === "string";
     const cast = isString && name.startsWith("((string)") ? name : `((${isString ? "string" : "List<object>"})${name})`;
     const length = `${cast}.${isString ? "Length" : "Count"}`;
-    const from = this.csharpSliceBoundExpression(start, length);
+    const from = start !== void 0 ? this.csharpSliceBoundExpression(start, length) : this.csharpSliceClampExpression(startBound, length);
     const guard = `(${this.csharpNullComparison(name, true)} ? null : `;
     const method = isString ? "Substring" : "GetRange";
-    if (!hasEnd) {
+    if (!hasEnd || openEnd) {
       const open = isString ? `Substring(${from})` : `GetRange(${from}, ${from === "0" ? length : `${length} - ${from}`})`;
       return `${guard}${cast}.${open})`;
     }
-    const to = this.csharpSliceBoundExpression(end, length);
-    const ordered = start === 0 || start >= 0 && end >= 0 && start <= end || start < 0 && end < 0 && start <= end;
+    const to = end !== void 0 ? this.csharpSliceBoundExpression(end, length) : this.csharpSliceClampExpression(endBound, length);
     let count;
-    if (from === to) {
-      count = "0";
+    if (start !== void 0 && end !== void 0) {
+      const ordered = start === 0 || start >= 0 && end >= 0 && start <= end || start < 0 && end < 0 && start <= end;
+      if (from === to) {
+        count = "0";
+      } else if (from === "0") {
+        count = to;
+      } else {
+        count = ordered ? `${to} - ${from}` : `Math.Max(${to} - ${from}, 0)`;
+      }
     } else if (from === "0") {
       count = to;
     } else {
-      count = ordered ? `${to} - ${from}` : `Math.Max(${to} - ${from}, 0)`;
+      count = `Math.Max(${to} - ${from}, 0)`;
     }
     return `${guard}${cast}.${method}(${from}, ${count}))`;
   }
@@ -6956,6 +7419,38 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return "0";
     }
     return value > 0 ? `Math.Min(${value}, ${length})` : `Math.Max(${length} - ${-value}, 0)`;
+  }
+  // The bound of a native slice, or undefined when the helper must stay: an integer literal,
+  // a read whose printed C# kind is `int` / `Int64`, and (end position only) an explicit
+  // null / undefined, which the helper answers as "to the end". The value is repeated by the
+  // clamp, so a call / assignment operand is refused; `double` is truncated by the helper.
+  csharpSliceBoundOperand(node, isEnd = false) {
+    const literal = this.csharpSliceLiteralBound(node);
+    if (literal !== void 0) {
+      return { kind: "literal", value: literal };
+    }
+    if (isEnd && (node?.kind === SyntaxKind4.NullKeyword || node?.kind === SyntaxKind4.Identifier && node.text === "undefined")) {
+      return { kind: "open" };
+    }
+    if (!this.csharpSliceReceiverIsSideEffectFree(node)) {
+      return void 0;
+    }
+    const kind = this.csharpExpressionTypeOf(node);
+    if (CSHARP_SLICE_BOUND_KINDS.indexOf(kind) < 0) {
+      return void 0;
+    }
+    return { kind, text: this.printNode(node, 0).trim() };
+  }
+  // JS clamps a bound into [0, length] the same way for any integer value: a non-negative one
+  // is min (bound, length), a negative one counts from the end. The length is an `int`, so a
+  // wider bound is clamped in Int64 and narrowed after the clamp (still inside [0, length]).
+  csharpSliceClampExpression(bound, length) {
+    const wide = bound.kind === "Int64" || bound.kind === "Int64?";
+    const value = csharpSliceBoundValue(bound);
+    const total = wide ? `((Int64)${length})` : length;
+    const ranged = `(${value} < 0 ? ${total} + (${value}) : ${value})`;
+    const clamped = `Math.Max(Math.Min(${ranged}, ${total}), ${wide ? "0L" : "0"})`;
+    return wide ? `((int)${clamped})` : clamped;
   }
   // The receiver of a native slice: a `List<object>` the printer / build layer declared (the only
   // receiver with GetRange), or a CHECKER-proven string (`string`, a literal, or a union with
@@ -8149,6 +8644,33 @@ var GO_PARAMS_TUPLE_HELPERS = {
   "handlePostOnly": 1,
   "handleTriggerPricesAndParams": 3
 };
+var GO_TUPLE_NATIVE_BINDING_PRODUCERS = [
+  "HandleMarketTypeAndParams",
+  "HandleSubTypeAndParams",
+  "HandleOptionStringAndParams",
+  "HandleUntilOption",
+  "HandleMarginModeAndParams",
+  "HandleOptionBoolAndParams",
+  "HandleOptionBoolAndParams2",
+  "HandleOptionIntegerAndParams",
+  "HandleOptionIntegerAndParams2",
+  "HandleOptionStringAndParams2",
+  "HandleOptionAndParams",
+  "HandleOptionAndParams2",
+  "HandleOptionBoolAndParamsNullable",
+  "HandleOptionBoolAndParams2Nullable",
+  "HandleOptionIntegerAndParamsNullable",
+  "HandleOptionIntegerAndParams2Nullable",
+  "HandleNetworkCodeAndParams",
+  "HandleWithdrawTagAndParams",
+  "HandlePostOnly",
+  "HandleParamString",
+  "HandleParamString2",
+  "HandleParamInteger",
+  "HandleParamInteger2",
+  "HandleParamBool",
+  "HandleParamBool2"
+];
 var GO_GETARG_NIL_MAP_READERS = [
   "GetValue",
   "InOp",
@@ -8261,6 +8783,14 @@ var GoTranspiler = class extends BaseTranspiler {
     // slice types above: the struct value is never a nil pointer and len(field) is the
     // very value the helper's type switch returns for it.
     this.GO_NATIVE_LENGTH_FIELDS = ["Symbols"];
+    // ---- hx10w5-G14: `key in dict` in an if condition -------------------------------
+    // The two-value map read is a *statement* in Go, which is why the emission above is a
+    // closure. An `if` can hold it in its init clause instead — `if _, ok := m["k"]; ok {`
+    // — so a condition with exactly one provable read prints that native form and no
+    // closure. Everything else keeps the existing helper/closure emission.
+    this.goInOpSubstitution = void 0;
+    // Map<in-expression, sentinel>, set while an if-init print runs
+    this.GO_IN_OP_SENTINEL = "goInOpBoundOk";
     // comparison helpers that normalize int/int64/float64 against each other, so a
     // literal operand's Go default type (int) behaves like the int64 OpNeg produces
     this.comparisonHelpers = ["IsEqual", "IsGreaterThan", "IsLessThan", "IsGreaterThanOrEqual", "IsLessThanOrEqual"];
@@ -9623,10 +10153,65 @@ func New${this.capitalize(this.className)}() *${this.className} {
     if (!this.goIsNativeAppendShape(receiver, pushNode)) {
       return void 0;
     }
-    if (this.goDeclaredTypeOfIdentifier(receiver) !== "[]any") {
+    const declared = this.goResolvedLocalGoType(receiver);
+    if (declared === GO_STRING_LIST_LOCAL_TYPE) {
+      return this.goStringListAppendsAString(pushNode) ? this.printNode(receiver, 0) : void 0;
+    }
+    if (declared !== "[]any") {
       return void 0;
     }
     return this.printNode(receiver, 0);
+  }
+  // the Go type of an identifier: the memoised verdict, or a fresh resolution when the cache
+  // holds the `any` a nested query answered before the declaration printed
+  goResolvedLocalGoType(receiver) {
+    const declared = this.goDeclaredTypeOfIdentifier(receiver);
+    if (declared !== void 0) {
+      return declared;
+    }
+    const decl = this.checkerOrUndefined()?.getSymbolAtLocation(receiver)?.valueDeclaration?.resolve();
+    if (decl?.kind !== SyntaxKind5.VariableDeclaration || this.goDeclaredTypeInProgress.has(decl)) {
+      return void 0;
+    }
+    this.goDeclaredTypeInProgress.add(decl);
+    try {
+      const printed = decl.initializer === void 0 ? this.UNDEFINED_TOKEN : this.printNode(decl.initializer, 0);
+      return this.getGoLocalType(decl, printed);
+    } finally {
+      this.goDeclaredTypeInProgress.delete(decl);
+    }
+  }
+  // `x.push(v)` on a local the printer declares []string appends natively when v already
+  // prints as a Go string: `x = append(x, v)` keeps the element type and the helper's order
+  goStringListAppendsAString(pushNode) {
+    const receiver = pushNode?.expression?.expression;
+    if (!this.goIsNativeAppendShape(receiver, pushNode)) {
+      return false;
+    }
+    return this.goStringValueNodeIsProven(pushNode.arguments[0]);
+  }
+  // the pushed value is a Go string without printing it: a literal, a local declared `string`,
+  // or an element read of a []string slice. Printing here would resolve other locals' types
+  // from inside a declaration's own safety scan and poison their caches.
+  goStringValueNodeIsProven(node) {
+    switch (node?.kind) {
+      case SyntaxKind5.StringLiteral:
+      case SyntaxKind5.NoSubstitutionTemplateLiteral:
+        return true;
+      case SyntaxKind5.ParenthesizedExpression:
+        return this.goStringValueNodeIsProven(node.expression);
+      case SyntaxKind5.Identifier:
+        return this.goDeclaredTypeOfIdentifier(node) === "string";
+      case SyntaxKind5.ElementAccessExpression: {
+        const base = node.expression;
+        if (base?.kind !== SyntaxKind5.Identifier) {
+          return false;
+        }
+        const declared = this.goDeclaredTypeOfIdentifier(base);
+        return declared === GO_STRING_LIST_LOCAL_TYPE;
+      }
+    }
+    return false;
   }
   // reject the refinement when something downstream needs the local to stay `any`:
   // `x.push(v)` prints `AppendToArray(&x, v)` (a *T is not a *any) and a later
@@ -9639,7 +10224,11 @@ func New${this.capitalize(this.className)}() *${this.className} {
       if (n.kind === SyntaxKind5.Identifier && n.text === varName && n !== declaration.name) {
         const parent = n.parent;
         if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === n && parent.name?.text === "push") {
-          if (goType !== "[]any" || !this.goIsNativeAppendShape(n, parent.parent)) {
+          if (goType === GO_STRING_LIST_LOCAL_TYPE) {
+            if (!this.goStringListAppendsAString(parent.parent)) {
+              return true;
+            }
+          } else if (goType !== "[]any" || !this.goIsNativeAppendShape(n, parent.parent)) {
             return true;
           }
         }
@@ -10212,7 +10801,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
     return this.goStringListUseReadsAs(node);
   }
   // a `[]string` local reads as a list of strings: its length, an element, a membership
-  // test. push keeps the box (the append arm of the []any rule takes an `any` element).
+  // test, and a push of a value that already prints as a Go string (append keeps the type)
   goStringListUseReadsAs(node) {
     const parent = node.parent;
     if (parent === void 0) {
@@ -10222,7 +10811,13 @@ func New${this.capitalize(this.className)}() *${this.className} {
       return true;
     }
     if (parent.kind === SyntaxKind5.PropertyAccessExpression) {
-      return parent.expression === node && parent.name?.text === "length";
+      if (parent.expression !== node) {
+        return false;
+      }
+      if (parent.name?.text === "length") {
+        return true;
+      }
+      return parent.name?.text === "push" && this.goStringListAppendsAString(parent.parent);
     }
     if (parent.kind === SyntaxKind5.ElementAccessExpression) {
       if (parent.expression !== node) {
@@ -10318,7 +10913,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
       const syntheticName = parsedArrayBindingElements.join("") + "Variable";
       let arrayBindingStatement = `${this.getIden(identation)}${syntheticName} := ${this.printNode(declaration.initializer, 0)}
 `;
-      arrayBindingStatement += parsedArrayBindingElements.map((e, index) => this.getIden(identation) + `${e} := GetValue(${syntheticName}, ${index})`).join("\n");
+      arrayBindingStatement += this.goTupleSlotBindingLines(arrayBindingPatternElements, syntheticName, identation, declaration);
       return arrayBindingStatement;
     }
     if (declaration?.initializer?.kind === SyntaxKind5.AwaitExpression) {
@@ -10779,6 +11374,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       }
     }
     if (op === SyntaxKind5.InKeyword) {
+      const substituted = this.goInOpSubstitutedText(node);
+      if (substituted !== void 0) {
+        return substituted;
+      }
       const dictText = this.printNode(right, 0);
       const keyText = this.printNode(left, 0);
       const inlined = this.printInlineInOp(right, left, dictText, keyText);
@@ -12126,6 +12725,93 @@ ${this.getIden(level + 1)}${read}
 ${this.getIden(level + 1)}return ok
 ${this.getIden(level)}}()`;
   }
+  // the text a substituted `in` operand prints: its init-clause binding
+  goInOpSubstitutedText(node) {
+    if (this.goInOpSubstitution === void 0) {
+      return void 0;
+    }
+    const inner = this.goUnwrapParenthesizedNode(node);
+    return inner === void 0 ? void 0 : this.goInOpSubstitution.get(inner);
+  }
+  // the init clause + condition text for an `if` whose condition holds one provable
+  // `key in dict` read, or undefined when the shape has to keep its current emission
+  goInOpIfInitClause(node) {
+    const parent = node?.parent;
+    if (parent?.kind !== SyntaxKind5.IfStatement || parent.expression !== node) {
+      return void 0;
+    }
+    const read = this.goIfInOpRead(node);
+    if (read === void 0) {
+      return void 0;
+    }
+    const name = this.goIfInOpBindingName(parent);
+    if (name === void 0) {
+      return void 0;
+    }
+    const saved = this.goInOpSubstitution;
+    this.goInOpSubstitution = /* @__PURE__ */ new Map([[read.inNode, this.GO_IN_OP_SENTINEL]]);
+    let text;
+    try {
+      text = this.printNode(node, 0);
+    } finally {
+      this.goInOpSubstitution = saved;
+    }
+    if (typeof text !== "string" || text.includes("\n") || !text.includes(this.GO_IN_OP_SENTINEL)) {
+      return void 0;
+    }
+    const sentinel = this.GO_IN_OP_SENTINEL;
+    const paren = "(" + sentinel + ")";
+    let condition = text.trim();
+    for (; ; ) {
+      const collapsed = condition.split(paren).join(sentinel);
+      if (collapsed === condition) {
+        break;
+      }
+      condition = collapsed;
+    }
+    condition = condition.split(sentinel).join(name);
+    return `_, ${name} := ${read.dictText}[${read.keyText}]; ${condition}`;
+  }
+  // the single `key in dict` read the condition can bind: a map-typed identifier
+  // receiver and a Go-string key. Both operands are identifiers/literals, so moving the
+  // read into the init clause cannot evaluate anything the condition would have skipped.
+  goIfInOpRead(condition) {
+    const reads = [];
+    const visit = (n) => {
+      if (n.kind === SyntaxKind5.BinaryExpression && n.operatorToken?.kind === SyntaxKind5.InKeyword) {
+        const dict = this.goUnwrapParenthesizedNode(n.right);
+        const key = this.goUnwrapParenthesizedNode(n.left);
+        const keyIsText = key?.kind === SyntaxKind5.StringLiteral || key?.kind === SyntaxKind5.NoSubstitutionTemplateLiteral || key?.kind === SyntaxKind5.Identifier;
+        if (dict?.kind === SyntaxKind5.Identifier && keyIsText) {
+          const dictText = this.printNode(dict, 0);
+          const keyText = this.printNode(key, 0);
+          if (!dictText.includes("\n") && !keyText.includes("\n") && this.goPrintedTypeOfExpression(dict, dictText) === "map[string]any" && this.goPrintedTypeOfExpression(key, keyText) === "string") {
+            reads.push({ inNode: n, dictText, keyText });
+          }
+        }
+      }
+      n.forEachChild(visit);
+    };
+    visit(condition);
+    return reads.length === 1 ? reads[0] : void 0;
+  }
+  // `ok` unless the statement already names it: the init clause would shadow that name
+  goIfInOpBindingName(statement) {
+    const taken = /* @__PURE__ */ new Set();
+    const visit = (n) => {
+      if (n.kind === SyntaxKind5.Identifier && typeof n.text === "string") {
+        taken.add(n.text);
+      }
+      n.forEachChild(visit);
+    };
+    statement.forEachChild(visit);
+    for (const candidate of ["ok", "ok2", "ok3"]) {
+      if (!taken.has(candidate)) {
+        return candidate;
+      }
+    }
+    return void 0;
+  }
   // OpNeg boxes `-val.Int()` / `-val.Float()`, i.e. an int64 or a float64, and nil
   // for anything else. `-x` reproduces that exactly only for an operand that already
   // prints as float64/int64; a Go `int` (or an integer literal) boxes as int instead.
@@ -12491,6 +13177,14 @@ ${this.getIden(level)}}()`;
     return this.OBJECT_OPENING + formattedObjectBody + this.OBJECT_CLOSING;
   }
   printCondition(node, identation) {
+    const substituted = this.goInOpSubstitutedText(node);
+    if (substituted !== void 0) {
+      return `${this.getIden(identation)}${substituted}`;
+    }
+    const initClause = this.goInOpIfInitClause(node);
+    if (initClause !== void 0) {
+      return `${this.getIden(identation)}${initClause}`;
+    }
     const native = this.goNativeCondition(node);
     if (native !== void 0) {
       return `${this.getIden(identation)}${this.goControlClauseParens(node, native)}`;
@@ -13589,6 +14283,134 @@ ${this.getIden(level)}}()`;
     }
     const element = checker.getTypeArguments(type)?.[index];
     return element !== void 0 && !(element.flags & (TypeFlags4.Any | TypeFlags4.Unknown)) && this.goParameterTypeIsDict(element);
+  }
+  // the Go unwrap for one slot of a destructured tuple: the checker names the element's Go type,
+  // so the slot reads as the same typed value the accessor families hand back (GetValue's own
+  // deref is what MapTyped/ListTyped/SafeStringPtr/SafeBoolPtr perform on their argument).
+  // undefined keeps the boxed `GetValue(holder, i)` for that slot.
+  goTupleSlotUnbox(element) {
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0 || element?.kind !== SyntaxKind5.BindingElement || element.dotDotDotToken !== void 0 || element.initializer !== void 0 || element.name?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    let type;
+    try {
+      type = checker.getTypeAtLocation(element.name);
+    } catch (e) {
+      return void 0;
+    }
+    if (type === void 0) {
+      return void 0;
+    }
+    let parts = typeof type.isUnionType === "function" && type.isUnionType() ? type.getTypes().slice() : [type];
+    parts = parts.filter((part) => !(part.flags & (TypeFlags4.Undefined | TypeFlags4.Null)));
+    if (parts.length === 0) {
+      return void 0;
+    }
+    if (parts.every((part) => (part.flags & TypeFlags4.BooleanLiteral) !== 0)) {
+      return { "goType": "*bool", "conv": "SafeBoolPtr" };
+    }
+    if (parts.every((part) => (part.flags & TypeFlags4.String) !== 0 || (part.flags & TypeFlags4.StringLiteral) !== 0)) {
+      return { "goType": "*string", "conv": "SafeStringPtr" };
+    }
+    return void 0;
+  }
+  // a typed slot local is only printed when every later use reads it as that type: a write, an
+  // address, a switch/case subject or an element-access index all need the box
+  goTupleSlotNameIsSafe(nameNode, declaration) {
+    const name = nameNode?.text;
+    const scope = this.goEnclosingFunction(declaration);
+    if (name === void 0 || scope === void 0) {
+      return false;
+    }
+    const unwrapped = (node) => node?.kind === SyntaxKind5.ParenthesizedExpression ? unwrapped(node.expression) : node;
+    return !this.hasNodeWhere(scope, (node) => {
+      if (node?.kind !== SyntaxKind5.Identifier || node.text !== name) {
+        return false;
+      }
+      const parent = node.parent;
+      if (parent === void 0) {
+        return false;
+      }
+      if (parent.kind === SyntaxKind5.PropertyAccessExpression && parent.name === node) {
+        return false;
+      }
+      if (parent.kind === SyntaxKind5.BindingElement || parent.kind === SyntaxKind5.PropertyAssignment) {
+        return false;
+      }
+      if (parent.kind === SyntaxKind5.VariableDeclaration && parent.name === node) {
+        return parent !== declaration;
+      }
+      if (parent.kind === SyntaxKind5.Parameter || parent.kind === SyntaxKind5.FunctionDeclaration || parent.kind === SyntaxKind5.MethodDeclaration) {
+        return true;
+      }
+      if (parent.kind === SyntaxKind5.BinaryExpression && unwrapped(parent.left) === node) {
+        return true;
+      }
+      if (parent.kind === SyntaxKind5.PrefixUnaryExpression || parent.kind === SyntaxKind5.PostfixUnaryExpression) {
+        return true;
+      }
+      if (parent.kind === SyntaxKind5.SwitchStatement && parent.expression === node) {
+        return true;
+      }
+      if (parent.kind === SyntaxKind5.CaseClause || parent.kind === SyntaxKind5.ElementAccessExpression) {
+        return true;
+      }
+      if (parent.kind === SyntaxKind5.ForOfStatement || parent.kind === SyntaxKind5.ForInStatement) {
+        return true;
+      }
+      return false;
+    });
+  }
+  // slot reads of `const [ a, b ] = <tuple producer>(…)`: a proven slot becomes a typed local,
+  // every other slot keeps the boxed GetValue
+  // The holder of a destructured tuple is a Go slice only when this printer emits the callee in
+  // this same file (a tuple return prints []any). An awaited call's element type is the channel
+  // table's decision (AsyncResult[any]) and an inherited method may have a hand-written `any`
+  // twin, so both keep the boxed slots.
+  goTupleBindingProducerName(declaration) {
+    const initializer = declaration?.initializer?.kind === SyntaxKind5.AwaitExpression ? declaration.initializer.expression : declaration?.initializer;
+    const callee = initializer?.kind === SyntaxKind5.CallExpression ? initializer.expression : void 0;
+    if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return void 0;
+    }
+    const name = String(callee.name?.text ?? "");
+    return name === "" ? void 0 : name.charAt(0).toUpperCase() + name.slice(1);
+  }
+  // the holder is a Go slice only when this printer emits the callee's tuple return: an awaited
+  // call's element type is the channel table's decision (AsyncResult[any]) and a
+  // `base/Exchange.ts` method has a hand-written `any` twin (go/v4/exchange.go)
+  goTupleBindingIsSliceHolder(declaration) {
+    const initializer = declaration?.initializer;
+    if (initializer?.kind !== SyntaxKind5.CallExpression || initializer.expression?.kind !== SyntaxKind5.PropertyAccessExpression || initializer.expression.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return false;
+    }
+    const checker = this.checkerOrUndefined();
+    let declared;
+    try {
+      declared = checker?.getSymbolAtLocation(initializer.expression.name)?.valueDeclaration?.resolve();
+    } catch (e) {
+      declared = void 0;
+    }
+    if (declared === void 0) {
+      return false;
+    }
+    const calleeFile = String(declared.getSourceFile?.()?.fileName ?? "");
+    return calleeFile !== "" && !/(^|[\/])base[\/]Exchange\.ts$/.test(calleeFile);
+  }
+  goTupleSlotBindingLines(elements, holder, identation, declaration) {
+    const iden = this.getIden(identation);
+    const producer = this.goTupleBindingProducerName(declaration);
+    const nativeBinding = producer !== void 0 && GO_TUPLE_NATIVE_BINDING_PRODUCERS.includes(producer);
+    const sliceHolder = !nativeBinding && this.goTupleBindingIsSliceHolder(declaration);
+    return elements.map((element, index) => {
+      const name = this.printNode(element.name, 0);
+      const unbox = element.name?.kind === SyntaxKind5.Identifier ? this.goTupleSlotUnbox(element) : void 0;
+      if (!sliceHolder || unbox === void 0 || !this.goTupleSlotNameIsSafe(element.name, declaration)) {
+        return iden + name + " := GetValue(" + holder + ", " + index + ")";
+      }
+      return iden + "var " + name + " " + unbox.goType + " = " + unbox.conv + "(" + holder + "[" + index + "])";
+    }).join("\n");
   }
   // `this.handleXxx(…, params, …)` of a base helper typed `any[]` whose element holds the params
   // map it was given after omit/extend; only when that element is the same map-typed local
@@ -14930,7 +15752,7 @@ ${this.getIden(level)}}()`;
   // above, or any other local/param the declared-type table proved a slice (a slice literal,
   // a `[]any`-returning accessor, a slice param the typed-param family registers). All of them
   goDeclaredListIdentifier(node) {
-    return this.goDeclaredTypeOfIdentifier(node) === GO_SAFE_LIST_LOCAL_TYPE || this.goSafeListUnboxIdentifier(node);
+    return this.goResolvedLocalGoType(node) === GO_SAFE_LIST_LOCAL_TYPE || this.goSafeListUnboxIdentifier(node);
   }
   // `x[k]` on a local the printer declared []any is a slice index: GetValue answered nil for an
   // absent index (negative or out of range) and derefs a pointer element, so the native read is
@@ -15675,6 +16497,7 @@ var JAVA_STRINGS_OPTIONAL_PARAMETER_NAMES = /* @__PURE__ */ new Set(["symbols"])
 var JAVA_STRING_LIST_TYPE = "java.util.List<String>";
 var JAVA_STRINGS_EXCLUDED_METHODS = /* @__PURE__ */ new Set(["marketSymbols", "marketIds", "marketsForSymbols", "getMarketFromSymbols"]);
 var JAVA_NATIVE_PARAMETER_SOURCE_FILES = /(^|\/)ts\/src\/base\/types\.ts$/;
+var JAVA_NATIVE_DICT_PARAMETER_TYPE = "java.util.Map<String, Object>";
 var JAVA_NATIVE_PARAMETER_EXCLUDED_POSITIONS = {
   // implicit endpoints pass fetch2/request/sign params through untyped (arrays for batch orders)
   "fetch2": [3],
@@ -15706,6 +16529,7 @@ var JAVA_NATIVE_PARAMETER_EXCLUDED_POSITIONS = {
   "watch": [0, 1]
 };
 var JAVA_NATIVE_PARAMETER_GENERATED_FILES = /(^|\/)ts\/src\/(?:pro\/|prediction\/)?[a-z0-9_]+\.ts$/;
+var JAVA_TEST_TIER_FILES = /(?:^|[\\/])ts[\\/]src[\\/](?:pro[\\/])?test[\\/].*\.ts$/;
 var JAVA_TRANSPILE_DELIMITER = "METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT";
 var JAVA_HANDWRITTEN_FULL_ARITY = /* @__PURE__ */ new Set(["loadMarkets", "fetchMarkets", "fetchCurrencies", "exceptionMessage"]);
 var JAVA_HANDWRITTEN_TIER_FILES = /(^|\/)ts\/src\/(?:base|static_dependencies)\//;
@@ -16263,9 +17087,39 @@ var JavaTranspiler = class extends BaseTranspiler {
       return `Helpers.toMapArg(${printed})`;
     }
     if (type === JAVA_STRING_LIST_TYPE) {
-      return `Helpers.toStringListArg(${printed})`;
+      const literal = this.javaStringListLiteral(node);
+      return literal !== void 0 ? literal : `Helpers.toStringListArg(${printed})`;
     }
     return `(${type}) (${printed})`;
+  }
+  // `[ 'a', 'b' ]` over proven String elements prints the `List<String>` the core parameter
+  // takes; the helper's unchecked cast has nothing left to convert. Any other element (a bare
+  // null makes `asList` ambiguous and throws) keeps the helper.
+  javaStringListLiteral(node) {
+    if (!isArrayLiteralExpression3(node) || node.elements.some((e) => e.kind === SyntaxKind6.SpreadElement)) {
+      return void 0;
+    }
+    const elements = [];
+    for (const element of node.elements) {
+      if (!this.javaStringListElementIsProven(element)) {
+        return void 0;
+      }
+      elements.push(this.printNode(element, 0));
+    }
+    return `new java.util.ArrayList<String>(java.util.Arrays.asList(${elements.join(", ")}))`;
+  }
+  javaStringListElementIsProven(node) {
+    if (node === void 0 || node.kind === SyntaxKind6.NullKeyword || node.kind === SyntaxKind6.Identifier && node.text === "undefined") {
+      return false;
+    }
+    if (this.javaArgumentHasType(node, "String")) {
+      return true;
+    }
+    const declared = this.javaDeclaredTypeOf(node);
+    if (declared !== void 0 && JAVA_DECLARED_STRING_TYPE.test(declared)) {
+      return true;
+    }
+    return this.javaProvableString(node);
   }
   // an identifier whose final Java declaration (the build layer's table, or a natively typed
   // parameter) is exactly the core type and which prints under its own name: no conversion
@@ -17744,6 +18598,39 @@ var JavaTranspiler = class extends BaseTranspiler {
   javaOptionalParameterJavaType(node) {
     return this.javaOptionalParameterType(node) ?? "Object";
   }
+  // A bare `params = {}` (no annotation) inherits the nearest ancestor declaration's native type.
+  // Only the dict family: every other alias pairs with a default of its own kind, so `{}` there
+  // would be a different value, not the same slot. javaOptionalParameterType's family walk still
+  // vetoes a chain whose declarations disagree.
+  javaInheritedOptionalParameterType(node) {
+    if (node.initializer === void 0 || !isObjectLiteralExpression3(node.initializer) || node.initializer.properties.length > 0) {
+      return void 0;
+    }
+    const method = node.parent;
+    const index = method?.parameters?.indexOf(node) ?? -1;
+    if (index < 0) {
+      return void 0;
+    }
+    let override;
+    try {
+      override = this.getMethodOverride(method);
+    } catch (e) {
+      return void 0;
+    }
+    while (override !== void 0) {
+      const baseParam = override.parameters?.[index];
+      const type = baseParam === void 0 ? void 0 : this.javaOptionalParameterTypeOf(baseParam);
+      if (type !== void 0) {
+        return type === JAVA_NATIVE_DICT_PARAMETER_TYPE ? type : void 0;
+      }
+      try {
+        override = this.getMethodOverride(override);
+      } catch (e) {
+        return void 0;
+      }
+    }
+    return void 0;
+  }
   javaOptionalParameterType(node) {
     if (node === void 0 || !isParameterDeclaration2(node)) {
       return void 0;
@@ -17801,6 +18688,9 @@ var JavaTranspiler = class extends BaseTranspiler {
     const excluded = JAVA_NATIVE_PARAMETER_EXCLUDED_POSITIONS[method.name?.text];
     if (excluded !== void 0 && excluded.includes(method.parameters.indexOf(node))) {
       return void 0;
+    }
+    if (node.type === void 0) {
+      return this.javaInheritedOptionalParameterType(node);
     }
     if (name === "Strings" || this.javaIsStringArrayType(checker, type)) {
       const listName = JAVA_STRINGS_OPTIONAL_PARAMETER_NAMES.has(node.name?.text) && !JAVA_STRINGS_EXCLUDED_METHODS.has(method.name?.text);
@@ -18461,10 +19351,19 @@ var JavaTranspiler = class extends BaseTranspiler {
       return void 0;
     }
     const method = node.parent;
-    if (method === void 0 || !isMethodDeclaration4(method) || !isClassDeclaration3(method.parent)) {
+    const testFileName = node.getSourceFile().fileName.replace(/\\/g, "/");
+    const testTier = JAVA_TEST_TIER_FILES.test(testFileName);
+    if (testTier) {
+      if (!isFunctionDeclaration4(method) && !isMethodDeclaration4(method)) {
+        return void 0;
+      }
+      if (this.isAsyncFunction(method) && this.javaParameterIsWritten(node)) {
+        return void 0;
+      }
+    } else if (method === void 0 || !isMethodDeclaration4(method) || !isClassDeclaration3(method.parent)) {
       return void 0;
     }
-    if (!JAVA_NATIVE_PARAMETER_BASE_FILES.test(node.getSourceFile().fileName) && !JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(node.getSourceFile().fileName)) {
+    if (!JAVA_NATIVE_PARAMETER_BASE_FILES.test(node.getSourceFile().fileName) && !JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(node.getSourceFile().fileName) && !testTier) {
       return void 0;
     }
     const checker = this.checkerOrUndefined();
@@ -18481,6 +19380,9 @@ var JavaTranspiler = class extends BaseTranspiler {
     }
     const symbol = this.javaParameterAliasSymbol(node, type, checker);
     const name = symbol?.name;
+    if (testTier && (name === "Strings" || this.javaIsStringArrayType(checker, type))) {
+      return void 0;
+    }
     if (name === void 0) {
       return this.javaPlainParameterTypeOf(node, type, checker);
     }
@@ -18517,12 +19419,21 @@ var JavaTranspiler = class extends BaseTranspiler {
     }
     return void 0;
   }
+  // the generated test tier's async wrapper copies hold the typed parameter's value
+  javaTestTierWrapperType(param) {
+    const fileName = (param?.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    if (!JAVA_TEST_TIER_FILES.test(fileName) || this.javaParameterIsWritten(param)) {
+      return void 0;
+    }
+    return this.javaNativeParameterType(param);
+  }
   // a generated venue method's PLAIN annotation prints its Java type: a TS `string` is always a
   // String box, a string-indexed dict a HashMap. Base-tier declarations are hand-written Java
   // (`Object`), so the heritage walk keeps the box for anything overriding them.
   javaPlainParameterTypeOf(node, type, checker) {
     const fileName = node.getSourceFile().fileName.replace(/\\/g, "/");
-    if (!JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName)) {
+    const testTier = JAVA_TEST_TIER_FILES.test(fileName);
+    if (!JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName) && !testTier) {
       return void 0;
     }
     if (type.getAliasSymbol?.() !== void 0 || type.isUnionType?.()) {
@@ -18530,6 +19441,9 @@ var JavaTranspiler = class extends BaseTranspiler {
     }
     if ((type.flags & TypeFlags5.String) !== 0) {
       return this.STRING_KEYWORD;
+    }
+    if (testTier) {
+      return void 0;
     }
     if ((type.flags & TypeFlags5.Object) === 0) {
       return void 0;
@@ -20820,12 +21734,12 @@ var JavaTranspiler = class extends BaseTranspiler {
   }
   printFinalOutsideMethodVariableWrappersIfAny(node, identation) {
     return this.javaAsyncParamWrapperLines(node, identation, (param, isOptionalParam, { sigName, snapName }) => {
-      const snapType = isOptionalParam && param.initializer !== void 0 ? this.javaOptionalParameterJavaType(param) : "Object";
+      const snapType = this.javaTestTierWrapperType(param) ?? (isOptionalParam && param.initializer !== void 0 ? this.javaOptionalParameterJavaType(param) : "Object");
       return `final ${snapType} ${snapName} = ${sigName};`;
     });
   }
   printInsideMethodVariableWrappersIfAny(node, identation) {
-    return this.javaAsyncParamWrapperLines(node, identation, (param, _isOptionalParam, { localName, snapName }) => `${this.javaAsyncParameterLocalType(param) ?? "Object"} ${localName} = ${snapName};`);
+    return this.javaAsyncParamWrapperLines(node, identation, (param, _isOptionalParam, { localName, snapName }) => `${this.javaTestTierWrapperType(param) ?? this.javaAsyncParameterLocalType(param) ?? "Object"} ${localName} = ${snapName};`);
   }
   // one line per reassigned parameter of an async method (optional ones only in a split core)
   javaAsyncParamWrapperLines(node, identation, printLine) {
@@ -22770,6 +23684,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // `x.push(v)` (native push), `x.length`, `return x` or an argument inside a `return`
     // (boxed once as `Value::from(x)`). Anything else keeps the `Value` box and `append_to_array`.
     this.rustVecLocalDecisions = /* @__PURE__ */ new WeakMap();
+    // ── hx10 R02: typed dict bearers ──────────────────────────────────────────
+    //
+    // A local that builds one object literal and is only ever read/written by a
+    // literal key, plus at most one final move, is declared a bare
+    // `indexmap::IndexMap<String, Value>`: reads print `.get(k)`, writes
+    // `.insert(k, v)`, and the box with its `get_value`/`add_element_to_object`
+    // calls and `|__m|` closure disappears. Any other use keeps the `Value` box.
+    this.rustDictBearerDecisions = /* @__PURE__ */ new WeakMap();
     /** Extra plain-dict write sources (R01 write-history proof), REST venue files only: no
      *  runtime tagged handle (book, ws subscription, cache bucket) is reachable there. */
     this.rustR12Visiting = /* @__PURE__ */ new Set();
@@ -23969,7 +24891,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       for (const key of keyStrs.slice(0, -1))
         acc = `get_value_mut(${acc}, &${key})`;
       const rhs = this.printNode(right, 0);
-      const nativeInsert = keyStrs.length === 1 ? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) : void 0;
+      const nativeInsert = keyStrs.length === 1 ? this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) : void 0;
       return nativeInsert ?? `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${rhs})`;
     }
     if (left.kind === SyntaxKind7.TypeOfExpression) {
@@ -24051,6 +24973,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (node.declarations.length === 1 && this.rustVecLocalIsTyped(declaration)) {
       const native = this.rustVecNativeLiteral(declaration);
       return `${indent}let mut ${varName}: Vec<Value> = ${native ?? "Vec::new()"}`;
+    }
+    if (node.declarations.length === 1 && this.rustDictLocalIsTyped(declaration)) {
+      const block = this.rustObjectLiteralBlock(this.rustSkipWrappers(declaration.initializer), identation);
+      return `${indent}let mut ${varName}: indexmap::IndexMap<String, Value> = (${block})`;
     }
     const boolValue = this.getRustBoolLocalInitializer(declaration, parsedValue);
     if (boolValue !== void 0) {
@@ -24247,7 +25173,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return safe;
   }
   rustLocalUsesAcceptBool(declaration, sourceName) {
-    return this.rustLocalUsesAll(declaration, sourceName, false, (n) => this.rustIdentifierUseIsCondition(n));
+    return this.rustLocalUsesAll(declaration, sourceName, false, (n) => this.rustIdentifierUseIsCondition(n) || this.rustBoolParamUseAccepted(n));
   }
   rustParamPrintsBool(param) {
     if (param?.kind !== SyntaxKind7.Parameter) {
@@ -25396,7 +26322,7 @@ ${classMethods}
         return void 0;
       return this.printNativeListIndex(receiverText, index);
     }
-    const dictRead = this.printNativeDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.printNativeThisFieldDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.rustR10DynamicRead(receiverText, receiverNode, keyNode);
+    const dictRead = this.rustBearerDictDynamicRead(receiverText, receiverNode, keyNode) ?? this.printNativeDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.printNativeThisFieldDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.rustR10DynamicRead(receiverText, receiverNode, keyNode);
     if (dictRead !== void 0)
       return dictRead;
     return this.printNativeDynamicListIndex(receiverText, receiverNode, keyNode) ?? this.r14ListArithIndex(receiverText, receiverNode, keyNode);
@@ -26048,6 +26974,11 @@ ${ind}let ${view}: &${map} = &${arc};
     return void 0;
   }
   printNativeMapAccess(receiverText, receiverNode, keyText) {
+    if (this.rustDictBearerDeclaration(receiverNode) !== void 0) {
+      if (!_RustTranspiler.rustBearerKeyTextOk(keyText))
+        return void 0;
+      return `${receiverText}.get("${this.escapeRustStringLiteral(keyText)}").cloned().unwrap_or(Value::Null)`;
+    }
     if (!this.isProvenMapExpression(receiverNode) && !this.rustR10LiteralReadOk(receiverNode, keyText)) {
       if (!this.rustIsDeclaredDictLocal(receiverNode))
         return void 0;
@@ -26537,6 +27468,11 @@ ${idn}}`;
     return idn + (this.foldNegateLiteral(operandText) ?? this.printRustNativeNegate(operand, operandText) ?? `negate(&${operandText})`);
   }
   printObjectLiteralExpression(node, identation) {
+    return `Value::Map(${this.rustObjectLiteralBlock(node, identation)})`;
+  }
+  /** The object-literal block on its own (`{ let mut m = …; m }`) — the payload a
+   *  `Value::Map(..)` box carries and the initialiser a typed dict bearer needs. */
+  rustObjectLiteralBlock(node, identation) {
     const escapeKey = (s) => String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
     const idn2 = this.getIden(identation + 2);
     const lines = node.properties.map((p) => {
@@ -26549,10 +27485,10 @@ ${idn}}`;
     });
     const idn1 = this.getIden(identation + 1);
     const body = lines.map((l) => l + "\n").join("");
-    return `Value::Map({
+    return `{
 ${idn1}let mut m = std::collections::HashMap::new();
 ${body}${idn1}m
-${this.getIden(identation)}})`;
+${this.getIden(identation)}}`;
   }
   printArrayLiteralExpression(node, identation) {
     return `Value::from(vec![${node.elements.map((e) => this.printNode(e, 0)).join(", ")}])`;
@@ -27167,11 +28103,165 @@ ${iden}}`;
   transformIdentifier(node, identifier) {
     const text = super.transformIdentifier(node, identifier);
     const parent = node?.parent;
+    if (this.rustDictBearerDeclaration(node) !== void 0 && parent !== void 0 && (isReturnStatement4(parent) && parent.expression === node || isCallExpression6(parent) && parent.arguments.some((a) => a === node))) {
+      return `Value::Map(${text})`;
+    }
     if (parent === void 0 || !(isReturnStatement4(parent) || isCallExpression6(parent) && parent.arguments.some((a) => a === node) && this.rustVecBoxingCallee(parent.expression) || parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === node))
       return text;
     if (this.rustVecLocalDeclarationOf(node) === void 0)
       return text;
     return this.rustVecValueUse(node, String(node.text)) ? `Value::from(${text})` : `Value::from(${text}.clone())`;
+  }
+  /** The declaration behind `node` when it is a local typed as a dict bearer. */
+  rustDictBearerDeclaration(node) {
+    if (!isIdentifier3(node))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.name === node)
+      return void 0;
+    return this.rustDictLocalIsTyped(declaration) ? declaration : void 0;
+  }
+  rustDictLocalIsTyped(declaration) {
+    if (declaration?.kind !== SyntaxKind7.VariableDeclaration)
+      return false;
+    let decision = this.rustDictBearerDecisions.get(declaration);
+    if (decision === void 0) {
+      this.rustDictBearerDecisions.set(declaration, false);
+      try {
+        decision = this.rustDictLocalIsTypedUncached(declaration);
+      } catch (e) {
+        decision = false;
+      }
+      this.rustDictBearerDecisions.set(declaration, decision);
+    }
+    return decision;
+  }
+  rustDictLocalIsTypedUncached(declaration) {
+    const init = declaration.initializer;
+    if (declaration.name?.kind !== SyntaxKind7.Identifier || init === void 0)
+      return false;
+    const literal = this.rustSkipWrappers(init);
+    if (!isObjectLiteralExpression4(literal))
+      return false;
+    if (literal.properties.some((p) => p.kind === SyntaxKind7.SpreadAssignment))
+      return false;
+    for (const property of literal.properties) {
+      const propertyName = property.name;
+      if (propertyName === void 0 || propertyName.kind === SyntaxKind7.ComputedPropertyName || !_RustTranspiler.rustBearerKeyTextOk(String(propertyName.text)))
+        return false;
+    }
+    const name = String(declaration.name.text);
+    const fn = this.rustEnclosingFunction(declaration);
+    if (fn === void 0 || isSourceFile5(fn))
+      return false;
+    const source = declaration.getSourceFile?.()?.fileName;
+    if (typeof source === "string" && /\/test\//.test(source))
+      return false;
+    const escapes = [];
+    const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
+      if (this.rustIdentifierIsPropertyName(n)) {
+        return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
+      }
+      if (!this.rustIdentifierRefersToDeclaration(n, declaration))
+        return false;
+      if (this.rustEnclosingFunction(n) !== fn)
+        return false;
+      const parent = n.parent;
+      if (isReturnStatement4(parent) && parent.expression === n) {
+        escapes.push(n);
+        return true;
+      }
+      if (isCallExpression6(parent) && parent.arguments.some((a) => a === n) && isPropertyAccessExpression3(parent.expression) && (parent.expression.expression.kind === SyntaxKind7.ThisKeyword || parent.expression.expression.kind === SyntaxKind7.SuperKeyword)) {
+        escapes.push(n);
+        return true;
+      }
+      if (isElementAccessExpression4(parent) && parent.expression === n)
+        return this.rustDictBearerElementUse(parent, name);
+      return false;
+    });
+    if (!safe || escapes.length > 1)
+      return false;
+    if (escapes.length === 1 && !this.rustVecIsFinalUse(escapes[0], name))
+      return false;
+    return true;
+  }
+  /** One `x[...]` use rooted at the bearer: a key read or a single-level `x['k'] = v`
+   *  write. Chained reads stay native at the first level; a chained/compound write,
+   *  `delete` and a call on the read reach the container through a `&mut Value`, so
+   *  they keep the box. */
+  rustDictBearerElementUse(access, name) {
+    let root = access;
+    while (isElementAccessExpression4(root.parent) && root.parent.expression === root)
+      root = root.parent;
+    const up = root.parent;
+    const write = up !== void 0 && isBinaryExpression5(up) && up.left === root && rustIsAssignmentOperator(up.operatorToken.kind);
+    if (write) {
+      if (root !== access || up.operatorToken.kind !== SyntaxKind7.EqualsToken)
+        return false;
+      return this.rustDictBearerKeyOk(access.argumentExpression);
+    }
+    if (up !== void 0 && (isDeleteExpression2(up) || isCallExpression6(up) && up.expression === root || up.kind === SyntaxKind7.PrefixUnaryExpression || up.kind === SyntaxKind7.PostfixUnaryExpression))
+      return false;
+    if (!this.isNativeAccessPositionSafe(root) || this.isNativeWriteTargetBase(root))
+      return false;
+    if (this.isWriteBackBindRead(access))
+      return false;
+    return this.rustDictBearerKeyOk(access.argumentExpression);
+  }
+  /** A literal string key, or a checker-proven `string` place. A by-construction
+   *  object literal carries no marker key (`__book_id`, `__cacheKind`, `__live_id`)
+   *  and no ws client-handle triple, so `get_value`'s store routes cannot fire and
+   *  the read is the map lookup. */
+  rustDictBearerKeyOk(keyNode) {
+    const key = this.rustSkipWrappers(keyNode);
+    if (key === void 0)
+      return false;
+    if (isStringLiteralLikeNode4(key))
+      return _RustTranspiler.rustBearerKeyTextOk(String(key.text));
+    if (!isIdentifier3(key) || !this.rustKeyIsProvenString(key) || this.rustStringLocalIdentifierIsTyped(key))
+      return false;
+    if (this.rustNodeIsKeyUnsafePlace(String(key.text)))
+      return false;
+    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(this.printNode(key, 0).trim());
+  }
+  /** Keys a bearer may carry: no empty/numeric key, no ws client-handle marker
+   *  (`subscriptions`/`futures` serve their live registry) and nothing `__`-prefixed. */
+  static rustBearerKeyTextOk(text) {
+    return text !== "" && !/^\d+$/.test(text) && !text.startsWith("__") && text !== "subscriptions" && text !== "futures";
+  }
+  /** `x[k]` on a bearer with a proven `string` key place: an `IndexMap` lookup, and
+   *  `get_value`'s non-`Str` key branches (always `Value::Null` here) become the
+   *  `""` fallback — the bearer can never hold an empty key. */
+  rustBearerDictDynamicRead(receiverText, receiverNode, keyNode) {
+    if (this.rustDictBearerDeclaration(receiverNode) === void 0)
+      return void 0;
+    const key = this.rustSkipWrappers(keyNode);
+    if (key === void 0 || isStringLiteralLikeNode4(key) || !this.rustDictBearerKeyOk(key))
+      return void 0;
+    if (this.isWriteBackBindRead(this.rustElementReadOfKey(keyNode)))
+      return void 0;
+    const keyText = this.printNode(keyNode, 0).trim();
+    return `${receiverText}.get(${keyText}.as_str().unwrap_or("")).cloned().unwrap_or(Value::Null)`;
+  }
+  /** `x['k'] = v` on a bearer: the insert `add_element_to_object` performs on the
+   *  same plain dict, minus the box (`Arc::make_mut` guard the type proves). */
+  rustBearerDictInsert(baseExpr, keyNode, keyText, valueText) {
+    const declaration = this.rustDictBearerDeclaration(baseExpr);
+    if (declaration === void 0 || !this.rustDictBearerKeyOk(keyNode))
+      return void 0;
+    const name = String(baseExpr.text);
+    const keyArg = this.rustNativeInsertKeyArg({ text: name, isField: false, plain: true }, keyNode, keyText);
+    if (keyArg === void 0)
+      return void 0;
+    const value = this.rustPrintedBoolArg(valueText) ? `Value::Bool(${valueText})` : valueText;
+    if (new RegExp(`\\b${name}\\b`).test(value)) {
+      return `{ let __be_tmp = ${value}; ${name}.insert(${keyArg}, __be_tmp); }`;
+    }
+    const trimmed = value.trim();
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed) && trimmed !== "self" && trimmed !== "true" && trimmed !== "false") {
+      return `${name}.insert(${keyArg}, ${trimmed}.clone())`;
+    }
+    return `${name}.insert(${keyArg}, ${value})`;
   }
   // hx4 R05 — native IndexMap ops for `k in X`, `delete X[k]`, `Object.keys/values(X)`.
   /** Source path of a node (forward slashes). */

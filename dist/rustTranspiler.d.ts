@@ -631,13 +631,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
     printNativeIncrement(op: any, operand: any, operandText: string): string | undefined;
     printPrefixUnaryExpression(node: any, identation: any): any;
     printObjectLiteralExpression(node: any, identation: any): string;
+    /** The object-literal block on its own (`{ let mut m = …; m }`) — the payload a
+     *  `Value::Map(..)` box carries and the initialiser a typed dict bearer needs. */
+    rustObjectLiteralBlock(node: any, identation: any): string;
     printArrayLiteralExpression(node: any, identation: any): string;
     printDeleteExpression(node: any, identation: any): string;
     printInstanceOfExpression(node: any, identation: any): string;
@@ -736,6 +739,31 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVecLocalDeclarationOf(node: any): any;
     printRustVecPush(node: any, name: string | undefined, parsedArg: string | undefined): string | undefined;
     transformIdentifier(node: any, identifier: any): string;
+    private rustDictBearerDecisions;
+    /** The declaration behind `node` when it is a local typed as a dict bearer. */
+    rustDictBearerDeclaration(node: any): any | undefined;
+    rustDictLocalIsTyped(declaration: any): boolean;
+    rustDictLocalIsTypedUncached(declaration: any): boolean;
+    /** One `x[...]` use rooted at the bearer: a key read or a single-level `x['k'] = v`
+     *  write. Chained reads stay native at the first level; a chained/compound write,
+     *  `delete` and a call on the read reach the container through a `&mut Value`, so
+     *  they keep the box. */
+    rustDictBearerElementUse(access: any, name: string): boolean;
+    /** A literal string key, or a checker-proven `string` place. A by-construction
+     *  object literal carries no marker key (`__book_id`, `__cacheKind`, `__live_id`)
+     *  and no ws client-handle triple, so `get_value`'s store routes cannot fire and
+     *  the read is the map lookup. */
+    rustDictBearerKeyOk(keyNode: any): boolean;
+    /** Keys a bearer may carry: no empty/numeric key, no ws client-handle marker
+     *  (`subscriptions`/`futures` serve their live registry) and nothing `__`-prefixed. */
+    static rustBearerKeyTextOk(text: string): boolean;
+    /** `x[k]` on a bearer with a proven `string` key place: an `IndexMap` lookup, and
+     *  `get_value`'s non-`Str` key branches (always `Value::Null` here) become the
+     *  `""` fallback — the bearer can never hold an empty key. */
+    rustBearerDictDynamicRead(receiverText: string, receiverNode: Node, keyNode: Node): string | undefined;
+    /** `x['k'] = v` on a bearer: the insert `add_element_to_object` performs on the
+     *  same plain dict, minus the box (`Arc::make_mut` guard the type proves). */
+    rustBearerDictInsert(baseExpr: any, keyNode: any, keyText: string, valueText: string): string | undefined;
     /** Source path of a node (forward slashes). */
     r05Path(node: Node): string;
     /** Test sources keep the helpers: tests-pipeline post-passes match `in_op(` text. */
