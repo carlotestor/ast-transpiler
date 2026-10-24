@@ -3578,6 +3578,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         }
 
         if (op === SyntaxKind.InKeyword) {
+            const substituted = this.goInOpSubstitutedText(node);
+            if (substituted !== undefined) {
+                return substituted;
+            }
             const dictText = this.printNode(right, 0);
             const keyText = this.printNode(left, 0);
             const inlined = this.printInlineInOp(right, left, dictText, keyText);
@@ -5134,6 +5138,110 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return `func() bool {\n${this.getIden(level + 1)}${read}\n${this.getIden(level + 1)}return ok\n${this.getIden(level)}}()`;
     }
 
+    // ---- hx10w5-G14: `key in dict` in an if condition -------------------------------
+    // The two-value map read is a *statement* in Go, which is why the emission above is a
+    // closure. An `if` can hold it in its init clause instead — `if _, ok := m["k"]; ok {`
+    // — so a condition with exactly one provable read prints that native form and no
+    // closure. Everything else keeps the existing helper/closure emission.
+    goInOpSubstitution = undefined; // Map<in-expression, sentinel>, set while an if-init print runs
+    GO_IN_OP_SENTINEL = 'goInOpBoundOk';
+
+    // the text a substituted `in` operand prints: its init-clause binding
+    goInOpSubstitutedText(node): string | undefined {
+        if (this.goInOpSubstitution === undefined) {
+            return undefined;
+        }
+        const inner = this.goUnwrapParenthesizedNode(node);
+        return (inner === undefined) ? undefined : this.goInOpSubstitution.get(inner);
+    }
+
+    // the init clause + condition text for an `if` whose condition holds one provable
+    // `key in dict` read, or undefined when the shape has to keep its current emission
+    goInOpIfInitClause(node): string | undefined {
+        const parent = node?.parent;
+        if ((parent?.kind !== SyntaxKind.IfStatement) || (parent.expression !== node)) {
+            return undefined;
+        }
+        const read = this.goIfInOpRead(node);
+        if (read === undefined) {
+            return undefined;
+        }
+        const name = this.goIfInOpBindingName(parent);
+        if (name === undefined) {
+            return undefined;
+        }
+        const saved = this.goInOpSubstitution;
+        this.goInOpSubstitution = new Map([[read.inNode, this.GO_IN_OP_SENTINEL]]);
+        let text;
+        try {
+            text = this.printNode(node, 0);
+        } finally {
+            this.goInOpSubstitution = saved;
+        }
+        if ((typeof text !== 'string') || text.includes('\n') || !text.includes(this.GO_IN_OP_SENTINEL)) {
+            return undefined;
+        }
+        // the source parentheses around the operand stay in the printed text
+        const sentinel = this.GO_IN_OP_SENTINEL;
+        const paren = '(' + sentinel + ')';
+        let condition = text.trim();
+        for (;;) {
+            const collapsed = condition.split(paren).join(sentinel);
+            if (collapsed === condition) {
+                break;
+            }
+            condition = collapsed;
+        }
+        condition = condition.split(sentinel).join(name);
+        return `_, ${name} := ${read.dictText}[${read.keyText}]; ${condition}`;
+    }
+
+    // the single `key in dict` read the condition can bind: a map-typed identifier
+    // receiver and a Go-string key. Both operands are identifiers/literals, so moving the
+    // read into the init clause cannot evaluate anything the condition would have skipped.
+    goIfInOpRead(condition): any {
+        const reads = [];
+        const visit = (n) => {
+            if ((n.kind === SyntaxKind.BinaryExpression) && (n.operatorToken?.kind === SyntaxKind.InKeyword)) {
+                const dict = this.goUnwrapParenthesizedNode(n.right);
+                const key = this.goUnwrapParenthesizedNode(n.left);
+                const keyIsText = (key?.kind === SyntaxKind.StringLiteral)
+                    || (key?.kind === SyntaxKind.NoSubstitutionTemplateLiteral)
+                    || (key?.kind === SyntaxKind.Identifier);
+                if ((dict?.kind === SyntaxKind.Identifier) && keyIsText) {
+                    const dictText = this.printNode(dict, 0);
+                    const keyText = this.printNode(key, 0);
+                    if (!dictText.includes('\n') && !keyText.includes('\n')
+                        && (this.goPrintedTypeOfExpression(dict, dictText) === 'map[string]any')
+                        && (this.goPrintedTypeOfExpression(key, keyText) === 'string')) {
+                        reads.push({ inNode: n, dictText, keyText });
+                    }
+                }
+            }
+            n.forEachChild(visit);
+        };
+        visit(condition);
+        return (reads.length === 1) ? reads[0] : undefined;
+    }
+
+    // `ok` unless the statement already names it: the init clause would shadow that name
+    goIfInOpBindingName(statement): string | undefined {
+        const taken = new Set();
+        const visit = (n) => {
+            if ((n.kind === SyntaxKind.Identifier) && (typeof n.text === 'string')) {
+                taken.add(n.text);
+            }
+            n.forEachChild(visit);
+        };
+        statement.forEachChild(visit);
+        for (const candidate of ['ok', 'ok2', 'ok3']) {
+            if (!taken.has(candidate)) {
+                return candidate;
+            }
+        }
+        return undefined;
+    }
+
     // comparison helpers that normalize int/int64/float64 against each other, so a
     // literal operand's Go default type (int) behaves like the int64 OpNeg produces
     comparisonHelpers = [ 'IsEqual', 'IsGreaterThan', 'IsLessThan', 'IsGreaterThanOrEqual', 'IsLessThanOrEqual' ];
@@ -5555,6 +5663,15 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
 
     printCondition(node, identation) {
+        // hx10w5-G14: the `in` operand an enclosing `if` bound in its init clause
+        const substituted = this.goInOpSubstitutedText(node);
+        if (substituted !== undefined) {
+            return `${this.getIden(identation)}${substituted}`;
+        }
+        const initClause = this.goInOpIfInitClause(node);
+        if (initClause !== undefined) {
+            return `${this.getIden(identation)}${initClause}`;
+        }
         // `!x` is handled by printPrefixUnaryExpression, which calls back into this
         // method with the operand; let the base class keep that recursion intact
         const native = this.goNativeCondition(node);
