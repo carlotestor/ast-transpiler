@@ -13,7 +13,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     countRequiredParameters(declaration: any): any;
     printArgsForCallExpression(node: any, identation: any): any;
     javaPrintCallArguments(args: any, node: any, identation: any): any;
-    javaMethodImplementation(declaration: any): import("typescript/unstable/ast").DeclarationBase;
+    javaMethodImplementation(declaration: any): Node;
     javaIsPrintedMethod(method: any): boolean;
     javaHasOptionalParameter(method: any): boolean;
     javaFullArityCallArguments(args: any, node: any, identation: any): string | undefined;

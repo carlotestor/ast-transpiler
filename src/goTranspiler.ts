@@ -180,6 +180,20 @@ const GO_HELPER_RETURN_TYPES: { [name: string]: string } = {
 // those locals stay `any`. A Safe* entry presupposes the matching Go accessor
 // returns that shape (as the hand-written base already does for Str/Int/Float).
 
+// Hand-written runtime calls whose every parameter is `any` and which normalise
+// their arguments with derefScalar: handing one a `*T` reads exactly like the box.
+const GO_NIL_INIT_ANY_ARG_CALLEES = new Set([
+    'this.SafeString', 'this.SafeString2', 'this.SafeStringN', 'this.SafeStringLower', 'this.SafeStringLower2',
+    'this.SafeStringUpper', 'this.SafeStringUpper2', 'this.SafeInteger', 'this.SafeIntegerProduct',
+    'this.SafeFloat', 'this.SafeNumber', 'this.SafeBool', 'this.SafeTimestamp', 'this.SafeSymbol',
+    'this.SafeCurrencyCode', 'this.SafeMarket', 'this.SafeDict', 'this.SafeList', 'this.SafeValue',
+    'this.Iso8601', 'this.Parse8601', 'this.ParseNumber', 'this.NumberToString', 'this.Omit',
+    'this.Market', 'this.PriceToPrecision',
+    'GetValue', 'SafeValue', 'ToString', 'EvalTruthy', 'IsEqual', 'IsString', 'IsNumber', 'IsBool',
+    'Precise.StringAdd', 'Precise.StringSub', 'Precise.StringMul', 'Precise.StringDiv', 'Precise.StringAbs',
+    'Precise.StringEq', 'Precise.StringGt', 'Precise.StringLt', 'Precise.StringGe', 'Precise.StringLe',
+]);
+
 // printed calls whose Go result is a JSON decode: map/slice/scalar or nil, never a
 // typed pointer. `this.parseJson` / `this.json` are the hand-written base decoders,
 // `JsonParse` / `ParseJSON` their runtime twins.
@@ -3473,8 +3487,9 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             if (types[i] === candidate) {
                 continue;
             }
-            // a literal or an absent value still lands in this pointer without a box
-            if (this.goPointerWriteConversion(writes[i], candidate) !== undefined) {
+            // an absent value still lands in the pointer, but a literal would need a
+            // wrapping call (SafeStringPtr) of its own: that is not a win, so keep the box
+            if (this.goPointerWriteConversion(writes[i], candidate) === 'nil') {
                 continue;
             }
             return undefined;
@@ -3520,6 +3535,12 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return parent.condition === current;
         case SyntaxKind.ConditionalExpression:
             return parent.condition === current;
+        // `this.safeString(x)`: a runtime accessor takes `any` and derefs it
+        case SyntaxKind.CallExpression:
+            if (!parent.arguments?.some((argument) => argument === current)) {
+                return false;
+            }
+            return GO_NIL_INIT_ANY_ARG_CALLEES.has(this.printNode(parent.expression, 0).trim());
         // `{ 'min': x }` / `{ x }`: an object literal holds map[string]any values
         case SyntaxKind.PropertyAssignment:
             return parent.initializer === current;

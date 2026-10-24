@@ -54,7 +54,7 @@ describe('hx10w8 GP07 nil-initialised locals', () => {
         expect(out).not.toContain('IsEqual(limit');
     });
 
-    test('a literal write lands in the pointer without a box', () => {
+    test('a literal write keeps the box (a pointer literal would need a wrapping call)', () => {
         const ts = PRELUDE +
             'class Test extends Base {\n' +
             '    safeString (d: any, k: any): string { return \'\'; }\n' +
@@ -66,9 +66,25 @@ describe('hx10w8 GP07 nil-initialised locals', () => {
             '    }\n' +
             '}\n';
         const out = go(ts);
-        expect(out).toContain('var typeVar *string = nil');
-        expect(out).toContain('typeVar = SafeStringPtr("spot")');
-        expect(out).toContain('if typeVar == nil {');
+        expect(out).toContain('var typeVar any = nil');
+        expect(out).not.toContain('SafeStringPtr("spot")');
+    });
+
+    test('a helper-call argument keeps the pointer (every runtime accessor derefs)', () => {
+        const ts = PRELUDE +
+            'class Test extends Base {\n' +
+            '    safeInteger (d: any, k: any): number { return 0; }\n' +
+            '    iso8601 (t: any): string { return \'\'; }\n' +
+            '    main (m: any): any {\n' +
+            '        let ts: Int = undefined;\n' +
+            '        ts = this.safeInteger (m, \'ts\');\n' +
+            '        if (ts === undefined) { return undefined; }\n' +
+            '        return this.iso8601 (ts);\n' +
+            '    }\n' +
+            '}\n';
+        const out = go(ts);
+        expect(out).toContain('var ts *int64 = nil');
+        expect(out).toContain('if ts == nil {');
     });
 
     test('a read as a value keeps the box', () => {

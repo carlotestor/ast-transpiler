@@ -8513,6 +8513,52 @@ var GO_HELPER_RETURN_TYPES = {
   // absent, so it carries the same *string shape as the Safe* string accessors
   ...Object.fromEntries(["Mul", "Div", "Sub", "Add", "Or", "Max", "Min", "Abs", "Neg", "Mod"].map((op) => ["Precise.String" + op, "*string"]))
 };
+var GO_NIL_INIT_ANY_ARG_CALLEES = /* @__PURE__ */ new Set([
+  "this.SafeString",
+  "this.SafeString2",
+  "this.SafeStringN",
+  "this.SafeStringLower",
+  "this.SafeStringLower2",
+  "this.SafeStringUpper",
+  "this.SafeStringUpper2",
+  "this.SafeInteger",
+  "this.SafeIntegerProduct",
+  "this.SafeFloat",
+  "this.SafeNumber",
+  "this.SafeBool",
+  "this.SafeTimestamp",
+  "this.SafeSymbol",
+  "this.SafeCurrencyCode",
+  "this.SafeMarket",
+  "this.SafeDict",
+  "this.SafeList",
+  "this.SafeValue",
+  "this.Iso8601",
+  "this.Parse8601",
+  "this.ParseNumber",
+  "this.NumberToString",
+  "this.Omit",
+  "this.Market",
+  "this.PriceToPrecision",
+  "GetValue",
+  "SafeValue",
+  "ToString",
+  "EvalTruthy",
+  "IsEqual",
+  "IsString",
+  "IsNumber",
+  "IsBool",
+  "Precise.StringAdd",
+  "Precise.StringSub",
+  "Precise.StringMul",
+  "Precise.StringDiv",
+  "Precise.StringAbs",
+  "Precise.StringEq",
+  "Precise.StringGt",
+  "Precise.StringLt",
+  "Precise.StringGe",
+  "Precise.StringLe"
+]);
 var GO_JSON_PARSE_CALLS = ["Json", "JsonParse", "ParseJson", "ParseJSON"];
 var GO_BOOL_FIELDS = /* @__PURE__ */ new Set([
   "this.Verbose",
@@ -11584,7 +11630,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
       if (types[i] === candidate) {
         continue;
       }
-      if (this.goPointerWriteConversion(writes[i], candidate) !== void 0) {
+      if (this.goPointerWriteConversion(writes[i], candidate) === "nil") {
         continue;
       }
       return void 0;
@@ -11624,6 +11670,11 @@ func New${this.capitalize(this.className)}() *${this.className} {
         return parent.condition === current;
       case SyntaxKind5.ConditionalExpression:
         return parent.condition === current;
+      case SyntaxKind5.CallExpression:
+        if (!parent.arguments?.some((argument) => argument === current)) {
+          return false;
+        }
+        return GO_NIL_INIT_ANY_ARG_CALLEES.has(this.printNode(parent.expression, 0).trim());
       case SyntaxKind5.PropertyAssignment:
         return parent.initializer === current;
       case SyntaxKind5.ShorthandPropertyAssignment:
