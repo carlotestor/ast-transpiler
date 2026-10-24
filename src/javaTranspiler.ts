@@ -317,6 +317,9 @@ const JAVA_STRINGS_EXCLUDED_METHODS = new Set<string>(['marketSymbols', 'marketI
 // the aliases above have to come from the shared ts/src/base/types.ts declaration
 const JAVA_NATIVE_PARAMETER_SOURCE_FILES = /(^|\/)ts\/src\/base\/types\.ts$/;
 
+// the Java spelling of a dict slot: the annotation tables above and the inheritance arm below
+const JAVA_NATIVE_DICT_PARAMETER_TYPE = 'java.util.Map<String, Object>';
+
 // Parameter positions whose Java signature cannot move to the annotated type even though
 // the base declaration carries it. Java overrides are invariant, so one excluded position
 // boxes every declaration of the name at once.
@@ -2718,6 +2721,41 @@ export class JavaTranspiler extends BaseTranspiler {
         return this.javaOptionalParameterType(node) ?? 'Object';
     }
 
+    // A bare `params = {}` (no annotation) inherits the nearest ancestor declaration's native type.
+    // Only the dict family: every other alias pairs with a default of its own kind, so `{}` there
+    // would be a different value, not the same slot. javaOptionalParameterType's family walk still
+    // vetoes a chain whose declarations disagree.
+    javaInheritedOptionalParameterType(node): string | undefined {
+        if (node.initializer === undefined || !isObjectLiteralExpression(node.initializer)
+            || node.initializer.properties.length > 0) {
+            return undefined;
+        }
+        const method: any = node.parent;
+        const index = method?.parameters?.indexOf(node) ?? -1;
+        if (index < 0) {
+            return undefined;
+        }
+        let override;
+        try {
+            override = this.getMethodOverride(method);
+        } catch (e) {
+            return undefined;
+        }
+        while (override !== undefined) {
+            const baseParam = (override as any).parameters?.[index];
+            const type = baseParam === undefined ? undefined : this.javaOptionalParameterTypeOf(baseParam);
+            if (type !== undefined) {
+                return type === JAVA_NATIVE_DICT_PARAMETER_TYPE ? type : undefined;
+            }
+            try {
+                override = this.getMethodOverride(override);
+            } catch (e) {
+                return undefined;
+            }
+        }
+        return undefined;
+    }
+
     javaOptionalParameterType(node): string | undefined {
         if (node === undefined || !isParameterDeclaration(node)) {
             return undefined;
@@ -2780,6 +2818,11 @@ export class JavaTranspiler extends BaseTranspiler {
         const excluded = JAVA_NATIVE_PARAMETER_EXCLUDED_POSITIONS[(method.name as any)?.text];
         if (excluded !== undefined && excluded.includes(method.parameters.indexOf(node))) {
             return undefined;
+        }
+        // a bare `params = {}` re-declares a slot an ancestor declares with a native type: the
+        // override carries the base contract, so it prints that type (Java overrides are invariant)
+        if (node.type === undefined) {
+            return this.javaInheritedOptionalParameterType(node);
         }
         if (name === 'Strings' || this.javaIsStringArrayType(checker, type)) {
             const listName = JAVA_STRINGS_OPTIONAL_PARAMETER_NAMES.has((node.name as any)?.text)

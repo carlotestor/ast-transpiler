@@ -7549,3 +7549,76 @@ describe('java native list and body-proven returns (pj03)', () => {
         expect(output).toContain('public java.util.concurrent.CompletableFuture<Object> parseAsyncRows(');
     });
 });
+
+// hx10 J09: an override that re-declares a base `params: Dict = {}` as a bare `params = {}` inherits
+// the declaration's native type (Java overrides are invariant), so the body prints the Map core
+// instead of an Object body plus a Map bridge.
+describe('hx10 J09: unannotated params overrides a typed declaration', () => {
+    const TMP = path.join(__dirname, 'files', 'tmp-hx10-j09');
+    const TYPES_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'types.ts');
+    const BASE_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'Exchange.ts');
+    const VENUE_FIXTURE = path.join(TMP, 'ts', 'src', 'pro', 'venuej09.ts');
+    let venueOutput: string;
+
+    beforeAll(() => {
+        fs.mkdirSync(path.dirname(TYPES_FIXTURE), { recursive: true });
+        fs.mkdirSync(path.dirname(VENUE_FIXTURE), { recursive: true });
+        fs.writeFileSync(TYPES_FIXTURE,
+            "export interface Dictionary<T> {\n    [key: string]: T;\n}\n" +
+            "export type Dict = Dictionary<any>;\n");
+        fs.writeFileSync(BASE_FIXTURE,
+            "import type { Dict } from './types';\n" +
+            "export default class Exchange {\n" +
+            "    async unWatchTicker (symbol: string, params: Dict = {}): Promise<any> {\n" +
+            "        return params;\n" +
+            "    }\n" +
+            "    handleRouteAndParams (method: string, params: Dict = {}): Dict {\n" +
+            "        return params;\n" +
+            "    }\n" +
+            "}\n");
+        fs.writeFileSync(VENUE_FIXTURE,
+            "import type { Dict } from '../base/types';\n" +
+            "import Exchange from '../base/Exchange';\n" +
+            "class Venue extends Exchange {\n" +
+            "    override async unWatchTicker (symbol: string, params = {}): Promise<any> {\n" +
+            "        const routed = this.handleRouteAndParams ('unWatchTicker', params);\n" +
+            "        const limit = params['limit'];\n" +
+            "        return await this.handleRouteAndParams ('unWatchTicker', routed);\n" +
+            "    }\n" +
+            "    async ownOnly (symbol: string, params = {}): Promise<any> {\n" +
+            "        return params;\n" +
+            "    }\n" +
+            "    async anyParam (symbol: string, params: any = {}): Promise<any> {\n" +
+            "        return params;\n" +
+            "    }\n" +
+            "}\n");
+        const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        venueOutput = byPath.transpileJavaByPath(VENUE_FIXTURE).content;
+    });
+
+    afterAll(() => {
+        fs.rmSync(TMP, { recursive: true, force: true });
+    });
+
+    test('the bare override prints the ancestor declaration type', () => {
+        expect(venueOutput).toContain('unWatchTicker(Object symbol, java.util.Map<String, Object> parameters)');
+        expect(venueOutput).not.toContain('unWatchTicker(Object symbol, Object parameters)');
+    });
+
+    test('no Map bridge stands in for the override', () => {
+        expect(venueOutput).not.toContain('(Object) (parameters)');
+    });
+
+    test('a dict argument into the inherited slot needs no conversion', () => {
+        expect(venueOutput).toContain('this.handleRouteAndParams("unWatchTicker", parameters)');
+        expect(venueOutput).not.toContain('Helpers.toMapArg(parameters)');
+    });
+
+    test('a method with no typed ancestor keeps the Object parameter', () => {
+        expect(venueOutput).toContain('ownOnly(String symbol, Object parameters)');
+    });
+
+    test('an any-annotated parameter keeps the Object parameter', () => {
+        expect(venueOutput).toContain('anyParam(String symbol, Object parameters)');
+    });
+});
