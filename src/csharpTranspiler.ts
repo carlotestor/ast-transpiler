@@ -288,6 +288,44 @@ const CSHARP_NATIVE_BOOL_FIELDS = [
     'reduceFees', 'reloadingMarkets', 'returnResponseHeaders', 'substituteCommonCurrencyCodes', 'verbose',
 ];
 
+// hand-written BaseExchange fields declared a non-nullable C# number (Exchange.Options.cs):
+// `public double rateLimit = 2000;` / `public double rollingWindowSize = 0.0;`. A read of one is
+// already that number, so `==` against a literal it holds is isEqual's integer/double branch.
+// precisionMode is an `object` box holding the mode constants, so it keeps the helper.
+const CSHARP_SCALAR_FIELD_KINDS: { [name: string]: string } = {
+    'rateLimit': 'double',
+    'rollingWindowSize': 'double',
+};
+
+// arithmetic prints that still call a runtime helper: such an operand is not native arithmetic,
+// so an isEqual around it keeps its own helper too
+const CSHARP_HELPER_ARITHMETIC_OPENERS = [ 'mod(', 'add(', 'subtract(', 'multiply(', 'divide(', 'callDynamically(' ];
+
+// a printed expression with the parentheses that wrap the WHOLE text removed (`((a % b))` -> `a % b`)
+function csharpStripOuterParens(text: string): string {
+    let stripped = text.trim();
+    while (stripped.startsWith('(') && stripped.endsWith(')')) {
+        let depth = 0;
+        let whole = true;
+        for (let i = 0; i < stripped.length; i++) {
+            if (stripped[i] === '(') {
+                depth++;
+            } else if (stripped[i] === ')') {
+                depth--;
+                if ((depth === 0) && (i < stripped.length - 1)) {
+                    whole = false;
+                    break;
+                }
+            }
+        }
+        if (!whole) {
+            break;
+        }
+        stripped = stripped.substring(1, stripped.length - 1).trim();
+    }
+    return stripped;
+}
+
 // Hand-written BaseExchange fields whose reads print natively although the key may be absent:
 // `has`/`options` are concrete dictionaries; `urls`, `markets`, `exceptions` are `object` boxes
 // that always hold one. The native read tests the key, so a missing key still reads null.
@@ -2365,6 +2403,121 @@ export class CSharpTranspiler extends BaseTranspiler {
         return isEquality ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
     }
 
+    // The C# numeric kind of an operand printed as `%` / `*` / `+` / `-` over two operands this
+    // printer can name in one family: C# types the result to that family. An operand that still
+    // prints an arithmetic helper (`mod(...)`, `add(...)`), a mixed int/double pair and an unnamed
+    // operand all answer undefined, so the helper stays.
+    csharpPrintedArithmeticKind(node, text: string): string | undefined {
+        while (node?.kind === SyntaxKind.ParenthesizedExpression) {
+            node = node.expression;
+        }
+        if (node?.kind !== SyntaxKind.BinaryExpression) {
+            return undefined;
+        }
+        const op = node.operatorToken?.kind;
+        if ((op !== SyntaxKind.PercentToken) && (op !== SyntaxKind.AsteriskToken)
+            && (op !== SyntaxKind.PlusToken) && (op !== SyntaxKind.MinusToken)) {
+            return undefined;
+        }
+        if (CSHARP_HELPER_ARITHMETIC_OPENERS.some((opener) => csharpStripOuterParens(text).startsWith(opener))) {
+            return undefined;
+        }
+        const leftKind = this.csharpArithmeticOperandKind(this.csharpExpressionTypeOf(node.left));
+        const rightKind = this.csharpArithmeticOperandKind(this.csharpExpressionTypeOf(node.right));
+        if ((leftKind === undefined) || (rightKind === undefined)) {
+            return undefined;
+        }
+        if ((leftKind === 'double') || (rightKind === 'double')) {
+            return ((leftKind === 'double') && (rightKind === 'double')) ? 'double' : undefined;
+        }
+        return ((leftKind === 'int') && (rightKind === 'int')) ? 'int' : 'Int64';
+    }
+
+    // The numeric family of an arithmetic operand: a nullable spelling (`Int64?`) is the same
+    // family — the printed operator lifts, and null answers false in both `==` and isEqual. Any
+    // other type is not a number this printer named.
+    csharpArithmeticOperandKind(csharpType: string | undefined): string | undefined {
+        switch (csharpType) {
+        case 'Int64':
+        case 'long':
+        case 'Int64?':
+        case 'long?':
+            return 'Int64';
+        case 'int':
+        case 'int?':
+            return 'int';
+        case 'double':
+        case 'double?':
+            return 'double';
+        }
+        return undefined;
+    }
+
+    // `isEqual (<numeric arithmetic>, N)` -> `==` / `!=`: the printed expression is native C#
+    // arithmetic of one numeric kind, so an integer literal it holds exactly compares the way
+    // isEqual's ToInt64 / Convert.ToDouble branches do. Two such expressions of one kind compare by
+    // value in both; every other pair keeps the helper.
+    csharpNativeArithmeticEquality(left, right, leftText: string, rightText: string, isEquality: boolean): string | undefined {
+        const leftKind = this.csharpPrintedArithmeticKind(left, leftText);
+        const rightKind = this.csharpPrintedArithmeticKind(right, rightText);
+        if ((leftKind !== undefined) && (rightKind !== undefined)) {
+            if (leftKind !== rightKind) {
+                return undefined;
+            }
+            return isEquality ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
+        }
+        if ((leftKind === undefined) && (rightKind === undefined)) {
+            return undefined;
+        }
+        const arithmeticKind = (leftKind === undefined) ? rightKind : leftKind;
+        const literalKind = this.csharpIntegerLiteralKind((leftKind === undefined) ? left : right);
+        if ((literalKind === undefined) || !this.csharpNumericKindHoldsLiteral(arithmeticKind, literalKind)) {
+            return undefined;
+        }
+        // the arithmetic operand keeps its own operator (it binds tighter than `==`), so the
+        // wrapper's parentheses are the pair the comparison needs
+        const arithmeticText = (leftKind === undefined) ? csharpStripOuterParens(rightText) : csharpStripOuterParens(leftText);
+        const literalText = (leftKind === undefined) ? leftText : rightText;
+        return isEquality ? `(${arithmeticText} == ${literalText})` : `(${arithmeticText} != ${literalText})`;
+    }
+
+    // the C# value kind of a `this.<field>` read of a hand-written numeric field
+    // (CSHARP_SCALAR_FIELD_KINDS), or undefined for every other read
+    csharpScalarFieldKind(node): string | undefined {
+        while (node?.kind === SyntaxKind.ParenthesizedExpression) {
+            node = node.expression;
+        }
+        if (!isPropertyAccessExpression(node) || (node.expression?.kind !== SyntaxKind.ThisKeyword)) {
+            return undefined;
+        }
+        const named = CSHARP_SCALAR_FIELD_KINDS[node.name?.text as string];
+        return (named === undefined) ? undefined : this.csharpValueEqualityKind(named);
+    }
+
+    // `isEqual (this.<number>, N)` -> `==` / `!=`: the field's C# declaration is a non-nullable
+    // number, so the operator is isEqual's integer/double branch and a literal it holds converts
+    // exactly. Two such fields of one kind compare by value in both; every other shape keeps the
+    // helper (precisionMode is an `object` box, so it never reaches here).
+    csharpNativeScalarFieldEquality(left, right, leftText: string, rightText: string, isEquality: boolean): string | undefined {
+        const leftKind = this.csharpScalarFieldKind(left);
+        const rightKind = this.csharpScalarFieldKind(right);
+        if ((leftKind !== undefined) && (rightKind !== undefined)) {
+            if (leftKind !== rightKind) {
+                return undefined;
+            }
+            return isEquality ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
+        }
+        if ((leftKind === undefined) && (rightKind === undefined)) {
+            return undefined;
+        }
+        const fieldKind = (leftKind === undefined) ? rightKind : leftKind;
+        const literalKind = this.csharpIntegerLiteralKind((leftKind === undefined) ? left : right);
+        if ((literalKind === undefined) || !this.csharpNumericKindHoldsLiteral(fieldKind, literalKind)) {
+            return undefined;
+        }
+        return isEquality ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
+    }
+
     // The C# value kind of a call operand (or `x.length`) when its printed signature is numeric:
     // `.indexOf`/`.length` (int) and safe* accessors from the printer's tables, `this.<name>()` from
     // CSHARP_NATIVE_NUMERIC_THIS_KINDS. undefined keeps the helper (an `object` box has no kind).
@@ -3177,6 +3330,8 @@ export class CSharpTranspiler extends BaseTranspiler {
                 const native = nativeEquality
                     ?? this.csharpNullLiteralEquality(op, left, right, leftText, rightText)
                     ?? this.printInlineEquality(left, right, leftText, rightText, isEquality)
+                    ?? this.csharpNativeScalarFieldEquality(left, right, leftText, rightText, isEquality)
+                    ?? this.csharpNativeArithmeticEquality(left, right, leftText, rightText, isEquality)
                     ?? this.csharpNativeElementLiteralEquality(left, right, leftText, rightText, isEquality)
                     ?? this.csharpNativeNumericCallEquality(left, right, leftText, rightText, isEquality);
                 if (native !== undefined) {
