@@ -9724,6 +9724,8 @@ func New${this.capitalize(this.className)}() *${this.className} {
         return initializer.operator === SyntaxKind5.ExclamationToken ? "bool" : void 0;
       case SyntaxKind5.ParenthesizedExpression:
         return this.goTypeOfInitializer(initializer.expression, printedValue);
+      case SyntaxKind5.Identifier:
+        return this.goDeclaredTypeOfIdentifier(initializer);
       case SyntaxKind5.BinaryExpression: {
         const op = initializer.operatorToken.kind;
         if (op === SyntaxKind5.BarBarToken || op === SyntaxKind5.AmpersandAmpersandToken) {
