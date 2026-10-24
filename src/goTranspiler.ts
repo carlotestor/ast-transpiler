@@ -9382,6 +9382,13 @@ ${tryBodyBlock}
             return false;
         }
         // an exchange override would print its own Go body: only the base property qualifies
+        if ((callee.name.text === 'safeValue') || (callee.name.text === 'safeValue2') || (callee.name.text === 'safeValueN')) {
+            const ownerDbg: any = this.goEnclosingClass(callee);
+            console.error('G15DBG ' + callee.name.text + ' args=' + expr.arguments.length + ' keys=' + keys
+                + ' decls=' + declarations.length
+                + ' files=' + declarations.map((d) => String(d.getSourceFile()?.fileName ?? 'NONE').split('/').slice(-2).join('/')).join(',')
+                + ' owner=' + String(ownerDbg?.name?.text) + ' parentOk=' + declarations.every((d) => d.parent === ownerDbg));
+        }
         const baseFile = /(^|\/)ts\/src\/base\/Exchange\.ts$/;
         if (declarations.every((d) => baseFile.test(String(d.getSourceFile()?.fileName ?? '').replace(/\\/g, '/')))) {
             return true;
