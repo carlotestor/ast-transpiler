@@ -830,7 +830,7 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var market map[string]any = MapTyped(this.Market(symbol))");
+        expect(output).toContain("var market map[string]any = this.Market(symbol)");
         expect(output).toContain("market[\"id\"]");
         expect(output).not.toContain("GetValue(market, \"id\")");
     });
@@ -878,7 +878,7 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var market map[string]any = MapTyped(this.Market(symbol))");
+        expect(output).toContain("var market map[string]any = this.Market(symbol)");
         // the compared element derefs through the helper, exactly what the boxed local answered
         expect(output).toContain("GetValue(market, \"swap\") == true");
         expect(output).toContain("GetValue(market, \"swap\") != true");
@@ -948,8 +948,95 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var first map[string]any = MapTyped(this.GetMarketFromSymbols(symbols))");
+        expect(output).toContain("var first map[string]any = this.GetMarketFromSymbols(symbols)");
         expect(output).toContain("first[\"id\"]");
+    });
+    test('a producer whose every path answers a dictionary prints map[string]any and its local holds it', () => {
+        const input =
+        "type MarketInterface = { id: string };\n" +
+        "type Market = MarketInterface | undefined;\n" +
+        "class Exchange {\n" +
+        "    safeMarketStructure(m): Market { return undefined; }\n" +
+        "    parseMarket(market): Market {\n" +
+        "        if (market['unknown'] === true) { return undefined; }\n" +
+        "        return this.safeMarketStructure (market);\n" +
+        "    }\n" +
+        "    parseMarkets(markets) {\n" +
+        "        const parsed = this.parseMarket (markets[0]);\n" +
+        "        const id = parsed['id'];\n" +
+        "        return id;\n" +
+        "    }\n" +
+        "}\n";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("func (this *Exchange) ParseMarket(market any) map[string]any {");
+        expect(output).toContain("var parsed map[string]any = this.ParseMarket(GetValue(markets, 0))");
+        expect(output).toContain("parsed[\"id\"]");
+    });
+    test('a producer returning a literal cast to the interface prints the map signature', () => {
+        const input =
+        "type MarketInterface = { id: string };\n" +
+        "type Market = MarketInterface | undefined;\n" +
+        "class Exchange {\n" +
+        "    parseMarket(market): Market {\n" +
+        "        if (market['id'] === undefined) { return undefined; }\n" +
+        "        return { 'id': market['id'] } as Market;\n" +
+        "    }\n" +
+        "}\n";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("func (this *Exchange) ParseMarket(market any) map[string]any {");
+    });
+    test('a producer whose return shape is unproven keeps the any signature and the boxed local', () => {
+        const input =
+        "type MarketInterface = { id: string };\n" +
+        "type Market = MarketInterface | undefined;\n" +
+        "class Exchange {\n" +
+        "    parseMarket(market): Market { return market['raw']; }\n" +
+        "    parseMarkets(markets) {\n" +
+        "        const parsed = this.parseMarket (markets[0]);\n" +
+        "        return parsed['id'];\n" +
+        "    }\n" +
+        "}\n";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("func (this *Exchange) ParseMarket(market any) any {");
+        expect(output).toContain("var parsed map[string]any = MapTyped(this.ParseMarket(GetValue(markets, 0)))");
+    });
+    test('a producer local appended into a list keeps the box (a nil map would box as present)', () => {
+        const input =
+        "type MarketInterface = { id: string };\n" +
+        "type Market = MarketInterface | undefined;\n" +
+        "class Exchange {\n" +
+        "    parseMarket(market): Market { return undefined; }\n" +
+        "    parseMarkets(markets) {\n" +
+        "        const result = [];\n" +
+        "        const parsed = this.parseMarket (markets[0]);\n" +
+        "        if (parsed !== undefined) { result.push (parsed); }\n" +
+        "        return result;\n" +
+        "    }\n" +
+        "}\n";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("var parsed any = this.ParseMarket(GetValue(markets, 0))");
+    });
+    test('a producer local nil-tested then read natively is typed and the read is native', () => {
+        const input =
+        "type MarketInterface = { id: string };\n" +
+        "type Market = MarketInterface | undefined;\n" +
+        "class Exchange {\n" +
+        "    safeMarket(id): MarketInterface { return undefined; }\n" +
+        "    getMarketFromClientAndMessage(client, message): Market {\n" +
+        "        const market = this.safeMarket (message['s']);\n" +
+        "        return market;\n" +
+        "    }\n" +
+        "    handleTicker(client, message) {\n" +
+        "        const market = this.getMarketFromClientAndMessage (client, message);\n" +
+        "        if (market === undefined) { return; }\n" +
+        "        const symbol = market['symbol'];\n" +
+        "        return symbol;\n" +
+        "    }\n" +
+        "}\n";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("func (this *Exchange) GetMarketFromClientAndMessage(client any, message any) map[string]any {");
+        expect(output).toContain("var market map[string]any = this.GetMarketFromClientAndMessage(client, message)");
+        expect(output).toContain("market[\"symbol\"]");
     });
     test('a Currency local whose element is written keeps the box', () => {
         const input =
