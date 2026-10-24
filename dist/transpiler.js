@@ -13890,6 +13890,13 @@ ${this.getIden(level)}}()`;
     const rNilFam = this.goScalarFamilyWithNil(right);
     const lBox = !lPtr && this.goIsAnyBoxExpression(left, leftText);
     const rBox = !rPtr && this.goIsAnyBoxExpression(right, rightText);
+    if (rFam === "nil" && left?.kind === SyntaxKind5.Identifier) {
+      const dbgDecl = this.goAnyBoxLocalDeclaration(left);
+      const dbgCallee = dbgDecl?.initializer?.kind === SyntaxKind5.CallExpression ? this.goAstCalleeName(dbgDecl.initializer) : void 0;
+      if (typeof dbgCallee === "string" && /^this\.SafeValue/.test(dbgCallee)) {
+        console.error("G15CMP " + leftText + " callee=" + dbgCallee + " lBox=" + lBox + " lNilFam=" + String(lNilFam) + " ptr=" + this.goAnyLocalHoldsPointer(dbgDecl) + " nonptr=" + this.goAnyLocalHoldsNonPointer(dbgDecl));
+      }
+    }
     if (lBox && rFam === "nil" && lNilFam !== void 0 && lNilFam !== "number") {
       return isEq ? `(${leftText} == nil)` : `(${leftText} != nil)`;
     }
