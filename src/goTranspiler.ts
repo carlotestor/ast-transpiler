@@ -9381,26 +9381,14 @@ ${tryBodyBlock}
         if (!declarations || declarations.length === 0) {
             return false;
         }
-        // an exchange override would print its own Go body: only the base property qualifies
-        if ((callee.name.text === 'safeValue') || (callee.name.text === 'safeValue2') || (callee.name.text === 'safeValueN')) {
-            const ownerDbg: any = this.goEnclosingClass(callee);
-            console.error('G15DBG ' + callee.name.text + ' args=' + expr.arguments.length + ' keys=' + keys
-                + ' decls=' + declarations.length
-                + ' files=' + declarations.map((d) => String(d.getSourceFile()?.fileName ?? 'NONE').split('/').slice(-2).join('/')).join(',')
-                + ' owner=' + String(ownerDbg?.name?.text) + ' parentOk=' + declarations.every((d) => d.parent === ownerDbg));
-        }
-        const baseFile = /(^|\/)ts\/src\/base\/Exchange\.ts$/;
+        // an exchange override would print its own Go body: only the base property qualifies.
+        // The base pass transpiles a stripped copy written beside the original as
+        // Exchange.nooverloads.<pid>.ts, so accept that suffix as the base file too.
+        const baseFile = /(^|\/)ts\/src\/base\/Exchange(\.[\w.-]+)?\.ts$/;
         if (declarations.every((d) => baseFile.test(String(d.getSourceFile()?.fileName ?? '').replace(/\\/g, '/')))) {
             return true;
         }
-        // the base file transpiled from text carries no usable file name, so the path proof above
-        // cannot answer there: a call written inside the base class that declares the accessor is
-        // the base declaration itself, which is what the Go receiver binds (no override to shadow)
-        if (this.goEnclosingClassName(callee) !== 'Exchange') {
-            return false;
-        }
-        const owner = this.goEnclosingClass(callee);
-        return declarations.every((d) => d.parent === owner);
+        return false;
     }
 
     goG02LiteralDefault(node): boolean {
