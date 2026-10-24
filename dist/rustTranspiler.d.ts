@@ -742,6 +742,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustVecPush(node: any, name: string | undefined, parsedArg: string | undefined): string | undefined;
     transformIdentifier(node: any, identifier: any): string;
     private rustDictBearerDecisions;
+    /** Bearers whose escapes all box a clone (the prediction-tier multi-escape rule). */
+    private rustDictBearerCloned;
+    /** A prediction venue: `ts/src/prediction/<id>.ts` builds nested request maps in one method. */
+    private static readonly RUST_PREDICTION_VENUE_FILE;
     /** The declaration behind `node` when it is a local typed as a dict bearer. */
     rustDictBearerDeclaration(node: any): any | undefined;
     rustDictLocalIsTyped(declaration: any): boolean;
@@ -750,6 +754,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `this.`/`super.` call. Anything else (a free-function argument) has no box
      *  site. */
     r01BoxSiteOk(node: any): boolean;
+    /** `Object.keys/values/entries`, `JSON.*`, `String(x)`, `typeof`-style readers: the printer
+     *  emits them from the receiver's own text, so a bearer boxed there is a wasted clone. */
+    r12NativeReadCallee(call: any): boolean;
+    private static readonly R12_NATIVE_READ_NAMESPACES;
     /** One `x[...]` use rooted at the bearer: a key read or a single-level `x['k'] = v`
      *  write. Chained reads stay native at the first level; a chained/compound write,
      *  `delete` and a call on the read reach the container through a `&mut Value`, so

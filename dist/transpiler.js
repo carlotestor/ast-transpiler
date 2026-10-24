@@ -24803,6 +24803,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // `.insert(k, v)`, and the box with its `get_value`/`add_element_to_object`
     // calls and `|__m|` closure disappears. Any other use keeps the `Value` box.
     this.rustDictBearerDecisions = /* @__PURE__ */ new WeakMap();
+    /** Bearers whose escapes all box a clone (the prediction-tier multi-escape rule). */
+    this.rustDictBearerCloned = /* @__PURE__ */ new WeakSet();
     // ── hx10w6 R02: read-only container bearers ───────────────────────────────
     //
     // A local that provably holds a list (or a plain dict) and is only ever read
@@ -29274,8 +29276,9 @@ ${iden}}`;
     if (this.rustNestedDictBearerDeclaration(node) !== void 0 && parent !== void 0 && (isReturnStatement4(parent) && parent.expression === node || isCallExpression6(parent) && parent.arguments.some((a) => a === node) || parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === node)) {
       return `Value::from(${text})`;
     }
-    if (this.rustDictBearerDeclaration(node) !== void 0 && parent !== void 0 && (isReturnStatement4(parent) && parent.expression === node || isCallExpression6(parent) && parent.arguments.some((a) => a === node) || this.rustR01BearerLiteralMove(node))) {
-      return `Value::Map(${text}${this.rustVecIsFinalUse(node, String(node.text)) ? "" : ".clone()"})`;
+    const bearer = this.rustDictBearerDeclaration(node);
+    if (bearer !== void 0 && parent !== void 0 && (isReturnStatement4(parent) && parent.expression === node || isCallExpression6(parent) && parent.arguments.some((a) => a === node) || this.rustR01BearerLiteralMove(node))) {
+      return `Value::Map(${text}${!this.rustDictBearerCloned.has(bearer) && this.rustVecIsFinalUse(node, String(node.text)) ? "" : ".clone()"})`;
     }
     if (parent === void 0 || !(isReturnStatement4(parent) || isCallExpression6(parent) && parent.arguments.some((a) => a === node) && this.rustVecBoxingCallee(parent.expression) || parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === node))
       return text;
@@ -29328,6 +29331,7 @@ ${iden}}`;
     const source = declaration.getSourceFile?.()?.fileName;
     if (typeof source === "string" && /\/test\//.test(source))
       return false;
+    const prediction = typeof source === "string" && _RustTranspiler.RUST_PREDICTION_VENUE_FILE.test(source.replace(/\\/g, "/"));
     const escapes = [];
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n)) {
@@ -29346,6 +29350,16 @@ ${iden}}`;
         escapes.push(n);
         return true;
       }
+      if (prediction && parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === n) {
+        escapes.push(n);
+        return true;
+      }
+      if (prediction && isCallExpression6(parent) && parent.arguments.some((a) => a === n)) {
+        if (this.r12NativeReadCallee(parent))
+          return false;
+        escapes.push(n);
+        return true;
+      }
       if (isElementAccessExpression4(parent) && parent.expression === n)
         return this.rustDictBearerElementUse(parent, name);
       if (this.rustR01BearerRebuild(n))
@@ -29355,8 +29369,11 @@ ${iden}}`;
     if (!safe)
       return false;
     for (const escape of escapes) {
-      if (this.r01BoxSiteOk(escape) !== true)
+      if (this.r01BoxSiteOk(escape) === true)
+        continue;
+      if (!prediction)
         return false;
+      this.rustDictBearerCloned.add(declaration);
     }
     return true;
   }
@@ -29370,6 +29387,17 @@ ${iden}}`;
     if (isReturnStatement4(parent) && parent.expression === node)
       return true;
     return isCallExpression6(parent) && parent.arguments.some((a) => a === node) && isPropertyAccessExpression3(parent.expression) && (parent.expression.expression.kind === SyntaxKind7.ThisKeyword || parent.expression.expression.kind === SyntaxKind7.SuperKeyword);
+  }
+  /** `Object.keys/values/entries`, `JSON.*`, `String(x)`, `typeof`-style readers: the printer
+   *  emits them from the receiver's own text, so a bearer boxed there is a wasted clone. */
+  r12NativeReadCallee(call) {
+    const callee = call?.expression;
+    const native = _RustTranspiler.R12_NATIVE_READ_NAMESPACES;
+    if (callee === void 0 || native === void 0)
+      return false;
+    if (isPropertyAccessExpression3(callee) && isIdentifier3(callee.expression))
+      return native.has(String(callee.expression.text));
+    return isIdentifier3(callee) && native.has(String(callee.text));
   }
   /** One `x[...]` use rooted at the bearer: a key read or a single-level `x['k'] = v`
    *  write. Chained reads stay native at the first level; a chained/compound write,
@@ -31981,6 +32009,9 @@ _RustTranspiler.BOOL_VALUE_PREFIXES = [
 _RustTranspiler.RUST_R01_PLAIN_DICT_BUILDERS = /* @__PURE__ */ new Set(["account", "safeLedgerEntry", "depositWithdrawFee"]);
 /** Base-tier `[Dict, Dict]` tuple helpers that hand back their `request` argument (index 1). */
 _RustTranspiler.RUST_R01_REQUEST_TUPLE_HELPERS = /* @__PURE__ */ new Set(["handleUntilOption"]);
+/** A prediction venue: `ts/src/prediction/<id>.ts` builds nested request maps in one method. */
+_RustTranspiler.RUST_PREDICTION_VENUE_FILE = /ts[\/]src[\/]prediction[\/][^/]+\.ts$/;
+_RustTranspiler.R12_NATIVE_READ_NAMESPACES = /* @__PURE__ */ new Set(["Object", "JSON", "Array", "Promise", "Math", "String", "Number"]);
 // hx4 R12 — plain-dict sources from base `safeDict*` reads of unshared dicts and same-file
 // sync request builders; native truthiness / bool equality on operands proven `Value::Bool`
 // or `Value::Null` at runtime (bool tuple elements, bool-returning exchange methods).

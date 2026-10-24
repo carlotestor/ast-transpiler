@@ -5285,13 +5285,14 @@ export class RustTranspiler extends BaseTranspiler {
         // hx10 R02: a typed dict bearer is boxed only at the single final move its
         // declaration proof admitted (`return x` / an argument of a `this.` call /
         // hx10w6 R01: the value of a parent object literal).
-        if (this.rustDictBearerDeclaration(node) !== undefined && parent !== undefined
+        const bearer = this.rustDictBearerDeclaration(node);
+        if (bearer !== undefined && parent !== undefined
             && ((isReturnStatement(parent) && parent.expression === node)
                 || (isCallExpression(parent) && parent.arguments.some((a) => a === node))
                 || this.rustR01BearerLiteralMove(node))) {
             // hx10w6 R01: only the map's last use moves into the box; an earlier
             // one boxes a clone, so a bearer may be handed out more than once.
-            return `Value::Map(${text}${this.rustVecIsFinalUse(node, String(node.text)) ? '' : '.clone()'})`;
+            return `Value::Map(${text}${!this.rustDictBearerCloned.has(bearer) && this.rustVecIsFinalUse(node, String(node.text)) ? '' : '.clone()'})`;
         }
         if (parent === undefined || !(isReturnStatement(parent) || (isCallExpression(parent) && parent.arguments.some((a) => a === node)
             && this.rustVecBoxingCallee(parent.expression)) || (parent.kind === SyntaxKind.PropertyAssignment && parent.initializer === node))) return text;
@@ -5308,6 +5309,12 @@ export class RustTranspiler extends BaseTranspiler {
     // calls and `|__m|` closure disappears. Any other use keeps the `Value` box.
 
     private rustDictBearerDecisions = new WeakMap<any, boolean>();
+
+    /** Bearers whose escapes all box a clone (the prediction-tier multi-escape rule). */
+    private rustDictBearerCloned = new WeakSet<any>();
+
+    /** A prediction venue: `ts/src/prediction/<id>.ts` builds nested request maps in one method. */
+    private static readonly RUST_PREDICTION_VENUE_FILE = /ts[\/]src[\/]prediction[\/][^/]+\.ts$/;
 
     /** The declaration behind `node` when it is a local typed as a dict bearer. */
     rustDictBearerDeclaration(node: any): any | undefined {
@@ -5349,6 +5356,10 @@ export class RustTranspiler extends BaseTranspiler {
         // The tests pipeline's text post-passes key on the boxed `Value` local shape.
         const source: any = declaration.getSourceFile?.()?.fileName;
         if (typeof source === 'string' && /\/test\//.test(source)) return false;
+        // hx10w6 R12: a prediction venue nests its builders (`{ action: obj }`, `f (x, obj)`), so a
+        // local there escapes more than once; every escape then boxes a clone.
+        const prediction = typeof source === 'string'
+            && RustTranspiler.RUST_PREDICTION_VENUE_FILE.test(source.replace(/\\/g, '/'));
         const escapes: any[] = [];
         const safe = this.rustLocalUsesAll(declaration, name, false, (n: any) => {
             if (this.rustIdentifierIsPropertyName(n)) {
@@ -5370,16 +5381,29 @@ export class RustTranspiler extends BaseTranspiler {
                 escapes.push(n);
                 return true;
             }
+            if (prediction && parent.kind === SyntaxKind.PropertyAssignment && parent.initializer === n) {
+                escapes.push(n);
+                return true;
+            }
+            if (prediction && isCallExpression(parent) && parent.arguments.some((a: any) => a === n)) {
+                // A collection/JSON reader prints its own receiver text (`Object.keys(x)`,
+                // `JSON.stringify(x)`), so passing through the box would only add a clone.
+                if (this.r12NativeReadCallee(parent)) return false;
+                escapes.push(n);
+                return true;
+            }
             if (isElementAccessExpression(parent) && parent.expression === n) return this.rustDictBearerElementUse(parent, name);
             // hx10w6 R01 (write side): a rebuilt plain literal keeps the bearer.
             if (this.rustR01BearerRebuild(n)) return true;
             return false;
         });
         if (!safe) return false;
-        // hx10w6 R01: every escape is boxed once — a move when nothing reads the
-        // map afterwards, a `clone()` otherwise — so the count no longer matters.
+        // hx10w6 R01: a return / `this.` call escape boxes a move at the last use, a clone before it.
+        // hx10w6 R12: any other escape is prediction-tier only, and then every escape boxes a clone.
         for (const escape of escapes) {
-            if (this.r01BoxSiteOk(escape) !== true) return false;
+            if (this.r01BoxSiteOk(escape) === true) continue;
+            if (!prediction) return false;
+            this.rustDictBearerCloned.add(declaration);
         }
         return true;
     }
@@ -5396,6 +5420,18 @@ export class RustTranspiler extends BaseTranspiler {
             && (parent.expression.expression.kind === SyntaxKind.ThisKeyword
                 || parent.expression.expression.kind === SyntaxKind.SuperKeyword);
     }
+
+    /** `Object.keys/values/entries`, `JSON.*`, `String(x)`, `typeof`-style readers: the printer
+     *  emits them from the receiver's own text, so a bearer boxed there is a wasted clone. */
+    r12NativeReadCallee(call: any): boolean {
+        const callee: any = call?.expression;
+        const native: Set<string> = (RustTranspiler as any).R12_NATIVE_READ_NAMESPACES;
+        if (callee === undefined || native === undefined) return false;
+        if (isPropertyAccessExpression(callee) && isIdentifier(callee.expression)) return native.has(String(callee.expression.text));
+        return isIdentifier(callee) && native.has(String(callee.text));
+    }
+
+    private static readonly R12_NATIVE_READ_NAMESPACES = new Set([ 'Object', 'JSON', 'Array', 'Promise', 'Math', 'String', 'Number' ]);
 
     /** One `x[...]` use rooted at the bearer: a key read or a single-level `x['k'] = v`
      *  write. Chained reads stay native at the first level; a chained/compound write,
