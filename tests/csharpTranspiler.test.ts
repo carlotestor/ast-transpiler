@@ -6311,3 +6311,174 @@ describe('boolean parameters become bool? on a proven call-site census', () => {
         expect(output).toContain("if (isTrue(flag))");
     });
 });
+
+describe('csharp native Promise.all -> Task.WhenAll (hx10w6 AU03)', () => {
+    const head =
+        "interface Ticker { id: string }\n" +
+        "class Test {\n" +
+        "    async fetchA (x: number): Promise<{ [key: string]: any }> { return {}; }\n" +
+        "    async fetchB (x: number): Promise<{ [key: string]: any }> { return {}; }\n" +
+        "    async dictList (x: number): Promise<{ [key: string]: any }[]> { return []; }\n" +
+        "    async ticker (x: number): Promise<Ticker> { return { 'id': 'x' }; }\n";
+    test('dict calls become typed task locals the helper no longer waits on', () => {
+        const ts = head +
+        "    async f (): Promise<void> {\n" +
+        "        const r = await Promise.all ([ this.fetchA (1), this.fetchB (2) ]);\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(ts).content;
+        expect(output).not.toContain('promiseAll(');
+        expect(output).toMatch(/var hxauTask\d+_\d+ = this\.fetchA\(1\);/);
+        expect(output).toMatch(/var hxauTask\d+_\d+ = this\.fetchB\(2\);/);
+        expect(output).toMatch(/await Task\.WhenAll\(hxauTask\d+_\d+, hxauTask\d+_\d+\);/);
+        expect(output).toContain('List<object> r = new List<object> { ');
+        expect(output).toMatch(/\.Result, hxauTask\d+_\d+\.Result \};/);
+    });
+    test('a const local feeding the list is declared as its concrete Task', () => {
+        const ts = head +
+        "    async f (): Promise<void> {\n" +
+        "        const a = this.dictList (3);\n" +
+        "        const b = this.dictList (4);\n" +
+        "        const r = await Promise.all ([ a, b ]);\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(ts).content;
+        expect(output).not.toContain('promiseAll(');
+        expect(output).toContain('var a = this.dictList(3);');
+        expect(output).toContain('await Task.WhenAll(a, b);');
+        expect(output).toContain('List<object> r = new List<object> { a.Result, b.Result };');
+    });
+    test('a destructured result keeps the holder-and-index shape', () => {
+        const ts = head +
+        "    async f (): Promise<void> {\n" +
+        "        const a = this.dictList (3);\n" +
+        "        const b = this.dictList (4);\n" +
+        "        const [ first, second ] = await Promise.all ([ a, b ]);\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(ts).content;
+        expect(output).not.toContain('promiseAll(');
+        expect(output).toContain('List<object> firstsecondVariable = new List<object> { a.Result, b.Result };');
+        expect(output).toContain('var first = ((IList<object>) firstsecondVariable)[0];');
+        expect(output).toContain('var second = ((IList<object>) firstsecondVariable)[1];');
+    });
+    test('a struct-typed value the helper de-types keeps the helper', () => {
+        const ts = head +
+        "    async f (): Promise<void> {\n" +
+        "        const r = await Promise.all ([ this.ticker (1), this.ticker (2) ]);\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(ts).content;
+        expect(output).toContain('promiseAll(');
+        expect(output).not.toContain('Task.WhenAll');
+    });
+    test('one unprovable element keeps the whole list on the helper', () => {
+        const ts = head +
+        "    async f (flag: boolean): Promise<void> {\n" +
+        "        let a = this.dictList (3);\n" +
+        "        a = this.dictList (4);\n" +
+        "        const r = await Promise.all ([ a, this.fetchA (5) ]);\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(ts).content;
+        expect(output).toContain('promiseAll(');
+        expect(output).not.toContain('Task.WhenAll');
+    });
+    test('a list argument that is not an array literal keeps the helper', () => {
+        const ts = head +
+        "    async f (promises: any[]): Promise<void> {\n" +
+        "        const r = await Promise.all (promises);\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(ts).content;
+        expect(output).toContain('promiseAll(');
+        expect(output).not.toContain('Task.WhenAll');
+    });
+});
+
+describe('csharp native Promise.all negative shapes (hx10w6 AU03)', () => {
+    const head =
+        "class Test {\n" +
+        "    async fetchA (x: number): Promise<{ [key: string]: any }> { return {}; }\n" +
+        "    async dictList (x: number): Promise<{ [key: string]: any }[]> { return []; }\n";
+    test('a let-bound result keeps the helper (a later write would not fit List<object>)', () => {
+        const ts = head +
+        "    async f (): Promise<void> {\n" +
+        "        let r = await Promise.all ([ this.fetchA (1), this.fetchA (2) ]);\n" +
+        "        r = [];\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(ts).content;
+        expect(output).toContain('promiseAll(');
+        expect(output).not.toContain('Task.WhenAll');
+    });
+    test('a single-element list keeps the helper (WhenAll overload is ambiguous for one Task<T>)', () => {
+        const ts = head +
+        "    async f (): Promise<void> {\n" +
+        "        const r = await Promise.all ([ this.fetchA (1) ]);\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(ts).content;
+        expect(output).toContain('promiseAll(');
+        expect(output).not.toContain('Task.WhenAll');
+    });
+});
+
+describe('csharp native Promise.all reaches every body shape (hx10w6 AU03)', () => {
+    const head =
+        "type Dict = { [key: string]: any };\n" +
+        "class Test {\n" +
+        "    async a (q: string[], p: Dict = {}): Promise<Dict[]> { return []; }\n" +
+        "    async b (q: string[], p: Dict = {}): Promise<Dict[]> { return []; }\n";
+    test('a method with parameters prints its body statement by statement, the list still goes native', () => {
+        const ts = head +
+        "    async f (q: string[], rest: Dict): Promise<void> {\n" +
+        "        const r = await Promise.all ([ this.a (q, rest), this.b (q, rest) ]);\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(ts).content;
+        expect(output).not.toContain('promiseAll(');
+        expect(output).toContain('await Task.WhenAll(');
+    });
+    test('a nested block plans its own statements', () => {
+        const ts = head +
+        "    async f (n: number, q: string[], rest: Dict): Promise<void> {\n" +
+        "        if (n > 0) {\n" +
+        "            const r = await Promise.all ([ this.a (q, rest), this.b (q, rest) ]);\n" +
+        "            rest['rows'] = r;\n" +
+        "        }\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(ts).content;
+        expect(output).not.toContain('promiseAll(');
+        expect(output).toContain('await Task.WhenAll(');
+    });
+});
+
+describe('csharp native Promise.all keeps the helper for typed map aliases (hx10w6 AU03)', () => {
+    test('a Dict alias whose values are all any goes native', () => {
+        const ts = "type Dict<Value = any> = { [key: string]: Value };\n" +
+        "class Test {\n" +
+        "    async a (p: Dict = {}): Promise<Dict> { return {}; }\n" +
+        "    async f (): Promise<void> {\n" +
+        "        const r = await Promise.all ([ this.a ({}), this.a ({}) ]);\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(ts).content;
+        expect(output).not.toContain('promiseAll(');
+        expect(output).toContain('await Task.WhenAll(');
+    });
+    test('a typed map alias (values hold a struct) keeps the helper', () => {
+        const ts = "interface Currency { id: string }\n" +
+        "type Currencies = { [key: string]: Currency };\n" +
+        "class Test {\n" +
+        "    async a (p: object = {}): Promise<Currencies> { return {}; }\n" +
+        "    async f (): Promise<void> {\n" +
+        "        const r = await Promise.all ([ this.a ({}), this.a ({}) ]);\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(ts).content;
+        expect(output).toContain('promiseAll(');
+        expect(output).not.toContain('Task.WhenAll');
+    });
+});

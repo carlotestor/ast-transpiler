@@ -448,6 +448,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustFunctionReturnsArrayLiteral;
     /** Native list-index read of a generator temp (`__destr_tmp.as_array()…`). */
     printNativeListIndex(receiverText: string, index: number): string;
+    /** Element read of a `Vec<Value>` binding (a destructuring temp the printer declares typed). */
+    printTypedVecElementRead(name: string, index: number): string;
     /** Native read for one chain level, or undefined to keep `get_value`. */
     printNativeContainerAccess(receiverText: string, receiverNode: Node, keyNode: Node): string | undefined;
     /** `get_value(&X, &i)` for a checker-proven list `X` and a dynamic integer
@@ -744,6 +746,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustDictBearerDeclaration(node: any): any | undefined;
     rustDictLocalIsTyped(declaration: any): boolean;
     rustDictLocalIsTypedUncached(declaration: any): boolean;
+    /** An escape the printer boxes: a `return` of the local, or an argument of a
+     *  `this.`/`super.` call. Anything else (a free-function argument) has no box
+     *  site. */
+    r01BoxSiteOk(node: any): boolean;
     /** One `x[...]` use rooted at the bearer: a key read or a single-level `x['k'] = v`
      *  write. Chained reads stay native at the first level; a chained/compound write,
      *  `delete` and a call on the read reach the container through a `&mut Value`, so
@@ -764,6 +770,64 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `x['k'] = v` on a bearer: the insert `add_element_to_object` performs on the
      *  same plain dict, minus the box (`Arc::make_mut` guard the type proves). */
     rustBearerDictInsert(baseExpr: any, keyNode: any, keyText: string, valueText: string): string | undefined;
+    /** A key the bearer write takes natively: the checker proves a `string` and
+     *  the printed key is a `Value::Str(..)` whose payload is that `String`, or a
+     *  native `Option<String>` place. A key that names the receiver is out (the
+     *  insert holds its `&mut`). */
+    rustR01BearerWriteKeyOk(keyNode: any, receiverName: string): boolean;
+    /** `m[k] = v` on a bearer with `k` a native `Option<String>` local. */
+    r01PlaceKeyNative(key: any): boolean;
+    /** The native map key for a printed bearer-write key, or undefined when the
+     *  box's payload is not a `String`. Literal keys stay with the shared path. */
+    rustR01BearerWriteKeyArg(keyNode: any, keyText: string, receiverName: string): string | undefined;
+    /** A plain object literal a bearer may be rebuilt from (`x = { .. }`): no
+     *  spread, literal keys only — the same rules the declaration proof applies. */
+    rustR01BearerPlainLiteral(node: any): boolean;
+    /** `x = { .. }` (or a compound rebuild) on a bearer: the value is the map. */
+    rustR01BearerRebuild(n: any): boolean;
+    /** The move of a bearer into a parent object literal's value. Shorthand
+     *  (`{ x }`) is out: the literal printer clones the name without passing
+     *  through the identifier printer, so the box could not be emitted. */
+    rustR01BearerLiteralMove(node: any): boolean;
+    private rustReadBearerDecisions;
+    /** The container kind a local is declared as, or undefined (no proof). */
+    rustReadBearerKind(node: any): 'list' | 'map' | undefined;
+    rustReadBearerKindOfDeclaration(declaration: any): 'list' | 'map' | false;
+    rustReadBearerKindUncached(declaration: any): 'list' | 'map' | false;
+    /** One element read rooted at the bearer: a plain read the native op serves. */
+    rustReadBearerElementUse(access: any, kind: 'list' | 'map'): boolean;
+    /** Key a read-only bearer serves natively: a literal string for a map, a
+     *  literal (or proven-number `Value`) index for a list. */
+    rustReadBearerKeyOk(kind: 'list' | 'map', keyNode: any): boolean;
+    /** Native read of one bearer level; undefined keeps the helper. */
+    printReadBearerAccess(kind: 'list' | 'map', receiverText: string, keyNode: any): string | undefined;
+    /** Container kind a printed `Value` expression provably yields on every path. */
+    rustContainerProducingKind(node: any, seen: Set<Node>): 'list' | 'map' | undefined;
+    private rustNestedBearerDecisions;
+    /** The declaration behind `node` when it is a local typed as a two-level
+     *  dict bearer. */
+    rustNestedDictBearerDeclaration(node: any): any;
+    rustNestedDictLocalIsTyped(declaration: any): boolean;
+    /** `{ k: { .. }, .. }` — every value an object literal, every key a plain
+     *  string: the outer map's value type is the inner `IndexMap`, never a box. */
+    rustNestedDictLiteral(node: any): any;
+    rustNestedDictLocalIsTypedUncached(declaration: any): boolean;
+    /** One use rooted at the bearer: exactly two key levels, either read
+     *  (`x[k1][k2]` in a value position) or a whole-entry write (`x[k1][k2] = v`
+     *  whose value never reads the receiver, which the write holds `&mut` of). */
+    rustNestedBearerElementUse(access: any, name: string): boolean;
+    /** The initialiser of a two-level bearer: one bucket per key, a line per entry. */
+    rustNestedObjectLiteralBlock(literal: any, identation?: number): string;
+    /** Read key: a bare literal, or the String an `IndexMap` lookup takes. */
+    rustNestedBearerReadKey(node: any, text: string, receiver?: string): string | undefined;
+    /** Write key: the `String` an `entry`/`insert` takes. */
+    rustNestedBearerWriteKey(node: any, text: string, receiver?: string): string | undefined;
+    /** `x[k1][k2] = v` on a two-level bearer: create the bucket, insert. */
+    rustNestedBearerInsert(baseExpr: any, key1Node: any, key1Text: string, key2Node: any, key2Text: string, valueText: string): string | undefined;
+    /** `x[k1] = {}` on a two-level bearer: seed the bucket, no box, no helper. */
+    rustNestedBearerBucket(baseExpr: any, key1Node: any, key1Text: string, valueNode: any): string | undefined;
+    /** `x[k1][k2]` on a two-level bearer: the two map lookups, boxed like `get_value`. */
+    rustNestedBearerRead(baseExpr: any, key1Node: any, key2Node: any): string | undefined;
     /** Source path of a node (forward slashes). */
     r05Path(node: Node): string;
     /** Test sources keep the helpers: tests-pipeline post-passes match `in_op(` text. */

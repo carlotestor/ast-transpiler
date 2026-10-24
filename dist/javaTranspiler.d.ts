@@ -1,6 +1,7 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
 import { type Node } from "typescript/unstable/ast";
 import { type Checker } from "typescript/unstable/sync";
+declare const JAVA_MEMO_UNDEFINED: unique symbol;
 export declare class JavaTranspiler extends BaseTranspiler {
     getChecker(): Checker;
     private methodOverrideCache;
@@ -57,6 +58,27 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printSuperCallInsideConstructor(_node: any, _identation: any): string;
     printNumericLiteral(node: any): any;
     printIdentifier(node: any): string;
+    javaHandlerTables: Map<any, any>;
+    javaHandlerCalls: Map<any, any>;
+    javaHandlerReads: Set<string>;
+    javaHandlerScannedFile: any;
+    javaHandlerKey(node: any): string;
+    javaHandlerMethod(reference: any): string;
+    javaHandlerSlotType(parameter: any, position: any): "Client" | "Map<String, Object>";
+    javaHandlerTableEntries(literal: any): any[];
+    javaHandlerScopeOf(node: any): any;
+    javaHandlerReferences(scope: any, name: any): any[];
+    javaIsHandlerTableRead(call: any, read: any): boolean;
+    javaHandlerBoundName(call: any): any;
+    javaIsHandlerReadOf(node: any, tableName: any): boolean;
+    javaIsHandlerCallUse(use: any, tableName: any): boolean;
+    javaScanHandlerTables(node: any): void;
+    printJavaHandlerTable(node: any, identation: any): string;
+    printJavaHandlerRead(node: any): string;
+    javaHandlerDeclarationType(declaration: any): "io.github.ccxt.Handler" | "java.util.Map<String, io.github.ccxt.Handler>";
+    javaHandlerArgumentType(node: any, position: any): "Client" | "Map<String, Object>";
+    javaHandlerCallArgument(node: any, position: any): string;
+    printJavaHandlerDispatch(node: any): string;
     printConstructorDeclaration(node: any, identation: any): string;
     injectLeadingInBody(body: any, firstLine: any): any;
     printDynamicCall(node: any, identation: any): string;
@@ -85,6 +107,10 @@ export declare class JavaTranspiler extends BaseTranspiler {
     elementWriteKeyText(key: any, keyText: string): string;
     isPlainHashMapReceiver(container: any, keys: any[]): boolean;
     javaFreshHashMapValue(container: any, value: any): boolean;
+    javaFreshMapBaseCall(node: any): boolean;
+    javaElementWriteMapLocalType(declaration: any): string | undefined;
+    javaLocalHasWriteAtAll(node: any): boolean;
+    javaElementWriteMapSource(value: any): boolean;
     javaPrintsNonNullValue(node: any): boolean;
     javaFreshExtendMap(initializer: any): boolean;
     javaDeclaredChainContainerRead(left: any, keyCount: number): string | undefined;
@@ -118,6 +144,8 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaRepeatableOperand(node: any): any;
     javaDeclaredTypeOf(expression: any): string | undefined;
     javaDeclaredTypeOfDeclaration(declaration: any): string | undefined;
+    javaOptionalParameterTypeCache: WeakMap<Node, string | typeof JAVA_MEMO_UNDEFINED>;
+    javaOptionalParameterTypeCached(node: any): string | undefined;
     javaNativeParameterType(node: any): string | undefined;
     private _exchangeTierMethods;
     exchangeTierMethods(): Map<string, any>;
@@ -206,6 +234,8 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaNativeArithmeticKind(node: any, allowDeclaredLocals?: boolean): string | undefined;
     javaLiteralFractionalProduct(left: any, right: any): boolean;
     javaNativeArithmeticPairKind(isPlus: any, isMultiply: any, isDivide: any, leftKind: any, rightKind: any): string | undefined;
+    javaJ07NestedAddKind(node: any): string | undefined;
+    javaJ07ArithmeticKind(node: any, allowDeclaredLocals?: boolean): string | undefined;
     javaComparisonOperand(node: any): {
         kind: string;
         boxed: boolean;
@@ -406,3 +436,4 @@ export interface JavaTranspiler {
     hx4J09CoreArgument(type: string, printed: string, node: any): string | undefined;
     hx4J09CcxtErrorClass(node: any): boolean;
 }
+export {};

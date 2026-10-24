@@ -993,18 +993,37 @@ describe('go pointer-typed Safe* body locals', () => {
         const output = squash(transpiler.transpileGo(input).content);
         expect(output).toContain("var marginEntry map[string]any = SafeMapTyped(item, \"margin\")");
     });
-    test('a SafeDict local a later use could observe as nil stays any', () => {
+    test('a SafeDict local compared with nil is typed and tested natively', () => {
         const input =
         "class Exchange {\n" +
         "    safeDict(a, b, c?) { return a; }\n" +
         "    main(item) {\n" +
         "        const info = this.safeDict (item, 'info');\n" +
         "        if (info === undefined) { return 1; }\n" +
-        "        return GetValue(info, 'id');\n" +
+        "        return info['id'];\n" +
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var info any = this.SafeDict(item, \"info\")");
+        // a nil map and the absent box are both nil: `info == nil` is the helper's predicate
+        expect(output).toContain("var info map[string]any = SafeMapTyped(item, \"info\")");
+        expect(output).toContain("if info == nil {");
+        expect(output).toContain("info[\"id\"]");
+    });
+    test('a SafeDict local compared with nil and backing an `in` keeps the box', () => {
+        const input =
+        "class Exchange {\n" +
+        "    safeDict(a, b, c?) { return a; }\n" +
+        "    main(item) {\n" +
+        "        const data = this.safeDict (item, 'data');\n" +
+        "        if (data === undefined) { return 1; }\n" +
+        "        if ('oi' in data) { return 2; }\n" +
+        "        return data['id'];\n" +
+        "    }\n" +
+        "}\n";
+        const output = squash(transpiler.transpileGo(input).content);
+        // a typed map answers `in` with a pasted comma-ok closure: the box keeps the helper
+        expect(output).toContain("var data any = this.SafeDict(item, \"data\")");
+        expect(output).not.toContain("_, ok := data[");
     });
     test('a SafeDict local whose truthiness is read stays any', () => {
         const input =
@@ -3589,9 +3608,8 @@ describe('go native element assignment', () => {
         "    }\n" +
         "}\n"
         const output = transpiler.transpileGo(input).content;
-        // a local can box a *sync.Map an accessor returned, a nil *sync.Map is not `== nil`
-        expect(output).toContain("var a bool = IsEqual(localDict, nil)");
-        expect(output).not.toContain("localDict == nil");
+        // a typed map local cannot box a *sync.Map: the nil test is the native one
+        expect(output).toContain("var a bool = (localDict == nil)");
         // a defaulted `Int` parameter is bound by GetArg, which folds a typed nil pointer
         // into the untyped default, so the box is nil-comparable
         expect(output).toContain("var b bool = (since == nil)");
@@ -4384,7 +4402,9 @@ describe('go gofmt-clean native shapes', () => {
         "    }\n" +
         "}\n";
         const output = squashWs(transpiler.transpileGo(input).content);
-        expect(output).toContain("return strings.Index(*address, sep) }()");
+        // the `as string` on a nilable *string is the author's non-null promise: plain deref
+        expect(output).toContain("strings.Index(*address, sep)");
+        expect(output).not.toContain("func() int {");
         expect(output).not.toContain("GetIndexOf(");
     });
     test('indexOf on a receiver Go boxes as any keeps the helper', () => {
@@ -4618,7 +4638,7 @@ describe('go string concat chains -> native +', () => {
         expect(output).toContain('ts = nil');
         expect(output).toContain('var side any = this.SafeString(item, "side")');
     });
-    test('a narrowed *int64 leaf keeps Add (the numeric family is not the string one)', () => {
+    test('a narrowed *int64 leaf adds natively (Add keeps int64 in, int64 out)', () => {
         const input =
         "class Exchange {\n" +
         "    safeInteger (a: any, b: string): number | undefined { return a; }\n" +
@@ -4631,7 +4651,22 @@ describe('go string concat chains -> native +', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain('return Add(expiry, 1)');
+        expect(output).toContain('return *expiry + 1');
+    });
+    test('a *int64 leaf without a non-nil proof keeps Add (the nil branch is reachable)', () => {
+        const input =
+        "class Exchange {\n" +
+        "    safeInteger (a: any, b: string): number | undefined { return a; }\n" +
+        "    main (item: any) {\n" +
+        "        const expiry = this.safeInteger (item, 'expiry');\n" +
+        "        const count = this.count (item);\n" +
+        "        return [expiry + 1, count + 2];\n" +
+        "    }\n" +
+        "    count (item: any): number { return item; }\n" +
+        "}\n";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain('Add(expiry, 1)');
+        expect(output).toContain('Add(count, 2)');
     });
     test('a *string local typed by a non-nilable overload needs no guard at all', () => {
         const input =
@@ -5663,6 +5698,65 @@ describe('go native string operations (strings.*)', () => {
         expect(output).toContain('var upper string = ToUpper(symbol)');
         expect(output).toContain('StartsWith(symbol, "a")');
         expect(output).not.toContain('import "strings"');
+    });
+    test('a nilable *string receiver without a non-null promise keeps the split/upper/lower helper', () => {
+        const input =
+            "class Exchange {\n" +
+            "    safeString(a, b) { return a; }\n" +
+            "    main (item) {\n" +
+            "        const a = this.safeString (item, 'a');\n" +
+            "        const parts = a.split ('-');\n" +
+            "        const up = a.toUpperCase ();\n" +
+            "        const low = a.toLowerCase ();\n" +
+            "        return [ parts, up, low ];\n" +
+            "    }\n" +
+            "}\n";
+        const output = transpiler.transpileGo(input).content;
+        // the helper answers nil / "" for a nil operand; nothing here proves `a` non-nil
+        expect(output).toContain('var parts []string = Split(a, "-")');
+        expect(output).toContain('ToUpper(a)');
+        expect(output).toContain('ToLower(a)');
+        expect(output).not.toContain('import "strings"');
+    });
+    test('an `as string` receiver of a nilable *string reads its pointee natively', () => {
+        const input =
+            "class Exchange {\n" +
+            "    safeString(a, b) { return a; }\n" +
+            "    main (item) {\n" +
+            "        const a = this.safeString (item, 'a');\n" +
+            "        const parts = (a as string).split ('-');\n" +
+            "        const up = (a as string).toUpperCase ();\n" +
+            "        const low = (a as string).toLowerCase ();\n" +
+            "        const idx = (a as string).indexOf ('-');\n" +
+            "        return [ parts, up, low, idx ];\n" +
+            "    }\n" +
+            "}\n";
+        const output = transpiler.transpileGo(input).content;
+        // the assertion is the author's non-null promise: a plain deref, no IIFE guard
+        expect(output).toContain('var parts []string = strings.Split(*a, "-")');
+        expect(output).toContain('var up string = strings.ToUpper(*a)');
+        expect(output).toContain('var low string = strings.ToLower(*a)');
+        expect(output).toContain('var idx int = strings.Index(*a, "-")');
+        expect(output).not.toContain('func() int {');
+        expect(output).toContain('import "strings"');
+    });
+
+    test('an `as string` assertion is transparent for a Go string and keeps the helper on an any box', () => {
+        const input =
+            "class Exchange {\n" +
+            "    main (box) {\n" +
+            "        const s: string = 'a-b';\n" +
+            "        const parts = (s as string).split ('-');\n" +
+            "        const up = (s as string).toUpperCase ();\n" +
+            "        const boxed = (box as string).split ('-');\n" +
+            "        return [ parts, up, boxed ];\n" +
+            "    }\n" +
+            "}\n";
+        const output = transpiler.transpileGo(input).content;
+        expect(output).toContain('strings.Split(s, "-")');
+        expect(output).toContain('strings.ToUpper(s)');
+        // a `(box as string)` prints the box itself: the printer must not trust the assertion
+        expect(output).toContain('Split(box, "-")');
     });
     test('a []any receiver and a regex pattern keep the helper', () => {
         const input =
@@ -6831,6 +6925,34 @@ describe('go GetValue on GetArgMap-bound parameters (hx4 G01)', () => {
         expect(output).toContain('GetValue(params, "x")');
     });
 });
+describe('hx10w6 G16: `key in dict` as a native two-value map read', () => {
+    const getArg = () => {
+        const inst = new Transpiler({ verbose: false });
+        (inst as any).goTranspiler.CCXT_GO_GETARG_DECLARED_TYPES = { 'Dict': 'map[string]any' };
+        return inst;
+    };
+    test('a GetArgMap-bound parameter is a comma-ok read', () => {
+        const output = getArg().transpileGo('type Dict = { [key: string]: any };\nclass T {\n    f (params: Dict = {}) {\n        if (\'coin\' in params) {\n            return 1;\n        }\n        return 0;\n    }\n}\n').content;
+        expect(output).toContain('if _, ok := params["coin"]; ok {');
+        expect(output).not.toContain('InOp(params');
+    });
+    test('a hand-written map field is a comma-ok read', () => {
+        const output = new Transpiler({ verbose: false }).transpileGo('class T {\n    trades = {};\n    f () {\n        if (\'tick\' in this.trades) {\n            return 1;\n        }\n        return 0;\n    }\n}\n').content;
+        expect(output).toContain('if _, ok := this.Trades["tick"]; ok {');
+        expect(output).not.toContain('InOp(');
+    });
+    test('Orderbooks keeps InOp: the book-local pass proves the stored book from that guard', () => {
+        const output = new Transpiler({ verbose: false }).transpileGo('class T {\n    orderbooks = {};\n    f () {\n        if (\'tick\' in this.orderbooks) {\n            return 1;\n        }\n        return 0;\n    }\n}\n').content;
+        expect(output).toContain('InOp(this.Orderbooks, "tick")');
+        expect(output).not.toContain('this.Orderbooks["tick"]');
+    });
+    test('an unproven receiver and an unlisted field keep the helper', () => {
+        const output = new Transpiler({ verbose: false }).transpileGo('class T {\n    balance = {};\n    f (trade) {\n        if (\'side\' in trade) {\n            return 1;\n        }\n        if (\'total\' in this.balance) {\n            return 2;\n        }\n        return 0;\n    }\n}\n').content;
+        expect(output).toContain('InOp(trade, "side")');
+        expect(output).toContain('InOp(this.Balance, "total")');
+    });
+});
+
 describe('go GetValue on GetArgMap-bound parameters: element-write values (hx4 G01)', () => {
     test('the value of an element write keeps GetValue for the write pass', () => {
         const inst = new Transpiler({ verbose: false });
@@ -7203,5 +7325,41 @@ describe('hx10 G06: typed tuple slots from the producer', () => {
     test('a producer the build layer binds natively keeps the printed slots', () => {
         const out = run("        const [ a, b ] = this.handleOptionStringAndParams (params, 'm', 'k', undefined);\n        return [ a, b ];\n");
         expect(out).toContain('a := GetValue(abVariable, 0)');
+    });
+});
+
+describe('hx10 G09: slice parameters typed from their array annotation', () => {
+    const run = (body: string) => new Transpiler({ verbose: false }).transpileGo(
+        "type Dict = { [key: string]: any };\n" +
+        "class Base { ok (a: any): any { return a; } }\n" +
+        "class T extends Base {\n" + body + "}\n").content;
+    test('a string[] parameter every caller passes as a string[] prints []string', () => {
+        const out = run(
+            "    idsCount (ids: string[]): number { return ids.length; }\n" +
+            "    go (ids: string[]): number { return this.idsCount (ids); }\n");
+        expect(out).toContain('IdsCount(ids []string)');
+        expect(out).toContain('len(ids)');
+        expect(out).not.toContain('GetArrayLength(ids)');
+    });
+    test('a Dict[] parameter every caller passes as a list prints []any', () => {
+        const out = run(
+            "    settlements (rows: Dict[]): number { return rows.length; }\n" +
+            "    go (rows: Dict[]): number { return this.settlements (rows); }\n");
+        expect(out).toContain('Settlements(rows []any)');
+        expect(out).toContain('len(rows)');
+    });
+    test('a caller the printer cannot prove keeps the parameter boxed', () => {
+        const out = run(
+            "    idsCount (ids: string[]): number { return ids.length; }\n" +
+            "    go (raw: any): number { return this.idsCount (raw); }\n");
+        expect(out).toContain('IdsCount(ids any)');
+        expect(out).toContain('GetArrayLength(ids)');
+    });
+    test('a []any parameter whose element is read keeps the boxed helper read', () => {
+        const out = run(
+            "    firstRow (rows: Dict[]): any { const row = rows[0]; return row; }\n" +
+            "    go (rows: Dict[]): any { return this.firstRow (rows); }\n");
+        expect(out).toContain('FirstRow(rows any)');
+        expect(out).not.toContain('func() any {');
     });
 });

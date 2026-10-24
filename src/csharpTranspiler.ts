@@ -1,5 +1,5 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
-import { SyntaxKind, type Node, type ParameterDeclaration } from 'typescript/unstable/ast';
+import { SyntaxKind, NodeFlags, type Node, type ParameterDeclaration } from 'typescript/unstable/ast';
 import { IndexKind, TypeFlags, type Checker, type Program, type Symbol as TsSymbol, type UnionType } from 'typescript/unstable/sync';
 import { isArrayLiteralExpression, isAsExpression, isBinaryExpression, isBlock, isBooleanLiteral, isBreakStatement, isCallExpression, isClassDeclaration, isClassExpression, isClassLikeDeclaration, isContinueStatement, isDeleteExpression, isElementAccessExpression, isExpressionStatement, isForStatement, isFunctionExpression, isIdentifier, isIfStatement, isMethodDeclaration, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPostfixUnaryExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isPropertyDeclaration, isPropertySignatureDeclaration, isReturnStatement, isSourceFile, isSpreadAssignment, isSpreadElement, isStringLiteral, isStringLiteralLikeNode, isThrowStatement, isTypeAssertion, isVariableDeclaration, isWhileStatement } from 'typescript/unstable/ast/is';
 import { findAncestor, getAllSuperTypeNodes, isFunctionLike } from './tsUtils.js';
@@ -548,6 +548,10 @@ export class CSharpTranspiler extends BaseTranspiler {
     // parameter declarations this printer typed as `IList<object>` (csharpArrayListParamType), so
     // their reads keep the helper's null branches (`(x?.Count ?? 0)`, the guarded indexer)
     csharpListParamDeclarations = new WeakSet<Node>();
+    // hx10w6 AU03: variable statements whose `await Promise.all ([...])` prints as typed task
+    // locals + `Task.WhenAll`, and the promise-holding declarations that plan prints as `var`
+    csharpPromiseAllSites = new WeakMap<Node, any>();
+    csharpPromiseAllTaskDeclarations = new WeakSet<Node>();
     // ws handler `message` parameter -> the typed signature this printer prints for it (D-19)
     csharpHandlerMessageTypes = new WeakMap<Node, string | undefined>();
     // method declaration -> a static call reference exists (a call binds its arguments)
@@ -568,6 +572,9 @@ export class CSharpTranspiler extends BaseTranspiler {
     // declaration node -> 'bool' | 'bool?' | '' (the printer cannot name it); see
     // csharpConditionOperandType — asked once per condition operand
     conditionOperandTypes = new WeakMap<Node, string>();
+    // declaration node -> the C# type its printed `<type> <name> =` prefix carries ('' = the
+    // printer printed `var`); see csharpDeclaredLocalValueType — asked once per arithmetic read
+    csharpDeclaredLocalTypes = new WeakMap<Node, string>();
 
     constructor(config = {}) {
         config['parser'] = Object.assign ({}, parserConfig, config['parser'] ?? {});
@@ -2476,8 +2483,8 @@ export class CSharpTranspiler extends BaseTranspiler {
         if (CSHARP_HELPER_ARITHMETIC_OPENERS.some((opener) => csharpStripOuterParens(text).startsWith(opener))) {
             return undefined;
         }
-        const leftKind = this.csharpArithmeticOperandKind(this.csharpExpressionTypeOf(node.left));
-        const rightKind = this.csharpArithmeticOperandKind(this.csharpExpressionTypeOf(node.right));
+        const leftKind = this.csharpArithmeticOperandKind(this.csharpArithmeticOperandType(node.left));
+        const rightKind = this.csharpArithmeticOperandKind(this.csharpArithmeticOperandType(node.right));
         if ((leftKind === undefined) || (rightKind === undefined)) {
             return undefined;
         }
@@ -2507,6 +2514,45 @@ export class CSharpTranspiler extends BaseTranspiler {
         return undefined;
     }
 
+    // The C# type this printer gave a local's own DECLARATION: getCSharpLocalType is the function
+    // that printed the `<type> <name> =` prefix, so its answer IS the declaration type (the same
+    // oracle csharpConditionOperandType uses for isTrue). Undefined for a parameter, a member read
+    // and a multi-declarator statement, whose reads no single declaration types.
+    csharpDeclaredLocalValueType(node): string | undefined {
+        const declaration = this.csharpReceiverBinding(node);
+        if (declaration?.kind !== SyntaxKind.VariableDeclaration) {
+            return undefined;
+        }
+        if ((declaration.parent as any)?.declarations?.length !== 1) {
+            return undefined;
+        }
+        const cached = this.csharpDeclaredLocalTypes.get(declaration);
+        if (cached !== undefined) {
+            return (cached === '') ? undefined : cached;
+        }
+        const type = this.getCSharpLocalType(declaration);
+        const named = ((type === undefined) || (type === this.VAR_TOKEN)) ? '' : type;
+        this.csharpDeclaredLocalTypes.set(declaration, named);
+        return (named === '') ? undefined : named;
+    }
+
+    // the C# type of an arithmetic operand: the printer's own proof for the expression first, then
+    // the declaration type of the local it reads (a chain the embedding build layer typed)
+    csharpArithmeticOperandType(node): string | undefined {
+        const named = this.csharpExpressionTypeOf(node);
+        return (named !== undefined) ? named : this.csharpDeclaredLocalValueType(node);
+    }
+
+    // two arithmetic kinds isEqual compares by value: the same family, or the two integer families
+    // (isEqual's ToInt64 branch and C#'s implicit int -> long promotion agree; a double never
+    // compares against an integer family, where isEqual's truncating branch and the operator differ)
+    csharpArithmeticKindsCompare(leftKind: string, rightKind: string): boolean {
+        if (leftKind === rightKind) {
+            return true;
+        }
+        return (leftKind !== 'double') && (rightKind !== 'double');
+    }
+
     // `isEqual (<numeric arithmetic>, N)` -> `==` / `!=`: the printed expression is native C#
     // arithmetic of one numeric kind, so an integer literal it holds exactly compares the way
     // isEqual's ToInt64 / Convert.ToDouble branches do. Two such expressions of one kind compare by
@@ -2524,14 +2570,21 @@ export class CSharpTranspiler extends BaseTranspiler {
             return undefined;
         }
         const arithmeticKind = (leftKind === undefined) ? rightKind : leftKind;
-        const literalKind = this.csharpIntegerLiteralKind((leftKind === undefined) ? left : right);
-        if ((literalKind === undefined) || !this.csharpNumericKindHoldsLiteral(arithmeticKind, literalKind)) {
-            return undefined;
-        }
+        const other = (leftKind === undefined) ? left : right;
+        const literalKind = this.csharpIntegerLiteralKind(other);
+        const literalText = (leftKind === undefined) ? leftText : rightText;
         // the arithmetic operand keeps its own operator (it binds tighter than `==`), so the
         // wrapper's parentheses are the pair the comparison needs
         const arithmeticText = (leftKind === undefined) ? csharpStripOuterParens(rightText) : csharpStripOuterParens(leftText);
-        const literalText = (leftKind === undefined) ? leftText : rightText;
+        if ((literalKind !== undefined) && this.csharpNumericKindHoldsLiteral(arithmeticKind, literalKind)) {
+            return isEquality ? `(${arithmeticText} == ${literalText})` : `(${arithmeticText} != ${literalText})`;
+        }
+        // or a local whose DECLARATION this printer typed as a number of a comparable family: both
+        // sides are then C# numbers, where the helper's integer branch and the operator agree
+        const operandKind = this.csharpArithmeticOperandKind(this.csharpDeclaredLocalValueType(other));
+        if ((operandKind === undefined) || !this.csharpArithmeticKindsCompare(arithmeticKind, operandKind)) {
+            return undefined;
+        }
         return isEquality ? `(${arithmeticText} == ${literalText})` : `(${arithmeticText} != ${literalText})`;
     }
 
@@ -3909,7 +3962,13 @@ export class CSharpTranspiler extends BaseTranspiler {
 
     printVariableDeclarationList(node,identation) {
         const declaration = node.declarations[0];
-        // const name = declaration.name.text;
+
+        if ((declaration !== undefined) && this.csharpPromiseAllTaskDeclarations.has(declaration)) {
+            // hx10w6 AU03: this local is an element of a native Task.WhenAll, so it has to hold the
+            // concrete Task<T> its call starts: `.Result` then reads the value without a cast
+            const parsedPromise = this.printNode(declaration.initializer, identation).trimStart();
+            return this.getIden(identation) + 'var ' + this.printNode(declaration.name) + ' = ' + parsedPromise;
+        }
 
         if (this.removeVariableDeclarationForFunctionExpression && declaration?.initializer &&  isFunctionExpression(declaration.initializer)) {
             return this.printNode(declaration.initializer, identation).trimEnd();
@@ -4012,6 +4071,9 @@ export class CSharpTranspiler extends BaseTranspiler {
     }
 
     printFunctionBody(node, identation) {
+
+        // a body with parameters prints statement by statement, so the Promise.all plan is made here
+        this.csharpPromiseAllPlanBlock(node?.body);
 
         // check if there is any default parameter to initialize
         const funcParams = node.parameters;
@@ -5097,6 +5159,222 @@ export class CSharpTranspiler extends BaseTranspiler {
 
     printPromiseAllCall(node, identation, parsedArg = undefined) {
         return `promiseAll(${parsedArg})`;
+    }
+
+    // ---- hx10w6 AU03: `await Promise.all ([a, b])` -> typed task locals + Task.WhenAll ----
+    //
+    // PromiseAll only reflects because an element's Task<T> has been erased to object. With every
+    // element a statically typed Task<T> whose T the helper hands back unchanged, WhenAll waits for
+    // exactly those tasks and `.Result` is the value the helper collected, in list order.
+
+    // the statements of a block are planned before any of them prints: a local feeding the list has
+    // to be emitted as `var` (a concrete Task<T>) by the time the site reads its `.Result`
+    printBlock(node, identation, chainBlock = false) {
+        this.csharpPromiseAllPlanBlock(node);
+        return super.printBlock(node, identation, chainBlock);
+    }
+
+    printVariableStatement(node, identation) {
+        const plan = this.csharpPromiseAllSites.get(node);
+        if (plan === undefined) {
+            return super.printVariableStatement(node, identation);
+        }
+        return this.printNodeCommentsIfAny(node, identation, this.csharpPromiseAllNativeStatement(plan, identation));
+    }
+
+    csharpPromiseAllPlanBlock(block) {
+        const statements = block?.statements;
+        if (statements === undefined) {
+            return;
+        }
+        for (let index = 0; index < statements.length; index++) {
+            const plan = this.csharpPromiseAllPlanStatement(statements, index);
+            if (plan !== undefined) {
+                this.csharpPromiseAllSites.set(statements[index], plan);
+                for (const declaration of plan.declarations) {
+                    this.csharpPromiseAllTaskDeclarations.add(declaration);
+                }
+            }
+        }
+    }
+
+    // `const r = await Promise.all ([...])` over 2..8 elements, each one a typed task the helper
+    // passes through: nothing else about the statement may change
+    csharpPromiseAllPlanStatement(statements, index) {
+        const statement = statements[index];
+        if (statement?.kind !== SyntaxKind.VariableStatement) {
+            return undefined;
+        }
+        const declarations = statement.declarationList?.declarations;
+        if ((declarations === undefined) || (declarations.length !== 1)) {
+            return undefined;
+        }
+        const elements = this.csharpPromiseAllList(declarations[0].initializer);
+        if ((elements === undefined) || ((declarations[0].parent?.flags & NodeFlags.Const) === 0)) {
+            return undefined; // a `let` may be rewritten with another shape, which the List<object> local would refuse
+        }
+        const parsed = [];
+        const taskDeclarations = [];
+        for (const element of elements) {
+            const resolved = this.csharpPromiseAllElement(statements, index, element);
+            if (resolved === undefined) {
+                return undefined;
+            }
+            parsed.push(resolved);
+            if (resolved.declaration !== undefined) {
+                taskDeclarations.push(resolved.declaration);
+            }
+        }
+        return { statement, declaration: declarations[0], elements: parsed, declarations: taskDeclarations };
+    }
+
+    // the element list of `await Promise.all ([...])`, or undefined for every other shape
+    csharpPromiseAllList(initializer) {
+        if (initializer?.kind !== SyntaxKind.AwaitExpression) {
+            return undefined;
+        }
+        const call = initializer.expression;
+        if ((call?.kind !== SyntaxKind.CallExpression) || (call.expression?.getText() !== 'Promise.all')) {
+            return undefined;
+        }
+        const list = call.arguments?.[0];
+        if ((list?.kind !== SyntaxKind.ArrayLiteralExpression) || (list.elements.length < 2) || (list.elements.length > 8)) {
+            return undefined;
+        }
+        return list.elements;
+    }
+
+    // one element: a `this.<name> (...)` call the printer resolves (an unresolved callee prints
+    // callDynamically, which returns object), or a const local declared earlier in the same block
+    // that already holds such a call
+    csharpPromiseAllElement(statements, index, element) {
+        if (element?.kind === SyntaxKind.CallExpression) {
+            const expression = element.expression;
+            const isThisCall = (expression?.kind === SyntaxKind.PropertyAccessExpression) && (expression.expression?.kind === SyntaxKind.ThisKeyword);
+            if (!isThisCall || !this.csharpCalleeResolves(element)) {
+                return undefined;
+            }
+            return this.csharpPromiseAllValueIsPlain(element) ? { text: this.printNode(element, 0).trim() } : undefined;
+        }
+        if (element?.kind !== SyntaxKind.Identifier) {
+            return undefined;
+        }
+        const declaration = this.csharpReceiverBinding(element);
+        if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || ((declaration.parent?.flags & NodeFlags.Const) === 0)) {
+            return undefined;
+        }
+        const statement = declaration.parent.parent;
+        const position = statements.indexOf(statement);
+        const singleDeclarator = (declaration.parent as any)?.declarations?.length === 1;
+        if (!singleDeclarator || (position < 0) || (position >= index)) {
+            return undefined;
+        }
+        return this.csharpPromiseAllValueIsPlain(element) ? { text: this.printNode(element, 0).trim(), declaration } : undefined;
+    }
+
+    // the awaited value of the element's Promise survives PromiseAll unchanged: FromTyped's switch
+    // covers the struct families and FromDictList reboxes List<Dictionary<...>> only, so an
+    // anonymous dictionary, a list of those, or a scalar is never rewritten; `any`/`object` and the
+    // named struct types keep the helper
+    csharpPromiseAllValueIsPlain(element) {
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined) {
+            return false;
+        }
+        let type;
+        try {
+            type = checker.getTypeAtLocation(element);
+        } catch (e) {
+            return false;
+        }
+        if (this.getTypeFromRawType(type) !== this.PROMISE_TYPE_KEYWORD) {
+            return false;
+        }
+        const resolved = checker.getTypeArguments(type);
+        if ((resolved === undefined) || (resolved.length !== 1)) {
+            return false;
+        }
+        return this.csharpPromiseAllTypeIsPlain(checker, resolved[0], 0);
+    }
+
+    csharpPromiseAllTypeIsPlain(checker, type, depth) {
+        if ((type === undefined) || (depth > 1)) {
+            return false;
+        }
+        const flags = type.flags;
+        if ((flags & (TypeFlags.String | TypeFlags.Number | TypeFlags.Boolean)) !== 0) {
+            return true;
+        }
+        if ((flags & (TypeFlags.Any | TypeFlags.Unknown | TypeFlags.Void | TypeFlags.Null | TypeFlags.Undefined | TypeFlags.Never)) !== 0) {
+            return false;
+        }
+        const name = type.getSymbol()?.escapedName;
+        if ((name === '__object') || this.csharpPromiseAllIsIndexOnlyObject(type)) {
+            return true;
+        }
+        if (name !== 'Array') {
+            return false;
+        }
+        // `T[]` is an ArrayType: this checker panics on getTypeArguments for one, the index type is
+        // the element type it holds
+        const element = this.csharpPromiseAllIndexType(type);
+        return (element !== undefined) && this.csharpPromiseAllTypeIsPlain(checker, element, depth + 1);
+    }
+
+    // `Dict` reaches the checker as a named alias whose symbol is the alias, so the shape proves it:
+    // a string index signature holding `any` and no declared members. A typed map alias (Currencies)
+    // holds a struct under the same shape and is de-typed by the helper, so it stays out.
+    csharpPromiseAllIsIndexOnlyObject(type) {
+        try {
+            if ((type.getProperties?.() ?? []).length > 0) {
+                return false;
+            }
+            const index = type.getStringIndexType?.();
+            return (index !== undefined) && ((index.flags & TypeFlags.Any) !== 0);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    csharpPromiseAllIndexType(type) {
+        try {
+            return type.getNumberIndexType?.();
+        } catch (e) {
+            return undefined;
+        }
+    }
+
+    csharpPromiseAllNativeStatement(plan, identation) {
+        const indent = this.getIden(identation);
+        const lines = [];
+        const tasks = [];
+        for (const element of plan.elements) {
+            if (element.declaration !== undefined) {
+                tasks.push(element.text);
+                continue;
+            }
+            // the call runs once, in place: the task local is what the list collects from
+            const task = 'hxauTask' + plan.statement.pos + '_' + tasks.length;
+            lines.push('var ' + task + ' = ' + element.text + this.LINE_TERMINATOR);
+            tasks.push(task);
+        }
+        lines.push('await Task.WhenAll(' + tasks.join(', ') + ')' + this.LINE_TERMINATOR);
+        const values = tasks.map((task) => task + '.Result');
+        const collected = 'new List<object> { ' + values.join(', ') + ' }';
+        const binding = plan.declaration.name;
+        if (binding.kind !== SyntaxKind.ArrayBindingPattern) {
+            lines.push('List<object> ' + this.printNode(binding, 0).trim() + ' = ' + collected + this.LINE_TERMINATOR);
+            return lines.map((line) => indent + line).join('\n');
+        }
+        // `const [a, b] = await Promise.all (...)`: same holder-and-index shape the printer uses for
+        // every other destructured result, so the two locals read as they did
+        const targets = binding.elements.map((element) => this.printNode(element.name, 0).trim());
+        const holder = targets.join('') + 'Variable';
+        lines.push('List<object> ' + holder + ' = ' + collected + this.LINE_TERMINATOR);
+        targets.forEach((target, index) => {
+            lines.push('var ' + target + ' = ((IList<object>) ' + holder + ')[' + index + ']' + this.LINE_TERMINATOR);
+        });
+        return lines.map((line) => indent + line).join('\n');
     }
 
     printMathFloorCall(node, identation, parsedArg = undefined) {

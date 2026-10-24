@@ -13,6 +13,8 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpListParamExclusions?: (name: string, index: number) => boolean;
     csharpTypedLocals: WeakMap<Node, string>;
     csharpListParamDeclarations: WeakSet<Node>;
+    csharpPromiseAllSites: WeakMap<Node, any>;
+    csharpPromiseAllTaskDeclarations: WeakSet<Node>;
     csharpHandlerMessageTypes: WeakMap<Node, string>;
     csharpHandlerCalled: WeakMap<Node, boolean>;
     csharpListRouteClasses: WeakMap<Node, boolean>;
@@ -20,6 +22,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpParamTypes: WeakMap<Node, string>;
     stringReceiverTypes: WeakMap<Node, string>;
     conditionOperandTypes: WeakMap<Node, string>;
+    csharpDeclaredLocalTypes: WeakMap<Node, string>;
     constructor(config?: {});
     initConfig(): void;
     getBlockOpen(identation: any): string;
@@ -124,6 +127,9 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpNativeNumericCallEquality(left: any, right: any, leftText: string, rightText: string, isEquality: boolean): string | undefined;
     csharpPrintedArithmeticKind(node: any, text: string): string | undefined;
     csharpArithmeticOperandKind(csharpType: string | undefined): string | undefined;
+    csharpDeclaredLocalValueType(node: any): string | undefined;
+    csharpArithmeticOperandType(node: any): string | undefined;
+    csharpArithmeticKindsCompare(leftKind: string, rightKind: string): boolean;
     csharpNativeArithmeticEquality(left: any, right: any, leftText: string, rightText: string, isEquality: boolean): string | undefined;
     csharpScalarFieldKind(node: any): string | undefined;
     csharpNativeScalarFieldEquality(left: any, right: any, leftText: string, rightText: string, isEquality: boolean): string | undefined;
@@ -243,6 +249,28 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     printJsonParseCall(node: any, identation: any, parsedArg?: any): string;
     printJsonStringifyCall(node: any, identation: any, parsedArg?: any): string;
     printPromiseAllCall(node: any, identation: any, parsedArg?: any): string;
+    printBlock(node: any, identation: any, chainBlock?: boolean): string;
+    printVariableStatement(node: any, identation: any): string;
+    csharpPromiseAllPlanBlock(block: any): void;
+    csharpPromiseAllPlanStatement(statements: any, index: any): {
+        statement: any;
+        declaration: any;
+        elements: any[];
+        declarations: any[];
+    };
+    csharpPromiseAllList(initializer: any): any;
+    csharpPromiseAllElement(statements: any, index: any, element: any): {
+        text: string;
+        declaration?: undefined;
+    } | {
+        text: string;
+        declaration: import("typescript/unstable/ast").DeclarationBase;
+    };
+    csharpPromiseAllValueIsPlain(element: any): any;
+    csharpPromiseAllTypeIsPlain(checker: any, type: any, depth: any): any;
+    csharpPromiseAllIsIndexOnlyObject(type: any): boolean;
+    csharpPromiseAllIndexType(type: any): any;
+    csharpPromiseAllNativeStatement(plan: any, identation: any): string;
     printMathFloorCall(node: any, identation: any, parsedArg?: any): string;
     printMathRoundCall(node: any, identation: any, parsedArg?: any): string;
     printMathCeilCall(node: any, identation: any, parsedArg?: any): string;

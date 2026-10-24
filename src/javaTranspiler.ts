@@ -155,6 +155,13 @@ const JAVA_BOOLEAN_BASE_CALLS = new Set([
     'isBinaryMessage',
 ]);
 
+// hand-written base methods (ts/src/base/Exchange.ts, spliced into BaseExchange.java) declared
+// `public Map<String, Object>` that build a new plain HashMap on every call: a local fed by one
+// owns that map, so its element writes are the helper's map branch
+const JAVA_FRESH_MAP_BASE_CALLS = new Set([
+    'account',
+]);
+
 // operators whose printed Java form is a primitive boolean on every path: the logical ones and
 // every comparison / `in` / `instanceof`-style test the printer lowers to Helpers.isEqual /
 // isGreaterThan / inOp (all declared `public static boolean`) or to a native Java boolean
@@ -207,6 +214,9 @@ const JAVA_THIS_BOOLEAN_BOX_METHODS: { [name: string]: number } = {
 // the Java spellings a consumer declares a dict local with (import-shortened forms
 // included); every other declared type keeps Helpers.GetValue
 const JAVA_DECLARED_MAP_TYPES = /^(java\.util\.)?(Map|HashMap)\s*<\s*String\s*,\s*Object\s*>$/;
+// the declaration token a local the printer feeds a fresh plain map prints with: fully qualified,
+// because the generated test tier imports only java.util.HashMap (JAVA_DECLARED_MAP_TYPES accepts it)
+const JAVA_ELEMENT_WRITE_MAP_TYPE = 'java.util.Map<String, Object>';
 
 // the Java spellings a consumer declares an element-read receiver with when it is a List:
 // the read prints `x.get(i)` / `x.size()` with no cast, because the declaration is the List
@@ -223,6 +233,11 @@ const JAVA_DECLARED_NUMERIC_TYPES: Set<string> =
 
 const JAVA_BOXED_NUMERIC_TYPES: Set<string> =
     new Set<string>(['Integer', 'Long', 'Double']);
+
+// the typed table a `method.call (this, client, message)` dispatches through: the runtime
+// functional interface it holds, and the map type the table declares
+const JAVA_HANDLER_INTERFACE = 'io.github.ccxt.Handler';
+const JAVA_HANDLER_TABLE_TYPE = 'java.util.Map<String, io.github.ccxt.Handler>';
 
 // receiver node kinds whose printed Java is a primary expression, so the `(String)`
 // checkcast in front of them binds the whole receiver (a native `+` prints its own parens)
@@ -1361,6 +1376,428 @@ export class JavaTranspiler extends BaseTranspiler {
         return this.transformIdentifier(node, idValue);
     }
 
+    // ── typed ws handler tables (hx10w5-J06) ────────────────────────────────────
+    // `const methods = { 'ticker': this.handleTicker }; const method = this.safeValue (methods, topic);
+    //  method.call (this, client, message)`: the table and its single read are proven together, so the
+    // literal prints method references and the call prints a virtual call instead of reflection.
+    javaHandlerTables: Map<any, any> = new Map();
+    javaHandlerCalls: Map<any, any> = new Map();
+    javaHandlerReads: Set<string> = new Set();
+    javaHandlerScannedFile: any = undefined;
+
+    // a node key that survives `symbol.valueDeclaration.resolve()` (which may hand back a copy)
+    javaHandlerKey(node) {
+        return `${node.getSourceFile()?.fileName}:${node.getStart()}:${node.getEnd()}`;
+    }
+
+    // `this.<name>` naming a 2-arg (Client, message) handler, as the java method name, else undefined
+    javaHandlerMethod(reference) {
+        if (!isPropertyAccessExpression(reference) || reference.expression?.kind !== SyntaxKind.ThisKeyword) {
+            return undefined;
+        }
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined) {
+            return undefined;
+        }
+        let symbol;
+        try {
+            symbol = checker.getSymbolAtLocation(reference.name);
+        } catch (e) {
+            return undefined;
+        }
+        const declaration: any = symbol?.valueDeclaration?.resolve();
+        if (declaration === undefined || !isMethodDeclaration(declaration) || declaration.body === undefined) {
+            return undefined;
+        }
+        if ((declaration.modifiers ?? []).some((modifier) => modifier.kind === SyntaxKind.StaticKeyword)) {
+            return undefined;
+        }
+        const parameters: any = declaration.parameters ?? [];
+        if (parameters.length !== 2) {
+            return undefined;
+        }
+        const types = parameters.map((parameter, index) => this.javaHandlerSlotType(parameter, index === 0 ? 'client' : 'message'));
+        if (types[0] !== 'Client' || types[1] !== 'Map<String, Object>') {
+            return undefined;
+        }
+        const name = this.printNode(reference.name, 0).trim();
+        return name === reference.name.text ? name : undefined;
+    }
+
+    // the Java type a handler-slot parameter prints, or undefined when a box would reach the interface.
+    // The ws post-pass retypes a `client` parameter (`(Object client,` -> `(Client client,`); the
+    // message slot must already print the dict, since nothing rewrites it later.
+    javaHandlerSlotType(parameter, position) {
+        if (parameter === undefined || !isParameterDeclaration(parameter) || parameter.initializer !== undefined) {
+            return undefined;
+        }
+        const printed = (this.printParameterType(parameter) || 'Object').trim();
+        if (position === 'client') {
+            if (printed === 'Client') {
+                return 'Client';
+            }
+            const name = parameter.name !== undefined && (parameter.name as any).text;
+            return printed === 'Object' && name === 'client' ? 'Client' : undefined;
+        }
+        return this.javaErasure(printed) === this.javaErasure('java.util.Map<String, Object>')
+            ? 'Map<String, Object>' : undefined;
+    }
+
+    // every value of the literal is a `this.<handler>` reference, so it can hold method references
+    javaHandlerTableEntries(literal) {
+        const entries: any[] = [];
+        for (const property of literal.properties) {
+            if (!isPropertyAssignment(property) || !isStringLiteralLikeNode(property.name)) {
+                return undefined;
+            }
+            const handler = this.javaHandlerMethod(property.initializer);
+            if (handler === undefined) {
+                return undefined;
+            }
+            entries.push({ key: property.name.text, name: handler });
+        }
+        return entries;
+    }
+
+    // the enclosing method body (or the file) a table and its reads live in
+    javaHandlerScopeOf(node) {
+        let current = node.parent;
+        while (current !== undefined) {
+            if (isMethodDeclaration(current) || current.kind === SyntaxKind.FunctionDeclaration
+                || current.kind === SyntaxKind.FunctionExpression || current.kind === SyntaxKind.ArrowFunction) {
+                return current.body ?? current;
+            }
+            current = current.parent;
+        }
+        return node.getSourceFile();
+    }
+
+    // every read of the declaration in that scope; undefined if the checker cannot place one
+    javaHandlerReferences(scope, name) {
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined) {
+            return undefined;
+        }
+        let symbol;
+        try {
+            symbol = checker.getSymbolAtLocation(name);
+        } catch (e) {
+            return undefined;
+        }
+        if (symbol === undefined) {
+            return undefined;
+        }
+        const references: any[] = [];
+        let failed = false;
+        const visit = (current) => {
+            if (current === undefined || failed) {
+                return;
+            }
+            if (isIdentifier(current) && current !== name && current.text === name.text) {
+                let other;
+                try {
+                    other = checker.getSymbolAtLocation(current);
+                } catch (e) {
+                    other = undefined;
+                }
+                if (other === undefined) {
+                    failed = true;
+                    return;
+                }
+                if (other === symbol) {
+                    references.push(current);
+                }
+            }
+            current.forEachChild(visit);
+        };
+        visit(scope);
+        return failed ? undefined : references;
+    }
+
+    // the table is read only as the first argument of `this.safeValue (methods, key)`
+    javaIsHandlerTableRead(call, read) {
+        return call !== undefined && isCallExpression(call) && call.arguments?.[0] === read
+            && isPropertyAccessExpression(call.expression)
+            && call.expression.name?.text === 'safeValue'
+            && call.expression.expression?.kind === SyntaxKind.ThisKeyword;
+    }
+
+    // the local a table read is bound to: its declaration, or the plain write that reassigns it
+    javaHandlerBoundName(call) {
+        let node = call;
+        let parent = call.parent;
+        while (parent !== undefined && (parent.kind === SyntaxKind.ParenthesizedExpression
+            || parent.kind === SyntaxKind.ConditionalExpression)) {
+            if (parent.kind === SyntaxKind.ConditionalExpression) {
+                const other = parent.whenTrue === node ? parent.whenFalse : parent.whenTrue;
+                if (parent.whenTrue !== node && parent.whenFalse !== node) {
+                    return undefined;
+                }
+                if (other === undefined || other.kind !== SyntaxKind.Identifier || other.text !== 'undefined') {
+                    return undefined;
+                }
+            }
+            node = parent;
+            parent = parent.parent;
+        }
+        if (parent === undefined) {
+            return undefined;
+        }
+        if (isVariableDeclaration(parent) && parent.initializer === node && isIdentifier(parent.name)) {
+            return parent.name;
+        }
+        if (parent.kind === SyntaxKind.BinaryExpression && parent.operatorToken.kind === SyntaxKind.EqualsToken
+            && parent.right === node && isIdentifier(parent.left)) {
+            return parent.left;
+        }
+        return undefined;
+    }
+
+    // the table name a `.call` argument or a write reads: a plain `this.safeValue (methods, key)` on that table
+    javaIsHandlerReadOf(node, tableName) {
+        let current = node;
+        while (current !== undefined && (current.kind === SyntaxKind.ParenthesizedExpression
+            || current.kind === SyntaxKind.ConditionalExpression)) {
+            current = current.kind === SyntaxKind.ConditionalExpression
+                ? (current.whenTrue === undefined ? current.whenFalse : current.whenTrue)
+                : current.expression;
+        }
+        const read = current?.kind === SyntaxKind.CallExpression ? current.arguments?.[0] : undefined;
+        if (current === undefined || read === undefined || read.kind !== SyntaxKind.Identifier
+            || read.text !== tableName.text) {
+            return false;
+        }
+        return this.javaIsHandlerTableRead(current, read);
+    }
+
+    // the safeValue result is only bound from that table, `method.call (this, a, b)`-ed and null-tested
+    javaIsHandlerCallUse(use, tableName) {
+        if (isVariableDeclaration(use.parent) && use.parent.name === use) {
+            return true;
+        }
+        const write = use.parent;
+        if (write !== undefined && write.kind === SyntaxKind.BinaryExpression
+            && write.operatorToken.kind === SyntaxKind.EqualsToken && write.left === use) {
+            return this.javaIsHandlerReadOf(write.right, tableName);
+        }
+        const access = use.parent;
+        if (isPropertyAccessExpression(access) && access.expression === use && access.name?.text === 'call'
+            && isCallExpression(access.parent) && access.parent.expression === access) {
+            const callArguments: any = access.parent.arguments ?? [];
+            return callArguments.length === 3 && callArguments[0].kind === SyntaxKind.ThisKeyword
+                && isIdentifier(callArguments[1]) && isIdentifier(callArguments[2])
+                && this.javaHandlerArgumentType(callArguments[1], 'client') !== undefined
+                && this.javaHandlerArgumentType(callArguments[2], 'message') !== undefined;
+        }
+        const comparison = use.parent;
+        if (comparison === undefined || comparison.kind !== SyntaxKind.BinaryExpression
+            || (comparison.left !== use && comparison.right !== use)) {
+            return false;
+        }
+        const other = comparison.left === use ? comparison.right : comparison.left;
+        return other !== undefined && other.kind === SyntaxKind.Identifier && other.text === 'undefined';
+    }
+
+    // one walk per file: record the tables whose every read is that idiom, keyed by the literal
+    // node and by the local that holds the safeValue result
+    javaScanHandlerTables(node) {
+        const file = node.getSourceFile();
+        if (file === undefined || this.javaHandlerScannedFile === file) {
+            return;
+        }
+        this.javaHandlerScannedFile = file;
+        if (this.checkerOrUndefined() === undefined) {
+            return;
+        }
+        const declarations: any[] = [];
+        const collect = (current) => {
+            if (current === undefined) {
+                return;
+            }
+            if (isVariableDeclaration(current)) {
+                declarations.push(current);
+            }
+            current.forEachChild(collect);
+        };
+        collect(file);
+        for (const declaration of declarations) {
+            const literal = declaration.initializer;
+            if (literal === undefined || !isObjectLiteralExpression(literal) || literal.properties.length === 0
+                || !isIdentifier(declaration.name)) {
+                continue;
+            }
+            const entries = this.javaHandlerTableEntries(literal);
+            if (entries === undefined) {
+                continue;
+            }
+            const scope = this.javaHandlerScopeOf(declaration);
+            if (scope === undefined) {
+                continue;
+            }
+            const reads = this.javaHandlerReferences(scope, declaration.name);
+            if (reads === undefined || reads.length === 0) {
+                continue;
+            }
+            const results: Map<string, any> = new Map();
+            const readCalls: any[] = [];
+            let proven = true;
+            for (const read of reads) {
+                const call = read.parent;
+                if (!this.javaIsHandlerTableRead(call, read)) {
+                    proven = false;
+                    break;
+                }
+                readCalls.push(call);
+                const bound = this.javaHandlerBoundName(call);
+                if (bound === undefined) {
+                    proven = false;
+                    break;
+                }
+                results.set(this.javaHandlerKey(bound), bound);
+            }
+            for (const bound of Array.from(results.values())) {
+                if (!proven) {
+                    break;
+                }
+                const uses = this.javaHandlerReferences(scope, bound);
+                if (uses === undefined
+                    || !uses.every((use) => this.javaIsHandlerCallUse(use, declaration.name))) {
+                    proven = false;
+                }
+            }
+            if (!proven) {
+                continue;
+            }
+            this.javaHandlerTables.set(this.javaHandlerKey(literal), entries);
+            for (const call of readCalls) {
+                this.javaHandlerReads.add(this.javaHandlerKey(call));
+            }
+            for (const bound of Array.from(results.values())) {
+                this.javaHandlerCalls.set(this.javaHandlerKey(bound), entries);
+            }
+        }
+    }
+
+    // the table literal, as a typed map of method references
+    printJavaHandlerTable(node, identation) {
+        this.javaScanHandlerTables(node);
+        const entries = this.javaHandlerTables.get(this.javaHandlerKey(node));
+        if (entries === undefined) {
+            return undefined;
+        }
+        const byKey: Map<string, string> = new Map();
+        for (const entry of entries) {
+            byKey.set(entry.key, entry.name); // the last duplicate key wins, as in the object literal
+        }
+        const keys = Array.from(byKey.keys());
+        const entryIndent = this.getIden(identation + 1);
+        const className = this.capitalize(this.currentClassName);
+        const parts: string[] = [];
+        for (const key of keys) {
+            // a qualified this: the map body is an anonymous subclass, where `this` is the map
+            parts.push(`${entryIndent}put(${JSON.stringify(key)}, ${className}.this::${byKey.get(key)});`);
+        }
+        // a HashMap (not Map.ofEntries): the helper's null key answers null, an immutable map's throws
+        return `new java.util.HashMap<String, ${JAVA_HANDLER_INTERFACE}>() {{\n${parts.join('\n')}\n${this.getIden(identation)}}}`;
+    }
+
+    // the Java type a safeValue read of a proven table prints: the handler interface
+    printJavaHandlerRead(node) {
+        if (!isCallExpression(node) || !this.javaHandlerReads.has(this.javaHandlerKey(node))) {
+            return undefined;
+        }
+        const table = this.printNode(node.arguments[0], 0).trim();
+        const key = this.printNode(node.arguments[1], 0).trim();
+        // safeValue's map branch with a null key answers null; HashMap.get does the same
+        return `${table}.get(${key})`;
+    }
+
+    // the declared Java type of the table local or of the local bound to one of its reads
+    javaHandlerDeclarationType(declaration) {
+        const initializer = declaration?.initializer;
+        if (initializer === undefined || !isIdentifier(declaration.name)) {
+            return undefined;
+        }
+        this.javaScanHandlerTables(initializer);
+        if (this.javaHandlerTables.has(this.javaHandlerKey(initializer))) {
+            return JAVA_HANDLER_TABLE_TYPE;
+        }
+        if (this.javaHandlerReads.has(this.javaHandlerKey(initializer))) {
+            return JAVA_HANDLER_INTERFACE;
+        }
+        return undefined;
+    }
+
+    // the java type the interface takes for a `.call` argument, or undefined when the box cannot hold it
+    javaHandlerArgumentType(node, position) {
+        if (node === undefined || !isIdentifier(node)) {
+            return undefined;
+        }
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined) {
+            return undefined;
+        }
+        let declaration;
+        try {
+            declaration = checker.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+        } catch (e) {
+            return undefined;
+        }
+        if (declaration === undefined || !isParameterDeclaration(declaration)) {
+            return undefined;
+        }
+        // the slot this argument fills in the emitted signature: no cast, the printer only passes
+        // operands whose declared type already is the interface's
+        return this.javaHandlerSlotType(declaration, position);
+    }
+
+    // the `.call` argument, already the interface slot's type
+    javaHandlerCallArgument(node, position) {
+        if (this.javaHandlerArgumentType(node, position) === undefined) {
+            return undefined;
+        }
+        return this.printNode(node, 0).trim();
+    }
+
+    printJavaHandlerDispatch(node) {
+        if (!isCallExpression(node)) {
+            return undefined;
+        }
+        const callee = node.expression;
+        if (!isPropertyAccessExpression(callee) || callee.name?.text !== 'call' || !isIdentifier(callee.expression)) {
+            return undefined;
+        }
+        const receiver = callee.expression;
+        const callArguments: any = node.arguments ?? [];
+        if (callArguments.length !== 3 || callArguments[0].kind !== SyntaxKind.ThisKeyword) {
+            return undefined;
+        }
+        this.javaScanHandlerTables(node);
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined) {
+            return undefined;
+        }
+        let symbol;
+        try {
+            symbol = checker.getSymbolAtLocation(receiver);
+        } catch (e) {
+            return undefined;
+        }
+        const declaration: any = symbol?.valueDeclaration?.resolve();
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.name === undefined
+            || !this.javaHandlerCalls.has(this.javaHandlerKey(declaration.name))) {
+            return undefined;
+        }
+        const client = this.javaHandlerCallArgument(callArguments[1], 'client');
+        const message = this.javaHandlerCallArgument(callArguments[2], 'message');
+        if (client === undefined || message === undefined) {
+            return undefined;
+        }
+        const receiverText = this.printNode(receiver, 0).trim();
+        // the local is declared as the interface type (javaHandlerDeclarationType), so no checkcast
+        return `${receiverText}.handle(${client}, ${message})`;
+    }
+
     printConstructorDeclaration(node, identation) {
         const classNode = node.parent;
         const className = this.printNode(classNode.name, 0);
@@ -1434,6 +1871,14 @@ export class JavaTranspiler extends BaseTranspiler {
     }
 
     printOutOfOrderCallExpressionIfAny(node, identation) {
+        const handlerRead = this.printJavaHandlerRead(node);
+        if (handlerRead !== undefined) {
+            return handlerRead;
+        }
+        const handlerDispatch = this.printJavaHandlerDispatch(node);
+        if (handlerDispatch !== undefined) {
+            return handlerDispatch;
+        }
         if (node.expression.kind === SyntaxKind.Identifier) {
             const callee = node.expression.text;
             if (callee === 'parseInt' || callee === 'parseFloat') {
@@ -1939,7 +2384,95 @@ export class JavaTranspiler extends BaseTranspiler {
         const initializer = this.unwrapPrintTransparentExpression(value);
         return initializer !== undefined && (isObjectLiteralExpression(initializer)
             || (isCallExpression(initializer) && this.callAlwaysReturnsPlainHashMap(initializer, 0))
-            || (this.javaDeclaredMapReceiver(container) && this.javaFreshExtendMap(initializer)));
+            || (this.javaDeclaredMapReceiver(container)
+                && (this.javaFreshExtendMap(initializer) || this.javaFreshMapBaseCall(initializer))));
+    }
+
+    // `this.account()` on the hand-written base builds a new HashMap per call, so the result is a
+    // plain map no other owner holds. A venue override prints its own signature and is not provable.
+    javaFreshMapBaseCall(node): boolean {
+        if (node === undefined || !isCallExpression(node) || node.arguments.length !== 0
+            || !isPropertyAccessExpression(node.expression)
+            || node.expression.expression.kind !== SyntaxKind.ThisKeyword
+            || !JAVA_FRESH_MAP_BASE_CALLS.has(node.expression.name.text)) {
+            return false;
+        }
+        const checker: any = this.checkerOrUndefined();
+        const fileName = checker?.getResolvedSignature(node)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
+        return typeof fileName === 'string' && JAVA_THIS_RETURN_TYPES_BASE_FILE.test(fileName);
+    }
+
+    // the map type a local the printer itself feeds a fresh plain map prints with: its element
+    // writes then bind the native put, and (a fresh HashMap holds a null like the helper does) a
+    // null value needs no helper. Only the shapes whose Java print IS `Map<String, Object>`.
+    javaElementWriteMapLocalType(declaration): string | undefined {
+        if (!isVariableDeclaration(declaration) || !isIdentifier(declaration.name) || !declaration.initializer) {
+            return undefined;
+        }
+        const name = declaration.name;
+        if (!this.javaElementWriteMapSource(declaration.initializer)) {
+            return undefined;
+        }
+        if (this.javaLocalHasWriteAtAll(name)) {
+            return undefined; // the declaration-typing layer casts a later write of an Object local
+        }
+        return JAVA_ELEMENT_WRITE_MAP_TYPE;
+    }
+
+    // any write at all - plain, compound, or a destructuring target - keeps the local on the type
+    // the build layer assigned it: it casts the write of an Object local and rewrites a destructuring
+    // hand-back into a raw element read, both of which need the box
+    javaLocalHasWriteAtAll(node): boolean {
+        const symbol = this.getChecker().getSymbolAtLocation(node);
+        if (symbol === undefined) {
+            return true;
+        }
+        let scope: any = node;
+        while (scope && !isFunctionLike(scope) && !isSourceFile(scope)) {
+            scope = scope.parent;
+        }
+        if (!scope) {
+            return true;
+        }
+        let wrote = false;
+        const walk = (current) => {
+            if (wrote || current === undefined) {
+                return;
+            }
+            if (current.kind === SyntaxKind.BinaryExpression
+                && current.operatorToken.kind >= SyntaxKind.FirstAssignment
+                && current.operatorToken.kind <= SyntaxKind.LastAssignment) {
+                const left = current.left;
+                if (isIdentifier(left) && this.getChecker().getSymbolAtLocation(left) === symbol) {
+                    wrote = true;
+                    return;
+                }
+                if (!isIdentifier(left) && !isElementAccessExpression(left) && !isPropertyAccessExpression(left)
+                    && this.javaPatternBindsSymbol(left, symbol)) {
+                    wrote = true;
+                    return;
+                }
+            }
+            if ((isForOfStatement(current) || isForInStatement(current))
+                && isIdentifier(current.initializer)
+                && this.getChecker().getSymbolAtLocation(current.initializer) === symbol) {
+                wrote = true;
+                return;
+            }
+            current.forEachChild(walk);
+        };
+        walk(scope);
+        return wrote;
+    }
+
+    // fresh-map values whose Java print carries `Map<String, Object>`: an object literal, the
+    // base-tier extend/deepExtend (declared `java.util.Map<String, Object>`), `this.account()`
+    javaElementWriteMapSource(value): boolean {
+        const node = this.unwrapPrintTransparentExpression(value);
+        if (node === undefined) {
+            return false;
+        }
+        return isObjectLiteralExpression(node) || this.javaFreshExtendMap(node) || this.javaFreshMapBaseCall(node);
     }
 
     // a value whose Java print can never be null: non-null literals and fresh containers
@@ -2632,10 +3165,40 @@ export class JavaTranspiler extends BaseTranspiler {
                 return type.trim();
             }
         }
+        // a local the printer itself declared with the map type it proved (javaElementWriteMapLocalType)
+        const own = this.javaElementWriteMapLocalType(declaration);
+        if (own !== undefined) {
+            return own;
+        }
         if (isParameterDeclaration(declaration)) {
-            return this.javaNativeParameterType(declaration);
+            const fixed = this.javaNativeParameterType(declaration);
+            if (fixed !== undefined) {
+                return fixed;
+            }
+            // A default-valued slot the printer typed in its signature: the dict family is the
+            // one whose element accessors bind on the declaration, so only it resolves here.
+            const optional = this.javaOptionalParameterTypeCached(declaration);
+            return optional === JAVA_NATIVE_DICT_PARAMETER_TYPE ? optional : undefined;
         }
         return undefined;
+    }
+
+    // javaOptionalParameterType walks the heritage chain, and every element access consults it
+    javaOptionalParameterTypeCache: WeakMap<Node, string | typeof JAVA_MEMO_UNDEFINED> = new WeakMap();
+
+    javaOptionalParameterTypeCached(node): string | undefined {
+        const cached = this.javaOptionalParameterTypeCache.get(node);
+        if (cached !== undefined) {
+            return cached === JAVA_MEMO_UNDEFINED ? undefined : cached;
+        }
+        let type;
+        try {
+            type = this.javaOptionalParameterType(node);
+        } catch (e) {
+            type = undefined;
+        }
+        this.javaOptionalParameterTypeCache.set(node, type ?? JAVA_MEMO_UNDEFINED);
+        return type;
     }
 
     // The native Java type a parameter prints with when its TS annotation is a base/types.ts alias in
@@ -4286,6 +4849,11 @@ export class JavaTranspiler extends BaseTranspiler {
             if (classRead !== undefined) {
                 return classRead;
             }
+            // a receiver the printer itself declared a Map already carries the accessor, so the
+            // read binds on the declaration and needs no checkcast in front of it
+            if (this.javaDeclaredMapReceiver(node.expression)) {
+                return `${this.printNode(node.expression, 0)}.get(${this.printNode(key, 0)})`;
+            }
             if (!this.isJavaMapStructureType(type)) {
                 if (!this.javaDeclaredMapReceiver(node.expression)) {
                     // a literal key on a table field the checker does not type (balance is
@@ -4728,6 +5296,33 @@ export class JavaTranspiler extends BaseTranspiler {
             return (leftKind === rightKind) ? leftKind : undefined;
         }
         return hasDouble ? 'double' : 'long';
+    }
+
+    // hx10 J07: 'long' | 'double' for a nested `+` this printer already prints natively through
+    // printWidenedNativeAdd, or undefined. Mirrors that printer's operand proof (javaWidenedNumericKind)
+    // behind the family and concat tests printInlineHelperArithmetic applies before it calls it.
+    javaJ07NestedAddKind(node): string | undefined {
+        while (node?.kind === SyntaxKind.ParenthesizedExpression) {
+            node = node.expression;
+        }
+        if (node?.kind !== SyntaxKind.BinaryExpression || node.operatorToken?.kind !== SyntaxKind.PlusToken) {
+            return undefined;
+        }
+        const leftFamily = this.javaScalarFamily(node.left);
+        const rightFamily = this.javaScalarFamily(node.right);
+        if (leftFamily !== 'number' || rightFamily !== 'number') {
+            return undefined;
+        }
+        if (this.javaStringConcatIsProvable(node.left, node.right, leftFamily, rightFamily)) {
+            return undefined;
+        }
+        return this.javaWidenedAddKind(node);
+    }
+
+    // the `- * /` operand kind: the printer's own proof first, then the nested-sum proof
+    javaJ07ArithmeticKind(node, allowDeclaredLocals = true): string | undefined {
+        const kind = this.javaProvableNumericKind(node, allowDeclaredLocals);
+        return kind !== undefined ? kind : this.javaJ07NestedAddKind(node);
     }
 
     // ---- ordered comparison over declared numeric locals ----
@@ -5178,9 +5773,21 @@ export class JavaTranspiler extends BaseTranspiler {
         // `+` keeps phase-1's literal-only rule (java-13/14 own Add): its operands must not
         // derive from a retyped local anywhere below
         const childAllows = !isPlus;
-        const leftKind = this.javaProvableNumericKind(left, childAllows);
-        const rightKind = this.javaProvableNumericKind(right, childAllows);
-        const pairKind = this.javaNativeArithmeticPairKind(isPlus, isMultiply, isDivide, leftKind, rightKind);
+        let leftKind = this.javaProvableNumericKind(left, childAllows);
+        let rightKind = this.javaProvableNumericKind(right, childAllows);
+        let pairKind = this.javaNativeArithmeticPairKind(isPlus, isMultiply, isDivide, leftKind, rightKind);
+        // hx10 J07: an unproven pair retries with the nested-sum operand kind, so a native `+`
+        // this printer already prints is consumable by the enclosing `- * /`
+        if (pairKind === undefined) {
+            const nestedLeft = this.javaJ07ArithmeticKind(left, childAllows);
+            const nestedRight = this.javaJ07ArithmeticKind(right, childAllows);
+            const nestedPair = this.javaNativeArithmeticPairKind(isPlus, isMultiply, isDivide, nestedLeft, nestedRight);
+            if (nestedPair !== undefined) {
+                leftKind = nestedLeft;
+                rightKind = nestedRight;
+                pairKind = nestedPair;
+            }
+        }
         if (pairKind === undefined) {
             return undefined;
         }
@@ -5997,6 +6604,19 @@ export class JavaTranspiler extends BaseTranspiler {
             const arithmeticType = this.javaArithmeticLocalType(declaration);
             if (arithmeticType !== undefined) {
                 varToken = arithmeticType + " ";
+            } else {
+                // a local fed a fresh plain map prints that map type, so its element writes bind
+                // the native put instead of casting the Object box at the site (hx10w6 J04)
+                const elementWriteType = this.javaElementWriteMapLocalType(declaration);
+                if (elementWriteType !== undefined) {
+                    varToken = elementWriteType + " ";
+                }
+            }
+            // the ws handler table and the local bound to one of its reads name their type,
+            // so the dispatch is a plain virtual call
+            const handlerType = this.javaHandlerDeclarationType(declaration);
+            if (handlerType !== undefined) {
+                varToken = handlerType + " ";
             }
         }
 
@@ -7891,6 +8511,10 @@ export class JavaTranspiler extends BaseTranspiler {
     builderObjectLiterals: WeakSet<Node> = new WeakSet();
 
     printObjectLiteralExpression(node, identation) {
+        const handlerTable = this.printJavaHandlerTable(node, identation);
+        if (handlerTable !== undefined) {
+            return handlerTable;
+        }
         if (node.properties.length > 0 && node.properties.every((p) => isPropertyAssignment(p)) &&
             this.objectLiteralCapturesReassigned(node)) {
             this.builderObjectLiterals.add(node);

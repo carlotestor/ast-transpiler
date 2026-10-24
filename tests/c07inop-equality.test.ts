@@ -107,3 +107,76 @@ describe('csharp inOp on `this.headers`', () => {
         expect(output).toContain('inOp(this.headers, "x-simulated-trading")');
     });
 });
+
+// the build layer types a numeric declaration (`Int64 week = (7 * day)`) without answering for the
+// later read, so the equality rule asks the declaration itself: getCSharpLocalType is the function
+// that printed the `<type> <name> =` prefix
+const csDeclared = (input: string, types: { [name: string]: string }, declared: { [name: string]: string }) => {
+    const target = printer();
+    target.csharpExpressionTypeResolver = (node) => types[node?.text];
+    const original = target.getCSharpLocalType;
+    target.getCSharpLocalType = (declaration) => declared[declaration?.name?.text] ?? original.call(target, declaration);
+    try {
+        return transpiler.transpileCSharp(input).content;
+    } finally {
+        target.csharpExpressionTypeResolver = undefined;
+        target.getCSharpLocalType = original;
+    }
+};
+
+describe('csharp isEqual over printed arithmetic against a declaration-typed number', () => {
+    test('an Int64 remainder against a declared int local prints the operator', () => {
+        const output = csDeclared(
+        DICT +
+        "class A {\n" +
+        "    run (params: Dict) {\n" +
+        "        const i = this.safeInteger(params, 'i');\n" +
+        "        const n = this.safeInteger(params, 'n');\n" +
+        "        if (i % 2 === n) { return 1; }\n" +
+        "        return 0;\n" +
+        "    }\n" +
+        "}\n", { i: 'int' }, { n: 'int' });
+        expect(output).toContain('== n)');
+        expect(output).not.toContain('isEqual(');
+    });
+    test('an Int64 remainder against a declared Int64 local prints the operator', () => {
+        const output = csDeclared(
+        DICT +
+        "class A {\n" +
+        "    run (params: Dict) {\n" +
+        "        const i = this.safeInteger(params, 'i');\n" +
+        "        const n = this.safeInteger(params, 'n');\n" +
+        "        if (i % 2 !== n) { return 1; }\n" +
+        "        return 0;\n" +
+        "    }\n" +
+        "}\n", { i: 'int' }, { n: 'Int64?' });
+        expect(output).toContain('!= n)');
+        expect(output).not.toContain('isEqual(');
+    });
+    test('a declared double local keeps the helper (isEqual truncates, the operator does not)', () => {
+        const output = csDeclared(
+        DICT +
+        "class A {\n" +
+        "    run (params: Dict) {\n" +
+        "        const i = this.safeInteger(params, 'i');\n" +
+        "        const n = this.safeNumber(params, 'n');\n" +
+        "        if (i % 2 === n) { return 1; }\n" +
+        "        return 0;\n" +
+        "    }\n" +
+        "}\n", { i: 'int' }, { n: 'double' });
+        expect(output).toContain('isEqual(');
+    });
+    test('an object-declared local keeps the helper', () => {
+        const output = csDeclared(
+        DICT +
+        "class A {\n" +
+        "    run (params: Dict) {\n" +
+        "        const i = this.safeInteger(params, 'i');\n" +
+        "        const n = this.safeValue(params, 'n');\n" +
+        "        if (i % 2 === n) { return 1; }\n" +
+        "        return 0;\n" +
+        "    }\n" +
+        "}\n", { i: 'int' }, {});
+        expect(output).toContain('isEqual(');
+    });
+});

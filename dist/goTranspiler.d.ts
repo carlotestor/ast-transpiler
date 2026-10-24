@@ -140,6 +140,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goNilProvenStringDeref(node: any): boolean;
     goDefaultedSafeStringLocal(node: any): boolean;
     goDefaultedSafeStringCall(node: any): boolean;
+    goAssertedStringDeref(node: any): boolean;
     goDerefableStringOperand(node: any): boolean;
     goStringConcatOperandType(node: any, printedText: string): string | undefined;
     goNativeStringConcat(node: any, leftText: string, rightText: string): {
@@ -167,6 +168,7 @@ export declare class GoTranspiler extends BaseTranspiler {
         pointer: boolean;
         text: string;
     } | undefined;
+    goNonNilPointerAdditionText(node: any, leftText: string, rightText: string): string | undefined;
     goNonNilPointerProductText(node: any, leftText: string, rightText: string): string | undefined;
     goInt64ProductOperand(node: any, printedText: string): {
         pointer: boolean;
@@ -199,6 +201,7 @@ export declare class GoTranspiler extends BaseTranspiler {
         container: any;
         key: any;
     };
+    goIsNilComparisonOperand(node: any, parent: any): boolean;
     goSafeDictUseReadsTheMap(node: any): boolean;
     goSafeDictLocalUnboxCache: Map<any, string>;
     goCachedLocalUnbox(cache: Map<any, string | undefined>, declaration: any, compute: () => string | undefined): string | undefined;
@@ -224,6 +227,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     goSafeListLocalUnboxCache: Map<any, string>;
     goSafeListLocalUnbox(declaration: any): string | undefined;
     goSafeListLocalUnboxUncached(declaration: any): string | undefined;
+    GO_LIST_SINK_CALLEES: string[];
+    goListLocalSinkReadsAsList(node: any, nilTestSafe: boolean): boolean;
+    goListLocalCopyTargetIsList(left: any): boolean;
     goSafeListUnboxValue(declaration: any, identation: number): string | undefined;
     goContainerTypeOfTsType(type: any): string | undefined;
     goContainerCandidateType(declaration: any): string | undefined;
@@ -298,6 +304,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     goTsSrcTreeCache: Map<string, any>;
     goNativeParameterType(param: any): string | undefined;
     goNativeParameterTypeOf(param: any): string | undefined;
+    goSliceParameterType(fn: any, param: any, index: number): string | undefined;
+    goAnnotatedSliceParameterType(param: any): string | undefined;
+    goBodyReadsElement(body: any, name: string): boolean;
     goIsUnifiedStringParameter(methodName: string, index: number): boolean;
     goUnifiedStringCallArgs(node: any, identation: any, flat?: boolean): string | undefined;
     goRequiredStringParameterType(param: any): string | undefined;
@@ -320,7 +329,7 @@ export declare class GoTranspiler extends BaseTranspiler {
         relativeOf: Map<string, string>;
     };
     goTsSrcFileDerivesFrom(tree: any, file: string, className: string | undefined): boolean;
-    goTextArgMatchesType(argText: string, goType: string, file: string, tree: any): boolean;
+    goTextArgMatchesType(argText: string, goType: string, file: string, tree: any, at?: number): boolean;
     goDeclaredTypeCache: Map<any, string>;
     goDeclaredTypeInProgress: Set<any>;
     goDeclaredTypeOfIdentifier(node: any): string | undefined;
@@ -339,6 +348,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goUseMayPrecede(use: any, writeSite: any, scope: any): boolean;
     goIsNonPointerValue(valueNode: any): boolean;
     goPrintedTypeOfExpression(node: any, printedText: string): string | undefined;
+    goPrintedLocalDeclarationType(node: any): string | undefined;
     sliceLengthTypes: string[];
     GO_NATIVE_LENGTH_FIELDS: string[];
     printInlineArrayLength(expression: any, printedText: string, lengthNode?: any): string | undefined;
@@ -355,6 +365,11 @@ export declare class GoTranspiler extends BaseTranspiler {
     goInOpSubstitutedText(node: any): string | undefined;
     goInOpIfInitClause(node: any): string | undefined;
     goIfInOpRead(condition: any): any;
+    GO_NATIVE_MAP_FIELDS: {
+        [name: string]: string;
+    };
+    GO_NATIVE_MAP_ACCESSORS: string[];
+    goInOpDictMapType(dictNode: any, dictText?: string): string | undefined;
     goIfInOpBindingName(statement: any): string | undefined;
     comparisonHelpers: string[];
     printInlineOpNeg(node: any, printedText: string): string | undefined;
@@ -385,6 +400,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goDerefRepeatableOperand(node: any, printedText: string): boolean;
     goIsReadOnlyCallArgument(node: any): boolean;
     goIsBareStringOperand(node: any): boolean;
+    goDeclaredContainerOperand(node: any): string | undefined;
     printInlineEquality(left: any, right: any, leftText: string, rightText: string, isEq: boolean): string | undefined;
     goNativeNumericEqualityKind(left: any, leftText: string, right: any, rightText: string): string | undefined;
     goOperandNumericKind(node: any, printedText: string): string | undefined;

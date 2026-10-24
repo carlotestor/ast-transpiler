@@ -1,5 +1,6 @@
 import { Transpiler } from '../src/transpiler';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 jest.mock('module',()=>({
@@ -365,7 +366,7 @@ describe('java transpiling tests', () => {
         "}";
         const output = transpiler.transpileJava(input).content;
         expect(output).not.toMatch(/final \w+ final\w+ =/);
-        expect(output).toContain('Object req = Helpers.newMap(');
+        expect(output).toContain('java.util.Map<String, Object> req = Helpers.newMap(');
         expect(output).toMatch(/"k", x,\n\s*"n", Helpers\.newMap\(\n\s*"m", x,\n\s*"id", this\.id\n\s*\),\n\s*"c", 1\n\s*\);/);
         expect(output).toMatch(/return this\.g\(Helpers\.newMap\(\n\s*"k", x\n\s*\)\);/);
         expect(output).not.toContain('T.this');
@@ -401,7 +402,7 @@ describe('java transpiling tests', () => {
         const output = transpiler.transpileJava(input).content;
         expect(output).not.toMatch(/final \w+ final\w+ =/);
         expect(output).toMatch(/\.add\(Helpers\.newMap\(\n\s*"i", i\n\s*\)\)/);
-        expect(output).toMatch(/Object r = Helpers\.newMap\(\n\s*"a", a\n\s*\);/);
+        expect(output).toMatch(/java\.util\.Map<String, Object> r = Helpers\.newMap\(\n\s*"a", a\n\s*\);/);
     });
 
     test('async method ending with for loop still adds return null', () => {
@@ -2598,8 +2599,9 @@ describe('declared-map element reads (d-11): a retyped Dict parameter consumes t
         expect(venueOutput).toContain('(data == null || !(code instanceof String) ? null : data.get(code))');
     });
 
-    test('the literal-key read on the same parameter still prints the B-09 shape', () => {
-        expect(venueOutput).toContain('((java.util.Map<String, Object>)data).get("id")');
+    test('the literal-key read on the same parameter binds on the declaration, no cast', () => {
+        expect(venueOutput).toContain('Object id = data.get("id")');
+        expect(venueOutput).not.toContain('((java.util.Map<String, Object>)data)');
     });
 });
 
@@ -3219,7 +3221,9 @@ describe('java optional parameter unpacking', () => {
 // printed only when the checker proves the target is a TS dictionary, the key is a
 // string literal and the receiver is not a shared field map.
 describe('java element-access write: native Map.put for proven dictionaries', () => {
-    const put = '((java.util.Map<String, Object>)request).put("symbol", "BTC/USDT")';
+    const put = 'request.put("symbol", "BTC/USDT")';
+    // a parameter receiver is not retyped by the printer, so its put still casts the box
+    const putBoxed = '((java.util.Map<String, Object>)request).put("symbol", "BTC/USDT")';
 
     test('dictionary-typed local with a string-literal key prints Map.put', () => {
         const input =
@@ -3242,7 +3246,7 @@ describe('java element-access write: native Map.put for proven dictionaries', ()
         "    }\n" +
         "}"
         const output = transpiler.transpileJava(input).content;
-        expect(output).toContain(put);
+        expect(output).toContain(putBoxed);
         expect(output).not.toContain("addElementToObject");
     });
 
@@ -3267,7 +3271,7 @@ describe('java element-access write: native Map.put for proven dictionaries', ()
         "    }\n" +
         "}"
         const output = transpiler.transpileJava(input).content;
-        expect(output).toContain('((java.util.Map<String, Object>)request).put((String)code, 1)');
+        expect(output).toContain('request.put((String)code, 1)');
         expect(output).not.toContain("addElementToObject");
     });
 
@@ -3325,7 +3329,7 @@ describe('java element-access write: native Map.put for proven dictionaries', ()
         const output = transpiler.transpileJava(input).content;
         // the initializer is the object literal the printer turns into `new HashMap`, so the
         // receiver is a HashMap on every path the local takes
-        expect(output).toContain('((java.util.Map<String, Object>)x).put("k", 1)');
+        expect(output).toContain('x.put("k", 1)');
         expect(output).not.toContain("addElementToObject");
     });
 
@@ -3339,7 +3343,7 @@ describe('java element-access write: native Map.put for proven dictionaries', ()
         "    }\n" +
         "}"
         const output = transpiler.transpileJava(input).content;
-        expect(output).toContain('((java.util.Map<String, Object>)x).put("a", 2)');
+        expect(output).toContain('x.put("a", 2)');
         expect(output).not.toContain("addElementToObject");
     });
 
@@ -3378,7 +3382,7 @@ describe('java element-access write: native Map.put for proven dictionaries', ()
         "    }\n" +
         "}"
         const output = transpiler.transpileJava(input).content;
-        expect(output).toContain('((java.util.Map<String, Object>)Helpers.GetValue(features, "spot")).put("limit", 1)');
+        expect(output).toContain('((java.util.Map<String, Object>)features.get("spot")).put("limit", 1)');
     });
 });
 
@@ -3396,7 +3400,7 @@ describe('java element-access write: proven-String keys and HashMap receivers', 
         "    }\n" +
         "}"
         const output = transpiler.transpileJava(input).content;
-        expect(output).toContain('((java.util.Map<String, Object>)request).put((String)key, 1)');
+        expect(output).toContain('request.put((String)key, 1)');
         expect(output).not.toContain("addElementToObject");
     });
 
@@ -3487,7 +3491,7 @@ describe('java element-access write: proven-String keys and HashMap receivers', 
         "    }\n" +
         "}"
         const output = transpiler.transpileJava(input).content;
-        expect(output).toContain('Helpers.addElementToObject(Helpers.GetValue(x, "a"), "b", 1)');
+        expect(output).toContain('Helpers.addElementToObject(x.get("a"), "b", 1)');
     });
 
     test('a string-typed key on a proven HashMap local prints the typed put', () => {
@@ -3499,7 +3503,7 @@ describe('java element-access write: proven-String keys and HashMap receivers', 
         "    }\n" +
         "}"
         const output = transpiler.transpileJava(input).content;
-        expect(output).toContain('((java.util.Map<String, Object>)result).put((String)code, 2)');
+        expect(output).toContain('result.put((String)code, 2)');
         expect(output).not.toContain("addElementToObject");
     });
 
@@ -5822,7 +5826,7 @@ describe('java typed parameters (b-09)', () => {
     });
 
     test('a retyped Dict parameter keeps its element reads native', () => {
-        expect(venueOutput).toContain('((java.util.Map<String, Object>)data).get("id")');
+        expect(venueOutput).toContain('Object id = data.get("id")');
         expect(venueOutput).not.toContain('Helpers.GetValue(data, "id")');
     });
 
@@ -5856,7 +5860,7 @@ describe('java typed parameters (b-09)', () => {
 
     test('a plain write to a retyped parameter casts its right side', () => {
         expect(venueOutput).toContain('data = (java.util.Map<String, Object>) (Helpers.callDynamically(this, "safeDict", new Object[] { data, "nested" }));');
-        expect(venueOutput).toContain('status = (String) ((((!java.util.Objects.equals(((java.util.Map<String, Object>)data).get("x"), null)))) ? "buy" : "sell");');
+        expect(venueOutput).toContain('status = (String) ((((!java.util.Objects.equals(data.get("x"), null)))) ? "buy" : "sell");');
     });
 
     test('a compound write to a parameter keeps the whole parameter boxed', () => {
@@ -7697,5 +7701,367 @@ describe('java test-tier parameter types', () => {
     test('an async body that writes its parameter keeps the Object box and the wrapper', () => {
         expect(out).toContain('Object code');
         expect(out).toContain('Helpers.toStringArg(code)');
+    });
+});
+
+// hx10w6 J04: a local the printer itself feeds a fresh plain map prints that map type, so its
+// element writes bind the native put with no box cast at the site. Only a value whose Java print
+// IS `Map<String, Object>` (an object literal, base extend/deepExtend, base account()) qualifies,
+// and only while every write hands the local another fresh map.
+describe('java element-write local declaration typing (hx10w6-J04)', () => {
+    test('a literal-fed local prints the map type and its writes stay native', () => {
+        const input =
+        "function f (params) {\n" +
+        "    const result = {};\n" +
+        "    result['stopLoss'] = params['sl'];\n" +
+        "    result['takeProfit'] = 1;\n" +
+        "    return result;\n" +
+        "}";
+        const output = transpiler.transpileJava(input).content;
+        expect(output).toContain('java.util.Map<String, Object> result = new java.util.HashMap<String, Object>() {{}};');
+        expect(output).toContain('result.put("stopLoss", Helpers.GetValue(parameters, "sl"));');
+        expect(output).toContain('result.put("takeProfit", 1);');
+        expect(output).not.toContain('addElementToObject');
+        expect(output).not.toContain('((java.util.Map<String, Object>)result).put(');
+    });
+
+    test('a local reassigned from an unprovable call keeps the Object box and the helper', () => {
+        const input =
+        "function f (a) {\n" +
+        "    let result = {};\n" +
+        "    if (a) {\n" +
+        "        result = this.safeDict (a, 'x', {});\n" +
+        "    }\n" +
+        "    result['id'] = a;\n" +
+        "    return result;\n" +
+        "}";
+        const output = transpiler.transpileJava(input).content;
+        expect(output).toContain('Object result = new java.util.HashMap<String, Object>() {{}};');
+        expect(output).toContain('Helpers.addElementToObject(result, "id", a);');
+    });
+});
+
+describe('java element-write local declaration typing over the hand-written base (hx10w6-J04)', () => {
+    const TMP = path.join(__dirname, 'files', 'tmp-j04w6');
+    const BASE_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'Exchange.ts');
+    const VENUE_FIXTURE = path.join(TMP, 'exchanges', 'bitfake.ts');
+
+    const source =
+    "class T {\n" +
+    "    account(): any {\n" +
+    "        return { 'free': undefined, 'used': undefined };\n" +
+    "    }\n" +
+    "    f(x): void {\n" +
+    "        const balance = this.account();\n" +
+    "        balance['free'] = x;\n" +
+    "        balance['used'] = 1;\n" +
+    "    }\n" +
+    "}\n";
+
+    let baseOutput: string;
+    let venueOutput: string;
+
+    beforeAll(() => {
+        fs.mkdirSync(path.dirname(BASE_FIXTURE), { recursive: true });
+        fs.mkdirSync(path.dirname(VENUE_FIXTURE), { recursive: true });
+        fs.writeFileSync(BASE_FIXTURE, source);
+        fs.writeFileSync(VENUE_FIXTURE, source);
+        const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        baseOutput = byPath.transpileJavaByPath(BASE_FIXTURE).content;
+        venueOutput = byPath.transpileJavaByPath(VENUE_FIXTURE).content;
+    });
+
+    afterAll(() => {
+        fs.rmSync(TMP, { recursive: true, force: true });
+    });
+
+    test('base account() builds a fresh HashMap, so the local prints the map type and puts natively', () => {
+        expect(baseOutput).toContain('java.util.Map<String, Object> balance = this.account();');
+        expect(baseOutput).toContain('balance.put("free", x);');
+        expect(baseOutput).toContain('balance.put("used", 1);');
+        expect(baseOutput).not.toContain('addElementToObject');
+    });
+
+    test('a venue override of account() keeps the Object box and the helper', () => {
+        expect(venueOutput).toContain('Object balance = this.account();');
+        expect(venueOutput).toContain('Helpers.addElementToObject(balance, "free", x);');
+    });
+});
+
+describe('java ws handler tables', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hx10w6-j06-'));
+    const write = (relative: string, content: string): string => {
+        const file = path.join(root, relative);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, content);
+        return file;
+    };
+    write('ts/src/base/types.ts', 'export type Dict = { [key: string]: any };\n');
+    let venue = 0;
+    const transpile = (body: string): string =>
+        transpiler.transpileJavaByPath(write(`ts/src/pro/venue${venue++}.ts`, body)).content;
+    const header = "import { Dict } from '../base/types.js';\nclass Client { }\n";
+
+    test('a proven table prints method references and the dispatch prints a virtual call', () => {
+        const output = transpile(header + `
+export default class V {
+    handleMessage (client: Client, message: Dict) {
+        const methods: Dict = {
+            'ticker': this.handleTicker,
+            'trade': this.handleTrades,
+        };
+        const event = this.safeString (message, 'event');
+        let method = this.safeValue (methods, event);
+        if (method !== undefined) {
+            method.call (this, client, message);
+            return;
+        }
+        const topic = this.safeString (message, 'topic');
+        if (topic !== undefined) {
+            method = this.safeValue (methods, topic);
+            if (method !== undefined) {
+                method.call (this, client, message);
+            }
+        }
+    }
+    handleTicker (client: Client, message: Dict) {
+        return 1;
+    }
+    handleTrades (client: Client, message: Dict) {
+    }
+}
+`);
+        expect(output).toContain('java.util.Map<String, io.github.ccxt.Handler> methods = new java.util.HashMap<String, io.github.ccxt.Handler>() {{');
+        expect(output).toContain('put("ticker", V.this::handleTicker);');
+        expect(output).toContain('io.github.ccxt.Handler method = methods.get(');
+        expect(output).toContain('method = methods.get(');
+        expect(output).toContain('method.handle(client, message);');
+        expect(output).not.toContain('.call(this, client, message)');
+        expect(output).not.toContain('(io.github.ccxt.Handler) method');
+        expect(output).not.toContain('"handleTicker"');
+    });
+
+    test('a table with a non-handler value keeps the reflective table', () => {
+        const output = transpile(header + `
+export default class V {
+    handleMessage (client: Client, message: Dict) {
+        const methods: Dict = { 'ticker': this.handleTicker, 'count': 1 };
+        const method = this.safeValue (methods, this.safeString (message, 'topic'));
+        if (method !== undefined) {
+            method.call (this, client, message);
+        }
+    }
+    handleTicker (client: Client, message: Dict) {
+    }
+}
+`);
+        expect(output).not.toContain('io.github.ccxt.Handler');
+        expect(output).toContain('.call(this, client, message)');
+    });
+
+    test('a table read outside the safeValue idiom keeps the reflective table', () => {
+        const output = transpile(header + `
+export default class V {
+    handleMessage (client: Client, message: Dict) {
+        const methods: Dict = { 'ticker': this.handleTicker };
+        const method = this.safeValue (methods, this.safeString (message, 'topic'));
+        this.log (methods);
+        if (method !== undefined) {
+            method.call (this, client, message);
+        }
+    }
+    handleTicker (client: Client, message: Dict) {
+    }
+}
+`);
+        expect(output).not.toContain('io.github.ccxt.Handler');
+        expect(output).toContain('.call(this, client, message)');
+    });
+
+    test('a handler value read as something else keeps the reflective table', () => {
+        const output = transpile(header + `
+export default class V {
+    handleMessage (client: Client, message: Dict) {
+        const methods: Dict = { 'ticker': this.handleTicker };
+        const method = this.safeValue (methods, this.safeString (message, 'topic'));
+        this.log (method);
+        if (method !== undefined) {
+            method.call (this, client, message);
+        }
+    }
+    handleTicker (client: Client, message: Dict) {
+    }
+}
+`);
+        expect(output).not.toContain('io.github.ccxt.Handler');
+        expect(output).toContain('.call(this, client, message)');
+    });
+
+    test('a table of three-argument handlers keeps the reflective table', () => {
+        const output = transpile(header + `
+export default class V {
+    handleMessage (client: Client, message: Dict) {
+        const methods: Dict = { 'subscribe': this.handleSubscribe };
+        const method = this.safeValue (methods, this.safeString (message, 'topic'));
+        if (method !== undefined) {
+            method.call (this, client, message, subscription);
+        }
+    }
+    handleSubscribe (client: Client, message: Dict, subscription: Dict) {
+    }
+}
+`);
+        expect(output).not.toContain('io.github.ccxt.Handler');
+    });
+
+    test('a message parameter that is not a dict keeps the reflective table', () => {
+        const output = transpile(header + `
+export default class V {
+    handleMessage (client: Client, message: any) {
+        const methods: Dict = { 'ticker': this.handleTicker };
+        const method = this.safeValue (methods, this.safeString (message, 'topic'));
+        if (method !== undefined) {
+            method.call (this, client, message);
+        }
+    }
+    handleTicker (client: Client, message: Dict) {
+    }
+}
+`);
+        expect(output).not.toContain('io.github.ccxt.Handler');
+        expect(output).toContain('.call(this, client, message)');
+    });
+});
+
+describe('hx10 J07: a nested native sum is a typed arithmetic operand', () => {
+    // `(a + b) - 1`: the `+` prints natively (its operands are long-proved), and its result is a
+    // Java primitive long, so the enclosing `- * /` takes the native operator with no cast and no
+    // box test. A pair the printer already proves keeps its own operand printing.
+    const withResolver = (resolver: any, body: () => void) => {
+        const printer: any = (transpiler as any).javaTranspiler;
+        const previous = printer.javaDeclaredLocalTypeResolver;
+        printer.javaDeclaredLocalTypeResolver = resolver;
+        try {
+            body();
+        } finally {
+            printer.javaDeclaredLocalTypeResolver = previous;
+        }
+    };
+
+    test('a nested native sum is an operand of the enclosing subtract', () => {
+        const input =
+        "function f (p: number, q: number) {\n" +
+        "    const a: number = p;\n" +
+        "    const b: number = q;\n" +
+        "    let out: any = null;\n" +
+        "    out = (a + b) - 1;\n" +
+        "    return out;\n" +
+        "}\n"
+        withResolver((declaration: any) => {
+            const name = declaration?.name?.text;
+            return (name === 'a' || name === 'b') ? 'Long' : undefined;
+        }, () => {
+            const content = transpiler.transpileJava(input).content;
+            expect(content).toContain("(((a + b)) - 1L)");
+            expect(content).not.toContain("Helpers.subtract");
+        });
+    });
+
+    test('a nested sum of unproven operands keeps the helper', () => {
+        const input =
+        "function f (o: any, q: number) {\n" +
+        "    let out: any = null;\n" +
+        "    out = (o + q) - 1;\n" +
+        "    return out;\n" +
+        "}\n"
+        const content = transpiler.transpileJava(input).content;
+        expect(content).toContain("Helpers.subtract");
+    });
+
+    test('a nested string concat is not a numeric operand', () => {
+        const input =
+        "function f (s: string, t: string) {\n" +
+        "    let out: any = null;\n" +
+        "    out = (s + t) - 1;\n" +
+        "    return out;\n" +
+        "}\n"
+        const content = transpiler.transpileJava(input).content;
+        expect(content).toContain("Helpers.subtract");
+    });
+});
+
+// hx10 wave-6 J08: a parameter the printer typed in its signature is a declared Map, so its
+// element reads and its non-null element writes print the native accessor. A write whose value
+// can be null keeps the helper: only Helpers.addElementToObject removes on a ConcurrentHashMap.
+describe('hx10 J08: element access on a typed parameter', () => {
+    const TMP = path.join(__dirname, 'files', 'tmp-hx10-j08');
+    const TYPES_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'types.ts');
+    const BASE_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'Exchange.ts');
+    const VENUE_FIXTURE = path.join(TMP, 'ts', 'src', 'venuej08.ts');
+    let venueOutput: string;
+
+    beforeAll(() => {
+        fs.mkdirSync(path.dirname(TYPES_FIXTURE), { recursive: true });
+        fs.mkdirSync(path.dirname(VENUE_FIXTURE), { recursive: true });
+        fs.writeFileSync(TYPES_FIXTURE,
+            "export interface Dictionary<T> {\n    [key: string]: T;\n}\n" +
+            "export type Dict = Dictionary<any>;\n");
+        fs.writeFileSync(BASE_FIXTURE,
+            "import type { Dict } from './types';\n" +
+            "export default class Exchange {\n" +
+            "    async fetchThing (symbol: string, params: Dict = {}): Promise<any> {\n" +
+            "        return params;\n" +
+            "    }\n" +
+            "}\n");
+        fs.writeFileSync(VENUE_FIXTURE,
+            "import type { Dict } from './base/types';\n" +
+            "import Exchange from './base/Exchange';\n" +
+            "class Venue extends Exchange {\n" +
+            "    override async fetchThing (symbol: string, params = {}): Promise<any> {\n" +
+            "        const limit = params['limit'];\n" +
+            "        const other = params['other'];\n" +
+            "        params['type'] = 'limit';\n" +
+            "        params['since'] = limit;\n" +
+            "        return [ limit, other ];\n" +
+            "    }\n" +
+            "    translate (blob: any, params = {}): any {\n" +
+            "        const value = params['value'];\n" +
+            "        params['seen'] = 'yes';\n" +
+            "        return [ blob, value ];\n" +
+            "    }\n" +
+            "}\n");
+        const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        venueOutput = byPath.transpileJavaByPath(VENUE_FIXTURE).content;
+    });
+
+    afterAll(() => {
+        fs.rmSync(TMP, { recursive: true, force: true });
+    });
+
+    test('a read on the typed parameter prints the native accessor', () => {
+        expect(venueOutput).toContain('parameters.get("limit")');
+        expect(venueOutput).toContain('parameters.get("other")');
+        expect(venueOutput).not.toContain('Helpers.GetValue(parameters, "limit")');
+        expect(venueOutput).not.toContain('Helpers.GetValue(parameters, "other")');
+    });
+
+    test('no Map cast stands in front of the parameter', () => {
+        expect(venueOutput).not.toContain('((java.util.Map<String, Object>)parameters)');
+        expect(venueOutput).not.toContain('((java.util.Map<?, ?>)parameters)');
+    });
+
+    test('a non-null element write prints put', () => {
+        expect(venueOutput).toContain('parameters.put("type", "limit")');
+    });
+
+    test('a write whose value may be null keeps the helper', () => {
+        expect(venueOutput).toContain('Helpers.addElementToObject(parameters, "since", limit)');
+    });
+
+    test('a parameter no declaration types keeps the helper', () => {
+        expect(venueOutput).toContain('Object blob');
+        expect(venueOutput).toContain('Object parameters');
+        expect(venueOutput).toContain('Helpers.GetValue(parameters, "value")');
+        expect(venueOutput).toContain('Helpers.addElementToObject(parameters, "seen", "yes")');
     });
 });

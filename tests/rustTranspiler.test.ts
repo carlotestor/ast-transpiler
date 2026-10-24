@@ -1393,9 +1393,9 @@ describe('rust checker-typed native container access', () => {
             "    return p;\n" +
             "}";
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('let mut pqVariable = g();');
-        expect(output).toContain('let mut p: Value = pqVariable.as_array().and_then(|__arr| __arr.get(0)).cloned().unwrap_or(Value::Null)');
-        expect(output).toContain('let mut q: Value = pqVariable.as_array().and_then(|__arr| __arr.get(1)).cloned().unwrap_or(Value::Null)');
+        expect(output).toContain('let pqVariable: Vec<Value> = g().as_array().cloned().unwrap_or_default();');
+        expect(output).toContain('let mut p: Value = pqVariable.get(0).cloned().unwrap_or(Value::Null)');
+        expect(output).toContain('let mut q: Value = pqVariable.get(1).cloned().unwrap_or(Value::Null)');
         expect(output).not.toContain('Value::Int(0)');
     });
 
@@ -1409,7 +1409,7 @@ describe('rust checker-typed native container access', () => {
             "    return p;\n" +
             "}";
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('{ let __destr_tmp = g(); p = __destr_tmp.as_array()');
+        expect(output).toContain('{ let __destr_tmp: Vec<Value> = g().as_array().cloned().unwrap_or_default(); p = __destr_tmp.get(0).cloned().unwrap_or(Value::Null)');
         expect(output).not.toContain('get_value(&__destr_tmp');
     });
 
@@ -2756,6 +2756,7 @@ describe('rust declared-Dict locals (rust-25)', () => {
     });
 
     test('the declaration stays Value (no native HashMap retype)', () => {
+        // hx10w6 R02: a read-only dict local is a bare IndexMap; a written one stays boxed.
         const snippet =
             'class T {\n' +
             '    m(response) {\n' +
@@ -2764,8 +2765,16 @@ describe('rust declared-Dict locals (rust-25)', () => {
             '    }\n' +
             '}';
         const output = transpiler.transpileRust(snippet).content;
-        expect(output).toContain('let mut data: Value = self.safeDict(response, Value::Str("data".into()), Value::Map({');
-        expect(output).not.toContain('HashMap<String, Value> = self.safeDict');
+        expect(output).toContain('let mut data: indexmap::IndexMap<String, Value> = self.safeDict(response, Value::Str("data".into()), Value::Map({');
+        const written =
+            'class T {\n' +
+            '    m(response) {\n' +
+            "        const data = this.safeDict(response, 'data', {});\n" +
+            "        data['a'] = 1;\n" +
+            "        return data['b'];\n" +
+            '    }\n' +
+            '}';
+        expect(transpiler.transpileRust(written).content).toContain('let mut data: Value = self.safeDict(response, Value::Str("data".into()), Value::Map({');
     });
 
     test('safe_dict without a default may be Value::Null, so no proof', () => {
@@ -3204,6 +3213,8 @@ describe('rust native container reads (B-28)', () => {
     // helper.
 
     const DYNAMIC = '.as_array().and_then(|__arr| match &i { Value::Int(__n) => __arr.get(*__n as usize), Value::Str(__s) => __s.parse::<usize>().ok().and_then(|__n| __arr.get(__n)), _ => None }).cloned().unwrap_or(Value::Null)';
+    // A list parameter that is shadowed reads its slice directly.
+    const SHADOW_DYNAMIC = '.get((i).as_i64().map_or(usize::MAX, |__n| __n as usize)).cloned().unwrap_or(Value::Null)';
 
     test('a dynamic index into a proven list reads natively', () => {
         const ts =
@@ -3216,7 +3227,8 @@ describe('rust native container reads (B-28)', () => {
             '    }\n' +
             '}';
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain(`let mut symbol: Value = symbols${DYNAMIC};`);
+        expect(output).toContain(`let mut symbol: Value = symbols${SHADOW_DYNAMIC};`);
+        expect(output).not.toContain(DYNAMIC);
         expect(output).not.toContain('get_value(&symbols, &i)');
     });
 
@@ -3367,7 +3379,7 @@ describe('rust native container reads (B-28)', () => {
             '    }\n' +
             '}';
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('let mut entry: Value = data.as_array().and_then(|__arr| match &i');
+        expect(output).toContain(`let mut entry: Value = data${SHADOW_DYNAMIC};`);
         expect(output).not.toContain('let mut entry: Value = get_value(&data, &i);');
     });
 
@@ -3390,7 +3402,7 @@ describe('rust destructure over an array-returning callee', () => {
 
     test('reassignment destructure over an any-typed tuple callee emits native reads', () => {
         const output = transpiler.transpileRust(ANY_TUPLE_CALLEE).content;
-        expect(output).toContain('{ let __destr_tmp = self.handleWithdrawTagAndParams(tag, params); tag = __destr_tmp.as_array()');
+        expect(output).toContain('{ let __destr_tmp: Vec<Value> = self.handleWithdrawTagAndParams(tag, params).as_array().cloned().unwrap_or_default(); tag = __destr_tmp.get(0).cloned().unwrap_or(Value::Null)');
         expect(output).not.toContain('get_value(&__destr_tmp');
     });
 
@@ -3404,7 +3416,7 @@ describe('rust destructure over an array-returning callee', () => {
             "    }\n" +
             "}";
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('let mut request: Value = requestextraParamsVariable.as_array().and_then(|__arr| __arr.get(0)).cloned().unwrap_or(Value::Null)');
+        expect(output).toContain('let mut request: Value = requestextraParamsVariable.get(0).cloned().unwrap_or(Value::Null)');
         expect(output).not.toContain('get_value(&requestextraParamsVariable');
     });
 
@@ -3419,7 +3431,7 @@ describe('rust destructure over an array-returning callee', () => {
             "    }\n" +
             "}";
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('a = __destr_tmp.as_array().and_then(|__arr| __arr.get(0))');
+        expect(output).toContain('a = __destr_tmp.get(0).cloned().unwrap_or(Value::Null)');
         expect(output).not.toContain('get_value(&__destr_tmp');
     });
 
@@ -3436,7 +3448,7 @@ describe('rust destructure over an array-returning callee', () => {
             "    }\n" +
             "}";
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('a = __destr_tmp.as_array().and_then(|__arr| __arr.get(0))');
+        expect(output).toContain('a = __destr_tmp.get(0).cloned().unwrap_or(Value::Null)');
         expect(output).not.toContain('get_value(&__destr_tmp');
     });
 
@@ -3449,7 +3461,7 @@ describe('rust destructure over an array-returning callee', () => {
             "    return address;\n" +
             "}";
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('{ let __destr_tmp = split(&addressString');
+        expect(output).toContain('{ let __destr_tmp: Vec<Value> = split(&addressString');
         expect(output).not.toContain('get_value(&__destr_tmp');
     });
 
@@ -3797,7 +3809,11 @@ describe('rust typed-receiver native reads (D-28)', () => {
             '    extend(a: any, b: any) { return a; }\n' +
             '}';
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('dict.as_map().and_then(|__m| key.as_str().and_then(|__k| __m.get(__k))).cloned().unwrap_or(Value::Null)');
+        // hx10w6 R01: the local is a typed bearer now, so the read is a plain map
+        // lookup and the earlier `this.` argument boxes a clone (no `as_map` chain).
+        expect(output).toContain('dict.get(key.as_str().unwrap_or("")).cloned().unwrap_or(Value::Null)');
+        expect(output).toContain('return self.extend(Value::Map(dict.clone()), Value::Map({');
+        expect(output).not.toContain('dict.as_map().and_then(|__m| key.as_str()');
         // the List parameter is shadowed (D-25), so the index reads on the borrowed slice
         expect(output).toContain('items.get(0).cloned().unwrap_or(Value::Null)');
         expect(output).not.toContain('get_value(&dict, &key)');
@@ -4372,7 +4388,8 @@ describe('hx4 R11: relaxed Vec locals and native list length', () => {
     });
     test('length of a split / array-literal-returning call local is native', () => {
         const out = rs('        const parts = s.split (\'-\');\n        const n = parts.length;\n        return n;', 's');
-        expect(out).toContain('parts.as_array().map_or(Value::Int(0), |__a| Value::Int(__a.len() as i64))');
+        expect(out).toContain('let mut parts: Vec<Value> = split(&s, &Value::Str("-".into())).as_array().cloned().unwrap_or_default()');
+        expect(out).toContain('Value::Int(parts.len() as i64)');
         expect(out).not.toContain('get_array_length');
     });
     test('negative: any-typed and reassigned locals keep get_array_length', () => {
@@ -4585,7 +4602,7 @@ describe('hx4 R18 collection helpers on proven plain-dict / Arr-only locals', ()
     });
 
     test('push on a [] local / length on a toArray local are native', () => {
-        expect(rest).toContain('if let Value::Arr(__a) = &mut out { std::sync::Arc::make_mut(__a).push(rows.as_array()');
+        expect(rest).toContain('if let Value::Arr(__a) = &mut out { std::sync::Arc::make_mut(__a).push(rows.get(');
         expect(rest).toContain('return Value::from(vec![out, count, Value::Int(parsed.len() as i64)]);');
     });
 
@@ -4648,7 +4665,7 @@ describe('hx4 R21 base-tier enumeration, Arr-only sources and string-method rece
     });
 
     test('a string-typed map read receiving toUpperCase reads natively; an any read keeps get_value', () => {
-        expect(rest).toContain('(currency.as_map().and_then(|__m| __m.get("id")).cloned().unwrap_or(Value::Null))');
+        expect(rest).toContain('(currency.get("id").cloned().unwrap_or(Value::Null)).as_str()');
         expect(rest).toMatch(/get_value\(&raw, &Value::Str\("id"\.into\(\)\)\)|get_value_k\(&raw, "id"\)/);
     });
 });
@@ -4874,9 +4891,7 @@ ${body}
         expect(arg).toContain('return self.parseX(Value::Map(params));');
     });
 
-    test('negative: a non-final escape, a dynamic key or a container helper keeps the box', () => {
-        const late = rs("        const params = {};\n        params['a'] = v;\n        const r = this.parseX (params);\n        return params;");
-        expect(late).toContain('let mut params: Value = Value::Map({');
+    test('negative: a dynamic key or a container helper keeps the box', () => {
         const dyn = rs("        const d = {};\n        d[v] = 1;\n        return d['a'];");
         expect(dyn).toContain('let mut d: Value = Value::Map({');
         const keys = rs("        const d = { 'a': 1 };\n        const n = Object.keys (d).length;\n        return n;");
@@ -4925,5 +4940,204 @@ describe('hx10w5 R09 bool locals into native-`bool` slots', () => {
 
     test('negative: a `Value` operand into the bool slot still coerces', () => {
         expect(venue).toContain('return self.settle(raw.is_truthy(), Value::Int(3));');
+    });
+});
+
+describe('hx10w6 R01 bearer write shapes', () => {
+    const wrap = (body: string, params = 'v: any') => `class T {
+    parseX (x) { return x; }
+    f (${params}) {
+${body}
+    }
+}`;
+    const rs = (body: string, params?: string) => transpiler.transpileRust(wrap(body, params)).content;
+
+    test('a string-proven computed key writes the bare map', () => {
+        const out = rs("        const m = {};\n        m['a' + k] = v;\n        return m;", 'v: any, k: string');
+        expect(out).toContain('let mut m: indexmap::IndexMap<String, Value> = ({');
+        expect(out).toContain('m.insert(format!("{}{}", Value::Str("a".into()), k), v.clone())');
+        expect(out).not.toContain('add_element_to_object');
+    });
+
+    test('negative: a computed-key read, or a key naming the receiver, keeps the box', () => {
+        const read = rs("        const m = {};\n        m['a' + k] = v;\n        return m['a' + k];", 'v: any, k: string');
+        expect(read).toContain('let mut m: Value = Value::Map({');
+        expect(read).toContain('add_element_to_object(&mut m,');
+        const self = rs("        const m = {};\n        m['a' + m['z']] = v;\n        return m;");
+        expect(self).toContain('let mut m: Value = Value::Map({');
+        expect(self).toContain('add_element_to_object(&mut m,');
+    });
+
+    test('the final move into a parent object literal is boxed once', () => {
+        const out = rs("        const d = {};\n        d['a'] = v;\n        const t = { 'x': d };\n        return t;");
+        expect(out).toContain('let mut d: indexmap::IndexMap<String, Value> = ({');
+        expect(out).toContain('d.insert("a".into(), v.clone())');
+        expect(out).toContain('m.insert("x".to_string(), Value::Map(d))');
+        expect(out).not.toContain('add_element_to_object');
+    });
+
+    test('a shorthand move keeps the box; a later write stays the map', () => {
+        const shorthand = rs("        const d = {};\n        d['a'] = v;\n        const t = { d };\n        return t;");
+        expect(shorthand).toContain('let mut d: Value = Value::Map({');
+        const late = rs("        const d = {};\n        d['a'] = v;\n        const t = { 'x': d };\n        d['b'] = v;\n        return t;");
+        expect(late).toContain('let mut d: indexmap::IndexMap<String, Value> = ({');
+        expect(late).toContain('m.insert("x".to_string(), Value::Map(d.clone()))');
+        expect(late).toContain('d.insert("b".into(), v.clone())');
+        expect(late).not.toContain('add_element_to_object');
+    });
+
+    test('a bearer handed out twice boxes a clone, then moves', () => {
+        const out = rs("        const d = {};\n        d['a'] = v;\n        this.parseX (d);\n        this.parseX (d);\n        return d;");
+        expect(out).toContain('let mut d: indexmap::IndexMap<String, Value> = ({');
+        expect(out).toContain('self.parseX(Value::Map(d.clone()));\n        self.parseX(Value::Map(d.clone()));');
+        expect(out).toContain('return Value::Map(d);');
+        expect(out).not.toContain('add_element_to_object');
+    });
+
+    test('a bearer rebuilt from a plain literal stays the map', () => {
+        const out = rs("        let d: Dict = {};\n        d['a'] = v;\n        if (v) {\n            d = { 'b': 1 };\n        }\n        return d['b'];");
+        expect(out).toContain('let mut d: indexmap::IndexMap<String, Value> = ({');
+        expect(out).toContain('d = ({');
+        expect(out).toContain('return d.get("b").cloned().unwrap_or(Value::Null);');
+        expect(out).not.toContain('add_element_to_object');
+    });
+
+    test('negative: a rebuild from a call keeps the box', () => {
+        const out = rs("        let d: Dict = {};\n        d['a'] = v;\n        if (v) {\n            d = this.parseX (v);\n        }\n        return d;");
+        expect(out).toContain('let mut d: Value = Value::Map({');
+        expect(out).toContain('add_element_to_object(&mut d,');
+    });
+});
+
+describe('hx10w6 R02 read-only container bearers', () => {
+    const wrap = (body: string, params = 'v: any') => `class T {
+    parseX (x) { return x; }
+    f (${params}) {
+${body}
+    }
+}`;
+    const rs = (body: string, params?: string) => transpiler.transpileRust(wrap(body, params)).content;
+
+    test('a split local is a Vec<Value> with closure-free native reads', () => {
+        const out = rs("        const parts = v.split ('-');\n        const a = parts[0];\n        const b = parts[1];\n        return a;");
+        expect(out).toContain('let mut parts: Vec<Value> = split(&v, &Value::Str("-".into())).as_array().cloned().unwrap_or_default();');
+        expect(out).toContain('parts.get(0).cloned().unwrap_or(Value::Null)');
+        expect(out).toContain('parts.get(1).cloned().unwrap_or(Value::Null)');
+        expect(out).not.toContain('get_value(&parts');
+        expect(out).not.toContain('and_then(|__arr|');
+        expect(out).not.toContain('as_map().and_then');
+    });
+
+    test('a loop counter indexes the bearer natively, `.length` is `len()`', () => {
+        const out = rs("        const xs = v.split (',');\n        for (let i = 0; i < xs.length; i++) {\n            const e = xs[i];\n            if (e) { return e; }\n        }\n        return 0;");
+        expect(out).toContain('let mut xs: Vec<Value> = split(&v, &Value::Str(",".into())).as_array().cloned().unwrap_or_default();');
+        expect(out).toContain('Value::Int(xs.len() as i64)');
+        expect(out).toContain('xs.get(i.as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)');
+        expect(out).not.toContain('get_array_length(&xs');
+        expect(out).not.toContain('get_value(&xs');
+    });
+
+    test('a safeList local with a list default is a Vec<Value>; Promise.all too', () => {
+        const out = rs("        const xs = this.safeList (v, 'a', []);\n        const b = xs[1];\n        return b;");
+        expect(out).toContain('let mut xs: Vec<Value> = self.safeList(v, Value::Str("a".into()), Value::from(vec![])).as_array().cloned().unwrap_or_default();');
+        expect(out).toContain('xs.get(1).cloned().unwrap_or(Value::Null)');
+        const allOut = rs("        const rs2 = await Promise.all (ps);\n        const b = rs2[0];\n        return b;", 'ps: any');
+        expect(allOut).toContain('let mut rs2: Vec<Value> = promise_all(&ps).await.as_array().cloned().unwrap_or_default();');
+    });
+
+    test('a read-only dict local is a bare IndexMap; literal-key reads are map lookups', () => {
+        const out = rs("        const m = this.safeDict (v, 'k', {});\n        const d = m['decimals'];\n        const e = m['base'];\n        return d;");
+        expect(out).toContain('let mut m: indexmap::IndexMap<String, Value> = self.safeDict(');
+        expect(out).toContain('m.get("decimals").cloned().unwrap_or(Value::Null)');
+        expect(out).toContain('m.get("base").cloned().unwrap_or(Value::Null)');
+        expect(out).not.toContain('get_value(&m');
+        expect(out).not.toContain('as_map().and_then');
+    });
+
+    test('negative: an escape, a push, a write or an unproven key keeps the box', () => {
+        // returned
+        const escaped = rs("        const parts = v.split ('-');\n        const a = parts[0];\n        return parts;");
+        expect(escaped).toContain('let mut parts: Value = split(&v, &Value::Str("-".into()));');
+        expect(escaped).toContain('get_value(&parts, &Value::Int(0))');
+        // pushed
+        const pushed = rs("        const parts = v.split ('-');\n        parts.push (1);\n        return parts[0];");
+        expect(pushed).toContain('let mut parts: Value = split(');
+        expect(pushed).toContain('get_value(&parts, &Value::Int(0))');
+        // written dict
+        const written = rs("        const m = this.safeDict (v, 'k', {});\n        m['a'] = 1;\n        return m['a'];");
+        expect(written).toContain('let mut m: Value = self.safeDict(');
+        // dynamic key
+        const dyn = rs("        const d = this.safeDict (v, 'k', {});\n        const e = d[a];\n        return e;", 'v: any, a: string');
+        expect(dyn).toContain('let mut d: Value = self.safeDict(');
+        expect(dyn).toContain('get_value(&d, &a)');
+        // Object.keys on a list local
+        const keys = rs("        const parts = v.split ('-');\n        const n = Object.keys (parts).length;\n        return n;");
+        expect(keys).toContain('let mut parts: Value = split(');
+    });
+});
+
+describe('hx10w6 R04 two-level dict bearers', () => {
+    const wrap = (body: string, params = 'v: any') => `class T {
+    parseX (x) { return x; }
+    f (${params}) {
+${body}
+    }
+}`;
+    const rs = (body: string, params?: string) => transpiler.transpileRust(wrap(body, params)).content;
+
+    test('an object-of-objects local is a nested IndexMap with native write and move', () => {
+        const out = rs("        const request = { 'params': {} };\n        request['params']['limit'] = v;\n        return request;");
+        expect(out).toContain('let mut request: indexmap::IndexMap<String, indexmap::IndexMap<String, Value>> = (');
+        expect(out).toContain('request.entry("params".to_string()).or_default().insert("limit".to_string(), v.clone())');
+        expect(out).toContain('return Value::from(request);');
+        expect(out).not.toContain('get_value_mut');
+        expect(out).not.toContain('add_element_to_object');
+    });
+
+    test('a two-level read is the two map lookups, not a `get_value` on a box', () => {
+        const out = rs("        const d = { 'a': {} };\n        d['a']['b'] = v;\n        return d['a']['b'];");
+        expect(out).toContain('let mut d: indexmap::IndexMap<String, indexmap::IndexMap<String, Value>> = (');
+        expect(out).toContain('d.get("a").and_then(|__n| __n.get("b")).cloned().unwrap_or(Value::Null)');
+        expect(out).not.toContain('get_value(&d');
+    });
+
+    test('a proven string key place reaches the native entry insert', () => {
+        const out = rs("        const d = {};\n        d['a'][k] = v;\n        return d;", 'v: any, k: string');
+        expect(out).toContain('d.entry("a".to_string()).or_default().insert(crate::runtime::stringify_param(&k), v.clone())');
+    });
+
+    test('a bearer with no two-level use keeps the flat map it escapes through', () => {
+        const out = rs("        const request = {};\n        const r = this.postActionRequest(t, request, params);\n        return r;", 't: any, params: any');
+        expect(out).not.toContain('indexmap::IndexMap<String, indexmap::IndexMap');
+        expect(out).toContain('Value::Map(request)');
+    });
+
+    test('a nested literal only used whole keeps the flat map', () => {
+        const out = rs("        const statuses = { 'deposit': { 'New': 'pending' } };\n        const r = this.safeDict(statuses, t);\n        return r;", 't: any');
+        expect(out).not.toContain('indexmap::IndexMap<String, indexmap::IndexMap');
+        expect(out).toContain('Value::Map(statuses)');
+    });
+
+    test('a bucket seeded as `x[k1] = {}` is the inner map itself', () => {
+        const out = rs("        const withdrawFees = {};\n        withdrawFees[code] = {};\n        withdrawFees[code][networkCode] = fee;\n        return { 'withdraw': withdrawFees };", 'code: string, networkCode: string, fee: any');
+        expect(out).toContain('let mut withdrawFees: indexmap::IndexMap<String, indexmap::IndexMap<String, Value>>');
+        expect(out).toContain('or_default()');
+        expect(out).not.toContain('get_value_mut');
+        expect(out).not.toContain('add_element_to_object');
+        expect(out).toContain('Value::from(withdrawFees)');
+    });
+
+    test('a bucket seeded from a non-empty literal keeps the box', () => {
+        const out = rs("        const d = {};\n        d['a'] = { 'b': v };\n        d['a']['c'] = v;\n        return d;");
+        expect(out).toContain('let mut d: Value = Value::Map({');
+    });
+
+    test('negative: a non-dict value, an unproven key or a receiver-reading value keeps the box', () => {
+        const value = rs("        const d = { 'a': v };\n        d['a']['b'] = v;\n        return d;");
+        expect(value).toContain('let mut d: Value = Value::Map({');
+        const num = rs("        const d = {};\n        d['a'][i] = v;\n        return d;", 'v: any, i: number');
+        expect(num).toContain('let mut d: Value = Value::Map({');
+        const self = rs("        const d = {};\n        d['a']['b'] = d['a'];\n        return d;");
+        expect(self).toContain('let mut d: Value = Value::Map({');
     });
 });
