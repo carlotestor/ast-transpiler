@@ -6261,14 +6261,6 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         const rNilFam = this.goScalarFamilyWithNil(right);
         const lBox = !lPtr && this.goIsAnyBoxExpression(left, leftText);
         const rBox = !rPtr && this.goIsAnyBoxExpression(right, rightText);
-        if ((rFam === 'nil') && (left?.kind === SyntaxKind.Identifier)) {
-            const dbgDecl: any = this.goAnyBoxLocalDeclaration(left);
-            const dbgCallee = (dbgDecl?.initializer?.kind === SyntaxKind.CallExpression) ? this.goAstCalleeName(dbgDecl.initializer) : undefined;
-            if ((typeof dbgCallee === 'string') && /^this\.SafeValue/.test(dbgCallee)) {
-                console.error('G15CMP ' + leftText + ' callee=' + dbgCallee + ' lBox=' + lBox + ' lNilFam=' + String(lNilFam)
-                    + ' ptr=' + this.goAnyLocalHoldsPointer(dbgDecl) + ' nonptr=' + this.goAnyLocalHoldsNonPointer(dbgDecl));
-            }
-        }
         if (lBox && (rFam === 'nil') && (lNilFam !== undefined) && (lNilFam !== 'number')) {
             return isEq ? `(${leftText} == nil)` : `(${leftText} != nil)`;
         }
