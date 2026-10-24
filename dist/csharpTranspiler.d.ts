@@ -195,7 +195,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpIsClassThrowArgument(node: any): boolean;
     csharpIsDeleteKey(node: any): boolean;
     csharpIsLeftPlusOperand(node: any): boolean;
-    csharpReceiverBinding(receiver: any): Node;
+    csharpReceiverBinding(receiver: any): import("typescript/unstable/ast").DeclarationBase;
     csharpStringReceiverType(receiver: any): string | undefined;
     csharpStringMethodReceiver(node: any, name: any): any;
     csharpDestructuringTempType(initializer: any): string | undefined;
@@ -221,7 +221,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpOverrideParamSpelling(node: any): string | undefined;
     csharpOverrideParamSpellingOfType(type: any, unionArms?: number): string | undefined;
     csharpBooleanParamType(node: any): string;
-    csharpBooleanParamProofs: WeakMap<Program, Map<Node, Set<number>>>;
+    csharpBooleanParamProofs: WeakMap<Program<import("typescript/unstable/sync").ProjectId>, Map<Node, Set<number>>>;
     csharpBooleanParamCensus(): Map<Node, Set<number>>;
     csharpNodeText(node: any): string;
     csharpNodePositionKey(node: any): string;
@@ -264,7 +264,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
         declaration?: undefined;
     } | {
         text: string;
-        declaration: Node;
+        declaration: import("typescript/unstable/ast").DeclarationBase;
     };
     csharpPromiseAllValueIsPlain(element: any): any;
     csharpPromiseAllTypeIsPlain(checker: any, type: any, depth: any): any;

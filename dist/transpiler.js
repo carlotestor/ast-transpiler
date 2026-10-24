@@ -8640,6 +8640,7 @@ var GO_SAFE_DICT_READ_HELPERS = ["GetValue", "InOp", "ObjectKeys", "IsDictionary
 var GO_MARKET_LOCAL_TYPE = "map[string]any";
 var GO_MARKET_PRODUCER_METHODS = ["parseMarket", "getMarketFromSymbols", "getMarketFromClientAndMessage"];
 var GO_MARKET_MAP_CALLS = ["Market", "SafeMarket", "SafeMarketStructure", "Extend", "DeepExtend", "MapTyped", "MarketTyped"];
+var GO_MARKET_MAP_BASE_CALLS = ["getMarketFromSymbols"];
 var GO_MARKET_READ_COMPARISON_OPERATORS = [
   SyntaxKind5.EqualsEqualsToken,
   SyntaxKind5.ExclamationEqualsToken,
@@ -11029,6 +11030,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
     }
     const printed = name.charAt(0).toUpperCase() + name.slice(1);
     if (GO_MARKET_MAP_CALLS.indexOf(name) >= 0 || GO_MARKET_MAP_CALLS.indexOf(printed) >= 0) {
+      return true;
+    }
+    if (GO_MARKET_MAP_BASE_CALLS.indexOf(name) >= 0 || GO_MARKET_MAP_BASE_CALLS.indexOf(printed) >= 0) {
       return true;
     }
     if (GO_MARKET_PRODUCER_METHODS.indexOf(name) < 0) {

@@ -295,6 +295,12 @@ const GO_MARKET_PRODUCER_METHODS = [ 'parseMarket', 'getMarketFromSymbols', 'get
 // base accessors/builders whose generated Go result is already the market dictionary
 const GO_MARKET_MAP_CALLS = [ 'Market', 'SafeMarket', 'SafeMarketStructure', 'Extend', 'DeepExtend', 'MapTyped', 'MarketTyped' ];
 
+// Base producers declared as an OVERLOAD PAIR (two signatures + the implementation). At a venue
+// call site the body proof cannot resolve the body-carrying declaration of an overloaded name, so
+// every caller boxed the row and wrapped it in MapTyped; the base-file print proves the body and
+// exchange_generated.go declares the result `map[string]any`, so the call is that dictionary.
+const GO_MARKET_MAP_BASE_CALLS = [ 'getMarketFromSymbols' ];
+
 // the binary operators under which a market/currency local's element read is a pure READ: the
 // element is derefed by the GetValue the element-read printer keeps for these operands
 // (goMarketComparisonElementRead), so `market['swap'] === true` keeps answering exactly what the
@@ -2766,6 +2772,9 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         }
         const printed = name.charAt(0).toUpperCase() + name.slice(1);
         if ((GO_MARKET_MAP_CALLS.indexOf(name) >= 0) || (GO_MARKET_MAP_CALLS.indexOf(printed) >= 0)) {
+            return true;
+        }
+        if ((GO_MARKET_MAP_BASE_CALLS.indexOf(name) >= 0) || (GO_MARKET_MAP_BASE_CALLS.indexOf(printed) >= 0)) {
             return true;
         }
         if (GO_MARKET_PRODUCER_METHODS.indexOf(name) < 0) {
