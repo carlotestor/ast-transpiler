@@ -7622,3 +7622,80 @@ describe('hx10 J09: unannotated params overrides a typed declaration', () => {
         expect(venueOutput).toContain('anyParam(String symbol, Object parameters)');
     });
 });
+
+// the generated test tier (java/tests/**) has no hand-written java counterpart and no venue
+// overrides, so a parameter's annotation prints its Java type and the core-argument wrapper
+// (Helpers.toStringArg / toStringListArg) disappears from the printed call
+describe('java test-tier parameter types', () => {
+    const TMP = path.join(__dirname, 'files', 'tmp-test-tier-params');
+    const TYPES_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'types.ts');
+    const VENUE_FIXTURE = path.join(TMP, 'ts', 'src', 'bitget.ts');
+    const TEST_FIXTURE = path.join(TMP, 'ts', 'src', 'test', 'Exchange', 'test.fetchOrders.ts');
+    let out: string;
+
+    beforeAll(() => {
+        fs.mkdirSync(path.dirname(TYPES_FIXTURE), { recursive: true });
+        fs.writeFileSync(TYPES_FIXTURE,
+            "export interface Dictionary<T> {\n    [key: string]: T;\n}\n" +
+            "export type Dict = Dictionary<any>;\n" +
+            "export type Str = string | undefined;\n" +
+            "export type Strings = string[];\n");
+        fs.mkdirSync(path.dirname(TEST_FIXTURE), { recursive: true });
+        fs.writeFileSync(VENUE_FIXTURE,
+            "import type { Dict, Str, Strings } from './base/types';\n" +
+            "export default class Venue {\n" +
+            "    async fetchOrders (symbol: Str = undefined, since: number = undefined, limit: number = undefined, params: Dict = {}): Promise<any> {\n" +
+            "        return [ symbol, since, limit, params ];\n" +
+            "    }\n" +
+            "    async fetchLastPrices (symbols: Strings = undefined, since: number = undefined, limit: number = undefined, params: Dict = {}): Promise<any> {\n" +
+            "        return [ symbols ];\n" +
+            "    }\n" +
+            "    async fetchCountry (code: Str = undefined, params: Dict = {}): Promise<any> {\n" +
+            "        return code;\n" +
+            "    }\n" +
+            "}\n");
+        fs.writeFileSync(TEST_FIXTURE,
+            "import Venue from '../../bitget';\n" +
+            "async function testFetchOrders (exchange: Venue, skippedProperties: object, symbol: string, code: string, blob: any, rest: object): Promise<any> {\n" +
+            "    const orders = await exchange.fetchOrders (symbol);\n" +
+            "    const country = await exchange.fetchCountry (code);\n" +
+            "    const prices = await exchange.fetchLastPrices ([ symbol ]);\n" +
+            "    const anyArg = await exchange.fetchCountry (blob);\n" +
+            "    const anyList = await exchange.fetchLastPrices ([ blob ]);\n" +
+            "    return [ orders, country, prices, anyArg, anyList, rest ];\n" +
+            "}\n" +
+            "async function testRewrite (exchange: Venue, code: string): Promise<any> {\n" +
+            "    code = 'x';\n" +
+            "    return await exchange.fetchCountry (code);\n" +
+            "}\n" +
+            "export default testFetchOrders;\n");
+        const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        out = byPath.transpileJavaByPath(TEST_FIXTURE).content;
+    });
+
+    afterAll(() => {
+        fs.rmSync(TMP, { recursive: true, force: true });
+    });
+
+    test('a plain string parameter prints String and its core argument needs no wrapper', () => {
+        expect(out).toContain('String symbol');
+        expect(out).toContain('exchange.fetchOrders(symbol');
+        expect(out).toContain('exchange.fetchCountry(code');
+    });
+
+    test('a string[] literal over a String parameter prints the List<String> literal', () => {
+        expect(out).toContain('new java.util.ArrayList<String>(java.util.Arrays.asList(symbol))');
+    });
+
+    test('an any parameter and an object parameter keep the Object box and the wrapper', () => {
+        expect(out).toContain('Object blob');
+        expect(out).toContain('Object rest');
+        expect(out).toContain('Helpers.toStringArg(blob)');
+        expect(out).toContain('Helpers.toStringListArg(new java.util.ArrayList<Object>(java.util.Arrays.asList(blob)))');
+    });
+
+    test('an async body that writes its parameter keeps the Object box and the wrapper', () => {
+        expect(out).toContain('Object code');
+        expect(out).toContain('Helpers.toStringArg(code)');
+    });
+});

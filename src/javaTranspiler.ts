@@ -358,6 +358,10 @@ const JAVA_NATIVE_PARAMETER_EXCLUDED_POSITIONS: { [name: string]: number[] } = {
 // hand-written java counterpart (BaseExchange/Exchange/Helpers/Precise) that keeps `Object`
 const JAVA_NATIVE_PARAMETER_GENERATED_FILES = /(^|\/)ts\/src\/(?:pro\/|prediction\/)?[a-z0-9_]+\.ts$/;
 
+// The generated test tier (java/tests/**): free functions and classes with no hand-written java
+// counterpart and no venue overrides, so a parameter's annotation prints its Java type there.
+const JAVA_TEST_TIER_FILES = /(?:^|[\\/])ts[\\/]src[\\/](?:pro[\\/])?test[\\/].*\.ts$/;
+
 // the base tier is generated too: the transpiled `BaseExchange` body of
 // ts/src/base/Exchange.ts is spliced into java/lib/.../BaseExchange.java (the hand-written
 // java surface around it is not a class of its own), so its declarations print the
@@ -955,9 +959,42 @@ export class JavaTranspiler extends BaseTranspiler {
             return `Helpers.toMapArg(${printed})`;
         }
         if (type === JAVA_STRING_LIST_TYPE) {
-            return `Helpers.toStringListArg(${printed})`;
+            const literal = this.javaStringListLiteral(node);
+            return literal !== undefined ? literal : `Helpers.toStringListArg(${printed})`;
         }
         return `(${type}) (${printed})`;
+    }
+
+    // `[ 'a', 'b' ]` over proven String elements prints the `List<String>` the core parameter
+    // takes; the helper's unchecked cast has nothing left to convert. Any other element (a bare
+    // null makes `asList` ambiguous and throws) keeps the helper.
+    javaStringListLiteral(node): string | undefined {
+        if (!isArrayLiteralExpression(node) || node.elements.some((e) => e.kind === SyntaxKind.SpreadElement)) {
+            return undefined;
+        }
+        const elements = [];
+        for (const element of node.elements) {
+            if (!this.javaStringListElementIsProven(element)) {
+                return undefined;
+            }
+            elements.push(this.printNode(element, 0));
+        }
+        return `new java.util.ArrayList<String>(java.util.Arrays.asList(${elements.join(', ')}))`;
+    }
+
+    javaStringListElementIsProven(node): boolean {
+        if (node === undefined || node.kind === SyntaxKind.NullKeyword
+            || (node.kind === SyntaxKind.Identifier && node.text === 'undefined')) {
+            return false;
+        }
+        if (this.javaArgumentHasType(node, 'String')) {
+            return true;
+        }
+        const declared = this.javaDeclaredTypeOf(node);
+        if (declared !== undefined && JAVA_DECLARED_STRING_TYPE.test(declared)) {
+            return true;
+        }
+        return this.javaProvableString(node);
     }
 
     // an identifier whose final Java declaration (the build layer's table, or a natively typed
@@ -3580,11 +3617,22 @@ export class JavaTranspiler extends BaseTranspiler {
             return undefined;
         }
         const method = node.parent;
-        if (method === undefined || !isMethodDeclaration(method) || !isClassDeclaration(method.parent)) {
+        const testFileName = node.getSourceFile().fileName.replace(/\\/g, '/');
+        const testTier = JAVA_TEST_TIER_FILES.test(testFileName);
+        if (testTier) {
+            // a free function of the test tier prints as a class method with no ancestor override
+            if (!isFunctionDeclaration(method) && !isMethodDeclaration(method)) {
+                return undefined;
+            }
+            // an async body that writes a parameter reads an Object copy of it, not the typed slot
+            if (this.isAsyncFunction(method) && this.javaParameterIsWritten(node)) {
+                return undefined;
+            }
+        } else if (method === undefined || !isMethodDeclaration(method) || !isClassDeclaration(method.parent)) {
             return undefined;
         }
         if (!JAVA_NATIVE_PARAMETER_BASE_FILES.test(node.getSourceFile().fileName)
-            && !JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(node.getSourceFile().fileName)) {
+            && !JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(node.getSourceFile().fileName) && !testTier) {
             return undefined; // a hand-written java class declares this method, not the printer
         }
         const checker: any = this.checkerOrUndefined();
@@ -3601,6 +3649,11 @@ export class JavaTranspiler extends BaseTranspiler {
         }
         const symbol = this.javaParameterAliasSymbol(node, type, checker);
         const name = symbol?.name;
+        if (testTier && (name === 'Strings' || this.javaIsStringArrayType(checker, type))) {
+            // a `Strings` slot stays Object: the test tier's own callers hold List<Object> locals
+            // and Java generics are invariant, so a typed slot rejects them
+            return undefined;
+        }
         if (name === undefined) {
             return this.javaPlainParameterTypeOf(node, type, checker);
         }
@@ -3639,12 +3692,22 @@ export class JavaTranspiler extends BaseTranspiler {
         return undefined;
     }
 
+    // the generated test tier's async wrapper copies hold the typed parameter's value
+    javaTestTierWrapperType(param): string | undefined {
+        const fileName = (param?.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
+        if (!JAVA_TEST_TIER_FILES.test(fileName) || this.javaParameterIsWritten(param)) {
+            return undefined;
+        }
+        return this.javaNativeParameterType(param);
+    }
+
     // a generated venue method's PLAIN annotation prints its Java type: a TS `string` is always a
     // String box, a string-indexed dict a HashMap. Base-tier declarations are hand-written Java
     // (`Object`), so the heritage walk keeps the box for anything overriding them.
     javaPlainParameterTypeOf(node, type, checker): string | undefined {
         const fileName = node.getSourceFile().fileName.replace(/\\/g, '/');
-        if (!JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName)) {
+        const testTier = JAVA_TEST_TIER_FILES.test(fileName);
+        if (!JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName) && !testTier) {
             return undefined;
         }
         if ((type as any).getAliasSymbol?.() !== undefined || (type as any).isUnionType?.()) {
@@ -3652,6 +3715,9 @@ export class JavaTranspiler extends BaseTranspiler {
         }
         if ((type.flags & TypeFlags.String) !== 0) {
             return this.STRING_KEYWORD;
+        }
+        if (testTier) {
+            return undefined; // the test tier types a plain `string` annotation only
         }
         if ((type.flags & TypeFlags.Object) === 0) {
             return undefined;
@@ -6429,15 +6495,15 @@ export class JavaTranspiler extends BaseTranspiler {
         return this.javaAsyncParamWrapperLines(node, identation, (param, isOptionalParam, { sigName, snapName }) => {
             // a default-valued parameter of the split core keeps its type in the
             // snapshot (`final Long since3 = since2;`); the body local stays `Object`
-            const snapType = (isOptionalParam && param.initializer !== undefined)
-                ? this.javaOptionalParameterJavaType(param) : 'Object';
+            const snapType = this.javaTestTierWrapperType(param) ?? ((isOptionalParam && param.initializer !== undefined)
+                ? this.javaOptionalParameterJavaType(param) : 'Object');
             return `final ${snapType} ${snapName} = ${sigName};`;
         });
     }
 
     printInsideMethodVariableWrappersIfAny(node, identation) {
         return this.javaAsyncParamWrapperLines(node, identation, (param, _isOptionalParam, { localName, snapName }) =>
-            `${this.javaAsyncParameterLocalType(param) ?? 'Object'} ${localName} = ${snapName};`);
+            `${this.javaTestTierWrapperType(param) ?? this.javaAsyncParameterLocalType(param) ?? 'Object'} ${localName} = ${snapName};`);
     }
 
     // one line per reassigned parameter of an async method (optional ones only in a split core)
