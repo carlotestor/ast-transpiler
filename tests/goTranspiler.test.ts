@@ -2780,7 +2780,9 @@ describe('go native element assignment', () => {
         "    }\n" +
         "}";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("AddElementToObject(result, code, \"x\")");
+        // the plain store now carries the helper's own nil-key test; a pointer value and a
+        // map another holder can write keep the helper
+        expect(output).toMatch(/if code != nil \{\s+result\[\*code\] = "x"\s+\}/);
         expect(output).toContain("AddElementToObject(result, code, code)");
         expect(output).toContain("AddElementToObject(other, code, \"y\")");
         expect(output).toContain("AddElementToObject(shared, code, \"z\")");
@@ -3219,7 +3221,9 @@ describe('go native element assignment', () => {
         "    }\n" +
         "}\n";
         const output = transpiler.transpileGo(input).content;
-        expect(output).toContain("AddElementToObject(fees, code, 1)");
+        // the boxed key is dereferenced only behind the helper's own nil test
+        expect(output).toMatch(/if code != nil \{\s+fees\[\*code\] = 1\s+\}/);
+        expect(output).not.toContain("AddElementToObject(fees");
     });
     test('a local the reject filters demoted to any keeps GetValue', () => {
         const input =

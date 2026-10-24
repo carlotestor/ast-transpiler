@@ -356,6 +356,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     goRebindingTargetOf(identifier: any): any;
     printNativeElementAssignment(containerNode: any, containerStr: string, keyNode: any, keyStr: string, valueStr: string, compound?: boolean, valueNode?: any): string | undefined;
     printNativeGuardedPointerKeyAssignment(containerNode: any, containerStr: string, containerType: any, fieldType: any, keyNode: any, keyStr: string, valueStr: string, compound: boolean, valueNode: any): string | undefined;
+    goGetArgMapParameterIsMapLocal(node: any): boolean;
+    printNativeMapWriteOnProvenLocal(containerNode: any, containerStr: string, keyNode: any, keyStr: string, valueStr: string, valueNode?: any, identation?: number): string | undefined;
+    goMapWriteValueIsNotPointer(valueNode: any): boolean;
     goIsNilGuardedStringPointerKey(keyNode: any): boolean;
     goIsFreshUnsharedMapLocal(node: any, writeSite: any): boolean;
     goUseMayPrecede(use: any, writeSite: any, scope: any): boolean;

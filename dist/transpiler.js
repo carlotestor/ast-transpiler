@@ -11977,7 +11977,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       }
       const rhs = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trimStart();
       const nativeRhs = right.kind === SyntaxKind5.BinaryExpression ? this.goWithExprDepth(this.goExprDepth, () => this.printNode(right, identation)).trimStart() : rhs;
-      const native = keyStrs.length === 1 ? this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, nativeRhs, false, right) : void 0;
+      const native = keyStrs.length === 1 ? this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, nativeRhs, false, right) ?? this.printNativeMapWriteOnProvenLocal(baseExpr, containerStr, keys[0], lastKey, nativeRhs, right, identation) : void 0;
       return native !== void 0 ? native : `AddElementToObject(${acc}, ${lastKey}, ${rhs})`;
     }
     if (left.kind === SyntaxKind5.TypeOfExpression) {
@@ -13184,6 +13184,56 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       return `${containerStr}[*${keyStr}] = ${valueStr}`;
     }
     return void 0;
+  }
+  // a `Dict` parameter with a `{}` default is the GetArgMap local the printer declares
+  // `map[string]any` — map literal fallback, so the local is a map on every line — and a
+  // write through it is a plain store once nothing rebinds the name
+  goGetArgMapParameterIsMapLocal(node) {
+    if (node?.kind !== SyntaxKind5.Identifier) {
+      return false;
+    }
+    let decl;
+    try {
+      decl = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+    } catch (e) {
+      decl = void 0;
+    }
+    if (decl?.kind !== SyntaxKind5.Parameter || this.goGetArgParameterType(decl) !== "map[string]any") {
+      return false;
+    }
+    const scope = this.goEnclosingFunction(decl);
+    return scope !== void 0 && !this.goLocalIsRebound(scope, decl.name);
+  }
+  // `m[k] = v` on the GetArgMap local, and `if k != nil { m[*k] = v }` for a nullable
+  // `*string` key on a map the printer proved: the helper's map branch skips a nil key and
+  // derefs a pointer value, so both shapes keep their guard and refuse a pointer value
+  printNativeMapWriteOnProvenLocal(containerNode, containerStr, keyNode, keyStr, valueStr, valueNode, identation = 0) {
+    if (valueStr.includes("\n")) {
+      return void 0;
+    }
+    const getArgMap = this.goGetArgMapParameterIsMapLocal(containerNode);
+    const provenMap = getArgMap || this.goElementAssignmentContainerType(containerNode, containerStr) === "map[string]any";
+    if (!provenMap) {
+      return void 0;
+    }
+    if (this.goIsStringKeyExpression(keyNode)) {
+      return getArgMap ? `${containerStr}[${keyStr}] = ${valueStr}` : void 0;
+    }
+    if (keyNode?.kind !== SyntaxKind5.Identifier || this.goDeclaredTypeOfIdentifier(keyNode) !== "*string" || !(getArgMap || this.goIsFreshUnsharedMapLocal(containerNode, containerNode)) || !this.goMapWriteValueIsNotPointer(valueNode)) {
+      return void 0;
+    }
+    const iden = this.getIden(identation);
+    return `if ${keyStr} != nil {
+${iden}	${containerStr}[*${keyStr}] = ${valueStr}
+${iden}}`;
+  }
+  // the helper stores derefScalar(value): a numeric literal is already the value it stores
+  goMapWriteValueIsNotPointer(valueNode) {
+    const inner = this.goUnwrapParenthesizedNode(valueNode);
+    if (inner?.kind === SyntaxKind5.NumericLiteral || inner?.kind === SyntaxKind5.BigIntLiteral) {
+      return true;
+    }
+    return this.goIsNonPointerValue(valueNode);
   }
   // a `*string` local the enclosing control flow proves non-nil: the helper's deref
   // yields the same string key (a nil key would have made it a no-op)
@@ -16168,7 +16218,7 @@ ${this.getIden(identation)}return nil`;
         const leftSide = this.printNode(elementAccess.expression, 0);
         const propName = this.printNode(elementAccess.argumentExpression, 0);
         const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trimStart();
-        const native = this.printNativeElementAssignment(elementAccess.expression, leftSide, elementAccess.argumentExpression, propName, value, false, right);
+        const native = this.printNativeElementAssignment(elementAccess.expression, leftSide, elementAccess.argumentExpression, propName, value, false, right) ?? this.printNativeMapWriteOnProvenLocal(elementAccess.expression, leftSide, elementAccess.argumentExpression, propName, value, right);
         if (native !== void 0) {
           return native;
         }
