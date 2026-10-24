@@ -9031,6 +9031,13 @@ var GoTranspiler = class extends BaseTranspiler {
     this.goContainerLocalCache = /* @__PURE__ */ new Map();
     // the array literal a `string[]` local is declared with, opened as a []string
     this.goStringListLiteralNode = void 0;
+    // GP07: a local declared nil (`let x: Str = undefined`, `let x = undefined`) whose body only
+    // stores one nullable scalar prints that scalar's pointer, so `x === undefined` is the native
+    // `x == nil` instead of IsEqual. The pointer is the type every write already names; a read
+    // the pointer cannot answer (argument, return, concat, index) keeps the local `any`.
+    this.goNilInitPointerTypes = /* @__PURE__ */ new Set(["*string", "*int64", "*float64", "*bool"]);
+    this.goNilInitLocalTypeCache = /* @__PURE__ */ new Map();
+    this.goNilInitLocalTypeInProgress = /* @__PURE__ */ new Set();
     this.goLocalSafeVerdicts = /* @__PURE__ */ new WeakMap();
     // `typeof x === "<name>"` checks and the Go predicate helper each maps to
     this.goTypeOfHelpers = /* @__PURE__ */ new Map([
@@ -11482,6 +11489,141 @@ func New${this.capitalize(this.className)}() *${this.className} {
       this.goDeclaredTypeInProgress.delete(declaration);
     }
   }
+  // the declaration shapes that print `= nil`: no initializer, undefined, null
+  goNilInitInitializer(initializer) {
+    if (initializer === void 0) {
+      return true;
+    }
+    const node = this.goUnwrapParenthesizedNode(initializer);
+    if (node?.kind === SyntaxKind5.NullKeyword) {
+      return true;
+    }
+    return node?.kind === SyntaxKind5.Identifier && node.text === "undefined";
+  }
+  goNilInitLocalType(declaration) {
+    if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    if (!this.goNilInitInitializer(declaration.initializer)) {
+      return void 0;
+    }
+    if (this.goNilInitLocalTypeCache.has(declaration)) {
+      return this.goNilInitLocalTypeCache.get(declaration);
+    }
+    if (this.goNilInitLocalTypeInProgress.has(declaration)) {
+      return void 0;
+    }
+    this.goNilInitLocalTypeInProgress.add(declaration);
+    let result;
+    try {
+      result = this.goNilInitLocalTypeScan(declaration);
+    } finally {
+      this.goNilInitLocalTypeInProgress.delete(declaration);
+    }
+    this.goNilInitLocalTypeCache.set(declaration, result);
+    return result;
+  }
+  goNilInitLocalTypeScan(declaration) {
+    const name = declaration.name.text;
+    const scope = this.goEnclosingFunction(declaration);
+    if (scope === void 0) {
+      return void 0;
+    }
+    const writes = [];
+    let otherUse = false;
+    const visit = (n) => {
+      if (otherUse) {
+        return;
+      }
+      if (n.kind === SyntaxKind5.Identifier && n.text === name && n !== declaration.name) {
+        const parent = n.parent;
+        if (parent?.kind === SyntaxKind5.VariableDeclaration && parent.name === n) {
+          return;
+        }
+        if (parent?.kind === SyntaxKind5.BinaryExpression && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
+          if (parent.left === n) {
+            writes.push(parent.right);
+            return;
+          }
+          if (this.goAssignmentWritesName(parent.left, name)) {
+            otherUse = true;
+            return;
+          }
+        }
+        if ((parent?.kind === SyntaxKind5.PrefixUnaryExpression || parent?.kind === SyntaxKind5.PostfixUnaryExpression) && (parent.operator === SyntaxKind5.PlusPlusToken || parent.operator === SyntaxKind5.MinusMinusToken)) {
+          otherUse = true;
+          return;
+        }
+        if (!this.goNilInitReadIsPointerSafe(n)) {
+          otherUse = true;
+        }
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    scope.forEachChild(visit);
+    if (otherUse || writes.length === 0) {
+      return void 0;
+    }
+    const types = writes.map((right) => this.goTypeOfInitializer(right, this.printNode(right, 0)));
+    let candidate;
+    for (const goType of types) {
+      if (typeof goType !== "string" || !this.goNilInitPointerTypes.has(goType)) {
+        continue;
+      }
+      if (candidate === void 0) {
+        candidate = goType;
+      } else if (candidate !== goType) {
+        return void 0;
+      }
+    }
+    if (candidate === void 0) {
+      return void 0;
+    }
+    for (let i = 0; i < writes.length; i++) {
+      if (types[i] === candidate) {
+        continue;
+      }
+      if (this.goPointerWriteConversion(writes[i], candidate) !== void 0) {
+        continue;
+      }
+      return void 0;
+    }
+    if (this.goTypeNameIsShadowed(scope, candidate) || !this.goLocalIsSafeToType(scope, declaration, name, candidate)) {
+      return void 0;
+    }
+    return candidate;
+  }
+  // the only reads a `*T` local answers exactly like the box did: comparisons (the pointer arms
+  // deref, or IsEqual does) and truthiness (`!x`, a condition), which EvalTruthy derefs too
+  goNilInitReadIsPointerSafe(node) {
+    let current = node;
+    let parent = current.parent;
+    while (parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = parent;
+      parent = parent.parent;
+    }
+    if (parent === void 0) {
+      return false;
+    }
+    switch (parent.kind) {
+      case SyntaxKind5.BinaryExpression: {
+        const operator = parent.operatorToken?.kind;
+        return operator === SyntaxKind5.EqualsEqualsToken || operator === SyntaxKind5.ExclamationEqualsToken || operator === SyntaxKind5.EqualsEqualsEqualsToken || operator === SyntaxKind5.ExclamationEqualsEqualsToken || operator === SyntaxKind5.LessThanToken || operator === SyntaxKind5.GreaterThanToken || operator === SyntaxKind5.LessThanEqualsToken || operator === SyntaxKind5.GreaterThanEqualsToken || operator === SyntaxKind5.AmpersandAmpersandToken || operator === SyntaxKind5.BarBarToken;
+      }
+      case SyntaxKind5.PrefixUnaryExpression:
+        return parent.operator === SyntaxKind5.ExclamationToken;
+      case SyntaxKind5.IfStatement:
+      case SyntaxKind5.WhileStatement:
+      case SyntaxKind5.DoStatement:
+        return parent.expression === current;
+      case SyntaxKind5.ForStatement:
+        return parent.condition === current;
+      case SyntaxKind5.ConditionalExpression:
+        return parent.condition === current;
+    }
+    return false;
+  }
   getGoLocalType(declaration, parsedValue) {
     const goType = this.goTypeOfInitializer(declaration.initializer, parsedValue);
     if (goType === void 0 || goType === GO_SAFE_LIST_LOCAL_TYPE) {
@@ -11491,7 +11633,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
       }
     }
     if (goType === void 0) {
-      return this.goSafeDictLocalUnbox(declaration) ?? this.goSafeListLocalUnbox(declaration) ?? this.goMarketLocalUnbox(declaration) ?? "any";
+      return this.goSafeDictLocalUnbox(declaration) ?? this.goSafeListLocalUnbox(declaration) ?? this.goMarketLocalUnbox(declaration) ?? this.goNilInitLocalType(declaration) ?? "any";
     }
     const sourceName = declaration.name?.text;
     if (sourceName === void 0) {
@@ -11555,6 +11697,10 @@ ${this.getIden(identation)}PanicOnError(${parsedName})`;
     if (parsedValue === this.UNDEFINED_TOKEN) {
       if (containerType !== void 0 && node?.parent?.kind === SyntaxKind5.FirstStatement) {
         return this.getIden(identation) + "var " + this.printNode(declaration.name) + " " + containerType + " = " + parsedValue;
+      }
+      const nilInitType = this.goNilInitLocalType(declaration);
+      if (nilInitType !== void 0) {
+        return this.getIden(identation) + "var " + this.printNode(declaration.name) + " " + nilInitType + " = " + parsedValue;
       }
       return this.getIden(identation) + "var " + this.printNode(declaration.name) + " any = " + parsedValue;
     }

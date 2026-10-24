@@ -256,6 +256,13 @@ export declare class GoTranspiler extends BaseTranspiler {
     goContainerLocalType(declaration: any): string | undefined;
     goContainerLocalTypeUncached(declaration: any): string | undefined;
     goStringListLiteralNode: any;
+    goNilInitPointerTypes: Set<string>;
+    goNilInitLocalTypeCache: Map<any, string>;
+    goNilInitLocalTypeInProgress: Set<any>;
+    goNilInitInitializer(initializer: any): boolean;
+    goNilInitLocalType(declaration: any): string | undefined;
+    goNilInitLocalTypeScan(declaration: any): string | undefined;
+    goNilInitReadIsPointerSafe(node: any): boolean;
     getGoLocalType(declaration: any, parsedValue: string): string;
     goLocalSafeVerdicts: WeakMap<object, Map<string, string>>;
     goAwaitReceiveUnbox(awaitNode: any, printedInitializer: string): {
