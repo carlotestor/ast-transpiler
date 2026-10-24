@@ -16556,19 +16556,11 @@ ${this.getIden(level)}}()`;
     if (declarations.every((d) => baseFile.test(String(d.getSourceFile()?.fileName ?? "").replace(/\\/g, "/")))) {
       return true;
     }
-    const owner = this.goEnclosingClass(callee);
-    if (owner?.name?.text !== "Exchange" || !declarations.every((d) => d.parent === owner)) {
+    if (this.goEnclosingClassName(callee) !== "Exchange") {
       return false;
     }
-    return true;
-  }
-  // the class declaration/expression a node is written inside, or undefined
-  goEnclosingClass(node) {
-    let parent = node?.parent;
-    while (parent !== void 0 && parent.kind !== SyntaxKind5.ClassDeclaration && parent.kind !== SyntaxKind5.ClassExpression) {
-      parent = parent.parent;
-    }
-    return parent?.kind === SyntaxKind5.ClassDeclaration ? parent : void 0;
+    const owner = this.goEnclosingClass(callee);
+    return declarations.every((d) => d.parent === owner);
   }
   goG02LiteralDefault(node) {
     node = this.goUnwrapParenthesizedNode(node);
