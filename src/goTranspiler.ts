@@ -2161,10 +2161,68 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         if (!this.goIsNativeAppendShape(receiver, pushNode)) {
             return undefined;
         }
-        if (this.goDeclaredTypeOfIdentifier(receiver) !== '[]any') {
+        const declared = this.goResolvedLocalGoType(receiver);
+        if (declared === GO_STRING_LIST_LOCAL_TYPE) {
+            return this.goStringListAppendsAString(pushNode) ? this.printNode(receiver, 0) : undefined;
+        }
+        if (declared !== '[]any') {
             return undefined;
         }
         return this.printNode(receiver, 0);
+    }
+
+    // the Go type of an identifier: the memoised verdict, or a fresh resolution when the cache
+    // holds the `any` a nested query answered before the declaration printed
+    goResolvedLocalGoType(receiver): string | undefined {
+        const declared = this.goDeclaredTypeOfIdentifier(receiver);
+        if (declared !== undefined) {
+            return declared;
+        }
+        const decl: any = this.checkerOrUndefined()?.getSymbolAtLocation(receiver)?.valueDeclaration?.resolve();
+        if ((decl?.kind !== SyntaxKind.VariableDeclaration) || this.goDeclaredTypeInProgress.has(decl)) {
+            return undefined;
+        }
+        this.goDeclaredTypeInProgress.add(decl);
+        try {
+            const printed = (decl.initializer === undefined) ? this.UNDEFINED_TOKEN : this.printNode(decl.initializer, 0);
+            return this.getGoLocalType(decl, printed);
+        } finally {
+            this.goDeclaredTypeInProgress.delete(decl);
+        }
+    }
+
+    // `x.push(v)` on a local the printer declares []string appends natively when v already
+    // prints as a Go string: `x = append(x, v)` keeps the element type and the helper's order
+    goStringListAppendsAString(pushNode): boolean {
+        const receiver = pushNode?.expression?.expression;
+        if (!this.goIsNativeAppendShape(receiver, pushNode)) {
+            return false;
+        }
+        return this.goStringValueNodeIsProven(pushNode.arguments[0]);
+    }
+
+    // the pushed value is a Go string without printing it: a literal, a local declared `string`,
+    // or an element read of a []string slice. Printing here would resolve other locals' types
+    // from inside a declaration's own safety scan and poison their caches.
+    goStringValueNodeIsProven(node): boolean {
+        switch (node?.kind) {
+        case SyntaxKind.StringLiteral:
+        case SyntaxKind.NoSubstitutionTemplateLiteral:
+            return true;
+        case SyntaxKind.ParenthesizedExpression:
+            return this.goStringValueNodeIsProven(node.expression);
+        case SyntaxKind.Identifier:
+            return this.goDeclaredTypeOfIdentifier(node) === 'string';
+        case SyntaxKind.ElementAccessExpression: {
+            const base = node.expression;
+            if (base?.kind !== SyntaxKind.Identifier) {
+                return false;
+            }
+            const declared = this.goDeclaredTypeOfIdentifier(base);
+            return declared === GO_STRING_LIST_LOCAL_TYPE;
+        }
+        }
+        return false;
     }
 
     // reject the refinement when something downstream needs the local to stay `any`:
@@ -2181,7 +2239,11 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
                 && parent.name?.text === 'push') {
                 // a []any local appends natively, so its receiver may be typed; every
                 // other push shape keeps the helper and with it the box
-                    if ((goType !== '[]any') || !this.goIsNativeAppendShape(n, parent.parent)) {
+                    if (goType === GO_STRING_LIST_LOCAL_TYPE) {
+                        if (!this.goStringListAppendsAString(parent.parent)) {
+                            return true;
+                        }
+                    } else if ((goType !== '[]any') || !this.goIsNativeAppendShape(n, parent.parent)) {
                         return true;
                     }
                 }
@@ -2841,7 +2903,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
     }
 
     // a `[]string` local reads as a list of strings: its length, an element, a membership
-    // test. push keeps the box (the append arm of the []any rule takes an `any` element).
+    // test, and a push of a value that already prints as a Go string (append keeps the type)
     goStringListUseReadsAs(node): boolean {
         const parent: any = node.parent;
         if (parent === undefined) {
@@ -2851,7 +2913,13 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return true; // a member name, not a reference
         }
         if (parent.kind === SyntaxKind.PropertyAccessExpression) {
-            return (parent.expression === node) && (parent.name?.text === 'length');
+            if (parent.expression !== node) {
+                return false;
+            }
+            if (parent.name?.text === 'length') {
+                return true;
+            }
+            return (parent.name?.text === 'push') && this.goStringListAppendsAString(parent.parent);
         }
         if (parent.kind === SyntaxKind.ElementAccessExpression) {
             if (parent.expression !== node) {
@@ -8697,7 +8765,7 @@ ${tryBodyBlock}
     // above, or any other local/param the declared-type table proved a slice (a slice literal,
     // a `[]any`-returning accessor, a slice param the typed-param family registers). All of them
     goDeclaredListIdentifier(node): boolean {
-        return (this.goDeclaredTypeOfIdentifier(node) === GO_SAFE_LIST_LOCAL_TYPE)
+        return (this.goResolvedLocalGoType(node) === GO_SAFE_LIST_LOCAL_TYPE)
             || this.goSafeListUnboxIdentifier(node);
     }
 

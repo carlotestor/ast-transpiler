@@ -489,7 +489,7 @@ describe('go typed body locals', () => {
         expect(output).toContain("var sum any = Add(a, b)");
         expect(output).toContain("var picked any = func() any {");
     });
-    test('a local reassigned with another type, appended to or spread stays any', () => {
+    test('a local reassigned with another type stays any, an appended []string keeps its type', () => {
         const input =
         "class Exchange {\n" +
         "    safeString(a, b) { return a; }\n" +
@@ -503,7 +503,8 @@ describe('go typed body locals', () => {
         "}";
         const output = squash(transpiler.transpileGo(input).content);
         expect(output).toContain("var reassigned any = ToUpper(market)");
-        expect(output).toContain("var appended any = Split(market, \"/\")");
+        expect(output).toContain("var appended []string = Split(market, \"/\")");
+        expect(output).toContain("appended = append(appended, \"extra\")");
     });
     test('a local reassigned with the same concrete type keeps the type', () => {
         const input =
@@ -5226,7 +5227,7 @@ describe('go .push -> append on a declared []any local', () => {
         expect(output).toContain("var x any = []any{}");
         expect(output).toContain("AppendToArray(&x, a)");
     });
-    test('a push onto a []string helper result keeps the box and the helper', () => {
+    test('a push onto a []string local appends natively', () => {
         const input =
         "class Test {\n" +
         "    f (market: string) {\n" +
@@ -5236,8 +5237,42 @@ describe('go .push -> append on a declared []any local', () => {
         "    }\n" +
         "}";
         const output = transpiler.transpileGo(input).content;
+        expect(output).toContain("var parts []string = Split(market, \"/\")");
+        expect(output).toContain("parts = append(parts, \"x\")");
+    });
+    test('a push of a nilable string keeps the []string local boxed', () => {
+        const input =
+        "class Test {\n" +
+        "    safeString (a, b) { return undefined; }\n" +
+        "    f (market: string) {\n" +
+        "        const parts = market.split ('/')\n" +
+        "        const id = this.safeString (market, 'id')\n" +
+        "        parts.push (id)\n" +
+        "        return parts\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileGo(input).content;
         expect(output).toContain("var parts any = Split(market, \"/\")");
-        expect(output).toContain("AppendToArray(&parts, \"x\")");
+        expect(output).toContain("AppendToArray(&parts, id)");
+    });
+    test('a string[] literal built by push stays []string and appends natively', () => {
+        const input =
+        "class Test {\n" +
+        "    f (row: any) {\n" +
+        "        const ids: string[] = []\n" +
+        "        for (let i = 0; i < 3; i++) {\n" +
+        "            const id = 'id' + i.toString ()\n" +
+        "            ids.push (id)\n" +
+        "        }\n" +
+        "        for (let i = 0; i < ids.length; i++) {\n" +
+        "            if (ids[i] === 'id1') { return i; }\n" +
+        "        }\n" +
+        "        return -1\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileGo(input).content;
+        expect(output).toContain("var ids []string = []string{}");
+        expect(output).toContain("ids = append(ids, id)");
     });
     test('a push onto a parameter keeps the helper', () => {
         const input =
