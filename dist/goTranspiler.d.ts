@@ -317,7 +317,6 @@ export declare class GoTranspiler extends BaseTranspiler {
     goMethodKeepsBaseSignature(fn: any): boolean;
     goHasTreeCallSite(fn: any): boolean;
     goParameterCallSitesPassType(fn: any, index: number, goType: string): boolean;
-    goEnclosingClass(fn: any): any;
     goEnclosingClassName(fn: any): string | undefined;
     goPrintedArgType(arg: any): string | undefined;
     goSameFileCallsOf(fn: any, name: string): Array<any>;

@@ -9382,7 +9382,27 @@ ${tryBodyBlock}
             return false;
         }
         // an exchange override would print its own Go body: only the base property qualifies
-        return declarations.every((d) => /(^|\/)ts\/src\/base\/Exchange\.ts$/.test(String(d.getSourceFile()?.fileName ?? '').replace(/\\/g, '/')));
+        const baseFile = /(^|\/)ts\/src\/base\/Exchange\.ts$/;
+        if (declarations.every((d) => baseFile.test(String(d.getSourceFile()?.fileName ?? '').replace(/\\/g, '/')))) {
+            return true;
+        }
+        // the base file transpiled from text carries no usable file name, so the path proof above
+        // cannot answer there: a call written inside the base class that declares the accessor is
+        // the base declaration itself, which is what the Go receiver binds (no override to shadow)
+        const owner = this.goEnclosingClass(callee);
+        if ((owner?.name?.text !== 'Exchange') || !declarations.every((d) => d.parent === owner)) {
+            return false;
+        }
+        return true;
+    }
+
+    // the class declaration/expression a node is written inside, or undefined
+    goEnclosingClass(node) {
+        let parent = node?.parent;
+        while ((parent !== undefined) && (parent.kind !== SyntaxKind.ClassDeclaration) && (parent.kind !== SyntaxKind.ClassExpression)) {
+            parent = parent.parent;
+        }
+        return (parent?.kind === SyntaxKind.ClassDeclaration) ? parent : undefined;
     }
 
     goG02LiteralDefault(node): boolean {
