@@ -1338,6 +1338,10 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return (initializer.operator === SyntaxKind.ExclamationToken) ? 'bool' : undefined;
         case SyntaxKind.ParenthesizedExpression:
             return this.goTypeOfInitializer(initializer.expression, printedValue);
+        case SyntaxKind.Identifier:
+            // `x := y` holds exactly what y holds, so it carries y's printed Go type: the
+            // alias is declared with that type and reads through it natively [hx10w7 G10]
+            return this.goDeclaredTypeOfIdentifier(initializer);
         case SyntaxKind.BinaryExpression: {
             // `a || b` prints `EvalTruthy(a) || EvalTruthy(b)`, a Go bool
             const op = initializer.operatorToken.kind;

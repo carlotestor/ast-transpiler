@@ -7363,3 +7363,39 @@ describe('hx10 G09: slice parameters typed from their array annotation', () => {
         expect(out).not.toContain('func() any {');
     });
 });
+
+describe('hx10 G10: `x := y` aliases carry the source local printed type', () => {
+    const run = (body: string) => new Transpiler({ verbose: false }).transpileGo(
+        "type Dict = { [key: string]: any };\n" +
+        "class Base { safeString (a: any, k: any, d: any = undefined): any { return d; } safeDict (a: any, k: any, d: any = undefined): any { return d; } }\n" +
+        "class T extends Base {\n" + body + "}\n").content;
+    test('an alias of a pointer local prints the pointer and compares natively', () => {
+        const out = run(
+            "    go (params: Dict): any {\n" +
+            "        const s = this.safeString(params, 's');\n" +
+            "        const t = s;\n" +
+            "        return t === 'x';\n" +
+            "    }\n");
+        expect(out).toContain('var t *string = s');
+        expect(out).toContain('t != nil && *t == \"x\"');
+        expect(out).not.toContain('IsEqual(t');
+    });
+    test('an alias of an untyped producer local keeps the box', () => {
+        const out = run(
+            "    go (params: Dict): any {\n" +
+            "        const opts = this.safeDict(params, 'opts');\n" +
+            "        const alias = opts;\n" +
+            "        return GetValue(alias, 'x');\n" +
+            "    }\n");
+        expect(out).toContain('var opts any = this.SafeDict(params, \"opts\")');
+        expect(out).toContain('var alias any = opts');
+        expect(out).toContain('GetValue(alias, \"x\")');
+    });
+    test('a chained read whose intermediate is untyped keeps the helper', () => {
+        const out = run(
+            "    go (a: Dict): any {\n" +
+            "        return a['x']['y'];\n" +
+            "    }\n");
+        expect(out).toContain('GetValue(GetValue(a, \"x\"), \"y\")');
+    });
+});
