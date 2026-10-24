@@ -3734,7 +3734,7 @@ describe('rust typed-receiver native reads (D-28)', () => {
             '    }\n' +
             '}';
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('currencies.as_map().and_then(|__m| code.as_str().and_then(|__k| __m.get(__k))).cloned().unwrap_or(Value::Null)');
+        expect(output).toContain('currencies.get(code.as_str().unwrap_or("")).cloned().unwrap_or(Value::Null)');
         expect(output).not.toContain('get_value(&currencies, &code)');
     });
 
@@ -4843,5 +4843,57 @@ describe('hx10 PR02 native `bool` parameters', () => {
         expect(venue).toContain('pub fn channelB(&self, flag: Value) -> Value {');
         // PR04's identifier arm: a boolean-typed `Value` prints the native `as_bool()` compare
         expect(venue).toContain('if flag.as_bool() == Some(true) {');
+    });
+});
+
+describe('hx10 w5 R02 typed dict bearers', () => {
+    const wrap = (body: string, params = 'v: any') => `class T {
+    parseX (x) { return x; }
+    f (${params}) {
+${body}
+    }
+}`;
+    const rs = (body: string, params?: string) => transpiler.transpileRust(wrap(body, params)).content;
+
+    test('a literal-only dict local is a bare IndexMap with native reads and inserts', () => {
+        const out = rs("        const request = { 'type': 'limit' };\n        request['symbol'] = v;\n        const sym = request['symbol'];\n        return sym;");
+        expect(out).toContain('let mut request: indexmap::IndexMap<String, Value> = ({');
+        expect(out).toContain('request.insert("symbol".into(), v.clone())');
+        expect(out).toContain('request.get("symbol").cloned().unwrap_or(Value::Null)');
+        expect(out).not.toContain('add_element_to_object');
+        expect(out).not.toContain('get_value(&request');
+        expect(out).not.toContain('as_map().and_then');
+    });
+
+    test('the final move is boxed once (return, and a `this.` argument)', () => {
+        const ret = rs("        const res = {};\n        res['a'] = v;\n        return res;");
+        expect(ret).toContain('let mut res: indexmap::IndexMap<String, Value> = ({');
+        expect(ret).toContain('res.insert("a".into(), v.clone())');
+        expect(ret).toContain('return Value::Map(res);');
+        const arg = rs("        const params = {};\n        params['a'] = v;\n        return this.parseX (params);");
+        expect(arg).toContain('return self.parseX(Value::Map(params));');
+    });
+
+    test('negative: a non-final escape, a dynamic key or a container helper keeps the box', () => {
+        const late = rs("        const params = {};\n        params['a'] = v;\n        const r = this.parseX (params);\n        return params;");
+        expect(late).toContain('let mut params: Value = Value::Map({');
+        const dyn = rs("        const d = {};\n        d[v] = 1;\n        return d['a'];");
+        expect(dyn).toContain('let mut d: Value = Value::Map({');
+        const keys = rs("        const d = { 'a': 1 };\n        const n = Object.keys (d).length;\n        return n;");
+        expect(keys).toContain('let mut d: Value = Value::Map({');
+    });
+
+    test('a proven string key place reads and writes natively', () => {
+        const out = rs("        const m = {};\n        m[k] = v;\n        return m[k];", 'v: any, k: string');
+        expect(out).toContain('let mut m: indexmap::IndexMap<String, Value> = ({');
+        expect(out).toContain('m.insert(crate::runtime::stringify_param(&k), v.clone())');
+        expect(out).toContain('m.get(k.as_str().unwrap_or("")).cloned().unwrap_or(Value::Null)');
+    });
+
+    test('negative: a chained write or a numeric key keeps the box', () => {
+        const nested = rs("        const d = {};\n        d['a']['b'] = v;\n        return d['a'];");
+        expect(nested).toContain('let mut d: Value = Value::Map({');
+        const num = rs("        const d = {};\n        d[0] = v;\n        return d[0];");
+        expect(num).toContain('let mut d: Value = Value::Map({');
     });
 });

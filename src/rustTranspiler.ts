@@ -1653,7 +1653,7 @@ export class RustTranspiler extends BaseTranspiler {
             const keyStrs = keys.map(k => this.printNode(k, 0));
             for (const key of keyStrs.slice(0, -1)) acc = `get_value_mut(${acc}, &${key})`;
             const rhs = this.printNode(right, 0);
-            const nativeInsert = keyStrs.length === 1 ? (this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs)) : undefined;
+            const nativeInsert = keyStrs.length === 1 ? (this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs)) : undefined;
             return nativeInsert ?? `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${rhs})`;
         }
         // typeof comparisons
@@ -1752,6 +1752,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (node.declarations.length === 1 && this.rustVecLocalIsTyped(declaration)) {
             const native = this.rustVecNativeLiteral(declaration);
             return `${indent}let mut ${varName}: Vec<Value> = ${native ?? 'Vec::new()'}`;
+        }
+        if (node.declarations.length === 1 && this.rustDictLocalIsTyped(declaration)) {
+            // Parenthesised: the driver strips the `;` of a statement ending in `};`.
+            const block = this.rustObjectLiteralBlock(this.rustSkipWrappers(declaration.initializer), identation);
+            return `${indent}let mut ${varName}: indexmap::IndexMap<String, Value> = (${block})`;
         }
         const boolValue = this.getRustBoolLocalInitializer(declaration, parsedValue);
         if (boolValue !== undefined) {
@@ -3339,7 +3344,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (!this.isProvenListExpression(receiverNode) && !this.r18ArrReadLocal(receiverNode)) return undefined;
             return this.printNativeListIndex(receiverText, index);
         }
-        const dictRead = this.printNativeDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.printNativeThisFieldDynamicMapAccess(receiverText, receiverNode, keyNode)
+        const dictRead = this.rustBearerDictDynamicRead(receiverText, receiverNode, keyNode) ?? this.printNativeDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.printNativeThisFieldDynamicMapAccess(receiverText, receiverNode, keyNode)
             ?? this.rustR10DynamicRead(receiverText, receiverNode, keyNode);
         if (dictRead !== undefined) return dictRead;
         // A non-literal index (the `for (let i = 0; …)` counter) into a
@@ -3988,6 +3993,12 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printNativeMapAccess(receiverText: string, receiverNode: Node, keyText: string): string | undefined {
+        // hx10 R02: a typed dict bearer is a bare IndexMap, so the read is the
+        // map lookup itself — no `as_map()` box and no `|__m|` closure.
+        if (this.rustDictBearerDeclaration(receiverNode) !== undefined) {
+            if (!RustTranspiler.rustBearerKeyTextOk(keyText)) return undefined;
+            return `${receiverText}.get("${this.escapeRustStringLiteral(keyText)}").cloned().unwrap_or(Value::Null)`;
+        }
         if (!this.isProvenMapExpression(receiverNode) && !this.rustR10LiteralReadOk(receiverNode, keyText)) {
             // Declared-Dict locals read natively too (see the classifier below).
             if (!this.rustIsDeclaredDictLocal(receiverNode)) return undefined;
@@ -4517,6 +4528,12 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printObjectLiteralExpression(node, identation) {
+        return `Value::Map(${this.rustObjectLiteralBlock(node, identation)})`;
+    }
+
+    /** The object-literal block on its own (`{ let mut m = …; m }`) — the payload a
+     *  `Value::Map(..)` box carries and the initialiser a typed dict bearer needs. */
+    rustObjectLiteralBlock(node, identation) {
         const escapeKey = (s: any): string => String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
             .replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
         const idn2 = this.getIden(identation + 2);
@@ -4531,7 +4548,7 @@ export class RustTranspiler extends BaseTranspiler {
         });
         const idn1 = this.getIden(identation + 1);
         const body = lines.map(l => l + '\n').join('');
-        return `Value::Map({\n${idn1}let mut m = std::collections::HashMap::new();\n${body}${idn1}m\n${this.getIden(identation)}})`;
+        return `{\n${idn1}let mut m = std::collections::HashMap::new();\n${body}${idn1}m\n${this.getIden(identation)}}`;
     }
 
     printArrayLiteralExpression(node, identation) {
@@ -5207,10 +5224,173 @@ export class RustTranspiler extends BaseTranspiler {
     transformIdentifier(node, identifier) {
         const text = super.transformIdentifier(node, identifier);
         const parent = node?.parent;
+        // hx10 R02: a typed dict bearer is boxed only at the single final move its
+        // declaration proof admitted (`return x` / an argument of a `this.` call).
+        if (this.rustDictBearerDeclaration(node) !== undefined && parent !== undefined
+            && ((isReturnStatement(parent) && parent.expression === node)
+                || (isCallExpression(parent) && parent.arguments.some((a) => a === node)))) {
+            return `Value::Map(${text})`;
+        }
         if (parent === undefined || !(isReturnStatement(parent) || (isCallExpression(parent) && parent.arguments.some((a) => a === node)
             && this.rustVecBoxingCallee(parent.expression)) || (parent.kind === SyntaxKind.PropertyAssignment && parent.initializer === node))) return text;
         if (this.rustVecLocalDeclarationOf(node) === undefined) return text;
         return this.rustVecValueUse(node, String(node.text)) ? `Value::from(${text})` : `Value::from(${text}.clone())`;
+    }
+
+    // ── hx10 R02: typed dict bearers ──────────────────────────────────────────
+    //
+    // A local that builds one object literal and is only ever read/written by a
+    // literal key, plus at most one final move, is declared a bare
+    // `indexmap::IndexMap<String, Value>`: reads print `.get(k)`, writes
+    // `.insert(k, v)`, and the box with its `get_value`/`add_element_to_object`
+    // calls and `|__m|` closure disappears. Any other use keeps the `Value` box.
+
+    private rustDictBearerDecisions = new WeakMap<any, boolean>();
+
+    /** The declaration behind `node` when it is a local typed as a dict bearer. */
+    rustDictBearerDeclaration(node: any): any | undefined {
+        if (!isIdentifier(node)) return undefined;
+        const declaration: any = this.rustDeclarationOfIdentifier(node);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.name === node) return undefined;
+        return this.rustDictLocalIsTyped(declaration) ? declaration : undefined;
+    }
+
+    rustDictLocalIsTyped(declaration: any): boolean {
+        if (declaration?.kind !== SyntaxKind.VariableDeclaration) return false;
+        let decision = this.rustDictBearerDecisions.get(declaration);
+        if (decision === undefined) {
+            this.rustDictBearerDecisions.set(declaration, false); // re-entrancy guard
+            try {
+                decision = this.rustDictLocalIsTypedUncached(declaration);
+            } catch (e) {
+                decision = false; // no proof -> the local keeps its `Value` box
+            }
+            this.rustDictBearerDecisions.set(declaration, decision);
+        }
+        return decision;
+    }
+
+    rustDictLocalIsTypedUncached(declaration: any): boolean {
+        const init: any = declaration.initializer;
+        if (declaration.name?.kind !== SyntaxKind.Identifier || init === undefined) return false;
+        const literal: any = this.rustSkipWrappers(init);
+        if (!isObjectLiteralExpression(literal)) return false;
+        if (literal.properties.some((p: any) => p.kind === SyntaxKind.SpreadAssignment)) return false;
+        for (const property of literal.properties as unknown as any[]) {
+            const propertyName: any = property.name;
+            if (propertyName === undefined || propertyName.kind === SyntaxKind.ComputedPropertyName
+                || !RustTranspiler.rustBearerKeyTextOk(String(propertyName.text))) return false;
+        }
+        const name = String(declaration.name.text);
+        const fn: any = this.rustEnclosingFunction(declaration);
+        if (fn === undefined || isSourceFile(fn)) return false;
+        // The tests pipeline's text post-passes key on the boxed `Value` local shape.
+        const source: any = declaration.getSourceFile?.()?.fileName;
+        if (typeof source === 'string' && /\/test\//.test(source)) return false;
+        const escapes: any[] = [];
+        const safe = this.rustLocalUsesAll(declaration, name, false, (n: any) => {
+            if (this.rustIdentifierIsPropertyName(n)) {
+                // `{ x }` shorthand is a value use, not a name; anything else spelled
+                // like the local is a property name, not this binding.
+                return !(n.parent?.kind === SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
+            }
+            if (!this.rustIdentifierRefersToDeclaration(n, declaration)) return false;
+            if (this.rustEnclosingFunction(n) !== fn) return false; // a closure capture
+            const parent: any = n.parent;
+            if (isReturnStatement(parent) && parent.expression === n) {
+                escapes.push(n);
+                return true;
+            }
+            if (isCallExpression(parent) && parent.arguments.some((a: any) => a === n)
+                && isPropertyAccessExpression(parent.expression)
+                && (parent.expression.expression.kind === SyntaxKind.ThisKeyword
+                    || parent.expression.expression.kind === SyntaxKind.SuperKeyword)) {
+                escapes.push(n);
+                return true;
+            }
+            if (isElementAccessExpression(parent) && parent.expression === n) return this.rustDictBearerElementUse(parent, name);
+            return false;
+        });
+        if (!safe || escapes.length > 1) return false;
+        // The boxed move is only sound when nothing reads the local afterwards.
+        if (escapes.length === 1 && !this.rustVecIsFinalUse(escapes[0], name)) return false;
+        return true;
+    }
+
+    /** One `x[...]` use rooted at the bearer: a key read or a single-level `x['k'] = v`
+     *  write. Chained reads stay native at the first level; a chained/compound write,
+     *  `delete` and a call on the read reach the container through a `&mut Value`, so
+     *  they keep the box. */
+    rustDictBearerElementUse(access: any, name: string): boolean {
+        let root: any = access;
+        while (isElementAccessExpression(root.parent) && root.parent.expression === root) root = root.parent;
+        const up: any = root.parent;
+        const write = up !== undefined && isBinaryExpression(up) && up.left === root
+            && rustIsAssignmentOperator(up.operatorToken.kind);
+        if (write) {
+            if (root !== access || up.operatorToken.kind !== SyntaxKind.EqualsToken) return false;
+            return this.rustDictBearerKeyOk(access.argumentExpression);
+        }
+        if (up !== undefined && (isDeleteExpression(up) || (isCallExpression(up) && up.expression === root)
+            || up.kind === SyntaxKind.PrefixUnaryExpression || up.kind === SyntaxKind.PostfixUnaryExpression)) return false;
+        // The printer proves the position on the outermost chain node.
+        if (!this.isNativeAccessPositionSafe(root) || this.isNativeWriteTargetBase(root)) return false;
+        // ccxt's write-back pass matches `get_value` text to write a mutated bind back.
+        if (this.isWriteBackBindRead(access)) return false;
+        return this.rustDictBearerKeyOk(access.argumentExpression);
+    }
+
+    /** A literal string key, or a checker-proven `string` place. A by-construction
+     *  object literal carries no marker key (`__book_id`, `__cacheKind`, `__live_id`)
+     *  and no ws client-handle triple, so `get_value`'s store routes cannot fire and
+     *  the read is the map lookup. */
+    rustDictBearerKeyOk(keyNode: any): boolean {
+        const key: any = this.rustSkipWrappers(keyNode);
+        if (key === undefined) return false;
+        if (isStringLiteralLikeNode(key)) return RustTranspiler.rustBearerKeyTextOk(String((key as any).text));
+        if (!isIdentifier(key) || !this.rustKeyIsProvenString(key) || this.rustStringLocalIdentifierIsTyped(key)) return false;
+        if (this.rustNodeIsKeyUnsafePlace(String((key as any).text))) return false;
+        return /^[A-Za-z_][A-Za-z0-9_]*$/.test(this.printNode(key, 0).trim());
+    }
+
+    /** Keys a bearer may carry: no empty/numeric key, no ws client-handle marker
+     *  (`subscriptions`/`futures` serve their live registry) and nothing `__`-prefixed. */
+    static rustBearerKeyTextOk(text: string): boolean {
+        return text !== '' && !/^\d+$/.test(text) && !text.startsWith('__')
+            && text !== 'subscriptions' && text !== 'futures';
+    }
+
+    /** `x[k]` on a bearer with a proven `string` key place: an `IndexMap` lookup, and
+     *  `get_value`'s non-`Str` key branches (always `Value::Null` here) become the
+     *  `""` fallback — the bearer can never hold an empty key. */
+    rustBearerDictDynamicRead(receiverText: string, receiverNode: Node, keyNode: Node): string | undefined {
+        if (this.rustDictBearerDeclaration(receiverNode) === undefined) return undefined;
+        const key: any = this.rustSkipWrappers(keyNode);
+        if (key === undefined || isStringLiteralLikeNode(key) || !this.rustDictBearerKeyOk(key)) return undefined;
+        if (this.isWriteBackBindRead(this.rustElementReadOfKey(keyNode))) return undefined;
+        const keyText = this.printNode(keyNode, 0).trim();
+        return `${receiverText}.get(${keyText}.as_str().unwrap_or("")).cloned().unwrap_or(Value::Null)`;
+    }
+
+    /** `x['k'] = v` on a bearer: the insert `add_element_to_object` performs on the
+     *  same plain dict, minus the box (`Arc::make_mut` guard the type proves). */
+    rustBearerDictInsert(baseExpr: any, keyNode: any, keyText: string, valueText: string): string | undefined {
+        const declaration = this.rustDictBearerDeclaration(baseExpr);
+        if (declaration === undefined || !this.rustDictBearerKeyOk(keyNode)) return undefined;
+        const name = String(baseExpr.text);
+        const keyArg = this.rustNativeInsertKeyArg({ text: name, isField: false, plain: true }, keyNode, keyText);
+        if (keyArg === undefined) return undefined;
+        const value = this.rustPrintedBoolArg(valueText) ? `Value::Bool(${valueText})` : valueText;
+        // The insert holds the receiver's `&mut`, so a value that reads it binds first.
+        // The trailing `;` keeps the block unit-typed when it stands as a statement.
+        if (new RegExp(`\\b${name}\\b`).test(value)) {
+            return `{ let __be_tmp = ${value}; ${name}.insert(${keyArg}, __be_tmp); }`;
+        }
+        const trimmed = value.trim();
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed) && trimmed !== 'self' && trimmed !== 'true' && trimmed !== 'false') {
+            return `${name}.insert(${keyArg}, ${trimmed}.clone())`;
+        }
+        return `${name}.insert(${keyArg}, ${value})`;
     }
 
     // hx4 R05 — native IndexMap ops for `k in X`, `delete X[k]`, `Object.keys/values(X)`.
