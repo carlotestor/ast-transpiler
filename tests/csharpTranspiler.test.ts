@@ -1557,7 +1557,7 @@ describe('csharp typed body locals', () => {
         expect(output).toContain("public async virtual Task<object> later(object x)");
         expect(output).toContain("public virtual object inferred(object x)");
         expect(output).toContain("public virtual object mixed(object x)");
-        expect(output).toContain("public virtual bool filtered(object items)");
+        expect(output).toContain("public virtual bool filtered(IList<object> items)");
         expect(output).toContain("return isGreaterThan(i, 1);");
         expect(output).toContain("return ((bool)((object)(getArrayLength(found) > 0))!);");
     });
@@ -4471,7 +4471,7 @@ describe('csharp helper removal: parseInt / parseFloat / mod / prefix `-x`', () 
         "    }\n" +
         "}\n";
         const output = withKinds({ len: 'int', ms: 'Int64' }, input);
-        expect(output).toContain('int len = getArrayLength(items);');
+        expect(output).toContain('int len = (items?.Count ?? 0);');
         expect(output).toContain('object p = ((Int64)len);');
         expect(output).toContain('object f = ((double)ms);');
         expect(output).not.toContain('parseInt(');
@@ -6155,6 +6155,89 @@ describe('hx4 L44 guarded nullable negation', () => {
         expect(output).toContain('object amount = this.safeNumberN(');
         expect(output).toContain('prefixUnaryNeg(ref amount)');
     });
+
+describe('array-annotated parameters', () => {
+    const listClass = (signature: string, body: string, extra = '') =>
+        "class Exchange {\n" +
+        "    safeValue(a, b) { return a; }\n" +
+        extra +
+        "    " + signature + " {\n" + body + "    }\n" +
+        "}";
+    test('a Dict[] parameter prints IList<object> and its reads go native', () => {
+        const output = transpiler.transpileCSharp(listClass(
+            'main (rows: { [key: string]: any }[])',
+            "        const n = rows.length;\n" +
+            "        return rows[0];\n")).content;
+        expect(output).toContain('public virtual object main(IList<object> rows)');
+        expect(output).toContain('(rows?.Count ?? 0)');
+        expect(output).not.toContain('getArrayLength(rows)');
+        expect(output).not.toContain('getValue(rows');
+    });
+    test('a string[] parameter keeps object and the helpers', () => {
+        const output = transpiler.transpileCSharp(listClass(
+            'main (symbols: string[])',
+            "        const n = symbols.length;\n" +
+            "        return symbols[0];\n")).content;
+        expect(output).toContain('public virtual object main(object symbols)');
+        expect(output).toContain('getArrayLength(symbols)');
+    });
+    test('a rebinding body keeps object', () => {
+        const output = transpiler.transpileCSharp(listClass(
+            'main (rows: any[])',
+            "        rows = this.safeValue(rows, 'rows');\n" +
+            "        return rows.length;\n")).content;
+        expect(output).toContain('public virtual object main(object rows)');
+        expect(output).toContain('getArrayLength(rows)');
+    });
+    test('a call site passing an object local keeps object', () => {
+        const output = transpiler.transpileCSharp(listClass(
+            'main (rows: any[])',
+            "        return rows.length;\n",
+            "    run (response) {\n" +
+            "        const local = this.safeValue(response, 'rows');\n" +
+            "        return this.main(local);\n" +
+            "    }\n")).content;
+        expect(output).toContain('public virtual object main(object rows)');
+        expect(output).toContain('getArrayLength(rows)');
+    });
+    test('a same-named call site in another class is still a call site of that name', () => {
+        // the census is name-scoped: the second class's `main` shares the key, so its object
+        // argument keeps BOTH declarations boxed (a worker batch resolves no declaration handle)
+        const input =
+        "class Exchange {\n" +
+        "    safeValue(a, b) { return a; }\n" +
+        "    main (rows: any[]) {\n        return rows.length;\n    }\n" +
+        "}\n" +
+        "class Second {\n" +
+        "    safeValue(a, b) { return a; }\n" +
+        "    main (rows: any[]) {\n        return rows.length;\n    }\n" +
+        "    run (response) {\n" +
+        "        const local = this.safeValue(response, 'rows');\n" +
+        "        return this.main(local);\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(input).content;
+        expect(output).not.toContain('IList<object> rows');
+        expect(output).toContain('getArrayLength(rows)');
+    });
+    test('a parameter argument needs its own key admitted, not its annotation', () => {
+        // `outer` is boxed by an object call in `run`, so its body hands an `object` to `inner`:
+        // `inner` must stay boxed too, whatever its annotation says
+        const input =
+        "class Exchange {\n" +
+        "    safeValue(a, b) { return a; }\n" +
+        "    outer (rows: any[]) {\n        return this.inner(rows);\n    }\n" +
+        "    inner (rows: any[]) {\n        return rows.length;\n    }\n" +
+        "    run (response) {\n" +
+        "        const local = this.safeValue(response, 'rows');\n" +
+        "        return this.outer(local);\n" +
+        "    }\n" +
+        "}";
+        const output = transpiler.transpileCSharp(input).content;
+        expect(output).not.toContain('IList<object> rows');
+        expect(output).toContain('getArrayLength(rows)');
+    });
+});
 });
 
 // PC04: a `boolean` parameter prints `bool?` only when every call site in the program passes a

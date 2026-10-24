@@ -459,7 +459,54 @@ const CSHARP_OVERRIDE_PARAM_TYPES: { [name: string]: { [index: number]: string }
 };
 
 
-// a leading cast of the printed expression: `(IList<object>)(x)` names the receiver's static type
+// pc01: a parameter whose ts/src annotation is an array of JSON cells (`Dict[]`, `Market[]`,
+// `any[]`) prints `IList<object>` -- the very value the generated C# tree passes for a TS array --
+// instead of `object`, so its `.length` / element reads emit `Count` / the guarded indexer. Two
+// whole-program proofs gate it, so a base member and every override keep ONE signature (D8) and no
+// call site needs a conversion:
+//   1. every declaration of that (method, position) in the program spells the same list type, and
+//   2. every call site of that NAME in the program passes an array of JSON cells at that position,
+//      or omits it. The census is name-scoped, so the proof needs no callee identity: a resolved
+//      signature handle is not the declaration's node in a worker batch.
+// A `string[]`/`number[]` cell keeps `object`: its C# value is a real `string[]`, not an IList.
+// Positions the embedding build layer retypes itself are left to it (see the exclusions hook).
+const csharpListParamCensuses = new WeakMap<object, Map<string, boolean>>();
+
+// the base tier is printed by the driver one source file at a time (`transpileCSharpByPath`), so
+// a program rooted in `ts/src/base/*.ts` holds no caller of the methods it declares
+function csharpListParamFileIsPrintedAlone (node): boolean {
+    const file: any = (typeof node.getSourceFile === 'function') ? node.getSourceFile() : undefined;
+    const fileName = String(file?.fileName ?? '');
+    return fileName.includes('/ts/src/base/');
+}
+
+// the annotation an ARRAY type node spells, without asking the checker (cheap pre-filter):
+// `X[]`, `(X)[]`, `X[] | undefined` -- whether the element is a JSON cell is the checker's answer
+function csharpSyntacticArrayType (node): boolean {
+    if (node === undefined) {
+        return false;
+    }
+    if (node.kind === SyntaxKind.ArrayType) {
+        return true;
+    }
+    if (node.kind === SyntaxKind.UnionType || node.kind === SyntaxKind.ParenthesizedType) {
+        const parts = (node.types !== undefined) ? Array.from (node.types as any) : [ (node as any).type ];
+        return parts.some ((part: any) => part !== undefined && csharpSyntacticArrayType (part));
+    }
+    return false;
+}
+
+// the parameter declaration behind a receiver, when this printer typed it as a list
+// (csharpArrayListParamType): such a read keeps the helper's own null branches
+function csharpListParamDeclaration (transpiler, expression): any {
+    if (expression === undefined) {
+        return undefined;
+    }
+    const declarations = transpiler.csharpListParamDeclarations;
+    const declaration = transpiler.csharpReceiverBinding (expression);
+    return ((declarations !== undefined) && (declaration !== undefined) && declarations.has (declaration)) ? declaration : undefined;
+}
+
 const CSHARP_LENGTH_CAST = /^\(([A-Za-z_][\w.]*(?:<[^<>]*(?:<[^<>]*>)?[^<>]*>)?)\)/;
 
 // U55: declaration types where `isEqual (x, null)` -> `x == null` is the same test: `T?` (`== null`
@@ -488,12 +535,19 @@ export class CSharpTranspiler extends BaseTranspiler {
     // embedding build layer for declarations it retyped itself; the member-access rules read it
     // only after this printer's own declared-local table declined
     csharpDeclaredLocalTypeResolver?: (declaration) => string | undefined;
+    // optional exclusion of the array-parameter rule below, installed by the embedding build
+    // layer for the (method, position) pairs its own post-print pass retypes: those keep the
+    // `object` box this printer would otherwise replace, so that pass still owns the signature
+    csharpListParamExclusions?: (name: string, index: number) => boolean;
     // variable declaration -> the concrete C# type this printer named for it
     // (getCSharpLocalType): 'List<object>' / 'Dictionary<string, object>' / 'string' / ...
     // Only declarations the printer typed itself are kept: the printed `<type> name = `
     // prefix is final, so every later read of the local is statically that type and its
     // members may replace inOp/getArrayLength
     csharpTypedLocals = new WeakMap<Node, string>();
+    // parameter declarations this printer typed as `IList<object>` (csharpArrayListParamType), so
+    // their reads keep the helper's null branches (`(x?.Count ?? 0)`, the guarded indexer)
+    csharpListParamDeclarations = new WeakSet<Node>();
     // ws handler `message` parameter -> the typed signature this printer prints for it (D-19)
     csharpHandlerMessageTypes = new WeakMap<Node, string | undefined>();
     // method declaration -> a static call reference exists (a call binds its arguments)
@@ -3087,6 +3141,13 @@ export class CSharpTranspiler extends BaseTranspiler {
     // `x.length` -> `x.Count`, same proof for the checker's array operands; strings keep
     // the `((string)x).Length` branch and every unproven operand keeps getArrayLength
     csharpNativeLengthExpression(expression): string | undefined {
+        if (csharpListParamDeclaration(this, expression)) {
+            // a parameter this printer typed as a list: keep getArrayLength's null -> 0 branch
+            const declared = this.csharpDeclaredLengthExpression(expression);
+            if (declared !== undefined) {
+                return declared;
+            }
+        }
         if (this.csharpIsArrayType(this.getChecker().getTypeAtLocation(expression))) {
             const receiver = this.csharpNativeReceiver(expression);
             if (receiver !== undefined) {
@@ -4036,12 +4097,293 @@ export class CSharpTranspiler extends BaseTranspiler {
         return this.printNode(node.expression, identation);
     }
 
+    // pc01: the array-parameter rule -- the type an array-annotated parameter prints with, or
+    // undefined when the whole-program census (csharpListParamCensus) has not admitted it
+    csharpArrayListParamType(node): string | undefined {
+        if (node === undefined || node.kind !== SyntaxKind.Parameter || node.name === undefined) {
+            return undefined;
+        }
+        if (!csharpSyntacticArrayType(node.type)) {
+            return undefined; // cheap pre-filter: only an `X[]` / `X[] | undefined` annotation
+        }
+        if (csharpListParamFileIsPrintedAlone(node)) {
+            // the base tier is printed from `ts/src/base/Exchange.ts` alone, so its program holds
+            // no caller: a call-site proof is impossible there and the box must stay
+            return undefined;
+        }
+        const method: any = findAncestor(node, (n) => isMethodDeclaration(n));
+        if (method === undefined || method.name === undefined || method.parameters === undefined) {
+            return undefined;
+        }
+        const index = method.parameters.indexOf(node);
+        if (index < 0) {
+            return undefined;
+        }
+        const census = this.csharpListParamCensus();
+        const admitted = (census === undefined) ? undefined : census.get(method.name.getText().trim() + ':' + index);
+        return (admitted === true) ? 'IList<object>' : undefined;
+    }
+
+    // The C# spelling an annotation proves, or undefined: an array (or a `T[] | undefined` union)
+    // whose cells the generated C# holds as `object` -- an `any` cell, a JSON dictionary, or a row
+    // class/interface (a TS object is a Dictionary<string, object> in every generated port). A
+    // `string`/`number`/`boolean` cell and a nested array keep their own C# type, so they decline.
+    csharpListParamSpelling(node): string | undefined {
+        return this.csharpListSpellingOfType(this.getChecker().getTypeAtLocation(node), 1);
+    }
+
+    csharpListSpellingOfType(type, unionArms = 1): string | undefined {
+        if (type === undefined || unionArms !== 1) {
+            return undefined;
+        }
+        const checker: any = this.getChecker();
+        if (type.isUnionType && type.isUnionType()) {
+            const arms = (type.getTypes() ?? []).filter((arm) => (arm.flags & (TypeFlags.Undefined | TypeFlags.Null)) === 0);
+            return (arms.length === 1) ? this.csharpListSpellingOfType(arms[0], arms.length) : undefined;
+        }
+        if (type.flags & (TypeFlags.TypeParameter | TypeFlags.Any | TypeFlags.Unknown | TypeFlags.EnumLike)) {
+            return undefined;
+        }
+        if (!checker.isArrayType(type) && !checker.isTupleType(type)) {
+            return undefined;
+        }
+        const element = (checker.getTypeArguments(type) || [])[0];
+        if (element === undefined) {
+            return undefined;
+        }
+        if (element.flags & (TypeFlags.Any | TypeFlags.Unknown)) {
+            return 'IList<object>';
+        }
+        if (checker.isArrayType(element) || checker.isTupleType(element)) {
+            return undefined;
+        }
+        if (this.isStringType(element.flags) || (element.flags & (TypeFlags.NumberLike | TypeFlags.BooleanLike))) {
+            return undefined;
+        }
+        const declarations = element.getSymbol?.()?.declarations ? element.getSymbol().declarations.map((declaration) => declaration.resolve()) : [];
+        if (declarations.some((declaration) => (declaration.kind === SyntaxKind.ClassDeclaration) || (declaration.kind === SyntaxKind.InterfaceDeclaration))) {
+            return 'IList<object>';
+        }
+        if (element.getCallSignatures && element.getCallSignatures().length > 0) {
+            return undefined;
+        }
+        return (checker.getIndexTypeOfType(element, IndexKind.String) !== undefined) ? 'IList<object>' : undefined;
+    }
+
+    // The (method, position) pairs the program proves, built once: every declaration of the pair
+    // spells a JSON-cell array, and every call the program resolves for it passes one (or omits it)
+    csharpListParamCensus(): Map<string, boolean> | undefined {
+        const program: any = this.getProgram();
+        if (program === undefined || typeof program.getSourceFileNames !== 'function') {
+            return undefined;
+        }
+        let census = csharpListParamCensuses.get(program);
+        if (census !== undefined) {
+            return census;
+        }
+        census = new Map<string, boolean>();
+        const declarations = new Map<string, any[]>();
+        const calls = new Map<string, any[]>();
+        const add = (table: Map<string, any[]>, key: string, value: any) => {
+            const row = table.get(key);
+            if (row === undefined) {
+                table.set(key, [ value ]);
+            } else {
+                row.push(value);
+            }
+        };
+        for (const name of program.getSourceFileNames() as any[]) {
+            const file: any = program.getSourceFile(name);
+            if (file === undefined) {
+                continue;
+            }
+            const fileName = String(file.fileName ?? name);
+            if (fileName.endsWith('.d.ts') || fileName.includes('node_modules')) {
+                continue;
+            }
+            const walk = (node: any) => {
+                if (isMethodDeclaration(node) && node.name !== undefined && node.parameters !== undefined && node.parameters.length > 0) {
+                    const methodName = node.name.getText().trim();
+                    Array.from(node.parameters as any).forEach((parameter: any, index: number) => add(declarations, methodName + ':' + index, parameter));
+                } else if (isCallExpression(node) && isPropertyAccessExpression(node.expression) && isIdentifier(node.expression.name)) {
+                    add(calls, node.expression.name.getText().trim(), node);
+                }
+                node.forEachChild(walk);
+            };
+            file.forEachChild(walk);
+        }
+        // one decision per key, memoized: an ARGUMENT that is itself a parameter of this rule needs
+        // that parameter's OWN decision, and a cycle of such hand-offs keeps both boxed
+        const memo = new Map<string, boolean>();
+        const visiting = new Set<string>();
+        const decide = (key: string): boolean => {
+            const cached = memo.get(key);
+            if (cached !== undefined) {
+                return cached;
+            }
+            if (visiting.has(key)) {
+                return false;
+            }
+            visiting.add(key);
+            const separator = key.lastIndexOf(':');
+            const methodName = key.substring(0, separator);
+            const index = Number(key.substring(separator + 1));
+            let admitted = !(typeof this.csharpListParamExclusions === 'function' && this.csharpListParamExclusions(methodName, index));
+            for (const parameter of declarations.get(key) ?? []) {
+                if (this.csharpListParamSpelling(parameter) !== 'IList<object>') {
+                    admitted = false;
+                    break;
+                }
+                if (csharpListParamFileIsPrintedAlone(parameter)) {
+                    admitted = false; // printed from a one-file program: no call site can be proved
+                    break;
+                }
+                if (this.csharpListParamIsWritten(parameter)) {
+                    admitted = false; // a body that rebinds the box would assign an object into an IList
+                    break;
+                }
+            }
+            if (admitted) {
+                for (const call of calls.get(methodName) ?? []) {
+                    const args = Array.from((call.arguments ?? []) as any);
+                    if (index >= args.length) {
+                        continue; // an omitted argument prints the parameter's own default
+                    }
+                    if (this.csharpListParamArgumentPrintsList(args[index], decide)) {
+                        continue; // the argument's own C# declaration already holds a list
+                    }
+                    admitted = false; // an `object` argument would need a conversion at the call site
+                    break;
+                }
+            }
+            visiting.delete(key);
+            memo.set(key, admitted);
+            return admitted;
+        };
+        for (const key of declarations.keys()) {
+            census.set(key, decide(key));
+        }
+        csharpListParamCensuses.set(program, census);
+        return census;
+    }
+
+    // whether the method body rebinds the parameter (an assignment or ++/--): the declaration
+    // would then have to accept a value that is not a list
+    csharpListParamIsWritten(parameter): boolean {
+        const name = (parameter.name === undefined || parameter.name.getText === undefined) ? '' : parameter.name.getText().trim();
+        if (name === '') {
+            return true;
+        }
+        const method: any = findAncestor(parameter, (n) => isMethodDeclaration(n));
+        if (method === undefined || method.body === undefined) {
+            return false;
+        }
+        let written = false;
+        const walk = (node: any) => {
+            if (written) {
+                return;
+            }
+            if (isBinaryExpression(node) && isIdentifier(node.left) && (node.left.text === name) && this.csharpIsAssignmentOperator(node.operatorToken.kind)) {
+                written = true;
+                return;
+            }
+            if ((isPrefixUnaryExpression(node) || isPostfixUnaryExpression(node)) && isIdentifier(node.operand) && (String(node.operand.getText()).trim() === name)) {
+                written = true;
+                return;
+            }
+            node.forEachChild(walk);
+        };
+        method.body.forEachChild(walk);
+        return written;
+    }
+
+    // whether a variable binding is rebound anywhere in its function (assignment or ++/--)
+    csharpListBindingIsWritten(declaration): boolean {
+        const name = (declaration.name === undefined || declaration.name.getText === undefined) ? '' : declaration.name.getText().trim();
+        if (name === '') {
+            return true;
+        }
+        const fn: any = findAncestor(declaration, (n) => isFunctionLike(n));
+        if (fn === undefined || fn.body === undefined) {
+            return false;
+        }
+        let written = false;
+        const walk = (node: any) => {
+            if (written) {
+                return;
+            }
+            if (isBinaryExpression(node) && isIdentifier(node.left) && (node.left.text === name) && this.csharpIsAssignmentOperator(node.operatorToken.kind)) {
+                written = true;
+                return;
+            }
+            if ((isPrefixUnaryExpression(node) || isPostfixUnaryExpression(node)) && isIdentifier(node.operand) && (String(node.operand.getText()).trim() === name)) {
+                written = true;
+                return;
+            }
+            node.forEachChild(walk);
+        };
+        fn.body.forEachChild(walk);
+        return written;
+    }
+
+    // whether the argument's own printed C# declaration holds a list: an array literal, an
+    // identifier whose declaration this printer types as a list (or a parameter this rule types
+    // for its own key), or an initializer the printer's local table names as one
+    csharpListParamArgumentPrintsList(argument, decide?: (key: string) => boolean): boolean {
+        let node: any = argument;
+        while (node !== undefined && (isAsExpression(node) || isParenthesizedExpression(node))) {
+            node = node.expression;
+        }
+        if (node === undefined) {
+            return true;
+        }
+        if (isArrayLiteralExpression(node)) {
+            return true;
+        }
+        if (isIdentifier(node)) {
+            const declaration: any = this.csharpReceiverBinding(node);
+            if (declaration === undefined) {
+                return false;
+            }
+            if (declaration.kind === SyntaxKind.Parameter) {
+                // a parameter of the same rule: only the census decision of ITS OWN key prints a
+                // list -- the annotation alone admits a parameter a sibling proof kept boxed
+                const method: any = findAncestor(declaration, (n) => isMethodDeclaration(n));
+                if (decide === undefined || method === undefined || method.name === undefined || method.parameters === undefined) {
+                    return false;
+                }
+                const position = (method.parameters as any).indexOf(declaration);
+                return (position < 0) ? false : decide(method.name.getText().trim() + ':' + position);
+            }
+            if (!isVariableDeclaration(declaration)) {
+                return false;
+            }
+            // the declaration must be the one the printer emits as a list: a single binding, never
+            // rebound, and a type this printer's own local table names -- the value oracle answers
+            // for locals the build layer leaves `object`
+            if (((declaration.parent as any)?.declarations?.length ?? 1) !== 1) {
+                return false;
+            }
+            if (this.csharpListBindingIsWritten(declaration)) {
+                return false;
+            }
+            const type: string | undefined = this.getCSharpLocalType(declaration);
+            return (type === 'List<object>') || (type === 'IList<object>');
+        }
+        const type: string | undefined = this.csharpTypeOfInitializer(node);
+        return (type === 'List<object>') || (type === 'IList<object>');
+    }
+
     // A parameter of a method that participates in an override relation prints the spelling its
     // base member and every sibling override agree on (CSHARP_OVERRIDE_PARAM_TYPES; D8): C# is
     // invariant on override parameter types, so a half-retyped name is CS0115, while a name the
     printParameterType(node) {
         if (node === undefined || node.kind !== SyntaxKind.Parameter) {
             return super.printParameterType(node);
+        }
+        const listType = this.csharpArrayListParamType(node);
+        if (listType !== undefined) {
+            return listType;
         }
         const method: any = findAncestor(node, (n) => isMethodDeclaration(n));
         const name = method === undefined || method.name === undefined ? undefined : method.name.getText().trim();
@@ -4330,6 +4672,13 @@ export class CSharpTranspiler extends BaseTranspiler {
             // the printed declaration is final, so every read of the parameter is that
             // dictionary and the member reads replace getValue/getArrayLength/inOp
             this.csharpTypedLocals.set(node, handlerType);
+        }
+        const listType = this.csharpArrayListParamType(node);
+        if (listType !== undefined) {
+            // the printed declaration is final, so the body's .length / element reads of this
+            // parameter are that list and print Count / the guarded indexer
+            this.csharpTypedLocals.set(node, listType);
+            this.csharpListParamDeclarations.add(node);
         }
         let type = handlerType !== undefined ? handlerType : this.printParameterType(node);
         type = type ? type : "";
