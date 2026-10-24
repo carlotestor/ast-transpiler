@@ -1991,7 +1991,8 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     rustLocalUsesAcceptBool(declaration, sourceName: string): boolean {
-        return this.rustLocalUsesAll(declaration, sourceName, false, (n) => this.rustIdentifierUseIsCondition(n));
+        return this.rustLocalUsesAll(declaration, sourceName, false, (n) =>
+            this.rustIdentifierUseIsCondition(n) || this.rustBoolParamUseAccepted(n));
     }
 
     // ── native `bool` parameters ──────────────────────────────────────────────

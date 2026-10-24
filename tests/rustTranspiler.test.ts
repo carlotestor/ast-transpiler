@@ -4897,3 +4897,33 @@ ${body}
         expect(num).toContain('let mut d: Value = Value::Map({');
     });
 });
+
+describe('hx10w5 R09 bool locals into native-`bool` slots', () => {
+    let venue = '';
+    beforeAll(() => {
+        const fresh = new Transpiler({
+            'verbose': false,
+            'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } }
+        } as any);
+        venue = fresh.transpileRustByPath('./tests/files/input/hx10w5r09/ts/src/venue.ts').content;
+    });
+
+    test('a comparison local read in a native-`bool` slot is declared `bool`', () => {
+        expect(venue).toContain('let mut isMarket: bool = type_var.as_str() == Some("market");');
+        expect(venue).toContain('return self.settle(isMarket, Value::Int(2));');
+        expect(venue).not.toContain('isMarket.is_truthy()');
+    });
+
+    test('a comparison local read only in conditions keeps the `bool` declaration', () => {
+        expect(venue).toContain('let mut isSpot: bool = type_var.as_str() == Some("spot");');
+    });
+
+    test('negative: a local read in a `Value` slot keeps the box', () => {
+        expect(venue).toContain('let mut isWide: Value = (Value::Bool(type_var.as_str() == Some("spot")));');
+        expect(venue).not.toContain('let mut isWide: bool');
+    });
+
+    test('negative: a `Value` operand into the bool slot still coerces', () => {
+        expect(venue).toContain('return self.settle(raw.is_truthy(), Value::Int(3));');
+    });
+});
