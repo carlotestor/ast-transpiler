@@ -31815,8 +31815,9 @@ ${iden}}`;
       return false;
     const method = String(callee.name.text);
     const handle = /^handle[A-Z]/.test(method);
-    if (!handle && !_RustTranspiler.RUST_DICT_PRODUCER_CALLEES.has(method))
-      return false;
+    if (!handle && !_RustTranspiler.RUST_DICT_PRODUCER_CALLEES.has(method)) {
+      return this.rustCallBuildsContainer(call, "map", 0);
+    }
     if (!this.rustWriteDictShape(this.typeOfNodeIfAny(call)))
       return false;
     if (handle || method === "parseJson")
@@ -31855,6 +31856,140 @@ ${iden}}`;
     if (parent === void 0 || !isBinaryExpression5(parent) || parent.left !== node)
       return false;
     return parent.operatorToken.kind === SyntaxKind7.EqualsToken && this.rustDictProducer(parent.right);
+  }
+  /** hx10w10 RP06: `this.<m>(…)` whose every return is a fresh untagged
+   *  container of `kind` — the method's own body, no venue override (the
+   *  checker resolves the most derived declaration for `this`). */
+  rustCallBuildsContainer(call, kind, depth = 0) {
+    if (depth > 2)
+      return false;
+    const passCallee = call?.expression;
+    const passMethod = isPropertyAccessExpression3(passCallee) ? String(passCallee.name?.text) : void 0;
+    if (passMethod !== void 0 && _RustTranspiler.RUST_BUILDER_PASSTHROUGH.has(passMethod)) {
+      const passArgs = call.arguments ?? [];
+      if (passArgs.length === 0)
+        return false;
+      return this.rustBuiltContainerKind(passArgs[0], depth + 1) === kind;
+    }
+    let declaration;
+    try {
+      declaration = signatureDeclaration(this.getChecker().getResolvedSignature(call));
+    } catch (e) {
+      return false;
+    }
+    if (declaration === void 0 || declaration === null || declaration.body === void 0)
+      return false;
+    if (declaration.kind !== SyntaxKind7.MethodDeclaration)
+      return false;
+    const body = declaration.body;
+    let returns = 0;
+    let ok = true;
+    const visit = (node) => {
+      if (!ok)
+        return;
+      if (node !== body && isFunctionLike(node))
+        return;
+      if (isReturnStatement4(node)) {
+        returns++;
+        if (this.rustBuiltContainerKind(node.expression, depth + 1) !== kind)
+          ok = false;
+        return;
+      }
+      node.forEachChild(visit);
+    };
+    body.forEachChild(visit);
+    return ok && returns > 0;
+  }
+  /** Container kind an expression the callee body builds yields, or undefined.
+   *  Shapes: a tag-free literal, a local that only ever receives element
+   *  writes, a `this.` builder that copies plain operands, a pass-through
+   *  builder of a built argument. */
+  rustBuiltContainerKind(node, depth = 0) {
+    if (depth > 3)
+      return void 0;
+    const expr = this.rustSkipWrappers(node);
+    if (expr === void 0 || expr === null)
+      return void 0;
+    if (isObjectLiteralExpression4(expr))
+      return this.rustPlainDictLiteral(expr) ? "map" : void 0;
+    if (isArrayLiteralExpression4(expr))
+      return "list";
+    if (isIdentifier3(expr)) {
+      const declaration = this.rustDeclarationOfIdentifier(expr);
+      if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.name === expr)
+        return void 0;
+      const built = this.rustBuiltContainerKind(declaration.initializer, depth + 1);
+      if (built === void 0 || !this.rustLocalContainerWritesOnly(declaration, String(expr.text), built, depth + 1))
+        return void 0;
+      return built;
+    }
+    if (!isCallExpression6(expr))
+      return void 0;
+    const callee = expr.expression;
+    if (!isPropertyAccessExpression3(callee))
+      return void 0;
+    const method = String(callee.name.text);
+    const owner = callee.expression;
+    const args = expr.arguments ?? [];
+    if (owner.kind === SyntaxKind7.ThisKeyword) {
+      if (_RustTranspiler.RUST_BUILDER_PASSTHROUGH.has(method) && args.length > 0) {
+        return this.rustBuiltContainerKind(args[0], depth + 1);
+      }
+      if (_RustTranspiler.RUST_DICT_PRODUCER_CALLEES.has(method) && method !== "safeDict") {
+        if (method === "parseJson")
+          return "map";
+        const copied = method === "extend" || method === "deepExtend" ? args : args.slice(0, 1);
+        if (copied.length === 0)
+          return void 0;
+        for (const arg of copied) {
+          if (this.rustBuiltContainerKind(arg, depth + 1) === void 0 && !this.hx7PlainMap(arg))
+            return void 0;
+        }
+        return "map";
+      }
+      if (method === "safeList" || method === "safeListValue") {
+        return args.length < 3 || isArrayLiteralExpression4(this.rustSkipWrappers(args[2])) ? "list" : void 0;
+      }
+      if (this.rustCallBuildsContainer(expr, "map", depth + 1))
+        return "map";
+      if (this.rustCallBuildsContainer(expr, "list", depth + 1))
+        return "list";
+      return void 0;
+    }
+    if (owner.kind === SyntaxKind7.Identifier) {
+      const ownerName = String(owner.text);
+      if (ownerName === "Object" && (method === "keys" || method === "values" || method === "entries"))
+        return "list";
+      if (ownerName === "Promise" && method === "all")
+        return "list";
+      if (method === "split")
+        return "list";
+    }
+    return void 0;
+  }
+  /** True when the only writes to this local inside its own function are
+   *  element writes and container rebuilds (no whole-local write of another
+   *  shape): the container it was built as is what it holds at every use. */
+  rustLocalContainerWritesOnly(declaration, name, kind, depth) {
+    const scope = this.rustEnclosingFunction(declaration);
+    if (scope === void 0 || isSourceFile5(scope))
+      return false;
+    let ok = true;
+    const isThisLocal = (left) => isIdentifier3(left) && String(left.text) === name && this.rustIdentifierRefersToDeclaration(left, declaration);
+    this.rustWalkScope(scope, (n) => {
+      if (!ok)
+        return;
+      if (isBinaryExpression5(n) && rustIsAssignmentOperator(n.operatorToken.kind)) {
+        if (!isThisLocal(n.left))
+          return;
+        if (n.operatorToken.kind !== SyntaxKind7.EqualsToken || this.rustBuiltContainerKind(n.right, depth + 1) !== kind)
+          ok = false;
+        return;
+      }
+      if ((isForOfStatement2(n) || isForInStatement2(n)) && isThisLocal(n.initializer))
+        ok = false;
+    });
+    return ok;
   }
   /** An escape the printer boxes: a `return` of the local, or an argument of a
    *  `this.`/`super.` call. Anything else (a free-function argument) has no box
@@ -32314,6 +32449,9 @@ ${iden}}`;
       const elementType = this.rustStringIndexedElementType(args[0]);
       return elementType !== void 0 && this.rustDictBearerType(elementType) ? "map" : void 0;
     }
+    const built = this.rustBuiltContainerKind(node, 0);
+    if (built !== void 0)
+      return built;
     return void 0;
   }
   /** Declared element type of a container indexed by a string key. */
@@ -34664,6 +34802,18 @@ _RustTranspiler.RUST_DICT_PRODUCER_CALLEES = /* @__PURE__ */ new Set([
   "parseJson",
   "safeDict"
 ]);
+// ── hx10w10 RP06: callee-return container proof ───────────────────────────
+//
+// A local initialised from `this.<m>(…)` is a box the checker cannot read:
+// the TS return is a typedef (`OrderBook`, `Dict`), so the port prints
+// `Value`. When the method's own body builds a fresh, untagged container on
+// every return, the local holds that container and nothing else — the
+// store-tag routes of `get_value`/`add_element_to_object` cannot fire — so
+// the declaration can carry the container type and every read/write prints
+// the native op.
+/** Builders that hand back one of their own arguments: the container kind is
+ *  the argument's (they only add fields to it). */
+_RustTranspiler.RUST_BUILDER_PASSTHROUGH = /* @__PURE__ */ new Set(["safeTicker", "safeOrder", "safeTrade", "safePosition"]);
 _RustTranspiler.R12_NATIVE_READ_NAMESPACES = /* @__PURE__ */ new Set(["Object", "JSON", "Array", "Promise", "Math", "String", "Number"]);
 // hx4 R12 — plain-dict sources from base `safeDict*` reads of unshared dicts and same-file
 // sync request builders; native truthiness / bool equality on operands proven `Value::Bool`
