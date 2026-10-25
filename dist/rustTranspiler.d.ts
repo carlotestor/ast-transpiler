@@ -166,6 +166,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  conversion the helper's dict branch applies to a non-string key, and
      *  `k.to_string()` for a string one. */
     rustNativeInsertKeyArg(receiver: any, keyNode: any, keyText: string): string | undefined;
+    rp05NestedDictWrite(baseExpr: any, keyNodes: any[], keyTexts: string[], valueText: string, fallbackText: string): string | undefined;
+    /** The `get_mut` key of an rp05 hop: a borrowed `&str` — the literal itself,
+     *  or the stringification the insert's key uses. */
+    rp05EntryKeyArg(receiver: any, keyNode: any, keyText: string): string | undefined;
     rustNativeInsertReceiver(expr: any): {
         text: string;
         isField: boolean;
@@ -279,6 +283,36 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustDeclaredNode(node: any): Node | undefined;
     /** Condition text for a bare identifier of native-`bool` type, else undefined. */
     printNativeBoolParamCondition(node: any): string | undefined;
+    private rustMapParamDecisions;
+    rustParamPrintsMap(param: any): boolean;
+    rustMapParamIsTypedUncached(param: any): boolean;
+    /** Every body use is a map operation the bearered printer emits, and at
+     *  least one of them writes (otherwise the read shadow already covers it). */
+    rustMapParamBodyUsesOk(param: any): boolean;
+    /** `read` / `write` on a single-level key, or `box` where the printer moves
+     *  the map into a `Value::Map(..)`; anything else has no printed form. */
+    rustMapParamUseKind(node: any): string | undefined;
+    /** The value operand of a `m['k'] = x` write: the receiver takes a `Value`, so
+     *  the map is boxed there (a move at its last use, a clone before it). */
+    rustDictWriteValue(node: any): boolean;
+    /** A use that prints the map as `Value::Map(x.clone())`: the body census's
+     *  `box` positions, never a key read or a map argument slot. */
+    rustMapParamBoxes(node: any): boolean;
+    /** A parameter printed as a native map, or undefined. */
+    rustMapParamDeclaration(node: any): any | undefined;
+    /** The `at`-th argument of a call lands in a native-map parameter slot. */
+    rustNativeMapArgumentSlot(params: any, at: number): any | undefined;
+    /** `&mut <bearer>` for a map slot; every call site is proven a bearer. */
+    rustMapArgumentText(node: any, identation: any): string;
+    rustMapArgumentIsBearer(node: any): boolean;
+    /** Program-wide call sites of `method`: every one passes a bearer in the slot. */
+    rustMapParamCallSitesOk(method: any, index: number): boolean;
+    rustDeclarationKey(node: any): string;
+    private rustCallSitesCache;
+    rustCallSitesForName(name: string): any[];
+    /** `x['k'] = v` on a native-map parameter: the insert `add_element_to_object`
+     *  performs on the same plain dict, on the map the type already is. */
+    rustMapParamDictInsert(baseExpr: any, keyNode: any, keyText: string, valueText: string): string | undefined;
     private static readonly RUST_STRING_LOCAL_HELPERS;
     private rustStringLocalDecisions;
     rustSafeStringLocalInitializer(declaration: any): boolean;
@@ -316,7 +350,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `-> Option<String>`; undefined otherwise (no proof → keep the box). */
     private rustCallDeclarations;
     rustNativeStrCalleeKind(node: Node): string | undefined;
-    /** `Option<String>` → `Value` (exact inverse of the return conversion). */
+    /** `Option<String>` → `Value` (exact inverse of the return conversion). hx10 R08: the
+     *  operand is already a typed `String`, so the conversion is the standard `From`
+     *  impl — no `|__s|` closure between them. */
     rustNativeStrValueBox(text: string): string;
     /** True when a call to a native-`Str` callee must be boxed back to a
      *  `Value` at this position; the declaration and return printers run the
@@ -588,6 +624,13 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  plain dict — `get_value(_k)` and this read agree on every key the
      *  runtime does not route elsewhere. */
     rustIsDeclaredDictLocal(node: Node): boolean;
+    /** The ws `OrderBook` class (`ts/src/base/ws/OrderBook.ts`): the rust port never
+     *  builds a struct for it — `order_book()` returns a `Value::Dict` — so its
+     *  element reads are plain map reads on a proven map. */
+    rustWsOrderBookClassType(type: Type | undefined): boolean;
+    /** Types the port stores as a plain `Value::Dict`: a checker-proven map, or the
+     *  ws order book class. */
+    rustDictBearerType(type: Type | undefined): boolean;
     /** A parameter declared as the ws `Client` class (or a union with it). The
      *  class is the default export of `ts/src/base/ws/Client.ts`, so its type
      *  symbol is named `default`; the declaration itself carries the name. */
@@ -653,6 +696,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     printArrayIsArrayCall(node: any, identation: any, parsedArg?: any): string;
     printObjectKeysCall(node: any, identation: any, parsedArg?: any): string;
     printObjectValuesCall(node: any, identation: any, parsedArg?: any): string;
+    /** hx10w9 RP04: `Object.keys/values(x)` on a typed bearer — the map's own
+     *  iterators. A bearer is built from an object literal, so the helper's
+     *  ws/tag filters have nothing to strip. */
+    r04BearerEnum(node: any, kind: 'keys' | 'values'): string | undefined;
+    /** The single plain-identifier argument of `Object.keys/values(…)`. */
+    r04BearerEnumArg(node: any): Identifier | undefined;
     printJsonParseCall(node: any, identation: any, parsedArg?: any): string;
     printJsonStringifyCall(node: any, identation: any, parsedArg?: any): string;
     printMathFloorCall(node: any, identation: any, parsedArg?: any): string;
@@ -750,6 +799,22 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustDictBearerDeclaration(node: any): any | undefined;
     rustDictLocalIsTyped(declaration: any): boolean;
     rustDictLocalIsTypedUncached(declaration: any): boolean;
+    /** hx10w7 R03: a call that builds a fresh plain map — the request/params
+     *  builders, `parseJson`, and the `handle*` family that hands back its own
+     *  request dict. The checker proves the result Dict-shaped and every copied
+     *  map operand is plain (a literal, a transpiler-built bearer, or a
+     *  Dict-typed place), so the bearer may be declared from the call and the
+     *  box is cloned out once. */
+    rustDictProducer(node: any): boolean;
+    /** A map operand the producer only copies into a fresh map: built by the
+     *  transpiler (literal / bearer / admitted producer) or a Dict-typed place.
+     *  `any` is out — its content may carry a runtime tag. */
+    hx7PlainMap(arg: any): boolean;
+    /** hx10w7 R03: `x = this.extend(..)` on a bearer — the producer hands back a
+     *  fresh map, so the local keeps its `IndexMap` type and the print clones the
+     *  box out at the assignment. */
+    rustR03ProducerReuse(node: any): boolean;
+    private static readonly RUST_DICT_PRODUCER_CALLEES;
     /** An escape the printer boxes: a `return` of the local, or an argument of a
      *  `this.`/`super.` call. Anything else (a free-function argument) has no box
      *  site. */
@@ -778,6 +843,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `x['k'] = v` on a bearer: the insert `add_element_to_object` performs on the
      *  same plain dict, minus the box (`Arc::make_mut` guard the type proves). */
     rustBearerDictInsert(baseExpr: any, keyNode: any, keyText: string, valueText: string): string | undefined;
+    /** `<name>.insert(<key>, <value>)` for a receiver the type proves is a map. The
+     *  insert holds the receiver's `&mut`, so a value that reads it binds first; the
+     *  trailing `;` keeps the block unit-typed when it stands as a statement. */
+    rustBearerInsertText(name: string, keyArg: string, valueText: string): string;
+    /** The `entry` key of a chained write's first hop, or undefined when the key
+     *  cannot be proven. The bearer proof and the emission share this one answer,
+     *  so a local is never typed on a chain the printer then prints boxed. */
+    rustBearerChainHopArg(keyNode: any, keyText: string, name: string): string | undefined;
+    rustBearerChainedWrite(baseExpr: any, keys: any[], keyStrs: string[], valueText: string): string | undefined;
     /** A key the bearer write takes natively: the checker proves a `string` and
      *  the printed key is a `Value::Str(..)` whose payload is that `String`, or a
      *  native `Option<String>` place. A key that names the receiver is out (the
@@ -788,6 +862,24 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The native map key for a printed bearer-write key, or undefined when the
      *  box's payload is not a `String`. Literal keys stay with the shared path. */
     rustR01BearerWriteKeyArg(keyNode: any, keyText: string, receiverName: string): string | undefined;
+    /** hx10w9 RP04: a write key of any boxed type. `add_element_to_object` stores
+     *  a non-`Str` key through `stringify_simple`, which `stringify_param` is, and
+     *  an `IndexMap` write needs a `String` either way — so the same call is the
+     *  whole key conversion. Only shapes the printer emits as a `Value` qualify. */
+    r04StringifiedWriteKeyArg(key: any, text: string): string | undefined;
+    /** The printed text of a key place that is a `Value` and safe to evaluate in a
+     *  key position: no nested statement, assignment or await. */
+    r04KeyTextIsValuePlace(key: any, text: string): boolean;
+    /** `k in x` on a typed bearer: `in_op`'s own Dict arm — a key that is not a
+     *  `Str` is never a hit — with the lookup on the bare map. */
+    r04BearerInOp(key: any, obj: any): string | undefined;
+    /** The key half of `r04BearerInOp`, also used while the receiver's own bearer
+     *  proof is still running (its declaration probe answers "not typed" then). */
+    r04BearerInOpKeyText(key: any): string | undefined;
+    /** The printed Rust for this TS type is a `Value`: `any`, an object/dict shape,
+     *  or a union of those with nullish. A `string`/number/bool place prints its own
+     *  Rust type instead (the caller's string proof owns those). */
+    r04KeyPrintsAsValue(type: any): boolean;
     /** A plain object literal a bearer may be rebuilt from (`x = { .. }`): no
      *  spread, literal keys only — the same rules the declaration proof applies. */
     rustR01BearerPlainLiteral(node: any): boolean;
@@ -811,6 +903,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     printReadBearerAccess(kind: 'list' | 'map', receiverText: string, keyNode: any): string | undefined;
     /** Container kind a printed `Value` expression provably yields on every path. */
     rustContainerProducingKind(node: any, seen: Set<Node>): 'list' | 'map' | undefined;
+    /** Declared element type of a container indexed by a string key. */
+    rustStringIndexedElementType(node: Node | undefined): Type | undefined;
     private rustNestedBearerDecisions;
     /** The declaration behind `node` when it is a local typed as a two-level
      *  dict bearer. */
@@ -846,6 +940,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `delete X[k]` on a receiver the native-insert proof admits (never a ws
      *  subscriptions snapshot, so `try_ws_subs_remove` is dead): `shift_remove`. */
     r05Delete(node: any): string | undefined;
+    /** A key the native `if let` can borrow beside `&mut RECV`: one expression
+     *  (no statement), naming neither the receiver nor its owner — the tuple
+     *  would borrow `self` twice — and never a bare `self`. */
+    rustDeleteKeyBorrowable(keyExpr: string, recv: string): boolean;
     /** `this.<field>` with a declared plain-dict type that is no ws container: the
      *  hand-written base builds these maps itself and never tags them. */
     r05UntaggedField(node: any): boolean;
@@ -992,6 +1090,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     r18ArrLength(node: any, receiver: string): string | undefined;
     /** `x.push(v)` statement on an Arr-only local: `append_to_array`'s cache-push arm needs a Dict. */
     r18ArrPush(node: any, name: string | undefined, parsedArg: string | undefined): string | undefined;
+    /** A `Value` local whose single declaration is an element read of a local typed as a
+     *  plain `IndexMap<String, Value>`: plain data all the way down, never a book handle. */
+    r18BearerReadLocal(ident: any): boolean;
     r20BoolCallEquality(left: any, right: any, op: any): string | undefined;
     /** `fn(...)` whose first `(` closes at the very end (string literals skipped). */
     r20Balanced(text: string): boolean;

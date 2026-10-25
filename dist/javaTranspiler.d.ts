@@ -13,7 +13,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     countRequiredParameters(declaration: any): any;
     printArgsForCallExpression(node: any, identation: any): any;
     javaPrintCallArguments(args: any, node: any, identation: any): any;
-    javaMethodImplementation(declaration: any): Node;
+    javaMethodImplementation(declaration: any): import("typescript/unstable/ast").DeclarationBase;
     javaIsPrintedMethod(method: any): boolean;
     javaHasOptionalParameter(method: any): boolean;
     javaFullArityCallArguments(args: any, node: any, identation: any): string | undefined;
@@ -109,6 +109,9 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaFreshHashMapValue(container: any, value: any): boolean;
     javaFreshMapBaseCall(node: any): boolean;
     javaElementWriteMapLocalType(declaration: any): string | undefined;
+    javaBaseMapFieldLocalType(declaration: any): string | undefined;
+    javaLocalUsesKeepContainerType(node: any): boolean;
+    javaContainerNeutralIdentifierUse(node: any): boolean;
     javaLocalHasWriteAtAll(node: any): boolean;
     javaElementWriteMapSource(value: any): boolean;
     javaPrintsNonNullValue(node: any): boolean;
@@ -169,6 +172,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaMethodAssignedNames: WeakMap<Node, Set<string>>;
     javaReturnTypeCache: WeakMap<Node, string | undefined>;
     javaReturnTypeInProgress: Set<Node>;
+    javaReturnTypeUsedDeclaredLocals: boolean;
     javaParameterIsTypeofTested(node: any): boolean;
     javaParameterIsCompoundAssigned(node: any): boolean;
     javaParameterAssignmentCast(left: any, right: any, identation: any): string | undefined;
@@ -208,8 +212,12 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaDeclaredLocalTypeResolver: ((declaration: Node) => string | undefined) | undefined;
     javaDeclarationOfIdentifier(expression: any): any;
     javaDeclaredMapReceiver(expression: any): boolean;
+    javaMapWriteFieldReceiver(expression: any): boolean;
     javaDeclaredListElementRead(node: any, isCounter: any): string;
     javaDeclaredMapElementRead(node: any): string;
+    javaDeclaredListIndexRead(node: any): string | undefined;
+    javaNonNullableNumberType(node: any): boolean;
+    javaRepeatableIntegerExpression(node: any, depth: number): boolean;
     javaPrimitiveCounterIndex(node: any): boolean;
     javaFieldMapReadText(receiver: any, key: any): string | undefined;
     javaFieldMapReadIfAllowed(node: any): string | undefined;

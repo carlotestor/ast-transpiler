@@ -13,6 +13,12 @@ export declare class GoTranspiler extends BaseTranspiler {
     unifiedStringParams: {
         [method: string]: number[];
     };
+    unifiedSliceParams: {
+        [method: string]: {
+            [index: number]: string;
+        };
+    };
+    goSliceLiteralTypes: Map<any, string>;
     CCXT_GO_GETARG_DECLARED_TYPES: any;
     CCXT_GO_GETARG_SAFE_CONSUMERS: any;
     goGetArgTypeCache: WeakMap<any, string | undefined>;
@@ -188,7 +194,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goResolvedLocalGoType(receiver: any): string | undefined;
     goStringListAppendsAString(pushNode: any): boolean;
     goStringValueNodeIsProven(node: any): boolean;
-    goLocalIsSafeToType(scope: any, declaration: any, varName: string, goType: string): boolean;
+    goLocalIsSafeToType(scope: any, declaration: any, varName: string, goType: string, stringWriteProven?: boolean): boolean;
     goSelfConcatWriteIsString(node: any, varName: string): boolean;
     goSelfConcatIsString(node: any, varName: string): boolean;
     goPointerWriteConversion(right: any, goType: string): 'nil' | 'wrap' | undefined;
@@ -262,6 +268,16 @@ export declare class GoTranspiler extends BaseTranspiler {
     goNilInitInitializer(initializer: any): boolean;
     goNilInitLocalType(declaration: any): string | undefined;
     goNilInitLocalTypeScan(declaration: any): string | undefined;
+    goNilInitStringLocalType(declaration: any): string | undefined;
+    goNilInitStringScanCache: WeakMap<object, string>;
+    goNilInitStringScanInProgress: Set<any>;
+    goNilInitStringLocalTypeScan(declaration: any): string | undefined;
+    goNilInitWrittenHelperCall(printed: string): boolean;
+    goNilInitReadIsConcatOperand(node: any): boolean;
+    goNilInitEnclosingStatement(node: any): any;
+    goNilInitWriteDominates(writes: any[], read: any): boolean;
+    goNilInitReadIsStringSafe(node: any): boolean;
+    goNilInitComparedToNonNil(parent: any, current: any): boolean;
     goNilInitReadIsPointerSafe(node: any): boolean;
     getGoLocalType(declaration: any, parsedValue: string): string;
     goLocalSafeVerdicts: WeakMap<object, Map<string, string>>;
@@ -328,9 +344,31 @@ export declare class GoTranspiler extends BaseTranspiler {
     goAnnotatedSliceParameterType(param: any): string | undefined;
     goBodyReadsElement(body: any, name: string): boolean;
     goIsUnifiedStringParameter(methodName: string, index: number): boolean;
+    goIsUnifiedSliceParameter(methodName: string, index: number): boolean;
+    goUnifiedSliceParameterType(fn: any, param: any): string | undefined;
+    goSliceTableRootParameter(fn: any, param: any): any;
+    goAnnotatedParameterText(param: any): string | undefined;
+    goSliceTableDeclarationsMatch(fn: any, annotation: string): boolean;
+    goSliceTableCallSitesPass(fn: any, methodName: string, index: number, goType: string): boolean;
+    goTextSliceArgumentMatches(argText: string, goType: string, file: string, tree: any, at?: number): boolean;
+    goTextStringElementMatches(element: string, file: string, tree: any, at?: number): boolean;
+    goTextEnclosingMethod(text: string, at?: number): {
+        name: string;
+        params: string[];
+    } | undefined;
+    goArrayLiteralSliceType(node: any, depth?: number): string | undefined;
+    goSliceElementIsString(node: any): boolean;
+    goSliceArgumentType(arg: any): string | undefined;
+    goResolvedCallParameter(node: any, index: number): any;
+    goCallSliceArgumentType(node: any, calleeName: string, index: number): string | undefined;
+    goSliceCallArgs(node: any, identation: any): string | undefined;
     goUnifiedStringCallArgs(node: any, identation: any, flat?: boolean): string | undefined;
     goRequiredStringParameterType(param: any): string | undefined;
     goParameterKeepsNilCompareNative(body: any, param: any, goType: string): boolean;
+    goWsFrameParameterType(fn: any, param: any): string | undefined;
+    goWsFrameReadsStayNative(body: any, param: any): boolean;
+    goWsFrameInOpHasInitClause(inNode: any, param: any): boolean;
+    goWsFrameBooleanOperator(operator: any): boolean;
     goIsProHandlerMethod(fn: any): boolean;
     goParameterTypeIsDict(type: any): boolean;
     goNativeParameterTypeCandidates(param: any, isHandler?: boolean): string[];
@@ -340,6 +378,12 @@ export declare class GoTranspiler extends BaseTranspiler {
     goEnclosingClass(fn: any): any;
     goEnclosingClassName(fn: any): string | undefined;
     goPrintedArgType(arg: any): string | undefined;
+    gp15NilProvenStringPtrArg(arg: any): boolean;
+    gp15SafeStringLiteralDefaultCall(call: any): boolean;
+    gp15HasExitingNilGuard(ident: any): boolean;
+    gp15StatementExitsOnNil(statement: any, ident: any): boolean;
+    gp15IsNilTestOf(node: any, ident: any): boolean;
+    goIdentifierRefersTo(node: any, other: any): boolean;
     goSameFileCallsOf(fn: any, name: string): Array<any>;
     goTsSrcTree(file: any): any;
     goTsSrcTreeBuild(root: string): {
@@ -507,6 +551,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     printReturnStatement(node: any, identation: any): string;
     printArrayLiteralExpression(node: any, identation?: number): string;
     printArgsForCallExpression(node: any, identation: any): any;
+    gp15CallParamAt(call: any, index: number): any;
+    gp15DerefStringArgCall(node: any, identation: any): string | undefined;
+    printIdentifier(node: any): string;
     isArraySliceTypes: string[];
     isArrayNonSliceTypes: string[];
     goIdentifierUsedElsewhere(nameNode: any): boolean;
@@ -666,6 +713,12 @@ export interface GoTranspiler {
 export interface GoTranspiler {
     g11NativeParameterType(fn: any, param: any, index: number): string | undefined;
     g11ParameterHasNullishDefault(body: any, param: any): boolean;
+}
+export interface GoTranspiler {
+    g14CallSiteParameterCandidates(fn: any, param: any, index: number): string[];
+    g14FeedsNullableSlot(fn: any, param: any): boolean;
+    g14HasDynamicCallee(fn: any, name: string): boolean;
+    goAnnotateMethodTypes(methodsTypes: any[], file: any): void;
 }
 export interface GoTranspiler {
     g13NumericParameterCandidates(param: any): string[];
