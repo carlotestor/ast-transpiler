@@ -272,6 +272,10 @@ export declare class GoTranspiler extends BaseTranspiler {
     goNilInitStringScanCache: WeakMap<object, string>;
     goNilInitStringScanInProgress: Set<any>;
     goNilInitStringLocalTypeScan(declaration: any): string | undefined;
+    goFieldStringLocalType(declaration: any): string | undefined;
+    goFieldStringLocalTypeCache: WeakMap<object, string>;
+    goFieldStringLocalTypeScan(declaration: any): string | undefined;
+    goFieldStringLocalReadIsSafe(node: any): boolean;
     goNilInitWrittenHelperCall(printed: string): boolean;
     goNilInitReadIsConcatOperand(node: any): boolean;
     goNilInitEnclosingStatement(node: any): any;

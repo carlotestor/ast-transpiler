@@ -347,8 +347,10 @@ const ORDERED_COMPARISON_OPERATORS: { [kind: number]: string } = {
 // hand-written BaseExchange fields (go/v4/exchange.go) declared `string`: their Go
 // value is never nil, so `this.<field> + s` matches Add(field, s) exactly. The Go
 // struct field is what decides — a batch-A `Str` TS annotation (`version: Str`)
-// still prints this field as a plain Go string.
-const GO_STRING_FIELD_NAMES = [ 'Id', 'Name', 'Version', 'Url', 'Hostname', 'UserAgent' ];
+// still prints this field as a plain Go string. The credential fields are the same
+// kind: gb09 declared them `string` (an absent key is "" not a nil box).
+const GO_STRING_FIELD_NAMES = [ 'Id', 'Name', 'Version', 'Url', 'Hostname', 'UserAgent',
+    'ApiKey', 'Secret', 'Uid', 'Password', 'AccountId', 'PrivateKey', 'WalletAddress' ];
 
 // the hand-written SafeString-family methods (go/v4/exchange_safe.go) return a fresh
 // non-nil pointer whenever the call passes a non-nil default: the value branch takes
@@ -3703,6 +3705,91 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         return 'string';
     }
 
+    // gp25: `const k = this.apiKey` holds the hand-written BaseExchange field, a plain Go
+    // string, so the local is that string and its Add chains fold. A nil test or any other
+    // read only the box answers keeps `any` (a Go string cannot be compared to nil).
+    goFieldStringLocalType(declaration): string | undefined {
+        if (declaration?.kind !== SyntaxKind.VariableDeclaration || declaration.name?.kind !== SyntaxKind.Identifier) {
+            return undefined;
+        }
+        if (this.goFieldStringLocalTypeCache.has(declaration)) {
+            return this.goFieldStringLocalTypeCache.get(declaration);
+        }
+        const result = this.goFieldStringLocalTypeScan(declaration);
+        this.goFieldStringLocalTypeCache.set(declaration, result);
+        return result;
+    }
+    goFieldStringLocalTypeCache = new WeakMap<object, string | undefined>();
+
+    goFieldStringLocalTypeScan(declaration): string | undefined {
+        const initializer = this.goUnwrapParenthesizedNode(declaration.initializer);
+        if ((initializer?.kind !== SyntaxKind.PropertyAccessExpression) || (initializer.expression?.kind !== SyntaxKind.ThisKeyword)) {
+            return undefined;
+        }
+        // the field's Go name is what the table holds (`apiKey` prints as `ApiKey`)
+        if (this.goStringFieldStaticType(initializer, this.printNode(initializer, 0).trim()) !== 'string') {
+            return undefined;
+        }
+        const name = declaration.name.text;
+        const scope = this.goEnclosingFunction(declaration);
+        if (scope === undefined) {
+            return undefined;
+        }
+        let bail = false;
+        const visit = (n) => {
+            if (bail) {
+                return;
+            }
+            if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name) || (n === declaration.name)) {
+                n.forEachChild(visit);
+                return;
+            }
+            const parent = n.parent;
+            if ((parent?.kind === SyntaxKind.VariableDeclaration) && (parent.name === n)) {
+                return; // a sibling block re-declaring the name gets its own type
+            }
+            if (((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n)
+                && (parent.operatorToken?.kind === SyntaxKind.EqualsToken))) {
+                // a later write must keep the field's string (an `any` producer would not compile)
+                const right = this.goUnwrapParenthesizedNode(parent.right);
+                if ((right?.kind === SyntaxKind.PropertyAccessExpression) && (right.expression?.kind === SyntaxKind.ThisKeyword)
+                    && (this.goStringFieldStaticType(right, this.printNode(right, 0).trim()) === 'string')) {
+                    return;
+                }
+                bail = true;
+                return;
+            }
+            if (!this.goFieldStringLocalReadIsSafe(n)) {
+                bail = true;
+            }
+        };
+        scope.forEachChild(visit);
+        if (bail || this.goTypeNameIsShadowed(scope, 'string') || !this.goLocalIsSafeToType(scope, declaration, name, 'string', true)) {
+            return undefined;
+        }
+        return 'string';
+    }
+
+    // a read a Go `string` answers like the box did: a concat operand, an `any` slot, a
+    // string-literal comparison or a runtime-accessor argument — never a nil test
+    goFieldStringLocalReadIsSafe(node): boolean {
+        const parent = node?.parent;
+        if ((parent?.kind === SyntaxKind.PrefixUnaryExpression) || (parent?.kind === SyntaxKind.PostfixUnaryExpression)) {
+            return false;
+        }
+        if ((parent?.kind === SyntaxKind.IfStatement) || (parent?.kind === SyntaxKind.WhileStatement)
+            || (parent?.kind === SyntaxKind.DoStatement) || (parent?.kind === SyntaxKind.ForStatement)) {
+            return false;
+        }
+        if ((parent?.kind === SyntaxKind.BinaryExpression)) {
+            const operator = parent.operatorToken?.kind;
+            if ((operator === SyntaxKind.AmpersandAmpersandToken) || (operator === SyntaxKind.BarBarToken)) {
+                return false; // a Go string is not a bool
+            }
+        }
+        return this.goNilInitReadIsStringSafe(node);
+    }
+
     // the printer's own helper emissions that box a value instead of producing a Go string
     goNilInitWrittenHelperCall(printed: string): boolean {
         const text = this.goUnwrapPrintedParens(printed ?? '');
@@ -3873,7 +3960,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         }
         if (goType === undefined) {
             return this.goSafeDictLocalUnbox(declaration) ?? this.goSafeListLocalUnbox(declaration) ?? this.goMarketLocalUnbox(declaration)
-                ?? this.goNilInitLocalType(declaration) ?? 'any';
+                ?? this.goFieldStringLocalType(declaration) ?? this.goNilInitLocalType(declaration) ?? 'any';
         }
         // the scan matches AST identifiers, so it needs the source name, not the
         // printed one (`type` is renamed to `typeVar` on the way out)

@@ -4813,13 +4813,44 @@ describe('go string concat operands -> declared Go string', () => {
     test('a field the Go struct declares `interface{}` keeps the helper', () => {
         const input =
         "class Exchange {\n" +
-        "    apiKey: string | undefined = undefined;\n" +
+        "    token: string | undefined = undefined;\n" +
         "    f () {\n" +
-        "        return this.apiKey + ':';\n" +
+        "        return this.token + ':';\n" +
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain('return Add(this.ApiKey, ":")');
+        expect(output).toContain('return Add(this.Token, ":")');
+    });
+    test('the credential fields gb09 declared `string` concat natively', () => {
+        const input =
+        "class Exchange {\n" +
+        "    apiKey: string | undefined = undefined;\n" +
+        "    secret: string | undefined = undefined;\n" +
+        "    uid: string | undefined = undefined;\n" +
+        "    password: string | undefined = undefined;\n" +
+        "    accountId: string | undefined = undefined;\n" +
+        "    privateKey: string | undefined = undefined;\n" +
+        "    walletAddress: string | undefined = undefined;\n" +
+        "    f () {\n" +
+        "        return this.apiKey + ':' + this.secret + this.uid + this.password + this.accountId + this.privateKey + this.walletAddress;\n" +
+        "    }\n" +
+        "}\n";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain('return this.ApiKey + ":" + this.Secret + this.Uid + this.Password + this.AccountId + this.PrivateKey + this.WalletAddress');
+        expect(output).not.toContain('Add(');
+    });
+    test('a local initialised from a credential field keeps the field string', () => {
+        const input =
+        "class Exchange {\n" +
+        "    apiKey: string | undefined = undefined;\n" +
+        "    f () {\n" +
+        "        const k = this.name;\n" +
+        "        return k + this.apiKey;\n" +
+        "    }\n" +
+        "}\n";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain('var k string = this.Name');
+        expect(output).toContain('return k + this.ApiKey');
     });
     test('a parameter the signature printer types `string` is a concat operand', () => {
         const inst = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
