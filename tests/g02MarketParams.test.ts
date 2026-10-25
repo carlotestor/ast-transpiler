@@ -52,7 +52,7 @@ describe('hx10 G02 required market parameters', () => {
         expect(out).toContain('GetValue(market, "id")');
     });
 
-    test('a body that nil-tests the parameter keeps the box', () => {
+    test('a body that nil-tests a map parameter compares it natively', () => {
         const ts = PRELUDE +
             'class Test extends Base {\n' +
             '    market (symbol: Str): Market { return undefined; }\n' +
@@ -66,8 +66,9 @@ describe('hx10 G02 required market parameters', () => {
             '    }\n' +
             '}\n';
         const out = go(ts);
-        expect(out).toContain('func (this *Test) RequestBody(market any) any {');
-        expect(out).toContain('IsEqual(market, nil)');
+        expect(out).toContain('func (this *Test) RequestBody(market map[string]any) any {');
+        expect(out).toContain('if market == nil {');
+        expect(out).not.toContain('IsEqual(market, nil)');
     });
 
     test('a parameter the caller does not prove stays the box', () => {

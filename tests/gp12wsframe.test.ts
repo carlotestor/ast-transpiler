@@ -109,7 +109,7 @@ describe ('hx10 GP12 ws frame parameter', () => {
         expect (output).toContain ('func (this *ex) HandleMessage(client any, message any) any {');
     });
 
-    test ('a nil test on the frame keeps the box (IsEqual, not ==)', () => {
+    test ('a nil test on the frame compares the map natively', () => {
         const output = goPath ('tmp-gp12-nil',
             "export class ex extends Exchange {\n" +
             "    override handleMessage (client: Client, message: Dict) {\n" +
@@ -119,7 +119,8 @@ describe ('hx10 GP12 ws frame parameter', () => {
             "        return this.safeValue (message, 'event');\n" +
             "    }\n" +
             "}\n");
-        expect (output).toContain ('func (this *ex) HandleMessage(client any, message any) any {');
+        expect (output).toContain ('func (this *ex) HandleMessage(client any, message map[string]any) any {');
+        expect (output).toContain ('if message == nil {');
     });
 
     test ('an in-read inside an if condition prints the native init clause', () => {

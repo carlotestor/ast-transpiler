@@ -74,7 +74,7 @@ describe('hx10 GP14 async venue-only parameters', () => {
         expect(out).toContain('GetValue(body, "id")');
     });
 
-    test('a body that nil-tests the parameter keeps the box', () => {
+    test('a body that nil-tests a map parameter compares it natively', () => {
         const ts = PRELUDE +
             'class Test extends Base {\n' +
             '    async watchPublic (body: any): Promise<any> {\n' +
@@ -86,8 +86,8 @@ describe('hx10 GP14 async venue-only parameters', () => {
             '    }\n' +
             '}\n';
         const out = go(ts);
-        expect(signature(out, 'WatchPublic')).toContain('(body any)');
-        expect(out).toContain('IsEqual(body, nil)');
+        expect(signature(out, 'WatchPublic')).toContain('(body map[string]any)');
+        expect(out).not.toContain('IsEqual(body, nil)');
     });
 
     test('a body that writes another type keeps the box', () => {
