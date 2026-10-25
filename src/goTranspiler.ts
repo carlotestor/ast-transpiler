@@ -9994,7 +9994,9 @@ ${this.getIden(identation)}${returnStatement}`;
         if (name.includes('\n') || parsedArg.includes('\n')) {
             return undefined;
         }
-        if (!this.goFileKeepsFileLevelImports()) {
+        // GP24 keeps `import "strings"` alive in the two generated base files, so the
+        // stdlib-call arms may fire there too; only the inline-blob arm below needs more
+        if (!this.goStdlibImportIsPlaceable()) {
             return undefined;
         }
         const receiver = this.goUnwrapPrintedAssertions(node?.expression?.expression);
@@ -10013,12 +10015,19 @@ ${this.getIden(identation)}${returnStatement}`;
             return `strings.Index(${name}, ${parsedArg})`;
         }
         // the literal repeats the identifier, so the receiver is still read exactly once
-        if ((receiverType === '*string') && (receiver?.kind === SyntaxKind.Identifier)) {
+        if ((receiverType === '*string') && (receiver?.kind === SyntaxKind.Identifier) && this.goFileKeepsFileLevelImports()) {
             this.goFileStdlibImports.add('strings');
             const level = this.goStatementLevel;
             const body = this.getIden(level + 1);
             const inner = this.getIden(level + 2);
             return `func() int {\n${body}if ${name} == nil {\n${inner}return -1\n${body}}\n${body}return strings.Index(*${name}, ${parsedArg})\n${this.getIden(level)}}()`;
+        }
+        // a base file takes no inline blob, so only the strong non-nil proof is emitted there:
+        // every write is a SafeString-family call whose literal default makes the pointer non-nil.
+        // A checker-narrowed `string` TS type does not prove the Go pointer (NumberToString -> nil)
+        if ((receiverType === '*string') && (receiver?.kind === SyntaxKind.Identifier) && (!this.goFileKeepsFileLevelImports()) && this.goDefaultedSafeStringLocal(receiver)) {
+            this.goFileStdlibImports.add('strings');
+            return `strings.Index(*${name.trim()}, ${parsedArg})`;
         }
         return undefined;
     }
@@ -11398,6 +11407,7 @@ ${tryBodyBlock}
         if ((typeof name !== 'string') || (typeof parsedArg !== 'string') || name.includes('\n') || parsedArg.includes('\n')) {
             return undefined;
         }
+        // no inline blob here, so the base files' GP24 import seam is enough
         if (!this.goFileKeepsFileLevelImports() || !this.goStdlibImportIsPlaceable()) {
             return undefined;
         }
