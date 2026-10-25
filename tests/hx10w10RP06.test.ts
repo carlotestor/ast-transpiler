@@ -146,6 +146,16 @@ describe('hx10w10 RP06 call-init container locals', () => {
         expect(out).toContain('let mut orderbook: Value = self.parseOrderBook(response, Value::Str("BTC/USDT".into()));');
     });
 
+    test('a local read out of the live ws order cache keeps the helper', () => {
+        const out = rust('    cachedOrders (cached: any, orderId: Str) {\n'
+            + '        const orders = this.safeDict (cached.hashmap (), "BTC/USDT", {});\n'
+            + '        orders[orderId] = 1;\n'
+            + '        return orders;\n'
+            + '    }\n');
+        expect(out).toContain('let mut orders: Value = self.safeDict(cached.hashmap(), Value::Str("BTC/USDT".into())');
+        expect(out).not.toContain('let mut orders: indexmap::IndexMap');
+    });
+
     test('a callee that stores the container it returns keeps the box', () => {
         const out = rust('    stored (response: any) {\n'
             + '        const book = this.seed (response);\n'

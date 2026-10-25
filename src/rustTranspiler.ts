@@ -5813,6 +5813,9 @@ export class RustTranspiler extends BaseTranspiler {
         const literal: any = this.rustSkipWrappers(init);
         const produced = !isObjectLiteralExpression(literal) && this.rustDictProducer(init);
         if (!isObjectLiteralExpression(literal) && !produced) return false;
+        // A dict read out of a live store (`x.hashmap()`, `x.subscriptions`) is a
+        // tagged handle: its writes must reach the store, so it keeps the helper.
+        if (produced && this.rustInitReadsTaggedStore(init)) return false;
         const entries: any[] = produced ? [] : literal.properties;
         for (const property of entries) {
             if (property.kind === SyntaxKind.SpreadAssignment) return false;
@@ -6011,6 +6014,23 @@ export class RustTranspiler extends BaseTranspiler {
         };
         body.forEachChild(visit);
         return ok && returns > 0;
+    }
+
+    /** A call operand that hands back a live-store map: `x.hashmap()` (the ws
+     *  order/subscription cache) or a `.subscriptions` / `.futures` read. The
+     *  runtime tags those dicts, so a write must reach the store. */
+    rustInitReadsTaggedStore(node: any): boolean {
+        const init: any = this.rustSkipWrappers(node);
+        if (!isCallExpression(init)) return false;
+        return ((init as any).arguments ?? []).some((arg: any) => {
+            const n: any = this.rustSkipWrappers(arg);
+            if (n === undefined) return false;
+            if (isPropertyAccessExpression(n)) return RustTranspiler.RUST_TAGGED_CONTAINER_FIELDS.has(String((n as any).name.text));
+            if (isCallExpression(n) && isPropertyAccessExpression(n.expression)) {
+                return RustTranspiler.RUST_TAGGED_CONTAINER_FIELDS.has(String((n as any).expression.name.text));
+            }
+            return false;
+        });
     }
 
     /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */

@@ -31727,6 +31727,8 @@ ${iden}}`;
     const produced = !_is.isObjectLiteralExpression.call(void 0, literal) && this.rustDictProducer(init);
     if (!_is.isObjectLiteralExpression.call(void 0, literal) && !produced)
       return false;
+    if (produced && this.rustInitReadsTaggedStore(init))
+      return false;
     const entries = produced ? [] : literal.properties;
     for (const property of entries) {
       if (property.kind === _ast.SyntaxKind.SpreadAssignment)
@@ -31907,6 +31909,25 @@ ${iden}}`;
     };
     body.forEachChild(visit);
     return ok && returns > 0;
+  }
+  /** A call operand that hands back a live-store map: `x.hashmap()` (the ws
+   *  order/subscription cache) or a `.subscriptions` / `.futures` read. The
+   *  runtime tags those dicts, so a write must reach the store. */
+  rustInitReadsTaggedStore(node) {
+    const init = this.rustSkipWrappers(node);
+    if (!_is.isCallExpression.call(void 0, init))
+      return false;
+    return (_nullishCoalesce(init.arguments, () => ( []))).some((arg) => {
+      const n = this.rustSkipWrappers(arg);
+      if (n === void 0)
+        return false;
+      if (_is.isPropertyAccessExpression.call(void 0, n))
+        return _RustTranspiler.RUST_TAGGED_CONTAINER_FIELDS.has(String(n.name.text));
+      if (_is.isCallExpression.call(void 0, n) && _is.isPropertyAccessExpression.call(void 0, n.expression)) {
+        return _RustTranspiler.RUST_TAGGED_CONTAINER_FIELDS.has(String(n.expression.name.text));
+      }
+      return false;
+    });
   }
   /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
   rustThisRootedPlace(node) {

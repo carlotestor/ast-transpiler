@@ -822,6 +822,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  container of `kind` — the method's own body, no venue override (the
      *  checker resolves the most derived declaration for `this`). */
     rustCallBuildsContainer(call: any, kind: 'map' | 'list', depth?: number): boolean;
+    /** A call operand that hands back a live-store map: `x.hashmap()` (the ws
+     *  order/subscription cache) or a `.subscriptions` / `.futures` read. The
+     *  runtime tags those dicts, so a write must reach the store. */
+    rustInitReadsTaggedStore(node: any): boolean;
     /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
     rustThisRootedPlace(node: any): boolean;
     /** Container kind an expression the callee body builds yields, or undefined.
