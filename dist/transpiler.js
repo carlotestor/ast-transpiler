@@ -17293,7 +17293,7 @@ ${this.getIden(identation)}`;
     if (name.includes("\n") || parsedArg.includes("\n")) {
       return void 0;
     }
-    if (!this.goFileKeepsFileLevelImports()) {
+    if (!this.goStdlibImportIsPlaceable()) {
       return void 0;
     }
     const receiver = this.goUnwrapPrintedAssertions(node?.expression?.expression);
@@ -17310,7 +17310,7 @@ ${this.getIden(identation)}`;
       this.goFileStdlibImports.add("strings");
       return `strings.Index(${name}, ${parsedArg})`;
     }
-    if (receiverType === "*string" && receiver?.kind === SyntaxKind5.Identifier) {
+    if (receiverType === "*string" && receiver?.kind === SyntaxKind5.Identifier && this.goFileKeepsFileLevelImports()) {
       this.goFileStdlibImports.add("strings");
       const level = this.goStatementLevel;
       const body = this.getIden(level + 1);
@@ -17321,6 +17321,10 @@ ${inner}return -1
 ${body}}
 ${body}return strings.Index(*${name}, ${parsedArg})
 ${this.getIden(level)}}()`;
+    }
+    if (receiverType === "*string" && receiver?.kind === SyntaxKind5.Identifier && !this.goFileKeepsFileLevelImports() && this.goDefaultedSafeStringLocal(receiver)) {
+      this.goFileStdlibImports.add("strings");
+      return `strings.Index(*${name.trim()}, ${parsedArg})`;
     }
     return void 0;
   }
