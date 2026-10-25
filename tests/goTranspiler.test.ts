@@ -6466,6 +6466,9 @@ describe('native parameter types, Dict/List (D-01)', () => {
         expect(output).toContain('func (this *Test) ParseFlag(flag any) any {');
     });
 
+    // hx10w9 GP13 scopes the typed array-literal rule to the slice table's own slots, so this
+    // pre-existing negative case keeps its box: a venue-local string-list parameter is proved by
+    // slice-typed call-site values, never by the `[]any{..}` a bare literal used to print.
     test('a non-any element []-typed parameter keeps the box', () => {
         const input = baseWithAccessors +
             "class Test extends Base {\n" +
@@ -6478,6 +6481,7 @@ describe('native parameter types, Dict/List (D-01)', () => {
             "}\n";
         const output = transpiler.transpileGo(input).content;
         expect(output).toContain('func (this *Test) ParseSymbols(symbols any) any {');
+        expect(output).toContain('[]any{"a"}');
     });
 
     test('a class-typed parameter keeps the box', () => {

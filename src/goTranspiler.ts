@@ -588,6 +588,14 @@ const GO_TS_SRC_STRING_PRODUCERS = goThisCallPatterns([
     'safeStringUpper', 'safeStringUpper2', 'safeCurrencyCode', 'safeSymbol',
 ]);
 
+// hx10w9 GP13: a slice element proves a Go string only from a quoted literal, a `: string`
+// parameter the printer types, or a defaulted parameter with a string-literal initializer. The
+// `safe*` readers answer a `*string` and `this.symbol(x)` answers an `any` box in Go, so neither
+// can enter a `[]string` literal without a deref/conversion this rule does not print.
+const GO_TS_SRC_SLICE_STRING_PRODUCERS: RegExp[] = [
+    /^(?:'[^'\\]*'|"[^"\\]*"|`[^`\\]*`)$/,
+];
+
 // the TS accessors whose Go signature GO_HELPER_RETURN_TYPES already names
 // `map[string]any`, for the same textual sibling-file proof. A map argument is also
 // proven when it is an object literal (its printed Go form is exactly that map) or a
@@ -629,6 +637,61 @@ function goBalancedCallArgs (text: string, open: number): string[] | undefined {
             continue;
         }
         if (ch === ')') {
+            depth--;
+            if (depth === 0) {
+                if (current.trim().length > 0) { args.push (current.trim ()); }
+                return args;
+            }
+            current += ch;
+            continue;
+        }
+        if ((ch === ',') && (depth === 1)) {
+            args.push (current.trim ());
+            current = '';
+            continue;
+        }
+        current += ch;
+    }
+    return undefined;
+}
+
+// hx10w9 GP13: the same split for a call whose arguments hold array literals. goBalancedCallArgs
+// only tracks parentheses, so `[ [ a, b ] ]` reads as two arguments; this one counts every
+// bracket, which is what a slice-argument proof needs.
+function goBalancedSliceArgs (text: string, open: number): string[] | undefined {
+    const args: string[] = [];
+    let depth = 0;
+    let current = '';
+    let quote: string | undefined;
+    for (let i = open; i < text.length; i++) {
+        const ch = text[i];
+        if (quote !== undefined) {
+            current += ch;
+            if (ch === '\\') {
+                current += text[i + 1] ?? '';
+                i++;
+                continue;
+            }
+            if (ch === quote) {
+                quote = undefined;
+            }
+            continue;
+        }
+        if ((ch === '"') || (ch === "'") || (ch === '`')) {
+            quote = ch;
+            current += ch;
+            continue;
+        }
+        if ((ch === '/') && (text[i + 1] === '/')) {
+            while ((i < text.length) && (text[i] !== '\n')) { i++; }
+            continue;
+        }
+        if ((ch === '(') || (ch === '[') || (ch === '{')) {
+            depth++;
+            if (depth > 1) { current += ch; }
+            continue;
+        }
+        if ((ch === ')') || (ch === ']') || (ch === '}')) {
             depth--;
             if (depth === 0) {
                 if (current.trim().length > 0) { args.push (current.trim ()); }
@@ -727,6 +790,12 @@ export class GoTranspiler extends BaseTranspiler {
     // inherited method name -> indexes of required params that print `string` on the base and every
     // override (the caller audits all declarations); other callers convert through StringArg
     unifiedStringParams: { [method: string]: number[] } = {};
+    // hx10w9 GP13: the slice mirror of the table above — inherited method name -> parameter
+    // index -> Go slice type (`[]string`/`[][]string`). Same audit: the base and every override
+    // print that slice, and every call site passes a literal the printer opens as that slice.
+    unifiedSliceParams: { [method: string]: { [index: number]: string } } = {};
+    // array literals the current print opens as a Go slice (set by the call-argument rule)
+    goSliceLiteralTypes: Map<any, string> = new Map<any, string>();
     // installed by the ccxt build: GetArg alias -> Go types, and the audited consumer table
     CCXT_GO_GETARG_DECLARED_TYPES: any;
     CCXT_GO_GETARG_SAFE_CONSUMERS: any;
@@ -781,6 +850,7 @@ export class GoTranspiler extends BaseTranspiler {
         this.asyncMethodSuffix = config['asyncMethodSuffix'] ?? '';
         this.asyncSuffixExemptPaths = (config['asyncSuffixExemptPaths'] ?? []).map((p) => new RegExp(p));
         this.unifiedStringParams = config['unifiedStringParams'] ?? {};
+        this.unifiedSliceParams = config['unifiedSliceParams'] ?? {};
     }
 
     initConfig() {
@@ -4844,12 +4914,22 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             }
             return 'string';
         }
+<<<<<<< src/goTranspiler.ts
         // hx10 GP12: the ws frame. `override handleMessage (client, message: Dict)` is the one
         // inherited signature the Go dispatch can type: WsDispatch asserts the decoded object once.
         const frameType = this.goWsFrameParameterType(fn, param);
         if (frameType !== undefined) {
             return frameType;
         }
+||||||| /tmp/hx10w9-base
+=======
+        if (this.goIsUnifiedSliceParameter(fn.name.text, fn.parameters.indexOf(param))) {
+            // hx10w9 GP13: the slice table types the base and every override together, exactly like
+            // the string table above. A method whose declarations or call sites disagree prints `any`
+            // everywhere so the Go signature stays the one the hand-written interfaces declare.
+            return this.goUnifiedSliceParameterType(fn, param);
+        }
+>>>>>>> /tmp/hx10w9-theirs
         if (this.goMethodKeepsBaseSignature(fn)) {
             return undefined; // inherited/base methods are pinned by the base class and IDerivedExchange
         }
@@ -4972,6 +5052,388 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     goIsUnifiedStringParameter(methodName: string, index: number): boolean {
         const indexes = Object.prototype.hasOwnProperty.call(this.unifiedStringParams, methodName) ? this.unifiedStringParams[methodName] : undefined;
         return Array.isArray(indexes) && indexes.includes(index);
+    }
+
+    // ---- hx10w9 GP13: the slice mirror of the string table --------------------------------------
+    // The ccxt-side table names the inherited methods whose parameter prints a Go slice. The TS
+    // annotation (`string[]`/`string[][]`) is the whole proof for the element type, and the
+    // argument side is proven by the literal rule below: an array literal whose elements all print
+    // as Go strings opens as that slice instead of `[]any{...}`.
+
+    goIsUnifiedSliceParameter(methodName: string, index: number): boolean {
+        const entry = Object.prototype.hasOwnProperty.call(this.unifiedSliceParams, methodName) ? this.unifiedSliceParams[methodName] : undefined;
+        return (entry !== undefined) && (typeof entry[index] === 'string');
+    }
+
+    goUnifiedSliceParameterType(fn, param): string | undefined {
+        const entry = Object.prototype.hasOwnProperty.call(this.unifiedSliceParams, fn.name.text) ? this.unifiedSliceParams[fn.name.text] : undefined;
+        if (entry === undefined) {
+            return undefined;
+        }
+        const goType = entry[fn.parameters.indexOf(param)];
+        const annotation = (goType === '[]string') ? 'string[]' : ((goType === '[][]string') ? 'string[][]' : undefined);
+        if ((annotation === undefined) || (this.goAnnotatedParameterText(param) !== annotation)) {
+            return undefined;
+        }
+        if (!this.goSliceTableDeclarationsMatch(fn, annotation)) {
+            return undefined;
+        }
+        // an override answers exactly what the declaring class answered: the interface method is
+        // one signature for the base and every venue
+        const rootParam = this.goSliceTableRootParameter(fn, param);
+        if (rootParam !== undefined) {
+            if (this.goNativeParameterType(rootParam) !== goType) {
+                return undefined;
+            }
+            return goType;
+        }
+        if (!this.goLocalIsSafeToType(fn.body, param, param.name.text, goType)) {
+            return undefined;
+        }
+        if (!this.goParameterKeepsNilCompareNative(fn.body, param, goType)) {
+            return undefined;
+        }
+        if (!this.goSliceTableCallSitesPass(fn, fn.name.text, fn.parameters.indexOf(param), goType)) {
+            return undefined;
+        }
+        return goType;
+    }
+
+    // the parameter the class chain's own declaration of this method takes: an override prints the
+    // same Go signature the base does, or the interface method would differ per venue
+    goSliceTableRootParameter(fn, param) {
+        const index = fn.parameters.indexOf(param);
+        const cls: any = this.goEnclosingClass(fn);
+        const checker: any = this.checkerOrUndefined();
+        if ((cls === undefined) || (checker === undefined)) {
+            return undefined;
+        }
+        for (const clause of (cls.heritageClauses ?? [])) {
+            if (clause.token !== SyntaxKind.ExtendsKeyword) {
+                continue;
+            }
+            for (const expr of (clause.types ?? [])) {
+                let baseType;
+                try {
+                    baseType = checker.getTypeAtLocation(expr);
+                } catch (e) {
+                    continue;
+                }
+                const property = baseType?.getProperty?.(fn.name.text);
+                for (const declaration of (property?.declarations ?? [])) {
+                    const resolved: any = declaration?.resolve?.() ?? declaration;
+                    if ((resolved?.kind !== SyntaxKind.MethodDeclaration) || (resolved === fn)) {
+                        continue;
+                    }
+                    const baseParam = (resolved.parameters ?? [])[index];
+                    if (baseParam !== undefined) {
+                        return baseParam;
+                    }
+                }
+            }
+        }
+        return undefined;
+    }
+
+    goAnnotatedParameterText(param): string | undefined {
+        if (param?.type === undefined) {
+            return undefined;
+        }
+        return String(param.type.getText()).replace(/\s+/g, '');
+    }
+
+    // every deriving file that declares the method must declare the same annotation, or the base
+    // and an override would print two different Go signatures for one interface method
+    goSliceTableDeclarationsMatch(fn, annotation: string): boolean {
+        const tree = this.goTsSrcTree(fn.getSourceFile());
+        if (tree === undefined) {
+            return true;
+        }
+        const name = fn.name.text;
+        const myFile = tree.relativeOf.get(path.resolve(fn.getSourceFile().fileName));
+        const myClass = this.goEnclosingClassName(fn);
+        const declarationRx = new RegExp('(?<![\\w.$])' + name + '\\s*\\(\\s*[A-Za-z_$][\\w$]*\\s*:\\s*([^,)]+)', 'g');
+        let matches = true;
+        tree.fileText.forEach((text: string, file: string) => {
+            if ((file === myFile) || !matches || !this.goTsSrcFileDerivesFrom(tree, file, myClass)) {
+                return;
+            }
+            declarationRx.lastIndex = 0;
+            let match;
+            while ((match = declarationRx.exec(text)) !== null) {
+                if (match[1].replace(/\s+/g, '') !== annotation) {
+                    matches = false;
+                    return;
+                }
+            }
+        });
+        return matches;
+    }
+
+    // every call site of the method anywhere in ts/src must pass a literal that prints that slice
+    goSliceTableCallSitesPass(fn, methodName: string, index: number, goType: string): boolean {
+        if (!this.goParameterCallSitesPassType(fn, index, goType)) {
+            return false;
+        }
+        const tree = this.goTsSrcTree(fn.getSourceFile());
+        if (tree === undefined) {
+            return true;
+        }
+        const myFile = tree.relativeOf.get(path.resolve(fn.getSourceFile().fileName));
+        const myClass = this.goEnclosingClassName(fn);
+        const callRx = new RegExp('\\.\\s*' + methodName + '\\s*\\(', 'g');
+        let passes = true;
+        tree.fileText.forEach((text: string, file: string) => {
+            if ((file === myFile) || !passes || !this.goTsSrcFileDerivesFrom(tree, file, myClass)) {
+                return;
+            }
+            callRx.lastIndex = 0;
+            let match;
+            while ((match = callRx.exec(text)) !== null) {
+                const args = goBalancedSliceArgs(text, match.index + match[0].length - 1);
+                if (args === undefined) {
+                    passes = false;
+                    return;
+                }
+                const arg = args[index];
+                if (arg === undefined) {
+                    continue;
+                }
+                if (process.env.GP13_DEBUG) { require('fs').appendFileSync(process.env.GP13_DEBUG, 'site ' + methodName + ' ' + file + ' arg=' + JSON.stringify((arg ?? '').substring(0, 50)) + ' ok=' + String(this.goTextSliceArgumentMatches(arg, goType, file, tree, match.index)) + '\n'); }
+                if (!this.goTextSliceArgumentMatches(arg, goType, file, tree, match.index)) {
+                    passes = false;
+                    return;
+                }
+            }
+        });
+        return passes;
+    }
+
+    // the textual proof of a slice argument: an array literal whose elements the sibling file
+    // itself proves print as Go strings (a quoted literal, a string producer, or a value it
+    // annotates `: string`). Every other shape fails closed.
+    goTextSliceArgumentMatches(argText: string, goType: string, file: string, tree, at?: number): boolean {
+        let text = (argText ?? '').trim();
+        while (text.startsWith('(') && text.endsWith(')')) {
+            text = text.substring(1, text.length - 1).trim();
+        }
+        if ((text.length < 3) || !text.startsWith('[') || !text.endsWith(']')) {
+            return false;
+        }
+        const inner = text.substring(1, text.length - 1).trim();
+        if (inner === '') {
+            return false;
+        }
+        const elements = goBalancedSliceArgs('(' + inner + ')', 0);
+        if (elements === undefined) {
+            return false;
+        }
+        if (goType === '[]string') {
+            return elements.every((element) => this.goTextStringElementMatches(element, file, tree, at));
+        }
+        if (goType === '[][]string') {
+            return elements.every((element) => this.goTextSliceArgumentMatches(element, '[]string', file, tree, at));
+        }
+        return false;
+    }
+
+    goTextStringElementMatches(element: string, file: string, tree, at?: number): boolean {
+        let text = (element ?? '').trim();
+        while (text.startsWith('(') && text.endsWith(')')) {
+            text = text.substring(1, text.length - 1).trim();
+        }
+        if (/^(?:'[^'\\]*'|"[^"\\]*"|`[^`\\]*`)$/.test(text)) {
+            return true;
+        }
+        if (GO_TS_SRC_SLICE_STRING_PRODUCERS.some((rx) => rx.test(text))) {
+            return true;
+        }
+        const identifier = /^([A-Za-z_$][\w$]*)$/.exec(text);
+        if (identifier === null) {
+            return false;
+        }
+        const fileText: string = tree.fileText.get(file) ?? '';
+        // the name must be a parameter of the method that makes the call, or a local bound before
+        // it: a same-named string elsewhere in the file proves nothing about this argument
+        const enclosing = this.goTextEnclosingMethod(fileText, at);
+        const parameterIndex = (enclosing === undefined) ? -1
+            : enclosing.params.findIndex((text2: string) => new RegExp('^\\s*' + identifier[1] + '\\s*(?::|=|$)').test(text2));
+        if (parameterIndex >= 0) {
+            const parameter = enclosing.params[parameterIndex];
+            // a defaulted parameter with a string-literal initializer prints `var x string = GetArgString(..)`
+            if (/=\s*(?:'[^']*'|"[^"]*")/.test(parameter)) {
+                return true;
+            }
+            // a `: string` parameter prints a Go string only where the printer types the method's
+            // parameters from the string table; every other async parameter keeps the box
+            if (/^\s*[A-Za-z_$][\w$]*\s*:\s*string\s*$/.test(parameter.split('=')[0].trim())) {
+                const indexes = Object.prototype.hasOwnProperty.call(this.unifiedStringParams, enclosing.name) ? this.unifiedStringParams[enclosing.name] : undefined;
+                return Array.isArray(indexes) && indexes.includes(parameterIndex);
+            }
+            return false;
+        }
+        if (at === undefined) {
+            return false;
+        }
+        const declarationRx = new RegExp('(?:const|let|var)\\s+' + identifier[1] + '\\s*(?::[^=]*)?=\\s*([^;\\n]+)', 'g');
+        let declaration;
+        let match;
+        while ((match = declarationRx.exec(fileText)) !== null) {
+            if (match.index > at) {
+                break;
+            }
+            declaration = match;
+        }
+        return (declaration !== undefined) && GO_TS_SRC_SLICE_STRING_PRODUCERS.some((rx) => rx.test(declaration[1].trim()));
+    }
+
+    // the method/function the call at `at` sits in: its name and parameter texts, or undefined
+    // when the text has no header above it. The slice-element proof reads a name's type from there.
+    goTextEnclosingMethod(text: string, at?: number): { name: string, params: string[] } | undefined {
+        if ((at === undefined) || (at <= 0)) {
+            return undefined;
+        }
+        const before = text.substring(0, at);
+        const headerRx = /(?:^|\n)\s*(?:override\s+)?(?:async\s+)?([A-Za-z_$][\w$]*)\s*\(/g;
+        let last;
+        let match;
+        while ((match = headerRx.exec(before)) !== null) {
+            last = match;
+        }
+        if (last === undefined) {
+            return undefined;
+        }
+        const params = goBalancedSliceArgs(text, last.index + last[0].length - 1);
+        if (params === undefined) {
+            return undefined;
+        }
+        return { 'name': last[1], 'params': params };
+    }
+
+    // the Go slice type an array literal prints: every element a Go string makes `[]string`, every
+    // element itself such a literal makes `[][]string`. A spread, an empty or a mixed literal keeps
+    // the box, so the rule never widens a `[]any{...}` that the target slot did not ask for.
+    goArrayLiteralSliceType(node, depth = 0): string | undefined {
+        if ((node?.kind !== SyntaxKind.ArrayLiteralExpression) || (depth > 2)) {
+            return undefined;
+        }
+        const elements = node.elements ?? [];
+        if (elements.length === 0) {
+            return undefined;
+        }
+        let element: string | undefined;
+        for (const node2 of elements) {
+            if (node2.kind === SyntaxKind.SpreadElement) {
+                return undefined;
+            }
+            const type = (node2.kind === SyntaxKind.ArrayLiteralExpression)
+                ? this.goArrayLiteralSliceType(node2, depth + 1)
+                : (this.goSliceElementIsString(node2) ? 'string' : undefined);
+            if (type === undefined) {
+                return undefined;
+            }
+            if (element === undefined) {
+                element = type;
+            } else if (element !== type) {
+                return undefined;
+            }
+        }
+        if (element === 'string') {
+            return '[]string';
+        }
+        return (element === '[]string') ? '[][]string' : undefined;
+    }
+
+    // an element prints as a Go string: a proven string operand, or a defaulted parameter whose
+    // initializer is a string literal (the printer binds it with GetArgString, so the body holds
+    // a Go string — the same rule the sibling-file proof applies to the text)
+    goSliceElementIsString(node): boolean {
+        if (this.goOperandStaticType(node, this.printNode(node, 0)) === 'string') {
+            return true;
+        }
+        if (node?.kind !== SyntaxKind.Identifier) {
+            return false;
+        }
+        const decl: any = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+        if (decl?.kind !== SyntaxKind.Parameter) {
+            return false;
+        }
+        const initializer = decl.initializer;
+        return (initializer?.kind === SyntaxKind.StringLiteral) || (initializer?.kind === SyntaxKind.NoSubstitutionTemplateLiteral);
+    }
+
+    // the type a call-site argument is proven to print at a slice parameter slot
+    goSliceArgumentType(arg): string | undefined {
+        if (arg?.kind === SyntaxKind.ArrayLiteralExpression) {
+            return this.goArrayLiteralSliceType(arg);
+        }
+        const printed = this.goPrintedArgType(arg);
+        return ((printed === '[]string') || (printed === '[][]string')) ? printed : undefined;
+    }
+
+    // the parameter node a call argument lands in, when the printer can resolve the declaration
+    goResolvedCallParameter(node, index: number) {
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined) {
+            return undefined;
+        }
+        let declaration;
+        try {
+            declaration = checker.getResolvedSignature(node)?.declaration?.resolve();
+        } catch (e) {
+            return undefined;
+        }
+        const fn: any = declaration;
+        if ((fn?.kind !== SyntaxKind.MethodDeclaration) && (fn?.kind !== SyntaxKind.FunctionDeclaration)) {
+            return undefined;
+        }
+        return (fn.parameters ?? [])[index];
+    }
+
+    // the Go slice type a call argument prints at the given parameter slot: the table names the
+    // inherited methods (whose declaration a scoped program may not hold), the resolved parameter
+    // names every other method the printer itself types
+    goCallSliceArgumentType(node, calleeName: string, index: number): string | undefined {
+        const param = this.goResolvedCallParameter(node, index);
+        if (param !== undefined) {
+            const goType = this.goNativeParameterType(param);
+            return (typeof goType === 'string') ? goType : undefined;
+        }
+        const entry = Object.prototype.hasOwnProperty.call(this.unifiedSliceParams, calleeName) ? this.unifiedSliceParams[calleeName] : undefined;
+        return (entry === undefined) ? undefined : entry[index];
+    }
+
+    // hx10w9 GP13: print the array literal of a call argument as the Go slice its parameter slot
+    // holds, so `[ symbol ]` at a `[]string` slot is `[]string{symbol}` and not a `[]any{...}` box.
+    // Returns undefined when no argument is such a literal, leaving every other call to the printer.
+    goSliceCallArgs(node, identation): string | undefined {
+        const callee: any = node.expression;
+        const name = (callee?.kind === SyntaxKind.PropertyAccessExpression) ? callee.name?.text : undefined;
+        if (typeof name !== 'string') {
+            return undefined;
+        }
+        const args = node.arguments ?? [];
+        if ((args.length === 0) || args.some((a) => a.kind === SyntaxKind.SpreadElement)) {
+            return undefined;
+        }
+        let marked = 0;
+        for (let i = 0; i < args.length; i++) {
+            const arg = args[i];
+            if ((arg.kind !== SyntaxKind.ArrayLiteralExpression) || !this.goIsUnifiedSliceParameter(name, i)) {
+                continue;
+            }
+            const goType = this.goCallSliceArgumentType(node, name, i);
+            if ((goType === undefined) || (this.goArrayLiteralSliceType(arg) !== goType)) {
+                continue;
+            }
+            this.goSliceLiteralTypes.set(arg, goType);
+            marked++;
+        }
+        if (marked === 0) {
+            return undefined;
+        }
+        const depth = this.goExprDepth + ((args.length > 1) ? 1 : 0);
+        return args.map((a) => this.goWithExprDepth(depth, () => this.printNode(a, identation)).trim()).join(', ');
     }
 
     // the call arguments of a unified method whose parameter prints `string`: an argument the
@@ -5272,7 +5734,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             if ((arg === undefined) || (arg.kind === SyntaxKind.SpreadElement)) {
                 return false;
             }
-            if (this.goPrintedArgType(arg) !== goType) {
+            // hx10w9 GP13: at a table slot an array literal is the slice its own elements prove,
+            // not the `[]any` box the default print opens. Every other parameter keeps the
+            // printer's own argument type, so no existing `[]any` slot changes shape.
+            const tableSlot = ((goType === '[]string') || (goType === '[][]string')) && this.goIsUnifiedSliceParameter(name, index);
+            const argType = tableSlot ? this.goSliceArgumentType(arg) : this.goPrintedArgType(arg);
+            if (argType !== goType) {
                 return false;
             }
         }
@@ -5287,7 +5754,15 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
                 if (!this.goTsSrcFileDerivesFrom(tree, site.file, myClass)) {
                     continue; // a same-named method of another exchange
                 }
-                const arg = site.args[index];
+                let arg = site.args[index];
+                // hx10w9 GP13: the tree's splitter ignores brackets, so a nested array literal
+                // reads as several arguments; re-split the call for a slice slot
+                if (((goType === '[]string') || (goType === '[][]string')) && (site.at !== undefined)) {
+                    const callArgs = goBalancedSliceArgs(tree.fileText.get(site.file) ?? '', site.at);
+                    if (callArgs !== undefined) {
+                        arg = callArgs[index];
+                    }
+                }
                 if ((arg === undefined) || !this.goTextArgMatchesType(arg, goType, site.file, tree, site.at)) {
                     return false;
                 }
@@ -5454,6 +5929,11 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         let text = (argText ?? '').trim();
         while (text.startsWith('(') && text.endsWith(')')) {
             text = text.substring(1, text.length - 1).trim();
+        }
+        // hx10w9 GP13: a slice slot is proven by the literal rule alone (the sibling file's own
+        // element proofs), never by the `[]any` text the default print would give it
+        if ((goType === '[]string') || (goType === '[][]string')) {
+            return this.goTextSliceArgumentMatches(text, goType, file, tree, at);
         }
         const isStringProducer = (candidate: string) => GO_TS_SRC_STRING_PRODUCERS.some(rx => rx.test(candidate));
         const localDeclaredFrom = (name: string, accept: (init: string) => boolean) => {
@@ -5992,7 +6472,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     // 0 for a nil slice, exactly like GetArrayLength's `[]T` cases. On a map or an
     // `any` box GetArrayLength answers 0, so only a `[]`-typed value may inline —
     // and only for the slice types the helper itself counts (a []byte would answer 0).
-    sliceLengthTypes = [ '[]any', '[]string', '[]int64', '[]float64', '[]bool', '[]int', '[][]any', '[]map[string]any' ];
+    sliceLengthTypes = [ '[]any', '[]string', '[]int64', '[]float64', '[]bool', '[]int', '[][]any', '[][]string', '[]map[string]any' ];
 
     // hand-written BaseExchange fields (go/v4/exchange.go) whose Go type is one of the
     // slice types above: the struct value is never a nil pointer and len(field) is the
@@ -8615,13 +9095,21 @@ ${this.getIden(identation)}${returnStatement}`;
         // statement's own level so their bodies land one level deeper
         // …but an element is inline after `{`, so any leading indent a printer prepends is trimmed
         // go/printer prints composite literal elements at depth 1 (exprList(..., 1, ...))
-        const elements = node.elements.map((e) => this.goWithExprDepth(1, () => this.printNode(e, identation)).trim()).join(", ");
+        // hx10w9 GP13: a literal a `[]string`/`[][]string` slot asked for opens as that slice
+        const markedType = this.goSliceLiteralTypes.get(node) ?? ((node === this.goStringListLiteralNode) ? '[]string' : undefined);
+        const elements = node.elements.map((e) => {
+            if ((markedType === '[][]string') && (e.kind === SyntaxKind.ArrayLiteralExpression)) {
+                this.goSliceLiteralTypes.set(e, '[]string');
+            }
+            return this.goWithExprDepth(1, () => this.printNode(e, identation)).trim();
+        }).join(", ");
         // a list of calls (promises included) always opens as `[]any{`; getFunctionType is kept for its
         // checker side effect (it caches a signature on the call node)
         const first = node.elements[0];
-        const arrayOpen = (node === this.goStringListLiteralNode)
-            ? '[]string{' : (((first?.kind === SyntaxKind.CallExpression) && (this.getFunctionType(first) || true))
-                ? '[]any{' : this.ARRAY_OPENING_TOKEN);
+        const arrayOpen = (markedType === '[]string')
+            ? '[]string{' : ((markedType === '[][]string')
+                ? '[][]string{' : (((first?.kind === SyntaxKind.CallExpression) && (this.getFunctionType(first) || true))
+                    ? '[]any{' : this.ARRAY_OPENING_TOKEN));
         return arrayOpen + elements + this.ARRAY_CLOSING_TOKEN;
     }
 
@@ -8629,6 +9117,10 @@ ${this.getIden(identation)}${returnStatement}`;
         const unified = this.goUnifiedStringCallArgs(node, identation);
         if (unified !== undefined) {
             return unified;
+        }
+        const sliceArgs = this.goSliceCallArgs(node, identation);
+        if (sliceArgs !== undefined) {
+            return sliceArgs;
         }
         // go/printer prints the arguments of a call with more than one argument
         // one level deeper than the call itself (nodes.go, CallExpr)
