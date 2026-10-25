@@ -3727,7 +3727,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return undefined;
         }
         // the field's Go name is what the table holds (`apiKey` prints as `ApiKey`)
-        if (this.goStringFieldStaticType(initializer, this.printNode(initializer, 0).trim()) !== 'string') {
+        if (GO_STRING_FIELD_NAMES.indexOf(this.goAstFieldGoName(initializer)) < 0) {
             return undefined;
         }
         const name = declaration.name.text;
@@ -3752,8 +3752,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
                 && (parent.operatorToken?.kind === SyntaxKind.EqualsToken))) {
                 // a later write must keep the field's string (an `any` producer would not compile)
                 const right = this.goUnwrapParenthesizedNode(parent.right);
-                if ((right?.kind === SyntaxKind.PropertyAccessExpression) && (right.expression?.kind === SyntaxKind.ThisKeyword)
-                    && (this.goStringFieldStaticType(right, this.printNode(right, 0).trim()) === 'string')) {
+                if (GO_STRING_FIELD_NAMES.indexOf(this.goAstFieldGoName(right)) >= 0) {
                     return;
                 }
                 bail = true;
@@ -4926,6 +4925,16 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             return (typeof name === 'string' && name.length > 0) ? 'this.' + name.charAt(0).toUpperCase() + name.substring(1) : undefined;
         }
         return undefined;
+    }
+
+    // the Go name a `this.<field>` read prints (`apiKey` -> `ApiKey`), read from the AST:
+    // printing it here would re-enter the local-type classifier that asks this question
+    goAstFieldGoName(node): string | undefined {
+        if ((node?.kind !== SyntaxKind.PropertyAccessExpression) || (node.expression?.kind !== SyntaxKind.ThisKeyword)) {
+            return undefined;
+        }
+        const name = node.name?.text;
+        return (typeof name === 'string' && name.length > 0) ? name.charAt(0).toUpperCase() + name.substring(1) : undefined;
     }
 
     // true when every declaration of the awaited callee is a bodyless method signature:

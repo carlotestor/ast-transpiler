@@ -11943,7 +11943,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
     if (initializer?.kind !== SyntaxKind5.PropertyAccessExpression || initializer.expression?.kind !== SyntaxKind5.ThisKeyword) {
       return void 0;
     }
-    if (this.goStringFieldStaticType(initializer, this.printNode(initializer, 0).trim()) !== "string") {
+    if (GO_STRING_FIELD_NAMES.indexOf(this.goAstFieldGoName(initializer)) < 0) {
       return void 0;
     }
     const name = declaration.name.text;
@@ -11966,7 +11966,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
       }
       if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
         const right = this.goUnwrapParenthesizedNode(parent.right);
-        if (right?.kind === SyntaxKind5.PropertyAccessExpression && right.expression?.kind === SyntaxKind5.ThisKeyword && this.goStringFieldStaticType(right, this.printNode(right, 0).trim()) === "string") {
+        if (GO_STRING_FIELD_NAMES.indexOf(this.goAstFieldGoName(right)) >= 0) {
           return;
         }
         bail = true;
@@ -12893,6 +12893,15 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       return typeof name === "string" && name.length > 0 ? "this." + name.charAt(0).toUpperCase() + name.substring(1) : void 0;
     }
     return void 0;
+  }
+  // the Go name a `this.<field>` read prints (`apiKey` -> `ApiKey`), read from the AST:
+  // printing it here would re-enter the local-type classifier that asks this question
+  goAstFieldGoName(node) {
+    if (node?.kind !== SyntaxKind5.PropertyAccessExpression || node.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return void 0;
+    }
+    const name = node.name?.text;
+    return typeof name === "string" && name.length > 0 ? name.charAt(0).toUpperCase() + name.substring(1) : void 0;
   }
   // true when every declaration of the awaited callee is a bodyless method signature:
   // TS never implements it, the endpoint generator does, and the Go body is the

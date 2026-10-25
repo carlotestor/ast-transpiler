@@ -329,6 +329,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goAnyLocalHoldsPointerCache: Map<any, boolean>;
     goAnyLocalHoldsPointer(decl: any): boolean;
     goAstCalleeName(call: any): string | undefined;
+    goAstFieldGoName(node: any): string | undefined;
     goAwaitedCallIsImplicitEndpoint(expression: any): boolean;
     goIsNonPointerValueSource(expr: any): boolean;
     goAnyLocalHoldsNonPointerCache: Map<any, boolean>;
