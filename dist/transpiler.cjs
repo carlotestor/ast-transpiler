@@ -11215,19 +11215,19 @@ func New${this.capitalize(this.className)}() *${this.className} {
     return goType;
   }
   goSafeDictLocalUnboxUncached(declaration) {
+    const scope = this.goEnclosingFunction(declaration);
+    const sourceName = _optionalChain([declaration, 'access', _901 => _901.name, 'optionalAccess', _902 => _902.text]);
+    const backsInOp = scope !== void 0 && sourceName !== void 0 && this.hasNodeWhere(scope, (n) => n.kind === _ast.SyntaxKind.BinaryExpression && _optionalChain([n, 'access', _903 => _903.operatorToken, 'optionalAccess', _904 => _904.kind]) === _ast.SyntaxKind.InKeyword && _optionalChain([n, 'access', _905 => _905.right, 'optionalAccess', _906 => _906.kind]) === _ast.SyntaxKind.Identifier && n.right.text === sourceName);
     if (this.goSafeDictDefaultedArgs(declaration.initializer) !== void 0) {
       return this.goDeclaredLocalTypeIfSafe(
         declaration,
         GO_SAFE_DICT_LOCAL_TYPE,
-        (n) => this.goNilDefaultedDictUseReadsTheMap(n)
+        (n) => !backsInOp && this.goNilDefaultedDictUseReadsTheMap(n)
       );
     }
     if (this.goSafeDictLocalArgs(declaration.initializer) === void 0) {
       return void 0;
     }
-    const scope = this.goEnclosingFunction(declaration);
-    const sourceName = _optionalChain([declaration, 'access', _901 => _901.name, 'optionalAccess', _902 => _902.text]);
-    const backsInOp = scope !== void 0 && sourceName !== void 0 && this.hasNodeWhere(scope, (n) => n.kind === _ast.SyntaxKind.BinaryExpression && _optionalChain([n, 'access', _903 => _903.operatorToken, 'optionalAccess', _904 => _904.kind]) === _ast.SyntaxKind.InKeyword && _optionalChain([n, 'access', _905 => _905.right, 'optionalAccess', _906 => _906.kind]) === _ast.SyntaxKind.Identifier && n.right.text === sourceName);
     return this.goDeclaredLocalTypeIfSafe(
       declaration,
       GO_SAFE_DICT_LOCAL_TYPE,

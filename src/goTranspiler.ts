@@ -2758,22 +2758,22 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
     }
 
     goSafeDictLocalUnboxUncached(declaration): string | undefined {
-        // a defaulted accessor names the map on every path, so the local takes the type even when
-        // a later store writes into it
-        if (this.goSafeDictDefaultedArgs(declaration.initializer) !== undefined) {
-            return this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_DICT_LOCAL_TYPE,
-                (n) => this.goNilDefaultedDictUseReadsTheMap(n));
-        }
-        if (this.goSafeDictLocalArgs(declaration.initializer) === undefined) {
-            return undefined;
-        }
         // a local typed only because of its nil test keeps the box when it also backs an `in`:
-        // that read prints a pasted comma-ok closure for a typed map, i.e. two blob sites
+        // that read prints a pasted comma-ok closure for a typed map, i.e. a new blob site
         const scope: any = this.goEnclosingFunction(declaration);
         const sourceName = declaration.name?.text;
         const backsInOp = (scope !== undefined) && (sourceName !== undefined) && this.hasNodeWhere(scope, (n: any) =>
             (n.kind === SyntaxKind.BinaryExpression) && (n.operatorToken?.kind === SyntaxKind.InKeyword)
             && (n.right?.kind === SyntaxKind.Identifier) && (n.right.text === sourceName));
+        // a defaulted accessor names the map on every path, so the local takes the type even when
+        // a later store writes into it
+        if (this.goSafeDictDefaultedArgs(declaration.initializer) !== undefined) {
+            return this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_DICT_LOCAL_TYPE,
+                (n) => !backsInOp && this.goNilDefaultedDictUseReadsTheMap(n));
+        }
+        if (this.goSafeDictLocalArgs(declaration.initializer) === undefined) {
+            return undefined;
+        }
         return this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_DICT_LOCAL_TYPE,
             (n) => this.goSafeDictUseReadsTheMap(n) || (!backsInOp && this.goIsNilComparisonOperand(n, n.parent)));
     }

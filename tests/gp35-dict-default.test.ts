@@ -95,4 +95,14 @@ describe('hx10 w11 GP35 safeDict-with-default locals', () => {
             '    }');
         expect(out).toContain('var x any = this.SafeDict(');
     });
+
+    test('a local that backs an `in` read keeps the box', () => {
+        const out = body('    f (p: any): any {\n' +
+            '        const x = this.safeDict (p, \'k\', {});\n' +
+            '        if (\'a\' in x) { return x; }\n' +
+            '        return undefined;\n' +
+            '    }');
+        expect(out).toContain('var x any = this.SafeDict(');
+        expect(out).not.toContain('func() bool {');
+    });
 });

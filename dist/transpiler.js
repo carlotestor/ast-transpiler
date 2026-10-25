@@ -11216,19 +11216,19 @@ func New${this.capitalize(this.className)}() *${this.className} {
     return goType;
   }
   goSafeDictLocalUnboxUncached(declaration) {
+    const scope = this.goEnclosingFunction(declaration);
+    const sourceName = declaration.name?.text;
+    const backsInOp = scope !== void 0 && sourceName !== void 0 && this.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.BinaryExpression && n.operatorToken?.kind === SyntaxKind5.InKeyword && n.right?.kind === SyntaxKind5.Identifier && n.right.text === sourceName);
     if (this.goSafeDictDefaultedArgs(declaration.initializer) !== void 0) {
       return this.goDeclaredLocalTypeIfSafe(
         declaration,
         GO_SAFE_DICT_LOCAL_TYPE,
-        (n) => this.goNilDefaultedDictUseReadsTheMap(n)
+        (n) => !backsInOp && this.goNilDefaultedDictUseReadsTheMap(n)
       );
     }
     if (this.goSafeDictLocalArgs(declaration.initializer) === void 0) {
       return void 0;
     }
-    const scope = this.goEnclosingFunction(declaration);
-    const sourceName = declaration.name?.text;
-    const backsInOp = scope !== void 0 && sourceName !== void 0 && this.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.BinaryExpression && n.operatorToken?.kind === SyntaxKind5.InKeyword && n.right?.kind === SyntaxKind5.Identifier && n.right.text === sourceName);
     return this.goDeclaredLocalTypeIfSafe(
       declaration,
       GO_SAFE_DICT_LOCAL_TYPE,
