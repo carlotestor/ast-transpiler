@@ -6871,7 +6871,9 @@ describe('pro handler frame parameters (D-03)', () => {
         expect(output).toContain('func (this *ex) HandleTicker(client any, message any) any {');
     });
 
-    test('the base stub override keeps the box (D8)', () => {
+    test('the base stub override carries the dict frame (GP12 lifted the D8 pin)', () => {
+        // GP12 types the ws frame: the Go dispatch asserts the decoded object once, so an
+        // object-framed venue's override no longer prints the box
         const file = treeFor('tmp-d03-pro-tree-override',
             "export class ex extends Exchange {\n" +
             "    override handleMessage (client: Client, message: Dict) {\n" +
@@ -6879,7 +6881,7 @@ describe('pro handler frame parameters (D-03)', () => {
             "    }\n" +
             "}\n");
         const output = new Transpiler({ verbose: false, go: {} }).transpileGoByPath(file).content;
-        expect(output).toContain('func (this *ex) HandleMessage(client any, message any) any {');
+        expect(output).toContain('func (this *ex) HandleMessage(client any, message map[string]any) any {');
     });
 
     test('a non-handler pro method keeps the box', () => {

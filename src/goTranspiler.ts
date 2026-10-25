@@ -292,6 +292,10 @@ const GO_MARKET_LOCAL_TYPE = 'map[string]any';
 // the market producers whose TS return type names no Go type (see goMarketProducerReturnType)
 const GO_MARKET_PRODUCER_METHODS = [ 'parseMarket', 'getMarketFromSymbols', 'getMarketFromClientAndMessage' ];
 
+// venues whose ws frames decode to a JSON array or to bare text: their handleMessage frame keeps
+// the `any` box even when the annotation says Dict, so the Go dispatch only types object frames
+const GO_ANY_FRAMED_VENUES = new Set([ 'bitfinex', 'toobit', 'coincheck', 'phemex', 'sxbet', 'gemini' ]);
+
 // base accessors/builders whose generated Go result is already the market dictionary
 const GO_MARKET_MAP_CALLS = [ 'Market', 'SafeMarket', 'SafeMarketStructure', 'Extend', 'DeepExtend', 'MapTyped', 'MarketTyped' ];
 
@@ -4840,6 +4844,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             }
             return 'string';
         }
+        // hx10 GP12: the ws frame. `override handleMessage (client, message: Dict)` is the one
+        // inherited signature the Go dispatch can type: WsDispatch asserts the decoded object once.
+        const frameType = this.goWsFrameParameterType(fn, param);
+        if (frameType !== undefined) {
+            return frameType;
+        }
         if (this.goMethodKeepsBaseSignature(fn)) {
             return undefined; // inherited/base methods are pinned by the base class and IDerivedExchange
         }
@@ -5037,6 +5047,105 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         };
         body.forEachChild(visit);
         return keeps;
+    }
+
+    // hx10 GP12: the ws frame parameter of `override handleMessage (client, message: Dict)`. The
+    // printer types it `map[string]any` under the D-03 body proofs; the Go ws dispatch asserts the
+    // decoded object once, so a text or array frame never reaches an object-framed body.
+    goWsFrameParameterType(fn, param): string | undefined {
+        if ((fn.name?.text !== 'handleMessage') || (fn.parameters.indexOf(param) !== 1)
+            || (param.name?.kind !== SyntaxKind.Identifier) || (fn.body === undefined)) {
+            return undefined;
+        }
+        if (!((fn.modifiers ?? []).some(m => m.kind === SyntaxKind.OverrideKeyword))) {
+            return undefined; // only a venue override answers the ws dispatch
+        }
+        const venue = this.goEnclosingClassName(fn);
+        if ((venue !== undefined) && GO_ANY_FRAMED_VENUES.has(venue.toLowerCase())) {
+            return undefined; // array/text frames: one frame type cannot serve every venue
+        }
+        const checker: any = this.checkerOrUndefined();
+        const type = checker?.getTypeAtLocation(param);
+        if (type === undefined) {
+            return undefined;
+        }
+        let parts = ((typeof type.isUnionType === 'function') && type.isUnionType()) ? type.getTypes().slice() : [type];
+        parts = parts.filter(p => !(p.flags & (TypeFlags.Undefined | TypeFlags.Null)));
+        if ((parts.length !== 1) || !this.goParameterTypeIsDict(parts[0])) {
+            return undefined;
+        }
+        if (!this.goWsFrameReadsStayNative(fn.body, param)) {
+            return undefined; // an `in` read outside an if condition would print a closure body
+        }
+        return (this.goLocalIsSafeToType(fn.body, param, param.name.text, 'map[string]any')
+            && this.goParameterKeepsNilCompareNative(fn.body, param, 'map[string]any')) ? 'map[string]any' : undefined;
+    }
+
+    // true when every `key in <frame>` of the body prints native. Only an `if` condition holding
+    // exactly one map read gets the init clause (hx10w5-G14); any other position prints the
+    // printer's `func() bool { … }()` closure, an inlined blob, so such a body keeps the box.
+    goWsFrameReadsStayNative(body, param): boolean {
+        let native = true;
+        const visit = (n) => {
+            if (!native) {
+                return;
+            }
+            if ((n.kind === SyntaxKind.BinaryExpression) && (n.operatorToken?.kind === SyntaxKind.InKeyword)) {
+                const dict = this.goUnwrapParenthesizedNode(n.right);
+                if ((dict?.kind === SyntaxKind.Identifier) && (dict.text === param.name.text)
+                    && (this.goAnyBoxLocalDeclaration(dict) === param)
+                    && !this.goWsFrameInOpHasInitClause(n, param)) {
+                    native = false;
+                    return;
+                }
+            }
+            n.forEachChild(visit);
+        };
+        body.forEachChild(visit);
+        return native;
+    }
+
+    // the `in` node sits in an `if` condition that holds exactly one identifier map read, so
+    // printCondition prints `if _, ok := m[k]; …` and no closure
+    goWsFrameInOpHasInitClause(inNode, param): boolean {
+        let child: any = inNode;
+        let parent: any = inNode.parent;
+        while (parent !== undefined) {
+            if (parent.kind === SyntaxKind.IfStatement) {
+                if ((parent.expression !== child) || (parent.expression === undefined)) {
+                    return false;
+                }
+                let reads = 0;
+                const count = (n) => {
+                    if ((n.kind === SyntaxKind.BinaryExpression) && (n.operatorToken?.kind === SyntaxKind.InKeyword)
+                        && (this.goUnwrapParenthesizedNode(n.right)?.kind === SyntaxKind.Identifier)) {
+                        reads += 1;
+                    }
+                    n.forEachChild(count);
+                };
+                count (parent.expression);
+                return reads === 1;
+            }
+            if ((parent.kind === SyntaxKind.ParenthesizedExpression)
+                || (parent.kind === SyntaxKind.PrefixUnaryExpression)
+                || (parent.kind === SyntaxKind.AsExpression)
+                || (parent.kind === SyntaxKind.NonNullExpression)
+                || ((parent.kind === SyntaxKind.BinaryExpression) && this.goWsFrameBooleanOperator(parent.operatorToken))) {
+                child = parent;
+                parent = parent.parent;
+                continue;
+            }
+            return false;
+        }
+        return false;
+    }
+
+    // an operator whose print keeps the operand a Go bool inside the same condition text
+    goWsFrameBooleanOperator(operator): boolean {
+        const kind = operator?.kind;
+        return (kind === SyntaxKind.AmpersandAmpersandToken) || (kind === SyntaxKind.BarBarToken)
+            || (kind === SyntaxKind.EqualsEqualsToken) || (kind === SyntaxKind.EqualsEqualsEqualsToken)
+            || (kind === SyntaxKind.ExclamationEqualsToken) || (kind === SyntaxKind.ExclamationEqualsEqualsToken);
     }
 
     // ---- D-03: pro handler frame parameters ------------------------------------
