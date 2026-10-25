@@ -10983,32 +10983,40 @@ export interface GoTranspiler {
     g11NativeParameterType(fn, param, index: number): string | undefined;
     g11ParameterHasNullishDefault(body, param): boolean;
 }
-// A required parameter of a sync exchange-local method whose TS type is `Str`/`string`, `Dict`-shaped or
+// A required parameter of an exchange-local method whose TS type is `Str`/`string`, `Dict`-shaped or
 // `List`: the Go type every call site passes (`string` first, then *string / map / []any), when the body
 // never writes another type, never nil-tests it and never `??`-defaults it (D2, D5)
 GoTranspiler.prototype.g11NativeParameterType = function (fn, param, index: number) {
-    if (this.isAsyncFunction(fn) || !this.goHasTreeCallSite(fn)) {
+    const asyncMethod = this.isAsyncFunction(fn);
+    if (!this.goHasTreeCallSite(fn)) {
         return undefined;
     }
     const candidates: string[] = [];
-    const type = this.checkerOrUndefined()?.getTypeAtLocation(param);
-    if (type !== undefined) {
-        const all = ((typeof type.isUnionType === 'function') && type.isUnionType()) ? type.getTypes() : [type];
-        const parts = all.filter(p => !(p.flags & (TypeFlags.Undefined | TypeFlags.Null)));
-        if ((parts.length > 0) && parts.every(p => (p.flags & (TypeFlags.String | TypeFlags.StringLiteral)) !== 0)) {
-            candidates.push('string');
+    if (asyncMethod) {
+        // hx10 GP14: an async parameter takes only the value type every call site already passes.
+        // A declared-type candidate (`*string` for `Str`, `*int64` for `Int`) would make the call
+        // sites wrap their argument (SafeStringPtr/...), which is a wrapper move, not a win.
+        candidates.push(...this.g14CallSiteParameterCandidates(fn, param, index));
+    } else {
+        const type = this.checkerOrUndefined()?.getTypeAtLocation(param);
+        if (type !== undefined) {
+            const all = ((typeof type.isUnionType === 'function') && type.isUnionType()) ? type.getTypes() : [type];
+            const parts = all.filter(p => !(p.flags & (TypeFlags.Undefined | TypeFlags.Null)));
+            if ((parts.length > 0) && parts.every(p => (p.flags & (TypeFlags.String | TypeFlags.StringLiteral)) !== 0)) {
+                candidates.push('string');
+            }
         }
-    }
-    for (const goType of this.goNativeParameterTypeCandidates(param).concat(this.g13NumericParameterCandidates(param))) {
-        if (!candidates.includes(goType)) {
-            candidates.push(goType);
+        for (const goType of this.goNativeParameterTypeCandidates(param).concat(this.g13NumericParameterCandidates(param))) {
+            if (!candidates.includes(goType)) {
+                candidates.push(goType);
+            }
         }
-    }
-    // hx10 G02: a required parameter named `market` that TS leaves untyped is the market row by
-    // convention; it takes the Go map when every call site passes one and the body only reads it
-    if ((candidates.length === 0) && (param.name?.text === 'market') && (param.initializer === undefined)
-        && (param.dotDotDotToken === undefined)) {
-        candidates.push('map[string]any');
+        // hx10 G02: a required parameter named `market` that TS leaves untyped is the market row by
+        // convention; it takes the Go map when every call site passes one and the body only reads it
+        if ((candidates.length === 0) && (param.name?.text === 'market') && (param.initializer === undefined)
+            && (param.dotDotDotToken === undefined)) {
+            candidates.push('map[string]any');
+        }
     }
     for (const goType of candidates) {
         if (this.goParameterCallSitesPassType(fn, index, goType)
@@ -11019,6 +11027,146 @@ GoTranspiler.prototype.g11NativeParameterType = function (fn, param, index: numb
         }
     }
     return undefined;
+};
+
+// hx10 GP14
+export interface GoTranspiler {
+    g14CallSiteParameterCandidates(fn, param, index: number): string[];
+    g14FeedsNullableSlot(fn, param): boolean;
+    g14HasDynamicCallee(fn, name: string): boolean;
+    goAnnotateMethodTypes(methodsTypes: any[], file): void;
+}
+// An async venue method also emits a public delegating wrapper, and ccxt builds that wrapper's
+// parameter list from these records: a positional parameter has to carry the Go type the printer
+// decided or the wrapper passes an `any` box into a typed slot. Optional and variadic parameters
+// ride the options struct, whose field stays `any`.
+GoTranspiler.prototype.goAnnotateMethodTypes = function (methodsTypes, file) {
+    const methods: any[] = [];
+    for (const statement of (file?.statements ?? [])) {
+        if (statement.kind !== SyntaxKind.ClassDeclaration) {
+            continue;
+        }
+        for (const member of (statement.members ?? [])) {
+            if (member.kind === SyntaxKind.MethodDeclaration) {
+                methods.push(member);
+            }
+        }
+    }
+    // getMethodTypes walks the classes and their methods in this same order
+    for (let index = 0; index < methods.length; index++) {
+        const fn = methods[index];
+        const record = methodsTypes?.[index];
+        if ((record === undefined) || !this.isAsyncFunction(fn)) {
+            continue;
+        }
+        const parameters = fn.parameters ?? [];
+        for (let i = 0; i < parameters.length; i++) {
+            const param = parameters[i];
+            if ((param.questionToken !== undefined) || (param.initializer !== undefined)
+                || (param.dotDotDotToken !== undefined) || (record.parameters?.[i] === undefined)) {
+                continue;
+            }
+            const goType = this.goNativeParameterType(param);
+            if (goType !== undefined) {
+                record.parameters[i].goType = goType;
+            }
+        }
+    }
+};
+// the value types an async parameter takes: a map is passed as a map everywhere; a string is passed
+// as a string unless the body feeds it into a nullable (`*string`) parameter slot
+const G14_PARAMETER_TYPES = [ 'map[string]any', 'string' ];
+// the aliases that print a `*T` Go type for a required parameter (g11NativeParameterTypeCandidates)
+const G14_NULLABLE_PARAM_TYPES = /^(?:Str|Int|Num|Bool)$/;
+// `this['name'](...)` resolves to no declaration, so a dynamic site can pass any value at any
+// position; one file-wide scan per source file answers the veto
+const G14_DYNAMIC_CACHE = new WeakMap<any, Set<string>>();
+// The Go type the printed argument of every same-file call site carries when they agree on one the
+// printer passes through unchanged; empty for disagreeing sites and for a site the index cannot see.
+GoTranspiler.prototype.g14CallSiteParameterCandidates = function (fn, param, index: number) {
+    if (this.g14HasDynamicCallee(fn, fn.name.text)) {
+        return [];
+    }
+    const sites = this.goSameFileCallsOf(fn, fn.name.text);
+    if (sites.length === 0) {
+        return [];
+    }
+    const types: string[] = [];
+    for (const site of sites) {
+        const arg = site.arguments?.[index];
+        if ((arg === undefined) || (arg.kind === SyntaxKind.SpreadElement)) {
+            return [];
+        }
+        const printed = this.goPrintedArgType(arg);
+        if ((printed === undefined) || (G14_PARAMETER_TYPES.indexOf(printed) < 0)) {
+            return []; // an unnameable or unpassable argument type proves nothing
+        }
+        if (types.indexOf(printed) < 0) {
+            types.push(printed);
+        }
+        if (types.length > 1) {
+            return [];
+        }
+    }
+    // a string that the body hands to a nullable-annotated parameter is re-wrapped there
+    // (SafeStringPtr/...): a wrapper move, not a win
+    if ((types[0] === 'string') && this.g14FeedsNullableSlot(fn, param)) {
+        return [];
+    }
+    return types;
+};
+
+// true when the body passes `param` as an argument to a call whose parameter is declared a nullable
+// alias (`Str`/`Int`/`Num`/`Bool`) or an `undefined`-bearing union: that slot prints a `*T`
+GoTranspiler.prototype.g14FeedsNullableSlot = function (fn, param): boolean {
+    const paramName = param.name.text;
+    let found = false;
+    const visit = (node: any) => {
+        if (found) {
+            return;
+        }
+        if ((node.kind === SyntaxKind.CallExpression) && (node.expression?.kind === SyntaxKind.PropertyAccessExpression)) {
+            const args = node.arguments ?? [];
+            for (let i = 0; i < args.length; i++) {
+                const arg = args[i];
+                if ((arg?.kind !== SyntaxKind.Identifier) || (arg.text !== paramName)
+                    || !this.goIdentifierRefersToDeclaration(arg, param)) {
+                    continue;
+                }
+                let declaration;
+                try {
+                    declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+                } catch (e) {
+                    declaration = undefined;
+                }
+                const calleeParam = declaration?.parameters?.[i];
+                const text = ((calleeParam?.type === undefined) ? '' : String(calleeParam.type.getText()).trim());
+                if (G14_NULLABLE_PARAM_TYPES.test(text) || text.includes('undefined')) {
+                    found = true;
+                    return;
+                }
+            }
+        }
+        node.forEachChild(visit);
+    };
+    fn.body?.forEachChild(visit);
+    return found;
+};
+
+GoTranspiler.prototype.g14HasDynamicCallee = function (fn, name: string): boolean {
+    const file: any = fn.getSourceFile();
+    let names = G14_DYNAMIC_CACHE.get(file);
+    if (names === undefined) {
+        names = new Set<string>();
+        const rx = /\[\s*['"]([A-Za-z_$][\w$]*)['"]\s*\]\s*\(/g;
+        const text = String(file.getFullText());
+        let m: RegExpExecArray | null;
+        while ((m = rx.exec(text)) !== null) {
+            names.add(m[1]);
+        }
+        G14_DYNAMIC_CACHE.set(file, names);
+    }
+    return names.has(name);
 };
 
 // `x ?? d` / `x || d` reads the parameter's absent state, which a non-nilable Go type cannot hold

@@ -6111,7 +6111,9 @@ describe('hx4 G11: required params of exchange-local methods typed from every ca
         expect(output).not.toContain('GetArrayLength(items)');
     });
 
-    test('an async method, a ?? default, a nil test, a mixed caller or a GetArg-bound optional keeps the box', () => {
+    // hx10 GP14: the async arm types from its callers (aBody x string); the four proofs below
+    // still keep the box of a sync method
+    test('a ?? default, a nil test, a mixed caller or a GetArg-bound optional keeps the box', () => {
         const input = base +
             "class Test extends Base {\n" +
             "    async a (x: Str) { return x === 'y'; }\n" +
@@ -6127,7 +6129,7 @@ describe('hx4 G11: required params of exchange-local methods typed from every ca
             "    }\n" +
             "}\n";
         const output = transpiler.transpileGo(input).content;
-        expect(output).toContain('func (this *Test) aBody(ch chan any, x any) any {');
+        expect(output).toContain('func (this *Test) aBody(ch chan any, x string) any {');
         expect(output).toContain('func (this *Test) B(x any) any {');
         expect(output).toContain('func (this *Test) C(x any) any {');
         expect(output).toContain('func (this *Test) D(x any) any {');
@@ -6164,7 +6166,9 @@ describe('hx4 G13: numeric required params typed from every caller', () => {
         expect(output).toContain('func (this *Test) Closest(limit *int64, step int64) any {');
     });
 
-    test('a mixed or any caller, an async method or a ?? default keeps the box', () => {
+    // hx10 GP14: the async arm types only the value type its call sites pass, so a `*int64`
+    // producer keeps the box too; mixed and any callers and a `??` default keep the box
+    test('a mixed or any caller or a ?? default keeps the box', () => {
         const input = base +
             "class Test extends Base {\n" +
             "    a (limit: Int) { return limit; }\n" +

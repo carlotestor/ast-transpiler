@@ -554,6 +554,11 @@ export default class Transpiler {
         }
 
         const methodsTypes = this.pythonTranspiler.getMethodTypes(src);
+        // hx10 GP14: the Go delegate wrapper is generated from these records, so an async
+        // parameter's printed type has to travel with them (every other port ignores the field)
+        if (lang === Languages.Go) {
+            this.goTranspiler.goAnnotateMethodTypes(methodsTypes, src);
+        }
         Logger.success("transpilation finished successfully");
 
         return {
