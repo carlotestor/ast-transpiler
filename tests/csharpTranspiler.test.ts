@@ -102,7 +102,7 @@ describe('csharp transpiling tests', () => {
         "\n" +
         "    public virtual void mainFeature(object message)\n" +
         "    {\n" +
-        "        Console.WriteLine(add(\"Hello! I'm inside main class:\", message));\n" +
+        "        Console.WriteLine((\"Hello! I'm inside main class:\" + message));\n" +
         "    }\n" +
         "}";
         const output = transpiler.transpileCSharp(ts).content;
@@ -455,7 +455,7 @@ describe('csharp transpiling tests', () => {
         "object d = subtract(4, 4);\n" +
         "object e = mod(5, 5);\n" +
         // two string literals: add(string, string) IS C# concatenation, nulls included
-        "object f = (\"foo\" + \"bar\");"
+        "string f = (\"foo\" + \"bar\");"
         const output = transpiler.transpileCSharp(ts).content;
         expect(output).toBe(csharp);
     })
@@ -1463,7 +1463,9 @@ describe('csharp typed body locals', () => {
         expect(output).toContain("object appended = ((string)market).Split(");
         expect(output).toContain("object reassigned = ((string)market).ToUpper()");
         expect(output).toContain("object counted = getArrayLength(market)");
-        expect(output).toContain("object grown = ((string)market).ToUpper()");
+        // `grown += 'x'` is a string self-concat: the local stays a NON-NULL string
+        expect(output).toContain("string grown = ((string)market).ToUpper()");
+        expect(output).toContain('grown = (grown + ("x"));');
     });
     test('a local reassigned with the same concrete type keeps the type', () => {
         const input =
@@ -5863,9 +5865,10 @@ describe('S62: falsy wrapper around a printed bool', () => {
         const output = transpiler.transpileCSharp(input).content;
         expect(output).toContain('add(s, "lit")');
         expect(output).toContain('add(s, b)');
-        expect(output).toContain('add("lit", s)');
+        // a literal LEFT is itself a non-null string: the printer's own proof prints the concat
+        expect(output).toContain('string three = ("lit" + s)');
         expect(output).not.toContain('(s + "lit")');
-        expect(output).not.toContain('("lit" + s)');
+        expect(output).not.toContain('add("lit", s)');
     });
     test('a proven string answer emits the parenthesised native concat', () => {
         const csharp: any = (transpiler as any).csharpTranspiler;

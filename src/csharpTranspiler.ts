@@ -3424,6 +3424,11 @@ export class CSharpTranspiler extends BaseTranspiler {
             const rightText = this.printNode(right, 0);
 
             if (op === SyntaxKind.PlusEqualsToken) {
+                // `x += v` IS `x = add (x, v)`; on a non-null string left the same concatenation
+                // prints natively (add(string, *) never answers null either)
+                if (this.csharpNonNullStringOperandType(left) === 'string') {
+                    return `${leftText} = (${leftText} + (${rightText}))`;
+                }
                 return `${leftText} = add(${leftText}, ${rightText})`;
             }
 
@@ -3574,6 +3579,12 @@ export class CSharpTranspiler extends BaseTranspiler {
             return (initializer.operator === SyntaxKind.ExclamationToken) ? 'bool' : undefined;
         case SyntaxKind.ParenthesizedExpression:
             return this.csharpTypeOfInitializer(initializer.expression);
+        case SyntaxKind.ConditionalExpression: {
+            // `cond ? 'a' : 'b'` prints the same C# conditional, whose static type is the type both
+            // arms share: a non-null string when neither arm can answer null
+            const arms = [ initializer.whenTrue, initializer.whenFalse ];
+            return arms.every((arm) => this.csharpNonNullStringOperandType(arm) === 'string') ? 'string' : undefined;
+        }
         case SyntaxKind.BinaryExpression: {
             const op = initializer.operatorToken.kind;
             // `a || b` prints `isTrue(a) || isTrue(b)`; the comparison wrappers and
@@ -3592,10 +3603,78 @@ export class CSharpTranspiler extends BaseTranspiler {
             case SyntaxKind.InKeyword:
                 return 'bool';
             }
+            if (op === SyntaxKind.PlusToken) {
+                return this.csharpPlusChainNonNullStringType(initializer);
+            }
             return undefined;
         }
         }
         return this.csharpCallReturnType(initializer) ?? (this.csharpBoolCallTyped(initializer) ? 'bool' : undefined);
+    }
+
+    // `a + b` prints `add (a, b)`: when the chain's LEFT SPINE starts at a value whose emitted C#
+    // type is a NON-NULL string, every enclosing `+` is that same string whatever the remaining
+    // operands are (add(string, *) IS C# concatenation and never answers null), so the declaration
+    // may name it. `self` is the declaration under test: its own reads use the running type, so a
+    // `x = x + v` write cannot recurse through x's declaration.
+    csharpPlusChainNonNullStringType(node, self = undefined): string | undefined {
+        if (node?.kind !== SyntaxKind.BinaryExpression || (node.operatorToken?.kind !== SyntaxKind.PlusToken)) {
+            return undefined;
+        }
+        return this.csharpNonNullStringOperandType(node.left, self);
+    }
+
+    // the emitted C# static type of a `+` operand proven a NON-NULL string: a literal, a call the
+    // printer rebinds to a string-returning member (`x.toUpperCase ()` -> `((string)x).ToUpper()`,
+    // which throws instead of answering null), a local the printer itself declares `string`, a
+    // conditional whose every arm is one, or such a chain's own left spine. Undefined everywhere
+    // else — a nullable or boxed operand keeps the helper.
+    csharpNonNullStringOperandType(node, self = undefined): string | undefined {
+        let value = node;
+        while (value?.kind === SyntaxKind.ParenthesizedExpression) {
+            value = value.expression;
+        }
+        // a local answered through its own declaration initializer can name another local: bound
+        // the recursion on the instance (each nested local starts its own operand proof)
+        const depth = (this as any).csharpStringChainDepth ?? 0;
+        if (value === undefined || depth > 6) {
+            return undefined;
+        }
+        (this as any).csharpStringChainDepth = depth + 1;
+        try {
+            return this.csharpNonNullStringLeafType(value, self);
+        } finally {
+            (this as any).csharpStringChainDepth = depth;
+        }
+    }
+
+    csharpNonNullStringLeafType(value, self = undefined): string | undefined {
+        switch (value.kind) {
+        case SyntaxKind.StringLiteral:
+        case SyntaxKind.NoSubstitutionTemplateLiteral:
+            return 'string';
+        case SyntaxKind.BinaryExpression:
+            return this.csharpPlusChainNonNullStringType(value, self);
+        case SyntaxKind.ConditionalExpression:
+            return ((this.csharpNonNullStringOperandType(value.whenTrue, self) === 'string')
+                && (this.csharpNonNullStringOperandType(value.whenFalse, self) === 'string')) ? 'string' : undefined;
+        case SyntaxKind.CallExpression: {
+            const type = this.csharpCallReturnType(value);
+            return (type === 'string') ? 'string' : undefined;
+        }
+        case SyntaxKind.Identifier: {
+            const declaration = this.csharpReceiverBinding(value);
+            if ((self !== undefined) && (declaration === self)) {
+                return 'string'; // the local being declared: a non-null string by induction
+            }
+            if (declaration?.kind !== SyntaxKind.VariableDeclaration || (declaration.parent as any)?.declarations?.length !== 1) {
+                return undefined;
+            }
+            const type = this.getCSharpLocalType(declaration);
+            return (type === 'string') ? 'string' : undefined;
+        }
+        }
+        return undefined;
     }
 
     // A `this.<name>(...)` call to a method the enclosing class declares with a plain `bool` return
@@ -3722,11 +3801,18 @@ export class CSharpTranspiler extends BaseTranspiler {
                 if (parent?.kind === SyntaxKind.BinaryExpression && parent.left === n) {
                     const op = parent.operatorToken.kind;
                     if (op === SyntaxKind.EqualsToken) {
-                        if (this.csharpTypeOfInitializer(parent.right) !== csharpType) {
+                        // a non-null string local written by its own `+` chain keeps that string
+                        // (`add(string, *)` is concatenation and never answers null)
+                        const chainIsString = (csharpType === 'string') && (this.csharpPlusChainNonNullStringType(parent.right, declaration) === 'string');
+                        if (!chainIsString && (this.csharpTypeOfInitializer(parent.right) !== csharpType)) {
                             return true;
                         }
                     } else if ((op >= SyntaxKind.FirstCompoundAssignment) && (op <= SyntaxKind.LastCompoundAssignment)) {
-                        return true;
+                        // `x += v` prints `x = add (x, v)`: on a non-null string local that is the
+                        // same concatenation; every other type would rebind a boxed `add`
+                        if (!((csharpType === 'string') && (op === SyntaxKind.PlusEqualsToken))) {
+                            return true;
+                        }
                     }
                 }
                 // a `string?` local as the LEFT operand of `+` prints add(<x>, ...): the
@@ -3745,6 +3831,21 @@ export class CSharpTranspiler extends BaseTranspiler {
     // already string: the cast names the box the value is in, it never changes the value
 
     getCSharpLocalType(declaration): string {
+        // a declaration whose initializer names a local that is itself being typed right now (a
+        // `a = b + x` / `b = a + y` pair) is not provable: answer `var` instead of recursing
+        const inProgress = ((this as any).csharpLocalTypeInProgress ??= new Set());
+        if (inProgress.has(declaration)) {
+            return this.VAR_TOKEN;
+        }
+        inProgress.add(declaration);
+        try {
+            return this.csharpResolvedLocalType(declaration);
+        } finally {
+            inProgress.delete(declaration);
+        }
+    }
+
+    csharpResolvedLocalType(declaration): string {
         const csharpType = this.csharpTypeOfInitializer(declaration.initializer);
         if (csharpType === undefined) {
             return this.VAR_TOKEN;
@@ -4965,6 +5066,12 @@ export class CSharpTranspiler extends BaseTranspiler {
     // add(string, string) / add(string, object) — both compute C# concatenation, nulls included.
     // Absolute operands (a literal, an `as string` cast, a proven call, a proven concat) keep the helper.
     csharpPrinterStringConcat(left, right, leftText, rightText): string | undefined {
+        // a NON-NULL string left takes any right operand: the call would bind add(string, *), which
+        // is C# concatenation for every input, boxed or not (`string + object` calls ToString on a
+        // non-string right exactly like add(string, object) does, and a null right reads as the left)
+        if (this.csharpNonNullStringOperandType(left) === 'string') {
+            return `(${leftText} + ${rightText})`;
+        }
         if (!this.csharpConcatOperandPrintsString(left) || !this.csharpConcatOperandPrintsString(right)) {
             return undefined;
         }
