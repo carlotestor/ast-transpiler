@@ -8511,7 +8511,13 @@ var parserConfig4 = {
   "ELEMENT_ACCESS_WRAPPER_CLOSE": ")"
 };
 var GO_NATIVE_CALL_RETURN_TYPES = {
-  "strings.Index": "int"
+  "strings.Index": "int",
+  // the `.toString()` native arms and the bracket-join form all return a Go string, so a
+  // local that captures one stays the string its helper result was (hx10w10 GP24)
+  "strconv.Itoa": "string",
+  "strconv.FormatInt": "string",
+  "strconv.FormatBool": "string",
+  "strings.Join": "string"
 };
 function goSafeAccessorTypes(names, goType) {
   return Object.fromEntries(names.flatMap((name) => ["", "2", "N"].map((suffix) => ["this." + name + suffix, goType])));
@@ -9367,6 +9373,14 @@ var GoTranspiler = class extends BaseTranspiler {
       "*bool",
       "*int"
     ];
+    // A native string call on a nilable `*string` local whose source carries an `(x as string)`
+    // assertion needs no guard: an undefined receiver throws in JS, so the assertion is the
+    // author's non-null promise (goAssertedStringDeref).
+    // The native string calls need `import "strings"` before the file's first declaration. Every ccxt
+    // consumer splices the body at file head, except build/goTranspiler.ts#transpileBaseMethods and
+    // #transpilePredictionBaseMethods; those two ask their writer for the import seam (a build
+    // extension sets goBaseFileStdlibImportSeam once it adds each referenced package itself).
+    this.goBaseFileStdlibImportSeam = false;
     // -----------------------------------------------------------------------
     // gofmt-compatible spacing of the binary expressions this printer emits
     // -----------------------------------------------------------------------
@@ -17157,14 +17171,8 @@ ${this.getIden(level)}}()`;
     }
     return helperCall;
   }
-  // A native string call on a nilable `*string` local whose source carries an `(x as string)`
-  // assertion needs no guard: an undefined receiver throws in JS, so the assertion is the
-  // author's non-null promise (goAssertedStringDeref).
-  // The native string calls need `import "strings"` before the file's first declaration. Every ccxt
-  // consumer splices the body at file head, except build/goTranspiler.ts#transpileBaseMethods and
-  // #transpilePredictionBaseMethods; those keep the helper until getGoImports(file) declares it.
   goStdlibImportIsPlaceable() {
-    return this.goFileKeepsFileLevelImports();
+    return this.goFileKeepsFileLevelImports() || this.goBaseFileStdlibImportSeam;
   }
   printStartsWithCall(node, identation, name = void 0, parsedArg = void 0) {
     return this.goNativeStringCallOr(
@@ -17214,18 +17222,53 @@ ${this.getIden(level)}}()`;
   printToStringCall(node, identation, name = void 0) {
     if (name !== void 0 && name.indexOf("\n") < 0) {
       const receiver = node?.expression?.kind === SyntaxKind5.PropertyAccessExpression ? node.expression.expression : void 0;
-      if (receiver !== void 0 && this.goOperandStaticType(receiver, name) === "string") {
-        return name;
-      }
-      if (receiver !== void 0 && (this.goDerefableStringOperand(receiver) || this.goLiteralUnionNarrowedStringDeref(receiver))) {
-        return "*" + name.trim();
-      }
-      if (receiver !== void 0 && this.goOperandStaticType(receiver, name) === "int64" && this.goStdlibImportIsPlaceable()) {
-        this.goFileStdlibImports.add("strconv");
-        return `strconv.FormatInt(${name}, 10)`;
+      if (receiver !== void 0) {
+        const goType = this.goToStringReceiverType(receiver, name);
+        if (goType === "string") {
+          return name;
+        }
+        if (this.goDerefableStringOperand(receiver) || this.goLiteralUnionNarrowedStringDeref(receiver)) {
+          return "*" + name.trim();
+        }
+        if (this.goStdlibImportIsPlaceable()) {
+          if (goType === "int") {
+            this.goFileStdlibImports.add("strconv");
+            return `strconv.Itoa(${name})`;
+          }
+          if (goType === "int64") {
+            this.goFileStdlibImports.add("strconv");
+            return `strconv.FormatInt(${name}, 10)`;
+          }
+          if (goType === "bool") {
+            this.goFileStdlibImports.add("strconv");
+            return `strconv.FormatBool(${name})`;
+          }
+          if (goType === "[]string") {
+            this.goFileStdlibImports.add("strings");
+            return `"[" + strings.Join(${name}, ", ") + "]"`;
+          }
+          if (receiver?.kind === SyntaxKind5.Identifier && this.goDeclaredTypeOfIdentifier(receiver) === "*int64" && this.goPointerNumberIsNonNil(receiver)) {
+            this.goFileStdlibImports.add("strconv");
+            return `strconv.FormatInt(*${name.trim()}, 10)`;
+          }
+        }
       }
     }
     return `ToString(${name})`;
+  }
+  // the Go type of a `.toString()` receiver: the scalar lookup names string/int/int64/float64,
+  // while a declared `bool` or `[]string` local (or a parameter typed that way) is only reachable
+  // through the declaration itself.
+  goToStringReceiverType(receiver, printedText) {
+    const scalar = this.goOperandStaticType(receiver, printedText);
+    if (scalar !== void 0) {
+      return scalar;
+    }
+    if (receiver?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    const declared = this.goLocalStaticType(receiver) ?? this.goDeclaredParamStaticType(receiver);
+    return declared === "bool" || declared === "[]string" ? declared : void 0;
   }
   printConcatCall(node, identation, name = void 0, parsedArg = void 0) {
     return `Concat(${name}, ${parsedArg})`;

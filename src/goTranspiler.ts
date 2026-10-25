@@ -78,6 +78,12 @@ const parserConfig = {
 // that concrete type, exactly like the helper result the emission replaced.
 const GO_NATIVE_CALL_RETURN_TYPES: { [name: string]: string } = {
     'strings.Index': 'int',
+    // the `.toString()` native arms and the bracket-join form all return a Go string, so a
+    // local that captures one stays the string its helper result was (hx10w10 GP24)
+    'strconv.Itoa': 'string',
+    'strconv.FormatInt': 'string',
+    'strconv.FormatBool': 'string',
+    'strings.Join': 'string',
 };
 
 // `this.<name>`, `this.<name>2` and `this.<name>N` of each accessor family, all typed `goType`
@@ -9861,9 +9867,12 @@ ${this.getIden(identation)}${returnStatement}`;
 
     // The native string calls need `import "strings"` before the file's first declaration. Every ccxt
     // consumer splices the body at file head, except build/goTranspiler.ts#transpileBaseMethods and
-    // #transpilePredictionBaseMethods; those keep the helper until getGoImports(file) declares it.
+    // #transpilePredictionBaseMethods; those two ask their writer for the import seam (a build
+    // extension sets goBaseFileStdlibImportSeam once it adds each referenced package itself).
+    goBaseFileStdlibImportSeam = false;
+
     goStdlibImportIsPlaceable(): boolean {
-        return this.goFileKeepsFileLevelImports();
+        return this.goFileKeepsFileLevelImports() || this.goBaseFileStdlibImportSeam;
     }
 
     printStartsWithCall(node, identation, name = undefined, parsedArg = undefined) {
@@ -9908,20 +9917,62 @@ ${this.getIden(identation)}${returnStatement}`;
             const receiver = (node?.expression?.kind === SyntaxKind.PropertyAccessExpression)
                 ? node.expression.expression
                 : undefined;
-            if ((receiver !== undefined) && (this.goOperandStaticType(receiver, name) === 'string')) {
-                return name;
-            }
-            // a non-nil `*string`: derefScalar hands ToString the pointee, returned unchanged
-            if ((receiver !== undefined) && (this.goDerefableStringOperand(receiver) || this.goLiteralUnionNarrowedStringDeref(receiver))) {
-                return '*' + name.trim();
-            }
-            // an int64 prints its decimal digits in both: the helper's Sprintf("%d") and FormatInt
-            if ((receiver !== undefined) && (this.goOperandStaticType(receiver, name) === 'int64') && this.goStdlibImportIsPlaceable()) {
-                this.goFileStdlibImports.add('strconv');
-                return `strconv.FormatInt(${name}, 10)`;
+            if (receiver !== undefined) {
+                const goType = this.goToStringReceiverType(receiver, name);
+                if (goType === 'string') {
+                    return name;
+                }
+                // a non-nil `*string`: derefScalar hands ToString the pointee, returned unchanged
+                if (this.goDerefableStringOperand(receiver) || this.goLiteralUnionNarrowedStringDeref(receiver)) {
+                    return '*' + name.trim();
+                }
+                if (this.goStdlibImportIsPlaceable()) {
+                    // an int prints its decimal digits in both: the helper's Sprintf("%d") and Itoa
+                    if (goType === 'int') {
+                        this.goFileStdlibImports.add('strconv');
+                        return `strconv.Itoa(${name})`;
+                    }
+                    // an int64 prints its decimal digits in both: the helper's Sprintf("%d") and FormatInt
+                    if (goType === 'int64') {
+                        this.goFileStdlibImports.add('strconv');
+                        return `strconv.FormatInt(${name}, 10)`;
+                    }
+                    // a bool prints "true"/"false" in both: the helper's Sprintf("%t") and FormatBool
+                    if (goType === 'bool') {
+                        this.goFileStdlibImports.add('strconv');
+                        return `strconv.FormatBool(${name})`;
+                    }
+                    // a []string prints "[a, b]": the helper's reflect arm brackets the elements
+                    // and joins them with ", " after ToString, which is the identity on a string
+                    if (goType === '[]string') {
+                        this.goFileStdlibImports.add('strings');
+                        return `"[" + strings.Join(${name}, ", ") + "]"`;
+                    }
+                    // a non-nil `*int64`: derefScalar hands ToString the pointee's decimal digits
+                    if ((receiver?.kind === SyntaxKind.Identifier) && (this.goDeclaredTypeOfIdentifier(receiver) === '*int64')
+                        && this.goPointerNumberIsNonNil(receiver)) {
+                        this.goFileStdlibImports.add('strconv');
+                        return `strconv.FormatInt(*${name.trim()}, 10)`;
+                    }
+                }
             }
         }
         return `ToString(${name})`;
+    }
+
+    // the Go type of a `.toString()` receiver: the scalar lookup names string/int/int64/float64,
+    // while a declared `bool` or `[]string` local (or a parameter typed that way) is only reachable
+    // through the declaration itself.
+    goToStringReceiverType(receiver, printedText: string): string | undefined {
+        const scalar = this.goOperandStaticType(receiver, printedText);
+        if (scalar !== undefined) {
+            return scalar;
+        }
+        if (receiver?.kind !== SyntaxKind.Identifier) {
+            return undefined;
+        }
+        const declared = this.goLocalStaticType(receiver) ?? this.goDeclaredParamStaticType(receiver);
+        return ((declared === 'bool') || (declared === '[]string')) ? declared : undefined;
     }
 
     printConcatCall(node, identation, name = undefined, parsedArg = undefined) {
