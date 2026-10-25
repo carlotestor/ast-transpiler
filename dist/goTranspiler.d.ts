@@ -579,7 +579,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goNativeStringOperandTexts(operands: any[], texts: string[], expected: string[]): string[] | undefined;
     goUnwrapPrintedAssertions(node: any): any;
     goNativeStringCallOr(node: any, texts: string[], expected: string[], nativeCall: (ops: string[]) => string, helperCall: string, unwrapReceiver?: boolean): string;
-    goBaseFileStdlibImportSeam: boolean;
+    goBaseFileStdlibImportSeamPaths: RegExp | undefined;
     goStdlibImportIsPlaceable(): boolean;
     printStartsWithCall(node: any, identation: any, name?: any, parsedArg?: any): string;
     printEndsWithCall(node: any, identation: any, name?: any, parsedArg?: any): string;

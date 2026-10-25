@@ -129,10 +129,35 @@ describe('hx10w10 GP24 printToStringCall native arms', () => {
             expect(plain).toContain('ToString(n)');
             expect(plain).not.toContain('import "strconv"');
             const seamed = new Transpiler(config());
-            seamed.goTranspiler.goBaseFileStdlibImportSeam = true;
+            seamed.goTranspiler.goBaseFileStdlibImportSeamPaths = /base\/Exchange\.ts$/;
             const out = seamed.transpileGoByPath(file).content;
             expect(out).toContain('return strconv.Itoa(n)');
             expect(out).toContain('import "strconv"');
+        } finally {
+            fs.rmSync(tmp, { recursive: true, force: true });
+        }
+    });
+
+    // the seam is a path predicate: a sliced writer's source (the ws cache tests) keeps the helper
+    test('a source outside the seam paths keeps the helper', () => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hx10w10-GP24-cache-'));
+        try {
+            const src = path.join(tmp, 'ts', 'src');
+            fs.mkdirSync(path.join(src, 'base'), { recursive: true });
+            const file = path.join(src, 'base', 'test.cache.ts');
+            fs.writeFileSync(file,
+                'type Dict = { [key: string]: any };\n' +
+                'export class TestCache {\n' +
+                '    total (xs: any[]): string {\n' +
+                '        const n = xs.length;\n' +
+                '        return n.toString ();\n' +
+                '    }\n' +
+                '}\n');
+            const seamed = new Transpiler(config());
+            seamed.goTranspiler.goBaseFileStdlibImportSeamPaths = /base\/Exchange\.ts$/;
+            const out = seamed.transpileGoByPath(file).content;
+            expect(out).toContain('ToString(n)');
+            expect(out).not.toContain('strconv.Itoa');
         } finally {
             fs.rmSync(tmp, { recursive: true, force: true });
         }

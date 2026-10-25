@@ -9867,12 +9867,19 @@ ${this.getIden(identation)}${returnStatement}`;
 
     // The native string calls need `import "strings"` before the file's first declaration. Every ccxt
     // consumer splices the body at file head, except build/goTranspiler.ts#transpileBaseMethods and
-    // #transpilePredictionBaseMethods; those two ask their writer for the import seam (a build
-    // extension sets goBaseFileStdlibImportSeam once it adds each referenced package itself).
-    goBaseFileStdlibImportSeam = false;
+    // #transpilePredictionBaseMethods; those two declare each referenced package themselves (the
+    // build sets the source paths here), so only those files may emit a stdlib call.
+    goBaseFileStdlibImportSeamPaths: RegExp | undefined = undefined;
 
     goStdlibImportIsPlaceable(): boolean {
-        return this.goFileKeepsFileLevelImports() || this.goBaseFileStdlibImportSeam;
+        if (this.goFileKeepsFileLevelImports()) {
+            return true;
+        }
+        const seam = this.goBaseFileStdlibImportSeamPaths;
+        if (seam === undefined) {
+            return false;
+        }
+        return seam.test(this.getSrc()?.fileName ?? '');
     }
 
     printStartsWithCall(node, identation, name = undefined, parsedArg = undefined) {

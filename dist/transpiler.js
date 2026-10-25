@@ -9378,9 +9378,9 @@ var GoTranspiler = class extends BaseTranspiler {
     // author's non-null promise (goAssertedStringDeref).
     // The native string calls need `import "strings"` before the file's first declaration. Every ccxt
     // consumer splices the body at file head, except build/goTranspiler.ts#transpileBaseMethods and
-    // #transpilePredictionBaseMethods; those two ask their writer for the import seam (a build
-    // extension sets goBaseFileStdlibImportSeam once it adds each referenced package itself).
-    this.goBaseFileStdlibImportSeam = false;
+    // #transpilePredictionBaseMethods; those two declare each referenced package themselves (the
+    // build sets the source paths here), so only those files may emit a stdlib call.
+    this.goBaseFileStdlibImportSeamPaths = void 0;
     // -----------------------------------------------------------------------
     // gofmt-compatible spacing of the binary expressions this printer emits
     // -----------------------------------------------------------------------
@@ -17172,7 +17172,14 @@ ${this.getIden(level)}}()`;
     return helperCall;
   }
   goStdlibImportIsPlaceable() {
-    return this.goFileKeepsFileLevelImports() || this.goBaseFileStdlibImportSeam;
+    if (this.goFileKeepsFileLevelImports()) {
+      return true;
+    }
+    const seam = this.goBaseFileStdlibImportSeamPaths;
+    if (seam === void 0) {
+      return false;
+    }
+    return seam.test(this.getSrc()?.fileName ?? "");
   }
   printStartsWithCall(node, identation, name = void 0, parsedArg = void 0) {
     return this.goNativeStringCallOr(
