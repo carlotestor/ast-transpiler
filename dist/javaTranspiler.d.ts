@@ -351,6 +351,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printArrayPushCall(_node: any, _identation: any, name?: any, parsedArg?: any): string;
     printIncludesCall(_node: any, _identation: any, name?: any, parsedArg?: any): string;
     javaNativeIndexOfCall(node: any, name: any, parsedArg: any): string;
+    javaNativeIndexOfGuardedElement(node: any, name: any, parsedArg: any): string;
     printIndexOfCall(node: any, _identation: any, name?: any, parsedArg?: any): string;
     printSearchCall(_node: any, _identation: any, name?: any, parsedArg?: any): string;
     printStartsWithCall(_node: any, _identation: any, name?: any, parsedArg?: any): string;

@@ -25445,8 +25445,43 @@ ${this.getIden(identation)}}}`;
     }
     return void 0;
   }
+  // A guarded element read `(xs == null || i < 0 || i >= xs.size() ? null : xs.get(i))` as the
+  // search target answers -1 for the missing element, which is exactly the helper's answer for a
+  // null target: fold both -1 arms into one guard so the element is read once. Needs a String
+  // receiver and a String element (a `List<String>` declaration), so no cast is involved.
+  javaNativeIndexOfGuardedElement(node, name, parsedArg) {
+    const arg = node?.arguments?.[0];
+    if (arg === void 0 || name === void 0 || parsedArg === void 0 || !isElementAccessExpression3(arg)) {
+      return void 0;
+    }
+    const list = arg.expression;
+    const index = arg.argumentExpression;
+    const receiver = node?.expression?.expression;
+    if (!isIdentifier2(list) || !isIdentifier2(index) || !isIdentifier2(receiver)) {
+      return void 0;
+    }
+    if (name !== receiver.text || this.printNode(receiver, 0) !== receiver.text) {
+      return void 0;
+    }
+    if (this.javaDeclaredTypeOf(receiver) !== "String") {
+      return void 0;
+    }
+    const listType = String(this.javaDeclaredTypeOf(list) ?? "").replace(/\s+/g, "");
+    if (!/^(?:java\.util\.)?(?:List|ArrayList|LinkedList)<String>$/.test(listType)) {
+      return void 0;
+    }
+    if (!this.javaPrimitiveCounterIndex(index)) {
+      return void 0;
+    }
+    const condition = `${list.text} == null || ${index.text} < 0 || ${index.text} >= ${list.text}.size()`;
+    const element = `${list.text}.get(${index.text})`;
+    if (parsedArg !== `(${condition} ? null : ${element})`) {
+      return void 0;
+    }
+    return `(${name} == null || ${condition} ? -1 : ${name}.indexOf(${element}))`;
+  }
   printIndexOfCall(node, _identation, name = void 0, parsedArg = void 0) {
-    return this.javaNativeIndexOfCall(node, name, parsedArg) ?? this.javaHx4J06NarrowedIndexOf(node, name, parsedArg) ?? `${this.INDEXOF_WRAPPER_OPEN}${name}, ${parsedArg}${this.INDEXOF_WRAPPER_CLOSE}`;
+    return this.javaNativeIndexOfCall(node, name, parsedArg) ?? this.javaNativeIndexOfGuardedElement(node, name, parsedArg) ?? this.javaHx4J06NarrowedIndexOf(node, name, parsedArg) ?? `${this.INDEXOF_WRAPPER_OPEN}${name}, ${parsedArg}${this.INDEXOF_WRAPPER_CLOSE}`;
   }
   printSearchCall(_node, _identation, name = void 0, parsedArg = void 0) {
     return `((String)${name}).indexOf(${parsedArg})`;
