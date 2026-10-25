@@ -4732,6 +4732,47 @@ describe('java native indexOf (Helpers.getIndexOf -> String/List.indexOf)', () =
     });
 });
 
+describe('java native indexOf on a guarded list element (jp08)', () => {
+    // Helpers.getIndexOf answers -1 for a null target; the printer's guarded element read answers
+    // null for a missing element. Both -1 arms fold into one guard, so the element is read once and
+    // no cast is needed (the declaration already carries `List<String>`).
+    const inputOf = (body: string) =>
+        "class T {\n" +
+        "    test(topic: any, methods: any): void {\n" +
+        "        const keys = Object.keys(methods);\n" +
+        "        for (var i = 0; i < keys.length; i++) {\n" +
+        body +
+        "        }\n" +
+        "    }\n" +
+        "}";
+    const withDeclared = (types: any, body: string) => {
+        const printer: any = (transpiler as any).javaTranspiler;
+        const original = printer.javaDeclaredLocalTypeResolver;
+        try {
+            printer.javaDeclaredLocalTypeResolver = (declaration: any) => types[declaration?.name?.text];
+            return transpiler.transpileJava(inputOf(body)).content;
+        } finally {
+            printer.javaDeclaredLocalTypeResolver = original;
+        }
+    };
+
+    test('a String receiver with a guarded List<String> element folds both -1 arms', () => {
+        const output = withDeclared({ 'topic': 'String', 'keys': 'List<String>' }, '            if (topic.indexOf(keys[i]) >= 0) { return; }');
+        expect(output).toContain('(topic == null || keys == null || i < 0 || i >= keys.size() ? -1 : topic.indexOf(keys.get(i)))');
+        expect(output).not.toContain('Helpers.getIndexOf');
+    });
+
+    test('a List<Object> element keeps the helper (indexOf would need a String cast)', () => {
+        const output = withDeclared({ 'topic': 'String', 'keys': 'List<Object>' }, '            if (topic.indexOf(keys[i]) >= 0) { return; }');
+        expect(output).toContain('Helpers.getIndexOf(topic,');
+    });
+
+    test('a non-String receiver keeps the helper (its List branch answers -1)', () => {
+        const output = withDeclared({ 'keys': 'List<String>' }, '            if (topic.indexOf(keys[i]) >= 0) { return; }');
+        expect(output).toContain('Helpers.getIndexOf(topic,');
+    });
+});
+
 describe('java native split (Helpers.split -> Arrays.asList(String.split(Pattern.quote)))', () => {
     // a receiver the checker types as a plain string with a literal separator: the emitted
     // text is Helpers.split's own body without its String.valueOf/String branch, which is
