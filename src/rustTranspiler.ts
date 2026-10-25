@@ -5813,6 +5813,9 @@ export class RustTranspiler extends BaseTranspiler {
         const literal: any = this.rustSkipWrappers(init);
         const produced = !isObjectLiteralExpression(literal) && this.rustDictProducer(init);
         if (!isObjectLiteralExpression(literal) && !produced) return false;
+        // A dict read out of a live store (`x.hashmap()`, `x.subscriptions`) is a
+        // tagged handle: its writes must reach the store, so it keeps the helper.
+        if (produced && this.rustInitReadsTaggedStore(init)) return false;
         const entries: any[] = produced ? [] : literal.properties;
         for (const property of entries) {
             if (property.kind === SyntaxKind.SpreadAssignment) return false;
@@ -5831,6 +5834,7 @@ export class RustTranspiler extends BaseTranspiler {
         const prediction = typeof source === 'string'
             && RustTranspiler.RUST_PREDICTION_VENUE_FILE.test(source.replace(/\\/g, '/'));
         const escapes: any[] = [];
+        let elementUses = 0;
         const safe = this.rustLocalUsesAll(declaration, name, false, (n: any) => {
             if (this.rustIdentifierIsPropertyName(n)) {
                 // `{ x }` shorthand is a value use, not a name; anything else spelled
@@ -5862,7 +5866,11 @@ export class RustTranspiler extends BaseTranspiler {
                 escapes.push(n);
                 return true;
             }
-            if (isElementAccessExpression(parent) && parent.expression === n) return this.rustDictBearerElementUse(parent, name);
+            if (isElementAccessExpression(parent) && parent.expression === n) {
+                if (!this.rustDictBearerElementUse(parent, name)) return false;
+                elementUses++;
+                return true;
+            }
             // hx10w9 RP02: the value of a dict write (`m['k'] = x`) is boxed once.
             if (this.rustDictWriteValue(n)) return true;
             // hx10w9 RP04: `Object.keys/values(x)` prints the map's own iterators.
@@ -5878,11 +5886,9 @@ export class RustTranspiler extends BaseTranspiler {
             return false;
         });
         if (!safe) return false;
-        // hx10w7 R03: a produced map is typed only when every use is native — an element access,
-        // a kind-preserving mutator, or a return (boxed once at the return). A helper-call
-        // argument would re-box it (`Value::Map(x.clone())`): a clone and a longer line for
-        // no helper win, so those locals keep the box.
-        if (produced && escapes.some((n: any) => !isReturnStatement(n.parent))) return false;
+        // hx10w10 RP06: a produced map that also escapes re-boxes as `Value::Map(x.clone())`
+        // at the escape, so it pays off only where the bearer folds a helper call on it.
+        if (produced && escapes.length > 0 && elementUses === 0) return false;
         // hx10w6 R01: a return / `this.` call escape boxes a move at the last use, a clone before it.
         // hx10w6 R12: any other escape is prediction-tier only, and then every escape boxes a clone.
         for (const escape of escapes) {
@@ -5907,7 +5913,10 @@ export class RustTranspiler extends BaseTranspiler {
             || callee.name?.kind !== SyntaxKind.Identifier) return false;
         const method = String(callee.name.text);
         const handle = /^handle[A-Z]/.test(method);
-        if (!handle && !RustTranspiler.RUST_DICT_PRODUCER_CALLEES.has(method)) return false;
+        if (!handle && !RustTranspiler.RUST_DICT_PRODUCER_CALLEES.has(method)) {
+            // hx10w10 RP06: the callee's own returns build a fresh untagged map.
+            return this.rustCallBuildsContainer(call, 'map', 0);
+        }
         if (!this.rustWriteDictShape(this.typeOfNodeIfAny(call))) return false;
         // `parseJson` takes text, a `handle*` call hands back the dict it was given.
         if (handle || method === 'parseJson') return true;
@@ -5945,6 +5954,169 @@ export class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_DICT_PRODUCER_CALLEES = new Set([
         'extend', 'deepExtend', 'omit', 'keysort', 'parseJson', 'safeDict',
     ]);
+
+    // ── hx10w10 RP06: callee-return container proof ───────────────────────────
+    //
+    // A local initialised from `this.<m>(…)` is a box the checker cannot read:
+    // the TS return is a typedef (`OrderBook`, `Dict`), so the port prints
+    // `Value`. When the method's own body builds a fresh, untagged container on
+    // every return, the local holds that container and nothing else — the
+    // store-tag routes of `get_value`/`add_element_to_object` cannot fire — so
+    // the declaration can carry the container type and every read/write prints
+    // the native op.
+
+    /** Builders that hand back one of their own arguments: the container kind is
+     *  the argument's (they only add fields to it). */
+    private static readonly RUST_BUILDER_PASSTHROUGH = new Set([ 'safeTicker', 'safeOrder', 'safeTrade', 'safePosition' ]);
+
+    /** hx10w10 RP06: `this.<m>(…)` whose every return is a fresh untagged
+     *  container of `kind` — the method's own body, no venue override (the
+     *  checker resolves the most derived declaration for `this`). */
+    rustCallBuildsContainer(call: any, kind: 'map' | 'list', depth = 0): boolean {
+        if (depth > 2) return false;
+        // A pass-through builder hands back its own first argument (it only adds
+        // fields to it), so the argument's kind is the result's.
+        const passCallee: any = (call as any)?.expression;
+        const passMethod = isPropertyAccessExpression(passCallee) ? String((passCallee as any).name?.text) : undefined;
+        if (passMethod !== undefined && RustTranspiler.RUST_BUILDER_PASSTHROUGH.has(passMethod)) {
+            const passArgs: any[] = (call as any).arguments ?? [];
+            if (passArgs.length === 0) return false;
+            return this.rustBuiltContainerKind(passArgs[0], depth + 1) === kind;
+        }
+        let declaration: any;
+        try {
+            declaration = signatureDeclaration((this.getChecker() as any).getResolvedSignature(call));
+        } catch (e) {
+            return false;
+        }
+        if (declaration === undefined || declaration === null || declaration.body === undefined) return false;
+        if (declaration.kind !== SyntaxKind.MethodDeclaration) return false;
+        const body: any = declaration.body;
+        let returns = 0;
+        let ok = true;
+        const visit = (node: any) => {
+            if (!ok) return;
+            if (node !== body && isFunctionLike(node)) return; // a nested closure owns its own returns
+            if (isReturnStatement(node)) {
+                returns++;
+                if (this.rustBuiltContainerKind(node.expression, depth + 1) !== kind) ok = false;
+                return;
+            }
+            // A store write (`this.orderbooks[sym] = book`, `this.tickers = ..`)
+            // hands the container to the runtime store, which tags it: a later
+            // native write would bypass the store, so such a callee is out.
+            if (isBinaryExpression(node) && rustIsAssignmentOperator(node.operatorToken.kind)
+                && this.rustThisRootedPlace(node.left)) {
+                ok = false;
+                return;
+            }
+            node.forEachChild(visit);
+        };
+        body.forEachChild(visit);
+        return ok && returns > 0;
+    }
+
+    /** A call operand that hands back a live-store map: `x.hashmap()` (the ws
+     *  order/subscription cache) or a `.subscriptions` / `.futures` read. The
+     *  runtime tags those dicts, so a write must reach the store. */
+    rustInitReadsTaggedStore(node: any): boolean {
+        const init: any = this.rustSkipWrappers(node);
+        if (!isCallExpression(init)) return false;
+        return ((init as any).arguments ?? []).some((arg: any) => {
+            const n: any = this.rustSkipWrappers(arg);
+            if (n === undefined) return false;
+            if (isPropertyAccessExpression(n)) return RustTranspiler.RUST_TAGGED_CONTAINER_FIELDS.has(String((n as any).name.text));
+            if (isCallExpression(n) && isPropertyAccessExpression(n.expression)) {
+                return RustTranspiler.RUST_TAGGED_CONTAINER_FIELDS.has(String((n as any).expression.name.text));
+            }
+            return false;
+        });
+    }
+
+    /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
+    rustThisRootedPlace(node: any): boolean {
+        if (isPropertyAccessExpression(node)) return node.expression.kind === SyntaxKind.ThisKeyword;
+        if (isElementAccessExpression(node)) return this.rustThisRootedPlace(node.expression);
+        return false;
+    }
+
+    /** Container kind an expression the callee body builds yields, or undefined.
+     *  Shapes: a tag-free literal, a local that only ever receives element
+     *  writes, a `this.` builder that copies plain operands, a pass-through
+     *  builder of a built argument. */
+    rustBuiltContainerKind(node: any, depth = 0): 'map' | 'list' | undefined {
+        if (depth > 3) return undefined;
+        const expr: any = this.rustSkipWrappers(node);
+        if (expr === undefined || expr === null) return undefined;
+        if (isObjectLiteralExpression(expr)) return this.rustPlainDictLiteral(expr) ? 'map' : undefined;
+        if (isArrayLiteralExpression(expr)) return 'list';
+        if (isIdentifier(expr)) {
+            const declaration: any = this.rustDeclarationOfIdentifier(expr);
+            if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.name === expr) return undefined;
+            const built = this.rustBuiltContainerKind(declaration.initializer, depth + 1);
+            if (built === undefined || !this.rustLocalContainerWritesOnly(declaration, String(expr.text), built, depth + 1)) return undefined;
+            return built;
+        }
+        if (!isCallExpression(expr)) return undefined;
+        const callee: any = expr.expression;
+        if (!isPropertyAccessExpression(callee)) return undefined;
+        const method = String(callee.name.text);
+        const owner: any = callee.expression;
+        const args: any[] = (expr as any).arguments ?? [];
+        if (owner.kind === SyntaxKind.ThisKeyword) {
+            if (RustTranspiler.RUST_BUILDER_PASSTHROUGH.has(method) && args.length > 0) {
+                return this.rustBuiltContainerKind(args[0], depth + 1);
+            }
+            if (RustTranspiler.RUST_DICT_PRODUCER_CALLEES.has(method) && method !== 'safeDict') {
+                // `extend`/`deepExtend`/`omit`/`keysort` copy plain operands into a
+                // fresh map; `parseJson` always builds one.
+                if (method === 'parseJson') return 'map';
+                const copied = method === 'extend' || method === 'deepExtend' ? args : args.slice(0, 1);
+                if (copied.length === 0) return undefined;
+                for (const arg of copied) {
+                    if (this.rustBuiltContainerKind(arg, depth + 1) === undefined && !this.hx7PlainMap(arg)) return undefined;
+                }
+                return 'map';
+            }
+            if (method === 'safeList' || method === 'safeListValue') {
+                return args.length < 3 || isArrayLiteralExpression(this.rustSkipWrappers(args[2])) ? 'list' : undefined;
+            }
+            if (this.rustCallBuildsContainer(expr, 'map', depth + 1)) return 'map';
+            if (this.rustCallBuildsContainer(expr, 'list', depth + 1)) return 'list';
+            return undefined;
+        }
+        if (owner.kind === SyntaxKind.Identifier) {
+            const ownerName = String(owner.text);
+            if (ownerName === 'Object' && (method === 'keys' || method === 'values' || method === 'entries')) return 'list';
+            if (ownerName === 'Promise' && method === 'all') return 'list';
+            // `x.split(sep)` — the runtime split is an array on every path.
+            if (method === 'split') return 'list';
+        }
+        return undefined;
+    }
+
+    /** True when the only writes to this local inside its own function are
+     *  element writes and container rebuilds (no whole-local write of another
+     *  shape): the container it was built as is what it holds at every use. */
+    private rustLocalContainerWritesOnly(declaration: any, name: string, kind: 'map' | 'list', depth: number): boolean {
+        const scope: any = this.rustEnclosingFunction(declaration);
+        if (scope === undefined || isSourceFile(scope)) return false;
+        let ok = true;
+        const isThisLocal = (left: any): boolean => isIdentifier(left) && String(left.text) === name
+            && this.rustIdentifierRefersToDeclaration(left, declaration);
+        this.rustWalkScope(scope, (n: any) => {
+            if (!ok) return;
+            if (isBinaryExpression(n) && rustIsAssignmentOperator(n.operatorToken.kind)) {
+                if (!isThisLocal(n.left)) return;
+                // A rebuild from a container the same proof admits keeps the kind.
+                if (n.operatorToken.kind !== SyntaxKind.EqualsToken
+                    || this.rustBuiltContainerKind(n.right, depth + 1) !== kind) ok = false;
+                return;
+            }
+            if ((isForOfStatement(n) || isForInStatement(n)) && isThisLocal(n.initializer)) ok = false;
+        });
+        return ok;
+    }
 
     /** An escape the printer boxes: a `return` of the local, or an argument of a
      *  `this.`/`super.` call. Anything else (a free-function argument) has no box
@@ -6409,6 +6581,9 @@ export class RustTranspiler extends BaseTranspiler {
             const elementType = this.rustStringIndexedElementType(args[0]);
             return elementType !== undefined && this.rustDictBearerType(elementType) ? 'map' : undefined;
         }
+        // hx10w10 RP06: the callee's own returns build the container.
+        const built = this.rustBuiltContainerKind(node, 0);
+        if (built !== undefined) return built;
         return undefined;
     }
 

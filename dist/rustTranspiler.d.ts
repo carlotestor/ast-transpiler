@@ -815,6 +815,28 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  box out at the assignment. */
     rustR03ProducerReuse(node: any): boolean;
     private static readonly RUST_DICT_PRODUCER_CALLEES;
+    /** Builders that hand back one of their own arguments: the container kind is
+     *  the argument's (they only add fields to it). */
+    private static readonly RUST_BUILDER_PASSTHROUGH;
+    /** hx10w10 RP06: `this.<m>(…)` whose every return is a fresh untagged
+     *  container of `kind` — the method's own body, no venue override (the
+     *  checker resolves the most derived declaration for `this`). */
+    rustCallBuildsContainer(call: any, kind: 'map' | 'list', depth?: number): boolean;
+    /** A call operand that hands back a live-store map: `x.hashmap()` (the ws
+     *  order/subscription cache) or a `.subscriptions` / `.futures` read. The
+     *  runtime tags those dicts, so a write must reach the store. */
+    rustInitReadsTaggedStore(node: any): boolean;
+    /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
+    rustThisRootedPlace(node: any): boolean;
+    /** Container kind an expression the callee body builds yields, or undefined.
+     *  Shapes: a tag-free literal, a local that only ever receives element
+     *  writes, a `this.` builder that copies plain operands, a pass-through
+     *  builder of a built argument. */
+    rustBuiltContainerKind(node: any, depth?: number): 'map' | 'list' | undefined;
+    /** True when the only writes to this local inside its own function are
+     *  element writes and container rebuilds (no whole-local write of another
+     *  shape): the container it was built as is what it holds at every use. */
+    private rustLocalContainerWritesOnly;
     /** An escape the printer boxes: a `return` of the local, or an argument of a
      *  `this.`/`super.` call. Anything else (a free-function argument) has no box
      *  site. */
