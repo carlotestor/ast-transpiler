@@ -1704,7 +1704,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (op === SyntaxKind.InKeyword) {
             const shadow = this.rustParamShadowOf(right);
             return (shadow !== undefined ? this.printShadowInOperator(shadow, left) : undefined)
-                ?? this.printNativeInOperator(left, right) ?? this.r18LiteralInOp(left, right) ?? this.r05InOp(left, right)
+                ?? this.r04BearerInOp(left, right) ?? this.printNativeInOperator(left, right)
+                ?? this.r18LiteralInOp(left, right) ?? this.r05InOp(left, right)
                 ?? `Value::Bool(in_op(&${this.printNode(right, 0)}, &${this.printNode(left, 0)}))`;
         }
         // `+=` / `-=` on regular variables
@@ -5004,11 +5005,37 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printObjectKeysCall(node, identation, parsedArg = undefined) {
-        return this.r05Enum(node, parsedArg, 'keys') ?? this.r18PredictionEnum(node, parsedArg, 'keys') ?? this.r21BaseEnum(node, parsedArg, 'keys') ?? `object_keys(&${parsedArg})`;
+        return this.r04BearerEnum(node, 'keys') ?? this.r05Enum(node, parsedArg, 'keys') ?? this.r18PredictionEnum(node, parsedArg, 'keys') ?? this.r21BaseEnum(node, parsedArg, 'keys') ?? `object_keys(&${parsedArg})`;
     }
 
     printObjectValuesCall(node, identation, parsedArg = undefined) {
-        return this.r05Enum(node, parsedArg, 'values') ?? this.r18PredictionEnum(node, parsedArg, 'values') ?? this.r21BaseEnum(node, parsedArg, 'values') ?? `object_values(&${parsedArg})`;
+        return this.r04BearerEnum(node, 'values') ?? this.r05Enum(node, parsedArg, 'values') ?? this.r18PredictionEnum(node, parsedArg, 'values') ?? this.r21BaseEnum(node, parsedArg, 'values') ?? `object_values(&${parsedArg})`;
+    }
+
+    /** hx10w9 RP04: `Object.keys/values(x)` on a typed bearer — the map's own
+     *  iterators. A bearer is built from an object literal, so the helper's
+     *  ws/tag filters have nothing to strip. */
+    r04BearerEnum(node: any, kind: 'keys' | 'values'): string | undefined {
+        const arg = this.r04BearerEnumArg(node);
+        if (arg === undefined || this.rustDictBearerDeclaration(arg) === undefined) return undefined;
+        const recv = String(arg.text);
+        const body = kind === 'keys'
+            ? `${recv}.keys().map(|__k| Value::Str(__k.clone().into())).collect()`
+            : `${recv}.values().cloned().collect()`;
+        return `Value::Array(${body})`;
+    }
+
+    /** The single plain-identifier argument of `Object.keys/values(…)`. */
+    r04BearerEnumArg(node: any): Identifier | undefined {
+        if (!isCallExpression(node) || (node.arguments?.length ?? 0) !== 1) return undefined;
+        const callee: any = node.expression;
+        if (!isPropertyAccessExpression(callee) || !isIdentifier(callee.expression)
+            || String(callee.expression.text) !== 'Object'
+            || (String(callee.name.text) !== 'keys' && String(callee.name.text) !== 'values')) {
+            return undefined;
+        }
+        const arg: any = this.rustSkipWrappers(node.arguments[0]);
+        return arg !== undefined && isIdentifier(arg) ? arg : undefined;
     }
 
     printJsonParseCall(node, identation, parsedArg = undefined) {
@@ -5750,8 +5777,17 @@ export class RustTranspiler extends BaseTranspiler {
                 return true;
             }
             if (isElementAccessExpression(parent) && parent.expression === n) return this.rustDictBearerElementUse(parent, name);
+<<<<<<< src/rustTranspiler.ts
             // hx10w9 RP02: the value of a dict write (`m['k'] = x`) is boxed once.
             if (this.rustDictWriteValue(n)) return true;
+||||||| /tmp/hx10w9-base
+=======
+            // hx10w9 RP04: `Object.keys/values(x)` prints the map's own iterators.
+            if (isCallExpression(parent) && this.r04BearerEnumArg(parent) === n) return true;
+            // hx10w9 RP04: `k in x` — the map's own lookup behind the helper's `Str` test.
+            if (isBinaryExpression(parent) && parent.operatorToken.kind === SyntaxKind.InKeyword
+                && parent.right === n) return this.r04BearerInOpKeyText(parent.left) !== undefined;
+>>>>>>> /tmp/hx10w9-theirs
             // hx10w6 R01 (write side): a rebuilt plain literal keeps the bearer.
             if (this.rustR01BearerRebuild(n)) return true;
             // hx10w7 R03: a rebuild from a fresh-map producer keeps the map type.
@@ -6007,15 +6043,85 @@ export class RustTranspiler extends BaseTranspiler {
         const key: any = this.rustSkipWrappers(keyNode);
         if (key === undefined || isStringLiteral(key)) return undefined;
         if (this.r01PlaceKeyNative(key) === true) return `${String(key.text)}.clone().unwrap_or_default()`;
-        if (!this.rustKeyIsProvenString(key)) return undefined;
         const text = String(keyText).trim();
         if (text === '' || new RegExp(`\\b${receiverName}\\b`).test(text)) return undefined;
+        if (!this.rustKeyIsProvenString(key)) return this.r04StringifiedWriteKeyArg(key, text);
         const boxed = text.match(/^Value::Str\((.+)\)$/s);
-        if (boxed === null) return undefined;
+        // A string-proven member read prints a `Value` box, not a `Str` payload.
+        if (boxed === null) return this.r04StringifiedWriteKeyArg(key, text);
         const payload = boxed[1].trim().replace(/\.into\(\)$/, '').trim();
         if (/^format!\(/s.test(payload)) return payload;
         if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(payload) && payload !== 'self') return `${payload}.to_string()`;
         return undefined;
+    }
+
+    /** hx10w9 RP04: a write key of any boxed type. `add_element_to_object` stores
+     *  a non-`Str` key through `stringify_simple`, which `stringify_param` is, and
+     *  an `IndexMap` write needs a `String` either way — so the same call is the
+     *  whole key conversion. Only shapes the printer emits as a `Value` qualify. */
+    r04StringifiedWriteKeyArg(key: any, text: string): string | undefined {
+        if (!this.r04KeyTextIsValuePlace(key, text)) return undefined;
+        return `crate::runtime::stringify_param(&(${text}))`;
+    }
+
+    /** The printed text of a key place that is a `Value` and safe to evaluate in a
+     *  key position: no nested statement, assignment or await. */
+    r04KeyTextIsValuePlace(key: any, text: string): boolean {
+        if (text === '' || text.includes(';') || /(?:^|[^=!<>])=\s/.test(text) || /\bawait\b/.test(text)) {
+            return false;
+        }
+        if (key.kind === SyntaxKind.ArrowFunction || key.kind === SyntaxKind.FunctionExpression
+            || key.kind === SyntaxKind.AwaitExpression) {
+            return false;
+        }
+        // A printed `Value`: a box, a match arm, or a map read (`get_value` /
+        // `unwrap_or(Value::Null)`) — a `string | undefined` member read prints the
+        // box, so the type alone would refuse a place that really is a `Value`.
+        if (/^(?:Value::|\(match |\(if |get_value|crate::value::get_value_k)|unwrap_or\(Value::Null\)/.test(text)) {
+            return true;
+        }
+        return this.r04KeyPrintsAsValue(this.typeOfNodeIfAny(key));
+    }
+
+    /** `k in x` on a typed bearer: `in_op`'s own Dict arm — a key that is not a
+     *  `Str` is never a hit — with the lookup on the bare map. */
+    r04BearerInOp(key: any, obj: any): string | undefined {
+        const recv: any = this.rustSkipWrappers(obj);
+        if (recv === undefined || !isIdentifier(recv) || this.rustDictBearerDeclaration(recv) === undefined) {
+            return undefined;
+        }
+        const text = this.r04BearerInOpKeyText(key);
+        if (text === undefined) return undefined;
+        return `Value::Bool(matches!(&${text}, Value::Str(__k) if ${String(recv.text)}.contains_key(__k.as_ref())))`;
+    }
+
+    /** The key half of `r04BearerInOp`, also used while the receiver's own bearer
+     *  proof is still running (its declaration probe answers "not typed" then). */
+    r04BearerInOpKeyText(key: any): string | undefined {
+        const keyNode: any = this.rustSkipWrappers(key);
+        if (keyNode === undefined || isStringLiteral(keyNode)) return undefined;
+        const text = this.printNode(key, 0).trim();
+        if (!/^(?:[A-Za-z_][A-Za-z0-9_]*|crate::|Value::|\(match |\(if )/.test(text)
+            || !this.r04KeyTextIsValuePlace(keyNode, text)) return undefined;
+        return text;
+    }
+
+    /** The printed Rust for this TS type is a `Value`: `any`, an object/dict shape,
+     *  or a union of those with nullish. A `string`/number/bool place prints its own
+     *  Rust type instead (the caller's string proof owns those). */
+    r04KeyPrintsAsValue(type: any): boolean {
+        if (type === undefined) return false;
+        const parts: any[] = (type.flags & TypeFlags.Union) ? ((typeParts(type) ?? []) as any[]) : [ type ];
+        if (parts.length === 0) return false;
+        const checker: any = this.checkerOrUndefined();
+        return parts.every((part: any) => {
+            if ((part.flags & TypeFlags.Any) !== 0) return true;
+            if ((part.flags & (TypeFlags.Undefined | TypeFlags.Null | TypeFlags.Void)) !== 0) return true;
+            if ((part.flags & (TypeFlags.StringLike | TypeFlags.NumberLike | TypeFlags.BooleanLike
+                | TypeFlags.BigIntLike | TypeFlags.ESSymbolLike | TypeFlags.TypeParameter)) !== 0) return false;
+            if ((part.flags & TypeFlags.Object) === 0) return false;
+            return checker === undefined || (!checker.isArrayType(part) && !checker.isTupleType(part));
+        });
     }
 
     /** A plain object literal a bearer may be rebuilt from (`x = { .. }`): no

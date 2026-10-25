@@ -4656,9 +4656,11 @@ describe('hx4 R21 base-tier enumeration, Arr-only sources and string-method rece
         rest = transpiler.transpileRustByPath('./tests/files/input/hx4r21/ts/src/venue.ts').content;
     });
 
+    // hx10w9 RP04: `built` is a literal-built local, so it is a typed bearer now and
+    // enumerates through the map's own iterators (no `as_map` box, no `object_keys`).
     test('Object.keys / Object.values on a base-tier plain local are native; any keeps the helper', () => {
-        expect(base).toContain('let mut keys: Value = Value::Array(built.as_map().map(|__m| __m.keys().map(|__k| Value::Str(__k.clone().into())).collect()).unwrap_or_default());');
-        expect(base).toContain('let mut values: Value = Value::Array(built.as_map().map(|__m| __m.values().cloned().collect()).unwrap_or_default());');
+        expect(base).toContain('let mut keys: Value = Value::Array(built.keys().map(|__k| Value::Str(__k.clone().into())).collect());');
+        expect(base).toContain('let mut values: Value = Value::Array(built.values().cloned().collect());');
         expect(base).toContain('object_keys(&response)');
     });
 
@@ -4899,11 +4901,16 @@ ${body}
         expect(arg).toContain('return self.parseX(Value::Map(params));');
     });
 
-    test('negative: a dynamic key or a container helper keeps the box', () => {
+    // hx10w9 RP04: a boxed key (`v`, `0`) now writes through `stringify_param` — the
+    // helper's own conversion — so the negatives are receivers the bearer proof rejects.
+    test('negative: an element-read receiver or a foreign container keeps the box', () => {
         const dyn = rs("        const d = {};\n        d[v] = 1;\n        return d['a'];");
-        expect(dyn).toContain('let mut d: Value = Value::Map({');
-        const keys = rs("        const d = { 'a': 1 };\n        const n = Object.keys (d).length;\n        return n;");
-        expect(keys).toContain('let mut d: Value = Value::Map({');
+        expect(dyn).toContain('let mut d: indexmap::IndexMap<String, Value> = ({');
+        const elem = rs("        const d = this.parseX (v)[0];\n        d['a'] = 1;\n        return d;");
+        expect(elem).toContain('add_element_to_object(&mut d');
+        const keys = rs("        const d = this.parseX (v);\n        const n = Object.keys (d).length;\n        return n;");
+        expect(keys).toContain('let mut d: Value = self.parseX(v);');
+        expect(keys).toContain('object_keys(&d)');
     });
 
     test('a proven string key place reads and writes natively', () => {
