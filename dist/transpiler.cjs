@@ -11976,28 +11976,54 @@ func New${this.capitalize(this.className)}() *${this.className} {
       }
     };
     scope.forEachChild(visit);
-    if (bail || this.goTypeNameIsShadowed(scope, "string") || !this.goLocalIsSafeToType(scope, declaration, name, "string", true)) {
+    if (bail || this.goTypeNameIsShadowed(scope, "string")) {
       return void 0;
     }
     return "string";
   }
   // a read a Go `string` answers like the box did: a concat operand, an `any` slot, a
-  // string-literal comparison or a runtime-accessor argument — never a nil test
+  // string-literal comparison or a runtime-accessor argument — never a nil test. Read from
+  // the AST only: printing here would resolve other locals from inside this scan.
   goFieldStringLocalReadIsSafe(node) {
-    const parent = _optionalChain([node, 'optionalAccess', _1023 => _1023.parent]);
-    if (_optionalChain([parent, 'optionalAccess', _1024 => _1024.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _1025 => _1025.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) {
+    let current = node;
+    let parent = _optionalChain([current, 'optionalAccess', _1023 => _1023.parent]);
+    while (_optionalChain([parent, 'optionalAccess', _1024 => _1024.kind]) === _ast.SyntaxKind.ParenthesizedExpression) {
+      current = parent;
+      parent = parent.parent;
+    }
+    if (parent === void 0) {
       return false;
     }
-    if (_optionalChain([parent, 'optionalAccess', _1026 => _1026.kind]) === _ast.SyntaxKind.IfStatement || _optionalChain([parent, 'optionalAccess', _1027 => _1027.kind]) === _ast.SyntaxKind.WhileStatement || _optionalChain([parent, 'optionalAccess', _1028 => _1028.kind]) === _ast.SyntaxKind.DoStatement || _optionalChain([parent, 'optionalAccess', _1029 => _1029.kind]) === _ast.SyntaxKind.ForStatement) {
-      return false;
-    }
-    if (_optionalChain([parent, 'optionalAccess', _1030 => _1030.kind]) === _ast.SyntaxKind.BinaryExpression) {
-      const operator = _optionalChain([parent, 'access', _1031 => _1031.operatorToken, 'optionalAccess', _1032 => _1032.kind]);
-      if (operator === _ast.SyntaxKind.AmpersandAmpersandToken || operator === _ast.SyntaxKind.BarBarToken) {
+    switch (parent.kind) {
+      case _ast.SyntaxKind.BinaryExpression: {
+        const operator = _optionalChain([parent, 'access', _1025 => _1025.operatorToken, 'optionalAccess', _1026 => _1026.kind]);
+        if (operator === _ast.SyntaxKind.EqualsToken) {
+          return parent.right === current && _optionalChain([parent, 'access', _1027 => _1027.left, 'optionalAccess', _1028 => _1028.kind]) === _ast.SyntaxKind.ElementAccessExpression;
+        }
+        if (operator === _ast.SyntaxKind.PlusToken) {
+          return true;
+        }
+        if (operator === _ast.SyntaxKind.EqualsEqualsToken || operator === _ast.SyntaxKind.ExclamationEqualsToken || operator === _ast.SyntaxKind.EqualsEqualsEqualsToken || operator === _ast.SyntaxKind.ExclamationEqualsEqualsToken) {
+          const other = parent.left === current ? parent.right : parent.left;
+          return _optionalChain([other, 'optionalAccess', _1029 => _1029.kind]) === _ast.SyntaxKind.StringLiteral;
+        }
         return false;
       }
+      case _ast.SyntaxKind.PropertyAssignment:
+        return parent.initializer === current;
+      case _ast.SyntaxKind.ShorthandPropertyAssignment:
+        return parent.name === current;
+      case _ast.SyntaxKind.CallExpression: {
+        if (!_optionalChain([parent, 'access', _1030 => _1030.arguments, 'optionalAccess', _1031 => _1031.some, 'call', _1032 => _1032((argument) => argument === current)])) {
+          return false;
+        }
+        const callee = this.goAstCalleeName(parent);
+        return callee !== void 0 && GO_NIL_INIT_ANY_ARG_CALLEES.has(callee);
+      }
+      case _ast.SyntaxKind.TemplateSpan:
+        return true;
     }
-    return this.goNilInitReadIsStringSafe(node);
+    return false;
   }
   // the printer's own helper emissions that box a value instead of producing a Go string
   goNilInitWrittenHelperCall(printed) {

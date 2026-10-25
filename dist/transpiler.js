@@ -11977,28 +11977,54 @@ func New${this.capitalize(this.className)}() *${this.className} {
       }
     };
     scope.forEachChild(visit);
-    if (bail || this.goTypeNameIsShadowed(scope, "string") || !this.goLocalIsSafeToType(scope, declaration, name, "string", true)) {
+    if (bail || this.goTypeNameIsShadowed(scope, "string")) {
       return void 0;
     }
     return "string";
   }
   // a read a Go `string` answers like the box did: a concat operand, an `any` slot, a
-  // string-literal comparison or a runtime-accessor argument — never a nil test
+  // string-literal comparison or a runtime-accessor argument — never a nil test. Read from
+  // the AST only: printing here would resolve other locals from inside this scan.
   goFieldStringLocalReadIsSafe(node) {
-    const parent = node?.parent;
-    if (parent?.kind === SyntaxKind5.PrefixUnaryExpression || parent?.kind === SyntaxKind5.PostfixUnaryExpression) {
+    let current = node;
+    let parent = current?.parent;
+    while (parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = parent;
+      parent = parent.parent;
+    }
+    if (parent === void 0) {
       return false;
     }
-    if (parent?.kind === SyntaxKind5.IfStatement || parent?.kind === SyntaxKind5.WhileStatement || parent?.kind === SyntaxKind5.DoStatement || parent?.kind === SyntaxKind5.ForStatement) {
-      return false;
-    }
-    if (parent?.kind === SyntaxKind5.BinaryExpression) {
-      const operator = parent.operatorToken?.kind;
-      if (operator === SyntaxKind5.AmpersandAmpersandToken || operator === SyntaxKind5.BarBarToken) {
+    switch (parent.kind) {
+      case SyntaxKind5.BinaryExpression: {
+        const operator = parent.operatorToken?.kind;
+        if (operator === SyntaxKind5.EqualsToken) {
+          return parent.right === current && parent.left?.kind === SyntaxKind5.ElementAccessExpression;
+        }
+        if (operator === SyntaxKind5.PlusToken) {
+          return true;
+        }
+        if (operator === SyntaxKind5.EqualsEqualsToken || operator === SyntaxKind5.ExclamationEqualsToken || operator === SyntaxKind5.EqualsEqualsEqualsToken || operator === SyntaxKind5.ExclamationEqualsEqualsToken) {
+          const other = parent.left === current ? parent.right : parent.left;
+          return other?.kind === SyntaxKind5.StringLiteral;
+        }
         return false;
       }
+      case SyntaxKind5.PropertyAssignment:
+        return parent.initializer === current;
+      case SyntaxKind5.ShorthandPropertyAssignment:
+        return parent.name === current;
+      case SyntaxKind5.CallExpression: {
+        if (!parent.arguments?.some((argument) => argument === current)) {
+          return false;
+        }
+        const callee = this.goAstCalleeName(parent);
+        return callee !== void 0 && GO_NIL_INIT_ANY_ARG_CALLEES.has(callee);
+      }
+      case SyntaxKind5.TemplateSpan:
+        return true;
     }
-    return this.goNilInitReadIsStringSafe(node);
+    return false;
   }
   // the printer's own helper emissions that box a value instead of producing a Go string
   goNilInitWrittenHelperCall(printed) {

@@ -3763,30 +3763,58 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             }
         };
         scope.forEachChild(visit);
-        if (bail || this.goTypeNameIsShadowed(scope, 'string') || !this.goLocalIsSafeToType(scope, declaration, name, 'string', true)) {
+        // the scan already refused every write and read a `string` cannot answer, so the
+        // box-wide veto (which prints) is not consulted here
+        if (bail || this.goTypeNameIsShadowed(scope, 'string')) {
             return undefined;
         }
         return 'string';
     }
 
     // a read a Go `string` answers like the box did: a concat operand, an `any` slot, a
-    // string-literal comparison or a runtime-accessor argument — never a nil test
+    // string-literal comparison or a runtime-accessor argument — never a nil test. Read from
+    // the AST only: printing here would resolve other locals from inside this scan.
     goFieldStringLocalReadIsSafe(node): boolean {
-        const parent = node?.parent;
-        if ((parent?.kind === SyntaxKind.PrefixUnaryExpression) || (parent?.kind === SyntaxKind.PostfixUnaryExpression)) {
+        let current = node;
+        let parent = current?.parent;
+        while (parent?.kind === SyntaxKind.ParenthesizedExpression) {
+            current = parent;
+            parent = parent.parent;
+        }
+        if (parent === undefined) {
             return false;
         }
-        if ((parent?.kind === SyntaxKind.IfStatement) || (parent?.kind === SyntaxKind.WhileStatement)
-            || (parent?.kind === SyntaxKind.DoStatement) || (parent?.kind === SyntaxKind.ForStatement)) {
-            return false;
-        }
-        if ((parent?.kind === SyntaxKind.BinaryExpression)) {
+        switch (parent.kind) {
+        case SyntaxKind.BinaryExpression: {
             const operator = parent.operatorToken?.kind;
-            if ((operator === SyntaxKind.AmpersandAmpersandToken) || (operator === SyntaxKind.BarBarToken)) {
-                return false; // a Go string is not a bool
+            if (operator === SyntaxKind.EqualsToken) {
+                return (parent.right === current) && (parent.left?.kind === SyntaxKind.ElementAccessExpression);
             }
+            if (operator === SyntaxKind.PlusToken) {
+                return true;
+            }
+            if ((operator === SyntaxKind.EqualsEqualsToken) || (operator === SyntaxKind.ExclamationEqualsToken)
+                || (operator === SyntaxKind.EqualsEqualsEqualsToken) || (operator === SyntaxKind.ExclamationEqualsEqualsToken)) {
+                const other = (parent.left === current) ? parent.right : parent.left;
+                return other?.kind === SyntaxKind.StringLiteral;
+            }
+            return false; // `&&`/`||`/ordered comparison: a Go string is not a bool or a number
         }
-        return this.goNilInitReadIsStringSafe(node);
+        case SyntaxKind.PropertyAssignment:
+            return parent.initializer === current;
+        case SyntaxKind.ShorthandPropertyAssignment:
+            return parent.name === current;
+        case SyntaxKind.CallExpression: {
+            if (!parent.arguments?.some((argument) => argument === current)) {
+                return false;
+            }
+            const callee = this.goAstCalleeName(parent);
+            return (callee !== undefined) && GO_NIL_INIT_ANY_ARG_CALLEES.has(callee);
+        }
+        case SyntaxKind.TemplateSpan:
+            return true;
+        }
+        return false;
     }
 
     // the printer's own helper emissions that box a value instead of producing a Go string
