@@ -8757,7 +8757,21 @@ var ORDERED_COMPARISON_OPERATORS = {
   [SyntaxKind5.LessThanToken]: "<",
   [SyntaxKind5.LessThanEqualsToken]: "<="
 };
-var GO_STRING_FIELD_NAMES = ["Id", "Name", "Version", "Url", "Hostname", "UserAgent"];
+var GO_STRING_FIELD_NAMES = [
+  "Id",
+  "Name",
+  "Version",
+  "Url",
+  "Hostname",
+  "UserAgent",
+  "ApiKey",
+  "Secret",
+  "Uid",
+  "Password",
+  "AccountId",
+  "PrivateKey",
+  "WalletAddress"
+];
 var GO_DEFAULTED_SAFE_STRING_ARITY = {
   "safeString": 3,
   "safeStringLower": 3,
@@ -9248,6 +9262,7 @@ var GoTranspiler = class extends BaseTranspiler {
     this.goNilInitLocalTypeInProgress = /* @__PURE__ */ new Set();
     this.goNilInitStringScanCache = /* @__PURE__ */ new WeakMap();
     this.goNilInitStringScanInProgress = /* @__PURE__ */ new Set();
+    this.goFieldStringLocalTypeCache = /* @__PURE__ */ new WeakMap();
     this.goLocalSafeVerdicts = /* @__PURE__ */ new WeakMap();
     // `typeof x === "<name>"` checks and the Go predicate helper each maps to
     this.goTypeOfHelpers = /* @__PURE__ */ new Map([
@@ -11923,6 +11938,108 @@ func New${this.capitalize(this.className)}() *${this.className} {
     }
     return "string";
   }
+  // gp25: `const k = this.apiKey` holds the hand-written BaseExchange field, a plain Go
+  // string, so the local is that string and its Add chains fold. A nil test or any other
+  // read only the box answers keeps `any` (a Go string cannot be compared to nil).
+  goFieldStringLocalType(declaration) {
+    if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    if (this.goFieldStringLocalTypeCache.has(declaration)) {
+      return this.goFieldStringLocalTypeCache.get(declaration);
+    }
+    const result = this.goFieldStringLocalTypeScan(declaration);
+    this.goFieldStringLocalTypeCache.set(declaration, result);
+    return result;
+  }
+  goFieldStringLocalTypeScan(declaration) {
+    const initializer = this.goUnwrapParenthesizedNode(declaration.initializer);
+    if (initializer?.kind !== SyntaxKind5.PropertyAccessExpression || initializer.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return void 0;
+    }
+    if (GO_STRING_FIELD_NAMES.indexOf(this.goAstFieldGoName(initializer)) < 0) {
+      return void 0;
+    }
+    const name = declaration.name.text;
+    const scope = this.goEnclosingFunction(declaration);
+    if (scope === void 0) {
+      return void 0;
+    }
+    let bail = false;
+    const visit = (n) => {
+      if (bail) {
+        return;
+      }
+      if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
+        n.forEachChild(visit);
+        return;
+      }
+      const parent = n.parent;
+      if (parent?.kind === SyntaxKind5.VariableDeclaration && parent.name === n) {
+        return;
+      }
+      if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
+        const right = this.goUnwrapParenthesizedNode(parent.right);
+        if (GO_STRING_FIELD_NAMES.indexOf(this.goAstFieldGoName(right)) >= 0) {
+          return;
+        }
+        bail = true;
+        return;
+      }
+      if (!this.goFieldStringLocalReadIsSafe(n)) {
+        bail = true;
+      }
+    };
+    scope.forEachChild(visit);
+    if (bail || this.goTypeNameIsShadowed(scope, "string")) {
+      return void 0;
+    }
+    return "string";
+  }
+  // a read a Go `string` answers like the box did: a concat operand, an `any` slot, a
+  // string-literal comparison or a runtime-accessor argument — never a nil test. Read from
+  // the AST only: printing here would resolve other locals from inside this scan.
+  goFieldStringLocalReadIsSafe(node) {
+    let current = node;
+    let parent = current?.parent;
+    while (parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = parent;
+      parent = parent.parent;
+    }
+    if (parent === void 0) {
+      return false;
+    }
+    switch (parent.kind) {
+      case SyntaxKind5.BinaryExpression: {
+        const operator = parent.operatorToken?.kind;
+        if (operator === SyntaxKind5.EqualsToken) {
+          return parent.right === current && parent.left?.kind === SyntaxKind5.ElementAccessExpression;
+        }
+        if (operator === SyntaxKind5.PlusToken) {
+          return true;
+        }
+        if (operator === SyntaxKind5.EqualsEqualsToken || operator === SyntaxKind5.ExclamationEqualsToken || operator === SyntaxKind5.EqualsEqualsEqualsToken || operator === SyntaxKind5.ExclamationEqualsEqualsToken) {
+          const other = parent.left === current ? parent.right : parent.left;
+          return other?.kind === SyntaxKind5.StringLiteral;
+        }
+        return false;
+      }
+      case SyntaxKind5.PropertyAssignment:
+        return parent.initializer === current;
+      case SyntaxKind5.ShorthandPropertyAssignment:
+        return parent.name === current;
+      case SyntaxKind5.CallExpression: {
+        if (!parent.arguments?.some((argument) => argument === current)) {
+          return false;
+        }
+        const callee = this.goAstCalleeName(parent);
+        return callee !== void 0 && GO_NIL_INIT_ANY_ARG_CALLEES.has(callee);
+      }
+      case SyntaxKind5.TemplateSpan:
+        return true;
+    }
+    return false;
+  }
   // the printer's own helper emissions that box a value instead of producing a Go string
   goNilInitWrittenHelperCall(printed) {
     const text = this.goUnwrapPrintedParens(printed ?? "");
@@ -12070,7 +12187,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
       }
     }
     if (goType === void 0) {
-      return this.goSafeDictLocalUnbox(declaration) ?? this.goSafeListLocalUnbox(declaration) ?? this.goMarketLocalUnbox(declaration) ?? this.goNilInitLocalType(declaration) ?? "any";
+      return this.goSafeDictLocalUnbox(declaration) ?? this.goSafeListLocalUnbox(declaration) ?? this.goMarketLocalUnbox(declaration) ?? this.goFieldStringLocalType(declaration) ?? this.goNilInitLocalType(declaration) ?? "any";
     }
     const sourceName = declaration.name?.text;
     if (sourceName === void 0) {
@@ -12816,6 +12933,15 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       return typeof name === "string" && name.length > 0 ? "this." + name.charAt(0).toUpperCase() + name.substring(1) : void 0;
     }
     return void 0;
+  }
+  // the Go name a `this.<field>` read prints (`apiKey` -> `ApiKey`), read from the AST:
+  // printing it here would re-enter the local-type classifier that asks this question
+  goAstFieldGoName(node) {
+    if (node?.kind !== SyntaxKind5.PropertyAccessExpression || node.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return void 0;
+    }
+    const name = node.name?.text;
+    return typeof name === "string" && name.length > 0 ? name.charAt(0).toUpperCase() + name.substring(1) : void 0;
   }
   // true when every declaration of the awaited callee is a bodyless method signature:
   // TS never implements it, the endpoint generator does, and the Go body is the
