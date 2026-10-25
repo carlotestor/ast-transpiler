@@ -143,6 +143,11 @@ const CSHARP_THIS_RETURN_TYPES: { [name: string]: string } = {
     'safeFloat': 'double?',
     'safeFloat2': 'double?',
     'safeFloatN': 'double?',
+    // BaseMethods.cs declares these `double?` too (safeNumber 6174, safeNumber2 3857,
+    // safeNumberOmitZero 1542); they were the only double-returning accessors left out
+    'safeNumber': 'double?',
+    'safeNumber2': 'double?',
+    'safeNumberOmitZero': 'double?',
     'safeNumberN': 'double?',
     'safeBool': 'bool?',
     'safeBool2': 'bool?',
@@ -207,6 +212,15 @@ const CSHARP_NUMERIC_KINDS = [ 'int', 'Int64', 'double' ];
 // numeric kinds a printed call result can carry (with the nullable spellings the safe*
 // accessors and parseToInt use), for the equality path only
 const CSHARP_NUMERIC_VALUE_KINDS = [ 'int', 'Int64', 'Int64?', 'double', 'double?' ];
+
+// the printed types a later write of a nullable scalar local may store without changing the
+// runtime box: the non-null twin converts implicitly and a `Nullable<T>` boxes as its `T`
+const CSHARP_NULLABLE_WIDENING: { [name: string]: string[] } = {
+    'string?': [ 'string' ],
+    'bool?': [ 'bool' ],
+    'Int64?': [ 'Int64', 'int' ],
+    'double?': [ 'double', 'Int64', 'int' ],
+};
 
 // integer kinds the helper normalises to Int64 (normalizeIntIfNeeded), the same widening the
 // C# operator applies to an int next to a long, so a mixed pair prints the identical comparison
@@ -3629,7 +3643,7 @@ export class CSharpTranspiler extends BaseTranspiler {
     // which throws instead of answering null), a local the printer itself declares `string`, a
     // conditional whose every arm is one, or such a chain's own left spine. Undefined everywhere
     // else — a nullable or boxed operand keeps the helper.
-    csharpNonNullStringOperandType(node, self = undefined): string | undefined {
+    csharpNonNullStringOperandType(node, self = undefined, guardedConcat = false): string | undefined {
         let value = node;
         while (value?.kind === SyntaxKind.ParenthesizedExpression) {
             value = value.expression;
@@ -3642,13 +3656,13 @@ export class CSharpTranspiler extends BaseTranspiler {
         }
         (this as any).csharpStringChainDepth = depth + 1;
         try {
-            return this.csharpNonNullStringLeafType(value, self);
+            return this.csharpNonNullStringLeafType(value, self, guardedConcat);
         } finally {
             (this as any).csharpStringChainDepth = depth;
         }
     }
 
-    csharpNonNullStringLeafType(value, self = undefined): string | undefined {
+    csharpNonNullStringLeafType(value, self = undefined, guardedConcat = false): string | undefined {
         switch (value.kind) {
         case SyntaxKind.StringLiteral:
         case SyntaxKind.NoSubstitutionTemplateLiteral:
@@ -3671,6 +3685,11 @@ export class CSharpTranspiler extends BaseTranspiler {
                 return undefined;
             }
             const type = this.getCSharpLocalType(declaration);
+            // a `string?` read a non-null proof dominates, in a concat whose right operand prints a
+            // string: the helper's string branch and C# concatenation agree on a non-null left
+            if (guardedConcat && (type === 'string?') && this.csharpGuardedStringConcatRead(value)) {
+                return 'string';
+            }
             return (type === 'string') ? 'string' : undefined;
         }
         }
@@ -3804,7 +3823,7 @@ export class CSharpTranspiler extends BaseTranspiler {
                         // a non-null string local written by its own `+` chain keeps that string
                         // (`add(string, *)` is concatenation and never answers null)
                         const chainIsString = (csharpType === 'string') && (this.csharpPlusChainNonNullStringType(parent.right, declaration) === 'string');
-                        if (!chainIsString && (this.csharpTypeOfInitializer(parent.right) !== csharpType)) {
+                        if (!chainIsString && !this.csharpWriteKeepsLocalType(parent.right, csharpType)) {
                             return true;
                         }
                     } else if ((op >= SyntaxKind.FirstCompoundAssignment) && (op <= SyntaxKind.LastCompoundAssignment)) {
@@ -3815,11 +3834,11 @@ export class CSharpTranspiler extends BaseTranspiler {
                         }
                     }
                 }
-                // a `string?` local as the LEFT operand of `+` prints add(<x>, ...): the
-                // nullable-to-`string` conversion makes add(string, ...) a better match than
-                // add(object, object), which turns a null left into the right operand instead
-                // of null (see the same rule in the ccxt cs/ccxt/base comments)
-                if (safeAccessor && (csharpType === 'string?') && this.csharpIsLeftPlusOperand(n)) {
+                // a `string?` local as the LEFT operand of `+` prints add(<x>, ...) and the
+                // nullable-to-`string` conversion rebinds the overload, so a null left would stop
+                // answering null. Only a non-null-proven read with a printed-string right operand
+                // (both overloads agree there) may keep the type.
+                if (safeAccessor && (csharpType === 'string?') && this.csharpIsLeftPlusOperand(n) && !this.csharpGuardedStringConcatRead(n)) {
                     return true;
                 }
             }
@@ -3925,6 +3944,68 @@ export class CSharpTranspiler extends BaseTranspiler {
         }
         const op = parent.operatorToken.kind;
         return (op === SyntaxKind.PlusToken) || (op === SyntaxKind.PlusEqualsToken);
+    }
+
+    // a `string?` local read as the LEFT of `+` where a non-null proof dominates the read and the
+    // right operand prints a string: add(string, object) and add(object, object) agree there, so
+    // the declaration may keep the nullable type and the chain prints natively.
+    csharpGuardedStringConcatRead(node): boolean {
+        let value = node;
+        while (value.parent && (value.parent.kind === SyntaxKind.ParenthesizedExpression)) {
+            value = value.parent;
+        }
+        const parent = value.parent;
+        if (parent?.kind !== SyntaxKind.BinaryExpression || (parent.left !== value) || (parent.operatorToken?.kind !== SyntaxKind.PlusToken)) {
+            return false;
+        }
+        if (!this.csharpConcatOperandPrintsString(parent.right, 0, true)) {
+            return false;
+        }
+        return this.csharpNullGuardAdmitsRead(node, node);
+    }
+
+    // a later write keeps the named type when it stores a value of that shape: the non-null twin of
+    // a nullable scalar (a `Nullable<T>` boxes as `T`), the null literal, or a copy of a local the
+    // printer already declares that type.
+    csharpWriteKeepsLocalType(right, csharpType: string): boolean {
+        // the family is the nullable scalars: every other declaration keeps the printer's
+        // initializer-only rule, so list/dict locals and their null-safety spelling do not move
+        if (CSHARP_NULLABLE_WIDENING[csharpType] === undefined) {
+            return this.csharpTypeOfInitializer(right) === csharpType;
+        }
+        if ((right?.kind === SyntaxKind.NullKeyword) || ((right?.kind === SyntaxKind.Identifier) && (right.text === 'undefined'))) {
+            // a null write belongs to a nullable spelling only: a non-nullable `string` declaration
+            // has its own promotion retry (`string?`), and answering true here would print the local
+            // as a non-null string and weaken every later `+` operand proof.
+            return csharpType.endsWith('?');
+        }
+        let valueType = this.csharpTypeOfInitializer(right) ?? this.csharpSourceLocalType(right);
+        if ((valueType === undefined) && (right?.kind === SyntaxKind.NumericLiteral)) {
+            // a C# literal is `int` (or `double` when fractional): both convert implicitly into a
+            // nullable scalar and box as that scalar, never as the int box `object x = 5` carries
+            valueType = (right.text.indexOf('.') >= 0) ? 'double' : 'int';
+        }
+        if (valueType === undefined) {
+            return false;
+        }
+        if (valueType === csharpType) {
+            return true;
+        }
+        const widened = CSHARP_NULLABLE_WIDENING[csharpType];
+        return (widened !== undefined) && (widened.indexOf(valueType) >= 0);
+    }
+
+    // the printed declaration type of the local a bare identifier reads, when the printer names it
+    csharpSourceLocalType(node): string | undefined {
+        if (node?.kind !== SyntaxKind.Identifier) {
+            return undefined;
+        }
+        const declaration = this.csharpReceiverBinding(node);
+        if (declaration?.kind !== SyntaxKind.VariableDeclaration || (declaration.parent as any)?.declarations?.length !== 1) {
+            return undefined;
+        }
+        const type = this.getCSharpLocalType(declaration);
+        return ((type === undefined) || (type === this.VAR_TOKEN)) ? undefined : type;
     }
     // the binding a bare identifier resolves to (a local, a parameter, ...) or undefined
     // for every other receiver shape (`this.x`, a call result, a destructured target)
@@ -5069,7 +5150,7 @@ export class CSharpTranspiler extends BaseTranspiler {
         // a NON-NULL string left takes any right operand: the call would bind add(string, *), which
         // is C# concatenation for every input, boxed or not (`string + object` calls ToString on a
         // non-string right exactly like add(string, object) does, and a null right reads as the left)
-        if (this.csharpNonNullStringOperandType(left) === 'string') {
+        if (this.csharpNonNullStringOperandType(left, undefined, true) === 'string') {
             return `(${leftText} + ${rightText})`;
         }
         if (!this.csharpConcatOperandPrintsString(left) || !this.csharpConcatOperandPrintsString(right)) {
@@ -5704,6 +5785,16 @@ export class CSharpTranspiler extends BaseTranspiler {
                     return true;
                 }
                 if (this.csharpContains(parent.elseStatement, current) && this.csharpTestIsNonNullCheck(parent.expression, symbol, false)) {
+                    return true;
+                }
+            }
+            if (parent.kind === SyntaxKind.ConditionalExpression) {
+                // `x === undefined ? undefined : x + y` / `x !== undefined ? x + y : undefined`:
+                // the arm that concatenates runs only where the test proved x non-null
+                if ((parent.whenTrue === current) && this.csharpTestIsNonNullCheck(parent.condition, symbol, true)) {
+                    return true;
+                }
+                if ((parent.whenFalse === current) && this.csharpTestIsNonNullCheck(parent.condition, symbol, false)) {
                     return true;
                 }
             }

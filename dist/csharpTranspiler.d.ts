@@ -185,8 +185,8 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpCalleeResolves(node: any): boolean;
     csharpTypeOfInitializer(initializer: any): string | undefined;
     csharpPlusChainNonNullStringType(node: any, self?: any): string | undefined;
-    csharpNonNullStringOperandType(node: any, self?: any): string | undefined;
-    csharpNonNullStringLeafType(value: any, self?: any): string | undefined;
+    csharpNonNullStringOperandType(node: any, self?: any, guardedConcat?: boolean): string | undefined;
+    csharpNonNullStringLeafType(value: any, self?: any, guardedConcat?: boolean): string | undefined;
     csharpBoolCallTyped(node: any): boolean;
     csharpEnclosingFunction(node: any): any;
     csharpTypeNameIsShadowed(scope: any, csharpType: string): boolean;
@@ -199,6 +199,9 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpIsClassThrowArgument(node: any): boolean;
     csharpIsDeleteKey(node: any): boolean;
     csharpIsLeftPlusOperand(node: any): boolean;
+    csharpGuardedStringConcatRead(node: any): boolean;
+    csharpWriteKeepsLocalType(right: any, csharpType: string): boolean;
+    csharpSourceLocalType(node: any): string | undefined;
     csharpReceiverBinding(receiver: any): import("typescript/unstable/ast").DeclarationBase;
     csharpStringReceiverType(receiver: any): string | undefined;
     csharpStringMethodReceiver(node: any, name: any): any;
