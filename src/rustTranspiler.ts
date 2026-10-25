@@ -1075,6 +1075,85 @@ export class RustTranspiler extends BaseTranspiler {
         return `crate::runtime::stringify_param(&${key})`;
     }
 
+    // rp05: `x[k1][k2] = v` on a `Dict` parameter — the `get_value_mut` hops go
+    // native (`get_mut`) and the outer write goes native (`insert`). A missing
+    // or non-dict intermediate makes the helper insert a Null placeholder and
+    // then no-op the write, which is the native no-op; JS throws in that state
+    // (`x[k1]` undefined), so no reachable behaviour changes. Fields stay on
+    // their own passes: a `&self` method would clone the field and lose the write.
+    rp05NestedDictWrite(baseExpr, keyNodes: any[], keyTexts: string[], valueText: string, fallbackText: string): string | undefined {
+        const receiver = this.rustNativeInsertReceiver(baseExpr);
+        if (receiver === undefined || receiver.isField || !this.rustReceiverStaysDict(baseExpr, receiver)) {
+            return undefined;
+        }
+        if (this.rustLocalInitReadsTaggedContainer(baseExpr) || keyTexts.length < 2) {
+            return undefined;
+        }
+        // A `Dict`-annotated parameter only. A local is the wave-2 text pass's
+        // shape (`build/hx10w2-R02.ts` proves locals by construction), so taking
+        // it here would only re-spell its output; a param is exactly the receiver
+        // that pass cannot read, and the checker's annotation proof covers it.
+        const declaration: any = this.rustSingleLocalDeclaration(baseExpr);
+        if (declaration === undefined || !isParameterDeclaration(declaration)) {
+            return undefined;
+        }
+        const name = receiver.text;
+        const last = keyTexts.length - 1;
+        const hops: string[] = [];
+        for (let i = 0; i < last; i++) {
+            const hop = this.rp05EntryKeyArg(receiver, keyNodes[i], keyTexts[i]);
+            if (hop === undefined) {
+                return undefined;
+            }
+            hops.push(hop);
+        }
+        const insertKey = this.rustNativeInsertKeyArg(receiver, keyNodes[last], keyTexts[last]);
+        if (insertKey === undefined) {
+            return undefined;
+        }
+        const keyArg = insertKey.endsWith('.into()') ? `${insertKey.slice(0, -'.into()'.length)}.to_string()` : insertKey;
+        const value = this.rustPrintedBoolArg(valueText) ? `Value::Bool(${valueText})` : valueText;
+        const readsReceiver = new RegExp(`\\b${name}\\b`).test(value);
+        // Same shape the ccxt wave-2 text pass (`build/hx10w2-R02.ts`) emits, so a
+        // site both can prove stays byte-identical; `__rd` letters are the tags
+        // its sibling passes read as a mutation statement.
+        const guard = (val: string) => {
+            let body = `std::sync::Arc::make_mut(__h${last}).insert(${keyArg}, ${val});`;
+            for (let i = last - 1; i >= 0; i--) {
+                body = `if let Some(Value::Dict(__h${i + 1})) =`
+                    + ` std::sync::Arc::make_mut(__h${i}).get_mut(${hops[i]}) { ${body} }`;
+            }
+            return `if let Value::Dict(__h0) = &mut ${name} { ${body} }`;
+        };
+        // A hop costs ~70 chars: keep the helper when it is the difference
+        // between a 400-char line and a longer one (36 = deepest indent + `;`).
+        const fits = (out: string) => !(fallbackText.length + 36 <= 400 && out.length + 36 > 400);
+        if (readsReceiver) {
+            const out = `{ let __rdt = ${value}; ${guard('__rdt')} }`;
+            return fits(out) ? out : undefined;
+        }
+        const trimmed = value.trim();
+        const out = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed) && trimmed !== 'self'
+            && trimmed !== 'true' && trimmed !== 'false' ? guard(`${trimmed}.clone()`) : guard(value);
+        return fits(out) ? out : undefined;
+    }
+
+    /** The `get_mut` key of an rp05 hop: a borrowed `&str` — the literal itself,
+     *  or the stringification the insert's key uses. */
+    rp05EntryKeyArg(receiver, keyNode, keyText: string): string | undefined {
+        if (isStringLiteral(keyNode)) {
+            const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
+            return keyLiteral === null ? undefined : keyLiteral[1];
+        }
+        const key = keyText.trim();
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || key === 'self' || !this.rustKeyIsProvenString(keyNode)
+            || new RegExp(`\\b${receiver.text}\\b`).test(key)) {
+            return undefined;
+        }
+        return this.rustStringLocalIdentifierIsTyped(keyNode)
+            ? `${key}.as_str()` : `&crate::runtime::stringify_param(&${key})`;
+    }
+
     // Receivers this unit may write natively: any local whose every path builds
     // a plain `Value::Map` (name-independent — rust-13's four names are the
     // batch-A subset of this proof), any parameter the checker proves is a
@@ -1658,9 +1737,12 @@ export class RustTranspiler extends BaseTranspiler {
             const keyStrs = keys.map(k => this.printNode(k, 0));
             for (const key of keyStrs.slice(0, -1)) acc = `get_value_mut(${acc}, &${key})`;
             const rhs = this.printNode(right, 0);
+            const helperWrite = `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${rhs})`;
             const nestedInsert = keyStrs.length === 2
-                ? this.rustNestedBearerInsert(baseExpr, keys[0], keyStrs[0], keys[1], keyStrs[1], rhs)
-                : this.rustNestedBearerBucket(baseExpr, keys[0], keyStrs[0], right);
+                ? (this.rustNestedBearerInsert(baseExpr, keys[0], keyStrs[0], keys[1], keyStrs[1], rhs)
+                    ?? this.rp05NestedDictWrite(baseExpr, keys, keyStrs, rhs, helperWrite))
+                : (this.rp05NestedDictWrite(baseExpr, keys, keyStrs, rhs, helperWrite)
+                    ?? this.rustNestedBearerBucket(baseExpr, keys[0], keyStrs[0], right));
             if (nestedInsert !== undefined) return nestedInsert;
 <<<<<<< src/rustTranspiler.ts
             // hx10w7 R04: `x[k1][k2] = v` on a one-level bearer — the first hop is the
