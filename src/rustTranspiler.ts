@@ -2418,6 +2418,16 @@ export class RustTranspiler extends BaseTranspiler {
             if (!this.rustDictBearerElementUse(parent, String(node.text))) {
                 return undefined;
             }
+            // a chained write (`p[k1][k2] = v`) has a native print only on a local bearer
+            if (isElementAccessExpression(parent.parent) && parent.parent.expression === parent) {
+                let root: any = parent.parent;
+                while (isElementAccessExpression(root.parent) && root.parent.expression === root) root = root.parent;
+                const top: any = root.parent;
+                if (top !== undefined && isBinaryExpression(top) && top.left === root
+                    && rustIsAssignmentOperator(top.operatorToken.kind)) {
+                    return undefined;
+                }
+            }
             const up: any = parent.parent;
             return (up !== undefined && isBinaryExpression(up) && up.left === parent
                 && rustIsAssignmentOperator(up.operatorToken.kind)) ? 'write' : 'read';

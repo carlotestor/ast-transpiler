@@ -28664,6 +28664,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (!this.rustDictBearerElementUse(parent, String(node.text))) {
         return void 0;
       }
+      if (isElementAccessExpression4(parent.parent) && parent.parent.expression === parent) {
+        let root = parent.parent;
+        while (isElementAccessExpression4(root.parent) && root.parent.expression === root)
+          root = root.parent;
+        const top = root.parent;
+        if (top !== void 0 && isBinaryExpression5(top) && top.left === root && rustIsAssignmentOperator(top.operatorToken.kind)) {
+          return void 0;
+        }
+      }
       const up = parent.parent;
       return up !== void 0 && isBinaryExpression5(up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind) ? "write" : "read";
     }

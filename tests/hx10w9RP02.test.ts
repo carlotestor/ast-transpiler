@@ -51,3 +51,11 @@ describe('owned map parameters', () => {
         expect(rust).toContain('let orderParams = orderParams.as_map().unwrap_or(&__orderParams_empty);');
     });
 });
+
+describe('owned map parameters: chained writes', () => {
+    test('a parameter written through a key chain stays boxed', () => {
+        const rust = transpiler.transpileRustByPath('./tests/files/input/hx10w9rp02chain/ts/src/venue.ts').content;
+        expect(rust).toContain('pub fn watchMany(&self, request: Value, ids: Value)');
+        expect(rust).not.toContain('request: &mut indexmap::IndexMap<String, Value>');
+    });
+});
