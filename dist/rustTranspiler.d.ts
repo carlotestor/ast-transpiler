@@ -822,6 +822,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  container of `kind` — the method's own body, no venue override (the
      *  checker resolves the most derived declaration for `this`). */
     rustCallBuildsContainer(call: any, kind: 'map' | 'list', depth?: number): boolean;
+    /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
+    rustThisRootedPlace(node: any): boolean;
     /** Container kind an expression the callee body builds yields, or undefined.
      *  Shapes: a tag-free literal, a local that only ever receives element
      *  writes, a `this.` builder that copies plain operands, a pass-through

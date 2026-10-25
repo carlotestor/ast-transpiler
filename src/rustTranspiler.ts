@@ -5831,6 +5831,7 @@ export class RustTranspiler extends BaseTranspiler {
         const prediction = typeof source === 'string'
             && RustTranspiler.RUST_PREDICTION_VENUE_FILE.test(source.replace(/\\/g, '/'));
         const escapes: any[] = [];
+        let elementUses = 0;
         const safe = this.rustLocalUsesAll(declaration, name, false, (n: any) => {
             if (this.rustIdentifierIsPropertyName(n)) {
                 // `{ x }` shorthand is a value use, not a name; anything else spelled
@@ -5862,7 +5863,11 @@ export class RustTranspiler extends BaseTranspiler {
                 escapes.push(n);
                 return true;
             }
-            if (isElementAccessExpression(parent) && parent.expression === n) return this.rustDictBearerElementUse(parent, name);
+            if (isElementAccessExpression(parent) && parent.expression === n) {
+                if (!this.rustDictBearerElementUse(parent, name)) return false;
+                elementUses++;
+                return true;
+            }
             // hx10w9 RP02: the value of a dict write (`m['k'] = x`) is boxed once.
             if (this.rustDictWriteValue(n)) return true;
             // hx10w9 RP04: `Object.keys/values(x)` prints the map's own iterators.
@@ -5878,11 +5883,9 @@ export class RustTranspiler extends BaseTranspiler {
             return false;
         });
         if (!safe) return false;
-        // hx10w7 R03: a produced map is typed only when every use is native — an element access,
-        // a kind-preserving mutator, or a return (boxed once at the return). A helper-call
-        // argument would re-box it (`Value::Map(x.clone())`): a clone and a longer line for
-        // no helper win, so those locals keep the box.
-        if (produced && escapes.some((n: any) => !isReturnStatement(n.parent))) return false;
+        // hx10w10 RP06: a produced map that also escapes re-boxes as `Value::Map(x.clone())`
+        // at the escape, so it pays off only where the bearer folds a helper call on it.
+        if (produced && escapes.length > 0 && elementUses === 0) return false;
         // hx10w6 R01: a return / `this.` call escape boxes a move at the last use, a clone before it.
         // hx10w6 R12: any other escape is prediction-tier only, and then every escape boxes a clone.
         for (const escape of escapes) {
@@ -5996,10 +5999,25 @@ export class RustTranspiler extends BaseTranspiler {
                 if (this.rustBuiltContainerKind(node.expression, depth + 1) !== kind) ok = false;
                 return;
             }
+            // A store write (`this.orderbooks[sym] = book`, `this.tickers = ..`)
+            // hands the container to the runtime store, which tags it: a later
+            // native write would bypass the store, so such a callee is out.
+            if (isBinaryExpression(node) && rustIsAssignmentOperator(node.operatorToken.kind)
+                && this.rustThisRootedPlace(node.left)) {
+                ok = false;
+                return;
+            }
             node.forEachChild(visit);
         };
         body.forEachChild(visit);
         return ok && returns > 0;
+    }
+
+    /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
+    rustThisRootedPlace(node: any): boolean {
+        if (isPropertyAccessExpression(node)) return node.expression.kind === SyntaxKind.ThisKeyword;
+        if (isElementAccessExpression(node)) return this.rustThisRootedPlace(node.expression);
+        return false;
     }
 
     /** Container kind an expression the callee body builds yields, or undefined.

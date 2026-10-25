@@ -126,12 +126,38 @@ describe('hx10w10 RP06 call-init container locals', () => {
         expect(out).toContain('add_element_to_object(&mut request');
     });
 
-    test('a produced local that escapes into a this-call keeps the box', () => {
+    test('a produced local that escapes boxes once at the escape, write folded', () => {
         const out = rust('    escaped (response: any) {\n'
             + '        const orderbook = this.parseOrderBook (response, "BTC/USDT");\n'
             + "        orderbook['nonce'] = 1;\n"
             + '        return this.use (orderbook);\n'
             + '    }\n');
-        expect(out).toContain('add_element_to_object(&mut orderbook');
+        expect(out).toContain('let mut orderbook: indexmap::IndexMap<String, Value>');
+        expect(out).toContain('orderbook.insert("nonce".into(), Value::Int(1));');
+        expect(out).toContain('self.use(Value::Map(orderbook))');
+        expect(out).not.toContain('add_element_to_object(&mut orderbook');
+    });
+
+    test('a produced local that only escapes keeps the box (no helper folds)', () => {
+        const out = rust('    onlyEscaped (response: any) {\n'
+            + '        const orderbook = this.parseOrderBook (response, "BTC/USDT");\n'
+            + '        return this.use (orderbook);\n'
+            + '    }\n');
+        expect(out).toContain('let mut orderbook: Value = self.parseOrderBook(response, Value::Str("BTC/USDT".into()));');
+    });
+
+    test('a callee that stores the container it returns keeps the box', () => {
+        const out = rust('    stored (response: any) {\n'
+            + '        const book = this.seed (response);\n'
+            + "        book['nonce'] = 1;\n"
+            + '        return book;\n'
+            + '    }\n'
+            + '\n'
+            + '    seed (response: any): Dict {\n'
+            + '        const book: Dict = {};\n'
+            + '        this.orderbooks["BTC/USDT"] = book;\n'
+            + '        return book;\n'
+            + '    }\n');
+        expect(out).toContain('add_element_to_object(&mut book');
     });
 });

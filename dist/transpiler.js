@@ -31745,6 +31745,7 @@ ${iden}}`;
       return false;
     const prediction = typeof source === "string" && _RustTranspiler.RUST_PREDICTION_VENUE_FILE.test(source.replace(/\\/g, "/"));
     const escapes = [];
+    let elementUses = 0;
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n)) {
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
@@ -31772,8 +31773,12 @@ ${iden}}`;
         escapes.push(n);
         return true;
       }
-      if (isElementAccessExpression4(parent) && parent.expression === n)
-        return this.rustDictBearerElementUse(parent, name);
+      if (isElementAccessExpression4(parent) && parent.expression === n) {
+        if (!this.rustDictBearerElementUse(parent, name))
+          return false;
+        elementUses++;
+        return true;
+      }
       if (this.rustDictWriteValue(n))
         return true;
       if (isCallExpression6(parent) && this.r04BearerEnumArg(parent) === n)
@@ -31789,7 +31794,7 @@ ${iden}}`;
     });
     if (!safe)
       return false;
-    if (produced && escapes.some((n) => !isReturnStatement4(n.parent)))
+    if (produced && escapes.length > 0 && elementUses === 0)
       return false;
     for (const escape of escapes) {
       if (this.r01BoxSiteOk(escape) === true)
@@ -31895,10 +31900,22 @@ ${iden}}`;
           ok = false;
         return;
       }
+      if (isBinaryExpression5(node) && rustIsAssignmentOperator(node.operatorToken.kind) && this.rustThisRootedPlace(node.left)) {
+        ok = false;
+        return;
+      }
       node.forEachChild(visit);
     };
     body.forEachChild(visit);
     return ok && returns > 0;
+  }
+  /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
+  rustThisRootedPlace(node) {
+    if (isPropertyAccessExpression3(node))
+      return node.expression.kind === SyntaxKind7.ThisKeyword;
+    if (isElementAccessExpression4(node))
+      return this.rustThisRootedPlace(node.expression);
+    return false;
   }
   /** Container kind an expression the callee body builds yields, or undefined.
    *  Shapes: a tag-free literal, a local that only ever receives element
