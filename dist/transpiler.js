@@ -2736,6 +2736,11 @@ var CSHARP_THIS_RETURN_TYPES = {
   "safeFloat": "double?",
   "safeFloat2": "double?",
   "safeFloatN": "double?",
+  // BaseMethods.cs declares these `double?` too (safeNumber 6174, safeNumber2 3857,
+  // safeNumberOmitZero 1542); they were the only double-returning accessors left out
+  "safeNumber": "double?",
+  "safeNumber2": "double?",
+  "safeNumberOmitZero": "double?",
   "safeNumberN": "double?",
   "safeBool": "bool?",
   "safeBool2": "bool?",
@@ -2778,6 +2783,12 @@ var CSHARP_TYPE_NAMES = ["string", "bool", "int", "long", "Int64", "double", "ob
 var GUARD_KEY_SEPARATOR = "\0";
 var CSHARP_NUMERIC_KINDS = ["int", "Int64", "double"];
 var CSHARP_NUMERIC_VALUE_KINDS = ["int", "Int64", "Int64?", "double", "double?"];
+var CSHARP_NULLABLE_WIDENING = {
+  "string?": ["string"],
+  "bool?": ["bool"],
+  "Int64?": ["Int64", "int"],
+  "double?": ["double", "Int64", "int"]
+};
 var CSHARP_INTEGER_KINDS = ["int", "Int64"];
 var CSHARP_NATIVE_COMPARISON_TOKENS = {
   [SyntaxKind4.LessThanToken]: "<",
@@ -5716,7 +5727,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // which throws instead of answering null), a local the printer itself declares `string`, a
   // conditional whose every arm is one, or such a chain's own left spine. Undefined everywhere
   // else — a nullable or boxed operand keeps the helper.
-  csharpNonNullStringOperandType(node, self = void 0) {
+  csharpNonNullStringOperandType(node, self = void 0, guardedConcat = false) {
     let value = node;
     while (value?.kind === SyntaxKind4.ParenthesizedExpression) {
       value = value.expression;
@@ -5727,12 +5738,12 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     this.csharpStringChainDepth = depth + 1;
     try {
-      return this.csharpNonNullStringLeafType(value, self);
+      return this.csharpNonNullStringLeafType(value, self, guardedConcat);
     } finally {
       this.csharpStringChainDepth = depth;
     }
   }
-  csharpNonNullStringLeafType(value, self = void 0) {
+  csharpNonNullStringLeafType(value, self = void 0, guardedConcat = false) {
     switch (value.kind) {
       case SyntaxKind4.StringLiteral:
       case SyntaxKind4.NoSubstitutionTemplateLiteral:
@@ -5754,6 +5765,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
           return void 0;
         }
         const type = this.getCSharpLocalType(declaration);
+        if (guardedConcat && type === "string?" && this.csharpGuardedStringConcatRead(value)) {
+          return "string";
+        }
         return type === "string" ? "string" : void 0;
       }
     }
@@ -5870,7 +5884,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
           const op = parent.operatorToken.kind;
           if (op === SyntaxKind4.EqualsToken) {
             const chainIsString = csharpType === "string" && this.csharpPlusChainNonNullStringType(parent.right, declaration) === "string";
-            if (!chainIsString && this.csharpTypeOfInitializer(parent.right) !== csharpType) {
+            if (!chainIsString && !this.csharpWriteKeepsLocalType(parent.right, csharpType)) {
               return true;
             }
           } else if (op >= SyntaxKind4.FirstCompoundAssignment && op <= SyntaxKind4.LastCompoundAssignment) {
@@ -5879,7 +5893,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
             }
           }
         }
-        if (safeAccessor && csharpType === "string?" && this.csharpIsLeftPlusOperand(n)) {
+        if (safeAccessor && csharpType === "string?" && this.csharpIsLeftPlusOperand(n) && !this.csharpGuardedStringConcatRead(n)) {
           return true;
         }
       }
@@ -5972,6 +5986,58 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     const op = parent.operatorToken.kind;
     return op === SyntaxKind4.PlusToken || op === SyntaxKind4.PlusEqualsToken;
+  }
+  // a `string?` local read as the LEFT of `+` where a non-null proof dominates the read and the
+  // right operand prints a string: add(string, object) and add(object, object) agree there, so
+  // the declaration may keep the nullable type and the chain prints natively.
+  csharpGuardedStringConcatRead(node) {
+    let value = node;
+    while (value.parent && value.parent.kind === SyntaxKind4.ParenthesizedExpression) {
+      value = value.parent;
+    }
+    const parent = value.parent;
+    if (parent?.kind !== SyntaxKind4.BinaryExpression || parent.left !== value || parent.operatorToken?.kind !== SyntaxKind4.PlusToken) {
+      return false;
+    }
+    if (!this.csharpConcatOperandPrintsString(parent.right, 0, true)) {
+      return false;
+    }
+    return this.csharpNullGuardAdmitsRead(node, node);
+  }
+  // a later write keeps the named type when it stores a value of that shape: the non-null twin of
+  // a nullable scalar (a `Nullable<T>` boxes as `T`), the null literal, or a copy of a local the
+  // printer already declares that type.
+  csharpWriteKeepsLocalType(right, csharpType) {
+    if (CSHARP_NULLABLE_WIDENING[csharpType] === void 0) {
+      return this.csharpTypeOfInitializer(right) === csharpType;
+    }
+    if (right?.kind === SyntaxKind4.NullKeyword || right?.kind === SyntaxKind4.Identifier && right.text === "undefined") {
+      return csharpType.endsWith("?");
+    }
+    let valueType = this.csharpTypeOfInitializer(right) ?? this.csharpSourceLocalType(right);
+    if (valueType === void 0 && right?.kind === SyntaxKind4.NumericLiteral) {
+      valueType = right.text.indexOf(".") >= 0 ? "double" : "int";
+    }
+    if (valueType === void 0) {
+      return false;
+    }
+    if (valueType === csharpType) {
+      return true;
+    }
+    const widened = CSHARP_NULLABLE_WIDENING[csharpType];
+    return widened !== void 0 && widened.indexOf(valueType) >= 0;
+  }
+  // the printed declaration type of the local a bare identifier reads, when the printer names it
+  csharpSourceLocalType(node) {
+    if (node?.kind !== SyntaxKind4.Identifier) {
+      return void 0;
+    }
+    const declaration = this.csharpReceiverBinding(node);
+    if (declaration?.kind !== SyntaxKind4.VariableDeclaration || declaration.parent?.declarations?.length !== 1) {
+      return void 0;
+    }
+    const type = this.getCSharpLocalType(declaration);
+    return type === void 0 || type === this.VAR_TOKEN ? void 0 : type;
   }
   // the binding a bare identifier resolves to (a local, a parameter, ...) or undefined
   // for every other receiver shape (`this.x`, a call result, a destructured target)
@@ -6959,7 +7025,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // add(string, string) / add(string, object) — both compute C# concatenation, nulls included.
   // Absolute operands (a literal, an `as string` cast, a proven call, a proven concat) keep the helper.
   csharpPrinterStringConcat(left, right, leftText, rightText) {
-    if (this.csharpNonNullStringOperandType(left) === "string") {
+    if (this.csharpNonNullStringOperandType(left, void 0, true) === "string") {
       return `(${leftText} + ${rightText})`;
     }
     if (!this.csharpConcatOperandPrintsString(left) || !this.csharpConcatOperandPrintsString(right)) {
@@ -7508,6 +7574,14 @@ var CSharpTranspiler = class extends BaseTranspiler {
           return true;
         }
         if (this.csharpContains(parent.elseStatement, current) && this.csharpTestIsNonNullCheck(parent.expression, symbol, false)) {
+          return true;
+        }
+      }
+      if (parent.kind === SyntaxKind4.ConditionalExpression) {
+        if (parent.whenTrue === current && this.csharpTestIsNonNullCheck(parent.condition, symbol, true)) {
+          return true;
+        }
+        if (parent.whenFalse === current && this.csharpTestIsNonNullCheck(parent.condition, symbol, false)) {
           return true;
         }
       }
