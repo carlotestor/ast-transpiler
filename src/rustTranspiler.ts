@@ -3970,11 +3970,14 @@ export class RustTranspiler extends BaseTranspiler {
             if (param.type === undefined) continue;
             const type = this.getCheckedTypeOf(param.type);
             if (type === undefined) continue;
-            const kind: RustParamShadowKind | undefined = this.isProvenMapType(type) ? RUST_PARAM_SHADOWS.MAP :
+            // A ws order-book parameter is a `Value::Dict` in the port, but its TS class
+            // carries methods, so only literal-key reads are proven for it.
+            const wsDict = !this.isProvenMapType(type) && this.rustWsOrderBookClassType(type);
+            const kind: RustParamShadowKind | undefined = (this.isProvenMapType(type) || wsDict) ? RUST_PARAM_SHADOWS.MAP :
                 this.isProvenShadowListType(type) ? RUST_PARAM_SHADOWS.LIST : undefined;
             if (kind === undefined) continue;
             if (this.rustParameterIsClientHandle(param)) continue;
-            if (this.rustParamShadowUseCensus(fn, param, kind) === undefined) continue;
+            if (this.rustParamShadowUseCensus(fn, param, kind, wsDict) === undefined) continue;
             table.set(name, { kind, name, declaration: param });
         }
         return table;
@@ -3999,7 +4002,7 @@ export class RustTranspiler extends BaseTranspiler {
      *  one must exist; anything else (a write, a `Value` pass-through, a Null
      *  comparison, a marker key) answers undefined and the parameter keeps its
      *  box. */
-    private rustParamShadowUseCensus(fn: Node, param: ParameterDeclaration, kind: RustParamShadowKind): { reads: number } | undefined {
+    private rustParamShadowUseCensus(fn: Node, param: ParameterDeclaration, kind: RustParamShadowKind, literalKeys = false): { reads: number } | undefined {
         const name = String((param.name as Identifier).text);
         const paramSymbol = this.rustSymbolOf(param.name as Identifier);
         if (paramSymbol === undefined) return undefined;
@@ -4008,7 +4011,7 @@ export class RustTranspiler extends BaseTranspiler {
         const visit = (node: Node) => {
             if (!ok) return;
             if (isIdentifier(node) && node.text === name && node !== param.name) {
-                if (this.rustSymbolOf(node) !== paramSymbol || !this.rustParamUseIsRead(node, kind)) {
+                if (this.rustSymbolOf(node) !== paramSymbol || !this.rustParamUseIsRead(node, kind, literalKeys)) {
                     ok = false;
                     return;
                 }
@@ -4022,7 +4025,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** One reference of a shadow candidate: true only for a read the shadow can
      *  print exactly (same proofs the emitted forms re-check). */
-    private rustParamUseIsRead(id: Identifier, kind: RustParamShadowKind): boolean {
+    private rustParamUseIsRead(id: Identifier, kind: RustParamShadowKind, literalKeys = false): boolean {
         const parent: any = id.parent;
         if (parent === undefined) return false;
         // `x[k]` — element read. Writes (`x[k] = v`, `x[k].push(..)`) and the
@@ -4031,6 +4034,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.isNativeWriteTargetBase(id)) return false;
             if (!this.isNativeAccessPositionSafe(id)) return false;
             if (this.isWriteBackBindRead(parent)) return false;
+            if (literalKeys) return this.rustShadowKeyIsLiteral(parent.argumentExpression);
             return this.rustShadowKeyIsReadable(parent.argumentExpression, kind);
         }
         // `x.length` — array length read.
@@ -4040,6 +4044,7 @@ export class RustTranspiler extends BaseTranspiler {
         // `'k' in x` / `k in x`.
         if (isBinaryExpression(parent) && parent.operatorToken.kind === SyntaxKind.InKeyword && parent.right === id) {
             if (kind !== RUST_PARAM_SHADOWS.MAP) return false;
+            if (literalKeys) return this.rustShadowKeyIsLiteral(parent.left);
             return this.rustShadowKeyIsReadable(parent.left, RUST_PARAM_SHADOWS.MAP);
         }
         // `this.safe<Type>(x, 'k'[, default])` — the read families the shadow
@@ -4461,6 +4466,27 @@ export class RustTranspiler extends BaseTranspiler {
             return false;
         }
         return !this.rustLocalIsReassigned(declaration, name);
+    }
+
+    /** The ws `OrderBook` class (`ts/src/base/ws/OrderBook.ts`): the rust port never
+     *  builds a struct for it — `order_book()` returns a `Value::Dict` — so its
+     *  element reads are plain map reads on a proven map. */
+    rustWsOrderBookClassType(type: Type | undefined): boolean {
+        if (type === undefined) return false;
+        if (type.flags & (TypeFlags.Union | TypeFlags.Intersection)) {
+            return (typeParts(type) ?? []).some((member: Type) => this.rustWsOrderBookClassType(member));
+        }
+        if (!(type.flags & TypeFlags.Object)) return false;
+        const symbol: any = this.typeSymbolOf(type);
+        if (symbol === undefined || symbol.name !== 'OrderBook' || (symbol.flags & SymbolFlags.Class) === 0) return false;
+        const members = (type.getProperties?.() ?? []).map((p: any) => String(p.name));
+        return members.includes('bids') && members.includes('asks');
+    }
+
+    /** Types the port stores as a plain `Value::Dict`: a checker-proven map, or the
+     *  ws order book class. */
+    rustDictBearerType(type: Type | undefined): boolean {
+        return this.isProvenMapType(type as Type) || this.rustWsOrderBookClassType(type);
     }
 
     /** A parameter declared as the ws `Client` class (or a union with it). The
@@ -6153,6 +6179,12 @@ export class RustTranspiler extends BaseTranspiler {
             return this.rustContainerProducingKind((node as any).expression, seen);
         }
         if (isConditionalExpression(node)) return undefined;
+        if (isElementAccessExpression(node)) {
+            // `this.orderbooks[symbol]`: the container's declared element type is what
+            // the port stores there.
+            const elementType = this.rustStringIndexedElementType((node as any).expression);
+            return elementType !== undefined && this.rustDictBearerType(elementType) ? 'map' : undefined;
+        }
         if (isIdentifier(node)) {
             const declaration: any = this.rustDeclarationOfIdentifier(node);
             if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.name === node) return undefined;
@@ -6182,7 +6214,22 @@ export class RustTranspiler extends BaseTranspiler {
         }
         if (method === 'safeDict' || method === 'safeMarket' || method === 'safeMarketStructure'
             || method === 'market' || method === 'currency' || method === 'safeCurrency') return 'map';
+        // `safeValue(container, key)` without a default: the element or `undefined`.
+        if (method === 'safeValue' || method === 'safeValue2') {
+            const args: any[] = (node as any).arguments ?? [];
+            if (args.length !== 2) return undefined;
+            const elementType = this.rustStringIndexedElementType(args[0]);
+            return elementType !== undefined && this.rustDictBearerType(elementType) ? 'map' : undefined;
+        }
         return undefined;
+    }
+
+    /** Declared element type of a container indexed by a string key. */
+    rustStringIndexedElementType(node: Node | undefined): Type | undefined {
+        if (node === undefined) return undefined;
+        const containerType = this.getCheckedTypeOf(node);
+        if (containerType === undefined) return undefined;
+        return this.getChecker().getIndexTypeOfType(containerType, IndexKind.String) ?? undefined;
     }
 
     // hx10 R04 — two-level dict bearers.

@@ -2480,8 +2480,12 @@ describe('rust declared-Dict locals', () => {
             "    }\n" +
             "}";
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain(NATIVE('market', 'id'));
+        // hx10w9 RP03: the element local is a bare IndexMap, so the read is a map
+        // lookup (`market.as_map()` box would only add the `|__m|` closure).
+        expect(output).toContain('market.get("id").cloned().unwrap_or(Value::Null)');
+        expect(output).toContain('let mut market: indexmap::IndexMap<String, Value> = self.markets');
         expect(output).not.toContain('get_value_k(&market');
+        expect(output).not.toContain(NATIVE('market', 'id'));
     });
 
     // D2: any later write may replace the dict, so the proof is dropped.
