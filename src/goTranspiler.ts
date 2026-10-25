@@ -2378,7 +2378,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
     // reject the refinement when something downstream needs the local to stay `any`:
     // `x.push(v)` prints `AppendToArray(&x, v)` (a *T is not a *any) and a later
     // assignment of a value with another concrete type would stop compiling
-    goLocalIsSafeToType(scope, declaration, varName: string, goType: string): boolean {
+    goLocalIsSafeToType(scope, declaration, varName: string, goType: string, stringWriteProven = false): boolean {
         if (scope === undefined) {
             return false;
         }
@@ -2422,12 +2422,17 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
                         if ((goType === 'string') && this.goSelfConcatWriteIsString(parent.right, varName)) {
                             return false;
                         }
+                        // the nil-init string scan already proved every write prints a Go string
+                        if (stringWriteProven && (goType === 'string')) {
+                            return false;
+                        }
                         if ((this.goTypeOfInitializer(parent.right, this.printNode(parent.right, 0)) !== goType)
                             && !((declaration.kind === SyntaxKind.VariableDeclaration) && this.goPointerWriteConversion(parent.right, goType) !== undefined)) {
                             return true;
                         }
                     } else if ((op === SyntaxKind.PlusEqualsToken) && (goType === 'string')
-                        && (this.goOperandStaticType(parent.right, this.printNode(parent.right, 0)) === 'string')) {
+                        && ((this.goOperandStaticType(parent.right, this.printNode(parent.right, 0)) === 'string')
+                            || stringWriteProven)) {
                         return false;
                     } else if ((op >= SyntaxKind.FirstCompoundAssignment) && (op <= SyntaxKind.LastCompoundAssignment)) {
                         return true;
@@ -3500,7 +3505,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         this.goNilInitLocalTypeInProgress.add(declaration);
         let result;
         try {
-            result = this.goNilInitLocalTypeScan(declaration);
+            result = this.goNilInitLocalTypeScan(declaration) ?? this.goNilInitStringLocalType(declaration);
         } finally {
             this.goNilInitLocalTypeInProgress.delete(declaration);
         }
@@ -3581,6 +3586,228 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return undefined;
         }
         return candidate;
+    }
+
+    // GP16: a nil-initialised local whose every write is a proven Go string is a string
+    // accumulator (`let x: Str = undefined` + `x += …`). It prints `var x string`, so the
+    // Add chain folds. A read that would see the nil (a nil test, a return, a call whose
+    // Go parameter is not `any`) keeps the box, so no nil guard is dropped.
+    goNilInitStringLocalType(declaration): string | undefined {
+        const name = declaration.name?.text;
+        if (name === undefined) {
+            return undefined;
+        }
+        if (this.goNilInitStringScanCache.has(declaration)) {
+            return this.goNilInitStringScanCache.get(declaration);
+        }
+        if (this.goNilInitStringScanInProgress.has(declaration)) {
+            return undefined; // the scan prints the same local through goTypeOfInitializer
+        }
+        this.goNilInitStringScanInProgress.add(declaration);
+        let result;
+        try {
+            result = this.goNilInitStringLocalTypeScan(declaration);
+        } finally {
+            this.goNilInitStringScanInProgress.delete(declaration);
+        }
+        this.goNilInitStringScanCache.set(declaration, result);
+        return result;
+    }
+    goNilInitStringScanCache = new WeakMap<object, string | undefined>();
+    goNilInitStringScanInProgress = new Set<any>();
+
+    goNilInitStringLocalTypeScan(declaration): string | undefined {
+        if (!this.goNilInitInitializer(declaration.initializer)) {
+            return undefined;
+        }
+        const name = declaration.name.text;
+        const scope = this.goEnclosingFunction(declaration);
+        if (scope === undefined) {
+            return undefined;
+        }
+        const writes: any[] = [];
+        const reads: any[] = [];
+        let bail = false;
+        const visit = (n) => {
+            if (bail) {
+                return;
+            }
+            if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name) || (n === declaration.name)) {
+                n.forEachChild(visit);
+                return;
+            }
+            const parent = n.parent;
+            if (parent?.kind === SyntaxKind.VariableDeclaration && parent.name === n) {
+                return; // a sibling block re-declaring the name gets its own type
+            }
+            if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n)) {
+                const operator = parent.operatorToken?.kind;
+                if ((operator === SyntaxKind.EqualsToken) || (operator === SyntaxKind.PlusEqualsToken)) {
+                    writes.push(parent);
+                    if (operator === SyntaxKind.EqualsToken) {
+                        visit(parent.right);
+                    }
+                    return;
+                }
+                if (this.goNilInitReadIsStringSafe(n)) {
+                    reads.push(n);
+                    return;
+                }
+                bail = true;
+                return;
+            }
+            if (this.goNilInitReadIsStringSafe(n)) {
+                reads.push(n);
+                return;
+            }
+            bail = true;
+        };
+        scope.forEachChild(visit);
+        // one write is a value the nil-declared join passes already carry; only a local the
+        // body writes again and again is the accumulator this rule is about
+        if (bail || (writes.length < 2)) {
+            return undefined;
+        }
+        const printedWrites: string[] = [];
+        for (const write of writes) {
+            const right = write.right;
+            const printed = this.printNode(right, 0).trim();
+            // a write the printer only reaches through a helper holds a box, not a Go string
+            if ((this.goNilInitWrittenHelperCall(printed)) || (right === undefined)) {
+                return undefined;
+            }
+            printedWrites.push(printed);
+            const writeType = this.goTypeOfInitializer(right, printed);
+            // a self-concat write reads the local, which the in-progress guard prints as `any`
+            if ((writeType !== 'string') && !this.goSelfConcatIsString(right, name)) {
+                return undefined;
+            }
+        }
+        // every write a plain literal is the nil-declared literal join the value-join pass types
+        if (printedWrites.every((text) => /^"(?:[^"\\]|\\.)*"$/.test(text))) {
+            return undefined;
+        }
+        for (const read of reads) {
+            // a read the box could still serve with nil is fine only when nil and the empty
+            // string are the same value: the accumulator's own concat operand
+            if (this.goNilInitReadIsConcatOperand(read)) {
+                continue;
+            }
+            if (!this.goNilInitWriteDominates(writes, read)) {
+                return undefined;
+            }
+        }
+        if (this.goTypeNameIsShadowed(scope, 'string') || !this.goLocalIsSafeToType(scope, declaration, name, 'string', true)) {
+            return undefined;
+        }
+        return 'string';
+    }
+
+    // the printer's own helper emissions that box a value instead of producing a Go string
+    goNilInitWrittenHelperCall(printed: string): boolean {
+        const text = this.goUnwrapPrintedParens(printed ?? '');
+        return /^(?:ccxt\.)?(?:Add|SafeStringPtr|DerefScalar|Ternary)\(/.test(text);
+    }
+
+    // the read is one side of a printed `+` chain: at worst the accumulator starts empty
+    // instead of nil, which no guard tested
+    goNilInitReadIsConcatOperand(node): boolean {
+        let current = node;
+        let parent = current.parent;
+        while (parent?.kind === SyntaxKind.ParenthesizedExpression) {
+            current = parent;
+            parent = parent.parent;
+        }
+        return (parent?.kind === SyntaxKind.BinaryExpression) && (parent.operatorToken?.kind === SyntaxKind.PlusToken);
+    }
+
+    goNilInitEnclosingStatement(node): any {
+        let current = node;
+        while (current?.parent !== undefined) {
+            const parent = current.parent;
+            if ((parent.kind === SyntaxKind.Block) || (parent.kind === SyntaxKind.SourceFile)
+                || (this.goEnclosingFunction(current) === parent)) {
+                return current;
+            }
+            current = parent;
+        }
+        return undefined;
+    }
+
+    // some write is a direct statement of a block that also holds the read, earlier in it:
+    // the write runs on every path that reaches the read
+    goNilInitWriteDominates(writes: any[], read): boolean {
+        const statements = writes.map((write) => this.goNilInitEnclosingStatement(write));
+        let statement = this.goNilInitEnclosingStatement(read);
+        while (statement !== undefined) {
+            const block = statement.parent;
+            if (block === undefined) {
+                return false;
+            }
+            for (const writeStatement of statements) {
+                if ((writeStatement?.parent === block) && (writeStatement.end <= statement.pos)) {
+                    return true;
+                }
+            }
+            statement = this.goNilInitEnclosingStatement(block);
+        }
+        return false;
+    }
+
+    // a read a Go `string` answers as the box did, so the retype needs no other change
+    goNilInitReadIsStringSafe(node): boolean {
+        let current = node;
+        let parent = current.parent;
+        while (parent?.kind === SyntaxKind.ParenthesizedExpression) {
+            current = parent;
+            parent = parent.parent;
+        }
+        if (parent === undefined) {
+            return false;
+        }
+        switch (parent.kind) {
+        case SyntaxKind.BinaryExpression: {
+            const operator = parent.operatorToken?.kind;
+            if (operator === SyntaxKind.EqualsToken) {
+                // `request['type'] = x` stores a string in an `any` slot
+                return (parent.right === current) && (parent.left?.kind === SyntaxKind.ElementAccessExpression);
+            }
+            if (operator === SyntaxKind.PlusToken) {
+                return true;
+            }
+            if ((operator === SyntaxKind.EqualsEqualsToken) || (operator === SyntaxKind.ExclamationEqualsToken)
+                || (operator === SyntaxKind.EqualsEqualsEqualsToken) || (operator === SyntaxKind.ExclamationEqualsEqualsToken)) {
+                return this.goNilInitComparedToNonNil(parent, current);
+            }
+            return false;
+        }
+        // `{ 'min': x }` / `{ x }`: an object literal holds map[string]any values
+        case SyntaxKind.PropertyAssignment:
+            return parent.initializer === current;
+        case SyntaxKind.ShorthandPropertyAssignment:
+            return parent.name === current;
+        // a runtime accessor takes `any`
+        case SyntaxKind.CallExpression:
+            if (!parent.arguments?.some((argument) => argument === current)) {
+                return false;
+            }
+            return GO_NIL_INIT_ANY_ARG_CALLEES.has(this.printNode(parent.expression, 0).trim());
+        case SyntaxKind.PrefixUnaryExpression:
+            return parent.operator === SyntaxKind.ExclamationToken;
+        case SyntaxKind.IfStatement:
+        case SyntaxKind.WhileStatement:
+        case SyntaxKind.DoStatement:
+            return parent.expression === current;
+        case SyntaxKind.TemplateSpan:
+            return true;
+        }
+        return false;
+    }
+
+    // `x == 'a'` prints a native comparison on a string; `x == nil` / `x === undefined` does not
+    goNilInitComparedToNonNil(parent, current): boolean {
+        const other = (parent.left === current) ? parent.right : parent.left;
+        return other?.kind === SyntaxKind.StringLiteral;
     }
 
     // the only reads a `*T` local answers exactly like the box did: comparisons (the pointer arms
@@ -3736,6 +3963,10 @@ ${this.getIden(identation)}PanicOnError(${parsedName})`;
             }
             // a nil-initialised local the body only writes as one nullable scalar holds that pointer
             const nilInitType = this.goNilInitLocalType(declaration);
+            if (nilInitType === 'string') {
+                // a string has no nil: the accumulator's zero value is the empty string
+                return this.getIden(identation) + "var " + this.printNode(declaration.name) + " string";
+            }
             if (nilInitType !== undefined) {
                 return this.getIden(identation) + "var " + this.printNode(declaration.name) + " " + nilInitType + " = " + parsedValue;
             }

@@ -7038,6 +7038,44 @@ describe('unified string parameters (unifiedStringParams)', () => {
     });
 });
 
+describe('go nil-initialised string accumulators (GP16)', () => {
+    const run = (body: string) => new Transpiler({ verbose: false }).transpileGo(
+        'type Str = string | undefined;\nclass T {\n    safeString (o, k, d?): Str { return o[k]; }\n    f (method = \'GET\', o): Str {\n' + body + '    }\n}\n').content;
+    test('a nil-initialised accumulator whose writes are strings prints var x string', () => {
+        const output = run("        let arrStr: Str = undefined;\n        for (let j = 0; j < 2; j++) {\n            if (j > 0) {\n                arrStr += ',' + method;\n            } else {\n                arrStr = method;\n            }\n        }\n        return '[' + arrStr + ']';\n");
+        expect(output).toContain('var arrStr string');
+        expect(output).toMatch(/arrStr \+= ","\s*\+\s*method/);
+        expect(output).toMatch(/return "\[" \+ arrStr \+ "\]"/);
+        expect(output).not.toContain('Add(');
+        expect(output).not.toContain('arrStr any');
+    });
+    test('a nil test on the local keeps the box and the helper', () => {
+        const output = run("        let x: Str = undefined;\n        x = method + 'z';\n        if (x === undefined) { return 'none'; }\n        return x;\n");
+        expect(output).toContain('var x any = nil');
+        expect(output).toContain('if x == nil {');
+    });
+    test('a read before any write keeps the box (the nil is observable)', () => {
+        const output = run("        const c1 = this.safeString (o, 'a', '');\n        const c2 = this.safeString (o, 'b', '');\n        let marketId: Str = undefined;\n        if (c1 !== undefined && c2 !== undefined) {\n            marketId = c1 + '-' + c2;\n        }\n        return this.safeString (o, marketId);\n");
+        expect(output).toContain('var marketId any = nil');
+        expect(output).toContain('marketId = *c1 + "-" + *c2');
+    });
+    test('a write from a nilable producer keeps the box', () => {
+        const output = run("        let h: Str = undefined;\n        const settle = this.safeString (o, 's');\n        h = method + ':' + settle;\n        return this.safeString (o, h);\n");
+        expect(output).toContain('var h any = nil');
+    });
+    test('a declaration with an initializer keeps the box (only nil-init locals are accumulators)', () => {
+        const output = run("        const raw = this.safeString (o, 'r');\n        const joined = 'unsubscribe:' + raw;\n        return this.safeString (o, joined);\n");
+        expect(output).toContain('var joined any = Add("unsubscribe:", raw)');
+        expect(output).not.toContain('var joined string');
+    });
+    test('a single write is left to the nil-declared join passes', () => {
+        const output = run("        let v: Str = undefined;\n        v = method;\n        const raw = this.safeString (o, 'r', '');\n        return raw + v;\n");
+        expect(output).toContain('var v any = nil');
+        const twice = run("        let w: Str = undefined;\n        w = method;\n        w += 'x';\n        return 'a' + w;\n");
+        expect(twice).toContain('var w string');
+    });
+});
+
 describe('go string locals rewritten by self-concatenation', () => {
     const run = (body: string) => new Transpiler({ verbose: false }).transpileGo(
         'type Str = string | undefined;\nclass T {\n    safeString (o, k): Str { return o[k]; }\n    f (q: string, o): string {\n' + body + '    }\n}\n').content;
