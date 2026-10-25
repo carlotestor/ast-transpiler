@@ -145,6 +145,7 @@ const JAVA_FIELD_TYPES: { [name: string]: { map: boolean, nullable: boolean } } 
     'markets':    { map: true, nullable: true },
 };
 
+<<<<<<< src/javaTranspiler.ts
 // hand-written fields of BaseExchange.java declared `Map<String, Object>` (field declarations
 // only, no method returns). A write of a non-null value into one is the helper's Map branch
 // `m.put(k, v)` verbatim, so the field's own declaration carries the type the put binds on.
@@ -172,6 +173,19 @@ const JAVA_MAP_WRITE_FIELDS: Set<string> = new Set([
     'userAgents',
 ]);
 
+||||||| /tmp/hx10w9-base
+=======
+// hand-written base fields (BaseExchange.java) whose Java declaration is exactly
+// `Map<String, Object>`: a local bound to one prints that type, so its element reads bind the
+// accessor with no cast. Fields the base declares `Object` (currencies, fees, timeframes) are
+// deliberately absent: assigning them to a Map needs a cast javaBaseMapFieldLocalType forbids.
+const JAVA_DECLARED_MAP_FIELD_NAMES: Set<string> = new Set<string>([
+    'markets', 'markets_by_id', 'has', 'features', 'options', 'balance',
+    'tickers', 'fundingRates', 'bidsasks', 'trades', 'orderbooks', 'ohlcvs',
+    'commonCurrencies', 'networkAliases',
+]);
+
+>>>>>>> /tmp/hx10w9-theirs
 // hand-written base methods declared `public boolean` (BaseExchange.java): a call prints a
 // primitive Java boolean, so a local fed by one holds a Boolean box or null.
 const JAVA_BOOLEAN_BASE_CALLS = new Set([
@@ -2446,6 +2460,95 @@ export class JavaTranspiler extends BaseTranspiler {
         return JAVA_ELEMENT_WRITE_MAP_TYPE;
     }
 
+    // `Object x = this.<field>` where the hand-written base declares that field
+    // `Map<String, Object>`: binding the local to the field's own type makes its element reads
+    // bind the accessor with no cast. Only a local nothing writes and nothing consumes as
+    // another Java type may carry it, or javac rejects the declaration's own uses.
+    javaBaseMapFieldLocalType(declaration): string | undefined {
+        if (!isVariableDeclaration(declaration) || !isIdentifier(declaration.name) || !declaration.initializer) {
+            return undefined;
+        }
+        const initializer = this.unwrapPrintTransparentExpression(declaration.initializer);
+        if (!isPropertyAccessExpression(initializer)
+            || initializer.expression?.kind !== SyntaxKind.ThisKeyword) {
+            return undefined;
+        }
+        if (!JAVA_DECLARED_MAP_FIELD_NAMES.has(String(initializer.name?.text))) {
+            return undefined;
+        }
+        if (this.javaLocalHasWriteAtAll(declaration.name)) {
+            return undefined; // a later write hands the local another type (the build layer casts it)
+        }
+        if (!this.javaLocalUsesKeepContainerType(declaration.name)) {
+            return undefined;
+        }
+        return JAVA_ELEMENT_WRITE_MAP_TYPE;
+    }
+
+    // every other mention of the local must be a read a `Map<String, Object>` declaration leaves
+    // unchanged: an element-access receiver, a call argument, a return value, an assignment's
+    // right-hand side, a comparison or a container element. A cast, a method call, a spread or a
+    // for-of loop on it prints code that only compiles for the box.
+    javaLocalUsesKeepContainerType(node): boolean {
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined) {
+            return false;
+        }
+        const symbol = checker.getSymbolAtLocation(node);
+        if (symbol === undefined) {
+            return false;
+        }
+        let scope: any = node;
+        while (scope && !isFunctionLike(scope) && !isSourceFile(scope)) {
+            scope = scope.parent;
+        }
+        if (!scope) {
+            return false;
+        }
+        let safe = true;
+        const walk = (current) => {
+            if (!safe || current === undefined) {
+                return;
+            }
+            if (isIdentifier(current) && current !== node && checker.getSymbolAtLocation(current) === symbol) {
+                if (!this.javaContainerNeutralIdentifierUse(current)) {
+                    safe = false;
+                    return;
+                }
+            }
+            current.forEachChild(walk);
+        };
+        scope.forEachChild(walk);
+        return safe;
+    }
+
+    javaContainerNeutralIdentifierUse(node): boolean {
+        const parent: any = node.parent;
+        if (parent === undefined) {
+            return false;
+        }
+        switch (parent.kind) {
+        case SyntaxKind.ElementAccessExpression:
+            return parent.expression === node;
+        case SyntaxKind.CallExpression:
+        case SyntaxKind.NewExpression:
+            return parent.arguments !== undefined && parent.arguments.includes(node);
+        case SyntaxKind.ReturnStatement:
+            return true;
+        case SyntaxKind.BinaryExpression:
+            return parent.operatorToken.kind === SyntaxKind.EqualsToken ? parent.right === node : true;
+        case SyntaxKind.VariableDeclaration:
+            return parent.initializer === node;
+        case SyntaxKind.ArrayLiteralExpression:
+        case SyntaxKind.ParenthesizedExpression:
+        case SyntaxKind.ConditionalExpression:
+        case SyntaxKind.PrefixUnaryExpression:
+            return true;
+        default:
+            return false;
+        }
+    }
+
     // any write at all - plain, compound, or a destructuring target - keeps the local on the type
     // the build layer assigned it: it casts the write of an Object local and rewrites a destructuring
     // hand-back into a raw element read, both of which need the box
@@ -3196,6 +3299,11 @@ export class JavaTranspiler extends BaseTranspiler {
         const own = this.javaElementWriteMapLocalType(declaration);
         if (own !== undefined) {
             return own;
+        }
+        // the same for a local it bound to a base field the hand-written Java declares a map
+        const baseField = this.javaBaseMapFieldLocalType(declaration);
+        if (baseField !== undefined) {
+            return baseField;
         }
         if (isParameterDeclaration(declaration)) {
             const fixed = this.javaNativeParameterType(declaration);
@@ -4806,6 +4914,100 @@ export class JavaTranspiler extends BaseTranspiler {
         return `(${target} == null || !(${keyText} instanceof String) ? null : ${target}.get(${keyText}))`;
     }
 
+    // `x[<integer expression>]` on a declared List. Helpers.GetValue truncates the key to an int
+    // and answers null outside [0, size), so the read carries both tests on the narrowed index.
+    // The guarded form prints the index three times, so only an operand of literals and
+    // declared-numeric names may take it.
+    javaDeclaredListIndexRead(node): string | undefined {
+        if (node.parent?.kind === SyntaxKind.ExpressionStatement) {
+            return undefined; // a bare conditional expression is not a Java statement
+        }
+        if (this.printElementAccessExpressionExceptionIfAny(node) !== undefined
+            || this.isLeftSideOfAssignment(node)) {
+            return undefined;
+        }
+        const declared = this.javaDeclaredTypeOf(node.expression);
+        if (declared === undefined || !JAVA_DECLARED_LIST_TYPES.test(declared)) {
+            return undefined;
+        }
+        const key = node.argumentExpression;
+        if (!this.javaRepeatableIntegerExpression(key, 0)) {
+            return undefined;
+        }
+        const index = this.printNode(key, 0);
+        if (index.includes('Helpers.') || index.includes('()')) {
+            return undefined; // a boxed or call-borne index is not the helper's own int index
+        }
+        // j03 (build/javaTranspiler.ts nativeJavaJ03ElementReads) already converts a numeric
+        // literal, a counter, an int/long/Long/Integer name and the `((long) X) - 1L` form;
+        // those sites stay byte-identical and are not ours to re-spell
+        if (/^[A-Za-z_$][\w$]*$/.test(index)) {
+            return undefined;
+        }
+        if (/^\(\(\(long\) [A-Za-z_$][\w$]*\) - 1L\)$/.test(index)) {
+            return undefined;
+        }
+        if (!this.javaNonNullableNumberType(key)) {
+            return undefined; // the narrowed form below cannot carry a nullable operand
+        }
+        const target = this.printNode(node.expression, 0);
+        const narrowed = index.startsWith('(') ? `((int) ${index})` : `((int) (${index}))`;
+        return `(${target} == null || ${narrowed} < 0 || ${narrowed} >= ${target}.size() ? null : ${target}.get(${narrowed}))`;
+    }
+
+    // a plain non-nullable TS number: the narrowed index is a primitive on every path
+    javaNonNullableNumberType(node): boolean {
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined || node === undefined) {
+            return false;
+        }
+        let type;
+        try {
+            type = checker.getTypeAtLocation(node);
+        } catch (e) {
+            return false;
+        }
+        if (type === undefined || type.getAliasSymbol?.() !== undefined) {
+            return false;
+        }
+        return (type.flags & TypeFlags.Number) !== 0 || (type.flags & TypeFlags.NumberLiteral) !== 0;
+    }
+
+    // a side-effect-free expression of integer leaves: a numeric literal, a `var` loop counter, or
+    // a name whose declaration prints a Java numeric type, combined with + - * / %
+    javaRepeatableIntegerExpression(node, depth: number): boolean {
+        if (node === undefined || depth > 4) {
+            return false;
+        }
+        switch (node.kind) {
+        case SyntaxKind.NumericLiteral:
+            return true;
+        case SyntaxKind.Identifier: {
+            if (this.javaPrimitiveCounterIndex(node)) {
+                return true;
+            }
+            const declared = this.javaDeclaredTypeOf(node);
+            return declared !== undefined && JAVA_DECLARED_NUMERIC_TYPES.has(declared.trim());
+        }
+        case SyntaxKind.ParenthesizedExpression:
+            return this.javaRepeatableIntegerExpression(node.expression, depth + 1);
+        case SyntaxKind.PrefixUnaryExpression:
+            return this.javaRepeatableIntegerExpression(node.operand, depth + 1);
+        case SyntaxKind.BinaryExpression: {
+            const operator = node.operatorToken.kind;
+            if (operator !== SyntaxKind.PlusToken && operator !== SyntaxKind.MinusToken
+                && operator !== SyntaxKind.AsteriskToken && operator !== SyntaxKind.SlashToken
+                && operator !== SyntaxKind.PercentToken) {
+                return false;
+            }
+            return this.javaRepeatableIntegerExpression(node.left, depth + 1)
+                && this.javaRepeatableIntegerExpression(node.right, depth + 1);
+        }
+        default:
+            return false;
+        }
+    }
+
     // the identifier of a `for (var i = <int literal>; …; i++)` counter that still prints as
     // `i`: the JN capture rename prints `finalI`, a `final Object` box, which is not an int
     javaPrimitiveCounterIndex(node) {
@@ -4878,6 +5080,12 @@ export class JavaTranspiler extends BaseTranspiler {
             const field = this.javaFieldMapReadIfAllowed(node);
             if (field !== undefined) {
                 return field;
+            }
+            // a declared List with an integer expression index reads natively with the
+            // helper's own bounds test
+            const listIndexRead = this.javaDeclaredListIndexRead(node);
+            if (listIndexRead !== undefined) {
+                return listIndexRead;
             }
             // a declared map (a local the build layer typed, or a param the printer retypes)
             // is the other proof a non-literal key binds natively
@@ -6656,6 +6864,12 @@ export class JavaTranspiler extends BaseTranspiler {
                 const elementWriteType = this.javaElementWriteMapLocalType(declaration);
                 if (elementWriteType !== undefined) {
                     varToken = elementWriteType + " ";
+                }
+                // a local bound to a base field the hand-written Java declares a plain
+                // Map<String, Object> prints that type, so its element reads bind the accessor
+                const baseFieldType = this.javaBaseMapFieldLocalType(declaration);
+                if (baseFieldType !== undefined) {
+                    varToken = baseFieldType + " ";
                 }
             }
             // the ws handler table and the local bound to one of its reads name their type,

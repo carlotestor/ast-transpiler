@@ -2176,6 +2176,62 @@ describe('declared-map element reads: Helpers.GetValue(x, "lit") -> x.get("lit")
         expect(baseline).toContain('Helpers.addElementToObject(Helpers.GetValue(x, "a"), "b", v);');
         expect(baseline).toContain('Helpers.addElementToObject(Helpers.GetValue(Helpers.GetValue(x, "c"), "d"), "e", v);');
     });
+
+    test('a local bound to a base map field carries the Map declaration and reads natively', () => {
+        const local =
+        "class T {\n" +
+        "    markets: any;\n" +
+        "    test(k: string): void {\n" +
+        "        const m = this.markets;\n" +
+        "        const a = m[k];\n" +
+        "        this.something(a);\n" +
+        "    }\n" +
+        "    something(...args: any[]): void {}\n" +
+        "}";
+        const output = transpiler.transpileJava(local).content;
+        expect(output).toContain('java.util.Map<String, Object> m = this.markets;');
+        expect(output).toContain('(m == null || k == null ? null : m.get(k))');
+        expect(output).not.toContain('Helpers.GetValue(m, k)');
+    });
+
+    test('a bound field local a later write or another container use reaches keeps Object', () => {
+        const written =
+        "class T {\n" +
+        "    markets: any;\n" +
+        "    test(k: string, other: any): void {\n" +
+        "        let m = this.markets;\n" +
+        "        m = other;\n" +
+        "        const a = m[k];\n" +
+        "        this.something(a);\n" +
+        "    }\n" +
+        "    something(...args: any[]): void {}\n" +
+        "}";
+        const iterated =
+        "class T {\n" +
+        "    markets: any;\n" +
+        "    test(k: string): void {\n" +
+        "        const m = this.markets;\n" +
+        "        for (const v of m) {\n" +
+        "            this.something(v);\n" +
+        "        }\n" +
+        "    }\n" +
+        "    something(...args: any[]): void {}\n" +
+        "}";
+        const unmapped =
+        "class T {\n" +
+        "    fees: any;\n" +
+        "    test(k: string): void {\n" +
+        "        const f = this.fees;\n" +
+        "        const a = f[k];\n" +
+        "        this.something(a);\n" +
+        "    }\n" +
+        "    something(...args: any[]): void {}\n" +
+        "}";
+        expect(transpiler.transpileJava(written).content).toContain('Object m = this.markets;');
+        expect(transpiler.transpileJava(iterated).content).toContain('Object m = this.markets;');
+        // `fees` is declared `Object` in the hand-written base: no Map declaration without a cast
+        expect(transpiler.transpileJava(unmapped).content).toContain('Object f = this.fees;');
+    });
 });
 
 describe('declared-list element reads: Helpers.GetValue(x, i) -> x.get(i)', () => {
@@ -2248,6 +2304,70 @@ describe('declared-list element reads: Helpers.GetValue(x, i) -> x.get(i)', () =
             const output = transpiler.transpileJava(input).content;
             expect(output).toContain('Helpers.GetValue(x, i)');
             expect(output).not.toContain('x.get(i)');
+        });
+    });
+
+    test('a bare identifier index stays with the ccxt j03 pass, byte-identically', () => {
+        const input =
+        "class T {\n" +
+        "    test(x: any, i: number): void {\n" +
+        "        const a = x[i];\n" +
+        "        this.something(a);\n" +
+        "    }\n" +
+        "    something(...args: any[]): void {}\n" +
+        "}";
+        withResolver((declaration: any) => declaration.name?.text === 'x' ? LIST_TYPE : 'Long', () => {
+            const output = transpiler.transpileJava(input).content;
+            // build/javaTranspiler.ts nativeJavaJ03ElementReads owns this shape
+            expect(output).toContain('Helpers.GetValue(x, i)');
+        });
+    });
+
+    test('a declared List with an arithmetic index reads native behind the helper bounds tests', () => {
+        const input =
+        "class T {\n" +
+        "    test(x: any, i: number): void {\n" +
+        "        const a = x[i - 1];\n" +
+        "        this.something(a);\n" +
+        "    }\n" +
+        "    something(...args: any[]): void {}\n" +
+        "}";
+        withResolver((declaration: any) => declaration.name?.text === 'x' ? LIST_TYPE : 'Long', () => {
+            const output = transpiler.transpileJava(input).content;
+            expect(output).toContain('((int) (i - 1L))');
+            expect(output).not.toContain('Helpers.GetValue(x,');
+        });
+    });
+
+    test('an index whose TS type may be undefined keeps the helper', () => {
+        const input =
+        "class T {\n" +
+        "    test(x: any, a: any): void {\n" +
+        "        const i = this.something(a);\n" +
+        "        const b = x[i - 1];\n" +
+        "        this.something(b);\n" +
+        "    }\n" +
+        "    something(...args: any[]): void {}\n" +
+        "}";
+        withResolver((declaration: any) => declaration.name?.text === 'x' ? LIST_TYPE : 'Long', () => {
+            const output = transpiler.transpileJava(input).content;
+            expect(output).toContain('Helpers.GetValue(x,');
+        });
+    });
+
+    test('an index the printer cannot prove repeatable keeps the helper', () => {
+        const input =
+        "class T {\n" +
+        "    test(x: any, i: any): void {\n" +
+        "        const a = x[i - 1];\n" +
+        "        this.something(a);\n" +
+        "    }\n" +
+        "    something(...args: any[]): void {}\n" +
+        "}";
+        // `i` resolves to no Java numeric declaration: the guarded form would print a box
+        withResolver((declaration: any) => declaration.name?.text === 'x' ? LIST_TYPE : undefined, () => {
+            const output = transpiler.transpileJava(input).content;
+            expect(output).toContain('Helpers.GetValue(x,');
         });
     });
 
