@@ -579,6 +579,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goNativeStringOperandTexts(operands: any[], texts: string[], expected: string[]): string[] | undefined;
     goUnwrapPrintedAssertions(node: any): any;
     goNativeStringCallOr(node: any, texts: string[], expected: string[], nativeCall: (ops: string[]) => string, helperCall: string, unwrapReceiver?: boolean): string;
+    goBaseFileStdlibImportSeamPaths: RegExp | undefined;
     goStdlibImportIsPlaceable(): boolean;
     printStartsWithCall(node: any, identation: any, name?: any, parsedArg?: any): string;
     printEndsWithCall(node: any, identation: any, name?: any, parsedArg?: any): string;
@@ -587,6 +588,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     printSplitCall(node: any, identation: any, name?: any, parsedArg?: any): string;
     printToFixedCall(node: any, identation: any, name?: any, parsedArg?: any): string;
     printToStringCall(node: any, identation: any, name?: any): any;
+    goToStringReceiverType(receiver: any, printedText: string): string | undefined;
     printConcatCall(node: any, identation: any, name?: any, parsedArg?: any): string;
     printToUpperCaseCall(node: any, identation: any, name?: any): string;
     printToLowerCaseCall(node: any, identation: any, name?: any): string;

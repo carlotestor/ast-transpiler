@@ -5499,7 +5499,7 @@ describe('go ToString -> the receiver when it is a declared string', () => {
         expect(output).toContain('var id any = GetValue(a, 0)');
         expect(output).toContain('return ToString(id)');
     });
-    test('an int-typed local keeps the helper', () => {
+    test('an int-typed local prints strconv.Itoa', () => {
         const ts =
         "class Test {\n" +
         "    f (a: any) {\n" +
@@ -5510,7 +5510,9 @@ describe('go ToString -> the receiver when it is a declared string', () => {
         "}";
         const output = transpiler.transpileGo(ts).content;
         expect(output).toContain('var n int = len(keys)');
-        expect(output).toContain('return ToString(n)');
+        // hx10w10 GP24: the helper's `case int` arm is Sprintf("%d"), i.e. Itoa
+        expect(output).toContain('return strconv.Itoa(n)');
+        expect(output).toContain('import "strconv"');
     });
     test('an int64-typed local prints strconv.FormatInt', () => {
         const ts =
