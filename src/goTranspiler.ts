@@ -5651,7 +5651,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         let parts = ((typeof type.isUnionType === 'function') && type.isUnionType()) ? type.getTypes().slice() : [type];
         parts = parts.filter(p => !(p.flags & (TypeFlags.Undefined | TypeFlags.Null)));
         // `Bool` is `boolean | undefined`: the union splits into the two boolean literals
-        if ((parts.length > 0) && parts.every(p => (p.flags & TypeFlags.BooleanLiteral) !== 0)) {
+        if ((parts.length > 0) && parts.every(p => (p.flags & (TypeFlags.BooleanLiteral)) !== 0)) {
             return isHandler ? [] : ['bool'];
         }
         if (parts.length !== 1) {
@@ -5659,7 +5659,13 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         }
         const inner: any = parts[0];
         if (inner.flags & TypeFlags.String) {
-            return isHandler ? [] : ['*string'];
+            // hx10 GP15: a pro `handle*` method's string parameter is not its frame (a frame is
+            // the Dict/text slot). A nullable pointer is only safe there when the body nil-tests
+            // it: a non-nilable declaration derefs in the body, so an absent frame value would
+            // panic where the boxed helper printed a nil string.
+            const body = param?.parent?.body;
+            const nilAware = (body !== undefined) && !this.goParameterKeepsNilCompareNative(body, param, 'string');
+            return (isHandler && !nilAware) ? [] : ['*string'];
         }
         // `Int`/`Num`/`number` params: the pointer twin the GetArg bound form already uses, or
         // the plain value type its callers pass (g13's table decides by the declared annotation)
@@ -5734,12 +5740,19 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             if ((arg === undefined) || (arg.kind === SyntaxKind.SpreadElement)) {
                 return false;
             }
+<<<<<<< src/goTranspiler.ts
             // hx10w9 GP13: at a table slot an array literal is the slice its own elements prove,
             // not the `[]any` box the default print opens. Every other parameter keeps the
             // printer's own argument type, so no existing `[]any` slot changes shape.
             const tableSlot = ((goType === '[]string') || (goType === '[][]string')) && this.goIsUnifiedSliceParameter(name, index);
             const argType = tableSlot ? this.goSliceArgumentType(arg) : this.goPrintedArgType(arg);
             if (argType !== goType) {
+||||||| /tmp/hx10w9-base
+            if (this.goPrintedArgType(arg) !== goType) {
+=======
+            if ((this.goPrintedArgType(arg) !== goType)
+                && !((goType === 'string') && this.gp15NilProvenStringPtrArg(arg))) {
+>>>>>>> /tmp/hx10w9-theirs
                 return false;
             }
         }
@@ -5791,6 +5804,117 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             return this.goDeclaredTypeOfIdentifier(arg);
         }
         return this.goTypeOfInitializer(arg, this.printNode(arg, 0));
+    }
+
+    // hx10 GP15: a `*string` argument the source itself proves non-nil at the call site — a
+    // dominating nil guard, or a Safe* accessor handed a literal default. A cast (`x as string`,
+    // `x!`) is not a proof of the absent state, so it reads through to the value underneath.
+    gp15NilProvenStringPtrArg(arg): boolean {
+        if (this.goPrintedArgType(arg) !== '*string') {
+            return false;
+        }
+        const node = this.goUnwrapPrintedAssertions(arg);
+        if (node?.kind === SyntaxKind.Identifier) {
+            return this.goHasEnclosingNilGuard(node) || this.gp15HasExitingNilGuard(node);
+        }
+        if (node?.kind === SyntaxKind.CallExpression) {
+            return this.gp15SafeStringLiteralDefaultCall(node);
+        }
+        return false;
+    }
+
+    // `this.safeString<FamilyN?>(dict, key, '<literal>')`: the accessor answers a pointer to the
+    // default on the absent path, so the pointee exists whatever the dictionary holds
+    gp15SafeStringLiteralDefaultCall(call): boolean {
+        const callee: any = call?.expression;
+        if (callee?.kind !== SyntaxKind.PropertyAccessExpression) {
+            return false;
+        }
+        const name = String(callee.name?.text ?? '');
+        if (!/^safeString(?:Lower|Upper)?(?:[2N])?$/.test(name)) {
+            return false;
+        }
+        const args = call.arguments ?? [];
+        if ((args.length < 3) || args.some((a) => a.kind === SyntaxKind.SpreadElement)) {
+            return false;
+        }
+        const last: any = args[args.length - 1];
+        return (last?.kind === SyntaxKind.StringLiteral) || (last?.kind === SyntaxKind.NoSubstitutionTemplateLiteral);
+    }
+
+    // `if (x === undefined) { return/throw/continue/break }` earlier in the same statement list:
+    // the flow past that point cannot hold a nil, so a pointer read there is the string
+    gp15HasExitingNilGuard(ident): boolean {
+        const name = String(ident?.text ?? '');
+        const scope = this.goEnclosingFunction(ident);
+        if ((name === '') || (scope === undefined) || this.goLocalIsRebound(scope, ident)) {
+            return false;
+        }
+        let child: any = ident;
+        let parent: any = ident.parent;
+        while ((parent !== undefined) && !isFunctionLike(parent)) {
+            if (parent.kind === SyntaxKind.Block) {
+                const statements: any[] = parent.statements ?? [];
+                const at = statements.indexOf(child);
+                if (at < 0) {
+                    return false;
+                }
+                for (let i = at - 1; i >= 0; i--) {
+                    if (this.gp15StatementExitsOnNil(statements[i], ident)) {
+                        return true;
+                    }
+                }
+            }
+            child = parent;
+            parent = parent.parent;
+        }
+        return false;
+    }
+
+    gp15StatementExitsOnNil(statement, ident): boolean {
+        if ((statement?.kind !== SyntaxKind.IfStatement) || (statement.elseStatement !== undefined)) {
+            return false;
+        }
+        const condition: any = this.goUnwrapParenthesizedNode(statement.expression);
+        if (!this.gp15IsNilTestOf(condition, ident)) {
+            return false;
+        }
+        const then: any = statement.thenStatement;
+        const body: any[] = (then?.kind === SyntaxKind.Block) ? (then.statements ?? []) : [ then ];
+        const last: any = body[body.length - 1];
+        return [ SyntaxKind.ReturnStatement, SyntaxKind.ThrowStatement, SyntaxKind.ContinueStatement,
+            SyntaxKind.BreakStatement ].includes(last?.kind);
+    }
+
+    // the mirror of goIsNonNilTestOf: `x == null`, `x === undefined`, `!x`
+    gp15IsNilTestOf(node, ident): boolean {
+        if (node?.kind === SyntaxKind.PrefixUnaryExpression) {
+            return (node.operator === SyntaxKind.ExclamationToken) && (node.operand?.kind === SyntaxKind.Identifier)
+                && this.goIdentifierRefersTo(node.operand, ident);
+        }
+        if (node?.kind !== SyntaxKind.BinaryExpression) {
+            return false;
+        }
+        const op = node.operatorToken?.kind;
+        if ((op !== SyntaxKind.EqualsEqualsToken) && (op !== SyntaxKind.EqualsEqualsEqualsToken)) {
+            return false;
+        }
+        const isNil = (side: any) => (side?.kind === SyntaxKind.NullKeyword)
+            || ((side?.kind === SyntaxKind.Identifier) && (side.text === 'undefined'));
+        const isName = (side: any) => (side?.kind === SyntaxKind.Identifier) && this.goIdentifierRefersTo(side, ident);
+        return (isName(node.left) && isNil(node.right)) || (isNil(node.left) && isName(node.right));
+    }
+
+    // both identifiers resolve to the same declaration (a shadowed name is a different value)
+    goIdentifierRefersTo(node, other): boolean {
+        try {
+            const checker: any = this.getChecker();
+            const a = checker.getSymbolAtLocation(node)?.valueDeclaration?.resolve?.();
+            const b = checker.getSymbolAtLocation(other)?.valueDeclaration?.resolve?.();
+            return (a !== undefined) && (a === b);
+        } catch (e) {
+            return false;
+        }
     }
 
     // every `this.<name>(...)` of this file whose resolved signature is `fn`
@@ -9118,16 +9242,95 @@ ${this.getIden(identation)}${returnStatement}`;
         if (unified !== undefined) {
             return unified;
         }
+<<<<<<< src/goTranspiler.ts
         const sliceArgs = this.goSliceCallArgs(node, identation);
         if (sliceArgs !== undefined) {
             return sliceArgs;
         }
+||||||| /tmp/hx10w9-base
+=======
+        const gp15 = this.gp15DerefStringArgCall(node, identation);
+        if (gp15 !== undefined) {
+            return gp15;
+        }
+>>>>>>> /tmp/hx10w9-theirs
         // go/printer prints the arguments of a call with more than one argument
         // one level deeper than the call itself (nodes.go, CallExpr)
         if (node.arguments && node.arguments.length > 1) {
             return this.goWithExprDepth(this.goExprDepth + 1, () => super.printArgsForCallExpression(node, identation));
         }
         return super.printArgsForCallExpression(node, identation);
+    }
+
+    // the printed parameter a call's argument lands in, or undefined when the printer cannot
+    // name it: an overload has no body, a variadic tail prints into `optionalArgs`
+    gp15CallParamAt(call, index: number) {
+        let declaration;
+        try {
+            declaration = this.getChecker()?.getResolvedSignature(call)?.declaration?.resolve?.();
+        } catch (e) {
+            return undefined;
+        }
+        if ((declaration?.body === undefined) || (declaration.kind !== SyntaxKind.MethodDeclaration)) {
+            return undefined;
+        }
+        const param = declaration.parameters?.[index];
+        if ((param === undefined) || (param.dotDotDotToken !== undefined) || (param.name?.kind !== SyntaxKind.Identifier)) {
+            return undefined;
+        }
+        return param;
+    }
+
+    // hx10 GP15: a `*string` argument handed to a `string` parameter prints its dereference, so
+    // the parameter keeps the plain type (gp15NilProvenStringPtrArg is the nil proof)
+    gp15DerefStringArgCall(node, identation): string | undefined {
+        const args = node.arguments ?? [];
+        if (args.length === 0) {
+            return undefined;
+        }
+        // an identifier argument derefs in printIdentifier, so a build-layer pass that re-prints
+        // the argument list (SafeStringPtr boxing of a sibling) keeps it; `*` binds tighter than
+        // every operator but a postfix/call/selector chain, so only those shapes take it here
+        const derefable = (arg) => [ SyntaxKind.CallExpression, SyntaxKind.PropertyAccessExpression,
+            SyntaxKind.ParenthesizedExpression, SyntaxKind.NonNullExpression, SyntaxKind.AsExpression ].includes(arg.kind);
+        const deref: boolean[] = args.map((arg, i) => {
+            const param = this.gp15CallParamAt(node, i);
+            const callee: any = node.expression;
+            const calleeName = (callee?.kind === SyntaxKind.PropertyAccessExpression) ? callee.name?.text : undefined;
+            if ((typeof calleeName === 'string') && this.goIsUnifiedStringParameter(calleeName, i)) {
+                return false; // a unified string argument prints through its own decision
+            }
+            return (param !== undefined) && (this.goNativeParameterType(param) === 'string')
+                && derefable(arg) && this.gp15NilProvenStringPtrArg(arg);
+        });
+        if (!deref.some((x) => x)) {
+            return undefined;
+        }
+        const print = () => args.map((arg, i) => {
+            const text = this.printNode(arg, identation).trim();
+            return deref[i] ? ('*' + text) : text;
+        }).join(', ');
+        return (args.length > 1) ? this.goWithExprDepth(this.goExprDepth + 1, print) : print();
+    }
+
+    printIdentifier(node) {
+        const printed = super.printIdentifier(node);
+        const parent: any = node.parent;
+        if ((parent?.kind !== SyntaxKind.CallExpression) || !(parent.arguments ?? []).includes(node)) {
+            return printed;
+        }
+        const index = parent.arguments.indexOf(node);
+        // a unified string argument prints through its own deref/StringArg decision
+        const callee: any = parent.expression;
+        const calleeName = (callee?.kind === SyntaxKind.PropertyAccessExpression) ? callee.name?.text : undefined;
+        if ((typeof calleeName === 'string') && this.goIsUnifiedStringParameter(calleeName, index)) {
+            return printed;
+        }
+        const param = this.gp15CallParamAt(parent, index);
+        if ((param === undefined) || (this.goNativeParameterType(param) !== 'string') || !this.gp15NilProvenStringPtrArg(node)) {
+            return printed;
+        }
+        return '*' + printed;
     }
 
     // check this out later
