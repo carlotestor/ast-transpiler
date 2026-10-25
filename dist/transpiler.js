@@ -11018,6 +11018,22 @@ func New${this.capitalize(this.className)}() *${this.className} {
   goSafeDictLocalArgs(initializer) {
     return this.goSafeAccessorLocalArgs(initializer, "safeDict", SyntaxKind5.ObjectLiteralExpression, "properties");
   }
+  // `this.safeDict(container, key, <object literal>)`: the literal answers every absent or
+  // non-dict member, so the local is that fresh map on every path [hx10w11 GP35]
+  goSafeDictDefaultedArgs(initializer) {
+    if (initializer?.kind !== SyntaxKind5.CallExpression) {
+      return void 0;
+    }
+    const callee = initializer.expression;
+    if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.name?.text !== "safeDict" || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return void 0;
+    }
+    const args = initializer.arguments;
+    if (args?.length !== 3 || args[2]?.kind !== SyntaxKind5.ObjectLiteralExpression) {
+      return void 0;
+    }
+    return { container: args[0], key: args[1], defaultValue: args[2] };
+  }
   // shared by the dict/list rules: `this.<accessor>(container, key[, <empty literal of fallbackKind>])`
   goSafeAccessorLocalArgs(initializer, accessor, fallbackKind, fallbackItems) {
     if (initializer?.kind !== SyntaxKind5.CallExpression) {
@@ -11099,6 +11115,59 @@ func New${this.capitalize(this.className)}() *${this.className} {
         return false;
     }
   }
+  // a `this.safeDict(c, k, {..})` local never holds nil: the object literal answers the absent
+  // and the non-dict member, so every read sees the same fresh map. Only a shape a typed map
+  // cannot take (assertion, address, call, non-nil comparison) re-boxes the local, and a store
+  // needs a value the helper would not deref.
+  goNilDefaultedDictUseReadsTheMap(node) {
+    const parent = node.parent;
+    if (parent === void 0) {
+      return false;
+    }
+    switch (parent.kind) {
+      case SyntaxKind5.ElementAccessExpression: {
+        if (parent.argumentExpression === node) {
+          return false;
+        }
+        const grandparent = parent.parent;
+        if (grandparent?.kind === SyntaxKind5.BinaryExpression && grandparent.left === parent) {
+          return grandparent.operatorToken?.kind === SyntaxKind5.EqualsToken && this.goMapWriteValueIsNotPointer(grandparent.right);
+        }
+        if (grandparent?.kind === SyntaxKind5.PostfixUnaryExpression || grandparent?.kind === SyntaxKind5.PrefixUnaryExpression || grandparent?.kind === SyntaxKind5.DeleteExpression) {
+          return false;
+        }
+        return true;
+      }
+      case SyntaxKind5.BinaryExpression: {
+        const op = parent.operatorToken?.kind;
+        if (op === SyntaxKind5.InKeyword && parent.right === node) {
+          return true;
+        }
+        if (parent.right === node) {
+          return op === SyntaxKind5.EqualsToken;
+        }
+        if (op === SyntaxKind5.EqualsEqualsToken || op === SyntaxKind5.ExclamationEqualsToken || op === SyntaxKind5.EqualsEqualsEqualsToken || op === SyntaxKind5.ExclamationEqualsEqualsToken) {
+          return this.goIsNilComparisonOperand(node, parent);
+        }
+        return false;
+      }
+      case SyntaxKind5.CallExpression:
+        return parent.expression !== node;
+      case SyntaxKind5.PropertyAccessExpression:
+        return parent.expression !== node;
+      case SyntaxKind5.AsExpression:
+      case SyntaxKind5.TypeAssertionExpression:
+      case SyntaxKind5.NonNullExpression:
+      case SyntaxKind5.SpreadElement:
+      case SyntaxKind5.PrefixUnaryExpression:
+      case SyntaxKind5.PostfixUnaryExpression:
+      case SyntaxKind5.DeleteExpression:
+      case SyntaxKind5.SwitchStatement:
+        return false;
+      default:
+        return true;
+    }
+  }
   // memoised, re-entrancy-guarded typing of a `var x T = …` declaration statement; a for-init
   // or any other shape prints `:=`, where the annotation would not appear
   goCachedLocalUnbox(cache, declaration, compute) {
@@ -11147,6 +11216,13 @@ func New${this.capitalize(this.className)}() *${this.className} {
     return goType;
   }
   goSafeDictLocalUnboxUncached(declaration) {
+    if (this.goSafeDictDefaultedArgs(declaration.initializer) !== void 0) {
+      return this.goDeclaredLocalTypeIfSafe(
+        declaration,
+        GO_SAFE_DICT_LOCAL_TYPE,
+        (n) => this.goNilDefaultedDictUseReadsTheMap(n)
+      );
+    }
     if (this.goSafeDictLocalArgs(declaration.initializer) === void 0) {
       return void 0;
     }
@@ -11164,6 +11240,13 @@ func New${this.capitalize(this.className)}() *${this.className} {
   goSafeDictUnboxValue(declaration, identation) {
     if (this.goSafeDictLocalUnbox(declaration) !== GO_SAFE_DICT_LOCAL_TYPE) {
       return void 0;
+    }
+    const defaulted = this.goSafeDictDefaultedArgs(declaration.initializer);
+    if (defaulted !== void 0) {
+      const container2 = this.printNode(defaulted.container, identation);
+      const key2 = this.printNode(defaulted.key, 0);
+      const fallback = this.printNode(defaulted.defaultValue, identation);
+      return `this.SafeDictMap(${container2}, ${key2}, ${fallback})`;
     }
     const args = this.goSafeDictLocalArgs(declaration.initializer);
     const container = this.printNode(args.container, identation);

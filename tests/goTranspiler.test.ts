@@ -787,7 +787,7 @@ describe('go pointer-typed Safe* body locals', () => {
         expect(output).toContain("var info map[string]any = SafeMapTyped(item, \"info\")");
         expect(output).toContain("this.SafeString(info, \"name\")");
     });
-    test('a SafeDict local with an empty-map default drops it: SafeMapTyped carries no default', () => {
+    test('a SafeDict local with an empty-map default types and keeps the default', () => {
         const input =
         "class Exchange {\n" +
         "    safeDict(a, b, c?) { return a; }\n" +
@@ -798,8 +798,8 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var info map[string]any = SafeMapTyped(item, \"info\")");
-        expect(output).not.toContain("map[string]any{}");
+        expect(output).toContain("var info map[string]any = this.SafeDictMap(item, \"info\", map[string]any{})");
+        expect(output).not.toContain("SafeMapTyped(item"); // the default must not be dropped
     });
     test('a SafeDict local read through GetValue/ObjectKeys/InOp/an index stays typed', () => {
         const input =
@@ -1151,7 +1151,7 @@ describe('go pointer-typed Safe* body locals', () => {
         const output = squash(transpiler.transpileGo(input).content);
         expect(output).toContain("var info any = this.SafeDict(item, \"info\")");
     });
-    test('a SafeDict default that carries data keeps the local any', () => {
+    test('a SafeDict default that carries data is carried into the typed reader', () => {
         const input =
         "class Exchange {\n" +
         "    safeDict(a, b, c?) { return a; }\n" +
@@ -1161,7 +1161,8 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var info any = this.SafeDict(item, \"info\", map[string]any{");
+        expect(output).toContain("var info map[string]any = this.SafeDictMap(item, \"info\", map[string]any{");
+        expect(output).toContain("\"id\": 1");
     });
     test('the dict variants outside the safeDict(key) shape stay any', () => {
         const input =

@@ -203,6 +203,11 @@ export declare class GoTranspiler extends BaseTranspiler {
         container: any;
         key: any;
     };
+    goSafeDictDefaultedArgs(initializer: any): {
+        container: any;
+        key: any;
+        defaultValue: any;
+    };
     goSafeAccessorLocalArgs(initializer: any, accessor: string, fallbackKind: SyntaxKind, fallbackItems: string): {
         container: any;
         key: any;
@@ -210,6 +215,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goIsNilComparisonOperand(node: any, parent: any): boolean;
     goSafeDictUseReadsTheMap(node: any): boolean;
     goSafeDictLocalUnboxCache: Map<any, string>;
+    goNilDefaultedDictUseReadsTheMap(node: any): boolean;
     goCachedLocalUnbox(cache: Map<any, string | undefined>, declaration: any, compute: () => string | undefined): string | undefined;
     goSafeDictLocalUnbox(declaration: any): string | undefined;
     goDeclaredLocalTypeIfSafe(declaration: any, goType: string, readsTheValue: (n: any) => boolean, skipUse?: (n: any) => boolean): string | undefined;

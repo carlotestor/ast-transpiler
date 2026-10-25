@@ -2539,6 +2539,24 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         return this.goSafeAccessorLocalArgs(initializer, 'safeDict', SyntaxKind.ObjectLiteralExpression, 'properties');
     }
 
+    // `this.safeDict(container, key, <object literal>)`: the literal answers every absent or
+    // non-dict member, so the local is that fresh map on every path [hx10w11 GP35]
+    goSafeDictDefaultedArgs(initializer) {
+        if (initializer?.kind !== SyntaxKind.CallExpression) {
+            return undefined;
+        }
+        const callee: any = initializer.expression;
+        if ((callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.name?.text !== 'safeDict')
+            || (callee.expression?.kind !== SyntaxKind.ThisKeyword)) {
+            return undefined;
+        }
+        const args = initializer.arguments;
+        if ((args?.length !== 3) || (args[2]?.kind !== SyntaxKind.ObjectLiteralExpression)) {
+            return undefined;
+        }
+        return { container: args[0], key: args[1], defaultValue: args[2] };
+    }
+
     // shared by the dict/list rules: `this.<accessor>(container, key[, <empty literal of fallbackKind>])`
     goSafeAccessorLocalArgs(initializer, accessor: string, fallbackKind: SyntaxKind, fallbackItems: string) {
         if (initializer?.kind !== SyntaxKind.CallExpression) {
@@ -2632,6 +2650,62 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
     // GetValue/InOp/ObjectKeys/IsDictionary and Safe* normalise a nil receiver. Else keep the box.
     goSafeDictLocalUnboxCache = new Map<any, string | undefined>();
 
+    // a `this.safeDict(c, k, {..})` local never holds nil: the object literal answers the absent
+    // and the non-dict member, so every read sees the same fresh map. Only a shape a typed map
+    // cannot take (assertion, address, call, non-nil comparison) re-boxes the local, and a store
+    // needs a value the helper would not deref.
+    goNilDefaultedDictUseReadsTheMap(node): boolean {
+        const parent: any = node.parent;
+        if (parent === undefined) {
+            return false;
+        }
+        switch (parent.kind) {
+        case SyntaxKind.ElementAccessExpression: {
+            if (parent.argumentExpression === node) {
+                return false; // x used as an index key
+            }
+            const grandparent: any = parent.parent;
+            if ((grandparent?.kind === SyntaxKind.BinaryExpression) && (grandparent.left === parent)) {
+                return (grandparent.operatorToken?.kind === SyntaxKind.EqualsToken) && this.goMapWriteValueIsNotPointer(grandparent.right);
+            }
+            if ((grandparent?.kind === SyntaxKind.PostfixUnaryExpression) || (grandparent?.kind === SyntaxKind.PrefixUnaryExpression)
+                || (grandparent?.kind === SyntaxKind.DeleteExpression)) {
+                return false;
+            }
+            return true;
+        }
+        case SyntaxKind.BinaryExpression: {
+            const op = parent.operatorToken?.kind;
+            if ((op === SyntaxKind.InKeyword) && (parent.right === node)) {
+                return true; // `key in x` reads the map; absent answers false either way
+            }
+            if (parent.right === node) {
+                return op === SyntaxKind.EqualsToken; // `y = x` carries the same map
+            }
+            if ((op === SyntaxKind.EqualsEqualsToken) || (op === SyntaxKind.ExclamationEqualsToken)
+                || (op === SyntaxKind.EqualsEqualsEqualsToken) || (op === SyntaxKind.ExclamationEqualsEqualsToken)) {
+                return this.goIsNilComparisonOperand(node, parent);
+            }
+            return false;
+        }
+        case SyntaxKind.CallExpression:
+            return parent.expression !== node; // an argument keeps the map, calling the local cannot
+        case SyntaxKind.PropertyAccessExpression:
+            return parent.expression !== node; // `x.length` / `x.push(..)` are not map operations
+        case SyntaxKind.AsExpression:
+        case SyntaxKind.TypeAssertionExpression:
+        case SyntaxKind.NonNullExpression:
+        case SyntaxKind.SpreadElement:
+        case SyntaxKind.PrefixUnaryExpression:
+        case SyntaxKind.PostfixUnaryExpression:
+        case SyntaxKind.DeleteExpression:
+        case SyntaxKind.SwitchStatement:
+            return false;
+        default:
+            return true;
+        }
+    }
+
     // memoised, re-entrancy-guarded typing of a `var x T = …` declaration statement; a for-init
     // or any other shape prints `:=`, where the annotation would not appear
     goCachedLocalUnbox(cache: Map<any, string | undefined>, declaration, compute: () => string | undefined): string | undefined {
@@ -2684,6 +2758,12 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
     }
 
     goSafeDictLocalUnboxUncached(declaration): string | undefined {
+        // a defaulted accessor names the map on every path, so the local takes the type even when
+        // a later store writes into it
+        if (this.goSafeDictDefaultedArgs(declaration.initializer) !== undefined) {
+            return this.goDeclaredLocalTypeIfSafe(declaration, GO_SAFE_DICT_LOCAL_TYPE,
+                (n) => this.goNilDefaultedDictUseReadsTheMap(n));
+        }
         if (this.goSafeDictLocalArgs(declaration.initializer) === undefined) {
             return undefined;
         }
@@ -2703,6 +2783,15 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
     goSafeDictUnboxValue(declaration, identation: number): string | undefined {
         if (this.goSafeDictLocalUnbox(declaration) !== GO_SAFE_DICT_LOCAL_TYPE) {
             return undefined;
+        }
+        const defaulted: any = this.goSafeDictDefaultedArgs(declaration.initializer);
+        if (defaulted !== undefined) {
+            // the default is part of the value: dropping it would make the absent case a nil map,
+            // which a store cannot write
+            const container = this.printNode(defaulted.container, identation);
+            const key = this.printNode(defaulted.key, 0);
+            const fallback = this.printNode(defaulted.defaultValue, identation);
+            return `this.SafeDictMap(${container}, ${key}, ${fallback})`;
         }
         const args: any = this.goSafeDictLocalArgs(declaration.initializer);
         const container = this.printNode(args.container, identation);
