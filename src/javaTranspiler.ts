@@ -3809,6 +3809,9 @@ export class JavaTranspiler extends BaseTranspiler {
     // D-09 memo/cycle guard for javaNativeReturnType (mutually recursive return chains)
     javaReturnTypeCache: WeakMap<Node, string | undefined> = new WeakMap();
     javaReturnTypeInProgress: Set<Node> = new Set();
+    // the build layer answers a printed local's type from what THIS worker has printed so far, so
+    // an unproven answer may only be provisional: caching it freezes the first worker's view
+    javaReturnTypeUsedDeclaredLocals = false;
 
     javaParameterIsTypeofTested(node): boolean {
         const method = node.parent;
@@ -3890,13 +3893,19 @@ export class JavaTranspiler extends BaseTranspiler {
             return this.javaReturnTypeCache.get(node);
         }
         this.javaReturnTypeInProgress.add(node);
+        const outerUsedDeclaredLocals = this.javaReturnTypeUsedDeclaredLocals;
+        this.javaReturnTypeUsedDeclaredLocals = false;
         let result;
         try {
             result = this.javaNativeReturnTypeUncached(node);
         } finally {
             this.javaReturnTypeInProgress.delete(node);
         }
-        this.javaReturnTypeCache.set(node, result);
+        const usedDeclaredLocals = this.javaReturnTypeUsedDeclaredLocals;
+        this.javaReturnTypeUsedDeclaredLocals = outerUsedDeclaredLocals || usedDeclaredLocals;
+        if (result !== undefined || !usedDeclaredLocals) {
+            this.javaReturnTypeCache.set(node, result);
+        }
         return result;
     }
 
@@ -4173,6 +4182,7 @@ export class JavaTranspiler extends BaseTranspiler {
         if (!isIdentifier(node) || typeof this.javaDeclaredLocalTypeResolver !== 'function') {
             return false;
         }
+        this.javaReturnTypeUsedDeclaredLocals = true;
         const declaration = this.javaDeclarationOfIdentifier(node);
         if (declaration === undefined) {
             return false;
