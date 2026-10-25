@@ -4997,11 +4997,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return parts.every(p => (p.flags & (TypeFlags.String | TypeFlags.StringLiteral)) !== 0) ? 'string' : undefined;
     }
 
-    // The boxed object parameter prints `x === undefined` as a native `x == nil`
-    // (goObjectBoxParameter); a parameter the printer typed as a Go map/slice would fall
-    // through to IsEqual(x, nil) instead. Both predicates answer false for every value a
+    // A nil test only vetoes the retype for a Go type that cannot hold nil: a map, a []string and a
+    // pointer all compare `x == nil` exactly as IsEqual(x, nil) does (derefScalar), so a nil-tested
+    // parameter of those types still types. `[]any` stays vetoed: its element read prints the
+    // guarded DerefScalar closure, a helper rise.
     goParameterKeepsNilCompareNative(body, param, goType: string): boolean {
-        if (goType === '*string') {
+        if (goType.startsWith('*') || goType.startsWith('map[') || (goType === '[]string')) {
             return true;
         }
         const name = param.name.text;

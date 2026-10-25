@@ -6379,7 +6379,7 @@ describe('native parameter types, Dict/List (D-01)', () => {
         expect(output).toContain('func (this *Test) ParseData(data any) any {');
     });
 
-    test('a nil compare on the parameter keeps the box', () => {
+    test('a nil compare on a Dict parameter still types: a Go map holds nil', () => {
         const input = baseWithAccessors +
             "class Test extends Base {\n" +
             "    parseData (data: Dict | undefined) {\n" +
@@ -6393,8 +6393,77 @@ describe('native parameter types, Dict/List (D-01)', () => {
             "    }\n" +
             "}\n";
         const output = transpiler.transpileGo(input).content;
-        expect(output).toContain('func (this *Test) ParseData(data any) any {');
+        expect(output).toContain('func (this *Test) ParseData(data map[string]any) any {');
         expect(output).toContain('if data == nil {');
+        expect(output).toContain('return data["a"]');
+    });
+
+    test('a nil-tested string[] parameter still types: a Go []string holds nil', () => {
+        const output = new Transpiler({ verbose: false }).transpileGo(
+            "type Dict = { [key: string]: any };\n" +
+            "class Base { ok (a: any): any { return a; } }\n" +
+            "class T extends Base {\n" +
+            "    idsCount (ids: string[]): number {\n" +
+            "        if (ids === undefined) { return 0; }\n" +
+            "        return ids.length;\n" +
+            "    }\n" +
+            "    go (ids: string[]): number { return this.idsCount (ids); }\n" +
+            "}\n").content;
+        expect(output).toContain('IdsCount(ids []string)');
+        expect(output).toContain('if ids == nil {');
+        expect(output).not.toContain('IsEqual(ids, nil)');
+    });
+
+    test('a nil-tested Dict[] parameter whose element is read keeps the box', () => {
+        const output = new Transpiler({ verbose: false }).transpileGo(
+            "type Dict = { [key: string]: any };\n" +
+            "class Base { ok (a: any): any { return a; } }\n" +
+            "class T extends Base {\n" +
+            "    firstRow (rows: Dict[]): any {\n" +
+            "        if (rows === undefined) { return 1; }\n" +
+            "        const row = rows[0];\n" +
+            "        return row;\n" +
+            "    }\n" +
+            "    go (rows: Dict[]): any { return this.firstRow (rows); }\n" +
+            "}\n").content;
+        expect(output).toContain('FirstRow(rows any)');
+        expect(output).not.toContain('func() any {');
+    });
+
+    test('a nil-tested List parameter keeps the box: a []any read prints the guarded closure', () => {
+        const input = baseWithAccessors +
+            "class Test extends Base {\n" +
+            "    parseRows (rows: List | undefined) {\n" +
+            "        if (rows === undefined) {\n" +
+            "            return 1;\n" +
+            "        }\n" +
+            "        return this.safeValue (rows, 0);\n" +
+            "    }\n" +
+            "    use () {\n" +
+            "        return this.parseRows ([ 1, 2 ]);\n" +
+            "    }\n" +
+            "}\n";
+        const output = transpiler.transpileGo(input).content;
+        expect(output).toContain('func (this *Test) ParseRows(rows any) any {');
+        expect(output).not.toContain('DerefScalar');
+    });
+
+    test('a nil compare on a value-typed parameter keeps the box: Go has no nil string/bool', () => {
+        const input = baseWithAccessors +
+            "type Bool = boolean | undefined;\n" +
+            "class Test extends Base {\n" +
+            "    parseFlag (flag: Bool) {\n" +
+            "        if (flag === undefined) {\n" +
+            "            return 1;\n" +
+            "        }\n" +
+            "        return 2;\n" +
+            "    }\n" +
+            "    use () {\n" +
+            "        return this.parseFlag (true);\n" +
+            "    }\n" +
+            "}\n";
+        const output = transpiler.transpileGo(input).content;
+        expect(output).toContain('func (this *Test) ParseFlag(flag any) any {');
     });
 
     test('a non-any element []-typed parameter keeps the box', () => {
