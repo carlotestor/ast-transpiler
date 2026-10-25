@@ -1662,12 +1662,18 @@ export class RustTranspiler extends BaseTranspiler {
                 ? this.rustNestedBearerInsert(baseExpr, keys[0], keyStrs[0], keys[1], keyStrs[1], rhs)
                 : this.rustNestedBearerBucket(baseExpr, keys[0], keyStrs[0], right);
             if (nestedInsert !== undefined) return nestedInsert;
+<<<<<<< src/rustTranspiler.ts
             // hx10w7 R04: `x[k1][k2] = v` on a one-level bearer — the first hop is the
             // map's own `entry`, the write below it keeps its helper.
             const bearerChain = keyStrs.length > 1
                 ? this.rustBearerChainedWrite(baseExpr, keys, keyStrs, rhs) : undefined;
             if (bearerChain !== undefined) return bearerChain;
             const nativeInsert = keyStrs.length === 1 ? (this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs)) : undefined;
+||||||| /tmp/hx10w9-base
+            const nativeInsert = keyStrs.length === 1 ? (this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs)) : undefined;
+=======
+            const nativeInsert = keyStrs.length === 1 ? (this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustMapParamDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs)) : undefined;
+>>>>>>> /tmp/hx10w9-theirs
             return nativeInsert ?? `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${rhs})`;
         }
         // hx10w6 R01: rebuilding a typed dict bearer from a plain literal (`x = { .. }`)
@@ -2132,7 +2138,9 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** Native type text of a parameter in the emitted signature. */
     rustParamType(param): string {
-        return this.rustParamPrintsBool(param) ? 'bool' : 'Value';
+        if (this.rustParamPrintsBool(param)) return 'bool';
+        if (this.rustParamPrintsMap(param)) return '&mut indexmap::IndexMap<String, Value>';
+        return 'Value';
     }
 
     // A read of a native-`bool` parameter that still compiles: a condition slot,
@@ -2243,6 +2251,287 @@ export class RustTranspiler extends BaseTranspiler {
         return declaration?.kind === SyntaxKind.Parameter && this.rustParamPrintsBool(declaration)
             ? this.printNode(inner, 0).trim()
             : undefined;
+    }
+
+    // ── hx10w9 RP02: owned map parameters ─────────────────────────────────────
+    //
+    // A `Dict`-annotated parameter whose body only takes map operations and whose
+    // every call site passes a typed dict bearer prints `&mut IndexMap`, so its
+    // writes are plain `.insert` with no per-site `Arc::make_mut` guard.
+
+    private rustMapParamDecisions = new WeakMap<any, boolean>();
+
+    rustParamPrintsMap(param): boolean {
+        if (param?.kind !== SyntaxKind.Parameter) {
+            return false;
+        }
+        let decision = this.rustMapParamDecisions.get(param);
+        if (decision === undefined) {
+            this.rustMapParamDecisions.set(param, false); // re-entrancy guard
+            try {
+                decision = this.rustMapParamIsTypedUncached(param);
+            } catch (e) {
+                decision = false; // no proof -> the parameter keeps its `Value` box
+            }
+            this.rustMapParamDecisions.set(param, decision);
+        }
+        return decision;
+    }
+
+    rustMapParamIsTypedUncached(param): boolean {
+        const method: any = param.parent;
+        if (!isMethodDeclaration(method) || method.body === undefined) {
+            return false;
+        }
+        if (param.name?.kind !== SyntaxKind.Identifier || param.dotDotDotToken !== undefined) {
+            return false;
+        }
+        if (param.initializer !== undefined || param.questionToken !== undefined || param.type === undefined) {
+            return false; // the optional-arg path binds through `get_arg`, a `Value`
+        }
+        if ((method.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.StaticKeyword)) {
+            return false;
+        }
+        // The base tier and every base override keep the fixed `Value` ABI the
+        // hand-written trait declares.
+        const baseFile = RustTranspiler.RUST_BASE_TIER_FILE;
+        if (baseFile.test(param.getSourceFile().fileName)) {
+            return false;
+        }
+        const hidden: any = this.getMethodOverride(method);
+        if (hidden !== undefined && baseFile.test(hidden.getSourceFile().fileName)) {
+            return false;
+        }
+        const type = this.getCheckedTypeOf(param.type);
+        if (type === undefined || !this.isProvenMapType(type)) {
+            return false;
+        }
+        if (this.rustMethodReferencedAsValue(method)) {
+            return false;
+        }
+        const index = Array.from(method.parameters as any).indexOf(param);
+        if (index < 0 || !this.rustMapParamBodyUsesOk(param)) {
+            return false;
+        }
+        return this.rustMapParamCallSitesOk(method, index);
+    }
+
+    /** Every body use is a map operation the bearered printer emits, and at
+     *  least one of them writes (otherwise the read shadow already covers it). */
+    rustMapParamBodyUsesOk(param): boolean {
+        let writes = 0;
+        const safe = this.rustLocalUsesAll(param, String((param.name as any).text), true, (n) => {
+            const kind = this.rustMapParamUseKind(n);
+            if (kind === 'write') {
+                writes++;
+            }
+            return kind !== undefined;
+        });
+        return safe && writes > 0;
+    }
+
+    /** `read` / `write` on a single-level key, or `box` where the printer moves
+     *  the map into a `Value::Map(..)`; anything else has no printed form. */
+    rustMapParamUseKind(node): string | undefined {
+        const parent: any = node.parent;
+        if (parent === undefined) {
+            return undefined;
+        }
+        if (isElementAccessExpression(parent) && parent.expression === node) {
+            if (!this.rustDictBearerElementUse(parent, String(node.text))) {
+                return undefined;
+            }
+            const up: any = parent.parent;
+            return (up !== undefined && isBinaryExpression(up) && up.left === parent
+                && rustIsAssignmentOperator(up.operatorToken.kind)) ? 'write' : 'read';
+        }
+        if (isReturnStatement(parent) && parent.expression === node) {
+            return 'box';
+        }
+        if (parent.kind === SyntaxKind.PropertyAssignment && parent.initializer === node) {
+            return 'box';
+        }
+        // `x['k'] = <this param>`: the value of a native dict write.
+        if (isBinaryExpression(parent) && parent.right === node
+            && parent.operatorToken.kind === SyntaxKind.EqualsToken
+            && isElementAccessExpression(parent.left)) {
+            return 'box';
+        }
+        // A `this.`/`super.` call argument, unless it lands in another map slot
+        // (a reborrow the printer does not emit).
+        if (isCallExpression(parent) && parent.arguments.some((a: any) => a === node)) {
+            const at = Array.from(parent.arguments).indexOf(node);
+            const params = this.rustCalleeParams(parent);
+            return this.rustNativeMapArgumentSlot(params, at) === undefined ? 'box' : undefined;
+        }
+        return undefined;
+    }
+
+    /** The value operand of a `m['k'] = x` write: the receiver takes a `Value`, so
+     *  the map is boxed there (a move at its last use, a clone before it). */
+    rustDictWriteValue(node): boolean {
+        const parent: any = node?.parent;
+        return parent !== undefined && isBinaryExpression(parent) && parent.right === node
+            && parent.operatorToken.kind === SyntaxKind.EqualsToken
+            && isElementAccessExpression(parent.left);
+    }
+
+    /** A use that prints the map as `Value::Map(x.clone())`: the body census's
+     *  `box` positions, never a key read or a map argument slot. */
+    rustMapParamBoxes(node): boolean {
+        const parent: any = node.parent;
+        if (parent === undefined) {
+            return false;
+        }
+        if (isReturnStatement(parent) && parent.expression === node) {
+            return true;
+        }
+        if (parent.kind === SyntaxKind.PropertyAssignment && parent.initializer === node) {
+            return true;
+        }
+        if (isBinaryExpression(parent) && parent.right === node
+            && parent.operatorToken.kind === SyntaxKind.EqualsToken
+            && isElementAccessExpression(parent.left)) {
+            return true;
+        }
+        if (isCallExpression(parent) && parent.arguments.some((a: any) => a === node)) {
+            const at = Array.from(parent.arguments).indexOf(node);
+            return this.rustNativeMapArgumentSlot(this.rustCalleeParams(parent), at) === undefined;
+        }
+        return false;
+    }
+
+    /** A parameter printed as a native map, or undefined. */
+    rustMapParamDeclaration(node): any | undefined {
+        if (!isIdentifier(node)) {
+            return undefined;
+        }
+        const declaration: any = this.rustDeclarationOfIdentifier(node);
+        if (declaration === undefined || !isParameterDeclaration(declaration)) {
+            return undefined;
+        }
+        return this.rustParamPrintsMap(declaration) ? declaration : undefined;
+    }
+
+    /** The `at`-th argument of a call lands in a native-map parameter slot. */
+    rustNativeMapArgumentSlot(params, at: number): any | undefined {
+        const param: any = params !== undefined && at < params.length ? params[at] : undefined;
+        if (param === undefined || param.initializer !== undefined || param.questionToken !== undefined) {
+            return undefined;
+        }
+        return this.rustParamPrintsMap(param) ? param : undefined;
+    }
+
+    /** `&mut <bearer>` for a map slot; every call site is proven a bearer. */
+    rustMapArgumentText(node, identation): string {
+        const inner: any = this.rustSkipWrappers(node);
+        if (inner !== undefined && isIdentifier(inner) && this.rustMapArgumentIsBearer(inner)) {
+            return `&mut ${this.printNode(inner, 0).trim()}`;
+        }
+        return this.printNode(node, identation).trim();
+    }
+
+    rustMapArgumentIsBearer(node): boolean {
+        const inner: any = this.rustSkipWrappers(node);
+        if (inner === undefined || !isIdentifier(inner)) {
+            return false;
+        }
+        const declaration: any = this.rustDeclarationOfIdentifier(inner);
+        return declaration !== undefined && isVariableDeclaration(declaration) && this.rustDictLocalIsTyped(declaration);
+    }
+
+    /** Program-wide call sites of `method`: every one passes a bearer in the slot. */
+    rustMapParamCallSitesOk(method, index: number): boolean {
+        const name = String((method.name as any)?.text ?? '');
+        if (name === '') {
+            return false;
+        }
+        const key = this.rustDeclarationKey(method);
+        let proven = 0;
+        for (const call of this.rustCallSitesForName(name) as any[]) {
+            const args: any[] = call.arguments ?? [];
+            if (args.some((a: any) => a.kind === SyntaxKind.SpreadElement)) {
+                return false;
+            }
+            let declaration: any;
+            try {
+                declaration = signatureDeclaration((this.getChecker() as any).getResolvedSignature(call));
+            } catch (e) {
+                return false;
+            }
+            declaration = declaration?.resolve?.() ?? declaration;
+            if (declaration === undefined || declaration === null || this.rustDeclarationKey(declaration) !== key) {
+                continue;
+            }
+            const arg: any = args[index];
+            if (arg === undefined || !this.rustMapArgumentIsBearer(arg)) {
+                return false;
+            }
+            proven++;
+        }
+        return proven > 0;
+    }
+
+    rustDeclarationKey(node): string {
+        const source = node?.getSourceFile?.();
+        return source === undefined ? '' : `${source.fileName}:${node.pos}:${node.end}`;
+    }
+
+    private rustCallSitesCache = new WeakMap<any, Map<string, any[]>>();
+
+    rustCallSitesForName(name: string): any[] {
+        const program: any = this.getProgram();
+        let table = this.rustCallSitesCache.get(program);
+        if (table === undefined) {
+            table = new Map<string, any[]>();
+            this.rustCallSitesCache.set(program, table);
+        }
+        const cached = table.get(name);
+        if (cached !== undefined) {
+            return cached;
+        }
+        const calls: any[] = [];
+        table.set(name, calls); // installed before the walk: a throwing walk admits nothing
+        const names: string[] = (program.getSourceFileNames?.() ?? []) as any;
+        for (const fileName of names) {
+            const file: any = program.getSourceFile(fileName);
+            if (file === undefined || file.isDeclarationFile) {
+                continue;
+            }
+            const visit = (node: any) => {
+                if (node?.kind === SyntaxKind.CallExpression) {
+                    const callee: any = node.expression;
+                    const calleeName = isPropertyAccessExpression(callee) && callee.name?.kind === SyntaxKind.Identifier
+                        ? String(callee.name.text)
+                        : (isIdentifier(callee) ? String(callee.text) : undefined);
+                    if (calleeName === name) {
+                        calls.push(node);
+                    }
+                }
+                node.forEachChild(visit);
+            };
+            file.forEachChild(visit);
+        }
+        return calls;
+    }
+
+    /** `x['k'] = v` on a native-map parameter: the insert `add_element_to_object`
+     *  performs on the same plain dict, on the map the type already is. */
+    rustMapParamDictInsert(baseExpr, keyNode, keyText: string, valueText: string): string | undefined {
+        const declaration = this.rustMapParamDeclaration(baseExpr);
+        if (declaration === undefined) {
+            return undefined;
+        }
+        const name = String(baseExpr.text);
+        if (!this.rustDictBearerKeyOk(keyNode) && !this.rustR01BearerWriteKeyOk(keyNode, name)) {
+            return undefined;
+        }
+        const keyArg = this.rustNativeInsertKeyArg({ text: name, isField: false, plain: true }, keyNode, keyText)
+            ?? this.rustR01BearerWriteKeyArg(keyNode, keyText, name);
+        if (keyArg === undefined) {
+            return undefined;
+        }
+        return this.rustBearerInsertText(name, keyArg, valueText);
     }
 
     // Typed string locals: `let x: Value = self.safeString(..)` is declared `Option<String>` when
@@ -2982,9 +3271,11 @@ export class RustTranspiler extends BaseTranspiler {
             const sig = this.methodSignatures[methodName];
             if (sig) {
                 const calleeParams = this.rustCalleeParams(node);
-                const printArg = (a, at) => this.rustNativeBoolArgumentSlot(calleeParams, at)
-                    ? this.rustBoolArgumentText(a, 0)
-                    : this.printNode(a, 0);
+                const printArg = (a, at) => this.rustNativeMapArgumentSlot(calleeParams, at) !== undefined
+                    ? this.rustMapArgumentText(a, 0)
+                    : (this.rustNativeBoolArgumentSlot(calleeParams, at)
+                        ? this.rustBoolArgumentText(a, 0)
+                        : this.printNode(a, 0));
                 const printArgs = (list, from = 0) => list.map((a, i) => printArg(a, from + i)).join(', ');
                 const requiredArgs = printArgs(args.slice(0, sig.requiredCount));
                 const reqPart = requiredArgs ? `${requiredArgs}, ` : '';
@@ -3003,6 +3294,9 @@ export class RustTranspiler extends BaseTranspiler {
             return super.printArgsForCallExpression(node, identation);
         }
         return Array.from(node.arguments).map((arg, at) => {
+            if (this.rustNativeMapArgumentSlot(params, at) !== undefined) {
+                return this.rustMapArgumentText(arg, identation);
+            }
             return this.rustNativeBoolArgumentSlot(params, at)
                 ? this.rustBoolArgumentText(arg, identation)
                 : this.printNode(arg, identation).trim();
@@ -4054,6 +4348,10 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printNativeMapAccess(receiverText: string, receiverNode: Node, keyText: string): string | undefined {
+        // hx10w9 RP02: a native-map parameter is an `&mut IndexMap` too.
+        if (this.rustMapParamDeclaration(receiverNode) !== undefined && RustTranspiler.rustBearerKeyTextOk(keyText)) {
+            return `${receiverText}.get("${this.escapeRustStringLiteral(keyText)}").cloned().unwrap_or(Value::Null)`;
+        }
         // hx10 R02: a typed dict bearer is a bare IndexMap, so the read is the
         // map lookup itself — no `as_map()` box and no `|__m|` closure.
         if (this.rustDictBearerDeclaration(receiverNode) !== undefined) {
@@ -5290,6 +5588,15 @@ export class RustTranspiler extends BaseTranspiler {
     transformIdentifier(node, identifier) {
         const text = super.transformIdentifier(node, identifier);
         const parent = node?.parent;
+        // hx10w9 RP02: an argument in a native-map slot passes the map itself
+        // (`&mut` is added by the caller printer), never a `Value::Map` box.
+        if (parent !== undefined && isCallExpression(parent) && parent.arguments.some((a) => a === node)) {
+            const at = Array.from(parent.arguments).indexOf(node as any);
+            if (this.rustNativeMapArgumentSlot(this.rustCalleeParams(parent), at) !== undefined
+                && (this.rustDictBearerDeclaration(node) !== undefined || this.rustMapParamDeclaration(node) !== undefined)) {
+                return text;
+            }
+        }
         // hx10 R04: a two-level bearer is boxed at its single admitted move.
         // Checked first: a two-level read also satisfies the R02 chain test below.
         if (this.rustNestedDictBearerDeclaration(node) !== undefined && parent !== undefined
@@ -5298,6 +5605,11 @@ export class RustTranspiler extends BaseTranspiler {
                 || (parent.kind === SyntaxKind.PropertyAssignment && parent.initializer === node))) {
             return `Value::from(${text})`;
         }
+        // hx10w9 RP02: a native-map parameter is a bare map too; every non-key use
+        // moves a clone into a `Value`.
+        if (this.rustMapParamDeclaration(node) !== undefined && this.rustMapParamBoxes(node)) {
+            return `Value::Map(${text}.clone())`;
+        }
         // hx10 R02: a typed dict bearer is boxed only at the single final move its
         // declaration proof admitted (`return x` / an argument of a `this.` call /
         // hx10w6 R01: the value of a parent object literal).
@@ -5305,6 +5617,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (bearer !== undefined && parent !== undefined
             && ((isReturnStatement(parent) && parent.expression === node)
                 || (isCallExpression(parent) && parent.arguments.some((a) => a === node))
+                || this.rustDictWriteValue(node)
                 || this.rustR01BearerLiteralMove(node))) {
             // hx10w6 R01: only the map's last use moves into the box; an earlier
             // one boxes a clone, so a bearer may be handed out more than once.
@@ -5411,6 +5724,8 @@ export class RustTranspiler extends BaseTranspiler {
                 return true;
             }
             if (isElementAccessExpression(parent) && parent.expression === n) return this.rustDictBearerElementUse(parent, name);
+            // hx10w9 RP02: the value of a dict write (`m['k'] = x`) is boxed once.
+            if (this.rustDictWriteValue(n)) return true;
             // hx10w6 R01 (write side): a rebuilt plain literal keeps the bearer.
             if (this.rustR01BearerRebuild(n)) return true;
             // hx10w7 R03: a rebuild from a fresh-map producer keeps the map type.
@@ -5562,7 +5877,9 @@ export class RustTranspiler extends BaseTranspiler {
      *  `get_value`'s non-`Str` key branches (always `Value::Null` here) become the
      *  `""` fallback — the bearer can never hold an empty key. */
     rustBearerDictDynamicRead(receiverText: string, receiverNode: Node, keyNode: Node): string | undefined {
-        if (this.rustDictBearerDeclaration(receiverNode) === undefined) return undefined;
+        const typed = this.rustDictBearerDeclaration(receiverNode) !== undefined
+            || this.rustMapParamDeclaration(receiverNode) !== undefined;
+        if (!typed) return undefined;
         const key: any = this.rustSkipWrappers(keyNode);
         if (key === undefined || isStringLiteralLikeNode(key) || !this.rustDictBearerKeyOk(key)) return undefined;
         if (this.isWriteBackBindRead(this.rustElementReadOfKey(keyNode))) return undefined;
@@ -5579,9 +5896,14 @@ export class RustTranspiler extends BaseTranspiler {
         const keyArg = this.rustNativeInsertKeyArg({ text: name, isField: false, plain: true }, keyNode, keyText)
             ?? this.rustR01BearerWriteKeyArg(keyNode, keyText, name);
         if (keyArg === undefined) return undefined;
+        return this.rustBearerInsertText(name, keyArg, valueText);
+    }
+
+    /** `<name>.insert(<key>, <value>)` for a receiver the type proves is a map. The
+     *  insert holds the receiver's `&mut`, so a value that reads it binds first; the
+     *  trailing `;` keeps the block unit-typed when it stands as a statement. */
+    rustBearerInsertText(name: string, keyArg: string, valueText: string): string {
         const value = this.rustPrintedBoolArg(valueText) ? `Value::Bool(${valueText})` : valueText;
-        // The insert holds the receiver's `&mut`, so a value that reads it binds first.
-        // The trailing `;` keeps the block unit-typed when it stands as a statement.
         if (new RegExp(`\\b${name}\\b`).test(value)) {
             return `{ let __be_tmp = ${value}; ${name}.insert(${keyArg}, __be_tmp); }`;
         }
