@@ -145,6 +145,33 @@ const JAVA_FIELD_TYPES: { [name: string]: { map: boolean, nullable: boolean } } 
     'markets':    { map: true, nullable: true },
 };
 
+// hand-written fields of BaseExchange.java declared `Map<String, Object>` (field declarations
+// only, no method returns). A write of a non-null value into one is the helper's Map branch
+// `m.put(k, v)` verbatim, so the field's own declaration carries the type the put binds on.
+const JAVA_MAP_WRITE_FIELDS: Set<string> = new Set([
+    'api',
+    'balance',
+    'baseCurrencies',
+    'bidsasks',
+    'commonCurrencies',
+    'exceptions',
+    'features',
+    'fundingRates',
+    'has',
+    'headers',
+    'markets',
+    'markets_by_id',
+    'ohlcvs',
+    'options',
+    'orderbooks',
+    'quoteCurrencies',
+    'tickers',
+    'trades',
+    'transformedApi',
+    'urls',
+    'userAgents',
+]);
+
 // hand-written base methods declared `public boolean` (BaseExchange.java): a call prints a
 // primitive Java boolean, so a local fed by one holds a Boolean box or null.
 const JAVA_BOOLEAN_BASE_CALLS = new Set([
@@ -4430,6 +4457,14 @@ export class JavaTranspiler extends BaseTranspiler {
                 && this.javaPrintsNonNullValue(right)) {
                 return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
             }
+            // `this.<field>[k] = v` on a header field the base declares Map<String, Object>: the
+            // field declaration is the type put binds on, and a non-null value makes the helper's
+            // ConcurrentHashMap null-removal branch unreachable, so the two writes are one
+            if (keys.length === 1 && this.javaMapWriteFieldReceiver(baseExpr)
+                && (isStringLiteralLikeNode(keys[0]) || this.javaDeclaredStringType(keys[0]))
+                && !this.elementWriteValueMayBeNull(right)) {
+                return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
+            }
             if (this.javaHx4MapPutIsNative(baseExpr, keys)) {
                 return `${prefixes}${acc}.put(${keyArg}, ${rhs})`;
             }
@@ -4671,6 +4706,17 @@ export class JavaTranspiler extends BaseTranspiler {
         }
         const type = this.javaDeclaredTypeOfDeclaration(declaration);
         return type !== undefined && JAVA_DECLARED_MAP_TYPES.test(type);
+    }
+
+    // `this.<field>` for a BaseExchange.java field declared Map<String, Object>
+    javaMapWriteFieldReceiver(expression): boolean {
+        if (expression === undefined || !isPropertyAccessExpression(expression)) {
+            return false;
+        }
+        if (expression.expression.kind !== SyntaxKind.ThisKeyword) {
+            return false;
+        }
+        return JAVA_MAP_WRITE_FIELDS.has(expression.name.text);
     }
 
     // `x[i]` where x is a declared java List and i is the int counter of `for (var i = <int literal>`:

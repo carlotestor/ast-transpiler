@@ -3250,7 +3250,10 @@ describe('java element-access write: native Map.put for proven dictionaries', ()
         expect(output).not.toContain("addElementToObject");
     });
 
-    test('shared field map keeps the helper (ConcurrentHashMap null-removal + monitor)', () => {
+    test('shared field map writes a non-null value natively (hx10w9 JP01)', () => {
+        // the base declares `public Map<String, Object> options = new SynchronizedOptions ()`, so
+        // `put` reaches the same hand-off the helper's map branch calls; with a non-null value the
+        // helper's null-removal branch can never run
         const input =
         "class T {\n" +
         "    test(): void {\n" +
@@ -3258,8 +3261,19 @@ describe('java element-access write: native Map.put for proven dictionaries', ()
         "    }\n" +
         "}"
         const output = transpiler.transpileJava(input).content;
-        expect(output).toContain('Helpers.addElementToObject(this.options, "sandboxMode", true)');
-        expect(output).not.toContain(".put(");
+        expect(output).toContain('this.options.put("sandboxMode", true)');
+        expect(output).not.toContain("addElementToObject");
+    });
+
+    test('shared field map keeps the helper for a nullable value (ConcurrentHashMap null-removal)', () => {
+        const input =
+        "class T {\n" +
+        "    test(value: boolean | undefined): void {\n" +
+        "        this.options[\"sandboxMode\"] = value;\n" +
+        "    }\n" +
+        "}"
+        const output = transpiler.transpileJava(input).content;
+        expect(output).toContain('Helpers.addElementToObject(this.options, "sandboxMode", value)');
     });
 
     test('string-typed key prints the typed put with the (String) cast', () => {
