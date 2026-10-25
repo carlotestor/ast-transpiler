@@ -5145,22 +5145,18 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             }
             return 'string';
         }
-<<<<<<< src/goTranspiler.ts
         // hx10 GP12: the ws frame. `override handleMessage (client, message: Dict)` is the one
         // inherited signature the Go dispatch can type: WsDispatch asserts the decoded object once.
         const frameType = this.goWsFrameParameterType(fn, param);
         if (frameType !== undefined) {
             return frameType;
         }
-||||||| /tmp/hx10w9-base
-=======
         if (this.goIsUnifiedSliceParameter(fn.name.text, fn.parameters.indexOf(param))) {
             // hx10w9 GP13: the slice table types the base and every override together, exactly like
             // the string table above. A method whose declarations or call sites disagree prints `any`
             // everywhere so the Go signature stays the one the hand-written interfaces declare.
             return this.goUnifiedSliceParameterType(fn, param);
         }
->>>>>>> /tmp/hx10w9-theirs
         if (this.goMethodKeepsBaseSignature(fn)) {
             return undefined; // inherited/base methods are pinned by the base class and IDerivedExchange
         }
@@ -5971,19 +5967,13 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             if ((arg === undefined) || (arg.kind === SyntaxKind.SpreadElement)) {
                 return false;
             }
-<<<<<<< src/goTranspiler.ts
             // hx10w9 GP13: at a table slot an array literal is the slice its own elements prove,
             // not the `[]any` box the default print opens. Every other parameter keeps the
             // printer's own argument type, so no existing `[]any` slot changes shape.
             const tableSlot = ((goType === '[]string') || (goType === '[][]string')) && this.goIsUnifiedSliceParameter(name, index);
             const argType = tableSlot ? this.goSliceArgumentType(arg) : this.goPrintedArgType(arg);
-            if (argType !== goType) {
-||||||| /tmp/hx10w9-base
-            if (this.goPrintedArgType(arg) !== goType) {
-=======
-            if ((this.goPrintedArgType(arg) !== goType)
+            if ((argType !== goType)
                 && !((goType === 'string') && this.gp15NilProvenStringPtrArg(arg))) {
->>>>>>> /tmp/hx10w9-theirs
                 return false;
             }
         }
@@ -9473,18 +9463,14 @@ ${this.getIden(identation)}${returnStatement}`;
         if (unified !== undefined) {
             return unified;
         }
-<<<<<<< src/goTranspiler.ts
         const sliceArgs = this.goSliceCallArgs(node, identation);
         if (sliceArgs !== undefined) {
             return sliceArgs;
         }
-||||||| /tmp/hx10w9-base
-=======
         const gp15 = this.gp15DerefStringArgCall(node, identation);
         if (gp15 !== undefined) {
             return gp15;
         }
->>>>>>> /tmp/hx10w9-theirs
         // go/printer prints the arguments of a call with more than one argument
         // one level deeper than the call itself (nodes.go, CallExpr)
         if (node.arguments && node.arguments.length > 1) {

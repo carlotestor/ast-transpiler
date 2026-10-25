@@ -1744,18 +1744,12 @@ export class RustTranspiler extends BaseTranspiler {
                 : (this.rp05NestedDictWrite(baseExpr, keys, keyStrs, rhs, helperWrite)
                     ?? this.rustNestedBearerBucket(baseExpr, keys[0], keyStrs[0], right));
             if (nestedInsert !== undefined) return nestedInsert;
-<<<<<<< src/rustTranspiler.ts
             // hx10w7 R04: `x[k1][k2] = v` on a one-level bearer — the first hop is the
             // map's own `entry`, the write below it keeps its helper.
             const bearerChain = keyStrs.length > 1
                 ? this.rustBearerChainedWrite(baseExpr, keys, keyStrs, rhs) : undefined;
             if (bearerChain !== undefined) return bearerChain;
-            const nativeInsert = keyStrs.length === 1 ? (this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs)) : undefined;
-||||||| /tmp/hx10w9-base
-            const nativeInsert = keyStrs.length === 1 ? (this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs)) : undefined;
-=======
             const nativeInsert = keyStrs.length === 1 ? (this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustMapParamDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs)) : undefined;
->>>>>>> /tmp/hx10w9-theirs
             return nativeInsert ?? `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${rhs})`;
         }
         // hx10w6 R01: rebuilding a typed dict bearer from a plain literal (`x = { .. }`)
@@ -5859,17 +5853,13 @@ export class RustTranspiler extends BaseTranspiler {
                 return true;
             }
             if (isElementAccessExpression(parent) && parent.expression === n) return this.rustDictBearerElementUse(parent, name);
-<<<<<<< src/rustTranspiler.ts
             // hx10w9 RP02: the value of a dict write (`m['k'] = x`) is boxed once.
             if (this.rustDictWriteValue(n)) return true;
-||||||| /tmp/hx10w9-base
-=======
             // hx10w9 RP04: `Object.keys/values(x)` prints the map's own iterators.
             if (isCallExpression(parent) && this.r04BearerEnumArg(parent) === n) return true;
             // hx10w9 RP04: `k in x` — the map's own lookup behind the helper's `Str` test.
             if (isBinaryExpression(parent) && parent.operatorToken.kind === SyntaxKind.InKeyword
                 && parent.right === n) return this.r04BearerInOpKeyText(parent.left) !== undefined;
->>>>>>> /tmp/hx10w9-theirs
             // hx10w6 R01 (write side): a rebuilt plain literal keeps the bearer.
             if (this.rustR01BearerRebuild(n)) return true;
             // hx10w7 R03: a rebuild from a fresh-map producer keeps the map type.

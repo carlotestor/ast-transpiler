@@ -145,7 +145,6 @@ const JAVA_FIELD_TYPES: { [name: string]: { map: boolean, nullable: boolean } } 
     'markets':    { map: true, nullable: true },
 };
 
-<<<<<<< src/javaTranspiler.ts
 // hand-written fields of BaseExchange.java declared `Map<String, Object>` (field declarations
 // only, no method returns). A write of a non-null value into one is the helper's Map branch
 // `m.put(k, v)` verbatim, so the field's own declaration carries the type the put binds on.
@@ -173,8 +172,6 @@ const JAVA_MAP_WRITE_FIELDS: Set<string> = new Set([
     'userAgents',
 ]);
 
-||||||| /tmp/hx10w9-base
-=======
 // hand-written base fields (BaseExchange.java) whose Java declaration is exactly
 // `Map<String, Object>`: a local bound to one prints that type, so its element reads bind the
 // accessor with no cast. Fields the base declares `Object` (currencies, fees, timeframes) are
@@ -185,7 +182,6 @@ const JAVA_DECLARED_MAP_FIELD_NAMES: Set<string> = new Set<string>([
     'commonCurrencies', 'networkAliases',
 ]);
 
->>>>>>> /tmp/hx10w9-theirs
 // hand-written base methods declared `public boolean` (BaseExchange.java): a call prints a
 // primitive Java boolean, so a local fed by one holds a Boolean box or null.
 const JAVA_BOOLEAN_BASE_CALLS = new Set([
