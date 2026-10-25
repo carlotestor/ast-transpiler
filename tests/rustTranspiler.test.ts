@@ -1788,7 +1788,7 @@ describe('rust borrowed string literals (Cow payload)', () => {
     test('a native string slice maps the borrowed payload', () => {
         const ts = "function f(s: string): string {\n    return s.slice(1, 3);\n}";
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('Value::Str(__s.into())');
+        expect(output).toContain('.map(Value::from).unwrap_or(Value::Null)');
         expect(output).not.toContain('.map(Value::Str)');
     });
 
@@ -3695,7 +3695,7 @@ describe('rust native Option<String> returns for `: Str` methods', () => {
             "    f (status: any) {\n        const m: any = {};\n" +
             "        m['status'] = this.parseStatus (status);\n        return m;\n    }\n}";
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('.insert("status".into(), self.parseStatus(status).map(|__s| Value::Str(__s.into())).unwrap_or(Value::Null));');
+        expect(output).toContain('.insert("status".into(), self.parseStatus(status).map(Value::from).unwrap_or(Value::Null));');
     });
 
     test('an assignment of a native return boxes', () => {
@@ -3704,7 +3704,7 @@ describe('rust native Option<String> returns for `: Str` methods', () => {
             "    f (status: any) {\n        let x: any = undefined;\n" +
             "        x = this.parseStatus (status);\n        return x;\n    }\n}";
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('x = self.parseStatus(status).map(|__s| Value::Str(__s.into())).unwrap_or(Value::Null);');
+        expect(output).toContain('x = self.parseStatus(status).map(Value::from).unwrap_or(Value::Null);');
     });
 
     test('a declaration whose uses are not all native sinks stays a Value box', () => {
@@ -3713,7 +3713,7 @@ describe('rust native Option<String> returns for `: Str` methods', () => {
             "    f (status: any) {\n        const x = this.parseStatus (status);\n" +
             "        const m: any = {};\n        m['status'] = x;\n        return m;\n    }\n}";
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('let mut x: Value = self.parseStatus(status).map(|__s| Value::Str(__s.into())).unwrap_or(Value::Null);');
+        expect(output).toContain('let mut x: Value = self.parseStatus(status).map(Value::from).unwrap_or(Value::Null);');
     });
 
     test('a caller whose uses are all native sinks binds Option<String>', () => {
@@ -4189,7 +4189,7 @@ describe('hx4 R06 native string methods on proven strings', () => {
         expect(o).not.toContain('to_upper(&');
     });
     test('split with a literal separator', () => {
-        expect(out("        return a.split('-');")).toContain('return Value::Array(a.as_str().map(|__s| __s.split("-").map(|__p| Value::Str(__p.to_string().into())).collect()).unwrap_or_default());');
+        expect(out("        return a.split('-');")).toContain('return Value::Array(a.as_str().map(|__s| __s.split("-").map(Value::from).collect()).unwrap_or_default());');
     });
     test('replace keeps the receiver for a non-string box', () => {
         expect(out("        return a.replace('x', 'y');")).toContain('return a.as_str().map(|__s| Value::Str(__s.replace("x", "y").into())).unwrap_or_else(|| a.clone());');
@@ -4446,7 +4446,7 @@ describe('hx4 R13 proven-Str safeString locals: native equality / replace / spli
     test('replace / split with a string-variable operand print native str ops', () => {
         expect(replaceOut).toContain('let mut marketId: Value = subscription.as_str().zip(prefix.as_str()).map(|(__s, __p)| Value::Str(__s.replace(__p, "").into())).unwrap_or_else(|| subscription.clone());');
         expect(replaceOut).toContain('code = code.as_str().zip(net.as_str()).map(|(__s, __p)| Value::Str(__s.replace(__p, "").into())).unwrap_or_else(|| code.clone());');
-        expect(replaceOut).toContain('let mut parts: Value = Value::Array(code.as_str().zip(id.as_str()).map(|(__s, __d)| __s.split(__d).map(|__p| Value::Str(__p.to_string().into())).collect()).unwrap_or_default());');
+        expect(replaceOut).toContain('let mut parts: Value = Value::Array(code.as_str().zip(id.as_str()).map(|(__s, __d)| __s.split(__d).map(Value::from).collect()).unwrap_or_default());');
         expect(replaceOut).toContain('.as_str().zip((Value::Str(format!("{}{}", Value::Str(".".into()), crate::value::get_value_k(&o, "x")).into())).as_str())');
         expect(replaceOut).toContain('let mut s: Value = Value::Str(format!("{}", id).into());');
         expect(replaceOut).not.toContain('replace_str(');
@@ -4702,11 +4702,13 @@ describe('hx4 R23 plain-dict sources in the base tier and pro files', () => {
 
     test('base extend copies of locals / typed Dict params insert natively', () => {
         expect(base).toContain('if let Value::Dict(__d) = &mut itemWithKey { std::sync::Arc::make_mut(__d).insert(crate::runtime::stringify_param(&keyName), key.clone()); }');
-        expect(base).toContain('if let Value::Dict(__d) = &mut result { std::sync::Arc::make_mut(__d).insert("swap".into(), Value::Bool(false)); }');
+        // hx10w7 R03: `extend` of a literal + a Dict-typed place declares the bearer.
+        expect(base).toContain('result.insert("swap".into(), Value::Bool(false));');
     });
 
     test('base safeDict(this.options, k, {}) local reads natively', () => {
-        expect(base).toContain('accountsByType.as_map().and_then(|__m| account.as_str().and_then(|__k| __m.get(__k))).cloned().unwrap_or(Value::Null)');
+        // hx10w7 R03: the safeDict local is a bearer, so the read is one map lookup.
+        expect(base).toContain('accountsByType.get(account.as_str().unwrap_or("")).cloned().unwrap_or(Value::Null)');
     });
 
     test('base extend of an any parameter keeps the helper', () => {
@@ -4719,7 +4721,9 @@ describe('hx4 R23 plain-dict sources in the base tier and pro files', () => {
     });
 
     test('pro safeDict(this.options, k, {}) local reads natively', () => {
-        expect(pro).toContain('subs.as_map().and_then(|__m| __m.get("a")).cloned().unwrap_or(Value::Null)');
+        // hx10w7 R03: bearer read and write, no helper and no cow_guard.
+        expect(pro).toContain('subs.insert("a".into(), Value::Int(1));');
+        expect(pro).toContain('subs.get("a").cloned().unwrap_or(Value::Null)');
     });
 });
 
@@ -4905,11 +4909,17 @@ ${body}
         expect(out).toContain('m.get(k.as_str().unwrap_or("")).cloned().unwrap_or(Value::Null)');
     });
 
-    test('negative: a chained write or a numeric key keeps the box', () => {
-        const nested = rs("        const d = {};\n        d['a']['b'] = v;\n        return d['a'];");
-        expect(nested).toContain('let mut d: Value = Value::Map({');
+    test('negative: a numeric key keeps the box', () => {
         const num = rs("        const d = {};\n        d[0] = v;\n        return d[0];");
         expect(num).toContain('let mut d: Value = Value::Map({');
+        expect(num).toContain('add_element_to_object(&mut d, &Value::Int(0), v)');
+    });
+
+    test('a chained write on a one-level bearer types the local (hx10w7 R04)', () => {
+        const nested = rs("        const d = {};\n        d['a']['b'] = v;\n        return d['a'];");
+        expect(nested).toContain('let mut d: indexmap::IndexMap<String, Value>');
+        expect(nested).toContain('if let Value::Dict(__d) = d.entry("a".into()).or_default()');
+        expect(nested).not.toContain('get_value_mut');
     });
 });
 
@@ -5127,17 +5137,58 @@ ${body}
         expect(out).toContain('Value::from(withdrawFees)');
     });
 
-    test('a bucket seeded from a non-empty literal keeps the box', () => {
+    test('a bucket seeded from a non-empty literal writes below the boxed seed natively', () => {
         const out = rs("        const d = {};\n        d['a'] = { 'b': v };\n        d['a']['c'] = v;\n        return d;");
-        expect(out).toContain('let mut d: Value = Value::Map({');
+        expect(out).toContain('let mut d: indexmap::IndexMap<String, Value>');
+        expect(out).toContain('d.insert("a".into(), Value::Map({');
+        expect(out).toContain('if let Value::Dict(__d) = d.entry("a".into()).or_default()');
     });
 
-    test('negative: a non-dict value, an unproven key or a receiver-reading value keeps the box', () => {
-        const value = rs("        const d = { 'a': v };\n        d['a']['b'] = v;\n        return d;");
-        expect(value).toContain('let mut d: Value = Value::Map({');
-        const num = rs("        const d = {};\n        d['a'][i] = v;\n        return d;", 'v: any, i: number');
+    test('a three-level chain keeps every middle hop on get_value_mut', () => {
+        const out = rs("        const d = {};\n        d['a']['b']['c'] = v;\n        return d;");
+        expect(out).toContain('add_element_to_object(get_value_mut(d.entry("a".into()).or_default(), &Value::Str("b".into())), &Value::Str("c".into()), v);');
+    });
+
+    test('negative: an unproven hop key or a receiver-reading value keeps the box', () => {
+        // the hop key of the chain root is unproven: a numeric literal
+        const num = rs("        const d = {};\n        d[0][1] = v;\n        return d[0];");
         expect(num).toContain('let mut d: Value = Value::Map({');
+        expect(num).toContain('add_element_to_object(get_value_mut(&mut d, &Value::Int(0)), &Value::Int(1), v);');
         const self = rs("        const d = {};\n        d['a']['b'] = d['a'];\n        return d;");
         expect(self).toContain('let mut d: Value = Value::Map({');
+    });
+});
+
+describe('hx10w7 R03 dict bearer from a map-producing call', () => {
+    const wrap = (body: string, params = 'v: any') => `type Dict = { [key: string]: any };
+class T {
+    safeDict (o: Dict, k: string, d: Dict = {}): Dict { return d; }
+    safeString (o: Dict, k: string, d: string = ''): string { return ''; }
+    extend (a: Dict, b: Dict): Dict { return {}; }
+    f (${params}) {
+${body}
+    }
+}`;
+    const rs = (body: string, params?: string) => transpiler.transpileRust(wrap(body, params)).content;
+
+    test('a safeDict local is a bearer: literal-key reads are map lookups', () => {
+        const out = rs("        const data = this.safeDict (o, 'data', {});\n        return data['id'];", 'o: Dict');
+        expect(out).toContain('let mut data: indexmap::IndexMap<String, Value> = (match o.get("data")');
+        expect(out).toContain('data.get("id").cloned().unwrap_or(Value::Null)');
+        expect(out).not.toContain('get_value(&data');
+    });
+
+    test('a produced local that escapes keeps the box', () => {
+        // A helper call would have to re-box the map (`Value::Map(data.clone())`): no helper
+        // falls, and the line grows. The local stays a `Value`.
+        const out = rs("        const data = this.safeDict (o, 'data', {});\n        const t = this.extend (data, { 'id': this.safeString (data, 'id') });\n        return t;", 'o: Dict');
+        expect(out).toContain('let mut data: Value = ');
+        expect(out).not.toContain('Value::Map(data.clone())');
+    });
+
+    test('extend of an untyped parameter keeps the box', () => {
+        const out = rs("        const t = this.extend (v, { 'id': 1 });\n        return t;");
+        expect(out).toContain('let mut t: Value = self.extend(v');
+        expect(out).not.toContain('indexmap::IndexMap');
     });
 });

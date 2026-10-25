@@ -910,7 +910,7 @@ export class RustTranspiler extends BaseTranspiler {
         return `${receiverText}.as_str().map(|__s| { let __c: Vec<char> = __s.chars().collect();` +
             ` let __l = __c.len() as i64; let __i = ${begin}; let __j = ${end};` +
             ` if __i <= __j { __c[__i as usize..__j as usize].iter().collect::<String>() } else { String::new() } })` +
-            `.map(|__s| Value::Str(__s.into())).unwrap_or(Value::Null)`;
+            `.map(Value::from).unwrap_or(Value::Null)`;
     }
 
     // Native value predicates (`Array.isArray` / `typeof … === '…'`): each runtime predicate is a
@@ -1662,6 +1662,11 @@ export class RustTranspiler extends BaseTranspiler {
                 ? this.rustNestedBearerInsert(baseExpr, keys[0], keyStrs[0], keys[1], keyStrs[1], rhs)
                 : this.rustNestedBearerBucket(baseExpr, keys[0], keyStrs[0], right);
             if (nestedInsert !== undefined) return nestedInsert;
+            // hx10w7 R04: `x[k1][k2] = v` on a one-level bearer — the first hop is the
+            // map's own `entry`, the write below it keeps its helper.
+            const bearerChain = keyStrs.length > 1
+                ? this.rustBearerChainedWrite(baseExpr, keys, keyStrs, rhs) : undefined;
+            if (bearerChain !== undefined) return bearerChain;
             const nativeInsert = keyStrs.length === 1 ? (this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs)) : undefined;
             return nativeInsert ?? `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${rhs})`;
         }
@@ -1669,6 +1674,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (isAssign && isIdentifier(left) && this.rustDictBearerDeclaration(left) !== undefined
             && this.rustR01BearerPlainLiteral(right)) {
             return `${this.printNode(left, 0)} = (${this.rustObjectLiteralBlock(this.rustSkipWrappers(right), identation)})`;
+        }
+        // hx10w7 R03: a bearer rebuilt from a fresh-map producer (`x = this.extend(..)`)
+        if (isAssign && isIdentifier(left) && this.rustDictBearerDeclaration(left) !== undefined
+            && this.rustDictProducer(right)) {
+            return `${this.printNode(left, 0)} = ${this.printNode(right, 0)}.as_map().cloned().unwrap_or_default()`;
         }
         // typeof comparisons
         if (left.kind === SyntaxKind.TypeOfExpression) {
@@ -1782,6 +1792,10 @@ export class RustTranspiler extends BaseTranspiler {
             return `${indent}let mut ${varName}: indexmap::IndexMap<String, indexmap::IndexMap<String, Value>> = (${block})`;
         }
         if (node.declarations.length === 1 && this.rustDictLocalIsTyped(declaration)) {
+            const literal = this.rustSkipWrappers(declaration.initializer);
+            if (!isObjectLiteralExpression(literal)) {
+                return `${indent}let mut ${varName}: indexmap::IndexMap<String, Value> = ${parsedValue}.as_map().cloned().unwrap_or_default()`;
+            }
             // Parenthesised: the driver strips the `;` of a statement ending in `};`.
             const block = this.rustObjectLiteralBlock(this.rustSkipWrappers(declaration.initializer), identation);
             return `${indent}let mut ${varName}: indexmap::IndexMap<String, Value> = (${block})`;
@@ -2522,9 +2536,11 @@ export class RustTranspiler extends BaseTranspiler {
         return declaration?.kind === SyntaxKind.MethodDeclaration ? this.rustNativeStrReturnKind(declaration) : undefined;
     }
 
-    /** `Option<String>` → `Value` (exact inverse of the return conversion). */
+    /** `Option<String>` → `Value` (exact inverse of the return conversion). hx10 R08: the
+     *  operand is already a typed `String`, so the conversion is the standard `From`
+     *  impl — no `|__s|` closure between them. */
     rustNativeStrValueBox(text: string): string {
-        return `${text}.map(|__s| Value::Str(__s.into())).unwrap_or(Value::Null)`;
+        return `${text}.map(Value::from).unwrap_or(Value::Null)`;
     }
 
     /** True when a call to a native-`Str` callee must be boxed back to a
@@ -5343,9 +5359,11 @@ export class RustTranspiler extends BaseTranspiler {
         const init: any = declaration.initializer;
         if (declaration.name?.kind !== SyntaxKind.Identifier || init === undefined) return false;
         const literal: any = this.rustSkipWrappers(init);
-        if (!isObjectLiteralExpression(literal)) return false;
-        if (literal.properties.some((p: any) => p.kind === SyntaxKind.SpreadAssignment)) return false;
-        for (const property of literal.properties as unknown as any[]) {
+        const produced = !isObjectLiteralExpression(literal) && this.rustDictProducer(init);
+        if (!isObjectLiteralExpression(literal) && !produced) return false;
+        const entries: any[] = produced ? [] : literal.properties;
+        for (const property of entries) {
+            if (property.kind === SyntaxKind.SpreadAssignment) return false;
             const propertyName: any = property.name;
             if (propertyName === undefined || propertyName.kind === SyntaxKind.ComputedPropertyName
                 || !RustTranspiler.rustBearerKeyTextOk(String(propertyName.text))) return false;
@@ -5395,9 +5413,17 @@ export class RustTranspiler extends BaseTranspiler {
             if (isElementAccessExpression(parent) && parent.expression === n) return this.rustDictBearerElementUse(parent, name);
             // hx10w6 R01 (write side): a rebuilt plain literal keeps the bearer.
             if (this.rustR01BearerRebuild(n)) return true;
+            // hx10w7 R03: a rebuild from a fresh-map producer keeps the map type.
+            const reuse = this.rustR03ProducerReuse(n);
+            if (reuse) return true;
             return false;
         });
         if (!safe) return false;
+        // hx10w7 R03: a produced map is typed only when every use is native — an element access,
+        // a kind-preserving mutator, or a return (boxed once at the return). A helper-call
+        // argument would re-box it (`Value::Map(x.clone())`): a clone and a longer line for
+        // no helper win, so those locals keep the box.
+        if (produced && escapes.some((n: any) => !isReturnStatement(n.parent))) return false;
         // hx10w6 R01: a return / `this.` call escape boxes a move at the last use, a clone before it.
         // hx10w6 R12: any other escape is prediction-tier only, and then every escape boxes a clone.
         for (const escape of escapes) {
@@ -5407,6 +5433,59 @@ export class RustTranspiler extends BaseTranspiler {
         }
         return true;
     }
+
+    /** hx10w7 R03: a call that builds a fresh plain map — the request/params
+     *  builders, `parseJson`, and the `handle*` family that hands back its own
+     *  request dict. The checker proves the result Dict-shaped and every copied
+     *  map operand is plain (a literal, a transpiler-built bearer, or a
+     *  Dict-typed place), so the bearer may be declared from the call and the
+     *  box is cloned out once. */
+    rustDictProducer(node: any): boolean {
+        const call: any = this.rustSkipWrappers(node);
+        if (!isCallExpression(call)) return false;
+        const callee: any = call.expression;
+        if (!isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword
+            || callee.name?.kind !== SyntaxKind.Identifier) return false;
+        const method = String(callee.name.text);
+        const handle = /^handle[A-Z]/.test(method);
+        if (!handle && !RustTranspiler.RUST_DICT_PRODUCER_CALLEES.has(method)) return false;
+        if (!this.rustWriteDictShape(this.typeOfNodeIfAny(call))) return false;
+        // `parseJson` takes text, a `handle*` call hands back the dict it was given.
+        if (handle || method === 'parseJson') return true;
+        const args: any[] = (call as any).arguments ?? [];
+        const copied = method === 'extend' || method === 'deepExtend' ? args : args.slice(0, 1);
+        if (copied.length === 0) return false;
+        for (const arg of copied) {
+            if (!this.hx7PlainMap(arg)) return false;
+        }
+        return true;
+    }
+
+    /** A map operand the producer only copies into a fresh map: built by the
+     *  transpiler (literal / bearer / admitted producer) or a Dict-typed place.
+     *  `any` is out — its content may carry a runtime tag. */
+    hx7PlainMap(arg: any): boolean {
+        const node: any = this.rustSkipWrappers(arg);
+        if (isObjectLiteralExpression(node)) return this.rustPlainDictLiteral(node);
+        if (isIdentifier(node) && this.rustDictBearerDeclaration(node) !== undefined) return true;
+        if (isCallExpression(node)) return this.rustDictProducer(node);
+        const type: any = this.typeOfNodeIfAny(node);
+        if (type === undefined || (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) !== 0) return false;
+        return this.rustWriteDictShape(type);
+    }
+
+    /** hx10w7 R03: `x = this.extend(..)` on a bearer — the producer hands back a
+     *  fresh map, so the local keeps its `IndexMap` type and the print clones the
+     *  box out at the assignment. */
+    rustR03ProducerReuse(node: any): boolean {
+        const parent: any = node?.parent;
+        if (parent === undefined || !isBinaryExpression(parent) || parent.left !== node) return false;
+        return parent.operatorToken.kind === SyntaxKind.EqualsToken && this.rustDictProducer(parent.right);
+    }
+
+    private static readonly RUST_DICT_PRODUCER_CALLEES = new Set([
+        'extend', 'deepExtend', 'omit', 'keysort', 'parseJson', 'safeDict',
+    ]);
 
     /** An escape the printer boxes: a `return` of the local, or an argument of a
      *  `this.`/`super.` call. Anything else (a free-function argument) has no box
@@ -5444,7 +5523,10 @@ export class RustTranspiler extends BaseTranspiler {
         const write = up !== undefined && isBinaryExpression(up) && up.left === root
             && rustIsAssignmentOperator(up.operatorToken.kind);
         if (write) {
-            if (root !== access || up.operatorToken.kind !== SyntaxKind.EqualsToken) return false;
+            if (up.operatorToken.kind !== SyntaxKind.EqualsToken) return false;
+            // hx10w7 R04: only the first key of a chain has to be proven — the
+            // bucket below it is the map's own `entry`, the rest keeps its helper.
+            if (root !== access) return this.rustBearerChainHopArg(access.argumentExpression, this.printNode(access.argumentExpression, 0), name) !== undefined;
             return this.rustDictBearerKeyOk(access.argumentExpression) || this.rustR01BearerWriteKeyOk(access.argumentExpression, name);
         }
         if (up !== undefined && (isDeleteExpression(up) || (isCallExpression(up) && up.expression === root)
@@ -5508,6 +5590,46 @@ export class RustTranspiler extends BaseTranspiler {
             return `${name}.insert(${keyArg}, ${trimmed}.clone())`;
         }
         return `${name}.insert(${keyArg}, ${value})`;
+    }
+
+    // ── hx10w7 R04: chained writes on a one-level bearer ─────────────────────
+    //
+    // `x[k1][k2] = v` roots at a plain `IndexMap<String, Value>`: the bucket is the
+    // map's own `entry(k1).or_default()` — the same `or_insert(Value::Null)`
+    // `get_value_mut` performs — so the write below it goes native too.
+
+    /** The `entry` key of a chained write's first hop, or undefined when the key
+     *  cannot be proven. The bearer proof and the emission share this one answer,
+     *  so a local is never typed on a chain the printer then prints boxed. */
+    rustBearerChainHopArg(keyNode: any, keyText: string, name: string): string | undefined {
+        return this.rustNativeInsertKeyArg({ text: name, isField: false, plain: true }, keyNode, keyText)
+            ?? this.rustR01BearerWriteKeyArg(keyNode, keyText, name);
+    }
+
+    rustBearerChainedWrite(baseExpr: any, keys: any[], keyStrs: string[], valueText: string): string | undefined {
+        if (this.rustDictBearerDeclaration(baseExpr) === undefined) return undefined;
+        const name = String(baseExpr.text);
+        const hop = this.rustBearerChainHopArg(keys[0], keyStrs[0], name);
+        if (hop === undefined) return undefined;
+        const value = this.rustPrintedBoolArg(valueText) ? `Value::Bool(${valueText})` : valueText;
+        const readsReceiver = new RegExp(`\\b${name}\\b`).test(value);
+        const acc = `${name}.entry(${hop}).or_default()`;
+        // Two levels: the bucket holds a plain map, so the write is the guarded
+        // native insert the boxed form prints for the same shape.
+        const lastKey = keyStrs.length === 2 ? this.rustBearerChainHopArg(keys[1], keyStrs[1], name) : undefined;
+        if (lastKey !== undefined) {
+            const trimmed = value.trim();
+            const payload = readsReceiver ? '__be_tmp'
+                : (/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed) && !/^(?:self|true|false)$/.test(trimmed) ? `${trimmed}.clone()` : value);
+            const insert = `if let Value::Dict(__d) = ${acc} { std::sync::Arc::make_mut(__d).insert(${lastKey}, ${payload}); }`;
+            return readsReceiver ? `{ let __be_tmp = ${value}; ${insert} }` : insert;
+        }
+        // Deeper: every middle hop stays a `get_value_mut`, the last write the helper.
+        let deepAcc = acc;
+        for (const middle of keyStrs.slice(1, -1)) deepAcc = `get_value_mut(${deepAcc}, &${middle})`;
+        const tail = `add_element_to_object(${deepAcc}, &${keyStrs[keyStrs.length - 1]}, `;
+        if (readsReceiver) return `{ let __be_tmp = ${value}; ${tail}__be_tmp); }`;
+        return `${tail}${value})`;
     }
 
     // ── hx10w6 R01: the write side of the typed dict bearer ───────────────────
@@ -5988,9 +6110,12 @@ export class RustTranspiler extends BaseTranspiler {
         const base: any = target.expression;
         const receiver = this.rustNativeInsertReceiver(base);
         // ws-capable tiers: a local/param may alias a `client.subscriptions` snapshot
-        // (live-store route in the helper); admit only fields and literal-built locals.
+        // (live-store route in the helper); admit only fields, literal-built locals and
+        // declared-Dict table locals whose initialiser reads no tagged container.
         const restTier = /\/ts\/src\/[^/]+\.ts$/.test(this.r05Path(node));
-        if (receiver !== undefined && !receiver.isField && !restTier && receiver.plain !== true) {
+        const declaredLocal = !receiver?.isField && this.rustDeclaredLocalEntry(base) !== undefined
+            && !this.rustLocalInitReadsTaggedContainer(base);
+        if (receiver !== undefined && !receiver.isField && !restTier && receiver.plain !== true && !declaredLocal) {
             return undefined;
         }
         if (receiver === undefined || this.rustParamShadowOf(base) !== undefined
@@ -6006,10 +6131,22 @@ export class RustTranspiler extends BaseTranspiler {
             return `if let Value::Dict(__d) = &mut ${recv} { std::sync::Arc::make_mut(__d).shift_remove(${literal}); }`;
         }
         const keyExpr = this.printNode(keyNode, 0).trim();
-        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyExpr) || keyExpr === 'self' || keyExpr === recv) {
+        if (!this.rustDeleteKeyBorrowable(keyExpr, recv)) {
             return undefined;
         }
-        return `if let (Value::Dict(__d), Value::Str(__k)) = (&mut ${recv}, &${keyExpr}) { std::sync::Arc::make_mut(__d).shift_remove(__k.as_ref()); }`;
+        const emitted = `if let (Value::Dict(__d), Value::Str(__k)) = (&mut ${recv}, &${keyExpr}) { std::sync::Arc::make_mut(__d).shift_remove(__k.as_ref()); }`;
+        return emitted.length > 380 ? undefined : emitted; // keep the line under the long400 budget
+    }
+
+    /** A key the native `if let` can borrow beside `&mut RECV`: one expression
+     *  (no statement), naming neither the receiver nor its owner — the tuple
+     *  would borrow `self` twice — and never a bare `self`. */
+    rustDeleteKeyBorrowable(keyExpr: string, recv: string): boolean {
+        if (keyExpr.length === 0 || keyExpr.includes(';') || /\bself\b/.test(keyExpr)) {
+            return false;
+        }
+        return !(/^[A-Za-z_][A-Za-z0-9_]*$/.test(recv)
+            && new RegExp(`(^|[^A-Za-z0-9_])${recv}([^A-Za-z0-9_]|$)`).test(keyExpr));
     }
 
     /** `this.<field>` with a declared plain-dict type that is no ws container: the
@@ -6100,7 +6237,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (receiver === undefined || node.arguments?.length !== 1) return undefined;
         const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
         if (literal === undefined) return undefined;
-        return `Value::Array(${receiver}.as_str().map(|__s| __s.split("${literal}").map(|__p| Value::Str(__p.to_string().into())).collect()).unwrap_or_default())`;
+        return `Value::Array(${receiver}.as_str().map(|__s| __s.split("${literal}").map(Value::from).collect()).unwrap_or_default())`;
     }
 
     // `x.replace("a", "b")`: the helper replaces every occurrence (`str::replace`), else the receiver.
@@ -6826,7 +6963,7 @@ export class RustTranspiler extends BaseTranspiler {
         const receiver = this.rustR13Receiver(node, receiverText) ?? this.rustR13PlainReceiver(node, receiverText);
         const delim = receiver === undefined ? undefined : this.rustR13StrOperand(node.arguments[0], true);
         if (delim === undefined) return undefined;
-        return `Value::Array(${receiver}.as_str().zip(${delim}.as_str()).map(|(__s, __d)| __s.split(__d).map(|__p| Value::Str(__p.to_string().into())).collect()).unwrap_or_default())`;
+        return `Value::Array(${receiver}.as_str().zip(${delim}.as_str()).map(|(__s, __d)| __s.split(__d).map(Value::from).collect()).unwrap_or_default())`;
     }
 
     // `x.toString()` on a proven-`Str` local: `stringify_simple` of `Str`/`Null` is `Display`.
@@ -7252,15 +7389,41 @@ export class RustTranspiler extends BaseTranspiler {
     /** `x.push(v)` statement on an Arr-only local: `append_to_array`'s cache-push arm needs a Dict. */
     r18ArrPush(node, name: string | undefined, parsedArg: string | undefined): string | undefined {
         const recv: any = node?.expression?.expression;
+        // hx10w7 R04: a `Value` local read straight out of a plain `IndexMap` local
+        // carries no book-cache handle, so its push is the same guarded `Arc::make_mut`.
+        if (name !== undefined && parsedArg !== undefined && this.r18BearerReadLocal(recv)
+            && node?.arguments?.length === 1 && node.arguments[0].kind !== SyntaxKind.SpreadElement
+            && node.parent?.kind === SyntaxKind.ExpressionStatement && name.trim() === this.printNode(recv, 0).trim()
+            && this.rustVecPushShape(node, String(recv.text))) {
+            const bareArg = parsedArg.trim();
+            const bareValue = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(bareArg) && bareArg !== 'self' && bareArg !== 'true' && bareArg !== 'false' ? `${bareArg}.clone()` : bareArg;
+            return `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${bareValue}); }`;
+        }
         if (name === undefined || parsedArg === undefined || node?.arguments?.length !== 1
             || node.arguments[0].kind === SyntaxKind.SpreadElement || node.parent?.kind !== SyntaxKind.ExpressionStatement
             || !this.r18ArrLocal(recv, false) || name.trim() !== this.printNode(recv, 0).trim()) return undefined;
         // the argument is evaluated while `name` is mutably borrowed: it must not read it
         if (!this.rustVecPushShape(node, String(recv.text))) return undefined;
+        // hx10w7 R04: a `Value` local read straight out of a plain `IndexMap` local
+        // carries no book-cache handle, so its push is the same guarded `Arc::make_mut`.
         const arg = parsedArg.trim();
         // `append_to_array` takes the value by move; ccxt's post-pass cloned a bare local there.
         const value = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(arg) && arg !== 'self' && arg !== 'true' && arg !== 'false' ? `${arg}.clone()` : arg;
         return `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${value}); }`;
+    }
+
+    /** A `Value` local whose single declaration is an element read of a local typed as a
+     *  plain `IndexMap<String, Value>`: plain data all the way down, never a book handle. */
+    r18BearerReadLocal(ident: any): boolean {
+        if (ident === undefined || !isIdentifier(ident)) return false;
+        const declaration: any = this.rustSingleLocalDeclaration(ident);
+        const init: any = this.rustSkipWrappers(declaration?.initializer);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || init === undefined) return false;
+        if (!isElementAccessExpression(init)) return false;
+        let root: any = init;
+        while (isElementAccessExpression(root.expression)) root = root.expression;
+        const base: any = this.rustStripWrappers(root.expression);
+        return base !== undefined && isIdentifier(base) && this.rustDictBearerDeclaration(base) !== undefined;
     }
 
     // hx4 R20 — `startsWith/endsWith(..) === true|false` compares the runtime fn's bare bool
