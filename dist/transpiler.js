@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -26970,7 +26970,7 @@ var JAVA_J16_IMPLICIT_API_FILE = /(^|[\\/])ts[\\/]src[\\/]abstract[\\/][a-z0-9_]
 // src/rustTranspiler.ts
 init_esm_shims();
 import { NodeFlags as NodeFlags3, SyntaxKind as SyntaxKind7 } from "typescript/unstable/ast";
-import { isArrayLiteralExpression as isArrayLiteralExpression4, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression3, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isMethodDeclaration as isMethodDeclaration5, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isVariableDeclaration as isVariableDeclaration3 } from "typescript/unstable/ast/is";
+import { isSpreadElement as isSpreadElement3, isArrayLiteralExpression as isArrayLiteralExpression4, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression3, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isMethodDeclaration as isMethodDeclaration5, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isVariableDeclaration as isVariableDeclaration3 } from "typescript/unstable/ast/is";
 import { IndexKind as IndexKind4, ObjectFlags, SignatureKind as SignatureKind2, SymbolFlags as SymbolFlags3, TypeFlags as TypeFlags6 } from "typescript/unstable/sync";
 var parserConfig6 = {
   "ELSEIF_TOKEN": "else if",
@@ -27060,6 +27060,15 @@ var RUST_DECLARED_DICT_LOCALS = {
     safe_dict: 2,
     safe_dict_n: 2,
     safe_dict2: 3
+  },
+  /** base `Exchange` producers -> leading arguments that must be Dict-proven
+   *  (`-1` = all). `extend` always builds a Dict; `omit`/`keysort` hand a
+   *  non-Dict first argument back and `deepExtend` a non-Dict later one. */
+  PRODUCER_CALLEES: {
+    extend: 0,
+    deepExtend: -1,
+    omit: 1,
+    keysort: 1
   },
   /** `&mut` receivers whose writes land inside the container, so a Dict local
    *  stays a Dict (`add_element_to_object` / `append_to_array` no-op on a
@@ -29623,7 +29632,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     for (const candidate of candidates) {
       const declaration = candidate.declaration;
       const start = declaration.getStart();
-      const alwaysDict = this.rustDictProvenExpression(candidate.defaultNode, table, start);
+      const alwaysDict = candidate.source === "producer" ? this.rustDictProducerProven(candidate.defaultNode, table, start) : this.rustDictProvenExpression(candidate.defaultNode, table, start);
       const scan = this.rustDictLocalWriteScan(declaration, candidate.name, table);
       const entries = table.get(candidate.name) ?? [];
       entries.push({
@@ -29650,6 +29659,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (!isCallExpression6(node))
       return void 0;
+    if (this.rustDictProducerCallee(node) !== void 0) {
+      return { source: "producer", defaultNode: node };
+    }
     const callee = this.rustSafeDictCallee(node);
     if (callee === void 0)
       return void 0;
@@ -29663,6 +29675,31 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const printed = this.toSnakeCaseName(expression.name.text);
     return RUST_DECLARED_DICT_LOCALS.SAFE_CALLEES[printed] === void 0 ? void 0 : printed;
+  }
+  /** `this.extend|deepExtend|omit|keysort(..)` resolved to the base `Exchange`
+   *  member in a REST file (whose operands are untagged API data: the copy
+   *  carries no runtime tag key), or undefined. */
+  rustDictProducerCallee(node) {
+    const expression = node.expression;
+    if (!isPropertyAccessExpression3(expression) || expression.expression.kind !== SyntaxKind7.ThisKeyword) {
+      return void 0;
+    }
+    const name = expression.name.text;
+    if (RUST_DECLARED_DICT_LOCALS.PRODUCER_CALLEES[name] === void 0 || this.r23Tier(node) !== "rest")
+      return void 0;
+    const declarations = symbolDeclarations(this.checkerOrUndefined()?.getSymbolAtLocation(expression.name));
+    return declarations.length > 0 && declarations.every((d) => d.getSourceFile().fileName.includes("ts/src/base/")) ? name : void 0;
+  }
+  /** A producer call yields a Dict when every argument whose entries reach the
+   *  result is itself Dict-proven (literal, proven local, nested producer or a
+   *  checker-proven map type). */
+  rustDictProducerProven(node, table, useStart) {
+    const name = this.rustDictProducerCallee(node);
+    if (name === void 0)
+      return false;
+    const count = RUST_DECLARED_DICT_LOCALS.PRODUCER_CALLEES[name];
+    const args = count < 0 ? node.arguments : node.arguments.slice(0, count);
+    return args.every((arg) => !isSpreadElement3(arg) && (this.rustDictProvenExpression(arg, table, useStart) || isCallExpression6(arg) && this.rustDictProducerProven(arg, table, useStart) || this.isProvenMapExpression(arg) && !this.rustTypeIsNullable(this.getCheckedTypeOf(arg))));
   }
   /** True when the expression can only be a Dict at run time: an object
    *  literal, a `safe_dict*` call with a Dict-proven default, an element of a
@@ -29688,7 +29725,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       });
     }
     const info = this.rustDictInitializerInfo(node);
-    return info !== void 0 && this.rustDictProvenExpression(info.defaultNode, table, useStart);
+    return info !== void 0 && info.source !== "producer" && this.rustDictProvenExpression(info.defaultNode, table, useStart);
   }
   /** D2 scan over the enclosing function: an assignment of a non-Dict-proven
    *  value would let the kind change. Every other write path the printer emits
@@ -30110,6 +30147,10 @@ ${classMethods}
    *  runtime value; `Value::Null` is the only box these ever get. */
   rustTypeIsNullish(type) {
     return type !== void 0 && (type.flags & (TypeFlags6.Undefined | TypeFlags6.Null | TypeFlags6.Void | TypeFlags6.Never)) !== 0;
+  }
+  /** A union with a `null`/`undefined` member: the base producers pass such a value through. */
+  rustTypeIsNullable(type) {
+    return type !== void 0 && (type.flags & TypeFlags6.Union) !== 0 && (typeParts(type) ?? []).some((p) => this.rustTypeIsNullish(p));
   }
   isProvenMapExpression(node) {
     return this.isProvenMapType(this.getCheckedTypeOf(node));

@@ -5253,3 +5253,23 @@ describe('rust catch binding', () => {
         expect(out).toContain('if _try_result.is_err() {');
     });
 });
+
+describe('hx11 w8 base Dict producers declare a Dict local', () => {
+    const insert = (receiver: string, key: string) =>
+        `if let Value::Dict(__d) = &mut ${receiver} { std::sync::Arc::make_mut(__d).insert("${key}".into()`;
+    let venue = '';
+    beforeAll(() => {
+        venue = transpiler.transpileRustByPath('./tests/files/input/hx11w8ext/ts/src/venue.ts').content;
+    });
+
+    test('extend of any operands and omit/keysort of a Dict-proven local insert natively', () => {
+        expect(venue).toContain(insert('extended', 'b'));
+        expect(venue).toContain(insert('omitted', 'c'));
+        expect(venue).toContain(insert('sorted', 'd'));
+    });
+
+    test('omit of an unproven or nullable first argument keeps the helper', () => {
+        expect(venue).toContain('add_element_to_object(&mut loose, &Value::Str("e".into())');
+        expect(venue).toContain('add_element_to_object(&mut optional, &Value::Str("f".into())');
+    });
+});

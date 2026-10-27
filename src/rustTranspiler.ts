@@ -1,6 +1,6 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
 import { NodeFlags, SyntaxKind, type Block, type CallExpression, type Declaration, type Expression, type Identifier, type Node, type NodeArray, type ParameterDeclaration, type SourceFile, type VariableDeclaration } from "typescript/unstable/ast";
-import { isArrayLiteralExpression, isArrowFunction, isAsExpression, isBinaryExpression, isBindingElement, isBlock, isCallExpression, isClassDeclaration, isClassExpression, isConditionalExpression, isDeleteExpression, isElementAccessExpression, isForInStatement, isForOfStatement, isIdentifier, isMethodDeclaration, isNoSubstitutionTemplateLiteral, isNonNullExpression, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isReturnStatement, isShorthandPropertyAssignment, isSourceFile, isStatement, isStringLiteral, isStringLiteralLikeNode, isTypeAssertion, isVariableDeclaration } from "typescript/unstable/ast/is";
+import { isSpreadElement, isArrayLiteralExpression, isArrowFunction, isAsExpression, isBinaryExpression, isBindingElement, isBlock, isCallExpression, isClassDeclaration, isClassExpression, isConditionalExpression, isDeleteExpression, isElementAccessExpression, isForInStatement, isForOfStatement, isIdentifier, isMethodDeclaration, isNoSubstitutionTemplateLiteral, isNonNullExpression, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isReturnStatement, isShorthandPropertyAssignment, isSourceFile, isStatement, isStringLiteral, isStringLiteralLikeNode, isTypeAssertion, isVariableDeclaration } from "typescript/unstable/ast/is";
 import { IndexKind, ObjectFlags, SignatureKind, SymbolFlags, TypeFlags, type Symbol as TsSymbol, type Type } from "typescript/unstable/sync";
 import { findAncestor, getAllSuperTypeNodes, isFunctionLike, signatureDeclaration, symbolDeclarations, symbolValueDeclaration, typeParts, typeTarget } from "./tsUtils.js";
 
@@ -128,6 +128,15 @@ export const RUST_DECLARED_DICT_LOCALS = {
         safe_dict: 2,
         safe_dict_n: 2,
         safe_dict2: 3,
+    } as Record<string, number>,
+    /** base `Exchange` producers -> leading arguments that must be Dict-proven
+     *  (`-1` = all). `extend` always builds a Dict; `omit`/`keysort` hand a
+     *  non-Dict first argument back and `deepExtend` a non-Dict later one. */
+    PRODUCER_CALLEES: {
+        extend: 0,
+        deepExtend: -1,
+        omit: 1,
+        keysort: 1,
     } as Record<string, number>,
     /** `&mut` receivers whose writes land inside the container, so a Dict local
      *  stays a Dict (`add_element_to_object` / `append_to_array` no-op on a
@@ -3106,7 +3115,9 @@ export class RustTranspiler extends BaseTranspiler {
         for (const candidate of candidates) {
             const declaration = candidate.declaration;
             const start = declaration.getStart();
-            const alwaysDict = this.rustDictProvenExpression(candidate.defaultNode, table, start);
+            const alwaysDict = candidate.source === 'producer'
+                ? this.rustDictProducerProven(candidate.defaultNode as CallExpression, table, start)
+                : this.rustDictProvenExpression(candidate.defaultNode, table, start);
             const scan = this.rustDictLocalWriteScan(declaration, candidate.name, table);
             const entries = table.get(candidate.name) ?? [];
             entries.push({ kind: RUST_DECLARED_DICT_LOCALS.DICT, name: candidate.name, source: candidate.source,
@@ -3125,6 +3136,9 @@ export class RustTranspiler extends BaseTranspiler {
             return this.rustDictInitializerInfo(node.expression);
         }
         if (!isCallExpression(node)) return undefined;
+        if (this.rustDictProducerCallee(node) !== undefined) {
+            return { source: 'producer', defaultNode: node };
+        }
         const callee = this.rustSafeDictCallee(node);
         if (callee === undefined) return undefined;
         return { source: callee, defaultNode: node.arguments[RUST_DECLARED_DICT_LOCALS.SAFE_CALLEES[callee]] };
@@ -3138,6 +3152,35 @@ export class RustTranspiler extends BaseTranspiler {
         }
         const printed = this.toSnakeCaseName(expression.name.text);
         return RUST_DECLARED_DICT_LOCALS.SAFE_CALLEES[printed] === undefined ? undefined : printed;
+    }
+
+    /** `this.extend|deepExtend|omit|keysort(..)` resolved to the base `Exchange`
+     *  member in a REST file (whose operands are untagged API data: the copy
+     *  carries no runtime tag key), or undefined. */
+    private rustDictProducerCallee(node: CallExpression): string | undefined {
+        const expression = node.expression;
+        if (!isPropertyAccessExpression(expression) || expression.expression.kind !== SyntaxKind.ThisKeyword) {
+            return undefined;
+        }
+        const name = expression.name.text;
+        if (RUST_DECLARED_DICT_LOCALS.PRODUCER_CALLEES[name] === undefined || this.r23Tier(node) !== 'rest') return undefined;
+        const declarations = symbolDeclarations(this.checkerOrUndefined()?.getSymbolAtLocation(expression.name));
+        return declarations.length > 0 && declarations.every((d) => d.getSourceFile().fileName.includes('ts/src/base/'))
+            ? name : undefined;
+    }
+
+    /** A producer call yields a Dict when every argument whose entries reach the
+     *  result is itself Dict-proven (literal, proven local, nested producer or a
+     *  checker-proven map type). */
+    private rustDictProducerProven(node: CallExpression, table: Map<string, RustDeclaredDictLocalEntry[]>, useStart: number): boolean {
+        const name = this.rustDictProducerCallee(node);
+        if (name === undefined) return false;
+        const count = RUST_DECLARED_DICT_LOCALS.PRODUCER_CALLEES[name];
+        const args = count < 0 ? node.arguments : node.arguments.slice(0, count);
+        return args.every((arg) => !isSpreadElement(arg)
+            && (this.rustDictProvenExpression(arg, table, useStart)
+                || (isCallExpression(arg) && this.rustDictProducerProven(arg, table, useStart))
+                || (this.isProvenMapExpression(arg) && !this.rustTypeIsNullable(this.getCheckedTypeOf(arg)))));
     }
 
     /** True when the expression can only be a Dict at run time: an object
@@ -3161,7 +3204,8 @@ export class RustTranspiler extends BaseTranspiler {
             });
         }
         const info = this.rustDictInitializerInfo(node);
-        return info !== undefined && this.rustDictProvenExpression(info.defaultNode, table, useStart);
+        return info !== undefined && info.source !== 'producer'
+            && this.rustDictProvenExpression(info.defaultNode, table, useStart);
     }
 
     /** D2 scan over the enclosing function: an assignment of a non-Dict-proven
@@ -3701,6 +3745,12 @@ export class RustTranspiler extends BaseTranspiler {
      *  runtime value; `Value::Null` is the only box these ever get. */
     rustTypeIsNullish(type: Type): boolean {
         return type !== undefined && (type.flags & (TypeFlags.Undefined | TypeFlags.Null | TypeFlags.Void | TypeFlags.Never)) !== 0;
+    }
+
+    /** A union with a `null`/`undefined` member: the base producers pass such a value through. */
+    rustTypeIsNullable(type: Type | undefined): boolean {
+        return type !== undefined && (type.flags & TypeFlags.Union) !== 0
+            && (typeParts(type) ?? []).some((p) => this.rustTypeIsNullish(p));
     }
 
     isProvenMapExpression(node: Node): boolean {

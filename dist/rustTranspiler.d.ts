@@ -52,6 +52,10 @@ export declare const RUST_DECLARED_DICT_LOCALS: {
     /** printed `self.<callee>` -> index of its `optionalArgs` parameter.
      *  `safe_dict*` returns `optional_args[0]` whenever the key holds a non-Dict. */
     SAFE_CALLEES: Record<string, number>;
+    /** base `Exchange` producers -> leading arguments that must be Dict-proven
+     *  (`-1` = all). `extend` always builds a Dict; `omit`/`keysort` hand a
+     *  non-Dict first argument back and `deepExtend` a non-Dict later one. */
+    PRODUCER_CALLEES: Record<string, number>;
     /** `&mut` receivers whose writes land inside the container, so a Dict local
      *  stays a Dict (`add_element_to_object` / `append_to_array` no-op on a
      *  non-container, `set_value` / `remove` write a key). */
@@ -404,6 +408,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustDictInitializerInfo;
     /** Printed `safe_dict*` callee name of `self.<name>(..)`, or undefined. */
     private rustSafeDictCallee;
+    /** `this.extend|deepExtend|omit|keysort(..)` resolved to the base `Exchange`
+     *  member in a REST file (whose operands are untagged API data: the copy
+     *  carries no runtime tag key), or undefined. */
+    private rustDictProducerCallee;
+    /** A producer call yields a Dict when every argument whose entries reach the
+     *  result is itself Dict-proven (literal, proven local, nested producer or a
+     *  checker-proven map type). */
+    private rustDictProducerProven;
     /** True when the expression can only be a Dict at run time: an object
      *  literal, a `safe_dict*` call with a Dict-proven default, an element of a
      *  one-element literal default, or an already-proven local. */
@@ -470,6 +482,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `undefined` / `null` / `void` / `never` — a union member that carries no
      *  runtime value; `Value::Null` is the only box these ever get. */
     rustTypeIsNullish(type: Type): boolean;
+    /** A union with a `null`/`undefined` member: the base producers pass such a value through. */
+    rustTypeIsNullable(type: Type | undefined): boolean;
     isProvenMapExpression(node: Node): boolean;
     isProvenListExpression(node: Node): boolean;
     /** RHS of a generator destructure that provably holds a `Value::Arr`: the
