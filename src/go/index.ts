@@ -1,0 +1,30 @@
+// ccxt's Go printer hooks, moved from ccxt build/ (hx11 ast-move). `installCcxtGoHooks` installs them in the order
+// build/go-worker.ts and build/goTranspiler.ts used (local types, indexable types, parameter types, dict params,
+// GB05 frame params, GB11 handleErrors code, sign typing), so the printed Go is unchanged.
+import { installCcxtGoLocalTypes, installCcxtGoIndexableTypes } from './go-local-types.js';
+import { installCcxtGoParamTypes } from './hx10w3-G08.js';
+import { installCcxtGoDictParams } from './hx10w8-GB01.js';
+import { installCcxtGoGb05ParamTypes } from './hx10w8-GB05.js';
+import { installCcxtGoGb11HandleErrorsCode } from './hx10w9-GB11.js';
+import { installCcxtGoSignTyping } from './hx11-sign-typing.js';
+
+export function installCcxtGoHooks (goTranspiler: any, unifiedInt64Params?: any): void {
+    installCcxtGoLocalTypes (goTranspiler, unifiedInt64Params);
+    installCcxtGoIndexableTypes (goTranspiler);
+    installCcxtGoParamTypes (goTranspiler);
+    installCcxtGoDictParams (goTranspiler);
+    installCcxtGoGb05ParamTypes (goTranspiler);
+    installCcxtGoGb11HandleErrorsCode (goTranspiler);
+    installCcxtGoSignTyping (goTranspiler);
+}
+
+export {
+    installCcxtGoLocalTypes, installCcxtGoIndexableTypes, installCcxtGoParamTypes, installCcxtGoDictParams,
+    installCcxtGoGb05ParamTypes, installCcxtGoGb11HandleErrorsCode, installCcxtGoSignTyping,
+};
+export { CCXT_GO_HELPER_RETURN_TYPES, CCXT_GO_BOOL_METHOD_NAMES, CCXT_GO_STRING_PTR_METHOD_NAMES } from './go-local-types.js';
+export { hx10G06Check } from './hx10w3-G06.js';
+export { g08w3Check } from './hx10w3-G08.js';
+export { hx10w8GB01Check } from './hx10w8-GB01.js';
+export { hx10w8GB05Check } from './hx10w8-GB05.js';
+export { hx10w9GB11Check } from './hx10w9-GB11.js';

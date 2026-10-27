@@ -1,4 +1,4 @@
-"use strict";Object.defineProperty(exports, "__esModule", {value: true}); function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) { newObj[key] = obj[key]; } } } newObj.default = obj; return newObj; } } function _nullishCoalesce(lhs, rhsFn) { if (lhs != null) { return lhs; } else { return rhsFn(); } } function _optionalChain(ops) { let lastAccessLHS = undefined; let value = ops[0]; let i = 1; while (i < ops.length) { const op = ops[i]; const fn = ops[i + 1]; i += 2; if ((op === 'optionalAccess' || op === 'optionalCall') && value == null) { return undefined; } if (op === 'access' || op === 'optionalAccess') { lastAccessLHS = value; value = fn(value); } else if (op === 'call' || op === 'optionalCall') { value = fn((...args) => value.call(lastAccessLHS, ...args)); lastAccessLHS = undefined; } } return value; }
+"use strict";Object.defineProperty(exports, "__esModule", {value: true}); function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) { newObj[key] = obj[key]; } } } newObj.default = obj; return newObj; } } function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; } function _nullishCoalesce(lhs, rhsFn) { if (lhs != null) { return lhs; } else { return rhsFn(); } } function _optionalChain(ops) { let lastAccessLHS = undefined; let value = ops[0]; let i = 1; while (i < ops.length) { const op = ops[i]; const fn = ops[i + 1]; i += 2; if ((op === 'optionalAccess' || op === 'optionalCall') && value == null) { return undefined; } if (op === 'access' || op === 'optionalAccess') { lastAccessLHS = value; value = fn(value); } else if (op === 'call' || op === 'optionalCall') { value = fn((...args) => value.call(lastAccessLHS, ...args)); lastAccessLHS = undefined; } } return value; }
 
 
 
@@ -12,34 +12,35 @@
 
 
 
-var _chunkFQAM6XR2cjs = require('./chunk-FQAM6XR2.cjs');
+
+var _chunkC7C726CWcjs = require('./chunk-C7C726CW.cjs');
 
 // src/dirname.cjs
-var require_dirname = _chunkFQAM6XR2cjs.__commonJS.call(void 0, {
+var require_dirname = _chunkC7C726CWcjs.__commonJS.call(void 0, {
   "src/dirname.cjs"(exports, module) {
-    _chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
+    _chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
     module.exports = __dirname;
   }
 });
 
 // src/transpiler.ts
-_chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
-var import_dirname = _chunkFQAM6XR2cjs.__toESM.call(void 0, require_dirname(), 1);
-var _ast = require('typescript/unstable/ast');
-var _sync = require('typescript/unstable/sync');
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+var import_dirname = _chunkC7C726CWcjs.__toESM.call(void 0, require_dirname(), 1);
+var _ast = require('typescript/unstable/ast'); var tsAst = _interopRequireWildcard(_ast);
+var _sync = require('typescript/unstable/sync'); var tsSync = _interopRequireWildcard(_sync);
 
 // src/pythonTranspiler.ts
-_chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 // src/baseTranspiler.ts
-_chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
-var _is = require('typescript/unstable/ast/is');
+var _is = require('typescript/unstable/ast/is'); var tsIs = _interopRequireWildcard(_is);
 var _factory = require('typescript/unstable/ast/factory');
 
 
 // src/types.ts
-_chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var TranspilationError = class extends Error {
   constructor(id, message, nodeText, start, end) {
     const parsedMessage = `Lang: ${id} Error: ${message} at ${start}:${end} node: "${nodeText}"`;
@@ -49,7 +50,7 @@ var TranspilationError = class extends Error {
 };
 
 // src/utils.ts
-_chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function regexAll(text, array) {
   for (const i in array) {
     let regex = array[i][0];
@@ -64,7 +65,7 @@ function unCamelCase(s) {
 }
 
 // src/logger.ts
-_chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var _colorette = require('colorette');
 var Logger = class {
   // static createInstanceIfNeeded(): void {
@@ -389,7 +390,7 @@ var BaseTranspiler = class {
     return type !== void 0 && this.getTypeFromRawType(type) === this.PROMISE_TYPE_KEYWORD;
   }
   isImplicitAsyncFunction(node) {
-    if (!this.implicitAsyncTranspiling || !_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, node) || this.hasAsyncModifier(node)) {
+    if (!this.implicitAsyncTranspiling || !_chunkC7C726CWcjs.isFunctionLike.call(void 0, node) || this.hasAsyncModifier(node)) {
       return false;
     }
     const signature = this.getChecker().getSignatureFromDeclaration(node);
@@ -410,7 +411,7 @@ var BaseTranspiler = class {
       return void 0;
     }
     let method = void 0;
-    let parentClass = _chunkFQAM6XR2cjs.getAllSuperTypeNodes.call(void 0, node.parent)[0];
+    let parentClass = _chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, node.parent)[0];
     while (parentClass !== void 0) {
       const parentClassType = this.getChecker().getTypeAtLocation(parentClass);
       const parentClassDecl = _optionalChain([parentClassType, 'optionalAccess', _4 => _4.getSymbol, 'call', _5 => _5(), 'optionalAccess', _6 => _6.valueDeclaration, 'optionalAccess', _7 => _7.resolve, 'call', _8 => _8()]);
@@ -427,7 +428,7 @@ var BaseTranspiler = class {
           }
         }
       });
-      parentClass = _nullishCoalesce(_chunkFQAM6XR2cjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
+      parentClass = _nullishCoalesce(_chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
     }
     return method;
   }
@@ -1391,7 +1392,7 @@ var BaseTranspiler = class {
   }
   wrapImplicitReturnAwait(node) {
     let exp = node.expression;
-    if (!exp || _is.isAwaitExpression.call(void 0, exp) || !this.isImplicitAsyncFunction(_chunkFQAM6XR2cjs.findAncestor.call(void 0, node, _chunkFQAM6XR2cjs.isFunctionLike)) || !this.isPromiseType(this.getChecker().getTypeAtLocation(exp))) {
+    if (!exp || _is.isAwaitExpression.call(void 0, exp) || !this.isImplicitAsyncFunction(_chunkC7C726CWcjs.findAncestor.call(void 0, node, _chunkC7C726CWcjs.isFunctionLike)) || !this.isPromiseType(this.getChecker().getTypeAtLocation(exp))) {
       return node;
     }
     if (_is.isConditionalExpression.call(void 0, exp) || _is.isBinaryExpression.call(void 0, exp)) {
@@ -2212,7 +2213,7 @@ var PythonTranspiler = class extends BaseTranspiler {
 };
 
 // src/phpTranspiler.ts
-_chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
@@ -2607,7 +2608,7 @@ var PhpTranspiler = class extends BaseTranspiler {
 };
 
 // src/csharpTranspiler.ts
-_chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
@@ -3180,7 +3181,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return _nullishCoalesce(cached, () => ( void 0));
     }
     let method = void 0;
-    let parentClass = _chunkFQAM6XR2cjs.getAllSuperTypeNodes.call(void 0, node.parent)[0];
+    let parentClass = _chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, node.parent)[0];
     while (parentClass !== void 0) {
       const parentClassDecl = _optionalChain([this, 'access', _66 => _66.getChecker, 'call', _67 => _67(), 'access', _68 => _68.getTypeAtLocation, 'call', _69 => _69(parentClass), 'optionalAccess', _70 => _70.getSymbol, 'call', _71 => _71(), 'optionalAccess', _72 => _72.valueDeclaration, 'optionalAccess', _73 => _73.resolve, 'call', _74 => _74()]);
       if (parentClassDecl === void 0) {
@@ -3189,7 +3190,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
         break;
       }
       method = _nullishCoalesce(this.csharpMethodsByName(parentClassDecl).get(node.name.text), () => ( method));
-      parentClass = _nullishCoalesce(_chunkFQAM6XR2cjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
+      parentClass = _nullishCoalesce(_chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
     }
     this.csharpMethodOverrides.set(node, _nullishCoalesce(method, () => ( null)));
     return method;
@@ -3607,7 +3608,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     let node = counter;
     while (node.parent !== void 0) {
       const parent = node.parent;
-      if (_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, parent)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, parent)) {
         return void 0;
       }
       if (_is.isForStatement.call(void 0, parent) && this.csharpContains(parent.statement, counter) && this.csharpForBoundsCounter(parent, counter, receiver)) {
@@ -3775,7 +3776,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     const index = /* @__PURE__ */ new Map();
     const collect = (n) => {
-      if (n !== func && _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, n)) {
+      if (n !== func && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n)) {
         return;
       }
       if (_is.isBinaryExpression.call(void 0, n) && n.operatorToken.kind === _ast.SyntaxKind.InKeyword) {
@@ -4144,7 +4145,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     let node = read;
     while (_optionalChain([node, 'optionalAccess', _223 => _223.parent]) !== void 0) {
       const parent = node.parent;
-      if (_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, parent)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, parent)) {
         return false;
       }
       if (_is.isForStatement.call(void 0, parent) && this.csharpForBoundsIndex(parent, read, receiverSymbol, indexSymbol)) {
@@ -5794,8 +5795,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (!_is.isMethodDeclaration.call(void 0, declaration) || this.csharpBooleanReturnType(declaration) !== "bool") {
       return false;
     }
-    const owner = _chunkFQAM6XR2cjs.findAncestor.call(void 0, declaration, _is.isClassLikeDeclaration);
-    if (owner === void 0 || owner !== _chunkFQAM6XR2cjs.findAncestor.call(void 0, node, _is.isClassLikeDeclaration)) {
+    const owner = _chunkC7C726CWcjs.findAncestor.call(void 0, declaration, _is.isClassLikeDeclaration);
+    if (owner === void 0 || owner !== _chunkC7C726CWcjs.findAncestor.call(void 0, node, _is.isClassLikeDeclaration)) {
       return false;
     }
     return _optionalChain([checker, 'access', _393 => _393.getSymbolAtLocation, 'call', _394 => _394(declaration.name), 'optionalAccess', _395 => _395.declarations, 'optionalAccess', _396 => _396.length]) === 1;
@@ -6313,7 +6314,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (csharpListParamFileIsPrintedAlone(node)) {
       return void 0;
     }
-    const method = _chunkFQAM6XR2cjs.findAncestor.call(void 0, node, (n) => _is.isMethodDeclaration.call(void 0, n));
+    const method = _chunkC7C726CWcjs.findAncestor.call(void 0, node, (n) => _is.isMethodDeclaration.call(void 0, n));
     if (method === void 0 || method.name === void 0 || method.parameters === void 0) {
       return void 0;
     }
@@ -6470,7 +6471,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (name === "") {
       return true;
     }
-    const method = _chunkFQAM6XR2cjs.findAncestor.call(void 0, parameter, (n) => _is.isMethodDeclaration.call(void 0, n));
+    const method = _chunkC7C726CWcjs.findAncestor.call(void 0, parameter, (n) => _is.isMethodDeclaration.call(void 0, n));
     if (method === void 0 || method.body === void 0) {
       return false;
     }
@@ -6498,7 +6499,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (name === "") {
       return true;
     }
-    const fn = _chunkFQAM6XR2cjs.findAncestor.call(void 0, declaration, (n) => _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, n));
+    const fn = _chunkC7C726CWcjs.findAncestor.call(void 0, declaration, (n) => _chunkC7C726CWcjs.isFunctionLike.call(void 0, n));
     if (fn === void 0 || fn.body === void 0) {
       return false;
     }
@@ -6540,7 +6541,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
         return false;
       }
       if (declaration.kind === _ast.SyntaxKind.Parameter) {
-        const method = _chunkFQAM6XR2cjs.findAncestor.call(void 0, declaration, (n) => _is.isMethodDeclaration.call(void 0, n));
+        const method = _chunkC7C726CWcjs.findAncestor.call(void 0, declaration, (n) => _is.isMethodDeclaration.call(void 0, n));
         if (decide === void 0 || method === void 0 || method.name === void 0 || method.parameters === void 0) {
           return false;
         }
@@ -6573,7 +6574,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (listType !== void 0) {
       return listType;
     }
-    const method = _chunkFQAM6XR2cjs.findAncestor.call(void 0, node, (n) => _is.isMethodDeclaration.call(void 0, n));
+    const method = _chunkC7C726CWcjs.findAncestor.call(void 0, node, (n) => _is.isMethodDeclaration.call(void 0, n));
     const name = method === void 0 || method.name === void 0 ? void 0 : method.name.getText().trim();
     const row = name === void 0 ? void 0 : CSHARP_OVERRIDE_PARAM_TYPES[name];
     const wanted = row === void 0 ? void 0 : row[method.parameters.indexOf(node)];
@@ -6637,7 +6638,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (this.checkerOrUndefined() === void 0) {
       return void 0;
     }
-    const method = _chunkFQAM6XR2cjs.findAncestor.call(void 0, node, (n) => _is.isMethodDeclaration.call(void 0, n));
+    const method = _chunkC7C726CWcjs.findAncestor.call(void 0, node, (n) => _is.isMethodDeclaration.call(void 0, n));
     if (method === void 0) {
       return void 0;
     }
@@ -6820,7 +6821,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
       if (_optionalChain([declaration, 'optionalAccess', _512 => _512.kind]) !== _ast.SyntaxKind.Parameter) {
         return this.csharpDeclaredLocalType(value) === "bool";
       }
-      const method = _chunkFQAM6XR2cjs.findAncestor.call(void 0, declaration, (n) => _is.isMethodDeclaration.call(void 0, n));
+      const method = _chunkC7C726CWcjs.findAncestor.call(void 0, declaration, (n) => _is.isMethodDeclaration.call(void 0, n));
       const parameterIndex = method === void 0 ? -1 : method.parameters.indexOf(declaration);
       return parameterIndex >= 0 && _optionalChain([accepted, 'access', _513 => _513.get, 'call', _514 => _514(method), 'optionalAccess', _515 => _515.has, 'call', _516 => _516(parameterIndex)]) === true;
     }
@@ -6998,8 +6999,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (declaration === void 0 || !_is.isMethodDeclaration.call(void 0, declaration)) {
       return void 0;
     }
-    const owner = _chunkFQAM6XR2cjs.findAncestor.call(void 0, declaration, _is.isClassLikeDeclaration);
-    if (owner === void 0 || owner !== _chunkFQAM6XR2cjs.findAncestor.call(void 0, node, _is.isClassLikeDeclaration)) {
+    const owner = _chunkC7C726CWcjs.findAncestor.call(void 0, declaration, _is.isClassLikeDeclaration);
+    if (owner === void 0 || owner !== _chunkC7C726CWcjs.findAncestor.call(void 0, node, _is.isClassLikeDeclaration)) {
       return void 0;
     }
     const printed = this.csharpPrintedReturnType(declaration);
@@ -7082,7 +7083,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // NullReferenceException a `: boolean` method returning null deserves (a `: string` one
   // answers null, the reference-type cast the box already has)
   printReturnStatement(node, identation) {
-    const owner = _chunkFQAM6XR2cjs.findAncestor.call(void 0, node.parent, _chunkFQAM6XR2cjs.isFunctionLike);
+    const owner = _chunkC7C726CWcjs.findAncestor.call(void 0, node.parent, _chunkC7C726CWcjs.isFunctionLike);
     const booleanType = this.csharpBooleanReturnType(owner);
     if (booleanType === void 0) {
       const stringType = this.csharpStringReturnType(owner);
@@ -8504,11 +8505,11 @@ var CSharpTranspiler = class extends BaseTranspiler {
 };
 
 // src/transpiler.ts
-var _path = require('path'); var path2 = _interopRequireWildcard(_path); var path = _interopRequireWildcard(_path);
-var _fs = require('fs'); var fs2 = _interopRequireWildcard(_fs); var fs = _interopRequireWildcard(_fs);
+var _path = require('path'); var path7 = _interopRequireWildcard(_path); var path = _interopRequireWildcard(_path);
+var _fs = require('fs'); var fs6 = _interopRequireWildcard(_fs); var fs = _interopRequireWildcard(_fs);
 
 // src/goTranspiler.ts
-_chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
@@ -13521,7 +13522,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
           continue;
         }
         if (process.env.GP13_DEBUG) {
-          _chunkFQAM6XR2cjs.__require.call(void 0, "fs").appendFileSync(process.env.GP13_DEBUG, "site " + methodName + " " + file + " arg=" + JSON.stringify((_nullishCoalesce(arg, () => ( ""))).substring(0, 50)) + " ok=" + String(this.goTextSliceArgumentMatches(arg, goType, file, tree, match.index)) + "\n");
+          _chunkC7C726CWcjs.__require.call(void 0, "fs").appendFileSync(process.env.GP13_DEBUG, "site " + methodName + " " + file + " arg=" + JSON.stringify((_nullishCoalesce(arg, () => ( ""))).substring(0, 50)) + " ok=" + String(this.goTextSliceArgumentMatches(arg, goType, file, tree, match.index)) + "\n");
         }
         if (!this.goTextSliceArgumentMatches(arg, goType, file, tree, match.index)) {
           passes = false;
@@ -14098,7 +14099,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
     let child = ident;
     let parent = ident.parent;
-    while (parent !== void 0 && !_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, parent)) {
+    while (parent !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, parent)) {
       if (parent.kind === _ast.SyntaxKind.Block) {
         const statements = _nullishCoalesce(parent.statements, () => ( []));
         const at = statements.indexOf(child);
@@ -14714,7 +14715,7 @@ ${iden}}`;
         }
         return;
       }
-      const inner = nested || _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, n);
+      const inner = nested || _chunkC7C726CWcjs.isFunctionLike.call(void 0, n);
       n.forEachChild((c) => visit(c, inner));
     };
     scope.forEachChild((c) => visit(c, false));
@@ -15422,7 +15423,7 @@ ${indent}}`);
     if (fileImports.size === 0) {
       return body;
     }
-    return [...fileImports].sort().map((path3) => `import "${path3}"`).join("\n") + "\n\n" + body;
+    return [...fileImports].sort().map((path8) => `import "${path8}"`).join("\n") + "\n\n" + body;
   }
   goBinaryMemoized(node, key, compute) {
     const outermost = this.goBinaryMemo === void 0;
@@ -16590,7 +16591,7 @@ ${indent}}`);
     const parent = n.parent;
     const stored = _optionalChain([parent, 'optionalAccess', _1656 => _1656.kind]) === _ast.SyntaxKind.BinaryExpression && parent.right === n && _optionalChain([parent, 'access', _1657 => _1657.operatorToken, 'optionalAccess', _1658 => _1658.kind]) === _ast.SyntaxKind.EqualsToken && _optionalChain([parent, 'access', _1659 => _1659.left, 'optionalAccess', _1660 => _1660.kind]) === _ast.SyntaxKind.ElementAccessExpression || _optionalChain([parent, 'optionalAccess', _1661 => _1661.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n;
     let method = _optionalChain([param, 'optionalAccess', _1662 => _1662.parent]);
-    while (method !== void 0 && !_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, method)) {
+    while (method !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, method)) {
       method = method.parent;
     }
     const methodName = String(_nullishCoalesce(_optionalChain([method, 'optionalAccess', _1663 => _1663.name, 'optionalAccess', _1664 => _1664.text]), () => ( "")));
@@ -18270,7 +18271,7 @@ ${this.getIden(level)}}()`;
   }
   isInsideVoidFunction(node) {
     for (let cur = node.parent; cur; cur = cur.parent) {
-      if (_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, cur)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, cur)) {
         return cur.type === void 0 || cur.type.kind === _ast.SyntaxKind.VoidKeyword;
       }
     }
@@ -18850,7 +18851,7 @@ GoTranspiler.prototype.g13NumericParameterCandidates = function(param) {
 };
 
 // src/javaTranspiler.ts
-_chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
@@ -19409,7 +19410,7 @@ var JavaTranspiler = class extends BaseTranspiler {
     let chain = this.overrideChainCache.get(classDeclaration);
     if (chain === void 0) {
       chain = [];
-      let parentClass = _chunkFQAM6XR2cjs.getAllSuperTypeNodes.call(void 0, classDeclaration)[0];
+      let parentClass = _chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, classDeclaration)[0];
       while (parentClass !== void 0) {
         const parentClassDecl = _optionalChain([this, 'access', _2028 => _2028.getChecker, 'call', _2029 => _2029(), 'access', _2030 => _2030.getTypeAtLocation, 'call', _2031 => _2031(parentClass), 'optionalAccess', _2032 => _2032.getSymbol, 'call', _2033 => _2033(), 'optionalAccess', _2034 => _2034.valueDeclaration, 'optionalAccess', _2035 => _2035.resolve, 'call', _2036 => _2036()]);
         if (parentClassDecl === void 0) {
@@ -19423,7 +19424,7 @@ var JavaTranspiler = class extends BaseTranspiler {
           }
         }
         chain.push(byName);
-        parentClass = _nullishCoalesce(_chunkFQAM6XR2cjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
+        parentClass = _nullishCoalesce(_chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
       }
       this.overrideChainCache.set(classDeclaration, chain);
     }
@@ -20735,7 +20736,7 @@ ${this.getIden(identation)}}}`;
   enclosingFunctionLike(node) {
     let current = _optionalChain([node, 'optionalAccess', _2254 => _2254.parent]);
     while (current) {
-      if (_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, current)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, current)) {
         return current;
       }
       current = current.parent;
@@ -20958,7 +20959,7 @@ ${this.getIden(identation)}}}`;
       return false;
     }
     let scope = node;
-    while (scope && !_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope)) {
+    while (scope && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope)) {
       scope = scope.parent;
     }
     if (!scope) {
@@ -21015,7 +21016,7 @@ ${this.getIden(identation)}}}`;
       return true;
     }
     let scope = node;
-    while (scope && !_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope)) {
+    while (scope && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope)) {
       scope = scope.parent;
     }
     if (!scope) {
@@ -21115,7 +21116,7 @@ ${this.getIden(identation)}}}`;
   // itself; an assignment could replace the HashMap with a List or a class instance.
   javaLocalIsReassigned(node, admitsWrite) {
     let scope = node;
-    while (scope && !_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope)) {
+    while (scope && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope)) {
       scope = scope.parent;
     }
     if (!scope) {
@@ -21176,7 +21177,7 @@ ${this.getIden(identation)}}}`;
     let returns = 0;
     let proven = true;
     const walk = (n) => {
-      if (!proven || n === void 0 || n !== declaration.body && _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, n)) {
+      if (!proven || n === void 0 || n !== declaration.body && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n)) {
         return;
       }
       if (_is.isReturnStatement.call(void 0, n)) {
@@ -21255,7 +21256,7 @@ ${this.getIden(identation)}}}`;
       if (!plain || current === void 0) {
         return;
       }
-      if (_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, current) && current !== declaration) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, current) && current !== declaration) {
         return;
       }
       if (_is.isReturnStatement.call(void 0, current)) {
@@ -22239,7 +22240,7 @@ ${this.getIden(identation)}}}`;
     let returns = 0;
     let ok = true;
     const scan = (n) => {
-      if (!ok || n !== method && _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, n)) {
+      if (!ok || n !== method && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n)) {
         return;
       }
       if (_is.isReturnStatement.call(void 0, n)) {
@@ -22371,7 +22372,7 @@ ${this.getIden(identation)}}}`;
       if (n === void 0) {
         return;
       }
-      if (n !== method && _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, n)) {
+      if (n !== method && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n)) {
         return;
       }
       if (_is.isReturnStatement.call(void 0, n)) {
@@ -23791,7 +23792,7 @@ ${this.getIden(identation)}}}`;
   // `++`/`--` keep the primitive int, any other operator would not
   javaCounterHasNoBoxWrite(node, symbol) {
     let scope = node.parent;
-    while (scope !== void 0 && !_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, scope) && scope.kind !== _ast.SyntaxKind.SourceFile) {
+    while (scope !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, scope) && scope.kind !== _ast.SyntaxKind.SourceFile) {
       scope = scope.parent;
     }
     if (scope === void 0) {
@@ -23990,13 +23991,13 @@ ${this.getIden(identation)}}}`;
       return false;
     }
     let enclosing = forStatement.parent;
-    while (enclosing && !_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, enclosing)) {
+    while (enclosing && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, enclosing)) {
       enclosing = enclosing.parent;
     }
     if (enclosing) {
       const body = _nullishCoalesce(enclosing.body, () => ( enclosing));
       const scanOuter = (n) => {
-        if (!safe || !n || n === forStatement || _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, n)) {
+        if (!safe || !n || n === forStatement || _chunkC7C726CWcjs.isFunctionLike.call(void 0, n)) {
           return;
         }
         if (n.kind === _ast.SyntaxKind.BinaryExpression && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(n.operatorToken.kind) && _optionalChain([n, 'access', _2629 => _2629.left, 'optionalAccess', _2630 => _2630.kind]) === _ast.SyntaxKind.Identifier && n.left.text === name) {
@@ -25292,7 +25293,7 @@ ${this.getIden(identation)}}}`;
       return false;
     }
     const declaration = _optionalChain([this, 'access', _2714 => _2714.getChecker, 'call', _2715 => _2715(), 'access', _2716 => _2716.getSymbolAtLocation, 'call', _2717 => _2717(node), 'optionalAccess', _2718 => _2718.valueDeclaration, 'optionalAccess', _2719 => _2719.resolve, 'call', _2720 => _2720()]);
-    return _optionalChain([declaration, 'optionalAccess', _2721 => _2721.kind]) === _ast.SyntaxKind.VariableDeclaration && (_chunkFQAM6XR2cjs.getCombinedNodeFlags.call(void 0, declaration) & _ast.NodeFlags.Const) === _ast.NodeFlags.Const;
+    return _optionalChain([declaration, 'optionalAccess', _2721 => _2721.kind]) === _ast.SyntaxKind.VariableDeclaration && (_chunkC7C726CWcjs.getCombinedNodeFlags.call(void 0, declaration) & _ast.NodeFlags.Const) === _ast.NodeFlags.Const;
   }
   printPromiseAllCall(node, identation, parsedArg = void 0) {
     return _nullishCoalesce(this.printNativePromiseAllCall(node), () => ( `Helpers.promiseAll(${parsedArg})`));
@@ -25807,7 +25808,7 @@ ${this.getIden(identation)}}}`;
       if (!ok) {
         return;
       }
-      if (current !== declaration && _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, current)) {
+      if (current !== declaration && _chunkC7C726CWcjs.isFunctionLike.call(void 0, current)) {
         return;
       }
       if (_is.isReturnStatement.call(void 0, current)) {
@@ -25928,7 +25929,7 @@ ${this.getIden(identation)}}}`;
   // identifier write must pass `accepts`; `tuples` also checks `[ x, params ] = ...` destructures
   javaWritesAreBoxed(symbol, decl, next, accepts, tuples) {
     let fn = decl.parent;
-    while (fn !== void 0 && !_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, fn)) {
+    while (fn !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, fn)) {
       fn = fn.parent;
     }
     if (fn === void 0) {
@@ -26707,7 +26708,7 @@ JavaTranspiler.prototype.hx4J09LiteralTupleElement = function(node, index) {
   let returns = 0;
   let ok = true;
   const scan = (current) => {
-    if (!ok || current !== declaration && _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, current)) {
+    if (!ok || current !== declaration && _chunkC7C726CWcjs.isFunctionLike.call(void 0, current)) {
       return;
     }
     if (_is.isReturnStatement.call(void 0, current)) {
@@ -26739,7 +26740,7 @@ JavaTranspiler.prototype.hx4J09CatchCannotWrap = function(node) {
     if (!ok) {
       return;
     }
-    if (_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, current) || current.kind === _ast.SyntaxKind.AwaitExpression || current.kind === _ast.SyntaxKind.TryStatement) {
+    if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, current) || current.kind === _ast.SyntaxKind.AwaitExpression || current.kind === _ast.SyntaxKind.TryStatement) {
       ok = false;
       return;
     }
@@ -26765,7 +26766,7 @@ JavaTranspiler.prototype.hx4J09CoreArgument = function(type, printed, node) {
     return void 0;
   }
   const declaration = this.javaDeclarationOfIdentifier(node);
-  if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || _optionalChain([declaration, 'access', _2947 => _2947.name, 'optionalAccess', _2948 => _2948.text]) !== node.text || (_chunkFQAM6XR2cjs.getCombinedNodeFlags.call(void 0, declaration) & _ast.NodeFlags.Const) === 0) {
+  if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || _optionalChain([declaration, 'access', _2947 => _2947.name, 'optionalAccess', _2948 => _2948.text]) !== node.text || (_chunkC7C726CWcjs.getCombinedNodeFlags.call(void 0, declaration) & _ast.NodeFlags.Const) === 0) {
     return void 0;
   }
   const initializer = declaration.initializer;
@@ -26863,7 +26864,7 @@ var JAVA_J16_IMPLICIT_API_FILE = /(^|[\\/])ts[\\/]src[\\/]abstract[\\/][a-z0-9_]
 }
 
 // src/rustTranspiler.ts
-_chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
@@ -27254,7 +27255,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "boolean";
     if (flags & _sync.TypeFlags.Union) {
       let kind = void 0;
-      for (const member of _nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( []))) {
+      for (const member of _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []))) {
         if (member.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Null)) {
           continue;
         }
@@ -27275,7 +27276,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (type === void 0)
       return false;
     if (type.flags & _sync.TypeFlags.Union) {
-      const members = _nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( []));
+      const members = _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []));
       return members.length > 0 && members.every((member) => this.isBooleanValueType(member));
     }
     return (type.flags & (_sync.TypeFlags.Boolean | _sync.TypeFlags.BooleanLiteral)) !== 0;
@@ -27285,7 +27286,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   isBooleanOrUndefinedType(type) {
     if (type === void 0)
       return false;
-    const members = type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( [])) : [type];
+    const members = type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( [])) : [type];
     if (members.length === 0)
       return false;
     const onlyBooleanOrEmpty = members.every((member) => this.isBooleanValueType(member) || (member.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Void | _sync.TypeFlags.Null)) !== 0);
@@ -27312,7 +27313,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const inner = this.unwrapParens(node);
     if (inner === void 0 || !_is.isIdentifier.call(void 0, inner) || !this.isDeclaredValueIdentifier(inner))
       return false;
-    const declarations = _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, this.getChecker().getSymbolAtLocation(inner));
+    const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, this.getChecker().getSymbolAtLocation(inner));
     return declarations.length > 0 && declarations.every((declaration) => !this.rustDeclarationPrintsNativeBool(declaration));
   }
   /** The declaration site emits `let mut x: bool = …` (see
@@ -27472,7 +27473,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (node.kind !== _ast.SyntaxKind.Identifier)
       return false;
     const symbol = this.getChecker().getSymbolAtLocation(node);
-    const declarations = _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, symbol);
+    const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, symbol);
     if (declarations.length === 0)
       return false;
     return declarations.every((declaration) => _is.isParameterDeclaration.call(void 0, declaration) || _is.isVariableDeclaration.call(void 0, declaration) && _optionalChain([declaration, 'access', _2979 => _2979.initializer, 'optionalAccess', _2980 => _2980.kind]) !== _ast.SyntaxKind.NewExpression);
@@ -27484,7 +27485,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (type === void 0)
       return false;
     if (type.flags & _sync.TypeFlags.Union) {
-      const members = _nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( []));
+      const members = _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []));
       return members.length > 0 && members.every((member) => this.rustBooleanComparableType(member));
     }
     if (type.flags & (_sync.TypeFlags.Boolean | _sync.TypeFlags.BooleanLiteral))
@@ -27576,7 +27577,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (type === void 0)
       return false;
     if (type.flags & _sync.TypeFlags.Union) {
-      const parts = _nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( []));
+      const parts = _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []));
       return parts.length > 0 && parts.every((part) => this.isValueLengthType(part));
     }
     return (type.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Null | _sync.TypeFlags.Void)) !== 0 || this.getChecker().isArrayType(type) || this.getChecker().isTupleType(type) || this.isStringType(type.flags);
@@ -27686,7 +27687,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // every one of them as `Value`. Imports, classes and function names print
   // as Rust items rather than as values, so they keep the helper.
   isDeclaredValueIdentifier(node) {
-    const declarations = _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, this.getChecker().getSymbolAtLocation(node));
+    const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, this.getChecker().getSymbolAtLocation(node));
     return declarations.length > 0 && declarations.every((d) => _is.isVariableDeclaration.call(void 0, d) || _is.isParameterDeclaration.call(void 0, d) || _is.isBindingElement.call(void 0, d));
   }
   // A declared `Value` place: a local/param identifier, or a field/element
@@ -27725,7 +27726,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (type === void 0)
       return false;
     if (type.flags & _sync.TypeFlags.Union) {
-      const parts = _nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( []));
+      const parts = _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []));
       const valueParts = parts.filter((part) => !this.rustTypeIsNullish(part));
       return parts.length > valueParts.length && valueParts.length > 0 && valueParts.every((part) => this.isDictShapedType(part));
     }
@@ -28001,7 +28002,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (checker === void 0) {
       return void 0;
     }
-    const declarations = _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(ident));
+    const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(ident));
     const declaration = declarations.length === 1 ? declarations[0] : void 0;
     return declaration !== void 0 && (_is.isVariableDeclaration.call(void 0, declaration) || _is.isParameterDeclaration.call(void 0, declaration)) ? declaration : void 0;
   }
@@ -28012,14 +28013,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (type === void 0)
       return false;
     if (type.flags & _sync.TypeFlags.Union) {
-      const parts = _nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( []));
+      const parts = _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []));
       return parts.length > 0 && parts.every((part) => this.rustWriteDictShape(part));
     }
     if (type.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Void)) {
       return true;
     }
     const checker = this.getChecker();
-    if (!(type.flags & _sync.TypeFlags.Object) || checker.isArrayType(type) || checker.isTupleType(type) || checker.isArrayLikeType(type) || (_nullishCoalesce(_chunkFQAM6XR2cjs.typeTarget.call(void 0, type), () => ( type))).objectFlags & _sync.ObjectFlags.Class) {
+    if (!(type.flags & _sync.TypeFlags.Object) || checker.isArrayType(type) || checker.isTupleType(type) || checker.isArrayLikeType(type) || (_nullishCoalesce(_chunkC7C726CWcjs.typeTarget.call(void 0, type), () => ( type))).objectFlags & _sync.ObjectFlags.Class) {
       return false;
     }
     return type.getCallSignatures().length === 0 && type.getConstructSignatures().length === 0;
@@ -28254,8 +28255,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!type) {
       return false;
     }
-    if (type.flags === _sync.TypeFlags.Union && Array.isArray(_chunkFQAM6XR2cjs.typeParts.call(void 0, type))) {
-      return _chunkFQAM6XR2cjs.typeParts.call(void 0, type).length > 0 && _chunkFQAM6XR2cjs.typeParts.call(void 0, type).every((member) => this.rustTypeFlagsAll(member, flags));
+    if (type.flags === _sync.TypeFlags.Union && Array.isArray(_chunkC7C726CWcjs.typeParts.call(void 0, type))) {
+      return _chunkC7C726CWcjs.typeParts.call(void 0, type).length > 0 && _chunkC7C726CWcjs.typeParts.call(void 0, type).every((member) => this.rustTypeFlagsAll(member, flags));
     }
     return flags.has(type.flags);
   }
@@ -28763,7 +28764,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     let declaration = this.rustCallDeclarations.get(call);
     if (declaration === void 0) {
       try {
-        declaration = _nullishCoalesce(_chunkFQAM6XR2cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call)), () => ( null));
+        declaration = _nullishCoalesce(_chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call)), () => ( null));
       } catch (e) {
         return void 0;
       }
@@ -28827,7 +28828,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     }
     const symbol = checker.getSymbolAtLocation(node);
-    return symbol === void 0 ? void 0 : _nullishCoalesce(_chunkFQAM6XR2cjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, symbol)[0]));
+    return symbol === void 0 ? void 0 : _nullishCoalesce(_chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkC7C726CWcjs.symbolDeclarations.call(void 0, symbol)[0]));
   }
   /** Condition text for a bare identifier of native-`bool` type, else undefined. */
   printNativeBoolParamCondition(node) {
@@ -29019,7 +29020,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       }
       let declaration;
       try {
-        declaration = _chunkFQAM6XR2cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+        declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
       } catch (e) {
         return false;
       }
@@ -29169,7 +29170,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     }
     const symbol = checker.getSymbolAtLocation(node);
-    const declaration = _nullishCoalesce(_chunkFQAM6XR2cjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, symbol)[0]));
+    const declaration = _nullishCoalesce(_chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkC7C726CWcjs.symbolDeclarations.call(void 0, symbol)[0]));
     return _optionalChain([declaration, 'optionalAccess', _3059 => _3059.kind]) === _ast.SyntaxKind.VariableDeclaration && this.rustSafeStringLocalIsTyped(declaration);
   }
   // `let x = <bool expr>` → the printed bool expression, or undefined.
@@ -29209,7 +29210,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return _nullishCoalesce(cached, () => ( void 0));
     }
     const chain = [];
-    let parentClass = _chunkFQAM6XR2cjs.getAllSuperTypeNodes.call(void 0, classDecl)[0];
+    let parentClass = _chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, classDecl)[0];
     let ok = true;
     while (parentClass !== void 0) {
       const parentClassDecl = _optionalChain([this, 'access', _3062 => _3062.getChecker, 'call', _3063 => _3063(), 'access', _3064 => _3064.getTypeAtLocation, 'call', _3065 => _3065(parentClass), 'optionalAccess', _3066 => _3066.getSymbol, 'call', _3067 => _3067(), 'optionalAccess', _3068 => _3068.valueDeclaration, 'optionalAccess', _3069 => _3069.resolve, 'call', _3070 => _3070()]);
@@ -29224,7 +29225,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         }
       }
       chain.push(byName);
-      parentClass = _nullishCoalesce(_chunkFQAM6XR2cjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
+      parentClass = _nullishCoalesce(_chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
     }
     this.rustClassAncestorTables.set(classDecl, ok ? chain : null);
     return ok ? chain : void 0;
@@ -29273,7 +29274,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     let ok = true;
     const visit = (n) => {
-      if (!ok || n !== body && _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, n)) {
+      if (!ok || n !== body && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n)) {
         return;
       }
       if (_is.isReturnStatement.call(void 0, n) && !this.rustStrReturnValueConverts(n.expression)) {
@@ -29322,7 +29323,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     let declaration = this.rustCallDeclarations.get(node);
     if (declaration === void 0) {
       try {
-        declaration = _nullishCoalesce(_chunkFQAM6XR2cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(node)), () => ( null));
+        declaration = _nullishCoalesce(_chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(node)), () => ( null));
       } catch (e) {
         return void 0;
       }
@@ -29353,7 +29354,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     }
     if (_is.isReturnStatement.call(void 0, parent) && parent.expression === current) {
-      return this.rustNativeStrReturnKind(_chunkFQAM6XR2cjs.findAncestor.call(void 0, parent.parent, _chunkFQAM6XR2cjs.isFunctionLike)) !== "str";
+      return this.rustNativeStrReturnKind(_chunkC7C726CWcjs.findAncestor.call(void 0, parent.parent, _chunkC7C726CWcjs.isFunctionLike)) !== "str";
     }
     return true;
   }
@@ -29899,7 +29900,7 @@ ${classMethods}
   /** Types declared outside ts/src (Date, Response, Array, Promise, …) are never
    *  backed by a plain `Value` map in the rust port. */
   isLibDeclaredType(type) {
-    const declarations = _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, this.typeSymbolOf(type));
+    const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, this.typeSymbolOf(type));
     return declarations.some((d) => {
       const file = _nullishCoalesce(_optionalChain([d, 'optionalAccess', _3099 => _3099.getSourceFile, 'optionalCall', _3100 => _3100(), 'optionalAccess', _3101 => _3101.fileName]), () => ( ""));
       return /[\\/]lib\.[^\\/]*\.d\.ts$/.test(file) || /[\\/]node_modules[\\/]typescript[\\/]/.test(file);
@@ -29909,12 +29910,12 @@ ${classMethods}
     if (type === void 0)
       return false;
     if (type.flags & (_sync.TypeFlags.Union | _sync.TypeFlags.Intersection)) {
-      return (_nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( []))).some((member) => this.isClassInstanceType(member));
+      return (_nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []))).some((member) => this.isClassInstanceType(member));
     }
     const symbol = _nullishCoalesce(this.typeSymbolOf(type), () => ( type.getAliasSymbol()));
     if (_optionalChain([symbol, 'optionalAccess', _3102 => _3102.flags]) & _sync.SymbolFlags.Class)
       return true;
-    const declarations = _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, symbol);
+    const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, symbol);
     return declarations.some((d) => _is.isClassDeclaration.call(void 0, d) || _is.isClassExpression.call(void 0, d));
   }
   hasCallableShape(type) {
@@ -29924,13 +29925,13 @@ ${classMethods}
   isProvenListType(type) {
     if (!(type.flags & _sync.TypeFlags.Object))
       return false;
-    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkFQAM6XR2cjs.typeTarget.call(void 0, type), 'optionalAccess', _3103 => _3103.objectFlags]), () => ( 0)));
+    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkC7C726CWcjs.typeTarget.call(void 0, type), 'optionalAccess', _3103 => _3103.objectFlags]), () => ( 0)));
     if (objectFlags & _sync.ObjectFlags.Tuple)
       return true;
     const name = _optionalChain([this, 'access', _3104 => _3104.typeSymbolOf, 'call', _3105 => _3105(type), 'optionalAccess', _3106 => _3106.name]);
     if (name === "Array" || name === "ReadonlyArray")
       return true;
-    const targetName = _optionalChain([this, 'access', _3107 => _3107.typeSymbolOf, 'call', _3108 => _3108(_chunkFQAM6XR2cjs.typeTarget.call(void 0, type)), 'optionalAccess', _3109 => _3109.name]);
+    const targetName = _optionalChain([this, 'access', _3107 => _3107.typeSymbolOf, 'call', _3108 => _3108(_chunkC7C726CWcjs.typeTarget.call(void 0, type)), 'optionalAccess', _3109 => _3109.name]);
     return targetName === "Array" || targetName === "ReadonlyArray";
   }
   /** True only for object types the rust port represents as `Value::Dict`
@@ -29939,7 +29940,7 @@ ${classMethods}
     if (type === void 0)
       return false;
     if (type.flags & _sync.TypeFlags.Union) {
-      const parts = _nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( []));
+      const parts = _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []));
       const nullish = parts.filter((p) => this.rustTypeIsNullish(p));
       const valueParts = parts.filter((p) => !this.rustTypeIsNullish(p));
       return nullish.length > 0 && valueParts.length > 0 && valueParts.every((p) => this.isProvenMapType(p));
@@ -30007,7 +30008,7 @@ ${classMethods}
     if (!_is.isPropertyAccessExpression.call(void 0, node.expression))
       return void 0;
     try {
-      return _chunkFQAM6XR2cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(node));
+      return _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(node));
     } catch (e) {
       return void 0;
     }
@@ -30028,7 +30029,7 @@ ${classMethods}
       const visit = (node) => {
         if (!all)
           return;
-        if (node !== body && _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, node))
+        if (node !== body && _chunkC7C726CWcjs.isFunctionLike.call(void 0, node))
           return;
         if (_is.isReturnStatement.call(void 0, node)) {
           returns++;
@@ -30189,7 +30190,7 @@ ${classMethods}
     const type = this.getCheckedTypeOf(node);
     if (type === void 0)
       return false;
-    const parts = type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( [])) : [type];
+    const parts = type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( [])) : [type];
     let strings = 0;
     for (const part of parts) {
       if (part.flags & (_sync.TypeFlags.String | _sync.TypeFlags.StringLiteral)) {
@@ -30318,7 +30319,7 @@ ${classMethods}
     const emitted = this.rustParamShadowEmittedSet();
     let scope = current.parent;
     while (scope !== void 0) {
-      if (_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, scope)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, scope)) {
         const entry = emitted.has(scope) ? this.rustParamShadowTable(scope).get(name) : void 0;
         if (entry !== void 0 && entry.declaration === declaration)
           return entry;
@@ -30331,7 +30332,7 @@ ${classMethods}
   rustFunctionDeclaresName(fn, name) {
     let found = false;
     this.rustWalkScope(fn, (node) => {
-      if (_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, node))
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, node))
         return RUST_WALK_SKIP;
       if ((_is.isVariableDeclaration.call(void 0, node) || _is.isParameterDeclaration.call(void 0, node)) && _is.isIdentifier.call(void 0, node.name) && node.name.text === name) {
         found = true;
@@ -30376,7 +30377,7 @@ ${classMethods}
       return false;
     if (!(type.flags & _sync.TypeFlags.Object))
       return false;
-    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkFQAM6XR2cjs.typeTarget.call(void 0, type), 'optionalAccess', _3112 => _3112.objectFlags]), () => ( 0)));
+    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkC7C726CWcjs.typeTarget.call(void 0, type), 'optionalAccess', _3112 => _3112.objectFlags]), () => ( 0)));
     if (objectFlags & _sync.ObjectFlags.Tuple)
       return false;
     if (this.hasCallableShape(type))
@@ -30386,7 +30387,7 @@ ${classMethods}
     const name = _optionalChain([this, 'access', _3113 => _3113.typeSymbolOf, 'call', _3114 => _3114(type), 'optionalAccess', _3115 => _3115.name]);
     if (name === "Array" || name === "ReadonlyArray")
       return true;
-    const targetName = _optionalChain([this, 'access', _3116 => _3116.typeSymbolOf, 'call', _3117 => _3117(_chunkFQAM6XR2cjs.typeTarget.call(void 0, type)), 'optionalAccess', _3118 => _3118.name]);
+    const targetName = _optionalChain([this, 'access', _3116 => _3116.typeSymbolOf, 'call', _3117 => _3117(_chunkC7C726CWcjs.typeTarget.call(void 0, type)), 'optionalAccess', _3118 => _3118.name]);
     return targetName === "Array" || targetName === "ReadonlyArray";
   }
   /** Every reference to the parameter must be a printable read, and at least
@@ -30766,7 +30767,7 @@ ${ind}let ${view}: &${map} = &${arc};
       return void 0;
     try {
       const symbol = this.getChecker().getSymbolAtLocation(node);
-      return _chunkFQAM6XR2cjs.symbolValueDeclaration.call(void 0, symbol);
+      return _chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, symbol);
     } catch (e) {
       return void 0;
     }
@@ -30811,7 +30812,7 @@ ${ind}let ${view}: &${map} = &${arc};
   /** D2: the proof holds only while nothing re-assigns the local. */
   rustLocalIsReassigned(declaration, name) {
     let scope = declaration;
-    while (scope !== void 0 && !_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope))
+    while (scope !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope))
       scope = scope.parent;
     if (scope === void 0)
       return true;
@@ -30848,7 +30849,7 @@ ${ind}let ${view}: &${map} = &${arc};
     if (type === void 0)
       return false;
     if (type.flags & (_sync.TypeFlags.Union | _sync.TypeFlags.Intersection)) {
-      return (_nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( []))).some((member) => this.rustWsOrderBookClassType(member));
+      return (_nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []))).some((member) => this.rustWsOrderBookClassType(member));
     }
     if (!(type.flags & _sync.TypeFlags.Object))
       return false;
@@ -30871,7 +30872,7 @@ ${ind}let ${view}: &${map} = &${arc};
       if (type2 === void 0)
         return false;
       const symbol = this.typeSymbolOf(type2);
-      const declarations = _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, symbol);
+      const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, symbol);
       return declarations.some((d) => {
         if (!_is.isClassDeclaration.call(void 0, d) || d.name === void 0 || d.name.text !== "Client")
           return false;
@@ -30882,7 +30883,7 @@ ${ind}let ${view}: &${map} = &${arc};
     const type = this.getCheckedTypeOf(declaration.name);
     if (named(type))
       return true;
-    return (_nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( []))).some((member) => named(member));
+    return (_nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []))).some((member) => named(member));
   }
   /** Constant string argument of `parseInt`/`parseFloat` folded the way rust's
    *  `str::parse` would; undefined when the fold is not obviously exact. */
@@ -30958,7 +30959,7 @@ ${ind}let ${view}: &${map} = &${arc};
       return false;
     const root = this.rootPlaceText(node);
     for (let current = node.parent; current; current = current.parent) {
-      if (_is.isStatement.call(void 0, current) || _is.isSourceFile.call(void 0, current) || _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, current))
+      if (_is.isStatement.call(void 0, current) || _is.isSourceFile.call(void 0, current) || _chunkC7C726CWcjs.isFunctionLike.call(void 0, current))
         break;
       if (_is.isBinaryExpression.call(void 0, current) && this.isNodeInsideNode(node, current.right)) {
         const op = current.operatorToken.kind;
@@ -31476,7 +31477,7 @@ ${iden}}`;
     const idn = this.getIden(identation);
     if (!exp)
       return `${idn}return;`;
-    const fn = _chunkFQAM6XR2cjs.findAncestor.call(void 0, node.parent, _chunkFQAM6XR2cjs.isFunctionLike);
+    const fn = _chunkC7C726CWcjs.findAncestor.call(void 0, node.parent, _chunkC7C726CWcjs.isFunctionLike);
     if (this.rustNativeStrReturnKind(fn) === "str" && this.rustStrReturnValueConverts(exp)) {
       if (this.literalKindOfNode(this.unwrapParensNode(exp)) === "null")
         return `${idn}return None;`;
@@ -31523,7 +31524,7 @@ ${iden}}`;
    *  exactly like the helper's `_ => {}` arm. */
   rustR01LocalStaysPlain(ident, depth = 0) {
     const checker = this.checkerOrUndefined();
-    const declarations = checker === void 0 ? [] : _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(ident));
+    const declarations = checker === void 0 ? [] : _chunkC7C726CWcjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(ident));
     const declaration = declarations.length === 1 ? declarations[0] : void 0;
     if (declaration === void 0 || depth > 4) {
       return false;
@@ -31654,7 +31655,7 @@ ${iden}}`;
     }
     let declaration;
     try {
-      declaration = _chunkFQAM6XR2cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+      declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
     } catch (e) {
       return false;
     }
@@ -31724,7 +31725,7 @@ ${iden}}`;
   rustR01CalleeIsBase(call) {
     let declaration;
     try {
-      declaration = _chunkFQAM6XR2cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+      declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
     } catch (e) {
       return false;
     }
@@ -31740,7 +31741,7 @@ ${iden}}`;
       return void 0;
     let declaration;
     try {
-      declaration = _chunkFQAM6XR2cjs.symbolValueDeclaration.call(void 0, this.getChecker().getSymbolAtLocation(node.name));
+      declaration = _chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, this.getChecker().getSymbolAtLocation(node.name));
     } catch (e) {
       return void 0;
     }
@@ -31758,7 +31759,7 @@ ${iden}}`;
     if (field === void 0)
       return false;
     const fieldType = this.getCheckedTypeOf(field.type);
-    const parts = fieldType.flags & _sync.TypeFlags.Union ? (_nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, fieldType), () => ( []))).filter((p) => !this.rustTypeIsNullish(p)) : [fieldType];
+    const parts = fieldType.flags & _sync.TypeFlags.Union ? (_nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, fieldType), () => ( []))).filter((p) => !this.rustTypeIsNullish(p)) : [fieldType];
     return parts.length === 1 && this.isProvenMapType(this.getChecker().getIndexTypeOfType(parts[0], _sync.IndexKind.String));
   }
   /** `this.<field>[k]` with a proven-dict field and a proven string key place. */
@@ -31909,7 +31910,7 @@ ${iden}}`;
       return void 0;
     const checker = this.checkerOrUndefined();
     const symbol = _optionalChain([checker, 'optionalAccess', _3173 => _3173.getSymbolAtLocation, 'call', _3174 => _3174(node)]);
-    const declaration = _nullishCoalesce(_chunkFQAM6XR2cjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, symbol)[0]));
+    const declaration = _nullishCoalesce(_chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkC7C726CWcjs.symbolDeclarations.call(void 0, symbol)[0]));
     return declaration !== void 0 && declaration.name !== node && this.rustVecLocalIsTyped(declaration) ? declaration : void 0;
   }
   printRustVecPush(node, name, parsedArg) {
@@ -32129,7 +32130,7 @@ ${iden}}`;
     }
     let declaration;
     try {
-      declaration = _chunkFQAM6XR2cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+      declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
     } catch (e) {
       return false;
     }
@@ -32143,7 +32144,7 @@ ${iden}}`;
     const visit = (node) => {
       if (!ok)
         return;
-      if (node !== body && _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, node))
+      if (node !== body && _chunkC7C726CWcjs.isFunctionLike.call(void 0, node))
         return;
       if (_is.isReturnStatement.call(void 0, node)) {
         returns++;
@@ -32517,7 +32518,7 @@ ${iden}}`;
   r04KeyPrintsAsValue(type) {
     if (type === void 0)
       return false;
-    const parts = type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( [])) : [type];
+    const parts = type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( [])) : [type];
     if (parts.length === 0)
       return false;
     const checker = this.checkerOrUndefined();
@@ -33037,7 +33038,7 @@ ${this.getIden(identation)}}`;
   rustProvenDictThisFieldR05(node) {
     let declaration;
     try {
-      declaration = _chunkFQAM6XR2cjs.symbolValueDeclaration.call(void 0, this.getChecker().getSymbolAtLocation(node.name));
+      declaration = _chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, this.getChecker().getSymbolAtLocation(node.name));
     } catch (e) {
       return false;
     }
@@ -33054,7 +33055,7 @@ ${this.getIden(identation)}}`;
       return void 0;
     }
     const type = this.typeOfNodeIfAny(arg);
-    const parts = type === void 0 ? [] : type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( [])) : [type];
+    const parts = type === void 0 ? [] : type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( [])) : [type];
     if (parts.some((p) => this.getChecker().isArrayType(p) || this.getChecker().isTupleType(p) || (p.flags & (_sync.TypeFlags.StringLike | _sync.TypeFlags.NumberLike | _sync.TypeFlags.BooleanLike | _sync.TypeFlags.BigIntLike)) !== 0)) {
       return void 0;
     }
@@ -33564,7 +33565,7 @@ ${this.getIden(identation)}}`;
     }
     let declarations;
     try {
-      declarations = _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(callee.name)).filter((d) => d.kind === _ast.SyntaxKind.MethodDeclaration && d.body !== void 0);
+      declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(callee.name)).filter((d) => d.kind === _ast.SyntaxKind.MethodDeclaration && d.body !== void 0);
     } catch (e) {
       return void 0;
     }
@@ -33665,7 +33666,7 @@ ${this.getIden(identation)}}`;
     const checker = this.checkerOrUndefined();
     if (depth > 5)
       return false;
-    const declarations = checker === void 0 ? [] : _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(ident));
+    const declarations = checker === void 0 ? [] : _chunkC7C726CWcjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(ident));
     const declaration = declarations.length === 1 ? declarations[0] : void 0;
     if (declaration === void 0)
       return false;
@@ -33769,7 +33770,7 @@ ${this.getIden(identation)}}`;
     if (node === void 0 || !_is.isIdentifier.call(void 0, node) || this.rustStringLocalIdentifierIsTyped(node))
       return false;
     const checker = this.checkerOrUndefined();
-    const declarations = checker === void 0 ? [] : _chunkFQAM6XR2cjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(node));
+    const declarations = checker === void 0 ? [] : _chunkC7C726CWcjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(node));
     if (declarations.length !== 1 || !_is.isVariableDeclaration.call(void 0, declarations[0]))
       return false;
     const declaration = declarations[0];
@@ -34031,7 +34032,7 @@ ${this.getIden(identation)}}`;
     }
     let declaration;
     try {
-      declaration = _chunkFQAM6XR2cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+      declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
     } catch (e) {
       return void 0;
     }
@@ -34039,7 +34040,7 @@ ${this.getIden(identation)}}`;
       return void 0;
     const kinds = [];
     const visit = (n) => {
-      if (n !== declaration && _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, n))
+      if (n !== declaration && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n))
         return;
       if (_is.isReturnStatement.call(void 0, n))
         kinds.push(n.expression === void 0 ? void 0 : this.rustR16NumericKind(n.expression, depth + 1));
@@ -34056,7 +34057,7 @@ ${this.getIden(identation)}}`;
       return void 0;
     const here = this.typeOfNodeIfAny(ident);
     const declared = this.typeOfNodeIfAny(declaration.name);
-    if (here !== void 0 && declared !== void 0 && (here.flags === _sync.TypeFlags.Number || here.flags === _sync.TypeFlags.NumberLiteral) && declared.flags & _sync.TypeFlags.Union && (_nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, declared), () => ( []))).some((t) => t.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Null)) && !this.rustR16HasWrites(declaration)) {
+    if (here !== void 0 && declared !== void 0 && (here.flags === _sync.TypeFlags.Number || here.flags === _sync.TypeFlags.NumberLiteral) && declared.flags & _sync.TypeFlags.Union && (_nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, declared), () => ( []))).some((t) => t.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Null)) && !this.rustR16HasWrites(declaration)) {
       return "definite";
     }
     if (!_is.isVariableDeclaration.call(void 0, declaration) || declaration.initializer === void 0 || declaration.type !== void 0)
@@ -34151,7 +34152,7 @@ ${this.getIden(identation)}}`;
       return false;
     if (_is.isIdentifier.call(void 0, inner) && (this.rustStringLocalIdentifierIsTyped(inner) || this.rustVecLocalDeclarationOf(inner) !== void 0))
       return false;
-    const parts = type === void 0 ? [] : type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkFQAM6XR2cjs.typeParts.call(void 0, type), () => ( [])) : [type];
+    const parts = type === void 0 ? [] : type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( [])) : [type];
     return parts.length > 0 && parts.every((t) => String(_nullishCoalesce(_nullishCoalesce(_optionalChain([t, 'optionalAccess', _3320 => _3320.symbol, 'optionalAccess', _3321 => _3321.escapedName]), () => ( _optionalChain([t, 'optionalAccess', _3322 => _3322.symbol, 'optionalAccess', _3323 => _3323.name]))), () => ( ""))) !== "Precise");
   }
   r17ConcatIsAnchored(left, right, leftType, rightType) {
@@ -34557,12 +34558,12 @@ ${this.getIden(identation)}}`;
   // also hold in the base tier and pro files, where a tagged handle can only arrive through a
   // parameter: base admits typed plain-dict parameters, pro admits no parameter at all.
   r23Tier(node) {
-    const path3 = this.r05Path(node);
-    if (_RustTranspiler.RUST_R12_REST_FILE.test(path3) && /\/ts\/src\/[^/]+\.ts$/.test(path3))
+    const path8 = this.r05Path(node);
+    if (_RustTranspiler.RUST_R12_REST_FILE.test(path8) && /\/ts\/src\/[^/]+\.ts$/.test(path8))
       return "rest";
-    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(path3) && !/\/base\/ws\//.test(path3))
+    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(path8) && !/\/base\/ws\//.test(path8))
       return "base";
-    if (/\/ts\/src\/pro\/[^/]+\.ts$/.test(path3))
+    if (/\/ts\/src\/pro\/[^/]+\.ts$/.test(path8))
       return "pro";
     return void 0;
   }
@@ -34710,7 +34711,7 @@ ${this.getIden(identation)}}`;
       return false;
     let declaration;
     try {
-      declaration = _chunkFQAM6XR2cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+      declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
     } catch (e) {
       return false;
     }
@@ -34718,7 +34719,7 @@ ${this.getIden(identation)}}`;
       return false;
     let ok = true;
     const visit = (n) => {
-      if (!ok || n !== declaration && _chunkFQAM6XR2cjs.isFunctionLike.call(void 0, n))
+      if (!ok || n !== declaration && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n))
         return;
       if (_is.isReturnStatement.call(void 0, n) && n.expression !== void 0 && !this.r25DictFieldStrOrNull(n.expression, key, depth + 1))
         ok = false;
@@ -35140,7 +35141,7 @@ _RustTranspiler.R26_PARAMS_SLOT_ARG = {
 var RustTranspiler = _RustTranspiler;
 
 // src/cppTranspiler.ts
-_chunkFQAM6XR2cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 var parserConfig7 = {
@@ -35331,7 +35332,7 @@ var CppTranspiler = class extends BaseTranspiler {
   printReturnStatement(node, identation) {
     if (this.asyncTranspiling && !node.expression) {
       let fn = node.parent;
-      while (fn !== void 0 && !_chunkFQAM6XR2cjs.isFunctionLike.call(void 0, fn)) {
+      while (fn !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, fn)) {
         fn = fn.parent;
       }
       if (fn !== void 0 && this.isAsyncFunction(fn)) {
@@ -35741,6 +35742,11029 @@ var CppTranspiler = class extends BaseTranspiler {
   }
 };
 
+// src/go/index.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+
+// src/go/go-local-types.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+
+
+
+// src/go/tsApi.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+
+
+
+var tsApi;
+var ts = {
+  ...tsAst,
+  ...tsIs,
+  ...tsSync,
+  ..._chunkC7C726CWcjs.tsUtils_exports,
+  // standalone parse (no program) over the generator's API process
+  createSourceFile: (fileName, text) => (tsApi ??= new tsSync.API({ cwd: process.cwd() })).createSourceFile(fileName, text)
+};
+var describeOwnLiterals = /* @__PURE__ */ new WeakMap();
+function describeOwnLiteralMethodCall(sourceFile, expression) {
+  if (_optionalChain([expression, 'optionalAccess', _3373 => _3373.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([expression, 'access', _3374 => _3374.expression, 'optionalAccess', _3375 => _3375.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([expression, 'access', _3376 => _3376.expression, 'access', _3377 => _3377.expression, 'optionalAccess', _3378 => _3378.kind]) !== ts.SyntaxKind.ThisKeyword || (_nullishCoalesce(_optionalChain([expression, 'access', _3379 => _3379.arguments, 'optionalAccess', _3380 => _3380.length]), () => ( 0))) !== 0) {
+    return void 0;
+  }
+  const name = _optionalChain([expression, 'access', _3381 => _3381.expression, 'access', _3382 => _3382.name, 'optionalAccess', _3383 => _3383.text]);
+  if (name === void 0) {
+    return void 0;
+  }
+  const definitions = [];
+  const collect = (node2) => {
+    if (node2.kind === ts.SyntaxKind.MethodDeclaration && _optionalChain([node2, 'access', _3384 => _3384.name, 'optionalAccess', _3385 => _3385.text]) === name) {
+      definitions.push(node2);
+    }
+    _optionalChain([node2, 'optionalAccess', _3386 => _3386.forEachChild, 'call', _3387 => _3387(collect)]);
+  };
+  collect(sourceFile);
+  if (definitions.length !== 1) {
+    return void 0;
+  }
+  const statements = _nullishCoalesce(_optionalChain([definitions, 'access', _3388 => _3388[0], 'access', _3389 => _3389.body, 'optionalAccess', _3390 => _3390.statements]), () => ( []));
+  if (statements.length !== 1 || statements[0].kind !== ts.SyntaxKind.ReturnStatement) {
+    return void 0;
+  }
+  let node = statements[0].expression;
+  while (_optionalChain([node, 'optionalAccess', _3391 => _3391.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  return _optionalChain([node, 'optionalAccess', _3392 => _3392.kind]) === ts.SyntaxKind.ObjectLiteralExpression ? node : void 0;
+}
+function ownDescribeLiteral(sourceFile) {
+  if (describeOwnLiterals.has(sourceFile)) {
+    return describeOwnLiterals.get(sourceFile);
+  }
+  let literal;
+  const visit = (node) => {
+    if (node.kind === ts.SyntaxKind.MethodDeclaration && _optionalChain([node, 'access', _3393 => _3393.name, 'optionalAccess', _3394 => _3394.text]) === "describe") {
+      const returned = _optionalChain([node, 'access', _3395 => _3395.body, 'optionalAccess', _3396 => _3396.statements, 'optionalAccess', _3397 => _3397.find, 'call', _3398 => _3398((statement) => statement.kind === ts.SyntaxKind.ReturnStatement)]);
+      let expression = _optionalChain([returned, 'optionalAccess', _3399 => _3399.expression]);
+      while (_optionalChain([expression, 'optionalAccess', _3400 => _3400.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+        expression = expression.expression;
+      }
+      if (_optionalChain([expression, 'optionalAccess', _3401 => _3401.kind]) === ts.SyntaxKind.CallExpression && _optionalChain([expression, 'access', _3402 => _3402.expression, 'optionalAccess', _3403 => _3403.kind]) === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([expression, 'access', _3404 => _3404.expression, 'access', _3405 => _3405.name, 'optionalAccess', _3406 => _3406.text]) === "deepExtend" && _optionalChain([expression, 'access', _3407 => _3407.arguments, 'optionalAccess', _3408 => _3408.length]) >= 2) {
+        expression = expression.arguments[expression.arguments.length - 1];
+        while (_optionalChain([expression, 'optionalAccess', _3409 => _3409.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+          expression = expression.expression;
+        }
+      }
+      if (_optionalChain([expression, 'optionalAccess', _3410 => _3410.kind]) === ts.SyntaxKind.ObjectLiteralExpression) {
+        literal = expression;
+      } else {
+        literal = describeOwnLiteralMethodCall(sourceFile, expression);
+      }
+    }
+    _optionalChain([node, 'optionalAccess', _3411 => _3411.forEachChild, 'call', _3412 => _3412(visit)]);
+  };
+  visit(sourceFile);
+  describeOwnLiterals.set(sourceFile, literal);
+  return literal;
+}
+function describeLiteralKey(property) {
+  const name = property.name;
+  if (_optionalChain([name, 'optionalAccess', _3413 => _3413.kind]) === ts.SyntaxKind.StringLiteral || _optionalChain([name, 'optionalAccess', _3414 => _3414.kind]) === ts.SyntaxKind.NoSubstitutionTemplateLiteral) {
+    return name.text;
+  }
+  return _optionalChain([name, 'optionalAccess', _3415 => _3415.kind]) === ts.SyntaxKind.Identifier ? name.text : void 0;
+}
+function describeLiteralProperty(literal, key) {
+  if (_optionalChain([literal, 'optionalAccess', _3416 => _3416.kind]) !== ts.SyntaxKind.ObjectLiteralExpression) {
+    return void 0;
+  }
+  for (const property of literal.properties) {
+    if (property.kind === ts.SyntaxKind.PropertyAssignment && describeLiteralKey(property) === key) {
+      return property.initializer;
+    }
+  }
+  return void 0;
+}
+function describeLiteralKind(value) {
+  let node = value;
+  while (_optionalChain([node, 'optionalAccess', _3417 => _3417.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  switch (_optionalChain([node, 'optionalAccess', _3418 => _3418.kind])) {
+    case ts.SyntaxKind.StringLiteral:
+    case ts.SyntaxKind.NoSubstitutionTemplateLiteral:
+      return "string";
+    case ts.SyntaxKind.ObjectLiteralExpression:
+      return "dictionary";
+    case ts.SyntaxKind.ArrayLiteralExpression:
+      return "list";
+    case ts.SyntaxKind.TrueKeyword:
+    case ts.SyntaxKind.FalseKeyword:
+      return "bool";
+    case ts.SyntaxKind.NumericLiteral:
+      return "number";
+    case ts.SyntaxKind.PrefixUnaryExpression:
+      return _optionalChain([node, 'access', _3419 => _3419.operand, 'optionalAccess', _3420 => _3420.kind]) === ts.SyntaxKind.NumericLiteral ? "number" : void 0;
+    case ts.SyntaxKind.NullKeyword:
+      return "null";
+    case ts.SyntaxKind.Identifier:
+      return node.text === "undefined" ? "null" : void 0;
+  }
+  return void 0;
+}
+function describeLiteralPathKind(literal, keys) {
+  let node = literal;
+  for (const key of keys) {
+    node = describeLiteralProperty(node, key);
+    if (node === void 0) {
+      return "absent";
+    }
+  }
+  return describeLiteralKind(node);
+}
+function asExpressionPrintsBare(node) {
+  const type = node.type;
+  if (type === void 0) {
+    return false;
+  }
+  if (type.kind === ts.SyntaxKind.AnyKeyword || type.kind === ts.SyntaxKind.StringKeyword) {
+    return false;
+  }
+  if (type.kind === ts.SyntaxKind.ArrayType && _optionalChain([type, 'access', _3421 => _3421.elementType, 'optionalAccess', _3422 => _3422.kind]) === ts.SyntaxKind.AnyKeyword) {
+    return false;
+  }
+  return true;
+}
+function urlsLiteralChain(initializer) {
+  let node = initializer;
+  const keys = [];
+  while (_optionalChain([node, 'optionalAccess', _3423 => _3423.kind]) === ts.SyntaxKind.ParenthesizedExpression || _optionalChain([node, 'optionalAccess', _3424 => _3424.kind]) === ts.SyntaxKind.ElementAccessExpression || _optionalChain([node, 'optionalAccess', _3425 => _3425.kind]) === ts.SyntaxKind.AsExpression) {
+    if (node.kind === ts.SyntaxKind.ParenthesizedExpression) {
+      node = node.expression;
+      continue;
+    }
+    if (node.kind === ts.SyntaxKind.AsExpression) {
+      if (!asExpressionPrintsBare(node)) {
+        return void 0;
+      }
+      node = node.expression;
+      continue;
+    }
+    const key = node.argumentExpression;
+    if (_optionalChain([key, 'optionalAccess', _3426 => _3426.kind]) !== ts.SyntaxKind.StringLiteral && _optionalChain([key, 'optionalAccess', _3427 => _3427.kind]) !== ts.SyntaxKind.NoSubstitutionTemplateLiteral) {
+      return void 0;
+    }
+    if (/^[0-9]+$/.test(key.text)) {
+      return void 0;
+    }
+    keys.unshift(key.text);
+    node = node.expression;
+  }
+  if (keys.length < 2 || _optionalChain([node, 'optionalAccess', _3428 => _3428.kind]) !== ts.SyntaxKind.PropertyAccessExpression) {
+    return void 0;
+  }
+  if (_optionalChain([node, 'access', _3429 => _3429.expression, 'optionalAccess', _3430 => _3430.kind]) !== ts.SyntaxKind.ThisKeyword || _optionalChain([node, 'access', _3431 => _3431.name, 'optionalAccess', _3432 => _3432.text]) !== "urls") {
+    return void 0;
+  }
+  return keys;
+}
+function urlsDescribeStringProducer(initializer) {
+  const keys = urlsLiteralChain(initializer);
+  if (keys === void 0) {
+    return false;
+  }
+  const urls = describeLiteralProperty(ownDescribeLiteral(initializer.getSourceFile()), "urls");
+  if (_optionalChain([urls, 'optionalAccess', _3433 => _3433.kind]) !== ts.SyntaxKind.ObjectLiteralExpression) {
+    return false;
+  }
+  if (describeLiteralPathKind(urls, keys) !== "string") {
+    return false;
+  }
+  const suffix = keys.slice(1);
+  for (const property of urls.properties) {
+    if (property.kind !== ts.SyntaxKind.PropertyAssignment || describeLiteralKey(property) === keys[0]) {
+      continue;
+    }
+    const value = property.initializer;
+    if (_optionalChain([value, 'optionalAccess', _3434 => _3434.kind]) === ts.SyntaxKind.ObjectLiteralExpression) {
+      const kind = describeLiteralPathKind(value, suffix);
+      if (kind !== "string" && kind !== "null" && kind !== "absent") {
+        return false;
+      }
+    } else {
+      const kind = describeLiteralKind(value);
+      if (kind !== "string" && kind !== "null" && kind !== "number" && kind !== "bool") {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// src/go/hx10w3-G06.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+var HX10G06_TUPLE_MAP_SLOTS = {
+  "handleOptionBoolAndParams": [1],
+  "handleOptionBoolAndParams2": [1],
+  "handleOptionIntegerAndParams": [1],
+  "handleOptionIntegerAndParams2": [1],
+  "handleUntilOption": [0, 1]
+};
+var HX10G06_JOIN_TYPE = "map[string]any";
+var HX10G06_TUPLE_DEFAULT_SLOT = {
+  "handleOptionBoolAndParams": 3,
+  "handleOptionBoolAndParams2": 4,
+  "handleOptionIntegerAndParams": 3,
+  "handleOptionIntegerAndParams2": 4
+};
+function hx10G06DefaultIsValue(arg) {
+  if (_optionalChain([arg, 'optionalAccess', _3435 => _3435.kind]) === ts.SyntaxKind.TrueKeyword || _optionalChain([arg, 'optionalAccess', _3436 => _3436.kind]) === ts.SyntaxKind.FalseKeyword) {
+    return true;
+  }
+  const literal = _optionalChain([arg, 'optionalAccess', _3437 => _3437.kind]) === ts.SyntaxKind.PrefixUnaryExpression && arg.operator === ts.SyntaxKind.MinusToken ? arg.operand : arg;
+  return _optionalChain([literal, 'optionalAccess', _3438 => _3438.kind]) === ts.SyntaxKind.NumericLiteral && /^\d+$/.test(_nullishCoalesce(literal.text, () => ( "")));
+}
+var HX10G06_GUARD_NAMES = ["string", "int", "int64", "float64", "bool", "any", "byte"];
+var HX10G06_ABSENT_SAFE_CALLEES = [
+  "GetValue",
+  "InOp",
+  "ObjectKeys",
+  "ObjectValues",
+  "GetArrayLength",
+  "ToArray",
+  "CastToSlice",
+  "IsDictionary",
+  "IsArray",
+  "MapTyped",
+  "ListTyped",
+  "SafeMapToMap",
+  "this.SafeValue",
+  "this.SafeDict",
+  "this.SafeDict2",
+  "this.SafeList",
+  "this.SafeList2",
+  "this.Omit",
+  "this.OmitN",
+  "this.OmitMap",
+  "this.Extend",
+  "this.DeepExtend",
+  "this.DeepExtend2",
+  "this.Merge",
+  "this.Aggregate",
+  "this.SafeString",
+  "this.SafeString2",
+  "this.SafeStringN",
+  "this.SafeInteger",
+  "this.SafeInteger2",
+  "this.SafeIntegerN",
+  "this.SafeNumber",
+  "this.SafeNumber2",
+  "this.SafeNumberN",
+  "this.SafeBool",
+  "this.SafeBool2",
+  "this.SafeBoolN",
+  "this.InOp"
+];
+function hx10G06IsNilInitializer(goTranspiler, initializer) {
+  if (initializer === void 0) {
+    return true;
+  }
+  if (initializer.kind === ts.SyntaxKind.NullKeyword) {
+    return true;
+  }
+  if (initializer.kind === ts.SyntaxKind.Identifier) {
+    return initializer.text === "undefined" || initializer.text === "null";
+  }
+  return false;
+}
+function hx10G06CalleeName(node) {
+  let current = node;
+  while (_optionalChain([current, 'optionalAccess', _3439 => _3439.kind]) === ts.SyntaxKind.ParenthesizedExpression || _optionalChain([current, 'optionalAccess', _3440 => _3440.kind]) === ts.SyntaxKind.AwaitExpression) {
+    current = current.kind === ts.SyntaxKind.ParenthesizedExpression ? current.expression : current.expression;
+  }
+  if (_optionalChain([current, 'optionalAccess', _3441 => _3441.kind]) !== ts.SyntaxKind.CallExpression) {
+    return void 0;
+  }
+  const callee = current.expression;
+  if (_optionalChain([callee, 'optionalAccess', _3442 => _3442.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _3443 => _3443.expression, 'optionalAccess', _3444 => _3444.kind]) !== ts.SyntaxKind.ThisKeyword) {
+    return void 0;
+  }
+  return _optionalChain([callee, 'access', _3445 => _3445.name, 'optionalAccess', _3446 => _3446.text]);
+}
+function hx10G06TupleWriteType(expression, name) {
+  if (_optionalChain([expression, 'optionalAccess', _3447 => _3447.kind]) !== ts.SyntaxKind.BinaryExpression) {
+    return void 0;
+  }
+  if (expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken) {
+    return void 0;
+  }
+  const left = expression.left;
+  if (_optionalChain([left, 'optionalAccess', _3448 => _3448.kind]) !== ts.SyntaxKind.ArrayLiteralExpression) {
+    return void 0;
+  }
+  const slots = _nullishCoalesce(left.elements, () => ( []));
+  if (slots.length !== 2) {
+    return void 0;
+  }
+  if (!slots.every((element) => _optionalChain([element, 'optionalAccess', _3449 => _3449.kind]) === ts.SyntaxKind.Identifier)) {
+    return void 0;
+  }
+  const index = slots.findIndex((element) => element.text === name);
+  const callee = hx10G06CalleeName(expression.right);
+  const mapSlots = callee === void 0 ? void 0 : HX10G06_TUPLE_MAP_SLOTS[callee];
+  if (mapSlots === void 0 || !mapSlots.includes(index)) {
+    return void 0;
+  }
+  if (_optionalChain([expression, 'access', _3450 => _3450.right, 'optionalAccess', _3451 => _3451.kind]) !== ts.SyntaxKind.CallExpression) {
+    return void 0;
+  }
+  const defaultSlot = HX10G06_TUPLE_DEFAULT_SLOT[callee];
+  if (defaultSlot !== void 0 && !hx10G06DefaultIsValue(expression.right.arguments[defaultSlot])) {
+    return void 0;
+  }
+  return HX10G06_JOIN_TYPE;
+}
+function hx10G06IndexWriteType(goTranspiler, right) {
+  if (_optionalChain([right, 'optionalAccess', _3452 => _3452.kind]) !== ts.SyntaxKind.ElementAccessExpression || _optionalChain([right, 'access', _3453 => _3453.expression, 'optionalAccess', _3454 => _3454.kind]) !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  const index = right.argumentExpression;
+  if (_optionalChain([index, 'optionalAccess', _3455 => _3455.kind]) !== ts.SyntaxKind.NumericLiteral || !/^\d+$/.test(_nullishCoalesce(index.text, () => ( "")))) {
+    return void 0;
+  }
+  if (typeof goTranspiler.goDeclaredTypeOfIdentifier !== "function") {
+    return void 0;
+  }
+  const holderType = goTranspiler.goDeclaredTypeOfIdentifier(right.expression);
+  if (typeof holderType !== "string" || !holderType.startsWith("[]")) {
+    return void 0;
+  }
+  return holderType.substring(2) === HX10G06_JOIN_TYPE ? HX10G06_JOIN_TYPE : void 0;
+}
+function hx10G06PrintedCallee(goTranspiler, call) {
+  if (_optionalChain([call, 'optionalAccess', _3456 => _3456.kind]) !== ts.SyntaxKind.CallExpression) {
+    return void 0;
+  }
+  const printed = (_nullishCoalesce(goTranspiler.printNode(call.expression, 0), () => ( ""))).trim();
+  if (!/^[A-Za-z_][\w.]*$/.test(printed)) {
+    return void 0;
+  }
+  const plain = printed.replace(/^ccxt\./, "").replace(/^exchange\./, "this.");
+  return plain;
+}
+function hx10G06ReadKeepsMeaning(goTranspiler, node) {
+  let child = node;
+  let parent = node.parent;
+  while (_optionalChain([parent, 'optionalAccess', _3457 => _3457.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    child = parent;
+    parent = parent.parent;
+  }
+  switch (_optionalChain([parent, 'optionalAccess', _3458 => _3458.kind])) {
+    case ts.SyntaxKind.BinaryExpression: {
+      const op = parent.operatorToken.kind;
+      if ([
+        ts.SyntaxKind.EqualsEqualsToken,
+        ts.SyntaxKind.EqualsEqualsEqualsToken,
+        ts.SyntaxKind.ExclamationEqualsToken,
+        ts.SyntaxKind.ExclamationEqualsEqualsToken
+      ].indexOf(op) >= 0) {
+        const other = parent.left === child ? parent.right : parent.left;
+        return _optionalChain([other, 'optionalAccess', _3459 => _3459.kind]) === ts.SyntaxKind.NullKeyword || _optionalChain([other, 'optionalAccess', _3460 => _3460.kind]) === ts.SyntaxKind.Identifier && (other.text === "undefined" || other.text === "null");
+      }
+      if (op === ts.SyntaxKind.InKeyword) {
+        return parent.right === child;
+      }
+      if (op === ts.SyntaxKind.AmpersandAmpersandToken || op === ts.SyntaxKind.BarBarToken) {
+        return hx10G06IsCondition(parent);
+      }
+      if (op === ts.SyntaxKind.EqualsToken) {
+        if (parent.right === child) {
+          const target = _optionalChain([parent, 'access', _3461 => _3461.left, 'optionalAccess', _3462 => _3462.kind]);
+          return target === ts.SyntaxKind.ElementAccessExpression || target === ts.SyntaxKind.PropertyAccessExpression;
+        }
+        return false;
+      }
+      return false;
+    }
+    case ts.SyntaxKind.PrefixUnaryExpression:
+      return parent.operator === ts.SyntaxKind.ExclamationToken;
+    case ts.SyntaxKind.IfStatement:
+    case ts.SyntaxKind.WhileStatement:
+    case ts.SyntaxKind.ConditionalExpression:
+      return parent.expression === child || parent.condition === child;
+    case ts.SyntaxKind.ElementAccessExpression: {
+      if (parent.expression !== child) {
+        return false;
+      }
+      const above = parent.parent;
+      return !(_optionalChain([above, 'optionalAccess', _3463 => _3463.kind]) === ts.SyntaxKind.BinaryExpression && above.left === parent && above.operatorToken.kind === ts.SyntaxKind.EqualsToken);
+    }
+    case ts.SyntaxKind.PropertyAccessExpression: {
+      if (parent.expression !== child) {
+        return false;
+      }
+      const above = parent.parent;
+      return !(_optionalChain([above, 'optionalAccess', _3464 => _3464.kind]) === ts.SyntaxKind.BinaryExpression && above.left === parent && above.operatorToken.kind === ts.SyntaxKind.EqualsToken);
+    }
+    case ts.SyntaxKind.PropertyAssignment:
+      return parent.initializer === child;
+    case ts.SyntaxKind.ShorthandPropertyAssignment:
+      return true;
+    case ts.SyntaxKind.CallExpression: {
+      if (parent.arguments.indexOf(child) < 0) {
+        return false;
+      }
+      const callee = hx10G06PrintedCallee(goTranspiler, parent);
+      if (callee === "len") {
+        return parent.arguments.length === 1;
+      }
+      if (callee === "EvalTruthy") {
+        return true;
+      }
+      if (callee === "IsEqual") {
+        const other = parent.arguments[0] === child ? parent.arguments[1] : parent.arguments[0];
+        return _optionalChain([other, 'optionalAccess', _3465 => _3465.kind]) === ts.SyntaxKind.NullKeyword || _optionalChain([other, 'optionalAccess', _3466 => _3466.kind]) === ts.SyntaxKind.Identifier && (other.text === "undefined" || other.text === "null");
+      }
+      return callee !== void 0 && HX10G06_ABSENT_SAFE_CALLEES.includes(callee);
+    }
+    case ts.SyntaxKind.ForOfStatement:
+    case ts.SyntaxKind.ForInStatement:
+      return parent.expression === child;
+  }
+  return false;
+}
+function hx10G06IsCondition(node) {
+  let current = node;
+  let parent = node.parent;
+  while (_optionalChain([parent, 'optionalAccess', _3467 => _3467.kind]) === ts.SyntaxKind.ParenthesizedExpression || _optionalChain([parent, 'optionalAccess', _3468 => _3468.kind]) === ts.SyntaxKind.BinaryExpression && [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken].includes(parent.operatorToken.kind)) {
+    current = parent;
+    parent = parent.parent;
+  }
+  return _optionalChain([parent, 'optionalAccess', _3469 => _3469.kind]) === ts.SyntaxKind.IfStatement && parent.expression === current || _optionalChain([parent, 'optionalAccess', _3470 => _3470.kind]) === ts.SyntaxKind.WhileStatement && parent.expression === current || _optionalChain([parent, 'optionalAccess', _3471 => _3471.kind]) === ts.SyntaxKind.PrefixUnaryExpression && parent.operator === ts.SyntaxKind.ExclamationToken;
+}
+function hx10G06InNestedFunction(node, scope) {
+  let current = node.parent;
+  while (current !== void 0 && current !== scope) {
+    if (current.kind === ts.SyntaxKind.FunctionDeclaration || current.kind === ts.SyntaxKind.FunctionExpression || current.kind === ts.SyntaxKind.ArrowFunction || current.kind === ts.SyntaxKind.MethodDeclaration || current.kind === ts.SyntaxKind.Constructor) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+function hx10G06BindingMentionsName(node, name) {
+  if (node === void 0) {
+    return false;
+  }
+  if (node.kind === ts.SyntaxKind.Identifier) {
+    return node.text === name;
+  }
+  let found = false;
+  const visit = (child) => {
+    if (found) {
+      return;
+    }
+    if (_optionalChain([child, 'optionalAccess', _3472 => _3472.kind]) === ts.SyntaxKind.Identifier && child.text === name) {
+      found = true;
+      return;
+    }
+    _optionalChain([child, 'optionalAccess', _3473 => _3473.forEachChild, 'call', _3474 => _3474(visit)]);
+  };
+  node.forEachChild(visit);
+  return found;
+}
+function hx10G06JoinType(goTranspiler, declaration, name) {
+  const scope = typeof goTranspiler.goEnclosingFunction === "function" ? goTranspiler.goEnclosingFunction(declaration) : void 0;
+  if (scope === void 0) {
+    return void 0;
+  }
+  const state = { "ok": true, "goType": void 0, "writes": 0 };
+  const fail = () => {
+    state.ok = false;
+  };
+  const isName = (node) => _optionalChain([node, 'optionalAccess', _3475 => _3475.kind]) === ts.SyntaxKind.Identifier && node.text === name;
+  const joinWrite = (goType) => {
+    if (goType === void 0) {
+      fail();
+      return;
+    }
+    if (state.goType === void 0) {
+      state.goType = goType;
+    } else if (state.goType !== goType) {
+      fail();
+      return;
+    }
+    state.writes += 1;
+  };
+  const readExpression = (node, assigned) => {
+    if (!state.ok || node === void 0 || node === null) {
+      return;
+    }
+    if (node.kind === ts.SyntaxKind.Identifier) {
+      if (isName(node) && node !== declaration.name) {
+        hx10G06ClassifyUse(node, assigned, readExpression, joinWrite, fail, scope, goTranspiler);
+      }
+      return;
+    }
+    if (node !== scope && ts.isFunctionLike(node)) {
+      if (hx10G06BindingMentionsName(node.body, name)) {
+        fail();
+      }
+      return;
+    }
+    node.forEachChild((child) => readExpression(child, assigned));
+  };
+  const visitStatement = (node, assigned) => {
+    if (!state.ok || node === void 0 || node === null) {
+      return assigned;
+    }
+    switch (node.kind) {
+      case ts.SyntaxKind.Block: {
+        let current = assigned;
+        for (const statement of node.statements) {
+          current = visitStatement(statement, current);
+        }
+        return current;
+      }
+      case ts.SyntaxKind.ExpressionStatement: {
+        const expression = node.expression;
+        if (_optionalChain([expression, 'optionalAccess', _3476 => _3476.kind]) === ts.SyntaxKind.BinaryExpression && expression.operatorToken.kind === ts.SyntaxKind.EqualsToken && isName(expression.left)) {
+          readExpression(expression.right, assigned);
+          const goType = _nullishCoalesce(hx10G06IndexWriteType(goTranspiler, expression.right), () => ( goTranspiler.goTypeOfInitializer(expression.right, goTranspiler.printNode(expression.right, 0))));
+          joinWrite(goType);
+          return state.ok;
+        }
+        const slotType = hx10G06TupleWriteType(expression, name);
+        if (slotType !== void 0) {
+          readExpression(expression.right, assigned);
+          joinWrite(slotType);
+          return state.ok;
+        }
+        readExpression(expression, assigned);
+        return assigned;
+      }
+      case ts.SyntaxKind.VariableStatement: {
+        let current = assigned;
+        for (const child of node.declarationList.declarations) {
+          if (isName(child.name)) {
+            if (child === declaration) {
+              current = false;
+            } else {
+              fail();
+            }
+          }
+          readExpression(child.initializer, current);
+        }
+        return current;
+      }
+      case ts.SyntaxKind.IfStatement: {
+        readExpression(node.expression, assigned);
+        const thenAssigned = visitStatement(node.thenStatement, assigned);
+        const elseAssigned = node.elseStatement === void 0 ? assigned : visitStatement(node.elseStatement, assigned);
+        return thenAssigned && elseAssigned;
+      }
+      case ts.SyntaxKind.ForStatement: {
+        visitStatement(node.initializer, assigned);
+        readExpression(node.condition, assigned);
+        readExpression(node.incrementor, assigned);
+        visitStatement(node.statement, assigned);
+        return assigned;
+      }
+      case ts.SyntaxKind.WhileStatement:
+      case ts.SyntaxKind.DoStatement:
+      case ts.SyntaxKind.ForInStatement:
+      case ts.SyntaxKind.ForOfStatement: {
+        readExpression(node.expression, assigned);
+        visitStatement(node.statement, assigned);
+        return assigned;
+      }
+      case ts.SyntaxKind.SwitchStatement: {
+        readExpression(node.expression, assigned);
+        for (const clause of node.caseBlock.clauses) {
+          readExpression(clause.expression, assigned);
+          for (const statement of clause.statements) {
+            visitStatement(statement, assigned);
+          }
+        }
+        return assigned;
+      }
+      case ts.SyntaxKind.TryStatement: {
+        visitStatement(node.tryBlock, assigned);
+        if (node.catchClause !== void 0) {
+          visitStatement(node.catchClause.block, assigned);
+        }
+        visitStatement(node.finallyBlock, assigned);
+        return assigned;
+      }
+      case ts.SyntaxKind.ReturnStatement:
+      case ts.SyntaxKind.ThrowStatement: {
+        readExpression(node.expression, assigned);
+        return true;
+      }
+      case ts.SyntaxKind.EmptyStatement:
+      case ts.SyntaxKind.BreakStatement:
+      case ts.SyntaxKind.ContinueStatement:
+        return assigned;
+      default: {
+        if (hx10G06BindingMentionsName(node, name)) {
+          fail();
+        }
+        return assigned;
+      }
+    }
+  };
+  const shadowingWalk = (node) => {
+    if (state.ok === false) {
+      return;
+    }
+    if (node !== declaration && (_optionalChain([node, 'optionalAccess', _3477 => _3477.kind]) === ts.SyntaxKind.VariableDeclaration || _optionalChain([node, 'optionalAccess', _3478 => _3478.kind]) === ts.SyntaxKind.Parameter) && hx10G06BindingMentionsName(node.name, name)) {
+      fail();
+      return;
+    }
+    _optionalChain([node, 'optionalAccess', _3479 => _3479.forEachChild, 'call', _3480 => _3480(shadowingWalk)]);
+  };
+  scope.forEachChild(shadowingWalk);
+  if (!state.ok) {
+    return void 0;
+  }
+  const body = scope.kind === ts.SyntaxKind.SourceFile ? scope.statements : ts.isBlock(scope.body) ? scope.body.statements : [scope.body];
+  let reached = false;
+  for (const statement of body) {
+    reached = visitStatement(statement, reached);
+    if (!state.ok) {
+      return void 0;
+    }
+  }
+  if (state.writes === 0 || state.goType !== HX10G06_JOIN_TYPE) {
+    return void 0;
+  }
+  if (typeof goTranspiler.goTypeNameIsShadowed === "function" && goTranspiler.goTypeNameIsShadowed(scope, state.goType)) {
+    return void 0;
+  }
+  return state.goType;
+}
+function hx10G06ClassifyUse(node, assigned, readExpression, joinWrite, fail, scope, goTranspiler) {
+  const parent = node.parent;
+  if (parent === void 0) {
+    fail();
+    return;
+  }
+  if (hx10G06InNestedFunction(node, scope)) {
+    fail();
+    return;
+  }
+  if (parent.kind === ts.SyntaxKind.PostfixUnaryExpression || parent.kind === ts.SyntaxKind.PrefixUnaryExpression) {
+    const op = parent.operator;
+    if (op === ts.SyntaxKind.PlusPlusToken || op === ts.SyntaxKind.MinusMinusToken) {
+      fail();
+      return;
+    }
+  }
+  if (parent.kind === ts.SyntaxKind.SpreadElement) {
+    fail();
+    return;
+  }
+  if (parent.kind === ts.SyntaxKind.PropertyAccessExpression && parent.expression === node && _optionalChain([parent, 'access', _3481 => _3481.name, 'optionalAccess', _3482 => _3482.text]) === "push") {
+    fail();
+    return;
+  }
+  if (parent.kind === ts.SyntaxKind.ArrayLiteralExpression && _optionalChain([parent, 'access', _3483 => _3483.parent, 'optionalAccess', _3484 => _3484.kind]) === ts.SyntaxKind.BinaryExpression && parent.parent.left === parent) {
+    fail();
+    return;
+  }
+  if ((parent.kind === ts.SyntaxKind.ElementAccessExpression || parent.kind === ts.SyntaxKind.PropertyAccessExpression) && parent.expression === node) {
+    const above = parent.parent;
+    if (_optionalChain([above, 'optionalAccess', _3485 => _3485.kind]) === ts.SyntaxKind.BinaryExpression && above.left === parent && (above.operatorToken.kind === ts.SyntaxKind.EqualsToken || above.operatorToken.kind >= ts.SyntaxKind.FirstCompoundAssignment && above.operatorToken.kind <= ts.SyntaxKind.LastCompoundAssignment)) {
+      if (!assigned) {
+        fail();
+      }
+      return;
+    }
+  }
+  if (parent.kind === ts.SyntaxKind.BinaryExpression && parent.left === node) {
+    const op = parent.operatorToken.kind;
+    if (op === ts.SyntaxKind.EqualsToken) {
+      const goType = _nullishCoalesce(hx10G06IndexWriteType(goTranspiler, parent.right), () => ( goTranspiler.goTypeOfInitializer(parent.right, goTranspiler.printNode(parent.right, 0))));
+      joinWrite(goType);
+      return;
+    }
+    if (op >= ts.SyntaxKind.FirstCompoundAssignment && op <= ts.SyntaxKind.LastCompoundAssignment) {
+      fail();
+      return;
+    }
+  }
+  if (parent.kind === ts.SyntaxKind.BinaryExpression && parent.right === node && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    fail();
+    return;
+  }
+  if (!assigned) {
+    if (!hx10G06ReadKeepsMeaning(goTranspiler, node)) {
+      fail();
+    }
+  }
+}
+function installHx10G06NilDeclaredTupleJoins(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__hx10G06TupleJoinsInstalled || typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  const nilDeclaration = new RegExp("^([\\t ]*)var (\\w+) any = " + goTranspiler.UNDEFINED_TOKEN + "$");
+  goTranspiler.printVariableDeclarationList = (node, indentation) => {
+    const printed = upstream(node, indentation);
+    if (typeof printed !== "string") {
+      return printed;
+    }
+    const parsed = printed.match(nilDeclaration);
+    if (parsed === null || _optionalChain([node, 'optionalAccess', _3486 => _3486.parent, 'optionalAccess', _3487 => _3487.kind]) !== ts.SyntaxKind.VariableStatement || _optionalChain([node, 'access', _3488 => _3488.declarations, 'optionalAccess', _3489 => _3489.length]) !== 1) {
+      return printed;
+    }
+    const declaration = node.declarations[0];
+    if (!ts.isIdentifier(_optionalChain([declaration, 'optionalAccess', _3490 => _3490.name])) || declaration.initializer === void 0 || !hx10G06IsNilInitializer(goTranspiler, declaration.initializer)) {
+      return printed;
+    }
+    const name = declaration.name.text;
+    if (HX10G06_GUARD_NAMES.indexOf(name) >= 0) {
+      return printed;
+    }
+    if (parsed[2] !== name) {
+      return printed;
+    }
+    const goType = hx10G06JoinType(goTranspiler, declaration, name);
+    if (goType === void 0) {
+      return printed;
+    }
+    _optionalChain([goTranspiler, 'access', _3491 => _3491.goDeclaredTypeCache, 'optionalAccess', _3492 => _3492.set, 'call', _3493 => _3493(declaration, goType)]);
+    return parsed[1] + "var " + parsed[2] + " " + goType + " = " + goTranspiler.UNDEFINED_TOKEN;
+  };
+  goTranspiler.__hx10G06TupleJoinsInstalled = true;
+}
+var HX10G06_SELF_INITIALIZER_TYPES = {
+  "this.extend (a, b)": "map[string]any",
+  "this.safeDict (a, b)": "map[string]any",
+  "[]": "[]any",
+  "{}": "map[string]any"
+};
+function hx10G06SelfTranspiler() {
+  const enclosing = (node) => {
+    let current = _optionalChain([node, 'optionalAccess', _3494 => _3494.parent]);
+    while (current !== void 0) {
+      if ([
+        ts.SyntaxKind.MethodDeclaration,
+        ts.SyntaxKind.FunctionDeclaration,
+        ts.SyntaxKind.FunctionExpression,
+        ts.SyntaxKind.ArrowFunction,
+        ts.SyntaxKind.Constructor,
+        ts.SyntaxKind.SourceFile
+      ].indexOf(current.kind) >= 0) {
+        return current;
+      }
+      current = current.parent;
+    }
+    return void 0;
+  };
+  return {
+    "UNDEFINED_TOKEN": "nil",
+    "goEnclosingFunction": enclosing,
+    "goTypeNameIsShadowed": () => false,
+    "goDeclaredTypeOfIdentifier": (node) => ["bank"].includes(_optionalChain([node, 'optionalAccess', _3495 => _3495.text])) ? "[]map[string]any" : _optionalChain([node, 'optionalAccess', _3496 => _3496.text]) === "rows" ? "[][NRP_DB90044229752D39BD22822A1CF943F5]" : void 0,
+    "printNode": (node) => node === void 0 ? "" : node.getText().replace(/^this\.([a-z])/, (m, c) => "this." + c.toUpperCase()),
+    "goTypeOfInitializer": (node) => {
+      if (node === void 0) {
+        return void 0;
+      }
+      return HX10G06_SELF_INITIALIZER_TYPES[node.getText()];
+    }
+  };
+}
+function hx10G06SelfJoin(source) {
+  const file = ts.createSourceFile("t.ts", source, ts.ScriptTarget.Latest, true);
+  const transpiler = hx10G06SelfTranspiler();
+  const printed = [];
+  const visit = (node) => {
+    if (node.kind === ts.SyntaxKind.VariableDeclaration && ts.isIdentifier(node.name) && hx10G06IsNilInitializer(transpiler, node.initializer)) {
+      const goType = hx10G06JoinType(transpiler, node, node.name.text);
+      if (goType !== void 0) {
+        printed.push(node.name.text + " " + goType);
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(file);
+  return printed.join(";");
+}
+function hx10G06Check() {
+  const problems = [];
+  const ok = (condition, message) => {
+    if (!condition) {
+      problems.push(message);
+    }
+  };
+  const joins = (body, expected) => ok(hx10G06SelfJoin(body) === expected, "expected [" + expected + "] from: " + body.replace(/\s+/g, " "));
+  const method = (body) => "\nclass X {\n    m (a: any, b: any, c: any) {\n" + body + "\n    }\n}\n";
+  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleUntilOption (a, b);\n        return bag;"), "bag map[string]any");
+  joins(method("let bag = undefined;\n        let stock = false;\n        [ stock, bag ] = this.handleOptionBoolAndParams (a, b, c, false);\n        return bag;"), "bag map[string]any");
+  joins(method("let bag = undefined;\n        let count = 0;\n        [ count, bag ] = this.handleOptionIntegerAndParams (a, b, c, 0);\n        return bag;"), "bag map[string]any");
+  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleUntilOption (a, b);\n        [ c, bag ] = this.handleUntilOption (a, c);\n        return bag;"), "bag map[string]any");
+  joins(method("let bag = undefined;\n        let flag = false;\n        [ flag, bag ] = this.handleOptionBoolAndParams (a, b, c, a);\n        return bag;"), "");
+  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleMarginModeAndParams (a, b);\n        return bag;"), "");
+  joins(method("let bag = undefined;\n        [ a, bag ] = this.handlePostOnly (a, b);\n        return bag;"), "");
+  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleParamString (a, b);\n        return bag;"), "");
+  joins(method("let bag = undefined;\n        if (a) {\n            [ a, bag ] = this.handleUntilOption (a, b);\n        }\n        return bag;"), "");
+  joins(method("let bag = undefined;\n        if (b in bag) {\n            return 1;\n        }\n        [ a, bag ] = this.handleUntilOption (a, b);\n        return bag;"), "bag map[string]any");
+  joins(method('let bag = undefined;\n        this.safeString (bag, "x");\n        [ a, bag ] = this.handleUntilOption (a, b);\n        return bag;'), "bag map[string]any");
+  joins(method("let bag = undefined;\n        if (bag.length > 0) {\n            return 1;\n        }\n        [ a, bag ] = this.handleUntilOption (a, b);\n        return bag;"), "bag map[string]any");
+  joins(method("let bag = undefined;\n        for (const k in bag) {\n            return k;\n        }\n        [ a, bag ] = this.handleUntilOption (a, b);\n        return bag;"), "bag map[string]any");
+  joins(method("let bag = undefined;\n        let other = bag;\n        [ a, bag ] = this.handleUntilOption (a, b);\n        return bag;"), "");
+  joins(method('let bag = undefined;\n        const v = bag["x"];\n        [ a, bag ] = this.handleUntilOption (a, b);\n        return v;'), "bag map[string]any");
+  joins(method('let bag = undefined;\n        [ a, bag ] = this.handleUntilOption (a, b);\n        bag["x"] = 1;\n        return bag;'), "bag map[string]any");
+  joins(method('let bag = undefined;\n        bag["x"] = 1;\n        [ a, bag ] = this.handleUntilOption (a, b);\n        return bag;'), "");
+  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleUntilOption (a, b);\n        bag.push (1);\n        return bag;"), "");
+  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleUntilOption (a, b);\n        const f = () => bag;\n        return f ();"), "");
+  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleUntilOption (a, b);\n        [ ...bag ] = c;\n        return bag;"), "");
+  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleUntilOption (a, b);\n        bag = a;\n        return bag;"), "");
+  joins(method("let bag = undefined;\n        [ a, bag ] = this.handleUntilOption (a, b);\n        bag = [];\n        return bag;"), "");
+  joins(method("let bag = undefined;\n        let rest = undefined;\n        [ bag, rest ] = this.handleUntilOption (a, b);\n        return [ bag, rest ];"), "bag map[string]any;rest map[string]any");
+  joins(method('let ticker = undefined;\n        if (bank[1] !== undefined) {\n            ticker = bank[1];\n        }\n        this.safeString (ticker, "open");\n        return 1;'), "ticker map[string]any");
+  joins(method('let ticker = undefined;\n        if (bank[1] !== undefined) {\n            ticker = bank[1];\n        }\n        return ticker["open"];'), "ticker map[string]any");
+  joins(method("let ticker = undefined;\n        if (bank[1] !== undefined) {\n            ticker = bank[1];\n        }\n        return ticker;"), "");
+  joins(method("let ticker = undefined;\n        if (rows[1] !== undefined) {\n            ticker = rows[1];\n        }\n        return ticker;"), "");
+  joins(method("let ticker = undefined;\n        ticker = bank[a];\n        return ticker;"), "");
+  return problems;
+}
+
+// src/go/go-local-types.ts
+var CCXT_GO_BOOL_METHOD_NAMES = [
+  "IsPostOnly",
+  "IsRoundNumber",
+  "CheckRequiredCredentials",
+  "IsLinear",
+  "IsInverse",
+  "UsesPrivateKey",
+  "IsHfOrMining",
+  // hx4 G09: every return is a Go bool; no interface pins them, no venue overrides
+  "IsLeveragedCurrency",
+  "HasOutcome",
+  // hx4 B01: base bodies return a Go bool on every path; the interface pins them as bool
+  "IsEmptyString",
+  "IsTickPrecision"
+];
+var CCXT_GO_STRING_PTR_METHOD_NAMES = ["NetworkIdToCode", "FindTimeframe", "AmountToPrecision", "PriceToPrecision"];
+var CCXT_GO_HELPER_RETURN_TYPES = {
+  // Typed twins of GetArg (go/v4/exchange_helpers.go) -- the `var x <T> = GetArg<T>(...)`
+  // locals the printer declares for a provable optional argument
+  "GetArgMap": "map[string]any",
+  "GetArgMapSlice": "[]map[string]any",
+  "GetArgAnySlice": "[]any",
+  "GetArgStringSlice": "[]string",
+  "GetArgString": "string",
+  "GetArgBool": "bool",
+  "GetArgInt64": "int64",
+  "GetArgFloat64": "float64",
+  "GetArgStringPtr": "*string",
+  "GetArgInt64Ptr": "*int64",
+  "GetArgFloat64Ptr": "*float64",
+  "GetArgBoolPtr": "*bool",
+  // generated boolean-returning methods (see CCXT_GO_BOOL_METHOD_NAMES above)
+  ...Object.fromEntries(CCXT_GO_BOOL_METHOD_NAMES.map((name) => ["this." + name, "bool"])),
+  // exchange_functions.go / exchange_generic.go
+  "this.ToArray": "[]any",
+  "this.SortBy": "[]any",
+  "this.SortBy2": "[]any",
+  "this.FilterBy": "[]any",
+  // kraken parseTransactionsByType: goTranspiler.ts#goProvenListMethods retypes it to []any
+  "this.ParseTransactionsByType": "[]any",
+  // hand-written (exchange.go): a slice on every path, a nil []any when the argument is not one
+  "this.ArraySlice": "[]any",
+  "this.Sort": "[]any",
+  "this.ExtractParams": "[]any",
+  // arrayConcat is `(a: any[], b: any[]) => a.concat (b)` upstream: an array on every path,
+  // never a typed nil — the Go twin returns a nil `[]any` (not an untyped nil) when an
+  // operand is not a slice, which reads exactly like the old boxed `nil`.
+  "this.ArrayConcat": "[]any",
+  // retyped by goTranspiler.ts#retypeGoProvenParseMethods: every return is the []any{} accumulator / the result map literal
+  "this.ArraysConcat": "[]any",
+  "this.ParseCurrenciesCustom": "map[string]any",
+  // deepExtend2 is Go-only: every return path hands back the `outDict` accumulator (a
+  // non-map operand panics on the assertion instead of escaping), so `map[string]any` is exact.
+  "this.DeepExtend2": "map[string]any",
+  "this.Account": "map[string]any",
+  "this.ParseOrderBook": "map[string]any",
+  "this.Market": "map[string]any",
+  "this.Currency": "map[string]any",
+  "this.SafeCurrency": "map[string]any",
+  "this.SafeMarket": "map[string]any",
+  // structure parsers retyped by goTranspiler.ts#retypeGoProvenParseMethods (never nil, base + every override)
+  ...Object.fromEntries([
+    "SafeOrder",
+    "SafeTicker",
+    "SafeLedgerEntry",
+    "ParseOrder",
+    "ParseTicker",
+    "ParseTransaction",
+    "ParseTransfer",
+    "ParseLedgerEntry",
+    "SafeMarketStructure",
+    "SafeCurrencyStructure",
+    "SafeOpenInterest",
+    "ParseCurrency",
+    "ParseOpenInterest",
+    "SafePredictionOrder",
+    "SafePredictionTicker",
+    "SafePredictionOrderBook",
+    "ParsePredictionOrder",
+    "ParsePredictionTicker",
+    "ParsePredictionOpenInterest",
+    "ParseSpotOrUtaTicker",
+    "ParseContractOrderBook",
+    "ParseFundingRate",
+    "ParseLeverage",
+    "ParseTradingFee",
+    "ParseDepositAddress",
+    "ParseMarginMode",
+    "ParseGreeks",
+    "ParseOption",
+    "ParseBorrowRate",
+    "ParseIsolatedBorrowRate",
+    "ParseConversion",
+    "ParseMarginModification",
+    "ParseTradeTx",
+    "ParseLeverageFromMarket",
+    "ParseLeverageFromSetting",
+    "ParseMarginModeFromSetting",
+    "ParseMarginLoan",
+    "ParseIsolatedBorrowRates",
+    // U15
+    "ParseBalanceCustom",
+    "ParseUtaBalance",
+    "ParseBalanceByType",
+    "ParseBalanceForSingleCurrency",
+    "ParseCustomBalance",
+    "ParseSwapBalance",
+    "ParseSpotBalance",
+    "CustomParseBalance",
+    "ParseFundingBalance",
+    "ParseTradingBalance",
+    // U07
+    "ParseADLRank",
+    // U16
+    "ParseDepositAddressSpecial",
+    // U11
+    "ParseEvent",
+    "ParseMarketToEvent",
+    // W18
+    "SafePosition",
+    "ParsePosition",
+    "ParseOptionPosition"
+  ].flatMap((name) => [["this." + name, "map[string]any"], ["this.DerivedExchange." + name, "map[string]any"]])),
+  ...Object.fromEntries(["ParseTradingFees", "AssignDefaultDepositWithdrawFees", "ParseDepositWithdrawFee", "ParseTradingLimits", "DepositWithdrawFee", "ParsePublicDepositWithdrawFees"].flatMap((name) => [["this." + name, "map[string]any"], ["this.DerivedExchange." + name, "map[string]any"]])),
+  // U12
+  // exchange_prediction.go: retyped by transpilePredictionBaseMethods (no venue overrides)
+  "this.Outcome": "map[string]any",
+  "this.SafeOutcome": "map[string]any",
+  "this.ParseSearchQueries": "[]any",
+  ...Object.fromEntries(["ParseLastPrices", "RemoveKeysFromDict", "ParseTickersForRolling", "ParseBidsAsksCustom", "ParseSxbetTickersByHash"].flatMap((n) => [["this." + n, "map[string]any"], ["this.DerivedExchange." + n, "map[string]any"]])),
+  // U06
+  ...Object.fromEntries([["ParseLeverageTiers", "map[string]any"], ["ParseLeverages", "map[string]any"], ["ParseMarginModes", "map[string]any"], ["ParseMarketLeverageTiers", "[]any"], ["ParseEmulatedLeverageTiers", "[]any"]].flatMap(([n, t]) => [["this." + n, t], ["this.DerivedExchange." + n, t]])),
+  // U14
+  "this.ApplyEventFetchParams": "[]any",
+  "this.ParsePredictionPositions": "[]any",
+  // U10
+  "this.ParseDepositAddresses": "[]any",
+  "this.DerivedExchange.ParseDepositAddresses": "[]any",
+  // W15
+  "this.SetApiCredentials": "map[string]any",
+  // W20
+  "this.ParseDepositMethodIds": "[]any",
+  "this.ParsePortfolioDetails": "[]any",
+  // W23
+  // exchange.go / exchange_string.go
+  "this.StringToCharsArray": "[]string",
+  // exchange_market_type.go (hand-written)
+  "this.MarketSymbols": "[]string",
+  "exchange.MarketSymbols": "[]string",
+  "this.Capitalize": "string",
+  "this.Uuid16": "string",
+  "this.Uuid22": "string",
+  "this.Uuid5": "string",
+  "this.RandomBytes": "string",
+  "this.FixStringifiedJsonMembers": "string",
+  "this.Yymmdd": "string",
+  "this.PrecisionFromString": "int",
+  "this.BinaryLength": "int",
+  "this.Crc32": "int64",
+  "this.RandNumber": "int64",
+  // exchange_helpers.go — the hand-written method delegates to the package-level
+  // IsDictionary predicate, so it is a real Go bool
+  "this.IsDictionary": "bool",
+  // exchange.go / exchange_misc.go: hand-written, a plain Go `string` on every return path
+  "this.Json": "string",
+  "this.ImplodeParams": "string",
+  "this.ImplodeHostname": "string",
+  // exchange_encode.go
+  "this.Urlencode": "string",
+  // the array-repeat encoder is hand-written next to Urlencode with the same concrete
+  // `string` return; naming it also lets a literal-initialised `any` local whose only
+  // later write is this call (phemex Sign queryString) carry the type its literal implies
+  "this.UrlencodeWithArrayRepeat": "string",
+  "this.Rawencode": "string",
+  "this.Encode": "string",
+  "this.Decode": "string",
+  "this.EncodeURIComponent": "string",
+  "this.IntToBase16": "string",
+  "this.Remove0xPrefix": "string",
+  "this.StringToBase64": "string",
+  "this.BinaryToBase16": "string",
+  "this.BinaryToBase64": "string",
+  "this.BinaryToBase58": "string",
+  "this.BinaryToString": "string",
+  "this.Base16ToBinary": "[]byte",
+  "this.Base64ToBinary": "[]byte",
+  "this.Base58ToBinary": "[]byte",
+  "this.BinaryConcat": "[]byte",
+  // exchange_eth.go
+  "this.EthGetAddressFromPrivateKey": "string",
+  // exchange_number.go / exchange.go / exchange_string.go — hand-written helpers whose every
+  // return path is a Go `string` (audited by the go-locals U24 unit; REPORT.md lists the
+  // look-alikes that must stay `any`: implodeParams/implodeHostname return the raw path or nil,
+  // json/iso8601/parse8601/parseDate/numberToString/parseJson/convertToBigInt have a nil path,
+  // hash returns []byte for digest "binary")
+  "this.DecimalToPrecision": "string",
+  "this.ExceptionMessage": "string",
+  "this.Strip": "string",
+  "this.ExtendedStarknetGetSelectorFromName": "string",
+  "this.ExtendedStarknetComputePoseidonHashOnElements": "string",
+  // The SafeBool accessors are the one member of the Safe* pointer layer whose TS bodies are
+  // real methods (safeBool/safeBool2/safeBoolN live below the "METHODS BELOW THIS LINE"
+  // marker), so the printer emits them as methods and returns `any`. build/goTranspiler.ts
+  // drops that generated copy and go/v4/exchange_safe.go hand-writes the pointer-returning
+  // twins, mirroring this.SafeString / this.SafeFloat.
+  "this.SafeBool": "*bool",
+  "this.SafeBool2": "*bool",
+  "this.SafeBoolN": "*bool",
+  // exchange_safe.go / exchange_generated.go. The Safe*Number accessors are TS methods whose
+  // `Num` return annotation prints as `any`; their Go signature is coerced to the honest
+  // *float64 pointer in exchange_safe.go (the transpiled copies are dropped in
+  // build/goTranspiler.ts), mirroring the hand-written SafeFloat layer. Same rule as the
+  // upstream table's SafeFloat/SafeInteger entries: a nil pointer is the absent value, a
+  // non-nil pointer a present number (so a present zero stays distinct).
+  "this.SafeNumber": "*float64",
+  "this.SafeNumber2": "*float64",
+  "this.SafeNumberN": "*float64",
+  "this.SafeNumberOmitZero": "*float64",
+  // the transpiled test tree calls the base methods on a `*ccxt.Exchange`-typed local
+  // literally named `exchange`, so the same signatures apply there
+  "exchange.SafeNumber": "*float64",
+  "exchange.SafeNumber2": "*float64",
+  "exchange.SafeNumberN": "*float64",
+  "exchange.SafeNumberOmitZero": "*float64",
+  // --- numeric / time helpers (the U17 family) ------------------------------------
+  // Each entry names the Go type every return path of the (hand-written or coerced)
+  // method already produces, so a local that receives the call keeps the very same
+  // value and only refines what the Go compiler knows.
+  //   NumberToString: string, or nil once the input stringifies to "" (undefined in TS)
+  //   Parse8601:      int64 milliseconds, or nil when every layout fails (undefined in TS)
+  //   Iso8601:        the formatted string, or nil for an absent/unparsable timestamp
+  // The two pointer shapes follow the #30054 Safe*/Precise.String* convention: a nil
+  // pointer is what TS reads as undefined, the printer emits *x / `x != nil` at every
+  // consumer of a typed local, and derefScalar() unwraps the ones that stay `any`.
+  //   ParseToInt:     ParseInt(ParseFloat(NumberToString(x))) — the hand-written ParseInt
+  //                   always returns int64 (math.MinInt64 on failure), so this one can
+  //                   never be nil and is named as a plain int64.
+  // ParseNumber is deliberately absent: its Go body hands `a[0]` — the caller's own
+  // default, of arbitrary type — straight back, so no single Go type names its box.
+  "this.NumberToString": "*string",
+  "this.Parse8601": "*int64",
+  "this.Iso8601": "*string",
+  "this.ParseToInt": "int64",
+  // package-level string helpers (exchange_helpers.go); the printer emits these
+  // for the matching String.prototype call, e.g. `s.replace (a, b)` → `Replace(s, a, b)`
+  "Replace": "string",
+  "Join": "string",
+  // their native forms, printed when every operand is a proven non-nil Go string
+  "strings.Split": "[]string",
+  "strings.Replace": "string",
+  "strings.ReplaceAll": "string",
+  "strings.Join": "string",
+  "strings.ToUpper": "string",
+  "strings.ToLower": "string",
+  "strings.HasPrefix": "bool",
+  "strings.HasSuffix": "bool",
+  "strconv.FormatInt": "string",
+  "Slice": "string",
+  "Trim": "string",
+  "PadStart": "string",
+  "PadEnd": "string",
+  "GetLength": "int",
+  "ObjectValues": "[]any",
+  // exchange_crypto.go (imported free functions in TypeScript: `eddsa (...)`)
+  "Eddsa": "string",
+  "Jwt": "string",
+  "Rsa": "string",
+  "Totp": "string",
+  "Ecdsa": "map[string]any",
+  // exchange_generated.go: SafeCurrencyCode / SafeSymbol return the code/symbol field of
+  // the dict safeCurrency/safeMarket always hands back, so their signature is coerced to
+  // the same `*string` shape as the hand-written accessors above (coerceTypedStringAccessors
+  // in build/goTranspiler.ts) and an absent value stays a nil pointer.
+  "this.SafeCurrencyCode": "*string",
+  "this.SafeSymbol": "*string",
+  "this.DerivedExchange.SafeCurrencyCode": "*string",
+  // base tuple helpers (exchange_generated.go). These are transpiled, but their emitted
+  // signature is coerced to `[]any` — every return path in the TS body prints a Go
+  // `[]any{...}` literal, see the coerceRegex in build/goTranspiler.ts#transpileBaseMethods.
+  // Listed so the ordinary (non-destructuring) call sites get a typed local too:
+  // `var values any = this.HandleOptionAndParams (...)` in HandleSubTypeAndParams.
+  "this.HandleOptionAndParams": "[]any",
+  "this.HandleOptionAndParams2": "[]any",
+  "this.HandleOptionStringAndParams": "[]any",
+  "this.HandleOptionStringAndParams2": "[]any",
+  "this.HandleOptionBoolAndParams": "[]any",
+  "this.HandleOptionBoolAndParams2": "[]any",
+  "this.HandleOptionBoolAndParamsNullable": "[]any",
+  "this.HandleOptionBoolAndParams2Nullable": "[]any",
+  "this.HandleOptionIntegerAndParamsNullable": "[]any",
+  "this.HandleOptionIntegerAndParams2Nullable": "[]any",
+  "this.HandleOptionIntegerAndParams": "[]any",
+  "this.HandleOptionIntegerAndParams2": "[]any",
+  "this.HandleParamString": "[]any",
+  "this.HandleParamString2": "[]any",
+  "this.HandleMarketTypeAndParams": "[]any",
+  ...Object.fromEntries(CCXT_GO_STRING_PTR_METHOD_NAMES.flatMap((name) => [["this." + name, "*string"], ["exchange." + name, "*string"]])),
+  // exchange.go: seconds as int64; a missing/malformed timeframe panics NotSupported like TS
+  "this.ParseTimeframe": "int64",
+  "exchange.ParseTimeframe": "int64"
+};
+var CCXT_GO_WS_HELPER_RETURN_TYPES = {
+  "this.OrderBook": "OrderBookInterface",
+  "this.IndexedOrderBook": "OrderBookInterface",
+  "this.CountedOrderBook": "OrderBookInterface",
+  "this.Client": "ClientInterface"
+};
+function goSourceIsWsTree(node) {
+  try {
+    let current = node;
+    while (current !== void 0 && current.parent !== void 0) {
+      current = current.parent;
+    }
+    const fileName = current !== void 0 && current.fileName !== void 0 ? String(current.fileName) : "";
+    return /(^|[\\/])ts[\\/]src[\\/]pro[\\/]/.test(fileName);
+  } catch (e) {
+    return false;
+  }
+}
+var EXTRA_GO_TYPE_NAMES = ["byte", "ClientInterface", "OrderBookInterface"];
+function typeNameIsUsable(goTranspiler, initializer, goType) {
+  for (const typeName of EXTRA_GO_TYPE_NAMES) {
+    if (goType.indexOf(typeName) >= 0) {
+      const scope = typeof goTranspiler.goEnclosingFunction === "function" ? goTranspiler.goEnclosingFunction(initializer) : void 0;
+      if (scopeMentionsIdentifier(scope, typeName)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+var FUNCTION_LIKE_KINDS = [
+  ts.SyntaxKind.MethodDeclaration,
+  ts.SyntaxKind.FunctionDeclaration,
+  ts.SyntaxKind.FunctionExpression,
+  ts.SyntaxKind.ArrowFunction,
+  ts.SyntaxKind.Constructor,
+  ts.SyntaxKind.SourceFile
+];
+function enclosingLoops(node) {
+  const loops = [];
+  let current = _optionalChain([node, 'optionalAccess', _3497 => _3497.parent]);
+  while (current !== void 0) {
+    if (FUNCTION_LIKE_KINDS.indexOf(current.kind) >= 0) {
+      break;
+    }
+    if (current.kind === ts.SyntaxKind.ForStatement || current.kind === ts.SyntaxKind.WhileStatement) {
+      loops.push(current);
+    }
+    current = current.parent;
+  }
+  return loops;
+}
+function isIdentifierNamed(node, name) {
+  return _optionalChain([node, 'optionalAccess', _3498 => _3498.kind]) === ts.SyntaxKind.Identifier && node.text === name;
+}
+function isLengthOf(node, name) {
+  return _optionalChain([node, 'optionalAccess', _3499 => _3499.kind]) === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([node, 'access', _3500 => _3500.name, 'optionalAccess', _3501 => _3501.text]) === "length" && isIdentifierNamed(node.expression, name);
+}
+function loopBoundsIndex(loop, indexName, receiverName) {
+  const condition = _optionalChain([loop, 'optionalAccess', _3502 => _3502.condition]);
+  if (_optionalChain([condition, 'optionalAccess', _3503 => _3503.kind]) !== ts.SyntaxKind.BinaryExpression) {
+    return false;
+  }
+  const op = _optionalChain([condition, 'access', _3504 => _3504.operatorToken, 'optionalAccess', _3505 => _3505.kind]);
+  if (op === ts.SyntaxKind.LessThanToken) {
+    return isIdentifierNamed(condition.left, indexName) && isLengthOf(condition.right, receiverName);
+  }
+  if (op === ts.SyntaxKind.GreaterThanToken) {
+    return isLengthOf(condition.left, receiverName) && isIdentifierNamed(condition.right, indexName);
+  }
+  return false;
+}
+function isAssignmentOperator(kind) {
+  return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
+}
+function writesOrShadowsName(node, name) {
+  let found = false;
+  const visit = (n) => {
+    if (found) {
+      return;
+    }
+    if (isIdentifierNamed(n, name)) {
+      const parent = n.parent;
+      if (parent !== void 0) {
+        if (parent.kind === ts.SyntaxKind.BinaryExpression && parent.left === n && isAssignmentOperator(_optionalChain([parent, 'access', _3506 => _3506.operatorToken, 'optionalAccess', _3507 => _3507.kind]))) {
+          found = true;
+          return;
+        }
+        if ((parent.kind === ts.SyntaxKind.PrefixUnaryExpression || parent.kind === ts.SyntaxKind.PostfixUnaryExpression) && parent.operand === n && (parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken)) {
+          found = true;
+          return;
+        }
+        if ((parent.kind === ts.SyntaxKind.ForInStatement || parent.kind === ts.SyntaxKind.ForOfStatement) && parent.initializer === n) {
+          found = true;
+          return;
+        }
+        if ((parent.kind === ts.SyntaxKind.VariableDeclaration || parent.kind === ts.SyntaxKind.Parameter || parent.kind === ts.SyntaxKind.BindingElement) && parent.name === n) {
+          found = true;
+          return;
+        }
+        if (parent.kind === ts.SyntaxKind.DeleteExpression) {
+          found = true;
+          return;
+        }
+      }
+    }
+    _optionalChain([n, 'optionalAccess', _3508 => _3508.forEachChild, 'call', _3509 => _3509(visit)]);
+  };
+  _optionalChain([node, 'optionalAccess', _3510 => _3510.forEachChild, 'call', _3511 => _3511(visit)]);
+  return found;
+}
+function ccxtGoElementAccessType(goTranspiler, initializer, printedValue) {
+  if (_optionalChain([initializer, 'optionalAccess', _3512 => _3512.kind]) !== ts.SyntaxKind.ElementAccessExpression) {
+    return void 0;
+  }
+  const receiver = initializer.expression;
+  const index = initializer.argumentExpression;
+  if (_optionalChain([receiver, 'optionalAccess', _3513 => _3513.kind]) !== ts.SyntaxKind.Identifier || _optionalChain([index, 'optionalAccess', _3514 => _3514.kind]) !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  if (typeof goTranspiler.goDeclaredTypeOfIdentifier !== "function") {
+    return void 0;
+  }
+  if (goTranspiler.goDeclaredTypeOfIdentifier(receiver) !== "[]string") {
+    return void 0;
+  }
+  const receiverText = goTranspiler.printNode(receiver, 0);
+  const indexText = goTranspiler.printNode(index, 0);
+  if ((_nullishCoalesce(printedValue, () => ( ""))).trim() !== `GetValue(${receiverText}, ${indexText})`) {
+    return void 0;
+  }
+  const receiverName = receiver.text;
+  const indexName = index.text;
+  if (receiverName === indexName) {
+    return void 0;
+  }
+  if (typeof goTranspiler.goEnclosingFunction === "function") {
+    const symbol = goTranspiler.getChecker().getSymbolAtLocation(receiver);
+    const declaration = _optionalChain([symbol, 'optionalAccess', _3515 => _3515.valueDeclaration, 'optionalAccess', _3516 => _3516.resolve, 'call', _3517 => _3517()]);
+    if (declaration === void 0 || goTranspiler.goEnclosingFunction(declaration) !== goTranspiler.goEnclosingFunction(initializer)) {
+      return void 0;
+    }
+  }
+  for (const loop of enclosingLoops(initializer)) {
+    if (!loopBoundsIndex(loop, indexName, receiverName)) {
+      continue;
+    }
+    if (writesOrShadowsName(loop.statement, indexName) || writesOrShadowsName(loop.statement, receiverName)) {
+      continue;
+    }
+    return "string";
+  }
+  return void 0;
+}
+var CCXT_GO_FAMILY_METHOD = /^parse[A-Za-z0-9]*(Status|Type|TimeInForce|Side|Action)$/;
+var CCXT_GO_SAFE_STRING_METHOD = /^safeString(2|N|Lower|Lower2|LowerN|Upper|Upper2|UpperN)?$/;
+var CCXT_GO_FAMILY_RETURN_TYPE = "*string";
+var CCXT_GO_FAMILY_LITERAL_RETURN_TYPE = "string";
+var TERNARY_HELPER_NAME = "Ternary";
+function ccxtStripPrintedParens(goTranspiler, text) {
+  let value = (_nullishCoalesce(text, () => ( ""))).trim();
+  while (value.startsWith("(") && goTranspiler.isWholePrintedCall(value, 0)) {
+    value = value.substring(1, value.length - 1).trim();
+  }
+  return value;
+}
+function ccxtSplitPrintedArguments(inner) {
+  const args = [];
+  let depth = 0, current = "", inString = false, quote = "", escaped = false;
+  for (let i = 0; i < inner.length; i++) {
+    const c = inner[i];
+    if (inString) {
+      current += c;
+      if (escaped) {
+        escaped = false;
+      } else if (c === "\\") {
+        escaped = true;
+      } else if (c === quote) {
+        inString = false;
+      }
+      continue;
+    }
+    if (c === '"' || c === "`") {
+      inString = true;
+      quote = c;
+      current += c;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{") {
+      depth += 1;
+      current += c;
+      continue;
+    }
+    if (c === ")" || c === "]" || c === "}") {
+      depth -= 1;
+      current += c;
+      continue;
+    }
+    if (c === "," && depth === 0) {
+      args.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += c;
+  }
+  if (current.trim().length > 0) {
+    args.push(current.trim());
+  }
+  return args;
+}
+function ccxtGoTernaryBranchType(goTranspiler, branchText) {
+  const text = ccxtStripPrintedParens(goTranspiler, branchText);
+  if (/^"(?:[^"\\]|\\.)*"$/.test(text) || /^`[^`]*`$/.test(text)) {
+    return "string";
+  }
+  if (text === "true" || text === "false") {
+    return "bool";
+  }
+  if (/^[0-9]+$/.test(text)) {
+    return "int";
+  }
+  if (/^[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?$/.test(text) || /^[0-9]+[eE][+-]?[0-9]+$/.test(text)) {
+    return "float64";
+  }
+  return void 0;
+}
+function ccxtGoTernaryType(goTranspiler, printedValue) {
+  const value = ccxtStripPrintedParens(goTranspiler, printedValue);
+  const open = value.indexOf("(");
+  if (open <= 0 || !goTranspiler.isWholePrintedCall(value, open)) {
+    return void 0;
+  }
+  if (value.substring(0, open) !== TERNARY_HELPER_NAME) {
+    return void 0;
+  }
+  const branches = ccxtSplitPrintedArguments(value.substring(open + 1, value.length - 1));
+  if (branches.length !== 3) {
+    return void 0;
+  }
+  const whenTrue = ccxtGoTernaryBranchType(goTranspiler, branches[1]);
+  if (whenTrue === void 0) {
+    return void 0;
+  }
+  return ccxtGoTernaryBranchType(goTranspiler, branches[2]) === whenTrue ? whenTrue : void 0;
+}
+function ccxtGoTernaryDeclaration(node) {
+  const declaration = _optionalChain([node, 'optionalAccess', _3518 => _3518.parent]);
+  if (declaration === void 0 || declaration.initializer !== node) {
+    return void 0;
+  }
+  if (declaration.name === void 0 || !Array.isArray(_optionalChain([declaration, 'access', _3519 => _3519.parent, 'optionalAccess', _3520 => _3520.declarations]))) {
+    return void 0;
+  }
+  return declaration;
+}
+var CCXT_GO_ARITHMETIC_CALLEES = ["Multiply", "Subtract", "Divide", "Mod"];
+var CCXT_GO_ARITHMETIC_LOCAL_TYPE = "int64";
+var CCXT_GO_INT_OPERAND_CALLEES = {
+  "GetLength": "int",
+  "GetArrayLength": "int",
+  "GetIndexOf": "int",
+  "ParseInt": "int64",
+  "this.Milliseconds": "int64",
+  "this.Seconds": "int64",
+  "this.Microseconds": "int64",
+  "this.Crc32": "int64",
+  "this.RandNumber": "int64",
+  "this.PrecisionFromString": "int",
+  "this.BinaryLength": "int"
+};
+function ccxtGoUnqualifiedCallee(callee) {
+  return callee.startsWith("ccxt.") ? callee.substring("ccxt.".length) : callee;
+}
+function ccxtGoArithmeticNodeMatches(node, callee) {
+  node = ccxtGoUnwrapPrintedParens(node);
+  if (_optionalChain([node, 'optionalAccess', _3521 => _3521.operatorToken]) === void 0 || node.left === void 0 || node.right === void 0) {
+    return false;
+  }
+  const op = ccxtGoNodeText(node.operatorToken);
+  return callee === "Multiply" && op === "*" || callee === "Subtract" && op === "-" || callee === "Divide" && op === "/" || callee === "Mod" && op === "%";
+}
+function ccxtGoNodeText(node) {
+  if (typeof _optionalChain([node, 'optionalAccess', _3522 => _3522.getText]) !== "function") {
+    return void 0;
+  }
+  try {
+    return node.getText().trim();
+  } catch (e) {
+    return void 0;
+  }
+}
+function ccxtGoUnwrapPrintedParens(node) {
+  for (let i = 0; i < 8 && _optionalChain([node, 'optionalAccess', _3523 => _3523.expression]) !== void 0; i++) {
+    if (node.operatorToken !== void 0 || node.left !== void 0 || node.right !== void 0 || node.arguments !== void 0 || node.name !== void 0 || node.argumentExpression !== void 0 || node.operand !== void 0 || node.condition !== void 0 || node.type !== void 0 || node.tag !== void 0 || node.template !== void 0 || node.operands !== void 0) {
+      return node;
+    }
+    if ((_nullishCoalesce(ccxtGoNodeText(node), () => ( ""))).startsWith("(") === false) {
+      return node;
+    }
+    node = node.expression;
+  }
+  return node;
+}
+function ccxtGoPrintedCallParts(goTranspiler, printedValue) {
+  let value = (_nullishCoalesce(printedValue, () => ( ""))).trim();
+  while (value.startsWith("(") && goTranspiler.isWholePrintedCall(value, 0)) {
+    value = value.substring(1, value.length - 1).trim();
+  }
+  const open = value.indexOf("(");
+  if (open <= 0 || !goTranspiler.isWholePrintedCall(value, open)) {
+    return void 0;
+  }
+  const callee = value.substring(0, open);
+  if (!/^[A-Za-z_][\w.]*$/.test(callee)) {
+    return void 0;
+  }
+  return { callee, argsText: value.substring(open + 1, value.length - 1) };
+}
+function ccxtGoSplitPrintedArgs(argsText) {
+  const text = (_nullishCoalesce(argsText, () => ( ""))).trim();
+  if (text === "") {
+    return [];
+  }
+  const args = [];
+  let depth = 0;
+  let stringDelimiter = void 0;
+  let escaped = false;
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (stringDelimiter !== void 0) {
+      if (stringDelimiter === '"' && escaped) {
+        escaped = false;
+      } else if (stringDelimiter === '"' && c === "\\") {
+        escaped = true;
+      } else if (c === stringDelimiter) {
+        stringDelimiter = void 0;
+      }
+      continue;
+    }
+    if (c === '"' || c === "`") {
+      stringDelimiter = c;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{") {
+      depth++;
+      continue;
+    }
+    if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      continue;
+    }
+    if (c === "," && depth === 0) {
+      args.push(text.substring(start, i).trim());
+      start = i + 1;
+    }
+  }
+  args.push(text.substring(start).trim());
+  return args;
+}
+function ccxtGoIntOperandKind(goTranspiler, node, printedValue, depth) {
+  const value = (_nullishCoalesce(printedValue, () => ( ""))).trim();
+  if (value === "") {
+    return void 0;
+  }
+  if (/^\d+$/.test(value)) {
+    return "intlit";
+  }
+  const parts = ccxtGoPrintedCallParts(goTranspiler, value);
+  if (parts !== void 0) {
+    const callee = ccxtGoUnqualifiedCallee(parts.callee);
+    const operandType = _nullishCoalesce(CCXT_GO_INT_OPERAND_CALLEES[parts.callee], () => ( CCXT_GO_INT_OPERAND_CALLEES[callee]));
+    if (operandType === "int" || operandType === "int64") {
+      return "int";
+    }
+    if (depth < 12 && ccxtGoArithmeticCallIsInt64(goTranspiler, node, parts.callee, parts.argsText, depth + 1)) {
+      return "int";
+    }
+    return void 0;
+  }
+  if (!/^[A-Za-z_]\w*$/.test(value)) {
+    return void 0;
+  }
+  const declared = typeof goTranspiler.goDeclaredTypeOfIdentifier === "function" ? goTranspiler.goDeclaredTypeOfIdentifier(node) : void 0;
+  if (declared !== "int" && declared !== "int64") {
+    return void 0;
+  }
+  if (!ccxtGoDeclarationIsTypedPrint(goTranspiler, node)) {
+    return void 0;
+  }
+  return "int";
+}
+function ccxtGoDeclarationIsTypedPrint(goTranspiler, node) {
+  if (typeof goTranspiler.getChecker !== "function") {
+    return false;
+  }
+  let list;
+  try {
+    list = _optionalChain([goTranspiler, 'access', _3524 => _3524.getChecker, 'call', _3525 => _3525(), 'access', _3526 => _3526.getSymbolAtLocation, 'call', _3527 => _3527(node), 'optionalAccess', _3528 => _3528.valueDeclaration, 'optionalAccess', _3529 => _3529.resolve, 'call', _3530 => _3530(), 'optionalAccess', _3531 => _3531.parent]);
+  } catch (e) {
+    return false;
+  }
+  const statement = _optionalChain([list, 'optionalAccess', _3532 => _3532.parent]);
+  return statement !== void 0 && statement.declarationList === list;
+}
+function ccxtGoArithmeticCallIsInt64(goTranspiler, node, callee, argsText, depth) {
+  const name = ccxtGoUnqualifiedCallee(callee);
+  if (CCXT_GO_ARITHMETIC_CALLEES.indexOf(name) < 0) {
+    return false;
+  }
+  if (!ccxtGoArithmeticNodeMatches(node, name)) {
+    return false;
+  }
+  const args = ccxtGoSplitPrintedArgs(argsText);
+  if (args.length !== 2) {
+    return false;
+  }
+  const leftKind = ccxtGoIntOperandKind(goTranspiler, node.left, args[0], depth);
+  const rightKind = ccxtGoIntOperandKind(goTranspiler, node.right, args[1], depth);
+  if (leftKind === void 0 || rightKind === void 0) {
+    return false;
+  }
+  if (name === "Divide") {
+    return false;
+  }
+  if (name === "Mod") {
+    if (rightKind !== "intlit" || /^0+$/.test(args[1])) {
+      return false;
+    }
+  }
+  return true;
+}
+function ccxtGoTypeOfArithmeticInitializer(goTranspiler, initializer, printedValue) {
+  const parts = ccxtGoPrintedCallParts(goTranspiler, printedValue);
+  if (parts === void 0) {
+    return void 0;
+  }
+  const name = ccxtGoUnqualifiedCallee(parts.callee);
+  if (CCXT_GO_ARITHMETIC_CALLEES.indexOf(name) < 0) {
+    return void 0;
+  }
+  if (!ccxtGoArithmeticCallIsInt64(goTranspiler, initializer, parts.callee, parts.argsText, 0)) {
+    return void 0;
+  }
+  return CCXT_GO_ARITHMETIC_LOCAL_TYPE;
+}
+var CCXT_GO_NATIVE_ARITHMETIC_LOCAL_TYPES = ["string", "int64", "float64", "int"];
+function ccxtGoTypeOfNativeArithmeticInitializer(goTranspiler, initializer, printedValue) {
+  let node = initializer;
+  while (_optionalChain([node, 'optionalAccess', _3533 => _3533.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  if (node !== initializer || _optionalChain([node, 'optionalAccess', _3534 => _3534.kind]) !== ts.SyntaxKind.BinaryExpression || typeof goTranspiler.goNativeArithmetic !== "function") {
+    return void 0;
+  }
+  const native = goTranspiler.goNativeArithmetic(node);
+  if (native === void 0 || native.text.trim() !== (_nullishCoalesce(printedValue, () => ( ""))).trim()) {
+    return void 0;
+  }
+  return CCXT_GO_NATIVE_ARITHMETIC_LOCAL_TYPES.indexOf(native.goType) >= 0 ? native.goType : void 0;
+}
+function ccxtGoUnboxArithmeticDeclaration(goTranspiler, printed) {
+  if (typeof printed !== "string") {
+    return printed;
+  }
+  const match = /^([\s\S]*?\bvar [A-Za-z0-9_]+ int64 = )((?:ccxt\.)?(?:Multiply|Subtract|Divide|Mod)\([^\n]*)$/.exec(printed);
+  if (match === null) {
+    return printed;
+  }
+  const tail = match[2];
+  const open = tail.indexOf("(");
+  const close = ccxtGoPrintedCallEnd(tail, open);
+  if (close < 0) {
+    return printed;
+  }
+  const rest = tail.substring(close);
+  if (!/^\s*(;?\s*(\/\/[^\n]*)?)$/.test(rest)) {
+    return printed;
+  }
+  return match[1] + tail.substring(0, close) + ".(" + CCXT_GO_ARITHMETIC_LOCAL_TYPE + ")" + rest;
+}
+function ccxtGoPrintedCallEnd(value, open) {
+  let depth = 0;
+  let stringDelimiter = void 0;
+  let escaped = false;
+  for (let i = open; i < value.length; i++) {
+    const c = value[i];
+    if (stringDelimiter !== void 0) {
+      if (stringDelimiter === '"' && escaped) {
+        escaped = false;
+      } else if (stringDelimiter === '"' && c === "\\") {
+        escaped = true;
+      } else if (c === stringDelimiter) {
+        stringDelimiter = void 0;
+      }
+      continue;
+    }
+    if (c === '"' || c === "`") {
+      stringDelimiter = c;
+      continue;
+    }
+    if (c === "(") {
+      depth++;
+      continue;
+    }
+    if (c === ")") {
+      depth--;
+      if (depth === 0) {
+        return i + 1;
+      }
+      if (depth < 0) {
+        return -1;
+      }
+    }
+  }
+  return -1;
+}
+function installCcxtGoArithmeticUnbox(goTranspiler) {
+  if (typeof goTranspiler.printVariableDeclarationList !== "function" || goTranspiler.__ccxtGoArithmeticUnboxInstalled) {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = upstream.call(this, node, identation);
+    return ccxtGoUnboxArithmeticDeclaration(this, printed);
+  };
+  goTranspiler.__ccxtGoArithmeticUnboxInstalled = true;
+}
+var CCXT_GO_CURRENCY_LOCAL_TYPE = "map[string]any";
+var CCXT_GO_CURRENCY_CALLEES = ["this.Currency", "this.SafeCurrency"];
+function ccxtGoWholePrintedCallee(goTranspiler, printedValue) {
+  let value = (_nullishCoalesce(printedValue, () => ( ""))).trim();
+  while (value.startsWith("(") && goTranspiler.isWholePrintedCall(value, 0)) {
+    value = value.substring(1, value.length - 1).trim();
+  }
+  const open = value.indexOf("(");
+  if (open <= 0 || !goTranspiler.isWholePrintedCall(value, open)) {
+    return void 0;
+  }
+  const callee = value.substring(0, open);
+  return /^[A-Za-z_][\w.]*$/.test(callee) ? callee : void 0;
+}
+function ccxtGoTypeOfCurrencyInitializer(goTranspiler, initializer, printedValue) {
+  if (_optionalChain([initializer, 'optionalAccess', _3535 => _3535.kind]) !== ts.SyntaxKind.CallExpression) {
+    return void 0;
+  }
+  if (_optionalChain([initializer, 'access', _3536 => _3536.parent, 'optionalAccess', _3537 => _3537.kind]) !== ts.SyntaxKind.VariableDeclaration) {
+    return void 0;
+  }
+  const callee = ccxtGoWholePrintedCallee(goTranspiler, printedValue);
+  if (callee === void 0 || CCXT_GO_CURRENCY_CALLEES.indexOf(callee) < 0) {
+    return void 0;
+  }
+  if (!typeNameIsUsable(goTranspiler, initializer, CCXT_GO_CURRENCY_LOCAL_TYPE)) {
+    return void 0;
+  }
+  return CCXT_GO_CURRENCY_LOCAL_TYPE;
+}
+function ccxtGoUnboxCurrencyDeclaration(goTranspiler, printed) {
+  if (typeof printed !== "string") {
+    return printed;
+  }
+  const match = /^([\s\S]*?\bvar [A-Za-z0-9_]+ map\[string\]any = )((?:ccxt\.)?(?:this\.)?(?:Currency|SafeCurrency)\([^\n]*)$/.exec(printed);
+  if (match === null) {
+    return printed;
+  }
+  const tail = match[2];
+  const open = tail.indexOf("(");
+  const close = ccxtGoPrintedCallEnd(tail, open);
+  if (close < 0) {
+    return printed;
+  }
+  const rest = tail.substring(close);
+  if (!/^\s*(;?\s*(\/\/[^\n]*)?)$/.test(rest)) {
+    return printed;
+  }
+  return match[1] + tail.substring(0, close) + ".(" + CCXT_GO_CURRENCY_LOCAL_TYPE + ")" + rest;
+}
+var CCXT_GO_PARSE_NUMBER_LOCAL_TYPE = "*float64";
+function ccxtGoTypeOfParseNumberInitializer(goTranspiler, initializer, printedValue) {
+  if (_optionalChain([initializer, 'optionalAccess', _3538 => _3538.kind]) !== ts.SyntaxKind.CallExpression || initializer.arguments.length !== 1 || _optionalChain([initializer, 'access', _3539 => _3539.parent, 'optionalAccess', _3540 => _3540.kind]) !== ts.SyntaxKind.VariableDeclaration || initializer.parent.initializer !== initializer || _optionalChain([initializer, 'access', _3541 => _3541.parent, 'access', _3542 => _3542.parent, 'optionalAccess', _3543 => _3543.parent, 'optionalAccess', _3544 => _3544.kind]) !== ts.SyntaxKind.VariableStatement) {
+    return void 0;
+  }
+  if (ccxtGoWholePrintedCallee(goTranspiler, printedValue) !== "this.ParseNumber") {
+    return void 0;
+  }
+  return typeNameIsUsable(goTranspiler, initializer, CCXT_GO_PARSE_NUMBER_LOCAL_TYPE) ? CCXT_GO_PARSE_NUMBER_LOCAL_TYPE : void 0;
+}
+function ccxtGoTypeOfUrlsInitializer(goTranspiler, initializer, printedValue) {
+  if (_optionalChain([initializer, 'optionalAccess', _3545 => _3545.parent, 'optionalAccess', _3546 => _3546.kind]) !== ts.SyntaxKind.VariableDeclaration || initializer.parent.initializer !== initializer || _optionalChain([initializer, 'access', _3547 => _3547.parent, 'access', _3548 => _3548.parent, 'optionalAccess', _3549 => _3549.parent, 'optionalAccess', _3550 => _3550.kind]) !== ts.SyntaxKind.VariableStatement || !/^GetValue\(/.test((_nullishCoalesce(printedValue, () => ( ""))).trim()) || !urlsDescribeStringProducer(initializer)) {
+    return void 0;
+  }
+  const declaration = initializer.parent;
+  const scope = typeof goTranspiler.goEnclosingFunction === "function" ? goTranspiler.goEnclosingFunction(declaration) : void 0;
+  if (scope === void 0 || _optionalChain([declaration, 'access', _3551 => _3551.name, 'optionalAccess', _3552 => _3552.kind]) !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  const varName = declaration.name.text;
+  let unproven = false;
+  const visit = (n) => {
+    if (!unproven && n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== declaration.name) {
+      unproven = !ccxtGoClosureReadIsSafe(goTranspiler, n, varName) && !ccxtGoUrlsStringEqualityRead(goTranspiler, n);
+    } else if (!unproven) {
+      _optionalChain([n, 'optionalAccess', _3553 => _3553.forEachChild, 'call', _3554 => _3554(visit)]);
+    }
+  };
+  _optionalChain([scope, 'optionalAccess', _3555 => _3555.forEachChild, 'call', _3556 => _3556(visit)]);
+  return unproven ? void 0 : typeNameIsUsable(goTranspiler, initializer, "*string") ? "*string" : void 0;
+}
+function ccxtGoUrlsStringEqualityRead(goTranspiler, node) {
+  let current = node;
+  while (_optionalChain([current, 'access', _3557 => _3557.parent, 'optionalAccess', _3558 => _3558.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    current = current.parent;
+  }
+  const parent = current.parent;
+  if (_optionalChain([parent, 'optionalAccess', _3559 => _3559.kind]) !== ts.SyntaxKind.BinaryExpression || typeof goTranspiler.goScalarFamily !== "function") {
+    return false;
+  }
+  const op = _optionalChain([parent, 'access', _3560 => _3560.operatorToken, 'optionalAccess', _3561 => _3561.kind]);
+  if (op !== ts.SyntaxKind.EqualsEqualsEqualsToken && op !== ts.SyntaxKind.ExclamationEqualsEqualsToken) {
+    return false;
+  }
+  const other = parent.left === current ? parent.right : parent.left;
+  return goTranspiler.goScalarFamily(other) === "string";
+}
+function goAddChainLeftmostLeaf(node) {
+  let current = node;
+  while (_optionalChain([current, 'optionalAccess', _3562 => _3562.kind]) === ts.SyntaxKind.ParenthesizedExpression || _optionalChain([current, 'optionalAccess', _3563 => _3563.kind]) === ts.SyntaxKind.BinaryExpression && _optionalChain([current, 'access', _3564 => _3564.operatorToken, 'optionalAccess', _3565 => _3565.kind]) === ts.SyntaxKind.PlusToken) {
+    current = current.kind === ts.SyntaxKind.ParenthesizedExpression ? current.expression : current.left;
+  }
+  return current;
+}
+function goAddChainLeafIsStringOrNil(goTranspiler, leaf) {
+  if (goStringOperand(goTranspiler, leaf)) {
+    return true;
+  }
+  if (_optionalChain([leaf, 'optionalAccess', _3566 => _3566.kind]) === ts.SyntaxKind.Identifier) {
+    return typeof goTranspiler.goDeclaredTypeOfIdentifier === "function" && goTranspiler.goDeclaredTypeOfIdentifier(leaf) === "*string";
+  }
+  if (_optionalChain([leaf, 'optionalAccess', _3567 => _3567.kind]) === ts.SyntaxKind.CallExpression) {
+    return goTranspiler.goTypeOfInitializer(leaf, goTranspiler.printNode(leaf, 0)) === "*string";
+  }
+  return false;
+}
+function goAddChainReadIsErrorArgument(node) {
+  const parent = node.parent;
+  if (_optionalChain([parent, 'optionalAccess', _3568 => _3568.kind]) !== ts.SyntaxKind.NewExpression || parent.expression === node || _optionalChain([parent, 'access', _3569 => _3569.expression, 'optionalAccess', _3570 => _3570.kind]) !== ts.SyntaxKind.Identifier) {
+    return false;
+  }
+  return goIdentifierImportedFromErrors(parent.expression);
+}
+function goIdentifierImportedFromErrors(identifier) {
+  let sourceFile = identifier;
+  while (_optionalChain([sourceFile, 'optionalAccess', _3571 => _3571.parent]) !== void 0) {
+    sourceFile = sourceFile.parent;
+  }
+  for (const statement of _nullishCoalesce(_optionalChain([sourceFile, 'optionalAccess', _3572 => _3572.statements]), () => ( []))) {
+    if (statement.kind === ts.SyntaxKind.ImportDeclaration && /errors(\.js)?$/.test(_nullishCoalesce(_optionalChain([statement, 'access', _3573 => _3573.moduleSpecifier, 'optionalAccess', _3574 => _3574.text]), () => ( "")))) {
+      const elements = _nullishCoalesce(_optionalChain([statement, 'access', _3575 => _3575.importClause, 'optionalAccess', _3576 => _3576.namedBindings, 'optionalAccess', _3577 => _3577.elements]), () => ( []));
+      if (elements.some((element) => _optionalChain([element, 'access', _3578 => _3578.name, 'optionalAccess', _3579 => _3579.text]) === identifier.text)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+function ccxtGoTypeOfAddChainInitializer(goTranspiler, initializer, printedValue) {
+  if (initializer === void 0 || initializer === null || typeof initializer !== "object") {
+    return void 0;
+  }
+  goTranspiler.ccxtGoAddChainTypes ??= /* @__PURE__ */ new WeakMap();
+  const cache = goTranspiler.ccxtGoAddChainTypes;
+  if (!cache.has(initializer)) {
+    cache.set(initializer, void 0);
+    cache.set(initializer, ccxtGoTypeOfAddChainInitializerUncached(goTranspiler, initializer, printedValue));
+  }
+  return cache.get(initializer);
+}
+function ccxtGoTypeOfAddChainInitializerUncached(goTranspiler, initializer, printedValue) {
+  const declaration = _optionalChain([initializer, 'optionalAccess', _3580 => _3580.parent]);
+  if (_optionalChain([initializer, 'optionalAccess', _3581 => _3581.kind]) !== ts.SyntaxKind.BinaryExpression || _optionalChain([initializer, 'access', _3582 => _3582.operatorToken, 'optionalAccess', _3583 => _3583.kind]) !== ts.SyntaxKind.PlusToken || _optionalChain([declaration, 'optionalAccess', _3584 => _3584.kind]) !== ts.SyntaxKind.VariableDeclaration || declaration.initializer !== initializer || _optionalChain([declaration, 'access', _3585 => _3585.name, 'optionalAccess', _3586 => _3586.kind]) !== ts.SyntaxKind.Identifier || _optionalChain([declaration, 'access', _3587 => _3587.parent, 'optionalAccess', _3588 => _3588.parent, 'optionalAccess', _3589 => _3589.kind]) !== ts.SyntaxKind.VariableStatement) {
+    return void 0;
+  }
+  if (ccxtGoWholePrintedCallee(goTranspiler, printedValue) !== "Add" || ccxtGoWholeAddCallEnd((_nullishCoalesce(printedValue, () => ( ""))).trim()) < 0) {
+    return void 0;
+  }
+  if (!goAddChainLeafIsStringOrNil(goTranspiler, goAddChainLeftmostLeaf(initializer))) {
+    return void 0;
+  }
+  const scope = typeof goTranspiler.goEnclosingFunction === "function" ? goTranspiler.goEnclosingFunction(declaration) : void 0;
+  if (scope === void 0) {
+    return void 0;
+  }
+  const varName = declaration.name.text;
+  let unproven = false;
+  const visit = (n) => {
+    if (!unproven && n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== declaration.name) {
+      const printedParent = _nullishCoalesce(goTranspiler.printNode(n.parent, 0), () => ( ""));
+      unproven = _optionalChain([n, 'access', _3590 => _3590.parent, 'optionalAccess', _3591 => _3591.kind]) === ts.SyntaxKind.ReturnStatement || printedParent.includes(varName + ".(") || !(ccxtGoClosureReadIsSafe(goTranspiler, n, varName) || goAddChainReadIsErrorArgument(n));
+    } else if (!unproven) {
+      _optionalChain([n, 'optionalAccess', _3592 => _3592.forEachChild, 'call', _3593 => _3593(visit)]);
+    }
+  };
+  _optionalChain([scope, 'optionalAccess', _3594 => _3594.forEachChild, 'call', _3595 => _3595(visit)]);
+  return unproven || goTranspiler.goTypeNameIsShadowed(scope, "SafeStringPtr") ? void 0 : "*string";
+}
+function ccxtGoWholeAddCallEnd(value) {
+  if (!value.startsWith("Add(")) {
+    return -1;
+  }
+  const close = ccxtGoPrintedCallEnd(value, 3);
+  return close > 0 && /^\s*$/.test(value.substring(close)) ? close : -1;
+}
+function ccxtGoWrapAddChainDeclaration(printed) {
+  if (typeof printed !== "string") {
+    return printed;
+  }
+  const match = /^([\s\S]*?\bvar [A-Za-z0-9_]+ \*string = )(Add\([\s\S]*)$/.exec(printed);
+  const close = match === null ? -1 : ccxtGoWholeAddCallEnd(match[2]);
+  return close < 0 ? printed : match[1] + "SafeStringPtr(" + match[2].substring(0, close) + ")" + match[2].substring(close);
+}
+function ccxtGoWrapUrlsDeclaration(printed) {
+  if (typeof printed !== "string") {
+    return printed;
+  }
+  const match = /^([\s\S]*?\bvar [A-Za-z0-9_]+ \*string = )(GetValue\((?:GetValue\()?[^\n]*this\.Urls[^\n]*\))(\s*)$/.exec(printed);
+  return match === null ? printed : match[1] + "SafeStringPtr(" + match[2] + ")" + match[3];
+}
+function ccxtGoUnboxParseNumberDeclaration(goTranspiler, printed) {
+  if (typeof printed !== "string") {
+    return printed;
+  }
+  const match = /^([\s\S]*?\bvar [A-Za-z0-9_]+ \*float64 = )(this\.ParseNumber\([^\n]*)$/.exec(printed);
+  if (match === null) {
+    return printed;
+  }
+  const tail = match[2];
+  const close = ccxtGoPrintedCallEnd(tail, tail.indexOf("("));
+  if (close < 0) {
+    return printed;
+  }
+  const rest = tail.substring(close);
+  if (!/^\s*(;?\s*(\/\/[^\n]*)?)$/.test(rest)) {
+    return printed;
+  }
+  return match[1] + "Float64PtrTyped(" + tail.substring(0, close) + ")" + rest;
+}
+function installCcxtGoCurrencyUnbox(goTranspiler) {
+  if (typeof goTranspiler.printVariableDeclarationList !== "function" || goTranspiler.__ccxtGoCurrencyUnboxInstalled) {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = upstream.call(this, node, identation);
+    return ccxtGoWrapAddChainDeclaration(ccxtGoWrapUrlsDeclaration(ccxtGoUnboxSumDeclaration(this, ccxtGoUnboxParseNumberDeclaration(this, ccxtGoUnboxCurrencyDeclaration(this, printed)))));
+  };
+  goTranspiler.__ccxtGoCurrencyUnboxInstalled = true;
+}
+var CCXT_GO_SAFE_DICT_LOCAL_TYPE = "map[string]any";
+var CCXT_GO_SAFE_LIST_LOCAL_TYPE = "[]any";
+var CCXT_GO_SAFE_COLLECTION_FAMILIES = {
+  "safeDict": "dict",
+  "safeList": "list",
+  "safeDict2": "dict2",
+  "safeList2": "list2"
+};
+var CCXT_GO_SAFE_DICT_READ_CALLEES = ["GetValue", "InOp", "ObjectKeys", "ObjectValues", "IsDictionary", "this.IsDictionary", "ccxt.GetValue", "ccxt.InOp", "ccxt.ObjectKeys", "ccxt.ObjectValues", "ccxt.IsDictionary"];
+var CCXT_GO_SAFE_DICT_STRICT_CALLEES = ["GetValue", "InOp", "ccxt.GetValue", "ccxt.InOp"];
+var CCXT_GO_SAFE_LIST_READ_CALLEES = ["GetValue", "GetArrayLength", "ccxt.GetValue", "ccxt.GetArrayLength"];
+var CCXT_GO_SAFE_ACCESSOR_CALLEE = /^(?:ccxt\.)?(?:this\.)?Safe[A-Z]/;
+var CCXT_GO_SAFE_ACCESSOR_MEMBER_KEYS = ["Data", "Index", "Depth", "Length", "Side", "Hashmap", "data", "hashmap"];
+function ccxtGoSafeAccessorMemberKey(call) {
+  const key = call.arguments[1];
+  if (key === void 0 || key.kind !== ts.SyntaxKind.StringLiteral) {
+    return void 0;
+  }
+  if (CCXT_GO_SAFE_ACCESSOR_MEMBER_KEYS.indexOf(key.text) >= 0 || /^[+-]?[0-9]+$/.test(key.text)) {
+    return void 0;
+  }
+  return key.text;
+}
+function ccxtGoSafeAccessorIndexKey(goTranspiler, call) {
+  const key = call.arguments[1];
+  if (key === void 0) {
+    return false;
+  }
+  if (key.kind === ts.SyntaxKind.NumericLiteral) {
+    return /^[0-9]+$/.test(key.text);
+  }
+  const checker = typeof goTranspiler.checkerOrUndefined === "function" ? goTranspiler.checkerOrUndefined() : void 0;
+  const type = _optionalChain([checker, 'optionalAccess', _3596 => _3596.getTypeAtLocation, 'call', _3597 => _3597(key)]);
+  return type !== void 0 && (type.flags & ts.TypeFlags.NumberLike) !== 0 && (type.flags & ts.TypeFlags.Union) === 0;
+}
+function ccxtGoSafeCollectionCall(initializer) {
+  let node = initializer;
+  while (node !== void 0 && (node.kind === ts.SyntaxKind.ParenthesizedExpression || node.kind === ts.SyntaxKind.AsExpression || node.kind === ts.SyntaxKind.NonNullExpression)) {
+    node = node.expression;
+  }
+  if (node === void 0 || node.kind !== ts.SyntaxKind.CallExpression) {
+    return void 0;
+  }
+  const callee = node.expression;
+  if (callee === void 0 || callee.kind !== ts.SyntaxKind.PropertyAccessExpression) {
+    return void 0;
+  }
+  if (callee.expression === void 0 || callee.expression.kind !== ts.SyntaxKind.ThisKeyword) {
+    return void 0;
+  }
+  const method = callee.name === void 0 ? "" : callee.name.text;
+  const family = CCXT_GO_SAFE_COLLECTION_FAMILIES[method];
+  return family === void 0 ? void 0 : { "family": family, "call": node };
+}
+function ccxtGoSafeCollectionArgs(initializer) {
+  const found = ccxtGoSafeCollectionCall(initializer);
+  if (found === void 0) {
+    return void 0;
+  }
+  const args = found.call.arguments;
+  const twoKeys = found.family === "dict2" || found.family === "list2";
+  const wanted = twoKeys ? 3 : 2;
+  if (args.length !== wanted && args.length !== wanted + 1) {
+    return void 0;
+  }
+  const dictLike = found.family === "dict" || found.family === "dict2";
+  let fallback;
+  if (args.length === wanted + 1) {
+    fallback = args[wanted];
+    if (dictLike && fallback.kind !== ts.SyntaxKind.ObjectLiteralExpression) {
+      return void 0;
+    }
+    if (!dictLike && fallback.kind !== ts.SyntaxKind.ArrayLiteralExpression) {
+      return void 0;
+    }
+  }
+  return { "family": found.family, "call": found.call, "args": args, "fallback": fallback };
+}
+function ccxtGoSafeCollectionUseReads(goTranspiler, node, family, defaulted) {
+  const parent = node.parent;
+  if (parent === void 0) {
+    return false;
+  }
+  const dictLike = family === "dict" || family === "dict2";
+  if (parent.kind === ts.SyntaxKind.ElementAccessExpression) {
+    if (parent.expression !== node) {
+      return false;
+    }
+    const above = parent.parent;
+    if (above === void 0) {
+      return true;
+    }
+    if (above.kind === ts.SyntaxKind.BinaryExpression && above.left === parent) {
+      return false;
+    }
+    if (above.kind === ts.SyntaxKind.PostfixUnaryExpression || above.kind === ts.SyntaxKind.PrefixUnaryExpression) {
+      return false;
+    }
+    if (above.kind === ts.SyntaxKind.DeleteExpression) {
+      return false;
+    }
+    return true;
+  }
+  if (parent.kind === ts.SyntaxKind.BinaryExpression) {
+    return dictLike && parent.operatorToken !== void 0 && parent.operatorToken.kind === ts.SyntaxKind.InKeyword && parent.right === node;
+  }
+  if (parent.kind === ts.SyntaxKind.PropertyAccessExpression) {
+    return !dictLike && parent.expression === node && parent.name !== void 0 && parent.name.text === "length";
+  }
+  if (parent.kind !== ts.SyntaxKind.CallExpression) {
+    return false;
+  }
+  if (parent.expression === node || parent.arguments.indexOf(node) !== 0) {
+    return false;
+  }
+  const callee = typeof goTranspiler.goPrintedCallee === "function" ? goTranspiler.goPrintedCallee(goTranspiler.printNode(parent, 0)) : void 0;
+  if (callee === void 0) {
+    return false;
+  }
+  if (!dictLike) {
+    if (CCXT_GO_SAFE_LIST_READ_CALLEES.indexOf(callee) >= 0) {
+      return true;
+    }
+    if (CCXT_GO_SAFE_ACCESSOR_CALLEE.test(callee) && ccxtGoSafeAccessorIndexKey(goTranspiler, parent)) {
+      return true;
+    }
+    return ccxtGoSafeAccessorMemberKey(parent) !== void 0;
+  }
+  if (!defaulted) {
+    return CCXT_GO_SAFE_DICT_STRICT_CALLEES.indexOf(callee) >= 0 || CCXT_GO_SAFE_ACCESSOR_CALLEE.test(callee);
+  }
+  return CCXT_GO_SAFE_DICT_READ_CALLEES.indexOf(callee) >= 0 || CCXT_GO_SAFE_ACCESSOR_CALLEE.test(callee);
+}
+function ccxtGoSafeCollectionLocalType(goTranspiler, declaration, families, restUses = true) {
+  if (declaration === void 0 || declaration.kind !== ts.SyntaxKind.VariableDeclaration) {
+    return void 0;
+  }
+  if (declaration.name === void 0 || declaration.name.kind !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  if (declaration.parent === void 0 || declaration.parent.parent === void 0 || declaration.parent.parent.kind !== ts.SyntaxKind.VariableStatement) {
+    return void 0;
+  }
+  const found = ccxtGoSafeCollectionArgs(declaration.initializer);
+  if (found === void 0 || families.indexOf(found.family) < 0) {
+    return void 0;
+  }
+  if (typeof goTranspiler.goEnclosingFunction !== "function" || typeof goTranspiler.goTypeNameIsShadowed !== "function" || typeof goTranspiler.hasNodeWhere !== "function" || typeof goTranspiler.printNode !== "function") {
+    return void 0;
+  }
+  const dictLike = found.family === "dict" || found.family === "dict2";
+  const goType = dictLike ? CCXT_GO_SAFE_DICT_LOCAL_TYPE : CCXT_GO_SAFE_LIST_LOCAL_TYPE;
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0 || goTranspiler.goTypeNameIsShadowed(scope, goType)) {
+    return void 0;
+  }
+  const sourceName = declaration.name.text;
+  const defaulted = true;
+  const restTree = restUses && !ccxtGoSafeCollectionReadsThisField(found.args[0]) && (ccxtGoSafeCollectionIsRestSource(declaration) || ccxtGoSafeCollectionReadsDecodedValue(goTranspiler, found.args[0]));
+  const refersToDeclaration = typeof goTranspiler.goIdentifierRefersToDeclaration === "function" ? goTranspiler.goIdentifierRefersToDeclaration : void 0;
+  const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind !== ts.SyntaxKind.Identifier || n.text !== sourceName || n === declaration.name) {
+      return false;
+    }
+    if (n.parent !== void 0 && n.parent.kind === ts.SyntaxKind.PropertyAccessExpression && n.parent.name === n) {
+      return false;
+    }
+    if (refersToDeclaration !== void 0 && !refersToDeclaration.call(goTranspiler, n, declaration)) {
+      return false;
+    }
+    if (ccxtGoSafeCollectionUseReads(goTranspiler, n, found.family, defaulted)) {
+      return false;
+    }
+    return !(restTree && (ccxtGoSafeCollectionRestUse(goTranspiler, ccxtGoSafeCollectionTypeOnlyWrapper(n), found.family, defaulted) || ccxtGoSafeCollectionLiteralDefaultWrite(n, found)));
+  });
+  return unsafe ? void 0 : goType;
+}
+function ccxtGoSafeCollectionTypeOnlyWrapper(node) {
+  let current = node;
+  while (current.parent !== void 0 && ((current.parent.kind === ts.SyntaxKind.AsExpression || current.parent.kind === ts.SyntaxKind.NonNullExpression || current.parent.kind === ts.SyntaxKind.ParenthesizedExpression) && current.parent.expression === current)) {
+    current = current.parent;
+  }
+  return current;
+}
+function ccxtGoSafeCollectionLiteralDefaultWrite(node, found) {
+  if (found.family !== "dict" && found.family !== "dict2" || found.fallback === void 0) {
+    return false;
+  }
+  const parent = node.parent;
+  const above = _optionalChain([parent, 'optionalAccess', _3598 => _3598.parent]);
+  return _optionalChain([parent, 'optionalAccess', _3599 => _3599.kind]) === ts.SyntaxKind.ElementAccessExpression && parent.expression === node && _optionalChain([above, 'optionalAccess', _3600 => _3600.kind]) === ts.SyntaxKind.BinaryExpression && above.left === parent && _optionalChain([above, 'access', _3601 => _3601.operatorToken, 'optionalAccess', _3602 => _3602.kind]) === ts.SyntaxKind.EqualsToken;
+}
+function ccxtGoSafeCollectionIsRestSource(node) {
+  const fileName = _optionalChain([node, 'optionalAccess', _3603 => _3603.getSourceFile, 'optionalCall', _3604 => _3604(), 'optionalAccess', _3605 => _3605.fileName]);
+  return typeof fileName === "string" && /(^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test(fileName);
+}
+function ccxtGoSafeCollectionReadsDecodedValue(goTranspiler, node, depth = 0) {
+  const checker = typeof goTranspiler.checkerOrUndefined === "function" ? goTranspiler.checkerOrUndefined() : void 0;
+  if (checker === void 0) {
+    return false;
+  }
+  let current = node;
+  while (current !== void 0) {
+    if (ccxtGoElementReadIsObject(checker, checker.getTypeAtLocation(current))) {
+      return false;
+    }
+    if (current.kind === ts.SyntaxKind.StringLiteral) {
+      return true;
+    }
+    if (current.kind === ts.SyntaxKind.Identifier) {
+      const decl = ccxtGoParamDeclarationOf(goTranspiler, current);
+      if (_optionalChain([decl, 'optionalAccess', _3606 => _3606.kind]) === ts.SyntaxKind.Parameter) {
+        return true;
+      }
+      if (_optionalChain([decl, 'optionalAccess', _3607 => _3607.kind]) !== ts.SyntaxKind.VariableDeclaration || decl.initializer === void 0 || depth > 4) {
+        return false;
+      }
+      return !ccxtGoSafeCollectionReadsThisField(decl.initializer) && ccxtGoSafeCollectionReadsDecodedValue(goTranspiler, decl.initializer, depth + 1);
+    }
+    if (current.kind === ts.SyntaxKind.ElementAccessExpression || current.kind === ts.SyntaxKind.ParenthesizedExpression) {
+      current = current.expression;
+    } else if (current.kind === ts.SyntaxKind.AwaitExpression) {
+      return ccxtGoAwaitsGeneratedEndpoint(checker, current.expression) || ccxtGoPredictionStructureList(checker, current) || ccxtGoStructureDictionaryFetch(checker, current);
+    } else if (current.kind === ts.SyntaxKind.CallExpression && ccxtGoPredictionStructureList(checker, current)) {
+      return true;
+    } else if (current.kind === ts.SyntaxKind.CallExpression && CCXT_GO_SAFE_ACCESSOR_CALLEE.test("this." + ((_nullishCoalesce(_optionalChain([current, 'access', _3608 => _3608.expression, 'optionalAccess', _3609 => _3609.name, 'optionalAccess', _3610 => _3610.text]), () => ( ""))).charAt(0).toUpperCase() + (_nullishCoalesce(_optionalChain([current, 'access', _3611 => _3611.expression, 'optionalAccess', _3612 => _3612.name, 'optionalAccess', _3613 => _3613.text]), () => ( ""))).slice(1))) && _optionalChain([current, 'access', _3614 => _3614.expression, 'optionalAccess', _3615 => _3615.expression, 'optionalAccess', _3616 => _3616.kind]) === ts.SyntaxKind.ThisKeyword) {
+      current = current.arguments[0];
+    } else {
+      return false;
+    }
+  }
+  return false;
+}
+function ccxtGoPredictionStructureList(checker, node) {
+  const call = node.kind === ts.SyntaxKind.AwaitExpression ? node.expression : node;
+  if (_optionalChain([call, 'optionalAccess', _3617 => _3617.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([call, 'access', _3618 => _3618.expression, 'optionalAccess', _3619 => _3619.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([call, 'access', _3620 => _3620.expression, 'access', _3621 => _3621.expression, 'optionalAccess', _3622 => _3622.kind]) !== ts.SyntaxKind.ThisKeyword || /^(un)?watch/.test(_nullishCoalesce(_optionalChain([call, 'access', _3623 => _3623.expression, 'access', _3624 => _3624.name, 'optionalAccess', _3625 => _3625.text]), () => ( "watch"))) || !/(^|[\\/])ts[\\/]src[\\/]prediction[\\/][^\\/]+\.ts$/.test(_nullishCoalesce(_optionalChain([call, 'access', _3626 => _3626.getSourceFile, 'optionalCall', _3627 => _3627(), 'optionalAccess', _3628 => _3628.fileName]), () => ( "")))) {
+    return false;
+  }
+  const type = checker.getTypeAtLocation(node);
+  const element = type !== void 0 && checker.isArrayType(type) ? checker.getTypeArguments(type)[0] : void 0;
+  return element !== void 0 && /^Prediction[A-Z]\w*$/.test(checker.typeToString(element)) && !ccxtGoElementReadIsObject(checker, element);
+}
+function ccxtGoStructureDictionaryFetch(checker, node) {
+  const call = node.expression;
+  if (_optionalChain([call, 'optionalAccess', _3629 => _3629.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([call, 'access', _3630 => _3630.expression, 'optionalAccess', _3631 => _3631.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([call, 'access', _3632 => _3632.expression, 'access', _3633 => _3633.expression, 'optionalAccess', _3634 => _3634.kind]) !== ts.SyntaxKind.ThisKeyword || !/^fetch[A-Z]/.test(_nullishCoalesce(_optionalChain([call, 'access', _3635 => _3635.expression, 'access', _3636 => _3636.name, 'optionalAccess', _3637 => _3637.text]), () => ( "")))) {
+    return false;
+  }
+  return /^(?:Tickers|OpenInterests|FundingRates|MarginModes|Leverages|TradingFees|IsolatedBorrowRates|CrossBorrowRates|LeverageTiers)$/.test(checker.typeToString(checker.getTypeAtLocation(node)));
+}
+function ccxtGoAwaitsGeneratedEndpoint(checker, call) {
+  if (_optionalChain([call, 'optionalAccess', _3638 => _3638.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([call, 'access', _3639 => _3639.expression, 'optionalAccess', _3640 => _3640.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([call, 'access', _3641 => _3641.expression, 'access', _3642 => _3642.expression, 'optionalAccess', _3643 => _3643.kind]) !== ts.SyntaxKind.ThisKeyword) {
+    return false;
+  }
+  let fileName;
+  try {
+    fileName = _optionalChain([checker, 'access', _3644 => _3644.getResolvedSignature, 'call', _3645 => _3645(call), 'optionalAccess', _3646 => _3646.declaration, 'optionalAccess', _3647 => _3647.resolve, 'call', _3648 => _3648(), 'optionalAccess', _3649 => _3649.getSourceFile, 'optionalCall', _3650 => _3650(), 'optionalAccess', _3651 => _3651.fileName]);
+  } catch (e) {
+    return false;
+  }
+  return typeof fileName === "string" && /(^|[\\/])ts[\\/]src[\\/]abstract[\\/]/.test(fileName);
+}
+function ccxtGoSafeCollectionReadsThisField(node) {
+  let current = node;
+  while (current !== void 0 && (current.kind === ts.SyntaxKind.CallExpression || current.kind === ts.SyntaxKind.ElementAccessExpression || current.kind === ts.SyntaxKind.PropertyAccessExpression || current.kind === ts.SyntaxKind.ParenthesizedExpression)) {
+    if (current.kind === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([current, 'access', _3652 => _3652.expression, 'optionalAccess', _3653 => _3653.kind]) === ts.SyntaxKind.ThisKeyword) {
+      return true;
+    }
+    current = current.kind === ts.SyntaxKind.CallExpression ? current.arguments[0] : current.expression;
+  }
+  return false;
+}
+var CCXT_GO_SAFE_COLLECTION_VETO_CALLEES = ["DeepExtend", "this.DeepExtend", "ObjectKeys", "ccxt.ObjectKeys", "AddElementToObject", "ccxt.AddElementToObject"];
+function ccxtGoSafeCollectionRestUse(goTranspiler, node, family, defaulted) {
+  const parent = node.parent;
+  if (parent === void 0) {
+    return false;
+  }
+  if (parent.kind === ts.SyntaxKind.CallExpression) {
+    if (parent.expression === node || parent.arguments.indexOf(node) < 0) {
+      return false;
+    }
+    if (_optionalChain([parent, 'access', _3654 => _3654.expression, 'optionalAccess', _3655 => _3655.kind]) === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([parent, 'access', _3656 => _3656.expression, 'access', _3657 => _3657.expression, 'optionalAccess', _3658 => _3658.kind]) === ts.SyntaxKind.Identifier && parent.expression.expression.text === "Array" && _optionalChain([parent, 'access', _3659 => _3659.expression, 'access', _3660 => _3660.name, 'optionalAccess', _3661 => _3661.text]) === "isArray") {
+      return false;
+    }
+    if (_optionalChain([parent, 'access', _3662 => _3662.expression, 'optionalAccess', _3663 => _3663.kind]) === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([parent, 'access', _3664 => _3664.expression, 'access', _3665 => _3665.name, 'optionalAccess', _3666 => _3666.text]) === "push" && parent.expression.expression !== node) {
+      return defaulted;
+    }
+    const callee = typeof goTranspiler.goPrintedCallee === "function" ? goTranspiler.goPrintedCallee(goTranspiler.printNode(parent, 0)) : void 0;
+    if (callee === void 0 || CCXT_GO_SAFE_COLLECTION_VETO_CALLEES.indexOf(callee) >= 0) {
+      return false;
+    }
+    if (parent.arguments.indexOf(node) === 0 && CCXT_GO_SAFE_ACCESSOR_CALLEE.test(callee)) {
+      return true;
+    }
+    return defaulted;
+  }
+  if (!defaulted) {
+    return false;
+  }
+  let literal = parent.kind === ts.SyntaxKind.ArrayLiteralExpression ? parent : parent.parent;
+  while (_optionalChain([literal, 'optionalAccess', _3667 => _3667.parent]) !== void 0 && (literal.parent.kind === ts.SyntaxKind.ArrayLiteralExpression || literal.parent.kind === ts.SyntaxKind.ObjectLiteralExpression || literal.parent.kind === ts.SyntaxKind.PropertyAssignment)) {
+    literal = literal.parent;
+  }
+  if (_optionalChain([literal, 'optionalAccess', _3668 => _3668.parent, 'optionalAccess', _3669 => _3669.kind]) === ts.SyntaxKind.BinaryExpression && literal.parent.left === literal) {
+    return false;
+  }
+  switch (parent.kind) {
+    case ts.SyntaxKind.PropertyAssignment:
+      return parent.initializer === node;
+    case ts.SyntaxKind.ShorthandPropertyAssignment:
+    case ts.SyntaxKind.ArrayLiteralExpression:
+    case ts.SyntaxKind.ReturnStatement:
+      return true;
+    case ts.SyntaxKind.BinaryExpression: {
+      const op = _optionalChain([parent, 'access', _3670 => _3670.operatorToken, 'optionalAccess', _3671 => _3671.kind]);
+      const other = parent.left === node ? parent.right : parent.left;
+      return COMPARISON_TOKENS.indexOf(op) >= 0 && (isUndefinedLiteral(other) || _optionalChain([other, 'optionalAccess', _3672 => _3672.kind]) === ts.SyntaxKind.NullKeyword);
+    }
+  }
+  return false;
+}
+function ccxtGoSafeCollectionUnboxValue(goTranspiler, declaration, identation, families) {
+  const found = ccxtGoSafeCollectionArgs(declaration.initializer);
+  if (found === void 0 || families.indexOf(found.family) < 0) {
+    return void 0;
+  }
+  const printed = found.args.map((arg, index) => goTranspiler.printNode(arg, index === 0 ? identation : 0));
+  const handedOut = ccxtGoSafeCollectionLocalType(goTranspiler, declaration, families, false) === void 0;
+  const empty = found.fallback === void 0 || !handedOut && (found.family === "dict" || found.family === "dict2" ? found.fallback.properties.length === 0 : found.fallback.elements.length === 0);
+  if (found.family === "dict") {
+    return empty ? "SafeMapTyped(" + printed[0] + ", " + printed[1] + ")" : "MapTyped(" + goTranspiler.printNode(found.call, identation) + ")";
+  }
+  if (found.family === "list") {
+    return empty ? "SafeListTyped(" + printed[0] + ", " + printed[1] + ")" : "SafeListTypedDefault(" + printed[0] + ", " + printed[1] + ", " + printed[2] + ")";
+  }
+  const reader = found.family === "dict2" ? "SafeDict2Typed" : "SafeList2Typed";
+  return reader + "(" + (empty ? printed.slice(0, 3) : printed.slice(0, 4)).join(", ") + ")";
+}
+function installCcxtGoSafeCollectionUnbox(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoSafeCollectionUnboxInstalled) {
+    return;
+  }
+  if (typeof goTranspiler.goSafeDictLocalUnbox !== "function" || typeof goTranspiler.goSafeListLocalUnbox !== "function" || typeof goTranspiler.goSafeDictUnboxValue !== "function" || typeof goTranspiler.goSafeListUnboxValue !== "function") {
+    return;
+  }
+  const shippedDictType = goTranspiler.goSafeDictLocalUnbox;
+  const shippedListType = goTranspiler.goSafeListLocalUnbox;
+  const shippedDictValue = goTranspiler.goSafeDictUnboxValue;
+  const shippedListValue = goTranspiler.goSafeListUnboxValue;
+  const dictFamilies = ["dict", "dict2"];
+  const listFamilies = ["list", "list2"];
+  goTranspiler.goSafeDictLocalUnbox = function(declaration) {
+    const known = shippedDictType.call(this, declaration);
+    if (known !== void 0) {
+      return known;
+    }
+    return ccxtGoSafeCollectionLocalType(this, declaration, dictFamilies);
+  };
+  goTranspiler.goSafeListLocalUnbox = function(declaration) {
+    const known = shippedListType.call(this, declaration);
+    if (known !== void 0) {
+      return known;
+    }
+    return ccxtGoSafeCollectionLocalType(this, declaration, listFamilies);
+  };
+  goTranspiler.goSafeDictUnboxValue = function(declaration, identation) {
+    if (ccxtGoSafeCollectionLocalType(this, declaration, dictFamilies) !== void 0) {
+      return ccxtGoSafeCollectionUnboxValue(this, declaration, identation, dictFamilies);
+    }
+    return shippedDictValue.call(this, declaration, identation);
+  };
+  goTranspiler.goSafeListUnboxValue = function(declaration, identation) {
+    if (ccxtGoSafeCollectionLocalType(this, declaration, listFamilies) !== void 0) {
+      return ccxtGoSafeCollectionUnboxValue(this, declaration, identation, listFamilies);
+    }
+    return shippedListValue.call(this, declaration, identation);
+  };
+  goTranspiler.__ccxtGoSafeCollectionUnboxInstalled = true;
+}
+var CCXT_GO_EXCHANGE_MAP_FIELDS = {
+  "Has": "map[string]any",
+  "Api": "map[string]any",
+  "TransformedApi": "map[string]any",
+  "RequiredCredentials": "map[string]any",
+  "HttpExceptions": "map[string]any",
+  "Timeframes": "map[string]any",
+  "Features": "map[string]any",
+  "Exceptions": "map[string]any",
+  "Precision": "map[string]any",
+  "UserAgents": "map[string]any",
+  "TokenBucket": "map[string]any",
+  "CommonCurrencies": "map[string]any",
+  "Limits": "map[string]any",
+  "Fees": "map[string]any",
+  "Status": "map[string]any",
+  // G10K-fields-typed: `Urls map[string]any`; written only by SetSandboxMode/EnableDemoTrading (config time)
+  "Urls": "map[string]any"
+};
+function ccxtGoIndexableThisField(goTranspiler, node) {
+  if (typeof goTranspiler.isGoThisPropertyAccessExpression !== "function") {
+    return void 0;
+  }
+  if (!goTranspiler.isGoThisPropertyAccessExpression(node)) {
+    return void 0;
+  }
+  const field = goTranspiler.transformPropertyAccessExpressionName(node.name.text, node.name);
+  return CCXT_GO_EXCHANGE_MAP_FIELDS[field];
+}
+function installCcxtGoIndexableTypes(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoIndexableTypesInstalled) {
+    return;
+  }
+  if (typeof goTranspiler.goIndexableTypeOf !== "function") {
+    return;
+  }
+  const upstream = goTranspiler.goIndexableTypeOf;
+  goTranspiler.goIndexableTypeOf = function(node, printed) {
+    const known = upstream.call(this, node, printed);
+    if (known !== void 0) {
+      return known;
+    }
+    return ccxtGoIndexableThisField(this, node);
+  };
+  const upstreamField = goTranspiler.goFieldContainerTypeNative;
+  if (typeof upstreamField === "function") {
+    goTranspiler.goFieldContainerTypeNative = function(node) {
+      const known = upstreamField.call(this, node);
+      return known === void 0 && ccxtGoIndexableThisField(this, node) !== void 0 && _optionalChain([node, 'access', _3673 => _3673.name, 'optionalAccess', _3674 => _3674.text]) === "urls" ? "map[string]any" : known;
+    };
+  }
+  goTranspiler.__ccxtGoIndexableTypesInstalled = true;
+  installCcxtGoPrintedMapDeclarations(goTranspiler);
+}
+function scopeMentionsIdentifier(scope, name) {
+  if (scope === void 0 || typeof scope.forEachChild !== "function") {
+    return true;
+  }
+  let found = false;
+  const visit = (n) => {
+    if (found) {
+      return;
+    }
+    if (n.text === name) {
+      found = true;
+      return;
+    }
+    _optionalChain([n, 'optionalAccess', _3675 => _3675.forEachChild, 'call', _3676 => _3676(visit)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _3677 => _3677.forEachChild, 'call', _3678 => _3678(visit)]);
+  return found;
+}
+var EXCHANGE_RECEIVER = "exchange";
+var EXCHANGE_RECEIVER_ALIASES = [
+  // printer's GO_HELPER_RETURN_TYPES (`this.` keys)
+  "Extend",
+  "DeepExtend",
+  "Keysort",
+  "IndexBy",
+  "GroupBy",
+  "Milliseconds",
+  "Seconds",
+  "Microseconds",
+  "Uuid",
+  "Ymdhms",
+  "Yyyymmdd",
+  "Ymd",
+  // CCXT_GO_HELPER_RETURN_TYPES above
+  "ToArray",
+  "SortBy",
+  "SortBy2",
+  "FilterBy",
+  "ExtractParams",
+  "Capitalize",
+  "Uuid16",
+  "Uuid22",
+  "Yymmdd",
+  "PrecisionFromString",
+  "Urlencode",
+  "Rawencode",
+  "Encode",
+  "Decode",
+  "Json",
+  "ImplodeParams",
+  "Base16ToBinary",
+  "BinaryConcat",
+  "EthGetAddressFromPrivateKey"
+];
+function aliasExchangeReceiver(goTranspiler, printedValue) {
+  let value = (_nullishCoalesce(printedValue, () => ( ""))).trim();
+  while (value.startsWith("(") && goTranspiler.isWholePrintedCall(value, 0)) {
+    value = value.substring(1, value.length - 1).trim();
+  }
+  const open = value.indexOf("(");
+  if (open <= 0 || !goTranspiler.isWholePrintedCall(value, open)) {
+    return void 0;
+  }
+  const callee = value.substring(0, open);
+  const match = /^([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)$/.exec(callee);
+  if (!match || match[1] !== EXCHANGE_RECEIVER || EXCHANGE_RECEIVER_ALIASES.indexOf(match[2]) < 0) {
+    return void 0;
+  }
+  return "this." + match[2] + value.substring(open);
+}
+var GO_STRING_EXCHANGE_FIELDS = [
+  "this.Id",
+  "this.Version",
+  "this.Name",
+  "this.Url",
+  "this.Hostname",
+  "this.UserAgent",
+  "this.ApiKey",
+  "this.Secret",
+  "this.Uid",
+  "this.Password",
+  "this.AccountId",
+  "this.WalletAddress",
+  "this.PrivateKey"
+];
+var TYPED_CONCAT_IN_FLIGHT = /* @__PURE__ */ new WeakSet();
+function concatDebugLog(status, node, nameText, leftText, rightText) {
+  if (!process.env.CCXT_GO_TYPED_CONCAT_DEBUG) {
+    return;
+  }
+  try {
+    process.stderr.write("[typed-concat] " + [status, nameText, leftText, rightText].join(" | ") + "\n");
+  } catch (e) {
+  }
+}
+function goStringOperand(goTranspiler, node) {
+  switch (_optionalChain([node, 'optionalAccess', _3679 => _3679.kind])) {
+    case ts.SyntaxKind.StringLiteral:
+    case ts.SyntaxKind.NoSubstitutionTemplateLiteral:
+      return true;
+    case ts.SyntaxKind.ParenthesizedExpression:
+      return goStringOperand(goTranspiler, node.expression);
+    case ts.SyntaxKind.PropertyAccessExpression: {
+      const printed = goTranspiler.printNode(node, 0);
+      return GO_STRING_EXCHANGE_FIELDS.indexOf(printed) >= 0;
+    }
+    case ts.SyntaxKind.Identifier:
+      if (typeof goTranspiler.goDeclaredTypeOfIdentifier === "function" && goTranspiler.goDeclaredTypeOfIdentifier(node) === "string") {
+        return true;
+      }
+      return ccxtGoWriteSiteLocalGoType(goTranspiler, node) === "string" || goConcatDeclaredStringLocal(goTranspiler, node);
+    case ts.SyntaxKind.BinaryExpression:
+      return _optionalChain([node, 'access', _3680 => _3680.operatorToken, 'optionalAccess', _3681 => _3681.kind]) === ts.SyntaxKind.PlusToken && goStringOperand(goTranspiler, node.left) && goStringOperand(goTranspiler, node.right);
+    case ts.SyntaxKind.CallExpression:
+      return goTranspiler.goTypeOfInitializer(node, goTranspiler.printNode(node, 0)) === "string";
+  }
+  return false;
+}
+var CONCAT_LOCAL_IN_PROGRESS = /* @__PURE__ */ new Set();
+function goConcatDeclaredStringLocal(goTranspiler, node) {
+  let declaration;
+  try {
+    declaration = _optionalChain([goTranspiler, 'access', _3682 => _3682.getChecker, 'call', _3683 => _3683(), 'access', _3684 => _3684.getSymbolAtLocation, 'call', _3685 => _3685(node), 'optionalAccess', _3686 => _3686.valueDeclaration, 'optionalAccess', _3687 => _3687.resolve, 'call', _3688 => _3688()]);
+  } catch (e) {
+    return false;
+  }
+  const initializer = _optionalChain([declaration, 'optionalAccess', _3689 => _3689.initializer]);
+  if (_optionalChain([declaration, 'optionalAccess', _3690 => _3690.kind]) !== ts.SyntaxKind.VariableDeclaration || _optionalChain([declaration, 'access', _3691 => _3691.name, 'optionalAccess', _3692 => _3692.kind]) !== ts.SyntaxKind.Identifier || _optionalChain([initializer, 'optionalAccess', _3693 => _3693.kind]) !== ts.SyntaxKind.BinaryExpression || _optionalChain([initializer, 'access', _3694 => _3694.operatorToken, 'optionalAccess', _3695 => _3695.kind]) !== ts.SyntaxKind.PlusToken || _optionalChain([declaration, 'access', _3696 => _3696.parent, 'optionalAccess', _3697 => _3697.parent, 'optionalAccess', _3698 => _3698.kind]) !== ts.SyntaxKind.FirstStatement || CONCAT_LOCAL_IN_PROGRESS.has(declaration) || typeof goTranspiler.goLocalIsSafeToType !== "function" || typeof goTranspiler.goTypeNameIsShadowed !== "function") {
+    return false;
+  }
+  CONCAT_LOCAL_IN_PROGRESS.add(declaration);
+  try {
+    const leaves = goNativeConcatLeaves(initializer);
+    const hasProof = leaves.some((leaf) => goStringOperand(goTranspiler, leaf));
+    if (leaves.some((leaf) => leaf.kind === ts.SyntaxKind.ParenthesizedExpression || !(goStringOperand(goTranspiler, leaf) || goPrinterDerefStringOperand(goTranspiler, leaf, hasProof)))) {
+      return false;
+    }
+    const printed = goTranspiler.printNode(initializer, 0);
+    const addShape = printed === "Add(" + goTranspiler.printNode(initializer.left, 0) + ", " + goTranspiler.printNode(initializer.right, 0) + ")";
+    if (!addShape && goPrintedTextHasBareAddCall(printed)) {
+      return false;
+    }
+    const scope = goTranspiler.goEnclosingFunction(declaration);
+    return scope !== void 0 && !goNativeConcatVetoed(goTranspiler, declaration, declaration.name.text) && !goTranspiler.goTypeNameIsShadowed(scope, "string") && goTranspiler.goLocalIsSafeToType(scope, declaration, declaration.name.text, "string");
+  } finally {
+    CONCAT_LOCAL_IN_PROGRESS.delete(declaration);
+  }
+}
+function goTypedConcatInitializer(goTranspiler, node, declaration) {
+  const initializer = _optionalChain([declaration, 'optionalAccess', _3699 => _3699.initializer]);
+  if (_optionalChain([initializer, 'optionalAccess', _3700 => _3700.kind]) !== ts.SyntaxKind.BinaryExpression || _optionalChain([initializer, 'access', _3701 => _3701.operatorToken, 'optionalAccess', _3702 => _3702.kind]) !== ts.SyntaxKind.PlusToken) {
+    return void 0;
+  }
+  if (_optionalChain([declaration, 'access', _3703 => _3703.name, 'optionalAccess', _3704 => _3704.kind]) !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  if (_optionalChain([node, 'optionalAccess', _3705 => _3705.parent, 'optionalAccess', _3706 => _3706.kind]) !== ts.SyntaxKind.FirstStatement) {
+    return void 0;
+  }
+  if (!goStringOperand(goTranspiler, initializer.left) || !goStringOperand(goTranspiler, initializer.right)) {
+    concatDebugLog(
+      "reject",
+      node,
+      goTranspiler.printNode(declaration.name, 0),
+      _nullishCoalesce(ts.SyntaxKind[_optionalChain([initializer, 'access', _3707 => _3707.left, 'optionalAccess', _3708 => _3708.kind])], () => ( "?")),
+      _nullishCoalesce(ts.SyntaxKind[_optionalChain([initializer, 'access', _3709 => _3709.right, 'optionalAccess', _3710 => _3710.kind])], () => ( "?"))
+    );
+    return void 0;
+  }
+  return initializer;
+}
+function goPrintedTextHasBareAddCall(text) {
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const character = text[i];
+    if (character === '"') {
+      i += 1;
+      while (i < text.length && text[i] !== '"') {
+        i += text[i] === "\\" ? 2 : 1;
+      }
+      continue;
+    }
+    if (character === "(" || character === "[" || character === "{") {
+      depth += 1;
+    } else if (character === ")" || character === "]" || character === "}") {
+      depth -= 1;
+    } else if (depth === 0 && text.startsWith("Add(", i)) {
+      return true;
+    }
+  }
+  return false;
+}
+function goNativeConcatLeaves(node) {
+  if (_optionalChain([node, 'optionalAccess', _3711 => _3711.kind]) === ts.SyntaxKind.BinaryExpression && _optionalChain([node, 'access', _3712 => _3712.operatorToken, 'optionalAccess', _3713 => _3713.kind]) === ts.SyntaxKind.PlusToken) {
+    return goNativeConcatLeaves(node.left).concat(goNativeConcatLeaves(node.right));
+  }
+  return [node];
+}
+function goPrinterDerefStringOperand(goTranspiler, node, chainHasStringProof) {
+  if (_optionalChain([node, 'optionalAccess', _3714 => _3714.kind]) !== ts.SyntaxKind.Identifier && _optionalChain([node, 'optionalAccess', _3715 => _3715.kind]) !== ts.SyntaxKind.CallExpression) {
+    return false;
+  }
+  const printed = (_nullishCoalesce(goTranspiler.printNode(node, 0), () => ( ""))).trim();
+  if (!printed.startsWith("*") || printed.startsWith("**")) {
+    return false;
+  }
+  const target = printed.substring(1).trim();
+  const isWholeTarget = /^[A-Za-z_]\w*$/.test(target) || typeof goTranspiler.isWholePrintedCall === "function" && goTranspiler.isWholePrintedCall(target, 0);
+  if (!isWholeTarget) {
+    return false;
+  }
+  let targetType;
+  try {
+    targetType = node.kind === ts.SyntaxKind.Identifier ? typeof goTranspiler.goDeclaredTypeOfIdentifier === "function" ? goTranspiler.goDeclaredTypeOfIdentifier(node) : void 0 : goTranspiler.goTypeOfInitializer(node, target);
+  } catch (e) {
+    targetType = void 0;
+  }
+  return targetType === "*string" || chainHasStringProof;
+}
+function goNativeConcatInitializer(goTranspiler, node, declaration) {
+  const initializer = _optionalChain([declaration, 'optionalAccess', _3716 => _3716.initializer]);
+  if (_optionalChain([initializer, 'optionalAccess', _3717 => _3717.kind]) !== ts.SyntaxKind.BinaryExpression || _optionalChain([initializer, 'access', _3718 => _3718.operatorToken, 'optionalAccess', _3719 => _3719.kind]) !== ts.SyntaxKind.PlusToken) {
+    return void 0;
+  }
+  if (_optionalChain([declaration, 'access', _3720 => _3720.name, 'optionalAccess', _3721 => _3721.kind]) !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  if (_optionalChain([node, 'optionalAccess', _3722 => _3722.parent, 'optionalAccess', _3723 => _3723.kind]) !== ts.SyntaxKind.FirstStatement) {
+    return void 0;
+  }
+  const nameText = goTranspiler.printNode(declaration.name, 0);
+  if (goPrintedTextHasBareAddCall(goTranspiler.printNode(initializer, 0))) {
+    return void 0;
+  }
+  const leaves = goNativeConcatLeaves(initializer);
+  if (leaves.length < 2) {
+    return void 0;
+  }
+  const chainHasStringProof = leaves.some((leaf) => goStringOperand(goTranspiler, leaf));
+  const allLeavesProvenString = leaves.every((leaf) => goStringOperand(goTranspiler, leaf) || goPrinterDerefStringOperand(goTranspiler, leaf, chainHasStringProof));
+  if (!allLeavesProvenString) {
+    concatDebugLog(
+      "native-leaf-reject",
+      node,
+      nameText,
+      leaves.map((leaf) => _nullishCoalesce(ts.SyntaxKind[leaf.kind], () => ( "?"))).join(","),
+      ""
+    );
+    return void 0;
+  }
+  if (goNativeConcatVetoed(goTranspiler, declaration, declaration.name.text)) {
+    concatDebugLog("native-veto", node, nameText, "read-or-write", "");
+    return void 0;
+  }
+  return initializer;
+}
+function goNativeConcatVetoed(goTranspiler, declaration, varName) {
+  if (typeof goTranspiler.goEnclosingFunction !== "function") {
+    return true;
+  }
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0) {
+    return true;
+  }
+  let vetoed = false;
+  const visit = (n) => {
+    if (vetoed) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== declaration.name) {
+      const parent = n.parent;
+      if (parent !== void 0) {
+        if (parent.kind === ts.SyntaxKind.BinaryExpression && parent.left === n && parent.operatorToken.kind >= ASSIGNMENT_KIND_MIN && parent.operatorToken.kind <= ASSIGNMENT_KIND_MAX) {
+          vetoed = true;
+          return;
+        }
+        if (parent.kind === ts.SyntaxKind.BinaryExpression && (parent.operatorToken.kind === ts.SyntaxKind.EqualsEqualsToken || parent.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsToken || parent.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken || parent.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken) && (isNilLiteralExpression(parent.left) || isNilLiteralExpression(parent.right))) {
+          vetoed = true;
+          return;
+        }
+        if ((parent.kind === ts.SyntaxKind.PrefixUnaryExpression || parent.kind === ts.SyntaxKind.PostfixUnaryExpression) && (parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken)) {
+          vetoed = true;
+          return;
+        }
+        if ((parent.kind === ts.SyntaxKind.PropertyAccessExpression || parent.kind === ts.SyntaxKind.ElementAccessExpression) && parent.expression === n) {
+          vetoed = true;
+          return;
+        }
+      }
+    }
+    _optionalChain([n, 'optionalAccess', _3724 => _3724.forEachChild, 'call', _3725 => _3725(visit)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _3726 => _3726.forEachChild, 'call', _3727 => _3727(visit)]);
+  return vetoed;
+}
+function installCcxtGoTypedConcat(goTranspiler) {
+  if (goTranspiler.__ccxtGoTypedConcatInstalled || typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  goTranspiler.printVariableDeclarationList = (node, identation) => {
+    const declaration = _optionalChain([node, 'optionalAccess', _3728 => _3728.declarations, 'optionalAccess', _3729 => _3729.length]) === 1 ? node.declarations[0] : void 0;
+    const nativeConcatenation = goNativeConcatInitializer(goTranspiler, node, declaration);
+    if (nativeConcatenation !== void 0) {
+      const nativeName = goTranspiler.printNode(declaration.name, 0);
+      TYPED_CONCAT_IN_FLIGHT.add(nativeConcatenation);
+      let nativePrinted;
+      try {
+        nativePrinted = upstream(node, identation);
+      } finally {
+        TYPED_CONCAT_IN_FLIGHT.delete(nativeConcatenation);
+      }
+      concatDebugLog(
+        nativePrinted.indexOf("var " + nativeName + " string = ") >= 0 ? "typed-native" : "native-any",
+        node,
+        nativeName,
+        "",
+        ""
+      );
+      return nativePrinted;
+    }
+    const concatenation = goTypedConcatInitializer(goTranspiler, node, declaration);
+    if (concatenation === void 0) {
+      return upstream(node, identation);
+    }
+    const leftText = goTranspiler.printNode(concatenation.left, 0);
+    const rightText = goTranspiler.printNode(concatenation.right, 0);
+    const callText = "Add(" + leftText + ", " + rightText + ")";
+    if (goTranspiler.printNode(declaration.initializer, identation) !== callText) {
+      concatDebugLog("shape-reject", node, goTranspiler.printNode(declaration.name, 0), leftText, rightText);
+      return upstream(node, identation);
+    }
+    const iden = goTranspiler.getIden(identation);
+    const nameText = goTranspiler.printNode(declaration.name, 0);
+    const typedPrefix = iden + "var " + nameText + " string = ";
+    TYPED_CONCAT_IN_FLIGHT.add(concatenation);
+    let printed;
+    try {
+      printed = upstream(node, identation);
+    } finally {
+      TYPED_CONCAT_IN_FLIGHT.delete(concatenation);
+    }
+    if (printed === typedPrefix + callText) {
+      concatDebugLog("typed", node, nameText, leftText, rightText);
+      const leafTexts = goNativeConcatLeaves(concatenation).map((leaf) => goTranspiler.printNode(leaf, 0));
+      if (!leafTexts.some(goPrintedTextHasBareAddCall)) {
+        return typedPrefix + leafTexts.join(" + ");
+      }
+      return iden + "var " + nameText + " any = " + callText;
+    }
+    concatDebugLog(printed.startsWith(typedPrefix) ? "scan-reject-after-type" : "scan-reject", node, nameText, leftText, rightText);
+    if (printed.startsWith(typedPrefix)) {
+      return iden + "var " + nameText + " any = " + callText;
+    }
+    return printed;
+  };
+  goTranspiler.__ccxtGoTypedConcatInstalled = true;
+}
+function ccxtGoTypeOfPrintedCall(goTranspiler, printedValue, wsTree = false, initializer = void 0) {
+  let value = (_nullishCoalesce(printedValue, () => ( ""))).trim();
+  while (value.startsWith("(") && goTranspiler.isWholePrintedCall(value, 0)) {
+    value = value.substring(1, value.length - 1).trim();
+  }
+  if (/^\d+$/.test(value)) {
+    return "int";
+  }
+  if (/^\d+(\.\d+)?([eE][+-]?\d+)?$/.test(value)) {
+    return "float64";
+  }
+  const open = value.indexOf("(");
+  if (open <= 0 || !goTranspiler.isWholePrintedCall(value, open)) {
+    return void 0;
+  }
+  const callee = value.substring(0, open);
+  if (!/^[A-Za-z_][\w.]*$/.test(callee)) {
+    return void 0;
+  }
+  const known = CCXT_GO_HELPER_RETURN_TYPES[callee];
+  if (known !== void 0) {
+    return known;
+  }
+  if (wsTree) {
+    const wsType = CCXT_GO_WS_HELPER_RETURN_TYPES[callee];
+    if (wsType !== void 0) {
+      return wsType;
+    }
+  }
+  return ccxtGoElementAccessType(goTranspiler, initializer, printedValue);
+}
+function ccxtGoTypeOfCopiedLocal(goTranspiler, initializer, printedValue) {
+  if (typeof goTranspiler.goDeclaredTypeOfIdentifier !== "function") {
+    return void 0;
+  }
+  const value = (_nullishCoalesce(printedValue, () => ( ""))).trim();
+  if (!/^[A-Za-z_]\w*$/.test(value)) {
+    return void 0;
+  }
+  const goType = goTranspiler.goDeclaredTypeOfIdentifier(initializer);
+  if (typeof goType !== "string" || goType.length === 0) {
+    return void 0;
+  }
+  return goType;
+}
+var CCXT_GO_ARRAY_BINDING_HOLDERS = [
+  "HandleOptionAndParams",
+  "HandleOptionAndParams2",
+  "HandleOptionStringAndParams",
+  "HandleOptionStringAndParams2",
+  "HandleOptionBoolAndParams",
+  "HandleOptionBoolAndParams2",
+  "HandleOptionBoolAndParamsNullable",
+  "HandleOptionBoolAndParams2Nullable",
+  "HandleOptionIntegerAndParamsNullable",
+  "HandleOptionIntegerAndParams2Nullable",
+  "HandleOptionIntegerAndParams",
+  "HandleOptionIntegerAndParams2",
+  "HandleParamString",
+  "HandleParamString2",
+  "HandleMarketTypeAndParams",
+  "HandleUntilOption",
+  "HandleMarginModeAndParams",
+  "HandleSubTypeAndParams",
+  "HandleNetworkCodeAndParams",
+  "HandleWithdrawTagAndParams",
+  "HandlePostOnly",
+  "HandleParamBool",
+  "HandleParamBool2",
+  "HandleParamInteger",
+  "HandleParamInteger2",
+  "HandleTriggerPricesAndParams",
+  "HandleTriggerDirectionAndParams"
+];
+var ARRAY_BINDING_HOLDER_RE = /^([ \t]*)([A-Za-z_]\w*Variable) := ([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\(/;
+function retypeArrayBindingHolder(goTranspiler, node, printed) {
+  if (typeof printed !== "string") {
+    return printed;
+  }
+  const match = ARRAY_BINDING_HOLDER_RE.exec(printed);
+  if (match === null) {
+    return retypeAsyncArrayBindingHolder(goTranspiler, node, printed);
+  }
+  const indent = match[1];
+  const name = match[2];
+  const callee = match[3];
+  const method = callee.substring(callee.lastIndexOf(".") + 1);
+  if (CCXT_GO_ARRAY_BINDING_HOLDERS.indexOf(method) < 0) {
+    return printed;
+  }
+  if (printed.indexOf("GetValue(" + name + ",") < 0) {
+    return printed;
+  }
+  const scope = typeof goTranspiler.goEnclosingFunction === "function" ? goTranspiler.goEnclosingFunction(node) : void 0;
+  if (typeof goTranspiler.goTypeNameIsShadowed === "function" && goTranspiler.goTypeNameIsShadowed(scope, "[]any")) {
+    return printed;
+  }
+  const prefix = indent + name + " := ";
+  if (!printed.startsWith(prefix)) {
+    return printed;
+  }
+  return indent + "var " + name + " []any = " + printed.slice(prefix.length);
+}
+var ASYNC_ARRAY_BINDING_HOLDER_RE = /^([ \t]*)([A-Za-z_]\w*Variable) := (\(<-(?:this\.)?([A-Za-z_]\w*)\([^\n]*\)\))\n/;
+function retypeAsyncArrayBindingHolder(goTranspiler, node, printed) {
+  const match = ASYNC_ARRAY_BINDING_HOLDER_RE.exec(printed);
+  if (match === null || CCXT_GO_ASYNC_ELEM_TYPES[match[4]] !== "[]any" || CCXT_GO_ASYNC_ELEM_EXCLUDED.indexOf(match[4]) >= 0) {
+    return printed;
+  }
+  const recv = match[3];
+  const bare = recv.replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  let depth = 0;
+  for (let i = 0; i < bare.length; i++) {
+    depth += bare[i] === "(" ? 1 : bare[i] === ")" ? -1 : 0;
+    if (depth === 0 && i < bare.length - 1) {
+      return printed;
+    }
+  }
+  if (depth !== 0 || printed.indexOf("GetValue(" + match[2] + ",") < 0) {
+    return printed;
+  }
+  const scope = typeof goTranspiler.goEnclosingFunction === "function" ? goTranspiler.goEnclosingFunction(node) : void 0;
+  if (typeof goTranspiler.goTypeNameIsShadowed === "function" && goTranspiler.goTypeNameIsShadowed(scope, "[]any")) {
+    return printed;
+  }
+  return match[1] + "var " + match[2] + " []any = ListTyped(PanicOnError(" + recv + "))\n" + printed.slice(match[0].length);
+}
+function installCcxtGoArrayBindingHolders(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoArrayBindingHoldersInstalled) {
+    return;
+  }
+  if (typeof goTranspiler.printVariableDeclarationList === "function") {
+    const upstreamDeclaration = goTranspiler.printVariableDeclarationList;
+    goTranspiler.printVariableDeclarationList = function(node, identation) {
+      return retypeArrayBindingHolder(this, node, upstreamDeclaration.call(this, node, identation));
+    };
+  }
+  if (typeof goTranspiler.printCustomBinaryExpressionIfAny === "function") {
+    const upstreamBinary = goTranspiler.printCustomBinaryExpressionIfAny;
+    goTranspiler.printCustomBinaryExpressionIfAny = function(node, identation) {
+      return retypeArrayBindingHolder(this, node, upstreamBinary.call(this, node, identation));
+    };
+  }
+  goTranspiler.__ccxtGoArrayBindingHoldersInstalled = true;
+}
+function isSafeStringCall(node) {
+  if (_optionalChain([node, 'optionalAccess', _3730 => _3730.kind]) !== ts.SyntaxKind.CallExpression) {
+    return false;
+  }
+  const callee = node.expression;
+  if (_optionalChain([callee, 'optionalAccess', _3731 => _3731.kind]) !== ts.SyntaxKind.PropertyAccessExpression) {
+    return false;
+  }
+  if (_optionalChain([callee, 'access', _3732 => _3732.expression, 'optionalAccess', _3733 => _3733.kind]) !== ts.SyntaxKind.ThisKeyword) {
+    return false;
+  }
+  const name = _optionalChain([callee, 'access', _3734 => _3734.name, 'optionalAccess', _3735 => _3735.text]);
+  return typeof name === "string" && CCXT_GO_SAFE_STRING_METHOD.test(name);
+}
+function isAbsentExpression(expression) {
+  if (expression.kind === ts.SyntaxKind.UndefinedKeyword || expression.kind === ts.SyntaxKind.NullKeyword || expression.kind === ts.SyntaxKind.VoidExpression) {
+    return true;
+  }
+  return expression.kind === ts.SyntaxKind.Identifier && expression.text === "undefined";
+}
+function collectReturnStatements(block) {
+  const returns = [];
+  const visit = (node) => {
+    switch (node.kind) {
+      case ts.SyntaxKind.FunctionDeclaration:
+      case ts.SyntaxKind.FunctionExpression:
+      case ts.SyntaxKind.ArrowFunction:
+      case ts.SyntaxKind.MethodDeclaration:
+      case ts.SyntaxKind.ClassDeclaration:
+      case ts.SyntaxKind.ClassExpression:
+        return;
+      case ts.SyntaxKind.ReturnStatement:
+        returns.push(node);
+        return;
+    }
+    _optionalChain([node, 'optionalAccess', _3736 => _3736.forEachChild, 'call', _3737 => _3737(visit)]);
+  };
+  block.statements.forEach(visit);
+  return returns;
+}
+function ccxtGoFamilyMethodReturnType(goTranspiler, node) {
+  const annotated = ccxtGoAnnotatedMethodReturnType(goTranspiler, node);
+  if (annotated !== void 0) {
+    return annotated;
+  }
+  if (_optionalChain([node, 'optionalAccess', _3738 => _3738.kind]) !== ts.SyntaxKind.MethodDeclaration) {
+    return void 0;
+  }
+  const name = _optionalChain([node, 'access', _3739 => _3739.name, 'optionalAccess', _3740 => _3740.text]);
+  if (typeof name !== "string" || !CCXT_GO_FAMILY_METHOD.test(name)) {
+    return void 0;
+  }
+  if (typeof _optionalChain([goTranspiler, 'optionalAccess', _3741 => _3741.isAsyncFunction]) === "function" && goTranspiler.isAsyncFunction(node)) {
+    return void 0;
+  }
+  const body = node.body;
+  if (_optionalChain([body, 'optionalAccess', _3742 => _3742.kind]) !== ts.SyntaxKind.Block) {
+    return void 0;
+  }
+  const returns = collectReturnStatements(body);
+  if (returns.length === 0) {
+    return void 0;
+  }
+  let valuePaths = 0;
+  let literalPaths = 0;
+  let absentPaths = 0;
+  for (const statement of returns) {
+    const expression = statement.expression;
+    if (expression === void 0) {
+      return void 0;
+    }
+    if (isAbsentExpression(expression)) {
+      absentPaths += 1;
+      continue;
+    }
+    if (isSafeStringCall(expression)) {
+      valuePaths += 1;
+      continue;
+    }
+    if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) {
+      literalPaths += 1;
+      continue;
+    }
+    return void 0;
+  }
+  if (valuePaths > 0 && literalPaths > 0 || absentPaths > 0 && literalPaths > 0) {
+    return void 0;
+  }
+  if (literalPaths > 0) {
+    return CCXT_GO_FAMILY_LITERAL_RETURN_TYPE;
+  }
+  return valuePaths > 0 ? CCXT_GO_FAMILY_RETURN_TYPE : void 0;
+}
+function enclosingClassDeclaration(node) {
+  let current = _optionalChain([node, 'optionalAccess', _3743 => _3743.parent]);
+  while (current !== void 0) {
+    if (current.kind === ts.SyntaxKind.ClassDeclaration || current.kind === ts.SyntaxKind.ClassExpression) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return void 0;
+}
+function findClassMethod(classNode, name) {
+  const members = _optionalChain([classNode, 'optionalAccess', _3744 => _3744.members]);
+  if (members === void 0) {
+    return void 0;
+  }
+  for (const member of members) {
+    if (member.kind === ts.SyntaxKind.MethodDeclaration && _optionalChain([member, 'access', _3745 => _3745.name, 'optionalAccess', _3746 => _3746.text]) === name) {
+      return member;
+    }
+  }
+  return void 0;
+}
+function ccxtGoFamilyCallType(goTranspiler, initializer, printedValue) {
+  if (_optionalChain([initializer, 'optionalAccess', _3747 => _3747.kind]) !== ts.SyntaxKind.CallExpression) {
+    return void 0;
+  }
+  const callee = initializer.expression;
+  if (_optionalChain([callee, 'optionalAccess', _3748 => _3748.kind]) !== ts.SyntaxKind.PropertyAccessExpression) {
+    return void 0;
+  }
+  if (_optionalChain([callee, 'access', _3749 => _3749.expression, 'optionalAccess', _3750 => _3750.kind]) !== ts.SyntaxKind.ThisKeyword) {
+    return void 0;
+  }
+  const name = _optionalChain([callee, 'access', _3751 => _3751.name, 'optionalAccess', _3752 => _3752.text]);
+  if (typeof name !== "string") {
+    return void 0;
+  }
+  let value = (_nullishCoalesce(printedValue, () => ( ""))).trim();
+  while (value.startsWith("(") && goTranspiler.isWholePrintedCall(value, 0)) {
+    value = value.substring(1, value.length - 1).trim();
+  }
+  const open = value.indexOf("(");
+  if (open <= 0 || !goTranspiler.isWholePrintedCall(value, open)) {
+    return void 0;
+  }
+  const expectedCallee = "this." + name.charAt(0).toUpperCase() + name.slice(1);
+  if (value.substring(0, open) !== expectedCallee) {
+    return void 0;
+  }
+  const methodNode = findClassMethod(enclosingClassDeclaration(initializer), name);
+  return ccxtGoFamilyMethodReturnType(goTranspiler, methodNode);
+}
+var CCXT_GO_SUM_LOCAL_TYPE = "int64";
+function ccxtGoIsDefaultedSafeInteger(node) {
+  if (_optionalChain([node, 'optionalAccess', _3753 => _3753.kind]) !== ts.SyntaxKind.CallExpression || node.arguments.length !== 3) {
+    return false;
+  }
+  const callee = node.expression;
+  if (_optionalChain([callee, 'optionalAccess', _3754 => _3754.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _3755 => _3755.expression, 'optionalAccess', _3756 => _3756.kind]) !== ts.SyntaxKind.ThisKeyword || _optionalChain([callee, 'access', _3757 => _3757.name, 'optionalAccess', _3758 => _3758.text]) !== "safeInteger") {
+    return false;
+  }
+  const fallback = node.arguments[2];
+  return fallback.kind === ts.SyntaxKind.NumericLiteral && /^[0-9]+$/.test(fallback.text);
+}
+function ccxtGoSumOperandIsInt(goTranspiler, node, printed, depth) {
+  while (_optionalChain([node, 'optionalAccess', _3759 => _3759.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  if (ccxtGoIsDefaultedSafeInteger(node)) {
+    return ccxtGoWholePrintedCallee(goTranspiler, printed) === "this.SafeInteger";
+  }
+  if (_optionalChain([node, 'optionalAccess', _3760 => _3760.kind]) === ts.SyntaxKind.Identifier) {
+    let declaration;
+    try {
+      declaration = _optionalChain([goTranspiler, 'access', _3761 => _3761.getChecker, 'call', _3762 => _3762(), 'access', _3763 => _3763.getSymbolAtLocation, 'call', _3764 => _3764(node), 'optionalAccess', _3765 => _3765.valueDeclaration, 'optionalAccess', _3766 => _3766.resolve, 'call', _3767 => _3767()]);
+    } catch (e) {
+      return false;
+    }
+    if (_optionalChain([declaration, 'optionalAccess', _3768 => _3768.kind]) === ts.SyntaxKind.VariableDeclaration && _optionalChain([declaration, 'access', _3769 => _3769.name, 'optionalAccess', _3770 => _3770.kind]) === ts.SyntaxKind.Identifier && (_optionalChain([declaration, 'access', _3771 => _3771.parent, 'optionalAccess', _3772 => _3772.flags]) & ts.NodeFlags.Const) !== 0 && ccxtGoIsDefaultedSafeInteger(declaration.initializer)) {
+      return true;
+    }
+  }
+  if (_optionalChain([node, 'optionalAccess', _3773 => _3773.kind]) === ts.SyntaxKind.CallExpression && ccxtGoSumCallee(goTranspiler, node, printed) !== void 0) {
+    return depth < 8 && ccxtGoSumCallIsInt64(goTranspiler, node, printed, depth + 1);
+  }
+  return ccxtGoIntOperandKind(goTranspiler, node, printed, depth) !== void 0;
+}
+function ccxtGoSumCallee(goTranspiler, node, printed) {
+  const callee = _optionalChain([node, 'optionalAccess', _3774 => _3774.expression]);
+  if (_optionalChain([node, 'optionalAccess', _3775 => _3775.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([callee, 'optionalAccess', _3776 => _3776.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _3777 => _3777.expression, 'optionalAccess', _3778 => _3778.kind]) !== ts.SyntaxKind.ThisKeyword || _optionalChain([callee, 'access', _3779 => _3779.name, 'optionalAccess', _3780 => _3780.text]) !== "sum") {
+    return void 0;
+  }
+  return ccxtGoWholePrintedCallee(goTranspiler, printed) === "this.Sum" ? "this.Sum" : void 0;
+}
+function ccxtGoSumCallIsInt64(goTranspiler, node, printed, depth) {
+  const parts = ccxtGoPrintedCallParts(goTranspiler, printed);
+  if (parts === void 0 || node.arguments.length === 0) {
+    return false;
+  }
+  const args = ccxtGoSplitPrintedArgs(parts.argsText);
+  if (args.length !== node.arguments.length) {
+    return false;
+  }
+  return node.arguments.every((arg, i) => arg.kind !== ts.SyntaxKind.SpreadElement && ccxtGoSumOperandIsInt(goTranspiler, arg, args[i], depth));
+}
+function ccxtGoTypeOfSumInitializer(goTranspiler, initializer, printedValue) {
+  if (_optionalChain([initializer, 'optionalAccess', _3781 => _3781.parent, 'optionalAccess', _3782 => _3782.kind]) !== ts.SyntaxKind.VariableDeclaration || initializer.parent.initializer !== initializer || _optionalChain([initializer, 'access', _3783 => _3783.parent, 'access', _3784 => _3784.parent, 'optionalAccess', _3785 => _3785.parent, 'optionalAccess', _3786 => _3786.kind]) !== ts.SyntaxKind.VariableStatement) {
+    return void 0;
+  }
+  if (ccxtGoSumCallee(goTranspiler, initializer, printedValue) === void 0) {
+    return void 0;
+  }
+  return ccxtGoSumCallIsInt64(goTranspiler, initializer, printedValue, 0) ? CCXT_GO_SUM_LOCAL_TYPE : void 0;
+}
+function ccxtGoTypeOfAddInitializer(goTranspiler, initializer, printedValue) {
+  if (_optionalChain([initializer, 'optionalAccess', _3787 => _3787.parent, 'optionalAccess', _3788 => _3788.kind]) !== ts.SyntaxKind.VariableDeclaration || initializer.parent.initializer !== initializer || _optionalChain([initializer, 'access', _3789 => _3789.parent, 'access', _3790 => _3790.parent, 'optionalAccess', _3791 => _3791.parent, 'optionalAccess', _3792 => _3792.kind]) !== ts.SyntaxKind.VariableStatement) {
+    return void 0;
+  }
+  if (initializer.kind !== ts.SyntaxKind.BinaryExpression || _optionalChain([initializer, 'access', _3793 => _3793.operatorToken, 'optionalAccess', _3794 => _3794.kind]) !== ts.SyntaxKind.PlusToken) {
+    return void 0;
+  }
+  const parts = ccxtGoPrintedCallParts(goTranspiler, printedValue);
+  if (parts === void 0 || ccxtGoUnqualifiedCallee(parts.callee) !== "Add") {
+    return void 0;
+  }
+  const args = ccxtGoSplitPrintedArgs(parts.argsText);
+  if (args.length !== 2) {
+    return void 0;
+  }
+  let left = initializer.left;
+  while (_optionalChain([left, 'optionalAccess', _3795 => _3795.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    left = left.expression;
+  }
+  if (!ccxtGoIsNonNilInt64Pointer(goTranspiler, left, args[0])) {
+    return void 0;
+  }
+  return ccxtGoSumOperandIsInt(goTranspiler, initializer.right, args[1], 0) ? CCXT_GO_SUM_LOCAL_TYPE : void 0;
+}
+function ccxtGoIsNonNilInt64Pointer(goTranspiler, node, printed) {
+  if (ccxtGoIsDefaultedSafeInteger(node)) {
+    return ccxtGoWholePrintedCallee(goTranspiler, printed) === "this.SafeInteger";
+  }
+  if (_optionalChain([node, 'optionalAccess', _3796 => _3796.kind]) !== ts.SyntaxKind.Identifier) {
+    return false;
+  }
+  let declaration;
+  try {
+    declaration = _optionalChain([goTranspiler, 'access', _3797 => _3797.getChecker, 'call', _3798 => _3798(), 'access', _3799 => _3799.getSymbolAtLocation, 'call', _3800 => _3800(node), 'optionalAccess', _3801 => _3801.valueDeclaration, 'optionalAccess', _3802 => _3802.resolve, 'call', _3803 => _3803()]);
+  } catch (e) {
+    return false;
+  }
+  return _optionalChain([declaration, 'optionalAccess', _3804 => _3804.kind]) === ts.SyntaxKind.VariableDeclaration && _optionalChain([declaration, 'access', _3805 => _3805.name, 'optionalAccess', _3806 => _3806.kind]) === ts.SyntaxKind.Identifier && (_optionalChain([declaration, 'access', _3807 => _3807.parent, 'optionalAccess', _3808 => _3808.flags]) & ts.NodeFlags.Const) !== 0 && ccxtGoIsDefaultedSafeInteger(declaration.initializer);
+}
+function ccxtGoUnboxSumDeclaration(goTranspiler, printed) {
+  if (typeof printed !== "string") {
+    return printed;
+  }
+  const match = /^([\s\S]*?\bvar [A-Za-z0-9_]+ int64 = )((?:this\.Sum|(?:ccxt\.)?Add)\([^\n]*)$/.exec(printed);
+  if (match === null) {
+    return printed;
+  }
+  const tail = match[2];
+  const close = ccxtGoPrintedCallEnd(tail, tail.indexOf("("));
+  if (close < 0) {
+    return printed;
+  }
+  const rest = tail.substring(close);
+  if (!/^\s*(;?\s*(\/\/[^\n]*)?)$/.test(rest)) {
+    return printed;
+  }
+  return match[1] + tail.substring(0, close) + ".(" + CCXT_GO_SUM_LOCAL_TYPE + ")" + rest;
+}
+var CCXT_GO_COUNTER_METHODS = ["requestId"];
+var CCXT_GO_COUNTER_RETURN_TYPES = ["int64", "string"];
+var CCXT_GO_COUNTER_CACHE = /* @__PURE__ */ new Map();
+var CCXT_GO_COUNTER_IN_PROGRESS = /* @__PURE__ */ new Set();
+function ccxtGoCounterMethodReturnType(goTranspiler, node) {
+  if (_optionalChain([node, 'optionalAccess', _3809 => _3809.kind]) !== ts.SyntaxKind.MethodDeclaration || _optionalChain([node, 'access', _3810 => _3810.body, 'optionalAccess', _3811 => _3811.kind]) !== ts.SyntaxKind.Block || !CCXT_GO_COUNTER_METHODS.includes(_optionalChain([node, 'access', _3812 => _3812.name, 'optionalAccess', _3813 => _3813.text]))) {
+    return void 0;
+  }
+  if (typeof goTranspiler.isAsyncFunction === "function" && goTranspiler.isAsyncFunction(node)) {
+    return void 0;
+  }
+  const reserved = ccxtGoReservedMethodNames(node);
+  if (reserved !== void 0 && (reserved.has("requestId") || reserved.has("RequestId"))) {
+    return void 0;
+  }
+  if (CCXT_GO_COUNTER_CACHE.has(node)) {
+    return CCXT_GO_COUNTER_CACHE.get(node);
+  }
+  if (CCXT_GO_COUNTER_IN_PROGRESS.has(node)) {
+    return void 0;
+  }
+  CCXT_GO_COUNTER_IN_PROGRESS.add(node);
+  let result;
+  try {
+    const returns = collectReturnStatements(node.body);
+    for (const statement of returns) {
+      const goType = statement.expression === void 0 ? void 0 : ccxtGoReturnExpressionType(goTranspiler, statement.expression);
+      if (!CCXT_GO_COUNTER_RETURN_TYPES.includes(goType) || result !== void 0 && result !== goType) {
+        result = void 0;
+        break;
+      }
+      result = goType;
+    }
+  } finally {
+    CCXT_GO_COUNTER_IN_PROGRESS.delete(node);
+  }
+  CCXT_GO_COUNTER_CACHE.set(node, result);
+  return result;
+}
+function ccxtGoCounterCallType(goTranspiler, initializer, printedValue) {
+  const callee = _optionalChain([initializer, 'optionalAccess', _3814 => _3814.expression]);
+  if (_optionalChain([initializer, 'optionalAccess', _3815 => _3815.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([callee, 'optionalAccess', _3816 => _3816.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _3817 => _3817.expression, 'optionalAccess', _3818 => _3818.kind]) !== ts.SyntaxKind.ThisKeyword || !CCXT_GO_COUNTER_METHODS.includes(_optionalChain([callee, 'access', _3819 => _3819.name, 'optionalAccess', _3820 => _3820.text]))) {
+    return void 0;
+  }
+  if (ccxtGoWholePrintedCallee(goTranspiler, printedValue) !== "this.RequestId") {
+    return void 0;
+  }
+  let declaration;
+  try {
+    declaration = _optionalChain([goTranspiler, 'access', _3821 => _3821.getChecker, 'call', _3822 => _3822(), 'access', _3823 => _3823.getResolvedSignature, 'call', _3824 => _3824(initializer), 'optionalAccess', _3825 => _3825.declaration, 'optionalAccess', _3826 => _3826.resolve, 'call', _3827 => _3827()]);
+  } catch (e) {
+    return void 0;
+  }
+  return ccxtGoCounterMethodReturnType(goTranspiler, declaration);
+}
+var CCXT_GO_ANNOTATED_RETURN_NATIVE = {
+  "Str": ["*string", "string"],
+  "Dict": ["map[string]any"],
+  "ExchangeOptions": ["map[string]any"],
+  // `Market` is MarketInterface | undefined: the dict or nil, like a Dict return
+  "Market": ["map[string]any"],
+  "List": ["[]any"],
+  "Bool": ["bool"],
+  "number": ["float64"]
+};
+var CCXT_GO_PARSE_METHOD = /^parse[A-Za-z0-9]*$/;
+var CCXT_GO_RESERVED_METHOD_CACHE = /* @__PURE__ */ new Map();
+var CCXT_GO_RETURN_TYPE_IN_PROGRESS = /* @__PURE__ */ new Set();
+var CCXT_GO_RETURN_TYPE_CACHE = /* @__PURE__ */ new Map();
+function ccxtGoReservedMethodNames(node) {
+  const fileName = _optionalChain([node, 'optionalAccess', _3828 => _3828.getSourceFile, 'optionalCall', _3829 => _3829(), 'optionalAccess', _3830 => _3830.fileName]);
+  if (typeof fileName !== "string") {
+    return void 0;
+  }
+  const marker = "/ts/src/";
+  const at = fileName.lastIndexOf(marker);
+  if (at < 0) {
+    return void 0;
+  }
+  const root = fileName.substring(0, at);
+  if (CCXT_GO_RESERVED_METHOD_CACHE.has(root)) {
+    return CCXT_GO_RESERVED_METHOD_CACHE.get(root);
+  }
+  const names = /* @__PURE__ */ new Set();
+  const files = [
+    "go/v4/exchange_interface.go",
+    "go/v4/exchange_typed_interface.go",
+    "go/v4/pro/exchange_interface.go",
+    "go/v4/pro/exchange_typed_interface.go"
+  ];
+  for (const relative of files) {
+    let text;
+    try {
+      text = fs6.default.readFileSync(path7.default.join(root, relative), "utf8");
+    } catch (e) {
+      continue;
+    }
+    for (const line of text.split("\n")) {
+      const match = /^\t([A-Za-z_]\w*)\s*\(/.exec(line);
+      if (match !== null) {
+        names.add(match[1]);
+      }
+    }
+  }
+  CCXT_GO_RESERVED_METHOD_CACHE.set(root, names);
+  return names;
+}
+function ccxtGoAnnotatedReturnTypes(goTranspiler, node) {
+  if (_optionalChain([node, 'optionalAccess', _3831 => _3831.kind]) !== ts.SyntaxKind.MethodDeclaration) {
+    return void 0;
+  }
+  let type;
+  try {
+    const checker = goTranspiler.getChecker();
+    type = checker.getReturnTypeOfSignature(checker.getSignatureFromDeclaration(node));
+  } catch (e) {
+    return void 0;
+  }
+  const alias = _optionalChain([type, 'optionalAccess', _3832 => _3832.getAliasSymbol, 'call', _3833 => _3833(), 'optionalAccess', _3834 => _3834.escapedName]);
+  const annotation = node.type !== void 0 ? node.type.getText() : void 0;
+  const key = typeof alias === "string" ? alias : annotation;
+  if (key === "Str" || key === "Dict" || key === "ExchangeOptions" || key === "Market" || key === "List" || key === "Bool") {
+    return CCXT_GO_ANNOTATED_RETURN_NATIVE[key];
+  }
+  const general = ccxtGoGeneralAnnotatedReturnTypes(node, type, key);
+  if (general !== void 0) {
+    return general;
+  }
+  if (key === "number" && type !== void 0 && (type.flags & ts.TypeFlags.Number) !== 0) {
+    return CCXT_GO_ANNOTATED_RETURN_NATIVE["number"];
+  }
+  return void 0;
+}
+function ccxtGoReturnExpressionType(goTranspiler, expression) {
+  if (expression.kind === ts.SyntaxKind.Identifier) {
+    return goTranspiler.goDeclaredTypeOfIdentifier(expression);
+  }
+  if (ts.isNumericLiteral(expression)) {
+    return "float64";
+  }
+  if (isSafeStringCall(expression)) {
+    return CCXT_GO_FAMILY_RETURN_TYPE;
+  }
+  let printed;
+  try {
+    printed = goTranspiler.printNode(expression, 0);
+  } catch (e) {
+    return void 0;
+  }
+  return goTranspiler.goTypeOfInitializer(expression, printed);
+}
+function ccxtGoProveReturnPaths(goTranspiler, node, allowed) {
+  const goTypeIsNilable = (goType) => goType.charAt(0) === "*" || goType === "map[string]any" || goType === "[]any";
+  const returns = collectReturnStatements(node.body);
+  if (returns.length === 0) {
+    return void 0;
+  }
+  let valueType;
+  let sawAbsent = false;
+  for (const statement of returns) {
+    for (let up = statement.parent; up !== void 0 && up !== node.body; up = up.parent) {
+      if (up.kind === ts.SyntaxKind.TryStatement) {
+        return void 0;
+      }
+    }
+    const expression = statement.expression;
+    if (expression === void 0) {
+      return void 0;
+    }
+    if (isAbsentExpression(expression)) {
+      if (!allowed.some(goTypeIsNilable)) {
+        return void 0;
+      }
+      sawAbsent = true;
+      continue;
+    }
+    const goType = ccxtGoReturnExpressionType(goTranspiler, expression);
+    if (typeof goType !== "string" || allowed.indexOf(goType) < 0) {
+      return void 0;
+    }
+    if (valueType === void 0) {
+      valueType = goType;
+    } else if (valueType !== goType) {
+      return void 0;
+    }
+  }
+  if (valueType === void 0) {
+    return allowed.find(goTypeIsNilable);
+  }
+  if (sawAbsent && !goTypeIsNilable(valueType)) {
+    return void 0;
+  }
+  return valueType;
+}
+var CCXT_GO_GENERAL_ANNOTATED_RETURN_NATIVE = {
+  "string": ["string"],
+  "boolean": ["bool"],
+  "Int": ["*int64"]
+};
+var CCXT_GO_TS_SRC_IMPORT_CACHE = /* @__PURE__ */ new Map();
+function ccxtGoGeneralAnnotatedReturnTypes(node, type, key) {
+  const name = _optionalChain([node, 'access', _3835 => _3835.name, 'optionalAccess', _3836 => _3836.text]);
+  if (typeof name !== "string" || CCXT_GO_PARSE_METHOD.test(name)) {
+    return void 0;
+  }
+  if (key === "Int" && _optionalChain([node, 'access', _3837 => _3837.type, 'optionalAccess', _3838 => _3838.getText, 'call', _3839 => _3839()]) === "Int") {
+    return CCXT_GO_GENERAL_ANNOTATED_RETURN_NATIVE["Int"];
+  }
+  if (key === "string" && type !== void 0 && (type.flags & ts.TypeFlags.String) !== 0) {
+    return CCXT_GO_GENERAL_ANNOTATED_RETURN_NATIVE["string"];
+  }
+  if (key === "boolean" && type !== void 0 && (type.flags & ts.TypeFlags.Boolean) !== 0) {
+    return CCXT_GO_GENERAL_ANNOTATED_RETURN_NATIVE["boolean"];
+  }
+  return void 0;
+}
+function ccxtGoTsSrcImportGraph(fileName) {
+  const resolved = path7.default.resolve(fileName);
+  const marker = "/ts/src/";
+  const at = resolved.lastIndexOf(marker);
+  if (at < 0) {
+    return void 0;
+  }
+  const root = resolved.substring(0, at + marker.length - 1);
+  if (CCXT_GO_TS_SRC_IMPORT_CACHE.has(root)) {
+    return CCXT_GO_TS_SRC_IMPORT_CACHE.get(root);
+  }
+  const texts = /* @__PURE__ */ new Map();
+  const imports = /* @__PURE__ */ new Map();
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = fs6.default.readdirSync(dir, { withFileTypes: true });
+    } catch (e) {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path7.default.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== "node_modules" && entry.name !== "static_dependencies") {
+          walk(full);
+        }
+        continue;
+      }
+      if (!entry.name.endsWith(".ts") || entry.name.endsWith(".d.ts")) {
+        continue;
+      }
+      let text;
+      try {
+        text = fs6.default.readFileSync(full, "utf8");
+      } catch (e) {
+        continue;
+      }
+      texts.set(full, text);
+      const targets = [];
+      const importRe = /^import\s[^;]*?from\s+'(\.[^']*)'/gm;
+      let match;
+      while ((match = importRe.exec(text)) !== null) {
+        targets.push(path7.default.resolve(dir, match[1].replace(/\.js$/, ".ts")));
+      }
+      imports.set(full, targets);
+    }
+  };
+  walk(root);
+  const graph = { texts, imports };
+  CCXT_GO_TS_SRC_IMPORT_CACHE.set(root, graph);
+  return graph;
+}
+function ccxtGoTsSrcMethodDeclarers(graph) {
+  if (graph.declarers !== void 0) {
+    return graph.declarers;
+  }
+  const declarers = /* @__PURE__ */ new Map();
+  const declRe = /^\s+(?:(?:override|async|public|protected|private|static)\s+)*([A-Za-z_$][\w$]*)\s*\(/gm;
+  for (const [file, text] of graph.texts) {
+    let match;
+    declRe.lastIndex = 0;
+    while ((match = declRe.exec(text)) !== null) {
+      const files = _nullishCoalesce(declarers.get(match[1]), () => ( /* @__PURE__ */ new Set()));
+      files.add(file);
+      declarers.set(match[1], files);
+    }
+  }
+  graph.declarers = declarers;
+  return declarers;
+}
+function ccxtGoGeneralAnnotatedMethodIsClosed(node, name) {
+  const fileName = _optionalChain([node, 'access', _3840 => _3840.getSourceFile, 'optionalCall', _3841 => _3841(), 'optionalAccess', _3842 => _3842.fileName]);
+  if (typeof fileName !== "string") {
+    return false;
+  }
+  const graph = ccxtGoTsSrcImportGraph(fileName);
+  if (graph === void 0) {
+    return false;
+  }
+  const own = path7.default.resolve(fileName);
+  if (!graph.texts.has(own)) {
+    return false;
+  }
+  const declarers = ccxtGoTsSrcMethodDeclarers(graph).get(name);
+  if (declarers === void 0) {
+    return true;
+  }
+  const related = /* @__PURE__ */ new Map();
+  const relates = (file, depth) => {
+    if (related.has(file)) {
+      return related.get(file);
+    }
+    related.set(file, false);
+    let result = false;
+    for (const target of _nullishCoalesce(graph.imports.get(file), () => ( []))) {
+      if (target === own || depth < 16 && relates(target, depth + 1)) {
+        result = true;
+        break;
+      }
+    }
+    related.set(file, result);
+    return result;
+  };
+  for (const file of declarers) {
+    if (file !== own && relates(file, 0)) {
+      return false;
+    }
+  }
+  return true;
+}
+function ccxtGoGeneralReturnKeepsAbsence(goTranspiler, node, goType) {
+  if (goType.charAt(0) === "*") {
+    return false;
+  }
+  if (goType !== "map[string]any" && goType !== "[]any") {
+    return true;
+  }
+  return collectReturnStatements(node.body).every((statement) => ccxtGoContainerNeverNil(goTranspiler, statement.expression));
+}
+function ccxtGoContainerNeverNil(goTranspiler, expression) {
+  while (expression !== void 0 && expression.kind === ts.SyntaxKind.ParenthesizedExpression) {
+    expression = expression.expression;
+  }
+  if (expression === void 0 || ts.isObjectLiteralExpression(expression) || ts.isArrayLiteralExpression(expression)) {
+    return expression !== void 0;
+  }
+  if (ts.isIdentifier(expression)) {
+    return g13LocalContainerNeverNil(goTranspiler, expression);
+  }
+  if (!ts.isCallExpression(expression) || !ts.isPropertyAccessExpression(expression.expression) || expression.expression.expression.kind !== ts.SyntaxKind.ThisKeyword) {
+    return false;
+  }
+  const callee = expression.expression.name.text;
+  if (callee === "extend" || callee === "deepExtend") {
+    return true;
+  }
+  let declaration;
+  try {
+    declaration = _optionalChain([goTranspiler, 'access', _3843 => _3843.getChecker, 'call', _3844 => _3844(), 'access', _3845 => _3845.getResolvedSignature, 'call', _3846 => _3846(expression), 'optionalAccess', _3847 => _3847.declaration]);
+  } catch (e) {
+    return false;
+  }
+  return _optionalChain([declaration, 'optionalAccess', _3848 => _3848.kind]) === ts.SyntaxKind.MethodDeclaration && !CCXT_GO_PARSE_METHOD.test(callee) && ccxtGoAnnotatedMethodReturnType(goTranspiler, declaration) !== void 0;
+}
+function ccxtGoAnnotatedMethodReturnType(goTranspiler, node) {
+  if (_optionalChain([node, 'optionalAccess', _3849 => _3849.kind]) !== ts.SyntaxKind.MethodDeclaration) {
+    return void 0;
+  }
+  const name = _optionalChain([node, 'access', _3850 => _3850.name, 'optionalAccess', _3851 => _3851.text]);
+  if (typeof name !== "string" || !CCXT_GO_PARSE_METHOD.test(name) && !ccxtGoGeneralAnnotatedMethodIsClosed(node, name)) {
+    return void 0;
+  }
+  if (_optionalChain([node, 'access', _3852 => _3852.body, 'optionalAccess', _3853 => _3853.kind]) !== ts.SyntaxKind.Block) {
+    return void 0;
+  }
+  if (typeof goTranspiler.isAsyncFunction === "function" && goTranspiler.isAsyncFunction(node)) {
+    return void 0;
+  }
+  if (typeof goTranspiler.goMethodKeepsBaseSignature === "function" && goTranspiler.goMethodKeepsBaseSignature(node)) {
+    return void 0;
+  }
+  if (CCXT_GO_RETURN_TYPE_IN_PROGRESS.has(node)) {
+    return void 0;
+  }
+  const reserved = ccxtGoReservedMethodNames(node);
+  if (reserved !== void 0 && (reserved.has(name) || reserved.has(name.charAt(0).toUpperCase() + name.slice(1)))) {
+    return void 0;
+  }
+  const allowed = _nullishCoalesce(_nullishCoalesce(ccxtGoAnnotatedReturnTypes(goTranspiler, node), () => ( g13ArrayAnnotatedReturnTypes(goTranspiler, node, name))), () => ( g15StringArrayAnnotatedReturnTypes(goTranspiler, node, name)));
+  if (allowed === void 0) {
+    return void 0;
+  }
+  if (CCXT_GO_RETURN_TYPE_CACHE.has(node)) {
+    return CCXT_GO_RETURN_TYPE_CACHE.get(node);
+  }
+  CCXT_GO_RETURN_TYPE_IN_PROGRESS.add(node);
+  let result;
+  try {
+    result = ccxtGoProveReturnPaths(goTranspiler, node, allowed);
+    if (result !== void 0 && !CCXT_GO_PARSE_METHOD.test(name) && !g15GeneralReturnKeepsAbsence(goTranspiler, node, result)) {
+      result = void 0;
+    }
+  } finally {
+    CCXT_GO_RETURN_TYPE_IN_PROGRESS.delete(node);
+  }
+  CCXT_GO_RETURN_TYPE_CACHE.set(node, result);
+  return result;
+}
+var NIL_DECLARED_SCALAR_POINTER_TYPES = ["*int64", "*float64", "*bool", "*string"];
+var NIL_DECLARED_SAFE_ARG_CALLEES = ["this.Iso8601", "this.NumberToString", "this.ParseOrderBook", "this.CreateCcxtTradeId"];
+var NIL_DECLARED_SAFE_ARG_SLOTS = {
+  "this.ParseNumber": 1,
+  "this.Parse8601": 1,
+  ...Object.fromEntries(["Mul", "Div", "Sub", "Add", "Or", "Max", "Min", "Abs", "Neg", "Mod", "Gt", "Ge", "Lt", "Le", "Eq", "Equals"].map((op) => ["Precise.String" + op, 2]))
+};
+var ASSIGNMENT_KIND_MIN = ts.SyntaxKind.FirstAssignment;
+var ASSIGNMENT_KIND_MAX = ts.SyntaxKind.LastAssignment;
+var COMPOUND_KIND_MIN = ts.SyntaxKind.FirstCompoundAssignment;
+var COMPOUND_KIND_MAX = ts.SyntaxKind.LastCompoundAssignment;
+var COMPARISON_TOKENS = [
+  ts.SyntaxKind.EqualsEqualsToken,
+  ts.SyntaxKind.EqualsEqualsEqualsToken,
+  ts.SyntaxKind.ExclamationEqualsToken,
+  ts.SyntaxKind.ExclamationEqualsEqualsToken
+];
+function isUndefinedLiteral(node) {
+  if (node === void 0) {
+    return false;
+  }
+  if (node.kind === ts.SyntaxKind.NullKeyword) {
+    return true;
+  }
+  if (node.kind === ts.SyntaxKind.Identifier) {
+    return node.text === "undefined" || node.text === "null";
+  }
+  return false;
+}
+function printedCalleeOfCall(goTranspiler, node) {
+  const text = (_nullishCoalesce(goTranspiler.printNode(node, 0), () => ( ""))).trim();
+  const printed = (_nullishCoalesce(ccxtGoTupleResultUnwrap(text), () => ( text))).trim();
+  const open = printed.indexOf("(");
+  if (open <= 0 || !goTranspiler.isWholePrintedCall(printed, open)) {
+    return void 0;
+  }
+  return printed.substring(0, open);
+}
+function nilDeclaredReadIsSafe(goTranspiler, node) {
+  const parent = node.parent;
+  if (parent === void 0) {
+    return false;
+  }
+  const kind = parent.kind;
+  if (parent.name === node && parent.expression !== node && parent.initializer !== node) {
+    return true;
+  }
+  if (kind === ts.SyntaxKind.BinaryExpression) {
+    if (parent.left === node) {
+      const op = parent.operatorToken.kind;
+      if (op === ts.SyntaxKind.EqualsToken) {
+        return true;
+      }
+      if (op >= COMPOUND_KIND_MIN && op <= COMPOUND_KIND_MAX) {
+        return false;
+      }
+      if (COMPARISON_TOKENS.indexOf(op) >= 0) {
+        return isUndefinedLiteral(parent.right);
+      }
+      return false;
+    }
+    if (parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      const target = parent.left;
+      if (_optionalChain([target, 'optionalAccess', _3854 => _3854.kind]) !== ts.SyntaxKind.ElementAccessExpression && _optionalChain([target, 'optionalAccess', _3855 => _3855.kind]) !== ts.SyntaxKind.PropertyAccessExpression) {
+        return false;
+      }
+      const printed = (_nullishCoalesce(goTranspiler.printNode(parent, 0), () => ( ""))).trim();
+      return printed.startsWith("AddElementToObject(");
+    }
+    if (COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) >= 0) {
+      return isUndefinedLiteral(parent.left);
+    }
+    return false;
+  }
+  if (kind === ts.SyntaxKind.PrefixUnaryExpression || kind === ts.SyntaxKind.PostfixUnaryExpression || kind === ts.SyntaxKind.DeleteExpression || kind === ts.SyntaxKind.SpreadElement) {
+    return false;
+  }
+  if (kind === ts.SyntaxKind.CallExpression) {
+    if (parent.expression === node) {
+      return false;
+    }
+    const callee = printedCalleeOfCall(goTranspiler, parent);
+    if (callee !== void 0 && parent.arguments.indexOf(node) < (_nullishCoalesce(NIL_DECLARED_SAFE_ARG_SLOTS[callee], () => ( 0)))) {
+      return true;
+    }
+    return callee !== void 0 && NIL_DECLARED_SAFE_ARG_CALLEES.indexOf(callee) >= 0;
+  }
+  if (kind === ts.SyntaxKind.PropertyAccessExpression || kind === ts.SyntaxKind.ElementAccessExpression) {
+    return false;
+  }
+  if (kind === ts.SyntaxKind.ArrayLiteralExpression) {
+    return true;
+  }
+  if (kind === ts.SyntaxKind.PropertyAssignment && parent.initializer === node || kind === ts.SyntaxKind.ShorthandPropertyAssignment) {
+    return true;
+  }
+  return false;
+}
+function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
+  if (declaration === void 0) {
+    return void 0;
+  }
+  const name = declaration.name;
+  if (name === void 0 || name.kind !== ts.SyntaxKind.Identifier || name.elements !== void 0) {
+    return void 0;
+  }
+  if (declaration.initializer !== void 0) {
+    const printedInit = (_nullishCoalesce(goTranspiler.printNode(declaration.initializer, 0), () => ( ""))).trim();
+    if (printedInit !== goTranspiler.UNDEFINED_TOKEN) {
+      return void 0;
+    }
+  }
+  const varName = name.text;
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0) {
+    return void 0;
+  }
+  let joinType;
+  let writeCount = 0;
+  let readUnproven = false;
+  const visit = (n) => {
+    if (readUnproven) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== name) {
+      const parent = n.parent;
+      const isWrite = parent !== void 0 && parent.kind === ts.SyntaxKind.BinaryExpression && parent.left === n && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken;
+      if (isWrite) {
+        writeCount += 1;
+        const written = goTranspiler.goTypeOfInitializer(parent.right, goTranspiler.printNode(parent.right, 0));
+        if (written === void 0 || joinType !== void 0 && written !== joinType) {
+          readUnproven = true;
+          return;
+        }
+        joinType = written;
+      } else if (!nilDeclaredReadIsSafe(goTranspiler, n)) {
+        readUnproven = true;
+        return;
+      }
+    }
+    _optionalChain([n, 'optionalAccess', _3856 => _3856.forEachChild, 'call', _3857 => _3857(visit)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _3858 => _3858.forEachChild, 'call', _3859 => _3859(visit)]);
+  if (readUnproven || writeCount === 0 || joinType === void 0) {
+    return void 0;
+  }
+  if (NIL_DECLARED_SCALAR_POINTER_TYPES.indexOf(joinType) < 0) {
+    return void 0;
+  }
+  if (goTranspiler.goTypeNameIsShadowed(scope, joinType) || !goTranspiler.goLocalIsSafeToType(scope, declaration, varName, joinType)) {
+    return void 0;
+  }
+  return joinType;
+}
+function installNilDeclaredJoin(goTranspiler) {
+  const upstream = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const declaration = _optionalChain([node, 'optionalAccess', _3860 => _3860.declarations, 'optionalAccess', _3861 => _3861[0]]);
+    const joinType = _nullishCoalesce(ccxtGoNilDeclaredJoinType(this, declaration), () => ( g13StrNilDeclaredJoinType(this, declaration)));
+    if (joinType !== void 0) {
+      return this.getIden(identation) + "var " + this.printNode(declaration.name) + " " + joinType + " = " + this.NULL_TOKEN;
+    }
+    return upstream.call(this, node, identation);
+  };
+}
+var NIL_JOIN_TYPES = ["map[string]any", "[]any"];
+var NIL_JOIN_ASSIGNMENT_TOKENS = [
+  ts.SyntaxKind.EqualsToken,
+  ts.SyntaxKind.PlusEqualsToken,
+  ts.SyntaxKind.MinusEqualsToken,
+  ts.SyntaxKind.AsteriskAsteriskEqualsToken,
+  ts.SyntaxKind.AsteriskEqualsToken,
+  ts.SyntaxKind.SlashEqualsToken,
+  ts.SyntaxKind.PercentEqualsToken,
+  ts.SyntaxKind.LessThanLessThanEqualsToken,
+  ts.SyntaxKind.GreaterThanGreaterThanEqualsToken,
+  ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
+  ts.SyntaxKind.AmpersandEqualsToken,
+  ts.SyntaxKind.BarEqualsToken,
+  ts.SyntaxKind.CaretEqualsToken,
+  ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+  ts.SyntaxKind.BarBarEqualsToken,
+  ts.SyntaxKind.QuestionQuestionEqualsToken
+];
+function nilJoinOccurrenceKind(node) {
+  const parent = node.parent;
+  if (parent === void 0) {
+    return "reject";
+  }
+  switch (parent.kind) {
+    case ts.SyntaxKind.PropertyAccessExpression:
+    case ts.SyntaxKind.QualifiedName:
+      return parent.name === node ? "skip" : "read";
+    case ts.SyntaxKind.PropertyAssignment:
+    case ts.SyntaxKind.BindingElement:
+      return parent.name === node ? "skip" : "read";
+    case ts.SyntaxKind.ShorthandPropertyAssignment:
+      return "read";
+    case ts.SyntaxKind.MethodDeclaration:
+    case ts.SyntaxKind.PropertyDeclaration:
+    case ts.SyntaxKind.Parameter:
+      return parent.name === node ? "skip" : "read";
+    case ts.SyntaxKind.VariableDeclaration:
+      return parent.name === node ? "declaration" : "read";
+    case ts.SyntaxKind.BinaryExpression: {
+      if (parent.left !== node) {
+        return "read";
+      }
+      const op = parent.operatorToken.kind;
+      if (op === ts.SyntaxKind.EqualsToken) {
+        return "write";
+      }
+      return NIL_JOIN_ASSIGNMENT_TOKENS.indexOf(op) >= 0 ? "reject" : "read";
+    }
+    case ts.SyntaxKind.PostfixUnaryExpression:
+    case ts.SyntaxKind.PrefixUnaryExpression: {
+      const op = parent.operator;
+      if (node === parent.operand && (op === ts.SyntaxKind.PlusPlusToken || op === ts.SyntaxKind.MinusMinusToken)) {
+        return "reject";
+      }
+      return "read";
+    }
+    case ts.SyntaxKind.SpreadElement:
+    case ts.SyntaxKind.SpreadAssignment:
+      return "reject";
+    case ts.SyntaxKind.ArrayLiteralExpression:
+      if (_optionalChain([parent, 'access', _3862 => _3862.parent, 'optionalAccess', _3863 => _3863.kind]) === ts.SyntaxKind.BinaryExpression && parent.parent.left === parent) {
+        return "reject";
+      }
+      return "read";
+  }
+  return "read";
+}
+function nilJoinMentionsName(node, name) {
+  let found = false;
+  const visit = (n) => {
+    if (found) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === name) {
+      found = true;
+      return;
+    }
+    _optionalChain([n, 'optionalAccess', _3864 => _3864.forEachChild, 'call', _3865 => _3865(visit)]);
+  };
+  visit(node);
+  return found;
+}
+var CCXT_GO_NIL_JOIN_CACHE = /* @__PURE__ */ new WeakMap();
+function ccxtGoNilDeclaredContainerJoinType(goTranspiler, declaration) {
+  if (CCXT_GO_NIL_JOIN_CACHE.has(declaration)) {
+    return CCXT_GO_NIL_JOIN_CACHE.get(declaration);
+  }
+  CCXT_GO_NIL_JOIN_CACHE.set(declaration, void 0);
+  const goType = ccxtGoNilDeclaredContainerJoinTypeUncached(goTranspiler, declaration);
+  CCXT_GO_NIL_JOIN_CACHE.set(declaration, goType);
+  return goType;
+}
+function ccxtGoNilJoinIsElementWrite(node) {
+  const parent = node.parent;
+  const access = _optionalChain([parent, 'optionalAccess', _3866 => _3866.kind]) === ts.SyntaxKind.ElementAccessExpression || _optionalChain([parent, 'optionalAccess', _3867 => _3867.kind]) === ts.SyntaxKind.PropertyAccessExpression;
+  return access && parent.expression === node && _optionalChain([parent, 'access', _3868 => _3868.parent, 'optionalAccess', _3869 => _3869.kind]) === ts.SyntaxKind.BinaryExpression && parent.parent.left === parent && NIL_JOIN_ASSIGNMENT_TOKENS.includes(parent.parent.operatorToken.kind);
+}
+function ccxtGoNilJoinIsPush(node) {
+  const parent = node.parent;
+  return _optionalChain([parent, 'optionalAccess', _3870 => _3870.kind]) === ts.SyntaxKind.PropertyAccessExpression && parent.expression === node && _optionalChain([parent, 'access', _3871 => _3871.name, 'optionalAccess', _3872 => _3872.text]) === "push";
+}
+var CCXT_GO_NIL_JOIN_ABSENT_ARG0 = /^(?:safe(?:Value|String|StringLower|StringUpper|Integer|Float|Number|Bool|Timestamp|Dict|List)(?:2|N)?|extend|deepExtend|isDictionary|isArray)$/;
+function ccxtGoNilJoinReadSeesAbsent(goTranspiler, node) {
+  let child = node;
+  let parent = node.parent;
+  while (_optionalChain([parent, 'optionalAccess', _3873 => _3873.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    child = parent;
+    parent = parent.parent;
+  }
+  switch (_optionalChain([parent, 'optionalAccess', _3874 => _3874.kind])) {
+    case ts.SyntaxKind.BinaryExpression: {
+      const op = parent.operatorToken.kind;
+      if (COMPARISON_TOKENS.indexOf(op) >= 0) {
+        return isUndefinedLiteral(parent.left === child ? parent.right : parent.left);
+      }
+      if (op === ts.SyntaxKind.AmpersandAmpersandToken || op === ts.SyntaxKind.BarBarToken) {
+        return ccxtGoNilJoinIsCondition(parent);
+      }
+      if (op === ts.SyntaxKind.EqualsToken && parent.right === child) {
+        const target = _optionalChain([parent, 'access', _3875 => _3875.left, 'optionalAccess', _3876 => _3876.kind]);
+        return target === ts.SyntaxKind.ElementAccessExpression || target === ts.SyntaxKind.PropertyAccessExpression;
+      }
+      return false;
+    }
+    case ts.SyntaxKind.PrefixUnaryExpression:
+      return parent.operator === ts.SyntaxKind.ExclamationToken;
+    case ts.SyntaxKind.IfStatement:
+    case ts.SyntaxKind.ConditionalExpression:
+      return parent.condition === child || parent.expression === child;
+    case ts.SyntaxKind.ElementAccessExpression:
+    case ts.SyntaxKind.PropertyAccessExpression: {
+      if (parent.expression !== child) {
+        return false;
+      }
+      const above = parent.parent;
+      if (_optionalChain([above, 'optionalAccess', _3877 => _3877.kind]) === ts.SyntaxKind.CallExpression && above.expression === parent) {
+        return false;
+      }
+      return !(_optionalChain([above, 'optionalAccess', _3878 => _3878.kind]) === ts.SyntaxKind.BinaryExpression && above.left === parent && NIL_JOIN_ASSIGNMENT_TOKENS.includes(above.operatorToken.kind));
+    }
+    case ts.SyntaxKind.PropertyAssignment:
+      return parent.initializer === child;
+    case ts.SyntaxKind.ShorthandPropertyAssignment:
+      return true;
+    case ts.SyntaxKind.CallExpression:
+      return ccxtGoNilJoinArgumentSeesAbsent(goTranspiler, parent, parent.arguments.indexOf(child));
+  }
+  return false;
+}
+function ccxtGoNilJoinIsCondition(node) {
+  let parent = node.parent;
+  while (_optionalChain([parent, 'optionalAccess', _3879 => _3879.kind]) === ts.SyntaxKind.ParenthesizedExpression || _optionalChain([parent, 'optionalAccess', _3880 => _3880.kind]) === ts.SyntaxKind.BinaryExpression && [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken].includes(parent.operatorToken.kind)) {
+    node = parent;
+    parent = parent.parent;
+  }
+  return _optionalChain([parent, 'optionalAccess', _3881 => _3881.kind]) === ts.SyntaxKind.IfStatement && parent.expression === node || _optionalChain([parent, 'optionalAccess', _3882 => _3882.kind]) === ts.SyntaxKind.PrefixUnaryExpression && parent.operator === ts.SyntaxKind.ExclamationToken;
+}
+var CCXT_GO_NIL_JOIN_TRANSPILED_BASE = /^(?:parse|handle|fetch|create|edit|cancel|filter|prepare|build|format)[A-Z]/;
+var CCXT_GO_NIL_JOIN_HAND_WRITTEN = ["parseNumber", "parseJson", "handleMessage", "handleHttpStatusCode"];
+function ccxtGoNilJoinArgumentSeesAbsent(goTranspiler, call, index) {
+  if (index < 0) {
+    return false;
+  }
+  const callee = call.expression;
+  if (_optionalChain([callee, 'optionalAccess', _3883 => _3883.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _3884 => _3884.expression, 'optionalAccess', _3885 => _3885.kind]) !== ts.SyntaxKind.ThisKeyword) {
+    return false;
+  }
+  if (index === 0 && CCXT_GO_NIL_JOIN_ABSENT_ARG0.test(_nullishCoalesce(_optionalChain([callee, 'access', _3886 => _3886.name, 'optionalAccess', _3887 => _3887.text]), () => ( "")))) {
+    return true;
+  }
+  let declaration;
+  try {
+    declaration = _optionalChain([goTranspiler, 'access', _3888 => _3888.getChecker, 'call', _3889 => _3889(), 'access', _3890 => _3890.getResolvedSignature, 'call', _3891 => _3891(call), 'optionalAccess', _3892 => _3892.declaration, 'optionalAccess', _3893 => _3893.resolve, 'call', _3894 => _3894()]);
+  } catch (e) {
+    return false;
+  }
+  const methodName = String(_nullishCoalesce(_optionalChain([declaration, 'optionalAccess', _3895 => _3895.name, 'optionalAccess', _3896 => _3896.text]), () => ( "")));
+  const baseFile = /[\\/]base[\\/]/.test(_nullishCoalesce(_optionalChain([declaration, 'optionalAccess', _3897 => _3897.getSourceFile, 'optionalCall', _3898 => _3898(), 'optionalAccess', _3899 => _3899.fileName]), () => ( "/base/")));
+  if (baseFile && (!CCXT_GO_NIL_JOIN_TRANSPILED_BASE.test(methodName) || CCXT_GO_NIL_JOIN_HAND_WRITTEN.includes(methodName))) {
+    return false;
+  }
+  const param = _optionalChain([declaration, 'optionalAccess', _3900 => _3900.parameters, 'optionalAccess', _3901 => _3901[index]]);
+  return param !== void 0 && param.dotDotDotToken === void 0 && (param.initializer !== void 0 || param.questionToken !== void 0);
+}
+function ccxtGoNilDeclaredContainerJoinTypeUncached(goTranspiler, declaration) {
+  const name = _optionalChain([declaration, 'access', _3902 => _3902.name, 'optionalAccess', _3903 => _3903.text]);
+  if (name === void 0) {
+    return void 0;
+  }
+  const scope = typeof goTranspiler.goEnclosingFunction === "function" ? goTranspiler.goEnclosingFunction(declaration) : void 0;
+  if (scope === void 0) {
+    return void 0;
+  }
+  const state = { ok: true, goType: void 0, writes: 0 };
+  const fail = () => {
+    state.ok = false;
+  };
+  const isName = (node) => _optionalChain([node, 'optionalAccess', _3904 => _3904.kind]) === ts.SyntaxKind.Identifier && node.text === name;
+  const readExpression = (node, assigned) => {
+    if (!state.ok || node === void 0 || node === null) {
+      return;
+    }
+    if (node.kind === ts.SyntaxKind.Identifier) {
+      if (isName(node) && node !== declaration.name) {
+        const kind = nilJoinOccurrenceKind(node);
+        if (kind === "read") {
+          state.mutated = state.mutated || ccxtGoNilJoinIsElementWrite(node);
+          if (ccxtGoNilJoinIsPush(node)) {
+            fail();
+          } else if (!assigned) {
+            if (!ccxtGoNilJoinReadSeesAbsent(goTranspiler, node)) {
+              fail();
+            }
+          }
+        } else if (kind !== "skip") {
+          fail();
+        }
+      }
+      return;
+    }
+    if (node !== scope && ts.isFunctionLike(node)) {
+      fail();
+      return;
+    }
+    _optionalChain([node, 'optionalAccess', _3905 => _3905.forEachChild, 'call', _3906 => _3906((child) => readExpression(child, assigned))]);
+  };
+  const writeExpression = (right, assigned) => {
+    readExpression(right, assigned);
+    let goType = goTranspiler.goTypeOfInitializer(right, goTranspiler.printNode(right, 0));
+    if (NIL_JOIN_TYPES.indexOf(goType) < 0) {
+      goType = NIL_JOIN_TYPES.find((t) => ccxtGoWriteSiteConversion(goTranspiler, t, right, true) !== void 0);
+    }
+    if (goType === void 0) {
+      fail();
+      return;
+    }
+    if (state.goType === void 0) {
+      state.goType = goType;
+    } else if (state.goType !== goType) {
+      fail();
+      return;
+    }
+    state.writes += 1;
+    const callee = ccxtGoWriteSiteCallee(goTranspiler, right);
+    const mayBeAbsent = /^this\.Safe(?:Dict|List)2?$/.test(_nullishCoalesce(callee, () => ( "")));
+    state.copies = state.copies || mayBeAbsent;
+    return !mayBeAbsent;
+  };
+  const visitStatement = (node, assigned) => {
+    if (!state.ok || node === void 0 || node === null) {
+      return assigned;
+    }
+    switch (node.kind) {
+      case ts.SyntaxKind.Block: {
+        let current = assigned;
+        for (const statement of node.statements) {
+          current = visitStatement(statement, current);
+        }
+        return current;
+      }
+      case ts.SyntaxKind.ExpressionStatement: {
+        const expression = node.expression;
+        if (_optionalChain([expression, 'optionalAccess', _3907 => _3907.kind]) === ts.SyntaxKind.BinaryExpression && expression.operatorToken.kind === ts.SyntaxKind.EqualsToken && isName(expression.left)) {
+          return writeExpression(expression.right, assigned) ? true : assigned;
+        }
+        readExpression(expression, assigned);
+        return assigned;
+      }
+      case ts.SyntaxKind.VariableStatement: {
+        let current = assigned;
+        for (const child of node.declarationList.declarations) {
+          if (isName(child.name)) {
+            if (child === declaration) {
+              current = false;
+            } else {
+              fail();
+            }
+          }
+          readExpression(child.initializer, current);
+        }
+        return current;
+      }
+      case ts.SyntaxKind.IfStatement: {
+        readExpression(node.expression, assigned);
+        const thenAssigned = visitStatement(node.thenStatement, assigned);
+        const elseAssigned = node.elseStatement === void 0 ? assigned : visitStatement(node.elseStatement, assigned);
+        return thenAssigned && elseAssigned;
+      }
+      case ts.SyntaxKind.ForStatement: {
+        visitStatement(node.initializer, assigned);
+        readExpression(node.condition, assigned);
+        readExpression(node.incrementor, assigned);
+        visitStatement(node.statement, assigned);
+        return assigned;
+      }
+      case ts.SyntaxKind.WhileStatement:
+      case ts.SyntaxKind.DoStatement:
+      case ts.SyntaxKind.ForInStatement:
+      case ts.SyntaxKind.ForOfStatement: {
+        readExpression(node.expression, assigned);
+        visitStatement(node.statement, assigned);
+        return assigned;
+      }
+      case ts.SyntaxKind.SwitchStatement: {
+        readExpression(node.expression, assigned);
+        for (const clause of node.caseBlock.clauses) {
+          for (const statement of clause.statements) {
+            visitStatement(statement, assigned);
+          }
+        }
+        return assigned;
+      }
+      case ts.SyntaxKind.TryStatement: {
+        visitStatement(node.tryBlock, assigned);
+        if (node.catchClause !== void 0) {
+          visitStatement(node.catchClause.block, assigned);
+        }
+        visitStatement(node.finallyBlock, assigned);
+        return assigned;
+      }
+      case ts.SyntaxKind.ReturnStatement:
+      case ts.SyntaxKind.ThrowStatement: {
+        readExpression(node.expression, assigned);
+        return true;
+      }
+      case ts.SyntaxKind.EmptyStatement:
+      case ts.SyntaxKind.BreakStatement:
+      case ts.SyntaxKind.ContinueStatement:
+        return assigned;
+      default: {
+        if (nilJoinMentionsName(node, name)) {
+          fail();
+        }
+        return assigned;
+      }
+    }
+  };
+  visitStatement(scope.body, false);
+  if (state.copies && state.mutated) {
+    return void 0;
+  }
+  if (!state.ok || state.writes === 0 || state.goType === void 0) {
+    return void 0;
+  }
+  if (goTranspiler.goTypeNameIsShadowed(scope, state.goType)) {
+    return void 0;
+  }
+  if (!goTranspiler.goLocalIsSafeToType(scope, declaration, name, state.goType)) {
+    return void 0;
+  }
+  return state.goType;
+}
+function installCcxtGoNilDeclaredJoin(goTranspiler) {
+  if (typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = upstream(node, identation);
+    const declarations = _optionalChain([node, 'optionalAccess', _3908 => _3908.declarations]);
+    if (!declarations || declarations.length !== 1) {
+      return printed;
+    }
+    const declaration = declarations[0];
+    if (_optionalChain([declaration, 'access', _3909 => _3909.name, 'optionalAccess', _3910 => _3910.kind]) !== ts.SyntaxKind.Identifier) {
+      return printed;
+    }
+    const match = new RegExp("^(\\s*)var (\\w+) any = " + goTranspiler.UNDEFINED_TOKEN + "$").exec(printed);
+    if (match === null || match[2] !== goTranspiler.printNode(declaration.name)) {
+      return printed;
+    }
+    const goType = ccxtGoNilDeclaredContainerJoinType(goTranspiler, declaration);
+    if (goType === void 0) {
+      return printed;
+    }
+    return match[1] + "var " + match[2] + " " + goType + " = " + goTranspiler.UNDEFINED_TOKEN;
+  };
+}
+var CCXT_GO_WRITESITE_CONVERSIONS = {
+  "this.SafeMarket": { "map[string]any": "MapTyped" },
+  "this.SafeCurrency": { "map[string]any": "MapTyped" },
+  "this.Omit": { "map[string]any": "MapTyped" },
+  "this.OmitN": { "map[string]any": "MapTyped" },
+  "this.OmitMap": { "map[string]any": "MapTyped" }
+};
+function ccxtGoWriteSiteCallee(goTranspiler, node) {
+  if (_optionalChain([node, 'optionalAccess', _3911 => _3911.kind]) !== ts.SyntaxKind.CallExpression || typeof goTranspiler.printNode !== "function") {
+    return void 0;
+  }
+  const printed = (_nullishCoalesce(goTranspiler.printNode(node.expression, 0), () => ( ""))).trim();
+  if (!/^[A-Za-z_][\w.]*$/.test(printed)) {
+    return void 0;
+  }
+  return printed.startsWith("exchange.") ? "this." + printed.substring(9) : printed;
+}
+function ccxtGoWriteSiteIsIntegerProducer(right) {
+  const isIntLiteral = (n) => _optionalChain([n, 'optionalAccess', _3912 => _3912.kind]) === ts.SyntaxKind.NumericLiteral && /^[0-9]+$/.test(n.text);
+  if (isIntLiteral(right)) {
+    return true;
+  }
+  const callee = _optionalChain([right, 'optionalAccess', _3913 => _3913.expression]);
+  if (_optionalChain([right, 'optionalAccess', _3914 => _3914.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([callee, 'optionalAccess', _3915 => _3915.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _3916 => _3916.expression, 'optionalAccess', _3917 => _3917.text]) !== "Math" || !["min", "max"].includes(_optionalChain([callee, 'access', _3918 => _3918.name, 'optionalAccess', _3919 => _3919.text]))) {
+    return false;
+  }
+  const left = _optionalChain([right, 'access', _3920 => _3920.parent, 'optionalAccess', _3921 => _3921.left]);
+  return right.arguments.length === 2 && right.arguments.every((a) => isIntLiteral(a) || a.kind === ts.SyntaxKind.Identifier && _optionalChain([left, 'optionalAccess', _3922 => _3922.kind]) === ts.SyntaxKind.Identifier && a.text === left.text);
+}
+function ccxtGoWriteSiteIsStringProducer(goTranspiler, right) {
+  if (_optionalChain([right, 'optionalAccess', _3923 => _3923.kind]) === ts.SyntaxKind.StringLiteral || _optionalChain([right, 'optionalAccess', _3924 => _3924.kind]) === ts.SyntaxKind.NoSubstitutionTemplateLiteral) {
+    return true;
+  }
+  if (_optionalChain([right, 'optionalAccess', _3925 => _3925.kind]) !== ts.SyntaxKind.ElementAccessExpression || typeof goTranspiler.checkerOrUndefined !== "function") {
+    return false;
+  }
+  const checker = goTranspiler.checkerOrUndefined();
+  const type = _optionalChain([checker, 'optionalAccess', _3926 => _3926.getTypeAtLocation, 'call', _3927 => _3927(right)]);
+  if (type === void 0 || (type.flags & ts.TypeFlags.String) === 0) {
+    return false;
+  }
+  for (let node = right; _optionalChain([node, 'optionalAccess', _3928 => _3928.kind]) === ts.SyntaxKind.ElementAccessExpression; node = node.expression) {
+    const containerType = checker.getTypeAtLocation(node.expression);
+    const parts = _optionalChain([containerType, 'optionalAccess', _3929 => _3929.isUnionType, 'optionalCall', _3930 => _3930()]) ? ts.typeParts(containerType) : [containerType];
+    if (parts.some((t) => ((_nullishCoalesce(_optionalChain([t, 'optionalAccess', _3931 => _3931.flags]), () => ( ts.TypeFlags.Any))) & (ts.TypeFlags.StringLike | ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0) || ccxtGoElementReadIsObject(checker, containerType)) {
+      return false;
+    }
+  }
+  return true;
+}
+function ccxtGoWriteSiteConversion(goTranspiler, goType, right, nilJoin = false) {
+  if (goType === "*int64" && ccxtGoWriteSiteIsIntegerProducer(right)) {
+    return "Int64PtrTyped";
+  }
+  if (goType === "*string" && ccxtGoWriteSiteIsStringProducer(goTranspiler, right)) {
+    return "SafeStringPtr";
+  }
+  if (nilJoin && ccxtGoNilJoinEndpointElement(goTranspiler, right) === goType) {
+    return CCXT_GO_ASYNC_UNBOX[goType];
+  }
+  const callee = ccxtGoWriteSiteCallee(goTranspiler, right);
+  if (callee === void 0) {
+    return void 0;
+  }
+  const admitted = _nullishCoalesce(CCXT_GO_WRITESITE_CONVERSIONS[callee], () => ( (nilJoin ? CCXT_GO_NIL_JOIN_WRITE_CONVERSIONS[callee] : void 0)));
+  return admitted === void 0 ? void 0 : admitted[goType];
+}
+function ccxtGoNilJoinEndpointElement(goTranspiler, right) {
+  if (_optionalChain([right, 'optionalAccess', _3932 => _3932.kind]) !== ts.SyntaxKind.AwaitExpression) {
+    return void 0;
+  }
+  const element = ccxtGoEndpointElement(goTranspiler, right.expression);
+  return NIL_JOIN_TYPES.includes(element) ? element : void 0;
+}
+var CCXT_GO_NIL_JOIN_WRITE_CONVERSIONS = {
+  "this.Currency": { "map[string]any": "MapTyped" },
+  "this.SafeDict": { "map[string]any": "MapTyped" },
+  "this.SafeDict2": { "map[string]any": "MapTyped" },
+  "this.SafeList": { "[]any": "ListTyped" },
+  "this.SafeList2": { "[]any": "ListTyped" }
+};
+function ccxtGoParamDeclarationOf(goTranspiler, n) {
+  try {
+    return _optionalChain([goTranspiler, 'access', _3933 => _3933.getChecker, 'call', _3934 => _3934(), 'access', _3935 => _3935.getSymbolAtLocation, 'call', _3936 => _3936(n), 'optionalAccess', _3937 => _3937.valueDeclaration, 'optionalAccess', _3938 => _3938.resolve, 'call', _3939 => _3939()]);
+  } catch (e) {
+    return void 0;
+  }
+}
+function ccxtGoWriteSiteShippedVeto(goTranspiler, n, parent, goType) {
+  if (_optionalChain([parent, 'optionalAccess', _3940 => _3940.kind]) === ts.SyntaxKind.PropertyAccessExpression && parent.expression === n && _optionalChain([parent, 'access', _3941 => _3941.name, 'optionalAccess', _3942 => _3942.text]) === "push") {
+    return goType !== "[]any" || !goTranspiler.goIsNativeAppendShape(n, parent.parent);
+  }
+  if (_optionalChain([parent, 'optionalAccess', _3943 => _3943.kind]) === ts.SyntaxKind.VariableDeclaration && parent.name === n) {
+    return false;
+  }
+  if (_optionalChain([parent, 'optionalAccess', _3944 => _3944.kind]) === ts.SyntaxKind.PostfixUnaryExpression || _optionalChain([parent, 'optionalAccess', _3945 => _3945.kind]) === ts.SyntaxKind.PrefixUnaryExpression) {
+    const op = parent.operator;
+    if (op === ts.SyntaxKind.PlusPlusToken || op === ts.SyntaxKind.MinusMinusToken) {
+      return true;
+    }
+  }
+  if (_optionalChain([parent, 'optionalAccess', _3946 => _3946.kind]) === ts.SyntaxKind.SpreadElement) {
+    return true;
+  }
+  if (_optionalChain([parent, 'optionalAccess', _3947 => _3947.kind]) === ts.SyntaxKind.ArrayLiteralExpression && _optionalChain([parent, 'access', _3948 => _3948.parent, 'optionalAccess', _3949 => _3949.kind]) === ts.SyntaxKind.BinaryExpression && parent.parent.left === parent && parent.parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    const index = parent.elements.indexOf(n);
+    if (goType === "map[string]any" && typeof goTranspiler.goGetArgTupleWriteIsDict === "function") {
+      const decl = ccxtGoParamDeclarationOf(goTranspiler, n);
+      return !goTranspiler.goGetArgTupleWriteIsDict(decl, parent.parent.right, index);
+    }
+    return !(goType === "map[string]any" && typeof goTranspiler.goGetArgBindsDictElement === "function" && goTranspiler.goGetArgBindsDictElement(n, parent.parent.right, index));
+  }
+  if (_optionalChain([parent, 'optionalAccess', _3950 => _3950.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n) {
+    const op = parent.operatorToken.kind;
+    if (op >= ts.SyntaxKind.FirstCompoundAssignment && op <= ts.SyntaxKind.LastCompoundAssignment) {
+      return true;
+    }
+  }
+  return false;
+}
+var CCXT_GO_WRITESITE_NIL_OBSERVING_READS = { "deepExtend": 1, "keys": 0, "addElementToObject": 0 };
+function ccxtGoWriteSiteReadObservesNil(call, n) {
+  const callee = call.expression;
+  const name = _nullishCoalesce(_optionalChain([callee, 'optionalAccess', _3951 => _3951.name, 'optionalAccess', _3952 => _3952.text]), () => ( _optionalChain([callee, 'optionalAccess', _3953 => _3953.text])));
+  const index = CCXT_GO_WRITESITE_NIL_OBSERVING_READS[name];
+  return index !== void 0 && _optionalChain([call, 'access', _3954 => _3954.arguments, 'optionalAccess', _3955 => _3955[index]]) === n;
+}
+function ccxtGoWriteSiteVetoesAreConvertible(goTranspiler, scope, declaration, varName, goType) {
+  const nilJoin = _optionalChain([declaration, 'optionalAccess', _3956 => _3956.kind]) === ts.SyntaxKind.VariableDeclaration && isNilDeclaredInitializer(declaration.initializer) && NIL_JOIN_TYPES.includes(goType);
+  if (scope === void 0 || _optionalChain([declaration, 'optionalAccess', _3957 => _3957.kind]) !== ts.SyntaxKind.Parameter && !nilJoin) {
+    return false;
+  }
+  if (typeof goTranspiler.hasNodeWhere !== "function" || typeof goTranspiler.goTypeOfInitializer !== "function" || typeof goTranspiler.printNode !== "function") {
+    return false;
+  }
+  let convertible = 0;
+  const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind !== ts.SyntaxKind.Identifier || n.text !== varName || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if (_optionalChain([parent, 'optionalAccess', _3958 => _3958.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n && _optionalChain([parent, 'access', _3959 => _3959.operatorToken, 'optionalAccess', _3960 => _3960.kind]) === ts.SyntaxKind.EqualsToken) {
+      if (goTranspiler.goTypeOfInitializer(parent.right, goTranspiler.printNode(parent.right, 0)) === goType) {
+        return false;
+      }
+      if (ccxtGoWriteSiteConversion(goTranspiler, goType, parent.right, nilJoin) !== void 0) {
+        convertible += 1;
+        return false;
+      }
+      return true;
+    }
+    if (_optionalChain([parent, 'optionalAccess', _3961 => _3961.kind]) === ts.SyntaxKind.CallExpression && ccxtGoWriteSiteReadObservesNil(parent, n)) {
+      return true;
+    }
+    return ccxtGoWriteSiteShippedVeto(goTranspiler, n, parent, goType);
+  });
+  return !unsafe && convertible > 0;
+}
+function ccxtGoWriteSiteLocalGoType(goTranspiler, node) {
+  if (typeof goTranspiler.goDeclaredTypeOfIdentifier === "function") {
+    const declared = goTranspiler.goDeclaredTypeOfIdentifier(node);
+    if (declared !== void 0) {
+      return declared;
+    }
+  }
+  const joined = ccxtGoNilJoinDeclarationType(goTranspiler, node);
+  if (joined !== void 0) {
+    return joined;
+  }
+  if (typeof goTranspiler.goGetArgLocalType !== "function" || typeof goTranspiler.goEnclosingFunction !== "function" || typeof goTranspiler.printNode !== "function" || typeof goTranspiler.getChecker !== "function") {
+    return void 0;
+  }
+  let param;
+  try {
+    param = _optionalChain([goTranspiler, 'access', _3962 => _3962.getChecker, 'call', _3963 => _3963(), 'access', _3964 => _3964.getSymbolAtLocation, 'call', _3965 => _3965(node), 'optionalAccess', _3966 => _3966.valueDeclaration, 'optionalAccess', _3967 => _3967.resolve, 'call', _3968 => _3968()]);
+  } catch (e) {
+    param = void 0;
+  }
+  if (_optionalChain([param, 'optionalAccess', _3969 => _3969.kind]) !== ts.SyntaxKind.Parameter || param.initializer === void 0) {
+    return void 0;
+  }
+  const body = goTranspiler.goEnclosingFunction(param);
+  if (body === void 0) {
+    return void 0;
+  }
+  goTranspiler.ccxtGoWriteSiteParamTypes ??= /* @__PURE__ */ new WeakMap();
+  const cache = goTranspiler.ccxtGoWriteSiteParamTypes;
+  if (!cache.has(param)) {
+    cache.set(param, void 0);
+    cache.set(param, goTranspiler.goGetArgLocalType(body, param, goTranspiler.printNode(param.initializer, 0)));
+  }
+  return cache.get(param);
+}
+function ccxtGoNilJoinDeclarationType(goTranspiler, node) {
+  const declaration = ccxtGoParamDeclarationOf(goTranspiler, node);
+  if (_optionalChain([declaration, 'optionalAccess', _3970 => _3970.kind]) !== ts.SyntaxKind.VariableDeclaration || _optionalChain([declaration, 'access', _3971 => _3971.name, 'optionalAccess', _3972 => _3972.kind]) !== ts.SyntaxKind.Identifier || !isNilDeclaredInitializer(declaration.initializer) || _optionalChain([declaration, 'access', _3973 => _3973.parent, 'optionalAccess', _3974 => _3974.parent, 'optionalAccess', _3975 => _3975.kind]) !== ts.SyntaxKind.VariableStatement) {
+    return void 0;
+  }
+  return ccxtGoNilDeclaredContainerJoinType(goTranspiler, declaration);
+}
+function ccxtGoWriteSiteAssignment(goTranspiler, node, identation) {
+  if (_optionalChain([node, 'optionalAccess', _3976 => _3976.operatorToken, 'optionalAccess', _3977 => _3977.kind]) !== ts.SyntaxKind.EqualsToken || _optionalChain([node, 'access', _3978 => _3978.left, 'optionalAccess', _3979 => _3979.kind]) !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  const goType = ccxtGoWriteSiteLocalGoType(goTranspiler, node.left);
+  if (goType === void 0) {
+    return void 0;
+  }
+  const nilJoin = ccxtGoNilJoinDeclarationType(goTranspiler, node.left) === goType;
+  const conversion = ccxtGoWriteSiteConversion(goTranspiler, goType, node.right, nilJoin);
+  if (conversion === void 0) {
+    return void 0;
+  }
+  if (typeof goTranspiler.getCustomOperatorIfAny === "function" && goTranspiler.getCustomOperatorIfAny(node.left, node.right, node.operatorToken) !== void 0) {
+    return void 0;
+  }
+  const leftVar = goTranspiler.printNode(node.left, 0);
+  const rightVar = goTranspiler.printNode(node.right, identation);
+  if (node.right.kind === ts.SyntaxKind.AwaitExpression) {
+    return "\n" + goTranspiler.getIden(identation) + leftVar + " = " + conversion + "(PanicOnError(" + rightVar.trim() + "))";
+  }
+  const separator = typeof goTranspiler.goBinarySeparator === "function" ? goTranspiler.goBinarySeparator("=", rightVar.trim(), node.left, node.right) : " ";
+  return leftVar + separator + "=" + separator + conversion + "(" + rightVar.trim() + ")";
+}
+function installCcxtGoWriteSiteConversions(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoWriteSiteConversionsInstalled) {
+    return;
+  }
+  if (typeof goTranspiler.goLocalIsSafeToType !== "function" || typeof goTranspiler.printBinaryExpression !== "function" || typeof goTranspiler.goTypeOfInitializer !== "function") {
+    return;
+  }
+  const shippedIsSafe = goTranspiler.goLocalIsSafeToType;
+  goTranspiler.goLocalIsSafeToType = function(scope, declaration, varName, goType) {
+    if (shippedIsSafe.call(this, scope, declaration, varName, goType)) {
+      return true;
+    }
+    return ccxtGoWriteSiteVetoesAreConvertible(this, scope, declaration, varName, goType);
+  };
+  const shippedBinary = goTranspiler.printBinaryExpression;
+  goTranspiler.printBinaryExpression = function(node, identation) {
+    const assignment = ccxtGoWriteSiteAssignment(this, node, identation);
+    if (assignment !== void 0) {
+      return assignment;
+    }
+    return shippedBinary.call(this, node, identation);
+  };
+  goTranspiler.__ccxtGoWriteSiteConversionsInstalled = true;
+}
+function ccxtGoArrayLiteralIsEmpty(node) {
+  return _optionalChain([node, 'optionalAccess', _3980 => _3980.kind]) === ts.SyntaxKind.ArrayLiteralExpression && node.elements.length === 0;
+}
+function ccxtGoArrayGuardAdmits(goTranspiler, test, name) {
+  const callee = _optionalChain([test, 'optionalAccess', _3981 => _3981.expression]);
+  if (_optionalChain([test, 'optionalAccess', _3982 => _3982.kind]) === ts.SyntaxKind.CallExpression && _optionalChain([callee, 'optionalAccess', _3983 => _3983.kind]) === ts.SyntaxKind.PropertyAccessExpression) {
+    return _optionalChain([callee, 'access', _3984 => _3984.expression, 'optionalAccess', _3985 => _3985.text]) === "Array" && _optionalChain([callee, 'access', _3986 => _3986.name, 'optionalAccess', _3987 => _3987.text]) === "isArray" && test.arguments.length === 1 && test.arguments[0].kind === ts.SyntaxKind.Identifier && test.arguments[0].text === name;
+  }
+  if (_optionalChain([test, 'optionalAccess', _3988 => _3988.kind]) !== ts.SyntaxKind.BinaryExpression || test.operatorToken.kind !== ts.SyntaxKind.ExclamationEqualsEqualsToken || _optionalChain([test, 'access', _3989 => _3989.left, 'optionalAccess', _3990 => _3990.kind]) !== ts.SyntaxKind.Identifier || test.left.text !== name || !isNilLiteralExpression(test.right)) {
+    return false;
+  }
+  const checker = typeof goTranspiler.checkerOrUndefined === "function" ? goTranspiler.checkerOrUndefined() : void 0;
+  const type = _optionalChain([checker, 'optionalAccess', _3991 => _3991.getTypeAtLocation, 'call', _3992 => _3992(test.left)]);
+  const parts = _optionalChain([type, 'optionalAccess', _3993 => _3993.isUnionType, 'optionalCall', _3994 => _3994()]) ? ts.typeParts(type) : [type];
+  return type !== void 0 && !ccxtGoElementReadIsObject(checker, type) && parts.every((t) => checker.isArrayType(t) || (t.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)) !== 0);
+}
+function ccxtGoArrayWriteIsGuarded(goTranspiler, write) {
+  const right = write.right;
+  if (_optionalChain([right, 'optionalAccess', _3995 => _3995.kind]) !== ts.SyntaxKind.Identifier) {
+    return false;
+  }
+  let statement = write.parent;
+  if (_optionalChain([statement, 'optionalAccess', _3996 => _3996.kind]) !== ts.SyntaxKind.ExpressionStatement) {
+    return false;
+  }
+  let branch = statement.parent;
+  if (_optionalChain([branch, 'optionalAccess', _3997 => _3997.kind]) === ts.SyntaxKind.Block && branch.statements.length === 1) {
+    statement = branch;
+    branch = branch.parent;
+  }
+  if (_optionalChain([branch, 'optionalAccess', _3998 => _3998.kind]) !== ts.SyntaxKind.IfStatement || branch.thenStatement !== statement) {
+    return false;
+  }
+  return ccxtGoArrayGuardAdmits(goTranspiler, branch.expression, right.text);
+}
+function ccxtGoArrayLiteralWriteConversion(goTranspiler, write) {
+  const right = write.right;
+  if (ccxtGoArrayWriteIsGuarded(goTranspiler, write)) {
+    return "ArrayTyped";
+  }
+  const callee = ccxtGoWriteSiteCallee(goTranspiler, right);
+  if ((callee === "this.SafeList" || callee === "this.SafeList2") && ccxtGoArrayLiteralIsEmpty(right.arguments[right.arguments.length - 1]) && right.arguments.length === (callee === "this.SafeList" ? 3 : 4)) {
+    return "ArrayTyped";
+  }
+  return void 0;
+}
+function ccxtGoArrayLiteralLocalIsSafe(goTranspiler, scope, declaration, varName) {
+  if (_optionalChain([declaration, 'optionalAccess', _3999 => _3999.kind]) !== ts.SyntaxKind.VariableDeclaration || !ccxtGoArrayLiteralIsEmpty(declaration.initializer) || typeof goTranspiler.hasNodeWhere !== "function") {
+    return false;
+  }
+  let convertible = 0;
+  const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind !== ts.SyntaxKind.Identifier || n.text !== varName || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if (_optionalChain([parent, 'optionalAccess', _4000 => _4000.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n && _optionalChain([parent, 'access', _4001 => _4001.operatorToken, 'optionalAccess', _4002 => _4002.kind]) === ts.SyntaxKind.EqualsToken) {
+      if (goTranspiler.goTypeOfInitializer(parent.right, goTranspiler.printNode(parent.right, 0)) === "[]any") {
+        return false;
+      }
+      if (ccxtGoArrayLiteralWriteConversion(goTranspiler, parent) !== void 0) {
+        convertible += 1;
+        return false;
+      }
+      return true;
+    }
+    return ccxtGoWriteSiteShippedVeto(goTranspiler, n, parent, "[]any");
+  });
+  return !unsafe && convertible > 0;
+}
+function ccxtGoArrayLiteralDeclarationOf(goTranspiler, node) {
+  const declaration = ccxtGoParamDeclarationOf(goTranspiler, node);
+  return _optionalChain([declaration, 'optionalAccess', _4003 => _4003.kind]) === ts.SyntaxKind.VariableDeclaration && ccxtGoArrayLiteralIsEmpty(declaration.initializer) ? declaration : void 0;
+}
+function installCcxtGoArrayLiteralWrites(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoArrayLiteralWritesInstalled || typeof goTranspiler.goLocalIsSafeToType !== "function" || typeof goTranspiler.printBinaryExpression !== "function" || typeof goTranspiler.goDeclaredTypeOfIdentifier !== "function") {
+    return;
+  }
+  const shippedIsSafe = goTranspiler.goLocalIsSafeToType;
+  goTranspiler.goLocalIsSafeToType = function(scope, declaration, varName, goType) {
+    return shippedIsSafe.call(this, scope, declaration, varName, goType) || goType === "[]any" && scope !== void 0 && ccxtGoArrayLiteralLocalIsSafe(this, scope, declaration, varName);
+  };
+  const shippedBinary = goTranspiler.printBinaryExpression;
+  goTranspiler.printBinaryExpression = function(node, identation) {
+    if (_optionalChain([node, 'optionalAccess', _4004 => _4004.operatorToken, 'optionalAccess', _4005 => _4005.kind]) === ts.SyntaxKind.EqualsToken && ts.isIdentifier(node.left) && ccxtGoArrayLiteralDeclarationOf(this, node.left) !== void 0 && this.goDeclaredTypeOfIdentifier(node.left) === "[]any" && this.goTypeOfInitializer(node.right, this.printNode(node.right, 0)) !== "[]any") {
+      const conversion = ccxtGoArrayLiteralWriteConversion(this, node);
+      if (conversion !== void 0) {
+        return this.printNode(node.left, 0) + " = " + conversion + "(" + this.printNode(node.right, 0).trim() + ")";
+      }
+    }
+    return shippedBinary.call(this, node, identation);
+  };
+  goTranspiler.__ccxtGoArrayLiteralWritesInstalled = true;
+}
+var CCXT_GO_IDENTITY_TUPLE_HOLDERS = { "this.HandleUntilOption": 1, "this.HandleUntilOptionString": 1 };
+function ccxtGoIsIdentityTupleRebind(goTranspiler, n) {
+  const pattern = _optionalChain([n, 'optionalAccess', _4006 => _4006.parent]);
+  const assignment = _optionalChain([pattern, 'optionalAccess', _4007 => _4007.parent]);
+  if (_optionalChain([pattern, 'optionalAccess', _4008 => _4008.kind]) !== ts.SyntaxKind.ArrayLiteralExpression || pattern.elements.indexOf(n) !== 0 || _optionalChain([assignment, 'optionalAccess', _4009 => _4009.kind]) !== ts.SyntaxKind.BinaryExpression || assignment.left !== pattern || assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken || _optionalChain([assignment, 'access', _4010 => _4010.parent, 'optionalAccess', _4011 => _4011.kind]) !== ts.SyntaxKind.ExpressionStatement) {
+    return false;
+  }
+  const slot = CCXT_GO_IDENTITY_TUPLE_HOLDERS[ccxtGoWriteSiteCallee(goTranspiler, assignment.right)];
+  return slot !== void 0 && isIdentifierNamed(_optionalChain([assignment, 'access', _4012 => _4012.right, 'access', _4013 => _4013.arguments, 'optionalAccess', _4014 => _4014[slot]]), n.text);
+}
+function ccxtGoIdentityTupleLocalIsSafe(goTranspiler, scope, declaration, varName) {
+  if (scope === void 0 || _optionalChain([declaration, 'optionalAccess', _4015 => _4015.kind]) !== ts.SyntaxKind.VariableDeclaration || _optionalChain([declaration, 'access', _4016 => _4016.initializer, 'optionalAccess', _4017 => _4017.kind]) !== ts.SyntaxKind.ObjectLiteralExpression) {
+    return false;
+  }
+  let rebinds = 0;
+  const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind !== ts.SyntaxKind.Identifier || n.text !== varName || n === declaration.name) {
+      return false;
+    }
+    if (ccxtGoIsIdentityTupleRebind(goTranspiler, n)) {
+      rebinds += 1;
+      return false;
+    }
+    const parent = n.parent;
+    if (_optionalChain([parent, 'optionalAccess', _4018 => _4018.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n && _optionalChain([parent, 'access', _4019 => _4019.operatorToken, 'optionalAccess', _4020 => _4020.kind]) === ts.SyntaxKind.EqualsToken) {
+      return goTranspiler.goTypeOfInitializer(parent.right, goTranspiler.printNode(parent.right, 0)) !== "map[string]any";
+    }
+    return ccxtGoWriteSiteShippedVeto(goTranspiler, n, parent, "map[string]any");
+  });
+  return !unsafe && rebinds > 0;
+}
+function installCcxtGoIdentityTupleRebind(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoIdentityTupleRebindInstalled || typeof goTranspiler.goLocalIsSafeToType !== "function" || typeof goTranspiler.printCustomBinaryExpressionIfAny !== "function" || typeof goTranspiler.goDeclaredTypeOfIdentifier !== "function") {
+    return;
+  }
+  const shippedIsSafe = goTranspiler.goLocalIsSafeToType;
+  goTranspiler.goLocalIsSafeToType = function(scope, declaration, varName, goType) {
+    return shippedIsSafe.call(this, scope, declaration, varName, goType) || goType === "map[string]any" && ccxtGoIdentityTupleLocalIsSafe(this, scope, declaration, varName);
+  };
+  const shippedCustom = goTranspiler.printCustomBinaryExpressionIfAny;
+  goTranspiler.printCustomBinaryExpressionIfAny = function(node, identation) {
+    const printed = shippedCustom.call(this, node, identation);
+    const target = _optionalChain([node, 'optionalAccess', _4021 => _4021.left, 'optionalAccess', _4022 => _4022.elements, 'optionalAccess', _4023 => _4023[0]]);
+    if (typeof printed !== "string" || node.left.kind !== ts.SyntaxKind.ArrayLiteralExpression || !ccxtGoIsIdentityTupleRebind(this, target) || this.goDeclaredTypeOfIdentifier(target) !== "map[string]any") {
+      return printed;
+    }
+    const read = this.printNode(target, 0) + " = GetValue(";
+    const lines = printed.split("\n");
+    const index = lines.findIndex((line) => line.trimStart().startsWith(read) && line.endsWith(", 0)"));
+    if (index < 0) {
+      return printed;
+    }
+    const indent = lines[index].substring(0, lines[index].length - lines[index].trimStart().length);
+    lines[index] = indent + this.printNode(target, 0) + " = MapTyped(" + lines[index].trimStart().substring(read.length - "GetValue(".length) + ")";
+    return lines.join("\n");
+  };
+  goTranspiler.__ccxtGoIdentityTupleRebindInstalled = true;
+}
+var CCXT_GO_CLOSURE_POINTER_JOIN_TYPES = ["*string", "*int64", "*float64", "*bool"];
+var CCXT_GO_CLOSURE_VALUE_JOIN_TYPES = ["string", "int64"];
+var CCXT_GO_CLOSURE_HEAD = /^([ \t]*)var ([A-Za-z_]\w*) any = func\(\) any \{$/;
+function ccxtGoClosureLiteralLines(printed) {
+  const lines = printed.split("\n");
+  if (lines.length !== 6) {
+    return void 0;
+  }
+  const match = CCXT_GO_CLOSURE_HEAD.exec(lines[0]);
+  if (match === null) {
+    return void 0;
+  }
+  const indent = match[1];
+  const body = indent + "	";
+  if (lines[5] !== indent + "}()" || !lines[1].startsWith(body + "if ") || !lines[1].endsWith(" {") || !lines[2].startsWith(body + "	return ") || lines[3] !== body + "}" || !lines[4].startsWith(body + "return ")) {
+    return void 0;
+  }
+  return {
+    indent,
+    name: match[2],
+    whenTrue: lines[2].substring(body.length + 8),
+    whenFalse: lines[4].substring(body.length + 7),
+    body: printed.substring(lines[0].length)
+  };
+}
+function ccxtGoClosureRewrite(literal, joinType) {
+  return literal.indent + "var " + literal.name + " " + joinType + " = func() " + joinType + " {" + literal.body;
+}
+function ccxtGoClosureArmType(goTranspiler, armNode, armText) {
+  const text = (_nullishCoalesce(armText, () => ( ""))).trim();
+  if (text === "nil") {
+    return "nil";
+  }
+  const open = text.indexOf("(");
+  if (open > 0 && typeof goTranspiler.isWholePrintedCall === "function" && goTranspiler.isWholePrintedCall(text, open)) {
+    const callee = text.substring(0, open);
+    const known = CCXT_GO_HELPER_RETURN_TYPES[callee];
+    if (known !== void 0) {
+      return known;
+    }
+    if (typeof goTranspiler.goTypeOfInitializer === "function") {
+      return goTranspiler.goTypeOfInitializer(armNode, text);
+    }
+    return void 0;
+  }
+  if (_optionalChain([armNode, 'optionalAccess', _4024 => _4024.kind]) === ts.SyntaxKind.Identifier && typeof goTranspiler.goDeclaredTypeOfIdentifier === "function") {
+    const declared = goTranspiler.goDeclaredTypeOfIdentifier(armNode);
+    return declared === "any" ? void 0 : declared;
+  }
+  return ccxtGoTypeOfNativeArithmeticInitializer(goTranspiler, armNode, text);
+}
+function ccxtGoClosureCompareIsHelper(goTranspiler, parent, name) {
+  const printed = (_nullishCoalesce(goTranspiler.printNode(parent, 0), () => ( ""))).trim();
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp('(?<![.\\w*"])' + escaped + "\\s*(?:==|!=)").test(printed)) {
+    return false;
+  }
+  return new RegExp("!?(?:ccxt\\.|this\\.)?IsEqual\\([^\\n]*\\b" + escaped + "\\b[^\\n]*\\)").test(printed);
+}
+function ccxtGoClosureReadIsSafe(goTranspiler, node, name) {
+  let current = node;
+  let parent = current.parent;
+  while (_optionalChain([parent, 'optionalAccess', _4025 => _4025.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    current = parent;
+    parent = current.parent;
+  }
+  if (parent === void 0) {
+    return false;
+  }
+  if (parent.name === node && parent.expression !== node && parent.initializer !== node) {
+    return true;
+  }
+  switch (parent.kind) {
+    case ts.SyntaxKind.PropertyAccessExpression:
+    case ts.SyntaxKind.QualifiedName:
+      return parent.name !== node;
+    case ts.SyntaxKind.PropertyAssignment:
+    case ts.SyntaxKind.BindingElement:
+      return parent.name !== node;
+    case ts.SyntaxKind.ShorthandPropertyAssignment:
+      return true;
+    case ts.SyntaxKind.MethodDeclaration:
+    case ts.SyntaxKind.PropertyDeclaration:
+    case ts.SyntaxKind.Parameter:
+      return parent.name !== node;
+    case ts.SyntaxKind.VariableDeclaration:
+      return false;
+    case ts.SyntaxKind.BinaryExpression: {
+      const op = _optionalChain([parent, 'access', _4026 => _4026.operatorToken, 'optionalAccess', _4027 => _4027.kind]);
+      if (op === ts.SyntaxKind.EqualsToken) {
+        if (parent.left === node) {
+          return false;
+        }
+        const target = parent.left;
+        if (_optionalChain([target, 'optionalAccess', _4028 => _4028.kind]) !== ts.SyntaxKind.ElementAccessExpression && _optionalChain([target, 'optionalAccess', _4029 => _4029.kind]) !== ts.SyntaxKind.PropertyAccessExpression) {
+          return false;
+        }
+        const printedWrite = (_nullishCoalesce(goTranspiler.printNode(parent, 0), () => ( ""))).trim();
+        return printedWrite.startsWith("AddElementToObject(") || /^\w+\["[^"]*"\] = /.test(printedWrite);
+      }
+      if (COMPARISON_TOKENS.indexOf(op) >= 0) {
+        return ccxtGoClosureCompareIsHelper(goTranspiler, parent, name);
+      }
+      return false;
+    }
+    case ts.SyntaxKind.PrefixUnaryExpression:
+    case ts.SyntaxKind.PostfixUnaryExpression:
+    case ts.SyntaxKind.DeleteExpression:
+    case ts.SyntaxKind.SpreadElement:
+      return false;
+    case ts.SyntaxKind.CallExpression:
+      return parent.expression !== node;
+    case ts.SyntaxKind.ReturnStatement:
+      return true;
+    case ts.SyntaxKind.ArrayLiteralExpression:
+      return !(_optionalChain([parent, 'access', _4030 => _4030.parent, 'optionalAccess', _4031 => _4031.kind]) === ts.SyntaxKind.BinaryExpression && parent.parent.left === parent);
+  }
+  return false;
+}
+function ccxtGoClosureJoinType(goTranspiler, declaration) {
+  if (declaration === void 0) {
+    return void 0;
+  }
+  const name = declaration.name;
+  if (_optionalChain([name, 'optionalAccess', _4032 => _4032.kind]) !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  const initializer = declaration.initializer;
+  if (_optionalChain([initializer, 'optionalAccess', _4033 => _4033.kind]) !== ts.SyntaxKind.ConditionalExpression) {
+    return void 0;
+  }
+  const varName = name.text;
+  const scope = typeof goTranspiler.goEnclosingFunction === "function" ? goTranspiler.goEnclosingFunction(declaration) : void 0;
+  if (scope === void 0) {
+    return void 0;
+  }
+  const whenTrue = (_nullishCoalesce(goTranspiler.printNode(initializer.whenTrue, 0), () => ( ""))).trim();
+  const whenFalse = (_nullishCoalesce(goTranspiler.printNode(initializer.whenFalse, 0), () => ( ""))).trim();
+  const whenTrueType = ccxtGoClosureArmType(goTranspiler, initializer.whenTrue, whenTrue);
+  const whenFalseType = ccxtGoClosureArmType(goTranspiler, initializer.whenFalse, whenFalse);
+  if (whenTrueType === void 0 || whenFalseType === void 0) {
+    return void 0;
+  }
+  const absent = whenTrueType === "nil" || whenFalseType === "nil";
+  const values = absent ? whenTrueType === "nil" ? [whenFalseType] : [whenTrueType] : [whenTrueType, whenFalseType];
+  if (values.length === 0 || values[0] !== values[values.length - 1]) {
+    return void 0;
+  }
+  const joinType = values[0];
+  if (CCXT_GO_CLOSURE_POINTER_JOIN_TYPES.indexOf(joinType) < 0) {
+    if (absent || CCXT_GO_CLOSURE_VALUE_JOIN_TYPES.indexOf(joinType) < 0) {
+      return void 0;
+    }
+  }
+  let unproven = false;
+  const visit = (n) => {
+    if (unproven) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== name) {
+      if (!ccxtGoClosureReadIsSafe(goTranspiler, n, varName)) {
+        unproven = true;
+      }
+      return;
+    }
+    _optionalChain([n, 'optionalAccess', _4034 => _4034.forEachChild, 'call', _4035 => _4035(visit)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _4036 => _4036.forEachChild, 'call', _4037 => _4037(visit)]);
+  if (unproven) {
+    return void 0;
+  }
+  if (goTranspiler.goTypeNameIsShadowed(scope, joinType)) {
+    return void 0;
+  }
+  if (!goTranspiler.goLocalIsSafeToType(scope, declaration, varName, joinType)) {
+    return void 0;
+  }
+  return joinType;
+}
+function installCcxtGoClosurePointerJoin(goTranspiler) {
+  if (typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = upstream(node, identation);
+    const declarations = _optionalChain([node, 'optionalAccess', _4038 => _4038.declarations]);
+    if (!declarations || declarations.length !== 1) {
+      return printed;
+    }
+    const declaration = declarations[0];
+    const literal = ccxtGoClosureLiteralLines(printed);
+    if (literal === void 0 || literal.name !== (_nullishCoalesce(goTranspiler.printNode(declaration.name), () => ( ""))).trim()) {
+      return printed;
+    }
+    const joinType = ccxtGoClosureJoinType(goTranspiler, declaration);
+    if (joinType === void 0) {
+      return printed;
+    }
+    const whenTrue = declaration.initializer.whenTrue === void 0 ? void 0 : (_nullishCoalesce(goTranspiler.printNode(declaration.initializer.whenTrue, 0), () => ( ""))).trim();
+    const whenFalse = (_nullishCoalesce(goTranspiler.printNode(declaration.initializer.whenFalse, 0), () => ( ""))).trim();
+    if (whenTrue !== literal.whenTrue || whenFalse !== literal.whenFalse) {
+      return printed;
+    }
+    return ccxtGoClosureRewrite(literal, joinType);
+  };
+}
+var CCXT_GO_CLOSURE_DEFAULT_VALUE_TYPES = { "*string": "string", "*int64": "int64", "*float64": "float64" };
+function ccxtGoClosureDefaultLiteralFits(pointerType, node) {
+  if (pointerType === "*string") {
+    return _optionalChain([node, 'optionalAccess', _4039 => _4039.kind]) === ts.SyntaxKind.StringLiteral || _optionalChain([node, 'optionalAccess', _4040 => _4040.kind]) === ts.SyntaxKind.NoSubstitutionTemplateLiteral;
+  }
+  if (_optionalChain([node, 'optionalAccess', _4041 => _4041.kind]) !== ts.SyntaxKind.NumericLiteral) {
+    return false;
+  }
+  return pointerType === "*float64" ? /^[0-9]+(\.[0-9]+)?$/.test(node.text) : /^[0-9]+$/.test(node.text);
+}
+function ccxtGoUnwrapParens(node) {
+  while (_optionalChain([node, 'optionalAccess', _4042 => _4042.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  return node;
+}
+function ccxtGoClosureDefaultShape(goTranspiler, declaration) {
+  const initializer = _optionalChain([declaration, 'optionalAccess', _4043 => _4043.initializer]);
+  if (_optionalChain([declaration, 'optionalAccess', _4044 => _4044.name, 'optionalAccess', _4045 => _4045.kind]) !== ts.SyntaxKind.Identifier || _optionalChain([initializer, 'optionalAccess', _4046 => _4046.kind]) !== ts.SyntaxKind.ConditionalExpression) {
+    return void 0;
+  }
+  const condition = ccxtGoUnwrapParens(initializer.condition);
+  if (_optionalChain([condition, 'optionalAccess', _4047 => _4047.kind]) !== ts.SyntaxKind.BinaryExpression || COMPARISON_TOKENS.indexOf(_optionalChain([condition, 'access', _4048 => _4048.operatorToken, 'optionalAccess', _4049 => _4049.kind])) < 0 || !isUndefinedLiteral(condition.right) || _optionalChain([condition, 'access', _4050 => _4050.left, 'optionalAccess', _4051 => _4051.kind]) !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  const negated = condition.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsToken || condition.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken;
+  const pointerArm = ccxtGoUnwrapParens(negated ? initializer.whenTrue : initializer.whenFalse);
+  const defaultArm = ccxtGoUnwrapParens(negated ? initializer.whenFalse : initializer.whenTrue);
+  const pointer = condition.left;
+  if (_optionalChain([pointerArm, 'optionalAccess', _4052 => _4052.kind]) !== ts.SyntaxKind.Identifier || pointerArm.text !== pointer.text || pointer.text === declaration.name.text) {
+    return void 0;
+  }
+  const checker = goTranspiler.getChecker();
+  if (checker.getSymbolAtLocation(pointerArm) !== checker.getSymbolAtLocation(pointer)) {
+    return void 0;
+  }
+  const pointerType = goTranspiler.goDeclaredTypeOfIdentifier(pointer);
+  const valueType = CCXT_GO_CLOSURE_DEFAULT_VALUE_TYPES[pointerType];
+  if (valueType === void 0 || !ccxtGoClosureDefaultLiteralFits(pointerType, defaultArm)) {
+    return void 0;
+  }
+  return { pointerName: (_nullishCoalesce(goTranspiler.printNode(pointer, 0), () => ( ""))).trim(), pointerIsTrueArm: negated, valueType };
+}
+function ccxtGoClosureDefaultReadsAreSafe(goTranspiler, declaration, valueType) {
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0) {
+    return false;
+  }
+  const name = declaration.name;
+  const varName = name.text;
+  let unproven = false;
+  const visit = (n) => {
+    if (unproven) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== name) {
+      unproven = !ccxtGoClosureReadIsSafe(goTranspiler, n, varName);
+      return;
+    }
+    _optionalChain([n, 'optionalAccess', _4053 => _4053.forEachChild, 'call', _4054 => _4054(visit)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _4055 => _4055.forEachChild, 'call', _4056 => _4056(visit)]);
+  return !unproven && !goTranspiler.goTypeNameIsShadowed(scope, valueType) && goTranspiler.goLocalIsSafeToType(scope, declaration, varName, valueType);
+}
+function installCcxtGoClosureDefaultValue(goTranspiler) {
+  if (typeof goTranspiler.printVariableDeclarationList !== "function" || typeof goTranspiler.goDeclaredTypeOfIdentifier !== "function" || goTranspiler.__ccxtGoClosureDefaultValueInstalled) {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = upstream(node, identation);
+    if (typeof printed !== "string" || _optionalChain([node, 'optionalAccess', _4057 => _4057.declarations, 'optionalAccess', _4058 => _4058.length]) !== 1) {
+      return printed;
+    }
+    const declaration = node.declarations[0];
+    const literal = ccxtGoClosureLiteralLines(printed);
+    if (literal === void 0 || literal.name !== (_nullishCoalesce(goTranspiler.printNode(declaration.name), () => ( ""))).trim()) {
+      return printed;
+    }
+    const shape = ccxtGoClosureDefaultShape(goTranspiler, declaration);
+    if (shape === void 0) {
+      return printed;
+    }
+    const lines = printed.split("\n");
+    const body = literal.indent + "	";
+    const pointerLine = shape.pointerIsTrueArm ? 2 : 4;
+    const expectedCondition = body + "if " + shape.pointerName + (shape.pointerIsTrueArm ? " != nil {" : " == nil {");
+    const expectedReturn = (shape.pointerIsTrueArm ? body + "	" : body) + "return " + shape.pointerName;
+    if (lines[1] !== expectedCondition || lines[pointerLine] !== expectedReturn || !ccxtGoClosureDefaultReadsAreSafe(goTranspiler, declaration, shape.valueType)) {
+      return printed;
+    }
+    lines[0] = literal.indent + "var " + literal.name + " " + shape.valueType + " = func() " + shape.valueType + " {";
+    lines[pointerLine] = expectedReturn.replace(/return (\w+)$/, "return *$1");
+    return lines.join("\n");
+  };
+  goTranspiler.__ccxtGoClosureDefaultValueInstalled = true;
+}
+var CCXT_GO_GETARG_DECLARED_TYPES = {
+  "Str": "*string",
+  "String": "*string",
+  "Int": "*int64",
+  "Num": "*float64",
+  "number": "*float64",
+  "Bool": "*bool",
+  "boolean": "*bool",
+  "Dict": "map[string]any",
+  "NullableDict": "map[string]any",
+  "Market": "map[string]any",
+  "Currency": "map[string]any",
+  "Order": "map[string]any",
+  "Ticker": "map[string]any",
+  "Trade": "map[string]any",
+  "OHLCV": "map[string]any",
+  "Strings": "[]string",
+  "Dict[]": "[]map[string]any",
+  "List": "[]any"
+};
+var CCXT_GO_GETARG_SAFE_CONSUMERS = {
+  // deref-aware helpers (value and key/dict arguments)
+  "GetValue": "*",
+  "InOp": "*",
+  "IsEqual": "*",
+  "IsDictionary": "*",
+  "EvalTruthy": "*",
+  "GetArrayLength": "*",
+  "Add": "*",
+  "Multiply": "*",
+  "Divide": "*",
+  "Subtract": "*",
+  "PlusEqual": "*",
+  "MathMin": "*",
+  "MathMax": "*",
+  "MathFloor": "*",
+  "MathCeil": "*",
+  "MathRound": "*",
+  "MathAbs": "*",
+  "Ternary": "*",
+  "IsString": "*",
+  "IsNumber": "*",
+  "IsInteger": "*",
+  "IsFloat": "*",
+  "IsBool": "*",
+  "IsArray": "*",
+  "IsObject": "*",
+  "ToUpper": "*",
+  "ToLower": "*",
+  "ToString": "*",
+  "ToFloat64": "*",
+  "ParseInt": "*",
+  "NumberToString": "*",
+  "Iso8601": "*",
+  "Sum": "*",
+  "ToArray": "*",
+  "SafeString": "*",
+  "SafeString2": "*",
+  "SafeStringN": "*",
+  "SafeInteger": "*",
+  "SafeNumber": "*",
+  "SafeBool": "*",
+  "SafeSymbol": "*",
+  "SafeMarket": "*",
+  "SafeCurrency": "*",
+  "SafeCurrencyCode": "*",
+  "SafeDict": "*",
+  "SafeList": "*",
+  "SafeValue2": "*",
+  "SafeMapTyped": "*",
+  "MapTyped": "*",
+  "DerefScalar": "*",
+  // the AddElementToObject value/key arguments (its container argument is separate)
+  "AddElementToObject": { "0": "container", "1": "deref", "2": "deref" },
+  // typed/typed-by-ABI methods of the port: GetArg derefs, so a pointer or a container reads
+  // exactly like the raw value (measured consumers)
+  "Market": "*",
+  "MarketId": "*",
+  "Currency": "*",
+  "MarketSymbols": "*",
+  "PriceToPrecision": "*",
+  "AmountToPrecision": "*",
+  "DecimalToPrecision": "*",
+  "ImplodeParams": "*",
+  "ParseTimeframe": { "0": "unsafe" },
+  "HandleOptionAndParams": "*",
+  "HandleMarketTypeAndParams": "*",
+  "HandleSubTypeAndParams": "*",
+  // the TypeScript-side spellings the printer's AST sees (mathMin/MathMin), the cache limit
+  // accessor (derefs both arguments, exchange_cache.go:322-330) and the request builder
+  // (symbol/type/side/amount are `any` in the generated Go: the tail is a GetArg ABI)
+  "mathMin": "*",
+  "mathMax": "*",
+  "GetLimit": "*",
+  "CreateOrderRequest": "*",
+  "HandleMarginModeAndParams": "*",
+  "HandleUntilOption": "*",
+  "HandleProductTypeAndParams": "*",
+  "HandleParamString": "*",
+  "HandleParamBool": "*",
+  "HandleParamInt": "*",
+  "FilterBySinceLimit": "*",
+  "FilterBySymbolSinceLimit": "*",
+  "FilterBySymbolsSinceLimit": "*",
+  "FilterByValueSinceLimit": "*",
+  "FilterByCurrencySinceLimit": "*",
+  "ParseTrades": "*",
+  "ParseOrders": "*",
+  "ParseOHLCVs": "*",
+  "ParseTransactions": "*",
+  "ParseLedger": "*",
+  "ParseTransfers": "*",
+  "ParseIncomes": "*",
+  "ParseConversions": "*",
+  "ParseLiquidations": "*",
+  "ParseFundingRateHistories": "*",
+  "ParsePredictionTrades": "*",
+  "ParsePredictionOrders": "*",
+  "Outcome": "*",
+  "Symbol": "*",
+  // every `XxxAsync`/`XxxBody` pair forwards the optionalArgs tail into a GetArg binding
+  "LoadMarketsAsync": "*",
+  "LoadOutcomeAsync": "*",
+  "FetchOrdersAsync": "*",
+  "FetchOrdersByStatusAsync": "*",
+  "FetchOrdersByStateAsync": "*",
+  "FetchCanceledAndClosedOrdersAsync": "*",
+  "FetchOpenOrdersAsync": "*",
+  "FetchMyTradesAsync": "*",
+  "FetchPaginatedCallDynamicAsync": "*",
+  "FetchPaginatedCallCursorAsync": "*",
+  "FetchPaginatedCallDeterministicAsync": "*",
+  "FetchPaginatedCallIncrementalAsync": "*",
+  "FetchTransactionsHelperAsync": "*",
+  "FetchTransactionsWithMethodAsync": "*",
+  "FetchDepositsWithdrawalsAsync": "*",
+  "WatchTradesForSymbolsAsync": "*",
+  "WatchOrderBookForSymbolsAsync": "*",
+  "WatchOHLCVForSymbolsAsync": "*",
+  // consumers that decide on the nil-ness of the box (container argument only)
+  "DeepExtend": { "*": "container" },
+  "SubstituteString": "*",
+  // bodies read the value only through derefScalar-ing helpers (IsGreaterThan/IsEqual/
+  // InArray/NumberToString/FilterByCurrencySinceLimit)
+  "GetClosestLimit": { "0": "deref" },
+  "CheckRequiredArgument": { "1": "deref" },
+  // TS-name keys (non-pointer lookups): IsEmpty/IsArray/derefScalar and the filterBy values
+  // slot (IsEqual(values, nil), InArray, GetArg forward) read a nil slice/map box as absent
+  "isEmpty": { "0": "deref" },
+  "isArray": { "0": "deref" },
+  "filterByArray": { "2": "deref" },
+  "filterByArrayTickers": { "2": "deref" },
+  "filterByArrayPositions": { "2": "deref" },
+  // tag slot: IsDictionary/IsEqual deref it; a present value is handed back as the tuple's element 0
+  "handleWithdrawTagAndParams": { "0": "deref" },
+  "FindNearestCeiling": { "1": "deref" },
+  "ParseToInt": { "0": "deref" },
+  "ParseToNumeric": { "0": "deref" },
+  "ParseBorrowRateHistory": { "1": "deref", "2": "deref", "3": "deref" }
+};
+var CCXT_GO_ASYNC_ELEM_TYPES = {
+  // R1 concrete container send in the body
+  "AddMarginAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Dict>'] -> map[string]any
+  "ApproveBuilderCodeAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "CancelAllContractOrdersAsync": "[]any",
+  // R1 concrete container send in the body
+  "CancelAllOrdersAfterAsync": "map[string]any",
+  // concrete []any
+  "CancelAllOrdersAsync": "[]any",
+  // R1 concrete container send in the body
+  "CancelAllOrdersRequestAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "CancelAllOrdersWsAsync": "[]any",
+  // R1 concrete container send in the body
+  "CancelAllSpotOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "CancelAllUtaOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CancelContractOrderAsync": "map[string]any",
+  // concrete map[string]any; TS Promise<Order>
+  "CancelOrderAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CancelOrderWsAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "CancelOrdersAsync": "[]any",
+  // R1 concrete container send in the body
+  "CancelOrdersForSymbolsAsync": "[]any",
+  // R1 concrete container send in the body
+  "CancelOrdersRequestAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "CancelOrdersWsAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CancelSpotOrderAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CancelTwapOrderAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "CancelUnifiedOrderAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CancelUtaOrderAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "CancelUtaOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "ClosePositionAsync": "map[string]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "CompleteRawTopicsAsync": "[]any",
+  // R2 TS annotations ['Promise<Dict>'] -> map[string]any
+  "CreateApiKeyAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CreateContractOrderAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "CreateContractOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Conversion>'] -> map[string]any
+  "CreateConvertTradeAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "CreateDepositAddressAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "CreateExtendedOrderRequestAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "CreateGiftCodeAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "CreateMarketBuyOrderWithCostAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CreateMarketOrderWithCostAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CreateMarketSellOrderWithCostAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Dict>'] -> map[string]any
+  "CreateOrDeriveApiKeyAsync": "map[string]any",
+  // bodies send map[string]any (concrete) e.g. ParseOrder(map[string]any); TS Promise<Order>
+  "CreateOrderAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "CreateOrderRequestAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CreateOrderWsAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "CreateOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "CreateOrdersWsAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CreateSpotOrderAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "CreateSpotOrderRequestAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "CreateSpotOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CreateSwapOrderAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CreateTrailingAmountOrderAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "CreateTrailingPercentOrderAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CreateTwapOrderAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "CreateUtaOrderAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "CreateUtaOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "EditContractOrderAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "EditOrderRequestAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "EditOrderWsAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "EditOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "EditSpotOrderAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "EstimateTxFeeAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Account>'] -> map[string]any
+  "FetchAccountAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchAccountHelperAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Position[]>'] -> []any
+  "FetchAccountPositionsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchAccountSettingsAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchAccountsAsync": "[]any",
+  // R2 TS annotations ['Promise<Account[]>'] -> []any
+  "FetchAccountsV2Async": "[]any",
+  // R2 TS annotations ['Promise<Account[]>'] -> []any
+  "FetchAccountsV3Async": "[]any",
+  // R2 TS annotations ['Promise<PredictionOrder[]>'] -> []any
+  "FetchAmmOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Dict>'] -> map[string]any
+  "FetchApiKeyAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Dict>'] -> map[string]any
+  "FetchApiKeysAsync": "map[string]any",
+  // TS Promise<Balances> (Dict-shaped); NewBalances(res) asserts map[string]any
+  "FetchBalanceAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Balances>'] -> map[string]any
+  "FetchBalanceWsAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Tickers>'] -> map[string]any
+  "FetchBidsAsksAsync": "map[string]any",
+  // R2 TS annotations ['Promise<BorrowInterest[]>'] -> []any
+  "FetchBorrowInterestAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchBorrowRateHistoriesAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Dict[]>'] -> []any
+  "FetchBorrowRateHistoryAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchCanceledAndClosedOrdersAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchCanceledOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchClosedContractOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "FetchClosedOrderAsync": "map[string]any",
+  // concrete []any; TS Promise<Order[]>
+  "FetchClosedOrdersAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchClosedOrdersWsAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchClosedSpotOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Balances>'] -> map[string]any
+  "FetchContractBalanceAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchContractDepositAddressAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Transaction[]>'] -> []any
+  "FetchContractDepositsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchContractMarketsAsync": "[]any",
+  // R2 TS annotations ['Promise<OHLCV[]>'] -> []any
+  "FetchContractOHLCVAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "FetchContractOrderAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchContractOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchContractOrdersByStatusAsync": "[]any",
+  // R2 TS annotations ['Promise<Tickers>'] -> map[string]any
+  "FetchContractTickersAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Transaction[]>'] -> []any
+  "FetchContractWithdrawalsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchConvertCurrenciesAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Conversion>'] -> map[string]any
+  "FetchConvertQuoteAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Conversion>'] -> map[string]any
+  "FetchConvertTradeAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Conversion[]>'] -> []any
+  "FetchConvertTradeHistoryAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchCrossBorrowRatesAsync": "map[string]any",
+  // concrete map[string]any; TS Promise<Currencies>
+  "FetchCurrenciesAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Dict>'] -> map[string]any
+  "FetchCurrenciesFromCacheAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchCurrenciesFromWebAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchCurrencyAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchCurrencyByIdAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchDefaultMarketsAsync": "[]any",
+  // TS Promise<DepositAddress>
+  "FetchDepositAddressAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchDepositAddressDefaultAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchDepositAddressSupplementAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchDepositAddressesByNetworkAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Transaction>'] -> map[string]any
+  "FetchDepositAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchDepositMethodIdAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Dict[]>'] -> []any
+  "FetchDepositMethodIdsAsync": "[]any",
+  // R2 TS annotations ['Promise<Dict[]>'] -> []any
+  "FetchDepositMethodsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchDepositWithdrawFeesAsync": "map[string]any",
+  // concrete []any; TS Promise<Transaction[]>
+  "FetchDepositsAsync": "[]any",
+  // R2 TS annotations ['Promise<Transaction[]>'] -> []any
+  "FetchDepositsOrWithdrawalsHelperAsync": "[]any",
+  // R2 TS annotations ['Promise<Transaction[]>'] -> []any
+  "FetchDepositsWithdrawalsAsync": "[]any",
+  // R2 TS annotations ['Promise<Transaction[]>'] -> []any
+  "FetchDepositsWsAsync": "[]any",
+  // R2 TS annotations ['Promise<LeverageTier[]>'] -> []any
+  "FetchDerivativesMarketLeverageTiersAsync": "[]any",
+  // R2 TS annotations ['Promise<OpenInterest[]>'] -> []any
+  "FetchDerivativesOpenInterestHistoryAsync": "[]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchEventsByQueryAsync": "[]any",
+  // R2 TS annotations ['Promise<Balances>'] -> map[string]any
+  "FetchFinancialBalanceAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchFundingHistoryAsync": "[]any",
+  // R2 TS annotations ['Promise<FundingRate>'] -> map[string]any
+  "FetchFundingIntervalAsync": "map[string]any",
+  // R2 TS annotations ['Promise<FundingRates>'] -> map[string]any
+  "FetchFundingIntervalsAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchFundingLimitsAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchFundingRateAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchFundingRateHistoryAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchFundingRatesAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchFutureMarketsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchGreeksAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchHip3MarketsAsync": "[]any",
+  // R2 TS annotations ['Promise<Market[]>'] -> []any
+  "FetchInverseSwapMarketsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchL2OrderBookAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchL3OrderBookAsync": "map[string]any",
+  // R2 TS annotations ['Promise<LedgerEntry[]>'] -> []any
+  "FetchLedgerAsync": "[]any",
+  // R2 TS annotations ['Promise<LedgerEntry[]>'] -> []any
+  "FetchLedgerByEntriesAsync": "[]any",
+  // R2 TS annotations ['Promise<LedgerEntry[]>'] -> []any
+  "FetchLedgerEntriesByIdsAsync": "[]any",
+  // R2 TS annotations ['Promise<LedgerEntry>'] -> map[string]any
+  "FetchLedgerEntryAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchLeverageAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchLeverageTiersAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Liquidation[]>'] -> []any
+  "FetchLiquidationsAsync": "[]any",
+  // R2 TS annotations ['Promise<LongShortRatio[]>'] -> []any
+  "FetchLongShortRatioHistoryAsync": "[]any",
+  // R2 TS annotations ['Promise<MarginModification[]>'] -> []any
+  "FetchMarginAdjustmentHistoryAsync": "[]any",
+  // R2 TS annotations ['Promise<Balances>'] -> map[string]any
+  "FetchMarginBalanceAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchMarginModeAsync": "map[string]any",
+  // R2 TS annotations ['Promise<OHLCV[]>'] -> []any
+  "FetchMarkOHLCVAsync": "[]any",
+  // R2 TS annotations ['Promise<Ticker>'] -> map[string]any
+  "FetchMarkPriceAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Tickers>'] -> map[string]any
+  "FetchMarkPricesAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Market>'] -> map[string]any
+  "FetchMarketAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Market>'] -> map[string]any
+  "FetchMarketByIdAsync": "map[string]any",
+  // R2 TS annotations ['Promise<LeverageTier[]>'] -> []any
+  "FetchMarketLeverageTiersAsync": "[]any",
+  // concrete []any (ParseMarkets); TS Promise<Market[]>
+  "FetchMarketsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchMarketsByTypeAndSubTypeAsync": "[]any",
+  // R2 TS annotations ['Promise<Market[]>'] -> []any
+  "FetchMarketsByTypeAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchMarketsFromAPIAsync": "[]any",
+  // R2 TS annotations ['Promise<Dict[]>'] -> []any
+  "FetchMarketsFromCacheAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchMarketsFromWebAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchMarketsV1Async": "[]any",
+  // R1 concrete container send in the body
+  "FetchMarketsV2Async": "[]any",
+  // R1 concrete container send in the body
+  "FetchMarketsV3Async": "[]any",
+  // R2 TS annotations ['Promise<Trade[]>'] -> []any
+  "FetchMyBuysAsync": "[]any",
+  // R2 TS annotations ['Promise<Trade[]>'] -> []any
+  "FetchMyContractTradesAsync": "[]any",
+  // R2 TS annotations ['Promise<Trade[]>'] -> []any
+  "FetchMyDustTradesAsync": "[]any",
+  // R2 TS annotations ['Promise<Liquidation[]>'] -> []any
+  "FetchMyLiquidationsAsync": "[]any",
+  // R2 TS annotations ['Promise<Trade[]>'] -> []any
+  "FetchMySellsAsync": "[]any",
+  // R2 TS annotations ['Promise<Dict[]>'] -> []any
+  "FetchMySettlementHistoryAsync": "[]any",
+  // R2 TS annotations ['Promise<Trade[]>'] -> []any
+  "FetchMySpotTradesAsync": "[]any",
+  // concrete []any; TS Promise<Trade[]>
+  "FetchMyTradesAsync": "[]any",
+  // R2 TS annotations ['Promise<Trade[]>'] -> []any
+  "FetchMyTradesWsAsync": "[]any",
+  // R2 TS annotations ['Promise<Trade[]>'] -> []any
+  "FetchMyUtaTradesAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchNetworkDepositAddressAsync": "map[string]any",
+  // concrete []any; TS Promise<OHLCV[]>
+  "FetchOHLCVAsync": "[]any",
+  // R2 TS annotations ['Promise<OHLCV[]>'] -> []any
+  "FetchOHLCVWsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchOpenInterestAsync": "map[string]any",
+  // R2 TS annotations ['Promise<OpenInterest[]>'] -> []any
+  "FetchOpenInterestHistoryAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "FetchOpenOrderAsync": "map[string]any",
+  // concrete []any; TS Promise<Order[]>
+  "FetchOpenOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchOpenOrdersV1Async": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchOpenOrdersV2Async": "[]any",
+  // R1 concrete container send in the body
+  "FetchOpenOrdersWsAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchOpenSpotOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchOpenSwapOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Option>'] -> map[string]any
+  "FetchOptionAsync": "map[string]any",
+  // R2 TS annotations ['Promise<OptionChain>'] -> map[string]any
+  "FetchOptionChainAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchOptionMarketsAsync": "[]any",
+  // R2 TS annotations ['Promise<OHLCV[]>'] -> []any
+  "FetchOptionOHLCVAsync": "[]any",
+  // R2 TS annotations ['Promise<Position[]>'] -> []any
+  "FetchOptionPositionsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchOptionUnderlyingsAsync": "[]any",
+  // TS Promise<Order>
+  "FetchOrderAsync": "map[string]any",
+  // binance.go:fetchOrderBookBody `var orderbook map[string]any = this.ParseOrderBook(...)` then `ch <- 
+  "FetchOrderBookAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchOrderBooksAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "FetchOrderClassicAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "FetchOrderDefaultAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "FetchOrderSupplementAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchOrderTradesAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "FetchOrderWsAsync": "map[string]any",
+  // concrete []any sends; TS Promise<Order[]>
+  "FetchOrdersAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchOrdersByIdsAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchOrdersByStateAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchOrdersByStatesAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchOrdersByStatusAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchOrdersByStatusWsAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchOrdersByTypeAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchOrdersClassicAsync": "[]any",
+  // R2 TS annotations ['Promise<PredictionOrder[]>'] -> []any
+  "FetchOrdersHelperAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchOrdersWithMethodAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchOrdersWsAsync": "[]any",
+  // same FilterBy* tail
+  "FetchPaginatedCallCursorAsync": "[]any",
+  // every send is `this.FilterBySinceLimit(..)`, which answers a []any or nil
+  "FetchPaginatedCallDeterministicAsync": "[]any",
+  "FetchPaginatedCallIncrementalAsync": "[]any",
+  // loadOutcome sends a cached/fetched outcome dict (SafeOutcome / fetchOutcome)
+  "LoadOutcomeAsync": "map[string]any",
+  // exchange_generated.go fetchPaginatedCallDynamicBody `ch <- this.FilterBySinceLimit(sortedRes, since,
+  "FetchPaginatedCallDynamicAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchPortfoliosAsync": "[]any",
+  // R2 TS annotations ['Promise<Position>'] -> map[string]any
+  "FetchPositionAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Position[]>'] -> []any
+  "FetchPositionHistoryAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchPositionModeAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Position[]>'] -> []any
+  "FetchPositionWsAsync": "[]any",
+  // R2 TS annotations ['Promise<ADL[]>'] -> []any
+  "FetchPositionsADLRankAsync": "[]any",
+  // concrete []any; TS Promise<Position[]>
+  "FetchPositionsAsync": "[]any",
+  // R2 TS annotations ['Promise<Position[]>'] -> []any
+  "FetchPositionsForSymbolAsync": "[]any",
+  // R2 TS annotations ['Promise<Position[]>'] -> []any
+  "FetchPositionsHistoryAsync": "[]any",
+  // R2 TS annotations ['Promise<Position[]>'] -> []any
+  "FetchPositionsRiskAsync": "[]any",
+  // R2 TS annotations ['Promise<Position[]>'] -> []any
+  "FetchPositionsWsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchPrivateTradingFeeAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchPrivateTradingFeesAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchPrivateTransactionFeesAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchPublicTradingFeeAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchPublicTradingFeesAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchPublicTransactionFeesAsync": "map[string]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchRawActiveMarketsAsync": "[]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchRawEventsBySearchAsync": "[]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchRawEventsListAsync": "[]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchRawMarketsBySearchAsync": "[]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchRawMarketsByTagsAsync": "[]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchRawMarketsListAsync": "[]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchRawQuestionsBySearchAsync": "[]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchRawQuestionsListAsync": "[]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchRawTopicsAsync": "[]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchRawTopicsByQueriesAsync": "[]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchSeriesEventsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchSettlementHistoryAsync": "[]any",
+  // R2 TS annotations ['Promise<Balances>'] -> map[string]any
+  "FetchSpotBalanceAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchSpotMarketsAsync": "[]any",
+  // R2 TS annotations ['Promise<OHLCV[]>'] -> []any
+  "FetchSpotOHLCVAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "FetchSpotOrderAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Trade[]>'] -> []any
+  "FetchSpotOrderTradesAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchSpotOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchSpotOrdersByStatesAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchSpotOrdersByStatusAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchStatusAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Market[]>'] -> []any
+  "FetchSwapAndFutureMarketsAsync": "[]any",
+  // R2 TS annotations ['Promise<Balances>'] -> map[string]any
+  "FetchSwapBalanceAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchSwapMarketsAsync": "[]any",
+  // R2 TS annotations ['Promise<Ticker>'] -> map[string]any
+  "FetchTicker2Async": "map[string]any",
+  // concrete map[string]any; TS Promise<Ticker>
+  "FetchTickerAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchTickerV1AndV2Async": "map[string]any",
+  // R2 TS annotations ['Promise<Ticker>'] -> map[string]any
+  "FetchTickerV1Async": "map[string]any",
+  // R2 TS annotations ['Promise<Ticker>'] -> map[string]any
+  "FetchTickerV2Async": "map[string]any",
+  // R2 TS annotations ['Promise<Ticker>'] -> map[string]any
+  "FetchTickerV3Async": "map[string]any",
+  // R2 TS annotations ['Promise<Ticker>'] -> map[string]any
+  "FetchTickerWsAsync": "map[string]any",
+  // concrete map[string]any sends; TS Promise<Tickers> (Dict) is contradicted by some []any impls -> map
+  "FetchTickersAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Tickers>'] -> map[string]any
+  "FetchTickersV2Async": "map[string]any",
+  // R2 TS annotations ['Promise<Tickers>'] -> map[string]any
+  "FetchTickersV3Async": "map[string]any",
+  // R2 TS annotations ['Promise<Dict>'] -> map[string]any
+  "FetchTradeQuoteAsync": "map[string]any",
+  // concrete []any; TS Promise<Trade[]>
+  "FetchTradesAsync": "[]any",
+  // R2 TS annotations ['Promise<Trade[]>'] -> []any
+  "FetchTradesWsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchTradingFeeAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchTradingFeesAsync": "map[string]any",
+  // R2 TS annotations ['Promise<TradingFees>'] -> map[string]any
+  "FetchTradingFeesWsAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchTradingLimitsAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchTradingLimitsByIdAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchTransactionFeeAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchTransactionFeesAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchTransactionsAsync": "[]any",
+  // R2 TS annotations ['Promise<Transaction[]>'] -> []any
+  "FetchTransactionsByTypeAsync": "[]any",
+  // R2 TS annotations ['Promise<Transaction[]>'] -> []any
+  "FetchTransactionsWithMethodAsync": "[]any",
+  // R2 TS annotations ['Promise<TransferEntry>'] -> map[string]any
+  "FetchTransferAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "FetchTransfersAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchUSDTMarketsAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchUTAMarketsAsync": "[]any",
+  // R2 TS annotations ['Promise<OHLCV[]>'] -> []any
+  "FetchUTAOHLCVAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchUnderlyingAssetsAsync": "[]any",
+  // R2 TS annotations ['Promise<Balances>'] -> map[string]any
+  "FetchUtaBalanceAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchUtaCanceledAndClosedOrdersAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchUtaMarketsAsync": "[]any",
+  // R2 TS annotations ['Promise<Order>'] -> map[string]any
+  "FetchUtaOrderAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "FetchUtaOrdersByStatusAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchVolatilityHistoryAsync": "[]any",
+  // R1 concrete container send in the body
+  "FetchWithdrawAddressesAsync": "[]any",
+  // R2 TS annotations ['Promise<Transaction>'] -> map[string]any
+  "FetchWithdrawalAsync": "map[string]any",
+  // concrete []any; TS Promise<Transaction[]>
+  "FetchWithdrawalsAsync": "[]any",
+  // R2 TS annotations ['Promise<Transaction[]>'] -> []any
+  "FetchWithdrawalsWsAsync": "[]any",
+  // R1 concrete container send in the body
+  "GetAssetHistoryRowsAsync": "[]any",
+  // R1 concrete container send in the body
+  "HandleAccountIndexAsync": "[]any",
+  // R1 concrete container send in the body
+  "HandleNetworkIdAndParamsAsync": "[]any",
+  // R1 concrete container send in the body
+  "HandlePortfolioAndParamsAsync": "[]any",
+  // R1 concrete container send in the body
+  "HandleUTAAndParamsAsync": "[]any",
+  // R2 TS annotations ['Promise<TransferEntry[]>'] -> []any
+  "InternalFetchTransfersAsync": "[]any",
+  // R1 concrete container send in the body
+  "IsUnifiedEnabledAsync": "[]any",
+  // R2 TS annotations ['Promise<Account[]>'] -> []any
+  "LoadAccountsAsync": "[]any",
+  // R2 TS annotations ['Promise<Dict>'] -> map[string]any
+  "LoadLeverageBracketsAsync": "map[string]any",
+  // exchange.go:414-443 sends `this.Markets` (*sync.Map) and `result := this.SetMarkets(...)` (any); Map
+  "LoadMarketsAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Dict>'] -> map[string]any
+  "LoadQuoteTokenAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Market>'] -> map[string]any
+  "LoadTradeMarketAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Dict>'] -> map[string]any
+  "ModifyLeverageAndMarginModeAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "ModifyMarginHelperAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "PrepareAccountRequestWithCurrencyCodeAsync": "[]any",
+  // R1 concrete container send in the body
+  "PrepareParadexDomainAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Dict>'] -> map[string]any
+  "QueryContractsAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Transaction[]>'] -> []any
+  "QueryTransactionsByEventTypeAsync": "[]any",
+  // R1 concrete container send in the body
+  "RequestWalletHistoryRowsAsync": "[]any",
+  // R2 TS annotations ['Promise<string[]>'] -> []any
+  "ResolveEventSeriesTickersAsync": "[]any",
+  // R1 concrete container send in the body
+  "SetContractLeverageAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "SetLeverageAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "SetMarginAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "SignAndCancelAllOrdersAsync": "[]any",
+  // R1 concrete container send in the body
+  "SignAndCancelOrderAsync": "[]any",
+  // R1 concrete container send in the body
+  "SignAndCreateOrderAsync": "[]any",
+  // R1 concrete container send in the body
+  "SignInWithPrivateKeyAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "TransferAsync": "map[string]any",
+  // R2 TS annotations ['Promise<TransferEntry>'] -> map[string]any
+  "TransferBetweenMainAndSubAccountAsync": "map[string]any",
+  // R2 TS annotations ['Promise<TransferEntry>'] -> map[string]any
+  "TransferBetweenSubAccountsAsync": "map[string]any",
+  // R2 TS annotations ['Promise<TransferEntry>'] -> map[string]any
+  "TransferClassicAsync": "map[string]any",
+  // R2 TS annotations ['Promise<TransferEntry>'] -> map[string]any
+  "TransferInAsync": "map[string]any",
+  // R1 concrete container send in the body
+  "TransferOutAsync": "map[string]any",
+  // R2 TS annotations ['Promise<TransferEntry>'] -> map[string]any
+  "TransferUtaAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Balances>'] -> map[string]any
+  "WatchBalanceAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Tickers>'] -> map[string]any
+  "WatchBidsAsksAsync": "map[string]any",
+  // R2 TS annotations ['Promise<FundingRate>'] -> map[string]any
+  "WatchFundingRateAsync": "map[string]any",
+  // R2 TS annotations ['Promise<FundingRates>'] -> map[string]any
+  "WatchFundingRatesAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Liquidation[]>'] -> []any
+  "WatchLiquidationsAsync": "[]any",
+  // R2 TS annotations ['Promise<Liquidation[]>'] -> []any
+  "WatchLiquidationsForSymbolsAsync": "[]any",
+  // R2 TS annotations ['Promise<Ticker>'] -> map[string]any
+  "WatchMarkPriceAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Tickers>'] -> map[string]any
+  "WatchMarkPricesAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Liquidation[]>'] -> []any
+  "WatchMyLiquidationsAsync": "[]any",
+  // R2 TS annotations ['Promise<Liquidation[]>'] -> []any
+  "WatchMyLiquidationsForSymbolsAsync": "[]any",
+  // TS watchMyTrades -> Promise<Trade[]>
+  "WatchMyTradesAsync": "[]any",
+  // R2 TS annotations ['Promise<Trade[]>'] -> []any
+  "WatchMyTradesForSymbolsAsync": "[]any",
+  // TS watchOHLCV -> Promise<OHLCV[]>
+  "WatchOHLCVAsync": "[]any",
+  // R2 TS annotations ['Promise<Dictionary<Dictionary<OHLCV[]>>>'] -> map[string]any
+  "WatchOHLCVForSymbolsAsync": "map[string]any",
+  // TS watchOrders -> Promise<Order[]>
+  "WatchOrdersAsync": "[]any",
+  // R2 TS annotations ['Promise<Order[]>'] -> []any
+  "WatchOrdersForSymbolsAsync": "[]any",
+  // R2 TS annotations ['Promise<Position>'] -> map[string]any
+  "WatchPositionAsync": "map[string]any",
+  // TS watchPositions -> Promise<Position[]>
+  "WatchPositionsAsync": "[]any",
+  // pro/binance.go watchTickerBody `ch <- ccxt.GetValue(tickers, symbol)`
+  "WatchTickerAsync": "map[string]any",
+  // `ch <- this.FilterByArray(this.Tickers, "symbol", symbols)`
+  "WatchTickersAsync": "map[string]any",
+  // TS watchTrades -> Promise<Trade[]>
+  "WatchTradesAsync": "[]any",
+  // R2 TS annotations ['Promise<Trade[]>'] -> []any
+  "WatchTradesForSymbolsAsync": "[]any",
+  // concrete map[string]any; TS Promise<Transaction>
+  "WithdrawAsync": "map[string]any",
+  // R2 TS annotations ['Promise<Transaction>'] -> map[string]any
+  "WithdrawWsAsync": "map[string]any",
+  // exchange_helpers.go:1946 `results := make([]any, len(tasks))` ... `ch <- results`; also a `ch <- nil
+  "promiseAll": "[]any",
+  // G11: every override sends a safeDict-with-default / applyEventFetchParams list (r13/g11/async-proposal.md)
+  "FetchDydxAccountAsync": "map[string]any",
+  "FetchExtendedAccountAsync": "map[string]any",
+  "FetchEventsAsync": "[]any"
+};
+var CCXT_GO_ASYNC_FORWARD_SAFE = [];
+var CCXT_GO_ASYNC_ELEM_EXCLUDED = [
+  "ApproveBuilderFeeAsync",
+  "AuthenticateAsync",
+  "AuthenticateRestAsync",
+  "AuthenticateUtaAsync",
+  "CallDynamically",
+  "ChangeApiKeyAsync",
+  "ConnectCentrifugoAsync",
+  "CreateAmmOrderAsync",
+  "CreateOrderbookOrderAsync",
+  "CreateSubAccountAsync",
+  "EditOrderAsync",
+  "EnsureErc20AllowanceAsync",
+  "EnsureUserDataStreamWsSubscribeListenTokenAsync",
+  "EnsureUserDataStreamWsSubscribeSignatureAsync",
+  "EthRpcAsync",
+  "Fetch2Async",
+  "FetchADLRankAsync",
+  "FetchAccountIdByTypeAsync",
+  "FetchAllGreeksAsync",
+  "FetchAsync",
+  "FetchBuilderApprovalsAsync",
+  "FetchCrossBorrowRateAsync",
+  "FetchDepositWithdrawFeeAsync",
+  "FetchEventAsync",
+  "FetchIsolatedBorrowRateAsync",
+  "FetchIsolatedBorrowRatesAsync",
+  "FetchLastPricesAsync",
+  "FetchLatestBlockHeightAsync",
+  "FetchLeveragesAsync",
+  "FetchMarginModesAsync",
+  "FetchNonceAsync",
+  "FetchOpenInterestsAsync",
+  "FetchOrderBookWsAsync",
+  "FetchOrderStatusAsync",
+  "FetchOutcomeAsync",
+  "FetchOutcomesAsync",
+  "FetchPaymentMethodsAsync",
+  "FetchPrivateDepositWithdrawFeesAsync",
+  "FetchPublicDepositWithdrawFeesAsync",
+  "FetchQuoteAsync",
+  "FetchRawEventByTickerAsync",
+  "FetchRawMarketByIdAsync",
+  "FetchRawQuestionByIdAsync",
+  "FetchRawTopicDetailAsync",
+  "FetchRestOrderBookSafeAsync",
+  "FetchSettlementsAsync",
+  "FetchTimeAsync",
+  "FetchWalletAsync",
+  "FetchWebEndpointAsync",
+  "FetchWithdrawalWhitelistAsync",
+  "GetAccountIdAsync",
+  "GetListenKeyAsync",
+  "GetSystemConfigAsync",
+  "GetUrlByMarketTypeAsync",
+  "GetUtaUrlAsync",
+  "GetWithdrawNonceAsync",
+  "GetZKContractSignatureObjAsync",
+  "GetZKTransferSignatureObjAsync",
+  "HandleBuilderFeeApprovalAsync",
+  "HelperForWatchMultipleConstructAsync",
+  "InitializeClientAsync",
+  "IsUTAEnabledAsync",
+  "LoadAccountAsync",
+  "LoadAccountInfosAsync",
+  "LoadAccountSettingsAsync",
+  "LoadApiCredentialsAsync",
+  "LoadApiKeyAsync",
+  "LoadCurrencyNetworksAsync",
+  "LoadDydxProtosAsync",
+  "LoadMarketsAndSignInAsync",
+  "LoadMultiSignAddressAsync",
+  "LoadOutcomesAsync",
+  "LoadTimeDifferenceAsync",
+  "LoadUnifiedStatusAsync",
+  "NegotiateAsync",
+  "PreLoadLighterLibraryAsync",
+  "PromiseAll",
+  "RequestAsync",
+  "RequestPrivateAsync",
+  "RetrieveAccountAsync",
+  "SeedOrderBookAsync",
+  "SeedPositionBalancesAsync",
+  "SendEvmTransactionAsync",
+  "SetMarginModeAsync",
+  "SetPositionModeAsync",
+  "SignInAsync",
+  "SubscribeAsync",
+  "SubscribeMultipleAsync",
+  "SubscribeMyriadChannelAsync",
+  "SubscribeOpinionChannelAsync",
+  "SubscribePrivateAsync",
+  "SubscribePrivateUtaAsync",
+  "SubscribePublicAsync",
+  "SubscribePublicMultipleAsync",
+  "SubscribePublicMultipleUtaAsync",
+  "SubscribePublicUtaAsync",
+  "SubscribeUserChannelAsync",
+  "TradeRequestAsync",
+  "UnSubscribeAsync",
+  "UnSubscribeMultipleAsync",
+  "UnSubscribePublicMultipleAsync",
+  "UnWatchAsync",
+  "UnWatchBalanceAsync",
+  "UnWatchBidsAsksAsync",
+  "UnWatchChannelAsync",
+  "UnWatchChannelsAsync",
+  "UnWatchFundingRateAsync",
+  "UnWatchMarkPriceAsync",
+  "UnWatchMarkPricesAsync",
+  "UnWatchMyTradesAsync",
+  "UnWatchOHLCVAsync",
+  "UnWatchOHLCVForSymbolsAsync",
+  "UnWatchOrderBookAsync",
+  "UnWatchOrderBookForSymbolsAsync",
+  "UnWatchOrdersAsync",
+  "UnWatchPositionsAsync",
+  "UnWatchPrivateAsync",
+  "UnWatchPublicAsync",
+  "UnWatchPublicMultipleAsync",
+  "UnWatchTickerAsync",
+  "UnWatchTickersAsync",
+  "UnWatchTopicsAsync",
+  "UnWatchTradesAsync",
+  "UnWatchTradesForSymbolsAsync",
+  "UnWatchWalletEventsAsync",
+  "UnsubscribeAsync",
+  "UnsubscribePublicAsync",
+  "UnwatchPublicAsync",
+  "WaitForTransactionReceiptAsync",
+  "WalletEventsTopicAsync",
+  "Watch",
+  "WatchExecuteRequestAsync",
+  "WatchHeartbeatAsync",
+  "WatchManyAsync",
+  "WatchMultiHelperAsync",
+  "WatchMultiTickerHelperAsync",
+  "WatchMultiple",
+  "WatchMultipleSubscriptionAsync",
+  "WatchMultipleWrapperAsync",
+  "WatchOrderBookAsync",
+  "WatchOrderBookForSymbolsAsync",
+  "WatchPrivateAsync",
+  "WatchPrivateMultipleAsync",
+  "WatchPrivateRequestAsync",
+  "WatchPrivateSubscribeAsync",
+  "WatchPublicAsync",
+  "WatchPublicMultipleAsync",
+  "WatchRequestAsync",
+  "WatchSpotPrivateAsync",
+  "WatchSpotPublicAsync",
+  "WatchStockMarketStreamAsync",
+  "WatchSwapPrivateAsync",
+  "WatchSwapPublicAsync",
+  "WatchTopicsAsync",
+  "WatchWalletEventsAsync",
+  "WathPublicAsync"
+];
+var CCXT_GO_ASYNC_RECV_CALL = /^\(\s*<-\s*(?:this|ccxt)\.([A-Za-z_]\w*)\s*\(/;
+var CCXT_GO_ASYNC_UNBOX = { "map[string]any": "MapTyped", "[]any": "ListTyped" };
+var CCXT_GO_ASYNC_READ_HELPERS = /^(?:this\.)?(?:Safe[A-Z]\w*|ToArray|FilterBy\w*|Sort\w*|ExtractParams|ArrayConcat|GetArrayLength|EvalTruthy|InOp)$/;
+function ccxtGoAsyncReceiveReadsTheValue(goTranspiler, node, goType) {
+  const parent = node.parent;
+  if (parent === void 0) {
+    return false;
+  }
+  switch (parent.kind) {
+    case ts.SyntaxKind.ElementAccessExpression: {
+      if (parent.expression !== node) {
+        return false;
+      }
+      const grandparent = parent.parent;
+      if (grandparent !== void 0) {
+        if (grandparent.kind === ts.SyntaxKind.BinaryExpression && grandparent.left === parent) {
+          return false;
+        }
+        if (grandparent.kind === ts.SyntaxKind.PostfixUnaryExpression || grandparent.kind === ts.SyntaxKind.PrefixUnaryExpression || grandparent.kind === ts.SyntaxKind.DeleteExpression) {
+          return false;
+        }
+      }
+      return true;
+    }
+    case ts.SyntaxKind.PropertyAccessExpression:
+      return parent.expression === node && _optionalChain([parent, 'access', _4059 => _4059.name, 'optionalAccess', _4060 => _4060.text]) === "length";
+    case ts.SyntaxKind.BinaryExpression:
+      return _optionalChain([parent, 'access', _4061 => _4061.operatorToken, 'optionalAccess', _4062 => _4062.kind]) === ts.SyntaxKind.InKeyword && parent.right === node;
+    case ts.SyntaxKind.CallExpression: {
+      if (parent.expression === node) {
+        return false;
+      }
+      if (parent.arguments.indexOf(node) !== 0) {
+        return false;
+      }
+      if (typeof goTranspiler.goPrintedCallee !== "function") {
+        return false;
+      }
+      const callee = goTranspiler.goPrintedCallee(goTranspiler.printNode(parent, 0));
+      if (callee === void 0) {
+        return false;
+      }
+      const name = callee.replace(/\s+/g, "");
+      return CCXT_GO_ASYNC_READ_HELPERS.test(name.replace(/\(.*$/, ""));
+    }
+    default:
+      return false;
+  }
+}
+function ccxtGoAsyncReceiveDeclaration(awaitNode) {
+  let node = awaitNode;
+  while (node !== void 0) {
+    const kind = node.kind;
+    if (kind === ts.SyntaxKind.VariableDeclaration) {
+      return node;
+    }
+    if (kind === ts.SyntaxKind.ExpressionStatement || kind === ts.SyntaxKind.ReturnStatement || kind === ts.SyntaxKind.FunctionDeclaration || kind === ts.SyntaxKind.MethodDeclaration || kind === ts.SyntaxKind.FunctionExpression || kind === ts.SyntaxKind.ArrowFunction) {
+      return void 0;
+    }
+    node = node.parent;
+  }
+  return void 0;
+}
+function ccxtGoAsyncDeclaredShapeAgrees(goTranspiler, callee, goType) {
+  let declaration = void 0;
+  try {
+    declaration = _optionalChain([goTranspiler, 'access', _4063 => _4063.getChecker, 'call', _4064 => _4064(), 'access', _4065 => _4065.getSymbolAtLocation, 'call', _4066 => _4066(callee.name), 'optionalAccess', _4067 => _4067.valueDeclaration, 'optionalAccess', _4068 => _4068.resolve, 'call', _4069 => _4069()]);
+  } catch (e) {
+    return true;
+  }
+  const text = _optionalChain([declaration, 'optionalAccess', _4070 => _4070.type, 'optionalAccess', _4071 => _4071.getText, 'optionalCall', _4072 => _4072()]);
+  const m = /^Promise<\s*([\s\S]*)\s*>$/.exec((_nullishCoalesce(text, () => ( ""))).trim());
+  if (m === null) {
+    return true;
+  }
+  const inner = m[1].trim();
+  if (inner.includes("|") || inner === "any") {
+    return true;
+  }
+  const isList = inner.startsWith("[") || inner.endsWith("[]") || /^(List|Array<[\s\S]*>)$/.test(inner);
+  const isMap = !isList && /^(Dict|Dictionary<[\s\S]*>|[A-Z]\w*)$/.test(inner) && !/^(Str|Num|Int|Bool|Strings)$/.test(inner);
+  return goType === "[]any" ? !isMap : !isList;
+}
+var CCXT_GO_ENDPOINT_SIG = /^func \(this \*\w+\) (\w+)\(args \.\.\.any\) <-chan (?:ccxt\.)?EndpointResult\[(.+)\] \{$/;
+var CCXT_GO_ENDPOINT_TABLES = /* @__PURE__ */ new Map();
+var CCXT_GO_ENDPOINT_DECLARED = { "Dict": "map[string]any", "List": "[]any", "string": "string" };
+function ccxtGoEndpointTable(abstractFile) {
+  const m = /^(.*)[\\/]ts[\\/]src[\\/]abstract[\\/]((?:prediction[\\/])?)(\w+)\.ts$/.exec(abstractFile);
+  if (m === null) {
+    return void 0;
+  }
+  const goFile = path7.default.join(m[1], "go", "v4", m[2], m[3] + "_api.go");
+  if (!CCXT_GO_ENDPOINT_TABLES.has(goFile)) {
+    const table = /* @__PURE__ */ new Map();
+    let text = "";
+    try {
+      text = fs6.default.readFileSync(goFile, "utf8");
+    } catch (e) {
+      text = "";
+    }
+    for (const line of text.split("\n")) {
+      const sig = CCXT_GO_ENDPOINT_SIG.exec(line);
+      if (sig !== null) {
+        table.set(sig[1], sig[2]);
+      }
+    }
+    CCXT_GO_ENDPOINT_TABLES.set(goFile, table);
+  }
+  return CCXT_GO_ENDPOINT_TABLES.get(goFile);
+}
+function ccxtGoEndpointElement(goTranspiler, call) {
+  if (call === void 0 || call.kind !== ts.SyntaxKind.CallExpression) {
+    return void 0;
+  }
+  const callee = call.expression;
+  if (_optionalChain([callee, 'optionalAccess', _4073 => _4073.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _4074 => _4074.expression, 'optionalAccess', _4075 => _4075.kind]) !== ts.SyntaxKind.ThisKeyword || typeof goTranspiler.getChecker !== "function") {
+    return void 0;
+  }
+  let declaration = void 0;
+  try {
+    declaration = _optionalChain([goTranspiler, 'access', _4076 => _4076.getChecker, 'call', _4077 => _4077(), 'access', _4078 => _4078.getSymbolAtLocation, 'call', _4079 => _4079(callee.name), 'optionalAccess', _4080 => _4080.declarations, 'optionalAccess', _4081 => _4081.map, 'call', _4082 => _4082((handle) => handle.resolve()), 'optionalAccess', _4083 => _4083[0]]);
+  } catch (e) {
+    return void 0;
+  }
+  const fileName = _optionalChain([declaration, 'optionalAccess', _4084 => _4084.getSourceFile, 'optionalCall', _4085 => _4085(), 'optionalAccess', _4086 => _4086.fileName]);
+  if (typeof fileName !== "string" || !/[\\/]ts[\\/]src[\\/]abstract[\\/]/.test(fileName)) {
+    return void 0;
+  }
+  const name = String(callee.name.text);
+  const goName = name.charAt(0).toUpperCase() + name.slice(1);
+  let element = void 0;
+  for (let file = fileName, hops = 0; element === void 0 && file !== void 0 && hops < 8; hops++) {
+    element = _optionalChain([ccxtGoEndpointTable, 'call', _4087 => _4087(file), 'optionalAccess', _4088 => _4088.get, 'call', _4089 => _4089(goName)]);
+    let text = "";
+    try {
+      text = fs6.default.readFileSync(file, "utf8");
+    } catch (e) {
+      text = "";
+    }
+    const parent = /^import _(\w+) from '\.\.\/(\w+)\.js';$/m.exec(text);
+    file = parent === null ? void 0 : path7.default.join(path7.default.dirname(file), parent[2] + ".ts");
+  }
+  if (element === void 0) {
+    return void 0;
+  }
+  const declared = /^Promise<\s*(\w+)\s*>$/.exec(_nullishCoalesce(_optionalChain([declaration, 'access', _4090 => _4090.type, 'optionalAccess', _4091 => _4091.getText, 'optionalCall', _4092 => _4092()]), () => ( "")));
+  if (declared === null || CCXT_GO_ENDPOINT_DECLARED[declared[1]] !== element) {
+    throw new Error("go endpoint " + name + ": stub element " + element + " disagrees with " + fileName);
+  }
+  return element;
+}
+var CCXT_GO_ENDPOINT_PARSER_READ = /^(?:parse[A-Z]\w*|safe[A-Z]\w*|addPaginationCursorToResult|indexBy|groupBy)$/;
+function ccxtGoEndpointLocalParserRead(node) {
+  const parent = node.parent;
+  if (_optionalChain([parent, 'optionalAccess', _4093 => _4093.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([parent, 'access', _4094 => _4094.arguments, 'optionalAccess', _4095 => _4095[0]]) !== node) {
+    return false;
+  }
+  const callee = parent.expression;
+  if (_optionalChain([callee, 'optionalAccess', _4096 => _4096.kind]) !== ts.SyntaxKind.PropertyAccessExpression) {
+    return false;
+  }
+  const name = String(_optionalChain([callee, 'access', _4097 => _4097.name, 'optionalAccess', _4098 => _4098.text]));
+  if (_optionalChain([callee, 'access', _4099 => _4099.expression, 'optionalAccess', _4100 => _4100.kind]) === ts.SyntaxKind.ThisKeyword) {
+    return CCXT_GO_ENDPOINT_PARSER_READ.test(name);
+  }
+  return _optionalChain([callee, 'access', _4101 => _4101.expression, 'optionalAccess', _4102 => _4102.kind]) === ts.SyntaxKind.Identifier && callee.expression.text === "Object" && name === "keys";
+}
+function ccxtGoParentPastParens(node) {
+  let parent = node.parent;
+  while (_optionalChain([parent, 'optionalAccess', _4103 => _4103.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    parent = parent.parent;
+  }
+  return parent;
+}
+function installCcxtGoEndpointConsumers(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoEndpointConsumersInstalled || typeof goTranspiler.printAwaitExpression !== "function" || typeof goTranspiler.printCallExpression !== "function") {
+    return;
+  }
+  const printAwait = goTranspiler.printAwaitExpression;
+  goTranspiler.printAwaitExpression = function(node, identation) {
+    const printed = printAwait.call(this, node, identation);
+    if (ccxtGoEndpointElement(this, node.expression) === void 0) {
+      return printed;
+    }
+    if (!printed.startsWith("(<-") || !printed.endsWith(")")) {
+      throw new Error("go endpoint receive printed as " + printed.slice(0, 80));
+    }
+    return printed + ".Raw";
+  };
+  const printCall = goTranspiler.printCallExpression;
+  goTranspiler.printCallExpression = function(node, identation) {
+    const printed = printCall.call(this, node, identation);
+    if (_optionalChain([ccxtGoParentPastParens, 'call', _4104 => _4104(node), 'optionalAccess', _4105 => _4105.kind]) === ts.SyntaxKind.AwaitExpression || ccxtGoEndpointElement(this, node) === void 0) {
+      return printed;
+    }
+    const lead = /^\s*/.exec(printed)[0];
+    return lead + "EndpointRaw(" + printed.slice(lead.length) + ")";
+  };
+  goTranspiler.__ccxtGoEndpointConsumersInstalled = true;
+}
+function ccxtGoPromiseAllUseIsSafe(n) {
+  const parent = n.parent;
+  if (parent === void 0) {
+    return false;
+  }
+  switch (parent.kind) {
+    case ts.SyntaxKind.ElementAccessExpression:
+      return parent.expression === n && !(_optionalChain([parent, 'access', _4106 => _4106.parent, 'optionalAccess', _4107 => _4107.kind]) === ts.SyntaxKind.BinaryExpression && parent.parent.left === parent);
+    case ts.SyntaxKind.PropertyAccessExpression:
+      return parent.expression === n && _optionalChain([parent, 'access', _4108 => _4108.name, 'optionalAccess', _4109 => _4109.text]) === "length";
+    case ts.SyntaxKind.CallExpression:
+      return parent.expression !== n;
+    default:
+      return false;
+  }
+}
+function ccxtGoAwaitSpecialReceive(goTranspiler, awaitNode, text) {
+  const declaration = ccxtGoAsyncReceiveDeclaration(awaitNode);
+  if (declaration === void 0 || _optionalChain([declaration, 'access', _4110 => _4110.name, 'optionalAccess', _4111 => _4111.kind]) !== ts.SyntaxKind.Identifier || typeof goTranspiler.goDeclaredLocalTypeIfSafe !== "function") {
+    return void 0;
+  }
+  const call = awaitNode.expression;
+  const callee = _optionalChain([call, 'optionalAccess', _4112 => _4112.expression]);
+  if (_optionalChain([call, 'optionalAccess', _4113 => _4113.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([callee, 'optionalAccess', _4114 => _4114.kind]) !== ts.SyntaxKind.PropertyAccessExpression) {
+    return void 0;
+  }
+  if (/^\(\s*<-\s*(?:ccxt\.)?[pP]romiseAll\s*\(/.test(text) && _optionalChain([callee, 'access', _4115 => _4115.expression, 'optionalAccess', _4116 => _4116.text]) === "Promise" && _optionalChain([callee, 'access', _4117 => _4117.name, 'optionalAccess', _4118 => _4118.text]) === "all" && (_optionalChain([call, 'access', _4119 => _4119.arguments, 'optionalAccess', _4120 => _4120[0], 'optionalAccess', _4121 => _4121.kind]) === ts.SyntaxKind.ArrayLiteralExpression || _optionalChain([call, 'access', _4122 => _4122.arguments, 'optionalAccess', _4123 => _4123[0], 'optionalAccess', _4124 => _4124.kind]) === ts.SyntaxKind.Identifier)) {
+    if (goTranspiler.goDeclaredLocalTypeIfSafe(declaration, "[]any", ccxtGoPromiseAllUseIsSafe) === void 0) {
+      return void 0;
+    }
+    return { goType: "[]any", wrap: (recv) => "ListTyped(PanicOnError(" + recv.trim() + "))" };
+  }
+  if (goSourceIsWsTree(awaitNode) && /^\(\s*<-\s*this\.\w+\s*\(/.test(text) && _optionalChain([callee, 'access', _4125 => _4125.expression, 'optionalAccess', _4126 => _4126.kind]) === ts.SyntaxKind.ThisKeyword && typeNameIsUsable(goTranspiler, awaitNode, "OrderBookInterface")) {
+    const onlyLimit = (n) => _optionalChain([n, 'access', _4127 => _4127.parent, 'optionalAccess', _4128 => _4128.kind]) === ts.SyntaxKind.PropertyAccessExpression && n.parent.expression === n && _optionalChain([n, 'access', _4129 => _4129.parent, 'access', _4130 => _4130.name, 'optionalAccess', _4131 => _4131.text]) === "limit" && _optionalChain([n, 'access', _4132 => _4132.parent, 'access', _4133 => _4133.parent, 'optionalAccess', _4134 => _4134.kind]) === ts.SyntaxKind.CallExpression && n.parent.parent.expression === n.parent && n.parent.parent.arguments.length === 0;
+    if (!/^orderbooks?$/.test(String(declaration.name.text))) {
+      return void 0;
+    }
+    if (goTranspiler.goDeclaredLocalTypeIfSafe(declaration, "OrderBookInterface", onlyLimit) === void 0) {
+      return void 0;
+    }
+    return { goType: "OrderBookInterface", wrap: (recv) => "PanicOnError(" + recv.trim() + ").(OrderBookInterface)" };
+  }
+  return void 0;
+}
+var CCXT_GO_WS_LIST_POSITIONAL_READS = ["safeDict", "safeList", "safeValue"];
+function ccxtGoWsListSourceFile(node) {
+  let current = node;
+  while (current !== void 0 && current.parent !== void 0) {
+    current = current.parent;
+  }
+  const fileName = String(_nullishCoalesce(_optionalChain([current, 'optionalAccess', _4135 => _4135.fileName]), () => ( "")));
+  return /(^|[\\/])ts[\\/]src[\\/](pro|prediction)[\\/]/.test(fileName) && !/[\\/]test[\\/]/.test(fileName);
+}
+function ccxtGoWsListStreamRead(n) {
+  const parent = n.parent;
+  if (parent === void 0) {
+    return false;
+  }
+  if (parent.kind === ts.SyntaxKind.PropertyAccessExpression && parent.expression === n) {
+    const call = parent.parent;
+    return _optionalChain([parent, 'access', _4136 => _4136.name, 'optionalAccess', _4137 => _4137.text]) === "getLimit" && _optionalChain([call, 'optionalAccess', _4138 => _4138.kind]) === ts.SyntaxKind.CallExpression && call.expression === parent;
+  }
+  if (parent.kind !== ts.SyntaxKind.CallExpression || _optionalChain([parent, 'access', _4139 => _4139.arguments, 'optionalAccess', _4140 => _4140[0]]) !== n) {
+    return false;
+  }
+  const callee = parent.expression;
+  if (_optionalChain([callee, 'optionalAccess', _4141 => _4141.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _4142 => _4142.expression, 'optionalAccess', _4143 => _4143.kind]) !== ts.SyntaxKind.ThisKeyword) {
+    return false;
+  }
+  const name = String(_nullishCoalesce(_optionalChain([callee, 'access', _4144 => _4144.name, 'optionalAccess', _4145 => _4145.text]), () => ( "")));
+  if (/^filterBy\w*$/.test(name)) {
+    return true;
+  }
+  return CCXT_GO_WS_LIST_POSITIONAL_READS.indexOf(name) >= 0 && parent.arguments.length === 2 && parent.arguments[1].kind === ts.SyntaxKind.NumericLiteral;
+}
+function ccxtGoWsListStreamReceive(goTranspiler, awaitNode) {
+  const declaration = ccxtGoAsyncReceiveDeclaration(awaitNode);
+  if (declaration === void 0 || _optionalChain([declaration, 'access', _4146 => _4146.name, 'optionalAccess', _4147 => _4147.kind]) !== ts.SyntaxKind.Identifier || declaration.initializer !== awaitNode || typeof goTranspiler.goDeclaredLocalTypeIfSafe !== "function" || !ccxtGoWsListSourceFile(awaitNode)) {
+    return void 0;
+  }
+  const method = typeof goTranspiler.goEnclosingFunction === "function" ? goTranspiler.goEnclosingFunction(declaration) : void 0;
+  if (_optionalChain([method, 'optionalAccess', _4148 => _4148.kind]) !== ts.SyntaxKind.MethodDeclaration || !/^Promise<\s*\w+\[\]\s*>$/.test(_nullishCoalesce(_optionalChain([method, 'access', _4149 => _4149.type, 'optionalAccess', _4150 => _4150.getText, 'optionalCall', _4151 => _4151()]), () => ( "")))) {
+    return void 0;
+  }
+  if (scopeMentionsIdentifier(method, "ArrayCacheInterface") || scopeMentionsIdentifier(method, "AsArrayCache")) {
+    return void 0;
+  }
+  if (goTranspiler.goDeclaredLocalTypeIfSafe(declaration, "ArrayCacheInterface", ccxtGoWsListStreamRead) === void 0) {
+    return void 0;
+  }
+  return { goType: "ArrayCacheInterface", wrap: (recv) => "AsArrayCache(PanicOnError(" + recv.trim() + "))" };
+}
+var CCXT_GO_ASYNC_SCALAR_TYPES = {
+  "string": ["*string", "SafeStringPtr"],
+  "Str": ["*string", "SafeStringPtr"],
+  "boolean": ["*bool", "SafeBoolPtr"],
+  "Bool": ["*bool", "SafeBoolPtr"],
+  "int": ["*int64", "Int64PtrTyped"],
+  "Int": ["*int64", "Int64PtrTyped"],
+  "number": ["*float64", "Float64PtrTyped"],
+  "Num": ["*float64", "Float64PtrTyped"]
+};
+function ccxtGoAsyncScalarRead(n) {
+  let node = n;
+  while (_optionalChain([node, 'access', _4152 => _4152.parent, 'optionalAccess', _4153 => _4153.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    node = node.parent;
+  }
+  const parent = node.parent;
+  if (_optionalChain([parent, 'optionalAccess', _4154 => _4154.kind]) === ts.SyntaxKind.PropertyAssignment && parent.initializer === node) {
+    return true;
+  }
+  if (_optionalChain([parent, 'optionalAccess', _4155 => _4155.kind]) === ts.SyntaxKind.ArrayLiteralExpression) {
+    return true;
+  }
+  return _optionalChain([parent, 'optionalAccess', _4156 => _4156.kind]) === ts.SyntaxKind.BinaryExpression && parent.right === node && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && parent.left.kind === ts.SyntaxKind.ElementAccessExpression && _optionalChain([parent, 'access', _4157 => _4157.parent, 'optionalAccess', _4158 => _4158.kind]) === ts.SyntaxKind.ExpressionStatement;
+}
+function ccxtGoAsyncScalarReceive(goTranspiler, awaitNode, call) {
+  const declaration = ccxtGoAsyncReceiveDeclaration(awaitNode);
+  if (declaration === void 0 || declaration.initializer !== awaitNode || _optionalChain([declaration, 'access', _4159 => _4159.name, 'optionalAccess', _4160 => _4160.kind]) !== ts.SyntaxKind.Identifier || typeof goTranspiler.goDeclaredLocalTypeIfSafe !== "function") {
+    return void 0;
+  }
+  let text = void 0;
+  try {
+    const method = _optionalChain([goTranspiler, 'access', _4161 => _4161.getChecker, 'call', _4162 => _4162(), 'access', _4163 => _4163.getResolvedSignature, 'call', _4164 => _4164(call), 'optionalAccess', _4165 => _4165.declaration, 'optionalAccess', _4166 => _4166.resolve, 'call', _4167 => _4167()]);
+    text = _optionalChain([method, 'optionalAccess', _4168 => _4168.kind]) === ts.SyntaxKind.MethodDeclaration && method.body !== void 0 ? _optionalChain([method, 'access', _4169 => _4169.type, 'optionalAccess', _4170 => _4170.getText, 'optionalCall', _4171 => _4171()]) : void 0;
+  } catch (e) {
+    return void 0;
+  }
+  const m = /^Promise<\s*(\w+)\s*>$/.exec((_nullishCoalesce(text, () => ( ""))).trim());
+  const scalar = m === null ? void 0 : CCXT_GO_ASYNC_SCALAR_TYPES[m[1]];
+  if (scalar === void 0 || goTranspiler.goDeclaredLocalTypeIfSafe(declaration, scalar[0], ccxtGoAsyncScalarRead) === void 0) {
+    return void 0;
+  }
+  return { goType: scalar[0], wrap: (recv) => scalar[1] + "(PanicOnError(" + recv.trim() + "))" };
+}
+var CCXT_GO_WS_KEYED_STRUCTURE_RETURNS = /^Promise<\s*(Tickers|FundingRates)\s*>$/;
+function ccxtGoWsKeyedStructureRead(n) {
+  const parent = n.parent;
+  if (_optionalChain([parent, 'optionalAccess', _4172 => _4172.kind]) === ts.SyntaxKind.ElementAccessExpression && parent.expression === n) {
+    const grandparent = parent.parent;
+    const isWrite = _optionalChain([grandparent, 'optionalAccess', _4173 => _4173.kind]) === ts.SyntaxKind.BinaryExpression && grandparent.left === parent;
+    return !isWrite && _optionalChain([parent, 'access', _4174 => _4174.argumentExpression, 'optionalAccess', _4175 => _4175.kind]) === ts.SyntaxKind.StringLiteral;
+  }
+  if (_optionalChain([parent, 'optionalAccess', _4176 => _4176.kind]) !== ts.SyntaxKind.BinaryExpression || parent.right !== n || parent.operatorToken.kind !== ts.SyntaxKind.EqualsToken || _optionalChain([parent, 'access', _4177 => _4177.parent, 'optionalAccess', _4178 => _4178.kind]) !== ts.SyntaxKind.ExpressionStatement) {
+    return false;
+  }
+  const target = parent.left;
+  const key = _optionalChain([target, 'optionalAccess', _4179 => _4179.argumentExpression]);
+  return _optionalChain([target, 'optionalAccess', _4180 => _4180.kind]) === ts.SyntaxKind.ElementAccessExpression && target.expression.kind === ts.SyntaxKind.Identifier && _optionalChain([key, 'optionalAccess', _4181 => _4181.kind]) === ts.SyntaxKind.ElementAccessExpression && key.expression.kind === ts.SyntaxKind.Identifier && key.expression.text === n.text && _optionalChain([key, 'access', _4182 => _4182.argumentExpression, 'optionalAccess', _4183 => _4183.kind]) === ts.SyntaxKind.StringLiteral && key.argumentExpression.text === "symbol";
+}
+function ccxtGoWsKeyedStructureReceive(goTranspiler, awaitNode, text) {
+  const declaration = ccxtGoAsyncReceiveDeclaration(awaitNode);
+  if (declaration === void 0 || declaration.initializer !== awaitNode || _optionalChain([declaration, 'access', _4184 => _4184.name, 'optionalAccess', _4185 => _4185.kind]) !== ts.SyntaxKind.Identifier || typeof goTranspiler.goDeclaredLocalTypeIfSafe !== "function" || typeof goTranspiler.goEnclosingFunction !== "function" || !ccxtGoWsListSourceFile(awaitNode) || !/^\(\s*<-\s*this\.\w+\s*\(/.test(text)) {
+    return void 0;
+  }
+  const callee = _optionalChain([awaitNode, 'access', _4186 => _4186.expression, 'optionalAccess', _4187 => _4187.expression]);
+  if (_optionalChain([callee, 'optionalAccess', _4188 => _4188.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _4189 => _4189.expression, 'optionalAccess', _4190 => _4190.kind]) !== ts.SyntaxKind.ThisKeyword || !ccxtGoAsyncDeclaredShapeAgrees(goTranspiler, callee, "map[string]any")) {
+    return void 0;
+  }
+  const method = goTranspiler.goEnclosingFunction(declaration);
+  if (_optionalChain([method, 'optionalAccess', _4191 => _4191.kind]) !== ts.SyntaxKind.MethodDeclaration || !CCXT_GO_WS_KEYED_STRUCTURE_RETURNS.test(_nullishCoalesce(_optionalChain([method, 'access', _4192 => _4192.type, 'optionalAccess', _4193 => _4193.getText, 'optionalCall', _4194 => _4194()]), () => ( "")))) {
+    return void 0;
+  }
+  const name = declaration.name.text;
+  let stored = false;
+  const visit = (node) => {
+    stored = stored || node.kind === ts.SyntaxKind.Identifier && node.text === name && node !== declaration.name && _optionalChain([node, 'access', _4195 => _4195.parent, 'optionalAccess', _4196 => _4196.kind]) === ts.SyntaxKind.BinaryExpression && ccxtGoWsKeyedStructureRead(node);
+    _optionalChain([node, 'optionalAccess', _4197 => _4197.forEachChild, 'call', _4198 => _4198(visit)]);
+  };
+  visit(method);
+  if (!stored || goTranspiler.goDeclaredLocalTypeIfSafe(declaration, "map[string]any", ccxtGoWsKeyedStructureRead) === void 0) {
+    return void 0;
+  }
+  return { goType: "map[string]any", wrap: (recv) => "MapTyped(PanicOnError(" + recv.trim() + "))" };
+}
+function ccxtGoAwaitReceiveUnbox(goTranspiler, awaitNode, printedInitializer) {
+  if (awaitNode === void 0 || awaitNode.kind !== ts.SyntaxKind.AwaitExpression) {
+    return void 0;
+  }
+  const text = (_nullishCoalesce(printedInitializer, () => ( ""))).replace(/\s+/g, " ").trim();
+  const wsList = ccxtGoWsListStreamReceive(goTranspiler, awaitNode);
+  if (wsList !== void 0) {
+    return wsList;
+  }
+  const special = ccxtGoAwaitSpecialReceive(goTranspiler, awaitNode, text);
+  if (special !== void 0) {
+    return special;
+  }
+  const keyed = ccxtGoWsKeyedStructureReceive(goTranspiler, awaitNode, text);
+  if (keyed !== void 0) {
+    return keyed;
+  }
+  const printed = CCXT_GO_ASYNC_RECV_CALL.exec(text);
+  if (printed === null) {
+    return void 0;
+  }
+  const call = awaitNode.expression;
+  if (call === void 0 || call.kind !== ts.SyntaxKind.CallExpression) {
+    return void 0;
+  }
+  const callee = call.expression;
+  if (callee === void 0 || callee.kind !== ts.SyntaxKind.PropertyAccessExpression) {
+    return void 0;
+  }
+  if (_optionalChain([callee, 'access', _4199 => _4199.expression, 'optionalAccess', _4200 => _4200.kind]) !== ts.SyntaxKind.ThisKeyword) {
+    return void 0;
+  }
+  const method = _optionalChain([callee, 'access', _4201 => _4201.name, 'optionalAccess', _4202 => _4202.text]);
+  if (typeof method !== "string") {
+    return void 0;
+  }
+  const exported = method.charAt(0).toUpperCase() + method.slice(1);
+  const endpoint = printed[1] === exported ? ccxtGoEndpointElement(goTranspiler, call) : void 0;
+  if (endpoint === void 0 && printed[1] !== exported + "Async") {
+    return void 0;
+  }
+  const goType = endpoint !== void 0 ? endpoint : CCXT_GO_ASYNC_ELEM_TYPES[printed[1]];
+  if (goType === void 0) {
+    return endpoint === void 0 ? ccxtGoAsyncScalarReceive(goTranspiler, awaitNode, call) : void 0;
+  }
+  if (endpoint !== void 0 && ccxtGoAsyncReceiveDeclaration(awaitNode) === void 0) {
+    return void 0;
+  }
+  if (endpoint === void 0 && !ccxtGoAsyncDeclaredShapeAgrees(goTranspiler, callee, goType)) {
+    return void 0;
+  }
+  const conv = CCXT_GO_ASYNC_UNBOX[goType];
+  if (conv === void 0) {
+    return void 0;
+  }
+  const declaration = ccxtGoAsyncReceiveDeclaration(awaitNode);
+  if (declaration !== void 0) {
+    if (typeof goTranspiler.goDeclaredLocalTypeIfSafe !== "function") {
+      return void 0;
+    }
+    const safe = goTranspiler.goDeclaredLocalTypeIfSafe(
+      declaration,
+      goType,
+      (n) => ccxtGoAsyncReceiveReadsTheValue(goTranspiler, n, goType) || endpoint !== void 0 && ccxtGoEndpointLocalParserRead(n)
+    );
+    if (safe === void 0) {
+      return void 0;
+    }
+  } else if (_optionalChain([awaitNode, 'access', _4203 => _4203.parent, 'optionalAccess', _4204 => _4204.kind]) === ts.SyntaxKind.ExpressionStatement) {
+    return void 0;
+  } else if (_optionalChain([awaitNode, 'access', _4205 => _4205.parent, 'optionalAccess', _4206 => _4206.kind]) === ts.SyntaxKind.ReturnStatement) {
+    if (CCXT_GO_ASYNC_FORWARD_SAFE.indexOf(method) < 0 && (typeof goTranspiler.printReturnStatement !== "function" || /^(un)?watch/i.test(method))) {
+      return void 0;
+    }
+  }
+  return { goType, wrap: (recv) => conv + "(PanicOnError(" + recv.trim() + "))" };
+}
+var CCXT_GO_BOXED_FORWARD = /^\n([ \t]*)(retRes\d+) := (\(?<-[^\n]*)\n\1PanicOnError\(\2\)\n((?:[ \t]*\/\/[^\n]*\n)*)\1ch <- \2((?:[ \t]+\/\/[^\n]*)?)\n/;
+function ccxtGoElideBoxedForward(printed) {
+  const m = CCXT_GO_BOXED_FORWARD.exec(printed);
+  if (m === null || m.index !== 0) {
+    return printed;
+  }
+  return "\n" + m[4] + m[1] + "ch <- PanicOnError(" + m[3] + ")" + m[5] + "\n" + printed.slice(m[0].length);
+}
+function installCcxtGoAsyncForwardRebox(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoAsyncForwardReboxInstalled || typeof goTranspiler.printReturnStatement !== "function") {
+    return;
+  }
+  const printReturn = goTranspiler.printReturnStatement;
+  goTranspiler.printReturnStatement = function(node, identation) {
+    const printed = printReturn.call(this, node, identation);
+    const m = /\n(\s*)var (retRes\d+) (?:map\[string\]any|\[\]any) = [^\n]*\n/.exec(printed);
+    if (m === null) {
+      return ccxtGoElideBoxedForward(printed);
+    }
+    const send = new RegExp("^([ \\t]*)ch <- " + m[2] + "([ \\t]*(?://.*)?)$", "m");
+    if (!send.test(printed)) {
+      throw new Error("go typed forward without its send: " + printed.slice(0, 120));
+    }
+    return printed.replace(send, (all, ind, tail) => {
+      const inner = ind + (ind.indexOf("	") >= 0 ? "	" : "    ");
+      return ind + "if " + m[2] + " == nil {\n" + inner + "ch <- nil\n" + ind + "} else {\n" + inner + "ch <- " + m[2] + tail + "\n" + ind + "}";
+    });
+  };
+  goTranspiler.__ccxtGoAsyncForwardReboxInstalled = true;
+}
+function installCcxtGoAsyncReceiveUnbox(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoAsyncReceiveUnboxInstalled) {
+    return;
+  }
+  if (typeof goTranspiler.goAwaitReceiveUnbox !== "function") {
+    return;
+  }
+  goTranspiler.goAwaitReceiveUnbox = function(awaitNode, printedInitializer) {
+    return ccxtGoAwaitReceiveUnbox(this, awaitNode, printedInitializer);
+  };
+  goTranspiler.__ccxtGoAsyncReceiveUnboxInstalled = true;
+}
+var CCXT_GO_BASE_FIELD_TYPES = { "isSandboxModeEnabled": "bool", "symbols": "[]string" };
+function ccxtGoBaseFieldType(goTranspiler, initializer, printedValue) {
+  const value = initializer;
+  if (value === void 0 || !ts.isPropertyAccessExpression(value) || value.expression.kind !== ts.SyntaxKind.ThisKeyword) {
+    return void 0;
+  }
+  const field = String(value.name.text);
+  const goType = CCXT_GO_BASE_FIELD_TYPES[field];
+  if (goType === void 0 || (_nullishCoalesce(printedValue, () => ( ""))).trim() !== "this." + field.charAt(0).toUpperCase() + field.slice(1)) {
+    return void 0;
+  }
+  try {
+    const decls = _nullishCoalesce(_optionalChain([goTranspiler, 'access', _4207 => _4207.getChecker, 'call', _4208 => _4208(), 'access', _4209 => _4209.getSymbolAtLocation, 'call', _4210 => _4210(value.name), 'optionalAccess', _4211 => _4211.declarations, 'optionalAccess', _4212 => _4212.map, 'call', _4213 => _4213((handle) => handle.resolve())]), () => ( []));
+    const ok = decls.length > 0 && decls.every((d) => ts.isPropertyDeclaration(d) && /[\\/]base[\\/]Exchange\.ts$/.test(d.getSourceFile().fileName));
+    return ok ? goType : void 0;
+  } catch (e) {
+    return void 0;
+  }
+}
+function installCcxtGoGetArgTernaryStore(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoGetArgTernaryStoreInstalled || typeof goTranspiler.goGetArgPointerStoredAsValue !== "function") {
+    return;
+  }
+  const shipped = goTranspiler.goGetArgPointerStoredAsValue;
+  goTranspiler.goGetArgPointerStoredAsValue = function(n, param) {
+    if (shipped.call(this, n, param)) {
+      return true;
+    }
+    let arm = n;
+    while (_optionalChain([arm, 'access', _4214 => _4214.parent, 'optionalAccess', _4215 => _4215.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+      arm = arm.parent;
+    }
+    const ternary = arm.parent;
+    if (_optionalChain([ternary, 'optionalAccess', _4216 => _4216.kind]) !== ts.SyntaxKind.ConditionalExpression || ternary.condition === arm) {
+      return false;
+    }
+    let whole = ternary;
+    while (_optionalChain([whole, 'access', _4217 => _4217.parent, 'optionalAccess', _4218 => _4218.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+      whole = whole.parent;
+    }
+    return shipped.call(this, whole, param);
+  };
+  goTranspiler.__ccxtGoGetArgTernaryStoreInstalled = true;
+}
+function installCcxtGoGetArgMapAlias(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoGetArgMapAliasInstalled || typeof goTranspiler.goGetArgUsesAreSafe !== "function" || typeof goTranspiler.goAnyLocalHoldsNonPointer !== "function") {
+    return;
+  }
+  const shipped = goTranspiler.goGetArgUsesAreSafe;
+  goTranspiler.goGetArgUsesAreSafe = function(body, param, name, goType, nilable, seen, boxed = false) {
+    const alias = boxed && nilable && goType === CCXT_GO_PRODUCER_DICT_TYPE && _optionalChain([param, 'optionalAccess', _4219 => _4219.kind]) === ts.SyntaxKind.VariableDeclaration && !this.goAnyLocalHoldsNonPointer(param);
+    return shipped.call(this, body, param, name, goType, nilable, seen, alias ? false : boxed);
+  };
+  goTranspiler.__ccxtGoGetArgMapAliasInstalled = true;
+}
+function installCcxtGoGetArgAddArithmetic(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoGetArgAddArithmeticInstalled || typeof goTranspiler.goGetArgPointerInHelperArithmetic !== "function") {
+    return;
+  }
+  const shipped = goTranspiler.goGetArgPointerInHelperArithmetic;
+  const addParents = /* @__PURE__ */ new WeakMap();
+  let probing = false;
+  goTranspiler.goGetArgPointerInHelperArithmetic = function(n) {
+    if (probing) {
+      return shipped.call(this, n);
+    }
+    let viaShipped;
+    probing = true;
+    try {
+      viaShipped = shipped.call(this, n);
+    } finally {
+      probing = false;
+    }
+    if (viaShipped) {
+      return true;
+    }
+    const parent = n.parent;
+    if (_optionalChain([parent, 'optionalAccess', _4220 => _4220.kind]) !== ts.SyntaxKind.BinaryExpression || _optionalChain([parent, 'access', _4221 => _4221.operatorToken, 'optionalAccess', _4222 => _4222.kind]) !== ts.SyntaxKind.PlusToken) {
+      return false;
+    }
+    if (addParents.has(parent)) {
+      return addParents.get(parent);
+    }
+    probing = true;
+    let printed;
+    try {
+      printed = (_nullishCoalesce(this.printNode(parent, 0), () => ( ""))).trim();
+    } finally {
+      probing = false;
+    }
+    const isAdd = /^(?:\(\s*)*(?:ccxt\.)?Add\(/.test(printed);
+    addParents.set(parent, isAdd);
+    return isAdd;
+  };
+  goTranspiler.__ccxtGoGetArgAddArithmeticInstalled = true;
+}
+function ccxtGoIsNilLiteral(node) {
+  return _optionalChain([node, 'optionalAccess', _4223 => _4223.kind]) === ts.SyntaxKind.NullKeyword || _optionalChain([node, 'optionalAccess', _4224 => _4224.kind]) === ts.SyntaxKind.Identifier && node.text === "undefined";
+}
+function ccxtGoIsStringParameter(goTranspiler, node) {
+  if (_optionalChain([node, 'optionalAccess', _4225 => _4225.kind]) !== ts.SyntaxKind.Identifier || typeof goTranspiler.checkerOrUndefined !== "function") {
+    return false;
+  }
+  const decl = _optionalChain([goTranspiler, 'access', _4226 => _4226.checkerOrUndefined, 'call', _4227 => _4227(), 'optionalAccess', _4228 => _4228.getSymbolAtLocation, 'call', _4229 => _4229(node), 'optionalAccess', _4230 => _4230.valueDeclaration, 'optionalAccess', _4231 => _4231.resolve, 'call', _4232 => _4232()]);
+  return _optionalChain([decl, 'optionalAccess', _4233 => _4233.kind]) === ts.SyntaxKind.Parameter && goTranspiler.goDeclaredTypeOfIdentifier(node) === "string";
+}
+function ccxtGoNilComparesAreThrowGuards(body, param) {
+  const name = _optionalChain([param, 'access', _4234 => _4234.name, 'optionalAccess', _4235 => _4235.text]);
+  let ok = true;
+  const visit = (n) => {
+    if (!ok) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.BinaryExpression && [n.left, n.right].some((s) => s.kind === ts.SyntaxKind.Identifier && s.text === name) && [n.left, n.right].some(ccxtGoIsNilLiteral)) {
+      const op = n.operatorToken.kind;
+      const stmt = n.parent;
+      const block = _optionalChain([stmt, 'optionalAccess', _4236 => _4236.thenStatement]);
+      const throws = _optionalChain([block, 'optionalAccess', _4237 => _4237.kind]) === ts.SyntaxKind.Block && block.statements.length === 1 && block.statements[0].kind === ts.SyntaxKind.ThrowStatement;
+      if (!(op === ts.SyntaxKind.EqualsEqualsEqualsToken && stmt.kind === ts.SyntaxKind.IfStatement && stmt.expression === n && throws && stmt.elseStatement === void 0)) {
+        ok = false;
+        return;
+      }
+    }
+    _optionalChain([n, 'optionalAccess', _4238 => _4238.forEachChild, 'call', _4239 => _4239(visit)]);
+  };
+  _optionalChain([body, 'optionalAccess', _4240 => _4240.forEachChild, 'call', _4241 => _4241(visit)]);
+  return ok;
+}
+function installCcxtGoStringParamNilGuards(goTranspiler) {
+  if (typeof goTranspiler.goParameterKeepsNilCompareNative !== "function" || typeof goTranspiler.printInlineEquality !== "function") {
+    return;
+  }
+  const upstreamKeeps = goTranspiler.goParameterKeepsNilCompareNative;
+  goTranspiler.goParameterKeepsNilCompareNative = function(body, param, goType) {
+    const fn = param.parent;
+    const tabled = goType === "string" && _optionalChain([fn, 'optionalAccess', _4242 => _4242.name, 'optionalAccess', _4243 => _4243.kind]) === ts.SyntaxKind.Identifier && _optionalChain([this, 'access', _4244 => _4244.goIsUnifiedStringParameter, 'optionalCall', _4245 => _4245(fn.name.text, fn.parameters.indexOf(param))]);
+    return upstreamKeeps.call(this, body, param, goType) || goType === "string" && (tabled || ccxtGoNilComparesAreThrowGuards(body, param));
+  };
+  const upstreamEquality = goTranspiler.printInlineEquality;
+  goTranspiler.printInlineEquality = function(left, right, leftText, rightText, isEq) {
+    if (ccxtGoIsNilLiteral(right) && ccxtGoIsStringParameter(this, left) || ccxtGoIsNilLiteral(left) && ccxtGoIsStringParameter(this, right)) {
+      return isEq ? "false" : "true";
+    }
+    return upstreamEquality.call(this, left, right, leftText, rightText, isEq);
+  };
+}
+function ccxtGoIsUnifiedInt64Parameter(goTranspiler, table, param) {
+  const fn = _optionalChain([param, 'optionalAccess', _4246 => _4246.parent]);
+  if (_optionalChain([param, 'optionalAccess', _4247 => _4247.kind]) !== ts.SyntaxKind.Parameter || param.initializer !== void 0 || param.dotDotDotToken !== void 0 || _optionalChain([param, 'access', _4248 => _4248.name, 'optionalAccess', _4249 => _4249.kind]) !== ts.SyntaxKind.Identifier || _optionalChain([fn, 'optionalAccess', _4250 => _4250.kind]) !== ts.SyntaxKind.MethodDeclaration || fn.body === void 0 || _optionalChain([fn, 'access', _4251 => _4251.name, 'optionalAccess', _4252 => _4252.kind]) !== ts.SyntaxKind.Identifier || !Object.prototype.hasOwnProperty.call(table, fn.name.text) || !table[fn.name.text].includes(fn.parameters.indexOf(param))) {
+    return false;
+  }
+  const type = _optionalChain([goTranspiler, 'access', _4253 => _4253.checkerOrUndefined, 'optionalCall', _4254 => _4254(), 'optionalAccess', _4255 => _4255.getTypeAtLocation, 'call', _4256 => _4256(param)]);
+  const union = type !== void 0 && typeof type.isUnionType === "function" && type.isUnionType();
+  const parts = type === void 0 ? [] : union ? type.getTypes() : [type];
+  const numeric = parts.some((t) => (t.flags & ts.TypeFlags.NumberLike) !== 0) && parts.every((t) => (t.flags & (ts.TypeFlags.NumberLike | ts.TypeFlags.Undefined)) !== 0);
+  if (!numeric) {
+    throw new Error(`unifiedInt64Params: ${fn.name.text} parameter ${param.name.text} is not a number`);
+  }
+  if (!goTranspiler.goLocalIsSafeToType(fn.body, param, param.name.text, "int64")) {
+    throw new Error(`unifiedInt64Params: ${fn.name.text} parameter ${param.name.text} is written with another type`);
+  }
+  return true;
+}
+function installCcxtGoUnifiedInt64Params(goTranspiler, table) {
+  if (table === void 0 || typeof goTranspiler.goNativeParameterType !== "function" || typeof goTranspiler.printInlineEquality !== "function") {
+    return;
+  }
+  const verdicts = /* @__PURE__ */ new Map();
+  const isTabled = (param) => {
+    if (!verdicts.has(param)) {
+      verdicts.set(param, false);
+      verdicts.set(param, ccxtGoIsUnifiedInt64Parameter(goTranspiler, table, param));
+    }
+    return verdicts.get(param);
+  };
+  const upstreamType = goTranspiler.goNativeParameterType;
+  goTranspiler.goNativeParameterType = function(param) {
+    return isTabled(param) ? "int64" : upstreamType.call(this, param);
+  };
+  const tabledRead = (node) => {
+    if (_optionalChain([node, 'optionalAccess', _4257 => _4257.kind]) !== ts.SyntaxKind.Identifier) {
+      return false;
+    }
+    const decl = _optionalChain([goTranspiler, 'access', _4258 => _4258.checkerOrUndefined, 'optionalCall', _4259 => _4259(), 'optionalAccess', _4260 => _4260.getSymbolAtLocation, 'call', _4261 => _4261(node), 'optionalAccess', _4262 => _4262.valueDeclaration, 'optionalAccess', _4263 => _4263.resolve, 'call', _4264 => _4264()]);
+    return _optionalChain([decl, 'optionalAccess', _4265 => _4265.kind]) === ts.SyntaxKind.Parameter && isTabled(decl);
+  };
+  const upstreamEquality = goTranspiler.printInlineEquality;
+  goTranspiler.printInlineEquality = function(left, right, leftText, rightText, isEq) {
+    if (ccxtGoIsNilLiteral(right) && tabledRead(left) || ccxtGoIsNilLiteral(left) && tabledRead(right)) {
+      return isEq ? "false" : "true";
+    }
+    return upstreamEquality.call(this, left, right, leftText, rightText, isEq);
+  };
+}
+function installCcxtGoGetArgOverloadDefaults(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoGetArgOverloadDefaultsInstalled || typeof goTranspiler.goGetArgPositionIsDefaulted !== "function") {
+    return;
+  }
+  const shipped = goTranspiler.goGetArgPositionIsDefaulted;
+  goTranspiler.goGetArgPositionIsDefaulted = function(callee, argIndex) {
+    if (shipped.call(this, callee, argIndex)) {
+      return true;
+    }
+    if (argIndex < 0) {
+      return false;
+    }
+    let decls;
+    try {
+      decls = _nullishCoalesce(_optionalChain([this, 'access', _4266 => _4266.getChecker, 'call', _4267 => _4267(), 'access', _4268 => _4268.getSymbolAtLocation, 'call', _4269 => _4269(callee), 'optionalAccess', _4270 => _4270.declarations]), () => ( []));
+    } catch (e) {
+      decls = [];
+    }
+    const impls = decls.map((d) => typeof _optionalChain([d, 'optionalAccess', _4271 => _4271.resolve]) === "function" ? d.resolve() : d).filter((d) => _optionalChain([d, 'optionalAccess', _4272 => _4272.kind]) === ts.SyntaxKind.MethodDeclaration && d.body !== void 0);
+    const param = impls.length === 1 ? _optionalChain([impls, 'access', _4273 => _4273[0], 'access', _4274 => _4274.parameters, 'optionalAccess', _4275 => _4275[argIndex]]) : void 0;
+    return _optionalChain([param, 'optionalAccess', _4276 => _4276.initializer]) !== void 0 && param.dotDotDotToken === void 0;
+  };
+  goTranspiler.__ccxtGoGetArgOverloadDefaultsInstalled = true;
+}
+function installCcxtGoUnifiedStringDerefArgs(goTranspiler) {
+  if (typeof goTranspiler.goUnifiedStringCallArgs !== "function" || typeof goTranspiler.goDerefableStringOperand !== "function") {
+    return;
+  }
+  goTranspiler.goUnifiedStringCallArgs = function(node, identation, flat = false) {
+    const callee = node.expression;
+    const name = _optionalChain([callee, 'optionalAccess', _4277 => _4277.kind]) === ts.SyntaxKind.PropertyAccessExpression ? _optionalChain([callee, 'access', _4278 => _4278.name, 'optionalAccess', _4279 => _4279.text]) : void 0;
+    if (typeof name !== "string" || !Object.prototype.hasOwnProperty.call(this.unifiedStringParams, name)) {
+      return void 0;
+    }
+    const args = _nullishCoalesce(node.arguments, () => ( []));
+    if (args.some((a) => a.kind === ts.SyntaxKind.SpreadElement)) {
+      return void 0;
+    }
+    const depth = this.goExprDepth + (args.length > 1 ? 1 : 0);
+    return args.map((a, i) => {
+      const printed = flat ? this.printNode(a, 0) : this.goWithExprDepth(depth, () => this.printNode(a, identation)).trim();
+      if (!this.goIsUnifiedStringParameter(name, i) || this.goPrintedArgType(a) === "string") {
+        return printed;
+      }
+      return this.goDerefableStringOperand(a) ? "*" + printed : `StringArg(${printed})`;
+    }).join(", ");
+  };
+}
+function installCcxtGoLocalTypes(goTranspiler, unifiedInt64Params = void 0) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoLocalTypesInstalled) {
+    return;
+  }
+  installCcxtGoArrayBindingHolders(goTranspiler);
+  if (typeof goTranspiler.goTypeOfInitializer !== "function" || typeof goTranspiler.isWholePrintedCall !== "function") {
+    return;
+  }
+  goTranspiler.CCXT_GO_GETARG_DECLARED_TYPES = CCXT_GO_GETARG_DECLARED_TYPES;
+  goTranspiler.CCXT_GO_GETARG_SAFE_CONSUMERS = CCXT_GO_GETARG_SAFE_CONSUMERS;
+  installCcxtGoGetArgTernaryStore(goTranspiler);
+  installCcxtGoGetArgAddArithmetic(goTranspiler);
+  installCcxtGoGetArgMapAlias(goTranspiler);
+  installCcxtGoGetArgOverloadDefaults(goTranspiler);
+  installCcxtGoTypedConcat(goTranspiler);
+  installCcxtGoStringParamNilGuards(goTranspiler);
+  installCcxtGoUnifiedStringDerefArgs(goTranspiler);
+  installCcxtGoUnifiedInt64Params(goTranspiler, unifiedInt64Params);
+  installHx5X32StringPtrParams(goTranspiler);
+  const upstream = goTranspiler.goTypeOfInitializer;
+  goTranspiler.goTypeOfInitializer = function(initializer, printedValue) {
+    const known = upstream.call(this, initializer, printedValue);
+    if (known !== void 0) {
+      return known;
+    }
+    const alias = aliasExchangeReceiver(this, printedValue);
+    if (alias !== void 0) {
+      const candidates = [
+        upstream.call(this, initializer, alias),
+        CCXT_GO_HELPER_RETURN_TYPES[alias.substring(0, alias.indexOf("("))]
+      ];
+      for (const candidate of candidates) {
+        if (candidate !== void 0 && !candidate.startsWith("*") && typeNameIsUsable(this, initializer, candidate)) {
+          return candidate;
+        }
+      }
+      return void 0;
+    }
+    const familyType = _nullishCoalesce(ccxtGoFamilyCallType(this, initializer, printedValue), () => ( ccxtGoBaseFieldType(this, initializer, printedValue)));
+    if (familyType !== void 0) {
+      return familyType;
+    }
+    if (ccxtGoTernaryDeclaration(initializer) !== void 0) {
+      const ternaryType = ccxtGoTernaryType(this, printedValue);
+      if (ternaryType !== void 0) {
+        return ternaryType;
+      }
+    }
+    const counterType = _nullishCoalesce(_nullishCoalesce(ccxtGoCounterCallType(this, initializer, printedValue), () => ( ccxtGoTypeOfSumInitializer(this, initializer, printedValue))), () => ( ccxtGoTypeOfAddInitializer(this, initializer, printedValue)));
+    if (counterType !== void 0 && typeNameIsUsable(this, initializer, counterType)) {
+      return counterType;
+    }
+    const arithmeticType = ccxtGoTypeOfArithmeticInitializer(this, initializer, printedValue);
+    if (arithmeticType !== void 0) {
+      return arithmeticType;
+    }
+    const nativeType = ccxtGoTypeOfNativeArithmeticInitializer(this, initializer, printedValue);
+    if (nativeType !== void 0) {
+      return nativeType;
+    }
+    if (TYPED_CONCAT_IN_FLIGHT.has(initializer)) {
+      return "string";
+    }
+    const addChainType = ccxtGoTypeOfAddChainInitializer(this, initializer, printedValue);
+    if (addChainType !== void 0) {
+      return addChainType;
+    }
+    const wsTree = goSourceIsWsTree(initializer);
+    const goType = ccxtGoTypeOfPrintedCall(this, printedValue, wsTree, initializer);
+    if (goType === void 0) {
+      const currencyType = ccxtGoTypeOfCurrencyInitializer(this, initializer, printedValue);
+      if (currencyType !== void 0) {
+        return currencyType;
+      }
+      const parseNumberType = ccxtGoTypeOfParseNumberInitializer(this, initializer, printedValue);
+      if (parseNumberType !== void 0) {
+        return parseNumberType;
+      }
+      const urlsType = ccxtGoTypeOfUrlsInitializer(this, initializer, printedValue);
+      if (urlsType !== void 0) {
+        return urlsType;
+      }
+      return ccxtGoTypeOfCopiedLocal(this, initializer, printedValue);
+    }
+    if (!typeNameIsUsable(this, initializer, goType)) {
+      return void 0;
+    }
+    return goType;
+  };
+  installCcxtGoNilDeclaredStringJoins(goTranspiler);
+  installCcxtGoNilDeclaredValueJoins(goTranspiler);
+  installCcxtGoTernaryCast(goTranspiler);
+  installCcxtGoNilDeclaredJoin(goTranspiler);
+  installHx10G06NilDeclaredTupleJoins(goTranspiler);
+  if (typeof goTranspiler.printVariableDeclarationList === "function" && typeof goTranspiler.goEnclosingFunction === "function" && typeof goTranspiler.goTypeNameIsShadowed === "function" && typeof goTranspiler.goLocalIsSafeToType === "function") {
+    installNilDeclaredJoin(goTranspiler);
+    installCcxtGoClosurePointerJoin(goTranspiler);
+    installCcxtGoClosureDefaultValue(goTranspiler);
+    installG22ClosureNumericDefault(goTranspiler);
+    installCcxtGoTernaryLiftJoin(goTranspiler);
+    installCcxtGoTernaryMapJoin(goTranspiler);
+    installCcxtGoNilDeclaredParseNumberJoins(goTranspiler);
+  }
+  if (typeof goTranspiler.printMethodDefinition === "function") {
+    const upstreamMethodDefinition = goTranspiler.printMethodDefinition;
+    goTranspiler.printMethodDefinition = function(node, identation) {
+      const methodDef = upstreamMethodDefinition.call(this, node, identation);
+      const goType = _nullishCoalesce(ccxtGoFamilyMethodReturnType(this, node), () => ( ccxtGoCounterMethodReturnType(this, node)));
+      if (goType === void 0) {
+        return methodDef;
+      }
+      return methodDef.replace(/(\)\s+)any(\s*)$/, "$1" + goType + "$2");
+    };
+  }
+  goTranspiler.__ccxtGoLocalTypesInstalled = true;
+  installCcxtGoArithmeticUnbox(goTranspiler);
+  installCcxtGoCurrencyUnbox(goTranspiler);
+  installCcxtGoWriteSiteConversions(goTranspiler);
+  installCcxtGoIdentityTupleRebind(goTranspiler);
+  installCcxtGoArrayLiteralWrites(goTranspiler);
+  installCcxtGoSafeCollectionUnbox(goTranspiler);
+  installCcxtGoG14SafeListWrappedReads(goTranspiler);
+  installCcxtGoAsyncReceiveUnbox(goTranspiler);
+  installCcxtGoAsyncForwardRebox(goTranspiler);
+  installCcxtGoEndpointConsumers(goTranspiler);
+  installCcxtGoProducerDeclarations(goTranspiler);
+  installCcxtGoElementReadJoins(goTranspiler);
+  installCcxtGoScalarLiteralLift(goTranspiler);
+  installCcxtGoElementReadUnbox(goTranspiler);
+  installCcxtGoStringConcatJoin(goTranspiler);
+  installCcxtGoScalarElementReads(goTranspiler);
+  installCcxtGoTupleStringJoin(goTranspiler);
+  installCcxtGoTupleParamsElement(goTranspiler);
+  installCcxtGoElement1Params(goTranspiler);
+  installCcxtGoLimitLocals(goTranspiler);
+  installCcxtGoDestructuredPointerBoxes(goTranspiler);
+  installCcxtGoTupleBoolElement(goTranspiler);
+  installCcxtGoTupleParamsRebind(goTranspiler);
+  installCcxtGoTupleResults(goTranspiler);
+  installHx4G10SelfMapWrites(goTranspiler);
+  installB02SafeBalanceLocals(goTranspiler);
+}
+function ccxtGoCallDestructuredElement(decl) {
+  const pattern = _optionalChain([decl, 'optionalAccess', _4280 => _4280.parent]);
+  const holder = _optionalChain([pattern, 'optionalAccess', _4281 => _4281.parent]);
+  if (_optionalChain([decl, 'optionalAccess', _4282 => _4282.kind]) !== ts.SyntaxKind.BindingElement || _optionalChain([pattern, 'optionalAccess', _4283 => _4283.kind]) !== ts.SyntaxKind.ArrayBindingPattern || _optionalChain([holder, 'optionalAccess', _4284 => _4284.kind]) !== ts.SyntaxKind.VariableDeclaration || holder.name !== pattern) {
+    return false;
+  }
+  let init = holder.initializer;
+  while (_optionalChain([init, 'optionalAccess', _4285 => _4285.kind]) === ts.SyntaxKind.ParenthesizedExpression || _optionalChain([init, 'optionalAccess', _4286 => _4286.kind]) === ts.SyntaxKind.AwaitExpression) {
+    init = init.expression;
+  }
+  return _optionalChain([init, 'optionalAccess', _4287 => _4287.kind]) === ts.SyntaxKind.CallExpression;
+}
+function installCcxtGoDestructuredPointerBoxes(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoDestructuredPointerBoxesInstalled || typeof goTranspiler.goAnyLocalHoldsPointer !== "function") {
+    return;
+  }
+  const shipped = goTranspiler.goAnyLocalHoldsPointer;
+  const visiting = /* @__PURE__ */ new Set();
+  goTranspiler.goAnyLocalHoldsPointer = function(decl) {
+    if (ccxtGoCallDestructuredElement(decl)) {
+      return true;
+    }
+    if (shipped.call(this, decl)) {
+      return true;
+    }
+    let init = _optionalChain([decl, 'optionalAccess', _4288 => _4288.kind]) === ts.SyntaxKind.VariableDeclaration ? decl.initializer : void 0;
+    while (_optionalChain([init, 'optionalAccess', _4289 => _4289.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+      init = init.expression;
+    }
+    if (_optionalChain([init, 'optionalAccess', _4290 => _4290.kind]) !== ts.SyntaxKind.ConditionalExpression || visiting.has(decl)) {
+      return false;
+    }
+    visiting.add(decl);
+    try {
+      return [init.whenTrue, init.whenFalse].some((arm) => {
+        while (_optionalChain([arm, 'optionalAccess', _4291 => _4291.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+          arm = arm.expression;
+        }
+        if (_optionalChain([arm, 'optionalAccess', _4292 => _4292.kind]) !== ts.SyntaxKind.Identifier) {
+          return false;
+        }
+        const armDecl = _optionalChain([this, 'access', _4293 => _4293.getChecker, 'call', _4294 => _4294(), 'access', _4295 => _4295.getSymbolAtLocation, 'call', _4296 => _4296(arm), 'optionalAccess', _4297 => _4297.valueDeclaration, 'optionalAccess', _4298 => _4298.resolve, 'call', _4299 => _4299()]);
+        return this.goDeclaredTypeOfIdentifier(arm) === void 0 && this.goAnyLocalHoldsPointer(armDecl);
+      });
+    } finally {
+      visiting.delete(decl);
+    }
+  };
+  goTranspiler.__ccxtGoDestructuredPointerBoxesInstalled = true;
+}
+var CCXT_GO_TUPLE_PARAMS_PRODUCERS = {
+  "this.HandleMarketTypeAndParams": -1,
+  "this.HandleSubTypeAndParams": -1,
+  "this.HandleMarginModeAndParams": -1,
+  "this.HandleNetworkCodeAndParams": 0,
+  "this.HandleParamString": 0,
+  "this.HandleParamString2": 0,
+  "this.HandleWithdrawTagAndParams": 1,
+  "this.HandlePostOnly": 2,
+  "this.HandleOptionAndParams": 0,
+  "this.HandleOptionAndParams2": 0,
+  "this.HandleOptionStringAndParams": 0,
+  "this.HandleOptionStringAndParams2": 0,
+  "this.HandleOptionBoolAndParams": 0,
+  "this.HandleOptionBoolAndParams2": 0,
+  "this.HandleOptionBoolAndParamsNullable": 0,
+  "this.HandleOptionBoolAndParams2Nullable": 0,
+  "this.HandleOptionIntegerAndParamsNullable": 0,
+  "this.HandleOptionIntegerAndParams2Nullable": 0
+};
+var CCXT_GO_TUPLE_ELEMENT_NATIVE = { "Dict": "map[string]any", "Str": "*string", "string": "*string", "Num": "*float64" };
+var CCXT_GO_TUPLE_OVERRIDE_CACHE = /* @__PURE__ */ new Map();
+function ccxtGoTupleAnnotationElement(typeNode, index) {
+  let node = typeNode;
+  if (_optionalChain([node, 'optionalAccess', _4300 => _4300.kind]) === ts.SyntaxKind.TypeReference && _optionalChain([node, 'access', _4301 => _4301.typeName, 'optionalAccess', _4302 => _4302.text]) === "Promise") {
+    node = _optionalChain([node, 'access', _4303 => _4303.typeArguments, 'optionalAccess', _4304 => _4304[0]]);
+  }
+  const element = _optionalChain([node, 'optionalAccess', _4305 => _4305.kind]) === ts.SyntaxKind.TupleType ? node.elements[index] : void 0;
+  return element === void 0 ? void 0 : CCXT_GO_TUPLE_ELEMENT_NATIVE[element.getText().trim()];
+}
+function ccxtGoTupleDictFromLooseParam(method, goType) {
+  return goType === "map[string]any" && (_nullishCoalesce(method.parameters, () => ( []))).some((p) => p.type === void 0 ? p.initializer === void 0 : ["object", "any", "unknown"].includes(p.type.getText().trim()));
+}
+function ccxtGoTupleOverridesAgree(declaration, name, index, goType) {
+  const fileName = path7.default.resolve(declaration.getSourceFile().fileName);
+  const at = fileName.lastIndexOf("/ts/src/");
+  if (at < 0) {
+    return false;
+  }
+  const key = fileName + "#" + name + "#" + index;
+  if (CCXT_GO_TUPLE_OVERRIDE_CACHE.has(key)) {
+    return CCXT_GO_TUPLE_OVERRIDE_CACHE.get(key) === goType;
+  }
+  let agreed = goType;
+  const root = fileName.substring(0, at) + "/ts/src";
+  const pattern = new RegExp("^\\s+(?:override\\s+)?(?:async\\s+)?" + name + "\\s*\\(", "m");
+  const base = fileName.endsWith("/base/Exchange.ts");
+  const texts = [];
+  for (const dir of [root, root + "/pro"]) {
+    for (const file of fs6.default.readdirSync(dir).filter((f) => f.endsWith(".ts"))) {
+      texts.push([path7.default.join(dir, file), fs6.default.readFileSync(path7.default.join(dir, file), "utf8")]);
+    }
+  }
+  const ids = /* @__PURE__ */ new Set([path7.default.basename(fileName, ".ts")]);
+  const imports = (text) => [...text.matchAll(/from '\.\.?\/(\w+)\.js'/g)].some((m) => ids.has(m[1]));
+  for (let grew = true; grew && !base; ) {
+    grew = false;
+    for (const [file, text] of texts) {
+      if (!ids.has(path7.default.basename(file, ".ts")) && imports(text)) {
+        ids.add(path7.default.basename(file, ".ts"));
+        grew = true;
+      }
+    }
+  }
+  for (const [file, text] of texts) {
+    if (!pattern.test(text) || !base && !ids.has(path7.default.basename(file, ".ts"))) {
+      continue;
+    }
+    const visit = (n) => {
+      if (n.kind === ts.SyntaxKind.MethodDeclaration && _optionalChain([n, 'access', _4306 => _4306.name, 'optionalAccess', _4307 => _4307.text]) === name && n.body !== void 0) {
+        const onlySuper = collectReturnStatements(n.body).every((r) => _optionalChain([r, 'access', _4308 => _4308.expression, 'optionalAccess', _4309 => _4309.kind]) === ts.SyntaxKind.CallExpression && _optionalChain([r, 'access', _4310 => _4310.expression, 'access', _4311 => _4311.expression, 'optionalAccess', _4312 => _4312.expression, 'optionalAccess', _4313 => _4313.kind]) === ts.SyntaxKind.SuperKeyword);
+        if (!onlySuper && (ccxtGoTupleAnnotationElement(n.type, index) !== goType || ccxtGoTupleDictFromLooseParam(n, goType))) {
+          agreed = void 0;
+        }
+      }
+      _optionalChain([n, 'optionalAccess', _4314 => _4314.forEachChild, 'call', _4315 => _4315(visit)]);
+    };
+    visit(ts.createSourceFile(file, text));
+  }
+  CCXT_GO_TUPLE_OVERRIDE_CACHE.set(key, agreed);
+  return agreed === goType;
+}
+function ccxtGoTupleCheckerElementType(goTranspiler, init, index) {
+  const call = _optionalChain([init, 'optionalAccess', _4316 => _4316.kind]) === ts.SyntaxKind.AwaitExpression ? init.expression : init;
+  const callee = _optionalChain([call, 'optionalAccess', _4317 => _4317.expression]);
+  if (_optionalChain([call, 'optionalAccess', _4318 => _4318.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([callee, 'optionalAccess', _4319 => _4319.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _4320 => _4320.expression, 'optionalAccess', _4321 => _4321.kind]) !== ts.SyntaxKind.ThisKeyword) {
+    return void 0;
+  }
+  let declaration;
+  let returned;
+  try {
+    const checker = goTranspiler.getChecker();
+    const signature = checker.getResolvedSignature(call);
+    declaration = _optionalChain([signature, 'optionalAccess', _4322 => _4322.declaration, 'optionalAccess', _4323 => _4323.resolve, 'call', _4324 => _4324()]);
+    returned = checker.getReturnTypeOfSignature(signature);
+    returned = _nullishCoalesce(checker.getAwaitedType(returned), () => ( returned));
+    if (!checker.isTupleType(returned)) {
+      return void 0;
+    }
+    const element = checker.getTypeArguments(returned)[index];
+    const alias = _optionalChain([element, 'optionalAccess', _4325 => _4325.getAliasSymbol, 'call', _4326 => _4326(), 'optionalAccess', _4327 => _4327.escapedName]);
+    const numeric = (_optionalChain([element, 'optionalAccess', _4328 => _4328.flags]) & ts.TypeFlags.Number) !== 0 ? "*float64" : void 0;
+    const goType = _nullishCoalesce(CCXT_GO_TUPLE_ELEMENT_NATIVE[_nullishCoalesce(alias, () => ( ""))], () => ( ((_optionalChain([element, 'optionalAccess', _4329 => _4329.flags]) & ts.TypeFlags.String) !== 0 ? "*string" : numeric)));
+    if (goType === void 0 || _optionalChain([declaration, 'optionalAccess', _4330 => _4330.kind]) !== ts.SyntaxKind.MethodDeclaration || ccxtGoTupleAnnotationElement(declaration.type, index) !== goType || ccxtGoTupleDictFromLooseParam(declaration, goType) || !ccxtGoTupleOverridesAgree(declaration, callee.name.text, index, goType)) {
+      return void 0;
+    }
+    return goType;
+  } catch (e) {
+    return void 0;
+  }
+}
+function ccxtGoTupleDictUseTestsAbsence(n) {
+  let current = n;
+  while (_optionalChain([current, 'access', _4331 => _4331.parent, 'optionalAccess', _4332 => _4332.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    current = current.parent;
+  }
+  const parent = current.parent;
+  if (_optionalChain([parent, 'optionalAccess', _4333 => _4333.kind]) === ts.SyntaxKind.BinaryExpression && COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) >= 0) {
+    return true;
+  }
+  if (_optionalChain([parent, 'optionalAccess', _4334 => _4334.kind]) === ts.SyntaxKind.PrefixUnaryExpression && parent.operator === ts.SyntaxKind.ExclamationToken) {
+    return true;
+  }
+  return (_optionalChain([parent, 'optionalAccess', _4335 => _4335.kind]) === ts.SyntaxKind.IfStatement || _optionalChain([parent, 'optionalAccess', _4336 => _4336.kind]) === ts.SyntaxKind.ConditionalExpression || _optionalChain([parent, 'optionalAccess', _4337 => _4337.kind]) === ts.SyntaxKind.WhileStatement) && (parent.expression === current || parent.condition === current);
+}
+function ccxtGoTupleElementMemo(goTranspiler, family, element, compute) {
+  goTranspiler.ccxtGoTupleElementTypes ??= {};
+  const cache = goTranspiler.ccxtGoTupleElementTypes[family] ??= /* @__PURE__ */ new WeakMap();
+  if (element === void 0 || element === null || typeof element !== "object") {
+    return compute();
+  }
+  if (!cache.has(element)) {
+    cache.set(element, void 0);
+    cache.set(element, compute());
+  }
+  return cache.get(element);
+}
+function ccxtGoTupleParamsElementType(goTranspiler, element) {
+  return ccxtGoTupleElementMemo(goTranspiler, "params", element, () => ccxtGoTupleParamsElementTypeUncached(goTranspiler, element));
+}
+function ccxtGoTupleParamsElementTypeUncached(goTranspiler, element) {
+  const pattern = _optionalChain([element, 'optionalAccess', _4338 => _4338.parent]);
+  const holder = _optionalChain([pattern, 'optionalAccess', _4339 => _4339.parent]);
+  if (_optionalChain([element, 'optionalAccess', _4340 => _4340.kind]) !== ts.SyntaxKind.BindingElement || !ts.isIdentifier(element.name) || _optionalChain([pattern, 'optionalAccess', _4341 => _4341.kind]) !== ts.SyntaxKind.ArrayBindingPattern || _optionalChain([holder, 'optionalAccess', _4342 => _4342.kind]) !== ts.SyntaxKind.VariableDeclaration || holder.name !== pattern || element.dotDotDotToken !== void 0 || element.initializer !== void 0 || _optionalChain([holder, 'access', _4343 => _4343.parent, 'optionalAccess', _4344 => _4344.parent, 'optionalAccess', _4345 => _4345.kind]) !== ts.SyntaxKind.VariableStatement || typeof goTranspiler.goDeclaredLocalTypeIfSafe !== "function") {
+    return void 0;
+  }
+  const init = holder.initializer;
+  const index = pattern.elements.indexOf(element);
+  const slot = index === 1 ? CCXT_GO_TUPLE_PARAMS_PRODUCERS[_nullishCoalesce(ccxtGoWriteSiteCallee(goTranspiler, init), () => ( ""))] : void 0;
+  const tableProven = slot !== void 0 && _optionalChain([init, 'access', _4346 => _4346.expression, 'optionalAccess', _4347 => _4347.expression, 'optionalAccess', _4348 => _4348.kind]) === ts.SyntaxKind.ThisKeyword && (slot < 0 || ccxtGoProducerArgIsMap(goTranspiler, init.arguments[slot]));
+  const checkerProven = !tableProven && ccxtGoTupleCheckerElementType(goTranspiler, init, index) === CCXT_GO_PRODUCER_DICT_TYPE;
+  if (!tableProven && !checkerProven) {
+    return void 0;
+  }
+  const name = element.name.text;
+  const scope = goTranspiler.goEnclosingFunction(element);
+  let rebound = false;
+  const visit = (n) => {
+    if (rebound) {
+      return;
+    }
+    if (n !== element && n.kind === ts.SyntaxKind.BindingElement && bindingMentionsName(n.name, name)) {
+      rebound = true;
+      return;
+    }
+    if (isIdentifierNamed(n, name) && n !== element.name && isDestructuringTarget(n)) {
+      rebound = true;
+      return;
+    }
+    _optionalChain([n, 'optionalAccess', _4349 => _4349.forEachChild, 'call', _4350 => _4350(visit)]);
+  };
+  if (scope !== void 0) {
+    _optionalChain([scope, 'optionalAccess', _4351 => _4351.forEachChild, 'call', _4352 => _4352(visit)]);
+  }
+  if (rebound) {
+    return void 0;
+  }
+  return goTranspiler.goDeclaredLocalTypeIfSafe(
+    element,
+    CCXT_GO_PRODUCER_DICT_TYPE,
+    (n) => !ccxtGoProducerUseRebinds(n) && (tableProven || !ccxtGoTupleDictUseTestsAbsence(n))
+  );
+}
+var CCXT_GO_TUPLE_NUMBER_SAFE_ARGS = { "this.PriceToPrecision": 2, "this.AmountToPrecision": 2 };
+function ccxtGoTupleNumberReadIsSafe(goTranspiler, n) {
+  let current = n;
+  while (_optionalChain([current, 'access', _4353 => _4353.parent, 'optionalAccess', _4354 => _4354.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    current = current.parent;
+  }
+  const parent = current.parent;
+  if (_optionalChain([parent, 'optionalAccess', _4355 => _4355.kind]) === ts.SyntaxKind.BinaryExpression && COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) >= 0) {
+    return isUndefinedLiteral(parent.left === current ? parent.right : parent.left) && ccxtGoClosureCompareIsHelper(goTranspiler, parent, n.text);
+  }
+  if (_optionalChain([parent, 'optionalAccess', _4356 => _4356.kind]) === ts.SyntaxKind.CallExpression && parent.expression !== current) {
+    const slots = CCXT_GO_TUPLE_NUMBER_SAFE_ARGS[_nullishCoalesce(printedCalleeOfCall(goTranspiler, parent), () => ( ""))];
+    return slots !== void 0 && parent.arguments.indexOf(current) < slots;
+  }
+  return _optionalChain([parent, 'optionalAccess', _4357 => _4357.kind]) === ts.SyntaxKind.PropertyAssignment && parent.initializer === current || _optionalChain([parent, 'optionalAccess', _4358 => _4358.kind]) === ts.SyntaxKind.ArrayLiteralExpression && current === n && !(_optionalChain([parent, 'access', _4359 => _4359.parent, 'optionalAccess', _4360 => _4360.kind]) === ts.SyntaxKind.BinaryExpression && parent.parent.left === parent);
+}
+function ccxtGoTupleNumberElementType(goTranspiler, element) {
+  return ccxtGoTupleElementMemo(goTranspiler, "number", element, () => ccxtGoTupleNumberElementTypeUncached(goTranspiler, element));
+}
+function ccxtGoTupleNumberElementTypeUncached(goTranspiler, element) {
+  const pattern = _optionalChain([element, 'optionalAccess', _4361 => _4361.parent]);
+  const holder = _optionalChain([pattern, 'optionalAccess', _4362 => _4362.parent]);
+  if (_optionalChain([element, 'optionalAccess', _4363 => _4363.kind]) !== ts.SyntaxKind.BindingElement || !ts.isIdentifier(element.name) || _optionalChain([pattern, 'optionalAccess', _4364 => _4364.kind]) !== ts.SyntaxKind.ArrayBindingPattern || _optionalChain([holder, 'optionalAccess', _4365 => _4365.kind]) !== ts.SyntaxKind.VariableDeclaration || holder.name !== pattern || element.dotDotDotToken !== void 0 || element.initializer !== void 0 || element.propertyName !== void 0 || _optionalChain([holder, 'access', _4366 => _4366.parent, 'optionalAccess', _4367 => _4367.parent, 'optionalAccess', _4368 => _4368.kind]) !== ts.SyntaxKind.VariableStatement || typeof goTranspiler.goDeclaredLocalTypeIfSafe !== "function" || ccxtGoTupleCheckerElementType(goTranspiler, holder.initializer, pattern.elements.indexOf(element)) !== "*float64") {
+    return void 0;
+  }
+  const scope = goTranspiler.goEnclosingFunction(element);
+  const name = element.name.text;
+  if (scope === void 0 || goTranspiler.goTypeNameIsShadowed(scope, "Float64PtrTyped")) {
+    return void 0;
+  }
+  let rebound = false;
+  const visit = (n) => {
+    if (rebound) {
+      return;
+    }
+    if (n !== scope && FUNCTION_LIKE_KINDS.indexOf(n.kind) >= 0 && scopeMentionsIdentifier(n, name)) {
+      rebound = true;
+      return;
+    }
+    if (n !== element && n.kind === ts.SyntaxKind.BindingElement && bindingMentionsName(n.name, name)) {
+      rebound = true;
+      return;
+    }
+    _optionalChain([n, 'optionalAccess', _4369 => _4369.forEachChild, 'call', _4370 => _4370(visit)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _4371 => _4371.forEachChild, 'call', _4372 => _4372(visit)]);
+  return rebound ? void 0 : goTranspiler.goDeclaredLocalTypeIfSafe(element, "*float64", (n) => ccxtGoTupleNumberReadIsSafe(goTranspiler, n));
+}
+function installCcxtGoTupleParamsElement(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoTupleParamsElementInstalled || typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  const shipped = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = shipped.call(this, node, identation);
+    const pattern = _optionalChain([node, 'optionalAccess', _4373 => _4373.declarations, 'optionalAccess', _4374 => _4374[0], 'optionalAccess', _4375 => _4375.name]);
+    if (typeof printed !== "string" || _optionalChain([pattern, 'optionalAccess', _4376 => _4376.kind]) !== ts.SyntaxKind.ArrayBindingPattern) {
+      return printed;
+    }
+    const lines = printed.split("\n");
+    pattern.elements.forEach((element, index) => {
+      if (element.kind !== ts.SyntaxKind.BindingElement) {
+        return;
+      }
+      const typed = ccxtGoTupleParamsElementType(this, element) === CCXT_GO_PRODUCER_DICT_TYPE ? "map[string]any = MapTyped(" : ccxtGoTupleNumberElementType(this, element) === "*float64" ? "*float64 = Float64PtrTyped(" : void 0;
+      if (typed === void 0) {
+        return;
+      }
+      const name = this.printNode(element.name, 0);
+      const at = lines.findIndex((line) => /^\s*\w+ := GetValue\(\w+, \d+\)$/.test(line) && line.trimStart().startsWith(name + " := GetValue(") && line.endsWith(", " + index + ")"));
+      if (at >= 0) {
+        const indent = lines[at].substring(0, lines[at].length - lines[at].trimStart().length);
+        lines[at] = indent + "var " + name + " " + typed + lines[at].trimStart().substring(name.length + 4) + ")";
+      }
+    });
+    return lines.join("\n");
+  };
+  goTranspiler.__ccxtGoTupleParamsElementInstalled = true;
+}
+var CCXT_GO_TUPLE_STRING_PRODUCERS = [
+  "this.HandleMarketTypeAndParams",
+  "this.HandleSubTypeAndParams",
+  "this.HandleParamString",
+  "this.HandleParamString2",
+  "this.HandleNetworkCodeAndParams",
+  // CheckOptionString (panics on a mistyped option) owns element 0 of these
+  "this.HandleOptionStringAndParams",
+  "this.HandleOptionStringAndParams2",
+  "this.HandleMarginModeAndParams",
+  // venue helpers whose every Go return path boxes a *string (or nil) at element 0
+  "this.GetBybitType",
+  "this.HandleProductTypeAndParams",
+  "this.GetMarginMode"
+];
+var CCXT_GO_TUPLE_STRING_SPLITS = ["Split(", "strings.Split("];
+var CCXT_GO_TUPLE_STRING_SAFE_ARGS = {
+  "this.IsLinear": 2,
+  "this.IsInverse": 2,
+  "ToLower": 1,
+  "ToUpper": 1,
+  "IsString": 1,
+  // container/key slots: SafeValueN / getValue / InOp derefScalar both before the lookup
+  "GetValue": 2,
+  "InOp": 2,
+  "this.SafeString": 2,
+  "this.SafeString2": 3,
+  "this.SafeValue": 2,
+  "this.SafeInteger": 2,
+  "this.SafeStringLower": 2,
+  // okx/deepcoin: `this.safeString (types, type, type)`, key and default both deref'd
+  "this.ConvertToInstrumentType": 1,
+  // IsEqual/InOp/GetValue/GetArg/InArray deref the value; an unmatched code is returned as the
+  // same *string a Safe*-declared caller local already passes (base + htx override)
+  "this.NetworkCodeToId": 1,
+  "this.InArray": 1,
+  "this.GetSupportedMapping": 1,
+  "this.CheckRequiredArgument": 2
+};
+var CCXT_GO_TUPLE_STRING_CACHE = /* @__PURE__ */ new WeakMap();
+var CCXT_GO_TUPLE_STRING_IN_PROGRESS = /* @__PURE__ */ new Set();
+function ccxtGoTupleStringIsProducerElement(goTranspiler, node) {
+  const pattern = node.parent;
+  const assignment = _optionalChain([pattern, 'optionalAccess', _4377 => _4377.parent]);
+  if (_optionalChain([pattern, 'optionalAccess', _4378 => _4378.kind]) !== ts.SyntaxKind.ArrayLiteralExpression || _optionalChain([assignment, 'optionalAccess', _4379 => _4379.kind]) !== ts.SyntaxKind.BinaryExpression || assignment.left !== pattern || assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken || pattern.elements.indexOf(node) !== 0 || _optionalChain([assignment, 'access', _4380 => _4380.parent, 'optionalAccess', _4381 => _4381.kind]) !== ts.SyntaxKind.ExpressionStatement) {
+    return false;
+  }
+  return CCXT_GO_TUPLE_STRING_PRODUCERS.indexOf(ccxtGoWriteSiteCallee(goTranspiler, assignment.right)) >= 0 || ccxtGoTupleCheckerElementType(goTranspiler, assignment.right, 0) === "*string";
+}
+function ccxtGoTupleStringWriteIsProven(goTranspiler, right) {
+  if (ts.isIdentifier(right) && CCXT_GO_TUPLE_STRING_ASSUMED.has(ccxtGoParamDeclarationOf(goTranspiler, right))) {
+    return true;
+  }
+  return ccxtGoTupleStringWriteNeedsLift(goTranspiler, right) || goTranspiler.goTypeOfInitializer(right, goTranspiler.printNode(right, 0)) === "*string";
+}
+function ccxtGoTupleStringWriteNeedsLift(goTranspiler, right) {
+  if (_optionalChain([right, 'optionalAccess', _4382 => _4382.kind]) === ts.SyntaxKind.StringLiteral || _optionalChain([right, 'optionalAccess', _4383 => _4383.kind]) === ts.SyntaxKind.NoSubstitutionTemplateLiteral) {
+    return true;
+  }
+  return goTranspiler.goTypeOfInitializer(right, goTranspiler.printNode(right, 0)) === "string";
+}
+function ccxtGoTupleStringReadIsSafe(goTranspiler, node) {
+  let current = node;
+  while (_optionalChain([current, 'access', _4384 => _4384.parent, 'optionalAccess', _4385 => _4385.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    current = current.parent;
+  }
+  const parent = current.parent;
+  if (parent === void 0) {
+    return false;
+  }
+  if (parent.kind === ts.SyntaxKind.BinaryExpression && COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) >= 0) {
+    const other = parent.left === current ? parent.right : parent.left;
+    if (_optionalChain([other, 'optionalAccess', _4386 => _4386.kind]) === ts.SyntaxKind.StringLiteral || isUndefinedLiteral(other)) {
+      return true;
+    }
+  }
+  if ((parent.kind === ts.SyntaxKind.IfStatement || parent.kind === ts.SyntaxKind.ConditionalExpression) && (parent.expression === current || parent.condition === current)) {
+    return true;
+  }
+  if (parent.kind === ts.SyntaxKind.PrefixUnaryExpression && parent.operator === ts.SyntaxKind.ExclamationToken) {
+    return true;
+  }
+  if (parent.kind === ts.SyntaxKind.BinaryExpression && parent.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    return true;
+  }
+  if (parent.kind === ts.SyntaxKind.ElementAccessExpression && parent.argumentExpression === current) {
+    const printed = (_nullishCoalesce(goTranspiler.printNode(_optionalChain([parent, 'access', _4387 => _4387.parent, 'optionalAccess', _4388 => _4388.kind]) === ts.SyntaxKind.BinaryExpression && parent.parent.left === parent ? parent.parent : parent, 0), () => ( ""))).trim();
+    return printed.startsWith("GetValue(") || printed.startsWith("AddElementToObject(");
+  }
+  if (parent.kind === ts.SyntaxKind.CallExpression && parent.expression !== current) {
+    const callee = printedCalleeOfCall(goTranspiler, parent);
+    const slots = CCXT_GO_TUPLE_STRING_SAFE_ARGS[(_nullishCoalesce(callee, () => ( ""))).replace(/^ccxt\./, "")];
+    if (slots !== void 0 && parent.arguments.indexOf(current) < slots) {
+      return true;
+    }
+    const typeSlot = { "this.SafeMarket": 3, "this.SafeSymbol": 3 }[(_nullishCoalesce(callee, () => ( ""))).replace(/^ccxt\./, "")];
+    if (typeSlot !== void 0 && parent.arguments.indexOf(current) === typeSlot) {
+      return true;
+    }
+  }
+  if (current === node && parent.kind === ts.SyntaxKind.BinaryExpression && parent.right === current && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && _optionalChain([parent, 'access', _4389 => _4389.left, 'optionalAccess', _4390 => _4390.kind]) === ts.SyntaxKind.ElementAccessExpression) {
+    return /^\w+\["\w+"\] = \w+$/.test((_nullishCoalesce(goTranspiler.printNode(parent, 0), () => ( ""))).trim()) || nilDeclaredReadIsSafe(goTranspiler, node);
+  }
+  if (parent.kind === ts.SyntaxKind.CallExpression && parent.expression !== current && (_nullishCoalesce(CCXT_GO_TUPLE_STRING_SAFE_ARG_INDEX[_nullishCoalesce(printedCalleeOfCall(goTranspiler, parent), () => ( ""))], () => ( []))).includes(parent.arguments.indexOf(current))) {
+    return true;
+  }
+  if (current === node && parent.kind === ts.SyntaxKind.BinaryExpression && parent.right === node && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && _optionalChain([parent, 'access', _4391 => _4391.left, 'optionalAccess', _4392 => _4392.kind]) === ts.SyntaxKind.ElementAccessExpression && typeof goTranspiler.goElementAssignmentContainerType === "function" && goTranspiler.goElementAssignmentContainerType(parent.left.expression, goTranspiler.printNode(parent.left.expression, 0)) === "map[string]any") {
+    return true;
+  }
+  if (current === node && parent.kind === ts.SyntaxKind.VariableDeclaration && parent.initializer === node) {
+    return ccxtGoTupleStringCopyTargetIsSafe(goTranspiler, parent, node);
+  }
+  if (current === node && parent.kind === ts.SyntaxKind.BinaryExpression && parent.right === node && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(parent.left) && _optionalChain([parent, 'access', _4393 => _4393.parent, 'optionalAccess', _4394 => _4394.kind]) === ts.SyntaxKind.ExpressionStatement) {
+    const target = ccxtGoParamDeclarationOf(goTranspiler, parent.left);
+    return goTranspiler.goEnclosingFunction(target) === goTranspiler.goEnclosingFunction(node) && ccxtGoTupleStringCopyTargetIsSafe(goTranspiler, target, node);
+  }
+  return current === node && nilDeclaredReadIsSafe(goTranspiler, node);
+}
+var CCXT_GO_TUPLE_STRING_SAFE_ARG_INDEX = {
+  "this.HandleMarketTypeAndParams": [3]
+};
+var CCXT_GO_TUPLE_STRING_COPY_CHECKING = /* @__PURE__ */ new Set();
+var CCXT_GO_TUPLE_STRING_ASSUMED = /* @__PURE__ */ new Set();
+function ccxtGoTupleStringIsCopyDeclaration(declaration) {
+  return _optionalChain([declaration, 'optionalAccess', _4395 => _4395.kind]) === ts.SyntaxKind.VariableDeclaration && ts.isIdentifier(declaration.name) && ts.isIdentifier(_nullishCoalesce(declaration.initializer, () => ( {}))) && !isNilDeclaredInitializer(declaration.initializer) && _optionalChain([declaration, 'access', _4396 => _4396.parent, 'optionalAccess', _4397 => _4397.parent, 'optionalAccess', _4398 => _4398.kind]) === ts.SyntaxKind.VariableStatement && declaration.parent.declarations.length === 1;
+}
+function ccxtGoTupleStringCopyTargetIsSafe(goTranspiler, target, source) {
+  const nilDeclared = _optionalChain([target, 'optionalAccess', _4399 => _4399.kind]) === ts.SyntaxKind.VariableDeclaration && ts.isIdentifier(target.name) && isNilDeclaredInitializer(target.initializer) && _optionalChain([target, 'access', _4400 => _4400.parent, 'optionalAccess', _4401 => _4401.parent, 'optionalAccess', _4402 => _4402.kind]) === ts.SyntaxKind.VariableStatement && target.parent.declarations.length === 1;
+  if (!nilDeclared && !ccxtGoTupleStringIsCopyDeclaration(target) || CCXT_GO_TUPLE_STRING_COPY_CHECKING.has(target)) {
+    return false;
+  }
+  const sourceDeclaration = ccxtGoParamDeclarationOf(goTranspiler, source);
+  if (sourceDeclaration === void 0) {
+    return false;
+  }
+  const seeded = !CCXT_GO_TUPLE_STRING_ASSUMED.has(sourceDeclaration);
+  CCXT_GO_TUPLE_STRING_COPY_CHECKING.add(target);
+  CCXT_GO_TUPLE_STRING_ASSUMED.add(sourceDeclaration);
+  try {
+    return ccxtGoTupleStringJoinTypeUncached(goTranspiler, target) === "*string";
+  } finally {
+    CCXT_GO_TUPLE_STRING_COPY_CHECKING.delete(target);
+    if (seeded) {
+      CCXT_GO_TUPLE_STRING_ASSUMED.delete(sourceDeclaration);
+    }
+  }
+}
+function ccxtGoTupleStringJoinTypeUncached(goTranspiler, declaration) {
+  const name = declaration.name.text;
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0 || NIL_DECLARED_GUARD_NAMES.indexOf(name) >= 0 || goTranspiler.goTypeNameIsShadowed(scope, "*string")) {
+    return void 0;
+  }
+  let producers = 0;
+  let writes = 0;
+  let ok = true;
+  const visit = (n) => {
+    if (!ok) {
+      return;
+    }
+    if (n !== scope && FUNCTION_LIKE_KINDS.indexOf(n.kind) >= 0) {
+      ok = !scopeMentionsIdentifier(n, name);
+      return;
+    }
+    if (n !== declaration && n !== _optionalChain([declaration, 'access', _4403 => _4403.parent, 'optionalAccess', _4404 => _4404.parent]) && (n.kind === ts.SyntaxKind.VariableDeclaration || n.kind === ts.SyntaxKind.Parameter) && bindingMentionsName(n.name, name)) {
+      ok = false;
+      return;
+    }
+    if (isIdentifierNamed(n, name) && n !== declaration.name) {
+      const parent = n.parent;
+      if (ccxtGoTupleStringIsProducerElement(goTranspiler, n)) {
+        producers += 1;
+      } else if (_optionalChain([parent, 'optionalAccess', _4405 => _4405.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        ok = ccxtGoTupleStringWriteIsProven(goTranspiler, parent.right);
+        writes += 1;
+      } else if (isDestructuringTarget(n) || !ccxtGoTupleStringReadIsSafe(goTranspiler, n)) {
+        ok = false;
+      }
+    }
+    _optionalChain([n, 'optionalAccess', _4406 => _4406.forEachChild, 'call', _4407 => _4407(visit)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _4408 => _4408.forEachChild, 'call', _4409 => _4409(visit)]);
+  const bound = declaration.kind === ts.SyntaxKind.BindingElement || ccxtGoTupleStringIsCopyDeclaration(declaration) ? 1 : 0;
+  if (!ok || producers + bound + writes === 0) {
+    return void 0;
+  }
+  if (producers + bound === 0 && new GoNilDeclaredAssignmentScan(goTranspiler, declaration, name).run()) {
+    return void 0;
+  }
+  return "*string";
+}
+function ccxtGoTupleStringBindingIsProducer(goTranspiler, declaration) {
+  const pattern = declaration.parent;
+  const holder = _optionalChain([pattern, 'optionalAccess', _4410 => _4410.parent]);
+  if (_optionalChain([pattern, 'optionalAccess', _4411 => _4411.kind]) !== ts.SyntaxKind.ArrayBindingPattern || _optionalChain([holder, 'optionalAccess', _4412 => _4412.kind]) !== ts.SyntaxKind.VariableDeclaration || holder.name !== pattern || declaration.dotDotDotToken !== void 0 || declaration.initializer !== void 0 || declaration.propertyName !== void 0) {
+    return false;
+  }
+  const init = holder.initializer;
+  if (_optionalChain([init, 'optionalAccess', _4413 => _4413.kind]) === ts.SyntaxKind.CallExpression && _optionalChain([init, 'access', _4414 => _4414.expression, 'optionalAccess', _4415 => _4415.kind]) === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([init, 'access', _4416 => _4416.expression, 'access', _4417 => _4417.name, 'optionalAccess', _4418 => _4418.text]) === "split" && CCXT_GO_TUPLE_STRING_SPLITS.some((head) => (_nullishCoalesce(goTranspiler.printNode(init, 0), () => ( ""))).trim().startsWith(head))) {
+    return true;
+  }
+  const callee = ccxtGoWriteSiteCallee(goTranspiler, init);
+  const index = pattern.elements.indexOf(declaration);
+  return index === 0 && CCXT_GO_TUPLE_STRING_PRODUCERS.indexOf(callee) >= 0 || ccxtGoTupleCheckerElementType(goTranspiler, init, index) === "*string";
+}
+function ccxtGoTupleStringJoinType(goTranspiler, declaration) {
+  const nilDeclared = _optionalChain([declaration, 'optionalAccess', _4419 => _4419.kind]) === ts.SyntaxKind.VariableDeclaration && ts.isIdentifier(declaration.name) && isNilDeclaredInitializer(declaration.initializer) && _optionalChain([declaration, 'access', _4420 => _4420.parent, 'optionalAccess', _4421 => _4421.parent, 'optionalAccess', _4422 => _4422.kind]) === ts.SyntaxKind.VariableStatement && declaration.parent.declarations.length === 1;
+  const bound = _optionalChain([declaration, 'optionalAccess', _4423 => _4423.kind]) === ts.SyntaxKind.BindingElement && ts.isIdentifier(declaration.name) && _optionalChain([declaration, 'access', _4424 => _4424.parent, 'optionalAccess', _4425 => _4425.parent, 'optionalAccess', _4426 => _4426.parent, 'optionalAccess', _4427 => _4427.parent, 'optionalAccess', _4428 => _4428.kind]) === ts.SyntaxKind.VariableStatement && ccxtGoTupleStringBindingIsProducer(goTranspiler, declaration);
+  const copied = ccxtGoTupleStringIsCopyDeclaration(declaration) && ccxtGoTupleStringDeclarationOf(goTranspiler, declaration.initializer) !== void 0;
+  if (!nilDeclared && !bound && !copied) {
+    return void 0;
+  }
+  if (CCXT_GO_TUPLE_STRING_CACHE.has(declaration)) {
+    return CCXT_GO_TUPLE_STRING_CACHE.get(declaration);
+  }
+  if (CCXT_GO_TUPLE_STRING_IN_PROGRESS.has(declaration)) {
+    return void 0;
+  }
+  CCXT_GO_TUPLE_STRING_IN_PROGRESS.add(declaration);
+  let result;
+  try {
+    result = ccxtGoTupleStringJoinTypeUncached(goTranspiler, declaration);
+  } finally {
+    CCXT_GO_TUPLE_STRING_IN_PROGRESS.delete(declaration);
+  }
+  CCXT_GO_TUPLE_STRING_CACHE.set(declaration, result);
+  return result;
+}
+function ccxtGoTupleStringDeclarationOf(goTranspiler, node) {
+  if (_optionalChain([node, 'optionalAccess', _4429 => _4429.kind]) !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  const declaration = ccxtGoParamDeclarationOf(goTranspiler, node);
+  return ccxtGoTupleStringJoinType(goTranspiler, declaration) === "*string" ? declaration : void 0;
+}
+function installCcxtGoTupleStringJoin(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoTupleStringJoinInstalled || typeof goTranspiler.goDeclaredTypeOfIdentifier !== "function" || typeof goTranspiler.printBinaryExpression !== "function" || typeof goTranspiler.printCustomBinaryExpressionIfAny !== "function" || typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  const shippedDeclared = goTranspiler.goDeclaredTypeOfIdentifier;
+  goTranspiler.goDeclaredTypeOfIdentifier = function(node) {
+    const known = shippedDeclared.call(this, node);
+    if (known !== void 0) {
+      return known;
+    }
+    return ccxtGoTupleStringDeclarationOf(this, node) !== void 0 ? "*string" : void 0;
+  };
+  const shippedDeclaration = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = shippedDeclaration.call(this, node, identation);
+    const declaration = _optionalChain([node, 'optionalAccess', _4430 => _4430.declarations, 'optionalAccess', _4431 => _4431[0]]);
+    if (typeof printed !== "string" || ccxtGoTupleStringJoinType(this, declaration) !== "*string") {
+      return printed;
+    }
+    const head = this.getIden(identation) + "var " + this.printNode(declaration.name, 0) + " ";
+    const value = isNilDeclaredInitializer(declaration.initializer) ? this.UNDEFINED_TOKEN : this.printNode(declaration.initializer, 0);
+    return printed === head + "any = " + value ? head + "*string = " + value : printed;
+  };
+  const shippedBinding = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = shippedBinding.call(this, node, identation);
+    const pattern = _optionalChain([node, 'optionalAccess', _4432 => _4432.declarations, 'optionalAccess', _4433 => _4433[0], 'optionalAccess', _4434 => _4434.name]);
+    if (typeof printed !== "string" || _optionalChain([pattern, 'optionalAccess', _4435 => _4435.kind]) !== ts.SyntaxKind.ArrayBindingPattern) {
+      return printed;
+    }
+    const lines = printed.split("\n");
+    pattern.elements.forEach((element, index) => {
+      if (element.kind !== ts.SyntaxKind.BindingElement || ccxtGoTupleStringJoinType(this, element) !== "*string") {
+        return;
+      }
+      const name = this.printNode(element.name, 0);
+      const at = lines.findIndex((line) => /^\s*\w+ := GetValue\(\w+, \d+\)$/.test(line) && line.trimStart().startsWith(name + " := GetValue(") && line.endsWith(", " + index + ")"));
+      if (at >= 0) {
+        const indent = lines[at].substring(0, lines[at].length - lines[at].trimStart().length);
+        lines[at] = indent + "var " + name + " *string = SafeStringPtr(" + lines[at].trimStart().substring(name.length + 4) + ")";
+      }
+    });
+    return lines.join("\n");
+  };
+  const shippedCustom = goTranspiler.printCustomBinaryExpressionIfAny;
+  goTranspiler.printCustomBinaryExpressionIfAny = function(node, identation) {
+    const printed = shippedCustom.call(this, node, identation);
+    const target = _optionalChain([node, 'optionalAccess', _4436 => _4436.left, 'optionalAccess', _4437 => _4437.elements, 'optionalAccess', _4438 => _4438[0]]);
+    if (typeof printed !== "string" || node.left.kind !== ts.SyntaxKind.ArrayLiteralExpression || target === void 0 || ccxtGoTupleStringDeclarationOf(this, target) === void 0) {
+      return printed;
+    }
+    const read = this.printNode(target, 0) + " = GetValue(";
+    const lines = printed.split("\n");
+    const index = lines.findIndex((line) => line.trimStart().startsWith(read) && line.endsWith(", 0)"));
+    if (index < 0) {
+      return printed;
+    }
+    const indent = lines[index].substring(0, lines[index].length - lines[index].trimStart().length);
+    lines[index] = indent + this.printNode(target, 0) + " = SafeStringPtr(" + lines[index].trimStart().substring(read.length - "GetValue(".length) + ")";
+    return lines.join("\n");
+  };
+  const shippedBinary = goTranspiler.printBinaryExpression;
+  goTranspiler.printBinaryExpression = function(node, identation) {
+    const right = _optionalChain([node, 'optionalAccess', _4439 => _4439.right]);
+    if (_optionalChain([node, 'optionalAccess', _4440 => _4440.operatorToken, 'optionalAccess', _4441 => _4441.kind]) === ts.SyntaxKind.EqualsToken && ts.isIdentifier(node.left) && ccxtGoTupleStringWriteNeedsLift(this, right) && ccxtGoTupleStringDeclarationOf(this, node.left) !== void 0) {
+      return this.printNode(node.left, 0) + " = SafeStringPtr(" + this.printNode(right, 0) + ")";
+    }
+    return shippedBinary.call(this, node, identation);
+  };
+  goTranspiler.__ccxtGoTupleStringJoinInstalled = true;
+}
+function ccxtGoElementReadInitializer(declaration) {
+  let node = _optionalChain([declaration, 'optionalAccess', _4442 => _4442.initializer]);
+  while (node !== void 0 && (node.kind === ts.SyntaxKind.ParenthesizedExpression || node.kind === ts.SyntaxKind.AsExpression || node.kind === ts.SyntaxKind.NonNullExpression)) {
+    node = node.expression;
+  }
+  if (node === void 0 || node.kind !== ts.SyntaxKind.ElementAccessExpression || node.questionDotToken !== void 0) {
+    return void 0;
+  }
+  return node;
+}
+var CCXT_GO_ELEMENT_READ_STRUCT_NAMES = /OrderBook|ArrayCache|Client|Future/;
+function ccxtGoElementReadIsObject(checker, type) {
+  const parts = _optionalChain([type, 'optionalAccess', _4443 => _4443.isUnionType, 'optionalCall', _4444 => _4444()]) ? ts.typeParts(type) : [type];
+  return parts.some((t) => _optionalChain([t, 'optionalAccess', _4445 => _4445.getSymbol, 'call', _4446 => _4446()]) !== void 0 && ((t.getSymbol().flags & ts.SymbolFlags.Class) !== 0 || CCXT_GO_ELEMENT_READ_STRUCT_NAMES.test(checker.typeToString(t))));
+}
+function ccxtGoElementReadLocalType(goTranspiler, declaration, family) {
+  if (_optionalChain([declaration, 'optionalAccess', _4447 => _4447.kind]) !== ts.SyntaxKind.VariableDeclaration || _optionalChain([declaration, 'access', _4448 => _4448.name, 'optionalAccess', _4449 => _4449.kind]) !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  if (_optionalChain([declaration, 'access', _4450 => _4450.parent, 'optionalAccess', _4451 => _4451.parent, 'optionalAccess', _4452 => _4452.kind]) !== ts.SyntaxKind.VariableStatement) {
+    return void 0;
+  }
+  const initializer = ccxtGoElementReadInitializer(declaration);
+  if (initializer === void 0) {
+    return void 0;
+  }
+  if (typeof goTranspiler.goDeclaredLocalTypeIfSafe !== "function" || typeof goTranspiler.goSafeDictUseReadsTheMap !== "function" || typeof goTranspiler.goSafeListUseReadsTheList !== "function" || typeof goTranspiler.hasNodeWhere !== "function") {
+    return void 0;
+  }
+  const sourceName = declaration.name.text;
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0) {
+    return void 0;
+  }
+  const refersTo = typeof goTranspiler.goIdentifierRefersToDeclaration === "function" ? (n) => goTranspiler.goIdentifierRefersToDeclaration(n, declaration) : () => true;
+  const skipUse = (n) => _optionalChain([n, 'access', _4453 => _4453.parent, 'optionalAccess', _4454 => _4454.kind]) === ts.SyntaxKind.PropertyAccessExpression && n.parent.name === n || _optionalChain([n, 'access', _4455 => _4455.parent, 'optionalAccess', _4456 => _4456.kind]) === ts.SyntaxKind.PropertyAssignment && n.parent.name === n || !refersTo(n);
+  let uses = 0;
+  goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === sourceName && n !== declaration.name && !skipUse(n)) {
+      uses += 1;
+    }
+    return false;
+  });
+  if (uses === 0) {
+    return void 0;
+  }
+  const dictLike = family === "map";
+  const printer = goTranspiler;
+  const checker = typeof printer.checkerOrUndefined === "function" ? printer.checkerOrUndefined() : void 0;
+  if (checker === void 0) {
+    return void 0;
+  }
+  const valueType = checker.getTypeAtLocation(declaration.name);
+  const parts = _optionalChain([valueType, 'optionalAccess', _4457 => _4457.isUnionType, 'optionalCall', _4458 => _4458()]) ? ts.typeParts(valueType) : [valueType];
+  const isList = (t) => checker.isArrayType(t) || checker.isTupleType(t);
+  const scalarFlags = ts.TypeFlags.StringLike | ts.TypeFlags.NumberLike | ts.TypeFlags.BooleanLike | ts.TypeFlags.BigIntLike;
+  if (!dictLike && !parts.every((t) => isList(t) || (t.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)) !== 0)) {
+    return void 0;
+  }
+  if (dictLike && parts.some((t) => isList(t) || (t.flags & scalarFlags) !== 0)) {
+    return void 0;
+  }
+  for (let node = initializer; _optionalChain([node, 'optionalAccess', _4459 => _4459.kind]) === ts.SyntaxKind.ElementAccessExpression; node = node.expression) {
+    if (ccxtGoElementReadIsObject(checker, checker.getTypeAtLocation(node.expression))) {
+      return void 0;
+    }
+  }
+  if (ccxtGoElementReadIsObject(checker, valueType)) {
+    return void 0;
+  }
+  const keyFits = (key) => {
+    if (key === void 0) {
+      return false;
+    }
+    if (dictLike) {
+      return (key.kind === ts.SyntaxKind.StringLiteral || key.kind === ts.SyntaxKind.NoSubstitutionTemplateLiteral) && !/^[+-]?[0-9]+$/.test(key.text);
+    }
+    return typeof printer.goIntIndexExpression === "function" && printer.goIntIndexExpression(key);
+  };
+  const reads = (n) => {
+    const parent = n.parent;
+    if (_optionalChain([parent, 'optionalAccess', _4460 => _4460.kind]) === ts.SyntaxKind.ElementAccessExpression) {
+      if (!keyFits(parent.argumentExpression)) {
+        return false;
+      }
+    } else if (_optionalChain([parent, 'optionalAccess', _4461 => _4461.kind]) === ts.SyntaxKind.CallExpression) {
+      const callee = typeof printer.goPrintedCallee === "function" ? printer.goPrintedCallee(printer.printNode(parent, 0)) : void 0;
+      if (callee === void 0 || /IsDictionary$/.test(callee)) {
+        return false;
+      }
+      if ((callee === "GetValue" || /^(?:this\.)?Safe[A-Z]/.test(callee)) && !keyFits(parent.arguments[1])) {
+        return false;
+      }
+    } else if (_optionalChain([parent, 'optionalAccess', _4462 => _4462.kind]) === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([parent, 'access', _4463 => _4463.name, 'optionalAccess', _4464 => _4464.text]) === "push") {
+      return false;
+    }
+    return dictLike ? printer.goSafeDictUseReadsTheMap(n) : printer.goSafeListUseReadsTheList(n);
+  };
+  return goTranspiler.goDeclaredLocalTypeIfSafe(declaration, dictLike ? CCXT_GO_SAFE_DICT_LOCAL_TYPE : CCXT_GO_SAFE_LIST_LOCAL_TYPE, reads, skipUse);
+}
+function installCcxtGoElementReadUnbox(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoElementReadUnboxInstalled) {
+    return;
+  }
+  if (typeof goTranspiler.goSafeDictLocalUnbox !== "function" || typeof goTranspiler.goSafeListLocalUnbox !== "function" || typeof goTranspiler.goSafeDictUnboxValue !== "function" || typeof goTranspiler.goSafeListUnboxValue !== "function") {
+    return;
+  }
+  const innerDictType = goTranspiler.goSafeDictLocalUnbox;
+  const innerListType = goTranspiler.goSafeListLocalUnbox;
+  const innerDictValue = goTranspiler.goSafeDictUnboxValue;
+  const innerListValue = goTranspiler.goSafeListUnboxValue;
+  const cache = /* @__PURE__ */ new Map();
+  const own = (printer, declaration, family) => {
+    const key = declaration;
+    if (!cache.has(key)) {
+      cache.set(key, {});
+      cache.set(key, { map: ccxtGoElementReadLocalType(printer, declaration, "map"), list: ccxtGoElementReadLocalType(printer, declaration, "list") });
+    }
+    return cache.get(key)[family];
+  };
+  goTranspiler.goSafeDictLocalUnbox = function(declaration) {
+    return _nullishCoalesce(innerDictType.call(this, declaration), () => ( own(this, declaration, "map")));
+  };
+  goTranspiler.goSafeListLocalUnbox = function(declaration) {
+    return _nullishCoalesce(innerListType.call(this, declaration), () => ( own(this, declaration, "list")));
+  };
+  goTranspiler.goSafeDictUnboxValue = function(declaration, identation) {
+    if (innerDictType.call(this, declaration) === void 0 && own(this, declaration, "map") !== void 0) {
+      return "MapTyped(" + this.printNode(declaration.initializer, identation).trimStart() + ")";
+    }
+    return innerDictValue.call(this, declaration, identation);
+  };
+  goTranspiler.goSafeListUnboxValue = function(declaration, identation) {
+    if (innerListType.call(this, declaration) === void 0 && own(this, declaration, "list") !== void 0) {
+      return "ArrayTyped(" + this.printNode(declaration.initializer, identation).trimStart() + ")";
+    }
+    return innerListValue.call(this, declaration, identation);
+  };
+  goTranspiler.__ccxtGoElementReadUnboxInstalled = true;
+}
+function ccxtGoConcatJoinLeafIsString(goTranspiler, node, declaration, derefOk) {
+  if (_optionalChain([node, 'optionalAccess', _4465 => _4465.kind]) === ts.SyntaxKind.Identifier && node.text === declaration.name.text) {
+    let target;
+    try {
+      target = _optionalChain([goTranspiler, 'access', _4466 => _4466.getChecker, 'call', _4467 => _4467(), 'access', _4468 => _4468.getSymbolAtLocation, 'call', _4469 => _4469(node), 'optionalAccess', _4470 => _4470.valueDeclaration, 'optionalAccess', _4471 => _4471.resolve, 'call', _4472 => _4472()]);
+    } catch (e) {
+      return false;
+    }
+    return target === declaration;
+  }
+  if (_optionalChain([node, 'optionalAccess', _4473 => _4473.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    return ccxtGoConcatJoinLeafIsString(goTranspiler, node.expression, declaration, false);
+  }
+  if (_optionalChain([node, 'optionalAccess', _4474 => _4474.kind]) === ts.SyntaxKind.BinaryExpression && _optionalChain([node, 'access', _4475 => _4475.operatorToken, 'optionalAccess', _4476 => _4476.kind]) === ts.SyntaxKind.PlusToken && ccxtGoConcatJoinMentions(node, declaration.name.text)) {
+    return ccxtGoConcatJoinLeafIsString(goTranspiler, node.left, declaration, true) && ccxtGoConcatJoinLeafIsString(goTranspiler, node.right, declaration, true);
+  }
+  if (ccxtGoConcatJoinMentions(node, declaration.name.text)) {
+    return false;
+  }
+  const printed = goTranspiler.printNode(node, 0);
+  return derefOk ? goTranspiler.goStringConcatOperandType(node, printed) === "string" : goTranspiler.goOperandStaticType(node, printed) === "string";
+}
+function ccxtGoConcatJoinMentions(node, name) {
+  if (node === void 0) {
+    return false;
+  }
+  if (node.kind === ts.SyntaxKind.Identifier && node.text === name) {
+    return true;
+  }
+  return _optionalChain([node, 'optionalAccess', _4477 => _4477.forEachChild, 'call', _4478 => _4478((child) => ccxtGoConcatJoinMentions(child, name) ? true : void 0)]) === true;
+}
+function ccxtGoStringConcatJoinIsSafe(goTranspiler, scope, declaration, varName) {
+  if (scope === void 0 || _optionalChain([declaration, 'optionalAccess', _4479 => _4479.kind]) !== ts.SyntaxKind.VariableDeclaration || _optionalChain([declaration, 'access', _4480 => _4480.name, 'optionalAccess', _4481 => _4481.kind]) !== ts.SyntaxKind.Identifier || _optionalChain([declaration, 'access', _4482 => _4482.parent, 'optionalAccess', _4483 => _4483.parent, 'optionalAccess', _4484 => _4484.kind]) !== ts.SyntaxKind.FirstStatement || typeof goTranspiler.goStringConcatOperandType !== "function" || typeof goTranspiler.goOperandStaticType !== "function") {
+    return false;
+  }
+  const init = declaration.initializer;
+  if (_optionalChain([init, 'optionalAccess', _4485 => _4485.kind]) !== ts.SyntaxKind.StringLiteral && _optionalChain([init, 'optionalAccess', _4486 => _4486.kind]) !== ts.SyntaxKind.NoSubstitutionTemplateLiteral) {
+    return false;
+  }
+  let grown = 0;
+  let unsafe = false;
+  const visit = (n) => {
+    if (unsafe) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== declaration.name) {
+      const parent = n.parent;
+      if (_optionalChain([parent, 'optionalAccess', _4487 => _4487.kind]) === ts.SyntaxKind.VariableDeclaration || _optionalChain([parent, 'optionalAccess', _4488 => _4488.kind]) === ts.SyntaxKind.Parameter) {
+        unsafe = true;
+        return;
+      }
+      if (_optionalChain([parent, 'optionalAccess', _4489 => _4489.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n) {
+        const op = parent.operatorToken.kind;
+        if (op === ts.SyntaxKind.EqualsToken) {
+          if (ccxtGoConcatJoinMentions(parent.right, varName)) {
+            if (!ccxtGoConcatJoinLeafIsString(goTranspiler, parent.right, declaration, true)) {
+              unsafe = true;
+              return;
+            }
+            grown += 1;
+          } else if (goTranspiler.goTypeOfInitializer(parent.right, goTranspiler.printNode(parent.right, 0)) !== "string") {
+            unsafe = true;
+            return;
+          }
+          _optionalChain([parent, 'access', _4490 => _4490.right, 'optionalAccess', _4491 => _4491.forEachChild, 'call', _4492 => _4492(visitReadsOnly)]);
+          return;
+        }
+        if (op === ts.SyntaxKind.PlusEqualsToken) {
+          if (!ccxtGoConcatJoinLeafIsString(goTranspiler, parent.right, declaration, false) || parent.right.kind !== ts.SyntaxKind.BinaryExpression && goTranspiler.goOperandStaticType(parent.right, goTranspiler.printNode(parent.right, 0)) !== "string") {
+            unsafe = true;
+            return;
+          }
+          grown += 1;
+          return;
+        }
+        unsafe = true;
+        return;
+      }
+      if (ccxtGoStringConcatReadVetoes(n, parent)) {
+        unsafe = true;
+        return;
+      }
+    }
+    _optionalChain([n, 'optionalAccess', _4493 => _4493.forEachChild, 'call', _4494 => _4494(visit)]);
+  };
+  const visitReadsOnly = (n) => {
+    if (unsafe) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === varName && ccxtGoStringConcatReadVetoes(n, n.parent)) {
+      unsafe = true;
+      return;
+    }
+    _optionalChain([n, 'optionalAccess', _4495 => _4495.forEachChild, 'call', _4496 => _4496(visitReadsOnly)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _4497 => _4497.forEachChild, 'call', _4498 => _4498(visit)]);
+  return !unsafe && grown > 0;
+}
+function ccxtGoStringConcatReadVetoes(n, parent) {
+  if (parent === void 0) {
+    return true;
+  }
+  if ((parent.kind === ts.SyntaxKind.PrefixUnaryExpression || parent.kind === ts.SyntaxKind.PostfixUnaryExpression) && (parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken)) {
+    return true;
+  }
+  if ((parent.kind === ts.SyntaxKind.PropertyAccessExpression || parent.kind === ts.SyntaxKind.ElementAccessExpression) && parent.expression === n) {
+    return true;
+  }
+  if (parent.kind === ts.SyntaxKind.SpreadElement || parent.kind === ts.SyntaxKind.CallExpression && parent.expression === n || isDestructuringTarget(n)) {
+    return true;
+  }
+  if (parent.kind === ts.SyntaxKind.BinaryExpression && (parent.left === n || parent.right === n)) {
+    const other = parent.left === n ? parent.right : parent.left;
+    if (isNilLiteralExpression(other) || isNonStringLiteralOperand(other)) {
+      return true;
+    }
+  }
+  return false;
+}
+function installCcxtGoStringConcatJoin(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoStringConcatJoinInstalled || typeof goTranspiler.goLocalIsSafeToType !== "function") {
+    return;
+  }
+  const upstreamSafe = goTranspiler.goLocalIsSafeToType;
+  goTranspiler.goLocalIsSafeToType = function(scope, declaration, varName, goType) {
+    if (upstreamSafe.call(this, scope, declaration, varName, goType)) {
+      return true;
+    }
+    return goType === "string" && ccxtGoStringConcatJoinIsSafe(this, scope, declaration, varName);
+  };
+  goTranspiler.__ccxtGoStringConcatJoinInstalled = true;
+}
+var CCXT_GO_SCALAR_ELEMENT_READERS = { "*string": "SafeStringPtr", "*bool": "SafeBoolPtr" };
+function ccxtGoScalarElementReadType(goTranspiler, initializer) {
+  const declaration = _optionalChain([initializer, 'optionalAccess', _4499 => _4499.parent]);
+  if (_optionalChain([declaration, 'optionalAccess', _4500 => _4500.kind]) !== ts.SyntaxKind.VariableDeclaration || declaration.initializer !== initializer || _optionalChain([declaration, 'access', _4501 => _4501.name, 'optionalAccess', _4502 => _4502.kind]) !== ts.SyntaxKind.Identifier || _optionalChain([declaration, 'access', _4503 => _4503.parent, 'optionalAccess', _4504 => _4504.parent, 'optionalAccess', _4505 => _4505.kind]) !== ts.SyntaxKind.VariableStatement) {
+    return void 0;
+  }
+  const read = ccxtGoElementReadInitializer(declaration);
+  if (read === void 0) {
+    return void 0;
+  }
+  const checker = typeof goTranspiler.checkerOrUndefined === "function" ? goTranspiler.checkerOrUndefined() : void 0;
+  if (checker === void 0) {
+    return void 0;
+  }
+  const kindOf = (type) => {
+    const parts = _optionalChain([type, 'optionalAccess', _4506 => _4506.isUnionType, 'optionalCall', _4507 => _4507()]) ? ts.typeParts(type) : [type];
+    let kind;
+    for (const t of parts) {
+      if (t === void 0 || (t.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0) {
+        return void 0;
+      }
+      if ((t.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)) !== 0) {
+        continue;
+      }
+      const k = (t.flags & ts.TypeFlags.StringLike) !== 0 ? "*string" : (t.flags & ts.TypeFlags.BooleanLike) !== 0 ? "*bool" : void 0;
+      if (k === void 0 || kind !== void 0 && kind !== k) {
+        return void 0;
+      }
+      kind = k;
+    }
+    return kind;
+  };
+  const goType = kindOf(checker.getTypeAtLocation(declaration.name));
+  if (goType === void 0 || kindOf(checker.getTypeAtLocation(read)) !== goType) {
+    return void 0;
+  }
+  for (let node = read; _optionalChain([node, 'optionalAccess', _4508 => _4508.kind]) === ts.SyntaxKind.ElementAccessExpression; node = node.expression) {
+    const containerType = checker.getTypeAtLocation(node.expression);
+    const parts = _optionalChain([containerType, 'optionalAccess', _4509 => _4509.isUnionType, 'optionalCall', _4510 => _4510()]) ? ts.typeParts(containerType) : [containerType];
+    if (parts.some((t) => ((_nullishCoalesce(_optionalChain([t, 'optionalAccess', _4511 => _4511.flags]), () => ( 0))) & (ts.TypeFlags.StringLike | ts.TypeFlags.Any)) !== 0) || ccxtGoElementReadIsObject(checker, containerType)) {
+      return void 0;
+    }
+  }
+  return goType;
+}
+function installCcxtGoScalarElementReads(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoScalarElementReadsInstalled || typeof goTranspiler.goTypeOfInitializer !== "function" || typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  const inner = goTranspiler.goTypeOfInitializer;
+  const cache = /* @__PURE__ */ new Map();
+  const own = (printer, initializer) => {
+    if (!cache.has(initializer)) {
+      cache.set(initializer, ccxtGoScalarElementReadType(printer, initializer));
+    }
+    return cache.get(initializer);
+  };
+  goTranspiler.goTypeOfInitializer = function(initializer, printedValue) {
+    const known = inner.call(this, initializer, printedValue);
+    return known !== void 0 ? known : own(this, initializer);
+  };
+  const innerPrint = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = innerPrint.call(this, node, identation);
+    const declaration = _optionalChain([node, 'optionalAccess', _4512 => _4512.declarations, 'optionalAccess', _4513 => _4513[0]]);
+    const initializer = _optionalChain([declaration, 'optionalAccess', _4514 => _4514.initializer]);
+    if (typeof printed !== "string" || initializer === void 0 || node.declarations.length !== 1) {
+      return printed;
+    }
+    const goType = own(this, initializer);
+    if (goType === void 0 || inner.call(this, initializer, this.printNode(initializer, 0)) !== void 0) {
+      return printed;
+    }
+    const head = this.getIden(identation) + "var " + this.printNode(declaration.name, 0) + " " + goType + " = ";
+    if (!printed.startsWith(head)) {
+      return printed;
+    }
+    return head + CCXT_GO_SCALAR_ELEMENT_READERS[goType] + "(" + printed.substring(head.length) + ")";
+  };
+  const shippedBinary = goTranspiler.printBinaryExpression;
+  goTranspiler.printBinaryExpression = function(node, identation) {
+    const right = _optionalChain([node, 'optionalAccess', _4515 => _4515.right]);
+    if (_optionalChain([node, 'optionalAccess', _4516 => _4516.operatorToken, 'optionalAccess', _4517 => _4517.kind]) === ts.SyntaxKind.EqualsToken && ts.isIdentifier(node.left) && ts.isIdentifier(right)) {
+      const decl = _optionalChain([this, 'access', _4518 => _4518.checkerOrUndefined, 'optionalCall', _4519 => _4519(), 'optionalAccess', _4520 => _4520.getSymbolAtLocation, 'call', _4521 => _4521(right), 'optionalAccess', _4522 => _4522.valueDeclaration, 'optionalAccess', _4523 => _4523.resolve, 'call', _4524 => _4524()]);
+      if (_optionalChain([decl, 'optionalAccess', _4525 => _4525.kind]) === ts.SyntaxKind.VariableDeclaration && decl.initializer !== void 0 && own(this, decl.initializer) !== void 0 && this.goDeclaredTypeOfIdentifier(node.left) === void 0) {
+        return this.printNode(node.left, 0) + " = DerefScalar(" + this.printNode(right, 0) + ")";
+      }
+    }
+    return shippedBinary.call(this, node, identation);
+  };
+  goTranspiler.__ccxtGoScalarElementReadsInstalled = true;
+}
+var CCXT_GO_PRODUCER_DECLARATIONS = {
+  "this.FindMessageHashes": "list",
+  "this.MarketIds": "list",
+  "this.ParseOrders": "list",
+  "this.OutcomesByMarketId": "list",
+  "this.ParseSearchQueries": "list",
+  "this.CreateOrderSettlementData": "map",
+  "this.ParseEventToMarkets": "list",
+  "this.WrapAsPostAction": "map",
+  "this.BuildClobOrderBody": "map",
+  "this.CreateOrderRequest": "map",
+  "this.ExpandGroupRows": "list",
+  "this.GetOrderChannelAndMessageHash": "list",
+  "this.ParseTradingFee": "map",
+  "this.BuildOHLCVC": "list",
+  "this.BuildOrderbookOrder": "map",
+  "this.HandleTriggerPricesAndParams": "list",
+  "this.OpinionOrderRawAmounts": "map",
+  "this.ParseBinaryMarketToOutcomes": "list",
+  "this.ParseCancelOrders": "list",
+  "this.ParseBorrowRateHistory": "list",
+  // U15
+  "this.ParsePredictionOrders": "list",
+  "this.FilterByOutcomeSinceLimit": "list",
+  // U03
+  "this.ParsePredictionTrades": "list",
+  // U04
+  "this.ParseFundingRate": "map",
+  "this.ParseMarketLeverageTiers": "list",
+  "this.ParseOHLCVs": "list",
+  "this.InsertMissingCandles": "list",
+  // gochan32-U05
+  "this.ParseTradingViewOHLCV": "list",
+  // gochan32-U05
+  "this.ParseTrade": "map",
+  "this.ParseOrder": "map",
+  "this.ParseTicker": "map",
+  "this.ParseWsOrder": "map",
+  "this.ParseWsTicker": "map",
+  "this.Omit": "map",
+  "this.SafeMarket": "map",
+  "this.ParseTransaction": "map",
+  "this.ParseWsOHLCVs": "list",
+  "this.PolymarketOrderRawAmounts": "map",
+  "this.SignPredictfunOrder": "map",
+  "this.AddKeyInArrayItems": "list",
+  "this.BuildGen2SubscriptionRequest": "list",
+  "this.CancelOrderRequest": "map",
+  "this.CancelOrdersRequest": "map",
+  "this.ClobOrderMessage": "map",
+  "this.ConstructPhantomAgent": "map",
+  "this.ConvertTradingViewToOHLCV": "list",
+  "this.CreateOrdersRequest": "list",
+  "this.CreatePublicSubscriptionRequest": "map",
+  "this.CreateSpotOrderRequest": "map",
+  "this.CreateTransferSettlementData": "map",
+  "this.CreateWithdrawalSettlementData": "map",
+  "this.CurrencyIds": "list",
+  "this.CustomParseBidAsk": "list",
+  "this.CustomParseOrderBook": "map",
+  "this.EditContractOrderRequest": "map",
+  "this.EditOrderRequest": "map",
+  "this.EditOrdersRequest": "map",
+  "this.GetListFromObjectValues": "list",
+  "this.IndexPositionBreakList": "map",
+  "this.OrdersToTrades": "list",
+  "this.ParseAccountPosition": "map",
+  "this.ParseAccountPositions": "list",
+  "this.ParseBorrowInterests": "list",
+  "this.ParseBorrowRate": "map",
+  "this.ParseContractBidsAsks": "list",
+  "this.ParseCurrency": "map",
+  "this.ParseDepositAddress": "map",
+  "this.ParseFundingRateHistory": "map",
+  "this.ParseFundingRateWs": "map",
+  "this.ParseGreeks": "map",
+  "this.ParseLeverage": "map",
+  "this.ParseMarginLoan": "map",
+  "this.ParseMarginModification": "map",
+  "this.ParseMarginModifications": "list",
+  "this.ParseMarket": "map",
+  "this.ParseMarkets": "list",
+  "this.ParseMyTrade": "map",
+  "this.ParseMyriadMarket": "map",
+  "this.ParseOpenInterest": "map",
+  "this.ParseOpinionMarket": "map",
+  "this.ParseOrderBookBidAsk": "list",
+  "this.ParseOrderBookBidsAsks": "list",
+  "this.ParsePosition": "map",
+  "this.ParsePredictionPosition": "map",
+  "this.ParsePredictionPositions": "list",
+  "this.ParseSettlement": "map",
+  "this.ParseSettlements": "list",
+  "this.ParseTopicMarket": "map",
+  "this.ParseTradingFees": "map",
+  "this.ParseTransfer": "map",
+  "this.ParseWsBalance": "map",
+  "this.ParseWsFundingRate": "map",
+  "this.ParseWsTrade": "map",
+  "this.PostActionRequest": "map",
+  "this.PrepareAccountRequest": "map",
+  "this.SafePredictionOrder": "map",
+  "this.SafePredictionPosition": "map",
+  "this.SafePredictionTicker": "map",
+  "this.SafePredictionTrade": "map",
+  "this.SeparateBidsOrAsks": "list",
+  "this.ParseOpenInterestsHistory": "list",
+  "this.ParseLiquidations": "list",
+  "this.ParseADLRanks": "list",
+  "this.FilterByArrayADLRanks": "list",
+  "this.ParseOpenInterests": "map",
+  // U16
+  "this.ParseConversions": "list",
+  "this.ParseLongShortRatioHistory": "list",
+  "this.ParseAccounts": "list",
+  "this.ParseAllGreeks": "map",
+  "this.ParseOptionChain": "map",
+  "this.ParseAccount": "map",
+  // U17
+  "this.ParseFundingRateHistories": "list",
+  "this.ParseIncomes": "list",
+  "this.ParseFundingHistories": "list",
+  // U13
+  "this.ParseDepositAddresses": "list"
+  // W15
+};
+var CCXT_GO_PRODUCER_DICT_TYPE = "map[string]any";
+var CCXT_GO_PRODUCER_LIST_TYPE = "[]any";
+function ccxtGoProducerDeclaredShapeAgrees(goTranspiler, callee, family) {
+  let declaration = void 0;
+  try {
+    declaration = _optionalChain([goTranspiler, 'access', _4526 => _4526.getChecker, 'call', _4527 => _4527(), 'access', _4528 => _4528.getSymbolAtLocation, 'call', _4529 => _4529(callee.name), 'optionalAccess', _4530 => _4530.valueDeclaration, 'optionalAccess', _4531 => _4531.resolve, 'call', _4532 => _4532()]);
+  } catch (e) {
+    return false;
+  }
+  const text = (_nullishCoalesce(_optionalChain([declaration, 'optionalAccess', _4533 => _4533.type, 'optionalAccess', _4534 => _4534.getText, 'optionalCall', _4535 => _4535()]), () => ( ""))).replace(/\s+/g, " ").trim();
+  if (text === "" || text.includes("|") || text === "any") {
+    return true;
+  }
+  const isList = text.startsWith("[") || text.endsWith("[]") || /^(List|Array<[\s\S]*>)$/.test(text);
+  return family === "map" ? !isList : true;
+}
+function ccxtGoProducerDeclaredList(goTranspiler, callee) {
+  let declaration = void 0;
+  try {
+    declaration = _optionalChain([goTranspiler, 'access', _4536 => _4536.getChecker, 'call', _4537 => _4537(), 'access', _4538 => _4538.getSymbolAtLocation, 'call', _4539 => _4539(callee.name), 'optionalAccess', _4540 => _4540.valueDeclaration, 'optionalAccess', _4541 => _4541.resolve, 'call', _4542 => _4542()]);
+  } catch (e) {
+    return false;
+  }
+  const text = (_nullishCoalesce(_optionalChain([declaration, 'optionalAccess', _4543 => _4543.type, 'optionalAccess', _4544 => _4544.getText, 'optionalCall', _4545 => _4545()]), () => ( ""))).replace(/\s+/g, " ").trim();
+  return !text.includes("|") && (text.startsWith("[") || text.endsWith("[]") || /^(List|Array<[\s\S]*>)$/.test(text));
+}
+function ccxtGoProducerDeclarationType(goTranspiler, declaration, family) {
+  if (declaration === void 0 || declaration.kind !== ts.SyntaxKind.VariableDeclaration || declaration.name === void 0 || declaration.name.kind !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  if (declaration.parent === void 0 || declaration.parent.parent === void 0 || declaration.parent.parent.kind !== ts.SyntaxKind.VariableStatement) {
+    return void 0;
+  }
+  const initializer = declaration.initializer;
+  if (initializer === void 0 || initializer.kind !== ts.SyntaxKind.CallExpression || initializer.questionDotToken !== void 0) {
+    return void 0;
+  }
+  const callee = initializer.expression;
+  if (callee === void 0 || callee.kind !== ts.SyntaxKind.PropertyAccessExpression || callee.questionDotToken !== void 0 || callee.expression === void 0 || callee.expression.kind !== ts.SyntaxKind.ThisKeyword || callee.name === void 0) {
+    return void 0;
+  }
+  const goName = callee.name.text.charAt(0).toUpperCase() + callee.name.text.slice(1);
+  const tableFamily = CCXT_GO_PRODUCER_DECLARATIONS["this." + goName];
+  if (tableFamily !== family && !(tableFamily === "map" && family === "list" && ccxtGoProducerDeclaredList(goTranspiler, callee))) {
+    return void 0;
+  }
+  if (!ccxtGoProducerDeclaredShapeAgrees(goTranspiler, callee, family)) {
+    return void 0;
+  }
+  const dictLike = family === "map";
+  const goType = dictLike ? CCXT_GO_PRODUCER_DICT_TYPE : CCXT_GO_PRODUCER_LIST_TYPE;
+  if (typeof goTranspiler.goDeclaredLocalTypeIfSafe !== "function" || typeof goTranspiler.goSafeDictUseReadsTheMap !== "function" || typeof goTranspiler.goSafeListUseReadsTheList !== "function") {
+    return void 0;
+  }
+  const neverAbsent = dictLike && (CCXT_GO_PRODUCER_NEVER_ABSENT.indexOf(goName) >= 0 || goName === "Omit" && ccxtGoProducerArgIsMap(goTranspiler, initializer.arguments[0]) || CCXT_GO_PRODUCER_NEVER_ABSENT_IF_DICT.indexOf(goName) >= 0 && ccxtGoProducerDeclaredDict(goTranspiler, callee));
+  const readsTheValue = neverAbsent ? (n) => !ccxtGoProducerUseRebinds(n) : dictLike ? (n) => goTranspiler.goSafeDictUseReadsTheMap(n) : (n) => goTranspiler.goSafeListUseReadsTheList(n) || ccxtGoSafeListIndexedAccessorRead(goTranspiler, n);
+  return goTranspiler.goDeclaredLocalTypeIfSafe(declaration, goType, readsTheValue);
+}
+var CCXT_GO_PRODUCER_NEVER_ABSENT = [
+  "ParseOrder",
+  "ParseTrade",
+  "ParseTicker",
+  "ParsePosition",
+  "ParseTransaction",
+  "ParseWsOrder",
+  "ParseWsTicker",
+  "ParseWsTrade",
+  // safeMarket: every override returns super.safeMarket or createExpiredOptionMarket (a dict literal)
+  "SafeMarket"
+];
+var CCXT_GO_PRODUCER_NEVER_ABSENT_IF_DICT = ["CreateOrderRequest"];
+function ccxtGoProducerDeclaredDict(goTranspiler, callee) {
+  let declaration = void 0;
+  try {
+    declaration = _optionalChain([goTranspiler, 'access', _4546 => _4546.getChecker, 'call', _4547 => _4547(), 'access', _4548 => _4548.getSymbolAtLocation, 'call', _4549 => _4549(callee.name), 'optionalAccess', _4550 => _4550.valueDeclaration, 'optionalAccess', _4551 => _4551.resolve, 'call', _4552 => _4552()]);
+  } catch (e) {
+    return false;
+  }
+  return (_nullishCoalesce(_optionalChain([declaration, 'optionalAccess', _4553 => _4553.type, 'optionalAccess', _4554 => _4554.getText, 'optionalCall', _4555 => _4555()]), () => ( ""))).trim() === "Dict";
+}
+function ccxtGoProducerArgIsMap(goTranspiler, arg) {
+  if (arg === void 0) {
+    return false;
+  }
+  if (arg.kind === ts.SyntaxKind.ObjectLiteralExpression) {
+    return true;
+  }
+  if (arg.kind === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([arg, 'access', _4556 => _4556.name, 'optionalAccess', _4557 => _4557.text]) === "urls") {
+    return ccxtGoIndexableThisField(goTranspiler, arg) !== void 0;
+  }
+  if (arg.kind !== ts.SyntaxKind.Identifier) {
+    return false;
+  }
+  if (ccxtGoElement1BindingIsMap(goTranspiler, arg, 0)) {
+    return true;
+  }
+  const element = ccxtGoParamDeclarationOf(goTranspiler, arg);
+  if (_optionalChain([element, 'optionalAccess', _4558 => _4558.kind]) === ts.SyntaxKind.BindingElement && ccxtGoTupleParamsElementType(goTranspiler, element) === CCXT_GO_PRODUCER_DICT_TYPE) {
+    return true;
+  }
+  const decl = ccxtGoParamDeclarationOf(goTranspiler, arg);
+  if (_optionalChain([decl, 'optionalAccess', _4559 => _4559.kind]) === ts.SyntaxKind.Parameter && typeof goTranspiler.goGetArgParameterType === "function" && goTranspiler.goGetArgParameterType(decl) === CCXT_GO_PRODUCER_DICT_TYPE) {
+    return true;
+  }
+  return typeof goTranspiler.goDeclaredTypeOfIdentifier === "function" && goTranspiler.goDeclaredTypeOfIdentifier(arg) === CCXT_GO_PRODUCER_DICT_TYPE;
+}
+var CCXT_GO_ELEMENT_1_PARAMS_SLOT = {
+  "handleOptionAndParams": 0,
+  "handleOptionAndParams2": 0,
+  "handleMarketTypeAndParams": 2,
+  "handleSubTypeAndParams": 2,
+  "handleMarginModeAndParams": 1,
+  "handleUntilOption": 2,
+  "handleWithdrawTagAndParams": 1,
+  "handleMaxEntriesPerRequestAndParams": 2,
+  "handleTriggerAndParams": 0,
+  "handleTriggerDirectionAndParams": 0,
+  "handlePostOnly": 2,
+  "handleParamString": 0,
+  "handleParamString2": 0,
+  "handleParamInteger": 0,
+  "handleParamInteger2": 0,
+  "handleParamBool": 0,
+  "handleParamBool2": 0,
+  "handleNetworkCodeAndParams": 0
+};
+var CCXT_GO_ELEMENT_1_BASE_FILE = /[\\/]base[\\/]Exchange(\.nooverloads\.\d+)?\.ts$/;
+var CCXT_GO_ELEMENT_1_CACHE = /* @__PURE__ */ new WeakMap();
+function ccxtGoElement1DeclarationIsMap(goTranspiler, declaration, depth) {
+  if (CCXT_GO_ELEMENT_1_CACHE.has(declaration)) {
+    return CCXT_GO_ELEMENT_1_CACHE.get(declaration);
+  }
+  CCXT_GO_ELEMENT_1_CACHE.set(declaration, false);
+  const call = declaration.initializer;
+  const callee = _optionalChain([call, 'optionalAccess', _4560 => _4560.expression]);
+  let result = false;
+  if (_optionalChain([call, 'optionalAccess', _4561 => _4561.kind]) === ts.SyntaxKind.CallExpression && _optionalChain([callee, 'optionalAccess', _4562 => _4562.kind]) === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([callee, 'access', _4563 => _4563.expression, 'optionalAccess', _4564 => _4564.kind]) === ts.SyntaxKind.ThisKeyword && call.questionDotToken === void 0) {
+    const slot = CCXT_GO_ELEMENT_1_PARAMS_SLOT[String(_nullishCoalesce(_optionalChain([callee, 'access', _4565 => _4565.name, 'optionalAccess', _4566 => _4566.text]), () => ( "")))];
+    let signature;
+    try {
+      signature = _optionalChain([goTranspiler, 'access', _4567 => _4567.getChecker, 'call', _4568 => _4568(), 'access', _4569 => _4569.getResolvedSignature, 'call', _4570 => _4570(call), 'optionalAccess', _4571 => _4571.declaration, 'optionalAccess', _4572 => _4572.resolve, 'call', _4573 => _4573()]);
+    } catch (e) {
+      signature = void 0;
+    }
+    const fileName = _nullishCoalesce(_optionalChain([signature, 'optionalAccess', _4574 => _4574.getSourceFile, 'optionalCall', _4575 => _4575(), 'optionalAccess', _4576 => _4576.fileName]), () => ( ""));
+    const arg = slot === void 0 ? void 0 : call.arguments[slot];
+    result = arg !== void 0 && CCXT_GO_ELEMENT_1_BASE_FILE.test(fileName) && depth < 16 && ccxtGoElement1ArgIsMap(goTranspiler, arg, depth + 1);
+  }
+  CCXT_GO_ELEMENT_1_CACHE.set(declaration, result);
+  return result;
+}
+function ccxtGoElement1ArgIsMap(goTranspiler, arg, depth) {
+  if (arg.kind === ts.SyntaxKind.ObjectLiteralExpression) {
+    return true;
+  }
+  if (arg.kind !== ts.SyntaxKind.Identifier) {
+    return false;
+  }
+  if (ccxtGoElement1BindingIsMap(goTranspiler, arg, depth)) {
+    return true;
+  }
+  const decl = ccxtGoParamDeclarationOf(goTranspiler, arg);
+  return _optionalChain([decl, 'optionalAccess', _4577 => _4577.kind]) === ts.SyntaxKind.Parameter && typeof goTranspiler.goGetArgParameterType === "function" && goTranspiler.goGetArgParameterType(decl) === CCXT_GO_PRODUCER_DICT_TYPE;
+}
+function ccxtGoElement1BindingIsMap(goTranspiler, identifier, depth) {
+  if (_optionalChain([identifier, 'optionalAccess', _4578 => _4578.kind]) !== ts.SyntaxKind.Identifier || typeof goTranspiler.getChecker !== "function") {
+    return false;
+  }
+  const element = ccxtGoParamDeclarationOf(goTranspiler, identifier);
+  return _optionalChain([element, 'optionalAccess', _4579 => _4579.kind]) === ts.SyntaxKind.BindingElement && ccxtGoElement1ElementIsMap(goTranspiler, element, depth);
+}
+function ccxtGoElement1ElementIsMap(goTranspiler, element, depth) {
+  const pattern = element.parent;
+  const declaration = _optionalChain([pattern, 'optionalAccess', _4580 => _4580.parent]);
+  if (_optionalChain([pattern, 'optionalAccess', _4581 => _4581.kind]) !== ts.SyntaxKind.ArrayBindingPattern || pattern.elements.indexOf(element) !== 1 || element.dotDotDotToken !== void 0 || element.initializer !== void 0 || _optionalChain([element, 'access', _4582 => _4582.name, 'optionalAccess', _4583 => _4583.kind]) !== ts.SyntaxKind.Identifier || _optionalChain([declaration, 'optionalAccess', _4584 => _4584.kind]) !== ts.SyntaxKind.VariableDeclaration || (_optionalChain([declaration, 'access', _4585 => _4585.parent, 'optionalAccess', _4586 => _4586.flags]) & ts.NodeFlags.Const) === 0) {
+    return false;
+  }
+  return ccxtGoElement1DeclarationIsMap(goTranspiler, declaration, depth);
+}
+function installCcxtGoElement1Params(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoElement1ParamsInstalled || typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = upstream.call(this, node, identation);
+    const declaration = _optionalChain([node, 'optionalAccess', _4587 => _4587.declarations, 'optionalAccess', _4588 => _4588[0]]);
+    const element = _optionalChain([declaration, 'optionalAccess', _4589 => _4589.name, 'optionalAccess', _4590 => _4590.elements, 'optionalAccess', _4591 => _4591[1]]);
+    if (typeof printed !== "string" || node.declarations.length !== 1 || declaration.name.kind !== ts.SyntaxKind.ArrayBindingPattern || _optionalChain([element, 'optionalAccess', _4592 => _4592.kind]) !== ts.SyntaxKind.BindingElement || !ccxtGoElement1ElementIsMap(this, element, 0)) {
+      return printed;
+    }
+    const scope = this.goEnclosingFunction(declaration);
+    if (typeof this.goTypeNameIsShadowed === "function" && this.goTypeNameIsShadowed(scope, "map[string]any")) {
+      return printed;
+    }
+    const name = this.printNode(element.name, 0);
+    const re = new RegExp("^([ \\t]*)" + name + " := (GetValue\\(\\w+Variable, 1\\))$", "m");
+    return printed.replace(re, (all, indent, read) => indent + "var " + name + " map[string]any = MapTyped(" + read + ")");
+  };
+  if (typeof goTranspiler.printCustomBinaryExpressionIfAny === "function") {
+    const upstreamBinary = goTranspiler.printCustomBinaryExpressionIfAny;
+    goTranspiler.printCustomBinaryExpressionIfAny = function(node, identation) {
+      const printed = upstreamBinary.call(this, node, identation);
+      if (typeof printed !== "string" || _optionalChain([node, 'optionalAccess', _4593 => _4593.operatorToken, 'optionalAccess', _4594 => _4594.kind]) !== ts.SyntaxKind.EqualsToken || _optionalChain([node, 'access', _4595 => _4595.left, 'optionalAccess', _4596 => _4596.kind]) !== ts.SyntaxKind.ArrayLiteralExpression || typeof this.goDeclaredTypeOfIdentifier !== "function") {
+        return printed;
+      }
+      const mapped = /* @__PURE__ */ new Set();
+      for (const element of node.left.elements) {
+        if (element.kind === ts.SyntaxKind.Identifier && this.goDeclaredTypeOfIdentifier(element) === "map[string]any") {
+          mapped.add(this.printNode(element, 0));
+        }
+      }
+      if (mapped.size === 0) {
+        return printed;
+      }
+      return printed.split("\n").map((line) => {
+        const match = /^([ \t]*)([A-Za-z_]\w*) = (GetValue\([A-Za-z_]\w*, \d+\))$/.exec(line);
+        return match !== null && mapped.has(match[2]) ? match[1] + match[2] + " = MapTyped(" + match[3] + ")" : line;
+      }).join("\n");
+    };
+  }
+  goTranspiler.__ccxtGoElement1ParamsInstalled = true;
+}
+function ccxtGoSafeListIndexedAccessorRead(goTranspiler, node) {
+  const parent = node.parent;
+  if (_optionalChain([parent, 'optionalAccess', _4597 => _4597.kind]) !== ts.SyntaxKind.CallExpression || parent.arguments.indexOf(node) !== 0) {
+    return false;
+  }
+  const callee = parent.expression;
+  if (_optionalChain([callee, 'optionalAccess', _4598 => _4598.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _4599 => _4599.expression, 'optionalAccess', _4600 => _4600.kind]) !== ts.SyntaxKind.ThisKeyword || !/^safe[A-Z]/.test(_nullishCoalesce(_optionalChain([callee, 'access', _4601 => _4601.name, 'optionalAccess', _4602 => _4602.text]), () => ( "")))) {
+    return false;
+  }
+  return ccxtGoSafeAccessorIndexKey(goTranspiler, parent);
+}
+function ccxtGoProducerUseRebinds(n) {
+  const parent = n.parent;
+  if (_optionalChain([parent, 'optionalAccess', _4603 => _4603.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n && isAssignmentOperator(parent.operatorToken.kind)) {
+    return true;
+  }
+  return _optionalChain([parent, 'optionalAccess', _4604 => _4604.kind]) === ts.SyntaxKind.PostfixUnaryExpression || _optionalChain([parent, 'optionalAccess', _4605 => _4605.kind]) === ts.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _4606 => _4606.kind]) === ts.SyntaxKind.DeleteExpression;
+}
+function ccxtGoProducerUnboxValue(goTranspiler, declaration, identation, family) {
+  if (ccxtGoProducerDeclarationType(goTranspiler, declaration, family) === void 0) {
+    return void 0;
+  }
+  const printed = goTranspiler.printNode(declaration.initializer, identation);
+  return (family === "map" ? "MapTyped(" : "ArrayTyped(") + printed.trimStart() + ")";
+}
+function installCcxtGoProducerDeclarations(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoProducerDeclarationsInstalled) {
+    return;
+  }
+  if (typeof goTranspiler.goSafeDictLocalUnbox !== "function" || typeof goTranspiler.goSafeListLocalUnbox !== "function" || typeof goTranspiler.goSafeDictUnboxValue !== "function" || typeof goTranspiler.goSafeListUnboxValue !== "function") {
+    return;
+  }
+  const shippedDictType = goTranspiler.goSafeDictLocalUnbox;
+  const shippedListType = goTranspiler.goSafeListLocalUnbox;
+  const shippedDictValue = goTranspiler.goSafeDictUnboxValue;
+  const shippedListValue = goTranspiler.goSafeListUnboxValue;
+  goTranspiler.goSafeDictLocalUnbox = function(declaration) {
+    const known = shippedDictType.call(this, declaration);
+    return known !== void 0 ? known : ccxtGoProducerDeclarationType(this, declaration, "map");
+  };
+  goTranspiler.goSafeListLocalUnbox = function(declaration) {
+    const known = shippedListType.call(this, declaration);
+    return known !== void 0 ? known : ccxtGoProducerDeclarationType(this, declaration, "list");
+  };
+  goTranspiler.goSafeDictUnboxValue = function(declaration, identation) {
+    if (shippedDictType.call(this, declaration) === void 0) {
+      const produced = ccxtGoProducerUnboxValue(this, declaration, identation, "map");
+      if (produced !== void 0) {
+        return produced;
+      }
+    }
+    return shippedDictValue.call(this, declaration, identation);
+  };
+  goTranspiler.goSafeListUnboxValue = function(declaration, identation) {
+    if (shippedListType.call(this, declaration) === void 0) {
+      const produced = ccxtGoProducerUnboxValue(this, declaration, identation, "list");
+      if (produced !== void 0) {
+        return produced;
+      }
+    }
+    return shippedListValue.call(this, declaration, identation);
+  };
+  goTranspiler.__ccxtGoProducerDeclarationsInstalled = true;
+}
+var CCXT_GO_ELEMENT_READ_TYPES = [
+  { type: "bool", reader: "GetValueBool", fallback: "false" }
+];
+var CCXT_GO_ELEMENT_READ_COMPARISONS = [
+  ts.SyntaxKind.EqualsEqualsToken,
+  ts.SyntaxKind.EqualsEqualsEqualsToken,
+  ts.SyntaxKind.ExclamationEqualsToken,
+  ts.SyntaxKind.ExclamationEqualsEqualsToken
+];
+function ccxtGoElementReadEntry(goType) {
+  const found = CCXT_GO_ELEMENT_READ_TYPES.filter((entry) => entry.type === goType);
+  return found.length === 1 ? found[0] : void 0;
+}
+function ccxtGoElementReadIsSafe(node) {
+  const parent = node.parent;
+  if (parent === void 0) {
+    return false;
+  }
+  if (parent.kind === ts.SyntaxKind.ParenthesizedExpression) {
+    return ccxtGoElementReadIsSafe(parent);
+  }
+  if (parent.kind === ts.SyntaxKind.BinaryExpression) {
+    const other = parent.left === node ? parent.right : parent.left;
+    return CCXT_GO_ELEMENT_READ_COMPARISONS.indexOf(parent.operatorToken.kind) >= 0 && _optionalChain([other, 'optionalAccess', _4607 => _4607.kind]) === ts.SyntaxKind.TrueKeyword;
+  }
+  if (parent.kind === ts.SyntaxKind.IfStatement || parent.kind === ts.SyntaxKind.WhileStatement || parent.kind === ts.SyntaxKind.DoStatement) {
+    return parent.expression === node;
+  }
+  if (parent.kind === ts.SyntaxKind.ForStatement) {
+    return parent.condition === node;
+  }
+  if (parent.kind === ts.SyntaxKind.ConditionalExpression) {
+    return parent.condition === node;
+  }
+  return false;
+}
+function ccxtGoElementReadFindDeclaration(scope, name) {
+  let found;
+  const walk = (node) => {
+    if (found !== void 0 || typeof _optionalChain([node, 'optionalAccess', _4608 => _4608.kind]) !== "number") {
+      return;
+    }
+    if (node.kind === ts.SyntaxKind.VariableDeclaration && isIdentifierNamed(node.name, name)) {
+      found = node;
+      return;
+    }
+    _optionalChain([node, 'optionalAccess', _4609 => _4609.forEachChild, 'call', _4610 => _4610(walk)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _4611 => _4611.forEachChild, 'call', _4612 => _4612(walk)]);
+  return found;
+}
+function ccxtGoElementReadDeclarationType(goTranspiler, declaration, varName) {
+  const name = varName !== void 0 ? varName : ts.isIdentifier(_optionalChain([declaration, 'optionalAccess', _4613 => _4613.name])) ? declaration.name.text : void 0;
+  if (name === void 0) {
+    return void 0;
+  }
+  if (_optionalChain([declaration, 'optionalAccess', _4614 => _4614.initializer, 'optionalAccess', _4615 => _4615.kind]) !== ts.SyntaxKind.TrueKeyword && _optionalChain([declaration, 'optionalAccess', _4616 => _4616.initializer, 'optionalAccess', _4617 => _4617.kind]) !== ts.SyntaxKind.FalseKeyword) {
+    return void 0;
+  }
+  const scope = typeof goTranspiler.goEnclosingFunction === "function" ? goTranspiler.goEnclosingFunction(declaration) : void 0;
+  if (scope === void 0) {
+    return void 0;
+  }
+  let elementReads = 0;
+  let rejected = false;
+  const walk = (node) => {
+    if (rejected) {
+      return;
+    }
+    if (node !== scope && node !== declaration && FUNCTION_LIKE_KINDS.indexOf(node.kind) >= 0) {
+      rejected = scopeMentionsIdentifier(node, name);
+      return;
+    }
+    if (node !== declaration && node.kind === ts.SyntaxKind.VariableDeclaration && isIdentifierNamed(node.name, name)) {
+      rejected = true;
+      return;
+    }
+    if (node !== declaration.name && isIdentifierNamed(node, name)) {
+      const parent = node.parent;
+      const destructuring = _optionalChain([parent, 'optionalAccess', _4618 => _4618.parent]);
+      if (_optionalChain([parent, 'optionalAccess', _4619 => _4619.kind]) === ts.SyntaxKind.ArrayLiteralExpression && _optionalChain([destructuring, 'optionalAccess', _4620 => _4620.kind]) === ts.SyntaxKind.BinaryExpression && destructuring.left === parent && destructuring.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        elementReads += 1;
+      } else if (_optionalChain([parent, 'optionalAccess', _4621 => _4621.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === node && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        if (_optionalChain([parent, 'access', _4622 => _4622.right, 'optionalAccess', _4623 => _4623.kind]) !== ts.SyntaxKind.TrueKeyword && _optionalChain([parent, 'access', _4624 => _4624.right, 'optionalAccess', _4625 => _4625.kind]) !== ts.SyntaxKind.FalseKeyword) {
+          rejected = true;
+        }
+      } else if (!ccxtGoElementReadIsSafe(node)) {
+        rejected = true;
+      }
+      return;
+    }
+    _optionalChain([node, 'optionalAccess', _4626 => _4626.forEachChild, 'call', _4627 => _4627(walk)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _4628 => _4628.forEachChild, 'call', _4629 => _4629(walk)]);
+  return rejected || elementReads === 0 ? void 0 : "bool";
+}
+var CCXT_GO_ARRAY_BINDING_READ = /^([ \t]*)([A-Za-z_]\w*) = GetValue\(([A-Za-z_]\w*), (\d+)\)$/;
+function retypeElementReadAssignment(goTranspiler, node, printed) {
+  if (typeof printed !== "string" || _optionalChain([node, 'optionalAccess', _4630 => _4630.operatorToken, 'optionalAccess', _4631 => _4631.kind]) !== ts.SyntaxKind.EqualsToken || _optionalChain([node, 'access', _4632 => _4632.left, 'optionalAccess', _4633 => _4633.kind]) !== ts.SyntaxKind.ArrayLiteralExpression) {
+    return printed;
+  }
+  const scope = typeof goTranspiler.goEnclosingFunction === "function" ? goTranspiler.goEnclosingFunction(node) : void 0;
+  if (scope === void 0) {
+    return printed;
+  }
+  return printed.split("\n").map((line) => {
+    const match = CCXT_GO_ARRAY_BINDING_READ.exec(line);
+    if (match === null) {
+      return line;
+    }
+    const declaration = ccxtGoElementReadFindDeclaration(scope, match[2]);
+    const entry = ccxtGoElementReadEntry(ccxtGoElementReadDeclarationType(goTranspiler, declaration, match[2]));
+    if (entry === void 0) {
+      return line;
+    }
+    return match[1] + match[2] + " = " + entry.reader + "(" + match[3] + ", " + match[4] + ", " + entry.fallback + ")";
+  }).join("\n");
+}
+function installCcxtGoElementReadJoins(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoElementReadJoinsInstalled) {
+    return;
+  }
+  if (typeof goTranspiler.goLocalIsSafeToType === "function") {
+    const upstreamSafe = goTranspiler.goLocalIsSafeToType;
+    goTranspiler.goLocalIsSafeToType = function(scope, declaration, varName, goType) {
+      if (upstreamSafe.call(this, scope, declaration, varName, goType)) {
+        return true;
+      }
+      return ccxtGoElementReadDeclarationType(this, declaration, varName) === goType;
+    };
+  }
+  if (typeof goTranspiler.printCustomBinaryExpressionIfAny === "function") {
+    const upstreamBinary = goTranspiler.printCustomBinaryExpressionIfAny;
+    goTranspiler.printCustomBinaryExpressionIfAny = function(node, identation) {
+      return retypeElementReadAssignment(this, node, upstreamBinary.call(this, node, identation));
+    };
+  }
+  goTranspiler.__ccxtGoElementReadJoinsInstalled = true;
+}
+var CCXT_GO_SCALAR_LIFT_WRITE_CALLEES = {
+  "Replace": "string"
+};
+function ccxtGoScalarLiftLeafIsString(goTranspiler, leaf, chainHasStringProof) {
+  if (goStringOperand(goTranspiler, leaf)) {
+    return true;
+  }
+  if (goPrinterDerefStringOperand(goTranspiler, leaf, chainHasStringProof)) {
+    return true;
+  }
+  return typeof goTranspiler.goDerefableStringOperand === "function" && goTranspiler.goDerefableStringOperand(leaf) === true;
+}
+function ccxtGoScalarLiftInitializer(goTranspiler, node, declaration) {
+  const initializer = _optionalChain([declaration, 'optionalAccess', _4634 => _4634.initializer]);
+  if (_optionalChain([declaration, 'optionalAccess', _4635 => _4635.name, 'optionalAccess', _4636 => _4636.kind]) !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  if (_optionalChain([initializer, 'optionalAccess', _4637 => _4637.kind]) === ts.SyntaxKind.StringLiteral || _optionalChain([initializer, 'optionalAccess', _4638 => _4638.kind]) === ts.SyntaxKind.NoSubstitutionTemplateLiteral) {
+    return initializer;
+  }
+  if (_optionalChain([initializer, 'optionalAccess', _4639 => _4639.kind]) !== ts.SyntaxKind.BinaryExpression || _optionalChain([initializer, 'access', _4640 => _4640.operatorToken, 'optionalAccess', _4641 => _4641.kind]) !== ts.SyntaxKind.PlusToken) {
+    return void 0;
+  }
+  if (_optionalChain([node, 'optionalAccess', _4642 => _4642.parent, 'optionalAccess', _4643 => _4643.kind]) !== ts.SyntaxKind.FirstStatement) {
+    return void 0;
+  }
+  if (goPrintedTextHasBareAddCall(goTranspiler.printNode(initializer, 0))) {
+    return void 0;
+  }
+  const leaves = goNativeConcatLeaves(initializer);
+  if (leaves.length < 2) {
+    return void 0;
+  }
+  const chainHasStringProof = leaves.some((leaf) => goStringOperand(goTranspiler, leaf));
+  for (const leaf of leaves) {
+    if (!ccxtGoScalarLiftLeafIsString(goTranspiler, leaf, chainHasStringProof)) {
+      return void 0;
+    }
+  }
+  return initializer;
+}
+function ccxtGoScalarLiftWrittenType(goTranspiler, right) {
+  if (_optionalChain([right, 'optionalAccess', _4644 => _4644.kind]) !== ts.SyntaxKind.CallExpression) {
+    return void 0;
+  }
+  const callee = right.expression;
+  const name = _optionalChain([callee, 'optionalAccess', _4645 => _4645.kind]) === ts.SyntaxKind.PropertyAccessExpression ? _optionalChain([callee, 'access', _4646 => _4646.name, 'optionalAccess', _4647 => _4647.text]) : _optionalChain([callee, 'optionalAccess', _4648 => _4648.kind]) === ts.SyntaxKind.Identifier ? callee.text : void 0;
+  if (typeof name !== "string") {
+    return void 0;
+  }
+  const printed = goTranspiler.printNode(right, 0);
+  const known = goTranspiler.goTypeOfInitializer(right, printed);
+  if (known !== void 0) {
+    return known;
+  }
+  return CCXT_GO_SCALAR_LIFT_WRITE_CALLEES[name] !== void 0 ? CCXT_GO_SCALAR_LIFT_WRITE_CALLEES[name] : CCXT_GO_HELPER_RETURN_TYPES[name] !== void 0 ? CCXT_GO_HELPER_RETURN_TYPES[name] : void 0;
+}
+function ccxtGoScalarLiftVetoed(goTranspiler, declaration, varName, goType) {
+  if (typeof goTranspiler.goEnclosingFunction !== "function") {
+    return true;
+  }
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0) {
+    return true;
+  }
+  let vetoed = false;
+  const visit = (n) => {
+    if (vetoed) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== declaration.name) {
+      const parent = n.parent;
+      if (parent === void 0) {
+        vetoed = true;
+        return;
+      }
+      if (parent.kind === ts.SyntaxKind.BinaryExpression && parent.left === n) {
+        const op = parent.operatorToken.kind;
+        if (op === ts.SyntaxKind.EqualsToken) {
+          if (ccxtGoScalarLiftWrittenType(goTranspiler, parent.right) !== goType) {
+            vetoed = true;
+            return;
+          }
+        } else if (op >= ts.SyntaxKind.FirstCompoundAssignment && op <= ts.SyntaxKind.LastCompoundAssignment) {
+          vetoed = true;
+          return;
+        }
+      }
+      if ((parent.kind === ts.SyntaxKind.PrefixUnaryExpression || parent.kind === ts.SyntaxKind.PostfixUnaryExpression) && (parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken)) {
+        vetoed = true;
+        return;
+      }
+      if ((parent.kind === ts.SyntaxKind.PropertyAccessExpression || parent.kind === ts.SyntaxKind.ElementAccessExpression) && parent.expression === n) {
+        vetoed = true;
+        return;
+      }
+      if (parent.kind === ts.SyntaxKind.SpreadElement || parent.kind === ts.SyntaxKind.ArrayLiteralExpression && _optionalChain([parent, 'access', _4649 => _4649.parent, 'optionalAccess', _4650 => _4650.left]) === parent || parent.kind === ts.SyntaxKind.CallExpression && parent.expression === n || parent.kind === ts.SyntaxKind.PropertyAccessExpression && parent.name === n) {
+        vetoed = true;
+        return;
+      }
+      if (parent.kind === ts.SyntaxKind.BinaryExpression && (parent.operatorToken.kind === ts.SyntaxKind.EqualsEqualsToken || parent.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsToken || parent.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken || parent.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken) && (isNilLiteralExpression(parent.left) || isNilLiteralExpression(parent.right))) {
+        vetoed = true;
+        return;
+      }
+      let container = n;
+      while (container !== void 0 && (_optionalChain([container, 'access', _4651 => _4651.parent, 'optionalAccess', _4652 => _4652.kind]) === ts.SyntaxKind.ArrayLiteralExpression || _optionalChain([container, 'access', _4653 => _4653.parent, 'optionalAccess', _4654 => _4654.kind]) === ts.SyntaxKind.ObjectLiteralExpression || _optionalChain([container, 'access', _4655 => _4655.parent, 'optionalAccess', _4656 => _4656.kind]) === ts.SyntaxKind.PropertyAssignment || _optionalChain([container, 'access', _4657 => _4657.parent, 'optionalAccess', _4658 => _4658.kind]) === ts.SyntaxKind.ShorthandPropertyAssignment || _optionalChain([container, 'access', _4659 => _4659.parent, 'optionalAccess', _4660 => _4660.kind]) === ts.SyntaxKind.SpreadElement)) {
+        container = container.parent;
+      }
+      const top = _optionalChain([container, 'optionalAccess', _4661 => _4661.parent]);
+      if (_optionalChain([top, 'optionalAccess', _4662 => _4662.kind]) === ts.SyntaxKind.BinaryExpression && top.left === container && top.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        vetoed = true;
+        return;
+      }
+      if (_optionalChain([top, 'optionalAccess', _4663 => _4663.kind]) === ts.SyntaxKind.ForOfStatement || _optionalChain([top, 'optionalAccess', _4664 => _4664.kind]) === ts.SyntaxKind.ForInStatement) {
+        vetoed = true;
+        return;
+      }
+    }
+    _optionalChain([n, 'optionalAccess', _4665 => _4665.forEachChild, 'call', _4666 => _4666(visit)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _4667 => _4667.forEachChild, 'call', _4668 => _4668(visit)]);
+  return vetoed;
+}
+function installCcxtGoScalarLiteralLift(goTranspiler) {
+  if (goTranspiler.__ccxtGoScalarLiteralLiftInstalled || typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  goTranspiler.printVariableDeclarationList = (node, identation) => {
+    const printed = upstream(node, identation);
+    const declaration = _optionalChain([node, 'optionalAccess', _4669 => _4669.declarations, 'optionalAccess', _4670 => _4670.length]) === 1 ? node.declarations[0] : void 0;
+    if (declaration === void 0 || ccxtGoScalarLiftInitializer(goTranspiler, node, declaration) === void 0) {
+      return printed;
+    }
+    if (typeof goTranspiler.goTypeNameIsShadowed === "function" && goTranspiler.goTypeNameIsShadowed(goTranspiler.goEnclosingFunction(declaration), "string")) {
+      return printed;
+    }
+    const nameText = goTranspiler.printNode(declaration.name, 0);
+    const marker = "var " + nameText + " any = ";
+    const at = printed.indexOf(marker);
+    if (at < 0 || printed.substring(0, at).trim() !== "") {
+      return printed;
+    }
+    if (ccxtGoScalarLiftVetoed(goTranspiler, declaration, declaration.name.text, "string")) {
+      return printed;
+    }
+    return printed.substring(0, at) + "var " + nameText + " string = " + printed.substring(at + marker.length);
+  };
+  goTranspiler.__ccxtGoScalarLiteralLiftInstalled = true;
+}
+var NIL_DECLARED_GUARD_NAMES = ["string", "int", "int64", "float64", "bool", "any", "byte"];
+function isNilDeclaredInitializer(initializer) {
+  if (initializer === void 0) {
+    return true;
+  }
+  if (initializer.kind === ts.SyntaxKind.NullKeyword) {
+    return true;
+  }
+  return ts.isIdentifier(initializer) && initializer.text === "undefined";
+}
+function isNilLiteralExpression(node) {
+  return node !== void 0 && (node.kind === ts.SyntaxKind.NullKeyword || ts.isIdentifier(node) && node.text === "undefined");
+}
+function isNonStringLiteralOperand(node) {
+  if (node === void 0) {
+    return false;
+  }
+  switch (node.kind) {
+    case ts.SyntaxKind.NumericLiteral:
+    case ts.SyntaxKind.BigIntLiteral:
+    case ts.SyntaxKind.TrueKeyword:
+    case ts.SyntaxKind.FalseKeyword:
+    case ts.SyntaxKind.RegularExpressionLiteral:
+    case ts.SyntaxKind.TemplateExpression:
+      return true;
+    case ts.SyntaxKind.PrefixUnaryExpression:
+      return node.operand !== void 0 && node.operand.kind === ts.SyntaxKind.NumericLiteral;
+    case ts.SyntaxKind.ParenthesizedExpression:
+      return isNonStringLiteralOperand(node.expression);
+  }
+  return false;
+}
+function bindingMentionsName(binding, name) {
+  if (binding === void 0) {
+    return false;
+  }
+  if (ts.isIdentifier(binding)) {
+    return binding.text === name;
+  }
+  let found = false;
+  const visit = (n) => {
+    if (found) {
+      return;
+    }
+    if (ts.isIdentifier(n) && n.text === name) {
+      found = true;
+      return;
+    }
+    _optionalChain([n, 'optionalAccess', _4671 => _4671.forEachChild, 'call', _4672 => _4672(visit)]);
+  };
+  _optionalChain([binding, 'optionalAccess', _4673 => _4673.forEachChild, 'call', _4674 => _4674(visit)]);
+  return found;
+}
+function isDestructuringTarget(id) {
+  let container = void 0;
+  let current = id;
+  while (true) {
+    const parent2 = current.parent;
+    if (parent2 === void 0) {
+      break;
+    }
+    const kind = parent2.kind;
+    if (kind === ts.SyntaxKind.ArrayLiteralExpression || kind === ts.SyntaxKind.ObjectLiteralExpression || kind === ts.SyntaxKind.SpreadElement || kind === ts.SyntaxKind.PropertyAssignment || kind === ts.SyntaxKind.ShorthandPropertyAssignment) {
+      container = parent2;
+      current = parent2;
+      continue;
+    }
+    break;
+  }
+  if (container === void 0) {
+    return false;
+  }
+  const parent = container.parent;
+  if (parent === void 0) {
+    return false;
+  }
+  if (parent.kind === ts.SyntaxKind.BinaryExpression) {
+    return parent.left === container && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken;
+  }
+  return (parent.kind === ts.SyntaxKind.ForOfStatement || parent.kind === ts.SyntaxKind.ForInStatement) && parent.initializer === container;
+}
+var GoNilDeclaredAssignmentScan = class {
+  constructor(goTranspiler, declaration, name) {
+    this.goTranspiler = goTranspiler;
+    this.declaration = declaration;
+    this.name = name;
+    this.rejected = false;
+    this.sawWrite = false;
+    this.unsafeRead = void 0;
+  }
+  isName(node) {
+    return ts.isIdentifier(node) && node.text === this.name;
+  }
+  // a later write is only provable when the printed value is a plain Go string
+  isStringWrite(rhs) {
+    return this.goTranspiler.goTypeOfInitializer(rhs, this.goTranspiler.printNode(rhs, 0)) === "string";
+  }
+  // identifiers that are plain `x = rhs` targets; everything else is a read
+  // (and takes the definite-assignment check below)
+  classifyIdentifier(node, assigned) {
+    const parent = node.parent;
+    if (parent === void 0) {
+      this.rejected = true;
+      return assigned;
+    }
+    if (parent.kind === ts.SyntaxKind.BinaryExpression && parent.left === node) {
+      const op = parent.operatorToken.kind;
+      if (op === ts.SyntaxKind.EqualsToken) {
+        this.sawWrite = true;
+        if (!this.isStringWrite(parent.right)) {
+          this.rejected = true;
+          return assigned;
+        }
+        this.walkExpression(parent.right, assigned);
+        return true;
+      }
+      if (op >= ts.SyntaxKind.FirstCompoundAssignment && op <= ts.SyntaxKind.LastCompoundAssignment) {
+        this.rejected = true;
+        return assigned;
+      }
+    }
+    if (parent.kind === ts.SyntaxKind.PostfixUnaryExpression || parent.kind === ts.SyntaxKind.PrefixUnaryExpression) {
+      this.rejected = true;
+      return assigned;
+    }
+    if (parent.kind === ts.SyntaxKind.PropertyAccessExpression && parent.expression === node && _optionalChain([parent, 'access', _4675 => _4675.name, 'optionalAccess', _4676 => _4676.text]) === "push") {
+      this.rejected = true;
+      return assigned;
+    }
+    if (parent.kind === ts.SyntaxKind.SpreadElement) {
+      this.rejected = true;
+      return assigned;
+    }
+    if (isDestructuringTarget(node)) {
+      this.rejected = true;
+      return assigned;
+    }
+    if (parent.kind === ts.SyntaxKind.BinaryExpression && (parent.left === node || parent.right === node)) {
+      const other = parent.left === node ? parent.right : parent.left;
+      if (isNilLiteralExpression(other)) {
+        this.rejected = true;
+        return assigned;
+      }
+      if (isNonStringLiteralOperand(other)) {
+        this.rejected = true;
+        return assigned;
+      }
+    }
+    if (this.inNestedFunction(node)) {
+      this.rejected = true;
+      return assigned;
+    }
+    if (!assigned && this.unsafeRead === void 0) {
+      this.unsafeRead = node;
+      this.rejected = true;
+    }
+    return assigned;
+  }
+  inNestedFunction(node) {
+    let current = node.parent;
+    while (current !== void 0 && current !== this.scope) {
+      switch (current.kind) {
+        case ts.SyntaxKind.FunctionDeclaration:
+        case ts.SyntaxKind.FunctionExpression:
+        case ts.SyntaxKind.ArrowFunction:
+        case ts.SyntaxKind.MethodDeclaration:
+        case ts.SyntaxKind.Constructor:
+          return true;
+      }
+      current = current.parent;
+    }
+    return false;
+  }
+  walkExpression(node, assigned) {
+    if (this.rejected || node === void 0 || node === this.declaration.name) {
+      return assigned;
+    }
+    if (this.isName(node)) {
+      return this.classifyIdentifier(node, assigned);
+    }
+    let current = assigned;
+    const visit = (child) => {
+      if (this.rejected) {
+        return;
+      }
+      current = this.walkExpression(child, current);
+    };
+    _optionalChain([node, 'optionalAccess', _4677 => _4677.forEachChild, 'call', _4678 => _4678(visit)]);
+    return current;
+  }
+  walkStatements(statements, assigned) {
+    let current = assigned;
+    let exit = "none";
+    for (const statement of statements) {
+      if (exit !== "none") {
+        break;
+      }
+      const result = this.walkStatement(statement, current);
+      current = result.assigned;
+      exit = result.exit;
+    }
+    return { assigned: current, exit };
+  }
+  walkStatement(statement, assigned) {
+    if (this.rejected) {
+      return { assigned, exit: "none" };
+    }
+    const kind = statement.kind;
+    if (kind === ts.SyntaxKind.Block) {
+      return this.walkStatements(statement.statements, assigned);
+    }
+    if (kind === ts.SyntaxKind.IfStatement) {
+      const condition = this.walkExpression(statement.expression, assigned);
+      const then = this.walkStatement(statement.thenStatement, condition);
+      const otherwise = statement.elseStatement !== void 0 ? this.walkStatement(statement.elseStatement, condition) : { assigned: condition, exit: "none" };
+      const terminates = (result) => result.exit === "return" || result.exit === "throw";
+      const thenDone = terminates(then) ? true : then.assigned;
+      const elseDone = terminates(otherwise) ? true : otherwise.assigned;
+      const exit = terminates(then) && terminates(otherwise) && then.exit === otherwise.exit ? then.exit : "none";
+      return { assigned: thenDone && elseDone, exit };
+    }
+    if (kind === ts.SyntaxKind.WhileStatement || kind === ts.SyntaxKind.ForStatement) {
+      let current = this.walkExpression(statement.condition, assigned);
+      if (kind === ts.SyntaxKind.ForStatement) {
+        current = this.walkExpression(statement.initializer, current);
+      }
+      this.walkStatement(statement.statement, current);
+      return { assigned, exit: "none" };
+    }
+    if (kind === ts.SyntaxKind.ForOfStatement || kind === ts.SyntaxKind.ForInStatement) {
+      const current = this.walkExpression(statement.expression, assigned);
+      this.walkStatement(statement.statement, current);
+      return { assigned, exit: "none" };
+    }
+    if (kind === ts.SyntaxKind.DoStatement) {
+      const body = this.walkStatement(statement.statement, assigned);
+      return { assigned: assigned || body.assigned, exit: "none" };
+    }
+    if (kind === ts.SyntaxKind.SwitchStatement) {
+      const current = this.walkExpression(statement.expression, assigned);
+      let allAssigned = true;
+      let hasDefault = false;
+      for (const clause of statement.caseBlock.clauses) {
+        if (clause.kind === ts.SyntaxKind.DefaultClause) {
+          hasDefault = true;
+        }
+        const scoped = this.walkExpression(clause.expression, current);
+        const result = this.walkStatements(clause.statements, scoped);
+        const terminates = result.exit === "return" || result.exit === "throw";
+        if (!terminates && !result.assigned) {
+          allAssigned = false;
+        }
+      }
+      return { assigned: hasDefault ? allAssigned : assigned, exit: "none" };
+    }
+    if (kind === ts.SyntaxKind.ReturnStatement || kind === ts.SyntaxKind.ThrowStatement) {
+      const current = this.walkExpression(statement.expression, assigned);
+      return { assigned: current, exit: "return" };
+    }
+    if (kind === ts.SyntaxKind.BreakStatement || kind === ts.SyntaxKind.ContinueStatement) {
+      return { assigned, exit: "break" };
+    }
+    if (kind === ts.SyntaxKind.TryStatement) {
+      const body = this.walkStatement(statement.tryBlock, assigned);
+      if (statement.catchClause !== void 0) {
+        this.walkStatement(statement.catchClause.block, assigned);
+      }
+      if (statement.finallyBlock !== void 0) {
+        this.walkStatement(statement.finallyBlock, body.exit === "none" ? assigned : body.assigned);
+      }
+      return { assigned, exit: "none" };
+    }
+    if (kind === ts.SyntaxKind.VariableStatement || kind === ts.SyntaxKind.ExpressionStatement || kind === ts.SyntaxKind.LabeledStatement || kind === ts.SyntaxKind.EmptyStatement || kind === ts.SyntaxKind.WithStatement || kind === ts.SyntaxKind.DebuggerStatement) {
+      const current = this.walkExpression(statement, assigned);
+      return { assigned: current, exit: "none" };
+    }
+    return { assigned, exit: "none" };
+  }
+  run() {
+    this.scope = typeof this.goTranspiler.goEnclosingFunction === "function" ? this.goTranspiler.goEnclosingFunction(this.declaration) : void 0;
+    if (this.scope === void 0 || this.declaration.name === void 0) {
+      return false;
+    }
+    const shadowingWalk = (node) => {
+      if (this.rejected) {
+        return;
+      }
+      if (node !== this.declaration && (node.kind === ts.SyntaxKind.VariableDeclaration || node.kind === ts.SyntaxKind.Parameter)) {
+        if (bindingMentionsName(node.name, this.name)) {
+          this.rejected = true;
+          return;
+        }
+      }
+      _optionalChain([node, 'optionalAccess', _4679 => _4679.forEachChild, 'call', _4680 => _4680(shadowingWalk)]);
+    };
+    _optionalChain([this, 'access', _4681 => _4681.scope, 'optionalAccess', _4682 => _4682.forEachChild, 'call', _4683 => _4683(shadowingWalk)]);
+    if (this.rejected) {
+      return false;
+    }
+    const body = this.scope.kind === ts.SyntaxKind.SourceFile ? this.scope.statements : ts.isBlock(this.scope.body) ? this.scope.body.statements : [this.scope.body];
+    this.walkStatements(body, false);
+    return !this.rejected && this.sawWrite;
+  }
+};
+function installCcxtGoNilDeclaredStringJoins(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoNilDeclaredJoinsInstalled || typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  const nilDeclaration = /^([\t ]*)var (\w+) any = nil$/;
+  goTranspiler.printVariableDeclarationList = (node, indentation) => {
+    const printed = upstream(node, indentation);
+    if (typeof printed !== "string") {
+      return printed;
+    }
+    const parsed = printed.match(nilDeclaration);
+    if (parsed === null || _optionalChain([node, 'optionalAccess', _4684 => _4684.parent, 'optionalAccess', _4685 => _4685.kind]) !== ts.SyntaxKind.VariableStatement || _optionalChain([node, 'access', _4686 => _4686.declarations, 'optionalAccess', _4687 => _4687.length]) !== 1) {
+      return printed;
+    }
+    const declaration = node.declarations[0];
+    if (!ts.isIdentifier(_optionalChain([declaration, 'optionalAccess', _4688 => _4688.name])) || !isNilDeclaredInitializer(declaration.initializer) || NIL_DECLARED_GUARD_NAMES.indexOf(declaration.name.text) >= 0) {
+      return printed;
+    }
+    const scan = new GoNilDeclaredAssignmentScan(goTranspiler, declaration, declaration.name.text);
+    if (!scan.run()) {
+      return printed;
+    }
+    return parsed[1] + "var " + parsed[2] + " string";
+  };
+  goTranspiler.__ccxtGoNilDeclaredJoinsInstalled = true;
+}
+function installCcxtGoTernaryCast(goTranspiler) {
+  if (typeof goTranspiler.printVariableDeclarationList !== "function" || goTranspiler.__ccxtGoTernaryCastInstalled) {
+    return;
+  }
+  const upstreamPrint = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = upstreamPrint.call(this, node, identation);
+    if (typeof printed !== "string") {
+      return printed;
+    }
+    const declaration = _optionalChain([node, 'optionalAccess', _4689 => _4689.declarations, 'optionalAccess', _4690 => _4690[0]]);
+    if (ccxtGoTernaryDeclaration(_optionalChain([declaration, 'optionalAccess', _4691 => _4691.initializer])) === void 0) {
+      return printed;
+    }
+    const lastLine = printed.substring(printed.lastIndexOf("\n") + 1);
+    const match = /^\s*var\s+[A-Za-z_][A-Za-z0-9_]*\s+(\S+)\s*=\s*([\s\S]*)$/.exec(lastLine);
+    if (match === null) {
+      return printed;
+    }
+    const declaredType = match[1];
+    if (declaredType === "any" || ccxtGoTernaryType(this, match[2]) !== declaredType) {
+      return printed;
+    }
+    return printed + ".(" + declaredType + ")";
+  };
+  goTranspiler.__ccxtGoTernaryCastInstalled = true;
+}
+var GoNilDeclaredValueAssignmentScan = class extends GoNilDeclaredAssignmentScan {
+  valueTypeOf(rhs) {
+    let node = rhs;
+    while (_optionalChain([node, 'optionalAccess', _4692 => _4692.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+      node = node.expression;
+    }
+    if (_optionalChain([node, 'optionalAccess', _4693 => _4693.kind]) === ts.SyntaxKind.NumericLiteral || _optionalChain([node, 'optionalAccess', _4694 => _4694.kind]) === ts.SyntaxKind.PrefixUnaryExpression && node.operator === ts.SyntaxKind.MinusToken && _optionalChain([node, 'access', _4695 => _4695.operand, 'optionalAccess', _4696 => _4696.kind]) === ts.SyntaxKind.NumericLiteral) {
+      const literal = node.kind === ts.SyntaxKind.NumericLiteral ? node : node.operand;
+      if (/^[0-9]+$/.test(literal.text)) {
+        return "int";
+      }
+      return /^[0-9]+\.[0-9]+$/.test(literal.text) ? "float64" : void 0;
+    }
+    const goType = this.goTranspiler.goTypeOfInitializer(rhs, this.goTranspiler.printNode(rhs, 0));
+    return goType === "bool" ? "bool" : void 0;
+  }
+  // `x == true` / `x === 1` against a literal of the joined kind compiles on the value type
+  classifyIdentifier(node, assigned) {
+    const parent = node.parent;
+    if (_optionalChain([parent, 'optionalAccess', _4697 => _4697.kind]) === ts.SyntaxKind.BinaryExpression && COMPARISON_TOKENS.includes(parent.operatorToken.kind) && this.joinType !== void 0 && !this.inNestedFunction(node)) {
+      const other = parent.left === node ? parent.right : parent.left;
+      const otherType = other.kind === ts.SyntaxKind.TrueKeyword || other.kind === ts.SyntaxKind.FalseKeyword ? "bool" : this.valueTypeOf(other);
+      if (otherType === this.joinType) {
+        if (!assigned) {
+          this.rejected = true;
+        }
+        return assigned;
+      }
+    }
+    return super.classifyIdentifier(node, assigned);
+  }
+  isStringWrite(rhs) {
+    const goType = this.valueTypeOf(rhs);
+    if (goType === void 0 || this.joinType !== void 0 && this.joinType !== goType) {
+      return false;
+    }
+    this.joinType = goType;
+    return true;
+  }
+};
+function installCcxtGoNilDeclaredValueJoins(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoNilDeclaredValueJoinsInstalled || typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  const nilDeclaration = /^([\t ]*)var (\w+) any = nil$/;
+  goTranspiler.printVariableDeclarationList = (node, indentation) => {
+    const printed = upstream(node, indentation);
+    const parsed = typeof printed === "string" ? printed.match(nilDeclaration) : null;
+    if (parsed === null || _optionalChain([node, 'optionalAccess', _4698 => _4698.parent, 'optionalAccess', _4699 => _4699.kind]) !== ts.SyntaxKind.VariableStatement || _optionalChain([node, 'access', _4700 => _4700.declarations, 'optionalAccess', _4701 => _4701.length]) !== 1) {
+      return printed;
+    }
+    const declaration = node.declarations[0];
+    if (!ts.isIdentifier(_optionalChain([declaration, 'optionalAccess', _4702 => _4702.name])) || !isNilDeclaredInitializer(declaration.initializer) || NIL_DECLARED_GUARD_NAMES.indexOf(declaration.name.text) >= 0) {
+      return printed;
+    }
+    const scan = new GoNilDeclaredValueAssignmentScan(goTranspiler, declaration, declaration.name.text);
+    if (!scan.run() || scan.joinType === void 0 || _optionalChain([goTranspiler, 'access', _4703 => _4703.goTypeNameIsShadowed, 'optionalCall', _4704 => _4704(goTranspiler.goEnclosingFunction(declaration), scan.joinType)])) {
+      return printed;
+    }
+    return parsed[1] + "var " + parsed[2] + " " + scan.joinType;
+  };
+  goTranspiler.__ccxtGoNilDeclaredValueJoinsInstalled = true;
+}
+var CCXT_GO_PARSE_NUMBER_JOIN_ROW_BUILDERS_REJECTED = ["safeMarketStructure", "safeCurrencyStructure"];
+function ccxtGoIsOneArgParseNumber(goTranspiler, node) {
+  return _optionalChain([node, 'optionalAccess', _4705 => _4705.kind]) === ts.SyntaxKind.CallExpression && node.arguments.length === 1 && ccxtGoWholePrintedCallee(goTranspiler, goTranspiler.printNode(node, 0)) === "this.ParseNumber";
+}
+function ccxtGoParseNumberJoinReadIsSafe(goTranspiler, n) {
+  const parent = n.parent;
+  if (_optionalChain([parent, 'optionalAccess', _4706 => _4706.kind]) === ts.SyntaxKind.BinaryExpression && COMPARISON_TOKENS.includes(parent.operatorToken.kind)) {
+    return isUndefinedLiteral(parent.left === n ? parent.right : parent.left);
+  }
+  if (!(_optionalChain([parent, 'optionalAccess', _4707 => _4707.kind]) === ts.SyntaxKind.PropertyAssignment && parent.initializer === n) && _optionalChain([parent, 'optionalAccess', _4708 => _4708.kind]) !== ts.SyntaxKind.ShorthandPropertyAssignment) {
+    return false;
+  }
+  let top = parent.parent;
+  while (_optionalChain([top, 'optionalAccess', _4709 => _4709.parent, 'optionalAccess', _4710 => _4710.kind]) === ts.SyntaxKind.PropertyAssignment && _optionalChain([top, 'access', _4711 => _4711.parent, 'access', _4712 => _4712.parent, 'optionalAccess', _4713 => _4713.kind]) === ts.SyntaxKind.ObjectLiteralExpression) {
+    top = top.parent.parent;
+  }
+  const call = _optionalChain([top, 'optionalAccess', _4714 => _4714.parent]);
+  const callee = _optionalChain([call, 'optionalAccess', _4715 => _4715.expression]);
+  return _optionalChain([top, 'optionalAccess', _4716 => _4716.kind]) === ts.SyntaxKind.ObjectLiteralExpression && _optionalChain([call, 'optionalAccess', _4717 => _4717.kind]) === ts.SyntaxKind.CallExpression && call.arguments.includes(top) && _optionalChain([callee, 'optionalAccess', _4718 => _4718.kind]) === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([callee, 'access', _4719 => _4719.expression, 'optionalAccess', _4720 => _4720.kind]) === ts.SyntaxKind.ThisKeyword && /^safe[A-Z]\w*$/.test(callee.name.text) && !CCXT_GO_PARSE_NUMBER_JOIN_ROW_BUILDERS_REJECTED.includes(callee.name.text);
+}
+function ccxtGoNilDeclaredParseNumberJoin(goTranspiler, declaration) {
+  if (_optionalChain([declaration, 'optionalAccess', _4721 => _4721.kind]) !== ts.SyntaxKind.VariableDeclaration || !ts.isIdentifier(declaration.name) || !isNilDeclaredInitializer(declaration.initializer) || _optionalChain([declaration, 'access', _4722 => _4722.parent, 'optionalAccess', _4723 => _4723.parent, 'optionalAccess', _4724 => _4724.kind]) !== ts.SyntaxKind.VariableStatement || NIL_DECLARED_GUARD_NAMES.indexOf(declaration.name.text) >= 0) {
+    return false;
+  }
+  goTranspiler.ccxtGoParseNumberJoins ??= /* @__PURE__ */ new WeakMap();
+  const cache = goTranspiler.ccxtGoParseNumberJoins;
+  if (cache.has(declaration)) {
+    return cache.get(declaration);
+  }
+  cache.set(declaration, false);
+  const scope = _optionalChain([goTranspiler, 'access', _4725 => _4725.goEnclosingFunction, 'optionalCall', _4726 => _4726(declaration)]);
+  const name = declaration.name.text;
+  let parseWrites = 0;
+  let ok = scope !== void 0 && !_optionalChain([goTranspiler, 'access', _4727 => _4727.goTypeNameIsShadowed, 'optionalCall', _4728 => _4728(scope, "*float64")]);
+  const visit = (n) => {
+    if (!ok) {
+      return;
+    }
+    if (n !== declaration && (n.kind === ts.SyntaxKind.VariableDeclaration || n.kind === ts.SyntaxKind.Parameter) && bindingMentionsName(n.name, name)) {
+      ok = false;
+      return;
+    }
+    if (ts.isIdentifier(n) && n.text === name && n !== declaration.name) {
+      const parent = n.parent;
+      if (_optionalChain([parent, 'optionalAccess', _4729 => _4729.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        if (ccxtGoIsOneArgParseNumber(goTranspiler, parent.right)) {
+          parseWrites += 1;
+        } else if (goTranspiler.goTypeOfInitializer(parent.right, goTranspiler.printNode(parent.right, 0)) !== "*float64") {
+          ok = false;
+        }
+      } else if (isDestructuringTarget(n) || !ccxtGoParseNumberJoinReadIsSafe(goTranspiler, n)) {
+        ok = false;
+      }
+      return;
+    }
+    n.forEachChild(visit);
+  };
+  _optionalChain([scope, 'optionalAccess', _4730 => _4730.forEachChild, 'call', _4731 => _4731(visit)]);
+  const joined = ok && parseWrites > 0;
+  cache.set(declaration, joined);
+  return joined;
+}
+function ccxtGoParseNumberJoinDeclarationOf(goTranspiler, node) {
+  const declaration = ccxtGoParamDeclarationOf(goTranspiler, node);
+  return ccxtGoNilDeclaredParseNumberJoin(goTranspiler, declaration) ? declaration : void 0;
+}
+function installCcxtGoNilDeclaredParseNumberJoins(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoNilDeclaredParseNumberJoinsInstalled || typeof goTranspiler.printVariableDeclarationList !== "function" || typeof goTranspiler.printBinaryExpression !== "function") {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  const nilDeclaration = /^([\t ]*)var (\w+) any = nil$/;
+  goTranspiler.printVariableDeclarationList = (node, indentation) => {
+    const printed = upstream(node, indentation);
+    const parsed = typeof printed === "string" ? printed.match(nilDeclaration) : null;
+    if (parsed === null || _optionalChain([node, 'access', _4732 => _4732.declarations, 'optionalAccess', _4733 => _4733.length]) !== 1 || !ccxtGoNilDeclaredParseNumberJoin(goTranspiler, node.declarations[0])) {
+      return printed;
+    }
+    return parsed[1] + "var " + parsed[2] + " *float64 = nil";
+  };
+  const binary = goTranspiler.printBinaryExpression;
+  goTranspiler.printBinaryExpression = function(node, identation) {
+    if (_optionalChain([node, 'optionalAccess', _4734 => _4734.operatorToken, 'optionalAccess', _4735 => _4735.kind]) === ts.SyntaxKind.EqualsToken && ts.isIdentifier(node.left) && ccxtGoIsOneArgParseNumber(this, node.right) && ccxtGoParseNumberJoinDeclarationOf(this, node.left) !== void 0) {
+      return this.printNode(node.left, 0) + " = Float64PtrTyped(" + this.printNode(node.right, identation).trim() + ")";
+    }
+    return binary.call(this, node, identation);
+  };
+  goTranspiler.__ccxtGoNilDeclaredParseNumberJoinsInstalled = true;
+}
+var CCXT_GO_TERNARY_LIFT = { "string": ["*string", "SafeStringPtr"], "int64": ["*int64", "Int64PtrTyped"], "bool": ["*bool", "SafeBoolPtr"] };
+function ccxtGoTernaryLiftArm(goTranspiler, armNode, armText) {
+  let node = armNode;
+  while (_optionalChain([node, 'optionalAccess', _4736 => _4736.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  if (_optionalChain([node, 'optionalAccess', _4737 => _4737.kind]) === ts.SyntaxKind.StringLiteral || _optionalChain([node, 'optionalAccess', _4738 => _4738.kind]) === ts.SyntaxKind.NoSubstitutionTemplateLiteral) {
+    return { type: "*string", wrap: "SafeStringPtr" };
+  }
+  if (_optionalChain([node, 'optionalAccess', _4739 => _4739.kind]) === ts.SyntaxKind.CallExpression && node.arguments.length === 1 && ccxtGoWholePrintedCallee(goTranspiler, armText) === "this.ParseNumber") {
+    return { type: "*float64", wrap: "Float64PtrTyped" };
+  }
+  const armType = ccxtGoClosureArmType(goTranspiler, armNode, armText);
+  if (armType === "nil") {
+    return { type: "nil" };
+  }
+  if (CCXT_GO_CLOSURE_POINTER_JOIN_TYPES.indexOf(armType) >= 0) {
+    return { type: armType };
+  }
+  const lift = CCXT_GO_TERNARY_LIFT[armType];
+  return lift === void 0 ? void 0 : { type: lift[0], wrap: lift[1] };
+}
+function ccxtGoTernaryLiftJoin(goTranspiler, declaration, literal) {
+  const initializer = _optionalChain([declaration, 'optionalAccess', _4740 => _4740.initializer]);
+  if (_optionalChain([declaration, 'optionalAccess', _4741 => _4741.name, 'optionalAccess', _4742 => _4742.kind]) !== ts.SyntaxKind.Identifier || _optionalChain([initializer, 'optionalAccess', _4743 => _4743.kind]) !== ts.SyntaxKind.ConditionalExpression) {
+    return void 0;
+  }
+  const arms = [[initializer.whenTrue, literal.whenTrue], [initializer.whenFalse, literal.whenFalse]].map(([armNode, armText]) => ccxtGoTernaryLiftArm(goTranspiler, armNode, armText));
+  if (arms.some((arm) => arm === void 0) || !arms.some((arm) => arm.wrap !== void 0)) {
+    return void 0;
+  }
+  const types = arms.map((arm) => arm.type).filter((armType) => armType !== "nil");
+  const joinType = types[0];
+  if (joinType === void 0 || types.some((armType) => armType !== joinType)) {
+    return void 0;
+  }
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0) {
+    return void 0;
+  }
+  const varName = declaration.name.text;
+  let unproven = false;
+  const visit = (n) => {
+    if (unproven) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== declaration.name) {
+      unproven = !ccxtGoClosureReadIsSafe(goTranspiler, n, varName);
+      return;
+    }
+    _optionalChain([n, 'optionalAccess', _4744 => _4744.forEachChild, 'call', _4745 => _4745(visit)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _4746 => _4746.forEachChild, 'call', _4747 => _4747(visit)]);
+  if (unproven || goTranspiler.goTypeNameIsShadowed(scope, joinType) || !goTranspiler.goLocalIsSafeToType(scope, declaration, varName, joinType)) {
+    return void 0;
+  }
+  const lifted = (arm, text) => arm.wrap === void 0 ? text : arm.wrap + "(" + text + ")";
+  return { joinType, whenTrue: lifted(arms[0], literal.whenTrue), whenFalse: lifted(arms[1], literal.whenFalse) };
+}
+function installCcxtGoTernaryLiftJoin(goTranspiler) {
+  if (typeof goTranspiler.printVariableDeclarationList !== "function" || typeof goTranspiler.goEnclosingFunction !== "function" || typeof goTranspiler.goLocalIsSafeToType !== "function" || goTranspiler.__ccxtGoTernaryLiftJoinInstalled) {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = upstream(node, identation);
+    if (typeof printed !== "string" || _optionalChain([node, 'optionalAccess', _4748 => _4748.declarations, 'optionalAccess', _4749 => _4749.length]) !== 1) {
+      return printed;
+    }
+    const declaration = node.declarations[0];
+    const literal = ccxtGoClosureLiteralLines(printed);
+    if (literal === void 0 || literal.name !== (_nullishCoalesce(goTranspiler.printNode(declaration.name), () => ( ""))).trim()) {
+      return printed;
+    }
+    const join3 = ccxtGoTernaryLiftJoin(goTranspiler, declaration, literal);
+    if (join3 === void 0) {
+      return printed;
+    }
+    const lines = printed.split("\n");
+    const body = literal.indent + "	";
+    lines[0] = literal.indent + "var " + literal.name + " " + join3.joinType + " = func() " + join3.joinType + " {";
+    lines[2] = body + "	return " + join3.whenTrue;
+    lines[4] = body + "return " + join3.whenFalse;
+    return lines.join("\n");
+  };
+  goTranspiler.__ccxtGoTernaryLiftJoinInstalled = true;
+}
+function ccxtGoTernaryMapArm(goTranspiler, armNode, armText) {
+  const node = ccxtGoUnwrapParens(armNode);
+  if (_optionalChain([node, 'optionalAccess', _4750 => _4750.kind]) === ts.SyntaxKind.ObjectLiteralExpression) {
+    return node.properties.length === 0 && armText.trim() === "map[string]any{}" ? armText : void 0;
+  }
+  if (_optionalChain([node, 'optionalAccess', _4751 => _4751.kind]) === ts.SyntaxKind.Identifier) {
+    return ccxtGoProducerArgIsMap(goTranspiler, node) ? armText : void 0;
+  }
+  if (_optionalChain([node, 'optionalAccess', _4752 => _4752.kind]) === ts.SyntaxKind.CallExpression && _optionalChain([node, 'access', _4753 => _4753.expression, 'optionalAccess', _4754 => _4754.kind]) === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([node, 'access', _4755 => _4755.expression, 'access', _4756 => _4756.expression, 'optionalAccess', _4757 => _4757.kind]) === ts.SyntaxKind.ThisKeyword && _optionalChain([node, 'access', _4758 => _4758.expression, 'access', _4759 => _4759.name, 'optionalAccess', _4760 => _4760.text]) === "omit" && ccxtGoWholePrintedCallee(goTranspiler, armText) === "this.Omit" && ccxtGoProducerArgIsMap(goTranspiler, ccxtGoUnwrapParens(node.arguments[0]))) {
+    return "MapTyped(" + armText.trim() + ")";
+  }
+  return void 0;
+}
+function installCcxtGoTernaryMapJoin(goTranspiler) {
+  if (typeof goTranspiler.printVariableDeclarationList !== "function" || typeof goTranspiler.goEnclosingFunction !== "function" || typeof goTranspiler.goLocalIsSafeToType !== "function" || goTranspiler.__ccxtGoTernaryMapJoinInstalled) {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = upstream(node, identation);
+    if (typeof printed !== "string" || _optionalChain([node, 'optionalAccess', _4761 => _4761.declarations, 'optionalAccess', _4762 => _4762.length]) !== 1) {
+      return printed;
+    }
+    const declaration = node.declarations[0];
+    const initializer = declaration.initializer;
+    const literal = ccxtGoClosureLiteralLines(printed);
+    if (literal === void 0 || _optionalChain([initializer, 'optionalAccess', _4763 => _4763.kind]) !== ts.SyntaxKind.ConditionalExpression || literal.name !== (_nullishCoalesce(goTranspiler.printNode(declaration.name), () => ( ""))).trim()) {
+      return printed;
+    }
+    const whenTrue = ccxtGoTernaryMapArm(goTranspiler, initializer.whenTrue, literal.whenTrue);
+    const whenFalse = ccxtGoTernaryMapArm(goTranspiler, initializer.whenFalse, literal.whenFalse);
+    const scope = goTranspiler.goEnclosingFunction(declaration);
+    if (whenTrue === void 0 || whenFalse === void 0 || scope === void 0) {
+      return printed;
+    }
+    const varName = declaration.name.text;
+    let unproven = false;
+    const visit = (n) => {
+      if (unproven) {
+        return;
+      }
+      if (n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== declaration.name) {
+        unproven = ccxtGoProducerUseRebinds(n);
+        return;
+      }
+      _optionalChain([n, 'optionalAccess', _4764 => _4764.forEachChild, 'call', _4765 => _4765(visit)]);
+    };
+    _optionalChain([scope, 'optionalAccess', _4766 => _4766.forEachChild, 'call', _4767 => _4767(visit)]);
+    const mapType = CCXT_GO_PRODUCER_DICT_TYPE;
+    if (unproven || goTranspiler.goTypeNameIsShadowed(scope, mapType) || !goTranspiler.goLocalIsSafeToType(scope, declaration, varName, mapType)) {
+      return printed;
+    }
+    const lines = printed.split("\n");
+    const body = literal.indent + "	";
+    lines[0] = literal.indent + "var " + literal.name + " " + mapType + " = func() " + mapType + " {";
+    lines[2] = body + "	return " + whenTrue;
+    lines[4] = body + "return " + whenFalse;
+    return lines.join("\n");
+  };
+  goTranspiler.__ccxtGoTernaryMapJoinInstalled = true;
+}
+var CCXT_GO_LIMIT_LOCAL_READS = ["filterBySinceLimit", "filterBySymbolSinceLimit", "filterByOutcomeSinceLimit"];
+function ccxtGoIsGetLimitCall(node) {
+  return _optionalChain([node, 'optionalAccess', _4768 => _4768.kind]) === ts.SyntaxKind.CallExpression && _optionalChain([node, 'access', _4769 => _4769.expression, 'optionalAccess', _4770 => _4770.kind]) === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([node, 'access', _4771 => _4771.expression, 'access', _4772 => _4772.expression, 'optionalAccess', _4773 => _4773.kind]) === ts.SyntaxKind.Identifier && _optionalChain([node, 'access', _4774 => _4774.expression, 'access', _4775 => _4775.name, 'optionalAccess', _4776 => _4776.text]) === "getLimit" && node.arguments.length === 2;
+}
+function ccxtGoLimitLocalUseIsSafe(n) {
+  const parent = n.parent;
+  if (_optionalChain([parent, 'optionalAccess', _4777 => _4777.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    return ccxtGoIsGetLimitCall(parent.right);
+  }
+  if (_optionalChain([parent, 'optionalAccess', _4778 => _4778.kind]) !== ts.SyntaxKind.CallExpression || parent.expression === n) {
+    return false;
+  }
+  if (ccxtGoIsGetLimitCall(parent)) {
+    return parent.arguments[1] === n;
+  }
+  const callee = parent.expression;
+  return _optionalChain([callee, 'optionalAccess', _4779 => _4779.kind]) === ts.SyntaxKind.PropertyAccessExpression && _optionalChain([callee, 'access', _4780 => _4780.expression, 'optionalAccess', _4781 => _4781.kind]) === ts.SyntaxKind.ThisKeyword && CCXT_GO_LIMIT_LOCAL_READS.includes(String(_optionalChain([callee, 'access', _4782 => _4782.name, 'optionalAccess', _4783 => _4783.text])));
+}
+function ccxtGoLimitLocalInitializer(goTranspiler, declaration) {
+  const seed = declaration.initializer;
+  if (_optionalChain([declaration, 'access', _4784 => _4784.name, 'optionalAccess', _4785 => _4785.kind]) !== ts.SyntaxKind.Identifier || _optionalChain([seed, 'optionalAccess', _4786 => _4786.kind]) !== ts.SyntaxKind.Identifier || !ccxtGoWsListSourceFile(declaration) || declaration.type !== void 0 && declaration.type.getText() !== "Int") {
+    return void 0;
+  }
+  let seedDeclaration;
+  try {
+    seedDeclaration = _optionalChain([goTranspiler, 'access', _4787 => _4787.getChecker, 'call', _4788 => _4788(), 'access', _4789 => _4789.getSymbolAtLocation, 'call', _4790 => _4790(seed), 'optionalAccess', _4791 => _4791.valueDeclaration, 'optionalAccess', _4792 => _4792.resolve, 'call', _4793 => _4793()]);
+  } catch (e) {
+    return void 0;
+  }
+  const seedIsIntParameter = _optionalChain([seedDeclaration, 'optionalAccess', _4794 => _4794.kind]) === ts.SyntaxKind.Parameter && _optionalChain([seedDeclaration, 'access', _4795 => _4795.type, 'optionalAccess', _4796 => _4796.getText, 'call', _4797 => _4797()]) === "Int";
+  const seedType = goTranspiler.goDeclaredTypeOfIdentifier(seed);
+  if (!seedIsIntParameter && seedType !== "*int64") {
+    return void 0;
+  }
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0 || goTranspiler.goTypeNameIsShadowed(scope, "*int64")) {
+    return void 0;
+  }
+  const name = declaration.name.text;
+  let writes = 0;
+  let unsafe = false;
+  const visit = (n) => {
+    if (unsafe) {
+      return;
+    }
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === name && n !== declaration.name) {
+      if (!ccxtGoLimitLocalUseIsSafe(n)) {
+        unsafe = true;
+      } else if (n.parent.kind === ts.SyntaxKind.BinaryExpression) {
+        writes += 1;
+      }
+      return;
+    }
+    _optionalChain([n, 'optionalAccess', _4798 => _4798.forEachChild, 'call', _4799 => _4799(visit)]);
+  };
+  _optionalChain([scope, 'optionalAccess', _4800 => _4800.forEachChild, 'call', _4801 => _4801(visit)]);
+  if (unsafe || writes === 0) {
+    return void 0;
+  }
+  const seedText = goTranspiler.printNode(seed, 0).trim();
+  return seedType === "*int64" ? seedText : "Int64PtrTyped(" + seedText + ")";
+}
+function installCcxtGoLimitLocals(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoLimitLocalsInstalled || typeof goTranspiler.printVariableDeclarationList !== "function" || typeof goTranspiler.goDeclaredTypeOfIdentifier !== "function" || typeof goTranspiler.goEnclosingFunction !== "function" || typeof goTranspiler.goTypeNameIsShadowed !== "function") {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = upstream(node, identation);
+    if (typeof printed !== "string" || _optionalChain([node, 'optionalAccess', _4802 => _4802.declarations, 'optionalAccess', _4803 => _4803.length]) !== 1) {
+      return printed;
+    }
+    const declaration = node.declarations[0];
+    if (declaration.initializer === void 0) {
+      return printed;
+    }
+    const head = this.getIden(identation) + "var " + (_nullishCoalesce(this.printNode(declaration.name, 0), () => ( ""))).trim() + " any = ";
+    if (!printed.startsWith(head) || printed.substring(head.length).trim() !== (_nullishCoalesce(this.printNode(declaration.initializer, 0), () => ( ""))).trim()) {
+      return printed;
+    }
+    let value;
+    try {
+      value = ccxtGoLimitLocalInitializer(this, declaration);
+    } catch (e) {
+      return printed;
+    }
+    return value === void 0 ? printed : head.replace(/ any = $/, " *int64 = ") + value;
+  };
+  goTranspiler.__ccxtGoLimitLocalsInstalled = true;
+}
+var CCXT_GO_TUPLE_BOOL_PRODUCERS = { "handleOptionBoolAndParams": 3, "handleOptionBoolAndParams2": 4, "handlePostOnly": -1 };
+function ccxtGoTupleBoolUseIsSafe(n) {
+  let current = n;
+  while (_optionalChain([current, 'access', _4804 => _4804.parent, 'optionalAccess', _4805 => _4805.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    current = current.parent;
+  }
+  const parent = current.parent;
+  if (_optionalChain([parent, 'optionalAccess', _4806 => _4806.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === current && isAssignmentOperator(parent.operatorToken.kind)) {
+    return parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && (_optionalChain([parent, 'access', _4807 => _4807.right, 'optionalAccess', _4808 => _4808.kind]) === ts.SyntaxKind.TrueKeyword || _optionalChain([parent, 'access', _4809 => _4809.right, 'optionalAccess', _4810 => _4810.kind]) === ts.SyntaxKind.FalseKeyword);
+  }
+  if (_optionalChain([parent, 'optionalAccess', _4811 => _4811.kind]) === ts.SyntaxKind.BinaryExpression && COMPARISON_TOKENS.indexOf(parent.operatorToken.kind) >= 0 && isUndefinedLiteral(parent.left === current ? parent.right : parent.left)) {
+    return false;
+  }
+  return !isDestructuringTarget(n) && _optionalChain([parent, 'optionalAccess', _4812 => _4812.kind]) !== ts.SyntaxKind.PostfixUnaryExpression && (_optionalChain([parent, 'optionalAccess', _4813 => _4813.kind]) !== ts.SyntaxKind.PrefixUnaryExpression || parent.operator === ts.SyntaxKind.ExclamationToken) && _optionalChain([parent, 'optionalAccess', _4814 => _4814.kind]) !== ts.SyntaxKind.DeleteExpression;
+}
+function ccxtGoTupleBoolElementType(goTranspiler, element) {
+  return ccxtGoTupleElementMemo(goTranspiler, "bool", element, () => ccxtGoTupleBoolElementTypeUncached(goTranspiler, element));
+}
+function ccxtGoTupleBoolElementTypeUncached(goTranspiler, element) {
+  const pattern = _optionalChain([element, 'optionalAccess', _4815 => _4815.parent]);
+  const holder = _optionalChain([pattern, 'optionalAccess', _4816 => _4816.parent]);
+  if (_optionalChain([element, 'optionalAccess', _4817 => _4817.kind]) !== ts.SyntaxKind.BindingElement || !ts.isIdentifier(element.name) || _optionalChain([pattern, 'optionalAccess', _4818 => _4818.kind]) !== ts.SyntaxKind.ArrayBindingPattern || pattern.elements.indexOf(element) !== 0 || _optionalChain([holder, 'optionalAccess', _4819 => _4819.kind]) !== ts.SyntaxKind.VariableDeclaration || holder.name !== pattern || element.dotDotDotToken !== void 0 || element.initializer !== void 0 || element.propertyName !== void 0 || _optionalChain([holder, 'access', _4820 => _4820.parent, 'optionalAccess', _4821 => _4821.parent, 'optionalAccess', _4822 => _4822.kind]) !== ts.SyntaxKind.VariableStatement || typeof goTranspiler.goDeclaredLocalTypeIfSafe !== "function" || typeof goTranspiler.getChecker !== "function") {
+    return void 0;
+  }
+  const call = holder.initializer;
+  const callee = _optionalChain([call, 'optionalAccess', _4823 => _4823.expression]);
+  if (_optionalChain([call, 'optionalAccess', _4824 => _4824.kind]) !== ts.SyntaxKind.CallExpression || call.questionDotToken !== void 0 || _optionalChain([callee, 'optionalAccess', _4825 => _4825.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _4826 => _4826.expression, 'optionalAccess', _4827 => _4827.kind]) !== ts.SyntaxKind.ThisKeyword) {
+    return void 0;
+  }
+  const slot = CCXT_GO_TUPLE_BOOL_PRODUCERS[String(_nullishCoalesce(_optionalChain([callee, 'access', _4828 => _4828.name, 'optionalAccess', _4829 => _4829.text]), () => ( "")))];
+  const fallback = slot === void 0 ? void 0 : call.arguments[slot];
+  if (slot === void 0 || slot >= 0 && _optionalChain([fallback, 'optionalAccess', _4830 => _4830.kind]) !== ts.SyntaxKind.TrueKeyword && _optionalChain([fallback, 'optionalAccess', _4831 => _4831.kind]) !== ts.SyntaxKind.FalseKeyword) {
+    return void 0;
+  }
+  let fileName = "";
+  try {
+    fileName = _nullishCoalesce(_optionalChain([goTranspiler, 'access', _4832 => _4832.getChecker, 'call', _4833 => _4833(), 'access', _4834 => _4834.getResolvedSignature, 'call', _4835 => _4835(call), 'optionalAccess', _4836 => _4836.declaration, 'optionalAccess', _4837 => _4837.resolve, 'call', _4838 => _4838(), 'optionalAccess', _4839 => _4839.getSourceFile, 'optionalCall', _4840 => _4840(), 'optionalAccess', _4841 => _4841.fileName]), () => ( ""));
+  } catch (e) {
+    return void 0;
+  }
+  const scope = goTranspiler.goEnclosingFunction(element);
+  if (!CCXT_GO_ELEMENT_1_BASE_FILE.test(fileName) || scope === void 0 || goTranspiler.goTypeNameIsShadowed(scope, "GetValueBool")) {
+    return void 0;
+  }
+  const name = element.name.text;
+  let rebound = false;
+  const visit = (n) => {
+    if (!rebound && n !== element && n.kind === ts.SyntaxKind.BindingElement && bindingMentionsName(n.name, name)) {
+      rebound = true;
+    }
+    if (!rebound) {
+      _optionalChain([n, 'optionalAccess', _4842 => _4842.forEachChild, 'call', _4843 => _4843(visit)]);
+    }
+  };
+  _optionalChain([scope, 'optionalAccess', _4844 => _4844.forEachChild, 'call', _4845 => _4845(visit)]);
+  return rebound ? void 0 : goTranspiler.goDeclaredLocalTypeIfSafe(element, "bool", (n) => ccxtGoTupleBoolUseIsSafe(n));
+}
+function installCcxtGoTupleBoolElement(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoTupleBoolElementInstalled || typeof goTranspiler.printVariableDeclarationList !== "function" || typeof goTranspiler.goDeclaredTypeOfIdentifier !== "function") {
+    return;
+  }
+  const shippedDeclared = goTranspiler.goDeclaredTypeOfIdentifier;
+  goTranspiler.goDeclaredTypeOfIdentifier = function(node) {
+    const known = shippedDeclared.call(this, node);
+    if (known !== void 0 || _optionalChain([node, 'optionalAccess', _4846 => _4846.kind]) !== ts.SyntaxKind.Identifier) {
+      return known;
+    }
+    const element = ccxtGoParamDeclarationOf(this, node);
+    return _optionalChain([element, 'optionalAccess', _4847 => _4847.kind]) === ts.SyntaxKind.BindingElement ? ccxtGoTupleBoolElementType(this, element) : void 0;
+  };
+  if (typeof goTranspiler.goAnyLocalHoldsPointer === "function") {
+    const shippedHolds = goTranspiler.goAnyLocalHoldsPointer;
+    goTranspiler.goAnyLocalHoldsPointer = function(decl) {
+      return ccxtGoTupleBoolElementType(this, decl) !== "bool" && shippedHolds.call(this, decl);
+    };
+  }
+  const shipped = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = shipped.call(this, node, identation);
+    const element = _optionalChain([node, 'optionalAccess', _4848 => _4848.declarations, 'optionalAccess', _4849 => _4849[0], 'optionalAccess', _4850 => _4850.name, 'optionalAccess', _4851 => _4851.elements, 'optionalAccess', _4852 => _4852[0]]);
+    if (typeof printed !== "string" || node.declarations[0].name.kind !== ts.SyntaxKind.ArrayBindingPattern || ccxtGoTupleBoolElementType(this, element) !== "bool") {
+      return printed;
+    }
+    const name = this.printNode(element.name, 0);
+    const re = new RegExp("^([ \\t]*)" + name + " := ((?:ccxt\\.)?)GetValue\\((\\w+), 0\\)$", "m");
+    return printed.replace(re, (all, indent, pkg, holder) => indent + "var " + name + " bool = " + pkg + "GetValueBool(" + holder + ", 0, false)");
+  };
+  goTranspiler.__ccxtGoTupleBoolElementInstalled = true;
+}
+function ccxtGoTupleParamsRebindIsMap(goTranspiler, n) {
+  const pattern = n.parent;
+  const assignment = _optionalChain([pattern, 'optionalAccess', _4853 => _4853.parent]);
+  if (_optionalChain([pattern, 'optionalAccess', _4854 => _4854.kind]) !== ts.SyntaxKind.ArrayLiteralExpression || pattern.elements.indexOf(n) !== 1 || _optionalChain([assignment, 'optionalAccess', _4855 => _4855.kind]) !== ts.SyntaxKind.BinaryExpression || assignment.left !== pattern || assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken || _optionalChain([assignment, 'access', _4856 => _4856.right, 'optionalAccess', _4857 => _4857.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([assignment, 'access', _4858 => _4858.right, 'access', _4859 => _4859.expression, 'optionalAccess', _4860 => _4860.expression, 'optionalAccess', _4861 => _4861.kind]) !== ts.SyntaxKind.ThisKeyword) {
+    return false;
+  }
+  const slot = CCXT_GO_TUPLE_PARAMS_PRODUCERS[_nullishCoalesce(ccxtGoWriteSiteCallee(goTranspiler, assignment.right), () => ( ""))];
+  return slot !== void 0 && (slot < 0 || ccxtGoProducerArgIsMap(goTranspiler, assignment.right.arguments[slot]));
+}
+function ccxtGoTupleParamsRebindLocalIsSafe(goTranspiler, scope, declaration, varName) {
+  if (scope === void 0 || _optionalChain([declaration, 'optionalAccess', _4862 => _4862.kind]) !== ts.SyntaxKind.VariableDeclaration || _optionalChain([declaration, 'access', _4863 => _4863.initializer, 'optionalAccess', _4864 => _4864.kind]) !== ts.SyntaxKind.ObjectLiteralExpression) {
+    return false;
+  }
+  let rebinds = 0;
+  const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind !== ts.SyntaxKind.Identifier || n.text !== varName || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if (_optionalChain([parent, 'optionalAccess', _4865 => _4865.kind]) === ts.SyntaxKind.ArrayLiteralExpression && ccxtGoTupleParamsRebindIsMap(goTranspiler, n)) {
+      rebinds += 1;
+      return false;
+    }
+    if (_optionalChain([parent, 'optionalAccess', _4866 => _4866.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n && _optionalChain([parent, 'access', _4867 => _4867.operatorToken, 'optionalAccess', _4868 => _4868.kind]) === ts.SyntaxKind.EqualsToken) {
+      return goTranspiler.goTypeOfInitializer(parent.right, goTranspiler.printNode(parent.right, 0)) !== "map[string]any";
+    }
+    return ccxtGoWriteSiteShippedVeto(goTranspiler, n, parent, "map[string]any");
+  });
+  return !unsafe && rebinds > 0;
+}
+function installCcxtGoTupleParamsRebind(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoTupleParamsRebindInstalled || typeof goTranspiler.goLocalIsSafeToType !== "function" || typeof goTranspiler.hasNodeWhere !== "function") {
+    return;
+  }
+  const shippedIsSafe = goTranspiler.goLocalIsSafeToType;
+  const visiting = /* @__PURE__ */ new Set();
+  goTranspiler.goLocalIsSafeToType = function(scope, declaration, varName, goType) {
+    if (shippedIsSafe.call(this, scope, declaration, varName, goType)) {
+      return true;
+    }
+    if (goType !== "map[string]any" || visiting.has(declaration)) {
+      return false;
+    }
+    visiting.add(declaration);
+    try {
+      return ccxtGoTupleParamsRebindLocalIsSafe(this, scope, declaration, varName);
+    } finally {
+      visiting.delete(declaration);
+    }
+  };
+  goTranspiler.__ccxtGoTupleParamsRebindInstalled = true;
+}
+var CCXT_GO_TUPLE_RESULT_METHODS = [
+  "handleMarketTypeAndParams",
+  "handleSubTypeAndParams",
+  "handleOptionStringAndParams",
+  "handleUntilOption",
+  "handleMarginModeAndParams",
+  "handleOptionBoolAndParams",
+  "handleOptionBoolAndParams2",
+  "handleOptionIntegerAndParams",
+  "handleOptionIntegerAndParams2",
+  "handleOptionStringAndParams2"
+];
+var CCXT_GO_TUPLE_RESULT_ELEMENT_0 = {
+  "handleUntilOption": "MapTyped",
+  "handleOptionBoolAndParams": "GetValueBool",
+  "handleOptionBoolAndParams2": "GetValueBool",
+  "handleOptionIntegerAndParams": "Int64Value",
+  "handleOptionIntegerAndParams2": "Int64Value"
+};
+var CCXT_GO_TUPLE_BOOL_DEFAULT_SLOT = {
+  "handleOptionBoolAndParams": 3,
+  "handleOptionBoolAndParams2": 4,
+  "handleOptionIntegerAndParams": 3,
+  "handleOptionIntegerAndParams2": 4
+};
+function ccxtGoTupleDefaultIsValue(name, arg) {
+  if (name.startsWith("handleOptionInteger")) {
+    const lit = _optionalChain([arg, 'optionalAccess', _4869 => _4869.kind]) === ts.SyntaxKind.PrefixUnaryExpression && arg.operator === ts.SyntaxKind.MinusToken ? arg.operand : arg;
+    return _optionalChain([lit, 'optionalAccess', _4870 => _4870.kind]) === ts.SyntaxKind.NumericLiteral && /^\d+$/.test(lit.text);
+  }
+  return _optionalChain([arg, 'optionalAccess', _4871 => _4871.kind]) === ts.SyntaxKind.TrueKeyword || _optionalChain([arg, 'optionalAccess', _4872 => _4872.kind]) === ts.SyntaxKind.FalseKeyword;
+}
+function ccxtGoTupleBoolCallIsNullable(node) {
+  const name = _optionalChain([node, 'optionalAccess', _4873 => _4873.expression, 'optionalAccess', _4874 => _4874.name, 'optionalAccess', _4875 => _4875.text]);
+  const slot = CCXT_GO_TUPLE_BOOL_DEFAULT_SLOT[name];
+  return slot !== void 0 && !ccxtGoTupleDefaultIsValue(name, node.arguments[slot]);
+}
+function ccxtGoTupleResultCall(node) {
+  const callee = _optionalChain([node, 'optionalAccess', _4876 => _4876.expression]);
+  return _optionalChain([node, 'optionalAccess', _4877 => _4877.kind]) === ts.SyntaxKind.CallExpression && _optionalChain([callee, 'optionalAccess', _4878 => _4878.kind]) === ts.SyntaxKind.PropertyAccessExpression && CCXT_GO_TUPLE_RESULT_METHODS.includes(_optionalChain([callee, 'access', _4879 => _4879.name, 'optionalAccess', _4880 => _4880.text])) && (_optionalChain([callee, 'access', _4881 => _4881.expression, 'optionalAccess', _4882 => _4882.kind]) === ts.SyntaxKind.ThisKeyword || _optionalChain([callee, 'access', _4883 => _4883.expression, 'optionalAccess', _4884 => _4884.kind]) === ts.SyntaxKind.SuperKeyword || isIdentifierNamed(callee.expression, "exchange")) && !ccxtGoTupleBoolCallIsNullable(node);
+}
+function ccxtGoTupleResultFirst(call) {
+  return _nullishCoalesce(CCXT_GO_TUPLE_RESULT_ELEMENT_0[call.expression.name.text], () => ( "SafeStringPtr"));
+}
+function ccxtGoTupleResultUnwrap(text) {
+  const t = text.trim().replace(/^ccxt\./, "");
+  return t.startsWith("TupleSlice(") && t.endsWith(")") ? t.substring("TupleSlice(".length, t.length - 1) : void 0;
+}
+function ccxtGoTupleResultJoin(printed, count, declare, untypedOk = false, first = "SafeStringPtr") {
+  const lines = printed.split("\n").filter((l) => l.trim() !== "");
+  const head = /^(\s*)(?:var (\w+Variable) \[\]any = |(\w+Variable) := )(.*)$/.exec(_nullishCoalesce(lines[0], () => ( "")));
+  if (head === null || lines.length !== count + 1) {
+    return void 0;
+  }
+  const holder = _nullishCoalesce(head[2], () => ( head[3]));
+  const call = ccxtGoTupleResultUnwrap(head[4]);
+  if (call === void 0) {
+    return void 0;
+  }
+  const names = ["_", "_"];
+  for (let i = 1; i < lines.length; i++) {
+    const l = lines[i].trim().replace(/\bccxt\.(SafeStringPtr|MapTyped|GetValue|GetValueBool)\(/g, "$1(").replace(/\bGetValueBool\((\w+), 0, false\)$/, "GetValueBool(GetValue($1, 0))");
+    const m = declare ? _nullishCoalesce(/^var (\w+) (?:\*string|bool|map\[string\]any) = (SafeStringPtr|GetValueBool|MapTyped)\(GetValue\((\w+), (\d)\)\)$/.exec(l), () => ( (untypedOk ? /^(\w+) := ()GetValue\((\w+), (\d)\)$/.exec(l) : null))) : _nullishCoalesce(/^(\w+) = (SafeStringPtr|GetValueBool|MapTyped)\(GetValue\((\w+), (\d)\)\)$/.exec(l), () => ( /^(\w+) = ()GetValue\((\w+), (\d)\)$/.exec(l)));
+    if (m === null) {
+      return void 0;
+    }
+    const [name, wrap, h, index] = [m[1], m[2], m[3], Number(m[4])];
+    const ok = h === holder && index === i - 1 && (wrap === "" ? index === 1 || declare && first !== "GetValueBool" || first === "MapTyped" || !declare && (first === "GetValueBool" || first === "Int64Value") : wrap === (index === 0 ? first : "MapTyped"));
+    if (!ok) {
+      return void 0;
+    }
+    names[index] = name;
+  }
+  if (declare && names.every((n) => n === "_")) {
+    return void 0;
+  }
+  return head[1] + names.join(", ") + (declare ? " := " : " = ") + call;
+}
+function ccxtGoTupleResultUntypedElementsAreSafe(goTranspiler, declaration) {
+  const scope = _optionalChain([goTranspiler, 'access', _4885 => _4885.goEnclosingFunction, 'optionalCall', _4886 => _4886(declaration)]);
+  const names = declaration.name.elements.filter((e) => e.kind === ts.SyntaxKind.BindingElement && ts.isIdentifier(e.name)).map((e) => e.name.text);
+  if (scope === void 0 || (declaration.parent.flags & ts.NodeFlags.Const) === 0) {
+    return false;
+  }
+  let unsafe = false;
+  const visit = (n) => {
+    if (!unsafe && n.kind === ts.SyntaxKind.SwitchStatement && ts.isIdentifier(n.expression) && names.includes(n.expression.text)) {
+      unsafe = true;
+    }
+    _optionalChain([n, 'optionalAccess', _4887 => _4887.forEachChild, 'call', _4888 => _4888(visit)]);
+  };
+  visit(scope);
+  return !unsafe;
+}
+function installCcxtGoTupleResults(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoTupleResultsInstalled) {
+    return;
+  }
+  const printCall = goTranspiler.printCallExpression;
+  goTranspiler.printCallExpression = function(node, identation) {
+    const printed = printCall.call(this, node, identation);
+    if (ccxtGoTupleBoolCallIsNullable(node) && (_optionalChain([node, 'access', _4889 => _4889.expression, 'access', _4890 => _4890.expression, 'optionalAccess', _4891 => _4891.kind]) === ts.SyntaxKind.ThisKeyword || isIdentifierNamed(node.expression.expression, "exchange"))) {
+      return printed.replace(/\b(HandleOption(?:Bool|Integer)AndParams2?)\(/, "$1Nullable(");
+    }
+    if (!ccxtGoTupleResultCall(node)) {
+      return printed;
+    }
+    const lead = /^\s*/.exec(printed)[0];
+    return lead + "TupleSlice(" + printed.slice(lead.length) + ")";
+  };
+  const printDeclaration = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = printDeclaration.call(this, node, identation);
+    const declaration = _optionalChain([node, 'optionalAccess', _4892 => _4892.declarations, 'optionalAccess', _4893 => _4893[0]]);
+    if (typeof printed !== "string" || _optionalChain([declaration, 'optionalAccess', _4894 => _4894.name, 'optionalAccess', _4895 => _4895.kind]) !== ts.SyntaxKind.ArrayBindingPattern || !ccxtGoTupleResultCall(declaration.initializer)) {
+      return printed;
+    }
+    const untypedOk = ccxtGoTupleResultUntypedElementsAreSafe(this, declaration);
+    return _nullishCoalesce(ccxtGoTupleResultJoin(printed, declaration.name.elements.length, true, untypedOk, ccxtGoTupleResultFirst(declaration.initializer)), () => ( printed));
+  };
+  const printCustom = goTranspiler.printCustomBinaryExpressionIfAny;
+  goTranspiler.printCustomBinaryExpressionIfAny = function(node, identation) {
+    const printed = printCustom.call(this, node, identation);
+    if (typeof printed !== "string" || _optionalChain([node, 'optionalAccess', _4896 => _4896.left, 'optionalAccess', _4897 => _4897.kind]) !== ts.SyntaxKind.ArrayLiteralExpression || _optionalChain([node, 'access', _4898 => _4898.operatorToken, 'optionalAccess', _4899 => _4899.kind]) !== ts.SyntaxKind.EqualsToken || !ccxtGoTupleResultCall(node.right)) {
+      return printed;
+    }
+    return _nullishCoalesce(ccxtGoTupleResultJoin(printed, node.left.elements.length, false, false, ccxtGoTupleResultFirst(node.right)), () => ( printed));
+  };
+  const printReturn = goTranspiler.printReturnStatement;
+  goTranspiler.printReturnStatement = function(node, identation) {
+    const printed = printReturn.call(this, node, identation);
+    let method = _optionalChain([node, 'optionalAccess', _4900 => _4900.parent]);
+    while (method !== void 0 && !ts.isFunctionLike(method)) {
+      method = method.parent;
+    }
+    const name = _optionalChain([method, 'optionalAccess', _4901 => _4901.name, 'optionalAccess', _4902 => _4902.text]);
+    if (typeof printed !== "string" || _optionalChain([method, 'optionalAccess', _4903 => _4903.kind]) !== ts.SyntaxKind.MethodDeclaration || !CCXT_GO_TUPLE_RESULT_METHODS.includes(name) || CCXT_GO_ELEMENT_1_BASE_FILE.test(node.getSourceFile().fileName)) {
+      return printed;
+    }
+    const expr = node.expression;
+    const m = /^(\s*return )(.*?)(\s*)$/s.exec(printed);
+    if (ccxtGoTupleResultCall(expr) && m !== null) {
+      const call = ccxtGoTupleResultUnwrap(m[2]);
+      return call === void 0 ? printed : m[1] + call + m[3];
+    }
+    if (_optionalChain([expr, 'optionalAccess', _4904 => _4904.kind]) !== ts.SyntaxKind.ArrayLiteralExpression || expr.elements.length !== 2 || m === null) {
+      throw new Error("go tuple-result method " + name + " returns a non-pair: " + printed.trim().slice(0, 120));
+    }
+    const first = _nullishCoalesce(CCXT_GO_TUPLE_RESULT_ELEMENT_0[name], () => ( "SafeStringPtr"));
+    const [a, b] = expr.elements.map((e) => this.printNode(e, 0).trim());
+    return m[1] + first + "(" + a + "), MapTyped(" + b + ")" + m[3];
+  };
+  goTranspiler.__ccxtGoTupleResultsInstalled = true;
+}
+var CCXT_GO_PRINTED_MAP_DECLARATIONS = /* @__PURE__ */ new WeakSet();
+function installCcxtGoPrintedMapDeclarations(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoPrintedMapDeclarationsInstalled || typeof goTranspiler.printVariableDeclarationList !== "function" || typeof goTranspiler.goIndexableTypeOf !== "function") {
+    return;
+  }
+  const shipped = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = shipped.call(this, node, identation);
+    const declaration = _optionalChain([node, 'optionalAccess', _4905 => _4905.declarations, 'optionalAccess', _4906 => _4906[0]]);
+    if (typeof printed === "string" && _optionalChain([node, 'optionalAccess', _4907 => _4907.declarations, 'optionalAccess', _4908 => _4908.length]) === 1 && _optionalChain([declaration, 'access', _4909 => _4909.name, 'optionalAccess', _4910 => _4910.kind]) === ts.SyntaxKind.Identifier && new RegExp("^\\s*var " + declaration.name.text + " map\\[string\\]any = ").test(printed)) {
+      CCXT_GO_PRINTED_MAP_DECLARATIONS.add(declaration);
+    }
+    return printed;
+  };
+  const upstream = goTranspiler.goIndexableTypeOf;
+  goTranspiler.goIndexableTypeOf = function(node, printed) {
+    const known = upstream.call(this, node, printed);
+    if (known !== void 0 || _optionalChain([node, 'optionalAccess', _4911 => _4911.kind]) !== ts.SyntaxKind.Identifier) {
+      return known;
+    }
+    let declaration;
+    try {
+      declaration = _optionalChain([this, 'access', _4912 => _4912.getChecker, 'call', _4913 => _4913(), 'access', _4914 => _4914.getSymbolAtLocation, 'call', _4915 => _4915(node), 'optionalAccess', _4916 => _4916.valueDeclaration, 'optionalAccess', _4917 => _4917.resolve, 'call', _4918 => _4918()]);
+    } catch (e) {
+      return known;
+    }
+    if (declaration === void 0 || !CCXT_GO_PRINTED_MAP_DECLARATIONS.has(declaration)) {
+      return known;
+    }
+    const access = node.parent;
+    if (_optionalChain([access, 'optionalAccess', _4919 => _4919.kind]) === ts.SyntaxKind.ElementAccessExpression && access.expression === node && (typeof this.g01ReadOk !== "function" || this.g01ReadOk(node, access) !== "map[string]any")) {
+      return known;
+    }
+    return "map[string]any";
+  };
+  goTranspiler.__ccxtGoPrintedMapDeclarationsInstalled = true;
+}
+function hx4G10SelfMapWrite(goTranspiler, right, declaration) {
+  while (_optionalChain([right, 'optionalAccess', _4920 => _4920.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    right = right.expression;
+  }
+  const callee = _optionalChain([right, 'optionalAccess', _4921 => _4921.expression]);
+  if (_optionalChain([right, 'optionalAccess', _4922 => _4922.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([callee, 'optionalAccess', _4923 => _4923.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _4924 => _4924.expression, 'optionalAccess', _4925 => _4925.kind]) !== ts.SyntaxKind.ThisKeyword || !["omit", "mergeBalanceAccount"].includes(_optionalChain([callee, 'access', _4926 => _4926.name, 'optionalAccess', _4927 => _4927.text])) || right.arguments.length < 2 || right.arguments[0].kind !== ts.SyntaxKind.Identifier || right.arguments.some((a) => a.kind === ts.SyntaxKind.SpreadElement)) {
+    return void 0;
+  }
+  let same = false;
+  try {
+    const method = _optionalChain([goTranspiler, 'access', _4928 => _4928.getChecker, 'call', _4929 => _4929(), 'access', _4930 => _4930.getSymbolAtLocation, 'call', _4931 => _4931(callee.name), 'optionalAccess', _4932 => _4932.valueDeclaration, 'optionalAccess', _4933 => _4933.resolve, 'call', _4934 => _4934()]);
+    if (!CCXT_GO_ELEMENT_1_BASE_FILE.test(_nullishCoalesce(_optionalChain([method, 'optionalAccess', _4935 => _4935.getSourceFile, 'call', _4936 => _4936(), 'optionalAccess', _4937 => _4937.fileName]), () => ( "")))) {
+      return void 0;
+    }
+    const symbol = goTranspiler.getChecker().getSymbolAtLocation(right.arguments[0]);
+    same = symbol !== void 0 && _optionalChain([symbol, 'access', _4938 => _4938.valueDeclaration, 'optionalAccess', _4939 => _4939.resolve, 'call', _4940 => _4940()]) === declaration;
+  } catch (e) {
+    same = false;
+  }
+  return same ? callee.name.text : void 0;
+}
+function hx4G10SelfMapWritesAreSafe(goTranspiler, scope, declaration, varName) {
+  if (scope === void 0 || _optionalChain([declaration, 'optionalAccess', _4941 => _4941.kind]) !== ts.SyntaxKind.VariableDeclaration || _optionalChain([declaration, 'access', _4942 => _4942.initializer, 'optionalAccess', _4943 => _4943.kind]) !== ts.SyntaxKind.ObjectLiteralExpression || _optionalChain([declaration, 'access', _4944 => _4944.name, 'optionalAccess', _4945 => _4945.kind]) !== ts.SyntaxKind.Identifier || typeof goTranspiler.hasNodeWhere !== "function") {
+    return false;
+  }
+  let selfWrites = 0;
+  const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind !== ts.SyntaxKind.Identifier || n.text !== varName || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if (_optionalChain([parent, 'optionalAccess', _4946 => _4946.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n && _optionalChain([parent, 'access', _4947 => _4947.operatorToken, 'optionalAccess', _4948 => _4948.kind]) === ts.SyntaxKind.EqualsToken) {
+      if (hx4G10SelfMapWrite(goTranspiler, parent.right, declaration) !== void 0) {
+        selfWrites += 1;
+        return false;
+      }
+      return _optionalChain([parent, 'access', _4949 => _4949.right, 'optionalAccess', _4950 => _4950.kind]) !== ts.SyntaxKind.ObjectLiteralExpression;
+    }
+    return ccxtGoWriteSiteShippedVeto(goTranspiler, n, parent, "map[string]any");
+  });
+  if (unsafe || selfWrites === 0) {
+    return false;
+  }
+  goTranspiler.hx4G10TypedLocals ??= /* @__PURE__ */ new Set();
+  goTranspiler.hx4G10TypedLocals.add(declaration.getSourceFile().fileName + ":" + declaration.pos);
+  return true;
+}
+function hx4G10TypedLocal(goTranspiler, node) {
+  const declaration = _optionalChain([node, 'optionalAccess', _4951 => _4951.kind]) === ts.SyntaxKind.Identifier ? ccxtGoParamDeclarationOf(goTranspiler, node) : void 0;
+  return declaration !== void 0 && _optionalChain([goTranspiler, 'access', _4952 => _4952.hx4G10TypedLocals, 'optionalAccess', _4953 => _4953.has, 'call', _4954 => _4954(declaration.getSourceFile().fileName + ":" + declaration.pos)]) ? declaration : void 0;
+}
+function installHx4G10SelfMapWrites(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__hx4G10Installed || typeof goTranspiler.goLocalIsSafeToType !== "function" || typeof goTranspiler.printBinaryExpression !== "function" || typeof goTranspiler.goDeclaredTypeOfIdentifier !== "function") {
+    return;
+  }
+  const shippedIsSafe = goTranspiler.goLocalIsSafeToType;
+  goTranspiler.goLocalIsSafeToType = function(scope, declaration, varName, goType) {
+    return shippedIsSafe.call(this, scope, declaration, varName, goType) || goType === "map[string]any" && hx4G10SelfMapWritesAreSafe(this, scope, declaration, varName);
+  };
+  const shippedBinary = goTranspiler.printBinaryExpression;
+  goTranspiler.printBinaryExpression = function(node, identation) {
+    const right = _optionalChain([node, 'optionalAccess', _4955 => _4955.right]);
+    if (_optionalChain([node, 'optionalAccess', _4956 => _4956.operatorToken, 'optionalAccess', _4957 => _4957.kind]) === ts.SyntaxKind.EqualsToken && _optionalChain([node, 'access', _4958 => _4958.left, 'optionalAccess', _4959 => _4959.kind]) === ts.SyntaxKind.Identifier && _optionalChain([right, 'optionalAccess', _4960 => _4960.kind]) === ts.SyntaxKind.CallExpression && _optionalChain([right, 'access', _4961 => _4961.expression, 'optionalAccess', _4962 => _4962.name, 'optionalAccess', _4963 => _4963.text]) === "mergeBalanceAccount" && hx4G10SelfMapWrite(this, right, ccxtGoParamDeclarationOf(this, node.left)) !== void 0 && this.goDeclaredTypeOfIdentifier(node.left) === "map[string]any") {
+      return this.printNode(node.left, 0) + " = MapTyped(" + this.printNode(right, identation).trim() + ")";
+    }
+    return shippedBinary.call(this, node, identation);
+  };
+  if (typeof goTranspiler.printNativeElementAssignment === "function") {
+    const shippedWrite = goTranspiler.printNativeElementAssignment;
+    goTranspiler.printNativeElementAssignment = function(containerNode, containerStr, keyNode, keyStr, valueStr, compound = false, valueNode = void 0) {
+      if (hx4G10TypedLocal(this, containerNode) !== void 0 && (compound || valueNode === void 0 || typeof this.goIsNonPointerValue !== "function" || !this.goIsNonPointerValue(valueNode))) {
+        return void 0;
+      }
+      return shippedWrite.call(this, containerNode, containerStr, keyNode, keyStr, valueStr, compound, valueNode);
+    };
+  }
+  goTranspiler.__hx4G10Installed = true;
+}
+function g13ArrayAnnotatedReturnTypes(goTranspiler, node, name) {
+  const annotation = _optionalChain([node, 'access', _4964 => _4964.type, 'optionalAccess', _4965 => _4965.getText, 'call', _4966 => _4966(), 'optionalAccess', _4967 => _4967.replace, 'call', _4968 => _4968(/\s+/g, "")]);
+  if (annotation !== "Dict[]" && annotation !== "any[]" || !ccxtGoGeneralAnnotatedMethodIsClosed(node, name)) {
+    return void 0;
+  }
+  try {
+    const checker = goTranspiler.getChecker();
+    const type = checker.getReturnTypeOfSignature(checker.getSignatureFromDeclaration(node));
+    return checker.isArrayType(type) ? ["[]any"] : void 0;
+  } catch (e) {
+    return void 0;
+  }
+}
+var G13_NEVER_NIL_IN_PROGRESS = /* @__PURE__ */ new Set();
+function g13LocalContainerNeverNil(goTranspiler, identifier) {
+  const declaration = ccxtGoParamDeclarationOf(goTranspiler, identifier);
+  if (_optionalChain([declaration, 'optionalAccess', _4969 => _4969.kind]) !== ts.SyntaxKind.VariableDeclaration || !ts.isIdentifier(declaration.name) || declaration.initializer === void 0 || G13_NEVER_NIL_IN_PROGRESS.has(declaration)) {
+    return false;
+  }
+  const scope = _optionalChain([goTranspiler, 'access', _4970 => _4970.goEnclosingFunction, 'optionalCall', _4971 => _4971(declaration)]);
+  if (scope === void 0) {
+    return false;
+  }
+  G13_NEVER_NIL_IN_PROGRESS.add(declaration);
+  try {
+    if (!ccxtGoContainerNeverNil(goTranspiler, declaration.initializer)) {
+      return false;
+    }
+    const name = declaration.name.text;
+    let unsafe = false;
+    const visit = (n) => {
+      if (unsafe) {
+        return;
+      }
+      if (ts.isIdentifier(n) && n.text === name && n !== declaration.name) {
+        const parent = n.parent;
+        if (_optionalChain([parent, 'optionalAccess', _4972 => _4972.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n && parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+          unsafe = parent.operatorToken.kind !== ts.SyntaxKind.EqualsToken || !ccxtGoContainerNeverNil(goTranspiler, parent.right);
+        } else if (isDestructuringTarget(n)) {
+          unsafe = true;
+        }
+      }
+      n.forEachChild(visit);
+    };
+    scope.forEachChild(visit);
+    return !unsafe;
+  } finally {
+    G13_NEVER_NIL_IN_PROGRESS.delete(declaration);
+  }
+}
+function g13StrNilDeclaredJoinType(goTranspiler, declaration) {
+  if (_optionalChain([declaration, 'optionalAccess', _4973 => _4973.kind]) !== ts.SyntaxKind.VariableDeclaration || !ts.isIdentifier(declaration.name) || _optionalChain([declaration, 'access', _4974 => _4974.type, 'optionalAccess', _4975 => _4975.getText, 'call', _4976 => _4976()]) !== "Str" || !isNilLiteralExpression(declaration.initializer) || NIL_DECLARED_GUARD_NAMES.indexOf(declaration.name.text) >= 0) {
+    return void 0;
+  }
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0) {
+    return void 0;
+  }
+  const name = declaration.name.text;
+  let pointerWrites = 0;
+  let unsafe = false;
+  const visit = (n) => {
+    if (unsafe) {
+      return;
+    }
+    if (ts.isIdentifier(n) && n.text === name && n !== declaration.name) {
+      const parent = n.parent;
+      if (_optionalChain([parent, 'optionalAccess', _4977 => _4977.kind]) === ts.SyntaxKind.VariableDeclaration && parent.name === n) {
+        unsafe = true;
+      } else if (_optionalChain([parent, 'optionalAccess', _4978 => _4978.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        const right = parent.right;
+        if (!isNilLiteralExpression(right)) {
+          const written = ts.isIdentifier(right) ? goTranspiler.goDeclaredTypeOfIdentifier(right) : goTranspiler.goTypeOfInitializer(right, goTranspiler.printNode(right, 0));
+          unsafe = written !== "*string";
+          pointerWrites += 1;
+        }
+      } else if (!nilDeclaredReadIsSafe(goTranspiler, n)) {
+        unsafe = true;
+      }
+    }
+    n.forEachChild(visit);
+  };
+  scope.forEachChild(visit);
+  if (unsafe || pointerWrites === 0 || goTranspiler.goTypeNameIsShadowed(scope, "*string")) {
+    return void 0;
+  }
+  return "*string";
+}
+function installCcxtGoG14SafeListWrappedReads(goTranspiler) {
+  if (typeof goTranspiler.goSafeListUseReadsTheList !== "function" || goTranspiler.__ccxtGoG14Installed) {
+    return;
+  }
+  const shipped = goTranspiler.goSafeListUseReadsTheList;
+  goTranspiler.goSafeListUseReadsTheList = function(node) {
+    let outer = node;
+    while (_optionalChain([outer, 'access', _4979 => _4979.parent, 'optionalAccess', _4980 => _4980.kind]) === ts.SyntaxKind.AsExpression || _optionalChain([outer, 'access', _4981 => _4981.parent, 'optionalAccess', _4982 => _4982.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+      outer = outer.parent;
+    }
+    return shipped.call(this, outer);
+  };
+  goTranspiler.__ccxtGoG14Installed = true;
+}
+function b02SafeBalanceOfLocal(goTranspiler, call) {
+  while (_optionalChain([call, 'optionalAccess', _4983 => _4983.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    call = call.expression;
+  }
+  const callee = _optionalChain([call, 'optionalAccess', _4984 => _4984.expression]);
+  if (_optionalChain([call, 'optionalAccess', _4985 => _4985.kind]) !== ts.SyntaxKind.CallExpression || _optionalChain([callee, 'optionalAccess', _4986 => _4986.kind]) !== ts.SyntaxKind.PropertyAccessExpression || _optionalChain([callee, 'access', _4987 => _4987.expression, 'optionalAccess', _4988 => _4988.kind]) !== ts.SyntaxKind.ThisKeyword || _optionalChain([callee, 'access', _4989 => _4989.name, 'optionalAccess', _4990 => _4990.text]) !== "safeBalance" || call.arguments.length !== 1 || call.arguments[0].kind !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  try {
+    const method = _optionalChain([goTranspiler, 'access', _4991 => _4991.getChecker, 'call', _4992 => _4992(), 'access', _4993 => _4993.getSymbolAtLocation, 'call', _4994 => _4994(callee.name), 'optionalAccess', _4995 => _4995.valueDeclaration, 'optionalAccess', _4996 => _4996.resolve, 'call', _4997 => _4997()]);
+    if (!CCXT_GO_ELEMENT_1_BASE_FILE.test(_nullishCoalesce(_optionalChain([method, 'optionalAccess', _4998 => _4998.getSourceFile, 'call', _4999 => _4999(), 'optionalAccess', _5000 => _5000.fileName]), () => ( "")))) {
+      return void 0;
+    }
+    return _optionalChain([goTranspiler, 'access', _5001 => _5001.getChecker, 'call', _5002 => _5002(), 'access', _5003 => _5003.getSymbolAtLocation, 'call', _5004 => _5004(call.arguments[0]), 'optionalAccess', _5005 => _5005.valueDeclaration, 'optionalAccess', _5006 => _5006.resolve, 'call', _5007 => _5007()]);
+  } catch (e) {
+    return void 0;
+  }
+}
+function b02NeverNilMapLocal(goTranspiler, declaration) {
+  return _optionalChain([declaration, 'optionalAccess', _5008 => _5008.kind]) === ts.SyntaxKind.VariableDeclaration && _optionalChain([declaration, 'access', _5009 => _5009.name, 'optionalAccess', _5010 => _5010.kind]) === ts.SyntaxKind.Identifier && _optionalChain([declaration, 'access', _5011 => _5011.initializer, 'optionalAccess', _5012 => _5012.kind]) === ts.SyntaxKind.ObjectLiteralExpression && goTranspiler.goDeclaredTypeOfIdentifier(declaration.name) === "map[string]any";
+}
+function b02SelfMapWritesAreSafe(goTranspiler, scope, declaration, varName) {
+  if (scope === void 0 || _optionalChain([declaration, 'optionalAccess', _5013 => _5013.kind]) !== ts.SyntaxKind.VariableDeclaration || _optionalChain([declaration, 'access', _5014 => _5014.initializer, 'optionalAccess', _5015 => _5015.kind]) !== ts.SyntaxKind.ObjectLiteralExpression || _optionalChain([declaration, 'access', _5016 => _5016.name, 'optionalAccess', _5017 => _5017.kind]) !== ts.SyntaxKind.Identifier || typeof goTranspiler.hasNodeWhere !== "function") {
+    return false;
+  }
+  let balanceWrites = 0;
+  const unsafe = goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind !== ts.SyntaxKind.Identifier || n.text !== varName || n === declaration.name) {
+      return false;
+    }
+    const parent = n.parent;
+    if (_optionalChain([parent, 'optionalAccess', _5018 => _5018.kind]) === ts.SyntaxKind.BinaryExpression && parent.left === n && _optionalChain([parent, 'access', _5019 => _5019.operatorToken, 'optionalAccess', _5020 => _5020.kind]) === ts.SyntaxKind.EqualsToken) {
+      if (b02SafeBalanceOfLocal(goTranspiler, parent.right) === declaration) {
+        balanceWrites += 1;
+        return false;
+      }
+      if (hx4G10SelfMapWrite(goTranspiler, parent.right, declaration) !== void 0) {
+        return false;
+      }
+      return _optionalChain([parent, 'access', _5021 => _5021.right, 'optionalAccess', _5022 => _5022.kind]) !== ts.SyntaxKind.ObjectLiteralExpression;
+    }
+    return ccxtGoWriteSiteShippedVeto(goTranspiler, n, parent, "map[string]any");
+  });
+  if (unsafe || balanceWrites === 0) {
+    return false;
+  }
+  goTranspiler.hx4G10TypedLocals ??= /* @__PURE__ */ new Set();
+  goTranspiler.hx4G10TypedLocals.add(declaration.getSourceFile().fileName + ":" + declaration.pos);
+  return true;
+}
+function installB02SafeBalanceLocals(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__hx4B02Installed || !goTranspiler.__hx4G10Installed || typeof goTranspiler.goSafeDictLocalUnbox !== "function" || typeof goTranspiler.goSafeDictUnboxValue !== "function" || typeof goTranspiler.goDeclaredLocalTypeIfSafe !== "function") {
+    return;
+  }
+  const shippedIsSafe = goTranspiler.goLocalIsSafeToType;
+  goTranspiler.goLocalIsSafeToType = function(scope, declaration, varName, goType) {
+    return shippedIsSafe.call(this, scope, declaration, varName, goType) || goType === "map[string]any" && b02SelfMapWritesAreSafe(this, scope, declaration, varName);
+  };
+  const shippedBinary = goTranspiler.printBinaryExpression;
+  goTranspiler.printBinaryExpression = function(node, identation) {
+    const right = _optionalChain([node, 'optionalAccess', _5023 => _5023.right]);
+    if (_optionalChain([node, 'optionalAccess', _5024 => _5024.operatorToken, 'optionalAccess', _5025 => _5025.kind]) === ts.SyntaxKind.EqualsToken && _optionalChain([node, 'access', _5026 => _5026.left, 'optionalAccess', _5027 => _5027.kind]) === ts.SyntaxKind.Identifier && _optionalChain([right, 'optionalAccess', _5028 => _5028.kind]) === ts.SyntaxKind.CallExpression && _optionalChain([right, 'access', _5029 => _5029.expression, 'optionalAccess', _5030 => _5030.name, 'optionalAccess', _5031 => _5031.text]) === "safeBalance" && b02SafeBalanceOfLocal(this, right) === ccxtGoParamDeclarationOf(this, node.left) && this.goDeclaredTypeOfIdentifier(node.left) === "map[string]any") {
+      return this.printNode(node.left, 0) + " = MapTyped(" + this.printNode(right, identation).trim() + ")";
+    }
+    return shippedBinary.call(this, node, identation);
+  };
+  const declared = (printer, declaration) => {
+    if (_optionalChain([declaration, 'optionalAccess', _5032 => _5032.kind]) !== ts.SyntaxKind.VariableDeclaration || _optionalChain([declaration, 'access', _5033 => _5033.name, 'optionalAccess', _5034 => _5034.kind]) !== ts.SyntaxKind.Identifier || _optionalChain([declaration, 'access', _5035 => _5035.parent, 'optionalAccess', _5036 => _5036.parent, 'optionalAccess', _5037 => _5037.kind]) !== ts.SyntaxKind.VariableStatement || _optionalChain([declaration, 'access', _5038 => _5038.initializer, 'optionalAccess', _5039 => _5039.kind]) !== ts.SyntaxKind.CallExpression) {
+      return void 0;
+    }
+    const source = b02SafeBalanceOfLocal(printer, declaration.initializer);
+    if (source === void 0 || source === declaration || !b02NeverNilMapLocal(printer, source)) {
+      return void 0;
+    }
+    return printer.goDeclaredLocalTypeIfSafe(declaration, "map[string]any", (n) => !ccxtGoProducerUseRebinds(n));
+  };
+  const shippedDictType = goTranspiler.goSafeDictLocalUnbox;
+  const shippedDictValue = goTranspiler.goSafeDictUnboxValue;
+  goTranspiler.goSafeDictLocalUnbox = function(declaration) {
+    return _nullishCoalesce(shippedDictType.call(this, declaration), () => ( declared(this, declaration)));
+  };
+  goTranspiler.goSafeDictUnboxValue = function(declaration, identation) {
+    if (shippedDictType.call(this, declaration) === void 0 && declared(this, declaration) !== void 0) {
+      return "MapTyped(" + this.printNode(declaration.initializer, identation).trimStart() + ")";
+    }
+    return shippedDictValue.call(this, declaration, identation);
+  };
+  goTranspiler.__hx4B02Installed = true;
+}
+function g15GeneralReturnKeepsAbsence(goTranspiler, node, goType) {
+  if (goType === "*string") {
+    return collectReturnStatements(node.body).every((statement) => statement.expression !== void 0 && !isAbsentExpression(statement.expression));
+  }
+  return ccxtGoGeneralReturnKeepsAbsence(goTranspiler, node, goType);
+}
+function g15StringArrayAnnotatedReturnTypes(goTranspiler, node, name) {
+  const annotation = _optionalChain([node, 'access', _5040 => _5040.type, 'optionalAccess', _5041 => _5041.getText, 'call', _5042 => _5042(), 'optionalAccess', _5043 => _5043.replace, 'call', _5044 => _5044(/\s+/g, "")]);
+  if (annotation !== "Strings" && annotation !== "string[]" || !ccxtGoGeneralAnnotatedMethodIsClosed(node, name)) {
+    return void 0;
+  }
+  const neverNil = collectReturnStatements(node.body).every((statement) => ccxtGoContainerNeverNil(goTranspiler, statement.expression));
+  return neverNil ? ["[]any"] : void 0;
+}
+var G22_ARITH_TOKENS = [
+  ts.SyntaxKind.AsteriskToken,
+  ts.SyntaxKind.MinusToken,
+  ts.SyntaxKind.SlashToken,
+  ts.SyntaxKind.PercentToken,
+  ts.SyntaxKind.LessThanToken,
+  ts.SyntaxKind.LessThanEqualsToken,
+  ts.SyntaxKind.GreaterThanToken,
+  ts.SyntaxKind.GreaterThanEqualsToken
+];
+function g22DefaultArmText(goTranspiler, pointerType, node) {
+  if (ccxtGoClosureDefaultLiteralFits(pointerType, node)) {
+    return void 0;
+  }
+  if (_optionalChain([node, 'optionalAccess', _5045 => _5045.kind]) !== ts.SyntaxKind.Identifier) {
+    return null;
+  }
+  const declared = goTranspiler.goDeclaredTypeOfIdentifier(node);
+  const printed = (_nullishCoalesce(goTranspiler.printNode(node, 0), () => ( ""))).trim();
+  if (pointerType === "*int64") {
+    return declared === "int64" ? printed : declared === "int" ? "int64(" + printed + ")" : null;
+  }
+  return pointerType === "*float64" && declared === "float64" ? printed : null;
+}
+function g22ArithReadIsSafe(goTranspiler, node, name) {
+  let current = node;
+  let parent = current.parent;
+  while (_optionalChain([parent, 'optionalAccess', _5046 => _5046.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    current = parent;
+    parent = current.parent;
+  }
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const nativeUse = new RegExp('(?<![\\w."])' + escaped + "\\s*[-*/%<>]|[-*/%<>]\\s*" + escaped + '(?![\\w"])');
+  if (_optionalChain([parent, 'optionalAccess', _5047 => _5047.kind]) === ts.SyntaxKind.BinaryExpression && G22_ARITH_TOKENS.indexOf(_optionalChain([parent, 'access', _5048 => _5048.operatorToken, 'optionalAccess', _5049 => _5049.kind])) >= 0) {
+    return !nativeUse.test((_nullishCoalesce(goTranspiler.printNode(parent, 0), () => ( ""))).trim());
+  }
+  if (_optionalChain([parent, 'optionalAccess', _5050 => _5050.kind]) === ts.SyntaxKind.PrefixUnaryExpression && parent.operator === ts.SyntaxKind.MinusToken) {
+    return /^(?:ccxt\.)?OpNeg\(/.test((_nullishCoalesce(goTranspiler.printNode(parent, 0), () => ( ""))).trim());
+  }
+  return ccxtGoClosureReadIsSafe(goTranspiler, node, name);
+}
+function installG22ClosureNumericDefault(goTranspiler) {
+  if (typeof goTranspiler.printVariableDeclarationList !== "function" || typeof goTranspiler.goDeclaredTypeOfIdentifier !== "function" || typeof goTranspiler.goEnclosingFunction !== "function" || goTranspiler.__g22ClosureNumericDefaultInstalled) {
+    return;
+  }
+  const upstream = goTranspiler.printVariableDeclarationList.bind(goTranspiler);
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = upstream(node, identation);
+    if (typeof printed !== "string" || _optionalChain([node, 'optionalAccess', _5051 => _5051.declarations, 'optionalAccess', _5052 => _5052.length]) !== 1) {
+      return printed;
+    }
+    const declaration = node.declarations[0];
+    const literal = ccxtGoClosureLiteralLines(printed);
+    if (literal === void 0 || literal.name !== (_nullishCoalesce(goTranspiler.printNode(declaration.name), () => ( ""))).trim()) {
+      return printed;
+    }
+    const initializer = declaration.initializer;
+    if (declaration.name.kind !== ts.SyntaxKind.Identifier || _optionalChain([initializer, 'optionalAccess', _5053 => _5053.kind]) !== ts.SyntaxKind.ConditionalExpression) {
+      return printed;
+    }
+    const condition = ccxtGoUnwrapParens(initializer.condition);
+    if (_optionalChain([condition, 'optionalAccess', _5054 => _5054.kind]) !== ts.SyntaxKind.BinaryExpression || COMPARISON_TOKENS.indexOf(_optionalChain([condition, 'access', _5055 => _5055.operatorToken, 'optionalAccess', _5056 => _5056.kind])) < 0 || !isUndefinedLiteral(condition.right) || _optionalChain([condition, 'access', _5057 => _5057.left, 'optionalAccess', _5058 => _5058.kind]) !== ts.SyntaxKind.Identifier) {
+      return printed;
+    }
+    const negated = condition.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsToken || condition.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken;
+    const pointerArm = ccxtGoUnwrapParens(negated ? initializer.whenTrue : initializer.whenFalse);
+    const defaultArm = ccxtGoUnwrapParens(negated ? initializer.whenFalse : initializer.whenTrue);
+    const pointer = condition.left;
+    if (_optionalChain([pointerArm, 'optionalAccess', _5059 => _5059.kind]) !== ts.SyntaxKind.Identifier || pointerArm.text !== pointer.text || pointer.text === declaration.name.text) {
+      return printed;
+    }
+    const checker = goTranspiler.getChecker();
+    if (checker.getSymbolAtLocation(pointerArm) !== checker.getSymbolAtLocation(pointer)) {
+      return printed;
+    }
+    const pointerType = goTranspiler.goDeclaredTypeOfIdentifier(pointer);
+    if (pointerType !== "*int64" && pointerType !== "*float64") {
+      return printed;
+    }
+    const defaultText = g22DefaultArmText(goTranspiler, pointerType, defaultArm);
+    if (defaultText === null) {
+      return printed;
+    }
+    const valueType = pointerType.slice(1);
+    const pointerName = (_nullishCoalesce(goTranspiler.printNode(pointer, 0), () => ( ""))).trim();
+    const lines = printed.split("\n");
+    const body = literal.indent + "	";
+    const pointerLine = negated ? 2 : 4;
+    const defaultLine = negated ? 4 : 2;
+    const expectedCondition = body + "if " + pointerName + (negated ? " != nil {" : " == nil {");
+    const expectedReturn = (negated ? body + "	" : body) + "return " + pointerName;
+    if (lines[1] !== expectedCondition || lines[pointerLine] !== expectedReturn) {
+      return printed;
+    }
+    const scope = goTranspiler.goEnclosingFunction(declaration);
+    if (scope === void 0) {
+      return printed;
+    }
+    const varName = declaration.name.text;
+    let unproven = false;
+    const visit = (n) => {
+      if (unproven) {
+        return;
+      }
+      if (n.kind === ts.SyntaxKind.Identifier && n.text === varName && n !== declaration.name) {
+        unproven = !g22ArithReadIsSafe(goTranspiler, n, varName);
+        return;
+      }
+      _optionalChain([n, 'optionalAccess', _5060 => _5060.forEachChild, 'call', _5061 => _5061(visit)]);
+    };
+    scope.forEachChild(visit);
+    if (unproven || goTranspiler.goTypeNameIsShadowed(scope, valueType) || !goTranspiler.goLocalIsSafeToType(scope, declaration, varName, valueType)) {
+      return printed;
+    }
+    lines[0] = literal.indent + "var " + literal.name + " " + valueType + " = func() " + valueType + " {";
+    lines[pointerLine] = expectedReturn.replace(/return (\w+)$/, "return *$1");
+    if (defaultText !== void 0) {
+      lines[defaultLine] = lines[defaultLine].replace(/return .*$/, "return " + defaultText);
+    }
+    return lines.join("\n");
+  };
+  goTranspiler.__g22ClosureNumericDefaultInstalled = true;
+}
+function hx5X32CallDeclaration(goTranspiler, call) {
+  let decl;
+  try {
+    decl = _optionalChain([goTranspiler, 'access', _5062 => _5062.getChecker, 'call', _5063 => _5063(), 'access', _5064 => _5064.getResolvedSignature, 'call', _5065 => _5065(call), 'optionalAccess', _5066 => _5066.declaration]);
+    decl = typeof _optionalChain([decl, 'optionalAccess', _5067 => _5067.resolve]) === "function" ? decl.resolve() : decl;
+  } catch (e) {
+    decl = void 0;
+  }
+  return _optionalChain([decl, 'optionalAccess', _5068 => _5068.kind]) === ts.SyntaxKind.MethodDeclaration && decl.body !== void 0 ? decl : void 0;
+}
+function hx5X32TextIsStringLiteral(text) {
+  let t = (_nullishCoalesce(text, () => ( ""))).trim();
+  while (t.startsWith("(") && t.endsWith(")")) {
+    t = t.substring(1, t.length - 1).trim();
+  }
+  return /^(?:'[^'\\]*'|"[^"\\]*")$/.test(t);
+}
+function hx5X32NullableStringParam(goTranspiler, param) {
+  let type;
+  try {
+    type = _optionalChain([goTranspiler, 'access', _5069 => _5069.checkerOrUndefined, 'optionalCall', _5070 => _5070(), 'optionalAccess', _5071 => _5071.getTypeAtLocation, 'call', _5072 => _5072(param)]);
+  } catch (e) {
+    return false;
+  }
+  const parts = type === void 0 ? [] : typeof type.isUnionType === "function" && type.isUnionType() ? type.getTypes() : [type];
+  const strings = parts.filter((p) => (p.flags & (ts.TypeFlags.String | ts.TypeFlags.StringLiteral)) !== 0);
+  return strings.length > 0 && parts.every((p) => (p.flags & (ts.TypeFlags.String | ts.TypeFlags.StringLiteral | ts.TypeFlags.Undefined | ts.TypeFlags.Null)) !== 0);
+}
+function installHx5X32StringPtrParams(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__hx5X32Installed || typeof goTranspiler.goParameterCallSitesPassType !== "function" || typeof goTranspiler.goTextArgMatchesType !== "function" || typeof goTranspiler.goPrintedArgType !== "function" || typeof goTranspiler.printArgsForCallExpression !== "function" || typeof goTranspiler.goSameFileCallsOf !== "function" || typeof goTranspiler.goTsSrcTree !== "function") {
+    return;
+  }
+  goTranspiler.__hx5X32Installed = true;
+  const upstreamSites = goTranspiler.goParameterCallSitesPassType;
+  const upstreamArgType = goTranspiler.goPrintedArgType;
+  const widenedSites = function(self, fn, index) {
+    const name = fn.name.text;
+    for (const call of self.goSameFileCallsOf(fn, name)) {
+      const arg = _optionalChain([call, 'access', _5073 => _5073.arguments, 'optionalAccess', _5074 => _5074[index]]);
+      if (arg === void 0 || arg.kind === ts.SyntaxKind.SpreadElement) {
+        return false;
+      }
+      const t = upstreamArgType.call(self, arg);
+      if (t !== "*string" && t !== "string") {
+        return false;
+      }
+    }
+    const tree = self.goTsSrcTree(fn.getSourceFile());
+    if (tree !== void 0) {
+      const myClass = self.goEnclosingClassName(fn);
+      const myFile = tree.relativeOf.get(path7.default.resolve(fn.getSourceFile().fileName));
+      for (const site of _nullishCoalesce(tree.callIndex.get(name), () => ( []))) {
+        if (site.file === myFile || !self.goTsSrcFileDerivesFrom(tree, site.file, myClass)) {
+          continue;
+        }
+        const arg = site.args[index];
+        if (arg === void 0 || !(self.goTextArgMatchesType(arg, "*string", site.file, tree) || hx5X32TextIsStringLiteral(arg))) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+  goTranspiler.goParameterCallSitesPassType = function(fn, index, goType) {
+    if (upstreamSites.call(this, fn, index, goType)) {
+      return true;
+    }
+    return goType === "*string" && widenedSites(this, fn, index);
+  };
+  let proving = 0;
+  const upstreamParamType = goTranspiler.goNativeParameterType;
+  goTranspiler.goNativeParameterType = function(param) {
+    proving++;
+    try {
+      return upstreamParamType.call(this, param);
+    } finally {
+      proving--;
+    }
+  };
+  const probeParam = (self, param) => {
+    const caches = [self.goNativeParameterTypeCache, self.goDeclaredTypeCache].filter((c) => c instanceof Map);
+    if (proving === 0 || caches.length === 0 || _optionalChain([self, 'access', _5075 => _5075.goNativeParameterTypeCache, 'optionalAccess', _5076 => _5076.has, 'optionalCall', _5077 => _5077(param)])) {
+      return self.goNativeParameterType(param);
+    }
+    const before = caches.map((c) => new Set(c.keys()));
+    try {
+      return self.goNativeParameterType(param);
+    } finally {
+      caches.forEach((c, i) => {
+        for (const key of [...c.keys()]) {
+          if (!before[i].has(key)) {
+            c.delete(key);
+          }
+        }
+      });
+    }
+  };
+  const upstreamArgs = goTranspiler.printArgsForCallExpression;
+  goTranspiler.printArgsForCallExpression = function(node, identation) {
+    const printed = upstreamArgs.call(this, node, identation);
+    const args = _nullishCoalesce(node.arguments, () => ( []));
+    if (args.length === 0 || args.some((a) => a.kind === ts.SyntaxKind.SpreadElement)) {
+      return printed;
+    }
+    const callee = node.expression;
+    const calleeName = _optionalChain([callee, 'optionalAccess', _5078 => _5078.kind]) === ts.SyntaxKind.PropertyAccessExpression ? _optionalChain([callee, 'access', _5079 => _5079.name, 'optionalAccess', _5080 => _5080.text]) : void 0;
+    if (typeof calleeName === "string" && Object.prototype.hasOwnProperty.call(_nullishCoalesce(this.unifiedStringParams, () => ( {})), calleeName)) {
+      return printed;
+    }
+    const decl = hx5X32CallDeclaration(this, node);
+    if (decl === void 0) {
+      return printed;
+    }
+    const wrap = args.map((a, i) => {
+      const param = _optionalChain([decl, 'access', _5081 => _5081.parameters, 'optionalAccess', _5082 => _5082[i]]);
+      return param !== void 0 && param.dotDotDotToken === void 0 && param.initializer === void 0 && hx5X32NullableStringParam(this, param) && upstreamArgType.call(this, a) === "string" && probeParam(this, param) === "*string";
+    });
+    if (!wrap.some((w) => w)) {
+      return printed;
+    }
+    const depth = this.goExprDepth + (args.length > 1 ? 1 : 0);
+    return args.map((a, i) => {
+      const text = this.goWithExprDepth(depth, () => this.printNode(a, identation)).trim();
+      return wrap[i] ? "SafeStringPtr(" + text + ")" : text;
+    }).join(", ");
+  };
+}
+
+// src/go/hx10w3-G08.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+
+var _os = require('os'); var _os2 = _interopRequireDefault(_os);
+
+var G08_WHITELIST = /* @__PURE__ */ new Set(["string", "bool", "map[string]any", "[]any"]);
+function g08UsesNullish(go, body, param) {
+  const SK = ts.SyntaxKind;
+  const name = param.name.text;
+  let found = false;
+  const visit = (n) => {
+    if (found || n === void 0) {
+      return;
+    }
+    if (n.kind === SK.BinaryExpression && (_optionalChain([n, 'access', _5083 => _5083.operatorToken, 'optionalAccess', _5084 => _5084.kind]) === SK.QuestionQuestionToken || _optionalChain([n, 'access', _5085 => _5085.operatorToken, 'optionalAccess', _5086 => _5086.kind]) === SK.QuestionQuestionEqualsToken)) {
+      const left = n.left;
+      if (_optionalChain([left, 'optionalAccess', _5087 => _5087.kind]) === SK.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
+        found = true;
+        return;
+      }
+    }
+    n.forEachChild(visit);
+  };
+  body.forEachChild(visit);
+  return found;
+}
+var G08_DYNAMIC_CACHE = /* @__PURE__ */ new WeakMap();
+function g08DynamicCallees(fn) {
+  const file = fn.getSourceFile();
+  let names = G08_DYNAMIC_CACHE.get(file);
+  if (names === void 0) {
+    names = /* @__PURE__ */ new Set();
+    const rx = /\[\s*['"]([A-Za-z_$][\w$]*)['"]\s*\]\s*\(/g;
+    const text = file.getFullText();
+    let m;
+    while ((m = rx.exec(text)) !== null) {
+      names.add(m[1]);
+    }
+    G08_DYNAMIC_CACHE.set(file, names);
+  }
+  return names;
+}
+function g08HasDynamicCall(fn, name) {
+  return g08DynamicCallees(fn).has(name);
+}
+function g08Derived(go, param) {
+  const SK = ts.SyntaxKind;
+  if (_optionalChain([param, 'optionalAccess', _5088 => _5088.kind]) !== SK.Parameter) {
+    return void 0;
+  }
+  if (param.dotDotDotToken !== void 0 || param.initializer !== void 0) {
+    return void 0;
+  }
+  if (_optionalChain([param, 'access', _5089 => _5089.name, 'optionalAccess', _5090 => _5090.kind]) !== SK.Identifier) {
+    return void 0;
+  }
+  const fn = param.parent;
+  if (_optionalChain([fn, 'optionalAccess', _5091 => _5091.kind]) !== SK.MethodDeclaration || fn.body === void 0 || _optionalChain([fn, 'access', _5092 => _5092.name, 'optionalAccess', _5093 => _5093.kind]) !== SK.Identifier) {
+    return void 0;
+  }
+  const name = param.name.text;
+  if (name === "this" || name === "chan" || name === "optionalArgs") {
+    return void 0;
+  }
+  const file = String(_nullishCoalesce(fn.getSourceFile().fileName, () => ( "")));
+  if (!/(^|[\\/])ts[\\/]src[\\/]/.test(file) || /(^|[\\/])ts[\\/]src[\\/]base[\\/]/.test(file)) {
+    return void 0;
+  }
+  const methodName = fn.name.text;
+  if (methodName.startsWith("parse") || methodName.startsWith("handle")) {
+    return void 0;
+  }
+  if (go.isAsyncFunction(fn) || go.goMethodKeepsBaseSignature(fn)) {
+    return void 0;
+  }
+  const checker = go.checkerOrUndefined();
+  if (checker === void 0) {
+    return void 0;
+  }
+  const declared = param.type === void 0 ? void 0 : String(param.type.getText()).trim();
+  if (declared !== void 0 && declared !== "any" && declared !== "unknown") {
+    return void 0;
+  }
+  if (g08HasDynamicCall(fn, methodName)) {
+    return void 0;
+  }
+  const index = fn.parameters.indexOf(param);
+  const sites = go.goSameFileCallsOf(fn, methodName);
+  if (sites.length === 0) {
+    return void 0;
+  }
+  const types = /* @__PURE__ */ new Set();
+  for (const site of sites) {
+    const arg = _optionalChain([site, 'access', _5094 => _5094.arguments, 'optionalAccess', _5095 => _5095[index]]);
+    if (arg === void 0 || arg.kind === SK.SpreadElement) {
+      return void 0;
+    }
+    const printed = go.goPrintedArgType(arg);
+    if (printed === void 0 || !G08_WHITELIST.has(printed)) {
+      return void 0;
+    }
+    types.add(printed);
+    if (types.size > 1) {
+      return void 0;
+    }
+  }
+  const candidates = [[...types][0]];
+  for (const goType of candidates) {
+    if (!go.goParameterCallSitesPassType(fn, index, goType)) {
+      continue;
+    }
+    if (!go.goLocalIsSafeToType(fn.body, param, name, goType)) {
+      continue;
+    }
+    if (!go.goParameterKeepsNilCompareNative(fn.body, param, goType)) {
+      continue;
+    }
+    if (g08UsesNullish(go, fn.body, param)) {
+      continue;
+    }
+    return goType;
+  }
+  return void 0;
+}
+function installCcxtGoParamTypes(goTranspiler) {
+  const flag = "hx10G08w3Installed";
+  const current = goTranspiler.goNativeParameterType;
+  if (_optionalChain([current, 'optionalAccess', _5096 => _5096[flag]]) === true) {
+    return current;
+  }
+  const original = goTranspiler.goNativeParameterType;
+  const cache = /* @__PURE__ */ new Map();
+  const inProgress = /* @__PURE__ */ new Set();
+  const native = function(param) {
+    const answer = original.call(this, param);
+    if (answer !== void 0) {
+      return answer;
+    }
+    if (cache.has(param)) {
+      return cache.get(param);
+    }
+    if (inProgress.has(param)) {
+      return void 0;
+    }
+    inProgress.add(param);
+    let derived;
+    try {
+      derived = g08Derived(this, param);
+    } finally {
+      inProgress.delete(param);
+    }
+    cache.set(param, derived);
+    return derived;
+  };
+  native[flag] = true;
+  goTranspiler.goNativeParameterType = native;
+  return native;
+}
+var G08_TEST_BASE = `export type Dict = { [key: string]: any };
+export type Str = string | undefined;
+export class Exchange {
+    safeString (o: any, k: any, d: any = undefined): any { return d; }
+    extend (...args: any[]): any { return args[0]; }
+    baseHelper (id: string) { return id; }
+}
+`;
+var G08_TEST_EXCHANGE = `import { Exchange, Dict, Str } from './base/Exchange';
+export class ex extends Exchange {
+    byString (id, options) {
+        if (id === 'ETH') { return options['chain']; }
+        return this.safeString (options, 'x', id);
+    }
+    byInt (count) { return count; }
+    mixedTypes (id) { this.mixedTypes ('a'); return this.mixedTypes (1); }
+    nilCompare (options) { if (options === undefined) { return 0; } return 1; }
+    declaredDict (config: Dict) { return config['a']; }
+    dynamic (id) { return id; }
+    baseHelper (id) { return id; }
+    run (opts) {
+        this.byString ('ETH', { 'chain': 'x' });
+        this.byInt (1);
+        this.mixedTypes ('a');
+        this.nilCompare (undefined);
+        this['dynamic'] ('x');
+        return this.baseHelper ('x');
+    }
+}
+`;
+function g08w3Check() {
+  const problems = [];
+  const ok = (condition, message) => {
+    if (!condition) {
+      problems.push("hx10 G08w3: " + message);
+    }
+  };
+  const tmp = fs6.default.mkdtempSync(path7.default.join(_os2.default.tmpdir(), "hx10-G08w3-"));
+  try {
+    const src = path7.default.join(tmp, "ts", "src");
+    fs6.default.mkdirSync(path7.default.join(src, "base"), { "recursive": true });
+    fs6.default.writeFileSync(path7.default.join(src, "base", "Exchange.ts"), G08_TEST_BASE);
+    fs6.default.writeFileSync(path7.default.join(src, "ex.ts"), G08_TEST_EXCHANGE);
+    const print = (install) => {
+      const t = new Transpiler({ "verbose": false, "go": {} });
+      if (install) {
+        installCcxtGoParamTypes(t.goTranspiler);
+      }
+      return t.transpileGoByPath(path7.default.join(src, "ex.ts")).content;
+    };
+    const body = (go, name) => _nullishCoalesce(go.split(/\nfunc /).find((f) => f.startsWith("(this *ex) " + name + "(")), () => ( ""));
+    const base = print(false);
+    const hooked = print(true);
+    ok(body(base, "ByString").indexOf("(id any, options any)") >= 0, "the base generator prints the parameters as any: " + body(base, "ByString"));
+    ok(body(hooked, "ByString").indexOf("(id string, options map[string]any)") >= 0, "the call-site type prints both parameters: " + body(hooked, "ByString"));
+    ok(body(hooked, "ByString").indexOf('options["chain"]') >= 0, "a typed map parameter reads natively");
+    ok(body(hooked, "ByString").indexOf("GetValue(options") < 0, "the map read keeps no helper call");
+    ok(body(hooked, "ByInt").indexOf("(count any)") >= 0, "a numeric call site keeps the box: " + body(hooked, "ByInt"));
+    ok(body(hooked, "MixedTypes").indexOf("(id any)") >= 0, "call sites of two types keep the box: " + body(hooked, "MixedTypes"));
+    ok(body(hooked, "NilCompare").indexOf("(options any)") >= 0, "a nil-compared parameter keeps the box");
+    ok(body(hooked, "NilCompare").indexOf("IsEqual(options, nil)") >= 0, "the nil compare keeps its helper");
+    ok(body(hooked, "BaseHelper").indexOf("(id any)") >= 0, "a base-member override keeps the base signature");
+    ok(body(hooked, "DeclaredDict").indexOf("(config any)") >= 0, "a declared type stays the printer's own decision: " + body(hooked, "DeclaredDict"));
+    ok(body(hooked, "Dynamic").indexOf("(id any)") >= 0, "a dynamically named call site keeps the box: " + body(hooked, "Dynamic"));
+    ok(body(base, "ByString") !== body(hooked, "ByString"), "the rule changes the base generator output");
+  } catch (e) {
+    problems.push("hx10 G08w3 threw: " + e.message);
+  } finally {
+    fs6.default.rmSync(tmp, { recursive: true, force: true });
+  }
+  return problems;
+}
+
+// src/go/hx10w8-GB01.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+
+var GB01_DICT_PARAMS = {
+  "safeTrade": [0],
+  "safeLedgerEntry": [0]
+};
+var GB01_TYPE = "map[string]any";
+var GB01_DEBUG = process.env.GB01_DEBUG === "1";
+var GB01_LENIENT = process.env.GB01_LENIENT === "1";
+var GB01_FAILURES = [];
+function gb01Log(message) {
+  GB01_FAILURES.push(message);
+  if (GB01_DEBUG || GB01_LENIENT) {
+    console.error("hx10 GB01: " + message);
+  }
+}
+function gb01IsBaseFile(fn) {
+  return /(^|[\\/])ts[\\/]src[\\/]base[\\/]/.test(String(_nullishCoalesce(fn.getSourceFile().fileName, () => ( ""))));
+}
+function gb01UsesNullish(go, body, param) {
+  const SK = ts.SyntaxKind;
+  const name = param.name.text;
+  let found = false;
+  const visit = (n) => {
+    if (found || n === void 0) {
+      return;
+    }
+    if (n.kind === SK.BinaryExpression && (_optionalChain([n, 'access', _5097 => _5097.operatorToken, 'optionalAccess', _5098 => _5098.kind]) === SK.QuestionQuestionToken || _optionalChain([n, 'access', _5099 => _5099.operatorToken, 'optionalAccess', _5100 => _5100.kind]) === SK.QuestionQuestionEqualsToken)) {
+      const left = n.left;
+      if (_optionalChain([left, 'optionalAccess', _5101 => _5101.kind]) === SK.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
+        found = true;
+        return;
+      }
+    }
+    n.forEachChild(visit);
+  };
+  body.forEachChild(visit);
+  return found;
+}
+function gb01CallSitesPassMap(go, fn, index) {
+  const name = fn.name.text;
+  for (const call of go.goSameFileCallsOf(fn, name)) {
+    const arg = _optionalChain([call, 'access', _5102 => _5102.arguments, 'optionalAccess', _5103 => _5103[index]]);
+    if (arg === void 0 || arg.kind === ts.SyntaxKind.SpreadElement) {
+      return false;
+    }
+    if (go.goPrintedArgType(arg) !== GB01_TYPE) {
+      return false;
+    }
+  }
+  const tree = go.goTsSrcTree(fn.getSourceFile());
+  if (tree === void 0) {
+    return false;
+  }
+  const myClass = go.goEnclosingClassName(fn);
+  const myFile = tree.relativeOf.get(path7.default.resolve(fn.getSourceFile().fileName));
+  const sites = _nullishCoalesce(tree.callIndex.get(name), () => ( []));
+  if (sites.length === 0) {
+    return true;
+  }
+  for (const site of sites) {
+    if (site.file === myFile) {
+      continue;
+    }
+    if (!go.goTsSrcFileDerivesFrom(tree, site.file, myClass)) {
+      continue;
+    }
+    const arg = String(_nullishCoalesce(_optionalChain([site, 'access', _5104 => _5104.args, 'optionalAccess', _5105 => _5105[index]]), () => ( ""))).trim();
+    if (arg.startsWith("{")) {
+      continue;
+    }
+    if (/^this\s*\.\s*(extend|deepExtend|keysort|indexBy|groupBy)\s*\(/.test(arg)) {
+      continue;
+    }
+    const identifier = /^([A-Za-z_$][\w$]*)$/.exec(arg);
+    if (identifier === null) {
+      return false;
+    }
+    const text = _nullishCoalesce(tree.fileText.get(site.file), () => ( ""));
+    const declRe = new RegExp("(?:const|let|var)\\s+" + identifier[1] + "\\s*(?::[^=]*)?=\\s*([^;\\n]+)", "g");
+    let declaration;
+    let match;
+    while ((match = declRe.exec(text)) !== null) {
+      if (match.index > site.at) {
+        break;
+      }
+      declaration = match;
+    }
+    if (declaration === void 0) {
+      return false;
+    }
+    const initializer = declaration[1].trim();
+    if (initializer.startsWith("{") || /^this\s*\.\s*(extend|deepExtend|safeDict)\s*\(/.test(initializer)) {
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+function gb01Rejection(go, fn, param) {
+  const SK = ts.SyntaxKind;
+  if (_optionalChain([param, 'optionalAccess', _5106 => _5106.kind]) !== SK.Parameter) {
+    return "not a parameter";
+  }
+  if (param.dotDotDotToken !== void 0 || param.initializer !== void 0) {
+    return "optional/variadic parameter";
+  }
+  if (_optionalChain([param, 'access', _5107 => _5107.name, 'optionalAccess', _5108 => _5108.kind]) !== SK.Identifier) {
+    return "destructured parameter";
+  }
+  if (_optionalChain([fn, 'optionalAccess', _5109 => _5109.kind]) !== SK.MethodDeclaration || fn.body === void 0 || _optionalChain([fn, 'access', _5110 => _5110.name, 'optionalAccess', _5111 => _5111.kind]) !== SK.Identifier) {
+    return "not a method with a body";
+  }
+  if (go.isAsyncFunction(fn)) {
+    return "async method";
+  }
+  if (go.goMethodKeepsBaseSignature(fn) && !gb01IsBaseFile(fn)) {
+    const cls = go.goEnclosingClass(fn);
+    if ((_nullishCoalesce(_optionalChain([cls, 'optionalAccess', _5112 => _5112.heritageClauses]), () => ( []))).some((c) => c.token === SK.ExtendsKeyword) === false) {
+      return "root class member";
+    }
+  }
+  const index = fn.parameters.indexOf(param);
+  const name = param.name.text;
+  if (!gb01CallSitesPassMap(go, fn, index)) {
+    return "call site passes another type";
+  }
+  if (!go.goLocalIsSafeToType(fn.body, param, name, GB01_TYPE)) {
+    return "body writes another type";
+  }
+  if (!go.goParameterKeepsNilCompareNative(fn.body, param, GB01_TYPE)) {
+    return "body nil-compares the parameter";
+  }
+  if (gb01UsesNullish(go, fn.body, param)) {
+    return "body reads the parameter with ??";
+  }
+  return void 0;
+}
+function gb01Derived(go, param) {
+  if (_optionalChain([param, 'optionalAccess', _5113 => _5113.kind]) !== ts.SyntaxKind.Parameter) {
+    return void 0;
+  }
+  const fn = param.parent;
+  if (_optionalChain([fn, 'optionalAccess', _5114 => _5114.kind]) !== ts.SyntaxKind.MethodDeclaration || _optionalChain([fn, 'access', _5115 => _5115.name, 'optionalAccess', _5116 => _5116.kind]) !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  const method = fn.name.text;
+  const indexes = Object.prototype.hasOwnProperty.call(GB01_DICT_PARAMS, method) ? GB01_DICT_PARAMS[method] : void 0;
+  if (indexes === void 0 || indexes.indexOf(fn.parameters.indexOf(param)) < 0) {
+    return void 0;
+  }
+  const reason = gb01Rejection(go, fn, param);
+  if (reason !== void 0) {
+    const file = String(_nullishCoalesce(fn.getSourceFile().fileName, () => ( ""))).split(/[\\/]/).slice(-3).join("/");
+    const message = `${file}: ${method}(${_optionalChain([param, 'access', _5117 => _5117.name, 'optionalAccess', _5118 => _5118.text])}) keeps the box: ${reason}`;
+    if (!GB01_LENIENT) {
+      if (!gb01IsBaseFile(fn) || reason === "not a parameter") {
+        throw new Error("hx10 GB01: " + message + " (the base prints map[string]any, an override must too)");
+      }
+    }
+    gb01Log(message);
+    return void 0;
+  }
+  if (GB01_DEBUG) {
+    gb01Log(`typed ${method}(${param.name.text}) in ${String(_nullishCoalesce(fn.getSourceFile().fileName, () => ( "")))}`);
+  }
+  return GB01_TYPE;
+}
+function installCcxtGoDictParams(goTranspiler) {
+  const flag = "hx10GB01w8Installed";
+  const current = goTranspiler.goNativeParameterType;
+  if (_optionalChain([current, 'optionalAccess', _5119 => _5119[flag]]) === true) {
+    return current;
+  }
+  const original = goTranspiler.goNativeParameterType;
+  const cache = /* @__PURE__ */ new Map();
+  const inProgress = /* @__PURE__ */ new Set();
+  const native = function(param) {
+    const answer = original.call(this, param);
+    if (answer !== void 0) {
+      return answer;
+    }
+    if (cache.has(param)) {
+      return cache.get(param);
+    }
+    if (inProgress.has(param)) {
+      return void 0;
+    }
+    inProgress.add(param);
+    let derived;
+    try {
+      derived = gb01Derived(this, param);
+    } finally {
+      inProgress.delete(param);
+    }
+    cache.set(param, derived);
+    return derived;
+  };
+  native[flag] = true;
+  goTranspiler.goNativeParameterType = native;
+  return native;
+}
+function hx10w8GB01Check() {
+  const problems = [];
+  const ok = (condition, message) => {
+    if (!condition) {
+      problems.push("hx10 GB01: " + message);
+    }
+  };
+  for (const entry of Object.values(GB01_DICT_PARAMS)) {
+    ok(entry.length > 0, "table entry without an index");
+  }
+  return problems;
+}
+
+// src/go/hx10w8-GB05.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+
+
+
+var GB05_METHODS = {
+  "parseBalance": 0,
+  "safeBalance": 0,
+  "safePosition": 0,
+  "safeTicker": 0
+};
+var GB05_NULLISH_CACHE = /* @__PURE__ */ new WeakMap();
+function gb05DynamicCallees(fn) {
+  const file = fn.getSourceFile();
+  let names = GB05_NULLISH_CACHE.get(file);
+  if (names === void 0) {
+    names = /* @__PURE__ */ new Set();
+    const rx = /\[\s*['"]([A-Za-z_$][\w$]*)['"]\s*\]\s*\(/g;
+    const text = file.getFullText();
+    let m;
+    while ((m = rx.exec(text)) !== null) {
+      names.add(m[1]);
+    }
+    GB05_NULLISH_CACHE.set(file, names);
+  }
+  return names;
+}
+function gb05UsesNullish(go, body, param) {
+  const SK = ts.SyntaxKind;
+  const name = param.name.text;
+  let found = false;
+  const visit = (n) => {
+    if (found || n === void 0) {
+      return;
+    }
+    if (n.kind === SK.BinaryExpression && (_optionalChain([n, 'access', _5120 => _5120.operatorToken, 'optionalAccess', _5121 => _5121.kind]) === SK.QuestionQuestionToken || _optionalChain([n, 'access', _5122 => _5122.operatorToken, 'optionalAccess', _5123 => _5123.kind]) === SK.QuestionQuestionEqualsToken)) {
+      const left = n.left;
+      if (_optionalChain([left, 'optionalAccess', _5124 => _5124.kind]) === SK.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
+        found = true;
+        return;
+      }
+    }
+    n.forEachChild(visit);
+  };
+  body.forEachChild(visit);
+  return found;
+}
+function gb05Derived(go, param) {
+  const SK = ts.SyntaxKind;
+  if (_optionalChain([param, 'optionalAccess', _5125 => _5125.kind]) !== SK.Parameter) {
+    return void 0;
+  }
+  if (param.dotDotDotToken !== void 0 || param.initializer !== void 0) {
+    return void 0;
+  }
+  if (_optionalChain([param, 'access', _5126 => _5126.name, 'optionalAccess', _5127 => _5127.kind]) !== SK.Identifier) {
+    return void 0;
+  }
+  const fn = param.parent;
+  if (_optionalChain([fn, 'optionalAccess', _5128 => _5128.kind]) !== SK.MethodDeclaration || fn.body === void 0 || _optionalChain([fn, 'access', _5129 => _5129.name, 'optionalAccess', _5130 => _5130.kind]) !== SK.Identifier) {
+    return void 0;
+  }
+  const name = param.name.text;
+  if (name === "this" || name === "chan" || name === "optionalArgs") {
+    return void 0;
+  }
+  const methodName = fn.name.text;
+  const indexes = Object.prototype.hasOwnProperty.call(GB05_METHODS, methodName) ? GB05_METHODS[methodName] : void 0;
+  if (indexes === void 0) {
+    return void 0;
+  }
+  if (fn.parameters.indexOf(param) !== indexes) {
+    return void 0;
+  }
+  if (go.isAsyncFunction(fn)) {
+    return void 0;
+  }
+  const checker = go.checkerOrUndefined();
+  if (checker === void 0) {
+    return void 0;
+  }
+  const declared = param.type === void 0 ? void 0 : String(param.type.getText()).trim();
+  if (declared !== void 0 && declared !== "any" && declared !== "unknown" && declared !== "Dict") {
+    return void 0;
+  }
+  if (declared !== void 0 && declared !== "any" && declared !== "unknown" && !go.goParameterTypeIsDict(checker.getTypeAtLocation(param))) {
+    return void 0;
+  }
+  if (gb05DynamicCallees(fn).has(methodName)) {
+    return void 0;
+  }
+  if (!go.goHasTreeCallSite(fn)) {
+    return void 0;
+  }
+  if (!go.goParameterCallSitesPassType(fn, indexes, "map[string]any")) {
+    return void 0;
+  }
+  if (!go.goLocalIsSafeToType(fn.body, param, name, "map[string]any")) {
+    return void 0;
+  }
+  if (!go.goParameterKeepsNilCompareNative(fn.body, param, "map[string]any")) {
+    return void 0;
+  }
+  if (gb05UsesNullish(go, fn.body, param)) {
+    return void 0;
+  }
+  return "map[string]any";
+}
+function installCcxtGoGb05ParamTypes(goTranspiler) {
+  const flag = "hx10Gb05w8Installed";
+  const current = goTranspiler.goNativeParameterType;
+  if (_optionalChain([current, 'optionalAccess', _5131 => _5131[flag]]) === true) {
+    return current;
+  }
+  const original = goTranspiler.goNativeParameterType;
+  const cache = /* @__PURE__ */ new Map();
+  const inProgress = /* @__PURE__ */ new Set();
+  const native = function(param) {
+    const answer = original.call(this, param);
+    if (answer !== void 0) {
+      return answer;
+    }
+    if (cache.has(param)) {
+      return cache.get(param);
+    }
+    if (inProgress.has(param)) {
+      return void 0;
+    }
+    inProgress.add(param);
+    let derived;
+    try {
+      derived = gb05Derived(this, param);
+    } finally {
+      inProgress.delete(param);
+    }
+    cache.set(param, derived);
+    return derived;
+  };
+  native[flag] = true;
+  goTranspiler.goNativeParameterType = native;
+  return native;
+}
+var GB05_TEST_BASE = `export type Dict = { [key: string]: any };
+export class Exchange {
+    fetchFrame (): any { return {}; }
+    safePosition (position: Dict): any { position['a'] = 1; return position; }
+    safeTicker (ticker: Dict): any { ticker['b'] = 2; return ticker; }
+    safeBalance (balance: Dict): any { return balance; }
+    safeOrder (order: Dict): any { return order; }
+    parseBalance (response): any { return response['total']; }
+    parseTicker (ticker: Dict): any { return ticker['c']; }
+}
+`;
+var GB05_TEST_EXCHANGE = `import { Exchange, Dict } from './base/Exchange';
+export class ex extends Exchange {
+    parseBalance (response) { return response['total']; }
+    run () {
+        this.safePosition ({ 'a': 1 });
+        this.safeTicker ({ 'b': 2 });
+        this.safeBalance ({ 'free': 1 });
+        this.parseBalance ({ 'total': 1 });
+        this.safeOrder ({ 'id': 1 });
+        this.parseTicker ({ 'c': 3 });
+        return 0;
+    }
+}
+`;
+function hx10w8GB05Check() {
+  const problems = [];
+  const ok = (condition, message) => {
+    if (!condition) {
+      problems.push("hx10 w8 GB05: " + message);
+    }
+  };
+  const tmp = fs6.default.mkdtempSync(path7.default.join(_os2.default.tmpdir(), "hx10-GB05w8-"));
+  try {
+    const src = path7.default.join(tmp, "ts", "src");
+    fs6.default.mkdirSync(path7.default.join(src, "base"), { recursive: true });
+    fs6.default.writeFileSync(path7.default.join(src, "base", "Exchange.ts"), GB05_TEST_BASE);
+    fs6.default.writeFileSync(path7.default.join(src, "ex.ts"), GB05_TEST_EXCHANGE);
+    const print = (file, install) => {
+      const t = new Transpiler({ verbose: false, go: {} });
+      if (install) {
+        installCcxtGoGb05ParamTypes(t.goTranspiler);
+      }
+      return t.transpileGoByPath(path7.default.join(src, file)).content;
+    };
+    const fnBody = (go, name) => _nullishCoalesce(go.split(/\nfunc /).find((f) => f.indexOf(" " + name + "(") >= 0), () => ( ""));
+    const base = print("base/Exchange.ts", false);
+    const baseHooked = print("base/Exchange.ts", true);
+    const exHooked = print("ex.ts", true);
+    const safePosition = fnBody(baseHooked, "SafePosition");
+    ok(safePosition.indexOf("(position map[string]any)") >= 0, "a proven frame parameter prints the map: " + safePosition);
+    ok(safePosition.indexOf('position["a"] = 1') >= 0, "the frame write is native: " + safePosition);
+    ok(safePosition.indexOf("AddElementToObject(position") < 0, "the frame write keeps no helper");
+    ok(fnBody(base, "SafePosition").indexOf("(position any)") >= 0, "the base generator boxes the frame parameter");
+    ok(fnBody(baseHooked, "SafeTicker").indexOf("(ticker map[string]any)") >= 0, "safeTicker types like safePosition");
+    ok(fnBody(baseHooked, "SafeBalance").indexOf("(balance map[string]any)") >= 0, "safeBalance types like safePosition");
+    ok(fnBody(exHooked, "ParseBalance").indexOf("(response map[string]any)") >= 0, "a venue parseBalance override types off its own call sites: " + fnBody(exHooked, "ParseBalance"));
+    ok(fnBody(exHooked, "ParseBalance").indexOf("GetValue(response") < 0, "the override reads the frame natively");
+    ok(fnBody(baseHooked, "ParseTicker").indexOf("(ticker any)") >= 0, "parseTicker keeps the box (IDerivedExchange pins it)");
+    ok(fnBody(baseHooked, "SafeOrder").indexOf("(order any)") >= 0, "a method outside the table keeps the box");
+  } catch (e) {
+    problems.push("hx10 w8 GB05 threw: " + e.message);
+  } finally {
+    fs6.default.rmSync(tmp, { recursive: true, force: true });
+  }
+  return problems;
+}
+
+// src/go/hx10w9-GB11.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+
+
+
+var GB11_METHOD = "handleErrors";
+var GB11_INDEX = 0;
+var GB11_NUMERIC_TYPES = ["int", "number", "Int"];
+var GB11_COMPARISONS = {};
+function gb11ComparisonOperators(SK) {
+  if (Object.keys(GB11_COMPARISONS).length !== 0) {
+    return GB11_COMPARISONS;
+  }
+  for (const op of [
+    "EqualsEqualsToken",
+    "EqualsEqualsEqualsToken",
+    "ExclamationEqualsToken",
+    "ExclamationEqualsEqualsToken",
+    "LessThanToken",
+    "LessThanEqualsToken",
+    "GreaterThanToken",
+    "GreaterThanEqualsToken"
+  ]) {
+    GB11_COMPARISONS[SK[op]] = true;
+  }
+  return GB11_COMPARISONS;
+}
+function gb11RefersToParam(go, node, param) {
+  const checker = go.checkerOrUndefined();
+  if (checker === void 0) {
+    return false;
+  }
+  try {
+    const symbol = checker.getSymbolAtLocation(node);
+    return _optionalChain([symbol, 'optionalAccess', _5132 => _5132.valueDeclaration, 'optionalAccess', _5133 => _5133.resolve, 'call', _5134 => _5134()]) === param;
+  } catch (e) {
+    return false;
+  }
+}
+function gb11UsesAreIntOnly(go, body, param) {
+  const SK = ts.SyntaxKind;
+  const comparisons = gb11ComparisonOperators(SK);
+  const name = param.name.text;
+  let ok = true;
+  const visit = (n) => {
+    if (!ok || n === void 0) {
+      return;
+    }
+    if (n.kind === SK.Identifier && n.text === name && gb11RefersToParam(go, n, param)) {
+      const parent = n.parent;
+      if (_optionalChain([parent, 'optionalAccess', _5135 => _5135.kind]) === SK.PropertyAccessExpression && parent.expression === n && _optionalChain([parent, 'access', _5136 => _5136.name, 'optionalAccess', _5137 => _5137.text]) === "toString") {
+        return;
+      }
+      if (_optionalChain([parent, 'optionalAccess', _5138 => _5138.kind]) === SK.BinaryExpression && comparisons[_optionalChain([parent, 'access', _5139 => _5139.operatorToken, 'optionalAccess', _5140 => _5140.kind])]) {
+        const other = parent.left === n ? parent.right : parent.left;
+        const literal = _optionalChain([other, 'optionalAccess', _5141 => _5141.kind]) === SK.NumericLiteral || _optionalChain([other, 'optionalAccess', _5142 => _5142.kind]) === SK.PrefixUnaryExpression && other.operator === SK.MinusToken && _optionalChain([other, 'access', _5143 => _5143.operand, 'optionalAccess', _5144 => _5144.kind]) === SK.NumericLiteral;
+        if (!literal) {
+          ok = false;
+        }
+        return;
+      }
+      if (_optionalChain([parent, 'optionalAccess', _5145 => _5145.kind]) === SK.CallExpression && (_nullishCoalesce(parent.arguments, () => ( []))).includes(n)) {
+        const callee = parent.expression;
+        if (_optionalChain([callee, 'optionalAccess', _5146 => _5146.kind]) === SK.PropertyAccessExpression && _optionalChain([callee, 'access', _5147 => _5147.name, 'optionalAccess', _5148 => _5148.text]) === "parseToInt") {
+          return;
+        }
+      }
+      ok = false;
+      return;
+    }
+    n.forEachChild(visit);
+  };
+  body.forEachChild(visit);
+  return ok;
+}
+function gb11Derived(go, param) {
+  const SK = ts.SyntaxKind;
+  if (_optionalChain([param, 'optionalAccess', _5149 => _5149.kind]) !== SK.Parameter) {
+    return void 0;
+  }
+  if (param.dotDotDotToken !== void 0 || param.initializer !== void 0) {
+    return void 0;
+  }
+  if (_optionalChain([param, 'access', _5150 => _5150.name, 'optionalAccess', _5151 => _5151.kind]) !== SK.Identifier) {
+    return void 0;
+  }
+  const fn = param.parent;
+  if (_optionalChain([fn, 'optionalAccess', _5152 => _5152.kind]) !== SK.MethodDeclaration || fn.body === void 0 || _optionalChain([fn, 'access', _5153 => _5153.name, 'optionalAccess', _5154 => _5154.kind]) !== SK.Identifier) {
+    return void 0;
+  }
+  if (fn.name.text !== GB11_METHOD) {
+    return void 0;
+  }
+  if (fn.parameters.indexOf(param) !== GB11_INDEX) {
+    return void 0;
+  }
+  if (go.isAsyncFunction(fn)) {
+    return void 0;
+  }
+  const declared = param.type === void 0 ? void 0 : String(param.type.getText()).trim();
+  if (GB11_NUMERIC_TYPES.indexOf(declared) < 0) {
+    return void 0;
+  }
+  if (!go.goLocalIsSafeToType(fn.body, param, param.name.text, "int64")) {
+    return void 0;
+  }
+  if (!go.goParameterKeepsNilCompareNative(fn.body, param, "int64")) {
+    return void 0;
+  }
+  if (!gb11UsesAreIntOnly(go, fn.body, param)) {
+    return void 0;
+  }
+  return "int64";
+}
+function gb11SplitArgs(text) {
+  const parts = [];
+  let depth = 0;
+  let start = 0;
+  let quote;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quote !== void 0) {
+      if (c === "\\") {
+        i++;
+        continue;
+      }
+      if (c === quote) {
+        quote = void 0;
+      }
+      continue;
+    }
+    if (c === '"' || c === "`" || c === "'") {
+      quote = c;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{") {
+      depth++;
+      continue;
+    }
+    if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      continue;
+    }
+    if (c === "," && depth === 0) {
+      parts.push(text.substring(start, i));
+      start = i + 1;
+    }
+  }
+  if (quote !== void 0 || depth !== 0) {
+    return void 0;
+  }
+  parts.push(text.substring(start));
+  return parts;
+}
+function gb11ArgIsInt64(go, arg) {
+  const SK = ts.SyntaxKind;
+  if (_optionalChain([arg, 'optionalAccess', _5155 => _5155.kind]) === SK.NumericLiteral) {
+    return true;
+  }
+  if (_optionalChain([arg, 'optionalAccess', _5156 => _5156.kind]) === SK.PrefixUnaryExpression && arg.operator === SK.MinusToken && _optionalChain([arg, 'access', _5157 => _5157.operand, 'optionalAccess', _5158 => _5158.kind]) === SK.NumericLiteral) {
+    return true;
+  }
+  return go.goPrintedArgType(arg) === "int64";
+}
+function gb11CodeArg(go, node, printed) {
+  const SK = ts.SyntaxKind;
+  const callee = node.expression;
+  if (_optionalChain([callee, 'optionalAccess', _5159 => _5159.kind]) !== SK.PropertyAccessExpression) {
+    return void 0;
+  }
+  if (_optionalChain([callee, 'access', _5160 => _5160.name, 'optionalAccess', _5161 => _5161.text]) !== GB11_METHOD) {
+    return void 0;
+  }
+  if (_optionalChain([callee, 'access', _5162 => _5162.expression, 'optionalAccess', _5163 => _5163.kind]) !== SK.ThisKeyword) {
+    return void 0;
+  }
+  const args = _nullishCoalesce(node.arguments, () => ( []));
+  if (args.length === 0 || args.some((a) => a.kind === SK.SpreadElement)) {
+    return void 0;
+  }
+  if (gb11ArgIsInt64(go, args[0])) {
+    return void 0;
+  }
+  const parts = gb11SplitArgs(printed);
+  if (parts === void 0 || parts.length !== args.length) {
+    return void 0;
+  }
+  parts[0] = "this.ParseToInt(" + parts[0].trim() + ")";
+  return parts.join(",");
+}
+function installCcxtGoGb11HandleErrorsCode(goTranspiler) {
+  const flag = "hx10Gb11w9Installed";
+  const current = goTranspiler.goNativeParameterType;
+  if (_optionalChain([current, 'optionalAccess', _5164 => _5164[flag]]) === true) {
+    return current;
+  }
+  const originalArgs = goTranspiler.goUnifiedStringCallArgs;
+  const args = function(node, identation, flat = false) {
+    const printed = originalArgs.call(this, node, identation, flat);
+    if (printed === void 0) {
+      return printed;
+    }
+    const rewritten = gb11CodeArg(this, node, printed);
+    return rewritten !== void 0 ? rewritten : printed;
+  };
+  args[flag] = true;
+  goTranspiler.goUnifiedStringCallArgs = args;
+  const original = goTranspiler.goNativeParameterType;
+  const cache = /* @__PURE__ */ new Map();
+  const inProgress = /* @__PURE__ */ new Set();
+  const native = function(param) {
+    const answer = original.call(this, param);
+    if (answer !== void 0) {
+      return answer;
+    }
+    if (cache.has(param)) {
+      return cache.get(param);
+    }
+    if (inProgress.has(param)) {
+      return void 0;
+    }
+    inProgress.add(param);
+    let derived;
+    try {
+      derived = gb11Derived(this, param);
+    } finally {
+      inProgress.delete(param);
+    }
+    cache.set(param, derived);
+    return derived;
+  };
+  native[flag] = true;
+  goTranspiler.goNativeParameterType = native;
+  return native;
+}
+var GB11_TEST_BASE = `export type Dict = { [key: string]: any };
+export class Exchange {
+    id: string = 'x';
+    safeInteger (o: any, k: string): any { return o[k]; }
+    handleErrors (statusCode: int, statusText: string, url: string, method: string, responseHeaders: Dict, responseBody: string, response: any, requestHeaders: any, requestBody: any) {
+        throw new Error (this.id + ' not implemented');
+    }
+}
+`;
+var GB11_TEST_EXCHANGE = `import { Exchange, Dict } from './base/Exchange';
+export class ex extends Exchange {
+    override handleErrors (code: int, reason: string, url: string, method: string, headers: Dict, body: string, response: any, requestHeaders: any, requestBody: any) {
+        if ((code === 418) || (code === 429)) {
+            throw new Error (this.id + ' ' + code.toString () + ' ' + reason);
+        }
+        if (code >= 400) {
+            throw new Error ('http ' + code.toString ());
+        }
+        return undefined;
+    }
+    handleOther (code: int) { return code === 400; }
+    run (err: any) {
+        const code = this.safeInteger (err, 'code');
+        this.handleErrors (code, '', '', '', {}, '', err, {}, {});
+        this.handleErrors (418, '', '', '', {}, '', err, {}, {});
+    }
+}
+`;
+var GB11_TEST_UNSAFE = `import { Exchange, Dict } from './base/Exchange';
+export class ex extends Exchange {
+    override handleErrors (code: int, reason: string, url: string, method: string, headers: Dict, body: string, response: any, requestHeaders: any, requestBody: any) {
+        if (code === undefined) { return undefined; }
+        return undefined;
+    }
+}
+`;
+var GB11_TEST_NULLABLE = `import { Exchange, Dict } from './base/Exchange';
+export class ex extends Exchange {
+    override handleErrors (code: Int, reason: string, url: string, method: string, headers: Dict, body: string, response: any, requestHeaders: any, requestBody: any) {
+        if (code === 401) { return undefined; }
+        return undefined;
+    }
+}
+`;
+var GB11_TEST_REASSIGNED = `import { Exchange, Dict } from './base/Exchange';
+export class ex extends Exchange {
+    override handleErrors (code: any, reason: string, url: string, method: string, headers: Dict, body: string, response: any, requestHeaders: any, requestBody: any) {
+        code = this.safeString (response, 'code');
+        if (code === 400) { return undefined; }
+        return undefined;
+    }
+}
+`;
+function hx10w9GB11Check() {
+  const problems = [];
+  const ok = (condition, message) => {
+    if (!condition) {
+      problems.push("hx10 w9 GB11: " + message);
+    }
+  };
+  const tmp = fs6.default.mkdtempSync(path7.default.join(_os2.default.tmpdir(), "hx10-GB11w9-"));
+  try {
+    const src = path7.default.join(tmp, "ts", "src");
+    fs6.default.mkdirSync(path7.default.join(src, "base"), { recursive: true });
+    fs6.default.writeFileSync(path7.default.join(src, "base", "Exchange.ts"), GB11_TEST_BASE);
+    fs6.default.writeFileSync(path7.default.join(src, "ex.ts"), GB11_TEST_EXCHANGE);
+    fs6.default.writeFileSync(path7.default.join(src, "unsafe.ts"), GB11_TEST_UNSAFE);
+    fs6.default.writeFileSync(path7.default.join(src, "reassigned.ts"), GB11_TEST_REASSIGNED);
+    fs6.default.writeFileSync(path7.default.join(src, "nullable.ts"), GB11_TEST_NULLABLE);
+    const print = (file, install) => {
+      const t = new Transpiler({ verbose: false, go: { unifiedStringParams: { "handleErrors": [2, 5] } } });
+      if (install) {
+        installCcxtGoGb11HandleErrorsCode(t.goTranspiler);
+      }
+      return t.transpileGoByPath(path7.default.join(src, file)).content;
+    };
+    const fnBody = (go, name) => _nullishCoalesce(go.split(/\nfunc /).find((f) => f.indexOf(" " + name + "(") >= 0), () => ( ""));
+    const base = print("base/Exchange.ts", false);
+    const baseHooked = print("base/Exchange.ts", true);
+    const exHooked = print("ex.ts", true);
+    const handle = fnBody(exHooked, "HandleErrors");
+    ok(fnBody(base, "HandleErrors").indexOf("(statusCode any,") >= 0, "the base generator boxes the code");
+    ok(fnBody(baseHooked, "HandleErrors").indexOf("(statusCode int64,") >= 0, "the base method types the code: " + fnBody(baseHooked, "HandleErrors"));
+    ok(handle.indexOf("(code int64,") >= 0, "a venue override types the code: " + handle);
+    ok(handle.indexOf("code == 418") >= 0, "a numeric comparison is native: " + handle);
+    ok(handle.indexOf("code >= 400") >= 0, "an ordered comparison is native: " + handle);
+    ok(handle.indexOf("IsEqual(code") < 0 && handle.indexOf("IsGreaterThan") < 0, "no comparison helper survives");
+    ok(handle.indexOf("ToString(code)") < 0, "the string conversion bails out of the helper: " + handle);
+    ok(fnBody(exHooked, "HandleOther").indexOf("(code any)") >= 0, "a method outside the table keeps the box");
+    ok(fnBody(print("unsafe.ts", true), "HandleErrors").indexOf("(code any,") >= 0, "a nil compare keeps the box");
+    ok(fnBody(print("reassigned.ts", true), "HandleErrors").indexOf("(code any,") >= 0, "a written code keeps the box");
+    ok(fnBody(print("nullable.ts", true), "HandleErrors").indexOf("(code int64,") >= 0, "a nullable Int without a nil compare types the code");
+    const run = fnBody(exHooked, "Run");
+    ok(run.indexOf("this.HandleErrors(this.ParseToInt(code),") >= 0, "a boxed call argument converts: " + run);
+    ok(run.indexOf("this.HandleErrors(418,") >= 0, "a numeric literal stays a literal: " + run);
+  } catch (e) {
+    problems.push("hx10 w9 GB11 threw: " + e.message);
+  } finally {
+    fs6.default.rmSync(tmp, { recursive: true, force: true });
+  }
+  return problems;
+}
+
+// src/go/hx11-sign-typing.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+var SIGN_API_METHODS = { "sign": 1, "fetch2": 1, "request": 1 };
+function signApiParameter(param) {
+  const SK = ts.SyntaxKind;
+  const fn = _optionalChain([param, 'optionalAccess', _5165 => _5165.parent]);
+  if (_optionalChain([param, 'optionalAccess', _5166 => _5166.kind]) !== SK.Parameter || _optionalChain([fn, 'optionalAccess', _5167 => _5167.kind]) !== SK.MethodDeclaration || _optionalChain([fn, 'access', _5168 => _5168.name, 'optionalAccess', _5169 => _5169.kind]) !== SK.Identifier) {
+    return false;
+  }
+  if (SIGN_API_METHODS[fn.name.text] !== fn.parameters.indexOf(param)) {
+    return false;
+  }
+  if (String(_nullishCoalesce(_optionalChain([param, 'access', _5170 => _5170.type, 'optionalAccess', _5171 => _5171.getText, 'optionalCall', _5172 => _5172()]), () => ( ""))).replace(/\s+/g, "") !== "string[]") {
+    return false;
+  }
+  const init = param.initializer;
+  return _optionalChain([init, 'optionalAccess', _5173 => _5173.kind]) === SK.ArrayLiteralExpression && (_nullishCoalesce(init.elements, () => ( []))).every((e) => e.kind === SK.StringLiteral);
+}
+function signApiElement(go, node) {
+  const SK = ts.SyntaxKind;
+  if (_optionalChain([node, 'optionalAccess', _5174 => _5174.kind]) !== SK.ElementAccessExpression || _optionalChain([node, 'access', _5175 => _5175.expression, 'optionalAccess', _5176 => _5176.kind]) !== SK.Identifier || _optionalChain([node, 'access', _5177 => _5177.argumentExpression, 'optionalAccess', _5178 => _5178.kind]) !== SK.NumericLiteral || !/^\d+$/.test(String(node.argumentExpression.text))) {
+    return false;
+  }
+  const decl = _optionalChain([go, 'access', _5179 => _5179.checkerOrUndefined, 'call', _5180 => _5180(), 'optionalAccess', _5181 => _5181.getSymbolAtLocation, 'call', _5182 => _5182(node.expression), 'optionalAccess', _5183 => _5183.valueDeclaration, 'optionalAccess', _5184 => _5184.resolve, 'call', _5185 => _5185()]);
+  return signApiParameter(decl) && go.goGetArgParameterType(decl) === "[]string";
+}
+function installCcxtGoSignTyping(goTranspiler) {
+  const flag = "hx11SignTypingInstalled";
+  if (goTranspiler[flag] === true) {
+    return;
+  }
+  goTranspiler[flag] = true;
+  const printLiteral = goTranspiler.printArrayLiteralExpression;
+  goTranspiler.printArrayLiteralExpression = function(node, ...rest) {
+    if (signApiParameter(_optionalChain([node, 'optionalAccess', _5186 => _5186.parent]))) {
+      this.goSliceLiteralTypes.set(node, "[]string");
+    }
+    return printLiteral.call(this, node, ...rest);
+  };
+  const printElement = goTranspiler.printElementAccessExpression;
+  goTranspiler.printElementAccessExpression = function(node, ...rest) {
+    if (signApiElement(this, node) && !this.isGoElementAccessAssignmentTarget(node)) {
+      return node.expression.text + "[" + node.argumentExpression.text + "]";
+    }
+    return printElement.call(this, node, ...rest);
+  };
+  const initType = goTranspiler.goTypeOfInitializer;
+  goTranspiler.goTypeOfInitializer = function(node, printed) {
+    if (signApiElement(this, node)) {
+      return "string";
+    }
+    return initType.call(this, node, printed);
+  };
+  const original = goTranspiler.goGetArgParameterType;
+  goTranspiler.goGetArgParameterType = function(decl) {
+    const answer = original.call(this, decl);
+    if (answer !== void 0 || !signApiParameter(decl)) {
+      return answer;
+    }
+    if (!this.goLocalIsSafeToType(decl.parent.body, decl, decl.name.text, "[]string")) {
+      return void 0;
+    }
+    return "[]string";
+  };
+}
+
+// src/go/index.ts
+function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
+  installCcxtGoLocalTypes(goTranspiler, unifiedInt64Params);
+  installCcxtGoIndexableTypes(goTranspiler);
+  installCcxtGoParamTypes(goTranspiler);
+  installCcxtGoDictParams(goTranspiler);
+  installCcxtGoGb05ParamTypes(goTranspiler);
+  installCcxtGoGb11HandleErrorsCode(goTranspiler);
+  installCcxtGoSignTyping(goTranspiler);
+}
+
 // src/transpiler.ts
 var __dirname_mock = import_dirname.default;
 var fastCompilerOptions = {
@@ -35774,7 +46798,7 @@ declare var WebSocket: any;
 declare var atob: any;
 declare var btoa: any;
 `;
-var globalsShimPath = path2.resolve(path2.join(__dirname_mock, "__globals-shim.d.ts"));
+var globalsShimPath = path7.resolve(path7.join(__dirname_mock, "__globals-shim.d.ts"));
 var UNDEFINED_SENTINEL = Symbol("undefined");
 var MEMOIZED_UNARY_CHECKER_METHODS = [
   "getTypeAtLocation",
@@ -35831,7 +46855,7 @@ function memoizePairMethod(owner, name) {
     if (args.length !== 2 || a === null || typeof a !== "object" || b === null || typeof b !== "object") {
       return original.apply(owner, args);
     }
-    const cached = _optionalChain([cache, 'access', _3373 => _3373.get, 'call', _3374 => _3374(a), 'optionalAccess', _3375 => _3375.get, 'call', _3376 => _3376(b)]);
+    const cached = _optionalChain([cache, 'access', _5187 => _5187.get, 'call', _5188 => _5188(a), 'optionalAccess', _5189 => _5189.get, 'call', _5190 => _5190(b)]);
     if (cached !== void 0) {
       return cached === UNDEFINED_SENTINEL ? void 0 : cached;
     }
@@ -35871,7 +46895,7 @@ function memoizeUnaryMethod(owner, name) {
 }
 function memoizeBinaryKindMethod(owner, name) {
   const unary = owner[name];
-  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _3377 => _3377.original]), () => ( unary));
+  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _5191 => _5191.original]), () => ( unary));
   if (typeof original !== "function") {
     return;
   }
@@ -35921,17 +46945,17 @@ function prefetchChecker(checker, root, options = {}) {
   const typeNodes = [], symbolNodes = [], callNodes = [];
   const visit = (node) => {
     const kind = node.kind;
-    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _3378 => _3378.has, 'optionalCall', _3379 => _3379(node)]))
+    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _5192 => _5192.has, 'optionalCall', _5193 => _5193(node)]))
       typeNodes.push(node);
-    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _3380 => _3380.has, 'optionalCall', _3381 => _3381(node)]))
+    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _5194 => _5194.has, 'optionalCall', _5195 => _5195(node)]))
       symbolNodes.push(node);
-    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _3382 => _3382.has, 'optionalCall', _3383 => _3383(node)]))
+    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _5196 => _5196.has, 'optionalCall', _5197 => _5197(node)]))
       callNodes.push(node);
     node.forEachChild(visit);
   };
   visit(root);
   const run = (nodes, fn) => {
-    if (_optionalChain([fn, 'optionalAccess', _3384 => _3384.seed]) === void 0 || fn.original === void 0)
+    if (_optionalChain([fn, 'optionalAccess', _5198 => _5198.seed]) === void 0 || fn.original === void 0)
       return;
     for (let i = 0; i < nodes.length; i += PREFETCH_BATCH) {
       const chunk = nodes.slice(i, i + PREFETCH_BATCH);
@@ -35947,7 +46971,7 @@ function prefetchChecker(checker, root, options = {}) {
   run(typeNodes, getType);
   run(symbolNodes, getSymbol);
   const api = checker.__astTranspilerApi;
-  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _3385 => _3385.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _3386 => _3386.original, 'optionalAccess', _3387 => _3387.gen]) !== void 0) {
+  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _5199 => _5199.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _5200 => _5200.original, 'optionalAccess', _5201 => _5201.gen]) !== void 0) {
     for (let i = 0; i < callNodes.length; i += PREFETCH_BATCH) {
       const chunk = callNodes.slice(i, i + PREFETCH_BATCH);
       const gens = chunk.map((n) => {
@@ -35974,7 +46998,7 @@ function prefetchChecker(checker, root, options = {}) {
 function prefetchDeclarationSignatures(checker, api, root) {
   const getSigDecl = checker.getSignatureFromDeclaration;
   const getTypeOfSymbolAtLocation = checker.getTypeOfSymbolAtLocation;
-  if (_optionalChain([getSigDecl, 'optionalAccess', _3388 => _3388.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _3389 => _3389.original, 'optionalAccess', _3390 => _3390.gen]) === void 0)
+  if (_optionalChain([getSigDecl, 'optionalAccess', _5202 => _5202.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _5203 => _5203.original, 'optionalAccess', _5204 => _5204.gen]) === void 0)
     return;
   const decls = [];
   const visit = (node) => {
@@ -36000,9 +47024,9 @@ function prefetchDeclarationSignatures(checker, api, root) {
     }())));
     api.batch(...chunk.map((decl) => safe(function* () {
       const type = checker.getTypeAtLocation(decl);
-      const symbol = _optionalChain([type, 'optionalAccess', _3391 => _3391.getSymbol, 'optionalAccess', _3392 => _3392.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
-      const location = _optionalChain([symbol, 'optionalAccess', _3393 => _3393.valueDeclaration, 'optionalAccess', _3394 => _3394.resolve, 'call', _3395 => _3395()]);
-      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _3396 => _3396.seed2]) === void 0)
+      const symbol = _optionalChain([type, 'optionalAccess', _5205 => _5205.getSymbol, 'optionalAccess', _5206 => _5206.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
+      const location = _optionalChain([symbol, 'optionalAccess', _5207 => _5207.valueDeclaration, 'optionalAccess', _5208 => _5208.resolve, 'call', _5209 => _5209()]);
+      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _5210 => _5210.seed2]) === void 0)
         return;
       const symbolType = yield* getTypeOfSymbolAtLocation.original.gen(symbol, location);
       getTypeOfSymbolAtLocation.seed2(symbol, location, symbolType);
@@ -36029,7 +47053,7 @@ function getApi(cache) {
 function createSnapshotProgram(cache, rootFiles, files) {
   const snapshot = getApi(cache).createSnapshot({
     fileSystem: { kind: "layer", files },
-    createPrograms: [{ rootFiles: rootFiles.map((f) => path2.resolve(f)), compilerOptions: fastCompilerOptions }]
+    createPrograms: [{ rootFiles: rootFiles.map((f) => path7.resolve(f)), compilerOptions: fastCompilerOptions }]
   });
   const program = snapshot.operation.createdPrograms[0];
   const checker = snapshot.getProjects().find((p) => p.program === program).checker;
@@ -36091,14 +47115,14 @@ var Transpiler = class _Transpiler {
   }
   // single-file snapshots are released when the next one replaces them; batches own theirs
   setSnapshotContext(snapshot, program, checker, fileName) {
-    const src = _nullishCoalesce(program.getSourceFile(fileName), () => ( program.getSourceFile(path2.resolve(fileName))));
+    const src = _nullishCoalesce(program.getSourceFile(fileName), () => ( program.getSourceFile(path7.resolve(fileName))));
     const previous = this.snapshot;
     this.snapshot = snapshot;
-    _optionalChain([previous, 'optionalAccess', _3397 => _3397.dispose, 'call', _3398 => _3398()]);
+    _optionalChain([previous, 'optionalAccess', _5211 => _5211.dispose, 'call', _5212 => _5212()]);
     return this.setContext({ src, checker, program });
   }
   createProgramInMemoryAndSetContext(content) {
-    const inMemoryFilePath = path2.resolve(path2.join(__dirname_mock, "__dummy-file.ts"));
+    const inMemoryFilePath = path7.resolve(path7.join(__dirname_mock, "__dummy-file.ts"));
     const [snapshot, program, checker] = createSnapshotProgram(this.programCache, [inMemoryFilePath, globalsShimPath], {
       [inMemoryFilePath]: content,
       [globalsShimPath]: globalsShim
@@ -36118,7 +47142,7 @@ var Transpiler = class _Transpiler {
   // long as the file's text on disk still equals the snapshot's. Replaces any
   // previous shared program; pass [] to drop it.
   setSharedProgram(paths) {
-    _optionalChain([this, 'access', _3399 => _3399.programCache, 'access', _3400 => _3400.shared, 'optionalAccess', _3401 => _3401.snapshot, 'access', _3402 => _3402.dispose, 'call', _3403 => _3403()]);
+    _optionalChain([this, 'access', _5213 => _5213.programCache, 'access', _5214 => _5214.shared, 'optionalAccess', _5215 => _5215.snapshot, 'access', _5216 => _5216.dispose, 'call', _5217 => _5217()]);
     this.programCache.shared = void 0;
     if (paths.length === 0) {
       return;
@@ -36131,8 +47155,8 @@ var Transpiler = class _Transpiler {
     if (shared === void 0) {
       return void 0;
     }
-    const src = shared.program.getSourceFile(path2.resolve(filePath));
-    if (src === void 0 || !fs2.existsSync(filePath) || fs2.readFileSync(filePath, "utf8") !== src.text) {
+    const src = shared.program.getSourceFile(path7.resolve(filePath));
+    if (src === void 0 || !fs6.existsSync(filePath) || fs6.readFileSync(filePath, "utf8") !== src.text) {
       return void 0;
     }
     return { src, checker: shared.checker, program: shared.program };
@@ -36163,8 +47187,8 @@ var Transpiler = class _Transpiler {
     return this.createProgramInMemoryAndSetContext(content);
   }
   /** @deprecated renamed to createProgramByPathAndSetContext */
-  createProgramByPathAndSetGlobals(path3) {
-    return this.createProgramByPathAndSetContext(path3);
+  createProgramByPathAndSetGlobals(path8) {
+    return this.createProgramByPathAndSetContext(path8);
   }
   checkFileDiagnostics(context = this.context) {
     if (!Logger.verbose) {
@@ -36295,29 +47319,29 @@ var Transpiler = class _Transpiler {
   transpilePython(content) {
     return this.transpile(0 /* Python */, 1 /* ByContent */, content, !this.pythonTranspiler.asyncTranspiling);
   }
-  transpilePythonByPath(path3) {
-    return this.transpile(0 /* Python */, 0 /* ByPath */, path3, !this.pythonTranspiler.asyncTranspiling);
+  transpilePythonByPath(path8) {
+    return this.transpile(0 /* Python */, 0 /* ByPath */, path8, !this.pythonTranspiler.asyncTranspiling);
   }
   transpilePhp(content) {
     return this.transpile(1 /* Php */, 1 /* ByContent */, content, !this.phpTranspiler.asyncTranspiling);
   }
-  transpilePhpByPath(path3) {
-    return this.transpile(1 /* Php */, 0 /* ByPath */, path3, !this.phpTranspiler.asyncTranspiling);
+  transpilePhpByPath(path8) {
+    return this.transpile(1 /* Php */, 0 /* ByPath */, path8, !this.phpTranspiler.asyncTranspiling);
   }
   transpileCSharp(content) {
     return this.transpile(2 /* CSharp */, 1 /* ByContent */, content);
   }
-  transpileCSharpByPath(path3) {
-    return this.transpile(2 /* CSharp */, 0 /* ByPath */, path3);
+  transpileCSharpByPath(path8) {
+    return this.transpile(2 /* CSharp */, 0 /* ByPath */, path8);
   }
   transpileJava(content) {
     return this.transpile(4 /* Java */, 1 /* ByContent */, content);
   }
-  transpileJavaByPath(path3) {
-    return this.transpile(4 /* Java */, 0 /* ByPath */, path3);
+  transpileJavaByPath(path8) {
+    return this.transpile(4 /* Java */, 0 /* ByPath */, path8);
   }
-  transpileGoByPath(path3) {
-    return this.transpile(3 /* Go */, 0 /* ByPath */, path3);
+  transpileGoByPath(path8) {
+    return this.transpile(3 /* Go */, 0 /* ByPath */, path8);
   }
   transpileGo(content) {
     return this.transpile(3 /* Go */, 1 /* ByContent */, content);
@@ -36325,14 +47349,14 @@ var Transpiler = class _Transpiler {
   transpileRust(content) {
     return this.transpile(5 /* Rust */, 1 /* ByContent */, content);
   }
-  transpileRustByPath(path3) {
-    return this.transpile(5 /* Rust */, 0 /* ByPath */, path3);
+  transpileRustByPath(path8) {
+    return this.transpile(5 /* Rust */, 0 /* ByPath */, path8);
   }
   transpileCpp(content) {
     return this.transpile(6 /* Cpp */, 1 /* ByContent */, content);
   }
-  transpileCppByPath(path3) {
-    return this.transpile(6 /* Cpp */, 0 /* ByPath */, path3);
+  transpileCppByPath(path8) {
+    return this.transpile(6 /* Cpp */, 0 /* ByPath */, path8);
   }
   getFileImports(content) {
     const context = this.createProgramInMemoryAndSetContext(content);
@@ -36396,7 +47420,7 @@ var TranspileProgramBatch = class {
   // point the owning Transpiler at one file of this batch, then run the same
   // diagnostics pass the single-file path runs
   setContextForPath(filePath) {
-    const src = _nullishCoalesce(this.program.getSourceFile(filePath), () => ( this.program.getSourceFile(path2.resolve(filePath))));
+    const src = _nullishCoalesce(this.program.getSourceFile(filePath), () => ( this.program.getSourceFile(path7.resolve(filePath))));
     if (src === void 0) {
       throw new Error(`ast-transpiler: "${filePath}" is not a file of this program batch`);
     }
@@ -36445,5 +47469,21 @@ var TranspileProgramBatch = class {
 
 
 
-exports.CheckFlags = _sync.CheckFlags; exports.ElementFlags = _sync.ElementFlags; exports.IndexKind = _sync.IndexKind; exports.ObjectFlags = _sync.ObjectFlags; exports.RUST_DECLARED_DICT_LOCALS = RUST_DECLARED_DICT_LOCALS; exports.SignatureKind = _sync.SignatureKind; exports.SymbolFlags = _sync.SymbolFlags; exports.SyntaxKind = _ast.SyntaxKind; exports.TranspileProgramBatch = TranspileProgramBatch; exports.Transpiler = Transpiler; exports.TypeFlags = _sync.TypeFlags; exports.TypeFormatFlags = _sync.TypeFormatFlags; exports.alignGoTrailingComments = alignGoTrailingComments; exports.default = Transpiler;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+exports.CCXT_GO_BOOL_METHOD_NAMES = CCXT_GO_BOOL_METHOD_NAMES; exports.CCXT_GO_HELPER_RETURN_TYPES = CCXT_GO_HELPER_RETURN_TYPES; exports.CCXT_GO_STRING_PTR_METHOD_NAMES = CCXT_GO_STRING_PTR_METHOD_NAMES; exports.CheckFlags = _sync.CheckFlags; exports.ElementFlags = _sync.ElementFlags; exports.IndexKind = _sync.IndexKind; exports.ObjectFlags = _sync.ObjectFlags; exports.RUST_DECLARED_DICT_LOCALS = RUST_DECLARED_DICT_LOCALS; exports.SignatureKind = _sync.SignatureKind; exports.SymbolFlags = _sync.SymbolFlags; exports.SyntaxKind = _ast.SyntaxKind; exports.TranspileProgramBatch = TranspileProgramBatch; exports.Transpiler = Transpiler; exports.TypeFlags = _sync.TypeFlags; exports.TypeFormatFlags = _sync.TypeFormatFlags; exports.alignGoTrailingComments = alignGoTrailingComments; exports.default = Transpiler; exports.g08w3Check = g08w3Check; exports.hx10G06Check = hx10G06Check; exports.hx10w8GB01Check = hx10w8GB01Check; exports.hx10w8GB05Check = hx10w8GB05Check; exports.hx10w9GB11Check = hx10w9GB11Check; exports.installCcxtGoDictParams = installCcxtGoDictParams; exports.installCcxtGoGb05ParamTypes = installCcxtGoGb05ParamTypes; exports.installCcxtGoGb11HandleErrorsCode = installCcxtGoGb11HandleErrorsCode; exports.installCcxtGoHooks = installCcxtGoHooks; exports.installCcxtGoIndexableTypes = installCcxtGoIndexableTypes; exports.installCcxtGoLocalTypes = installCcxtGoLocalTypes; exports.installCcxtGoParamTypes = installCcxtGoParamTypes; exports.installCcxtGoSignTyping = installCcxtGoSignTyping;
 //# sourceMappingURL=transpiler.cjs.map

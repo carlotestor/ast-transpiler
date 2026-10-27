@@ -17,6 +17,10 @@ var __esm = (fn, res) => function __init() {
 var __commonJS = (cb, mod) => function __require2() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -34,12 +38,12 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// ../../../ts7perf-nm/cs-ast/node_modules/tsup/assets/esm_shims.js
+// ../../ast-transpiler/node_modules/tsup/assets/esm_shims.js
 import { fileURLToPath } from "url";
 import path from "path";
 var getFilename, getDirname, __dirname;
 var init_esm_shims = __esm({
-  "../../../ts7perf-nm/cs-ast/node_modules/tsup/assets/esm_shims.js"() {
+  "../../ast-transpiler/node_modules/tsup/assets/esm_shims.js"() {
     getFilename = () => fileURLToPath(import.meta.url);
     getDirname = () => path.dirname(getFilename());
     __dirname = /* @__PURE__ */ getDirname();
@@ -47,6 +51,23 @@ var init_esm_shims = __esm({
 });
 
 // src/tsUtils.ts
+var tsUtils_exports = {};
+__export(tsUtils_exports, {
+  ModifierFlags: () => ModifierFlags,
+  canHaveModifiers: () => canHaveModifiers,
+  findAncestor: () => findAncestor,
+  getAllSuperTypeNodes: () => getAllSuperTypeNodes,
+  getCombinedNodeFlags: () => getCombinedNodeFlags,
+  getModifiers: () => getModifiers,
+  isClassLike: () => isClassLike,
+  isFunctionLike: () => isFunctionLike,
+  isStringLiteralLike: () => isStringLiteralLike,
+  signatureDeclaration: () => signatureDeclaration,
+  symbolDeclarations: () => symbolDeclarations,
+  symbolValueDeclaration: () => symbolValueDeclaration,
+  typeParts: () => typeParts,
+  typeTarget: () => typeTarget
+});
 init_esm_shims();
 import { SyntaxKind, ModifierFlags } from "typescript/unstable/ast";
 var FUNCTION_LIKE_KINDS = /* @__PURE__ */ new Set([
@@ -160,6 +181,7 @@ export {
   symbolValueDeclaration,
   signatureDeclaration,
   typeParts,
-  typeTarget
+  typeTarget,
+  tsUtils_exports
 };
-//# sourceMappingURL=chunk-AR3HKU64.js.map
+//# sourceMappingURL=chunk-MEKZ6QY3.js.map
