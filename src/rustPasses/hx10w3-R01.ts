@@ -361,6 +361,28 @@ function classify(shape: Shape, ctx: Ctx, masked: string, content: string, where
             }
         }
     }
+    // The printed dict index write `if let Value::Dict(__d) = &mut X { Arc::make_mut(__d).insert(k, v); }`
+    // on a fresh-literal map local is `X.insert(k, v);` (the block holds only that one insert).
+    if (shape === 'Map' && before.endsWith('= &mut ')) {
+        const varM = /if let Value::Dict\((\w+)\) = &mut $/.exec(before);
+        if (varM !== null && /^\s*\{/.test(after)) {
+            const stmtStart = s - varM[0].length;
+            const brace = nameEnd + after.indexOf('{');
+            const close = closeBrace(masked, brace);
+            const head = `std::sync::Arc::make_mut(${varM[1]}).insert(`;
+            if (close > 0) {
+                const body = content.slice(brace + 1, close - 1).trim();
+                if (body.startsWith(head)) {
+                    const pushOpen = brace + 1 + content.slice(brace + 1).indexOf(head) + head.length - 1;
+                    const pushClose = closeParen(masked, pushOpen);
+                    if (pushClose > 0 && content.slice(pushClose, close - 1).trim() === ';') {
+                        const val = content.slice(pushOpen + 1, pushClose - 1).trim();
+                        return [{ start: stmtStart, end: close, text: `${name}.insert(${val});` }];
+                    }
+                }
+            }
+        }
+    }
     // `matches!(&X, Value::Bool(<lit>))` on a proven bool is the value itself.
     if (shape === 'Bool' && open.kind[s] === 1 && /matches!$/.test(masked.slice(Math.max(0, open.at[s] - 12), open.at[s]))) {
         const m = /^,\s*Value::Bool\(\s*(true|false)\s*\)\)/.exec(after);
@@ -470,7 +492,7 @@ function blockHeader(masked: string, from: number, open: number): string {
 }
 
 /** True when `pos` sits inside a loop body or a closure (re-runnable). */
-function inRepeatedBlock(masked: string, from: number, pos: number): boolean {
+function inRepeatedBlock(masked: string, from: number, pos: number, declAt = -1): boolean {
     const stack: number[] = [];
     for (let k = from; k < pos; k++) {
         const c = masked[k];
@@ -478,6 +500,8 @@ function inRepeatedBlock(masked: string, from: number, pos: number): boolean {
         else if (c === '}' && stack.length > 0) stack.pop();
     }
     for (const open of stack) {
+        // A block that already encloses the declaration re-creates the local on every pass.
+        if (open < declAt) continue;
         const head = blockHeader(masked, from, open);
         if (/\b(for|while|loop)\b/.test(head)) return true;
         if (/\|[^|]*\|/.test(head)) return true;
@@ -547,7 +571,17 @@ export function r01TypedLocals(content: string): string {
         let lo = 0;
         for (let h = 0; h < heads.length; h++) if (heads[h] <= declStart) lo = h;
         const regionStart = heads[lo];
-        const regionEnd = lo + 1 < heads.length ? heads[lo + 1] : content.length;
+        let regionEnd = lo + 1 < heads.length ? heads[lo + 1] : content.length;
+        if (shape === 'Map') {
+            // A map local is only visible to the end of its own block: a later sibling block may
+            // declare the same name again without shadowing this one.
+            let depth = 0;
+            for (let k = end; k < regionEnd; k++) {
+                const c = masked[k];
+                if (c === '{') depth++;
+                else if (c === '}') { if (depth === 0) { regionEnd = k; break; } depth--; }
+            }
+        }
         const region = masked.slice(end, regionEnd);
         if (rebound(region, name)) continue;
         const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, 'g');
@@ -591,7 +625,7 @@ export function r01TypedLocals(content: string): string {
         if (gained === 0) continue;
         // A move needs the final, non re-runnable use; a by-value source cannot gain a clone.
         for (const b of boxes) {
-            const canMove = b.pos === lastUse && !inRepeatedBlock(masked, regionStart, b.pos);
+            const canMove = b.pos === lastUse && !inRepeatedBlock(masked, regionStart, b.pos, shape === 'Map' ? declStart : -1);
             // A `Value` clone of a Dict/Arr is a refcount bump; deep-copying the
             // native container instead would cost more, so those keep `Value`.
             const collection = shape === 'Vec' || shape === 'Map';
@@ -686,6 +720,11 @@ export function r01SelfTest(): string[] {
             'map-reads-and-writes',
             'fn f() {\n    let mut d: Value = Value::Map({\n        let mut m = indexmap::IndexMap::new();\n        m\n    });\n    add_element_to_object(&mut d, &Value::Str("k".into()), v);\n    if in_op(&d, &Value::Str("k".into())) {\n        let x: Value = get_value(&d, &Value::Str("k".into()));\n    }\n}\n',
             'fn f() {\n    let mut d: indexmap::IndexMap<String, Value> = {\n        let mut m = indexmap::IndexMap::new();\n        m\n    };\n    d.insert("k".to_string(), v);\n    if d.contains_key("k") {\n        let x: Value = d.get("k").cloned().unwrap_or(Value::Null);\n    }\n}\n',
+        ],
+        [
+            'map-index-write-then-extend',
+            'fn f() {\n    if c {\n        let mut u: Value = Value::Map({\n            let mut m = indexmap::IndexMap::new();\n            m\n        });\n        if let Value::Dict(__d) = &mut u { std::sync::Arc::make_mut(__d).insert("k".into(), v); }\n        a = self.extend(a.clone(), &[u]);\n    } else {\n        let mut u: Value = Value::Map({\n            let mut m = indexmap::IndexMap::new();\n            m\n        });\n    }\n}\n',
+            'fn f() {\n    if c {\n        let mut u: indexmap::IndexMap<String, Value> = {\n            let mut m = indexmap::IndexMap::new();\n            m\n        };\n        u.insert("k".into(), v);\n        a = self.extend(a.clone(), &[Value::Map(u)]);\n    } else {\n        let mut u: Value = Value::Map({\n            let mut m = indexmap::IndexMap::new();\n            m\n        });\n    }\n}\n',
         ],
         [
             'unproven-use-keeps-value',

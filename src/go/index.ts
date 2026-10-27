@@ -7,6 +7,7 @@ import { installCcxtGoDictParams } from './hx10w8-GB01.js';
 import { installCcxtGoGb05ParamTypes } from './hx10w8-GB05.js';
 import { installCcxtGoGb11HandleErrorsCode } from './hx10w9-GB11.js';
 import { installCcxtGoSignTyping } from './hx11-sign-typing.js';
+import { installHx11w8NumParams } from './hx11w8-num-param.js';
 
 export function installCcxtGoHooks (goTranspiler: any, unifiedInt64Params?: any): void {
     installCcxtGoLocalTypes (goTranspiler, unifiedInt64Params);
@@ -16,11 +17,12 @@ export function installCcxtGoHooks (goTranspiler: any, unifiedInt64Params?: any)
     installCcxtGoGb05ParamTypes (goTranspiler);
     installCcxtGoGb11HandleErrorsCode (goTranspiler);
     installCcxtGoSignTyping (goTranspiler);
+    installHx11w8NumParams (goTranspiler);
 }
 
 export {
     installCcxtGoLocalTypes, installCcxtGoIndexableTypes, installCcxtGoParamTypes, installCcxtGoDictParams,
-    installCcxtGoGb05ParamTypes, installCcxtGoGb11HandleErrorsCode, installCcxtGoSignTyping,
+    installCcxtGoGb05ParamTypes, installCcxtGoGb11HandleErrorsCode, installCcxtGoSignTyping, installHx11w8NumParams,
 };
 export { CCXT_GO_HELPER_RETURN_TYPES, CCXT_GO_BOOL_METHOD_NAMES, CCXT_GO_STRING_PTR_METHOD_NAMES } from './go-local-types.js';
 export { hx10G06Check } from './hx10w3-G06.js';

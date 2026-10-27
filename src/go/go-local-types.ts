@@ -1647,6 +1647,74 @@ function ccxtGoSafeCollectionLocalType (goTranspiler, declaration, families, res
     return unsafe ? undefined : goType;
 }
 
+// a 2-arg `const xs = this.safeList (c, k)` whose every use is a presence guard inside an `&&` chain
+// and an accessor index read (`this.safeDict (xs, 0)`), with at least one of each: the slice type would
+// only swap the free this.SafeList for the SafeListTyped wrapper, so the local keeps its box
+function ccxtGoSafeListGuardOnly (goTranspiler, declaration) {
+    const found = ccxtGoSafeCollectionArgs (declaration?.initializer);
+    if ((found === undefined) || (found.family !== 'list') || (found.fallback !== undefined)) {
+        return false;
+    }
+    const scope = goTranspiler.goEnclosingFunction (declaration);
+    if (scope === undefined) {
+        return false;
+    }
+    const refersToDeclaration = typeof goTranspiler.goIdentifierRefersToDeclaration === 'function' ? goTranspiler.goIdentifierRefersToDeclaration : undefined;
+    let guards = 0;
+    let reads = 0;
+    let others = 0;
+    goTranspiler.hasNodeWhere (scope, (n) => {
+        if ((n.kind !== ts.SyntaxKind.Identifier) || (n.text !== declaration.name.text) || (n === declaration.name)) {
+            return false;
+        }
+        if ((n.parent?.kind === ts.SyntaxKind.PropertyAccessExpression) && (n.parent.name === n)) {
+            return false;
+        }
+        if ((refersToDeclaration !== undefined) && !refersToDeclaration.call (goTranspiler, n, declaration)) {
+            return false;
+        }
+        if (ccxtGoSafeListNilTest (n)) {
+            guards++;
+        } else if (ccxtGoSafeListAccessorRead (goTranspiler, n)) {
+            reads++;
+        } else {
+            others++;
+        }
+        return false;
+    });
+    // a local that is only guarded (no element read) keeps the slice type: there the wrapper and the
+    // any-local trade one for one
+    return (guards > 0) && (reads > 0) && (others === 0);
+}
+
+// a nil comparison of a list local that guards a `&&` chain
+function ccxtGoSafeListNilTest (node) {
+    const parent = node.parent;
+    if ((parent?.kind !== ts.SyntaxKind.BinaryExpression) || (COMPARISON_TOKENS.indexOf (parent.operatorToken?.kind) < 0)) {
+        return false;
+    }
+    const other = (parent.left === node) ? parent.right : parent.left;
+    if (!(isUndefinedLiteral (other) || (other?.kind === ts.SyntaxKind.NullKeyword))) {
+        return false;
+    }
+    // only a presence guard joined with another condition by `&&` (a lone `xs !== undefined` keeps
+    // the slice local: typing it replaces the any-local, which untyping would put back)
+    let operand = parent;
+    while (operand.parent?.kind === ts.SyntaxKind.ParenthesizedExpression) {
+        operand = operand.parent;
+    }
+    return (operand.parent?.kind === ts.SyntaxKind.BinaryExpression) && (operand.parent.operatorToken?.kind === ts.SyntaxKind.AmpersandAmpersandToken);
+}
+
+// `this.safeX (xs, 0)`: the element read an []any answers like the box did
+function ccxtGoSafeListAccessorRead (goTranspiler, node) {
+    const parent = node.parent;
+    return (parent?.kind === ts.SyntaxKind.CallExpression) && (parent.arguments.indexOf (node) === 0)
+        && (parent.expression?.kind === ts.SyntaxKind.PropertyAccessExpression) && (parent.expression.expression?.kind === ts.SyntaxKind.ThisKeyword)
+        && CCXT_GO_SAFE_ACCESSOR_CALLEE.test ('this.' + ((parent.expression.name?.text ?? '').charAt (0).toUpperCase () + (parent.expression.name?.text ?? '').slice (1)))
+        && ccxtGoSafeAccessorIndexKey (goTranspiler, parent);
+}
+
 // `x as Dict` / `(x)` / `x!` print as x itself: the use is the wrapper's position
 function ccxtGoSafeCollectionTypeOnlyWrapper (node) {
     let current = node;
@@ -1885,7 +1953,7 @@ function installCcxtGoSafeCollectionUnbox (goTranspiler) {
     goTranspiler.goSafeListLocalUnbox = function (declaration) {
         const known = shippedListType.call (this, declaration);
         if (known !== undefined) {
-            return known;
+            return ccxtGoSafeListGuardOnly (this, declaration) ? undefined : known;
         }
         return ccxtGoSafeCollectionLocalType (this, declaration, listFamilies);
     };
@@ -5068,7 +5136,7 @@ export const CCXT_GO_GETARG_SAFE_CONSUMERS = {
     // the TypeScript-side spellings the printer's AST sees (mathMin/MathMin), the cache limit
     // accessor (derefs both arguments, exchange_cache.go:322-330) and the request builder
     // (symbol/type/side/amount are `any` in the generated Go: the tail is a GetArg ABI)
-    'mathMin': '*', 'mathMax': '*', 'GetLimit': '*', 'CreateOrderRequest': '*',
+    'mathMin': '*', 'mathMax': '*', 'GetLimit': '*', 'CreateOrderRequest': '*', 'EditOrderRequest': '*',
     'HandleMarginModeAndParams': '*', 'HandleUntilOption': '*', 'HandleProductTypeAndParams': '*',
     'HandleParamString': '*', 'HandleParamBool': '*', 'HandleParamInt': '*',
     'FilterBySinceLimit': '*', 'FilterBySymbolSinceLimit': '*', 'FilterBySymbolsSinceLimit': '*',

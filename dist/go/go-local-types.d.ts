@@ -303,6 +303,7 @@ export declare const CCXT_GO_GETARG_SAFE_CONSUMERS: {
     mathMax: string;
     GetLimit: string;
     CreateOrderRequest: string;
+    EditOrderRequest: string;
     HandleMarginModeAndParams: string;
     HandleUntilOption: string;
     HandleProductTypeAndParams: string;

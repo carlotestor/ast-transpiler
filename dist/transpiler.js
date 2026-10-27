@@ -8609,7 +8609,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
 };
 
 // src/transpiler.ts
-import * as path7 from "path";
+import * as path8 from "path";
 import * as fs7 from "fs";
 
 // src/goTranspiler.ts
@@ -15527,7 +15527,7 @@ ${indent}}`);
     if (fileImports.size === 0) {
       return body;
     }
-    return [...fileImports].sort().map((path8) => `import "${path8}"`).join("\n") + "\n\n" + body;
+    return [...fileImports].sort().map((path9) => `import "${path9}"`).join("\n") + "\n\n" + body;
   }
   goBinaryMemoized(node, key, compute) {
     const outermost = this.goBinaryMemo === void 0;
@@ -34724,12 +34724,12 @@ ${this.getIden(identation)}}`;
   // also hold in the base tier and pro files, where a tagged handle can only arrive through a
   // parameter: base admits typed plain-dict parameters, pro admits no parameter at all.
   r23Tier(node) {
-    const path8 = this.r05Path(node);
-    if (_RustTranspiler.RUST_R12_REST_FILE.test(path8) && /\/ts\/src\/[^/]+\.ts$/.test(path8))
+    const path9 = this.r05Path(node);
+    if (_RustTranspiler.RUST_R12_REST_FILE.test(path9) && /\/ts\/src\/[^/]+\.ts$/.test(path9))
       return "rest";
-    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(path8) && !/\/base\/ws\//.test(path8))
+    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(path9) && !/\/base\/ws\//.test(path9))
       return "base";
-    if (/\/ts\/src\/pro\/[^/]+\.ts$/.test(path8))
+    if (/\/ts\/src\/pro\/[^/]+\.ts$/.test(path9))
       return "pro";
     return void 0;
   }
@@ -37993,6 +37993,59 @@ function ccxtGoSafeCollectionLocalType(goTranspiler, declaration, families, rest
   });
   return unsafe ? void 0 : goType;
 }
+function ccxtGoSafeListGuardOnly(goTranspiler, declaration) {
+  const found = ccxtGoSafeCollectionArgs(declaration?.initializer);
+  if (found === void 0 || found.family !== "list" || found.fallback !== void 0) {
+    return false;
+  }
+  const scope = goTranspiler.goEnclosingFunction(declaration);
+  if (scope === void 0) {
+    return false;
+  }
+  const refersToDeclaration = typeof goTranspiler.goIdentifierRefersToDeclaration === "function" ? goTranspiler.goIdentifierRefersToDeclaration : void 0;
+  let guards = 0;
+  let reads = 0;
+  let others = 0;
+  goTranspiler.hasNodeWhere(scope, (n) => {
+    if (n.kind !== ts.SyntaxKind.Identifier || n.text !== declaration.name.text || n === declaration.name) {
+      return false;
+    }
+    if (n.parent?.kind === ts.SyntaxKind.PropertyAccessExpression && n.parent.name === n) {
+      return false;
+    }
+    if (refersToDeclaration !== void 0 && !refersToDeclaration.call(goTranspiler, n, declaration)) {
+      return false;
+    }
+    if (ccxtGoSafeListNilTest(n)) {
+      guards++;
+    } else if (ccxtGoSafeListAccessorRead(goTranspiler, n)) {
+      reads++;
+    } else {
+      others++;
+    }
+    return false;
+  });
+  return guards > 0 && reads > 0 && others === 0;
+}
+function ccxtGoSafeListNilTest(node) {
+  const parent = node.parent;
+  if (parent?.kind !== ts.SyntaxKind.BinaryExpression || COMPARISON_TOKENS.indexOf(parent.operatorToken?.kind) < 0) {
+    return false;
+  }
+  const other = parent.left === node ? parent.right : parent.left;
+  if (!(isUndefinedLiteral(other) || other?.kind === ts.SyntaxKind.NullKeyword)) {
+    return false;
+  }
+  let operand = parent;
+  while (operand.parent?.kind === ts.SyntaxKind.ParenthesizedExpression) {
+    operand = operand.parent;
+  }
+  return operand.parent?.kind === ts.SyntaxKind.BinaryExpression && operand.parent.operatorToken?.kind === ts.SyntaxKind.AmpersandAmpersandToken;
+}
+function ccxtGoSafeListAccessorRead(goTranspiler, node) {
+  const parent = node.parent;
+  return parent?.kind === ts.SyntaxKind.CallExpression && parent.arguments.indexOf(node) === 0 && parent.expression?.kind === ts.SyntaxKind.PropertyAccessExpression && parent.expression.expression?.kind === ts.SyntaxKind.ThisKeyword && CCXT_GO_SAFE_ACCESSOR_CALLEE.test("this." + ((parent.expression.name?.text ?? "").charAt(0).toUpperCase() + (parent.expression.name?.text ?? "").slice(1))) && ccxtGoSafeAccessorIndexKey(goTranspiler, parent);
+}
 function ccxtGoSafeCollectionTypeOnlyWrapper(node) {
   let current = node;
   while (current.parent !== void 0 && ((current.parent.kind === ts.SyntaxKind.AsExpression || current.parent.kind === ts.SyntaxKind.NonNullExpression || current.parent.kind === ts.SyntaxKind.ParenthesizedExpression) && current.parent.expression === current)) {
@@ -38177,7 +38230,7 @@ function installCcxtGoSafeCollectionUnbox(goTranspiler) {
   goTranspiler.goSafeListLocalUnbox = function(declaration) {
     const known = shippedListType.call(this, declaration);
     if (known !== void 0) {
-      return known;
+      return ccxtGoSafeListGuardOnly(this, declaration) ? void 0 : known;
     }
     return ccxtGoSafeCollectionLocalType(this, declaration, listFamilies);
   };
@@ -40764,6 +40817,7 @@ var CCXT_GO_GETARG_SAFE_CONSUMERS = {
   "mathMax": "*",
   "GetLimit": "*",
   "CreateOrderRequest": "*",
+  "EditOrderRequest": "*",
   "HandleMarginModeAndParams": "*",
   "HandleUntilOption": "*",
   "HandleProductTypeAndParams": "*",
@@ -46921,6 +46975,70 @@ function installCcxtGoSignTyping(goTranspiler) {
   };
 }
 
+// src/go/hx11w8-num-param.ts
+init_esm_shims();
+import path7 from "path";
+var NUM_SIGNATURE = /\n {4}(?:(?:override|async|public|private|protected) )*[A-Za-z_$][\w$]* \(([^\n]*)\)(?:: [^\n{]*)? \{/g;
+function hx11w8SiblingNumIdentifier(text, at, arg) {
+  const name = /^([A-Za-z_$][\w$]*)$/.exec((arg ?? "").trim())?.[1];
+  if (name === void 0 || at === void 0) {
+    return false;
+  }
+  const head = text.substring(0, at);
+  let last = null;
+  let m;
+  NUM_SIGNATURE.lastIndex = 0;
+  while ((m = NUM_SIGNATURE.exec(head)) !== null) {
+    last = m;
+  }
+  if (last === null) {
+    return false;
+  }
+  if (!new RegExp("(?:^|[(,]\\s*)" + name + ": Num = undefined(?:,|$)").test(last[1])) {
+    return false;
+  }
+  const body = head.substring(last.index + last[0].length);
+  return !new RegExp("(?<![\\w.$])" + name + "\\s*(?:[-+*/]?=(?!=)|\\+\\+|--)").test(body);
+}
+function installHx11w8NumParams(goTranspiler) {
+  const flag = "hx11w8NumParamsInstalled";
+  if (goTranspiler === void 0 || goTranspiler[flag] === true || typeof goTranspiler.goParameterCallSitesPassType !== "function" || typeof goTranspiler.goSameFileCallsOf !== "function" || typeof goTranspiler.goTsSrcTree !== "function") {
+    return;
+  }
+  goTranspiler[flag] = true;
+  const upstream = goTranspiler.goParameterCallSitesPassType;
+  goTranspiler.goParameterCallSitesPassType = function(fn, index, goType) {
+    if (upstream.call(this, fn, index, goType)) {
+      return true;
+    }
+    if (goType !== "*float64") {
+      return false;
+    }
+    const name = fn.name.text;
+    for (const call of this.goSameFileCallsOf(fn, name)) {
+      const arg = call.arguments?.[index];
+      if (arg === void 0 || arg.kind === ts.SyntaxKind.SpreadElement || this.goPrintedArgType(arg) !== "*float64") {
+        return false;
+      }
+    }
+    const tree = this.goTsSrcTree(fn.getSourceFile());
+    if (tree === void 0) {
+      return true;
+    }
+    const myClass = this.goEnclosingClassName(fn);
+    const myFile = tree.relativeOf.get(path7.resolve(fn.getSourceFile().fileName));
+    for (const site of tree.callIndex.get(name) ?? []) {
+      if (site.file === myFile || !this.goTsSrcFileDerivesFrom(tree, site.file, myClass)) {
+        continue;
+      }
+      if (!hx11w8SiblingNumIdentifier(tree.fileText.get(site.file) ?? "", site.at, site.args[index])) {
+        return false;
+      }
+    }
+    return true;
+  };
+}
+
 // src/go/index.ts
 function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoLocalTypes(goTranspiler, unifiedInt64Params);
@@ -46930,6 +47048,7 @@ function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoGb05ParamTypes(goTranspiler);
   installCcxtGoGb11HandleErrorsCode(goTranspiler);
   installCcxtGoSignTyping(goTranspiler);
+  installHx11w8NumParams(goTranspiler);
 }
 
 // src/rustPasses/index.ts
@@ -49498,6 +49617,26 @@ function classify(shape, ctx, masked, content, where) {
       }
     }
   }
+  if (shape === "Map" && before.endsWith("= &mut ")) {
+    const varM = /if let Value::Dict\((\w+)\) = &mut $/.exec(before);
+    if (varM !== null && /^\s*\{/.test(after)) {
+      const stmtStart = s - varM[0].length;
+      const brace = nameEnd + after.indexOf("{");
+      const close = closeBrace(masked, brace);
+      const head = `std::sync::Arc::make_mut(${varM[1]}).insert(`;
+      if (close > 0) {
+        const body = content.slice(brace + 1, close - 1).trim();
+        if (body.startsWith(head)) {
+          const pushOpen = brace + 1 + content.slice(brace + 1).indexOf(head) + head.length - 1;
+          const pushClose = closeParen2(masked, pushOpen);
+          if (pushClose > 0 && content.slice(pushClose, close - 1).trim() === ";") {
+            const val = content.slice(pushOpen + 1, pushClose - 1).trim();
+            return [{ start: stmtStart, end: close, text: `${name}.insert(${val});` }];
+          }
+        }
+      }
+    }
+  }
   if (shape === "Bool" && open.kind[s] === 1 && /matches!$/.test(masked.slice(Math.max(0, open.at[s] - 12), open.at[s]))) {
     const m = /^,\s*Value::Bool\(\s*(true|false)\s*\)\)/.exec(after);
     const start = s - "matches!(&".length;
@@ -49608,7 +49747,7 @@ function blockHeader(masked, from, open) {
   }
   return masked.slice(i + 1, open);
 }
-function inRepeatedBlock(masked, from, pos) {
+function inRepeatedBlock(masked, from, pos, declAt = -1) {
   const stack = [];
   for (let k = from; k < pos; k++) {
     const c = masked[k];
@@ -49618,6 +49757,8 @@ function inRepeatedBlock(masked, from, pos) {
       stack.pop();
   }
   for (const open of stack) {
+    if (open < declAt)
+      continue;
     const head = blockHeader(masked, from, open);
     if (/\b(for|while|loop)\b/.test(head))
       return true;
@@ -49695,7 +49836,22 @@ function r01TypedLocals(content) {
       if (heads[h] <= declStart)
         lo = h;
     const regionStart = heads[lo];
-    const regionEnd = lo + 1 < heads.length ? heads[lo + 1] : content.length;
+    let regionEnd = lo + 1 < heads.length ? heads[lo + 1] : content.length;
+    if (shape === "Map") {
+      let depth = 0;
+      for (let k = end; k < regionEnd; k++) {
+        const c = masked[k];
+        if (c === "{")
+          depth++;
+        else if (c === "}") {
+          if (depth === 0) {
+            regionEnd = k;
+            break;
+          }
+          depth--;
+        }
+      }
+    }
     const region = masked.slice(end, regionEnd);
     if (rebound(region, name))
       continue;
@@ -49740,7 +49896,7 @@ function r01TypedLocals(content) {
     if (gained === 0)
       continue;
     for (const b of boxes) {
-      const canMove = b.pos === lastUse && !inRepeatedBlock(masked, regionStart, b.pos);
+      const canMove = b.pos === lastUse && !inRepeatedBlock(masked, regionStart, b.pos, shape === "Map" ? declStart : -1);
       const collection = shape === "Vec" || shape === "Map";
       if (!canMove && (b.tail === 0 || collection)) {
         ok = false;
@@ -52899,7 +53055,7 @@ declare var WebSocket: any;
 declare var atob: any;
 declare var btoa: any;
 `;
-var globalsShimPath = path7.resolve(path7.join(__dirname_mock, "__globals-shim.d.ts"));
+var globalsShimPath = path8.resolve(path8.join(__dirname_mock, "__globals-shim.d.ts"));
 var UNDEFINED_SENTINEL = Symbol("undefined");
 var MEMOIZED_UNARY_CHECKER_METHODS = [
   "getTypeAtLocation",
@@ -53154,7 +53310,7 @@ function getApi(cache) {
 function createSnapshotProgram(cache, rootFiles, files) {
   const snapshot = getApi(cache).createSnapshot({
     fileSystem: { kind: "layer", files },
-    createPrograms: [{ rootFiles: rootFiles.map((f) => path7.resolve(f)), compilerOptions: fastCompilerOptions }]
+    createPrograms: [{ rootFiles: rootFiles.map((f) => path8.resolve(f)), compilerOptions: fastCompilerOptions }]
   });
   const program = snapshot.operation.createdPrograms[0];
   const checker = snapshot.getProjects().find((p) => p.program === program).checker;
@@ -53216,14 +53372,14 @@ var Transpiler = class _Transpiler {
   }
   // single-file snapshots are released when the next one replaces them; batches own theirs
   setSnapshotContext(snapshot, program, checker, fileName) {
-    const src = program.getSourceFile(fileName) ?? program.getSourceFile(path7.resolve(fileName));
+    const src = program.getSourceFile(fileName) ?? program.getSourceFile(path8.resolve(fileName));
     const previous = this.snapshot;
     this.snapshot = snapshot;
     previous?.dispose();
     return this.setContext({ src, checker, program });
   }
   createProgramInMemoryAndSetContext(content) {
-    const inMemoryFilePath = path7.resolve(path7.join(__dirname_mock, "__dummy-file.ts"));
+    const inMemoryFilePath = path8.resolve(path8.join(__dirname_mock, "__dummy-file.ts"));
     const [snapshot, program, checker] = createSnapshotProgram(this.programCache, [inMemoryFilePath, globalsShimPath], {
       [inMemoryFilePath]: content,
       [globalsShimPath]: globalsShim
@@ -53256,7 +53412,7 @@ var Transpiler = class _Transpiler {
     if (shared === void 0) {
       return void 0;
     }
-    const src = shared.program.getSourceFile(path7.resolve(filePath));
+    const src = shared.program.getSourceFile(path8.resolve(filePath));
     if (src === void 0 || !fs7.existsSync(filePath) || fs7.readFileSync(filePath, "utf8") !== src.text) {
       return void 0;
     }
@@ -53288,8 +53444,8 @@ var Transpiler = class _Transpiler {
     return this.createProgramInMemoryAndSetContext(content);
   }
   /** @deprecated renamed to createProgramByPathAndSetContext */
-  createProgramByPathAndSetGlobals(path8) {
-    return this.createProgramByPathAndSetContext(path8);
+  createProgramByPathAndSetGlobals(path9) {
+    return this.createProgramByPathAndSetContext(path9);
   }
   checkFileDiagnostics(context = this.context) {
     if (!Logger.verbose) {
@@ -53420,29 +53576,29 @@ var Transpiler = class _Transpiler {
   transpilePython(content) {
     return this.transpile(0 /* Python */, 1 /* ByContent */, content, !this.pythonTranspiler.asyncTranspiling);
   }
-  transpilePythonByPath(path8) {
-    return this.transpile(0 /* Python */, 0 /* ByPath */, path8, !this.pythonTranspiler.asyncTranspiling);
+  transpilePythonByPath(path9) {
+    return this.transpile(0 /* Python */, 0 /* ByPath */, path9, !this.pythonTranspiler.asyncTranspiling);
   }
   transpilePhp(content) {
     return this.transpile(1 /* Php */, 1 /* ByContent */, content, !this.phpTranspiler.asyncTranspiling);
   }
-  transpilePhpByPath(path8) {
-    return this.transpile(1 /* Php */, 0 /* ByPath */, path8, !this.phpTranspiler.asyncTranspiling);
+  transpilePhpByPath(path9) {
+    return this.transpile(1 /* Php */, 0 /* ByPath */, path9, !this.phpTranspiler.asyncTranspiling);
   }
   transpileCSharp(content) {
     return this.transpile(2 /* CSharp */, 1 /* ByContent */, content);
   }
-  transpileCSharpByPath(path8) {
-    return this.transpile(2 /* CSharp */, 0 /* ByPath */, path8);
+  transpileCSharpByPath(path9) {
+    return this.transpile(2 /* CSharp */, 0 /* ByPath */, path9);
   }
   transpileJava(content) {
     return this.transpile(4 /* Java */, 1 /* ByContent */, content);
   }
-  transpileJavaByPath(path8) {
-    return this.transpile(4 /* Java */, 0 /* ByPath */, path8);
+  transpileJavaByPath(path9) {
+    return this.transpile(4 /* Java */, 0 /* ByPath */, path9);
   }
-  transpileGoByPath(path8) {
-    return this.transpile(3 /* Go */, 0 /* ByPath */, path8);
+  transpileGoByPath(path9) {
+    return this.transpile(3 /* Go */, 0 /* ByPath */, path9);
   }
   transpileGo(content) {
     return this.transpile(3 /* Go */, 1 /* ByContent */, content);
@@ -53450,14 +53606,14 @@ var Transpiler = class _Transpiler {
   transpileRust(content) {
     return this.transpile(5 /* Rust */, 1 /* ByContent */, content);
   }
-  transpileRustByPath(path8) {
-    return this.transpile(5 /* Rust */, 0 /* ByPath */, path8);
+  transpileRustByPath(path9) {
+    return this.transpile(5 /* Rust */, 0 /* ByPath */, path9);
   }
   transpileCpp(content) {
     return this.transpile(6 /* Cpp */, 1 /* ByContent */, content);
   }
-  transpileCppByPath(path8) {
-    return this.transpile(6 /* Cpp */, 0 /* ByPath */, path8);
+  transpileCppByPath(path9) {
+    return this.transpile(6 /* Cpp */, 0 /* ByPath */, path9);
   }
   getFileImports(content) {
     const context = this.createProgramInMemoryAndSetContext(content);
@@ -53521,7 +53677,7 @@ var TranspileProgramBatch = class {
   // point the owning Transpiler at one file of this batch, then run the same
   // diagnostics pass the single-file path runs
   setContextForPath(filePath) {
-    const src = this.program.getSourceFile(filePath) ?? this.program.getSourceFile(path7.resolve(filePath));
+    const src = this.program.getSourceFile(filePath) ?? this.program.getSourceFile(path8.resolve(filePath));
     if (src === void 0) {
       throw new Error(`ast-transpiler: "${filePath}" is not a file of this program batch`);
     }
@@ -53595,6 +53751,7 @@ export {
   installCcxtGoLocalTypes,
   installCcxtGoParamTypes,
   installCcxtGoSignTyping,
+  installHx11w8NumParams,
   narrowStrNullLocals,
   narrowStrSinkLocals,
   nativeGetValue,
