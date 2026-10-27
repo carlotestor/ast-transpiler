@@ -9,6 +9,24 @@ import { JavaTranspiler } from './javaTranspiler.js';
 import { RustTranspiler, RUST_DECLARED_DICT_LOCALS } from './rustTranspiler.js';
 import type { RustDeclaredDictLocalEntry } from './rustTranspiler.js';
 import { CppTranspiler } from './cppTranspiler.js';
+import { hx10J01ElementWrites, j01ElementWritesSelfTest } from "./java/hx10w2-J01.js";
+import { nativeJavaJ02ElementReads, j02SelfTest } from "./java/hx10w2-J02.js";
+import { nativeJavaJ03Family } from "./java/hx10w2-J03.js";
+import { nativeJavaJ05, j05FamilySelfTest } from "./java/hx10w2-J05.js";
+import { nativeJavaJ06FieldOps, j06SelfTest } from "./java/hx10w2-J06.js";
+import { j01wsNativeOps, j01wsSelfTest } from "./java/hx10w3-J01.js";
+import { hx10w3J02BalancePuts, j02BalanceSelfTest } from "./java/hx10w3-J02.js";
+import { nativeJavaJ04OptionsOps, j04OptionsSelfTest } from "./java/hx10w3-J04.js";
+import { nativeJavaJ05DictChains, j05DictChainsSelfTest } from "./java/hx10w3-J05.js";
+import { nativeJavaBF02FieldOps, bf02SelfTest } from "./java/hx10w4-BF02.js";
+import { hx10w4OJ01OptionsOwner, oj01OptionsSelfTest } from "./java/hx10w4-OJ01.js";
+import { nativeJavaJ09SwitchBlobs, j09SelfTest } from "./java/hx10w6-J09.js";
+import { j01w7FieldPuts, j01w7FieldPutsSelfTest } from "./java/hx10w7-J01.js";
+import { nativeJ05CallReceiverReads, j05CallReceiverSelfTest } from "./java/hx10w7-J05.js";
+import { j12AsyncThrows, j12SelfTest } from "./java/hx10w7-J12.js";
+import { wsMapReads, wsReadsTest } from "./java/hx10w7-OJ06.js";
+import { hx10w10JO01, jo01SelfTest } from "./java/hx10w10-JO01.js";
+import { javaRuntimeRoot, setJavaRuntimeRoot } from "./java/javaRuntimeRoot.js";
 export default class Transpiler {
     config: any;
     pythonTranspiler: PythonTranspiler;
@@ -92,3 +110,4 @@ declare class TranspileProgramBatch {
 }
 export { Transpiler, TranspileProgramBatch, CheckFlags, ElementFlags, IndexKind, ObjectFlags, SignatureKind, SymbolFlags, TypeFlags, TypeFormatFlags, SyntaxKind, alignGoTrailingComments, RUST_DECLARED_DICT_LOCALS, };
 export type { RustDeclaredDictLocalEntry };
+export { hx10J01ElementWrites, j01ElementWritesSelfTest, nativeJavaJ02ElementReads, j02SelfTest, nativeJavaJ03Family, nativeJavaJ05, j05FamilySelfTest, nativeJavaJ06FieldOps, j06SelfTest, j01wsNativeOps, j01wsSelfTest, hx10w3J02BalancePuts, j02BalanceSelfTest, nativeJavaJ04OptionsOps, j04OptionsSelfTest, nativeJavaJ05DictChains, j05DictChainsSelfTest, nativeJavaBF02FieldOps, bf02SelfTest, hx10w4OJ01OptionsOwner, oj01OptionsSelfTest, nativeJavaJ09SwitchBlobs, j09SelfTest, j01w7FieldPuts, j01w7FieldPutsSelfTest, nativeJ05CallReceiverReads, j05CallReceiverSelfTest, j12AsyncThrows, j12SelfTest, wsMapReads, wsReadsTest, hx10w10JO01, jo01SelfTest, javaRuntimeRoot, setJavaRuntimeRoot, };

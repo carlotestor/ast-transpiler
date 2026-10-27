@@ -177,6 +177,16 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaParameterIsCompoundAssigned(node: any): boolean;
     javaParameterAssignmentCast(left: any, right: any, identation: any): string | undefined;
     javaNativeReturnType(node: any): string | undefined;
+    javaVenueCalleeResults: WeakMap<Node, {
+        type: string;
+    } | undefined>;
+    javaVenueCalleeInProgress: WeakSet<Node>;
+    javaVenueCalleeType(node: any): {
+        type: string;
+    } | undefined;
+    javaVenueCalleeTypeUncached(node: any): {
+        type: string;
+    } | undefined;
     javaNativeReturnTypeUncached(node: any): string | undefined;
     javaMethodReturnsNonNullBoolean(method: any, depth: number): boolean;
     javaPrintsNonNullBoolean(node: any, depth: number): boolean;
@@ -226,6 +236,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaClassTypedElementRead(node: any): string;
     javaScalarFamily(node: any): string | undefined;
     javaProvableString(node: any): boolean;
+    javaPrintsStringCast(node: any): boolean;
     javaResolvedString(node: any): boolean;
     javaNativeConcat(node: any): boolean;
     javaStringConcatIsProvable(left: any, right: any, leftFamily: any, rightFamily: any): boolean;
@@ -358,6 +369,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printTrimCall(_node: any, _identation: any, name?: any): string;
     printJoinCall(_node: any, _identation: any, name?: any, parsedArg?: any): string;
     printSplitCall(node: any, _identation: any, name?: any, parsedArg?: any): string;
+    javaTypedSplitCall(node: any, name: any, parsedArg: any): string | undefined;
     printConcatCall(_node: any, _identation: any, name?: any, parsedArg?: any): string;
     printToFixedCall(_node: any, _identation: any, name?: any, parsedArg?: any): string;
     printToStringCall(_node: any, _identation: any, name?: any): string;
@@ -368,6 +380,13 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printPopCall(_node: any, _identation: any, name?: any): string;
     printAssertCall(_node: any, _identation: any, parsedArgs: any): string;
     printSliceCall(node: any, _identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;
+    javaTypedSliceCall(node: any, name: any, parsedArg: any, parsedArg2: any, identation: any): string | undefined;
+    javaTypedSliceCallUnchecked(node: any, name: any, parsedArg: any, parsedArg2: any, identation: any): string | undefined;
+    javaTypedStringPrinted(node: any): boolean;
+    javaRepeatableBound(node: any): boolean;
+    javaIntegralBoundPrinted(node: any): boolean;
+    javaIntegralBoundText(node: any, printed: string): string | undefined;
+    javaBoundLiteral(node: any): number | undefined;
     javaSliceLiteralBound(node: any): any;
     javaSliceBoundExpression(value: any, length: any): string;
     nativeSliceCallIfProvable(node: any, name: any): string;
@@ -410,6 +429,11 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaNullableBooleanBoxIdentifier(node: any, seen?: Set<any>): string | undefined;
     javaBooleanWrapperFreeCondition(node: any): string | undefined;
     printCondition(node: any, identation: any): any;
+    javaBooleanParameterCondition(node: any, printed: string): string | undefined;
+    javaFalsyWrapperOperand(text: string): string | undefined;
+    javaMatchingParen(text: string, open: number): number;
+    javaBooleanParameterOperand(printed: string): string | undefined;
+    javaBooleanishType(node: any): boolean;
     printConditionalExpression(node: any, _identation: any): string;
     printDeleteExpression(node: any, _identation: any): string;
     printThrowStatement(node: any, identation: any): string;

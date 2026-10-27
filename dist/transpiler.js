@@ -13,7 +13,7 @@ import {
   symbolValueDeclaration,
   typeParts,
   typeTarget
-} from "./chunk-AR3HKU64.js";
+} from "./chunk-O7NNCZWA.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -4416,8 +4416,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
         }
         return this.csharpDeclaredTypeOfBinding(node) ?? this.csharpParameterOperandType(node);
       case SyntaxKind4.PropertyAccessExpression: {
-        const fieldType = this.csharpReferenceFieldType(node);
-        return fieldType === void 0 ? this.csharpTypeOfInitializer(node) : fieldType;
+        const fieldType2 = this.csharpReferenceFieldType(node);
+        return fieldType2 === void 0 ? this.csharpTypeOfInitializer(node) : fieldType2;
       }
     }
     if (isStringLiteralLikeNode2(node)) {
@@ -4598,11 +4598,11 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // declaration is a C# string: the printer's declared-local table, then the embedding build
   // layer's proof for the declarations it retypes itself (ccxt's csharp-local-types.js).
   csharpDeclaredStringLiteralComparison(left, right, leftText, rightText, isEquality) {
-    const ident = isIdentifier(left) ? left : isIdentifier(right) ? right : void 0;
-    if (ident === void 0 || !isStringLiteralLikeNode2(ident === left ? right : left)) {
+    const ident3 = isIdentifier(left) ? left : isIdentifier(right) ? right : void 0;
+    if (ident3 === void 0 || !isStringLiteralLikeNode2(ident3 === left ? right : left)) {
       return void 0;
     }
-    const declared = this.csharpDeclaredReadType(ident);
+    const declared = this.csharpDeclaredReadType(ident3);
     if (declared === void 0 || !this.csharpTypeIsStringType(declared)) {
       return void 0;
     }
@@ -6203,11 +6203,11 @@ var CSharpTranspiler = class extends BaseTranspiler {
       }
       return this.getIden(identation) + specificVarToken + " " + this.printNode(declaration.name) + " = " + parsedValue;
     }
-    const declaredType = isNew ? "var" : this.getCSharpLocalType(declaration);
-    if (!isNew && node.declarations.length === 1 && this.csharpTypeIsNative(declaredType)) {
-      this.csharpTypedLocals.set(declaration, declaredType);
+    const declaredType3 = isNew ? "var" : this.getCSharpLocalType(declaration);
+    if (!isNew && node.declarations.length === 1 && this.csharpTypeIsNative(declaredType3)) {
+      this.csharpTypedLocals.set(declaration, declaredType3);
     }
-    return this.getIden(identation) + declaredType + " " + this.printNode(declaration.name) + " = " + parsedValue;
+    return this.getIden(identation) + declaredType3 + " " + this.printNode(declaration.name) + " = " + parsedValue;
   }
   transformPropertyAcessExpressionIfNeeded(node) {
     const expression = node.expression;
@@ -6964,8 +6964,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
     return result;
   }
   isOverrideMethod(node) {
-    const override = this.getMethodOverride(node);
-    return override !== void 0 && override !== node;
+    const override2 = this.getMethodOverride(node);
+    return override2 !== void 0 && override2 !== node;
   }
   // the C# string box a `this.<name>(...)` call hands back: the printer's own table of the
   // hand-written base helpers first (that IS the emitted signature), then a method of the SAME
@@ -7121,12 +7121,12 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     return printed === "string" || printed === "string?";
   }
-  printUnboxedReturnStatement(node, identation, declaredType, forgiving) {
+  printUnboxedReturnStatement(node, identation, declaredType3, forgiving) {
     const leadingComment = this.printLeadingComments(node, identation);
     let trailingComment = this.printTraillingComment(node, identation);
     trailingComment = trailingComment ? " " + trailingComment : trailingComment;
     const value = this.printNode(node.expression, identation).trim();
-    return leadingComment + this.getIden(identation) + this.RETURN_TOKEN + ` ((${declaredType})((object)(${value}))${forgiving})` + this.LINE_TERMINATOR + trailingComment;
+    return leadingComment + this.getIden(identation) + this.RETURN_TOKEN + ` ((${declaredType3})((object)(${value}))${forgiving})` + this.LINE_TERMINATOR + trailingComment;
   }
   printMethodDefinition(node, identation) {
     let name = node.name.text;
@@ -8505,8 +8505,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
 };
 
 // src/transpiler.ts
-import * as path2 from "path";
-import * as fs2 from "fs";
+import * as path11 from "path";
+import * as fs11 from "fs";
 
 // src/goTranspiler.ts
 init_esm_shims();
@@ -10680,15 +10680,15 @@ func New${this.capitalize(this.className)}() *${this.className} {
     return "float64(*" + leftText.trim() + ") / " + this.goUnwrapPrintedParens(rightText.trim());
   }
   // the checker narrowed the identifier to a plain number here, or an enclosing guard tests it
-  goPointerNumberIsNonNil(ident) {
-    if (this.goHasEnclosingNilGuard(ident)) {
+  goPointerNumberIsNonNil(ident3) {
+    if (this.goHasEnclosingNilGuard(ident3)) {
       return true;
     }
     const checker = this.checkerOrUndefined();
     if (checker === void 0) {
       return false;
     }
-    const type = checker.getTypeAtLocation(ident);
+    const type = checker.getTypeAtLocation(ident3);
     return type !== void 0 && (type.flags & TypeFlags4.NumberLike) !== 0;
   }
   // the division (through parens) is the only argument of this.parseToInt or Math.floor/ceil/round
@@ -12340,10 +12340,10 @@ ${this.getIden(identation)}PanicOnError(${parsedName})`;
         return this.getIden(identation) + this.printNode(declaration.name) + " := " + parsedValue;
       }
       const varName = this.printNode(declaration.name);
-      const declaredType = containerType !== void 0 ? containerType : this.getGoLocalType(declaration, parsedValue);
-      const unboxValue = this.goMarketUnboxValue(declaration, parsedValue) ?? (declaredType === GO_SAFE_DICT_LOCAL_TYPE ? this.goSafeDictUnboxValue(declaration, identation) : declaredType === GO_SAFE_LIST_LOCAL_TYPE ? this.goSafeListUnboxValue(declaration, identation) : void 0);
+      const declaredType3 = containerType !== void 0 ? containerType : this.getGoLocalType(declaration, parsedValue);
+      const unboxValue = this.goMarketUnboxValue(declaration, parsedValue) ?? (declaredType3 === GO_SAFE_DICT_LOCAL_TYPE ? this.goSafeDictUnboxValue(declaration, identation) : declaredType3 === GO_SAFE_LIST_LOCAL_TYPE ? this.goSafeListUnboxValue(declaration, identation) : void 0);
       const declaredValue = unboxValue !== void 0 ? unboxValue : parsedValue.trimStart();
-      const stm = this.getIden(identation) + "var " + varName + " " + declaredType + " = " + declaredValue;
+      const stm = this.getIden(identation) + "var " + varName + " " + declaredType3 + " = " + declaredValue;
       if (parsedValue.startsWith("<-this.callInternal(")) {
         return `
 ${stm}
@@ -13191,8 +13191,8 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       return typeof declared === "string" && declared.startsWith("*");
     }
     if (expr.kind === SyntaxKind5.PropertyAccessExpression && expr.expression?.kind === SyntaxKind5.ThisKeyword) {
-      const fieldType = GO_NILABLE_FIELDS_Typed["this." + expr.name?.text];
-      return typeof fieldType === "string" && GO_NIL_EQUIVALENT_POINTER_TYPES_Native.has(fieldType);
+      const fieldType2 = GO_NILABLE_FIELDS_Typed["this." + expr.name?.text];
+      return typeof fieldType2 === "string" && GO_NIL_EQUIVALENT_POINTER_TYPES_Native.has(fieldType2);
     }
     return false;
   }
@@ -14091,14 +14091,14 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   }
   // `if (x === undefined) { return/throw/continue/break }` earlier in the same statement list:
   // the flow past that point cannot hold a nil, so a pointer read there is the string
-  gp15HasExitingNilGuard(ident) {
-    const name = String(ident?.text ?? "");
-    const scope = this.goEnclosingFunction(ident);
-    if (name === "" || scope === void 0 || this.goLocalIsRebound(scope, ident)) {
+  gp15HasExitingNilGuard(ident3) {
+    const name = String(ident3?.text ?? "");
+    const scope = this.goEnclosingFunction(ident3);
+    if (name === "" || scope === void 0 || this.goLocalIsRebound(scope, ident3)) {
       return false;
     }
-    let child = ident;
-    let parent = ident.parent;
+    let child = ident3;
+    let parent = ident3.parent;
     while (parent !== void 0 && !isFunctionLike(parent)) {
       if (parent.kind === SyntaxKind5.Block) {
         const statements = parent.statements ?? [];
@@ -14107,7 +14107,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
           return false;
         }
         for (let i = at - 1; i >= 0; i--) {
-          if (this.gp15StatementExitsOnNil(statements[i], ident)) {
+          if (this.gp15StatementExitsOnNil(statements[i], ident3)) {
             return true;
           }
         }
@@ -14117,12 +14117,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
     return false;
   }
-  gp15StatementExitsOnNil(statement, ident) {
+  gp15StatementExitsOnNil(statement, ident3) {
     if (statement?.kind !== SyntaxKind5.IfStatement || statement.elseStatement !== void 0) {
       return false;
     }
     const condition = this.goUnwrapParenthesizedNode(statement.expression);
-    if (!this.gp15IsNilTestOf(condition, ident)) {
+    if (!this.gp15IsNilTestOf(condition, ident3)) {
       return false;
     }
     const then = statement.thenStatement;
@@ -14136,9 +14136,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     ].includes(last?.kind);
   }
   // the mirror of goIsNonNilTestOf: `x == null`, `x === undefined`, `!x`
-  gp15IsNilTestOf(node, ident) {
+  gp15IsNilTestOf(node, ident3) {
     if (node?.kind === SyntaxKind5.PrefixUnaryExpression) {
-      return node.operator === SyntaxKind5.ExclamationToken && node.operand?.kind === SyntaxKind5.Identifier && this.goIdentifierRefersTo(node.operand, ident);
+      return node.operator === SyntaxKind5.ExclamationToken && node.operand?.kind === SyntaxKind5.Identifier && this.goIdentifierRefersTo(node.operand, ident3);
     }
     if (node?.kind !== SyntaxKind5.BinaryExpression) {
       return false;
@@ -14148,7 +14148,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       return false;
     }
     const isNil = (side) => side?.kind === SyntaxKind5.NullKeyword || side?.kind === SyntaxKind5.Identifier && side.text === "undefined";
-    const isName = (side) => side?.kind === SyntaxKind5.Identifier && this.goIdentifierRefersTo(side, ident);
+    const isName = (side) => side?.kind === SyntaxKind5.Identifier && this.goIdentifierRefersTo(side, ident3);
     return isName(node.left) && isNil(node.right) || isNil(node.left) && isName(node.right);
   }
   // both identifiers resolve to the same declaration (a shadowed name is a different value)
@@ -14398,9 +14398,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       return declared;
     }
     if (node?.kind === SyntaxKind5.PropertyAccessExpression) {
-      const fieldType = GO_NILABLE_FIELDS_Typed[printedText];
-      if (typeof fieldType === "string" && GO_NIL_EQUIVALENT_POINTER_TYPES_Native.has(fieldType)) {
-        return fieldType;
+      const fieldType2 = GO_NILABLE_FIELDS_Typed[printedText];
+      if (typeof fieldType2 === "string" && GO_NIL_EQUIVALENT_POINTER_TYPES_Native.has(fieldType2)) {
+        return fieldType2;
       }
     }
     if (node?.kind === SyntaxKind5.CallExpression) {
@@ -14518,12 +14518,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   // printer, otherwise undefined and the caller keeps the runtime helper
   printNativeElementAssignment(containerNode, containerStr, keyNode, keyStr, valueStr, compound = false, valueNode) {
     const containerType = this.goElementAssignmentContainerType(containerNode, containerStr);
-    const fieldType = this.goFieldContainerTypeNative(containerNode);
-    if (fieldType !== void 0 || containerType === "map[string]any") {
+    const fieldType2 = this.goFieldContainerTypeNative(containerNode);
+    if (fieldType2 !== void 0 || containerType === "map[string]any") {
       if (!this.goIsStringKeyExpression(keyNode)) {
-        return this.printNativeGuardedPointerKeyAssignment(containerNode, containerStr, containerType, fieldType, keyNode, keyStr, valueStr, compound, valueNode);
+        return this.printNativeGuardedPointerKeyAssignment(containerNode, containerStr, containerType, fieldType2, keyNode, keyStr, valueStr, compound, valueNode);
       }
-      if (fieldType === "*sync.Map") {
+      if (fieldType2 === "*sync.Map") {
         return compound ? void 0 : `${containerStr}.Store(${keyStr}, ${valueStr})`;
       }
       return `${containerStr}[${keyStr}] = ${valueStr}`;
@@ -14535,8 +14535,8 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   }
   // `m[*k] = v` for a fresh unshared map local, a nil-guarded *string key and a
   // non-pointer value: exactly the helper's map branch minus its lock and derefs
-  printNativeGuardedPointerKeyAssignment(containerNode, containerStr, containerType, fieldType, keyNode, keyStr, valueStr, compound, valueNode) {
-    if (compound || fieldType !== void 0 || containerType !== "map[string]any" || valueNode === void 0) {
+  printNativeGuardedPointerKeyAssignment(containerNode, containerStr, containerType, fieldType2, keyNode, keyStr, valueStr, compound, valueNode) {
+    if (compound || fieldType2 !== void 0 || containerType !== "map[string]any" || valueNode === void 0) {
       return void 0;
     }
     if (this.goIsNilGuardedStringPointerKey(keyNode) && this.goIsFreshUnsharedMapLocal(containerNode, containerNode) && this.goIsNonPointerValue(valueNode)) {
@@ -14603,16 +14603,16 @@ ${iden}}`;
   // read runs. InOp derefs its key (nil answers false) and a Go map read of a nil pointer panics,
   // so the comma-ok needs that proof; a `&&` conjunct of the read's own condition does not count
   // when the read moves into an if init clause, which Go evaluates first.
-  goInOpPointerKeyProvenNonNil(statement, ident) {
-    if (ident?.kind !== SyntaxKind5.Identifier || this.goDeclaredTypeOfIdentifier(ident) !== "*string") {
+  goInOpPointerKeyProvenNonNil(statement, ident3) {
+    if (ident3?.kind !== SyntaxKind5.Identifier || this.goDeclaredTypeOfIdentifier(ident3) !== "*string") {
       return false;
     }
     const checker = this.checkerOrUndefined();
     if (checker === void 0 || statement === void 0) {
       return false;
     }
-    const declaration = checker.getSymbolAtLocation(ident)?.valueDeclaration?.resolve();
-    if (this.goLocalIsRebound(this.goEnclosingFunction(declaration ?? ident), ident)) {
+    const declaration = checker.getSymbolAtLocation(ident3)?.valueDeclaration?.resolve();
+    if (this.goLocalIsRebound(this.goEnclosingFunction(declaration ?? ident3), ident3)) {
       return false;
     }
     let child = statement;
@@ -14620,12 +14620,12 @@ ${iden}}`;
     while (parent !== void 0) {
       const kind = parent.kind;
       if (kind === SyntaxKind5.Block) {
-        if (this.goBlockExitsOnNilTest(parent, child, ident)) {
+        if (this.goBlockExitsOnNilTest(parent, child, ident3)) {
           return true;
         }
       }
       const guard = this.goNilGuardFields[kind];
-      if (guard !== void 0 && child === parent[guard[0]] && this.goConditionProvesNonNil(parent[guard[1]], ident)) {
+      if (guard !== void 0 && child === parent[guard[0]] && this.goConditionProvesNonNil(parent[guard[1]], ident3)) {
         return true;
       }
       if (guard === void 0 && kind !== SyntaxKind5.Block && kind !== SyntaxKind5.LabeledStatement) {
@@ -14638,7 +14638,7 @@ ${iden}}`;
   }
   // `if (k === undefined) { return }` earlier in the block: every path that reaches `statement`
   // has k non-nil
-  goBlockExitsOnNilTest(block, statement, ident) {
+  goBlockExitsOnNilTest(block, statement, ident3) {
     const statements = block?.statements;
     if (statements === void 0) {
       return false;
@@ -14653,14 +14653,14 @@ ${iden}}`;
         continue;
       }
       const test = this.goUnwrapParenthesizedNode(sibling.expression);
-      if (this.goIsNilTestOf(test, ident) && this.goStatementAlwaysExits(sibling.thenStatement)) {
+      if (this.goIsNilTestOf(test, ident3) && this.goStatementAlwaysExits(sibling.thenStatement)) {
         return true;
       }
     }
     return false;
   }
   // `k === null/undefined` (the helper's false branch is the nil key)
-  goIsNilTestOf(node, ident) {
+  goIsNilTestOf(node, ident3) {
     if (node?.kind !== SyntaxKind5.BinaryExpression) {
       return false;
     }
@@ -14668,7 +14668,7 @@ ${iden}}`;
     if (op !== SyntaxKind5.EqualsEqualsToken && op !== SyntaxKind5.EqualsEqualsEqualsToken) {
       return false;
     }
-    return this.goIsSameSymbol(node.left, ident) && this.goIsNilLiteral(node.right) || this.goIsSameSymbol(node.right, ident) && this.goIsNilLiteral(node.left);
+    return this.goIsSameSymbol(node.left, ident3) && this.goIsNilLiteral(node.right) || this.goIsSameSymbol(node.right, ident3) && this.goIsNilLiteral(node.left);
   }
   // the statement's own control flow always leaves the enclosing function or loop
   goStatementAlwaysExits(statement) {
@@ -15423,7 +15423,7 @@ ${indent}}`);
     if (fileImports.size === 0) {
       return body;
     }
-    return [...fileImports].sort().map((path3) => `import "${path3}"`).join("\n") + "\n\n" + body;
+    return [...fileImports].sort().map((path12) => `import "${path12}"`).join("\n") + "\n\n" + body;
   }
   goBinaryMemoized(node, key, compute) {
     const outermost = this.goBinaryMemo === void 0;
@@ -15934,7 +15934,7 @@ ${indent}}`);
   }
   // `x !== undefined` / `x != null` on that identifier: the printer writes the Go
   // `x != nil` test for it, so an enclosing one proves the pointer present
-  goIsNonNilTestOf(node, ident) {
+  goIsNonNilTestOf(node, ident3) {
     if (node?.kind !== SyntaxKind5.BinaryExpression) {
       return false;
     }
@@ -15942,7 +15942,7 @@ ${indent}}`);
     if (op !== SyntaxKind5.ExclamationEqualsToken && op !== SyntaxKind5.ExclamationEqualsEqualsToken) {
       return false;
     }
-    return this.goIsSameSymbol(node.left, ident) && this.goIsNilLiteral(node.right) || this.goIsSameSymbol(node.right, ident) && this.goIsNilLiteral(node.left);
+    return this.goIsSameSymbol(node.left, ident3) && this.goIsNilLiteral(node.right) || this.goIsSameSymbol(node.right, ident3) && this.goIsNilLiteral(node.left);
   }
   // a null/undefined literal, or any expression the checker types as one
   goIsNilLiteral(node) {
@@ -15966,17 +15966,17 @@ ${indent}}`);
   // true when the enclosing control flow already proves the identifier non-nil at this node: an
   // earlier conjunct of an `&&` chain, or the condition of a wrapping if/loop/ternary containing the
   // node. A local rebound anywhere in its function never counts — the guard may be dead by then.
-  goHasEnclosingNilGuard(ident) {
+  goHasEnclosingNilGuard(ident3) {
     const checker = this.checkerOrUndefined();
     if (checker === void 0) {
       return false;
     }
-    const declaration = checker.getSymbolAtLocation(ident)?.valueDeclaration?.resolve();
-    if (this.goLocalIsRebound(this.goEnclosingFunction(declaration ?? ident), ident)) {
+    const declaration = checker.getSymbolAtLocation(ident3)?.valueDeclaration?.resolve();
+    if (this.goLocalIsRebound(this.goEnclosingFunction(declaration ?? ident3), ident3)) {
       return false;
     }
-    let child = ident;
-    let parent = ident?.parent;
+    let child = ident3;
+    let parent = ident3?.parent;
     while (parent !== void 0) {
       const kind = parent.kind;
       if (kind === SyntaxKind5.ParenthesizedExpression || kind === SyntaxKind5.VariableStatement || kind === SyntaxKind5.ExpressionStatement || kind === SyntaxKind5.Block || kind === SyntaxKind5.ReturnStatement || kind === SyntaxKind5.ElementAccessExpression || kind === SyntaxKind5.CallExpression || kind === SyntaxKind5.PropertyAccessExpression || kind === SyntaxKind5.ObjectLiteralExpression || kind === SyntaxKind5.PropertyAssignment || kind === SyntaxKind5.ArrayLiteralExpression || kind === SyntaxKind5.AwaitExpression || kind === SyntaxKind5.CaseClause || kind === SyntaxKind5.SwitchStatement || kind === SyntaxKind5.DoStatement || kind === SyntaxKind5.LabeledStatement) {
@@ -15986,7 +15986,7 @@ ${indent}}`);
       }
       if (kind === SyntaxKind5.BinaryExpression) {
         const op = parent.operatorToken?.kind;
-        if (op === SyntaxKind5.AmpersandAmpersandToken && child === parent.right && this.goConditionProvesNonNil(parent.left, ident)) {
+        if (op === SyntaxKind5.AmpersandAmpersandToken && child === parent.right && this.goConditionProvesNonNil(parent.left, ident3)) {
           return true;
         }
         child = parent;
@@ -15995,7 +15995,7 @@ ${indent}}`);
       }
       const guard = this.goNilGuardFields[kind];
       if (guard !== void 0) {
-        if (child === parent[guard[0]] && this.goConditionProvesNonNil(parent[guard[1]], ident)) {
+        if (child === parent[guard[0]] && this.goConditionProvesNonNil(parent[guard[1]], ident3)) {
           return true;
         }
         child = parent;
@@ -16007,18 +16007,18 @@ ${indent}}`);
     return false;
   }
   // the whole condition, or any conjunct of its `&&` chain, is the non-nil test
-  goConditionProvesNonNil(condition, ident) {
+  goConditionProvesNonNil(condition, ident3) {
     const inner = this.goUnwrapParenthesizedNode(condition);
     if (inner === void 0) {
       return false;
     }
-    if (this.goIsNonNilTestOf(inner, ident)) {
+    if (this.goIsNonNilTestOf(inner, ident3)) {
       return true;
     }
     if (inner.kind !== SyntaxKind5.BinaryExpression || inner.operatorToken?.kind !== SyntaxKind5.AmpersandAmpersandToken) {
       return false;
     }
-    return this.goConditionProvesNonNil(inner.left, ident) || this.goConditionProvesNonNil(inner.right, ident);
+    return this.goConditionProvesNonNil(inner.left, ident3) || this.goConditionProvesNonNil(inner.right, ident3);
   }
   goUnwrapParenthesizedNode(node) {
     let current = node;
@@ -19363,6 +19363,8 @@ var JavaTranspiler = class extends BaseTranspiler {
     // the build layer answers a printed local's type from what THIS worker has printed so far, so
     // an unproven answer may only be provisional: caching it freezes the first worker's view
     this.javaReturnTypeUsedDeclaredLocals = false;
+    this.javaVenueCalleeResults = /* @__PURE__ */ new WeakMap();
+    this.javaVenueCalleeInProgress = /* @__PURE__ */ new WeakSet();
     // a literal-defaulted parameter is read as `Objects.requireNonNullElse(x, <default>)`: a dynamic
     // caller pads omitted slots with null, and the parameter stays final with no local copy
     this.javaDefaultedLocalNames = /* @__PURE__ */ new Map();
@@ -21720,19 +21722,19 @@ ${this.getIden(identation)}}}`;
     try {
       const method = node.parent;
       const index = method.parameters.indexOf(node);
-      let override = this.getMethodOverride(method);
-      if (override === void 0 && JAVA_NATIVE_PARAMETER_PREDICTION_FILES.test(node.getSourceFile().fileName) && method.name !== void 0) {
+      let override2 = this.getMethodOverride(method);
+      if (override2 === void 0 && JAVA_NATIVE_PARAMETER_PREDICTION_FILES.test(node.getSourceFile().fileName) && method.name !== void 0) {
         const tier = this.exchangeTierMethods().get(method.name.getText().trim());
         if (tier !== void 0 && !this.javaParameterPrintsType(tier.parameters?.[index], type)) {
           return void 0;
         }
       }
-      while (override !== void 0) {
-        const baseParam = override.parameters?.[index];
+      while (override2 !== void 0) {
+        const baseParam = override2.parameters?.[index];
         if (!this.javaParameterPrintsType(baseParam, type)) {
           return void 0;
         }
-        override = this.getMethodOverride(override);
+        override2 = this.getMethodOverride(override2);
       }
     } catch (e) {
       return void 0;
@@ -21787,14 +21789,14 @@ ${this.getIden(identation)}}}`;
     if (method === void 0 || index === void 0 || index < 0) {
       return void 0;
     }
-    let override = this.getMethodOverride(method);
-    while (override !== void 0) {
-      const baseParam = override.parameters?.[index];
+    let override2 = this.getMethodOverride(method);
+    while (override2 !== void 0) {
+      const baseParam = override2.parameters?.[index];
       const type = baseParam === void 0 ? void 0 : this.javaNativeParameterTypeOf(baseParam);
       if (type !== void 0) {
         return type;
       }
-      override = this.getMethodOverride(override);
+      override2 = this.getMethodOverride(override2);
     }
     return void 0;
   }
@@ -21816,20 +21818,20 @@ ${this.getIden(identation)}}}`;
     if (index < 0) {
       return void 0;
     }
-    let override;
+    let override2;
     try {
-      override = this.getMethodOverride(method);
+      override2 = this.getMethodOverride(method);
     } catch (e) {
       return void 0;
     }
-    while (override !== void 0) {
-      const baseParam = override.parameters?.[index];
+    while (override2 !== void 0) {
+      const baseParam = override2.parameters?.[index];
       const type = baseParam === void 0 ? void 0 : this.javaOptionalParameterTypeOf(baseParam);
       if (type !== void 0) {
         return type === JAVA_NATIVE_DICT_PARAMETER_TYPE ? type : void 0;
       }
       try {
-        override = this.getMethodOverride(override);
+        override2 = this.getMethodOverride(override2);
       } catch (e) {
         return void 0;
       }
@@ -21856,12 +21858,12 @@ ${this.getIden(identation)}}}`;
     const method = node.parent;
     try {
       const index = method.parameters.indexOf(node);
-      let override = this.getMethodOverride(method);
-      while (override !== void 0) {
-        if (!this.javaOptionalParameterFamilyAgrees(method, override, index, own)) {
+      let override2 = this.getMethodOverride(method);
+      while (override2 !== void 0) {
+        if (!this.javaOptionalParameterFamilyAgrees(method, override2, index, own)) {
           return void 0;
         }
-        override = this.getMethodOverride(override);
+        override2 = this.getMethodOverride(override2);
       }
     } catch (e) {
       return void 0;
@@ -21929,8 +21931,8 @@ ${this.getIden(identation)}}}`;
   }
   // Java overrides are invariant: every ancestor declaration must match the parameter count,
   // the first default-valued index and this position's type, otherwise the position stays Object.
-  javaOptionalParameterFamilyAgrees(method, override, index, type) {
-    const baseParams = override?.parameters;
+  javaOptionalParameterFamilyAgrees(method, override2, index, type) {
+    const baseParams = override2?.parameters;
     if (baseParams === void 0 || baseParams.length !== method.parameters.length) {
       return false;
     }
@@ -22199,6 +22201,73 @@ ${this.getIden(identation)}}}`;
       this.javaReturnTypeCache.set(node, result);
     }
     return result;
+  }
+  // the Java type of a sync `this.<m>(...)` call to a generated venue method, as that method's own
+  // declaration prints it (Map / List only); undefined for every shape this rule does not decide
+  javaVenueCalleeType(node) {
+    if (node === void 0 || node.kind !== SyntaxKind6.CallExpression) {
+      return void 0;
+    }
+    if (this.javaVenueCalleeResults.has(node)) {
+      return this.javaVenueCalleeResults.get(node);
+    }
+    if (this.javaVenueCalleeInProgress.has(node)) {
+      return void 0;
+    }
+    this.javaVenueCalleeInProgress.add(node);
+    try {
+      const decided = this.javaVenueCalleeTypeUncached(node);
+      this.javaVenueCalleeResults.set(node, decided);
+      return decided;
+    } finally {
+      this.javaVenueCalleeInProgress.delete(node);
+    }
+  }
+  javaVenueCalleeTypeUncached(node) {
+    const callee = node.expression;
+    if (callee === void 0 || !isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword && !(isIdentifier2(callee.expression) && callee.expression.text === "super")) {
+      return void 0;
+    }
+    let declaration;
+    for (let attempt = 0; attempt < 2 && declaration === void 0; attempt++) {
+      try {
+        declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+      } catch (e) {
+        declaration = void 0;
+      }
+    }
+    if (declaration === void 0 || declaration.kind !== SyntaxKind6.MethodDeclaration || declaration.body === void 0) {
+      return void 0;
+    }
+    const fileName = (declaration.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    if (!JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName)) {
+      return void 0;
+    }
+    const decided = (printed2) => {
+      const type = typeof printed2 === "string" ? printed2.replace(/\s+/g, "").replace(/^java\.util\./, "") : void 0;
+      return type === "Map<String,Object>" ? JAVA_NATIVE_RETURN_MAP_TYPE : type === "List<Object>" ? JAVA_NATIVE_RETURN_LIST_TYPE : void 0;
+    };
+    let printed;
+    try {
+      printed = this.printFunctionType(declaration);
+    } catch (e) {
+      return void 0;
+    }
+    const direct = decided(printed);
+    if (direct !== void 0) {
+      return { type: direct };
+    }
+    if (printed !== this.DEFAULT_RETURN_TYPE) {
+      return void 0;
+    }
+    let native;
+    try {
+      native = this.javaNativeReturnType(declaration);
+    } catch (e) {
+      return void 0;
+    }
+    const fallback = decided(native);
+    return fallback === void 0 ? void 0 : { type: fallback };
   }
   javaNativeReturnTypeUncached(node) {
     const fileName = node.getSourceFile().fileName;
@@ -23316,8 +23385,19 @@ ${this.getIden(identation)}}}`;
         return this.javaProvableString(node.expression);
       case SyntaxKind6.BinaryExpression:
         return this.javaNativeConcat(node);
+      case SyntaxKind6.CallExpression:
+        if (this.javaPrintsStringCast(node)) {
+          return true;
+        }
     }
     return this.javaResolvedString(node);
+  }
+  // a zero-argument `toLowerCase/toUpperCase/trim/toString` member: the printer emits
+  // `((String)recv).m()` / `String.valueOf(recv)` itself, which javac types String whatever the
+  // receiver was declared as (never null: String.valueOf prints "null")
+  javaPrintsStringCast(node) {
+    const callee = node?.expression;
+    return callee !== void 0 && isPropertyAccessExpression2(callee) && (node.arguments?.length ?? 0) === 0 && ["toLowerCase", "toUpperCase", "trim", "toString"].includes(String(callee.name?.text));
   }
   // the embedding build layer's proof of the concrete printed Java type of an
   // expression (installed like csharpExpressionTypeResolver); only `String` is
@@ -25377,7 +25457,24 @@ ${this.getIden(identation)}}}`;
     return `String.join((String)${parsedArg}, (java.util.List<String>)${name})`;
   }
   printSplitCall(node, _identation, name = void 0, parsedArg = void 0) {
-    return this.javaNativeSplitCall(node, name, parsedArg) ?? `Helpers.split(${name}, ${parsedArg})`;
+    return this.javaNativeSplitCall(node, name, parsedArg) ?? this.javaTypedSplitCall(node, name, parsedArg) ?? `Helpers.split(${name}, ${parsedArg})`;
+  }
+  // `s.split (sep)` where the types print both the receiver and the separator as a plain String
+  javaTypedSplitCall(node, name, parsedArg) {
+    try {
+      const callee = node?.expression;
+      const args = node?.arguments ?? [];
+      if (name === void 0 || parsedArg === void 0 || callee === void 0 || !isPropertyAccessExpression2(callee) || callee.name?.text !== "split" || args.length !== 1) {
+        return void 0;
+      }
+      const receiver = callee.expression;
+      if (receiver === void 0 || this.javaSplitTernaryReceiver(receiver) || this.javaScalarFamily(receiver) !== "string" || this.javaScalarFamily(args[0]) !== "string") {
+        return void 0;
+      }
+      return `${this.ARRAY_OPENING_TOKEN}((String)${name}).split(java.util.regex.Pattern.quote(${parsedArg}))${this.ARRAY_CLOSING_TOKEN}`;
+    } catch (e) {
+      return void 0;
+    }
   }
   printConcatCall(_node, _identation, name = void 0, parsedArg = void 0) {
     return `Helpers.concat(${name}, ${parsedArg})`;
@@ -25411,10 +25508,174 @@ ${this.getIden(identation)}}}`;
     if (nativeCall !== void 0) {
       return nativeCall;
     }
+    const typed = this.javaTypedSliceCall(node, name, parsedArg, parsedArg2, _identation);
+    if (typed !== void 0) {
+      return typed;
+    }
     if (parsedArg2 === void 0) {
       parsedArg2 = "null";
     }
     return `Helpers.slice(${name}, ${parsedArg}, ${parsedArg2})`;
+  }
+  // `x.slice (a, b)` over a receiver the types print as String and bounds that print integral: the
+  // helper's clamp and null -> null stay explicit in the substring. Unproven shapes keep the helper.
+  javaTypedSliceCall(node, name, parsedArg, parsedArg2, identation) {
+    try {
+      return this.javaTypedSliceCallUnchecked(node, name, parsedArg, parsedArg2, identation);
+    } catch (e) {
+      return void 0;
+    }
+  }
+  javaTypedSliceCallUnchecked(node, name, parsedArg, parsedArg2, identation) {
+    const callee = node?.expression;
+    if (name === void 0 || parsedArg === void 0 || callee === void 0 || !isPropertyAccessExpression2(callee) || callee.name?.text !== "slice") {
+      return void 0;
+    }
+    const args = node.arguments ?? [];
+    if (args.length < 1 || args.length > 2 || args.length !== (parsedArg2 === void 0 || parsedArg2 === "null" ? 1 : 2)) {
+      return void 0;
+    }
+    const receiver = callee.expression;
+    if (receiver === void 0 || !this.sideEffectFreeReceiver(receiver) || !this.javaTypedStringPrinted(receiver)) {
+      return void 0;
+    }
+    const printedArgs = [parsedArg, parsedArg2];
+    const bounds = [];
+    for (let i = 0; i < args.length; i++) {
+      if (!this.javaRepeatableBound(args[i])) {
+        return void 0;
+      }
+      const bound = this.javaIntegralBoundText(args[i], printedArgs[i]);
+      if (bound === void 0) {
+        return void 0;
+      }
+      bounds.push(bound);
+    }
+    const recv = this.javaDeclaredStringType(receiver) === true ? name : `((String)${name})`;
+    const length = `${recv}.length()`;
+    const startLiteral = this.javaBoundLiteral(args[0]);
+    const startText = () => {
+      if (startLiteral === 0) {
+        return "0";
+      }
+      if (startLiteral !== void 0) {
+        return startLiteral > 0 ? `Math.min(${startLiteral}, ${length})` : `Math.max(${length} - ${-startLiteral}, 0)`;
+      }
+      const t = bounds[0];
+      return `Math.min(Math.max(${t} < 0 ? ${length} + ${t} : ${t}, 0), ${length})`;
+    };
+    const endText = () => {
+      const value = this.javaBoundLiteral(args[1]);
+      if (value !== void 0 && value >= 0) {
+        return `Math.min(${value}, ${length})`;
+      }
+      if (value !== void 0) {
+        return `${length} - ${-value}`;
+      }
+      const t = bounds[1];
+      return `Math.min(${t} < 0 ? ${length} + ${t} : ${t}, ${length})`;
+    };
+    const open = args.length === 1;
+    const to = open ? length : endText();
+    const from = open ? startText() : startLiteral === 0 ? "0" : `Math.min(${startText()}, ${to})`;
+    const cast = (text) => text === "0" ? "0" : `(int) ${text}`;
+    const full = open ? `(${name} == null ? null : ${recv}.substring(${cast(from)}))` : `(${name} == null ? null : ${recv}.substring(${cast(from)}, (int) ${to}))`;
+    const budget = open ? 200 : Math.max(220, 392 - identation * 4 - 50);
+    return full.length > budget ? void 0 : full;
+  }
+  // the receiver prints as a Java String: a plain TS `string`, a String-declared local, a literal
+  javaTypedStringPrinted(node) {
+    return this.javaScalarFamily(node) === "string" || this.javaProvableString(node) || this.javaDeclaredStringType(node) === true;
+  }
+  // the printed text of this bound appears more than once in the native form
+  javaRepeatableBound(node) {
+    let n = node;
+    while (n !== void 0 && isParenthesizedExpression2(n)) {
+      n = n.expression;
+    }
+    if (n === void 0) {
+      return false;
+    }
+    switch (n.kind) {
+      case SyntaxKind6.Identifier:
+      case SyntaxKind6.PropertyAccessExpression:
+      case SyntaxKind6.ThisKeyword:
+      case SyntaxKind6.NumericLiteral:
+        return true;
+      case SyntaxKind6.PrefixUnaryExpression:
+        return n.operator === SyntaxKind6.MinusToken && this.javaRepeatableBound(n.operand);
+      case SyntaxKind6.BinaryExpression: {
+        const op = n.operatorToken.kind;
+        return (op === SyntaxKind6.PlusToken || op === SyntaxKind6.MinusToken || op === SyntaxKind6.AsteriskToken) && this.javaRepeatableBound(n.left) && this.javaRepeatableBound(n.right);
+      }
+      default:
+        return false;
+    }
+  }
+  // the bound prints as an integral Java number (`+ - Math.min Math.max` and `(int)` compile on it)
+  javaIntegralBoundPrinted(node) {
+    let n = node;
+    while (n !== void 0 && isParenthesizedExpression2(n)) {
+      n = n.expression;
+    }
+    if (n === void 0) {
+      return false;
+    }
+    switch (n.kind) {
+      case SyntaxKind6.NumericLiteral:
+        return !/[.eE]/.test(n.text) && Number(n.text) <= 2147483647;
+      case SyntaxKind6.PrefixUnaryExpression:
+        return n.operator === SyntaxKind6.MinusToken && this.javaIntegralBoundPrinted(n.operand);
+      case SyntaxKind6.PropertyAccessExpression:
+        return n.name?.text === "length" && this.javaScalarFamily(n) === "number";
+      case SyntaxKind6.BinaryExpression: {
+        const op = n.operatorToken.kind;
+        return (op === SyntaxKind6.PlusToken || op === SyntaxKind6.MinusToken || op === SyntaxKind6.AsteriskToken) && this.javaIntegralBoundPrinted(n.left) && this.javaIntegralBoundPrinted(n.right);
+      }
+    }
+    if (n.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    const type = this.javaDeclaredTypeOf(n);
+    return type !== void 0 && ["long", "int", "short", "byte", "Long", "Integer", "Short", "Byte"].includes(type.replace(/^final\s+/, "").trim());
+  }
+  // a bound as the integer the helper's toInt answers: an integral print is its own text, a boxed
+  // number (an `Object` from indexOf, a Double) takes the helper's own intValue truncation
+  javaIntegralBoundText(node, printed) {
+    let n = node;
+    while (n !== void 0 && isParenthesizedExpression2(n)) {
+      n = n.expression;
+    }
+    if (this.javaIntegralBoundPrinted(node)) {
+      const atom = n !== void 0 && (n.kind === SyntaxKind6.Identifier || n.kind === SyntaxKind6.PropertyAccessExpression || n.kind === SyntaxKind6.ThisKeyword || n.kind === SyntaxKind6.NumericLiteral);
+      return atom ? printed : `(${printed})`;
+    }
+    if (n === void 0 || n.kind !== SyntaxKind6.Identifier || this.javaScalarFamily(n) !== "number") {
+      return void 0;
+    }
+    const type = this.javaDeclaredTypeOf(n);
+    if (type === void 0 || !["Object", "Double", "Float", "Number"].includes(type.replace(/^final\s+/, "").trim())) {
+      return void 0;
+    }
+    return `((Number)${printed}).intValue()`;
+  }
+  // the integer value of a literal bound (`18`, `-64`), or undefined
+  javaBoundLiteral(node) {
+    let n = node;
+    while (n !== void 0 && isParenthesizedExpression2(n)) {
+      n = n.expression;
+    }
+    if (n === void 0) {
+      return void 0;
+    }
+    if (n.kind === SyntaxKind6.NumericLiteral && !/[.eE]/.test(n.text)) {
+      return Number(n.text);
+    }
+    if (n.kind === SyntaxKind6.PrefixUnaryExpression && n.operator === SyntaxKind6.MinusToken) {
+      const inner = this.javaBoundLiteral(n.operand);
+      return inner === void 0 ? void 0 : -inner;
+    }
+    return void 0;
   }
   // Integer value of a slice bound that is an integer literal (`18`, `-64`); anything else keeps
   // the helper — the Java helper converts bounds with toInt, and a double cannot be clamped with the
@@ -26186,7 +26447,108 @@ ${this.getIden(identation)}}}`;
     if (callKind === "nullableBoolean") {
       return this.getIden(identation) + `Boolean.TRUE.equals(${this.printNode(node, 0)})`;
     }
-    return super.printCondition(node, identation);
+    const printed = super.printCondition(node, identation);
+    return this.javaBooleanParameterCondition(node, printed) ?? printed;
+  }
+  // `Helpers.isTrue(p)` over a never-written `boolean` / `Bool` method parameter: its typed callers
+  // fill a Boolean-or-null box, so the null-safe TRUE test is exactly the helper's answer
+  javaBooleanParameterCondition(node, printed) {
+    if (typeof printed !== "string" || !printed.includes(this.FALSY_WRAPPER_OPEN)) {
+      return void 0;
+    }
+    const operand = this.javaFalsyWrapperOperand(printed.trim());
+    if (operand === void 0) {
+      return void 0;
+    }
+    let inner = node;
+    while (inner?.kind === SyntaxKind6.ParenthesizedExpression) {
+      inner = inner.expression;
+    }
+    if (inner?.kind !== SyntaxKind6.Identifier) {
+      return void 0;
+    }
+    let declaration;
+    try {
+      declaration = this.checkerOrUndefined()?.getSymbolAtLocation(inner)?.valueDeclaration?.resolve();
+    } catch (e) {
+      return void 0;
+    }
+    if (declaration?.kind !== SyntaxKind6.Parameter || declaration.parent?.kind !== SyntaxKind6.MethodDeclaration || this.javaParameterIsWritten(declaration) || !this.javaBooleanishType(inner)) {
+      return void 0;
+    }
+    const parameter = this.javaBooleanParameterOperand(operand);
+    if (parameter === void 0) {
+      return void 0;
+    }
+    const iden = printed.slice(0, printed.length - printed.trimStart().length);
+    return `${iden}Boolean.TRUE.equals(${parameter})`;
+  }
+  // the operand of a printed `Helpers.isTrue(<operand>)` that spans the whole text, else undefined
+  javaFalsyWrapperOperand(text) {
+    if (!text.startsWith(this.FALSY_WRAPPER_OPEN) || !text.endsWith(")")) {
+      return void 0;
+    }
+    const open = this.FALSY_WRAPPER_OPEN.length - 1;
+    return this.javaMatchingParen(text, open) === text.length - 1 ? text.slice(open + 1, -1) : void 0;
+  }
+  // index of the `)` closing the `(` at `open` (string literals skipped), or -1
+  javaMatchingParen(text, open) {
+    let depth = 0;
+    for (let i = open; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '"') {
+        i++;
+        while (i < text.length && text[i] !== '"') {
+          if (text[i] === "\\") {
+            i++;
+          }
+          i++;
+        }
+        continue;
+      }
+      if (ch === "(") {
+        depth++;
+      } else if (ch === ")") {
+        depth--;
+        if (depth === 0) {
+          return i;
+        }
+      }
+    }
+    return -1;
+  }
+  // a parameter read the printer prints bare (`p`) or through its default (`requireNonNullElse (p, lit)`)
+  javaBooleanParameterOperand(printed) {
+    let text = printed.trim();
+    while (text.startsWith("(") && text.endsWith(")") && this.javaMatchingParen(text, 0) === text.length - 1) {
+      text = text.slice(1, -1).trim();
+    }
+    if (/^[A-Za-z_$][\w$]*$/.test(text) || /^java\.util\.Objects\.requireNonNullElse\([A-Za-z_$][\w$]*, (?:true|false)\)$/.test(text)) {
+      return text;
+    }
+    return void 0;
+  }
+  // plain `boolean`, or a union of boolean and nullish members only (`Bool`)
+  javaBooleanishType(node) {
+    let type;
+    try {
+      type = this.getChecker().getTypeAtLocation(node);
+    } catch (e) {
+      return false;
+    }
+    if (type === void 0 || type === null) {
+      return false;
+    }
+    const booleanish = (t) => (t.flags & (TypeFlags5.Boolean | TypeFlags5.BooleanLiteral)) !== 0;
+    const nullish = (t) => (t.flags & (TypeFlags5.Undefined | TypeFlags5.Null | TypeFlags5.Void)) !== 0;
+    if (booleanish(type)) {
+      return true;
+    }
+    if ((type.flags & TypeFlags5.Union) === 0) {
+      return false;
+    }
+    const parts = type.getTypes?.() ?? [];
+    return parts.length > 0 && parts.some(booleanish) && parts.every((t) => booleanish(t) || nullish(t));
   }
   printConditionalExpression(node, _identation) {
     const condition = this.printCondition(node.condition, 0);
@@ -27892,8 +28254,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  annotation proves a plain dict and whose writes keep that shape. The
    *  returned flag is the *by-construction* plainness (literal-init locals,
    *  handler tuples, hand-written plain fields) that a book-meta key needs. */
-  rustInsertIdentifierReceiver(ident) {
-    const declaration = this.rustSingleLocalDeclaration(ident);
+  rustInsertIdentifierReceiver(ident3) {
+    const declaration = this.rustSingleLocalDeclaration(ident3);
     if (declaration !== void 0 && isParameterDeclaration3(declaration)) {
       if (this.rustParamStaysPlainDict(declaration) || declaration.initializer !== void 0) {
         return false;
@@ -27902,11 +28264,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (this.rustInsertReceiverBuildsPlainDict(declaration)) {
         return true;
       }
-      if (this.rustDeclaredLocalEntry(ident) !== void 0 && this.rustDeclaredInitIsTagFree(declaration)) {
+      if (this.rustDeclaredLocalEntry(ident3) !== void 0 && this.rustDeclaredInitIsTagFree(declaration)) {
         return false;
       }
     }
-    if (_RustTranspiler.RUST_NATIVE_INSERT_RECEIVERS.has(ident.text)) {
+    if (_RustTranspiler.RUST_NATIVE_INSERT_RECEIVERS.has(ident3.text)) {
       return false;
     }
     return void 0;
@@ -27927,8 +28289,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** The local's single declaration is initialised from a call that reads
    *  `x.hashmap` / `x.subscriptions` / `x.futures` — element dicts the runtime
    *  tags with a backref so writes reach the shared store, not the COW copy. */
-  rustLocalInitReadsTaggedContainer(ident) {
-    const declaration = this.rustSingleLocalDeclaration(ident);
+  rustLocalInitReadsTaggedContainer(ident3) {
+    const declaration = this.rustSingleLocalDeclaration(ident3);
     if (declaration === void 0 || !isVariableDeclaration3(declaration)) {
       return false;
     }
@@ -27997,12 +28359,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** The single variable declaration a local identifier binds to, or
    *  undefined when the checker cannot answer / the binding is not a local. */
-  rustSingleLocalDeclaration(ident) {
+  rustSingleLocalDeclaration(ident3) {
     const checker = this.checkerOrUndefined();
     if (checker === void 0) {
       return void 0;
     }
-    const declarations = symbolDeclarations(checker.getSymbolAtLocation(ident));
+    const declarations = symbolDeclarations(checker.getSymbolAtLocation(ident3));
     const declaration = declarations.length === 1 ? declarations[0] : void 0;
     return declaration !== void 0 && (isVariableDeclaration3(declaration) || isParameterDeclaration3(declaration)) ? declaration : void 0;
   }
@@ -28032,24 +28394,24 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (receiver.isField) {
       return this.rustFieldStaysDict(baseExpr, receiver.nameNode.text);
     }
-    const ident = baseExpr;
-    const declaration = this.rustSingleLocalDeclaration(ident);
+    const ident3 = baseExpr;
+    const declaration = this.rustSingleLocalDeclaration(ident3);
     if (declaration === void 0) {
       return false;
     }
-    if (this.rustDeclaredLocalEntry(ident) !== void 0) {
+    if (this.rustDeclaredLocalEntry(ident3) !== void 0) {
       return true;
     }
     if (isParameterDeclaration3(declaration) && this.rustParamStaysPlainDict(declaration)) {
       return true;
     }
-    const name = ident.text;
+    const name = ident3.text;
     const initializer = declaration.initializer;
     const scope = this.rustEnclosingFunction(declaration);
     if (initializer === void 0 || isElementAccessExpression4(initializer) || declaration.name?.kind !== SyntaxKind7.Identifier || scope === void 0) {
       return false;
     }
-    let safe = this.rustWriteDictShape(this.typeOfNodeIfAny(ident)) && this.rustWriteDictShape(this.typeOfNodeIfAny(initializer));
+    let safe = this.rustWriteDictShape(this.typeOfNodeIfAny(ident3)) && this.rustWriteDictShape(this.typeOfNodeIfAny(initializer));
     this.rustWalkScope(scope, (n) => {
       if (n !== declaration && this.rustBindsName(n, name)) {
         safe = false;
@@ -31522,24 +31884,24 @@ ${iden}}`;
    *  whose declaration and every write is a plain-dict source or nullish. A
    *  nullish value leaves a non-Dict, which `if let Value::Dict` no-ops on
    *  exactly like the helper's `_ => {}` arm. */
-  rustR01LocalStaysPlain(ident, depth = 0) {
+  rustR01LocalStaysPlain(ident3, depth = 0) {
     const checker = this.checkerOrUndefined();
-    const declarations = checker === void 0 ? [] : symbolDeclarations(checker.getSymbolAtLocation(ident));
+    const declarations = checker === void 0 ? [] : symbolDeclarations(checker.getSymbolAtLocation(ident3));
     const declaration = declarations.length === 1 ? declarations[0] : void 0;
     if (declaration === void 0 || depth > 4) {
       return false;
     }
     if (declaration.kind === SyntaxKind7.BindingElement) {
-      return this.rustR01TupleBindingStaysPlain(ident, declaration, depth);
+      return this.rustR01TupleBindingStaysPlain(ident3, declaration, depth);
     }
     if (!isVariableDeclaration3(declaration) || declaration.name?.kind !== SyntaxKind7.Identifier) {
       return false;
     }
     const scope = this.rustEnclosingFunction(declaration);
-    if (scope === void 0 || isSourceFile5(scope) || this.rustEnclosingFunction(ident) !== scope) {
+    if (scope === void 0 || isSourceFile5(scope) || this.rustEnclosingFunction(ident3) !== scope) {
       return false;
     }
-    const name = String(ident.text);
+    const name = String(ident3.text);
     const symbol = this.rustSymbolOf(declaration.name);
     if (symbol === void 0) {
       return false;
@@ -31573,7 +31935,7 @@ ${iden}}`;
   }
   /** `const [ x, p ] = this.handleUntilOption (k, r, …)` with `r` itself a
    *  plain local: element 0 is `r` handed back, and `x` is never re-written. */
-  rustR01TupleBindingStaysPlain(ident, element, depth) {
+  rustR01TupleBindingStaysPlain(ident3, element, depth) {
     const pattern = element.parent;
     const declaration = pattern?.parent;
     if (pattern?.kind !== SyntaxKind7.ArrayBindingPattern || declaration === void 0 || !isVariableDeclaration3(declaration) || ![0, 1].includes(pattern.elements.indexOf(element)) || element.name?.kind !== SyntaxKind7.Identifier || element.initializer !== void 0 || element.dotDotDotToken !== void 0) {
@@ -31583,9 +31945,9 @@ ${iden}}`;
       return false;
     }
     const scope = this.rustEnclosingFunction(declaration);
-    const name = String(ident.text);
+    const name = String(ident3.text);
     const symbol = this.rustSymbolOf(element.name);
-    if (scope === void 0 || symbol === void 0 || this.rustEnclosingFunction(ident) !== scope) {
+    if (scope === void 0 || symbol === void 0 || this.rustEnclosingFunction(ident3) !== scope) {
       return false;
     }
     for (const node of this.rustScopeNameNodes(scope, name)) {
@@ -31597,8 +31959,8 @@ ${iden}}`;
     return true;
   }
   /** The shipped construction proof (literal-built local / handler tuple), read-only. */
-  rustR01ShippedPlain(ident) {
-    const declaration = this.rustSingleLocalDeclaration(ident);
+  rustR01ShippedPlain(ident3) {
+    const declaration = this.rustSingleLocalDeclaration(ident3);
     return declaration !== void 0 && isVariableDeclaration3(declaration) && this.rustInsertReceiverBuildsPlainDict(declaration);
   }
   /** A use of the local: reads and element writes keep the box; a direct
@@ -31758,8 +32120,8 @@ ${iden}}`;
     const field = this.rustProvenDictThisField(node.expression);
     if (field === void 0)
       return false;
-    const fieldType = this.getCheckedTypeOf(field.type);
-    const parts = fieldType.flags & TypeFlags6.Union ? (typeParts(fieldType) ?? []).filter((p) => !this.rustTypeIsNullish(p)) : [fieldType];
+    const fieldType2 = this.getCheckedTypeOf(field.type);
+    const parts = fieldType2.flags & TypeFlags6.Union ? (typeParts(fieldType2) ?? []).filter((p) => !this.rustTypeIsNullish(p)) : [fieldType2];
     return parts.length === 1 && this.isProvenMapType(this.getChecker().getIndexTypeOfType(parts[0], IndexKind4.String));
   }
   /** `this.<field>[k]` with a proven-dict field and a proven string key place. */
@@ -33662,11 +34024,11 @@ ${this.getIden(identation)}}`;
   }
   /** A local whose declaration and every write store a bool value. Locals the printer or
    *  ccxt's narrowBoolLocals may declare `bool` (bool-expression initializer) are left out. */
-  rustR12BoolLocal(ident, depth) {
+  rustR12BoolLocal(ident3, depth) {
     const checker = this.checkerOrUndefined();
     if (depth > 5)
       return false;
-    const declarations = checker === void 0 ? [] : symbolDeclarations(checker.getSymbolAtLocation(ident));
+    const declarations = checker === void 0 ? [] : symbolDeclarations(checker.getSymbolAtLocation(ident3));
     const declaration = declarations.length === 1 ? declarations[0] : void 0;
     if (declaration === void 0)
       return false;
@@ -34049,13 +34411,13 @@ ${this.getIden(identation)}}`;
     declaration.body.forEachChild(visit);
     return this.rustR16Combine(kinds) === void 0 ? void 0 : "number";
   }
-  rustR16IdentifierKind(ident, depth) {
-    if (this.rustParamShadowOf(ident) !== void 0 || !this.printsValueExpression(ident))
+  rustR16IdentifierKind(ident3, depth) {
+    if (this.rustParamShadowOf(ident3) !== void 0 || !this.printsValueExpression(ident3))
       return void 0;
-    const declaration = this.rustSingleLocalDeclaration(ident);
+    const declaration = this.rustSingleLocalDeclaration(ident3);
     if (declaration === void 0 || declaration.name?.kind !== SyntaxKind7.Identifier)
       return void 0;
-    const here = this.typeOfNodeIfAny(ident);
+    const here = this.typeOfNodeIfAny(ident3);
     const declared = this.typeOfNodeIfAny(declaration.name);
     if (here !== void 0 && declared !== void 0 && (here.flags === TypeFlags6.Number || here.flags === TypeFlags6.NumberLiteral) && declared.flags & TypeFlags6.Union && (typeParts(declared) ?? []).some((t) => t.flags & (TypeFlags6.Undefined | TypeFlags6.Null)) && !this.rustR16HasWrites(declaration)) {
       return "definite";
@@ -34249,14 +34611,14 @@ ${this.getIden(identation)}}`;
   }
   /** A local whose every write (declaration included) is an `r18ArrSource`, never captured by
    *  a closure: its `Value` is a plain `Value::Arr` (the runtime never tags an array). */
-  r18ArrLocal(ident, allowNull) {
-    if (ident === void 0 || !isIdentifier3(ident) || this.rustParamShadowOf(ident) !== void 0 || this.r05IsTest(ident))
+  r18ArrLocal(ident3, allowNull) {
+    if (ident3 === void 0 || !isIdentifier3(ident3) || this.rustParamShadowOf(ident3) !== void 0 || this.r05IsTest(ident3))
       return false;
-    const declaration = this.rustSingleLocalDeclaration(ident);
+    const declaration = this.rustSingleLocalDeclaration(ident3);
     if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name) || !this.r18ArrSource(declaration.initializer, allowNull))
       return false;
     const scope = this.rustEnclosingFunction(declaration);
-    if (scope === void 0 || isSourceFile5(scope) || this.rustEnclosingFunction(ident) !== scope)
+    if (scope === void 0 || isSourceFile5(scope) || this.rustEnclosingFunction(ident3) !== scope)
       return false;
     const name = String(declaration.name.text);
     const symbol = this.rustSymbolOf(declaration.name);
@@ -34289,10 +34651,10 @@ ${this.getIden(identation)}}`;
   }
   /** `x[i]` on an Arr-only local, except the initializer shapes ccxt's `hx10w2-R01`
    *  post-pass already retypes to `Vec<Value>`/native reads (it owns those). */
-  r18ArrReadLocal(ident) {
-    if (!this.r18ArrLocal(ident, true))
+  r18ArrReadLocal(ident3) {
+    if (!this.r18ArrLocal(ident3, true))
       return false;
-    const declaration = this.rustSingleLocalDeclaration(ident);
+    const declaration = this.rustSingleLocalDeclaration(ident3);
     const initializer = declaration?.initializer;
     if (initializer === void 0)
       return false;
@@ -34339,10 +34701,10 @@ ${this.getIden(identation)}}`;
   }
   /** A `Value` local whose single declaration is an element read of a local typed as a
    *  plain `IndexMap<String, Value>`: plain data all the way down, never a book handle. */
-  r18BearerReadLocal(ident) {
-    if (ident === void 0 || !isIdentifier3(ident))
+  r18BearerReadLocal(ident3) {
+    if (ident3 === void 0 || !isIdentifier3(ident3))
       return false;
-    const declaration = this.rustSingleLocalDeclaration(ident);
+    const declaration = this.rustSingleLocalDeclaration(ident3);
     const init = this.rustSkipWrappers(declaration?.initializer);
     if (declaration === void 0 || !isVariableDeclaration3(declaration) || init === void 0)
       return false;
@@ -34445,15 +34807,15 @@ ${this.getIden(identation)}}`;
     }
     return isIdentifier3(n) && String(n.text) !== "undefined" && this.r21ArrAlias(n);
   }
-  r21ArrAlias(ident) {
-    const declaration = this.rustSingleLocalDeclaration(ident);
+  r21ArrAlias(ident3) {
+    const declaration = this.rustSingleLocalDeclaration(ident3);
     if (declaration === void 0 || !isVariableDeclaration3(declaration))
       return false;
     if (this.r21ArrVisiting.has(declaration))
       return true;
     this.r21ArrVisiting.add(declaration);
     try {
-      return this.r18ArrLocal(ident, false);
+      return this.r18ArrLocal(ident3, false);
     } finally {
       this.r21ArrVisiting.delete(declaration);
     }
@@ -34478,10 +34840,10 @@ ${this.getIden(identation)}}`;
   }
   /** A plain `Value` local, never captured by a closure, whose every write is always-Str (`x += e`
    *  keeps it), or Str|Null (R13 source / nullish) when the checker narrows this read to `string`. */
-  r22AlwaysStrLocal(ident, allowNull = false) {
-    if (this.rustParamShadowOf(ident) !== void 0 || this.rustStringLocalIdentifierIsTyped(ident) || this.rustVecLocalDeclarationOf(ident) !== void 0)
+  r22AlwaysStrLocal(ident3, allowNull = false) {
+    if (this.rustParamShadowOf(ident3) !== void 0 || this.rustStringLocalIdentifierIsTyped(ident3) || this.rustVecLocalDeclarationOf(ident3) !== void 0)
       return false;
-    const declaration = this.rustSingleLocalDeclaration(ident);
+    const declaration = this.rustSingleLocalDeclaration(ident3);
     if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name) || declaration.initializer === void 0)
       return false;
     if (this.r22StrVisiting.has(declaration))
@@ -34489,7 +34851,7 @@ ${this.getIden(identation)}}`;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0)
       return false;
-    const here = this.typeOfNodeIfAny(ident);
+    const here = this.typeOfNodeIfAny(ident3);
     const narrowed = allowNull || here !== void 0 && this.isStringLikeType(here);
     const nullish = (e) => {
       const n = this.unwrapParensNode(e);
@@ -34558,12 +34920,12 @@ ${this.getIden(identation)}}`;
   // also hold in the base tier and pro files, where a tagged handle can only arrive through a
   // parameter: base admits typed plain-dict parameters, pro admits no parameter at all.
   r23Tier(node) {
-    const path3 = this.r05Path(node);
-    if (_RustTranspiler.RUST_R12_REST_FILE.test(path3) && /\/ts\/src\/[^/]+\.ts$/.test(path3))
+    const path12 = this.r05Path(node);
+    if (_RustTranspiler.RUST_R12_REST_FILE.test(path12) && /\/ts\/src\/[^/]+\.ts$/.test(path12))
       return "rest";
-    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(path3) && !/\/base\/ws\//.test(path3))
+    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(path12) && !/\/base\/ws\//.test(path12))
       return "base";
-    if (/\/ts\/src\/pro\/[^/]+\.ts$/.test(path3))
+    if (/\/ts\/src\/pro\/[^/]+\.ts$/.test(path12))
       return "pro";
     return void 0;
   }
@@ -35742,6 +36104,5951 @@ var CppTranspiler = class extends BaseTranspiler {
   }
 };
 
+// src/java/hx10w2-J01.ts
+init_esm_shims();
+import fs3 from "fs";
+import path3 from "path";
+
+// src/java/javaRuntimeRoot.ts
+init_esm_shims();
+import fs2 from "fs";
+import path2 from "path";
+var RUNTIME_SEGMENTS = ["java", "lib", "src", "main", "java", "io", "github", "ccxt"];
+var override;
+var resolvedKey;
+var resolvedRoot;
+var lastRoot;
+var resets = [];
+function onJavaRuntimeRootChange(reset) {
+  resets.push(reset);
+}
+function setJavaRuntimeRoot(p) {
+  override = p;
+}
+function resolveRoot(cwd) {
+  if (override !== void 0 && override !== "")
+    return override;
+  const env = process.env.CCXT_JAVA_RUNTIME_ROOT;
+  if (env !== void 0 && env !== "")
+    return env;
+  const direct = path2.join(cwd, ...RUNTIME_SEGMENTS);
+  if (fs2.existsSync(direct))
+    return direct;
+  let dir = cwd;
+  for (; ; ) {
+    const candidate = path2.join(dir, ...RUNTIME_SEGMENTS);
+    if (fs2.existsSync(candidate))
+      return candidate;
+    const parent = path2.dirname(dir);
+    if (parent === dir)
+      break;
+    dir = parent;
+  }
+  return direct;
+}
+function javaRuntimeRoot() {
+  const cwd = process.cwd();
+  const key = [override ?? "", process.env.CCXT_JAVA_RUNTIME_ROOT ?? "", cwd].join("\0");
+  if (key !== resolvedKey || resolvedRoot === void 0) {
+    resolvedKey = key;
+    resolvedRoot = resolveRoot(cwd);
+  }
+  if (lastRoot !== void 0 && lastRoot !== resolvedRoot) {
+    for (const reset of resets)
+      reset();
+  }
+  lastRoot = resolvedRoot;
+  return resolvedRoot;
+}
+
+// src/java/hx10w2-J01.ts
+function JAVA_ROOT() {
+  return javaRuntimeRoot();
+}
+function HEADER_FILES() {
+  return ["BaseExchange.java", "Exchange.java", "PredictionExchange.java"].map((f) => path3.join(JAVA_ROOT(), f));
+}
+var HEADER_DELIM = "// METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT";
+var MAP_TYPE = /^(?:java\.util\.)?(?:Map|HashMap|LinkedHashMap|ConcurrentHashMap|TreeMap|AbstractMap)\s*<\s*String\s*,\s*Object\s*>$/;
+var LIST_TYPE = /^(?:java\.util\.)?(?:List|ArrayList|LinkedList)\s*<\s*Object\s*>$/;
+var DECL_STOP = ["return", "new", "else", "case", "throw", "instanceof", "yield", "assert"];
+var normType = (t) => t.replace(/^java\.util\./, "").replace(/\s+/g, " ").trim();
+function mapValueKind(rhs) {
+  const e = rhs.trim();
+  if (/^new\s+(?:java\.util\.concurrent\.)?Concurrent(?:HashMap|SkipListMap)\b/.test(e))
+    return "concurrent";
+  if (/^new\s+(?:java\.util\.)?(?:Linked)?HashMap\b/.test(e))
+    return "plain";
+  if (/^Helpers\.newMap\s*\(/.test(e))
+    return "plain";
+  if (/^this\.createSafeDictionary\s*\(\s*true\s*\)/.test(e))
+    return "concurrent";
+  if (/^this\.createSafeDictionary\s*\(\s*\)/.test(e))
+    return "plain";
+  if (/^this\.extend\s*\(/.test(e))
+    return "plain";
+  if (/^this\.mapToSafeMap\s*\(/.test(e))
+    return "map";
+  if (/^this\.convertToSafeDictionary\s*\(/.test(e))
+    return "map";
+  return "other";
+}
+function closeOf(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let closed = false;
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (text[j] === c) {
+          i = j;
+          closed = true;
+          break;
+        }
+      }
+      if (!closed)
+        return -1;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      if (--depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function lineEnd(text, at) {
+  let depth = 0;
+  for (let i = at; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let closed = false;
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (text[j] === c) {
+          i = j;
+          closed = true;
+          break;
+        }
+      }
+      if (!closed)
+        return -1;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === ";" && depth === 0)
+      return i;
+    else if (c === "\n")
+      return -1;
+  }
+  return -1;
+}
+function splitArgs(text) {
+  const out = [];
+  let depth = 0, at = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let closed = false;
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (text[j] === c) {
+          i = j;
+          closed = true;
+          break;
+        }
+      }
+      if (!closed)
+        return void 0;
+      continue;
+    }
+    if (c === "<" && /[\w]/.test(text[i - 1] ?? "")) {
+      const g = /^<[\w.?,\s<>]*>/.exec(text.slice(i));
+      if (g !== null) {
+        i += g[0].length - 1;
+        continue;
+      }
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      out.push(text.slice(at, i).trim());
+      at = i + 1;
+    }
+  }
+  if (depth !== 0)
+    return void 0;
+  out.push(text.slice(at).trim());
+  return out;
+}
+function unparen(e) {
+  let t = e.trim();
+  for (; ; ) {
+    if (!t.startsWith("("))
+      return t;
+    const close = closeOf(t, 0);
+    if (close !== t.length - 1)
+      return t;
+    t = t.slice(1, -1).trim();
+  }
+}
+var ident = (e) => /^[A-Za-z_]\w*$/.test(e) && !/^(?:this|null|true|false|new)$/.test(e);
+var strLit = (e) => /^"(?:[^"\\]|\\.)*"$/.test(e);
+var stringCast = (e) => /^\(\(String\)\s*[A-Za-z_]\w*\s*\)$/.test(e);
+var intLit = (e) => /^\d+$/.test(e);
+var fieldRef = (e) => /^this\.([A-Za-z_]\w*)$/.exec(e);
+function declaredType(member, name) {
+  const re = new RegExp(`(?:^|[\\s(,])((?:final )?[\\w.]+(?:<[\\w.?]+(?:<[\\w.?, ]*>)?(?:, [\\w.?]+(?:<[\\w.?, ]*>)?)*>)?) ${name}(?=\\s*(?:=(?!=)|[,);:]))`, "gm");
+  const types = /* @__PURE__ */ new Set();
+  for (const m of member.matchAll(re)) {
+    const t = m[1].replace(/^final /, "");
+    if (DECL_STOP.includes(t))
+      continue;
+    types.add(t);
+  }
+  const shadowed = new RegExp(`(?:\\(|, )${name}\\) ->|(?<![\\w.])${name} ->`).test(member);
+  return !shadowed && types.size === 1 ? [...types][0] : void 0;
+}
+function isParam(member, name) {
+  const nl = member.indexOf("\n");
+  const sig = (nl === -1 ? member : member.slice(0, nl)).replace(/\{.*$/, "");
+  return new RegExp(`[(,]\\s*(?:final\\s+)?[\\w.<>, ?\\[\\]]+ ${name}\\s*[,)]`).test(sig);
+}
+function listLiteralLength(rhs) {
+  const head = /^(?:new (?:java\.util\.)?ArrayList<Object>\s*\(\s*)?(?:java\.util\.)?Arrays\.asList\s*\(/.exec(rhs);
+  if (head === null)
+    return -1;
+  const close = closeOf(rhs, head[0].length - 1);
+  if (close === -1)
+    return -1;
+  const inner = rhs.slice(head[0].length, close).trim();
+  const args = inner === "" ? [] : splitArgs(inner);
+  return args === void 0 ? -1 : args.length;
+}
+var fieldFactsCache;
+var overrideNames;
+function headerOf(file) {
+  try {
+    return fs3.readFileSync(file, "utf8").split(HEADER_DELIM)[0];
+  } catch (e) {
+    return "";
+  }
+}
+function j01FieldFacts() {
+  if (fieldFactsCache !== void 0)
+    return fieldFactsCache;
+  const declared = /* @__PURE__ */ new Map();
+  const init = /* @__PURE__ */ new Map();
+  for (const file of HEADER_FILES()) {
+    const header = headerOf(file);
+    if (header === "")
+      continue;
+    const field = /^ {4}(?:public |protected |private )?(?:volatile |static |final |transient )*([\w.<>, ?]+?) (\w+)\s*(?:=\s*([^;\n]*))?;/gm;
+    for (const m of header.matchAll(field)) {
+      const type = normType(m[1]);
+      if (DECL_STOP.includes(type))
+        continue;
+      declared.set(m[2], declared.has(m[2]) && declared.get(m[2]) !== type ? void 0 : type);
+      if (m[3] !== void 0)
+        init.set(m[2], m[3]);
+    }
+  }
+  const kinds = /* @__PURE__ */ new Map();
+  const nulls = /* @__PURE__ */ new Set();
+  const overrides2 = /* @__PURE__ */ new Set();
+  overrideNames = overrides2;
+  const walk = (dir) => {
+    let names = [];
+    try {
+      names = fs3.readdirSync(dir);
+    } catch (e) {
+      return;
+    }
+    for (const name of names) {
+      const full = path3.join(dir, name);
+      let stat;
+      try {
+        stat = fs3.statSync(full);
+      } catch (e) {
+        continue;
+      }
+      if (stat.isDirectory()) {
+        if (full !== path3.join(JAVA_ROOT(), "types"))
+          walk(full);
+        continue;
+      }
+      if (!name.endsWith(".java"))
+        continue;
+      let text = "";
+      try {
+        text = fs3.readFileSync(full, "utf8");
+      } catch (e) {
+        continue;
+      }
+      if (!HEADER_FILES().includes(full)) {
+        for (const m of text.matchAll(/^ {4}(?:public|protected|private)[\w<>\[\], .]*\s(\w+)\s*\(/gm))
+          overrides2.add(m[1]);
+      }
+      for (const m of text.matchAll(/(?<![\w.])this\.(\w+)\s*=\s*(?!=)/g)) {
+        if (!declared.has(m[1]))
+          continue;
+        const at = m.index + m[0].length;
+        const end = lineEnd(text, at);
+        const rhs = end === -1 ? "" : text.slice(at, end).trim();
+        if (rhs === "null")
+          nulls.add(m[1]);
+        const list = kinds.get(m[1]) ?? [];
+        list.push(end === -1 ? "other" : mapValueKind(rhs));
+        kinds.set(m[1], list);
+      }
+    }
+  };
+  walk(JAVA_ROOT());
+  fieldFactsCache = /* @__PURE__ */ new Map();
+  for (const [name, type] of declared) {
+    if (type === void 0)
+      continue;
+    const writes = kinds.get(name) ?? [];
+    const initKind = init.has(name) ? mapValueKind(init.get(name)) : void 0;
+    const all = initKind === void 0 ? writes : [initKind, ...writes];
+    if (init.has(name) && init.get(name).trim() === "null")
+      nulls.add(name);
+    fieldFactsCache.set(name, {
+      declaredMap: MAP_TYPE.test(type),
+      declaredList: LIST_TYPE.test(type),
+      plain: all.length > 0 && all.every((k) => k === "plain"),
+      allMapNonNull: all.length > 0 && all.every((k) => k === "plain" || k === "concurrent" || k === "map"),
+      nullable: nulls.has(name)
+    });
+  }
+  return fieldFactsCache;
+}
+var baseMethodCache;
+function baseMethodNonNull(name) {
+  if (baseMethodCache === void 0)
+    baseMethodCache = /* @__PURE__ */ new Map();
+  const cached = baseMethodCache.get(name);
+  if (cached !== void 0)
+    return cached;
+  baseMethodCache.set(name, false);
+  j01FieldFacts();
+  if (overrideNames !== void 0 && overrideNames.has(name))
+    return false;
+  let result = false;
+  for (const file of HEADER_FILES()) {
+    const header = headerOf(file);
+    if (header === "")
+      continue;
+    for (const m of header.matchAll(new RegExp(`(?:public|protected|private)[\\w<>\\[\\], .]*\\s${name}\\s*\\(`, "g"))) {
+      const sigClose = closeOf(header, header.indexOf("(", m.index + m[0].length - 1));
+      if (sigClose === -1)
+        continue;
+      const bodyOpen = header.indexOf("{", sigClose);
+      if (bodyOpen === -1)
+        continue;
+      const bodyClose = closeOf(header, bodyOpen);
+      if (bodyClose === -1)
+        continue;
+      const body = header.slice(bodyOpen, bodyClose);
+      const returns = [...body.matchAll(/(?<![\w.])return\s+([^;]+);/g)].map((r) => r[1].trim());
+      result = returns.length > 0 && returns.every((r) => nonNullValue(void 0, r, 0));
+      if (result)
+        break;
+    }
+    if (result)
+      break;
+  }
+  baseMethodCache.set(name, result);
+  return result;
+}
+var localFactsCache = /* @__PURE__ */ new Map();
+function localFacts(member, name) {
+  const key = `${name}\0${member}`;
+  if (localFactsCache.has(key))
+    return localFactsCache.get(key);
+  localFactsCache.set(key, void 0);
+  let facts;
+  const decl = declaredType(member, name);
+  if (decl !== void 0 && !isParam(member, name)) {
+    const kinds = [];
+    const lists = [];
+    let ok = true;
+    for (const m of member.matchAll(new RegExp(`(?<![\\w.])${name}\\s*(=(?!=)|[+\\-*/]?=|\\+\\+|--)`, "g"))) {
+      if (m[1] !== "=") {
+        ok = false;
+        break;
+      }
+      const at = m.index + m[0].length;
+      const end = lineEnd(member, at);
+      if (end === -1) {
+        ok = false;
+        break;
+      }
+      const rhs = member.slice(at, end).trim();
+      kinds.push(mapValueKind(rhs));
+      lists.push(listLiteralLength(rhs));
+    }
+    if (ok && kinds.length > 0 && !new RegExp(`(?<![\\w.])${name}\\s*(?:\\+\\+|--)`).test(member)) {
+      const type = normType(decl);
+      const len = lists.every((n) => n === lists[0]) ? lists[0] : -1;
+      if (LIST_TYPE.test(type)) {
+        facts = { plain: false, allMapNonNull: false, listLen: len > 0 ? len : void 0 };
+      } else {
+        facts = {
+          plain: kinds.every((k) => k === "plain"),
+          allMapNonNull: kinds.every((k) => k === "plain" || k === "concurrent" || k === "map"),
+          listLen: void 0
+        };
+      }
+    }
+  }
+  localFactsCache.set(key, facts);
+  return facts;
+}
+function nonNullValue(member, value, depth) {
+  const v = unparen(value);
+  if (/^(?:"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?[LD]?|true|false)$/.test(v))
+    return true;
+  if (/^new [\w.]+(?:<[\w.<>, ?]*>)?\(/.test(v))
+    return true;
+  if (v === "null" || v === "undefined")
+    return false;
+  const call = /^this\.([A-Za-z_]\w*)\s*\(/.exec(v);
+  if (call !== null && depth < 3)
+    return baseMethodNonNull(call[1]);
+  if (member !== void 0 && ident(v) && depth < 2) {
+    const facts = localFacts(member, v);
+    return facts !== void 0 && facts.allMapNonNull;
+  }
+  const cast = /^\([\w.<>, ?]+\)\s*(.+)$/s.exec(v);
+  if (cast !== null && depth < 3)
+    return nonNullValue(member, cast[1], depth + 1);
+  return false;
+}
+function statementCall(line) {
+  const m = /^(\s*)Helpers\.addElementToObject\(/.exec(line);
+  if (m === null)
+    return void 0;
+  const open = m[0].length - 1;
+  const close = closeOf(line, open);
+  if (close === -1 || line[close + 1] !== ";")
+    return void 0;
+  const args = splitArgs(line.slice(open + 1, close));
+  if (args === void 0 || args.length !== 3)
+    return void 0;
+  return { indent: m[1], args, tail: line.slice(close + 2) };
+}
+function j01Member(member) {
+  if (!member.includes("Helpers.addElementToObject("))
+    return member;
+  const fields = j01FieldFacts();
+  const lines = member.split("\n");
+  let changed = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s*(?:\/\/|\*)/.test(line))
+      continue;
+    const call = statementCall(line);
+    if (call === void 0)
+      continue;
+    const [recv, key, value] = call.args;
+    const stringKey = strLit(key) || stringCast(key) || ident(key) && declaredType(member, key) === "String";
+    const field = fieldRef(recv);
+    if (field !== null) {
+      if (!stringKey)
+        continue;
+      const facts2 = fields.get(field[1]);
+      if (facts2 === void 0 || facts2.nullable)
+        continue;
+      const fresh2 = nonNullValue(member, value, 0);
+      if (facts2.declaredMap && (fresh2 || facts2.plain)) {
+        lines[i] = `${call.indent}this.${field[1]}.put(${key}, ${value});${call.tail}`;
+        changed = true;
+      } else if (!facts2.declaredMap && facts2.allMapNonNull && (fresh2 || facts2.plain)) {
+        lines[i] = `${call.indent}((java.util.Map<String, Object>) this.${field[1]}).put(${key}, ${value});${call.tail}`;
+        changed = true;
+      }
+      continue;
+    }
+    if (!ident(recv))
+      continue;
+    const decl = declaredType(member, recv);
+    if (decl === void 0)
+      continue;
+    const type = normType(decl);
+    const facts = localFacts(member, recv);
+    const fresh = nonNullValue(member, value, 0);
+    if (type === "Object" || type === "var") {
+      if (!stringKey)
+        continue;
+      if (facts !== void 0 && facts.allMapNonNull && (fresh || facts.plain)) {
+        lines[i] = `${call.indent}((java.util.Map<String, Object>) ${recv}).put(${key}, ${value});${call.tail}`;
+        changed = true;
+      }
+    } else if (MAP_TYPE.test(type)) {
+      if (stringKey && (fresh || facts !== void 0 && facts.plain)) {
+        lines[i] = `${call.indent}${recv}.put(${key}, ${value});${call.tail}`;
+        changed = true;
+      }
+    } else if (LIST_TYPE.test(type) && intLit(key) && facts !== void 0 && facts.listLen !== void 0) {
+      const at = Number(key);
+      if (at < facts.listLen) {
+        lines[i] = `${call.indent}${recv}.set(${at}, ${value});${call.tail}`;
+        changed = true;
+      }
+    }
+  }
+  return changed ? lines.join("\n") : member;
+}
+function hx10J01ElementWrites(content) {
+  if (!content.includes("Helpers.addElementToObject("))
+    return content;
+  const lines = content.split("\n");
+  const starts = [0];
+  for (let i = 1; i < lines.length; i++)
+    if (/^    (?:public|private|protected)\b/.test(lines[i]))
+      starts.push(i);
+  starts.push(lines.length);
+  const parts = [];
+  for (let s = 0; s + 1 < starts.length; s++)
+    parts.push(j01Member(lines.slice(starts[s], starts[s + 1]).join("\n")));
+  return parts.join("\n");
+}
+function j01ElementWritesSelfTest() {
+  const problems = [];
+  const cls = (sig, body) => `public class Gemini extends GeminiRest
+{
+    public Object m(${sig})
+    {
+${body}
+    }
+}`;
+  const cases = [
+    ["declared Map param", "Object p", '        Map<String, Object> m = new HashMap<String, Object>() {{}};\n        Helpers.addElementToObject(m, "a", "x");', '        m.put("a", "x");'],
+    ["declared Map String key", "Map<String, Object> p, String k", '        Helpers.addElementToObject(p, k, "x");', '        p.put(k, "x");'],
+    ["nullable value on a declared Map", "Map<String, Object> p, Object v", '        Helpers.addElementToObject(p, "a", v);', void 0],
+    ["fresh local nullable value", "Object v", '        Map<String, Object> r = new HashMap<String, Object>() {{}};\n        Helpers.addElementToObject(r, "a", v);', '        r.put("a", v);'],
+    ["Object local holding one map", "Object v", '        Object r = new LinkedHashMap<String, Object>();\n        Helpers.addElementToObject(r, "a", v);', '        ((java.util.Map<String, Object>) r).put("a", v);'],
+    ["non-null value proves the put", "Map<String, Object> p", '        Object w = new HashMap<String, Object>() {{}};\n        Helpers.addElementToObject(p, "a", w);', '        p.put("a", w);'],
+    ["base map field", "Object v", '        Helpers.addElementToObject(this.options, "a", "x");', '        this.options.put("a", "x");'],
+    ["list literal index", "Object a, Object b, Object x", "        List<Object> l = new ArrayList<Object>(Arrays.asList(a, b));\n        Helpers.addElementToObject(l, 1, x);", "        l.set(1, x);"],
+    // helper kept: unproven receiver, nullable value on a declared Map, a field with a non-map write,
+    // an index past the end, a reassigned Object local, an Object key, a value-position call
+    ["Object receiver", "Object p", '        Helpers.addElementToObject(p, "a", "x");', void 0],
+    ["nullable value on a declared Map", "Map<String, Object> p, Object v", '        Helpers.addElementToObject(p, "a", v);', void 0],
+    ["field with a non-map write", "Object v", '        Helpers.addElementToObject(this.markets, "a", new HashMap<String, Object>() {{}});', void 0],
+    ["index past the end", "Object a, Object x", "        List<Object> l = new ArrayList<Object>(Arrays.asList(a));\n        Helpers.addElementToObject(l, 1, x);", void 0],
+    ["reassigned Object local", "Object v", '        Object r = new HashMap<String, Object>() {{}};\n        r = this.safeValue(v, "x");\n        Helpers.addElementToObject(r, "a", v);', void 0],
+    ["Object key", "Map<String, Object> p, Object k, Object v", "        Helpers.addElementToObject(p, k, v);", void 0],
+    ["value position", "Map<String, Object> p, Object v", '        return Helpers.addElementToObject(p, "a", v);', void 0]
+  ];
+  for (const [name, sig, body, expect] of cases) {
+    const input = cls(sig, body);
+    const out = hx10J01ElementWrites(input);
+    const ok = expect === void 0 ? out === input : out.includes(expect);
+    if (!ok)
+      problems.push(`hx10 J01: ${name}
+${out}`);
+    if (hx10J01ElementWrites(out) !== out)
+      problems.push(`hx10 J01: ${name} not idempotent`);
+  }
+  return problems;
+}
+onJavaRuntimeRootChange(() => {
+  fieldFactsCache = void 0;
+  overrideNames = void 0;
+  baseMethodCache = void 0;
+  localFactsCache.clear();
+});
+
+// src/java/hx10w2-J02.ts
+init_esm_shims();
+import fs4 from "fs";
+import path4 from "path";
+function J02_SRC() {
+  return javaRuntimeRoot();
+}
+var J02_MAP_DECL = /^(?:java\.util\.)?(?:Map|AbstractMap|HashMap|ConcurrentHashMap|LinkedHashMap|TreeMap|SortedMap|NavigableMap|Hashtable)\s*<[^<>]*>$/;
+var J02_LIST_DECL = /^(?:java\.util\.)?(?:List|ArrayList|LinkedList|AbstractList|CopyOnWriteArrayList)\s*<[^<>]*>$/;
+var J02_FRESH_MAP = /^new\s+(?:java\.util\.)?(?:HashMap|ConcurrentHashMap|LinkedHashMap)\s*[<(]/;
+var J02_MAP_CAST = /^\(\s*(?:java\.util\.)?Map\s*</;
+var J02_STRING_LITERAL = /^"(?:[^"\\]|\\.)*"$/;
+var J02_IDENT = /^[A-Za-z_]\w*$/;
+var J02_STRING_CAST = /^\(+\s*\(?\s*String\s*\)\s*([A-Za-z_]\w*)\s*\)+$/;
+var J02_NONNULL_STRING = /^java\.util\.Objects\.requireNonNullElse\s*\(\s*([A-Za-z_]\w*)\s*,\s*"(?:[^"\\]|\\.)*"\s*\)$/;
+var J02_NONNULL_KEY = J02_NONNULL_STRING;
+var J02_MEMBER_START = /^ {0,4}(?:public|private|protected|static|final|abstract|synchronized|@)/;
+function j02IsMapDecl(text) {
+  return J02_MAP_DECL.exec(text) !== null;
+}
+function j02IsListDecl(text) {
+  return J02_LIST_DECL.exec(text) !== null;
+}
+function j02IsFreshMap(text) {
+  return J02_FRESH_MAP.exec(text) !== null;
+}
+function j02IsMapCast(text) {
+  return J02_MAP_CAST.exec(text) !== null;
+}
+function j02IsIdent(text) {
+  return J02_IDENT.exec(text) !== null;
+}
+function j02IsStringLiteral(text) {
+  return J02_STRING_LITERAL.exec(text) !== null;
+}
+function j02Mask(text) {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < text.length && text[j] !== ch && text[j] !== "\n") {
+        j += text[j] === "\\" ? 2 : 1;
+      }
+      out += ch + " ".repeat(Math.max(0, Math.min(j, text.length - 1) - i - 1)) + (j < text.length ? text[j] : "");
+      i = j + 1;
+      continue;
+    }
+    if (ch === "/" && text[i + 1] === "/") {
+      let j = text.indexOf("\n", i);
+      if (j < 0)
+        j = text.length;
+      out += " ".repeat(j - i);
+      i = j;
+      continue;
+    }
+    if (ch === "/" && text[i + 1] === "*") {
+      let j = text.indexOf("*/", i + 2);
+      j = j < 0 ? text.length : j + 2;
+      out += text.slice(i, j).replace(/[^\n]/g, " ");
+      i = j;
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+function j02Close(masked, open) {
+  let depth = 0;
+  for (let i = open; i < masked.length; i++) {
+    const ch = masked[i];
+    if (ch === "(")
+      depth++;
+    else if (ch === ")") {
+      depth--;
+      if (depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function j02Sites(masked) {
+  const sites = [];
+  const needle = "Helpers.GetValue(";
+  let at = masked.indexOf(needle);
+  while (at >= 0) {
+    const open = at + needle.length - 1;
+    const close = j02Close(masked, open);
+    if (close < 0)
+      break;
+    let depth = 0;
+    let comma = -1;
+    let args = 1;
+    for (let k = open + 1; k < close; k++) {
+      const ch = masked[k];
+      if (ch === "(" || ch === "[" || ch === "{")
+        depth++;
+      else if (ch === ")" || ch === "]" || ch === "}")
+        depth--;
+      else if (ch === "," && depth === 0) {
+        if (comma >= 0)
+          args = 3;
+        comma = k;
+      }
+    }
+    if (args === 1 && comma > 0) {
+      sites.push({ start: at, end: close + 1, recvStart: open + 1, recvEnd: comma, keyStart: comma + 1, keyEnd: close });
+    }
+    at = masked.indexOf(needle, close + 1);
+  }
+  return sites;
+}
+function j02Simple(name) {
+  return name.replace(/^.*\./, "");
+}
+function j02ParseClass(name, text) {
+  const head = /(?:^|\n)(?:public\s+)?(?:final\s+|abstract\s+)?class\s+(\w+)(?:\s+extends\s+([\w.]+))?/.exec(text);
+  const fields = /* @__PURE__ */ new Map();
+  for (const line of text.split("\n")) {
+    const m = /^ {4}(?:public|private|protected)\s+(?:static\s+|final\s+|volatile\s+|transient\s+)*([A-Za-z_][\w.]*(?:<[^;=]*>)?(?:\[\])?)\s+(\w+)\s*(?:=(.*?))?;\s*$/.exec(line);
+    if (m !== null) {
+      fields.set(m[2], { type: m[1].trim(), init: (m[3] ?? "").trim() });
+    }
+  }
+  return { name, sup: head?.[2], fields, text };
+}
+var j02ClassCache = /* @__PURE__ */ new Map();
+function j02LoadClass(name) {
+  if (j02ClassCache.has(name))
+    return j02ClassCache.get(name);
+  const dirs = ["exchanges/pro", "exchanges", "exchanges/prediction", "ws", ""];
+  let found;
+  for (const dir of dirs) {
+    const file = path4.join(J02_SRC(), dir, name + ".java");
+    try {
+      found = j02ParseClass(name, fs4.readFileSync(file, "utf8"));
+      break;
+    } catch (e) {
+      continue;
+    }
+  }
+  j02ClassCache.set(name, found);
+  return found;
+}
+function j02Owner(content, sourcePath) {
+  const head = /(?:^|\n)public class\s+(\w+)/.exec(content);
+  if (head !== null)
+    return j02ParseClass(head[1], content);
+  if (sourcePath === void 0)
+    return void 0;
+  return j02LoadClass(path4.basename(sourcePath, ".java"));
+}
+function j02FieldWrites(text, field) {
+  const masked = j02Mask(text);
+  const writes = [];
+  const rx = new RegExp("(?<![\\w.])this\\." + field + "\\s*=(?!=)\\s*([^;]*);", "g");
+  let m;
+  while ((m = rx.exec(masked)) !== null) {
+    writes.push(m[1].trim());
+  }
+  return writes;
+}
+function j02MapValue(text) {
+  const t = text.trim();
+  if (t === "null")
+    return true;
+  if (j02IsFreshMap(t))
+    return true;
+  if (j02IsMapCast(t))
+    return true;
+  return /^this\.createSafeDictionary\s*\(/.test(t);
+}
+function j02HashValue(text) {
+  const t = text.trim();
+  if (t === "null")
+    return true;
+  if (j02IsFreshMap(t))
+    return true;
+  if (j02IsMapCast(t))
+    return true;
+  return /^this\.createSafeDictionary\s*\(/.test(t);
+}
+function j02MapFieldProof(field, owner) {
+  if (owner === void 0)
+    return void 0;
+  const chain = [];
+  const seen = /* @__PURE__ */ new Set();
+  let cur = owner;
+  while (cur !== void 0 && !seen.has(cur.name)) {
+    seen.add(cur.name);
+    chain.push(cur);
+    cur = cur.sup === void 0 ? void 0 : j02LoadClass(j02Simple(cur.sup));
+  }
+  const declaring = chain.find((c) => c.fields.has(field));
+  if (declaring === void 0)
+    return void 0;
+  const decl = declaring.fields.get(field);
+  const init = decl.init.trim();
+  const writes = chain.flatMap((c) => j02FieldWrites(c.text, field));
+  const hashKeyed = j02HashValue(init) && writes.every(j02HashValue);
+  if (j02IsMapDecl(decl.type))
+    return { kind: "decl", hashKeyed };
+  if (decl.type !== "Object")
+    return void 0;
+  if (init !== "" && init !== "null" && !j02IsFreshMap(init) && !j02IsMapCast(init))
+    return void 0;
+  if (!writes.every(j02MapValue))
+    return void 0;
+  return { kind: "cast", hashKeyed };
+}
+function j02DeclaredType(lines, lineIndex, name) {
+  const rx = new RegExp("(?:^[\\s{]*|[(,{]\\s*)(?:final\\s+)?((?:java\\.util\\.)?[A-Za-z_][\\w.]*(?:<[^;=()]*>)?(?:\\[\\])?)\\s+" + name + "\\s*(?:=|;|:|,|\\))");
+  for (let i = lineIndex; i >= 0; i--) {
+    const line = lines[i];
+    if (!/^\s*(?:\/\/|\*)/.test(line)) {
+      const m = rx.exec(line);
+      if (m !== null && m[1] !== "return" && m[1] !== "new" && m[1] !== "else" && m[1] !== "throw" && m[1] !== "case") {
+        return m[1].replace(/\s+/g, " ");
+      }
+    }
+    if (J02_MEMBER_START.exec(line) !== null)
+      return void 0;
+  }
+  return void 0;
+}
+function j02IntCounter(masked, lines, lineIndex, name) {
+  const rx = new RegExp("\\bfor\\s*\\(\\s*(?:var|int)\\s+" + name + "\\s*=\\s*\\d+");
+  let initLine = -1;
+  for (let i = lineIndex; i >= 0; i--) {
+    if (rx.test(lines[i])) {
+      initLine = i;
+      break;
+    }
+    if (J02_MEMBER_START.exec(lines[i]) !== null)
+      return false;
+  }
+  if (initLine < 0)
+    return false;
+  const writes = masked.match(new RegExp("(?<![\\w.])" + name + "\\s*(?:=(?!=)|\\+=|-=|\\*=|/=)", "g")) ?? [];
+  return writes.length === 1;
+}
+function j02IntIndex(masked, lines, lineIndex, name) {
+  if (!j02IsIdent(name))
+    return false;
+  const declared = j02DeclaredType(lines, lineIndex, name);
+  if (declared === "int")
+    return true;
+  if (declared !== "var")
+    return false;
+  return j02IntCounter(masked, lines, lineIndex, name);
+}
+function j02LineOf(lineStarts, offset) {
+  let lo = 0;
+  let hi = lineStarts.length - 1;
+  while (lo < hi) {
+    const mid = lo + hi + 1 >> 1;
+    if (lineStarts[mid] <= offset)
+      lo = mid;
+    else
+      hi = mid - 1;
+  }
+  return lo;
+}
+function nativeJavaJ02ElementReads(content, sourcePath) {
+  if (!content.includes("Helpers.GetValue("))
+    return content;
+  const masked = j02Mask(content);
+  const sites = j02Sites(masked);
+  if (sites.length === 0)
+    return content;
+  const lines = content.split("\n");
+  const lineStarts = [0];
+  for (let i = 0; i < content.length; i++) {
+    if (content[i] === "\n")
+      lineStarts.push(i + 1);
+  }
+  const owner = j02Owner(content, sourcePath);
+  let result = content;
+  for (let s = sites.length - 1; s >= 0; s--) {
+    const site = sites[s];
+    const recv = content.slice(site.recvStart, site.recvEnd).trim();
+    const key = content.slice(site.keyStart, site.keyEnd).trim();
+    const lineIndex = j02LineOf(lineStarts, site.start);
+    const lineStart = lineStarts[lineIndex];
+    const lineEnd2 = lineIndex + 1 < lineStarts.length ? lineStarts[lineIndex + 1] : content.length;
+    if (content.slice(lineStart, site.start).trim() === "" && content.slice(site.end, lineEnd2).trim() === ";")
+      continue;
+    let base = recv;
+    let mapProof;
+    let listProof;
+    const fieldRead = /^(this|[A-Za-z_]\w*)\.([A-Za-z_]\w*)$/.exec(recv);
+    if (fieldRead !== null) {
+      if (fieldRead[1] === "this") {
+        mapProof = j02MapFieldProof(fieldRead[2], owner);
+      } else {
+        const qualifierType = j02DeclaredType(lines, lineIndex, fieldRead[1]);
+        if (qualifierType !== void 0 && !/[<>[\]]/.test(qualifierType)) {
+          mapProof = j02MapFieldProof(fieldRead[2], j02LoadClass(j02Simple(qualifierType)));
+        }
+      }
+    } else if (j02IsIdent(recv)) {
+      const declared = j02DeclaredType(lines, lineIndex, recv);
+      if (declared !== void 0) {
+        if (j02IsMapDecl(declared))
+          mapProof = { kind: "decl", hashKeyed: false };
+        else if (j02IsListDecl(declared))
+          listProof = "decl";
+      }
+    } else {
+      const castList = /^\(\s*(?:java\.util\.)?(?:List|ArrayList)\s*<[^()]*>\s*\)\s*\(?\s*([A-Za-z_]\w*)\s*\)?$/.exec(recv);
+      if (castList !== null) {
+        listProof = "cast";
+        base = castList[1];
+      }
+    }
+    if (mapProof !== void 0) {
+      const literalKey = j02IsStringLiteral(key);
+      const castKey = J02_STRING_CAST.exec(key);
+      const nonNullKey2 = J02_NONNULL_KEY.exec(key);
+      const identKey = !literalKey && castKey === null && nonNullKey2 === null && j02IsIdent(key);
+      let keyIdent;
+      if (literalKey)
+        keyIdent = key;
+      else if (castKey !== null)
+        keyIdent = castKey[1];
+      else if (identKey && j02DeclaredType(lines, lineIndex, key) === "String")
+        keyIdent = key;
+      else if (identKey && mapProof.hashKeyed)
+        keyIdent = key;
+      else if (nonNullKey2 !== null && mapProof.hashKeyed)
+        keyIdent = null;
+      if (keyIdent === void 0)
+        continue;
+      const guard = keyIdent === null || keyIdent === key && literalKey ? base + " == null" : base + " == null || " + keyIdent + " == null";
+      const read = mapProof.kind === "decl" ? base : "((java.util.Map<?, ?>)" + base + ")";
+      result = result.slice(0, site.start) + "(" + guard + " ? null : " + read + ".get(" + key + "))" + result.slice(site.end);
+      continue;
+    }
+    if (listProof !== void 0) {
+      const literalIndex = /^\d+$/.test(key);
+      const intIndex = !literalIndex && j02IntIndex(masked, lines, lineIndex, key);
+      if (!literalIndex && !intIndex)
+        continue;
+      const list = listProof === "decl" ? base : "((java.util.List<?>)" + base + ")";
+      const lower = literalIndex ? "" : key + " < 0 || ";
+      result = result.slice(0, site.start) + "(" + base + " == null || " + lower + key + " >= " + list + ".size() ? null : " + list + ".get(" + key + "))" + result.slice(site.end);
+    }
+  }
+  return result;
+}
+function j02SelfTest() {
+  const problems = [];
+  const head = "public class zzj02native extends BaseExchange {\n";
+  const run = (body, sourcePath) => nativeJavaJ02ElementReads(head + body + "\n}\n", sourcePath);
+  const pos = [
+    // a field declared a Map needs no write audit
+    [
+      '    public Map<String, Object> opts = new HashMap<>();\n    public Object f(Object k) { return Helpers.GetValue(this.opts, "a"); }',
+      'return (this.opts == null ? null : this.opts.get("a"))'
+    ],
+    // a String-declared key keeps the helper's null-key answer
+    [
+      "    public Map<String, Object> opts = new HashMap<>();\n    public Object f(String k) { return Helpers.GetValue(this.opts, k); }",
+      "return (this.opts == null || k == null ? null : this.opts.get(k))"
+    ],
+    // Object field whose every write is a fresh map: checkcast read, any non-null key
+    [
+      '    public Object cache = new ConcurrentHashMap<String, Object>();\n    public Object f(Object k) { this.cache = new HashMap<String, Object>(); return Helpers.GetValue(this.cache, "a"); }\n    public Object g(Object k) { return Helpers.GetValue(this.cache, k); }',
+      "return (this.cache == null || k == null ? null : ((java.util.Map<?, ?>)this.cache).get(k))"
+    ],
+    // explicit List checkcast receiver, int parameter index: bounds-guarded element
+    [
+      "    public Object f(Object xs, int i) { return Helpers.GetValue((List<String>)(xs), i); }",
+      "return (xs == null || i < 0 || i >= ((java.util.List<?>)xs).size() ? null : ((java.util.List<?>)xs).get(i))"
+    ],
+    // declared List local, literal index
+    [
+      "    public Object f() { List<Object> xs = new ArrayList<Object>(); return Helpers.GetValue(xs, 0); }",
+      "return (xs == null || 0 >= xs.size() ? null : xs.get(0))"
+    ],
+    // a base-class field resolved through the super chain (the runtime sources are the table)
+    [
+      '    public Object f() { return Helpers.GetValue(this.options, "a"); }',
+      'return (this.options == null ? null : this.options.get("a"))'
+    ],
+    // the file already holds a converted read of the field: its `== null` is not a write, so the
+    // remaining helper call keeps its proof and converts too (idempotent rebuild)
+    [
+      '    public Object cache = new HashMap<String, Object>();\n    public Object g(Object k) { return (this.cache == null || k == null ? null : ((Map<?, ?>)this.cache).get(k)); }\n    public Object f() { return Helpers.GetValue(this.cache, "a"); }',
+      'return (this.cache == null ? null : ((java.util.Map<?, ?>)this.cache).get("a"))'
+    ]
+  ];
+  for (const [body, expect] of pos) {
+    const out = run(body);
+    if (!out.includes(expect))
+      problems.push(`j02: expected ${expect} in
+${out}`);
+  }
+  const neg = [
+    // unproven Object receiver
+    '    public Object f(Object m) { return Helpers.GetValue(m, "a"); }',
+    // Object field that can hold a non-map
+    '    public Object cache = null;\n    public Object f(Object m) { this.cache = m; return Helpers.GetValue(this.cache, "a"); }',
+    // Object key on a declared Map that may be a TreeMap
+    "    public Object f(Map<String, Object> m, Object k) { return Helpers.GetValue(m, k); }",
+    // index that is not an int
+    "    public Object f(Object xs, Object i) { return Helpers.GetValue(xs, i); }"
+  ];
+  for (const body of neg) {
+    if (run(body) !== head + body + "\n}\n")
+      problems.push(`j02: must keep the helper in
+${body}`);
+  }
+  return problems;
+}
+onJavaRuntimeRootChange(() => {
+  j02ClassCache.clear();
+});
+
+// src/java/hx10w2-J03.ts
+init_esm_shims();
+var J03_TRUE_EQUALS = "Boolean.TRUE.equals(";
+var J03_FAMILY = ["isTrue", "isEqual", "add", "subtract", "multiply", "divide"];
+var J03_CALL = new RegExp("Helpers\\.(" + J03_FAMILY.join("|") + ")\\(", "g");
+var J03_TYPE = "(?:Object|String|Long|Double|Boolean|Integer|Float|java\\.util\\.List<Object>|List<Object>|java\\.util\\.Map<String, Object>|Map<String, Object>|long|double|int|boolean|var)";
+var J03_DECL = new RegExp("^(\\s*)(?:final\\s+)?(" + J03_TYPE + ")\\s+([A-Za-z_$][\\w$]*)\\s*(?:=|;)");
+var J03_FIELD = new RegExp("^    (?:public |protected |private |static |final )*(" + J03_TYPE + ")\\s+([A-Za-z_$][\\w$]*)\\s*(?:=|;)");
+var J03_SIG = /^    (?:public|protected|private)\s[^(=;]*\(.*\)\s*$/;
+var J03_PARAM = new RegExp("(?:final\\s+)?(" + J03_TYPE + ")\\s+([A-Za-z_$][\\w$]*)", "g");
+var J03_TRANSPILED = "METHODS BELOW THIS LINE ARE TRANSPILED";
+var J03_STRING_FIELDS = /* @__PURE__ */ new Set([
+  "id",
+  "name",
+  "version",
+  "url",
+  "hostname",
+  "userAgent",
+  "apiKey",
+  "secret",
+  "password",
+  "uid",
+  "accountId",
+  "twofa",
+  "privateKey",
+  "walletAddress",
+  "login",
+  "agent"
+]);
+var J03_KINDS = {
+  "Long": "longbox",
+  "long": "longprim",
+  "Integer": "intbox",
+  "int": "intprim",
+  "Double": "doublebox",
+  "double": "doubleprim",
+  "String": "string",
+  "Boolean": "boolbox",
+  "boolean": "boolprim"
+};
+var J03_INTEGRAL = /* @__PURE__ */ new Set(["longbox", "longprim", "intbox", "intprim", "intlit", "longlit"]);
+var J03_NUMERIC = /* @__PURE__ */ new Set(["longbox", "longprim", "intbox", "intprim", "intlit", "longlit", "doublebox", "doubleprim"]);
+var J03_BOXED = /* @__PURE__ */ new Set(["longbox", "intbox", "doublebox"]);
+var J03_LONGISH = /* @__PURE__ */ new Set(["longbox", "longprim"]);
+var J03_INTISH = /* @__PURE__ */ new Set(["intbox", "intprim", "intlit"]);
+function j03Mask(line, state) {
+  const out = new Array(line.length);
+  for (let i2 = 0; i2 < line.length; i2++)
+    out[i2] = line[i2];
+  let i = 0;
+  while (i < out.length) {
+    if (state.block) {
+      const end = line.indexOf("*/", i);
+      const stop = end === -1 ? out.length : end + 2;
+      for (let k = i; k < stop; k++)
+        out[k] = " ";
+      i = stop;
+      if (end !== -1)
+        state.block = false;
+      continue;
+    }
+    const ch = out[i];
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < out.length && out[j] !== ch) {
+        if (out[j] === "\\")
+          j++;
+        j++;
+      }
+      for (let k = i; k < Math.min(j + 1, out.length); k++)
+        out[k] = " ";
+      i = j + 1;
+      continue;
+    }
+    if (ch === "/" && out[i + 1] === "/") {
+      for (let k = i; k < out.length; k++)
+        out[k] = " ";
+      break;
+    }
+    if (ch === "/" && out[i + 1] === "*") {
+      state.block = true;
+      continue;
+    }
+    i++;
+  }
+  return out.join("");
+}
+function j03CallArgs(text, openIndex) {
+  let depth = 0;
+  let close = -1;
+  for (let i = openIndex; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      i++;
+      while (i < text.length && text[i] !== '"') {
+        if (text[i] === "\\")
+          i++;
+        i++;
+      }
+      continue;
+    }
+    if (ch === "(")
+      depth++;
+    else if (ch === ")") {
+      depth--;
+      if (depth === 0) {
+        close = i;
+        break;
+      }
+    }
+  }
+  if (close === -1) {
+    return void 0;
+  }
+  const body = text.slice(openIndex + 1, close);
+  const args = [];
+  let nesting = 0;
+  let current = "";
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (ch === '"') {
+      current += ch;
+      i++;
+      while (i < body.length && body[i] !== '"') {
+        if (body[i] === "\\")
+          current += body[i++];
+        current += body[i++];
+      }
+      current += '"';
+      continue;
+    }
+    if (ch === "(")
+      nesting++;
+    else if (ch === ")")
+      nesting--;
+    if (ch === "," && nesting === 0) {
+      args.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim() !== "" || body.trim() !== "") {
+    args.push(current.trim());
+  }
+  return { args, close };
+}
+function j03StripParens(text) {
+  let value = text.trim();
+  for (; ; ) {
+    if (!value.startsWith("(") || !value.endsWith(")")) {
+      return value;
+    }
+    const call = j03CallArgs(value, 0);
+    if (call === void 0 || call.close !== value.length - 1) {
+      return value;
+    }
+    value = value.slice(1, -1).trim();
+  }
+}
+function j03KindOf(text, lookup) {
+  const value = j03StripParens(text);
+  if (/^-?\d+$/.test(value)) {
+    return "intlit";
+  }
+  if (/^-?\d+[lL]$/.test(value)) {
+    return "longlit";
+  }
+  if (/^"([^"\\]|\\.)*"$/.test(value)) {
+    return "string";
+  }
+  if (value === "true" || value === "false") {
+    return "boolprim";
+  }
+  if (value === "null") {
+    return "null";
+  }
+  const cast = /^\(\((long|double|int)\)\s*([A-Za-z_$][\w$]*)\)$/.exec(value);
+  if (cast !== null) {
+    return J03_KINDS[cast[1]];
+  }
+  const name = /^(this\.)?([A-Za-z_$][\w$]*)$/.exec(value);
+  if (name !== null) {
+    if (name[1] !== void 0 && J03_STRING_FIELDS.has(name[2]) && lookup(name[2]) === void 0) {
+      return "string";
+    }
+    const type = lookup(name[2]);
+    return type === void 0 ? void 0 : J03_KINDS[type];
+  }
+  return void 0;
+}
+function j03AsLong(text, kind) {
+  if (kind === "longbox" || kind === "longprim")
+    return j03StripParens(text);
+  if (kind === "intlit")
+    return j03StripParens(text) + "L";
+  if (kind === "longlit")
+    return j03StripParens(text);
+  return "((long) " + j03StripParens(text) + ")";
+}
+function j03AsDouble(text, kind) {
+  if (kind === "doublebox" || kind === "doubleprim")
+    return j03StripParens(text);
+  if (kind === "intlit")
+    return "((double) " + j03StripParens(text) + ")";
+  if (kind === "longlit")
+    return "((double) " + j03StripParens(text) + ")";
+  return "((double) " + j03StripParens(text) + ")";
+}
+function j03NullGuard(parts, expr) {
+  if (parts.length === 0) {
+    return "(" + expr + ")";
+  }
+  return "((" + parts.join(" == null || ") + " == null) ? null : " + expr + ")";
+}
+function j03Emit(helper, args, kinds) {
+  const boxedOf = (list) => [...new Set(list.map((k, i) => J03_BOXED.has(k) ? j03StripParens(args[i]) : void 0).filter((x) => x !== void 0))];
+  const allIn = (set) => kinds.every((k) => set.has(k));
+  const anyIn = (set) => kinds.some((k) => set.has(k));
+  if (helper === "isTrue") {
+    if (args.length !== 1)
+      return void 0;
+    if (kinds[0] === "boolbox")
+      return J03_TRUE_EQUALS + j03StripParens(args[0]) + ")";
+    if (kinds[0] === "boolprim")
+      return j03StripParens(args[0]);
+    return void 0;
+  }
+  if (helper === "isEqual") {
+    if (args.length !== 2)
+      return void 0;
+    const [a, b] = kinds;
+    if (a === "null" && !(b === "boolprim" || b === "longprim" || b === "intprim" || b === "doubleprim")) {
+      return "(" + j03StripParens(args[1]) + " == null)";
+    }
+    if (b === "null" && !(a === "boolprim" || a === "longprim" || a === "intprim" || a === "doubleprim")) {
+      return "(" + j03StripParens(args[0]) + " == null)";
+    }
+    const sameFamily = (x, y) => x === y && ["string", "longbox", "intbox", "boolbox", "longprim", "intprim", "boolprim"].includes(x) || (J03_LONGISH.has(x) && J03_LONGISH.has(y) || J03_INTISH.has(x) && J03_INTISH.has(y));
+    if (!sameFamily(a, b))
+      return void 0;
+    if (a === "longprim" && b === "longprim")
+      return "(" + j03StripParens(args[0]) + " == " + j03StripParens(args[1]) + ")";
+    if (a === "intprim" && b === "intprim")
+      return "(" + j03StripParens(args[0]) + " == " + j03StripParens(args[1]) + ")";
+    if (a === "boolprim" && b === "boolprim")
+      return "(" + j03StripParens(args[0]) + " == " + j03StripParens(args[1]) + ")";
+    return "java.util.Objects.equals(" + j03StripParens(args[0]) + ", " + j03StripParens(args[1]) + ")";
+  }
+  if (helper === "add" || helper === "subtract" || helper === "multiply" || helper === "divide") {
+    if (args.length !== 2)
+      return void 0;
+    const [a, b] = kinds;
+    if (a === void 0 || b === void 0)
+      return void 0;
+    if (helper === "add") {
+      const stringish = (k) => k === "string";
+      if (stringish(a) || stringish(b)) {
+        const other = stringish(a) ? b : a;
+        if (other === "doublebox" || other === "doubleprim" || other === "null")
+          return void 0;
+        if (!(stringish(other) || J03_INTEGRAL.has(other) || other === "boolbox" || other === "boolprim"))
+          return void 0;
+        return "(" + j03StripParens(args[0]) + " + " + j03StripParens(args[1]) + ")";
+      }
+      if (allIn(J03_INTEGRAL)) {
+        return j03NullGuard(boxedOf(kinds), "(" + j03AsLong(args[0], a) + " + " + j03AsLong(args[1], b) + ")");
+      }
+      if (allIn(J03_NUMERIC)) {
+        return j03NullGuard(boxedOf(kinds), "(" + j03AsDouble(args[0], a) + " + " + j03AsDouble(args[1], b) + ")");
+      }
+      return void 0;
+    }
+    if (helper === "subtract") {
+      if (!allIn(J03_NUMERIC))
+        return void 0;
+      if (anyIn(/* @__PURE__ */ new Set(["doublebox", "doubleprim"]))) {
+        return j03NullGuard(boxedOf(kinds), "(" + j03AsDouble(args[0], a) + " - " + j03AsDouble(args[1], b) + ")");
+      }
+      const sameIntegral = J03_LONGISH.has(a) && J03_LONGISH.has(b) || J03_INTISH.has(a) && J03_INTISH.has(b);
+      if (!sameIntegral)
+        return void 0;
+      const expr = "(" + j03StripParens(args[0]) + " - " + j03StripParens(args[1]) + ")";
+      return j03NullGuard(boxedOf(kinds), expr);
+    }
+    if (helper === "multiply") {
+      if (!allIn(J03_INTEGRAL))
+        return void 0;
+      return j03NullGuard(boxedOf(kinds), "(" + j03AsLong(args[0], a) + " * " + j03AsLong(args[1], b) + ")");
+    }
+    if (helper === "divide") {
+      if (!allIn(J03_NUMERIC))
+        return void 0;
+      return j03NullGuard(boxedOf(kinds), "(" + j03AsDouble(args[0], a) + " / " + j03AsDouble(args[1], b) + ")");
+    }
+  }
+  return void 0;
+}
+function j03AdjacentOperand(line, start, close) {
+  let before = line.slice(0, start).replace(/\s+$/, "");
+  const after = line.slice(close + 1).replace(/^\s+/, "");
+  if (/[+\-*/%?:]$/.test(before) && !/\($/.test(before))
+    return true;
+  if (/^[+\-*/%?:]/.test(after))
+    return true;
+  if (/^\.[A-Za-z_$]/.test(after))
+    return true;
+  return false;
+}
+function nativeJavaJ03Family(content) {
+  if (typeof content !== "string" || !J03_CALL.test(content)) {
+    J03_CALL.lastIndex = 0;
+    return content;
+  }
+  J03_CALL.lastIndex = 0;
+  const lines = content.split("\n");
+  const maskState = { block: false };
+  const masked = lines.map((line) => j03Mask(line, maskState));
+  let from = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(J03_TRANSPILED)) {
+      from = i + 1;
+    }
+  }
+  const starts = [];
+  for (let i = 0; i < masked.length; i++) {
+    if (J03_SIG.test(lines[i]) && i + 1 < lines.length && lines[i + 1].trim() === "{") {
+      starts.push(i);
+    }
+  }
+  const paramsOf = /* @__PURE__ */ new Map();
+  for (const start of starts) {
+    const signature = masked[start];
+    const open = signature.indexOf("(");
+    const map = /* @__PURE__ */ new Map();
+    J03_PARAM.lastIndex = 0;
+    let m;
+    while ((m = J03_PARAM.exec(signature.slice(open + 1))) !== null) {
+      if (!map.has(m[2]))
+        map.set(m[2], m[1]);
+    }
+    paramsOf.set(start, map);
+  }
+  const lookupAt = (lineIndex) => (name) => {
+    let memberStart = -1;
+    for (const start of starts) {
+      if (start <= lineIndex)
+        memberStart = start;
+      else
+        break;
+    }
+    for (let j = lineIndex - 1; j > memberStart; j--) {
+      const decl = J03_DECL.exec(masked[j]);
+      if (decl !== null && decl[3] === name) {
+        return decl[2];
+      }
+    }
+    if (memberStart >= 0) {
+      const params = paramsOf.get(memberStart);
+      if (params !== void 0 && params.has(name)) {
+        return params.get(name);
+      }
+    }
+    for (let j = Math.max(memberStart, 0) - 1; j >= 0; j--) {
+      const field = J03_FIELD.exec(masked[j]);
+      if (field !== null && field[2] === name) {
+        return field[1];
+      }
+    }
+    return void 0;
+  };
+  let changed = false;
+  for (let i = from; i < lines.length; i++) {
+    if (!lines[i].includes("Helpers.")) {
+      continue;
+    }
+    const lookup = lookupAt(i);
+    for (let guard = 0; guard < 8; guard++) {
+      const line = lines[i];
+      const mask = j03Mask(line, { block: false });
+      const hits = [];
+      J03_CALL.lastIndex = 0;
+      let m;
+      while ((m = J03_CALL.exec(mask)) !== null) {
+        hits.push([m.index, m[1]]);
+      }
+      if (hits.length === 0) {
+        break;
+      }
+      let done = false;
+      for (let h = hits.length - 1; h >= 0 && !done; h--) {
+        const [start, helper] = hits[h];
+        if (start !== 0 && /[\w.]/.test(mask[start - 1])) {
+          continue;
+        }
+        const call = j03CallArgs(line, start + ("Helpers." + helper).length);
+        if (call === void 0) {
+          continue;
+        }
+        const kinds = call.args.map((arg) => j03KindOf(arg, lookup));
+        if (kinds.some((k) => k === void 0)) {
+          continue;
+        }
+        const replacement = j03Emit(helper, call.args, kinds);
+        if (replacement === void 0) {
+          continue;
+        }
+        if (j03AdjacentOperand(line, start, call.close)) {
+          continue;
+        }
+        lines[i] = line.slice(0, start) + replacement + line.slice(call.close + 1);
+        changed = true;
+        done = true;
+      }
+      if (!done) {
+        break;
+      }
+    }
+  }
+  return changed ? lines.join("\n") : content;
+}
+
+// src/java/hx10w2-J05.ts
+init_esm_shims();
+var J05_MEMBER_START_RE = /^    (?:public|private|protected)\b/;
+var J05_LOCAL_DECL = (name) => new RegExp("^\\s*(?:final\\s+)?([A-Za-z_][\\w.]*(?:<[^;()=]*>)?(?:\\[\\])?)\\s+" + name + "\\s*(?:=(?!=)|;)");
+var J05_MAP_DECL = (name) => new RegExp("^\\s*(?:final\\s+)?(?:java\\.util\\.)?(?:Map|HashMap|LinkedHashMap|ConcurrentHashMap|TreeMap|IdentityHashMap)\\s*<[^;=()]*>\\s+" + name + "\\s*=(?!=)");
+var J05_ASSIGN = (name) => new RegExp("(?<![\\w.])" + name + "\\s*=(?!=)");
+var J05_LAMBDA_PARAM = (name) => new RegExp("(?:\\(|, )" + name + "\\)?\\s*->|(?<![\\w.])" + name + "\\s*->");
+function j05MemberBounds(lines, lineIndex) {
+  let start = 0;
+  for (let j = lineIndex; j >= 0; j--) {
+    if (J05_MEMBER_START_RE.test(lines[j])) {
+      start = j;
+      break;
+    }
+  }
+  let end = lines.length - 1;
+  for (let j = lineIndex + 1; j < lines.length; j++) {
+    if (J05_MEMBER_START_RE.test(lines[j])) {
+      end = j - 1;
+      break;
+    }
+  }
+  return [start, end];
+}
+function j05ProvenMapLocal(lines, lineIndex, name) {
+  const [start, end] = j05MemberBounds(lines, lineIndex);
+  let declared = false;
+  for (let j = lineIndex; j >= start; j--) {
+    if (J05_MAP_DECL(name).test(lines[j])) {
+      declared = true;
+      break;
+    }
+    if (J05_LOCAL_DECL(name).test(lines[j])) {
+      return false;
+    }
+  }
+  if (!declared) {
+    return false;
+  }
+  let writes = 0;
+  for (let j = start; j <= end; j++) {
+    if (J05_ASSIGN(name).test(lines[j])) {
+      writes++;
+    }
+  }
+  if (writes !== 1) {
+    return false;
+  }
+  return !J05_LAMBDA_PARAM(name).test(lines.slice(start, end + 1).join("\n"));
+}
+function nativeJavaJ05ObjectValues(content) {
+  if (!content.includes("Helpers.objectValues(")) {
+    return content;
+  }
+  const lines = content.split("\n");
+  const call = /Helpers\.objectValues\((\w+)\)/g;
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].includes("Helpers.objectValues(")) {
+      continue;
+    }
+    call.lastIndex = 0;
+    let out = "";
+    let cursor = 0;
+    let m;
+    while ((m = call.exec(lines[i])) !== null) {
+      if (!j05ProvenMapLocal(lines, i, m[1])) {
+        continue;
+      }
+      out += lines[i].slice(cursor, m.index) + "new java.util.ArrayList<Object>(" + m[1] + ".values())";
+      cursor = m.index + m[0].length;
+    }
+    if (cursor > 0) {
+      lines[i] = out + lines[i].slice(cursor);
+    }
+  }
+  return lines.join("\n");
+}
+var J05_SYNC_MEMBERS = /* @__PURE__ */ new Set([
+  "safeString",
+  "safeString2",
+  "safeStringLower",
+  "safeStringUpper",
+  "safeInteger",
+  "safeInteger2",
+  "safeValue",
+  "safeDict",
+  "safeList",
+  "safeFloat",
+  "safeNumber",
+  "safeTimestamp",
+  "safeBool",
+  "json",
+  "parseNumber",
+  "throwExactlyMatchedException",
+  "throwBroadlyMatchedException",
+  "throwMatchedException"
+]);
+var J05_WRAPPER_SOURCE_RE = /\.join\s*\(|\.get\s*\(\s*\)|CompletableFuture|->|\bThread\b|\bawait\b/;
+function j05SyncCatch(lines, lineIndex, name) {
+  const catchRe = /^(\s*)\}?\s*catch\s*\(\s*([\w.]+)\s+(\w+)\s*\)/;
+  let catchAt = -1;
+  let catchIndent = "";
+  let catchType = "";
+  for (let j = lineIndex; j >= 0; j--) {
+    const c = catchRe.exec(lines[j]);
+    if (c !== null) {
+      if (c[3] !== name) {
+        return false;
+      }
+      catchAt = j;
+      catchIndent = c[1];
+      catchType = c[2];
+      break;
+    }
+    if (J05_MEMBER_START_RE.test(lines[j])) {
+      return false;
+    }
+  }
+  if (catchAt < 0) {
+    return false;
+  }
+  if (!/^(?:Exception|Throwable|RuntimeException)$/.test(catchType)) {
+    return false;
+  }
+  let tryAt = -1;
+  for (let j = catchAt - 1; j >= 0; j--) {
+    const t = /^(\s*)try\s*$/.exec(lines[j]);
+    if (t !== null && t[1].length <= catchIndent.length) {
+      tryAt = j;
+      break;
+    }
+    if (J05_MEMBER_START_RE.test(lines[j])) {
+      return false;
+    }
+  }
+  if (tryAt < 0) {
+    return false;
+  }
+  const body = lines.slice(tryAt + 1, catchAt).join("\n");
+  if (J05_WRAPPER_SOURCE_RE.test(body)) {
+    return false;
+  }
+  for (const call of body.matchAll(/(?<![\w.])this\.(\w+)\s*\(/g)) {
+    if (!J05_SYNC_MEMBERS.has(call[1])) {
+      return false;
+    }
+  }
+  return true;
+}
+function nativeJavaJ05IsInstance(content) {
+  if (!content.includes("Helpers.isInstance(")) {
+    return content;
+  }
+  const lines = content.split("\n");
+  const call = /Helpers\.isInstance\((\w+), (\w+)\.class\)/g;
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].includes("Helpers.isInstance(")) {
+      continue;
+    }
+    call.lastIndex = 0;
+    let out = "";
+    let cursor = 0;
+    let m;
+    while ((m = call.exec(lines[i])) !== null) {
+      if (!j05SyncCatch(lines, i, m[1])) {
+        continue;
+      }
+      out += lines[i].slice(cursor, m.index) + "(" + m[1] + " instanceof " + m[2] + ")";
+      cursor = m.index + m[0].length;
+    }
+    if (cursor > 0) {
+      lines[i] = out + lines[i].slice(cursor);
+    }
+  }
+  return lines.join("\n");
+}
+function nativeJavaJ05(content) {
+  return nativeJavaJ05IsInstance(nativeJavaJ05ObjectValues(content));
+}
+function j05FamilySelfTest() {
+  const problems = [];
+  const wrap = (body) => "public class Bitget extends BitgetRest\n{\n    public Object m(Object message, Client client)\n    {\n" + body + "\n    }\n}";
+  const mapCase = [
+    "map local",
+    '        Map<String, Object> data = (Map<String, Object>) this.safeDict(response, "markets", new HashMap<String, Object>() {{}});\n        Object markets = Helpers.objectValues(data);',
+    "new java.util.ArrayList<Object>(data.values())"
+  ];
+  const mapCases = [
+    [mapCase[0], wrap(mapCase[1]), mapCase[2]],
+    ["Object local", wrap('        Object data = this.safeDict(response, "markets", null);\n        Object markets = Helpers.objectValues(data);'), void 0],
+    ["reassigned map local", wrap('        Map<String, Object> data = new HashMap<String, Object>() {{}};\n        data = this.safeDict(response, "markets", null);\n        Object markets = Helpers.objectValues(data);'), void 0],
+    ["map parameter", "public class Bitget extends BitgetRest\n{\n    public Object m(Map<String, Object> data)\n    {\n        return Helpers.objectValues(data);\n    }\n}", void 0]
+  ];
+  for (const [name, input, expect] of mapCases) {
+    const out = nativeJavaJ05ObjectValues(input);
+    const ok = expect === void 0 ? out === input : out.includes(expect) && !out.includes("Helpers.objectValues(");
+    if (!ok) {
+      problems.push("hx10w2 J05 objectValues: " + name + "\n" + out);
+    }
+  }
+  const syncTry = 'public class Bitget extends BitgetRest\n{\n    public Boolean handleErrorMessage(Client client, Object message)\n    {\n        try\n        {\n            this.throwExactlyMatchedException(((Map<String, Object>)this.exceptions.get("ws")).get("exact"), this.safeString(message, "code"), this.json(message));\n        } catch(Exception e)\n        {\n            if (Helpers.isInstance(e, AuthenticationError.class))\n            {\n                return false;\n            }\n        }\n        return true;\n    }\n}';
+  const joinedTry = syncTry.replace("this.json(message)", "this.fetchStatus().join()");
+  const foreignVar = syncTry.replace("Helpers.isInstance(e,", "Helpers.isInstance(error,");
+  const instanceCases = [
+    ["sync catch", syncTry, "(e instanceof AuthenticationError)"],
+    ["negated", syncTry.replace("Helpers.isInstance(e,", "!Helpers.isInstance(e,"), "!(e instanceof AuthenticationError)"],
+    ["join in try", joinedTry, void 0],
+    ["not the catch parameter", foreignVar, void 0]
+  ];
+  for (const [name, input, expect] of instanceCases) {
+    const out = nativeJavaJ05IsInstance(input);
+    const ok = expect === void 0 ? out === input : out.includes(expect) && !out.includes("Helpers.isInstance(");
+    if (!ok) {
+      problems.push("hx10w2 J05 isInstance: " + name + "\n" + out);
+    }
+  }
+  return problems;
+}
+
+// src/java/hx10w2-J06.ts
+init_esm_shims();
+var PLAIN_FIELDS = /* @__PURE__ */ new Set(["tickers", "orderbooks", "trades", "bidsasks", "ohlcvs", "fundingRates"]);
+var CLIENT_FIELDS = /* @__PURE__ */ new Set(["subscriptions", "futures", "rejections"]);
+var TYPE_TOKEN = "[A-Za-z_][\\w.]*(?:<[\\w.<>, ?]+>)?(?:\\[\\])*";
+var STRING_LITERAL = /^"(?:[^"\\]|\\.)*"$/;
+function maskOpaque(text) {
+  const out = text.split("");
+  const blank = (from, to) => {
+    for (let k = from; k < to; k++) {
+      if (out[k] !== "\n")
+        out[k] = " ";
+    }
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < text.length) {
+        if (text[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (text[j] === c)
+          break;
+        j++;
+      }
+      blank(i + 1, Math.min(j, text.length));
+      i = j;
+    } else if (c === "/" && text[i + 1] === "/") {
+      let j = text.indexOf("\n", i);
+      if (j === -1)
+        j = text.length;
+      blank(i, j);
+      i = j - 1;
+    } else if (c === "/" && text[i + 1] === "*") {
+      let j = text.indexOf("*/", i + 2);
+      j = j === -1 ? text.length : j + 2;
+      blank(i, j);
+      i = j - 1;
+    }
+  }
+  return out.join("");
+}
+function closeParen(masked, open) {
+  let depth = 0;
+  for (let i = open; i < masked.length; i++) {
+    const c = masked[i];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function splitArgs2(masked, open, close) {
+  const args = [];
+  let depth = 0;
+  let start = open + 1;
+  for (let i = open + 1; i < close; i++) {
+    const c = masked[i];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      args.push([start, i]);
+      start = i + 1;
+    }
+  }
+  args.push([start, close]);
+  return args;
+}
+function trimmedRange(text, from, to) {
+  let a = from;
+  let b = to;
+  while (a < b && /\s/.test(text[a]))
+    a++;
+  while (b > a && /\s/.test(text[b - 1]))
+    b--;
+  return { start: a, end: b, value: text.slice(a, b) };
+}
+function isStatementStart(masked, idx) {
+  let j = idx - 1;
+  while (j >= 0 && /\s/.test(masked[j]))
+    j--;
+  return j < 0 || masked[j] === ";" || masked[j] === "{" || masked[j] === "}";
+}
+function declaredTypeInMember(lines, lineIndex, name) {
+  const local = new RegExp("^\\s*(?:final\\s+)?(" + TYPE_TOKEN + ")\\s+" + name + "\\s*(?:=|;)");
+  const param = new RegExp("[(,]\\s*(?:final\\s+)?(" + TYPE_TOKEN + ")\\s+" + name + "\\s*[,)]");
+  for (let i = lineIndex - 1; i >= 0; i--) {
+    const line = lines[i];
+    const memberStart = /^ {4}(?:public|private|protected)\b/.test(line);
+    const p = memberStart ? param.exec(line) : null;
+    if (p !== null)
+      return p[1].trim();
+    const l = local.exec(line);
+    if (l !== null)
+      return l[1].trim();
+    if (memberStart)
+      return void 0;
+  }
+  return void 0;
+}
+function lineOffsets(text) {
+  const offsets = [0];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "\n")
+      offsets.push(i + 1);
+  }
+  return offsets;
+}
+function keyPrintsString(keyText, lines, lineIndex) {
+  if (STRING_LITERAL.test(keyText))
+    return true;
+  if (/^\(\(String\)[^()]+\)$/.test(keyText) || /^\(String\)\s*[A-Za-z_][\w.]*$/.test(keyText))
+    return true;
+  if (!/^[A-Za-z_]\w*$/.test(keyText))
+    return false;
+  return declaredTypeInMember(lines, lineIndex, keyText) === "String";
+}
+function nativeJavaJ06FieldOps(content) {
+  if (typeof content !== "string" || !content.includes("Helpers.")) {
+    return content;
+  }
+  if (!content.includes("Helpers.addElementToObject(this.") && !content.includes("Helpers.GetValue(")) {
+    return content;
+  }
+  const masked = maskOpaque(content);
+  const lines = content.split("\n");
+  const offsets = lineOffsets(content);
+  const lineAt = (index) => {
+    let lo = 0;
+    let hi = offsets.length - 1;
+    while (lo < hi) {
+      const mid = lo + hi + 1 >> 1;
+      if (offsets[mid] <= index)
+        lo = mid;
+      else
+        hi = mid - 1;
+    }
+    return lo;
+  };
+  const edits = [];
+  for (const [needle, kind] of [["Helpers.addElementToObject(", "put"], ["Helpers.GetValue(", "get"]]) {
+    let from = 0;
+    while (true) {
+      const at = masked.indexOf(needle, from);
+      if (at === -1)
+        break;
+      from = at + needle.length;
+      if (at > 0 && /[\w.]/.test(masked[at - 1]))
+        continue;
+      const open = at + needle.length - 1;
+      const close = closeParen(masked, open);
+      if (close === -1)
+        continue;
+      const args = splitArgs2(masked, open, close);
+      const receiver = trimmedRange(content, args[0][0], args[0][1]).value;
+      const field = /^this\.([A-Za-z_]\w*)$/.exec(receiver) ?? /^client\.([A-Za-z_]\w*)$/.exec(receiver);
+      if (field === null)
+        continue;
+      const isClient = receiver.startsWith("client.");
+      const name = field[1];
+      if (!(isClient ? CLIENT_FIELDS : PLAIN_FIELDS).has(name))
+        continue;
+      if (kind === "put") {
+        if (isClient || args.length !== 3 || !isStatementStart(masked, at))
+          continue;
+      } else if (args.length !== 2) {
+        continue;
+      }
+      const key = trimmedRange(content, args[1][0], args[1][1]);
+      if (!keyPrintsString(key.value, lines, lineAt(key.start)))
+        continue;
+      if (kind === "put") {
+        const value = trimmedRange(content, args[2][0], args[2][1]);
+        edits.push([at, close + 1, `${receiver}.put(${key.value}, ${value.value})`]);
+      } else {
+        const guard = STRING_LITERAL.test(key.value) ? `${receiver} == null` : `${receiver} == null || ${key.value} == null`;
+        edits.push([at, close + 1, `(${guard} ? null : ${receiver}.get(${key.value}))`]);
+      }
+    }
+  }
+  if (edits.length === 0) {
+    return content;
+  }
+  let out = content;
+  for (const [start, end, text] of edits.sort((a, b) => b[0] - a[0])) {
+    out = out.slice(0, start) + text + out.slice(end);
+  }
+  return out;
+}
+function j06SelfTest() {
+  const problems = [];
+  const cls = (body, params = "Object o, String s, Object v, Client client") => `public class Woo extends WooApi
+{
+    public Object m(${params})
+    {
+${body}
+    }
+}`;
+  const cases = [
+    // native: plain single-owner field, String key
+    ["put literal key", '        Helpers.addElementToObject(this.orderbooks, "a", v);', '        this.orderbooks.put("a", v);'],
+    ["put String local key", '        String symbol = this.safeString(o, "s");\n        Helpers.addElementToObject(this.tickers, symbol, v);', "        this.tickers.put(symbol, v);"],
+    ["put String param key", "        Helpers.addElementToObject(this.ohlcvs, s, v);", "        this.ohlcvs.put(s, v);"],
+    ["put cast key", "        Helpers.addElementToObject(this.trades, ((String)s), v);", "        this.trades.put(((String)s), v);"],
+    ["get literal key", '        return Helpers.GetValue(this.orderbooks, "a");', '        return (this.orderbooks == null ? null : this.orderbooks.get("a"));'],
+    ["get String local key", '        String symbol = this.safeString(o, "s");\n        return Helpers.GetValue(this.tickers, symbol);', "        return (this.tickers == null || symbol == null ? null : this.tickers.get(symbol));"],
+    ["get client map", "        return Helpers.GetValue(client.subscriptions, s);", "        return (client.subscriptions == null || s == null ? null : client.subscriptions.get(s));"],
+    ["get client futures", "        return Helpers.GetValue(client.futures, s);", "        return (client.futures == null || s == null ? null : client.futures.get(s));"],
+    // helper kept: unproven key, unlisted / nullable / concurrent receivers, expression-position put
+    ["put Object key", '        Object k = this.safeValue(o, "k");\n        Helpers.addElementToObject(this.orderbooks, k, v);', void 0],
+    ["put Object param key", "        Helpers.addElementToObject(this.tickers, o, v);", void 0],
+    ["put options field", '        Helpers.addElementToObject(this.options, "a", v);', void 0],
+    ["put markets field", "        Helpers.addElementToObject(this.markets, s, v);", void 0],
+    ["put balance field", "        Helpers.addElementToObject(this.balance, s, v);", void 0],
+    ["put liquidations field", "        Helpers.addElementToObject(this.liquidations, s, v);", void 0],
+    ["put client map", '        Helpers.addElementToObject(client.subscriptions, "a", v);', void 0],
+    ["put expression position", '        Object x = Helpers.addElementToObject(this.tickers, "a", v);', void 0],
+    ["get Object key", "        return Helpers.GetValue(this.tickers, o);", void 0],
+    ["get markets field", "        return Helpers.GetValue(this.markets, s);", void 0],
+    ["get client Object key", "        return Helpers.GetValue(client.subscriptions, o);", void 0]
+  ];
+  for (const [name, body, expect] of cases) {
+    const input = cls(body);
+    let out;
+    try {
+      out = nativeJavaJ06FieldOps(input);
+    } catch (e) {
+      problems.push(`hx10w2 J06: ${name} threw ${e.message}`);
+      continue;
+    }
+    if (expect === void 0 ? out !== input : !out.includes(expect)) {
+      problems.push(`hx10w2 J06: ${name}
+${out}`);
+    }
+    if (nativeJavaJ06FieldOps(out) !== out) {
+      problems.push(`hx10w2 J06: ${name} not idempotent`);
+    }
+  }
+  const commented = cls('        // Helpers.addElementToObject(this.tickers, "a", v);\n        String m = "Helpers.GetValue(this.tickers, s)";');
+  if (nativeJavaJ06FieldOps(commented) !== commented) {
+    problems.push("hx10w2 J06: rewrote inside a comment / literal");
+  }
+  return problems;
+}
+
+// src/java/hx10w3-J01.ts
+init_esm_shims();
+import fs5 from "fs";
+import path5 from "path";
+function JAVA_ROOT2() {
+  return javaRuntimeRoot();
+}
+var WS_FIELDS = ["futures", "subscriptions", "rejections"];
+var MAP_OPS = ["get", "put", "putIfAbsent", "remove", "containsKey", "keySet", "values", "size", "isEmpty", "clear", "entrySet", "computeIfAbsent"];
+var STRING_KEY_OPS = ["put", "putIfAbsent"];
+var FUTURE = "io.github.ccxt.ws.Future";
+var STRING_LITERAL2 = /^"(?:[^"\\]|\\.)*"$/;
+function maskOpaque2(text) {
+  const out = text.split("");
+  const blank = (from, to) => {
+    for (let k = from; k < to; k++) {
+      if (out[k] !== "\n")
+        out[k] = " ";
+    }
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < text.length) {
+        if (text[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (text[j] === c)
+          break;
+        j++;
+      }
+      blank(i + 1, Math.min(j, text.length));
+      i = j;
+    } else if (c === "/" && text[i + 1] === "/") {
+      let j = text.indexOf("\n", i);
+      if (j === -1)
+        j = text.length;
+      blank(i, j);
+      i = j - 1;
+    } else if (c === "/" && text[i + 1] === "*") {
+      let j = text.indexOf("*/", i + 2);
+      j = j === -1 ? text.length : j + 2;
+      blank(i, j);
+      i = j - 1;
+    }
+  }
+  return out.join("");
+}
+function closeOf2(masked, open) {
+  let depth = 0;
+  for (let i = open; i < masked.length; i++) {
+    const c = masked[i];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function argRanges(text, masked, open, close) {
+  const out = [];
+  let depth = 0;
+  let start = open + 1;
+  const push = (from, to) => {
+    let a = from;
+    let b = to;
+    while (a < b && /\s/.test(text[a]))
+      a++;
+    while (b > a && /\s/.test(text[b - 1]))
+      b--;
+    out.push({ start: a, end: b, value: text.slice(a, b) });
+  };
+  for (let i = open + 1; i < close; i++) {
+    const c = masked[i];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      push(start, i);
+      start = i + 1;
+    }
+  }
+  push(start, close);
+  return out;
+}
+function applyEdits(text, edits) {
+  if (edits.length === 0)
+    return text;
+  let out = text;
+  for (const [start, end, replacement] of edits.slice().sort((a, b) => b[0] - a[0])) {
+    out = out.slice(0, start) + replacement + out.slice(end);
+  }
+  return out;
+}
+var normSpace = (t) => t.replace(/\s+/g, " ").trim();
+var wsFieldOf = (e) => {
+  const m = /^client\.([A-Za-z_]\w*)$/.exec(normSpace(e));
+  return m === null || !WS_FIELDS.includes(m[1]) ? void 0 : m[1];
+};
+function printsStringKey(scope, key) {
+  const k = normSpace(key);
+  if (STRING_LITERAL2.test(k))
+    return true;
+  if (/^\(\(?String\)/.test(k))
+    return true;
+  if (!/^[A-Za-z_]\w*$/.test(k))
+    return false;
+  return new RegExp("(?:^|[\\s(,])String " + k + "(?=\\s*(?:=(?!=)|[,);]))").test(scope);
+}
+function spelling(content) {
+  return {
+    map: /\bjava\.util\.Map\s*</.test(content) ? "java.util.Map" : "Map",
+    list: /\bjava\.util\.ArrayList\s*</.test(content) ? "java.util.ArrayList" : "ArrayList"
+  };
+}
+function fieldType(field, sp) {
+  return field === "futures" ? sp.map + "<String, " + FUTURE + ">" : sp.map + "<String, Object>";
+}
+var RECEIVER_CAST = /\(\((?:(?:java\.util\.)?Map\s*(?:<\s*(?:\?\s*,\s*\?|String\s*,\s*Object|String\s*,\s*io\.github\.ccxt\.ws\.Future)\s*>)?)\)\s*(client\.[A-Za-z_]\w*)\s*\)\.(\w+)\(/g;
+function stripReceiverCasts(content) {
+  if (!content.includes("client."))
+    return content;
+  const masked = maskOpaque2(content);
+  const edits = [];
+  for (const m of masked.matchAll(RECEIVER_CAST)) {
+    const field = wsFieldOf(m[1]);
+    if (field === void 0 || !MAP_OPS.includes(m[2]))
+      continue;
+    const argOpen = m.index + m[0].length - 1;
+    const argClose = closeOf2(masked, argOpen);
+    if (argClose === -1)
+      continue;
+    if (STRING_KEY_OPS.includes(m[2])) {
+      const args = argRanges(content, masked, argOpen, argClose);
+      if (args[0] === void 0 || !printsStringKey(content, args[0].value))
+        continue;
+    }
+    edits.push([m.index, m.index + m[0].length, m[1] + "." + m[2] + "("]);
+  }
+  return applyEdits(content, edits);
+}
+var FIELD_READ = /Helpers\.GetValue\(/g;
+function nativeFieldReads(content) {
+  if (!content.includes("Helpers.GetValue(client"))
+    return content;
+  if (!/(?:^|[(,])\s*(?:final\s+)?(?:io\.github\.ccxt\.)?(?:Ws)?Client client\b/.test(content))
+    return content;
+  const masked = maskOpaque2(content);
+  const edits = [];
+  for (const m of masked.matchAll(FIELD_READ)) {
+    if (m.index > 0 && /[\w.]/.test(masked[m.index - 1]))
+      continue;
+    const open = m.index + m[0].length - 1;
+    const close = closeOf2(masked, open);
+    if (close === -1)
+      continue;
+    const args = argRanges(content, masked, open, close);
+    if (args.length !== 2)
+      continue;
+    if (!/^client$/.test(normSpace(args[0].value)))
+      continue;
+    const key = normSpace(args[1].value);
+    const literal = /^"([A-Za-z_]\w*)"$/.exec(key);
+    if (literal === null || !WS_FIELDS.includes(literal[1]))
+      continue;
+    edits.push([m.index, close + 1, "client." + literal[1]]);
+  }
+  return applyEdits(content, edits);
+}
+function nativeMapReads(content) {
+  if (!content.includes("Helpers.GetValue("))
+    return content;
+  if (!/(?:^|[(,])\s*(?:final\s+)?(?:io\.github\.ccxt\.)?(?:Ws)?Client client\b/.test(content))
+    return content;
+  const masked = maskOpaque2(content);
+  const edits = [];
+  for (const m of masked.matchAll(FIELD_READ)) {
+    if (m.index > 0 && /[\w.]/.test(masked[m.index - 1]))
+      continue;
+    const open = m.index + m[0].length - 1;
+    const close = closeOf2(masked, open);
+    if (close === -1)
+      continue;
+    const args = argRanges(content, masked, open, close);
+    if (args.length !== 2)
+      continue;
+    const receiver = normSpace(args[0].value);
+    if (wsFieldOf(receiver) === void 0)
+      continue;
+    const key = normSpace(args[1].value);
+    if (STRING_LITERAL2.test(key)) {
+      edits.push([m.index, close + 1, "(" + receiver + " == null ? null : " + receiver + ".get(" + key + "))"]);
+    } else if (/^[A-Za-z_]\w*$/.test(key) && printsStringKey(content, key)) {
+      edits.push([m.index, close + 1, "(" + receiver + " == null || " + key + " == null ? null : " + receiver + ".get(" + key + "))"]);
+    }
+  }
+  return applyEdits(content, edits);
+}
+function stripKeySetBlobs(content, sp) {
+  const NEEDLE = "switch ((Object)(client.";
+  if (!content.includes(NEEDLE))
+    return content;
+  const masked = maskOpaque2(content);
+  const head = "((List<Object>) ";
+  const edits = [];
+  let from = 0;
+  for (; ; ) {
+    const at = masked.indexOf(NEEDLE, from);
+    if (at === -1)
+      break;
+    from = at + NEEDLE.length;
+    let start = -1;
+    for (const h of [head, "((java.util.List<Object>) "]) {
+      const s = at - h.length;
+      if (s >= 0 && masked.slice(s, at) === h) {
+        start = s;
+        break;
+      }
+    }
+    if (start === -1)
+      continue;
+    const fieldEnd = masked.indexOf(")", at + NEEDLE.length);
+    if (fieldEnd === -1)
+      continue;
+    const field = masked.slice(at + NEEDLE.length, fieldEnd).trim();
+    if (!WS_FIELDS.includes(field))
+      continue;
+    const end = closeOf2(masked, start);
+    if (end === -1)
+      continue;
+    const z = masked.slice(start, end + 1).replace(/java\.util\./g, "").replace(/\s+/g, " ").trim();
+    const sync = "-> { synchronized (";
+    const syncAt = z.indexOf(sync);
+    if (syncAt === -1)
+      continue;
+    const nameEnd = z.indexOf(")", syncAt + sync.length);
+    if (nameEnd === -1)
+      continue;
+    const v = z.slice(syncAt + sync.length, nameEnd);
+    const receiver = "client." + field;
+    for (const member of ["keySet", "values"]) {
+      const expected = "((List<Object>) switch ((Object)(" + receiver + ")) { case Map<?, ?> " + v + " -> { synchronized (" + v + ") { yield new ArrayList<Object>(" + v + "." + member + "()); } } case null, default -> new ArrayList<Object>(); })";
+      if (z !== expected)
+        continue;
+      edits.push([start, end + 1, "new " + sp.list + "<Object>(" + receiver + "." + member + "())"]);
+    }
+  }
+  return applyEdits(content, edits);
+}
+function stripKeyValueHelpers(content, sp, aliases) {
+  if (!content.includes("Helpers.objectKeys(") && !content.includes("Helpers.objectValues("))
+    return content;
+  const masked = maskOpaque2(content);
+  const edits = [];
+  for (const m of masked.matchAll(/Helpers\.object(Keys|Values)\(/g)) {
+    if (m.index > 0 && /[\w.]/.test(masked[m.index - 1]))
+      continue;
+    const open = m.index + m[0].length - 1;
+    const close = closeOf2(masked, open);
+    if (close === -1)
+      continue;
+    const args = argRanges(content, masked, open, close);
+    if (args.length !== 1)
+      continue;
+    const target = normSpace(args[0].value);
+    const field = wsFieldOf(target) ?? aliases.get(target);
+    if (field === void 0)
+      continue;
+    const member = m[1] === "Keys" ? "keySet" : "values";
+    edits.push([m.index, close + 1, "new " + sp.list + "<Object>(" + target + "." + member + "())"]);
+  }
+  return applyEdits(content, edits);
+}
+var ALIAS_DECL = /(^|\n)([ \t]*)Object ([A-Za-z_]\w*) = (client\.(?:futures|subscriptions|rejections));/g;
+var ALIAS_METHODS = /* @__PURE__ */ new Set([...MAP_OPS, "toString", "equals", "hashCode", "forEach", "containsValue", "getOrDefault", "replace", "replaceAll", "compute", "merge", "putAll", "clone"]);
+var MAP_CAST_PREFIX = /\(\((?:[\w]+\.)*Map\s*(?:<[^()]*>)?\)\s*$/;
+var FOREIGN_CAST = /\(\(?(?:String|Long|Double|Integer|Boolean|Number|List|Set|Collection|Map\.Entry|Object\[\])\s*(?:<[^()]*>)?\)\s*$/;
+function retypeAliases(member, sp) {
+  const aliases = /* @__PURE__ */ new Map();
+  if (!member.includes("= client."))
+    return { member, aliases };
+  const masked = maskOpaque2(member);
+  const edits = [];
+  for (const m of masked.matchAll(ALIAS_DECL)) {
+    const name = m[3];
+    const field = m[4].replace("client.", "");
+    const declAt = m.index + m[1].length + m[2].length;
+    const declEnd = declAt + "Object".length;
+    const write = new RegExp("(?<![\\w.])" + name + "\\s*(?:=(?!=)|[+\\-*/]?=|\\+\\+|--)", "g");
+    const writes = [...masked.matchAll(write)];
+    if (writes.length !== 1 || writes[0].index !== declEnd + 1)
+      continue;
+    const uses = [...masked.matchAll(new RegExp("(?<![\\w.])" + name + "(?![\\w])", "g"))];
+    let usable = true;
+    for (const use of uses) {
+      if (use.index === declAt || use.index === declEnd + 1)
+        continue;
+      const before = masked.slice(Math.max(0, use.index - 60), use.index);
+      const after = masked.slice(use.index + name.length, use.index + name.length + 40);
+      if (FOREIGN_CAST.test(before) || /^\s*\[/.test(after)) {
+        usable = false;
+        break;
+      }
+      const call = /^\.\s*([A-Za-z_]\w*)\s*\(/.exec(after);
+      if (call !== null && !ALIAS_METHODS.has(call[1])) {
+        usable = false;
+        break;
+      }
+    }
+    if (!usable)
+      continue;
+    aliases.set(name, field);
+    edits.push([declAt, declEnd, fieldType(field, sp)]);
+    for (const use of uses) {
+      if (use.index === declAt || use.index === declEnd + 1)
+        continue;
+      const before = masked.slice(Math.max(0, use.index - 60), use.index);
+      const cast = MAP_CAST_PREFIX.exec(before);
+      if (cast === null)
+        continue;
+      const tail = masked[use.index + name.length] === ")" ? 1 : 0;
+      edits.push([use.index - cast[0].length, use.index + name.length + tail, name]);
+    }
+  }
+  return { member: applyEdits(member, edits), aliases };
+}
+function nonNullValue2(value, depth) {
+  const v = normSpace(value);
+  if (v === "" || v === "null" || v === "undefined")
+    return false;
+  if (/\bnull\b/.test(v))
+    return false;
+  if (/^-?\d+(?:\.\d+)?[LD]?$/.test(v) || v === "true" || v === "false")
+    return true;
+  if (STRING_LITERAL2.test(v))
+    return true;
+  if (/^new [\w.]+(?:<[\w.<>, ?]*>)?\s*\(/.test(v))
+    return true;
+  if (/^this\.extend\s*\(/.test(v))
+    return true;
+  if (/^client\.(?:future|reusableFuture)\s*\(/.test(v))
+    return true;
+  if (depth < 2) {
+    const cast = /^\([^()]*\)\s*(.+)$/s.exec(v);
+    if (cast !== null)
+      return nonNullValue2(cast[1], depth + 1);
+  }
+  return false;
+}
+function nativeElementWrites(content) {
+  if (!content.includes("Helpers.addElementToObject(client."))
+    return content;
+  const masked = maskOpaque2(content);
+  const edits = [];
+  for (const m of masked.matchAll(/Helpers\.addElementToObject\(/g)) {
+    if (m.index > 0 && /[\w.]/.test(masked[m.index - 1]))
+      continue;
+    const open = m.index + m[0].length - 1;
+    const close = closeOf2(masked, open);
+    if (close === -1 || masked[close + 1] !== ";")
+      continue;
+    const args = argRanges(content, masked, open, close);
+    if (args.length !== 3)
+      continue;
+    const field = wsFieldOf(args[0].value);
+    if (field === void 0 || field === "futures")
+      continue;
+    if (!printsStringKey(content, args[1].value))
+      continue;
+    if (!nonNullValue2(args[2].value, 0))
+      continue;
+    edits.push([m.index, close + 1, "client." + field + ".put(" + args[1].value + ", " + args[2].value + ")"]);
+  }
+  return applyEdits(content, edits);
+}
+var FUTURE_LOCAL = /(^|\n)([ \t]*)Object ([A-Za-z_]\w*) = (client\.futures\.get\()/g;
+function retypeFutureLocals(content) {
+  if (!content.includes("client.futures.get("))
+    return content;
+  const masked = maskOpaque2(content);
+  const edits = [];
+  for (const m of masked.matchAll(FUTURE_LOCAL)) {
+    const name = m[3];
+    const declAt = m.index + m[1].length + m[2].length;
+    if ([...masked.matchAll(new RegExp("(?<![\\w.])" + name + "\\s*=(?!=)", "g"))].length !== 1)
+      continue;
+    edits.push([declAt, declAt + "Object".length, FUTURE]);
+    const cast = new RegExp("\\(\\(io\\.github\\.ccxt\\.ws\\.Future\\)\\s*" + name + "\\s*\\)", "g");
+    for (const c of masked.matchAll(cast))
+      edits.push([c.index, c.index + c[0].length, name]);
+  }
+  return applyEdits(content, edits);
+}
+function stripFutureCasts(member) {
+  if (!member.includes("((io.github.ccxt.ws.Future)"))
+    return member;
+  const masked = maskOpaque2(member);
+  const edits = [];
+  const declared = new Set([...masked.matchAll(/(?:^|[\s(,])io\.github\.ccxt\.ws\.Future ([A-Za-z_]\w*)(?=\s*(?:=(?!=)|[,);]))/g)].map((m) => m[1]));
+  for (const m of masked.matchAll(/\(\(io\.github\.ccxt\.ws\.Future\)\s*([A-Za-z_]\w*)\s*\)/g)) {
+    if (declared.has(m[1]))
+      edits.push([m.index, m.index + m[0].length, m[1]]);
+  }
+  return applyEdits(member, edits);
+}
+function stripFutureTernaryCasts(content) {
+  if (!content.includes("(io.github.ccxt.ws.Future)(client.futures == null"))
+    return content;
+  const masked = maskOpaque2(content);
+  const edits = [];
+  for (const m of masked.matchAll(/\(io\.github\.ccxt\.ws\.Future\)\(client\.futures == null/g)) {
+    const open = m.index + "(io.github.ccxt.ws.Future)".length;
+    const close = closeOf2(masked, open);
+    if (close === -1)
+      continue;
+    const inner = content.slice(open + 1, close);
+    if (!/^client\.futures == null \|\| .+ == null \? null : client\.futures\.get\(.+\)$/s.test(inner))
+      continue;
+    edits.push([m.index, open, ""]);
+  }
+  return applyEdits(content, edits);
+}
+function membersOf(content) {
+  const lines = content.split("\n");
+  const starts = [0];
+  for (let i = 1; i < lines.length; i++) {
+    if (/^ {4}(?:public|private|protected)\b/.test(lines[i]))
+      starts.push(i);
+  }
+  starts.push(lines.length);
+  const parts = [];
+  for (let s = 0; s + 1 < starts.length; s++)
+    parts.push(lines.slice(starts[s], starts[s + 1]).join("\n"));
+  return parts;
+}
+function j01wsNativeOps(content) {
+  if (typeof content !== "string")
+    return content;
+  if (!WS_FIELDS.some((f) => content.includes("client." + f)) && !content.includes("Helpers.GetValue(client"))
+    return content;
+  const sp = spelling(content);
+  let out = content;
+  out = nativeFieldReads(out);
+  out = nativeMapReads(out);
+  out = stripReceiverCasts(out);
+  out = stripKeySetBlobs(out, sp);
+  out = nativeElementWrites(out);
+  out = retypeFutureLocals(out);
+  out = stripFutureTernaryCasts(out);
+  return membersOf(out).map((member) => {
+    const retyped = retypeAliases(member, sp);
+    return stripKeyValueHelpers(stripFutureCasts(retyped.member), sp, retyped.aliases);
+  }).join("\n");
+}
+function j01wsSelfTest() {
+  const problems = [];
+  const cls = (body) => "public class Gemini extends GeminiRest\n{\n    public Object m(Client client, Object o, String s)\n    {\n" + body + "\n    }\n}";
+  const cases = [
+    ["keySet blob", "        List<Object> keys = ((List<Object>) switch ((Object)(client.subscriptions)) { case Map<?, ?> j39v1 -> { synchronized (j39v1) { yield new ArrayList<Object>(j39v1.keySet()); } } case null, default -> new ArrayList<Object>(); });", "        List<Object> keys = new ArrayList<Object>(client.subscriptions.keySet());"],
+    ["qualified keySet blob", "        java.util.List<Object> keys = ((java.util.List<Object>) switch ((Object)(client.subscriptions)) { case Map<?, ?> j39v1 -> { synchronized (j39v1) { yield new java.util.ArrayList<Object>(j39v1.keySet()); } } case null, default -> new java.util.ArrayList<Object>(); });", "        java.util.List<Object> keys = new java.util.ArrayList<Object>(client.subscriptions.keySet());"],
+    ["objectValues helper", "        Object values = Helpers.objectValues(client.subscriptions);", "        Object values = new ArrayList<Object>(client.subscriptions.values());"],
+    ["objectKeys helper", "        Object keys = Helpers.objectKeys(client.futures);", "        Object keys = new ArrayList<Object>(client.futures.keySet());"],
+    ["cast receiver op", "        return ((Map<?, ?>)client.futures).containsKey(s);", "        return client.futures.containsKey(s);"],
+    ["cast receiver put", "        ((Map)client.subscriptions).put(s, o);", "        client.subscriptions.put(s, o);"],
+    ["cast receiver remove", "        ((Map<String,Object>)client.subscriptions).remove(s);", "        client.subscriptions.remove(s);"],
+    ["raw cast Future local", '        Object promise = ((Map)client.futures).get("authenticated");\n        ((io.github.ccxt.ws.Future)promise).resolve(o);', '        io.github.ccxt.ws.Future promise = client.futures.get("authenticated");\n        promise.resolve(o);'],
+    ["future ternary cast", "        io.github.ccxt.ws.Future f = (io.github.ccxt.ws.Future)(client.futures == null || s == null ? null : client.futures.get(s));", "        io.github.ccxt.ws.Future f = (client.futures == null || s == null ? null : client.futures.get(s));"],
+    ["reflected field read", '        Object futs = Helpers.GetValue(client, "futures");', "        Map<String, io.github.ccxt.ws.Future> futs = client.futures;"],
+    ["reflected map read", '        Object v = Helpers.GetValue(client.subscriptions, "authenticated");', '        Object v = (client.subscriptions == null ? null : client.subscriptions.get("authenticated"));'],
+    ["put helper non-null", "        Helpers.addElementToObject(client.subscriptions, s, this.extend(o, o));", "        client.subscriptions.put(s, this.extend(o, o));"],
+    ["put helper live future", "        Helpers.addElementToObject(client.subscriptions, s, client.reusableFuture(s));", "        client.subscriptions.put(s, client.reusableFuture(s));"],
+    ["alias local", "        Object subs = client.subscriptions;\n        List<String> keys = new ArrayList<String>(((Map<String, Object>)subs).keySet());", "        Map<String, Object> subs = client.subscriptions;\n        List<String> keys = new ArrayList<String>(subs.keySet());"],
+    ["alias future map", "        Object futs = client.futures;\n        boolean has = ((Map<?, ?>)futs).containsKey(s);", "        Map<String, io.github.ccxt.ws.Future> futs = client.futures;\n        boolean has = futs.containsKey(s);"],
+    // helper / cast kept: a null value on a ConcurrentHashMap, an unproven key, a box a use needs, a write
+    ["null value keeps helper", "        Helpers.addElementToObject(client.subscriptions, s, null);", void 0],
+    ["nullable value keeps helper", "        Object v = this.safeValue(o, s);\n        Helpers.addElementToObject(client.subscriptions, s, v);", void 0],
+    ["Object key keeps raw cast", "        ((Map)client.subscriptions).put(o, s);", void 0],
+    ["reassigned alias keeps Object", "        Object subs = client.subscriptions;\n        subs = this.safeValue(o, s);\n        List<String> keys = new ArrayList<String>(((Map<String, Object>)subs).keySet());", void 0],
+    ["Object local Future cast kept", "        Object f = this.safeValue(o, s);\n        ((io.github.ccxt.ws.Future)f).resolve(o);", void 0]
+  ];
+  for (const [name, body, expect] of cases) {
+    const input = cls(body);
+    const out = j01wsNativeOps(input);
+    const ok = expect === void 0 ? out === input : out.includes(expect);
+    if (!ok)
+      problems.push("hx10w3 J01: " + name + "\n" + out);
+    if (j01wsNativeOps(out) !== out)
+      problems.push("hx10w3 J01: " + name + " not idempotent");
+  }
+  problems.push(...hx10w3J01HeaderCheck());
+  const commented = cls('        // Helpers.objectValues(client.subscriptions);\n        String m = "((Map)client.subscriptions).put(s, o)";');
+  if (j01wsNativeOps(commented) !== commented)
+    problems.push("hx10w3 J01: rewrote inside a comment / literal");
+  return problems;
+}
+function hx10w3J01HeaderCheck() {
+  let text = "";
+  try {
+    text = fs5.readFileSync(path5.join(JAVA_ROOT2(), "ws", "WsClient.java"), "utf8");
+  } catch (e) {
+    return ["hx10w3 J01: cannot read ws/WsClient.java"];
+  }
+  const problems = [];
+  const shapes = [
+    ["Map<String, Future> futures", /public (?:final )?Map<String, (?:io\.github\.ccxt\.ws\.)?Future> futures\b/],
+    ["Map<String, Object> subscriptions", /public (?:final )?Map<String, Object> subscriptions\b/],
+    ["Map<String, Object> rejections", /public (?:final )?Map<String, Object> rejections\b/]
+  ];
+  for (const [name, shape] of shapes) {
+    if (!shape.test(text))
+      problems.push("hx10w3 J01: ws/WsClient.java no longer declares " + name);
+  }
+  return problems;
+}
+
+// src/java/hx10w3-J02.ts
+init_esm_shims();
+import fs6 from "fs";
+import path6 from "path";
+function J02_ROOT() {
+  return javaRuntimeRoot();
+}
+var J02_BASE = path6.join(J02_ROOT(), "BaseExchange.java");
+var J02_DELIM = "// METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT";
+var J02_BALANCE_DECL = /^\s+public Map<String, Object> balance = new HashMap<>\(\);\s*$/m;
+var J02_CALL = "Helpers.addElementToObject(this.balance,";
+var J02_STRING_LITERAL2 = /^"(?:[^"\\]|\\.)*"$/;
+var J02_STOP = ["return", "new", "else", "case", "throw", "instanceof", "yield", "assert"];
+function j02Mask2(text) {
+  const out = text.split("");
+  const blank = (from, to) => {
+    for (let k = from; k < to; k++)
+      if (out[k] !== "\n")
+        out[k] = " ";
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < text.length) {
+        if (text[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (text[j] === c)
+          break;
+        j++;
+      }
+      blank(i + 1, Math.min(j, text.length));
+      i = j;
+    } else if (c === "/" && text[i + 1] === "/") {
+      let j = text.indexOf("\n", i);
+      if (j === -1)
+        j = text.length;
+      blank(i, j);
+      i = j - 1;
+    } else if (c === "/" && text[i + 1] === "*") {
+      let j = text.indexOf("*/", i + 2);
+      j = j === -1 ? text.length : j + 2;
+      blank(i, j);
+      i = j - 1;
+    }
+  }
+  return out.join("");
+}
+function j02Close2(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      if (--depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function j02Split(text) {
+  const out = [];
+  let depth = 0;
+  let at = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let closed = false;
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (text[j] === c) {
+          i = j;
+          closed = true;
+          break;
+        }
+      }
+      if (!closed)
+        return void 0;
+      continue;
+    }
+    if (c === "<" && /[\w]/.test(text[i - 1] ?? "")) {
+      const generic = /^<[\w.?,\s<>]*>/.exec(text.slice(i));
+      if (generic !== null) {
+        i += generic[0].length - 1;
+        continue;
+      }
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      out.push(text.slice(at, i).trim());
+      at = i + 1;
+    }
+  }
+  if (depth !== 0)
+    return void 0;
+  out.push(text.slice(at).trim());
+  return out;
+}
+function j02Member(lines, index) {
+  let start = index;
+  while (start > 0 && !/^ {4}(?:public|private|protected)\b/.test(lines[start]))
+    start--;
+  let end = start + 1;
+  while (end < lines.length && !/^ {4}(?:public|private|protected)\b/.test(lines[end]))
+    end++;
+  return { text: lines.slice(start, end).join("\n"), start };
+}
+function j02Types(member, name) {
+  const types = /* @__PURE__ */ new Set();
+  const re = new RegExp(`(?:^|[\\s(,])((?:final )?[\\w.]+(?:<[\\w.?]+(?:<[\\w.?, ]*>)?(?:, [\\w.?]+(?:<[\\w.?, ]*>)?)*>)?) ${name}(?=\\s*(?:=(?!=)|[,);:]))`, "gm");
+  for (const m of member.matchAll(re)) {
+    const t = m[1].replace(/^final /, "");
+    if (J02_STOP.includes(t))
+      continue;
+    types.add(t);
+  }
+  return [...types];
+}
+function j02IsParam(member, name) {
+  const newline = member.indexOf("\n");
+  const signature = (newline === -1 ? member : member.slice(0, newline)).replace(/\{.*$/, "");
+  return new RegExp(`[(,]\\s*(?:final\\s+)?[\\w.<>, ?\\[\\]]+ ${name}\\s*[,)]`).test(signature);
+}
+function j02Writes(member, name) {
+  const masked = j02Mask2(member);
+  const writes = [];
+  const re = new RegExp(`(?<![\\w.])${name}\\s*=(?![=>])(?<![+\\-*/%&|^]=)`, "g");
+  let m;
+  while ((m = re.exec(masked)) !== null) {
+    const at = m.index + m[0].length;
+    let depth = 0;
+    let end = -1;
+    for (let i = at; i < masked.length; i++) {
+      const c = masked[i];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      else if (c === ";" && depth === 0) {
+        end = i;
+        break;
+      } else if (c === "\n" && depth === 0)
+        return void 0;
+    }
+    if (end === -1)
+      return void 0;
+    writes.push(member.slice(at, end).trim());
+  }
+  return writes;
+}
+function j02Unparen(text) {
+  let t = text.trim();
+  for (; ; ) {
+    if (!t.startsWith("("))
+      return t;
+    const close = j02Close2(t, 0);
+    if (close !== t.length - 1)
+      return t;
+    t = t.slice(1, -1).trim();
+  }
+}
+var producersCache;
+var fieldIsMapCache;
+function j02Producers() {
+  if (producersCache !== void 0)
+    return producersCache;
+  const returns = /* @__PURE__ */ new Map();
+  const walk = (dir) => {
+    let names = [];
+    try {
+      names = fs6.readdirSync(dir);
+    } catch (e) {
+      return;
+    }
+    for (const name of names) {
+      const full = path6.join(dir, name);
+      let stat;
+      try {
+        stat = fs6.statSync(full);
+      } catch (e) {
+        continue;
+      }
+      if (stat.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!name.endsWith(".java"))
+        continue;
+      let text = "";
+      try {
+        text = j02Mask2(fs6.readFileSync(full, "utf8"));
+      } catch (e) {
+        continue;
+      }
+      const signature = /(?:public|protected|private)[\w<>\[\], .]*\s(\w+)\s*\([^;{]*\)\s*(?:throws [\w, .]+)?\s*\{/g;
+      let m;
+      while ((m = signature.exec(text)) !== null) {
+        const open = text.indexOf("{", m.index + m[0].length - 1);
+        const close = j02Close2(text, open);
+        if (open < 0 || close < 0)
+          continue;
+        const body = text.slice(open, close);
+        const found = [...body.matchAll(/(?<![\w.])return\s+([^;]+);/g)].map((r) => r[1].trim());
+        const list = returns.get(m[1]) ?? [];
+        list.push(found);
+        returns.set(m[1], list);
+      }
+    }
+  };
+  walk(J02_ROOT());
+  const producers = /* @__PURE__ */ new Set();
+  let grew = true;
+  let rounds = 0;
+  while (grew && rounds < 8) {
+    grew = false;
+    rounds++;
+    for (const [name, declarations] of returns) {
+      if (producers.has(name))
+        continue;
+      const ok = declarations.every((found) => found.length > 0 && found.every((value) => {
+        const v = j02Unparen(value);
+        if (J02_STRING_LITERAL2.test(v) || /^-?\d+(?:\.\d+)?[LD]?$/.test(v) || v === "true" || v === "false")
+          return true;
+        if (/^new [\w.]+(?:<[\w.<>, ?]*>)?\(/.test(v))
+          return true;
+        const call = /^this\.([A-Za-z_]\w*)\s*\(/.exec(v) ?? /^[A-Z][\w.]*\.([A-Za-z_]\w*)\s*\(/.exec(v);
+        return call !== null && producers.has(call[1]);
+      }));
+      if (ok) {
+        producers.add(name);
+        grew = true;
+      }
+    }
+  }
+  producersCache = producers;
+  return producers;
+}
+function j02FieldIsMap() {
+  if (fieldIsMapCache !== void 0)
+    return fieldIsMapCache;
+  let header = "";
+  try {
+    header = fs6.readFileSync(J02_BASE, "utf8").split(J02_DELIM)[0];
+  } catch (e) {
+    header = "";
+  }
+  fieldIsMapCache = J02_BALANCE_DECL.test(header);
+  return fieldIsMapCache;
+}
+function j02NonNull(member, value, producers, depth) {
+  const v = j02Unparen(value);
+  if (J02_STRING_LITERAL2.test(v) || /^-?\d+(?:\.\d+)?[LD]?$/.test(v) || v === "true" || v === "false")
+    return true;
+  if (v === "null" || v === "undefined")
+    return false;
+  if (/^new [\w.]+(?:<[\w.<>, ?]*>)?\(/.test(v))
+    return true;
+  const call = /^this\.([A-Za-z_]\w*)\s*\(/.exec(v) ?? /^[A-Z][\w.]*\.([A-Za-z_]\w*)\s*\(/.exec(v);
+  if (call !== null && !/^Helpers$/.test(v.split(".")[0]) && producers.has(call[1]))
+    return true;
+  const cast = /^\([\w.<>, ?\[\]]+\)\s*(.+)$/s.exec(v);
+  if (cast !== null && depth < 3)
+    return j02NonNull(member, cast[1], producers, depth + 1);
+  if (depth < 2 && /^[A-Za-z_]\w*$/.test(v)) {
+    if (j02IsParam(member, v))
+      return false;
+    if (j02Types(member, v).length !== 1)
+      return false;
+    const writes = j02Writes(member, v);
+    return writes !== void 0 && writes.length > 0 && writes.every((w) => j02NonNull(member, w, producers, depth + 1));
+  }
+  return false;
+}
+function j02KeyIsString(member, key) {
+  if (J02_STRING_LITERAL2.test(key))
+    return true;
+  if (/^\(\(String\)\s*[A-Za-z_]\w*\s*\)$/.test(key) || /^\(String\)\s*[A-Za-z_]\w*$/.test(key))
+    return true;
+  if (!/^[A-Za-z_]\w*$/.test(key))
+    return false;
+  const types = j02Types(member, key);
+  return types.length === 1 && types[0] === "String";
+}
+function hx10w3J02BalancePuts(content, options = {}) {
+  if (typeof content !== "string" || !content.includes(J02_CALL))
+    return content;
+  const fieldIsMap = options.fieldIsMap ?? j02FieldIsMap();
+  if (!fieldIsMap)
+    return content;
+  const producers = options.producers ?? j02Producers();
+  const lines = content.split("\n");
+  let changed = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.includes(J02_CALL))
+      continue;
+    if (/^\s*(?:\/\/|\*)/.test(line))
+      continue;
+    const member = j02Member(lines, i);
+    const indent = /^(\s*)/.exec(line)[1];
+    if (line.slice(indent.length).indexOf(J02_CALL) !== 0)
+      continue;
+    const open = indent.length + "Helpers.addElementToObject".length;
+    const close = j02Close2(line, open);
+    if (close === -1 || line[close + 1] !== ";")
+      continue;
+    const args = j02Split(line.slice(open + 1, close));
+    if (args === void 0 || args.length !== 3)
+      continue;
+    const [receiver, key, value] = args;
+    if (receiver !== "this.balance")
+      continue;
+    if (!j02KeyIsString(member.text, key))
+      continue;
+    if (!j02NonNull(member.text, value, producers, 0))
+      continue;
+    lines[i] = `${indent}this.balance.put(${key}, ${value});${line.slice(close + 2)}`;
+    changed = true;
+  }
+  return changed ? lines.join("\n") : content;
+}
+function j02BalanceSelfTest() {
+  const problems = [];
+  const producers = /* @__PURE__ */ new Set(["safeBalance", "extend"]);
+  const run = (body, signature = "Object v") => hx10w3J02BalancePuts(
+    `public class Zz02 extends BaseExchange
+{
+    public Object m(${signature})
+    {
+${body}
+    }
+}`,
+    { producers, fieldIsMap: true }
+  );
+  const cases = [
+    ["literal value", '        Helpers.addElementToObject(this.balance, "info", "x");', 'this.balance.put("info", "x");'],
+    ["fresh map value", "        Helpers.addElementToObject(this.balance, code, new HashMap<String, Object>() {{}});", "this.balance.put(code, new HashMap<String, Object>() {{}});", "String code"],
+    ["producer call value", '        Helpers.addElementToObject(this.balance, "cash", this.safeBalance(v));', 'this.balance.put("cash", this.safeBalance(v));'],
+    ["local with fresh writes", '        Map<String, Object> account = new HashMap<String, Object>() {{}};\n        Helpers.addElementToObject(this.balance, "x", account);', 'this.balance.put("x", account);'],
+    ["String-declared key", '        String type = this.safeString(v, "t");\n        Helpers.addElementToObject(this.balance, type, this.extend(v, this.balance));', "this.balance.put(type, this.extend(v, this.balance));"],
+    // the helper stays: a nullable value, an unproven producer, an Object key, a non-statement position
+    ["nullable value", '        Long timestamp = this.safeInteger(v, "t");\n        Helpers.addElementToObject(this.balance, "timestamp", timestamp);', void 0],
+    ["unproven producer", '        Helpers.addElementToObject(this.balance, "info", this.safeDict(v, "info", (Object) null));', void 0],
+    ["Object key", '        Object code = v;\n        Helpers.addElementToObject(this.balance, code, "x");', void 0],
+    ["value position", '        return Helpers.addElementToObject(this.balance, "a", "x");', void 0],
+    ["guarded get target", '        Helpers.addElementToObject((this.balance == null ? null : this.balance.get("a")), "b", "x");', void 0]
+  ];
+  for (const [name, body, expect, signature] of cases) {
+    const input = run(body, signature);
+    const out = hx10w3J02BalancePuts(input, { producers, fieldIsMap: true });
+    const ok = expect === void 0 ? out === input : out.includes(expect);
+    if (!ok)
+      problems.push(`hx10w3 J02: ${name}
+${out}`);
+    if (hx10w3J02BalancePuts(out, { producers, fieldIsMap: true }) !== out)
+      problems.push(`hx10w3 J02: ${name} not idempotent`);
+  }
+  const objectField = hx10w3J02BalancePuts(run(cases[0][1]), { producers, fieldIsMap: false });
+  const objectInput = run(cases[0][1]);
+  if (objectField !== objectInput)
+    problems.push("hx10w3 J02: an Object-typed balance field must keep the helper");
+  return problems;
+}
+onJavaRuntimeRootChange(() => {
+  producersCache = void 0;
+  fieldIsMapCache = void 0;
+});
+
+// src/java/hx10w3-J04.ts
+init_esm_shims();
+import fs7 from "fs";
+import path7 from "path";
+function J04_ROOT() {
+  return javaRuntimeRoot();
+}
+function J04_HEADERS() {
+  return ["BaseExchange.java", "Exchange.java", "PredictionExchange.java"].map((f) => path7.join(J04_ROOT(), f));
+}
+var J04_DELIM = "// METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT";
+var OPTIONS_FIELD = /^ {4}public\s+Map<\s*String\s*,\s*Object\s*>\s+options\s*=\s*new\s+(?:java\.util\.concurrent\.)?(?:ConcurrentHashMap|SynchronizedOptions)/m;
+var DECL_STOP2 = ["return", "new", "else", "case", "throw", "instanceof", "yield", "assert"];
+var norm = (t) => t.replace(/^java\.util\.concurrent\./, "").replace(/^java\.util\./, "").replace(/\s+/g, " ").trim();
+var NUMBER_TYPES = /* @__PURE__ */ new Set(["long", "int", "short", "byte", "double", "float", "Long", "Integer", "Double", "Float", "Short", "Byte"]);
+var PRIMITIVE_TYPES = /* @__PURE__ */ new Set(["long", "int", "short", "byte", "char", "double", "float", "boolean"]);
+var boolHelpers = /^Helpers\.(?:isEqual|isGreaterThan|isGreaterThanOrEqual|isLessThan|isLessThanOrEqual|inOp|isTrue|startsWith|endsWith|isArray|isString|isInteger|isFloat|isObject)\(/;
+var boxedMethods = /* @__PURE__ */ new Set(["milliseconds", "seconds", "sum"]);
+function closeOf3(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let closed = false;
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (text[j] === c) {
+          i = j;
+          closed = true;
+          break;
+        }
+      }
+      if (!closed)
+        return -1;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      if (--depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function splitArgs3(text) {
+  const out = [];
+  let depth = 0, at = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let closed = false;
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (text[j] === c) {
+          i = j;
+          closed = true;
+          break;
+        }
+      }
+      if (!closed)
+        return void 0;
+      continue;
+    }
+    if (c === "<" && /[\w]/.test(text[i - 1] ?? "")) {
+      const g = /^<[\w.?,\s<>]*>/.exec(text.slice(i));
+      if (g !== null) {
+        i += g[0].length - 1;
+        continue;
+      }
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      out.push(text.slice(at, i).trim());
+      at = i + 1;
+    }
+  }
+  if (depth !== 0)
+    return void 0;
+  out.push(text.slice(at).trim());
+  return out;
+}
+function unparen2(e) {
+  let t = e.trim();
+  for (; ; ) {
+    if (!t.startsWith("("))
+      return t;
+    const close = closeOf3(t, 0);
+    if (close !== t.length - 1)
+      return t;
+    t = t.slice(1, -1).trim();
+  }
+}
+var ident2 = (e) => /^[A-Za-z_]\w*$/.test(e) && !/^(?:this|null|true|false|new|undefined)$/.test(e);
+var strLit2 = (e) => /^"(?:[^"\\]|\\.)*"$/.test(e);
+var numLit = (e) => /^-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?[LD]?$/.test(e);
+var nullLit = (e) => /^(?:null|undefined)$/.test(e.trim());
+var requireNonNull = /^java\.util\.Objects\.requireNonNullElse\s*\(/;
+var equalsCall = /^(?:(?:java\.util\.)?Objects\.(?:equals|deepEquals)|[A-Za-z_][\w.]*\.equals)\s*\(/;
+function castParts(e) {
+  const m = /^\(([\w.<>, ?\[\]]+)\)\s*(\S.*)$/s.exec(e);
+  if (m === null)
+    return void 0;
+  const type = m[1].trim();
+  if (!/^[\w.<>\[\]?]+$/.test(type))
+    return void 0;
+  return [type, m[2]];
+}
+var optionsProven;
+function optionsIsMap() {
+  if (optionsProven !== void 0)
+    return optionsProven;
+  optionsProven = false;
+  for (const file of J04_HEADERS()) {
+    let header = "";
+    try {
+      header = fs7.readFileSync(file, "utf8").split(J04_DELIM)[0];
+    } catch (e) {
+      continue;
+    }
+    if (OPTIONS_FIELD.test(header)) {
+      optionsProven = true;
+      break;
+    }
+  }
+  return optionsProven;
+}
+var overrideNames2;
+function overrides() {
+  if (overrideNames2 !== void 0)
+    return overrideNames2;
+  const names = /* @__PURE__ */ new Set();
+  const walk = (dir) => {
+    let entries = [];
+    try {
+      entries = fs7.readdirSync(dir);
+    } catch (e) {
+      return;
+    }
+    for (const name of entries) {
+      const full = path7.join(dir, name);
+      let stat;
+      try {
+        stat = fs7.statSync(full);
+      } catch (e) {
+        continue;
+      }
+      if (stat.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!name.endsWith(".java") || J04_HEADERS().includes(full))
+        continue;
+      let text = "";
+      try {
+        text = fs7.readFileSync(full, "utf8");
+      } catch (e) {
+        continue;
+      }
+      for (const m of text.matchAll(/^ {4}(?:public|protected|private)[\w<>\[\], .]*\s(\w+)\s*\(/gm))
+        names.add(m[1]);
+    }
+  };
+  walk(path7.join(J04_ROOT(), "exchanges"));
+  overrideNames2 = names;
+  return names;
+}
+var returnTypes = /* @__PURE__ */ new Map();
+var returnScan = false;
+function baseReturnType(name) {
+  if (!returnScan) {
+    returnScan = true;
+    for (const file of J04_HEADERS()) {
+      let header = "";
+      try {
+        header = fs7.readFileSync(file, "utf8").split(J04_DELIM)[0];
+      } catch (e) {
+        continue;
+      }
+      for (const m of header.matchAll(/^ {4}(?:public|protected|private)\s+([\w<>\[\], .]+?)\s+(\w+)\s*\(/gm)) {
+        const type = norm(m[1]);
+        const seen = returnTypes.get(m[2]);
+        returnTypes.set(m[2], seen === void 0 || seen === type ? type : void 0);
+      }
+    }
+  }
+  if (overrides().has(name))
+    return void 0;
+  return returnTypes.get(name);
+}
+function declaredType2(member, name) {
+  const re = new RegExp(`(?:^|[\\s(,])((?:final )?[\\w.]+(?:<[\\w.?]+(?:<[\\w.?, ]*>)?(?:, [\\w.?]+(?:<[\\w.?, ]*>)?)*>)?) ${name}(?=\\s*(?:=(?!=)|[,);:]))`, "gm");
+  const types = /* @__PURE__ */ new Set();
+  for (const m of member.matchAll(re)) {
+    const t = m[1].replace(/^final /, "");
+    if (DECL_STOP2.includes(t))
+      continue;
+    types.add(t);
+  }
+  const shadowed = new RegExp(`(?<![\\w.])${name}\\s*->`).test(member);
+  return !shadowed && types.size === 1 ? [...types][0] : void 0;
+}
+function isParam2(member, name) {
+  const nl = member.indexOf("\n");
+  const sig = (nl === -1 ? member : member.slice(0, nl)).replace(/\{.*$/, "");
+  return new RegExp(`[(,]\\s*(?:final\\s+)?[\\w.<>, ?\\[\\]]+ ${name}\\s*[,)]`).test(sig);
+}
+function topLevelOp(e) {
+  let depth = 0;
+  for (let i = 0; i < e.length; i++) {
+    const c = e[i];
+    if (c === '"' || c === "'") {
+      for (let j = i + 1; j < e.length; j++) {
+        if (e[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (e[j] === c) {
+          i = j;
+          break;
+        }
+      }
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{") {
+      depth++;
+      continue;
+    }
+    if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      continue;
+    }
+    if (depth !== 0 || !"+-*/%".includes(c))
+      continue;
+    const prev = e.slice(0, i).trimEnd().slice(-1);
+    const next = e[i + 1];
+    if (!/[\w)\]"']/.test(prev))
+      continue;
+    if (next === "=" || c === "+" && next === "+" || c === "-" && (next === "-" || next === ">"))
+      continue;
+    return { op: c, at: i };
+  }
+  return void 0;
+}
+function isNumeric(member, e, depth) {
+  if (depth > 3)
+    return false;
+  const v = unparen2(e);
+  if (numLit(v))
+    return true;
+  if (ident2(v)) {
+    const t = declaredType2(member, v);
+    return t !== void 0 && NUMBER_TYPES.has(norm(t));
+  }
+  const cast = castParts(v);
+  if (cast !== void 0) {
+    const t = norm(cast[0]);
+    return (NUMBER_TYPES.has(t) || PRIMITIVE_TYPES.has(t)) && isNumeric(member, cast[1], depth + 1);
+  }
+  const call = /^this\.([A-Za-z_]\w*)\s*\(/.exec(v);
+  if (call !== null) {
+    const t = baseReturnType(call[1]);
+    return t !== void 0 && NUMBER_TYPES.has(t);
+  }
+  const op = topLevelOp(v);
+  if (op !== void 0)
+    return isNumeric(member, v.slice(0, op.at), depth + 1) && isNumeric(member, v.slice(op.at + 1), depth + 1);
+  return false;
+}
+function ternaryArms(e) {
+  let depth = 0, q = -1;
+  for (let i = 0; i < e.length; i++) {
+    const c = e[i];
+    if (c === '"' || c === "'") {
+      for (let j = i + 1; j < e.length; j++) {
+        if (e[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (e[j] === c) {
+          i = j;
+          break;
+        }
+      }
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (depth === 0 && c === "?")
+      q = i;
+    else if (depth === 0 && c === ":" && q !== -1)
+      return [e.slice(q + 1, i).trim(), e.slice(i + 1).trim()];
+  }
+  return void 0;
+}
+var joinVisiting = /* @__PURE__ */ new Set();
+function writesOf(member, name) {
+  if (new RegExp(`(?<![\\w.])${name}\\s*(?:\\+=|-=|\\*=|/=|%=|\\+\\+|--)`).test(member))
+    return void 0;
+  const out = [];
+  for (const m of member.matchAll(new RegExp(`(?<![\\w.])${name}\\s*=\\s*(?!=)`, "g"))) {
+    const at = m.index + m[0].length;
+    const semi = member.indexOf(";", at);
+    const nl = member.indexOf("\n", at);
+    if (semi === -1 || nl !== -1 && nl < semi)
+      return void 0;
+    out.push(member.slice(at, semi).trim());
+  }
+  return out;
+}
+function writesNonNull(member, name, depth) {
+  if (depth > 3)
+    return false;
+  const decl = declaredType2(member, name);
+  if (decl === void 0 || isParam2(member, name))
+    return false;
+  const key = `${name}\0${member}`;
+  if (joinVisiting.has(key))
+    return false;
+  const rhs = writesOf(member, name);
+  if (rhs === void 0 || rhs.length === 0)
+    return false;
+  joinVisiting.add(key);
+  const ok = rhs.every((r) => nonNullValue3(member, r, depth + 1));
+  joinVisiting.delete(key);
+  return ok;
+}
+function nonNullValue3(member, value, depth) {
+  if (depth > 4)
+    return false;
+  const v = unparen2(value);
+  if (strLit2(v) || numLit(v) || v === "true" || v === "false")
+    return true;
+  if (/^new [\w.]+(?:<[\w.<>, ?]*>)?\(/.test(v))
+    return true;
+  if (/^[A-Za-z_][\w.]*\.class$/.test(v))
+    return true;
+  if (nullLit(v))
+    return false;
+  if (requireNonNull.test(v)) {
+    const open = v.indexOf("(");
+    const close = closeOf3(v, open);
+    if (close !== v.length - 1)
+      return false;
+    const args = splitArgs3(v.slice(open + 1, close));
+    return args !== void 0 && args.some((a) => nonNullValue3(member, a, depth + 1));
+  }
+  if (equalsCall.test(v))
+    return true;
+  if (boolHelpers.test(v))
+    return true;
+  const cast = castParts(v);
+  if (cast !== void 0)
+    return nonNullValue3(member, cast[1], depth + 1);
+  const arms = ternaryArms(v);
+  if (arms !== void 0)
+    return nonNullValue3(member, arms[0], depth + 1) && nonNullValue3(member, arms[1], depth + 1);
+  const op = topLevelOp(v);
+  if (op !== void 0) {
+    return isNumeric(member, v.slice(0, op.at), depth + 1) && isNumeric(member, v.slice(op.at + 1), depth + 1);
+  }
+  const call = /^this\.([A-Za-z_]\w*)\s*\(/.exec(v);
+  if (call !== null) {
+    const type = baseReturnType(call[1]);
+    if (type !== void 0 && PRIMITIVE_TYPES.has(type))
+      return true;
+    return boxedMethods.has(call[1]);
+  }
+  if (ident2(v)) {
+    const type = declaredType2(member, v);
+    if (type !== void 0 && PRIMITIVE_TYPES.has(norm(type)))
+      return true;
+    return writesNonNull(member, v, depth + 1);
+  }
+  return false;
+}
+function nonNullKey(member, key) {
+  const k = unparen2(key);
+  if (strLit2(k))
+    return true;
+  if (requireNonNull.test(k))
+    return nonNullValue3(member, k, 0);
+  if (!ident2(k))
+    return false;
+  const type = declaredType2(member, k);
+  if (type !== void 0 && norm(type) === "String")
+    return true;
+  const rhs = writesOf(member, k);
+  return rhs !== void 0 && rhs.length === 1 && strLit2(unparen2(rhs[0]));
+}
+function nativeReads(member, line) {
+  let out = line;
+  for (let guard = 0; guard < 8; guard++) {
+    const at = out.indexOf("Helpers.GetValue(this.options, ");
+    if (at === -1)
+      return out;
+    const open = at + "Helpers.GetValue".length;
+    const close = closeOf3(out, open);
+    if (close === -1)
+      return out;
+    const args = splitArgs3(out.slice(open + 1, close));
+    if (args === void 0 || args.length !== 2 || !nonNullKey(member, args[1]))
+      return out;
+    out = out.slice(0, at) + `this.options.get(${args[1]})` + out.slice(close + 1);
+  }
+  return out;
+}
+function j04Member(member) {
+  if (!member.includes("Helpers.addElementToObject(this.options, ") && !member.includes("Helpers.GetValue(this.options, "))
+    return member;
+  if (!optionsIsMap())
+    return member;
+  const lines = member.split("\n");
+  let changed = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].includes("Helpers."))
+      continue;
+    let line = nativeReads(member, lines[i]);
+    const indent = /^\s*/.exec(line)[0];
+    const body = line.slice(indent.length);
+    if (body.startsWith("Helpers.addElementToObject(this.options, ")) {
+      const open = body.indexOf("(");
+      const close = closeOf3(body, open);
+      if (close !== -1) {
+        const tail = body.slice(close + 1);
+        const args = splitArgs3(body.slice(open + 1, close));
+        if (/^;\s*(?:\/\/.*)?$/.test(tail) && args !== void 0 && args.length === 3 && nonNullKey(member, args[1])) {
+          const key = args[1], value = args[2];
+          let native;
+          if (nullLit(value))
+            native = `this.options.remove(${key});`;
+          else if (nonNullValue3(member, value, 0))
+            native = `this.options.put(${key}, ${value});`;
+          if (native !== void 0)
+            line = indent + native + tail.slice(1);
+        }
+      }
+    }
+    if (line !== lines[i]) {
+      lines[i] = line;
+      changed = true;
+    }
+  }
+  return changed ? lines.join("\n") : member;
+}
+function nativeJavaJ04OptionsOps(content) {
+  if (!content.includes("Helpers.addElementToObject(this.options, ") && !content.includes("Helpers.GetValue(this.options, "))
+    return content;
+  const lines = content.split("\n");
+  const starts = [0];
+  for (let i = 1; i < lines.length; i++)
+    if (/^    (?:public|private|protected)\b/.test(lines[i]))
+      starts.push(i);
+  starts.push(lines.length);
+  const parts = [];
+  let changed = false;
+  for (let s = 0; s + 1 < starts.length; s++) {
+    const before = lines.slice(starts[s], starts[s + 1]).join("\n");
+    const after = j04Member(before);
+    if (after !== before)
+      changed = true;
+    parts.push(after);
+  }
+  return changed ? parts.join("\n") : content;
+}
+function j04OptionsSelfTest() {
+  const problems = [];
+  const cls = (body) => `public class Gemini extends GeminiRest
+{
+${body}
+}
+`;
+  const run = (body) => nativeJavaJ04OptionsOps(cls(body));
+  const unchanged = (t) => nativeJavaJ04OptionsOps(t) === t;
+  const pos = [
+    [
+      "null value removes",
+      '    public void setKey()\n    {\n        Helpers.addElementToObject(this.options, "listenKey", null);\n    }',
+      '        this.options.remove("listenKey");'
+    ],
+    [
+      "non-null literal puts",
+      '    public void setKey()\n    {\n        Helpers.addElementToObject(this.options, "chainId", 97);\n    }',
+      '        this.options.put("chainId", 97);'
+    ],
+    [
+      "primitive local arithmetic puts",
+      '    public void setExpiry()\n    {\n        long now = this.milliseconds();\n        Helpers.addElementToObject(this.options, "signInExpiration", (now + 86400000L));\n    }',
+      '        this.options.put("signInExpiration", (now + 86400000L));'
+    ],
+    [
+      "boolean-equality value puts",
+      '    public void setMode(Object result)\n    {\n        Helpers.addElementToObject(this.options, "enableUnifiedMargin", java.util.Objects.equals(this.safeInteger(result, "unified"), 1L));\n    }',
+      'this.options.put("enableUnifiedMargin", java.util.Objects.equals(this.safeInteger(result, "unified"), 1L));'
+    ],
+    [
+      "primitive-return call puts",
+      '    public void stamp()\n    {\n        Helpers.addElementToObject(this.options, "limitsLoaded", this.microseconds());\n    }',
+      '        this.options.put("limitsLoaded", this.microseconds());'
+    ],
+    [
+      "boxed runtime call puts",
+      '    public void stamp()\n    {\n        Helpers.addElementToObject(this.options, "limitsLoaded", this.milliseconds());\n    }',
+      '        this.options.put("limitsLoaded", this.milliseconds());'
+    ],
+    [
+      "single non-null write joins",
+      '    public Long requestId()\n    {\n        Long next = (Long) this.sum(this.safeInteger(this.options, "requestId", 0), 1);\n        Helpers.addElementToObject(this.options, "requestId", next);\n        return next;\n    }',
+      '        this.options.put("requestId", next);'
+    ],
+    [
+      "numeric ternary puts",
+      '    public void setChain(long expiry)\n    {\n        long chainId = (expiry > 0L) ? 300 : 304;\n        Helpers.addElementToObject(this.options, "chainId", chainId);\n    }',
+      '        this.options.put("chainId", chainId);'
+    ],
+    [
+      "requireNonNullElse key puts",
+      '    public void setType(Boolean t)\n    {\n        Helpers.addElementToObject(this.options, java.util.Objects.requireNonNullElse(t, "margin"), new java.util.HashMap<String, Object>());\n    }',
+      'this.options.put(java.util.Objects.requireNonNullElse(t, "margin"), new java.util.HashMap<String, Object>());'
+    ],
+    [
+      "String local key reads and writes",
+      '    public void put(Object v)\n    {\n        String k = "listenKey";\n        Helpers.addElementToObject(this.options, k, "v");\n        Object current = Helpers.GetValue(this.options, k);\n    }',
+      '        this.options.put(k, "v");\n        Object current = this.options.get(k);'
+    ]
+  ];
+  for (const [name, body, expect] of pos) {
+    const out = run(body);
+    if (!out.includes(expect))
+      problems.push(`hx10 J04: ${name} expected ${expect} in
+${out}`);
+    if (!unchanged(out))
+      problems.push(`hx10 J04: ${name} not idempotent`);
+  }
+  const neg = [
+    ["boxed parameter value", '    public void setSandboxMode(Boolean enable)\n    {\n        Helpers.addElementToObject(this.options, "sandboxMode", enable);\n    }'],
+    ["nullable safeString value", '    public void setAccount(Object data)\n    {\n        Helpers.addElementToObject(this.options, "accountId", this.safeString(data, "id", "0"));\n    }'],
+    ["nullable parseToInt value", '    public void setIndex(Object n)\n    {\n        Helpers.addElementToObject(this.options, "apiKeyIndex", this.parseToInt(n));\n    }'],
+    ["Object key", "    public void put(Object helper, Object v)\n    {\n        Helpers.addElementToObject(this.options, helper, v);\n    }"],
+    ["boxed local written twice", '    public void put(Object v)\n    {\n        Long id = this.safeInteger(v, "id");\n        id = this.safeInteger(v, "other");\n        Helpers.addElementToObject(this.options, "id", id);\n    }'],
+    ["other receiver", '    public void put(Object v)\n    {\n        Helpers.addElementToObject(this.markets, "id", v);\n    }']
+  ];
+  for (const [name, body] of neg) {
+    const input = cls(body);
+    if (!unchanged(input))
+      problems.push(`hx10 J04: ${name} must keep the helper
+${input}`);
+  }
+  return problems;
+}
+onJavaRuntimeRootChange(() => {
+  optionsProven = void 0;
+  overrideNames2 = void 0;
+  returnTypes.clear();
+  returnScan = false;
+});
+
+// src/java/hx10w3-J05.ts
+init_esm_shims();
+var J05_ROOTS = /* @__PURE__ */ new Set(["urls", "fees", "limits"]);
+var J05_STRING = /^"(?:[^"\\]|\\.)*"$/;
+var J05_IDENT = /^[A-Za-z_]\w*$/;
+function j05Mask(text) {
+  const out = text.split("");
+  const blank = (from, to) => {
+    for (let k = from; k < to; k++) {
+      if (out[k] !== "\n") {
+        out[k] = " ";
+      }
+    }
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < text.length) {
+        if (text[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (text[j] === c) {
+          break;
+        }
+        j++;
+      }
+      blank(i + 1, Math.min(j, text.length));
+      i = j;
+    } else if (c === "/" && text[i + 1] === "/") {
+      const j = text.indexOf("\n", i);
+      const end = j === -1 ? text.length : j;
+      blank(i, end);
+      i = end;
+    } else if (c === "/" && text[i + 1] === "*") {
+      const j = text.indexOf("*/", i + 2);
+      const end = j === -1 ? text.length : j + 2;
+      blank(i, end);
+      i = end;
+    }
+  }
+  return out.join("");
+}
+function j05Close(masked, open) {
+  let depth = 0;
+  for (let i = open; i < masked.length; i++) {
+    const c = masked[i];
+    if (c === "(" || c === "[" || c === "{") {
+      depth++;
+    } else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+function j05Open(masked, close) {
+  let depth = 0;
+  for (let i = close; i >= 0; i--) {
+    const c = masked[i];
+    if (c === ")" || c === "]" || c === "}") {
+      depth++;
+    } else if (c === "(" || c === "[" || c === "{") {
+      depth--;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+function j05EnclosingBody(masked, at) {
+  let depth = 0;
+  for (let i = at; i >= 0; i--) {
+    const c = masked[i];
+    if (c === ")" || c === "]" || c === "}") {
+      depth++;
+    } else if (c === "(" || c === "[" || c === "{") {
+      depth--;
+      if (depth < 0) {
+        return masked[i - 1] === "{" ? i - 1 : i;
+      }
+    }
+  }
+  return -1;
+}
+function j05Unwrap(text) {
+  let t = text.trim();
+  for (; ; ) {
+    if (t.startsWith("(") && j05Close(t, 0) === t.length - 1) {
+      t = t.slice(1, -1).trim();
+      continue;
+    }
+    return t;
+  }
+}
+function j05SplitArgs(masked, open, close) {
+  const out = [];
+  let depth = 0;
+  let at = open + 1;
+  for (let i = open + 1; i < close; i++) {
+    const c = masked[i];
+    if (c === "<" && /[\w]/.test(masked[i - 1] ?? "")) {
+      const generic = /^<[\w.?,\s<>]*>/.exec(masked.slice(i, close));
+      if (generic !== null) {
+        i += generic[0].length - 1;
+        continue;
+      }
+    }
+    if (c === "(" || c === "[" || c === "{") {
+      depth++;
+    } else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+    } else if (c === "," && depth === 0) {
+      out.push([at, i]);
+      at = i + 1;
+    }
+  }
+  out.push([at, close]);
+  return out;
+}
+function j05MapBody(text, masked, open) {
+  const close = j05Close(masked, open);
+  if (close < 0) {
+    return void 0;
+  }
+  const from = open + 2;
+  const to = Math.max(from, close - 1);
+  const tree = {};
+  let depth = 0;
+  for (let i = from; i < to; i++) {
+    const c = masked[i];
+    if (c === "(" || c === "[" || c === "{") {
+      depth++;
+      continue;
+    }
+    if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      continue;
+    }
+    if (depth !== 0 || c !== "p" || masked.slice(i, i + 4) !== "put(" || /[\w.]/.test(masked[i - 1] ?? "")) {
+      continue;
+    }
+    const putClose = j05Close(masked, i + 3);
+    if (putClose < 0 || putClose > to) {
+      continue;
+    }
+    const args = j05SplitArgs(masked, i + 3, putClose);
+    if (args.length !== 2) {
+      i = putClose;
+      continue;
+    }
+    const key = text.slice(args[0][0], args[0][1]).trim();
+    if (J05_STRING.test(key)) {
+      tree[JSON.parse(key)] = j05ValueKind(text.slice(args[1][0], args[1][1]));
+    }
+    i = putClose;
+  }
+  return tree;
+}
+function j05ValueKind(raw) {
+  const v = raw.trim();
+  if (/^new\s+(?:java\.util\.)?HashMap\s*<\s*String\s*,\s*Object\s*>\s*\(\s*\)\s*\{\{/.test(v)) {
+    const local = j05Mask(v);
+    return j05MapBody(v, local, local.indexOf("{{"));
+  }
+  if (/^new\s+(?:java\.util\.)?(?:HashMap|LinkedHashMap|TreeMap)\b/.test(v)) {
+    return {};
+  }
+  if (/^new\s+(?:java\.util\.)?(?:ArrayList|LinkedList|Vector)\b/.test(v)) {
+    return "list";
+  }
+  if (/^(?:java\.util\.)?(?:Arrays\.asList|List\.of|Set\.of)\b/.test(v)) {
+    return "list";
+  }
+  if (J05_STRING.test(v) || /^-?\d/.test(v) || /^(?:true|false|null|undefined)$/.test(v)) {
+    return "scalar";
+  }
+  return "other";
+}
+function j05DescribeTree(text) {
+  const masked = j05Mask(text);
+  const needle = /put\s*\(\s*"urls"/g;
+  let m;
+  while ((m = needle.exec(text)) !== null) {
+    const at = m.index;
+    const open = j05EnclosingBody(masked, at);
+    if (open >= 0 && masked.slice(open, open + 2) === "{{") {
+      return j05MapBody(text, masked, open);
+    }
+    const putClose = j05Close(masked, at + 3);
+    if (putClose > at) {
+      const comma = j05SplitArgs(masked, at + 3, putClose);
+      const kind = comma.length === 2 ? j05ValueKind(text.slice(comma[1][0], comma[1][1])) : void 0;
+      if (kind !== void 0 && typeof kind === "object") {
+        return { "urls": kind };
+      }
+    }
+  }
+  return void 0;
+}
+function j05KeyStep(raw) {
+  const t = j05Unwrap(raw);
+  if (J05_STRING.test(t)) {
+    return { kind: "literal", text: t };
+  }
+  if (J05_IDENT.test(t)) {
+    return { kind: "ident", text: t };
+  }
+  return void 0;
+}
+var j05IsTypeText = (s) => /^(?:java\.util\.)?[A-Za-z_][\w.]*(?:<[^()]*>)?$/.test(s) && !/^(?:true|false|null|this)$/.test(s);
+function j05CastStrip(t) {
+  if (!t.startsWith("(")) {
+    return void 0;
+  }
+  const close = j05Close(t, 0);
+  if (close < 0) {
+    return void 0;
+  }
+  const inner = t.slice(1, close).trim();
+  if (j05IsTypeText(inner)) {
+    const rest = t.slice(close + 1).trim();
+    return rest === "" ? void 0 : rest;
+  }
+  if (close === t.length - 1 && inner.startsWith("(")) {
+    const head = j05Close(inner, 0);
+    if (head > 0 && head < inner.length - 1 && j05IsTypeText(inner.slice(1, head).trim())) {
+      return inner.slice(head + 1);
+    }
+  }
+  return void 0;
+}
+function j05Chain(raw) {
+  const t = j05Unwrap(raw);
+  const direct = /^this\.([A-Za-z_]\w*)$/.exec(t);
+  if (direct !== null) {
+    return J05_ROOTS.has(direct[1]) ? { field: direct[1], steps: [] } : void 0;
+  }
+  const cast = j05CastStrip(t);
+  if (cast !== void 0) {
+    return j05Chain(cast);
+  }
+  const guard = /^([A-Za-z_]\w*)\s*==\s*null\s*(?:\|\|\s*this\.([A-Za-z_]\w*)\s*==\s*null\s*)?\?\s*null\s*:\s*([\s\S]+)$/.exec(t);
+  if (guard !== null) {
+    const inner = j05Chain(guard[3]);
+    if (inner === void 0) {
+      return void 0;
+    }
+    if (guard[2] !== void 0 && inner.field !== guard[2]) {
+      return void 0;
+    }
+    const last = inner.steps[inner.steps.length - 1];
+    if (last === void 0 || last.kind !== "ident" || last.text !== guard[1]) {
+      return void 0;
+    }
+    return { field: inner.field, steps: inner.steps, guarded: true };
+  }
+  const fieldGuard = /^this\.([A-Za-z_]\w*)\s*==\s*null\s*\?\s*null\s*:\s*([\s\S]+)$/.exec(t);
+  if (fieldGuard !== null) {
+    const inner = j05Chain(fieldGuard[2]);
+    if (inner === void 0 || inner.field !== fieldGuard[1]) {
+      return void 0;
+    }
+    return { field: inner.field, steps: inner.steps, guarded: true };
+  }
+  if (t.endsWith(")")) {
+    const local = j05Mask(t);
+    const open = j05Open(local, t.length - 1);
+    if (open > 0) {
+      const prefix = t.slice(0, open);
+      const get = /\.get\s*$/.exec(prefix);
+      if (get !== null) {
+        const head = j05Chain(prefix.slice(0, get.index));
+        if (head === void 0) {
+          return void 0;
+        }
+        const step = j05KeyStep(t.slice(open + 1, t.length - 1));
+        if (step === void 0) {
+          return void 0;
+        }
+        return { field: head.field, steps: head.steps.concat([step]), guarded: head.guarded === true };
+      }
+    }
+  }
+  return void 0;
+}
+var j05IsObject = (node) => node !== void 0 && node !== null && typeof node === "object" && !Array.isArray(node);
+function j05ValueIsMap(tree, steps) {
+  let current = tree;
+  let nullable = false;
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    if (!j05IsObject(current)) {
+      return { ok: false, nullable };
+    }
+    if (step.kind !== "literal") {
+      const children = Object.keys(current).map((k) => current[k]);
+      if (children.length === 0 || !children.every(j05IsObject)) {
+        return { ok: false, nullable };
+      }
+      current = {};
+      nullable = true;
+      continue;
+    }
+    const key = JSON.parse(step.text);
+    if (!Object.prototype.hasOwnProperty.call(current, key)) {
+      return { ok: false, nullable };
+    }
+    current = current[key];
+  }
+  return { ok: j05IsObject(current), nullable };
+}
+function j05ReadText(step, receiver, nullable) {
+  if (step.kind !== "literal") {
+    const guarded = nullable ? ` || ${receiver} == null` : "";
+    return `(${step.text} == null${guarded} ? null : ((java.util.Map<String, Object>)${receiver}).get(${step.text}))`;
+  }
+  const read = `((java.util.Map<String, Object>)${receiver}).get(${step.text})`;
+  return nullable ? `(${receiver} == null ? null : ${read})` : read;
+}
+function nativeJavaJ05DictChains(content) {
+  if (!/Helpers\.GetValue\(/.test(content)) {
+    return content;
+  }
+  if (!/this\.urls|this\.fees|this\.limits/.test(content)) {
+    return content;
+  }
+  const tree = j05DescribeTree(content);
+  if (tree === void 0) {
+    return content;
+  }
+  let out = content;
+  for (let round = 0; round < 6; round++) {
+    const masked = j05Mask(out);
+    const sites = [];
+    let at = masked.indexOf("Helpers.GetValue(");
+    while (at >= 0) {
+      const open = at + "Helpers.GetValue".length;
+      const close = j05Close(masked, open);
+      if (close < 0) {
+        break;
+      }
+      const args = j05SplitArgs(masked, open, close);
+      if (args.length === 2) {
+        sites.push({ start: at, end: close + 1, recvStart: args[0][0], recvEnd: args[0][1], keyStart: args[1][0], keyEnd: args[1][1] });
+      }
+      at = masked.indexOf("Helpers.GetValue(", at + 1);
+    }
+    const shifts = [];
+    const adjust = (pos) => {
+      let p = pos;
+      for (const shift of shifts) {
+        if (shift.at < pos) {
+          p += shift.delta;
+        }
+      }
+      return p;
+    };
+    let changed = false;
+    for (let i = sites.length - 1; i >= 0; i--) {
+      const site = sites[i];
+      const recv = out.slice(adjust(site.recvStart), adjust(site.recvEnd));
+      const keyText = out.slice(adjust(site.keyStart), adjust(site.keyEnd));
+      const chain = j05Chain(recv);
+      if (chain === void 0 || chain.steps.length === 0) {
+        continue;
+      }
+      if (chain.guarded === true) {
+        continue;
+      }
+      const proof = j05ValueIsMap(tree[chain.field], chain.steps);
+      if (!proof.ok) {
+        continue;
+      }
+      const key = j05KeyStep(keyText);
+      if (key === void 0) {
+        continue;
+      }
+      const lineStart = out.lastIndexOf("\n", adjust(site.start)) + 1;
+      const lineEnd2 = out.indexOf("\n", adjust(site.end));
+      const line = out.slice(lineStart, lineEnd2 === -1 ? out.length : lineEnd2);
+      if (/hx4J4\d|hx4J38|Helpers\.(?:add|subtract|multiply|divide)\(/.test(line)) {
+        continue;
+      }
+      const read = j05ReadText(key, recv.trim(), proof.nullable || chain.guarded === true);
+      const start = adjust(site.start);
+      const end = adjust(site.end);
+      out = out.slice(0, start) + read + out.slice(end);
+      shifts.push({ at: site.start, delta: read.length - (site.end - site.start) });
+      changed = true;
+    }
+    if (!changed) {
+      break;
+    }
+  }
+  return out;
+}
+function j05DictChainsSelfTest() {
+  const problems = [];
+  const describe = [
+    '            put( "id", "test" );',
+    '            put( "name", "Test" );',
+    '            put( "urls", new HashMap<String, Object>() {{',
+    '                put( "logo", "https://x/logo.png" );',
+    '                put( "api", new HashMap<String, Object>() {{',
+    '                    put( "public", "https://x/api" );',
+    '                    put( "ws", new HashMap<String, Object>() {{',
+    '                        put( "public", "wss://x/public" );',
+    '                        put( "private", "wss://x/private" );',
+    '                        put( "trading", new HashMap<String, Object>() {{',
+    '                            put( "x", "y" );',
+    "                        }} );",
+    "                    }} );",
+    "                }} );",
+    '                put( "doc", new java.util.ArrayList<Object>(java.util.Arrays.asList( "https://x/doc" )) );',
+    "            }} );",
+    '            put( "fees", new HashMap<String, Object>() {{',
+    '                put( "trading", new HashMap<String, Object>() {{',
+    '                    put( "taker", 0.001 );',
+    "                }} );",
+    "            }} );",
+    '            put( "limits", new HashMap<String, Object>() {{',
+    '                put( "amount", new HashMap<String, Object>() {{',
+    '                    put( "min", 0.001 );',
+    "                }} );",
+    "            }} );"
+  ].join("\n");
+  const cls = (body) => "public class Woo extends WooRest\n{\n    public Woo()\n    {\n        this.describe = new HashMap<String, Object>() {{\n" + describe + "\n        }};\n    }\n\n    public Object m(Object apiName, Object fees)\n    {\n" + body + "\n    }\n}";
+  const cases = [
+    // native: a literal path the describe literal holds as an object
+    [
+      "urls api ws literal key",
+      '        return Helpers.GetValue(((Map<String, Object>)this.urls.get("api")).get("ws"), "private");',
+      'return ((java.util.Map<String, Object>)((Map<String, Object>)this.urls.get("api")).get("ws")).get("private");'
+    ],
+    [
+      "urls api level",
+      '        return Helpers.GetValue(this.urls.get("api"), "public");',
+      'return ((java.util.Map<String, Object>)this.urls.get("api")).get("public");'
+    ],
+    [
+      "fees trading",
+      '        return Helpers.GetValue(((Map<String, Object>)this.fees).get("trading"), "taker");',
+      'return ((java.util.Map<String, Object>)((Map<String, Object>)this.fees).get("trading")).get("taker");'
+    ],
+    [
+      "limits amount",
+      '        return Helpers.GetValue(((Map<String, Object>)this.limits).get("amount"), "min");',
+      'return ((java.util.Map<String, Object>)((Map<String, Object>)this.limits).get("amount")).get("min");'
+    ],
+    [
+      "nested GetValue chain",
+      '        return Helpers.GetValue(Helpers.GetValue(((Map<String, Object>)this.urls.get("api")).get("ws"), "trading"), "x");',
+      'return ((java.util.Map<String, Object>)((java.util.Map<String, Object>)((Map<String, Object>)this.urls.get("api")).get("ws")).get("trading")).get("x");'
+    ],
+    // helper kept: scalar leaf path, unlisted path, foreign receiver, impure key, guarded receiver
+    ["urls logo is a string", '        return Helpers.GetValue(this.urls, "logo");', void 0],
+    ["scalar receiver", '        return Helpers.GetValue(this.urls.get("logo"), "x");', void 0],
+    ["doc is a list", '        return Helpers.GetValue(this.urls.get("doc"), "0");', void 0],
+    ["foreign receiver", '        return Helpers.GetValue(market.get("info"), "id");', void 0],
+    ["impure key", '        return Helpers.GetValue(this.urls.get("api"), this.safeString(apiName, "k"));', void 0],
+    ["guarded receiver", '        return Helpers.GetValue((this.fees == null ? null : ((Map<?, ?>)this.fees).get("trading")), "taker");', void 0],
+    ["string content untouched", `        return "Helpers.GetValue(((Map<String, Object>)this.urls.get('api')).get('ws'), 'private')";`, void 0]
+  ];
+  for (const [name, body, expect] of cases) {
+    const input = cls(body);
+    let out;
+    try {
+      out = nativeJavaJ05DictChains(input);
+    } catch (e) {
+      problems.push(`hx10w3 J05 ${name}: threw ${e.message}`);
+      continue;
+    }
+    const ok = expect === void 0 ? out === input : out.includes(expect);
+    if (!ok) {
+      problems.push(`hx10w3 J05 ${name}
+${out}`);
+    }
+    if (nativeJavaJ05DictChains(out) !== out) {
+      problems.push(`hx10w3 J05 ${name} not idempotent`);
+    }
+  }
+  const scalarLeaf = nativeJavaJ05DictChains(cls('        return Helpers.GetValue(Helpers.GetValue(((Map<String, Object>)this.urls.get("api")).get("ws"), "public"), "x");'));
+  if (!scalarLeaf.includes('((Map<String, Object>)this.urls.get("api")).get("ws")).get("public")') || !scalarLeaf.includes("return Helpers.GetValue(")) {
+    problems.push(`hx10w3 J05 scalar leaf
+${scalarLeaf}`);
+  }
+  const dynamic = nativeJavaJ05DictChains(cls('        return Helpers.GetValue(this.urls.get("api"), apiName);'));
+  if (!dynamic.includes('(apiName == null ? null : ((java.util.Map<String, Object>)this.urls.get("api")).get(apiName))')) {
+    problems.push(`hx10w3 J05 dynamic key
+${dynamic}`);
+  }
+  return problems;
+}
+
+// src/java/hx10w4-BF02.ts
+init_esm_shims();
+var BF02_HEADER_MAP = /* @__PURE__ */ new Set(["markets", "fees", "limits"]);
+var BF02_PLAIN_NEW = /^new (?:java\.util\.)?(?:Linked)?HashMap\b/;
+var BF02_PLAIN_CALL = /^this\.createSafeDictionary\(/;
+var BF02_CONCURRENT = /^new (?:java\.util\.)?(?:concurrent\.)?ConcurrentHashMap\b/;
+var BF02_MAP_CAST = /^\(\s*(?:java\.util\.)?Map<String, Object>\s*\)/;
+var BF02_DECL = /(?:java\.util\.)?(?:HashMap<String, Object>|Map<String, Object>)\s+([A-Za-z_]\w*)\s*=\s*([^;]*)/g;
+function bf02Close(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let closed = false;
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (text[j] === c) {
+          i = j;
+          closed = true;
+          break;
+        }
+      }
+      if (!closed)
+        return -1;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      if (--depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function bf02SplitArgs(text) {
+  const out = [];
+  let depth = 0, at = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let closed = false;
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (text[j] === c) {
+          i = j;
+          closed = true;
+          break;
+        }
+      }
+      if (!closed)
+        return void 0;
+      continue;
+    }
+    if (c === "<" && /[\w]/.test(text[i - 1] ?? "")) {
+      const g = /^<[\w.?,\s<>]*>/.exec(text.slice(i));
+      if (g !== null) {
+        i += g[0].length - 1;
+        continue;
+      }
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      out.push(text.slice(at, i).trim());
+      at = i + 1;
+    }
+  }
+  if (depth !== 0)
+    return void 0;
+  out.push(text.slice(at).trim());
+  return out;
+}
+function bf02RhsKind(rhs, content, depth) {
+  const t = rhs.trim();
+  if (/^null$/.test(t))
+    return "null";
+  if (BF02_CONCURRENT.test(t))
+    return "concurrent";
+  if (BF02_PLAIN_NEW.test(t) || BF02_PLAIN_CALL.test(t))
+    return "plain";
+  if (BF02_MAP_CAST.test(t))
+    return "map";
+  if (depth < 2 && /^[A-Za-z_]\w*$/.test(t)) {
+    const re = new RegExp(BF02_DECL.source, "g");
+    for (const m of content.matchAll(re)) {
+      if (m[1] === t)
+        return bf02RhsKind(m[2], content, depth + 1);
+    }
+  }
+  return "other";
+}
+function bf02FieldKinds(content, field) {
+  const out = [];
+  const rx = new RegExp("this\\." + field + "\\s*=(?!=)\\s*([^;]*)", "g");
+  for (const m of content.matchAll(rx))
+    out.push(bf02RhsKind(m[1], content, 0));
+  return out;
+}
+function bf02ReadsAreNative(kinds, field) {
+  if (kinds.some((k) => k === "other"))
+    return false;
+  if (kinds.length === 0)
+    return BF02_HEADER_MAP.has(field);
+  return true;
+}
+function bf02WritesAreNative(kinds) {
+  return kinds.some((k) => k === "plain") && kinds.every((k) => k === "plain" || k === "null");
+}
+function bf02Reads(content, field) {
+  const open = `Helpers.GetValue(this.${field},`;
+  let out = "", i = 0, changed = false;
+  for (; ; ) {
+    const at = content.indexOf(open, i);
+    if (at === -1) {
+      out += content.slice(i);
+      break;
+    }
+    const p = at + "Helpers.GetValue".length;
+    const cl = bf02Close(content, p);
+    if (cl === -1) {
+      out += content.slice(i);
+      break;
+    }
+    const args = bf02SplitArgs(content.slice(p + 1, cl));
+    const key = args !== void 0 && args.length === 2 ? args[1].trim() : "";
+    const recv = `this.${field}`;
+    let native;
+    if (/^"(?:[^"\\]|\\.)*"$/.test(key)) {
+      native = `(${recv} == null ? null : ((java.util.Map<?, ?>)${recv}).get(${key}))`;
+    } else if (/^[A-Za-z_]\w*$/.test(key)) {
+      native = `(${key} == null || ${recv} == null ? null : ((java.util.Map<?, ?>)${recv}).get(${key}))`;
+    }
+    if (native === void 0) {
+      out += content.slice(i, p + 1);
+      i = p + 1;
+      continue;
+    }
+    out += content.slice(i, at) + native;
+    i = cl + 1;
+    changed = true;
+  }
+  return changed ? out : content;
+}
+function bf02Writes(content, field) {
+  const open = `Helpers.addElementToObject(this.${field},`;
+  let out = "", i = 0, changed = false;
+  for (; ; ) {
+    const at = content.indexOf(open, i);
+    if (at === -1) {
+      out += content.slice(i);
+      break;
+    }
+    const lineStart = content.lastIndexOf("\n", at) + 1;
+    const indent = content.slice(lineStart, at);
+    const p = at + "Helpers.addElementToObject".length;
+    const cl = bf02Close(content, p);
+    if (cl === -1 || !/^[ \t]*$/.test(indent)) {
+      out += content.slice(i, p + 1);
+      i = p + 1;
+      continue;
+    }
+    const args = bf02SplitArgs(content.slice(p + 1, cl));
+    if (args === void 0 || args.length !== 3) {
+      out += content.slice(i, p + 1);
+      i = p + 1;
+      continue;
+    }
+    let end = cl + 1;
+    while (content[end] === " " || content[end] === "	")
+      end++;
+    if (content[end] !== ";") {
+      out += content.slice(i, p + 1);
+      i = p + 1;
+      continue;
+    }
+    const [keyRaw, value] = [args[1].trim(), args[2]];
+    const recv = `this.${field}`;
+    const call = `((java.util.Map<Object, Object>) (java.util.Map<?, ?>) ${recv}).put(${keyRaw}, ${value});`;
+    out += content.slice(i, at) + call;
+    i = end + 1;
+    changed = true;
+  }
+  return changed ? out : content;
+}
+function nativeJavaBF02FieldOps(content) {
+  if (!content.includes("Helpers.GetValue(this.") && !content.includes("Helpers.addElementToObject(this."))
+    return content;
+  let out = content;
+  for (const field of ["markets", "positions", "fees", "limits"]) {
+    const kinds = bf02FieldKinds(out, field);
+    if (bf02ReadsAreNative(kinds, field))
+      out = bf02Reads(out, field);
+    if (bf02WritesAreNative(kinds))
+      out = bf02Writes(out, field);
+  }
+  return out;
+}
+function bf02SelfTest() {
+  const POS_HASH_MAP = "    public void init()\n    {\n        this.positions = new HashMap<String, Object>() {{}};\n    }\n";
+  const MARKETS_HASH_MAP = "    public void init()\n    {\n        this.markets = this.createSafeDictionary();\n    }\n";
+  const problems = [];
+  const cls = (body, extra = "") => `public class Woo extends WooRest
+{
+${extra}    public void m(Object v, String type, Object key)
+    {
+${body}
+    }
+}
+`;
+  const run = (body, extra = "") => nativeJavaBF02FieldOps(cls(body, extra));
+  const pos = [
+    [
+      "markets read, literal key",
+      '        return Helpers.GetValue(this.markets, "BTC/USDT");',
+      '        return (this.markets == null ? null : ((java.util.Map<?, ?>)this.markets).get("BTC/USDT"));',
+      ""
+    ],
+    [
+      "markets read, identifier key",
+      "        return Helpers.GetValue(this.markets, type);",
+      "        return (type == null || this.markets == null ? null : ((java.util.Map<?, ?>)this.markets).get(type));",
+      ""
+    ],
+    [
+      "positions read on a HashMap file",
+      "        Object cache = Helpers.GetValue(this.positions, type);",
+      "        Object cache = (type == null || this.positions == null ? null : ((java.util.Map<?, ?>)this.positions).get(type));",
+      POS_HASH_MAP
+    ],
+    [
+      "markets write, String key",
+      '        Helpers.addElementToObject(this.markets, "BTC/USDT", v);',
+      '((java.util.Map<Object, Object>) (java.util.Map<?, ?>) this.markets).put("BTC/USDT", v);',
+      MARKETS_HASH_MAP
+    ],
+    [
+      "markets write, Object key goes through the wildcard",
+      '        Helpers.addElementToObject(this.markets, Helpers.GetValue(v, "market"), v);',
+      '((java.util.Map<Object, Object>) (java.util.Map<?, ?>) this.markets).put(Helpers.GetValue(v, "market"), v);',
+      MARKETS_HASH_MAP
+    ],
+    [
+      "positions write on a HashMap file",
+      "        Helpers.addElementToObject(this.positions, type, v);",
+      "((java.util.Map<Object, Object>) (java.util.Map<?, ?>) this.positions).put(type, v);",
+      POS_HASH_MAP
+    ],
+    [
+      "fees read",
+      '        return Helpers.GetValue(this.fees, "trading");',
+      '        return (this.fees == null ? null : ((java.util.Map<?, ?>)this.fees).get("trading"));',
+      ""
+    ]
+  ];
+  for (const [name, body, expect, extra] of pos) {
+    const out = run(body, extra);
+    if (!out.includes(expect))
+      problems.push(`hx10 BF02: ${name} expected ${expect} in
+${out}`);
+    if (nativeJavaBF02FieldOps(out) !== out)
+      problems.push(`hx10 BF02: ${name} not idempotent
+${out}`);
+  }
+  const neg = [
+    [
+      "positions holding an ArrayCache",
+      "        Object cache = Helpers.GetValue(this.positions, type);",
+      "    public void init()\n    {\n        this.positions = new ArrayCache.ArrayCacheBySymbolBySide();\n    }\n"
+    ],
+    [
+      "positions write while an ArrayCache is one of its writes",
+      "        Helpers.addElementToObject(this.positions, type, v);",
+      "    public void init()\n    {\n        this.positions = new HashMap<String, Object>() {{}};\n    }\n\n    public void other()\n    {\n        this.positions = new ArrayCache.ArrayCacheBySymbolBySide();\n    }\n"
+    ],
+    [
+      "ConcurrentHashMap field write (null value removes there)",
+      '        Helpers.addElementToObject(this.markets, "a", v);',
+      "    public void init()\n    {\n        this.markets = new java.util.concurrent.ConcurrentHashMap<>();\n    }\n"
+    ],
+    ["positions with no write in the file", "        return Helpers.GetValue(this.positions, type);", ""]
+  ];
+  for (const [name, body, extra2] of neg) {
+    const input = cls(body, extra2);
+    if (nativeJavaBF02FieldOps(input) !== input)
+      problems.push(`hx10 BF02: ${name} must keep the helper
+${nativeJavaBF02FieldOps(input)}`);
+  }
+  const computed = cls("        return Helpers.GetValue(this.markets, this.symbol(v));");
+  if (nativeJavaBF02FieldOps(computed) !== computed)
+    problems.push("hx10 BF02: a repeatable-key proof is required");
+  return problems;
+}
+
+// src/java/hx10w4-OJ01.ts
+init_esm_shims();
+import fs8 from "fs";
+import path8 from "path";
+function OJ01_ROOT() {
+  return javaRuntimeRoot();
+}
+function OJ01_HEADERS() {
+  return ["BaseExchange.java", "Exchange.java", "PredictionExchange.java"].map((f) => path8.join(OJ01_ROOT(), f));
+}
+var OJ01_DELIM = "// METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT";
+var OWNER_FIELD = /^ {4}public\s+Map<\s*String\s*,\s*Object\s*>\s+options\s*=\s*new\s+(?:[A-Za-z_][\w.]*\.)?SynchronizedOptions\s*\(/m;
+var HANDOFF_NULL = /this\.safeDict\s*\(\s*this\.options\s*,\s*"cachedCurrencies"\s*,\s*\(Object\)\s*null\s*\)/g;
+var HANDOFF_EMPTY = /this\.safeDict\s*\(\s*this\.options\s*,\s*"cachedCurrencies"\s*,\s*new\s+(?:java\.util\.)?HashMap<String, Object>\s*\(\s*\)\s*\{\{\}\}\s*\)/g;
+function closeOf4(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let closed = false;
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (text[j] === c) {
+          i = j;
+          closed = true;
+          break;
+        }
+      }
+      if (!closed)
+        return -1;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      if (--depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function splitArgs4(text) {
+  const out = [];
+  let depth = 0, at = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let closed = false;
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (text[j] === c) {
+          i = j;
+          closed = true;
+          break;
+        }
+      }
+      if (!closed)
+        return void 0;
+      continue;
+    }
+    if (c === "<" && /[\w]/.test(text[i - 1] ?? "")) {
+      const g = /^<[\w.?,\s<>]*>/.exec(text.slice(i));
+      if (g !== null) {
+        i += g[0].length - 1;
+        continue;
+      }
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      out.push(text.slice(at, i).trim());
+      at = i + 1;
+    }
+  }
+  if (depth !== 0)
+    return void 0;
+  out.push(text.slice(at).trim());
+  return out;
+}
+var strLit3 = (e) => /^"(?:[^"\\]|\\.)*"$/.test(e.trim());
+var ownerProven;
+function optionsIsOwnerStore() {
+  if (ownerProven !== void 0)
+    return ownerProven;
+  ownerProven = false;
+  for (const file of OJ01_HEADERS()) {
+    let header = "";
+    try {
+      header = fs8.readFileSync(file, "utf8").split(OJ01_DELIM)[0];
+    } catch (e) {
+      continue;
+    }
+    if (OWNER_FIELD.test(header)) {
+      ownerProven = true;
+      break;
+    }
+  }
+  return ownerProven;
+}
+function oj01NativeOptionsWrites(content) {
+  if (!optionsIsOwnerStore())
+    return content;
+  const H = "Helpers.addElementToObject(";
+  let out = "";
+  let at = 0;
+  for (; ; ) {
+    const i = content.indexOf(H, at);
+    if (i < 0) {
+      out += content.slice(at);
+      break;
+    }
+    const open = i + H.length - 1;
+    const close = closeOf4(content, open);
+    if (close < 0) {
+      out += content.slice(at);
+      break;
+    }
+    const args = splitArgs4(content.slice(open + 1, close));
+    out += content.slice(at, i);
+    if (args === void 0 || args.length !== 3 || args[0] !== "this.options" || !strLit3(args[1])) {
+      out += content.slice(i, close + 1);
+    } else {
+      out += "this.options.put(" + args[1] + ", " + args[2] + ")";
+    }
+    at = close + 1;
+  }
+  return out;
+}
+function oj01CachedCurrenciesHandoff(content) {
+  if (!optionsIsOwnerStore())
+    return content;
+  return content.replace(HANDOFF_EMPTY, "this.cachedCurrenciesForLoadOrEmpty()").replace(HANDOFF_NULL, "this.cachedCurrenciesForLoad()");
+}
+function hx10w4OJ01OptionsOwner(content) {
+  if (!optionsIsOwnerStore())
+    return content;
+  return oj01CachedCurrenciesHandoff(oj01NativeOptionsWrites(content));
+}
+function oj01OptionsSelfTest() {
+  const problems = [];
+  if (!optionsIsOwnerStore()) {
+    problems.push("hx10w4 OJ01: BaseExchange.java must declare `options = new SynchronizedOptions ()`");
+    return problems;
+  }
+  const cls = (body) => `public class Gemini extends GeminiRest
+{
+${body}
+}
+`;
+  const run = (body) => hx10w4OJ01OptionsOwner(cls(body));
+  const unchanged = (t) => hx10w4OJ01OptionsOwner(t) === t;
+  const pos = [
+    [
+      "nullable boxed value puts",
+      '    public void setSandboxMode(Object enable)\n    {\n        Helpers.addElementToObject(this.options, "sandboxMode", enable);\n    }',
+      'this.options.put("sandboxMode", enable);'
+    ],
+    [
+      "nullable call value puts",
+      '    public void setAccount(Object data)\n    {\n        Helpers.addElementToObject(this.options, "accountId", this.safeString(data, "id", "0"));\n    }',
+      'this.options.put("accountId", this.safeString(data, "id", "0"));'
+    ],
+    [
+      "multi-line nested value puts",
+      '    public void setConfig(Object response)\n    {\n        Helpers.addElementToObject(this.options, "systemConfig", new java.util.HashMap<String, Object>() {{\n            put("a", response);\n        }});\n    }',
+      'this.options.put("systemConfig", new java.util.HashMap<String, Object>() {{'
+    ],
+    [
+      "cachedCurrencies null default",
+      '    public void read()\n    {\n        Map<String, Object> currencies = (Map<String, Object>) this.safeDict(this.options, "cachedCurrencies", (Object) null);\n    }',
+      "this.cachedCurrenciesForLoad()"
+    ],
+    [
+      "cachedCurrencies empty default",
+      '    public void read()\n    {\n        Map<String, Object> currencies = (Map<String, Object>) this.safeDict(this.options, "cachedCurrencies", new HashMap<String, Object>() {{}});\n    }',
+      "this.cachedCurrenciesForLoadOrEmpty()"
+    ]
+  ];
+  for (const [name, body, expect] of pos) {
+    const out = run(body);
+    if (!out.includes(expect))
+      problems.push(`hx10w4 OJ01: ${name} expected ${expect} in
+${out}`);
+    if (!unchanged(out))
+      problems.push(`hx10w4 OJ01: ${name} not idempotent`);
+  }
+  const neg = [
+    ["Object key", "    public void put(Object helper, Object value)\n    {\n        Helpers.addElementToObject(this.options, helper, value);\n    }"],
+    ["other receiver", '    public void put(Object value)\n    {\n        Helpers.addElementToObject(this.markets, "id", value);\n    }'],
+    ["one arg", "    public void put(Object value)\n    {\n        Helpers.addElementToObject(this.options, value);\n    }"],
+    ["read keeps helper", '    public void read()\n    {\n        Object value = Helpers.GetValue(this.options, "ws");\n    }'],
+    ["other cached key", '    public void read()\n    {\n        Object value = this.safeDict(this.options, "cachedCurrenciesById", new HashMap<String, Object>() {{}});\n    }']
+  ];
+  for (const [name, body] of neg) {
+    const input = cls(body);
+    if (!unchanged(input))
+      problems.push(`hx10w4 OJ01: ${name} must keep the helper
+${input}`);
+  }
+  return problems;
+}
+onJavaRuntimeRootChange(() => {
+  ownerProven = void 0;
+});
+
+// src/java/hx10w6-J09.ts
+init_esm_shims();
+import fs9 from "fs";
+import path9 from "path";
+function J09_RT_DIR() {
+  return javaRuntimeRoot();
+}
+var J09_RT_FILES = ["BaseExchange.java", "PredictionExchange.java", "Exchange.java"];
+function j09Type(t) {
+  return t.replace(/\bfinal\b/g, "").replace(/java\.util\./g, "").replace(/(?:java\.lang\.)?Boolean\b/g, "Boolean").replace(/\s+/g, "").trim();
+}
+var J09_TYPE = "(?:final\\s+)?(?:java\\.util\\.)?[A-Za-z][\\w.]*(?:\\s*<[^;=(){}]*?>)?(?:\\[\\])?";
+function j09IsMap(t) {
+  return /^(?:Map|HashMap|LinkedHashMap|TreeMap|ConcurrentHashMap|SortedMap|NavigableMap|AbstractMap|Hashtable)(?:<String,Object>)?$/.test(t);
+}
+function j09IsList(t) {
+  return /^(?:List|ArrayList|LinkedList|AbstractList|CopyOnWriteArrayList)<[^<>]*>$/.test(t) || /^(?:List|ArrayList|LinkedList)$/.test(t);
+}
+function j09Mask(s) {
+  const out = s.split("");
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '"') {
+      let j = i + 1;
+      while (j < s.length && s[j] !== '"') {
+        if (s[j] === "\\") {
+          j++;
+        }
+        j++;
+      }
+      const end = Math.min(j, s.length - 1);
+      for (let k = i; k <= end; k++) {
+        out[k] = " ";
+      }
+      i = end;
+    } else if (s[i] === "'") {
+      const m = /^'(?:\\.|[^'\\])'/.exec(s.slice(i, i + 4));
+      if (m !== null) {
+        for (let k = i; k < i + m[0].length; k++) {
+          out[k] = " ";
+        }
+        i += m[0].length - 1;
+      }
+    }
+  }
+  return out.join("");
+}
+function j09Paren(m, open) {
+  let d = 0;
+  for (let k = open; k < m.length; k++) {
+    if (m[k] === "(") {
+      d++;
+    } else if (m[k] === ")") {
+      d--;
+      if (d === 0) {
+        return k;
+      }
+    }
+  }
+  return -1;
+}
+function j09Brace(m, open) {
+  let d = 0;
+  for (let k = open; k < m.length; k++) {
+    if (m[k] === "{") {
+      d++;
+    } else if (m[k] === "}") {
+      d--;
+      if (d === 0) {
+        return k;
+      }
+    }
+  }
+  return -1;
+}
+function j09DeclTypes(masked, name, pos) {
+  const before = masked.slice(0, pos);
+  const starts = [...before.matchAll(/^[ \t]*(?:public|private|protected)[ \t]/gm)];
+  if (starts.length === 0) {
+    return void 0;
+  }
+  const win = before.slice(starts[starts.length - 1].index);
+  const rx = new RegExp("(?:^|[\\s(,;{])(" + J09_TYPE + ")\\s+" + name + "\\s*(?=[=;,)])", "g");
+  const out = /* @__PURE__ */ new Set();
+  let m;
+  while ((m = rx.exec(win)) !== null) {
+    const t = j09Type(m[1]);
+    if (/,$/.test(t) || /^(?:return|new|else|case|throw|instanceof)$/.test(t)) {
+      continue;
+    }
+    out.add(t);
+  }
+  if (out.size === 0) {
+    return void 0;
+  }
+  if (new RegExp("(?:\\(|, )" + name + "\\) ->|(?<![\\w.])" + name + " ->").test(win)) {
+    return void 0;
+  }
+  return [...out];
+}
+var j09RtFields;
+function j09RuntimeFields() {
+  if (j09RtFields !== void 0) {
+    return j09RtFields;
+  }
+  const table = /* @__PURE__ */ new Map();
+  for (const f of J09_RT_FILES) {
+    let src = "";
+    try {
+      src = fs9.readFileSync(path9.join(J09_RT_DIR(), f), "utf8");
+    } catch {
+      continue;
+    }
+    const rx = new RegExp("^[ \\t]+(?:public|private|protected)\\s+(?:static\\s+)?(?:final\\s+)?(?:volatile\\s+)?(?:transient\\s+)?(" + J09_TYPE + ")\\s+(\\w+)\\s*(?:=|;)", "gm");
+    let m;
+    while ((m = rx.exec(src)) !== null) {
+      const t = j09Type(m[1]);
+      if (!table.has(m[2])) {
+        table.set(m[2], /* @__PURE__ */ new Set());
+      }
+      table.get(m[2]).add(t);
+    }
+  }
+  j09RtFields = table;
+  return table;
+}
+function j09FieldType(content, name) {
+  const out = /* @__PURE__ */ new Set();
+  const rx = new RegExp("^[ \\t]+(?:public|private|protected)\\s+(?:static\\s+)?(?:final\\s+)?(?:volatile\\s+)?(?:transient\\s+)?(" + J09_TYPE + ")\\s+" + name + "\\s*(?:=|;)", "gm");
+  let m;
+  while ((m = rx.exec(content)) !== null) {
+    out.add(j09Type(m[1]));
+  }
+  for (const t of j09RuntimeFields().get(name) ?? []) {
+    out.add(t);
+  }
+  if (out.size !== 1) {
+    return void 0;
+  }
+  for (const t of out) {
+    return t;
+  }
+  return void 0;
+}
+function j09Ternary(X) {
+  let depth = 0, q = -1, colons = 0;
+  for (let k = 0; k < X.length; k++) {
+    const c = X[k];
+    if (c === "(" || c === "[" || c === "{") {
+      depth++;
+    } else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+    } else if (depth === 0 && c === "?" && X[k + 1] !== "?" && X[k - 1] !== "?") {
+      if (q !== -1) {
+        return void 0;
+      }
+      q = k;
+    } else if (depth === 0 && c === ":" && q !== -1) {
+      colons++;
+    }
+  }
+  if (q === -1 || colons !== 1) {
+    return void 0;
+  }
+  return [X.slice(0, q).trim(), X.slice(X.indexOf(":", q) + 1).trim()];
+}
+var j09RtMethods;
+function j09MethodTable(src, table) {
+  const rx = /^[ \t]+(?:public|private|protected)\s+(?:static\s+)?(?:(?:final|synchronized)\s+)*([\w.<>?,\[\] ]+?)\s+(\w+)\s*\(/gm;
+  let m;
+  while ((m = rx.exec(src)) !== null) {
+    const t = j09Type(m[1].replace(/\s+/g, ""));
+    if (/^(?:return|new|else|if)$/.test(t)) {
+      continue;
+    }
+    if (!table.has(m[2])) {
+      table.set(m[2], /* @__PURE__ */ new Set());
+    }
+    table.get(m[2]).add(t);
+  }
+}
+function j09RuntimeMethods() {
+  if (j09RtMethods !== void 0) {
+    return j09RtMethods;
+  }
+  const table = /* @__PURE__ */ new Map();
+  for (const f of J09_RT_FILES) {
+    let src = "";
+    try {
+      src = fs9.readFileSync(path9.join(J09_RT_DIR(), f), "utf8");
+    } catch {
+      continue;
+    }
+    j09MethodTable(src, table);
+  }
+  j09RtMethods = table;
+  return table;
+}
+function j09CallType(content, x) {
+  const call = /^(?:this\.)?([A-Za-z_]\w*)\s*\(/.exec(x);
+  if (call === null) {
+    return void 0;
+  }
+  const open = x.indexOf("(");
+  if (j09Paren(x, open) !== x.length - 1) {
+    return void 0;
+  }
+  const table = /* @__PURE__ */ new Map();
+  j09MethodTable(content, table);
+  const ts = /* @__PURE__ */ new Set([...table.get(call[1]) ?? [], ...j09RuntimeMethods().get(call[1]) ?? []]);
+  if (ts.size !== 1) {
+    return void 0;
+  }
+  for (const t of ts) {
+    return t;
+  }
+  return void 0;
+}
+function j09Prove(content, masked, X, pos) {
+  const x = X.trim();
+  if (/^new\s+([A-Za-z][\w.]*)\s*(?:<[^<>]*>)?\s*\(/.test(x)) {
+    const m = /^new\s+([A-Za-z][\w.]*)\s*(<[^<>]*>)?\s*\(/.exec(x);
+    return { t: j09Type(m[1] + (m[2] ?? "")), nonNull: true };
+  }
+  const nn = /^(?:java\.util\.)?Objects\.requireNonNullElse\(\s*([A-Za-z_]\w*)\s*,\s*"(?:[^"\\]|\\.)*"\s*\)$/.exec(x);
+  if (nn !== null) {
+    const inner = j09Prove(content, masked, nn[1], pos);
+    if (inner !== void 0 && inner.t === "String") {
+      return { t: "String", nonNull: true };
+    }
+    return void 0;
+  }
+  if (/^[A-Za-z_]/.test(x) && /\)$/.test(x)) {
+    const t = j09CallType(content, x);
+    if (t !== void 0) {
+      return { t, nonNull: false };
+    }
+  }
+  if (/^[A-Za-z_]\w*$/.test(x)) {
+    const t = j09DeclTypes(masked, x, pos);
+    if (t !== void 0 && t.length === 1) {
+      return { t: t[0], nonNull: false };
+    }
+    const f = j09FieldType(content, x);
+    return f === void 0 ? void 0 : { t: f, nonNull: false };
+  }
+  const tf = /^this\.([A-Za-z_]\w*)$/.exec(x);
+  if (tf !== null) {
+    const f = j09FieldType(content, tf[1]);
+    return f === void 0 ? void 0 : { t: f, nonNull: false };
+  }
+  const tern = j09Ternary(x);
+  if (tern !== void 0 && /^null$/.test(tern[0])) {
+    const inner = j09Prove(content, masked, tern[1], pos);
+    return inner === void 0 ? void 0 : { t: inner.t, nonNull: false };
+  }
+  if (tern !== void 0 && /^null$/.test(tern[1])) {
+    const inner = j09Prove(content, masked, tern[0], pos);
+    return inner === void 0 ? void 0 : { t: inner.t, nonNull: false };
+  }
+  return void 0;
+}
+function j09Family(body) {
+  if (/containsKey\s*\(/.test(body)) {
+    return "inOp";
+  }
+  if (/keySet\s*\(\s*\)/.test(body) && /ArrayList/.test(body)) {
+    return "objectKeys";
+  }
+  if (/Array\.getLength/.test(body)) {
+    return "getArrayLength";
+  }
+  if (/expected a dictionary/.test(body)) {
+    return "toMapArg";
+  }
+  if (/expected a list of strings/.test(body)) {
+    return "toStringListArg";
+  }
+  if (/expected a number/.test(body)) {
+    return "toLongOrNull";
+  }
+  if (/Long\.parseLong\("null"\)/.test(body)) {
+    return "toInt64";
+  }
+  if (/case (?:Long|Integer|Double|String) /.test(body)) {
+    return "add";
+  }
+  return "other";
+}
+function j09Native(family, p, X, body) {
+  const x = X.trim();
+  const rep = /^(?:this\.)?[A-Za-z_]\w*$/.test(x);
+  const guarded = (nullArm, op) => p.nonNull ? op : rep ? `(${x} == null ? ${nullArm} : ${op})` : void 0;
+  switch (family) {
+    case "toMapArg":
+      return j09IsMap(p.t) ? x : void 0;
+    case "toStringListArg":
+      return /^(?:List|ArrayList|LinkedList)<String>$/.test(p.t) ? x : void 0;
+    case "toLongOrNull":
+      return p.t === "Long" ? x : void 0;
+    case "toInt64":
+      return p.t === "long" || p.t === "int" ? x : void 0;
+    case "add": {
+      const poison = /String\.valueOf\(\w+\) \+ \(([\s\S]*)\); \}/.exec(body);
+      if (poison !== null) {
+        return p.t === "String" ? `(${x} + ${poison[1]})` : void 0;
+      }
+      const lit = /case Long \w+ -> \(Object\) \(\w+ \+ ([^)]+)\)/.exec(body);
+      if (lit === null) {
+        return void 0;
+      }
+      if (p.t === "Long") {
+        return guarded("null", `(Object) (${x} + ${lit[1]})`);
+      }
+      if (p.t === "long") {
+        return `(${x} + ${lit[1]})`;
+      }
+      return void 0;
+    }
+    case "objectKeys": {
+      if (!j09IsMap(p.t)) {
+        return void 0;
+      }
+      return guarded("new java.util.ArrayList<Object>()", `new java.util.ArrayList<Object>(${x}.keySet())`);
+    }
+    case "getArrayLength": {
+      if (/\[\]$/.test(p.t)) {
+        return guarded("0", `${x}.length`);
+      }
+      if (j09IsList(p.t)) {
+        return guarded("0", `${x}.size()`);
+      }
+      if (p.t === "String") {
+        return guarded("0", `${x}.length()`);
+      }
+      return void 0;
+    }
+    case "inOp": {
+      const key = /containsKey\(((?:"(?:[^"\\]|\\.)*"|[A-Za-z_]\w*))\)/.exec(body);
+      if (key !== null && j09IsMap(p.t)) {
+        return guarded("false", `${x}.containsKey(${key[1]})`);
+      }
+      const lkey = /\.contains\(((?:"(?:[^"\\]|\\.)*"|[A-Za-z_]\w*))\)/.exec(body);
+      if (lkey !== null && j09IsList(p.t)) {
+        return guarded("false", `${x}.contains(${lkey[1]})`);
+      }
+      return void 0;
+    }
+    default:
+      return void 0;
+  }
+}
+function j09Site(content, masked, at) {
+  const brace = masked.indexOf("{", at);
+  if (brace === -1) {
+    return void 0;
+  }
+  const selOpen = masked.indexOf("(", at + "switch ".length);
+  if (selOpen === -1 || selOpen > brace) {
+    return void 0;
+  }
+  const selClose = j09Paren(masked, selOpen);
+  if (selClose === -1 || selClose > brace) {
+    return void 0;
+  }
+  const castEnd = selOpen + 1 + "(Object)".length;
+  const operandOpen = masked.indexOf("(", castEnd);
+  if (operandOpen === -1 || operandOpen >= selClose) {
+    return void 0;
+  }
+  const operandClose = j09Paren(masked, operandOpen);
+  if (operandClose === -1 || operandClose !== selClose - 1) {
+    return void 0;
+  }
+  const bodyEnd = j09Brace(masked, brace);
+  if (bodyEnd === -1) {
+    return void 0;
+  }
+  const X = content.slice(operandOpen + 1, operandClose);
+  const body = content.slice(brace, bodyEnd + 1);
+  const family = j09Family(body);
+  if (family === "other") {
+    return void 0;
+  }
+  const p = j09Prove(content, masked, X, at);
+  if (p === void 0) {
+    return void 0;
+  }
+  const nat = j09Native(family, p, X, body);
+  if (nat === void 0) {
+    return void 0;
+  }
+  let s = at, e = bodyEnd;
+  for (; ; ) {
+    if (s > 0 && e + 1 < masked.length && masked[s - 1] === "(" && masked[e + 1] === ")" && (s < 2 || !/[A-Za-z0-9_$)\]]/.test(masked[s - 2]))) {
+      s--;
+      e++;
+      continue;
+    }
+    const cast = /\(\s*((?:java\.util\.)?[A-Za-z][\w.]*(?:\s*<[^<>]*>)?)\s*\)\s+$/.exec(masked.slice(Math.max(0, s - 120), s));
+    if (cast !== null && e + 1 < masked.length && masked[e + 1] === ")" && masked[s - 1] === " ") {
+      const open = s - cast[0].length - 1;
+      if (open >= 0 && masked[open] === "(") {
+        const target = j09Type(cast[1]);
+        const ok = family === "toMapArg" && j09IsMap(target) || family === "toStringListArg" && /^(?:List|ArrayList|LinkedList)<String>$/.test(target) || family === "toLongOrNull" && target === "Long" || family === "toInt64" && (target === "long" || target === "int") || family === "objectKeys" && /^(?:List|ArrayList|LinkedList)<Object>$/.test(target) || family === "add" && target === "Object";
+        if (ok) {
+          s = open;
+          e++;
+          continue;
+        }
+      }
+    }
+    break;
+  }
+  return { start: s, end: e, text: nat };
+}
+function nativeJavaJ09SwitchBlobs(content) {
+  if (!content.includes("switch ((Object)")) {
+    return content;
+  }
+  const masked = j09Mask(content);
+  const sites = [];
+  let from = 0;
+  for (; ; ) {
+    const at = masked.indexOf("switch ((Object)", from);
+    if (at === -1) {
+      break;
+    }
+    from = at + 1;
+    const site = j09Site(content, masked, at);
+    if (site !== void 0) {
+      sites.push(site);
+    }
+  }
+  if (sites.length === 0) {
+    return content;
+  }
+  let out = content;
+  let floor = out.length;
+  for (let i = sites.length - 1; i >= 0; i--) {
+    const site = sites[i];
+    if (site.end >= floor) {
+      continue;
+    }
+    out = out.slice(0, site.start) + site.text + out.slice(site.end + 1);
+    floor = site.start;
+  }
+  return out;
+}
+function j09SelfTest() {
+  const problems = [];
+  const cls = (sig, strings, body) => `public class Woo extends WooApi
+{
+    public Object m(${sig})
+    {
+${body}
+    }
+}`;
+  const MAP = "Map<String, Object> parameters";
+  const OBJ = "Object parameters";
+  const toMapArg = '((Map<String, Object>) (switch ((Object) (parameters)) { case null -> (Map<String, Object>) null; case Map<?, ?> hx4J40v1 -> (Map<String, Object>) hx4J40v1; case Object hx4J40v1 -> throw new ClassCastException("ccxt: expected a dictionary, got " + hx4J40v1.getClass().getName()); }))';
+  const toListArg = '((List<String>) (switch ((Object) (s)) { case null -> (List<String>) null; case List<?> hx4J40v2 -> (List<String>) hx4J40v2; case Object hx4J40v2 -> throw new ClassCastException("ccxt: expected a list of strings, got " + hx4J40v2.getClass().getName()); }))';
+  const toLong = '((Long) (switch ((Object) (q)) { case null -> (Long) null; case Long hx4J40v3 -> hx4J40v3; case Number hx4J40v3 -> Long.valueOf(hx4J40v3.longValue()); case Object hx4J40v3 -> throw new ClassCastException("ccxt: expected a number, got " + hx4J40v3.getClass().getName()); }))';
+  const objKeys = "((List<Object>) switch ((Object)(featuresObj)) { case Map<?, ?> j39v1 -> { synchronized (j39v1) { yield new ArrayList<Object>(j39v1.keySet()); } } case null, default -> new ArrayList<Object>(); })";
+  const arrLen = "(switch ((Object)(chains)) { case null -> 0; case List<?> j39v2 -> j39v2.size(); case String j39v3 -> j39v3.length(); case Object j39v4 -> j39v4.getClass().isArray() ? java.lang.reflect.Array.getLength(j39v4) : 0; })";
+  const inOp = '((switch ((Object)(parameters)) { case List<?> j39v5 -> j39v5.contains("coin"); case Map<?, ?> j39v6 -> j39v6.containsKey("coin"); case null, default -> false; }))';
+  const addLit = '((Object) (switch ((Object) (pricePrecision)) { case null -> (Object) null; case Long hx4J40v7 -> (Object) (hx4J40v7 + 1L); case Integer hx4J40v7 -> (Object) (hx4J40v7.longValue() + 1L); case String hx4J40v7 -> (Object) (hx4J40v7 + "1"); default -> (Object) null; }))';
+  const cases = [
+    // signature, body, expected substring (undefined keeps the site)
+    ["toMapArg Map param", MAP, "        return this.f(" + toMapArg + ");", "this.f(parameters)"],
+    ["toMapArg Object param", OBJ, "        return this.f(" + toMapArg + ");", void 0],
+    ["toStringListArg List<String> local", MAP, "        List<String> s = new ArrayList<String>();\n        return this.f(" + toListArg + ");", "this.f(s)"],
+    ["toStringListArg List<Object> local", MAP, "        List<Object> s = new ArrayList<Object>();\n        return this.f(" + toListArg + ");", void 0],
+    ["toLongOrNull Long local", MAP, "        Long q = n;\n        return this.f(" + toLong + ");", "this.f(q)"],
+    ["toLongOrNull Integer local", MAP, "        Integer q = 1;\n        return this.f(" + toLong + ");", void 0],
+    ["objectKeys Map local", MAP, "        Map<String, Object> featuresObj = new HashMap<String, Object>();\n        List<Object> keys = " + objKeys + ";", "featuresObj.keySet()"],
+    ["objectKeys Object local", MAP, "        Object featuresObj = p;\n        List<Object> keys = " + objKeys + ";", void 0],
+    ["getArrayLength List local", MAP, "        List<Object> chains = new ArrayList<Object>();\n        for (var j = 0; j < " + arrLen + ") {}", "chains.size()"],
+    ["getArrayLength Object local", MAP, "        Object chains = p;\n        for (var j = 0; j < " + arrLen + ") {}", void 0],
+    ["inOp Map param", MAP, "        if (" + inOp + ") {}", 'parameters.containsKey("coin")'],
+    ["inOp Object param", OBJ, "        if (" + inOp + ") {}", void 0],
+    ["add Long local", MAP, "        Long pricePrecision = n;\n        return " + addLit + ";", "pricePrecision + 1L"],
+    ["add Object local", MAP, "        Object pricePrecision = p;\n        return " + addLit + ";", void 0]
+  ];
+  for (const [name, sig, body, expect] of cases) {
+    const src = cls(sig, "", body);
+    const out = nativeJavaJ09SwitchBlobs(src);
+    const ok = expect === void 0 ? out === src : out.includes(expect) && !out.includes("switch ((Object)") && nativeJavaJ09SwitchBlobs(out) === out;
+    if (!ok) {
+      problems.push(`hx10w6 J09: ${name}
+${out}`);
+    }
+  }
+  return problems;
+}
+onJavaRuntimeRootChange(() => {
+  j09RtFields = void 0;
+  j09RtMethods = void 0;
+});
+
+// src/java/hx10w7-J01.ts
+init_esm_shims();
+import fs10 from "fs";
+import path10 from "path";
+function J01W7_ROOT() {
+  return javaRuntimeRoot();
+}
+function J01W7_HEADERS() {
+  return ["BaseExchange.java", "PredictionExchange.java"].map((n) => path10.join(J01W7_ROOT(), n));
+}
+var J01W7_DELIM = "// METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT";
+var J01W7_CALL = "Helpers.addElementToObject(";
+var J01W7_DECL = /^[ \t]*public\s+Map<\s*String\s*,\s*Object\s*>\s+(\w+)\s*=\s*new\s+(?:java\.util\.)?(?:Linked)?HashMap\s*(?:<[^<>]*>)?\s*\(\s*\)\s*\{?\s*;?[ \t]*$/gm;
+var J01W7_WRITE = /(?<![\w.$])this\.(\w+)\s*=(?![=>])/g;
+var J01W7_PLAIN = /^(?:new\s+(?:java\.util\.)?(?:Linked)?HashMap\b|this\.createSafeDictionary\s*\(|this\.omit(?:Map)?\s*\(|this\.(?:safeBalance|parseBalance|parseWsBalance)\s*\(|this\.(?:extend|Extend|deepExtend)\s*\()/;
+var J01W7_NONNULL_CALL = /^this\.(?:extend|Extend|deepExtend|omit|omitMap|safeBalance|parseBalance|parseWsBalance|createSafeDictionary|orderBook|indexedOrderBook)\s*\(/;
+var provenFields;
+function j01w7Mask(text) {
+  const out = text.split("");
+  const blank = (from, to) => {
+    for (let k = from; k < to; k++)
+      if (out[k] !== "\n")
+        out[k] = " ";
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < text.length) {
+        if (text[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (text[j] === c)
+          break;
+        j++;
+      }
+      blank(i + 1, Math.min(j, text.length));
+      i = j;
+    } else if (c === "/" && text[i + 1] === "/") {
+      let j = text.indexOf("\n", i);
+      if (j === -1)
+        j = text.length;
+      blank(i, j);
+      i = j - 1;
+    } else if (c === "/" && text[i + 1] === "*") {
+      let j = text.indexOf("*/", i + 2);
+      j = j === -1 ? text.length : j + 2;
+      blank(i, j);
+      i = j - 1;
+    }
+  }
+  return out.join("");
+}
+function j01w7Close(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let closed = false;
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (text[j] === c) {
+          i = j;
+          closed = true;
+          break;
+        }
+      }
+      if (!closed)
+        return -1;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      if (--depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function j01w7Split(text) {
+  const out = [];
+  let depth = 0;
+  let at = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let closed = false;
+      for (let j = i + 1; j < text.length; j++) {
+        if (text[j] === "\\") {
+          j++;
+          continue;
+        }
+        if (text[j] === c) {
+          i = j;
+          closed = true;
+          break;
+        }
+      }
+      if (!closed)
+        return void 0;
+      continue;
+    }
+    if (c === "<" && /[\w]/.test(text[i - 1] ?? "")) {
+      const generic = /^<[\w.?,\s<>]*>/.exec(text.slice(i));
+      if (generic !== null) {
+        i += generic[0].length - 1;
+        continue;
+      }
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      out.push(text.slice(at, i).trim());
+      at = i + 1;
+    }
+  }
+  if (depth !== 0)
+    return void 0;
+  out.push(text.slice(at).trim());
+  return out;
+}
+function j01w7Files(dir, out = []) {
+  let names = [];
+  try {
+    names = fs10.readdirSync(dir);
+  } catch (e) {
+    return out;
+  }
+  for (const name of names) {
+    const full = path10.join(dir, name);
+    let stat;
+    try {
+      stat = fs10.statSync(full);
+    } catch (e) {
+      continue;
+    }
+    if (stat.isDirectory())
+      j01w7Files(full, out);
+    else if (name.endsWith(".java"))
+      out.push(full);
+  }
+  return out;
+}
+function j01w7WritesOf(masked, name) {
+  const out = [];
+  const re = new RegExp(`(?<![\\w.$])${name}\\s*=(?![=>])`, "g");
+  let m;
+  while ((m = re.exec(masked)) !== null) {
+    const at = m.index + m[0].length;
+    let depth = 0;
+    let end = -1;
+    for (let i = at; i < masked.length; i++) {
+      const c = masked[i];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      else if (c === ";" && depth === 0) {
+        end = i;
+        break;
+      }
+    }
+    if (end === -1)
+      return out;
+    out.push(masked.slice(at, end).trim());
+  }
+  return out;
+}
+function j01w7StripCast(text) {
+  let v = text.trim();
+  for (; ; ) {
+    const cast = /^\([\w.<>, ?\[\]]+\)\s*(.+)$/s.exec(v);
+    if (cast === null)
+      return v;
+    v = cast[1].trim();
+  }
+}
+function j01w7WriteKind(rhs, masked, depth) {
+  const v = j01w7StripCast(rhs);
+  if (v === "null" || v === "undefined")
+    return "null";
+  if (J01W7_PLAIN.test(v))
+    return "plain";
+  if (J01W7_NONNULL_CALL.test(v))
+    return "nonnull";
+  if (/^new [\w.]+(?:<[\w.<>, ?]*>)?\(/.test(v))
+    return "nonnull";
+  const safe = /^this\.(?:safeDict|safeMap|safeValue|safeList)\s*\(/.exec(v);
+  if (safe !== null) {
+    const close = j01w7Close(v, safe[0].length - 1);
+    const call = close < 0 ? void 0 : j01w7Split(v.slice(safe[0].length, close));
+    const last = call === void 0 ? void 0 : call[call.length - 1];
+    const builtDefault = last !== void 0 && (/^new\s/.test(last) || J01W7_STR_LIT.test(last) || /^-?\d/.test(last));
+    return call !== void 0 && call.length >= 3 && builtDefault ? "nonnull" : "null";
+  }
+  if (depth < 2 && /^[A-Za-z_]\w*$/.test(v)) {
+    const writes = j01w7WritesOf(masked, v);
+    if (writes.length === 0)
+      return "null";
+    const kinds = writes.map((w) => j01w7WriteKind(w, masked, depth + 1));
+    if (kinds.every((k) => k === "plain"))
+      return "plain";
+    return kinds.every((k) => k !== "null") ? "nonnull" : "null";
+  }
+  return "null";
+}
+var J01W7_CHM = /new\s+(?:java\.util\.concurrent\.)?ConcurrentHashMap\b/;
+var J01W7_CHM_OWNED = /(?:liquidations|myLiquidations|clients)\s*=\s*new\s+(?:java\.util\.concurrent\.)?ConcurrentHashMap/;
+var J01W7_CHM_FILES = /* @__PURE__ */ new Set(["WsClient.java", "ArrayCache.java"]);
+var concurrencyFree;
+function j01w7NoConcurrent() {
+  if (concurrencyFree !== void 0)
+    return concurrencyFree;
+  concurrencyFree = true;
+  for (const file of j01w7Files(J01W7_ROOT())) {
+    let raw = "";
+    try {
+      raw = fs10.readFileSync(file, "utf8");
+    } catch (e) {
+      continue;
+    }
+    if (!J01W7_CHM.test(raw))
+      continue;
+    if (J01W7_CHM_FILES.has(path10.basename(file)))
+      continue;
+    for (const line of raw.split("\n")) {
+      if (J01W7_CHM.test(line) && !J01W7_CHM_OWNED.test(line)) {
+        concurrencyFree = false;
+        break;
+      }
+    }
+    if (!concurrencyFree)
+      break;
+  }
+  return concurrencyFree;
+}
+function j01w7Fields() {
+  if (provenFields !== void 0)
+    return provenFields;
+  const declared = /* @__PURE__ */ new Set();
+  for (const file of J01W7_HEADERS()) {
+    let header = "";
+    try {
+      header = fs10.readFileSync(file, "utf8").split(J01W7_DELIM)[0];
+    } catch (e) {
+      continue;
+    }
+    for (const m of header.matchAll(J01W7_DECL))
+      declared.add(m[1]);
+  }
+  const unknown = /* @__PURE__ */ new Set();
+  const nullable = /* @__PURE__ */ new Set();
+  const roots = fs10.readdirSync(J01W7_ROOT()).filter((n) => n.endsWith(".java")).map((n) => path10.join(J01W7_ROOT(), n));
+  for (const file of roots.concat(j01w7Files(path10.join(J01W7_ROOT(), "exchanges")))) {
+    let raw = "";
+    try {
+      raw = fs10.readFileSync(file, "utf8");
+    } catch (e) {
+      continue;
+    }
+    if (!raw.includes("this."))
+      continue;
+    const masked = j01w7Mask(raw);
+    for (const m of masked.matchAll(J01W7_WRITE)) {
+      const field = m[1];
+      if (!declared.has(field))
+        continue;
+      const at = m.index + m[0].length;
+      const end = masked.indexOf(";", at);
+      const rhs = masked.slice(at, end === -1 ? Math.min(at + 200, masked.length) : end).trim().split("\n")[0].trim();
+      const kind = j01w7WriteKind(rhs, j01w7Member(masked, m.index), 0);
+      if (kind === "plain")
+        continue;
+      if (kind === "nonnull") {
+        unknown.add(field);
+        continue;
+      }
+      nullable.add(field);
+    }
+  }
+  const tier1 = /* @__PURE__ */ new Set();
+  const tier2 = /* @__PURE__ */ new Set();
+  const noConcurrent = j01w7NoConcurrent();
+  for (const field of declared) {
+    if (nullable.has(field))
+      continue;
+    if (noConcurrent)
+      tier1.add(field);
+    else if (unknown.has(field))
+      tier2.add(field);
+    else
+      tier1.add(field);
+  }
+  provenFields = { tier1, tier2 };
+  return provenFields;
+}
+function j01w7Member(content, at) {
+  const head = /^ {4}(?:public|private|protected)\b/gm;
+  let start = 0;
+  let end = content.length;
+  let m;
+  while ((m = head.exec(content)) !== null) {
+    if (m.index <= at)
+      start = m.index;
+    else {
+      end = m.index;
+      break;
+    }
+  }
+  return content.slice(start, end);
+}
+var J01W7_STR_LIT = /^"(?:[^"\\]|\\.)*"$/;
+function j01w7Unparen(text) {
+  let t = text.trim();
+  for (; ; ) {
+    if (!t.startsWith("("))
+      return t;
+    const close = j01w7Close(t, 0);
+    if (close !== t.length - 1)
+      return t;
+    t = t.slice(1, -1).trim();
+  }
+}
+function j01w7KeyIsString(member, key) {
+  if (J01W7_STR_LIT.test(key))
+    return true;
+  if (!/^[A-Za-z_]\w*$/.test(key))
+    return false;
+  const escaped = key.replace(/[$]/g, "\\$&");
+  const declared = [...member.matchAll(new RegExp(`(?<![\\w.$])(?:final\\s+)?((?:[a-z]+\\.)*[A-Z]\\w*(?:<[^<>]*>)?)\\s+${escaped}\\s*(?=[=;,):])`, "g"))].map((d) => d[1]);
+  return declared.length > 0 && declared.every((d) => d === "String");
+}
+function j01w7NonNull(member, value, depth) {
+  const v = j01w7Unparen(value);
+  if (J01W7_STR_LIT.test(v) || /^-?\d+(?:\.\d+)?[LD]?$/.test(v) || v === "true" || v === "false")
+    return true;
+  if (v === "null" || v === "undefined")
+    return false;
+  if (/^new [\w.]+(?:<[\w.<>, ?]*>)?\(/.test(v))
+    return true;
+  if (J01W7_NONNULL_CALL.test(v))
+    return true;
+  const cast = /^\([\w.<>, ?\[\]]+\)\s*(.+)$/s.exec(v);
+  if (cast !== null && depth < 3)
+    return j01w7NonNull(member, cast[1], depth + 1);
+  if (depth < 2 && /^[A-Za-z_]\w*$/.test(v)) {
+    const writes = j01w7WritesOf(j01w7Mask(member), v);
+    return writes.length > 0 && writes.every((w) => j01w7NonNull(member, w, depth + 1));
+  }
+  return false;
+}
+function j01w7CastFree(text) {
+  return !/\((?:final\s+)?(?:[A-Z][\w.]*|(?:java|io|com)\.[\w.]+)(?:<[^()]*>)?\)/.test(text);
+}
+var J01W7_OWNER_MEMBER = /^(?:handle[A-Z]\w*|parseWSBalances)$/;
+function j01w7OwnerMember(member) {
+  const head = /^ {4}(?:public|private|protected)[^\n]*$/m.exec(member);
+  if (head === null)
+    return false;
+  const name = /\b(\w+)\s*\(/.exec(head[0])?.[1];
+  return name !== void 0 && J01W7_OWNER_MEMBER.test(name);
+}
+function j01w7FieldPuts(content, options = {}) {
+  if (typeof content !== "string" || !content.includes(J01W7_CALL))
+    return content;
+  const sets = options.sets ?? j01w7Fields();
+  if (sets.tier1.size === 0 && sets.tier2.size === 0)
+    return content;
+  const callHead = J01W7_CALL.length;
+  let out = "";
+  let at = 0;
+  for (; ; ) {
+    const i = content.indexOf(J01W7_CALL, at);
+    if (i < 0) {
+      out += content.slice(at);
+      break;
+    }
+    const lineStart = content.lastIndexOf("\n", i) + 1;
+    const indent = content.slice(lineStart, i);
+    const open = i + callHead - 1;
+    const close = j01w7Close(content, open);
+    if (close < 0) {
+      out += content.slice(at);
+      break;
+    }
+    out += content.slice(at, i);
+    const lineEnd2 = content.indexOf("\n", close + 1);
+    const rest = content.slice(close + 1, lineEnd2 === -1 ? content.length : lineEnd2);
+    const args = j01w7Split(content.slice(open + 1, close));
+    const receiver = args !== void 0 && args.length === 3 ? /^this\.(\w+)$/.exec(args[0]) : null;
+    const standalone = /^[ \t]*$/.test(indent) && /^;\s*$/.test(rest);
+    let text;
+    if (receiver !== null && standalone && args !== void 0) {
+      const name = receiver[1];
+      const tier1 = sets.tier1.has(name);
+      const tier2 = sets.tier2.has(name);
+      if (tier1 || tier2) {
+        const member = j01w7Member(content, i);
+        const selfWrite = !tier1 && new RegExp(`(?<![\\w.$])this\\.${name}\\s*=(?![=>])`).test(member);
+        const stringKey = j01w7KeyIsString(member, args[1]);
+        if (!selfWrite && stringKey && j01w7OwnerMember(member) && j01w7CastFree(args[1]) && j01w7CastFree(args[2]) && (tier1 || j01w7NonNull(member, args[2], 0))) {
+          text = `this.${name}.put(${args[1]}, ${args[2]})`;
+        }
+      }
+    }
+    out += text ?? content.slice(i, close + 1);
+    at = close + 1;
+  }
+  return out;
+}
+function j01w7FieldPutsSelfTest() {
+  const problems = [];
+  const sets = { tier1: /* @__PURE__ */ new Set(["balance", "tickers", "orderbooks"]), tier2: /* @__PURE__ */ new Set(["trades"]) };
+  const run = (body, signature = "Object v", member = "handleZz") => j01w7FieldPuts(
+    `public class ZzJ01 extends BaseExchange
+{
+    public Object ${member}(${signature})
+    {
+${body}
+    }
+}`,
+    { sets }
+  );
+  const cases = [
+    ["literal key nullable value on tier 1", '        Helpers.addElementToObject(this.tickers, "BTC/USDT", ticker);', 'this.tickers.put("BTC/USDT", ticker);', "Object ticker"],
+    ["String key from a String local", '        String type = this.safeString(v, "t");\n        Helpers.addElementToObject(this.balance, type, this.iso8601(v));', "this.balance.put(type, this.iso8601(v));"],
+    ["String cast key", "        Helpers.addElementToObject(this.orderbooks, (String) v, this.orderBook(new HashMap<String, Object>() {{}}, v));", void 0],
+    ["null value is the helper put on tier 1", '        Helpers.addElementToObject(this.balance, "timestamp", null);', 'this.balance.put("timestamp", null);'],
+    ["non-null value on tier 2", '        Helpers.addElementToObject(this.trades, "BTC/USDT", this.extend(v, new HashMap<String, Object>() {{}}));', 'this.trades.put("BTC/USDT", this.extend(v, new HashMap<String, Object>() {{}}));'],
+    // the helper stays: null value on tier 2, an Object/map-element key, an unproven field, a local demotion
+    ["null-ish value on tier 2", '        Helpers.addElementToObject(this.trades, "BTC/USDT", v);', void 0],
+    ["Object key on tier 1", "        Object symbol = v;\n        Helpers.addElementToObject(this.tickers, symbol, ticker);", void 0],
+    ["cast in the value", '        Helpers.addElementToObject(this.balance, "info", ((Map<String, Object>) response).get("info"));', void 0],
+    ["cast key", "        Helpers.addElementToObject(this.orderbooks, (String) v, this.orderBook());", void 0],
+    ["map-element key on tier 1", '        Helpers.addElementToObject(this.orderbooks, market.get("symbol"), this.orderBook(new HashMap<String, Object>() {{}}, v));', void 0],
+    ["Object key on tier 2", '        Object code = v;\n        Helpers.addElementToObject(this.trades, code, "x");', void 0],
+    ["unproven field", '        Helpers.addElementToObject(this.has, "fetchOrder", true);', void 0],
+    ["field written in the member on tier 2", '        this.trades = this.createSafeDictionary();\n        Helpers.addElementToObject(this.trades, "a", this.extend(v, new HashMap<String, Object>() {{}}));', void 0],
+    ["value position", '        return Helpers.addElementToObject(this.tickers, "a", v);', void 0],
+    ["two args", '        Helpers.addElementToObject(this.tickers, "a");', void 0],
+    ["guarded receiver", '        Helpers.addElementToObject((this.tickers == null ? null : this.tickers.get("a")), "b", v);', void 0],
+    // off-owner members keep the helper: there the map's monitor is the only serialisation with
+    // a writer on the watch path, on spawn's virtual executor, or on a user-thread API
+    ["watch member keeps the helper", '        Helpers.addElementToObject(this.balance, "info", info);', void 0, "Object info", "watchBalance"],
+    ["spawned snapshot loader keeps the helper", '        Helpers.addElementToObject(this.balance, "info", info);', void 0, "Object info", "loadBalanceSnapshot"],
+    ["sandbox setter keeps the helper", '        Helpers.addElementToObject(this.balance, "info", info);', void 0, "Object info", "setSandboxMode"]
+  ];
+  for (const [name, body, expect, signature, member] of cases) {
+    const input = run(body, signature, member);
+    const out = j01w7FieldPuts(input, { sets });
+    const ok = expect === void 0 ? out === input : out.includes(expect);
+    if (!ok)
+      problems.push(`hx10w7 J01: ${name}
+${out}`);
+    if (j01w7FieldPuts(out, { sets }) !== out)
+      problems.push(`hx10w7 J01: ${name} not idempotent`);
+  }
+  const empty = j01w7FieldPuts(run(cases[0][1]), { sets: { tier1: /* @__PURE__ */ new Set(), tier2: /* @__PURE__ */ new Set() } });
+  if (empty !== run(cases[0][1]))
+    problems.push("hx10w7 J01: no proven field must leave every site alone");
+  const proven = j01w7Fields();
+  for (const needed of ["balance", "tickers", "orderbooks", "trades", "ohlcvs", "headers"]) {
+    if (!proven.tier1.has(needed) && !proven.tier2.has(needed))
+      problems.push(`hx10w7 J01: ${needed} must be a proven field`);
+  }
+  for (const unsafe of ["has", "urls", "features", "commonCurrencies", "markets_by_id", "options", "markets", "requiredCredentials"]) {
+    if (proven.tier1.has(unsafe) || proven.tier2.has(unsafe))
+      problems.push(`hx10w7 J01: ${unsafe} must not be a proven field`);
+  }
+  return problems;
+}
+onJavaRuntimeRootChange(() => {
+  provenFields = void 0;
+  concurrencyFree = void 0;
+});
+
+// src/java/hx10w7-J05.ts
+init_esm_shims();
+var J05_CTOR = "new ArrayList<Object>(Arrays.asList(";
+var J05_SPLIT = /^\(\(String\)\s*[A-Za-z_]\w*\)\.split\(java\.util\.regex\.Pattern\.quote\("[^"]*"\)\)$/;
+var J05_CONTROL = /^(?:if|for|while|switch|return|throw|catch|else|do)\b|->/;
+function j05Close2(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      const end = text.indexOf('"', i + 1);
+      if (end < 0) {
+        return -1;
+      }
+      i = end;
+      continue;
+    }
+    if (c === "(") {
+      depth++;
+    } else if (c === ")") {
+      depth--;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+function j05Args(text, open, close) {
+  const args = [];
+  let depth = 0;
+  let start = open + 1;
+  for (let i = open + 1; i < close; i++) {
+    const c = text[i];
+    if (c === '"') {
+      const end = text.indexOf('"', i + 1);
+      if (end < 0 || end > close) {
+        return void 0;
+      }
+      i = end;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{") {
+      depth++;
+    } else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+    } else if (c === "," && depth === 0) {
+      args.push(text.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  args.push(text.slice(start, close).trim());
+  return args;
+}
+function nativeJ05CallReceiverReads(content) {
+  if (!content.includes("Helpers.GetValue(" + J05_CTOR)) {
+    return content;
+  }
+  const lines = content.split("\n");
+  const out = [];
+  let serial = 0;
+  for (const line of lines) {
+    const indent = /^\s*/.exec(line)?.[0] ?? "";
+    let text = line;
+    const declarations = [];
+    const prev = out.length > 0 ? out[out.length - 1] : void 0;
+    const statementStart = prev === void 0 || prev.trim() === "" || /[;{}]\s*$/.test(prev);
+    let search = 0;
+    for (; ; ) {
+      const at = text.indexOf("Helpers.GetValue(" + J05_CTOR, search);
+      if (at < 0) {
+        break;
+      }
+      const open = at + "Helpers.GetValue".length;
+      const close = j05Close2(text, open);
+      if (close < 0) {
+        break;
+      }
+      const args = j05Args(text, open, close);
+      const receiver = args?.[0] ?? "";
+      const index = (args?.[1] ?? "").trim();
+      const inner = receiver.startsWith(J05_CTOR) && receiver.endsWith("))") ? receiver.slice(J05_CTOR.length, -2) : "";
+      const prefix = text.slice(0, at);
+      const statement = (/=\s*$/.test(prefix) || /\.put\([^()]*,\s*$/.test(prefix)) && !J05_CONTROL.test(text.trim());
+      if (args?.length !== 2 || !J05_SPLIT.test(inner) || !/^\d+$/.test(index) || !statement || !statementStart) {
+        search = close + 1;
+        continue;
+      }
+      const local = `j05parts${++serial}`;
+      declarations.push(`${indent}List<String> ${local} = Arrays.asList(${inner});`);
+      text = text.slice(0, at) + `(${index} >= ${local}.size() ? null : ${local}.get(${index}))` + text.slice(close + 1);
+      search = at + 1;
+    }
+    if (declarations.length > 0) {
+      out.push(...declarations);
+    }
+    out.push(text);
+  }
+  return out.join("\n");
+}
+function j05CallReceiverSelfTest() {
+  const problems = [];
+  const split = 'new ArrayList<Object>(Arrays.asList(((String)cookie).split(java.util.regex.Pattern.quote(";"))))';
+  const one = `                Object cookieValue = Helpers.GetValue(${split}, 0);`;
+  const fixed = nativeJ05CallReceiverReads(one);
+  if (!fixed.includes('List<String> j05parts1 = Arrays.asList(((String)cookie).split(java.util.regex.Pattern.quote(";")));')) {
+    problems.push("j05: the split receiver must hoist into a typed local");
+  }
+  if (!fixed.includes("Object cookieValue = (0 >= j05parts1.size() ? null : j05parts1.get(0));")) {
+    problems.push("j05: the read must print the helper's range guard on that local");
+  }
+  if (fixed.includes("Helpers.GetValue(")) {
+    problems.push("j05: the split-index read must not keep the helper");
+  }
+  const keep = [
+    `        Object a = Helpers.GetValue(new ArrayList<Object>(Arrays.asList(x)), 0);`,
+    `        Object b = Helpers.GetValue(new ArrayList<Object>(Arrays.asList(((String)x).split(java.util.regex.Pattern.quote(";")))), i);`,
+    `        for (var i = 0; i < Helpers.GetValue(new ArrayList<Object>(Arrays.asList(((String)x).split(java.util.regex.Pattern.quote(";")))), 0); i++)`
+  ];
+  for (const line of keep) {
+    if (nativeJ05CallReceiverReads(line) !== line) {
+      problems.push("j05: a receiver outside the proven shape must keep the helper: " + line.trim());
+    }
+  }
+  const nested = "        if (Ok(cookie))\n" + one;
+  if (nativeJ05CallReceiverReads(nested).includes("j05parts")) {
+    problems.push("j05: no declaration under a brace-less control line");
+  }
+  return problems;
+}
+
+// src/java/hx10w7-J12.ts
+init_esm_shims();
+function j12Mask(s) {
+  const out = s.split("");
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < s.length && s[j] !== c) {
+        if (s[j] === "\\") {
+          j++;
+        }
+        j++;
+      }
+      const end = Math.min(j, s.length - 1);
+      for (let k = i; k <= end; k++) {
+        out[k] = " ";
+      }
+      i = end;
+    }
+  }
+  return out.join("");
+}
+function j12Close(m, open, o, c) {
+  let d = 0;
+  for (let k = open; k < m.length; k++) {
+    if (m[k] === o) {
+      d++;
+    } else if (m[k] === c) {
+      d--;
+      if (d === 0) {
+        return k;
+      }
+    }
+  }
+  return -1;
+}
+function j12ThrowValue(masked, raw) {
+  const lead = masked.length - masked.trimStart().length;
+  const t = masked.trim();
+  const m = /^throw\s+new\s+[A-Za-z][\w.]*\s*\(/.exec(t);
+  if (m === null) {
+    return void 0;
+  }
+  const expr = t.replace(/^throw\s+/, "").replace(/;\s*$/, "").trim();
+  if (!expr.endsWith(")")) {
+    return void 0;
+  }
+  if (j12Close(expr, expr.indexOf("("), "(", ")") !== expr.length - 1) {
+    return void 0;
+  }
+  if (/[;{}]/.test(expr)) {
+    return void 0;
+  }
+  return raw.slice(lead).replace(/^throw\s+/, "").replace(/;\s*$/, "").trim();
+}
+function j12AsyncThrows(content) {
+  if (!content.includes("supplyAsync(") || !content.includes("throw new")) {
+    return content;
+  }
+  const nf = /(?:^|[\s(])(?:java\.util\.concurrent\.)?CompletableFuture[<(.]/.test(content) ? "CompletableFuture" : "java.util.concurrent.CompletableFuture";
+  const masked = j12Mask(content);
+  const edits = [];
+  let from = 0;
+  for (; ; ) {
+    const at = masked.indexOf("supplyAsync", from);
+    if (at === -1) {
+      break;
+    }
+    from = at + 1;
+    const prev = at === 0 ? "" : masked[at - 1];
+    const after = masked.slice(at + "supplyAsync".length, at + "supplyAsync".length + 1);
+    if (after !== "(" || prev !== "" && /[\w$]/.test(prev)) {
+      continue;
+    }
+    const openParen = at + "supplyAsync".length;
+    const closeParen2 = j12Close(masked, openParen, "(", ")");
+    if (closeParen2 === -1) {
+      continue;
+    }
+    let p = openParen + 1;
+    const skip = () => {
+      while (p < masked.length && /\s/.test(masked[p])) {
+        p++;
+      }
+    };
+    skip();
+    if (masked[p] !== "(") {
+      continue;
+    }
+    p++;
+    skip();
+    if (masked[p] !== ")") {
+      continue;
+    }
+    p++;
+    skip();
+    if (masked.slice(p, p + 2) !== "->") {
+      continue;
+    }
+    p += 2;
+    skip();
+    if (masked[p] !== "{") {
+      continue;
+    }
+    const bodyEnd = j12Close(masked, p, "{", "}");
+    if (bodyEnd === -1 || bodyEnd > closeParen2) {
+      continue;
+    }
+    let q = bodyEnd + 1;
+    while (q < masked.length && /\s/.test(masked[q])) {
+      q++;
+    }
+    if (q !== closeParen2) {
+      continue;
+    }
+    const value = j12ThrowValue(masked.slice(p + 1, bodyEnd), content.slice(p + 1, bodyEnd));
+    if (value === void 0) {
+      continue;
+    }
+    let start = at;
+    while (start > 0 && /[\w.$]/.test(masked[start - 1])) {
+      start--;
+    }
+    if (start > 0 && masked[start - 1] === ".") {
+      start--;
+      while (start > 0 && /[\w.$]/.test(masked[start - 1])) {
+        start--;
+      }
+    }
+    edits.push([start, closeParen2 + 1, `${nf}.failedFuture(${value})`]);
+    from = closeParen2 + 1;
+  }
+  if (edits.length === 0) {
+    return content;
+  }
+  let out = content;
+  for (let i = edits.length - 1; i >= 0; i--) {
+    out = out.slice(0, edits[i][0]) + edits[i][2] + out.slice(edits[i][1]);
+  }
+  return out;
+}
+function j12SelfTest() {
+  const problems = [];
+  const cls = (ret2, body) => `public class Woo extends BaseExchange
+{
+    public ${ret2} m(Map<String, Object> parameters)
+    {
+${body}
+    }
+}`;
+  const ret = "CompletableFuture<Order>";
+  const cases = [
+    [
+      "plain throw",
+      cls(ret, '        return BaseExchange.supplyAsync(() -> {\n\n            throw new NotSupported((this.id + " closePosition() is not supported yet")) ;\n        }).thenApply(Order::new);'),
+      (o) => o.includes('CompletableFuture.failedFuture(new NotSupported((this.id + " closePosition() is not supported yet")))') && o.includes(".thenApply(Order::new)") && !o.includes("supplyAsync") && !o.includes("throw new")
+    ],
+    [
+      "bare static call",
+      cls(ret, '        return supplyAsync(() -> { throw new NotSupported(Helpers.add(this.id, " redeem() is not supported yet")); });'),
+      (o) => o.includes('CompletableFuture.failedFuture(new NotSupported(Helpers.add(this.id, " redeem() is not supported yet")))') && !o.includes("supplyAsync")
+    ],
+    [
+      "body keeps other statements",
+      cls(ret, '        return BaseExchange.supplyAsync(() -> {\n            if (parameters == null) { throw new NotSupported("x"); }\n            return null;\n        });'),
+      (o) => o.includes("supplyAsync(") && o.includes("if (parameters == null)")
+    ],
+    [
+      "executor overload kept",
+      cls(ret, '        return BaseExchange.supplyAsync(() -> { throw new NotSupported("x"); }, this.executor);'),
+      (o) => o.includes("supplyAsync(")
+    ],
+    [
+      "thenApply lambda untouched",
+      cls(ret, '        return BaseExchange.supplyAsync(() -> { throw new NotSupported("x"); }).thenApply(y -> y);'),
+      (o) => o.includes('failedFuture(new NotSupported("x"))') && o.includes(".thenApply(y -> y)")
+    ],
+    [
+      "string literal mentioning throw",
+      cls(ret, '        Object s = "supplyAsync(() -> { throw new X(); })";\n        return BaseExchange.supplyAsync(() -> { throw new NotSupported(s); });'),
+      (o) => o.includes('Object s = "supplyAsync(() -> { throw new X(); })"') && o.includes("failedFuture(new NotSupported(s))")
+    ]
+  ];
+  for (const [name, src, ok] of cases) {
+    const out = j12AsyncThrows(src);
+    if (!ok(out)) {
+      problems.push(`hx10w7 J12: ${name}
+${out}`);
+    }
+    if (j12AsyncThrows(out) !== out) {
+      problems.push(`hx10w7 J12: ${name} not idempotent`);
+    }
+  }
+  return problems;
+}
+
+// src/java/hx10w7-OJ06.ts
+init_esm_shims();
+var wsFields = ["futures", "subscriptions", "rejections"];
+var wsCall = "Helpers.GetValue(";
+var wsLit = /^"(?:[^"\\]|\\.)*"$/;
+var wsId = /^[A-Za-z_]\w*$/;
+function maskWs(text) {
+  const out = text.split("");
+  const blank = (from, to) => {
+    for (let k = from; k < to; k++)
+      if (out[k] !== "\n")
+        out[k] = " ";
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < text.length) {
+        if (text[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (text[j] === c)
+          break;
+        j++;
+      }
+      blank(i + 1, j);
+      i = j;
+      continue;
+    }
+    if (c === "/" && text[i + 1] === "/") {
+      let j = i;
+      while (j < text.length && text[j] !== "\n")
+        j++;
+      blank(i, j);
+      i = j;
+    }
+  }
+  return out.join("");
+}
+function closeWs(masked, open) {
+  let depth = 0;
+  for (let k = open; k < masked.length; k++) {
+    const c = masked[k];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      if (--depth === 0)
+        return k;
+    }
+  }
+  return -1;
+}
+function argsWs(content, masked, open, close) {
+  const parts = [];
+  let depth = 0;
+  let start = open + 1;
+  for (let k = open + 1; k < close; k++) {
+    const c = masked[k];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      parts.push(content.slice(start, k));
+      start = k + 1;
+    }
+  }
+  parts.push(content.slice(start, close));
+  return parts;
+}
+function wsMapReads(content) {
+  if (!content.includes(wsCall))
+    return content;
+  const masked = maskWs(content);
+  const edits = [];
+  for (let i = masked.indexOf(wsCall); i !== -1; i = masked.indexOf(wsCall, i + 1)) {
+    const open = i + wsCall.length - 1;
+    const close = closeWs(masked, open);
+    if (close === -1)
+      continue;
+    const parts = argsWs(content, masked, open, close);
+    if (parts.length !== 2)
+      continue;
+    const receiver = /^client\.([A-Za-z_]\w*)$/.exec(parts[0].trim());
+    if (receiver === null || wsFields.indexOf(receiver[1]) === -1)
+      continue;
+    const key = parts[1].trim();
+    const literal = wsLit.test(key);
+    if (!literal && !wsId.test(key))
+      continue;
+    const get = "client." + receiver[1] + ".get(" + key + ")";
+    const text = literal ? "(client." + receiver[1] + " == null ? null : " + get + ")" : "(client." + receiver[1] + " == null || " + key + " == null ? null : " + get + ")";
+    edits.push([i, close + 1, text]);
+  }
+  let out = content;
+  for (const [from, to, text] of edits.reverse())
+    out = out.slice(0, from) + text + out.slice(to);
+  return out;
+}
+function wsReadsTest() {
+  const problems = [];
+  const cases = [
+    [
+      "ident key",
+      "        Object subscription = Helpers.GetValue(client.subscriptions, key);",
+      "(client.subscriptions == null || key == null ? null : client.subscriptions.get(key))"
+    ],
+    [
+      "literal key",
+      '        Object v = Helpers.GetValue(client.subscriptions, "authenticated");',
+      '(client.subscriptions == null ? null : client.subscriptions.get("authenticated"))'
+    ],
+    [
+      "rejections field",
+      "        Object r = Helpers.GetValue(client.rejections, messageHash);",
+      "(client.rejections == null || messageHash == null ? null : client.rejections.get(messageHash))"
+    ],
+    [
+      "cast prefix",
+      "        io.github.ccxt.ws.Future f = (io.github.ccxt.ws.Future)Helpers.GetValue(client.futures, s);",
+      "(io.github.ccxt.ws.Future)(client.futures == null || s == null ? null : client.futures.get(s))"
+    ],
+    ["other field", "        Object v = Helpers.GetValue(client.other, key);", void 0],
+    ["computed key", "        Object v = Helpers.GetValue(client.subscriptions, this.hash(x));", void 0],
+    ["three args", "        Object v = Helpers.GetValue(client.subscriptions, key, extra);", void 0],
+    ["not a client receiver", "        Object v = Helpers.GetValue(subs, key);", void 0]
+  ];
+  for (const [name, body, expect] of cases) {
+    const out = wsMapReads(body);
+    if (expect === void 0) {
+      if (out !== body)
+        problems.push("hx10w7 OJ06: " + name + " should keep the helper: " + out);
+      continue;
+    }
+    if (!out.includes(expect))
+      problems.push("hx10w7 OJ06: " + name + " not native: " + out);
+    if (wsMapReads(out) !== out)
+      problems.push("hx10w7 OJ06: " + name + " not idempotent");
+  }
+  return problems;
+}
+
+// src/java/hx10w10-JO01.ts
+init_esm_shims();
+var DECL = /^ {8}(Long|Object) (\w+);$/;
+var SYNC = /^ {8}synchronized \(this\) \{$/;
+var PREV_LOCAL = /^ {8}Long (\w+) = this\.safeInteger\(this\.options, "([^"]+)", 0\);$/;
+var ASSIGN_SUM_PREV = /^ {8}(\w+) = (?:\(Long\) )?this\.sum\((\w+), 1\);$/;
+var ASSIGN_SUM_READ = /^ {8}(\w+) = (?:\(Long\) )?this\.sum\(this\.safeInteger\(this\.options, "([^"]+)", 0\), 1\);$/;
+var PUT = /^ {8}this\.options\.put\("([^"]+)", (\w+)\);$/;
+var NONCE_SPAN = /^ {8}this\.lockLastNonce\(\);\n {8}Long (\w+) = this\.safeInteger\(this\.options, "lastNonce", 0\);\n {8}Object (\w+) = [^\n]*\? (\w+) : \(\1 \+ 1L\);[^\n]*\n {8}this\.options\.put\("lastNonce", \2\);\n {8}this\.unlockLastNonce\(\);\n/m;
+function counterBody(lines) {
+  if (lines.length === 2) {
+    const a = ASSIGN_SUM_READ.exec(lines[0]);
+    const p = PUT.exec(lines[1]);
+    if (a === null || p === null)
+      return void 0;
+    if (a[1] !== p[2] || a[2] !== p[1])
+      return void 0;
+    return [a[1], a[2], p[1], p[2]];
+  }
+  if (lines.length === 3) {
+    const pre = PREV_LOCAL.exec(lines[0]);
+    const a = ASSIGN_SUM_PREV.exec(lines[1]);
+    const p = PUT.exec(lines[2]);
+    if (pre === null || a === null || p === null)
+      return void 0;
+    if (pre[1] !== a[2] || a[1] !== p[2] || pre[2] !== p[1])
+      return void 0;
+    return [a[1], pre[2], p[1], p[2]];
+  }
+  return void 0;
+}
+function hx10w10JO01Counters(content) {
+  if (!content.includes("synchronized (this) {"))
+    return content;
+  const lines = content.split("\n");
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (i + 1 < lines.length && DECL.test(lines[i]) && SYNC.test(lines[i + 1])) {
+      const decl = DECL.exec(lines[i]);
+      const body = [];
+      let j = i + 2;
+      while (j < lines.length && lines[j] !== "        }") {
+        body.push(lines[j]);
+        j++;
+      }
+      const shape = j < lines.length ? counterBody(body) : void 0;
+      if (shape !== void 0 && shape[0] === decl[2]) {
+        out.push("        Long " + decl[2] + ' = this.nextCounter("' + shape[1] + '", 1L);');
+        i = j;
+        continue;
+      }
+    }
+    out.push(lines[i]);
+  }
+  return out.join("\n");
+}
+function hx10w10JO01Nonce(content) {
+  return content.replace(NONCE_SPAN, (_m, _last, result, floor) => "        Object " + result + ' = this.nextCounterAbove("lastNonce", 1L, ' + floor + ");\n");
+}
+function hx10w10JO01(content) {
+  return hx10w10JO01Nonce(hx10w10JO01Counters(content));
+}
+function jo01SelfTest() {
+  const problems = [];
+  const cls = (body) => "public class Gate extends GateRest\n{\n" + body + "\n}\n";
+  const run = (body) => hx10w10JO01(cls(body));
+  const same = (body) => hx10w10JO01(cls(body)) === cls(body);
+  const pos = [
+    [
+      "cast sum of options read",
+      '    public Long requestId()\n    {\n        Long reqid;\n        synchronized (this) {\n        reqid = (Long) this.sum(this.safeInteger(this.options, "reqid", 0), 1);\n        this.options.put("reqid", reqid);\n        }\n        return reqid;\n    }',
+      '        Long reqid = this.nextCounter("reqid", 1L);'
+    ],
+    [
+      "object local, previous local form",
+      '    public Long requestId()\n    {\n        Long next;\n        synchronized (this) {\n        Long previous = this.safeInteger(this.options, "requestId", 0);\n        next = (Long) this.sum(previous, 1);\n        this.options.put("requestId", next);\n        }\n        return next;\n    }',
+      '        Long next = this.nextCounter("requestId", 1L);'
+    ],
+    [
+      "uncast sum, object declaration",
+      '    public String requestId()\n    {\n        Object requestId;\n        synchronized (this) {\n        requestId = this.sum(this.safeInteger(this.options, "requestId", 0), 1);\n        this.options.put("requestId", requestId);\n        }\n        return (String) (String.valueOf(requestId));\n    }',
+      '        Long requestId = this.nextCounter("requestId", 1L);'
+    ]
+  ];
+  for (const [name, body, expect] of pos) {
+    const out = run(body);
+    if (!out.includes(expect))
+      problems.push("hx10w10 JO01: " + name + " expected " + expect + " in\n" + out);
+    if (run(body) !== out)
+      problems.push("hx10w10 JO01: " + name + " not idempotent");
+  }
+  const nonceBody = '    public Object incrementingNonce()\n    {\n        Long currentNonce = this.nonce();\n        this.lockLastNonce();\n        Long lastNonce = this.safeInteger(this.options, "lastNonce", 0);\n        Object result = ((((currentNonce != null && (lastNonce == null || currentNonce > lastNonce))))) ? currentNonce : (lastNonce + 1L);\n        this.options.put("lastNonce", result);\n        this.unlockLastNonce();\n        return result;\n    }';
+  const nonceOut = run(nonceBody);
+  if (!nonceOut.includes('Object result = this.nextCounterAbove("lastNonce", 1L, currentNonce);')) {
+    problems.push("hx10w10 JO01: incrementingNonce hand-off missing in\n" + nonceOut);
+  }
+  if (nonceOut.includes("lockLastNonce"))
+    problems.push("hx10w10 JO01: incrementingNonce kept the lock bracket");
+  const neg = [
+    [
+      "unrelated monitor",
+      "    public void put(Object value)\n    {\n        synchronized (this) {\n        this.something = value;\n        }\n    }"
+    ],
+    [
+      "read key differs from put key",
+      '    public Long requestId()\n    {\n        Long reqid;\n        synchronized (this) {\n        reqid = (Long) this.sum(this.safeInteger(this.options, "reqid", 0), 1);\n        this.options.put("other", reqid);\n        }\n        return reqid;\n    }'
+    ],
+    [
+      "different counter step",
+      '    public Long requestId()\n    {\n        Long reqid;\n        synchronized (this) {\n        reqid = (Long) this.sum(this.safeInteger(this.options, "reqid", 0), 2);\n        this.options.put("reqid", reqid);\n        }\n        return reqid;\n    }'
+    ],
+    [
+      "declared name not assigned",
+      '    public Long requestId()\n    {\n        Long reqid;\n        synchronized (this) {\n        Long other = (Long) this.sum(this.safeInteger(this.options, "reqid", 0), 1);\n        this.options.put("reqid", other);\n        }\n        return reqid;\n    }'
+    ]
+  ];
+  for (const [name, body] of neg) {
+    if (!same(body))
+      problems.push("hx10w10 JO01: " + name + " must keep the monitor\n" + run(body));
+  }
+  return problems;
+}
+
 // src/transpiler.ts
 var __dirname_mock = import_dirname.default;
 var fastCompilerOptions = {
@@ -35775,7 +42082,7 @@ declare var WebSocket: any;
 declare var atob: any;
 declare var btoa: any;
 `;
-var globalsShimPath = path2.resolve(path2.join(__dirname_mock, "__globals-shim.d.ts"));
+var globalsShimPath = path11.resolve(path11.join(__dirname_mock, "__globals-shim.d.ts"));
 var UNDEFINED_SENTINEL = Symbol("undefined");
 var MEMOIZED_UNARY_CHECKER_METHODS = [
   "getTypeAtLocation",
@@ -36030,7 +42337,7 @@ function getApi(cache) {
 function createSnapshotProgram(cache, rootFiles, files) {
   const snapshot = getApi(cache).createSnapshot({
     fileSystem: { kind: "layer", files },
-    createPrograms: [{ rootFiles: rootFiles.map((f) => path2.resolve(f)), compilerOptions: fastCompilerOptions }]
+    createPrograms: [{ rootFiles: rootFiles.map((f) => path11.resolve(f)), compilerOptions: fastCompilerOptions }]
   });
   const program = snapshot.operation.createdPrograms[0];
   const checker = snapshot.getProjects().find((p) => p.program === program).checker;
@@ -36092,14 +42399,14 @@ var Transpiler = class _Transpiler {
   }
   // single-file snapshots are released when the next one replaces them; batches own theirs
   setSnapshotContext(snapshot, program, checker, fileName) {
-    const src = program.getSourceFile(fileName) ?? program.getSourceFile(path2.resolve(fileName));
+    const src = program.getSourceFile(fileName) ?? program.getSourceFile(path11.resolve(fileName));
     const previous = this.snapshot;
     this.snapshot = snapshot;
     previous?.dispose();
     return this.setContext({ src, checker, program });
   }
   createProgramInMemoryAndSetContext(content) {
-    const inMemoryFilePath = path2.resolve(path2.join(__dirname_mock, "__dummy-file.ts"));
+    const inMemoryFilePath = path11.resolve(path11.join(__dirname_mock, "__dummy-file.ts"));
     const [snapshot, program, checker] = createSnapshotProgram(this.programCache, [inMemoryFilePath, globalsShimPath], {
       [inMemoryFilePath]: content,
       [globalsShimPath]: globalsShim
@@ -36132,8 +42439,8 @@ var Transpiler = class _Transpiler {
     if (shared === void 0) {
       return void 0;
     }
-    const src = shared.program.getSourceFile(path2.resolve(filePath));
-    if (src === void 0 || !fs2.existsSync(filePath) || fs2.readFileSync(filePath, "utf8") !== src.text) {
+    const src = shared.program.getSourceFile(path11.resolve(filePath));
+    if (src === void 0 || !fs11.existsSync(filePath) || fs11.readFileSync(filePath, "utf8") !== src.text) {
       return void 0;
     }
     return { src, checker: shared.checker, program: shared.program };
@@ -36164,8 +42471,8 @@ var Transpiler = class _Transpiler {
     return this.createProgramInMemoryAndSetContext(content);
   }
   /** @deprecated renamed to createProgramByPathAndSetContext */
-  createProgramByPathAndSetGlobals(path3) {
-    return this.createProgramByPathAndSetContext(path3);
+  createProgramByPathAndSetGlobals(path12) {
+    return this.createProgramByPathAndSetContext(path12);
   }
   checkFileDiagnostics(context = this.context) {
     if (!Logger.verbose) {
@@ -36296,29 +42603,29 @@ var Transpiler = class _Transpiler {
   transpilePython(content) {
     return this.transpile(0 /* Python */, 1 /* ByContent */, content, !this.pythonTranspiler.asyncTranspiling);
   }
-  transpilePythonByPath(path3) {
-    return this.transpile(0 /* Python */, 0 /* ByPath */, path3, !this.pythonTranspiler.asyncTranspiling);
+  transpilePythonByPath(path12) {
+    return this.transpile(0 /* Python */, 0 /* ByPath */, path12, !this.pythonTranspiler.asyncTranspiling);
   }
   transpilePhp(content) {
     return this.transpile(1 /* Php */, 1 /* ByContent */, content, !this.phpTranspiler.asyncTranspiling);
   }
-  transpilePhpByPath(path3) {
-    return this.transpile(1 /* Php */, 0 /* ByPath */, path3, !this.phpTranspiler.asyncTranspiling);
+  transpilePhpByPath(path12) {
+    return this.transpile(1 /* Php */, 0 /* ByPath */, path12, !this.phpTranspiler.asyncTranspiling);
   }
   transpileCSharp(content) {
     return this.transpile(2 /* CSharp */, 1 /* ByContent */, content);
   }
-  transpileCSharpByPath(path3) {
-    return this.transpile(2 /* CSharp */, 0 /* ByPath */, path3);
+  transpileCSharpByPath(path12) {
+    return this.transpile(2 /* CSharp */, 0 /* ByPath */, path12);
   }
   transpileJava(content) {
     return this.transpile(4 /* Java */, 1 /* ByContent */, content);
   }
-  transpileJavaByPath(path3) {
-    return this.transpile(4 /* Java */, 0 /* ByPath */, path3);
+  transpileJavaByPath(path12) {
+    return this.transpile(4 /* Java */, 0 /* ByPath */, path12);
   }
-  transpileGoByPath(path3) {
-    return this.transpile(3 /* Go */, 0 /* ByPath */, path3);
+  transpileGoByPath(path12) {
+    return this.transpile(3 /* Go */, 0 /* ByPath */, path12);
   }
   transpileGo(content) {
     return this.transpile(3 /* Go */, 1 /* ByContent */, content);
@@ -36326,14 +42633,14 @@ var Transpiler = class _Transpiler {
   transpileRust(content) {
     return this.transpile(5 /* Rust */, 1 /* ByContent */, content);
   }
-  transpileRustByPath(path3) {
-    return this.transpile(5 /* Rust */, 0 /* ByPath */, path3);
+  transpileRustByPath(path12) {
+    return this.transpile(5 /* Rust */, 0 /* ByPath */, path12);
   }
   transpileCpp(content) {
     return this.transpile(6 /* Cpp */, 1 /* ByContent */, content);
   }
-  transpileCppByPath(path3) {
-    return this.transpile(6 /* Cpp */, 0 /* ByPath */, path3);
+  transpileCppByPath(path12) {
+    return this.transpile(6 /* Cpp */, 0 /* ByPath */, path12);
   }
   getFileImports(content) {
     const context = this.createProgramInMemoryAndSetContext(content);
@@ -36397,7 +42704,7 @@ var TranspileProgramBatch = class {
   // point the owning Transpiler at one file of this batch, then run the same
   // diagnostics pass the single-file path runs
   setContextForPath(filePath) {
-    const src = this.program.getSourceFile(filePath) ?? this.program.getSourceFile(path2.resolve(filePath));
+    const src = this.program.getSourceFile(filePath) ?? this.program.getSourceFile(path11.resolve(filePath));
     if (src === void 0) {
       throw new Error(`ast-transpiler: "${filePath}" is not a file of this program batch`);
     }
@@ -36445,6 +42752,41 @@ export {
   TypeFlags7 as TypeFlags,
   TypeFormatFlags,
   alignGoTrailingComments,
-  Transpiler as default
+  bf02SelfTest,
+  Transpiler as default,
+  hx10J01ElementWrites,
+  hx10w10JO01,
+  hx10w3J02BalancePuts,
+  hx10w4OJ01OptionsOwner,
+  j01ElementWritesSelfTest,
+  j01w7FieldPuts,
+  j01w7FieldPutsSelfTest,
+  j01wsNativeOps,
+  j01wsSelfTest,
+  j02BalanceSelfTest,
+  j02SelfTest,
+  j04OptionsSelfTest,
+  j05CallReceiverSelfTest,
+  j05DictChainsSelfTest,
+  j05FamilySelfTest,
+  j06SelfTest,
+  j09SelfTest,
+  j12AsyncThrows,
+  j12SelfTest,
+  javaRuntimeRoot,
+  jo01SelfTest,
+  nativeJ05CallReceiverReads,
+  nativeJavaBF02FieldOps,
+  nativeJavaJ02ElementReads,
+  nativeJavaJ03Family,
+  nativeJavaJ04OptionsOps,
+  nativeJavaJ05,
+  nativeJavaJ05DictChains,
+  nativeJavaJ06FieldOps,
+  nativeJavaJ09SwitchBlobs,
+  oj01OptionsSelfTest,
+  setJavaRuntimeRoot,
+  wsMapReads,
+  wsReadsTest
 };
 //# sourceMappingURL=transpiler.js.map

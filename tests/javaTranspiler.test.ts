@@ -1131,8 +1131,11 @@ describe('java boolean conditions emitted without the Helpers.isTrue wrapper', (
         expect(conditionOf("        if (x) { return; }\n", 'test(x: string): void'))
             .toContain("if (Helpers.isTrue(x))");
         expect(conditionOf("        if (x) { return; }\n")).toContain("if (Helpers.isTrue(x))");
-        // `boolean | undefined` is not proven boolean - the helper must stay
+        // a never-written `boolean | undefined` parameter is a Boolean-or-null box: the null-safe TRUE test
         expect(conditionOf("        if (x) { return; }\n", 'test(x: boolean | undefined): void'))
+            .toContain("if (Boolean.TRUE.equals(x))");
+        // a nullable union with a non-boolean member keeps the helper
+        expect(conditionOf("        if (x) { return; }\n", 'test(x: boolean | string): void'))
             .toContain("if (Helpers.isTrue(x))");
         // negation of a non-boolean keeps the helper inside the `!`
         expect(conditionOf("        if (!x) { return; }\n", 'test(x: string): void'))
@@ -4610,12 +4613,14 @@ describe('falsy-wrapper removal: boolean identifiers and Array.isArray', () => {
     });
 
     test('nullable, any and parameter identifiers keep the helper', () => {
-        const output = wrapped("        if (maybe) { return; }\n", '', 'test(x: any, maybe: boolean | undefined): void');
+        const output = wrapped("        if (maybe) { return; }\n", '', 'test(x: any, maybe: boolean | string): void');
         expect(output).toContain("if (Helpers.isTrue(maybe))");
         const implicitAny = wrapped("        let a;\n        if (a) { return; }\n");
         expect(implicitAny).toContain("if (Helpers.isTrue(a))");
         const parameter = wrapped("        if (flag) { return; }\n", '', 'test(x: any, flag: boolean): void');
-        expect(parameter).toContain("if (Helpers.isTrue(flag))");
+        expect(parameter).toContain("if (Boolean.TRUE.equals(flag))");
+        const anyParameter = wrapped("        if (x) { return; }\n", '', 'test(x: any, flag: boolean): void');
+        expect(anyParameter).toContain("if (Helpers.isTrue(x))");
     });
 
     test('a destructured binding element keeps the helper', () => {
@@ -4820,10 +4825,21 @@ describe('java native split (Helpers.split -> Arrays.asList(String.split(Pattern
         expect(output).toContain("Helpers.split(s, \",\")");
     });
 
-    test('a non-literal separator keeps the helper', () => {
+    test('a plain-string non-literal separator prints the native split', () => {
         const input =
         "class T {\n" +
         "    test(s: string, sep: string): void {\n" +
+        "        const parts = s.split(sep);\n" +
+        "    }\n" +
+        "}"
+        const output = transpiler.transpileJava(input).content;
+        expect(output).toContain("((String)s).split(java.util.regex.Pattern.quote(sep))");
+    });
+
+    test('an any separator keeps the helper', () => {
+        const input =
+        "class T {\n" +
+        "    test(s: string, sep: any): void {\n" +
         "        const parts = s.split(sep);\n" +
         "    }\n" +
         "}"
@@ -7328,7 +7344,7 @@ describe('hx4 J09: isTrue / isInstance / core-argument residual', () => {
     test('a boolean local written from a proven local prints Boolean.TRUE.equals', () => {
         expect(out).toContain('if (Boolean.TRUE.equals(y1))');
         expect(out).toContain('if (Helpers.isTrue(y2))');
-        expect(out).not.toContain('Boolean.TRUE.equals(flag)');
+        expect(out).toContain('Boolean.TRUE.equals(flag)');
     });
 
     test('a base tuple method returning boolean literals binds a Boolean element', () => {

@@ -3905,6 +3905,81 @@ export class JavaTranspiler extends BaseTranspiler {
         return result;
     }
 
+    javaVenueCalleeResults: WeakMap<Node, { type: string } | undefined> = new WeakMap();
+    javaVenueCalleeInProgress: WeakSet<Node> = new WeakSet();
+
+    // the Java type of a sync `this.<m>(...)` call to a generated venue method, as that method's own
+    // declaration prints it (Map / List only); undefined for every shape this rule does not decide
+    javaVenueCalleeType(node): { type: string } | undefined {
+        if (node === undefined || node.kind !== SyntaxKind.CallExpression) {
+            return undefined;
+        }
+        if (this.javaVenueCalleeResults.has(node)) {
+            return this.javaVenueCalleeResults.get(node);
+        }
+        if (this.javaVenueCalleeInProgress.has(node)) {
+            return undefined;
+        }
+        this.javaVenueCalleeInProgress.add(node);
+        try {
+            const decided = this.javaVenueCalleeTypeUncached(node);
+            this.javaVenueCalleeResults.set(node, decided);
+            return decided;
+        } finally {
+            this.javaVenueCalleeInProgress.delete(node);
+        }
+    }
+
+    javaVenueCalleeTypeUncached(node): { type: string } | undefined {
+        const callee = node.expression;
+        if (callee === undefined || !isPropertyAccessExpression(callee)
+            || (callee.expression.kind !== SyntaxKind.ThisKeyword
+                && !(isIdentifier(callee.expression) && callee.expression.text === 'super'))) {
+            return undefined;
+        }
+        let declaration: any;
+        for (let attempt = 0; attempt < 2 && declaration === undefined; attempt++) {
+            try {
+                declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+            } catch (e) {
+                declaration = undefined; // a transient checker failure: one retry
+            }
+        }
+        if (declaration === undefined || declaration.kind !== SyntaxKind.MethodDeclaration || declaration.body === undefined) {
+            return undefined;
+        }
+        const fileName = (declaration.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
+        if (!JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName)) {
+            return undefined; // a base-tier or hand-written callee keeps the recorded proof
+        }
+        const decided = (printed: any): string | undefined => {
+            const type = typeof printed === 'string' ? printed.replace(/\s+/g, '').replace(/^java\.util\./, '') : undefined;
+            return type === 'Map<String,Object>' ? JAVA_NATIVE_RETURN_MAP_TYPE
+                : type === 'List<Object>' ? JAVA_NATIVE_RETURN_LIST_TYPE : undefined;
+        };
+        let printed: string;
+        try {
+            printed = this.printFunctionType(declaration);
+        } catch (e) {
+            return undefined;
+        }
+        const direct = decided(printed);
+        if (direct !== undefined) {
+            return { type: direct };
+        }
+        if (printed !== this.DEFAULT_RETURN_TYPE) {
+            return undefined; // a future, a DTO, a scalar
+        }
+        let native: string | undefined;
+        try {
+            native = this.javaNativeReturnType(declaration);
+        } catch (e) {
+            return undefined;
+        }
+        const fallback = decided(native);
+        return fallback === undefined ? undefined : { type: fallback };
+    }
+
     javaNativeReturnTypeUncached(node): string | undefined {
         const fileName = node.getSourceFile().fileName;
         const generated = JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName);
@@ -5225,8 +5300,21 @@ export class JavaTranspiler extends BaseTranspiler {
             return this.javaProvableString(node.expression);
         case SyntaxKind.BinaryExpression:
             return this.javaNativeConcat(node);
+        case SyntaxKind.CallExpression:
+            if (this.javaPrintsStringCast(node)) {
+                return true;
+            }
         }
         return this.javaResolvedString(node);
+    }
+
+    // a zero-argument `toLowerCase/toUpperCase/trim/toString` member: the printer emits
+    // `((String)recv).m()` / `String.valueOf(recv)` itself, which javac types String whatever the
+    // receiver was declared as (never null: String.valueOf prints "null")
+    javaPrintsStringCast(node): boolean {
+        const callee = node?.expression;
+        return callee !== undefined && isPropertyAccessExpression(callee) && (node.arguments?.length ?? 0) === 0
+            && ['toLowerCase', 'toUpperCase', 'trim', 'toString'].includes(String(callee.name?.text));
     }
 
     // the embedding build layer's proof of the concrete printed Java type of an
@@ -7739,7 +7827,28 @@ export class JavaTranspiler extends BaseTranspiler {
     }
 
     printSplitCall(node, _identation, name = undefined, parsedArg = undefined) {
-        return this.javaNativeSplitCall(node, name, parsedArg) ?? `Helpers.split(${name}, ${parsedArg})`;
+        return this.javaNativeSplitCall(node, name, parsedArg) ?? this.javaTypedSplitCall(node, name, parsedArg)
+            ?? `Helpers.split(${name}, ${parsedArg})`;
+    }
+
+    // `s.split (sep)` where the types print both the receiver and the separator as a plain String
+    javaTypedSplitCall(node, name, parsedArg): string | undefined {
+        try {
+            const callee = node?.expression;
+            const args = node?.arguments ?? [];
+            if (name === undefined || parsedArg === undefined || callee === undefined || !isPropertyAccessExpression(callee)
+                || callee.name?.text !== 'split' || args.length !== 1) {
+                return undefined;
+            }
+            const receiver = callee.expression;
+            if (receiver === undefined || this.javaSplitTernaryReceiver(receiver)
+                || this.javaScalarFamily(receiver) !== 'string' || this.javaScalarFamily(args[0]) !== 'string') {
+                return undefined;
+            }
+            return `${this.ARRAY_OPENING_TOKEN}((String)${name}).split(java.util.regex.Pattern.quote(${parsedArg}))${this.ARRAY_CLOSING_TOKEN}`;
+        } catch (e) {
+            return undefined;
+        }
     }
 
     printConcatCall(_node, _identation, name = undefined, parsedArg = undefined) {
@@ -7783,10 +7892,188 @@ export class JavaTranspiler extends BaseTranspiler {
         if (nativeCall !== undefined) {
             return nativeCall;
         }
+        const typed = this.javaTypedSliceCall(node, name, parsedArg, parsedArg2, _identation);
+        if (typed !== undefined) {
+            return typed;
+        }
         if (parsedArg2 === undefined) {
             parsedArg2 = "null";
         }
         return `Helpers.slice(${name}, ${parsedArg}, ${parsedArg2})`;
+    }
+
+    // `x.slice (a, b)` over a receiver the types print as String and bounds that print integral: the
+    // helper's clamp and null -> null stay explicit in the substring. Unproven shapes keep the helper.
+    javaTypedSliceCall(node, name, parsedArg, parsedArg2, identation): string | undefined {
+        try {
+            return this.javaTypedSliceCallUnchecked(node, name, parsedArg, parsedArg2, identation);
+        } catch (e) {
+            return undefined;
+        }
+    }
+
+    javaTypedSliceCallUnchecked(node, name, parsedArg, parsedArg2, identation): string | undefined {
+        const callee = node?.expression;
+        if (name === undefined || parsedArg === undefined || callee === undefined
+            || !isPropertyAccessExpression(callee) || callee.name?.text !== 'slice') {
+            return undefined;
+        }
+        const args = node.arguments ?? [];
+        if (args.length < 1 || args.length > 2 || args.length !== (parsedArg2 === undefined || parsedArg2 === 'null' ? 1 : 2)) {
+            return undefined;
+        }
+        const receiver = callee.expression;
+        if (receiver === undefined || !this.sideEffectFreeReceiver(receiver) || !this.javaTypedStringPrinted(receiver)) {
+            return undefined;
+        }
+        const printedArgs = [parsedArg, parsedArg2];
+        const bounds: string[] = [];
+        for (let i = 0; i < args.length; i++) {
+            if (!this.javaRepeatableBound(args[i])) {
+                return undefined;
+            }
+            const bound = this.javaIntegralBoundText(args[i], printedArgs[i]);
+            if (bound === undefined) {
+                return undefined;
+            }
+            bounds.push(bound);
+        }
+        const recv = this.javaDeclaredStringType(receiver) === true ? name : `((String)${name})`;
+        const length = `${recv}.length()`;
+        const startLiteral = this.javaBoundLiteral(args[0]);
+        const startText = () => {
+            if (startLiteral === 0) {
+                return '0';
+            }
+            if (startLiteral !== undefined) {
+                return startLiteral > 0 ? `Math.min(${startLiteral}, ${length})` : `Math.max(${length} - ${-startLiteral}, 0)`;
+            }
+            const t = bounds[0];
+            return `Math.min(Math.max(${t} < 0 ? ${length} + ${t} : ${t}, 0), ${length})`;
+        };
+        const endText = () => {
+            const value = this.javaBoundLiteral(args[1]);
+            if (value !== undefined && value >= 0) {
+                return `Math.min(${value}, ${length})`;
+            }
+            if (value !== undefined) {
+                return `${length} - ${-value}`;
+            }
+            const t = bounds[1];
+            return `Math.min(${t} < 0 ? ${length} + ${t} : ${t}, ${length})`;
+        };
+        const open = args.length === 1;
+        const to = open ? length : endText();
+        const from = open ? startText() : (startLiteral === 0 ? '0' : `Math.min(${startText()}, ${to})`);
+        const cast = (text: string) => (text === '0' ? '0' : `(int) ${text}`);
+        const full = open
+            ? `(${name} == null ? null : ${recv}.substring(${cast(from)}))`
+            : `(${name} == null ? null : ${recv}.substring(${cast(from)}, (int) ${to}))`;
+        // the clamp repeats the bounds: keep the emitted line under the 400-char audit
+        const budget = open ? 200 : Math.max(220, 392 - identation * 4 - 50);
+        return full.length > budget ? undefined : full;
+    }
+
+    // the receiver prints as a Java String: a plain TS `string`, a String-declared local, a literal
+    javaTypedStringPrinted(node): boolean {
+        return this.javaScalarFamily(node) === 'string' || this.javaProvableString(node) || this.javaDeclaredStringType(node) === true;
+    }
+
+    // the printed text of this bound appears more than once in the native form
+    javaRepeatableBound(node): boolean {
+        let n = node;
+        while (n !== undefined && isParenthesizedExpression(n)) {
+            n = n.expression;
+        }
+        if (n === undefined) {
+            return false;
+        }
+        switch (n.kind) {
+        case SyntaxKind.Identifier:
+        case SyntaxKind.PropertyAccessExpression:
+        case SyntaxKind.ThisKeyword:
+        case SyntaxKind.NumericLiteral:
+            return true;
+        case SyntaxKind.PrefixUnaryExpression:
+            return n.operator === SyntaxKind.MinusToken && this.javaRepeatableBound(n.operand);
+        case SyntaxKind.BinaryExpression: {
+            const op = n.operatorToken.kind;
+            return (op === SyntaxKind.PlusToken || op === SyntaxKind.MinusToken || op === SyntaxKind.AsteriskToken)
+                && this.javaRepeatableBound(n.left) && this.javaRepeatableBound(n.right);
+        }
+        default:
+            return false;
+        }
+    }
+
+    // the bound prints as an integral Java number (`+ - Math.min Math.max` and `(int)` compile on it)
+    javaIntegralBoundPrinted(node): boolean {
+        let n = node;
+        while (n !== undefined && isParenthesizedExpression(n)) {
+            n = n.expression;
+        }
+        if (n === undefined) {
+            return false;
+        }
+        switch (n.kind) {
+        case SyntaxKind.NumericLiteral:
+            return !/[.eE]/.test(n.text) && Number(n.text) <= 2147483647;
+        case SyntaxKind.PrefixUnaryExpression:
+            return n.operator === SyntaxKind.MinusToken && this.javaIntegralBoundPrinted(n.operand);
+        case SyntaxKind.PropertyAccessExpression:
+            return n.name?.text === 'length' && this.javaScalarFamily(n) === 'number';
+        case SyntaxKind.BinaryExpression: {
+            const op = n.operatorToken.kind;
+            return (op === SyntaxKind.PlusToken || op === SyntaxKind.MinusToken || op === SyntaxKind.AsteriskToken)
+                && this.javaIntegralBoundPrinted(n.left) && this.javaIntegralBoundPrinted(n.right);
+        }
+        }
+        if (n.kind !== SyntaxKind.Identifier) {
+            return false;
+        }
+        const type = this.javaDeclaredTypeOf(n);
+        return type !== undefined && ['long', 'int', 'short', 'byte', 'Long', 'Integer', 'Short', 'Byte'].includes(type.replace(/^final\s+/, '').trim());
+    }
+
+    // a bound as the integer the helper's toInt answers: an integral print is its own text, a boxed
+    // number (an `Object` from indexOf, a Double) takes the helper's own intValue truncation
+    javaIntegralBoundText(node, printed: string): string | undefined {
+        let n = node;
+        while (n !== undefined && isParenthesizedExpression(n)) {
+            n = n.expression;
+        }
+        if (this.javaIntegralBoundPrinted(node)) {
+            const atom = n !== undefined && (n.kind === SyntaxKind.Identifier || n.kind === SyntaxKind.PropertyAccessExpression
+                || n.kind === SyntaxKind.ThisKeyword || n.kind === SyntaxKind.NumericLiteral);
+            return atom ? printed : `(${printed})`;
+        }
+        if (n === undefined || n.kind !== SyntaxKind.Identifier || this.javaScalarFamily(n) !== 'number') {
+            return undefined;
+        }
+        const type = this.javaDeclaredTypeOf(n);
+        if (type === undefined || !['Object', 'Double', 'Float', 'Number'].includes(type.replace(/^final\s+/, '').trim())) {
+            return undefined;
+        }
+        return `((Number)${printed}).intValue()`;
+    }
+
+    // the integer value of a literal bound (`18`, `-64`), or undefined
+    javaBoundLiteral(node): number | undefined {
+        let n = node;
+        while (n !== undefined && isParenthesizedExpression(n)) {
+            n = n.expression;
+        }
+        if (n === undefined) {
+            return undefined;
+        }
+        if (n.kind === SyntaxKind.NumericLiteral && !/[.eE]/.test(n.text)) {
+            return Number(n.text);
+        }
+        if (n.kind === SyntaxKind.PrefixUnaryExpression && n.operator === SyntaxKind.MinusToken) {
+            const inner = this.javaBoundLiteral(n.operand);
+            return inner === undefined ? undefined : -inner;
+        }
+        return undefined;
     }
 
     // Integer value of a slice bound that is an integer literal (`18`, `-64`); anything else keeps
@@ -8673,7 +8960,116 @@ export class JavaTranspiler extends BaseTranspiler {
             // and FALSE test false, TRUE tests true
             return this.getIden(identation) + `Boolean.TRUE.equals(${this.printNode(node, 0)})`;
         }
-        return super.printCondition(node, identation);
+        const printed = super.printCondition(node, identation);
+        return this.javaBooleanParameterCondition(node, printed) ?? printed;
+    }
+
+    // `Helpers.isTrue(p)` over a never-written `boolean` / `Bool` method parameter: its typed callers
+    // fill a Boolean-or-null box, so the null-safe TRUE test is exactly the helper's answer
+    javaBooleanParameterCondition(node, printed: string): string | undefined {
+        if (typeof printed !== 'string' || !printed.includes(this.FALSY_WRAPPER_OPEN)) {
+            return undefined;
+        }
+        const operand = this.javaFalsyWrapperOperand(printed.trim());
+        if (operand === undefined) {
+            return undefined;
+        }
+        let inner = node;
+        while (inner?.kind === SyntaxKind.ParenthesizedExpression) {
+            inner = inner.expression;
+        }
+        if (inner?.kind !== SyntaxKind.Identifier) {
+            return undefined;
+        }
+        let declaration: any;
+        try {
+            declaration = this.checkerOrUndefined()?.getSymbolAtLocation(inner)?.valueDeclaration?.resolve();
+        } catch (e) {
+            return undefined;
+        }
+        // a lambda parameter is typed by its functional interface; a written one is filled by the body
+        if (declaration?.kind !== SyntaxKind.Parameter || declaration.parent?.kind !== SyntaxKind.MethodDeclaration
+            || this.javaParameterIsWritten(declaration) || !this.javaBooleanishType(inner)) {
+            return undefined;
+        }
+        const parameter = this.javaBooleanParameterOperand(operand);
+        if (parameter === undefined) {
+            return undefined;
+        }
+        const iden = printed.slice(0, printed.length - printed.trimStart().length);
+        return `${iden}Boolean.TRUE.equals(${parameter})`;
+    }
+
+    // the operand of a printed `Helpers.isTrue(<operand>)` that spans the whole text, else undefined
+    javaFalsyWrapperOperand(text: string): string | undefined {
+        if (!text.startsWith(this.FALSY_WRAPPER_OPEN) || !text.endsWith(')')) {
+            return undefined;
+        }
+        const open = this.FALSY_WRAPPER_OPEN.length - 1;
+        return this.javaMatchingParen(text, open) === text.length - 1 ? text.slice(open + 1, -1) : undefined;
+    }
+
+    // index of the `)` closing the `(` at `open` (string literals skipped), or -1
+    javaMatchingParen(text: string, open: number): number {
+        let depth = 0;
+        for (let i = open; i < text.length; i++) {
+            const ch = text[i];
+            if (ch === '"') {
+                i++;
+                while (i < text.length && text[i] !== '"') {
+                    if (text[i] === '\\') {
+                        i++;
+                    }
+                    i++;
+                }
+                continue;
+            }
+            if (ch === '(') {
+                depth++;
+            } else if (ch === ')') {
+                depth--;
+                if (depth === 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    // a parameter read the printer prints bare (`p`) or through its default (`requireNonNullElse (p, lit)`)
+    javaBooleanParameterOperand(printed: string): string | undefined {
+        let text = printed.trim();
+        while (text.startsWith('(') && text.endsWith(')') && this.javaMatchingParen(text, 0) === text.length - 1) {
+            text = text.slice(1, -1).trim();
+        }
+        if (/^[A-Za-z_$][\w$]*$/.test(text)
+            || /^java\.util\.Objects\.requireNonNullElse\([A-Za-z_$][\w$]*, (?:true|false)\)$/.test(text)) {
+            return text;
+        }
+        return undefined;
+    }
+
+    // plain `boolean`, or a union of boolean and nullish members only (`Bool`)
+    javaBooleanishType(node): boolean {
+        let type: any;
+        try {
+            type = this.getChecker().getTypeAtLocation(node);
+        } catch (e) {
+            return false;
+        }
+        if (type === undefined || type === null) {
+            return false;
+        }
+        const booleanish = (t: any) => ((t.flags & (TypeFlags.Boolean | TypeFlags.BooleanLiteral)) !== 0);
+        const nullish = (t: any) => ((t.flags & (TypeFlags.Undefined | TypeFlags.Null | TypeFlags.Void)) !== 0);
+        if (booleanish(type)) {
+            return true;
+        }
+        if ((type.flags & TypeFlags.Union) === 0) {
+            return false;
+        }
+        const parts: any[] = type.getTypes?.() ?? [];
+        return parts.length > 0 && parts.some(booleanish) && parts.every((t) => booleanish(t) || nullish(t));
     }
 
     printConditionalExpression(node, _identation) {
