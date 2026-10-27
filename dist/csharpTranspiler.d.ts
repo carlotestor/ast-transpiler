@@ -11,6 +11,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpExpressionTypeResolver?: (node: any) => string | undefined;
     csharpDeclaredLocalTypeResolver?: (declaration: any) => string | undefined;
     csharpListParamExclusions?: (name: string, index: number) => boolean;
+    csharpElementRowLocalSource?: (fileName: string) => boolean;
     csharpTypedLocals: WeakMap<Node, string>;
     csharpListParamDeclarations: WeakSet<Node>;
     csharpPromiseAllSites: WeakMap<Node, any>;
@@ -212,6 +213,10 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpNegatedConditionOperand(operand: any): string;
     csharpConditionPositionAllowsNative(node: any): boolean;
     printVariableDeclarationList(node: any, identation: any): string;
+    csharpElementRowLocalType(declaration: any): string | undefined;
+    csharpElementRowKeyIsString(node: any): boolean;
+    csharpBindingNames(name: any): string[];
+    csharpElementRowUseIsDictionaryShaped(use: any): boolean;
     transformPropertyAcessExpressionIfNeeded(node: any): any;
     printCustomDefaultValueIfNeeded(node: any): string;
     printFunctionBody(node: any, identation: any): string;

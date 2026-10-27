@@ -13,7 +13,7 @@ import {
   symbolValueDeclaration,
   typeParts,
   typeTarget
-} from "./chunk-AR3HKU64.js";
+} from "./chunk-O7NNCZWA.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -2980,6 +2980,8 @@ function csharpSliceBoundValue(bound) {
   return bound.text;
 }
 var CSHARP_MARKET_RECEIVER_NAMES = ["market", "currency"];
+var CSHARP_ELEMENT_ROW_READERS = ["safeString", "safeInteger", "safeNumber", "safeFloat", "safeBool", "safeDict", "safeList", "safeValue", "safeStringLower", "safeStringUpper", "safeIntegerProduct"];
+var CSHARP_FUNCTION_SCOPES = [SyntaxKind4.MethodDeclaration, SyntaxKind4.FunctionDeclaration, SyntaxKind4.FunctionExpression, SyntaxKind4.ArrowFunction, SyntaxKind4.Constructor, SyntaxKind4.GetAccessor, SyntaxKind4.SetAccessor];
 var CSHARP_OVERRIDE_PARAM_TYPES = {
   ethRpc: { 2: "IList<object>" },
   parsePredictionOpenInterest: { 0: "IDictionary<string, object>" },
@@ -6204,10 +6206,108 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return this.getIden(identation) + specificVarToken + " " + this.printNode(declaration.name) + " = " + parsedValue;
     }
     const declaredType = isNew ? "var" : this.getCSharpLocalType(declaration);
+    if (!isNew && declaredType === this.VAR_TOKEN && node.declarations.length === 1) {
+      const rowType = this.csharpElementRowLocalType(declaration);
+      if (rowType !== void 0) {
+        this.csharpTypedLocals.set(declaration, rowType);
+        return this.getIden(identation) + rowType + " " + this.printNode(declaration.name) + " = ((" + rowType + ")" + parsedValue + ")";
+      }
+    }
     if (!isNew && node.declarations.length === 1 && this.csharpTypeIsNative(declaredType)) {
       this.csharpTypedLocals.set(declaration, declaredType);
     }
     return this.getIden(identation) + declaredType + " " + this.printNode(declaration.name) + " = " + parsedValue;
+  }
+  // `const row = list[i]` (non-string key): when every use of the local in its function reads the
+  // box as a string-keyed dictionary, the box IS a dictionary and the declaration may name it.
+  csharpElementRowLocalType(declaration) {
+    if (declaration.name?.kind !== SyntaxKind4.Identifier) {
+      return void 0;
+    }
+    let init = declaration.initializer;
+    while (init?.kind === SyntaxKind4.ParenthesizedExpression) {
+      init = init.expression;
+    }
+    if (init?.kind !== SyntaxKind4.ElementAccessExpression || this.csharpElementRowKeyIsString(init.argumentExpression)) {
+      return void 0;
+    }
+    const name = declaration.name.text;
+    if (CSHARP_MARKET_RECEIVER_NAMES.indexOf(name) >= 0) {
+      return void 0;
+    }
+    const fileName = (declaration.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    const sourceOk = typeof this.csharpElementRowLocalSource === "function" ? this.csharpElementRowLocalSource(fileName) : fileName.includes("ts/src/") && !fileName.includes("ts/src/test/") && !fileName.includes("examples/");
+    if (!sourceOk) {
+      return void 0;
+    }
+    const scope = this.csharpEnclosingFunction(declaration);
+    const type = "IDictionary<string, object>";
+    if (scope === void 0 || this.csharpTypeNameIsShadowed(scope, type)) {
+      return void 0;
+    }
+    let bindings = 0;
+    let reads = 0;
+    let bad = false;
+    const visit = (n) => {
+      if (bad || n === void 0) {
+        return;
+      }
+      if (n !== scope && CSHARP_FUNCTION_SCOPES.indexOf(n.kind) >= 0) {
+        return;
+      }
+      if ((n.kind === SyntaxKind4.Parameter || n.kind === SyntaxKind4.VariableDeclaration) && this.csharpBindingNames(n.name).indexOf(name) >= 0) {
+        bindings += 1;
+      }
+      const memberName = n.parent?.kind === SyntaxKind4.PropertyAccessExpression && n.parent.name === n;
+      if (n !== declaration.name && !memberName && n.kind === SyntaxKind4.Identifier && n.text === name) {
+        if (!this.csharpElementRowUseIsDictionaryShaped(n)) {
+          bad = true;
+          return;
+        }
+        const parent = n.parent;
+        if (parent?.kind === SyntaxKind4.ElementAccessExpression && parent.expression === n && this.csharpElementRowKeyIsString(parent.argumentExpression)) {
+          reads += 1;
+        }
+      }
+      n.forEachChild(visit);
+    };
+    scope.forEachChild(visit);
+    return bad || bindings !== 1 || reads === 0 ? void 0 : type;
+  }
+  csharpElementRowKeyIsString(node) {
+    return node !== void 0 && (node.kind === SyntaxKind4.StringLiteral || node.kind === SyntaxKind4.NoSubstitutionTemplateLiteral);
+  }
+  csharpBindingNames(name) {
+    const names = [];
+    const visit = (n) => {
+      if (n?.kind === SyntaxKind4.Identifier) {
+        names.push(n.text);
+      } else if (n?.kind === SyntaxKind4.ObjectBindingPattern || n?.kind === SyntaxKind4.ArrayBindingPattern) {
+        for (const element of n.elements) {
+          visit(element?.name);
+        }
+      }
+    };
+    visit(name);
+    return names;
+  }
+  csharpElementRowUseIsDictionaryShaped(use) {
+    const parent = use.parent;
+    if (parent === void 0) {
+      return false;
+    }
+    if (parent.kind === SyntaxKind4.ElementAccessExpression && parent.expression === use) {
+      return this.csharpElementRowKeyIsString(parent.argumentExpression);
+    }
+    if (parent.kind === SyntaxKind4.CallExpression && parent.arguments?.[0] === use) {
+      const callee = parent.expression;
+      return callee?.kind === SyntaxKind4.PropertyAccessExpression && callee.expression?.kind === SyntaxKind4.ThisKeyword && CSHARP_ELEMENT_ROW_READERS.indexOf(callee.name?.text) >= 0;
+    }
+    if (parent.kind === SyntaxKind4.BinaryExpression) {
+      const op = parent.operatorToken?.kind;
+      return op === SyntaxKind4.EqualsEqualsEqualsToken || op === SyntaxKind4.ExclamationEqualsEqualsToken || op === SyntaxKind4.EqualsEqualsToken || op === SyntaxKind4.ExclamationEqualsToken;
+    }
+    return false;
   }
   transformPropertyAcessExpressionIfNeeded(node) {
     const expression = node.expression;
