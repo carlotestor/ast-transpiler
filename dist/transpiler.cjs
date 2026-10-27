@@ -46149,7 +46149,8 @@ _chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 var GB01_DICT_PARAMS = {
   "safeTrade": [0],
-  "safeLedgerEntry": [0]
+  "safeLedgerEntry": [0],
+  "safeLiquidation": [0]
 };
 var GB01_TYPE = "map[string]any";
 var GB01_DEBUG = process.env.GB01_DEBUG === "1";
