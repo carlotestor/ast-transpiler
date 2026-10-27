@@ -6231,6 +6231,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (init?.kind !== SyntaxKind4.ElementAccessExpression || this.csharpElementRowKeyIsString(init.argumentExpression)) {
       return void 0;
     }
+    if (init.expression?.kind === SyntaxKind4.PropertyAccessExpression) {
+      return void 0;
+    }
     const name = declaration.name.text;
     if (CSHARP_MARKET_RECEIVER_NAMES.indexOf(name) >= 0) {
       return void 0;

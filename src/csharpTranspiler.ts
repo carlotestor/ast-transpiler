@@ -4241,6 +4241,11 @@ export class CSharpTranspiler extends BaseTranspiler {
         if (init?.kind !== SyntaxKind.ElementAccessExpression || this.csharpElementRowKeyIsString(init.argumentExpression)) {
             return undefined;
         }
+        // `this.<member>[k]` reads (ws caches such as this.orderbooks) belong to the host's member-cache
+        // families, which name their own box; only a local list receiver is this rule's
+        if (init.expression?.kind === SyntaxKind.PropertyAccessExpression) {
+            return undefined;
+        }
         const name = declaration.name.text;
         if (CSHARP_MARKET_RECEIVER_NAMES.indexOf(name) >= 0) {
             return undefined; // the market-row read arms own these names

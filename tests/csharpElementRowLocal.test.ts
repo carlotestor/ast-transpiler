@@ -47,6 +47,11 @@ describe('csharp element-row locals', () => {
         expect(printed(body('        const market = list[i];\n        return market[\'a\'];'), true)).not.toContain('IDictionary<string, object> market');
     });
 
+    test('a member-cache element read (this.orderbooks[sym]) is left to the host families', () => {
+        const ts = body('        const row = this.orderbooks[i];\n        return row[\'a\'];');
+        expect(printed(ts, true)).not.toContain('IDictionary<string, object> row');
+    });
+
     test('a second binding of the name keeps object', () => {
         const ts = body('        const row = list[i];\n        const a = row[\'a\'];\n        if (a) {\n            const row = list[0];\n            return row[\'c\'];\n        }\n        return a;');
         expect(printed(ts, true)).not.toContain('IDictionary<string, object> row');
