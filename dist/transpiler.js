@@ -13,7 +13,7 @@ import {
   symbolValueDeclaration,
   typeParts,
   typeTarget
-} from "./chunk-AR3HKU64.js";
+} from "./chunk-R6B5ZSKV.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -8506,7 +8506,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
 
 // src/transpiler.ts
 import * as path2 from "path";
-import * as fs2 from "fs";
+import * as fs3 from "fs";
 
 // src/goTranspiler.ts
 init_esm_shims();
@@ -14024,9 +14024,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         }
         let arg = site.args[index];
         if ((goType === "[]string" || goType === "[][]string") && site.at !== void 0) {
-          const callArgs = goBalancedSliceArgs(tree.fileText.get(site.file) ?? "", site.at);
-          if (callArgs !== void 0) {
-            arg = callArgs[index];
+          const callArgs3 = goBalancedSliceArgs(tree.fileText.get(site.file) ?? "", site.at);
+          if (callArgs3 !== void 0) {
+            arg = callArgs3[index];
           }
         }
         if (arg === void 0 || !this.goTextArgMatchesType(arg, goType, site.file, tree, site.at)) {
@@ -14478,21 +14478,21 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       return true;
     }
     const name = nameNode.text;
-    let rebound = false;
+    let rebound2 = false;
     const visit = (n) => {
-      if (rebound) {
+      if (rebound2) {
         return;
       }
       if (n.kind === SyntaxKind5.Identifier && n.text === name && n !== nameNode) {
         if (this.goRebindingTargetOf(n) !== void 0) {
-          rebound = true;
+          rebound2 = true;
           return;
         }
       }
       n.forEachChild(visit);
     };
     visit(scope);
-    return rebound;
+    return rebound2;
   }
   // walks up from the identifier to the assignment it targets: `x = …` / `x += …` /
   // `[x, y] = …` / `for (x of …)` rebind the local, `x[k] = v` does not
@@ -15462,9 +15462,9 @@ ${indent}}`);
     if (node?.kind === SyntaxKind5.BinaryExpression && GO_ARITHMETIC_KINDS.indexOf(node.operatorToken.kind) >= 0) {
       return this.goPrintBinaryMemoized(node, identation);
     }
-    const isStatement2 = node !== void 0 && isStatementNode(node) && node.kind !== SyntaxKind5.Block;
+    const isStatement4 = node !== void 0 && isStatementNode(node) && node.kind !== SyntaxKind5.Block;
     const previousLevel = this.goStatementLevel;
-    if (isStatement2) {
+    if (isStatement4) {
       this.goStatementLevel = identation;
     }
     try {
@@ -16422,7 +16422,7 @@ ${indent}}`);
     body.forEachChild(visit);
     return inBody && !valueWrite ? target : void 0;
   }
-  goGetArgUsesAreSafe(body, param, name, goType, nilable, seen, boxed = false) {
+  goGetArgUsesAreSafe(body, param, name, goType, nilable, seen, boxed2 = false) {
     seen.add(param);
     const table = this.CCXT_GO_GETARG_SAFE_CONSUMERS ?? {};
     const pointer = goType.startsWith("*");
@@ -16498,7 +16498,7 @@ ${indent}}`);
             const other = parent.left === n ? parent.right : parent.left;
             const isNullTest = other?.kind === SyntaxKind5.NullKeyword || other?.kind === SyntaxKind5.Identifier && other.text === "undefined";
             if (isNullTest) {
-              safe = pointer || !boxed;
+              safe = pointer || !boxed2;
               return;
               safe = true;
               return;
@@ -25209,16 +25209,16 @@ ${this.getIden(identation)}}}`;
     return this.javaTypeFlagsOnly(type, JAVA_SCALAR_TYPE_FLAGS | JAVA_NULLISH_TYPE_FLAGS);
   }
   // the type, or every member of its (nested) union, carries one of the mask's flags
-  javaTypeFlagsOnly(type, mask, depth = 0) {
+  javaTypeFlagsOnly(type, mask2, depth = 0) {
     if (type === void 0 || type === null || depth > 3) {
       return false;
     }
     const flags = type.flags;
     if (flags & TypeFlags5.Union) {
       const parts = type.getTypes?.() ?? [];
-      return parts.length > 0 && parts.every((part) => this.javaTypeFlagsOnly(part, mask, depth + 1));
+      return parts.length > 0 && parts.every((part) => this.javaTypeFlagsOnly(part, mask2, depth + 1));
     }
-    return (flags & mask) !== 0;
+    return (flags & mask2) !== 0;
   }
   // A checker-proven dict prints a Map on every path, so the key copy is native;
   // every other target keeps the helper — shared field maps need its synchronized
@@ -27753,8 +27753,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // shapes the printer emits today (`Value::Str("k".to_string())`,
   // `Value::from("k")`) plus a bare `"k"` once an arg-shape unit drops the box.
   rustStringLiteralOf(printedKey) {
-    const boxed = printedKey.match(/^(?:Value::Str|Value::from)\((.+)\)$/);
-    const literal = (boxed ? boxed[1].replace(/\.(?:to_string|into)\(\)$/, "") : printedKey).trim();
+    const boxed2 = printedKey.match(/^(?:Value::Str|Value::from)\((.+)\)$/);
+    const literal = (boxed2 ? boxed2[1].replace(/\.(?:to_string|into)\(\)$/, "") : printedKey).trim();
     return /^"(?:[^"\\]|\\.)*"$/.test(literal) ? literal : void 0;
   }
   // `X["k"] = v` on a checker-proven plain Dict receiver: mutate the Dict
@@ -28474,6 +28474,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const typedStr = this.rustSafeStringLocalIsTyped(declaration);
     const nativeStr = this.rustNativeStrCalleeKind(declaration.initializer) === "str";
+    const signApi = typedStr ? this.rustSignApiElementInit(declaration) : void 0;
+    if (signApi !== void 0) {
+      return `${indent}let mut ${varName}: Option<String> = ${signApi.receiver}.get(${signApi.index}).and_then(Value::as_str).map(str::to_owned)`;
+    }
     if (typedStr) {
       return `${indent}let mut ${varName}: Option<String> = ${parsedValue}${nativeStr ? "" : ".as_str().map(str::to_owned)"}`;
     }
@@ -29134,9 +29138,23 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return cached;
     }
     this.rustStringLocalDecisions.set(declaration, false);
-    const decision = this.rustSafeStringLocalIsTypedUncached(declaration);
+    const decision = this.rustSignApiElementInit(declaration) !== void 0 ? this.rustSignApiStringLocalIsTyped(declaration) : this.rustSafeStringLocalIsTypedUncached(declaration);
     this.rustStringLocalDecisions.set(declaration, decision);
     return decision;
+  }
+  // Only string-literal compares: the null compare prints `!= Value::Null` and needs the box.
+  rustSignApiStringLocalIsTyped(declaration) {
+    if (this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) !== "string")
+      return false;
+    let literalUses = 0;
+    const safe = this.rustLocalUsesAll(declaration, declaration.name.text, true, (n) => {
+      const other = n.parent?.kind === SyntaxKind7.BinaryExpression ? n.parent.left === n ? n.parent.right : n.parent.left : void 0;
+      if (other === void 0 || this.literalKindOfNode(other) !== "string" || !this.rustStringLocalUseIsNative(n))
+        return false;
+      literalUses++;
+      return true;
+    });
+    return safe && literalUses > 0;
   }
   rustSafeStringLocalIsTypedUncached(declaration) {
     if (!this.rustSafeStringLocalInitializer(declaration) || this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) !== "string") {
@@ -29150,6 +29168,32 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       (n) => this.rustStringLocalUseIsNative(n) && ++nativeUses > 0
     );
     return safe && nativeUses > 0;
+  }
+  /** The `api: string[]` / `section: string[]` parameter (position 1) of sign/fetch2/request an identifier names. */
+  rustSignApiParam(node) {
+    if (node === void 0 || !isIdentifier3(node) || node.text !== "api" && node.text !== "section")
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration === void 0 || !isParameterDeclaration3(declaration))
+      return void 0;
+    const fn = declaration.parent;
+    if (fn === void 0 || !isMethodDeclaration5(fn) || !isIdentifier3(fn.name))
+      return void 0;
+    if (!_RustTranspiler.RUST_SIGN_API_METHODS.has(fn.name.text) || fn.parameters.indexOf(declaration) !== 1)
+      return void 0;
+    return String(declaration.type?.getText?.() ?? "").replace(/\s+/g, "") === "string[]" ? declaration : void 0;
+  }
+  /** `api[N]` on a shadowed sign-api parameter: the element read the shadow prints as `api.get(N)`. */
+  rustSignApiElementInit(declaration) {
+    const init = declaration.initializer;
+    if (declaration.name?.kind !== SyntaxKind7.Identifier || init === void 0 || !isElementAccessExpression4(init))
+      return void 0;
+    const key = init.argumentExpression;
+    if (!isNumericLiteral4(key) || !/^\d+$/.test(String(key.text)) || !isIdentifier3(init.expression))
+      return void 0;
+    if (this.rustSignApiParam(init.expression) === void 0 || this.rustParamShadowOf(init.expression) === void 0)
+      return void 0;
+    return { receiver: String(init.expression.text), index: Number(key.text) };
   }
   // `x.foo` / `{ foo: 1 }` — a property name is not a use of the local.
   rustIdentifierIsPropertyName(node) {
@@ -30046,7 +30090,10 @@ ${classMethods}
     }
   }
   /** Native list-index read of a generator temp (`__destr_tmp.as_array()…`). */
-  printNativeListIndex(receiverText, index) {
+  printNativeListIndex(receiverText, index, receiverNode) {
+    if (receiverNode !== void 0 && this.rustSignApiParam(receiverNode) !== void 0) {
+      return `${receiverText}.as_array().into_iter().flatten().nth(${index}).cloned().unwrap_or(Value::Null)`;
+    }
     return `${receiverText}.as_array().and_then(|__arr| __arr.get(${index})).cloned().unwrap_or(Value::Null)`;
   }
   /** Element read of a `Vec<Value>` binding (a destructuring temp the printer declares typed). */
@@ -30079,7 +30126,7 @@ ${classMethods}
       }
       if (!this.isProvenListExpression(receiverNode) && !this.r18ArrReadLocal(receiverNode))
         return void 0;
-      return this.printNativeListIndex(receiverText, index);
+      return this.printNativeListIndex(receiverText, index, receiverNode);
     }
     const dictRead = this.rustBearerDictDynamicRead(receiverText, receiverNode, keyNode) ?? this.printNativeDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.printNativeThisFieldDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.rustR10DynamicRead(receiverText, receiverNode, keyNode);
     if (dictRead !== void 0)
@@ -31460,15 +31507,30 @@ ${this.getIden(identation)}}`;
   printThrowStatement(node, identation) {
     return `${this.getIden(identation)}panic!("{}", ${this.printNode(node.expression, 0)});`;
   }
+  rustCatchBindingIsRead(block, name) {
+    let read = false;
+    const visit = (n) => {
+      if (read)
+        return;
+      if (isIdentifier3(n) && n.text === name) {
+        read = true;
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    block.forEachChild(visit);
+    return read;
+  }
   printTryStatement(node, identation) {
     const body = (block) => block.statements.map((s) => this.printNode(s, identation + 1)).join("\n");
     const rawName = node.catchClause?.variableDeclaration?.name?.text;
     const iden = this.getIden(identation);
     const errorName = rawName ? `_${rawName}` : "_e";
+    const head = rawName !== void 0 && this.rustCatchBindingIsRead(node.catchClause.block, rawName) ? `if let Err(${errorName}) = _try_result {` : "if _try_result.is_err() {";
     return `${iden}let _try_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 ${body(node.tryBlock)}
 ${iden}}));
-${iden}if let Err(${errorName}) = _try_result {
+${iden}${head}
 ${body(node.catchClause.block)}
 ${iden}}`;
   }
@@ -32456,10 +32518,10 @@ ${iden}}`;
       return void 0;
     if (!this.rustKeyIsProvenString(key))
       return this.r04StringifiedWriteKeyArg(key, text);
-    const boxed = text.match(/^Value::Str\((.+)\)$/s);
-    if (boxed === null)
+    const boxed2 = text.match(/^Value::Str\((.+)\)$/s);
+    if (boxed2 === null)
       return this.r04StringifiedWriteKeyArg(key, text);
-    const payload = boxed[1].trim().replace(/\.into\(\)$/, "").trim();
+    const payload = boxed2[1].trim().replace(/\.into\(\)$/, "").trim();
     if (/^format!\(/s.test(payload))
       return payload;
     if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(payload) && payload !== "self")
@@ -34971,6 +35033,7 @@ _RustTranspiler.RUST_STRING_LOCAL_HELPERS = /* @__PURE__ */ new Set([
   "safeStringUpper2",
   "safeStringUpperN"
 ]);
+_RustTranspiler.RUST_SIGN_API_METHODS = /* @__PURE__ */ new Set(["sign", "fetch2", "request"]);
 // `ts/src/base/**` — the shared `Exchange` / `PredictionExchange` classes
 // (the transpiler synthesises variants like `.__ExchangeNoOverloads.ts`).
 _RustTranspiler.RUST_BASE_TIER_FILE = /ts[\\/]src[\\/]base[\\/]/;
@@ -35742,6 +35805,5930 @@ var CppTranspiler = class extends BaseTranspiler {
   }
 };
 
+// src/rustPasses/index.ts
+init_esm_shims();
+
+// src/rustPasses/hx10w2-R01.ts
+init_esm_shims();
+var IDENT = "[A-Za-z_][A-Za-z0-9_]*";
+var MARKER_KEYS = ["__book_id", "__cache_id", "__cacheKind", "__sideKind", "__live_id"];
+var ROUTED_KEYS = ["cache", "hashmap", "subscriptions", "futures", "timestamp", "datetime", "nonce", "symbol", "checksum"];
+function maskText(src) {
+  let out = "";
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      while (i < src.length && src[i] !== "\n") {
+        out += " ";
+        i++;
+      }
+      continue;
+    }
+    if (c === '"') {
+      out += " ";
+      i++;
+      while (i < src.length && src[i] !== '"') {
+        if (src[i] === "\\") {
+          out += "  ";
+          i += 2;
+          continue;
+        }
+        out += src[i] === "\n" ? "\n" : " ";
+        i++;
+      }
+      if (i < src.length) {
+        out += " ";
+        i++;
+      }
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
+}
+function closeBracket(src, open) {
+  let depth = 0;
+  for (let k = open; k < src.length; k++) {
+    const c = src[k];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0)
+        return k + 1;
+    }
+  }
+  return -1;
+}
+function statementEnd(src, from) {
+  let depth = 0;
+  for (let k = from; k < src.length; k++) {
+    const c = src[k];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      if (depth === 0)
+        return -1;
+      depth--;
+    } else if (c === ";" && depth === 0)
+      return k + 1;
+    else if (c === "\n" && depth === 0)
+      return -1;
+  }
+  return -1;
+}
+var ARRAY_INIT = /^(?:Value::Array\(|Value::from\(\s*vec!\[|Value::from\(\s*std::sync::Arc::new\(\s*vec!\[|split\(|object_keys\(|object_values\(|self\.array_concat\(|self\.safe_list(?:_k|_n)?\()/;
+var DICT_INIT = /^(?:Value::Map\(|Value::Dict\()/;
+var SEQ_TYPE = /^(?:&)?(?:mut )?(?:Vec<(?:crate::)?Value>|\[(?:crate::)?Value\])$/;
+var INDEXED = ".cloned().unwrap_or(Value::Null)";
+function literalIndex(keyText) {
+  const key = keyText.trim().replace(/^&/, "").trim();
+  const int = /^Value::Int\(\s*(\d+)\s*\)$/.exec(key);
+  if (int !== null)
+    return Number(int[1]);
+  const str = /^Value::Str\(\s*"(\d+)"\s*(?:\.into\(\)|\.to_string\(\))?\s*\)$/.exec(key);
+  if (str !== null)
+    return Number(str[1]);
+  return -1;
+}
+function literalStrKey(keyText) {
+  const key = keyText.trim().replace(/^&/, "").trim();
+  const m = /^Value::Str\(\s*"([^"\\]*)"\s*(?:\.into\(\)|\.to_string\(\))?\s*\)$/.exec(key);
+  return m === null ? void 0 : m[1];
+}
+function identKey(keyText) {
+  const m = /^&?([A-Za-z_][A-Za-z0-9_]*)$/.exec(keyText.trim());
+  return m === null ? void 0 : m[1];
+}
+function callArgs(masked, callStart, recv) {
+  const head = "get_value(&" + recv;
+  if (masked.slice(callStart, callStart + head.length) !== head)
+    return void 0;
+  const afterRecv = callStart + head.length;
+  if (masked[afterRecv] !== ",")
+    return void 0;
+  const close = closeBracket(masked, masked.indexOf("(", callStart));
+  if (close < 0)
+    return void 0;
+  return [afterRecv, close];
+}
+function intPinned(region, name) {
+  const declRe = new RegExp("^[ \\t]*let (?:mut )?" + name + ":\\s*(?:crate::)?Value\\s*=\\s*Value::Int\\(\\s*\\d+\\s*\\);", "m");
+  const decl = declRe.exec(region);
+  if (decl === null)
+    return false;
+  const declEnd = decl.index + decl[0].length;
+  const useRe = new RegExp("(?<![A-Za-z0-9_.])" + name + "(?![A-Za-z0-9_])", "g");
+  let um;
+  while ((um = useRe.exec(region)) !== null) {
+    const at = um.index;
+    if (at >= decl.index && at < declEnd)
+      continue;
+    const before = region.slice(Math.max(0, at - 5), at);
+    const after = region.slice(at + name.length);
+    if (before === "&mut " && /^\s*\{\s*\*n \+= 1;\s*\}/.test(after))
+      continue;
+    if (before.endsWith("&"))
+      continue;
+    if (/^\.(?:as_(?:i64|f64)|clone)\(\)/.test(after))
+      continue;
+    return false;
+  }
+  return true;
+}
+function nativeGetValue(content, stats) {
+  const masked = maskText(content);
+  const edits = [];
+  const headers = [];
+  const headerRe = /^[ \t]*(?:pub )?(?:async )?fn /gm;
+  let hm;
+  while ((hm = headerRe.exec(masked)) !== null)
+    headers.push(hm.index);
+  headers.push(content.length);
+  for (let h = 0; h + 1 < headers.length; h++) {
+    const from = headers[h];
+    const to = h + 2 < headers.length ? headers[h + 1] : content.length;
+    const region = masked.slice(from, to);
+    const readText = (recv, seq, keyText) => {
+      if (seq) {
+        const idx = literalIndex(keyText);
+        if (idx >= 0)
+          return recv + ".get(" + idx + ")" + INDEXED;
+        const key = identKey(keyText);
+        if (key !== void 0 && intPinned(region, key)) {
+          return recv + ".get(" + key + ".as_i64().unwrap() as usize)" + INDEXED;
+        }
+        return void 0;
+      }
+      const str = literalStrKey(keyText);
+      if (str === void 0 || ROUTED_KEYS.indexOf(str) >= 0)
+        return void 0;
+      return recv + '.as_map().unwrap().get("' + str + '").cloned().unwrap_or(Value::Null)';
+    };
+    const rewriteRead = (recv, seq, callStart) => {
+      const args = callArgs(masked, callStart, recv);
+      if (args === void 0)
+        return void 0;
+      const text = readText(recv, seq, content.slice(args[0] + 1, args[1] - 1));
+      return text === void 0 ? void 0 : { start: callStart, end: args[1], text };
+    };
+    const declared = /* @__PURE__ */ new Map();
+    const declType = new RegExp("\\blet (?:mut )?(" + IDENT + ")\\s*:\\s*([^=;]+?)\\s*=", "g");
+    let dm;
+    while ((dm = declType.exec(region)) !== null)
+      declared.set(dm[1], dm[2].trim());
+    const headerEnd = region.indexOf("{");
+    const headerText = headerEnd < 0 ? region : region.slice(0, headerEnd);
+    const paramRe = new RegExp("\\b(?:mut )?(" + IDENT + ")\\s*:\\s*([&\\[A-Za-z_][A-Za-z0-9_:<>,\\s&\\[\\]]*)", "g");
+    while ((dm = paramRe.exec(headerText)) !== null) {
+      if (!declared.has(dm[1]))
+        declared.set(dm[1], dm[2].trim());
+    }
+    for (const [name, type] of declared) {
+      if (!SEQ_TYPE.test(type))
+        continue;
+      const useRe = new RegExp("get_value\\(&" + name + "(?![A-Za-z0-9_])", "g");
+      let um;
+      while ((um = useRe.exec(region)) !== null) {
+        const read = rewriteRead(name, true, from + um.index);
+        if (read === void 0)
+          continue;
+        edits.push(read);
+        if (stats)
+          stats.seqReads++;
+      }
+    }
+    const declRe = new RegExp("^([ \\t]*)let (mut )?(" + IDENT + "):\\s*(?:crate::)?Value\\s*=\\s*", "gm");
+    while ((dm = declRe.exec(region)) !== null) {
+      const name = dm[3];
+      const declAt = from + dm.index;
+      const initStart = declAt + dm[0].length;
+      const stmtEnd3 = statementEnd(masked, initStart);
+      if (stmtEnd3 < 0)
+        continue;
+      const initText = content.slice(initStart, stmtEnd3).trim();
+      const isSeq = ARRAY_INIT.test(initText);
+      const isDict = DICT_INIT.test(initText);
+      if (!isSeq && !isDict)
+        continue;
+      const declCount = (region.match(new RegExp("\\blet (?:mut )?" + name + "\\b", "g")) ?? []).length;
+      if (declCount !== 1)
+        continue;
+      if (new RegExp("(?<![A-Za-z0-9_.])" + name + "\\s*=[^=]").test(region))
+        continue;
+      const dictKeys = [];
+      if (isDict) {
+        const keys = insertedKeys(initText);
+        if (keys === void 0)
+          continue;
+        for (const k of keys)
+          dictKeys.push(k);
+      }
+      const useRe = new RegExp("(?<![A-Za-z0-9_.])" + name + "(?![A-Za-z0-9_])", "g");
+      const reads = [];
+      let ok = true;
+      let um;
+      while ((um = useRe.exec(region)) !== null) {
+        const at2 = um.index;
+        if (at2 >= dm.index && at2 < dm.index + dm[0].length)
+          continue;
+        const gv = region.lastIndexOf("get_value(", at2);
+        if (gv >= 0 && region.slice(gv, at2) === "get_value(&") {
+          const read = rewriteRead(name, isSeq, from + gv);
+          if (read === void 0) {
+            ok = false;
+            break;
+          }
+          reads.push(read);
+          continue;
+        }
+        if (isSeq && /^\.\s*(?:len|is_empty)\s*\(\s*\)/.test(region.slice(at2 + name.length)))
+          continue;
+        if (isSeq) {
+          ok = false;
+          break;
+        }
+        const before = region.slice(Math.max(0, at2 - 24), at2);
+        const writeHead = /(?:add_element_to_object|set_value)\(\s*&mut\s+$/.exec(before);
+        if (writeHead !== null) {
+          const keyStart = at2 + name.length;
+          const key = /^\s*,\s*&?\s*Value::Str\(\s*"([^"\\]*)"\s*(?:\.into\(\)|\.to_string\(\))?\s*\)\s*,/.exec(region.slice(keyStart));
+          if (key === null) {
+            ok = false;
+            break;
+          }
+          if (ROUTED_KEYS.indexOf(key[1]) >= 0 || MARKER_KEYS.indexOf(key[1]) >= 0) {
+            ok = false;
+            break;
+          }
+          dictKeys.push(key[1]);
+          continue;
+        }
+        if (/&mut\s+$/.test(before)) {
+          ok = false;
+          break;
+        }
+      }
+      if (!ok || reads.length === 0)
+        continue;
+      if (dictKeys.some((k) => MARKER_KEYS.indexOf(k) >= 0))
+        continue;
+      if (isSeq) {
+        const typeAt = declAt + dm[0].length - "Value = ".length;
+        edits.push({ start: typeAt, end: typeAt + "Value".length, text: "Vec<Value>" });
+        const initExpr = content.slice(initStart, stmtEnd3 - 1).replace(/\s+$/, "");
+        const inner = arrayPayload(initExpr);
+        edits.push({
+          start: initStart,
+          end: initStart + initExpr.length,
+          text: inner !== void 0 ? inner : initExpr + ".as_array().unwrap().clone()"
+        });
+        if (stats) {
+          stats.seqLocals++;
+          stats.seqReads += reads.length;
+        }
+      } else if (stats) {
+        stats.dictLocals++;
+        stats.dictReads += reads.length;
+      }
+      for (const r of reads)
+        edits.push(r);
+    }
+  }
+  if (edits.length === 0)
+    return content;
+  edits.sort((a, b) => a.start - b.start);
+  let out = "";
+  let at = 0;
+  for (const e of edits) {
+    if (e.start < at)
+      continue;
+    out += content.slice(at, e.start) + e.text;
+    at = e.end;
+  }
+  return out + content.slice(at);
+}
+function arrayPayload(initExpr) {
+  const strip = (text, prefix) => {
+    if (!text.startsWith(prefix) || !text.endsWith(")"))
+      return void 0;
+    return text.slice(prefix.length, -1).trim();
+  };
+  const direct = strip(initExpr, "Value::Array(");
+  if (direct !== void 0 && direct.length > 0)
+    return direct;
+  let inner = strip(initExpr, "Value::from(");
+  if (inner !== void 0)
+    inner = strip(inner, "std::sync::Arc::new(") ?? inner;
+  if (inner === void 0 || !inner.startsWith("vec!["))
+    return void 0;
+  return inner;
+}
+function insertedKeys(initText) {
+  const keys = [];
+  const insertRe = /\.insert\(\s*(?:"([^"\\]*)"\s*(?:\.to_string\(\)|\.into\(\))|([^,]+?))\s*,/g;
+  let im;
+  while ((im = insertRe.exec(initText)) !== null) {
+    if (im[1] === void 0)
+      return void 0;
+    keys.push(im[1]);
+  }
+  return keys;
+}
+var CASES = [
+  {
+    name: "seq: Value::from(vec![..]) local retyped, literal int key",
+    src: [
+      "pub fn demo(&mut self) -> Value {",
+      "    let mut rows: Value = Value::from(vec![Value::Int(1), Value::Int(2)]);",
+      "    let mut first: Value = get_value(&rows, &Value::Int(1));",
+      "    return first;",
+      "}"
+    ].join("\n"),
+    want: ["let mut rows: Vec<Value> =", "rows.get(1).cloned().unwrap_or(Value::Null)"],
+    gone: ["get_value("]
+  },
+  {
+    name: "seq: safe_list_k local, numeric-string key",
+    src: [
+      "pub fn demo(&mut self) -> Value {",
+      '    let mut data: Value = self.safe_list_k(response.clone(), "data", &[Value::from(vec![])]);',
+      '    let mut head: Value = get_value(&data, &Value::Str("0".into()));',
+      "    return head;",
+      "}"
+    ].join("\n"),
+    want: ["let mut data: Vec<Value> =", "data.get(0).cloned().unwrap_or(Value::Null)"],
+    gone: ["get_value("]
+  },
+  {
+    name: "seq: split local read by a Value::Int-pinned counter",
+    src: [
+      "pub fn demo(&mut self) -> Value {",
+      '    let mut parts: Value = split(&raw, &Value::Str("_".into()));',
+      "    let mut i: Value = Value::Int(0);",
+      "    while i.as_f64().unwrap_or(f64::NAN) < 2.0 {",
+      "        let mut part: Value = get_value(&parts, &i);",
+      "        if let Value::Int(n) = &mut i { *n += 1; }",
+      "    }",
+      "    return Value::Null;",
+      "}"
+    ].join("\n"),
+    want: ["let mut parts: Vec<Value> =", "parts.get(i.as_i64().unwrap() as usize).cloned().unwrap_or(Value::Null)"],
+    gone: ["get_value("]
+  },
+  {
+    name: "seq: unpinned dynamic key stays a helper call",
+    src: [
+      "pub fn demo(&mut self, mut key: Value) -> Value {",
+      '    let mut parts: Value = split(&raw, &Value::Str("_".into()));',
+      "    return get_value(&parts, &key);",
+      "}"
+    ].join("\n"),
+    want: ["let mut parts: Value =", "get_value(&parts, &key)"],
+    gone: ["Vec<Value>"]
+  },
+  {
+    name: "seq: a Value sink keeps the box",
+    src: [
+      "pub fn demo(&mut self) -> Value {",
+      '    let mut data: Value = self.safe_list_k(response.clone(), "data", &[Value::from(vec![])]);',
+      "    let mut first: Value = get_value(&data, &Value::Int(0));",
+      "    return self.parse_trades(data, &[]);",
+      "}"
+    ].join("\n"),
+    want: ["let mut data: Value =", "get_value(&data, &Value::Int(0))"],
+    gone: []
+  },
+  {
+    name: "dict: fresh literal with a literal key",
+    src: [
+      "pub fn demo(&mut self) -> Value {",
+      "    let mut request: Value = Value::Map({",
+      "        let mut m = indexmap::IndexMap::new();",
+      '        m.insert("amount".to_string(), amount);',
+      "        m",
+      "    });",
+      '    let mut amount2: Value = get_value(&request, &Value::Str("amount".into()));',
+      "    return amount2;",
+      "}"
+    ].join("\n"),
+    want: ["let mut request: Value =", 'request.as_map().unwrap().get("amount").cloned().unwrap_or(Value::Null)'],
+    gone: ["get_value("]
+  },
+  {
+    name: "dict: a routed key stays a helper call",
+    src: [
+      "pub fn demo(&mut self) -> Value {",
+      "    let mut book: Value = Value::Map({",
+      "        let mut m = indexmap::IndexMap::new();",
+      '        m.insert("bids".to_string(), bids);',
+      "        m",
+      "    });",
+      '    return get_value(&book, &Value::Str("cache".into()));',
+      "}"
+    ].join("\n"),
+    want: ['get_value(&book, &Value::Str("cache".into()))'],
+    gone: []
+  },
+  {
+    name: "dict: a computed insert key makes the key set dynamic",
+    src: [
+      "pub fn demo(&mut self, mut key: Value) -> Value {",
+      "    let mut request: Value = Value::Map({",
+      "        let mut m = indexmap::IndexMap::new();",
+      "        m.insert(crate::runtime::stringify_param(&key), amount);",
+      "        m",
+      "    });",
+      '    return get_value(&request, &Value::Str("amount".into()));',
+      "}"
+    ].join("\n"),
+    want: ['get_value(&request, &Value::Str("amount".into()))'],
+    gone: []
+  },
+  {
+    name: "seq: a reassigned local keeps the box",
+    src: [
+      "pub fn demo(&mut self) -> Value {",
+      "    let mut rows: Value = Value::from(vec![Value::Int(1)]);",
+      "    rows = self.parse_rows();",
+      "    return get_value(&rows, &Value::Int(0));",
+      "}"
+    ].join("\n"),
+    want: ["let mut rows: Value =", "get_value(&rows, &Value::Int(0))"],
+    gone: []
+  },
+  {
+    name: "seq: an already typed receiver goes native as is",
+    src: [
+      "pub fn demo(&mut self, mut rows: &[Value]) -> Value {",
+      "    return get_value(&rows, &Value::Int(2));",
+      "}"
+    ].join("\n"),
+    want: ["rows.get(2).cloned().unwrap_or(Value::Null)"],
+    gone: ["get_value("]
+  }
+];
+
+// src/rustPasses/hx10w2-R02.ts
+init_esm_shims();
+var CALL = "add_element_to_object(";
+var TAGFREE_FIELDS = /* @__PURE__ */ new Set([
+  "balance",
+  "orderbooks",
+  "trades",
+  "tickers",
+  "bidsasks",
+  "ohlcvs",
+  "clients",
+  "transactions",
+  "headers",
+  "currencies",
+  "has",
+  "tokenBucket",
+  "options",
+  "markets",
+  "urls",
+  "positions",
+  "fees",
+  "exceptions",
+  "markets_by_id",
+  "currencies_by_id"
+]);
+var NEST_FIELDS = /* @__PURE__ */ new Set([
+  "options",
+  "urls",
+  "fees",
+  "exceptions",
+  "markets",
+  "currencies",
+  "headers",
+  "has",
+  "tokenBucket",
+  "markets_by_id",
+  "currencies_by_id"
+]);
+var TAG_ACCESS = [
+  "self.orderbooks",
+  "self.balance",
+  "self.ohlcvs",
+  "self.tickers",
+  "self.trades",
+  "self.bidsasks",
+  "self.positions",
+  "self.clients",
+  "self.transactions",
+  '"subscriptions"',
+  '"futures"',
+  '"cache"',
+  ".hashmap",
+  "self.order_book(",
+  "self.order_book_side("
+];
+var BUILDERS = /* @__PURE__ */ new Set(["account", "safe_ledger_entry", "deposit_withdraw_fee"]);
+var EXTENDERS = /* @__PURE__ */ new Set(["extend", "omit", "keysort"]);
+var PARSERS = /* @__PURE__ */ new Set([
+  "parse_order",
+  "parse_ws_order",
+  "parse_trade",
+  "parse_ws_trade",
+  "parse_ticker",
+  "parse_ws_ticker",
+  "parse_position",
+  "parse_ws_position",
+  "parse_balance",
+  "parse_market",
+  "parse_currency",
+  "parse_transaction",
+  "parse_ledger_entry",
+  "parse_deposit_withdraw_fee",
+  "parse_account",
+  "parse_funding_rate",
+  "parse_open_interest",
+  "parse_liquidation",
+  "parse_borrow_rate",
+  "parse_income"
+]);
+var LITERAL_KEY = /^&Value::Str\(("(?:[^"\\]|\\.)*")\.(?:into|to_string)\(\)\)$/;
+var PLACE_KEY = /^&([A-Za-z_][A-Za-z0-9_]*)$/;
+var IDENT2 = /^[A-Za-z_][A-Za-z0-9_]*$/;
+function isWordChar(c) {
+  return c >= "a" && c <= "z" || c >= "A" && c <= "Z" || c >= "0" && c <= "9" || c === "_";
+}
+function splitArgs(text) {
+  const out = [];
+  let depth = 0, inStr = false, esc = false, cur = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc)
+        esc = false;
+      else if (c === "\\")
+        esc = true;
+      else if (c === '"')
+        inStr = false;
+      continue;
+    }
+    if (c === '"') {
+      inStr = true;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      out.push(text.slice(cur, i));
+      cur = i + 1;
+    }
+  }
+  out.push(text.slice(cur));
+  return out.length > 0 ? out : void 0;
+}
+function closeParenAt(content, open) {
+  let depth = 0, inStr = false, esc = false;
+  for (let i = open; i < content.length; i++) {
+    const c = content[i];
+    if (inStr) {
+      if (esc)
+        esc = false;
+      else if (c === "\\")
+        esc = true;
+      else if (c === '"')
+        inStr = false;
+      continue;
+    }
+    if (c === '"') {
+      inStr = true;
+      continue;
+    }
+    if (c === "(")
+      depth++;
+    else if (c === ")") {
+      depth--;
+      if (depth === 0)
+        return i + 1;
+    }
+  }
+  return -1;
+}
+function fnRegions(content) {
+  const headers = [];
+  const rx = /^[ \t]*(?:pub )?(?:async )?fn [A-Za-z0-9_]+/gm;
+  let m;
+  while ((m = rx.exec(content)) !== null)
+    headers.push(m.index);
+  const out = [];
+  for (let i = 0; i < headers.length; i++) {
+    out.push({ start: headers[i], end: i + 1 < headers.length ? headers[i + 1] : content.length });
+  }
+  return out;
+}
+function regionAt(regions, pos) {
+  let lo = 0, hi = regions.length - 1, hit;
+  while (lo <= hi) {
+    const mid = lo + hi >> 1;
+    if (regions[mid].start <= pos) {
+      hit = regions[mid];
+      lo = mid + 1;
+    } else
+      hi = mid - 1;
+  }
+  return hit && pos < hit.end ? hit : void 0;
+}
+function firstArg(text) {
+  const open = text.indexOf("(");
+  if (open < 0)
+    return void 0;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc)
+        esc = false;
+      else if (c === "\\")
+        esc = true;
+      else if (c === '"')
+        inStr = false;
+      continue;
+    }
+    if (c === '"') {
+      inStr = true;
+      continue;
+    }
+    if (c === "(")
+      depth++;
+    else if (c === ")") {
+      depth--;
+      if (depth === 0)
+        return text.slice(open + 1, i);
+    } else if (c === "," && depth === 1)
+      return text.slice(open + 1, i);
+  }
+  return void 0;
+}
+var Proof = class {
+  constructor(content, regions) {
+    this.calls = /* @__PURE__ */ new Map();
+    this.locals = /* @__PURE__ */ new Map();
+    this.content = content;
+    this.regions = regions;
+  }
+  /** A local whose every binding is a fresh tag-free literal. */
+  localTagFree(name, body, region, depth = 0) {
+    if (depth > 2)
+      return false;
+    const key = region.start + ":" + name;
+    if (depth === 0) {
+      const cached = this.locals.get(key);
+      if (cached !== void 0)
+        return cached;
+    }
+    const verdict = this.localTagFreeUncached(name, body, region, depth);
+    if (depth === 0)
+      this.locals.set(key, verdict);
+    return verdict;
+  }
+  localTagFreeUncached(name, body, region, depth) {
+    if (body.includes('"__'))
+      return false;
+    const decl = new RegExp("^[ \\t]*let mut " + name + "[ \\t]*:[ \\t]*Value\\b(.*)$", "gm");
+    const bare = new RegExp("^[ \\t]*let mut " + name + "[ \\t]*=(.*)$", "gm");
+    const bound = new RegExp("(^|[^.\\w])" + name + "[ \\t]*=(?!=)(.*)$", "gm");
+    const sources = [];
+    let sawBind = false;
+    let m;
+    while ((m = bare.exec(body)) !== null) {
+      sawBind = true;
+      sources.push(m[1]);
+    }
+    while ((m = decl.exec(body)) !== null) {
+      sawBind = true;
+      const rest = m[1].trim();
+      if (rest.length > 0) {
+        if (rest[0] !== "=")
+          return false;
+        sources.push(rest.slice(1));
+      }
+    }
+    if (!sawBind)
+      return false;
+    while ((m = bound.exec(body)) !== null)
+      sources.push(m[2]);
+    for (const src of sources) {
+      if (!this.srcTagFree(src, body, region, depth))
+        return false;
+    }
+    return true;
+  }
+  /** A value expression that can only be a fresh plain dict. */
+  srcTagFree(src, body, region, depth = 0) {
+    const t = src.trim();
+    if (depth > 2)
+      return false;
+    if (t.startsWith("Value::Map("))
+      return true;
+    if (t.startsWith("Value::Null"))
+      return true;
+    const callee = t.match(/^self\.([A-Za-z_][A-Za-z0-9_]*)[ \t]*\(/);
+    if (callee === null)
+      return false;
+    const name = callee[1];
+    if (BUILDERS.has(name) || PARSERS.has(name))
+      return true;
+    if (EXTENDERS.has(name)) {
+      const arg = firstArg(t);
+      if (arg === void 0)
+        return false;
+      const head = arg.trim();
+      if (IDENT2.test(head))
+        return this.localTagFree(head, body, region, depth + 1);
+      return this.srcTagFree(head, body, region, depth + 1);
+    }
+    return this.calleePlain(name, region);
+  }
+  /** Same-file method whose only `return` is a proven tag-free local. */
+  calleePlain(name, caller) {
+    const key = caller.start;
+    const cache = this.calls.get(key * 1e5 + (name.charCodeAt(0) || 0));
+    if (cache !== void 0)
+      return cache;
+    let verdict = false;
+    for (const r of this.regions) {
+      const body = this.content.slice(r.start, r.end);
+      const header = body.slice(0, body.indexOf("\n") < 0 ? body.length : body.indexOf("\n"));
+      if (!new RegExp("fn " + name + "\\s*\\(").test(header))
+        continue;
+      if (body.includes('"__'))
+        continue;
+      const ret = body.match(/^[ \t]*return ([A-Za-z_][A-Za-z0-9_]*);/m);
+      if (ret !== null) {
+        if (this.localTagFree(ret[1], body, r)) {
+          verdict = true;
+          break;
+        }
+        continue;
+      }
+      if (new RegExp("\\b[A-Za-z0-9_]+Core::" + name + "\\(").test(body)) {
+        verdict = true;
+        break;
+      }
+    }
+    this.calls.set(key * 1e5 + (name.charCodeAt(0) || 0), verdict);
+    return verdict;
+  }
+};
+function callArgs2(text, name) {
+  if (!text.startsWith(name + "("))
+    return void 0;
+  const after = closeParenAt(text, name.length);
+  if (after !== text.length)
+    return void 0;
+  return splitArgs(text.slice(name.length + 1, after - 1));
+}
+function keyConv(arg, intermediate) {
+  const lit = arg.trim().match(LITERAL_KEY);
+  if (lit !== null)
+    return lit[1] + ".to_string()";
+  if (intermediate)
+    return void 0;
+  const place = arg.trim().match(PLACE_KEY);
+  if (place !== null)
+    return "crate::runtime::stringify_param(&" + place[1] + ")";
+  return void 0;
+}
+function r02NativeInserts(content) {
+  if (!content.includes(CALL))
+    return content;
+  const regions = fnRegions(content);
+  const proof = new Proof(content, regions);
+  const edits = [];
+  let i = 0;
+  while (true) {
+    const at = content.indexOf(CALL, i);
+    if (at < 0)
+      break;
+    i = at + 1;
+    if (at > 0 && isWordChar(content[at - 1]))
+      continue;
+    const open = at + CALL.length - 1;
+    const after = closeParenAt(content, open);
+    if (after < 0)
+      break;
+    const args = splitArgs(content.slice(open + 1, after - 1));
+    if (args === void 0 || args.length !== 3)
+      continue;
+    const region = regionAt(regions, at);
+    if (region === void 0)
+      continue;
+    const body = content.slice(region.start, region.end);
+    const chain = [];
+    let cur = args[0].trim();
+    let ok = true;
+    while (true) {
+      const outer = callArgs2(cur, "get_value_mut");
+      if (outer === void 0 || outer.length !== 2)
+        break;
+      const inner = outer[0].trim();
+      if (!inner.startsWith("&mut "))
+        break;
+      chain.push(outer[1].trim());
+      cur = inner.slice(5).trim();
+    }
+    let base;
+    let place;
+    if (cur.startsWith("&mut ")) {
+      base = cur.slice(5).trim();
+      place = "&mut " + base;
+    } else if (cur.startsWith("unsafe {")) {
+      const coerce = cur.match(/^unsafe \{ (crate::runtime::coerce_value_to_mut\(&self\.[A-Za-z_][A-Za-z0-9_]*\)) \}$/);
+      if (coerce === null)
+        continue;
+      place = cur;
+      base = coerce[1].replace("coerce_value_to_mut(&self.", "self.").replace(/\)$/, "");
+    } else if (/^(?:self\.)?[A-Za-z_][A-Za-z0-9_]*$/.test(cur)) {
+      base = cur;
+      place = "&mut " + cur;
+    } else
+      continue;
+    const field = base.match(/^self\.([A-Za-z_][A-Za-z0-9_]*)$/);
+    const local = base.match(/^([A-Za-z_][A-Za-z0-9_]*)$/);
+    if (field !== null) {
+      const name = field[1];
+      if (!TAGFREE_FIELDS.has(name))
+        continue;
+      if (chain.length > 0 && !NEST_FIELDS.has(name))
+        continue;
+    } else if (local !== null) {
+      if (!proof.localTagFree(local[1], body, region))
+        continue;
+      if (chain.length > 0 && TAG_ACCESS.some((t) => body.includes(t)))
+        continue;
+    } else
+      continue;
+    const keys = [];
+    for (const k of chain.reverse()) {
+      const conv = keyConv(k, true);
+      if (conv === void 0) {
+        ok = false;
+        break;
+      }
+      keys.push(conv);
+    }
+    if (!ok)
+      continue;
+    const last = keyConv(args[1], false);
+    if (last === void 0)
+      continue;
+    const value = args[2].trim();
+    const receiverName = field !== null ? field[1] : local !== null ? local[1] : "";
+    const readsReceiver = field !== null ? /\bself\b/.test(value) : new RegExp("\\b" + receiverName + "\\b").test(value);
+    if (keys.length > 9)
+      continue;
+    const tag = (i2) => "__rd" + "abcdefghij"[i2];
+    let insert = "std::sync::Arc::make_mut(" + tag(keys.length) + ").insert(" + last + ", " + value + ");";
+    for (let d = keys.length - 1; d >= 0; d--) {
+      insert = "if let Value::Dict(" + tag(d + 1) + ") = std::sync::Arc::make_mut(" + tag(d) + ").entry(" + keys[d] + ").or_insert(Value::Null) { " + insert + " }";
+    }
+    let native = "if let Value::Dict(" + tag(0) + ") = " + place + " { " + insert + " }";
+    if (readsReceiver)
+      native = "{ let __rdt = " + value + "; " + native.replace(", " + value + ");", ", __rdt);") + " }";
+    const lineStart = content.lastIndexOf("\n", at) + 1;
+    let lineEnd = content.indexOf("\n", after);
+    if (lineEnd < 0)
+      lineEnd = content.length;
+    const before = content.slice(lineStart, lineEnd);
+    let suffix = content.slice(after, lineEnd);
+    if (suffix.startsWith(";"))
+      suffix = suffix.slice(1);
+    const merged = content.slice(lineStart, at) + native + suffix;
+    if (before.length <= 400 && merged.length > 400)
+      continue;
+    edits.push({ start: at, end: after, text: native });
+  }
+  if (edits.length === 0)
+    return content;
+  let out = "";
+  let pos = 0;
+  for (const e of edits) {
+    out += content.slice(pos, e.start) + e.text;
+    let p = e.end;
+    while (p < content.length && (content[p] === " " || content[p] === "	"))
+      p++;
+    if (p < content.length && content[p] === ";")
+      p++;
+    pos = p;
+  }
+  out += content.slice(pos);
+  return out;
+}
+
+// src/rustPasses/hx10w2-R03.ts
+init_esm_shims();
+var R03_SITE_RX = /(?<![A-Za-z0-9_:.])(in_op|object_keys|object_values|get_array_length)\(/g;
+var R03_LITERAL_KEY = /^&Value::Str\(("(?:[^"\\]|\\.)*")\.(?:to_string|into)\(\)\)$/;
+var R03_IDENT_ARG = /^&([a-z_][A-Za-z0-9_]*)$/;
+var R03_CLIENT_STATE = /^&get_value\(&(client), &Value::Str\("(subscriptions|futures)"\.(?:to_string|into)\(\)\)\)$/;
+var R03_SIDE_WORD = /asks|bids|[Ss]ide|[Bb]ook|entries|__sideKind/;
+var R03_JSON_SOURCE = /^(?:crate::value::)?(?:get_value|get_value_k)\(|^self\.(?:safe_\w+|parse_\w+|fetch\w*|to_array|array_concat|extend|omit)\(|^get_arg\(|^split\(|^Value::(?:Map|List|Array|Str|from)\(/;
+var R03_READS = /* @__PURE__ */ new Set([
+  "clone",
+  "len",
+  "is_empty",
+  "as_map",
+  "as_array",
+  "as_str",
+  "as_i64",
+  "as_f64",
+  "as_bool",
+  "is_truthy",
+  "is_null",
+  "is_str",
+  "is_map",
+  "is_array",
+  "to_string",
+  "to_json"
+]);
+var R03_SHAPE_WRITES = /(?:(?<![A-Za-z0-9_:.])(?:add_element_to_object|set_value|append_to_array|remove)\(|(?:^|[^A-Za-z0-9_:.])if let (?:Value::(?:Dict|Arr)\(__[a-z]+\)|\(Value::(?:Dict|Arr)\(__[a-z]+\), ?(?:&mut )?[a-z_][A-Za-z0-9_]*\)) = )$/;
+function r03Mask(content) {
+  const out = content.split("");
+  let i = 0;
+  while (i < content.length) {
+    const c = content[i];
+    if (c === "/" && content[i + 1] === "/") {
+      while (i < content.length && content[i] !== "\n")
+        out[i++] = " ";
+      continue;
+    }
+    if (c === '"') {
+      out[i++] = " ";
+      while (i < content.length && content[i] !== '"') {
+        if (content[i] === "\\")
+          out[i++] = " ";
+        out[i++] = " ";
+      }
+      if (i < content.length)
+        out[i++] = " ";
+      continue;
+    }
+    i++;
+  }
+  return out.join("");
+}
+function r03Close(content, open) {
+  const pairs = { "(": ")", "[": "]", "{": "}" };
+  const close = pairs[content[open]];
+  if (close === void 0)
+    return -1;
+  let depth = 0;
+  let i = open;
+  while (i < content.length) {
+    const c = content[i];
+    if (c === '"') {
+      i++;
+      while (i < content.length && content[i] !== '"') {
+        if (content[i] === "\\")
+          i++;
+        i++;
+      }
+      i++;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0)
+        return c === close ? i : -1;
+    }
+    i++;
+  }
+  return -1;
+}
+function r03Split(inner) {
+  const parts = [];
+  let depth = 0;
+  let cur = "";
+  let i = 0;
+  while (i < inner.length) {
+    const c = inner[i];
+    if (c === '"') {
+      const start = i;
+      i++;
+      while (i < inner.length && inner[i] !== '"') {
+        if (inner[i] === "\\")
+          i++;
+        i++;
+      }
+      i++;
+      cur += inner.slice(start, i);
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    if (c === "," && depth === 0) {
+      parts.push(cur);
+      cur = "";
+    } else {
+      cur += c;
+    }
+    i++;
+  }
+  parts.push(cur);
+  return parts;
+}
+function r03StmtEnd(content, i) {
+  let depth = 0;
+  while (i < content.length) {
+    const c = content[i];
+    if (c === '"') {
+      i++;
+      while (i < content.length && content[i] !== '"') {
+        if (content[i] === "\\")
+          i++;
+        i++;
+      }
+      i++;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth < 0)
+        return -1;
+    } else if (c === ";" && depth === 0) {
+      return i;
+    }
+    i++;
+  }
+  return -1;
+}
+function r03Parens(e) {
+  let t = e.trim();
+  while (t.startsWith("(") && r03Close(t, 0) === t.length - 1)
+    t = t.slice(1, -1).trim();
+  return t;
+}
+function r03IsCall(e, name) {
+  if (!e.startsWith(name + "("))
+    return false;
+  return r03Close(e, name.length) === e.length - 1;
+}
+var R03Prover = class {
+  constructor(content) {
+    this.headers = [0];
+    this.memo = /* @__PURE__ */ new Map();
+    this.pending = /* @__PURE__ */ new Set();
+    this.content = content;
+    this.masked = r03Mask(content);
+    for (const m of this.masked.matchAll(/\n[ \t]*(?:pub(?:\([a-z]+\))? )?(?:async )?fn /g)) {
+      this.headers.push(m.index + 1);
+    }
+    this.headers.push(content.length);
+  }
+  // Enclosing fn region containing `pos`.
+  region(pos) {
+    let lo = 0;
+    for (let h = 0; h + 1 < this.headers.length; h++)
+      if (this.headers[h] <= pos)
+        lo = h;
+    return lo;
+  }
+  facts(name, pos) {
+    if (!/^[a-z_][A-Za-z0-9_]*$/.test(name))
+      return void 0;
+    const lo = this.region(pos);
+    const key = `${lo}:${name}`;
+    if (this.memo.has(key))
+      return this.memo.get(key);
+    if (this.pending.has(key))
+      return void 0;
+    this.pending.add(key);
+    const result = this.prove(name, this.headers[lo], this.headers[lo + 1], /* @__PURE__ */ new Set());
+    this.pending.delete(key);
+    this.memo.set(key, result);
+    return result;
+  }
+  prove(name, from, to, seen) {
+    const region = this.masked.slice(from, to);
+    const real = this.content.slice(from, to);
+    const header = real.slice(0, Math.max(0, real.indexOf("{")));
+    const isParam = new RegExp(`[^A-Za-z0-9_]${name}\\s*:`).test(header);
+    const rebind = new RegExp(`(?<!\\|)\\|(?!\\|)[^|\\n]*\\b${name}\\b[^|\\n]*(?<!\\|)\\|(?!\\|)|\\bfor [^\\n]*\\b${name}\\b[^\\n]* in |\\blet \\([^)]*\\b${name}\\b|\\b${name}\\s*@|\\b${name}\\s*[-+*/%|&^]=`);
+    if (rebind.test(region) || new RegExp(`\\*\\s*${name}\\b\\s*=(?!=)`).test(region))
+      return void 0;
+    let writes = 0;
+    let proof;
+    let shapeUnknown = false;
+    let lenSafe = !R03_SIDE_WORD.test(name);
+    const writesRe = new RegExp(`(?<![A-Za-z0-9_.*])(let (?:mut )?)?${name}\\b(\\s*:\\s*([A-Za-z_][A-Za-z0-9_<>,:& ]*?))?\\s*=(?!=)`, "g");
+    for (const m of region.matchAll(writesRe)) {
+      const typed = m[3] === void 0 ? "Value" : m[3].replace(/\s+/g, "");
+      if (typed !== "Value")
+        return void 0;
+      const rhsStart = m.index + m[0].length;
+      const end = r03StmtEnd(real, rhsStart);
+      if (end < 0)
+        return void 0;
+      const raw = r03Parens(real.slice(rhsStart, end));
+      const write = this.source(raw, from + m.index, seen);
+      writes++;
+      if (write === void 0) {
+        lenSafe = lenSafe && R03_JSON_SOURCE.test(raw) && !R03_SIDE_WORD.test(raw);
+        shapeUnknown = true;
+        continue;
+      }
+      if (shapeUnknown) {
+        lenSafe = lenSafe && write.markerFree && !R03_SIDE_WORD.test(raw);
+        continue;
+      }
+      if (proof === void 0)
+        proof = { ...write };
+      else if (proof.kind !== write.kind)
+        shapeUnknown = true;
+      else {
+        proof.markerFree = proof.markerFree && write.markerFree;
+        proof.untagged = proof.untagged && write.untagged;
+      }
+      lenSafe = lenSafe && write.markerFree && !R03_SIDE_WORD.test(raw);
+    }
+    if (writes === 0)
+      return void 0;
+    for (const m of region.matchAll(new RegExp(`&mut ${name}\\b`, "g"))) {
+      const before = region.slice(Math.max(0, m.index - 96), m.index);
+      if (!R03_SHAPE_WRITES.test(before))
+        return void 0;
+    }
+    for (const m of region.matchAll(new RegExp(`(?<![A-Za-z0-9_.])${name}\\.([A-Za-z_][A-Za-z0-9_]*)`, "g"))) {
+      if (!R03_READS.has(m[1]))
+        return void 0;
+    }
+    if (isParam)
+      return lenSafe ? { lenSafe } : void 0;
+    return shapeUnknown ? { lenSafe } : { proof, lenSafe };
+  }
+  // Shape and marker safety of one right-hand side.
+  source(raw, absPos, seen) {
+    const e = r03Parens(raw);
+    if (e === "")
+      return void 0;
+    const lit = (kind, untagged = true) => ({ kind, markerFree: true, untagged });
+    const tagged = e.includes("subscriptions") || e.includes("client");
+    if (r03IsCall(e, "Value::Map"))
+      return lit("map", !tagged && !e.includes("__ws_sub"));
+    if (r03IsCall(e, "Value::List") || r03IsCall(e, "Value::Array") || r03IsCall(e, "Value::from")) {
+      return e.includes("vec![") ? lit("arr") : void 0;
+    }
+    if (r03IsCall(e, "Value::Str"))
+      return lit("str");
+    const readers = [
+      [/^self\.safe_dict(?:_k|2|_k2)?\(/, "map"],
+      [/^self\.safe_list(?:_k|2|_k2)?\(/, "arr"],
+      [/^self\.(?:parse_ids|to_array|array_concat)\(/, "arr"],
+      [/^split\(/, "arr"]
+    ];
+    for (const [rx, kind] of readers) {
+      if (rx.test(e) && r03Close(e, e.indexOf("(")) === e.length - 1)
+        return lit(kind, !tagged);
+    }
+    const merge = /^self\.(?:extend|omit)\(/.exec(e);
+    if (merge !== null && r03Close(e, merge[0].length - 1) === e.length - 1) {
+      const args = r03Split(e.slice(merge[0].length, -1));
+      const first = args.length > 0 ? this.source(args[0], absPos, seen) : void 0;
+      if (first === void 0)
+        return void 0;
+      return { kind: first.kind, markerFree: first.markerFree, untagged: first.untagged && !tagged };
+    }
+    const alias = /^([a-z_][A-Za-z0-9_]*)\.clone\(\)$/.exec(e);
+    if (alias !== null) {
+      if (seen.has(alias[1]))
+        return void 0;
+      seen.add(alias[1]);
+      return this.facts(alias[1], absPos)?.proof;
+    }
+    return void 0;
+  }
+};
+function r03KeyText(key) {
+  const lit = R03_LITERAL_KEY.exec(key);
+  if (lit !== null)
+    return lit[1];
+  const ident = R03_IDENT_ARG.exec(key);
+  if (ident !== null)
+    return ident[1];
+  return void 0;
+}
+function hx10w2R03(content) {
+  if (!/\b(?:in_op|object_keys|object_values|get_array_length)\(&/.test(content))
+    return content;
+  const prover = new R03Prover(content);
+  for (let round = 0; round < 6; round++) {
+    const masked = r03Mask(content);
+    const rewrites = [];
+    for (const m of masked.matchAll(R03_SITE_RX)) {
+      const start = m.index;
+      const name = m[1];
+      if (/\bfn\s+$/.test(masked.slice(Math.max(0, start - 8), start)))
+        continue;
+      if (rewrites.some((r) => start >= r.start && start < r.end))
+        continue;
+      const open = start + name.length;
+      const close = r03Close(content, open);
+      if (close < 0)
+        continue;
+      const args = r03Split(content.slice(open + 1, close)).map((s) => s.trim());
+      let expr;
+      let kind;
+      let untagged = false;
+      let lenSafe = false;
+      const recv = R03_IDENT_ARG.exec(args[0] ?? "");
+      const state = R03_CLIENT_STATE.exec(args[0] ?? "");
+      if (recv !== null) {
+        const facts = prover.facts(recv[1], start);
+        if (facts === void 0)
+          continue;
+        expr = recv[1];
+        kind = facts.proof?.kind;
+        untagged = facts.proof?.untagged === true;
+        lenSafe = facts.lenSafe;
+      } else if (state !== null) {
+        expr = (args[0] ?? "").trim().slice(1);
+        kind = "map";
+        untagged = state[2] === "futures";
+        lenSafe = true;
+      } else {
+        continue;
+      }
+      let text;
+      if (name === "get_array_length" && args.length === 1) {
+        if (lenSafe)
+          text = `Value::Int(${expr}.len() as i64)`;
+      } else if (name === "in_op" && args.length === 2 && kind === "map") {
+        const key = r03KeyText(args[1]);
+        if (key !== void 0) {
+          text = key.startsWith('"') ? `matches!(&${expr}, Value::Dict(__d) if __d.contains_key(${key}))` : `matches!((&${expr}, &${key}), (Value::Dict(__d), Value::Str(__k)) if __d.contains_key(__k.as_ref()))`;
+        }
+      } else if ((name === "object_keys" || name === "object_values") && args.length === 1 && kind === "map" && untagged) {
+        const body = name === "object_keys" ? "__m.keys().map(|__k| Value::Str(__k.clone().into())).collect()" : "__m.values().cloned().collect()";
+        text = `Value::Array(${expr}.as_map().map(|__m| ${body}).unwrap_or_default())`;
+      }
+      if (text === void 0)
+        continue;
+      rewrites.push({ start, end: close + 1, text });
+    }
+    if (rewrites.length === 0)
+      break;
+    let out = "";
+    let at = 0;
+    for (const r of rewrites) {
+      if (r.start < at)
+        continue;
+      out += content.slice(at, r.start) + r.text;
+      at = r.end;
+    }
+    content = out + content.slice(at);
+  }
+  return content;
+}
+
+// src/rustPasses/hx10w2-R04.ts
+init_esm_shims();
+var BOOL_FNS = /* @__PURE__ */ new Set(["safe_bool", "safe_bool_k", "safe_bool_2", "get_arg_bool"]);
+var INT_FNS = /* @__PURE__ */ new Set(["safe_integer", "safe_integer_k", "safe_integer_2", "safe_int", "safe_timestamp"]);
+var STR_FNS = /* @__PURE__ */ new Set(["safe_string", "safe_string_k", "safe_string_2", "safe_string_lower", "safe_string_upper", "safe_string_lower_k", "safe_string_upper_k"]);
+var FLOAT_FNS = /* @__PURE__ */ new Set(["safe_float", "safe_float_k", "safe_number", "safe_number_k", "safe_number_2"]);
+function mask(content) {
+  const out = content.split("");
+  let i = 0;
+  while (i < out.length) {
+    if (out[i] === '"') {
+      let j = i + 1;
+      while (j < out.length && out[j] !== '"') {
+        if (out[j] === "\\")
+          j++;
+        j++;
+      }
+      for (let k = i + 1; k < j && k < out.length; k++)
+        out[k] = " ";
+      i = j + 1;
+      continue;
+    }
+    if (out[i] === "/" && out[i + 1] === "/") {
+      let j = i;
+      while (j < out.length && out[j] !== "\n") {
+        out[j] = " ";
+        j++;
+      }
+      i = j;
+      continue;
+    }
+    i++;
+  }
+  return out.join("");
+}
+function closeParen(masked, open) {
+  let depth = 0;
+  for (let i = open; i < masked.length; i++) {
+    const c = masked[i];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function splitTopLevel(src, sep) {
+  const parts = [];
+  let depth = 0;
+  let cur = "";
+  let inStr = false;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (inStr) {
+      cur += c;
+      if (c === "\\") {
+        cur += src[i + 1] ?? "";
+        i++;
+        continue;
+      }
+      if (c === '"')
+        inStr = false;
+      continue;
+    }
+    if (c === '"') {
+      inStr = true;
+      cur += c;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    if (c === sep && depth === 0) {
+      parts.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += c;
+  }
+  parts.push(cur);
+  return parts.map((p) => p.trim());
+}
+function stripOuter(src) {
+  let s = src.trim();
+  while (s.startsWith("(") && closeParen(s, 0) === s.length - 1)
+    s = s.slice(1, -1).trim();
+  return s;
+}
+function statementBefore(masked, pos) {
+  let depth = 0;
+  for (let i = pos; i > 0; i--) {
+    const c = masked[i - 1];
+    if (c === ")" || c === "]")
+      depth++;
+    else if (c === "(" || c === "[") {
+      if (depth > 0)
+        depth--;
+    } else if (depth === 0 && (c === ";" || c === "{" || c === "}" || c === "\n"))
+      return masked.slice(i, pos);
+  }
+  return masked.slice(0, pos);
+}
+function fnRegionOf(masked, pos) {
+  const heads = [0];
+  for (const m of masked.matchAll(/\n[ \t]*(?:pub )?(?:async )?fn /g))
+    heads.push(m.index + 1);
+  heads.push(masked.length);
+  let lo = 0;
+  for (let h = 0; h + 1 < heads.length; h++)
+    if (heads[h] <= pos)
+      lo = h;
+  const body = masked.slice(heads[lo], heads[lo + 1]);
+  const brace = body.indexOf("{");
+  return { start: heads[lo], end: heads[lo + 1], header: brace < 0 ? body : body.slice(0, brace) };
+}
+function rhsAfter(masked, from) {
+  let depth = 0;
+  for (let i = from; i < masked.length; i++) {
+    const c = masked[i];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === ";" && depth === 0)
+      return masked.slice(from, i).trim();
+  }
+  return "";
+}
+function stripTrailingOperand(s) {
+  let depth = 0;
+  for (let i = s.length - 1; i >= 0; i--) {
+    const c = s[i];
+    if (c === ")" || c === "]" || c === "}")
+      depth++;
+    else if (c === "(" || c === "[" || c === "{") {
+      if (depth === 0)
+        return s.slice(0, i);
+      depth--;
+      if (depth === 0 && !/[A-Za-z0-9_.)\]]/.test(s[i - 1] ?? ""))
+        return s.slice(0, i);
+    } else if (depth === 0) {
+      if (c === "&" && s[i - 1] === "&" || c === "|" && s[i - 1] === "|")
+        return s.slice(0, i - 1);
+      if (c === "," || c === ";" || c === "=")
+        return s.slice(0, i + 1);
+      if (/[A-Za-z0-9_.)]/.test(c)) {
+        let k = i;
+        while (k >= 0 && /[A-Za-z0-9_.]/.test(s[k]))
+          k--;
+        return k < 0 ? s : s.slice(0, k + 1);
+      }
+    }
+  }
+  return "";
+}
+function boolSlotAt(masked, start) {
+  let prefix = statementBefore(masked, start);
+  for (let hop = 0; hop < 60; hop++) {
+    prefix = prefix.replace(/[\s!]+$/, "");
+    if (/(?:^|[^\w])(?:if|while|for|assert|assert_eq)$/.test(prefix))
+      return true;
+    if (/Value::Bool\($/.test(prefix))
+      return true;
+    if (/(?:&&|\|\|)$/.test(prefix)) {
+      prefix = stripTrailingOperand(prefix.slice(0, -2));
+      continue;
+    }
+    if (/[^=!<>]=$/.test(prefix))
+      return /:\s*bool\s*=?$/.test(prefix.slice(0, -1));
+    if (/\($/.test(prefix)) {
+      prefix = prefix.slice(0, -1);
+      continue;
+    }
+    return false;
+  }
+  return false;
+}
+var UNION = ["bool", "null"];
+function variantOf(expr, masked, region, depth) {
+  const e = stripOuter(expr);
+  const lit = /^Value::(Bool|Int|Float|Str)\(/.exec(e);
+  if (lit !== null && closeParen(e, "Value::".length + lit[1].length) === e.length - 1) {
+    return /* @__PURE__ */ new Set([lit[1].toLowerCase()]);
+  }
+  if (e === "Value::Null" || e === "crate::Value::Null")
+    return /* @__PURE__ */ new Set(["null"]);
+  const call = /^self\.([a-z_][a-z0-9_]*)\(/.exec(e);
+  if (call !== null && closeParen(e, "self.".length + call[1].length) === e.length - 1) {
+    const name = call[1];
+    if (BOOL_FNS.has(name))
+      return safeBoolVariants(e, masked, region, depth);
+    if (INT_FNS.has(name))
+      return /* @__PURE__ */ new Set(["int", "null"]);
+    if (STR_FNS.has(name))
+      return /* @__PURE__ */ new Set(["str", "null"]);
+    if (FLOAT_FNS.has(name))
+      return /* @__PURE__ */ new Set(["float", "int", "null"]);
+    return void 0;
+  }
+  if (/^\(?if /.test(e) && e.includes("} else {")) {
+    const at = e.indexOf("} else {");
+    const a = variantOf(e.slice(e.indexOf("{") + 1, at), masked, region, depth);
+    const b = variantOf(e.slice(at + "} else {".length, e.lastIndexOf("}")), masked, region, depth);
+    if (a !== void 0 && b !== void 0)
+      return /* @__PURE__ */ new Set([...a, ...b]);
+  }
+  return void 0;
+}
+function safeBoolVariants(call, masked, region, depth) {
+  const open = call.indexOf("(");
+  const args = splitTopLevel(call.slice(open + 1, closeParen(call, open)), ",");
+  const list = /^&\[(.*)\]$/.exec(args[args.length - 1] ?? "");
+  if (list === null)
+    return void 0;
+  const items = list[1].trim();
+  if (items === "")
+    return new Set(UNION);
+  return boolDefault(items, masked, region, depth);
+}
+function boolDefault(expr, masked, region, depth) {
+  const e = stripOuter(expr);
+  if (/^Value::Bool\(/.test(e) || e === "Value::Null")
+    return new Set(UNION);
+  const name = /^([A-Za-z_][A-Za-z0-9_]*)(?:\.clone\(\))?$/.exec(e);
+  if (name === null)
+    return void 0;
+  const proof = proveLocal(masked, name[1], region, depth + 1);
+  if (proof.variants === void 0)
+    return void 0;
+  return [...proof.variants].every((v) => v === "bool" || v === "null") ? new Set(UNION) : void 0;
+}
+function proveLocal(masked, name, region, depth) {
+  if (depth > 3)
+    return { kind: "none" };
+  const body = masked.slice(region.start, region.end);
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const shadow = new RegExp(`(?<!\\|)\\|(?!\\|)[^|\\n]*\\b${esc}\\b[^|\\n]*(?<!\\|)\\|(?!\\|)|\\bfor [^\\n]*\\b${esc}\\b[^\\n]* in |\\blet \\([^)]*\\b${esc}\\b`);
+  if (shadow.test(body))
+    return { kind: "none" };
+  const types = /* @__PURE__ */ new Set();
+  const param = new RegExp(`\\b(?:mut )?${esc}\\s*:\\s*([A-Za-z_][A-Za-z0-9_<>]*)`).exec(region.header);
+  if (param !== null)
+    types.add(param[1]);
+  const writes = [];
+  const spans = [];
+  const letRe = new RegExp(`\\blet (?:mut )?${esc}\\b\\s*(?::\\s*([A-Za-z_][A-Za-z0-9_<>]*))?\\s*=`, "g");
+  for (const m of body.matchAll(letRe)) {
+    const at = m.index;
+    const rhs = rhsAfter(masked, region.start + at + m[0].length);
+    spans.push([at, at + m[0].length + rhs.length]);
+    if (m[1] !== void 0)
+      types.add(m[1]);
+    writes.push(rhs);
+  }
+  const assignRe = new RegExp(`(?<![A-Za-z0-9_.])${esc}\\s*=(?!=)`, "g");
+  for (const m of body.matchAll(assignRe)) {
+    const at = m.index;
+    if (spans.some(([s, e]) => at >= s && at < e))
+      continue;
+    writes.push(rhsAfter(masked, region.start + at + m[0].length));
+    types.add("?");
+  }
+  const only = [...types];
+  if (writes.length === 0 || only.some((t) => t !== "Value" && t !== "?"))
+    return { kind: "none" };
+  let acc = void 0;
+  for (const w of writes) {
+    const v = variantOf(w, masked, region, depth);
+    if (v === void 0)
+      return { kind: "none" };
+    acc = acc === void 0 ? v : new Set([...acc].filter((x) => v.has(x)));
+    if (acc.size === 0)
+      return { kind: "none" };
+  }
+  return acc === void 0 ? { kind: "none" } : { kind: "variant", variants: acc };
+}
+var isBoolOnly = (v) => [...v].every((x) => x === "bool" || x === "null");
+function pushEdit(edits, masked, start, close, text) {
+  let k = start - 1;
+  while (k >= 0 && (masked[k] === " " || masked[k] === "	"))
+    k--;
+  if (k >= 0 && masked[k] === "!" && masked[k - 1] !== "=") {
+    edits.push({ start: k, end: close + 1, text: text.replace(" == ", " != ") });
+    return;
+  }
+  edits.push({ start, end: close + 1, text });
+}
+function r04Scalars(content) {
+  if (!content.includes("is_true(&") && !content.includes("is_equal(&"))
+    return content;
+  const masked = mask(content);
+  const edits = [];
+  for (const m of masked.matchAll(/(?<![A-Za-z0-9_:.])(is_true|is_equal)\(&/g)) {
+    const start = m.index;
+    const open = start + m[1].length;
+    const close = closeParen(masked, open);
+    if (close < 0)
+      continue;
+    if (!boolSlotAt(masked, start))
+      continue;
+    const args = splitTopLevel(content.slice(open + 1, close), ",");
+    const region = fnRegionOf(masked, start);
+    const proofOf2 = (e) => {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(e))
+        return void 0;
+      return proveLocal(masked, e, region, 0).variants;
+    };
+    if (m[1] === "is_true") {
+      if (args.length !== 1)
+        continue;
+      const operand = stripOuter(args[0].replace(/^&/, ""));
+      const variants = proofOf2(operand);
+      if (variants === void 0 || !isBoolOnly(variants))
+        continue;
+      pushEdit(edits, masked, start, close, `${operand}.as_bool() == Some(true)`);
+      continue;
+    }
+    if (args.length !== 2)
+      continue;
+    const a = stripOuter(args[0].replace(/^&/, ""));
+    const b = stripOuter(args[1].replace(/^&/, ""));
+    const lit = (e) => e === "Value::Null" || /^Value::Bool\((?:true|false)\)$/.test(e);
+    if (lit(a) && lit(b))
+      continue;
+    const va = lit(a) ? new Set(UNION) : proofOf2(a);
+    const vb = lit(b) ? new Set(UNION) : proofOf2(b);
+    if (va === void 0 || vb === void 0 || !isBoolOnly(va) || !isBoolOnly(vb))
+      continue;
+    const asOption = (e) => {
+      const box = /^Value::Bool\((true|false)\)$/.exec(e);
+      if (box !== null)
+        return `Some(${box[1]})`;
+      return e === "Value::Null" ? "None" : `${e}.as_bool()`;
+    };
+    pushEdit(edits, masked, start, close, `${asOption(a)} == ${asOption(b)}`);
+  }
+  if (edits.length === 0)
+    return content;
+  let out = "";
+  let at = 0;
+  for (const e of edits) {
+    if (e.start < at)
+      continue;
+    out += content.slice(at, e.start) + e.text;
+    at = e.end;
+  }
+  return out + content.slice(at);
+}
+
+// src/rustPasses/hx10w2-R08.ts
+init_esm_shims();
+var FIELDS_ARR = [
+  "options",
+  "urls",
+  "markets",
+  "markets_by_id",
+  "currencies",
+  "currencies_by_id",
+  "commonCurrencies",
+  "baseCurrencies",
+  "quoteCurrencies",
+  "timeframes",
+  "precision",
+  "limits",
+  "fees",
+  "has",
+  "exceptions",
+  "features",
+  "api",
+  "accounts",
+  "accountsById",
+  "tokenBucket",
+  "headers",
+  "requiredCredentials",
+  "networkAliases",
+  "balance",
+  "positions",
+  "ohlcvs",
+  "tickers",
+  "bidsasks",
+  "orderbooks",
+  "trades",
+  "orders",
+  "myTrades",
+  "liquidations",
+  "myLiquidations",
+  "fundingRates",
+  "triggerOrders",
+  "transactions",
+  "clients"
+];
+var PLAIN_VALUES = /^(?:options|urls|markets|markets_by_id|currencies|currencies_by_id|commonCurrencies|baseCurrencies|quoteCurrencies|timeframes|precision|limits|fees|has|exceptions|features|api|accounts|accountsById|tokenBucket|headers|requiredCredentials|networkAliases|balance|transactions)$/;
+var DICT_VALUES = /^(?:ohlcvs|tickers|bidsasks|orderbooks|trades|orders|myTrades|liquidations|myLiquidations|fundingRates|triggerOrders|positions|clients)$/;
+var MARKER_KEYS2 = /^(?:timestamp|datetime|nonce|symbol|checksum|cache|hashmap|subscriptions|futures)$/;
+var RECV = "self\\.(?:(?:core|parent)\\.)*(" + FIELDS_ARR.join("|") + ")";
+var STR_KEY = '&Value::Str\\("((?:[^"\\\\]|\\\\.)*)"\\.(?:into|to_string)\\(\\)\\)';
+var NATIVE_TAIL = /\.cloned\(\)\.unwrap_or\(Value::Null\)$/;
+var NULL = "Value::Null";
+function maskSrc(src) {
+  const out = src.split("");
+  const blank = (from, to) => {
+    for (let i2 = from; i2 < to && i2 < out.length; i2++)
+      if (out[i2] !== "\n")
+        out[i2] = " ";
+  };
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      const end = src.indexOf("\n", i);
+      const stop = end < 0 ? src.length : end;
+      blank(i, stop);
+      i = stop;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      const end = src.indexOf("*/", i + 2);
+      const stop = end < 0 ? src.length : end + 2;
+      blank(i, stop);
+      i = stop;
+      continue;
+    }
+    if (c === "'") {
+      const m = /^'(?:\\.|[^\\'])'/.exec(src.slice(i, i + 4));
+      if (m !== null) {
+        i += m[0].length;
+        continue;
+      }
+    }
+    if (c === '"') {
+      let j = i + 1;
+      while (j < src.length) {
+        if (src[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (src[j] === '"')
+          break;
+        j++;
+      }
+      blank(i, Math.min(j + 1, src.length));
+      i = j + 1;
+      continue;
+    }
+    i++;
+  }
+  return out.join("");
+}
+function argSpans(masked, open) {
+  let depth = 0;
+  const spans = [];
+  let start = open + 1;
+  for (let j = open; j < masked.length; j++) {
+    const c = masked[j];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0) {
+        spans.push([start, j]);
+        return spans;
+      }
+    } else if (c === "," && depth === 1) {
+      spans.push([start, j]);
+      start = j + 1;
+    }
+  }
+  return void 0;
+}
+function callEnd(masked, open) {
+  let depth = 0;
+  for (let j = open; j < masked.length; j++) {
+    const c = masked[j];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0)
+        return j + 1;
+    }
+  }
+  return -1;
+}
+function isStatement2(masked, from, to) {
+  let k = to;
+  while (k < masked.length && (masked[k] === " " || masked[k] === "	"))
+    k++;
+  if (masked[k] !== ";")
+    return false;
+  let s = from - 1;
+  while (s >= 0 && (masked[s] === " " || masked[s] === "	" || masked[s] === "\n"))
+    s--;
+  return s < 0 || "{};".indexOf(masked[s]) >= 0;
+}
+function receiverOf(arg) {
+  const e = arg.trim().replace(/^&\s*/, "").trim();
+  const direct = new RegExp("^" + RECV + "$");
+  if (direct.test(e))
+    return { text: e, chained: false };
+  const head = new RegExp("^" + RECV + "\\.as_map\\(\\)\\.and_then\\(\\|__m\\|");
+  if (head.test(e) && NATIVE_TAIL.test(e))
+    return { text: e, chained: true };
+  return void 0;
+}
+function rootField(text) {
+  const m = new RegExp("^" + RECV).exec(text.trim());
+  return m === null ? "" : m[1];
+}
+function runPass(content) {
+  if (!content.includes("self."))
+    return content;
+  const masked = maskSrc(content);
+  const callRe = /(?<![A-Za-z0-9_:.])(add_element_to_object|get_value|in_op)\(/g;
+  const rws = [];
+  let m;
+  while ((m = callRe.exec(masked)) !== null) {
+    const name = m[1];
+    const open = m.index + name.length;
+    const spans = argSpans(masked, open);
+    if (spans === void 0)
+      continue;
+    const end = callEnd(masked, open);
+    if (end < 0)
+      continue;
+    const raw = spans.map(function(sp) {
+      return content.slice(sp[0], sp[1]).trim();
+    });
+    if (name === "get_value" || name === "in_op") {
+      if (spans.length !== 2)
+        continue;
+      const recv = receiverOf(raw[0]);
+      if (recv === void 0)
+        continue;
+      if (/&mut\s*$/.test(masked.slice(Math.max(0, m.index - 5), m.index)))
+        continue;
+      const plainValues = PLAIN_VALUES.test(rootField(recv.text));
+      const lit2 = new RegExp("^" + STR_KEY + "$").exec(raw[1]);
+      if (lit2 !== null) {
+        const k = lit2[1];
+        if (recv.chained && !plainValues && (k === "" || /^[0-9]+$/.test(k) || MARKER_KEYS2.test(k)))
+          continue;
+        rws.push({
+          start: m.index,
+          end,
+          text: name === "get_value" ? recv.text + '.as_map().and_then(|__m| __m.get("' + k + '")).cloned().unwrap_or(' + NULL + ")" : recv.text + '.as_map().is_some_and(|__m| __m.contains_key("' + k + '"))'
+        });
+        continue;
+      }
+      if (recv.chained && (name === "get_value" || !DICT_VALUES.test(rootField(recv.text))))
+        continue;
+      const dynKey = /^&\s*(.+)$/.exec(raw[1]);
+      if (dynKey === null)
+        continue;
+      const keyText = dynKey[1].trim();
+      if (/^Value::(?:Str|Int|Float|Bool|Null)\(/.test(keyText) || keyText === "Value::Null")
+        continue;
+      rws.push({
+        start: m.index,
+        end,
+        text: name === "get_value" ? recv.text + ".as_map().and_then(|__m| " + keyText + ".as_str().and_then(|__k| __m.get(__k))).cloned().unwrap_or(" + NULL + ")" : recv.text + ".as_map().is_some_and(|__m| " + keyText + ".as_str().is_some_and(|__k| __m.contains_key(__k)))"
+      });
+      continue;
+    }
+    if (spans.length !== 3)
+      continue;
+    if (!isStatement2(masked, m.index, end))
+      continue;
+    const lit = new RegExp("^" + STR_KEY + "$").exec(raw[1]);
+    if (lit === null)
+      continue;
+    const value = raw[2];
+    if (/\bself\b/.test(value))
+      continue;
+    const inner = new RegExp("^get_value_mut\\(\\s*&mut\\s+(" + RECV + ")\\s*,\\s*" + STR_KEY + "\\s*\\)$").exec(raw[0]);
+    if (inner !== null) {
+      rws.push({
+        start: m.index,
+        end,
+        text: "if let Value::Dict(__r08a) = &mut " + inner[1] + ' { let __r08e = std::sync::Arc::make_mut(__r08a).entry("' + inner[inner.length - 1] + '".to_string()).or_insert(' + NULL + '); if let Value::Dict(__r08b) = __r08e { std::sync::Arc::make_mut(__r08b).insert("' + lit[1] + '".to_string(), ' + value + "); } }"
+      });
+      continue;
+    }
+    const direct = new RegExp("^&mut\\s+(" + RECV + ")$").exec(raw[0]);
+    if (direct === null)
+      continue;
+    rws.push({
+      start: m.index,
+      end,
+      text: "if let Value::Dict(__r08d) = &mut " + direct[1] + ' { std::sync::Arc::make_mut(__r08d).insert("' + lit[1] + '".to_string(), ' + value + "); }"
+    });
+  }
+  if (rws.length === 0)
+    return content;
+  rws.sort(function(a, b) {
+    return a.start - b.start;
+  });
+  let out = "";
+  let at = 0;
+  for (const r of rws) {
+    if (r.start < at)
+      continue;
+    out += content.slice(at, r.start) + r.text;
+    at = r.end;
+  }
+  return out + content.slice(at);
+}
+function hx10w2R08(content) {
+  let out = content;
+  for (let i = 0; i < 3; i++) {
+    const next = runPass(out);
+    if (next === out)
+      break;
+    out = next;
+  }
+  return out;
+}
+
+// src/rustPasses/hx10w2-r06.ts
+init_esm_shims();
+var R06_HELPER = "append_to_array";
+var R06_MAX_LINE = 400;
+var R06_CALL_RX = new RegExp("(?<![\\w.:])" + R06_HELPER + "\\(", "g");
+var R06_ARR_INIT = [
+  /^Value::from\(vec!\[/,
+  /^Value::from\(Vec::new\(\)\)$/,
+  /^Value::Null$/,
+  /^\(match [\s\S]*Some\(__v\) if matches!\(__v, Value::Arr\(_\)\) => __v, _ => Value::from\(vec!\[/
+];
+function r06MaskText(src) {
+  const out = [];
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      while (i < n && src[i] !== "\n") {
+        out.push(" ");
+        i++;
+      }
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      out.push("  ");
+      i += 2;
+      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) {
+        out.push(src[i] === "\n" ? "\n" : " ");
+        i++;
+      }
+      if (i < n) {
+        out.push("  ");
+        i += 2;
+      }
+      continue;
+    }
+    if (c === '"') {
+      out.push(" ");
+      i++;
+      while (i < n && src[i] !== '"') {
+        if (src[i] === "\\") {
+          out.push("  ");
+          i += 2;
+          continue;
+        }
+        out.push(src[i] === "\n" ? "\n" : " ");
+        i++;
+      }
+      if (i < n) {
+        out.push(" ");
+        i++;
+      }
+      continue;
+    }
+    out.push(c);
+    i++;
+  }
+  return out.join("");
+}
+function r06FnRegions(masked) {
+  const regions = [];
+  const head = /\bfn\s+[A-Za-z0-9_]*\s*[(<]/g;
+  let m;
+  while ((m = head.exec(masked)) !== null) {
+    let i = m.index + m[0].length - 1;
+    let depth = 0;
+    let open = -1;
+    while (i < masked.length) {
+      const c = masked[i];
+      if (c === "(" || c === "[" || c === "<")
+        depth++;
+      else if (c === ")" || c === "]" || c === ">")
+        depth--;
+      else if (c === "{") {
+        if (depth <= 0) {
+          open = i;
+          break;
+        }
+        depth++;
+      } else if (c === ";" && depth <= 0)
+        break;
+      i++;
+    }
+    if (open < 0)
+      continue;
+    let close = -1;
+    let d = 0;
+    for (let j = open; j < masked.length; j++) {
+      if (masked[j] === "{")
+        d++;
+      else if (masked[j] === "}") {
+        d--;
+        if (d === 0) {
+          close = j;
+          break;
+        }
+      }
+    }
+    if (close > open)
+      regions.push([open, close]);
+  }
+  return regions;
+}
+function r06CloseParen(src, open) {
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    const c = src[i];
+    if (c === "(")
+      depth++;
+    else if (c === ")") {
+      depth--;
+      if (depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function r06ExprEnd(masked, from) {
+  let depth = 0;
+  for (let i = from; i < masked.length; i++) {
+    const c = masked[i];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === ";" && depth <= 0)
+      return i;
+  }
+  return -1;
+}
+function r06IsArrInit(init) {
+  const t = init.trim();
+  return R06_ARR_INIT.some((rx) => rx.test(t));
+}
+function r06Bal(s) {
+  let d = 0;
+  for (const c of s) {
+    if (c === "(" || c === "[" || c === "{")
+      d++;
+    else if (c === ")" || c === "]" || c === "}") {
+      d--;
+      if (d < 0)
+        return false;
+    }
+  }
+  return d === 0;
+}
+function r06GuardClone(masked, rhs, stmtStart, rhsEnd) {
+  const m = /^([A-Za-z_][A-Za-z0-9_]*)\.clone\(\)$/.exec(rhs.trim());
+  if (m === null)
+    return false;
+  const open = masked.lastIndexOf("{", stmtStart);
+  if (open < 0 || masked.slice(open + 1, stmtStart).trim() !== "" || !/^\s*\}/.test(masked.slice(rhsEnd + 1)))
+    return false;
+  const ifStart = masked.lastIndexOf("if", open);
+  if (ifStart < 0 || /[\w.]/.test(masked[ifStart - 1] ?? ""))
+    return false;
+  let cond = masked.slice(ifStart + 2, open).trim();
+  while (cond.startsWith("(") && cond.endsWith(")") && r06Bal(cond.slice(1, -1)))
+    cond = cond.slice(1, -1).trim();
+  const cm = /^matches!\(\s*&\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*Value::Arr\(_\)\s*\)$/.exec(cond);
+  return cm !== null && cm[1] === m[1];
+}
+function r06Push(content) {
+  if (!content.includes(R06_HELPER + "("))
+    return content;
+  const masked = r06MaskText(content);
+  const regions = r06FnRegions(masked);
+  const jobs = [];
+  const rx = new RegExp(R06_CALL_RX.source, "g");
+  let m;
+  while ((m = rx.exec(masked)) !== null) {
+    const start = m.index;
+    const lineStart = masked.lastIndexOf("\n", start) + 1;
+    if (/^\s*(?:pub\s+)?fn /.test(masked.slice(lineStart, start)))
+      continue;
+    const region = regions.find((r) => r[0] < start && start < r[1]);
+    if (region === void 0)
+      continue;
+    const argStart = start + R06_HELPER.length + 1;
+    const recv = /^&mut\s+([A-Za-z_][A-Za-z0-9_]*)\s*,/.exec(content.slice(argStart, argStart + 120));
+    if (recv === null)
+      continue;
+    const name = recv[1];
+    const nameRx = new RegExp("(?<![\\w.])" + name + "(?![\\w])");
+    const headerStart = masked.lastIndexOf("fn ", region[0]);
+    if (new RegExp("(?<![\\w])" + name + "\\s*:").test(masked.slice(headerStart, region[0])))
+      continue;
+    const declRx = new RegExp("let (?:mut )?" + name + "\\s*:\\s*([^=;]+?)\\s*=(?!=)", "g");
+    const decls = [];
+    let d;
+    const head = masked.slice(0, start);
+    while ((d = declRx.exec(head)) !== null) {
+      if (d.index <= region[0])
+        continue;
+      if (d[1].trim() !== "Value") {
+        decls.length = 0;
+        break;
+      }
+      const initStart = d.index + d[0].length;
+      const initEnd = r06ExprEnd(masked, initStart);
+      if (initEnd < 0) {
+        decls.length = 0;
+        break;
+      }
+      decls.push({ start: d.index, initStart, initEnd });
+    }
+    if (decls.length === 0)
+      continue;
+    if (!decls.every((x) => r06IsArrInit(content.slice(x.initStart, x.initEnd))))
+      continue;
+    const useRx = new RegExp(nameRx.source, "g");
+    const body = masked.slice(region[0], region[1]);
+    let u;
+    let ok = true;
+    while ((u = useRx.exec(body)) !== null) {
+      const s = region[0] + u.index;
+      const e = s + name.length;
+      if (decls.some((x) => s >= x.start && s < x.initEnd))
+        continue;
+      const before = masked.slice(Math.max(0, s - 40), s);
+      const after = masked.slice(e, e + 80);
+      if (/&mut\s*$/.test(before)) {
+        if (!(new RegExp(R06_HELPER + "\\(\\s*&mut\\s*$").test(before) && /^\s*,/.test(after))) {
+          ok = false;
+          break;
+        }
+        continue;
+      }
+      const assign = /^\s*=(?!=)/.exec(after);
+      if (assign !== null) {
+        const rhsStart = e + assign[0].length;
+        const rhsEnd = r06ExprEnd(masked, rhsStart);
+        if (rhsEnd < 0) {
+          ok = false;
+          break;
+        }
+        let aStart = masked.lastIndexOf(";", s);
+        aStart = Math.max(aStart, masked.lastIndexOf("{", s), masked.lastIndexOf("}", s)) + 1;
+        const init = content.slice(rhsStart, rhsEnd);
+        if (!r06IsArrInit(init) && !r06GuardClone(masked, init, aStart, rhsEnd)) {
+          ok = false;
+          break;
+        }
+      }
+    }
+    if (!ok)
+      continue;
+    const callEnd4 = r06CloseParen(masked, argStart - 1);
+    if (callEnd4 < 0)
+      continue;
+    const valueStart = argStart + recv[0].length;
+    const value = content.slice(valueStart, callEnd4);
+    if (nameRx.test(value))
+      continue;
+    let stmtStart = masked.lastIndexOf(";", start);
+    stmtStart = Math.max(stmtStart, masked.lastIndexOf("{", start), masked.lastIndexOf("}", start)) + 1;
+    if (masked.slice(stmtStart, start).trim() !== "")
+      continue;
+    if (!/^\)\s*;/.test(masked.slice(callEnd4, callEnd4 + 4)))
+      continue;
+    const text = `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${value.trim()}); }`;
+    const lStart = content.lastIndexOf("\n", start) + 1;
+    const lEnd = content.indexOf("\n", callEnd4) < 0 ? content.length : content.indexOf("\n", callEnd4);
+    const lenNow = lEnd - lStart;
+    if (lenNow <= R06_MAX_LINE && lenNow - (callEnd4 + 1 - start) + text.length > R06_MAX_LINE)
+      continue;
+    jobs.push({ start, end: callEnd4 + 1, text });
+  }
+  if (jobs.length === 0)
+    return content;
+  let out = content;
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const j = jobs[i];
+    out = out.slice(0, j.start) + j.text + out.slice(j.end);
+  }
+  return out;
+}
+
+// src/rustPasses/hx10w3-R01.ts
+init_esm_shims();
+var STR_LIT = String.raw`"(?:[^"\\]|\\.)*"`;
+function maskText2(src) {
+  let out = "";
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      while (i < src.length && src[i] !== "\n") {
+        out += " ";
+        i++;
+      }
+      continue;
+    }
+    if (c === '"') {
+      out += " ";
+      i++;
+      while (i < src.length && src[i] !== '"') {
+        if (src[i] === "\n") {
+          out += "\n";
+          i++;
+          continue;
+        }
+        if (src[i] === "\\") {
+          out += "  ";
+          i += 2;
+          continue;
+        }
+        out += " ";
+        i++;
+      }
+      if (i < src.length) {
+        out += " ";
+        i++;
+      }
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
+}
+function closeParen2(masked, open) {
+  let depth = 0;
+  for (let k = open; k < masked.length; k++) {
+    const c = masked[k];
+    if (c === "(")
+      depth++;
+    else if (c === ")") {
+      depth--;
+      if (depth === 0)
+        return k + 1;
+    }
+  }
+  return -1;
+}
+function closeAt(src, open) {
+  const openCh = src[open];
+  const closeCh = openCh === "(" ? ")" : openCh === "[" ? "]" : "}";
+  let depth = 0;
+  for (let k = open; k < src.length; k++) {
+    const c = src[k];
+    if (c === openCh)
+      depth++;
+    else if (c === closeCh) {
+      depth--;
+      if (depth === 0)
+        return k + 1;
+    }
+  }
+  return -1;
+}
+function closeBrace(masked, open) {
+  let depth = 0;
+  for (let k = open; k < masked.length; k++) {
+    const c = masked[k];
+    if (c === "{")
+      depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0)
+        return k + 1;
+    }
+  }
+  return -1;
+}
+function stmtEnd(masked, from) {
+  let depth = 0;
+  for (let k = from; k < masked.length; k++) {
+    const c = masked[k];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth < 0)
+        return -1;
+    } else if (c === ";" && depth === 0)
+      return k;
+  }
+  return -1;
+}
+function splitArgs2(masked, from, to) {
+  const args = [];
+  let depth = 0;
+  let start = from;
+  for (let k = from; k < to; k++) {
+    const c = masked[k];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      args.push(masked.slice(start, k));
+      start = k + 1;
+    }
+  }
+  args.push(masked.slice(start, to));
+  return args;
+}
+function openerMap(masked) {
+  const kind = new Uint8Array(masked.length);
+  const at = new Int32Array(masked.length).fill(-1);
+  const stack = [];
+  for (let i = 0; i < masked.length; i++) {
+    const c = masked[i];
+    if (c === "(")
+      stack.push({ kind: 1, at: i });
+    else if (c === "[")
+      stack.push({ kind: masked[i - 1] === "&" ? 3 : 2, at: i });
+    else if (c === "{")
+      stack.push({ kind: 4, at: i });
+    else if (c === ")" || c === "]" || c === "}") {
+      if (stack.length > 0)
+        stack.pop();
+    }
+    const top = stack[stack.length - 1];
+    kind[i] = top === void 0 ? 0 : top.kind;
+    at[i] = top === void 0 ? -1 : top.at;
+  }
+  return { kind, at };
+}
+var KEYWORDS = /* @__PURE__ */ new Set(["if", "while", "match", "return", "for", "in", "else", "loop", "not"]);
+function valueSlot(masked, content, s, name, open) {
+  const kind = open.kind[s];
+  if (kind !== 1 && kind !== 2 && kind !== 3)
+    return 0;
+  if (kind === 1) {
+    const head = masked.slice(Math.max(0, open.at[s] - 40), open.at[s]);
+    const word = /([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(head);
+    if (word === null || KEYWORDS.has(word[1]))
+      return 0;
+    const ctor = /Value::([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(head);
+    if (ctor !== null)
+      return 0;
+  }
+  let k = s - 1;
+  while (k >= 0 && /\s/.test(masked[k]))
+    k--;
+  if (masked[k] === "&" || masked[k] === "." || masked[k] === "!")
+    return 0;
+  if (/\bmut\s+$/.test(masked.slice(Math.max(0, s - 8), s)))
+    return 0;
+  const after = content.slice(s + name.length);
+  const m = /^(?:\.clone\(\))?\s*[,)\];]/.exec(after);
+  if (m === null)
+    return 0;
+  return after.startsWith(".clone()") ? 2 : 1;
+}
+var FN_HEADER = /(?:^|\n)[ \t]*(?:pub(?:\([a-z]+\))? )?(?:async )?fn /g;
+function fnRegions2(masked) {
+  const heads = [0];
+  for (const m of masked.matchAll(FN_HEADER))
+    heads.push(m.index + 1);
+  return heads;
+}
+var RUST_TYPE = {
+  "String": "String",
+  "Int": "i64",
+  "Float": "f64",
+  "Bool": "bool",
+  "Vec": "Vec<Value>",
+  "Map": "indexmap::IndexMap<String, Value>"
+};
+function boxed(shape, expr) {
+  switch (shape) {
+    case "String":
+      return `Value::str(${expr})`;
+    case "Int":
+      return `Value::Int(${expr})`;
+    case "Float":
+      return `Value::Float(${expr})`;
+    case "Bool":
+      return `Value::Bool(${expr})`;
+    case "Vec":
+      return `Value::Array(${expr})`;
+    case "Map":
+      return `Value::Map(${expr})`;
+  }
+}
+function initShape(init) {
+  const pinned = (head, shape) => {
+    if (!init.startsWith(head))
+      return void 0;
+    const open = head.length - 1;
+    const close = closeAt(init, open);
+    if (close < 0)
+      return void 0;
+    const inner = init.slice(open + 1, close - 1);
+    if (inner.trim() === "" || inner.trim().startsWith("Value::"))
+      return void 0;
+    return { shape, inner, wrapperEnd: close };
+  };
+  for (const [head, shape] of [
+    ["Value::Str(", "String"],
+    ["Value::Int(", "Int"],
+    ["Value::Float(", "Float"],
+    ["Value::Bool(", "Bool"],
+    ["Value::Map(", "Map"]
+  ]) {
+    const hit = pinned(head, shape);
+    if (hit !== void 0)
+      return hit;
+  }
+  for (const head of ["Value::Array(", "Value::List(", "Value::from("]) {
+    if (!init.startsWith(head))
+      continue;
+    const close = closeAt(init, head.length - 1);
+    if (close < 0)
+      return void 0;
+    const inner = init.slice(head.length, close - 1);
+    if (!inner.startsWith("vec![") || closeAt(inner, 4) !== inner.length)
+      return void 0;
+    return { shape: "Vec", inner, wrapperEnd: close };
+  }
+  if (init.startsWith("vec![")) {
+    const close = closeAt(init, 4);
+    if (close !== init.length)
+      return void 0;
+    return { shape: "Vec", inner: init.slice(5, close - 1), wrapperEnd: close };
+  }
+  return void 0;
+}
+function rebound(region, name) {
+  const n = name;
+  const rx = new RegExp(
+    `\\blet\\s+(?:mut\\s+)?${n}\\b|\\bfor\\s+(?:mut\\s+)?${n}\\b|\\|\\s*(?:mut\\s+)?${n}\\s*[:|,]|\\blet\\s*\\([^)]*\\b${n}\\b|\\b${n}\\s*@|\\b${n}\\b[^;\\n]*=>`
+  );
+  return rx.test(region);
+}
+function classify(shape, ctx, masked, content, where) {
+  const { name, useStart: s, before, after } = ctx;
+  const open = where;
+  const nameEnd = s + name.length;
+  const boxStr = `&Value::Str\\(\\s*(${STR_LIT})\\s*(?:\\.into\\(\\)|\\.to_string\\(\\))?\\s*\\)`;
+  const boxInt = `&Value::Int\\(\\s*(-?\\d+)\\s*\\)`;
+  const boxFlt = `&Value::Float\\(\\s*(-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)\\s*\\)`;
+  const boxNum = shape === "Int" ? boxInt : boxFlt;
+  const numeric = shape === "Int" || shape === "Float";
+  const eqOp = (op, lit, len, prefix) => {
+    const start = s - prefix.length;
+    return [{ start, end: nameEnd + len, text: `(${name} ${op} ${lit})` }];
+  };
+  if (shape === "String" && before.endsWith("is_equal(&")) {
+    const m = new RegExp(`^,\\s*${boxStr}\\)`).exec(after);
+    if (m !== null)
+      return eqOp("==", m[1], m[0].length, "is_equal(&");
+  }
+  if (numeric && before.endsWith("is_equal(&")) {
+    const m = new RegExp(`^,\\s*${boxNum}\\)`).exec(after);
+    if (m !== null)
+      return eqOp("==", m[1], m[0].length, "is_equal(&");
+  }
+  if (numeric) {
+    const cmp = [
+      ["is_less_than(&", "<"],
+      ["is_greater_than(&", ">"],
+      ["is_less_than_or_equal(&", "<="],
+      ["is_greater_than_or_equal(&", ">="]
+    ];
+    for (const [prefix, op] of cmp) {
+      if (!before.endsWith(prefix))
+        continue;
+      const m = new RegExp(`^,\\s*${boxNum}\\)`).exec(after);
+      if (m !== null)
+        return eqOp(op, m[1], m[0].length, prefix);
+    }
+  }
+  if (shape === "String" && before.endsWith("to_string_val(&") && after.startsWith(")")) {
+    return [{ start: s - "to_string_val(&".length, end: nameEnd + 1, text: `${name}.clone()` }];
+  }
+  if (shape === "String") {
+    for (const [prefix, method] of [["ends_with(&", "ends_with"], ["starts_with(&", "starts_with"]]) {
+      if (!before.endsWith(prefix))
+        continue;
+      const m = new RegExp(`^,\\s*${boxStr}\\)`).exec(after);
+      if (m !== null) {
+        const start = s - prefix.length;
+        return [{ start, end: nameEnd + m[0].length, text: `${name}.${method}(${m[1]})` }];
+      }
+    }
+  }
+  if (shape === "Bool" && before.endsWith("is_true(&") && after.startsWith(")")) {
+    return [{ start: s - "is_true(&".length, end: nameEnd + 1, text: name }];
+  }
+  if (shape === "Bool") {
+    const m = /^\.as_bool\(\)\s*(==|!=)\s*Some\((true|false)\)/.exec(after);
+    if (m !== null) {
+      const eq = m[1] === "==";
+      const positive = m[2] === "true";
+      return [{ start: s, end: nameEnd + m[0].length, text: eq === positive ? name : `!${name}` }];
+    }
+  }
+  if (shape === "Vec" && before.endsWith("get_array_length(&") && after.startsWith(")")) {
+    return [{ start: s - "get_array_length(&".length, end: nameEnd + 1, text: `Value::Int(${name}.len() as i64)` }];
+  }
+  if (shape === "Vec" && before.endsWith("append_to_array(&mut ") && after.startsWith(",")) {
+    const open2 = s - "(&mut ".length;
+    const close = closeParen2(masked, open2);
+    if (close > 0) {
+      const args = splitArgs2(masked, open2 + 1, close - 1);
+      if (args !== void 0 && args.length === 2) {
+        const val = content.slice(open2 + 1 + args[0].length + 1, close - 1).trim();
+        return [{ start: open2 - "append_to_array".length, end: close, text: `${name}.push(${val})` }];
+      }
+    }
+  }
+  if (shape === "Vec" && before.endsWith("= &mut ")) {
+    const varM = /if let Value::Arr\((\w+)\) = &mut $/.exec(before);
+    if (varM !== null) {
+      const stmtStart = s - varM[0].length;
+      const brace = masked.indexOf("{", nameEnd);
+      const close = brace < 0 ? -1 : closeBrace(masked, brace);
+      const head = `std::sync::Arc::make_mut(${varM[1]}).push(`;
+      if (close > 0) {
+        const rel = masked.slice(brace + 1, close - 1).indexOf(head);
+        if (rel >= 0) {
+          const pushOpen = brace + 1 + rel + head.length - 1;
+          const pushClose = closeParen2(masked, pushOpen);
+          if (pushClose > 0) {
+            const val = content.slice(pushOpen + 1, pushClose - 1).trim();
+            return [{ start: stmtStart, end: close, text: `${name}.push(${val});` }];
+          }
+        }
+      }
+    }
+  }
+  if (shape === "Map" && before.endsWith("get_value(&")) {
+    const m = new RegExp(`^,\\s*${boxStr}\\)`).exec(after);
+    if (m !== null) {
+      const start = s - "get_value(&".length;
+      return [{ start, end: nameEnd + m[0].length, text: `${name}.get(${m[1]}).cloned().unwrap_or(Value::Null)` }];
+    }
+  }
+  if (shape === "Map" && before.endsWith("in_op(&")) {
+    const m = new RegExp(`^,\\s*${boxStr}\\)`).exec(after);
+    if (m !== null) {
+      const start = s - "in_op(&".length;
+      return [{ start, end: nameEnd + m[0].length, text: `${name}.contains_key(${m[1]})` }];
+    }
+  }
+  if (shape === "Map" && before.endsWith("add_element_to_object(&mut ")) {
+    const m = new RegExp(`^,\\s*${boxStr}\\s*,`).exec(after);
+    if (m !== null) {
+      const open2 = s - "(&mut ".length;
+      const close = closeParen2(masked, open2);
+      if (close > 0) {
+        const args = splitArgs2(masked, open2 + 1, close - 1);
+        if (args !== void 0 && args.length === 3) {
+          const val = content.slice(open2 + 1 + args[0].length + 1 + args[1].length + 1, close - 1).trim();
+          return [{ start: open2 - "add_element_to_object".length, end: close, text: `${name}.insert(${m[1]}.to_string(), ${val})` }];
+        }
+      }
+    }
+  }
+  if (shape === "Bool" && open.kind[s] === 1 && /matches!$/.test(masked.slice(Math.max(0, open.at[s] - 12), open.at[s]))) {
+    const m = /^,\s*Value::Bool\(\s*(true|false)\s*\)\)/.exec(after);
+    const start = s - "matches!(&".length;
+    if (m !== null) {
+      const positive = m[1] === "true";
+      return [{ start, end: nameEnd + m[0].length, text: positive ? name : `!${name}` }];
+    }
+  }
+  if (shape === "String" && before.endsWith("Value::str(") && (after.startsWith(")") || after.startsWith(".clone())") || after.startsWith(".to_string())")))
+    return [];
+  if (shape === "String" && after.startsWith(".as_str()")) {
+    const m = /^\.as_str\(\)\s*(==|!=)\s*Some\(\s*("(?:[^"\\]|\\.)*")\s*\)/.exec(after);
+    if (m !== null)
+      return [{ start: s, end: nameEnd + m[0].length, text: `(${name} ${m[1]} ${m[2]})` }];
+    const rev = /^\.as_str\(\)\s*(==|!=)\s*Some\(\s*("(?:[^"\\]|\\.)*")\s*\.to_string\(\)\s*\)/.exec(after);
+    if (rev !== null)
+      return [{ start: s, end: nameEnd + rev[0].length, text: `(${name} ${rev[1]} ${rev[2]})` }];
+  }
+  if (numeric && after.startsWith(".as_f64()")) {
+    const plain = shape === "Float" ? name : `(${name} as f64)`;
+    const nan = /^\.as_f64\(\)\.unwrap_or\(f64::NAN\)/.exec(after);
+    if (nan !== null)
+      return [{ start: s, end: nameEnd + nan[0].length, text: plain }];
+    const some = /^\.as_f64\(\)\s*(==|!=)\s*Some\(\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*\)/.exec(after);
+    if (some !== null)
+      return [{ start: s, end: nameEnd + some[0].length, text: `(${plain} ${some[1]} ${some[2]})` }];
+  }
+  if ((shape === "String" || numeric || shape === "Bool") && open.kind[s] === 1) {
+    const macroOpen = open.at[s];
+    const macroHead = /([A-Za-z_][A-Za-z0-9_]*)!$/.exec(masked.slice(Math.max(0, macroOpen - 40), macroOpen));
+    const pre = masked.slice(Math.max(0, s - 12), s);
+    const tail = after.startsWith(".clone()") ? ".clone()" : after.startsWith(".to_string()") ? ".to_string()" : "";
+    const rest = after.slice(tail.length);
+    const closes = rest.startsWith(")") || rest.startsWith(",");
+    if (macroHead !== void 0 && /[(,]\s*$/.test(pre) && closes) {
+      const close = closeParen2(masked, macroOpen);
+      if (close > 0) {
+        const args = splitArgs2(masked, macroOpen + 1, close - 1);
+        const raw = content.slice(macroOpen + 1, close - 1);
+        const tpl = args === void 0 ? void 0 : /^\s*"((?:[^"\\]|\\.)*)"\s*$/.exec(raw.slice(0, args[0].length));
+        const holes = tpl === null || tpl === void 0 ? [] : tpl[1].match(/\{[^}]*\}/g) ?? [];
+        if (args !== void 0 && args.length > 1 && holes.length === args.length - 1 && holes.every((h) => h === "{}"))
+          return [];
+      }
+    }
+  }
+  {
+    const tail = after.startsWith(".clone()") && after.slice(".clone()".length).startsWith(")") ? ".clone()" : after.startsWith(")") ? "" : null;
+    if (tail !== null) {
+      const wide = content.slice(Math.max(0, s - 160), s);
+      const lit = shape === "String" ? /is_equal\(&Value::Str\(\s*("(?:[^"\\]|\\.)*")\s*(?:\.into\(\)|\.to_string\(\))?\s*\)\s*,\s*&$/.exec(wide) : shape === "Bool" ? /is_equal\(&Value::Bool\(\s*(true|false)\s*\)\s*,\s*&$/.exec(wide) : numeric ? /(is_equal|is_less_than|is_greater_than|is_less_than_or_equal|is_greater_than_or_equal)\(&\s*Value::(?:Int|Float)\(\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*\)\s*,\s*&$/.exec(wide) : null;
+      if (lit !== null) {
+        const ops = {
+          "is_equal": "==",
+          "is_less_than": "<",
+          "is_greater_than": ">",
+          "is_less_than_or_equal": "<=",
+          "is_greater_than_or_equal": ">="
+        };
+        const op = shape === "String" || shape === "Bool" ? "==" : ops[lit[1]];
+        const value = shape === "String" || shape === "Bool" ? lit[1] : lit[2];
+        const start = s - lit[0].length;
+        return [{ start, end: nameEnd + tail.length + 1, text: `(${value} ${op} ${name}${tail})` }];
+      }
+    }
+  }
+  if ((shape === "Int" || shape === "Float" || shape === "Bool") && before.endsWith("to_string_val(&") && after.startsWith(")")) {
+    return [{ start: s - "to_string_val(&".length, end: nameEnd + 1, text: `Value::str(${name}.to_string())` }];
+  }
+  if (before.endsWith("Value::Str(") && shape === "String") {
+    if (after.startsWith(")") || after.startsWith(".clone())")) {
+      return [{ start: s - "Value::Str".length, end: s - 1, text: "Value::str" }];
+    }
+  }
+  const nativeMethod = /^\.(?:len|is_empty|push|insert|contains_key|get|keys|values|iter|first|last)\(/.exec(after);
+  if (nativeMethod !== null && (shape === "Vec" || shape === "Map"))
+    return [];
+  if (shape === "Int" && /^\.as_i64\(\)/.test(after))
+    return null;
+  if (before.endsWith("Value::Int(") && shape === "Int" && after.startsWith(")"))
+    return [];
+  if (before.endsWith("Value::Float(") && shape === "Float" && after.startsWith(")"))
+    return [];
+  if (before.endsWith("Value::Bool(") && shape === "Bool" && after.startsWith(")"))
+    return [];
+  if ((before.endsWith("Value::Array(") || before.endsWith("Value::List(")) && shape === "Vec" && after.startsWith(")"))
+    return [];
+  if (before.endsWith("Value::Map(") && shape === "Map" && after.startsWith(")"))
+    return [];
+  if (before.endsWith("Value::from(") && after.startsWith(")"))
+    return [];
+  return null;
+}
+function blockHeader(masked, from, open) {
+  let i = open - 1;
+  let depth = 0;
+  while (i >= from) {
+    const c = masked[i];
+    if (c === ")" || c === "]" || c === "}")
+      depth++;
+    else if (c === "(" || c === "[" || c === "{") {
+      if (depth === 0)
+        break;
+      depth--;
+    } else if (c === ";" && depth === 0)
+      break;
+    i--;
+  }
+  return masked.slice(i + 1, open);
+}
+function inRepeatedBlock(masked, from, pos) {
+  const stack = [];
+  for (let k = from; k < pos; k++) {
+    const c = masked[k];
+    if (c === "{")
+      stack.push(k);
+    else if (c === "}" && stack.length > 0)
+      stack.pop();
+  }
+  for (const open of stack) {
+    const head = blockHeader(masked, from, open);
+    if (/\b(for|while|loop)\b/.test(head))
+      return true;
+    if (/\|[^|]*\|/.test(head))
+      return true;
+    if (/\bmove\s*$/.test(head))
+      return true;
+  }
+  return false;
+}
+function assignRewrite(shape, name, s, after, content, masked) {
+  const m = /^\s*=\s*/.exec(after);
+  if (m === null)
+    return null;
+  const rhsStart = s + name.length + m[0].length;
+  const end = stmtEnd(masked, rhsStart);
+  if (end < 0)
+    return null;
+  const rhs = content.slice(rhsStart, end).trim();
+  const heads = {
+    "String": ["Value::Str("],
+    "Int": ["Value::Int("],
+    "Float": ["Value::Float("],
+    "Bool": ["Value::Bool("],
+    "Vec": ["Value::Array(vec![", "Value::List(vec![", "Value::from(vec![", "vec!["],
+    "Map": ["Value::Map("]
+  };
+  const head = heads[shape].find((h) => rhs.startsWith(h));
+  if (head === void 0)
+    return null;
+  const close = closeParen2(rhs, head.length - 1);
+  if (close < 0 || close !== rhs.length)
+    return null;
+  const inner = rhs.slice(head.length, close - 1);
+  if (inner.trim() === "" || inner.trim().startsWith("Value::"))
+    return null;
+  return [{ start: rhsStart, end, text: inner }];
+}
+var r01Rejects = [];
+function r01TypedLocals(content) {
+  r01Rejects = [];
+  if (!content.includes(": Value = "))
+    return content;
+  const masked = maskText2(content);
+  const openers = openerMap(masked);
+  const anyOpen = openers.kind;
+  const atOpen = openers;
+  const heads = fnRegions2(masked);
+  const rewrites = [];
+  let group = 0;
+  const declRe = /^([ \t]*)let (?:mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = /gm;
+  let m;
+  while ((m = declRe.exec(content)) !== null) {
+    const name = m[2];
+    const declStart = m.index;
+    const initStart = declStart + m[0].length;
+    const end = stmtEnd(masked, initStart);
+    if (end < 0)
+      continue;
+    const rawInit = content.slice(initStart, end);
+    const lead = rawInit.length - rawInit.trimStart().length;
+    const init = rawInit.trim();
+    const parsed = initShape(init);
+    if (parsed === void 0) {
+      continue;
+    }
+    const { shape } = parsed;
+    if (parsed.wrapperEnd !== init.length) {
+      continue;
+    }
+    if (shape === "Float" && /^-?\d+$/.test(parsed.inner))
+      continue;
+    let lo = 0;
+    for (let h = 0; h < heads.length; h++)
+      if (heads[h] <= declStart)
+        lo = h;
+    const regionStart = heads[lo];
+    const regionEnd = lo + 1 < heads.length ? heads[lo + 1] : content.length;
+    const region = masked.slice(end, regionEnd);
+    if (rebound(region, name))
+      continue;
+    const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, "g");
+    const uses = [];
+    const boxes = [];
+    let ok = true;
+    let gained = 0;
+    let lastUse = -1;
+    let u;
+    while ((u = useRe.exec(region)) !== null) {
+      const s = end + u.index;
+      const before = content.slice(Math.max(regionStart, s - 60), s);
+      const after = content.slice(s + name.length, s + name.length + 90);
+      lastUse = s;
+      const slot = valueSlot(masked, content, s, name, atOpen);
+      if (slot > 0) {
+        const dotClone = after.startsWith(".clone()") ? ".clone()".length : 0;
+        boxes.push({ pos: s, tail: dotClone, move: slot === 1 });
+        continue;
+      }
+      const ctx = { name, useStart: s, before, after };
+      const rw = classify(shape, ctx, masked, content, atOpen);
+      if (rw !== null && rw.length > 0)
+        gained++;
+      if (rw === null) {
+        const asg = assignRewrite(shape, name, s, after, content, masked);
+        if (asg === null) {
+          ok = false;
+          const ls = content.lastIndexOf("\n", s) + 1;
+          const le = content.indexOf("\n", s);
+          r01Rejects.push({ shape, name, line: content.slice(0, s).split("\n").length, text: content.slice(ls, le < 0 ? content.length : le).trim() });
+          break;
+        }
+        uses.push(...asg);
+        continue;
+      }
+      uses.push(...rw);
+    }
+    if (!ok)
+      continue;
+    if (gained === 0)
+      continue;
+    for (const b of boxes) {
+      const canMove = b.pos === lastUse && !inRepeatedBlock(masked, regionStart, b.pos);
+      const collection = shape === "Vec" || shape === "Map";
+      if (!canMove && (b.tail === 0 || collection)) {
+        ok = false;
+        break;
+      }
+      const expr = canMove ? name : `${name}.clone()`;
+      uses.push({ start: b.pos, end: b.pos + name.length + b.tail, text: boxed(shape, expr) });
+    }
+    if (!ok)
+      continue;
+    for (const a of uses) {
+      for (const b of uses) {
+        if (a !== b && a.start <= b.start && b.end < a.end) {
+          ok = false;
+          break;
+        }
+      }
+      if (!ok)
+        break;
+    }
+    if (!ok)
+      continue;
+    const growth = /* @__PURE__ */ new Map();
+    const lineOf = (pos) => content.lastIndexOf("\n", pos) + 1;
+    for (const rw of uses) {
+      const lineStart = lineOf(rw.start);
+      if (lineOf(rw.end) !== lineStart)
+        continue;
+      const lineEnd = content.indexOf("\n", lineStart);
+      const len = (lineEnd < 0 ? content.length : lineEnd) - lineStart;
+      const next = (growth.get(lineStart) ?? 0) + rw.text.length - (rw.end - rw.start);
+      growth.set(lineStart, next);
+      if (len + next > 400 && len <= 400) {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok)
+      continue;
+    const typeAt = declStart + m[0].indexOf(": Value") + 2;
+    const exprAt = initStart + lead;
+    const g = group++;
+    rewrites.push({ start: typeAt, end: typeAt + 5, text: RUST_TYPE[shape], g });
+    rewrites.push({ start: exprAt, end: exprAt + parsed.wrapperEnd, text: parsed.inner, g });
+    for (const u2 of uses)
+      rewrites.push({ ...u2, g });
+  }
+  if (rewrites.length === 0)
+    return content;
+  const sorted = [...rewrites].sort((a, b) => a.start - b.start || a.end - b.end);
+  const dirty = /* @__PURE__ */ new Set();
+  const active = [];
+  for (const r of sorted) {
+    for (let i = active.length - 1; i >= 0; i--)
+      if (active[i].end <= r.start)
+        active.splice(i, 1);
+    for (const a of active) {
+      if (a.g !== r.g) {
+        dirty.add(a.g);
+        dirty.add(r.g);
+      }
+    }
+    active.push(r);
+  }
+  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
+  let out = "";
+  let last = 0;
+  for (const r of rewrites) {
+    if (dirty.has(r.g))
+      continue;
+    if (r.start < last)
+      continue;
+    out += content.slice(last, r.start) + r.text;
+    last = r.end;
+  }
+  out += content.slice(last);
+  return out;
+}
+
+// src/rustPasses/hx10w3-R03.ts
+init_esm_shims();
+import * as fs2 from "fs";
+var R03_ROUTED = /* @__PURE__ */ new Set(["cache", "hashmap", "subscriptions", "futures", "timestamp", "datetime", "nonce", "symbol", "checksum"]);
+var R03_MARKER = ["__book_id", "__cache_id", "__cacheKind", "__sideKind", "__live_id"];
+var R03_BASE_FILE = "rust/ccxt-common/src/exchange_generated.rs";
+var r03BaseShapes = void 0;
+function r03Mask2(src) {
+  let out = "";
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      while (i < src.length && src[i] !== "\n") {
+        out += " ";
+        i++;
+      }
+      continue;
+    }
+    if (c === '"') {
+      out += " ";
+      i++;
+      while (i < src.length && src[i] !== '"') {
+        if (src[i] === "\n") {
+          out += "\n";
+          i++;
+          continue;
+        }
+        if (src[i] === "\\") {
+          out += "  ";
+          i += 2;
+          continue;
+        }
+        out += " ";
+        i++;
+      }
+      if (i < src.length) {
+        out += " ";
+        i++;
+      }
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
+}
+function r03Close2(src, open) {
+  const openCh = src[open];
+  const closeCh = openCh === "(" ? ")" : openCh === "[" ? "]" : openCh === "{" ? "}" : "";
+  if (closeCh === "")
+    return -1;
+  let depth = 0;
+  for (let k = open; k < src.length; k++) {
+    const c = src[k];
+    if (c === openCh)
+      depth++;
+    else if (c === closeCh) {
+      depth--;
+      if (depth === 0)
+        return k;
+    }
+  }
+  return -1;
+}
+function r03Args(masked, open, close) {
+  const spans = [];
+  let depth = 0;
+  let start = open + 1;
+  for (let k = open + 1; k < close; k++) {
+    const c = masked[k];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      spans.push([start, k]);
+      start = k + 1;
+    }
+  }
+  if (masked.slice(start, close).trim() !== "")
+    spans.push([start, close]);
+  return spans;
+}
+function r03StmtEnd2(masked, from) {
+  let depth = 0;
+  for (let k = from; k < masked.length; k++) {
+    const c = masked[k];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth < 0)
+        return -1;
+    } else if (c === ";" && depth === 0)
+      return k;
+  }
+  return -1;
+}
+function r03Returns(masked) {
+  const out = [];
+  const rx = /(?<![A-Za-z0-9_])return\b/g;
+  let m;
+  while ((m = rx.exec(masked)) !== null) {
+    const end = r03StmtEnd2(masked, m.index + 6);
+    if (end < 0)
+      continue;
+    out.push(masked.slice(m.index + 6, end).trim());
+  }
+  return out;
+}
+function r03Tail(body) {
+  const t = body.replace(/\s+$/, "");
+  if (t === "" || t.endsWith(";"))
+    return void 0;
+  const cut = t.lastIndexOf(";");
+  const tail = (cut < 0 ? t : t.slice(cut + 1)).trim();
+  if (tail === "" || /^(?:if|match|while|for|loop|\{)/.test(tail))
+    return void 0;
+  return tail;
+}
+function r03TailIsDead(body) {
+  const cut = body.replace(/\s+$/, "").lastIndexOf(";");
+  if (cut < 0)
+    return false;
+  let depth = 0;
+  let k = cut - 1;
+  for (; k >= 0; k--) {
+    const c = body[k];
+    if (c === ")" || c === "]" || c === "}")
+      depth++;
+    else if (c === "(" || c === "[" || c === "{") {
+      depth--;
+      if (depth < 0)
+        break;
+    } else if (c === ";" && depth === 0)
+      break;
+  }
+  return /^\s*return\b/.test(body.slice(k + 1, cut));
+}
+function r03FreshShape(t) {
+  const s = t.replace(/^\(+/, "").trim();
+  if (/^Value::(?:Map|Dict)\(/.test(s)) {
+    const open = s.indexOf("(");
+    if (/^Value::(?:Map|Dict)\(\s*(?:\{|indexmap::IndexMap::new\(\)|HashMap::new\(\))/.test(s))
+      return "dict";
+    return void 0;
+  }
+  if (/^Value::(?:Array|List)\(\s*(?:vec!\[|std::sync::Arc::new\(\s*vec!\[)/.test(s))
+    return "arr";
+  if (/^Value::from\(\s*(?:std::sync::Arc::new\(\s*)?vec!\[/.test(s))
+    return "arr";
+  return void 0;
+}
+function r03Decl(region, name) {
+  const rx = new RegExp("\\blet (?:mut )?" + name + "\\s*(?::\\s*[^=;]+)?=\\s*", "g");
+  let hit = null;
+  let count = 0;
+  let m;
+  while ((m = rx.exec(region)) !== null) {
+    hit = m;
+    count++;
+  }
+  if (count !== 1 || hit === null)
+    return void 0;
+  return { init: region.slice(hit.index + hit[0].length, hit.index + hit[0].length + 400) };
+}
+function r03MethodShapes(content, masked, loose = false) {
+  const shapes = /* @__PURE__ */ new Map();
+  const hdr = loose ? /\n    (?:pub )?fn (\w+)\s*\(/g : /\n    pub fn (\w+)\s*\(/g;
+  let hm;
+  while ((hm = hdr.exec(masked)) !== null) {
+    const lineEnd = masked.indexOf("\n", hm.index + 1);
+    const line = masked.slice(hm.index, lineEnd < 0 ? masked.length : lineEnd);
+    if (!/->\s*(?:crate::)?Value\b/.test(line))
+      continue;
+    const open = masked.indexOf("(", hm.index);
+    const close = r03Close2(masked, open);
+    if (close < 0)
+      continue;
+    const braceOpen = masked.indexOf("{", close);
+    if (braceOpen < 0)
+      continue;
+    if (!/^(?:->\s*(?:crate::)?Value)?$/.test(masked.slice(close + 1, braceOpen).trim()))
+      continue;
+    const braceClose = r03Close2(masked, braceOpen);
+    if (braceClose < 0)
+      continue;
+    const body = masked.slice(braceOpen + 1, braceClose);
+    const exprs = r03Returns(body);
+    if (exprs.length === 0)
+      continue;
+    const tail = r03Tail(body);
+    if (tail !== void 0 && !r03TailIsDead(body)) {
+      exprs.push(tail);
+    }
+    const kinds = /* @__PURE__ */ new Set();
+    for (const e of exprs) {
+      if (loose && /^__\w+$/.test(e))
+        continue;
+      kinds.add(r03FreshShape(e) ?? "other");
+    }
+    if (kinds.size !== 1)
+      continue;
+    const only = [...kinds][0];
+    if (only === "other")
+      continue;
+    shapes.set(hm[1], only);
+  }
+  return shapes;
+}
+function r03BaseShapeTable() {
+  if (r03BaseShapes !== void 0)
+    return r03BaseShapes;
+  r03BaseShapes = /* @__PURE__ */ new Map();
+  try {
+    const src = fs2.readFileSync(R03_BASE_FILE, "utf8");
+    r03BaseShapes = r03MethodShapes(src, r03Mask2(src), true);
+  } catch (e) {
+    if (e === void 0 || e.code !== "ENOENT")
+      throw e;
+  }
+  return r03BaseShapes;
+}
+var R03_PASSTHROUGH = /* @__PURE__ */ new Set(["extend", "omit", "keysort", "clone_value"]);
+var R03Prover2 = class {
+  constructor(region, maskedRegion, own, base) {
+    this.visiting = /* @__PURE__ */ new Set();
+    this.region = region;
+    this.masked = maskedRegion;
+    this.own = own;
+    this.base = base;
+  }
+  /** Shape of the local `name` in this region, or undefined when unproven. */
+  shape(name) {
+    if (this.visiting.has(name))
+      return void 0;
+    this.visiting.add(name);
+    const out = this.prove(name);
+    this.visiting.delete(name);
+    return out;
+  }
+  prove(name) {
+    const decl = r03Decl(this.masked, name);
+    if (decl === void 0)
+      return void 0;
+    return this.shapeOfInit(decl.init);
+  }
+  shapeOfInit(init) {
+    const fresh = r03FreshShape(init);
+    if (fresh !== void 0)
+      return fresh;
+    const call = /^self\.(\w+)\s*\(/.exec(init);
+    if (call === null)
+      return void 0;
+    const callee = call[1];
+    const own = this.own.get(callee);
+    if (own !== void 0)
+      return own;
+    const base = this.base.get(callee);
+    if (base !== void 0)
+      return base;
+    if (R03_PASSTHROUGH.has(callee)) {
+      const open = init.indexOf("(");
+      const close = r03Close2(init, open);
+      if (close < 0)
+        return void 0;
+      const args = r03Args(init, open, close);
+      if (args === void 0 || args.length === 0)
+        return void 0;
+      const first = init.slice(args[0][0], args[0][1]).trim();
+      if (!/^[a-z_][A-Za-z0-9_]*$/.test(first))
+        return void 0;
+      return this.shape(first);
+    }
+    return void 0;
+  }
+};
+function r03LiteralKey(arg) {
+  if (arg === void 0)
+    return void 0;
+  const m = /^&\s*Value::Str\(\s*("(?:[^"\\]|\\.)*")\s*(?:\.into\(\)|\.to_string\(\))?\s*\)$/.exec(arg.trim());
+  return m === null ? void 0 : m[1].slice(1, -1);
+}
+function r03PlainReceiver(region, name) {
+  const rx = new RegExp("&mut " + name + "(?![A-Za-z0-9_])", "g");
+  let m;
+  while ((m = rx.exec(region)) !== null) {
+    const before = region.slice(Math.max(0, m.index - 40), m.index);
+    if (/(?:add_element_to_object|get_value_mut|set_value)\($/.test(before))
+      continue;
+    if (/if let Value::(?:Dict|Arr|Map)\(\s*__\w+\s*\)\s*=\s*$/.test(before))
+      continue;
+    return false;
+  }
+  return true;
+}
+function r03SingleWrite(region, name) {
+  const rx = new RegExp("(?<![A-Za-z0-9_.])" + name + "\\s*=\\s*(?!=)", "g");
+  let m;
+  while ((m = rx.exec(region)) !== null) {
+    const before = region.slice(Math.max(0, m.index - 5), m.index);
+    if (/\blet $/.test(before) || /\blet mut $/.test(region.slice(Math.max(0, m.index - 8), m.index)))
+      continue;
+    return false;
+  }
+  return true;
+}
+function hx10w3R03(content, stats) {
+  if (content.indexOf("add_element_to_object(") < 0 && content.indexOf("get_value(&") < 0 && content.indexOf("in_op(") < 0 && content.indexOf("object_keys(") < 0 && content.indexOf("object_values(") < 0 && content.indexOf("get_array_length(") < 0)
+    return content;
+  const masked = r03Mask2(content);
+  const own = r03MethodShapes(content, masked);
+  const base = r03BaseShapeTable();
+  const heads = [];
+  const hdr = /^[ \t]*(?:pub(?:\([a-z]+\))? )?(?:async )?fn /gm;
+  let hm;
+  while ((hm = hdr.exec(masked)) !== null)
+    heads.push(hm.index);
+  heads.push(content.length);
+  const edits = [];
+  const FAM = /(?<![A-Za-z0-9_:.])(add_element_to_object|get_value|in_op|object_keys|object_values|get_array_length)\(/g;
+  for (let h = 0; h + 1 < heads.length; h++) {
+    const from = heads[h];
+    const to = heads[h + 1];
+    const maskedRegion = masked.slice(from, to);
+    const prover = new R03Prover2(content.slice(from, to), maskedRegion, own, base);
+    FAM.lastIndex = 0;
+    let fm;
+    while ((fm = FAM.exec(maskedRegion)) !== null) {
+      const name = fm[1];
+      const open = fm.index + fm[0].length - 1;
+      const close = r03Close2(maskedRegion, open);
+      if (close < 0)
+        continue;
+      const spans = r03Args(maskedRegion, open, close);
+      if (spans === void 0)
+        continue;
+      let recv;
+      let keyArg;
+      let valueStart = -1;
+      if (name === "add_element_to_object") {
+        if (spans.length !== 3)
+          continue;
+        const first = maskedRegion.slice(spans[0][0], spans[0][1]).trim();
+        const head = /^&mut\s+([a-z_][A-Za-z0-9_]*)$/.exec(first);
+        if (head === null)
+          continue;
+        recv = head[1];
+        keyArg = content.slice(from + spans[1][0], from + spans[1][1]);
+        valueStart = spans[2][0];
+      } else if (name === "get_array_length" || name === "object_keys" || name === "object_values") {
+        if (spans.length !== 1)
+          continue;
+        const head = /^&\s*([a-z_][A-Za-z0-9_]*)$/.exec(maskedRegion.slice(spans[0][0], spans[0][1]).trim());
+        if (head === null)
+          continue;
+        recv = head[1];
+      } else {
+        if (spans.length !== 2)
+          continue;
+        const head = /^&\s*([a-z_][A-Za-z0-9_]*)$/.exec(maskedRegion.slice(spans[0][0], spans[0][1]).trim());
+        if (head === null)
+          continue;
+        recv = head[1];
+        keyArg = content.slice(from + spans[1][0], from + spans[1][1]);
+      }
+      const shape = prover.shape(recv);
+      if (shape === void 0)
+        continue;
+      if (name === "get_array_length") {
+        if (shape !== "arr")
+          continue;
+        if (!r03SingleWrite(maskedRegion, recv))
+          continue;
+        edits.push({ start: from + fm.index, end: from + close + 1, text: `Value::Int(${recv}.len() as i64)` });
+        continue;
+      }
+      if (shape !== "dict")
+        continue;
+      if (!r03PlainReceiver(maskedRegion, recv) || !r03SingleWrite(maskedRegion, recv))
+        continue;
+      if (name === "add_element_to_object") {
+        const key2 = r03LiteralKey(keyArg);
+        if (key2 === void 0 || R03_MARKER.indexOf(key2) >= 0)
+          continue;
+        const valueEnd = spans[2][1];
+        const value = content.slice(from + valueStart, from + valueEnd).trim();
+        const stmtEnd3 = maskedRegion[close + 1] === ";" ? close + 2 : close + 1;
+        edits.push({
+          start: from + fm.index,
+          end: from + stmtEnd3,
+          text: `if let Value::Dict(__r03d) = &mut ${recv} { std::sync::Arc::make_mut(__r03d).insert("${key2}".into(), ${value}); }`
+        });
+        continue;
+      }
+      const key = r03LiteralKey(keyArg);
+      if (key === void 0 || R03_ROUTED.has(key) || R03_MARKER.indexOf(key) >= 0)
+        continue;
+      if (name === "get_value") {
+        edits.push({
+          start: from + fm.index,
+          end: from + close + 1,
+          text: `${recv}.as_map().unwrap().get("${key}").cloned().unwrap_or(Value::Null)`
+        });
+      } else if (name === "in_op") {
+        if (!r03BoolPosition(maskedRegion, fm.index))
+          continue;
+        edits.push({
+          start: from + fm.index,
+          end: from + close + 1,
+          text: `matches!(&${recv}, Value::Dict(__r03k) if __r03k.contains_key("${key}"))`
+        });
+      } else {
+        const body = name === "object_keys" ? "__m.keys().map(|__k| Value::Str(__k.clone().into())).collect()" : "__m.values().cloned().collect()";
+        edits.push({
+          start: from + fm.index,
+          end: from + close + 1,
+          text: `Value::Array(${recv}.as_map().map(|__m| ${body}).unwrap_or_default())`
+        });
+      }
+    }
+  }
+  if (edits.length === 0)
+    return content;
+  edits.sort((a, b) => a.start - b.start || b.end - a.end);
+  let out = "";
+  let at = 0;
+  let count = 0;
+  for (const e of edits) {
+    if (e.start < at)
+      continue;
+    out += content.slice(at, e.start) + e.text;
+    at = e.end;
+    count++;
+  }
+  out += content.slice(at);
+  if (stats !== void 0)
+    stats.sites += count;
+  return out;
+}
+function r03BoolPosition(masked, pos) {
+  const lineStart = masked.lastIndexOf("\n", pos) + 1;
+  const pre = masked.slice(lineStart, pos).trim();
+  const headed = /^(?:\}\s*else\s+)?(?:if|while)$/.test(pre);
+  const wrapped = /is_true\(&$/.test(pre);
+  return headed || wrapped;
+}
+
+// src/rustPasses/hx10w3-R04.ts
+init_esm_shims();
+function hx10R04Mask(text) {
+  const out = text.split("");
+  const n = out.length;
+  let i = 0;
+  while (i < n) {
+    const c = out[i];
+    if (c === '"') {
+      let j = i + 1;
+      while (j < n && out[j] !== '"') {
+        if (out[j] === "\\")
+          j += 1;
+        j += 1;
+      }
+      for (let k = i + 1; k < j && k < n; k++)
+        out[k] = " ";
+      i = j + 1;
+      continue;
+    }
+    if (c === "/" && out[i + 1] === "/") {
+      let j = i;
+      while (j < n && out[j] !== "\n") {
+        out[j] = " ";
+        j += 1;
+      }
+      i = j;
+      continue;
+    }
+    i += 1;
+  }
+  return out.join("");
+}
+function hx10R04Close(masked, open) {
+  let depth = 0;
+  for (let i = open; i < masked.length; i++) {
+    const c = masked[i];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function hx10R04Strip(src) {
+  let s = src.trim();
+  while (s.startsWith("(") && hx10R04Close(s, 0) === s.length - 1)
+    s = s.slice(1, -1).trim();
+  return s;
+}
+var HX10R04_FN = /\n[ \t]*(?:pub )?(?:async )?fn (\w+)/g;
+function hx10R04Regions(masked) {
+  const heads = [0];
+  for (const m of masked.matchAll(HX10R04_FN))
+    heads.push(m.index + 1);
+  heads.push(masked.length);
+  const out = [];
+  for (let h = 0; h + 1 < heads.length; h++) {
+    const seg = masked.slice(heads[h], heads[h + 1]);
+    const head = /^[ \t]*(?:pub )?(?:async )?fn (\w+)\s*(?:<[^>]*>)?\s*\(/.exec(seg);
+    if (head === null)
+      continue;
+    const open = seg.indexOf("(", head[0].length - 1);
+    const close = hx10R04Close(seg, open);
+    if (close < 0)
+      continue;
+    const brace = seg.indexOf("{", close);
+    out.push({ start: heads[h], end: heads[h + 1], name: head[1], ret: brace < 0 ? "" : seg.slice(close + 1, brace), body: brace < 0 ? "" : seg.slice(brace) });
+  }
+  return out;
+}
+function hx10R04RetExprs(region) {
+  if (!/^\s*->\s*(?:crate::)?Value\s*$/.test(region.ret.replace(/\s+/g, " ")))
+    return void 0;
+  const body = region.body;
+  const rets = [];
+  for (const m of body.matchAll(/\breturn\b/g)) {
+    const at = m.index + m[0].length;
+    let depth = 0;
+    let j = at;
+    for (; j < body.length; j++) {
+      const c = body[j];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}") {
+        if (depth === 0)
+          break;
+        depth--;
+      } else if (c === ";" && depth === 0)
+        break;
+    }
+    rets.push(body.slice(at, j));
+  }
+  const close = body.lastIndexOf("}");
+  const tailEnd = body.slice(0, close).replace(/\s+$/, "");
+  const semi = tailEnd.lastIndexOf(";");
+  const braceOpen = tailEnd.lastIndexOf("{");
+  if (semi > braceOpen || semi < 0 && braceOpen < 0) {
+    const tail = tailEnd.slice(semi + 1).trim();
+    if (tail !== "" && !tail.startsWith("}"))
+      rets.push(tail);
+  }
+  if (rets.length === 0)
+    return void 0;
+  return rets;
+}
+function hx10R04SafeBoolDefault(call) {
+  const open = call.indexOf("(");
+  const close = hx10R04Close(call, open);
+  if (close < 0)
+    return void 0;
+  const inner = call.slice(open + 1, close);
+  const listAt = inner.lastIndexOf("&[");
+  if (listAt < 0)
+    return void 0;
+  const list = hx10R04Strip(inner.slice(listAt));
+  if (!list.startsWith("&[") || !list.endsWith("]"))
+    return void 0;
+  const items = list.slice(2, -1).trim();
+  if (items === "")
+    return true;
+  const one = hx10R04Strip(items);
+  if (/^Value::Bool\((?:true|false)\)$/.test(one))
+    return true;
+  if (one === "Value::Null")
+    return true;
+  return void 0;
+}
+var HX10R04_BOOL_BASE = /^(?:in_array|is_json_encoded_object)$/;
+var HX10R04_BOOLISH = (v) => [...v].every((x) => x === "bool" || x === "null");
+function hx10R04Variant(expr, masked, byName, region, depth, visiting) {
+  if (depth > 6)
+    return void 0;
+  let e = hx10R04Strip(expr);
+  while (e.endsWith(".clone()"))
+    e = hx10R04Strip(e.slice(0, -".clone()".length));
+  while (e.endsWith(".await"))
+    e = e.slice(0, -".await".length).trim();
+  const lit = /^Value::(Bool|Int|Float|Str)\(/.exec(e);
+  if (lit !== null && hx10R04Close(e, "Value::".length + lit[1].length) === e.length - 1) {
+    return /* @__PURE__ */ new Set([lit[1].toLowerCase()]);
+  }
+  if (e === "Value::Null" || e === "crate::Value::Null")
+    return /* @__PURE__ */ new Set(["null"]);
+  if (/^\(?if .+\)?$/.test(e) && e.includes("} else {")) {
+    const at = e.indexOf("} else {");
+    const a = hx10R04Variant(e.slice(e.indexOf("{") + 1, at), masked, byName, region, depth, visiting);
+    const b = hx10R04Variant(e.slice(at + "} else {".length, e.lastIndexOf("}")), masked, byName, region, depth, visiting);
+    if (a !== void 0 && b !== void 0)
+      return /* @__PURE__ */ new Set([...a, ...b]);
+    return void 0;
+  }
+  const precise = /^crate::precise::Precise::(\w+)\((?:(?!\()[^()]|\((?!\()(?:[^()]|\([^()]*\))*\))*\)$/.exec(e);
+  if (precise !== null && /^string(?:Eq|Gt|Ge|Lt|Le|Equals)$/.test(precise[1]))
+    return /* @__PURE__ */ new Set(["bool"]);
+  if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(e)) {
+    const writes = hx10R04Writes(masked, e, region);
+    if (writes === void 0)
+      return void 0;
+    let acc = void 0;
+    for (const w of writes) {
+      const v = hx10R04Variant(w, masked, byName, region, depth + 1, visiting);
+      if (v === void 0)
+        return void 0;
+      acc = acc === void 0 ? v : new Set([...acc].filter((x) => v.has(x)));
+    }
+    return acc;
+  }
+  const call = /^self\.([a-z_][a-z0-9_]*)\s*\(/.exec(e);
+  if (call !== null && hx10R04Close(e, "self.".length + call[1].length) === e.length - 1) {
+    if (HX10R04_BOOL_BASE.test(call[1]))
+      return /* @__PURE__ */ new Set(["bool"]);
+    if (/^safe_bool(_2|_k)?$/.test(call[1])) {
+      return hx10R04SafeBoolDefault(e) === true ? /* @__PURE__ */ new Set(["bool", "null"]) : void 0;
+    }
+    return hx10R04CalleeVariant(call[1], masked, byName, depth + 1, visiting);
+  }
+  return void 0;
+}
+function hx10R04CalleeVariant(name, masked, byName, depth, visiting) {
+  if (visiting.has(name) || depth > 6)
+    return void 0;
+  const decls = byName.get(name);
+  if (decls === void 0 || decls.length === 0)
+    return void 0;
+  const next = new Set(visiting);
+  next.add(name);
+  let acc = void 0;
+  for (const decl of decls) {
+    const rets = hx10R04RetExprs(decl);
+    if (rets === void 0)
+      return void 0;
+    for (const r of rets) {
+      const v = hx10R04Variant(r, masked, byName, decl, depth + 1, next);
+      if (v === void 0)
+        return void 0;
+      acc = acc === void 0 ? v : /* @__PURE__ */ new Set([...acc, ...v]);
+    }
+  }
+  return acc;
+}
+function hx10R04Writes(masked, ident, region) {
+  const esc = ident.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const body = masked.slice(region.start, region.end);
+  const shadow = new RegExp(`\\|(?!\\|)[^|\\n]*\\b${esc}\\b[^|\\n]*\\|(?!\\|)|\\bfor [^\\n]*\\b${esc}\\b[^\\n]* in |\\blet \\([^)]*\\b${esc}\\b`);
+  if (shadow.test(body))
+    return void 0;
+  const writes = [];
+  const spans = [];
+  const letRe = new RegExp(`\\blet (?:mut )?${esc}\\b\\s*(?::\\s*([A-Za-z_][A-Za-z0-9_<>]*))?\\s*=`, "g");
+  for (const m of body.matchAll(letRe)) {
+    const at = m.index;
+    if (m[1] !== void 0 && m[1] !== "Value")
+      return void 0;
+    let depth = 0;
+    let j = at + m[0].length;
+    for (; j < body.length; j++) {
+      const c = body[j];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}") {
+        if (depth === 0)
+          break;
+        depth--;
+      } else if (c === ";" && depth === 0)
+        break;
+    }
+    writes.push(body.slice(at + m[0].length, j));
+    spans.push([at, j]);
+  }
+  const assignRe = new RegExp(`(?<![A-Za-z0-9_.])${esc}\\s*=(?!=)`, "g");
+  for (const m of body.matchAll(assignRe)) {
+    const at = m.index;
+    if (spans.some(([s, e]) => at >= s && at < e))
+      continue;
+    let depth = 0;
+    let j = at + m[0].length;
+    for (; j < body.length; j++) {
+      const c = body[j];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}") {
+        if (depth === 0)
+          break;
+        depth--;
+      } else if (c === ";" && depth === 0)
+        break;
+    }
+    writes.push(body.slice(at + m[0].length, j));
+  }
+  if (writes.length === 0)
+    return void 0;
+  return writes;
+}
+function r04StmtBefore(masked, pos) {
+  let depth = 0;
+  for (let i = pos; i > 0; i--) {
+    const c = masked[i - 1];
+    if (c === ")" || c === "]")
+      depth++;
+    else if (c === "(" || c === "[") {
+      if (depth > 0)
+        depth--;
+    } else if (depth === 0 && (c === ";" || c === "{" || c === "}" || c === "\n"))
+      return masked.slice(i, pos);
+  }
+  return masked.slice(0, pos);
+}
+function r04DropOperand(s) {
+  let depth = 0;
+  for (let i = s.length - 1; i >= 0; i--) {
+    const c = s[i];
+    if (c === ")" || c === "]" || c === "}")
+      depth++;
+    else if (c === "(" || c === "[" || c === "{") {
+      if (depth === 0)
+        return s.slice(0, i);
+      depth--;
+      if (depth === 0 && !/[A-Za-z0-9_.)\]]/.test(s[i - 1] ?? ""))
+        return s.slice(0, i);
+    } else if (depth === 0) {
+      if (c === "&" && s[i - 1] === "&" || c === "|" && s[i - 1] === "|")
+        return s.slice(0, i - 1);
+      if (c === "," || c === ";" || c === "=")
+        return s.slice(0, i + 1);
+      if (/[A-Za-z0-9_.)\]]/.test(c)) {
+        let k = i;
+        while (k >= 0 && /[A-Za-z0-9_.]/.test(s[k]))
+          k--;
+        return k < 0 ? s : s.slice(0, k + 1);
+      }
+    }
+  }
+  return "";
+}
+function r04BoolSlot(masked, start) {
+  let prefix = r04StmtBefore(masked, start);
+  for (let hop = 0; hop < 60; hop++) {
+    prefix = prefix.replace(/[\s!]+$/, "");
+    if (/(?:^|[^\w])(?:if|while|for|assert)$/.test(prefix))
+      return true;
+    if (/Value::Bool\($/.test(prefix))
+      return true;
+    if (/(?:&&|\|\|)$/.test(prefix)) {
+      prefix = r04DropOperand(prefix.slice(0, -2));
+      continue;
+    }
+    if (/[^=!<>]=$/.test(prefix))
+      return /:\s*bool\s*=?$/.test(prefix.slice(0, -1));
+    if (/\($/.test(prefix)) {
+      prefix = prefix.slice(0, -1);
+      continue;
+    }
+    return false;
+  }
+  return false;
+}
+function r04Callee(content) {
+  if (!content.includes("is_true(&"))
+    return content;
+  const masked = hx10R04Mask(content);
+  const regions = hx10R04Regions(masked);
+  const byName = /* @__PURE__ */ new Map();
+  for (const r of regions) {
+    const list = byName.get(r.name);
+    if (list === void 0)
+      byName.set(r.name, [r]);
+    else
+      list.push(r);
+  }
+  const edits = [];
+  for (const m of masked.matchAll(/(?<![A-Za-z0-9_:.])is_true\(&/g)) {
+    const start = m.index;
+    const open = start + "is_true".length;
+    const close = hx10R04Close(masked, open);
+    if (close < 0)
+      continue;
+    const arg = content.slice(open + 1, close);
+    if (arg.includes("\n"))
+      continue;
+    const expr = hx10R04Strip(arg.replace(/^&/, ""));
+    if (expr === "")
+      continue;
+    const region = regions.find((r) => start >= r.start && start < r.end);
+    if (region === void 0)
+      continue;
+    if (!r04BoolSlot(masked, start))
+      continue;
+    const variants = hx10R04Variant(expr, masked, byName, region, 0, /* @__PURE__ */ new Set());
+    if (variants === void 0 || !HX10R04_BOOLISH(variants))
+      continue;
+    let k = start - 1;
+    while (k >= 0 && (masked[k] === " " || masked[k] === "	"))
+      k--;
+    const negated = k >= 0 && masked[k] === "!" && masked[k - 1] !== "=";
+    edits.push({ start: negated ? k : start, end: close + 1, text: `${expr}.as_bool() == Some(${negated ? "false" : "true"})` });
+  }
+  if (edits.length === 0)
+    return content;
+  let out = "";
+  let at = 0;
+  for (const e of edits) {
+    if (e.start < at)
+      continue;
+    out += content.slice(at, e.start) + e.text;
+    at = e.end;
+  }
+  return out + content.slice(at);
+}
+
+// src/rustPasses/hx10w3-R05.ts
+init_esm_shims();
+var FIELDS_ARR2 = ["balance", "ohlcvs", "options"];
+var RECV2 = "self\\.(?:(?:core|parent)\\.)*(" + FIELDS_ARR2.join("|") + ")";
+var STR_KEY2 = '&Value::Str\\("((?:[^"\\\\]|\\\\.)*)"\\.(?:into|to_string)\\(\\)\\)';
+var MAX_LINE = 400;
+function maskSrc2(src) {
+  const out = src.split("");
+  const blank = (from, to) => {
+    for (let i2 = from; i2 < to && i2 < out.length; i2++)
+      if (out[i2] !== "\n")
+        out[i2] = " ";
+  };
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      const end = src.indexOf("\n", i);
+      const stop = end < 0 ? src.length : end;
+      blank(i, stop);
+      i = stop;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      const end = src.indexOf("*/", i + 2);
+      const stop = end < 0 ? src.length : end + 2;
+      blank(i, stop);
+      i = stop;
+      continue;
+    }
+    if (c === "'") {
+      const m = /^'(?:\\.|[^\\'])'/.exec(src.slice(i, i + 4));
+      if (m !== null) {
+        i += m[0].length;
+        continue;
+      }
+    }
+    if (c === '"') {
+      let j = i + 1;
+      while (j < src.length) {
+        if (src[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (src[j] === '"')
+          break;
+        j++;
+      }
+      blank(i, Math.min(j + 1, src.length));
+      i = j + 1;
+      continue;
+    }
+    i++;
+  }
+  return out.join("");
+}
+function argSpans2(masked, open) {
+  let depth = 0;
+  const spans = [];
+  let start = open + 1;
+  for (let j = open; j < masked.length; j++) {
+    const c = masked[j];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0) {
+        spans.push([start, j]);
+        return spans;
+      }
+    } else if (c === "," && depth === 1) {
+      spans.push([start, j]);
+      start = j + 1;
+    }
+  }
+  return void 0;
+}
+function callEnd2(masked, open) {
+  let depth = 0;
+  for (let j = open; j < masked.length; j++) {
+    const c = masked[j];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0)
+        return j + 1;
+    }
+  }
+  return -1;
+}
+function isStatement3(masked, from, to) {
+  let k = to;
+  while (k < masked.length && (masked[k] === " " || masked[k] === "	"))
+    k++;
+  if (masked[k] !== ";")
+    return false;
+  let s = from - 1;
+  while (s >= 0 && (masked[s] === " " || masked[s] === "	" || masked[s] === "\n"))
+    s--;
+  return s < 0 || "{};".indexOf(masked[s]) >= 0;
+}
+function firstArg2(expr) {
+  const open = expr.indexOf("(");
+  if (open < 0)
+    return "";
+  let depth = 0;
+  for (let j = open; j < expr.length; j++) {
+    const c = expr[j];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0)
+        return expr.slice(open + 1, j).trim();
+    } else if (c === "," && depth === 1) {
+      return expr.slice(open + 1, j).trim();
+    }
+  }
+  return "";
+}
+function chainField(recv) {
+  const direct = new RegExp("^&mut\\s+" + RECV2 + "$").exec(recv);
+  if (direct !== null)
+    return direct[1];
+  let expr = recv;
+  for (let hop = 0; hop < 8; hop++) {
+    if (!expr.startsWith("get_value_mut("))
+      return "";
+    const a = firstArg2(expr);
+    const mutRoot = new RegExp("^&mut\\s+" + RECV2 + "$").exec(a);
+    if (mutRoot !== null)
+      return mutRoot[1];
+    const coerced = new RegExp("^unsafe\\s*\\{\\s*crate::runtime::coerce_value_to_mut\\(&" + RECV2 + "\\)\\s*\\}$").exec(a);
+    if (coerced !== null)
+      return coerced[1];
+    if (!a.startsWith("get_value_mut("))
+      return "";
+    expr = a;
+  }
+  return "";
+}
+var FN_HEAD = /(?:^|\n)[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+[A-Za-z_][A-Za-z0-9_]*/g;
+function fnSpan(src, at) {
+  FN_HEAD.lastIndex = 0;
+  let start = 0;
+  let m;
+  while ((m = FN_HEAD.exec(src)) !== null) {
+    if (m.index > at)
+      return [start, m.index];
+    start = m.index;
+  }
+  return [start, src.length];
+}
+function identKeyArg(body, ident, header) {
+  const asStr = new RegExp("\\blet\\s+(?:mut\\s+)?" + ident + "\\s*:\\s*String\\s*=");
+  const asVal = new RegExp("\\blet\\s+(?:mut\\s+)?" + ident + "\\s*:\\s*Value\\s*=");
+  if (asStr.test(body))
+    return ident + ".clone()";
+  if (asVal.test(body))
+    return "crate::runtime::stringify_param(&" + ident + ")";
+  const paramVal = new RegExp("(?:^|[(,]\\s*)(?:mut\\s+)?" + ident + "\\s*:\\s*Value\\b");
+  const paramStr = new RegExp("(?:^|[(,]\\s*)(?:mut\\s+)?" + ident + "\\s*:\\s*String\\b");
+  if (paramStr.test(header))
+    return ident + ".clone()";
+  if (paramVal.test(header))
+    return "crate::runtime::stringify_param(&" + ident + ")";
+  return "";
+}
+function runPass2(content) {
+  if (!content.includes("add_element_to_object("))
+    return content;
+  const masked = maskSrc2(content);
+  const callRe = /(?<![A-Za-z0-9_:.])(add_element_to_object)\(/g;
+  const rws = [];
+  let m;
+  while ((m = callRe.exec(masked)) !== null) {
+    const open = m.index + m[1].length;
+    const spans = argSpans2(masked, open);
+    if (spans === void 0 || spans.length !== 3)
+      continue;
+    const end = callEnd2(masked, open);
+    if (end < 0)
+      continue;
+    if (!isStatement3(masked, m.index, end))
+      continue;
+    const raw = spans.map((sp) => content.slice(sp[0], sp[1]).trim());
+    if (chainField(raw[0]) === "")
+      continue;
+    const value = raw[2];
+    if (/\bself\b/.test(value))
+      continue;
+    let keyArg = "";
+    const lit = new RegExp("^" + STR_KEY2 + "$").exec(raw[1]);
+    if (lit !== null) {
+      keyArg = '"' + lit[1] + '".to_string()';
+    } else {
+      const ident = /^&([A-Za-z_][A-Za-z0-9_]*)$/.exec(raw[1]);
+      if (ident === null)
+        continue;
+      const [fnStart, fnEnd] = fnSpan(masked, m.index);
+      const headerEnd = masked.indexOf("\n", fnStart + 1);
+      const header = masked.slice(fnStart, headerEnd < 0 ? fnEnd : headerEnd);
+      keyArg = identKeyArg(masked.slice(fnStart, m.index), ident[1], header);
+      if (keyArg === "")
+        continue;
+    }
+    const text = "if let Value::Dict(__r05d) = " + raw[0] + " { std::sync::Arc::make_mut(__r05d).insert(" + keyArg + ", " + value + "); }";
+    const lineStart = content.lastIndexOf("\n", m.index) + 1;
+    const lineEndIdx = content.indexOf("\n", end);
+    const lineLen = (lineEndIdx < 0 ? content.length : lineEndIdx) - lineStart;
+    if (lineLen > MAX_LINE || lineLen - (end - m.index) + text.length > MAX_LINE)
+      continue;
+    let stop = end;
+    while (stop < content.length && (content[stop] === " " || content[stop] === "	"))
+      stop++;
+    if (content[stop] !== ";")
+      continue;
+    rws.push({ start: m.index, end: stop + 1, text });
+  }
+  if (rws.length === 0)
+    return content;
+  rws.sort((a, b) => a.start - b.start);
+  let out = "";
+  let at = 0;
+  for (const r of rws) {
+    if (r.start < at)
+      continue;
+    out += content.slice(at, r.start) + r.text;
+    at = r.end;
+  }
+  return out + content.slice(at);
+}
+function r05FieldChainInserts(content) {
+  let out = content;
+  for (let i = 0; i < 4; i++) {
+    const next = runPass2(out);
+    if (next === out)
+      break;
+    out = next;
+  }
+  return out;
+}
+
+// src/rustPasses/hx10w3-R06.ts
+init_esm_shims();
+var helperName = "append_to_array";
+var lineBudget = 400;
+var plainFields = /* @__PURE__ */ new Set([
+  "orders",
+  "positions",
+  "tickers",
+  "trades",
+  "ohlcvs",
+  "bidsasks",
+  "clients",
+  "balance",
+  "options",
+  "markets",
+  "markets_by_id",
+  "currencies",
+  "events",
+  "outcomes",
+  "outcomes_by_id",
+  "events_by_slug",
+  "symbols",
+  "free",
+  "used",
+  "total"
+]);
+var keeperCalls = ["add_element_to_object", "set_value", "remove"];
+var literalPrefixes = ["Value::Null", "Value::Int(", "Value::Float(", "Value::Bool(", "Value::Str(", "Value::Map({", "Value::Array("];
+function maskText3(src) {
+  const out = [];
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      while (i < n && src[i] !== "\n") {
+        out.push(" ");
+        i++;
+      }
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      out.push("  ");
+      i += 2;
+      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) {
+        out.push(src[i] === "\n" ? "\n" : " ");
+        i++;
+      }
+      if (i < n) {
+        out.push("  ");
+        i += 2;
+      }
+      continue;
+    }
+    if (c === '"') {
+      out.push(" ");
+      i++;
+      while (i < n && src[i] !== '"') {
+        if (src[i] === "\\") {
+          out.push("  ");
+          i += 2;
+          continue;
+        }
+        out.push(src[i] === "\n" ? "\n" : " ");
+        i++;
+      }
+      if (i < n) {
+        out.push(" ");
+        i++;
+      }
+      continue;
+    }
+    out.push(c);
+    i++;
+  }
+  return out.join("");
+}
+function fnRegions3(masked) {
+  const regions = [];
+  const head = /\bfn\s+[A-Za-z0-9_]*\s*[(<]/g;
+  let m;
+  while ((m = head.exec(masked)) !== null) {
+    let i = m.index + m[0].length - 1;
+    let depth = 0;
+    let open = -1;
+    while (i < masked.length) {
+      const c = masked[i];
+      if (c === "(" || c === "[" || c === "<")
+        depth++;
+      else if (c === ")" || c === "]" || c === ">")
+        depth--;
+      else if (c === "{") {
+        if (depth <= 0) {
+          open = i;
+          break;
+        }
+        depth++;
+      } else if (c === ";" && depth <= 0)
+        break;
+      i++;
+    }
+    if (open < 0)
+      continue;
+    let close = -1;
+    let d = 0;
+    for (let j = open; j < masked.length; j++) {
+      if (masked[j] === "{")
+        d++;
+      else if (masked[j] === "}") {
+        d--;
+        if (d === 0) {
+          close = j;
+          break;
+        }
+      }
+    }
+    if (close > open)
+      regions.push([open, close]);
+  }
+  return regions;
+}
+function closeParenAt2(src, open) {
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    const c = src[i];
+    if (c === "(")
+      depth++;
+    else if (c === ")") {
+      depth--;
+      if (depth === 0)
+        return i;
+    }
+  }
+  return -1;
+}
+function exprEnd(masked, from) {
+  let depth = 0;
+  for (let i = from; i < masked.length; i++) {
+    const c = masked[i];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === ";" && depth <= 0)
+      return i;
+  }
+  return -1;
+}
+function r06w3Push(content) {
+  if (!content.includes(helperName + "("))
+    return content;
+  const masked = maskText3(content);
+  const regions = fnRegions3(masked);
+  const callRx = new RegExp("(?<![\\w.:])" + helperName + "\\(", "g");
+  const jobs = [];
+  const memo = /* @__PURE__ */ new Map();
+  const factsOf = (region) => {
+    const key = region[0] + ":" + region[1];
+    let hit = memo.get(key);
+    if (hit === void 0) {
+      hit = /* @__PURE__ */ new Map();
+      memo.set(key, hit);
+    }
+    return hit;
+  };
+  const isPlainField = (expr) => {
+    const f = /^self\.([A-Za-z_][A-Za-z0-9_]*)\b/.exec(expr.trim());
+    return f !== null && plainFields.has(f[1]);
+  };
+  const chainRoot = (expr) => {
+    const m2 = /^([A-Za-z_][A-Za-z0-9_]*)\.(?:as_map|as_array)\(\)/.exec(expr.trim());
+    return m2 === null ? null : m2[1];
+  };
+  const sourceFree = (expr, region, seen) => {
+    const t = expr.trim();
+    if (literalPrefixes.some((p) => t.startsWith(p)))
+      return true;
+    if (/^Value::from\(vec!\[/.test(t) || /^Value::from\(Vec::new\(\)\)$/.test(t))
+      return true;
+    if (t.startsWith("self.safe_list"))
+      return true;
+    if (/^[A-Za-z_][A-Za-z0-9_]*\.as_str\(\)\.map\(/.test(t))
+      return true;
+    if (isPlainField(t))
+      return true;
+    const safeValue = /^self\.safe_value(?:_k)?\(self\.([A-Za-z_][A-Za-z0-9_]*)/.exec(t);
+    if (safeValue !== null && plainFields.has(safeValue[1]))
+      return true;
+    const matchRead = /^match\s*&\s*([A-Za-z_][A-Za-z0-9_]*)\s*\{\s*Value::Dict\(__m\d+\)\s*=>\s*__m\d+\.get\("/.exec(t);
+    if (matchRead !== null)
+      return localFree(matchRead[1], region, seen);
+    const read = /^(?:crate::value::)?(?:get_value_k|get_value)\(/.exec(t);
+    if (read !== null) {
+      const open = read[0].length - 1;
+      const close = closeParenAt2(t, open);
+      if (close < 0)
+        return false;
+      const args = t.slice(open + 1, close);
+      const comma = args.indexOf(",");
+      if (comma < 0)
+        return false;
+      const recv = args.slice(0, comma).trim().replace(/^&\s*/, "");
+      if (isPlainField(recv))
+        return true;
+      const root2 = chainRoot(recv);
+      if (root2 !== null)
+        return localFree(root2, region, seen);
+      if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(recv))
+        return localFree(recv, region, seen);
+      return false;
+    }
+    const clone = /^([A-Za-z_][A-Za-z0-9_]*)\.clone\(\)$/.exec(t);
+    if (clone !== null)
+      return localFree(clone[1], region, seen);
+    const root = chainRoot(t);
+    if (root !== null)
+      return localFree(root, region, seen);
+    return false;
+  };
+  const localFree = (name, region, seen) => {
+    const facts = factsOf(region);
+    const known = facts.get(name);
+    if (known !== void 0)
+      return known;
+    if (seen.has(name))
+      return false;
+    const body = masked.slice(region[0], region[1]);
+    const declRx = new RegExp("let (?:mut )?" + name + "\\s*:\\s*([^=;]+?)\\s*=(?!=)", "g");
+    const spans = [];
+    let d;
+    while ((d = declRx.exec(body)) !== null) {
+      if (d[1].trim() !== "Value") {
+        facts.set(name, false);
+        return false;
+      }
+      const rhsStart = region[0] + d.index + d[0].length;
+      const rhsEnd = exprEnd(masked, rhsStart);
+      if (rhsEnd < 0) {
+        facts.set(name, false);
+        return false;
+      }
+      spans.push([d.index, rhsEnd - region[0]]);
+    }
+    if (spans.length === 0) {
+      facts.set(name, false);
+      return false;
+    }
+    seen.add(name);
+    let ok = true;
+    for (const [d0, d1] of spans) {
+      const rhsStart = region[0] + d0 + body.slice(d0).indexOf("=") + 1;
+      if (!sourceFree(content.slice(rhsStart, region[0] + d1), region, seen)) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) {
+      const wrx = new RegExp("(?<![\\w.])" + name + "\\s*=(?!=)", "g");
+      let w;
+      while ((w = wrx.exec(body)) !== null) {
+        if (spans.some(([d0, d1]) => w.index >= d0 + body.slice(d0).indexOf("=") && w.index < d1))
+          continue;
+        const rhsStart = region[0] + w.index + w[0].length;
+        const rhsEnd = exprEnd(masked, rhsStart);
+        if (rhsEnd < 0 || !sourceFree(content.slice(rhsStart, rhsEnd), region, seen)) {
+          ok = false;
+          break;
+        }
+      }
+    }
+    seen.delete(name);
+    facts.set(name, ok);
+    return ok;
+  };
+  let m;
+  while ((m = callRx.exec(masked)) !== null) {
+    const start = m.index;
+    const lineStart = masked.lastIndexOf("\n", start) + 1;
+    if (/^\s*(?:pub\s+)?fn /.test(masked.slice(lineStart, start)))
+      continue;
+    const region = regions.find((r) => r[0] < start && start < r[1]);
+    if (region === void 0)
+      continue;
+    const argStart = start + helperName.length + 1;
+    const recv = /^&mut\s+([A-Za-z_][A-Za-z0-9_]*)\s*,/.exec(content.slice(argStart, argStart + 160));
+    if (recv === null)
+      continue;
+    const name = recv[1];
+    const nameRx = new RegExp("(?<![\\w.])" + name + "(?![\\w])");
+    const headerStart = masked.lastIndexOf("fn ", region[0]);
+    if (new RegExp("(?<![\\w])" + name + "\\s*:").test(masked.slice(headerStart, region[0])))
+      continue;
+    if (!localFree(name, region, /* @__PURE__ */ new Set()))
+      continue;
+    const body = masked.slice(region[0], region[1]);
+    const mutRx = new RegExp("&mut\\s+" + name + "(?![\\w])", "g");
+    let ok = true;
+    let mu;
+    while ((mu = mutRx.exec(body)) !== null) {
+      const at = region[0] + mu.index;
+      const before = masked.slice(Math.max(0, at - 60), at);
+      const after = masked.slice(at + mu[0].length, at + mu[0].length + 8);
+      const pushRecv = new RegExp(helperName + "\\(\\s*$").test(before) && /^\s*,/.test(after);
+      const keeper = keeperCalls.some((c) => new RegExp("(?<![\\w.])" + c + "\\(\\s*$").test(before)) && /^\s*,/.test(after);
+      if (!pushRecv && !keeper) {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok)
+      continue;
+    const callEnd4 = closeParenAt2(masked, argStart - 1);
+    if (callEnd4 < 0)
+      continue;
+    const valueStart = argStart + recv[0].length;
+    const value = content.slice(valueStart, callEnd4);
+    if (nameRx.test(value))
+      continue;
+    let stmtStart = masked.lastIndexOf(";", start);
+    stmtStart = Math.max(stmtStart, masked.lastIndexOf("{", start), masked.lastIndexOf("}", start)) + 1;
+    if (masked.slice(stmtStart, start).trim() !== "")
+      continue;
+    if (!/^\)\s*;/.test(masked.slice(callEnd4, callEnd4 + 4)))
+      continue;
+    const text = `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${value.trim()}); }`;
+    const lStart = content.lastIndexOf("\n", start) + 1;
+    const lEnd = content.indexOf("\n", callEnd4) < 0 ? content.length : content.indexOf("\n", callEnd4);
+    const lenNow = lEnd - lStart;
+    if (lenNow <= lineBudget && lenNow - (callEnd4 + 1 - start) + text.length > lineBudget)
+      continue;
+    jobs.push({ start, end: callEnd4 + 1, text });
+  }
+  if (jobs.length === 0)
+    return content;
+  let out = content;
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const j = jobs[i];
+    out = out.slice(0, j.start) + j.text + out.slice(j.end);
+  }
+  return out;
+}
+
+// src/rustPasses/hx10w3-R07.ts
+init_esm_shims();
+var SCALAR = /* @__PURE__ */ new Set(["str", "int", "float", "bool", "null"]);
+var NATIVE_TY = /* @__PURE__ */ new Set(["String", "Vec<String>", "i64", "f64", "bool", "usize", "u32", "isize"]);
+function maskText4(src) {
+  const out = src.split("");
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      while (i < src.length && src[i] !== "\n")
+        out[i++] = " ";
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) {
+        if (src[i] !== "\n")
+          out[i] = " ";
+        i++;
+      }
+      if (i < src.length) {
+        out[i] = " ";
+        out[i + 1] = " ";
+        i += 2;
+      }
+      continue;
+    }
+    if (c === '"') {
+      out[i++] = " ";
+      while (i < src.length && src[i] !== '"') {
+        if (src[i] === "\\")
+          out[i++] = " ";
+        if (i < src.length) {
+          if (src[i] !== "\n")
+            out[i] = " ";
+          i++;
+        }
+      }
+      if (i < src.length)
+        out[i++] = " ";
+      continue;
+    }
+    i++;
+  }
+  return out.join("");
+}
+function closeParen3(masked, open) {
+  const openCh = masked[open];
+  const closeCh = openCh === "(" ? ")" : openCh === "[" ? "]" : "}";
+  let depth = 0;
+  for (let k = open; k < masked.length; k++) {
+    const c = masked[k];
+    if (c === openCh)
+      depth++;
+    else if (c === closeCh) {
+      depth--;
+      if (depth === 0)
+        return k + 1;
+    }
+  }
+  return -1;
+}
+function splitArgs3(masked, from, to) {
+  const args = [];
+  let depth = 0;
+  let start = from;
+  for (let k = from; k < to; k++) {
+    const c = masked[k];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === "," && depth === 0) {
+      args.push(masked.slice(start, k));
+      start = k + 1;
+    }
+  }
+  args.push(masked.slice(start, to));
+  return args;
+}
+function stmtEnd2(masked, from) {
+  let depth = 0;
+  for (let k = from; k < masked.length; k++) {
+    const c = masked[k];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth < 0)
+        return -1;
+    } else if (c === ";" && depth === 0)
+      return k;
+  }
+  return -1;
+}
+var FN_HEAD2 = /(?:^|\n)[ \t]*(?:pub(?:\([a-z]+\))? )?(?:async )?fn /g;
+function fnBounds(masked, pos) {
+  let start = 0;
+  for (const m of masked.matchAll(FN_HEAD2)) {
+    const at = m.index;
+    if (at <= pos)
+      start = at + 1;
+    else
+      return [start, at + 1];
+  }
+  return [start, masked.length];
+}
+function strBox(arg) {
+  const m = /^&\s*Value::Str\(\s*("(?:[^"\\]|\\.)*")\s*(?:\.into\(\)|\.to_string\(\))?\s*\)$/.exec(arg.trim());
+  return m === null ? void 0 : m[1];
+}
+function intBox(arg) {
+  const m = /^&\s*Value::Int\(\s*(-?\d+)\s*\)$/.exec(arg.trim());
+  return m === null ? void 0 : m[1];
+}
+function elemKind(expr, locals, depth = 0) {
+  const e = expr.trim().replace(/;$/, "").trim();
+  const vec = /^(?:Value::(?:Array|List|from)|vec!)\(?(vec!)?\[/.exec(e) ?? /^vec!\[/.exec(e);
+  if (vec !== null) {
+    const open = e.indexOf("[");
+    const close = closeParen3(e, open);
+    if (close < 0 || !/^\)*$/.test(e.slice(close)))
+      return void 0;
+    const items = splitArgs3(e, open + 1, close - 1);
+    if (items === void 0)
+      return void 0;
+    for (const it of items) {
+      if (it.trim() === "")
+        continue;
+      if (!/^\s*Value::Str\(/.test(it))
+        return void 0;
+    }
+    return "str";
+  }
+  const arr = /^Value::(?:Array|List)\(/.exec(e);
+  if (arr !== null) {
+    const open = arr[0].length - 1;
+    const close = closeParen3(e, open);
+    if (close !== e.length)
+      return void 0;
+    const inner = e.slice(open + 1, close - 1);
+    if (/\.map\(\|__p\| Value::Str\(|\.split\([^()]*\)\.map\(Value::from\)/.test(inner))
+      return "str";
+    return void 0;
+  }
+  if (/^(?:crate::runtime::)?split\(/.test(e))
+    return "str";
+  const slice = /^(?:self\.)?array_slice\(\s*&?([A-Za-z_]\w*)/.exec(e);
+  if (slice !== null && depth === 0) {
+    const src = locals.get(slice[1]);
+    return src === void 0 ? void 0 : src.elems;
+  }
+  return void 0;
+}
+function inferSet(expr, locals) {
+  const e = expr.trim().replace(/;$/, "").trim();
+  for (const [head, variant] of [["Value::Str(", "str"], ["Value::Int(", "int"], ["Value::Float(", "float"], ["Value::Bool(", "bool"]]) {
+    if (e.startsWith(head))
+      return /* @__PURE__ */ new Set([variant]);
+  }
+  if (e === "Value::Null")
+    return /* @__PURE__ */ new Set(["null"]);
+  const copy = /^([A-Za-z_]\w*)(?:\.clone\(\))?$/.exec(e);
+  if (copy !== null) {
+    const src = locals.get(copy[1]);
+    if (src === void 0)
+      return void 0;
+    if (src.ty === "Value")
+      return src.set === void 0 ? void 0 : new Set(src.set);
+    if (src.ty === "String")
+      return /* @__PURE__ */ new Set(["str"]);
+  }
+  const own = /^(?:crate::runtime::)?(to_string_val|replace_str|replace_all_str|join|pad_end|to_fixed)\(/.exec(e);
+  if (own !== null)
+    return own[1] === "pad_end" ? /* @__PURE__ */ new Set(["str", "null"]) : /* @__PURE__ */ new Set(["str"]);
+  if (/^(?:crate::runtime::)?split\(/.test(e))
+    return /* @__PURE__ */ new Set(["arr"]);
+  const call = /^(?:crate::value::)?(?:self\.)?(safe_string(?:_k|_2|_lower|_upper|_lower_k|_upper_k)?|safe_bool(?:_k|_2)?|safe_integer(?:_k|_2)?|safe_int|safe_timestamp|safe_float(?:_k)?|safe_number(?:_k|_2)?|parse_int|parse_float|parse_to_int|number_to_string|decimal_to_precision|sum)\(/.exec(e);
+  if (call !== null) {
+    const name = call[1];
+    const open = call[0].length - 1;
+    if (closeParen3(e, open) !== e.length)
+      return void 0;
+    if (name === "decimal_to_precision")
+      return /* @__PURE__ */ new Set(["str"]);
+    if (name === "number_to_string")
+      return /* @__PURE__ */ new Set(["str", "null"]);
+    if (name === "sum")
+      return /* @__PURE__ */ new Set(["int", "float", "str", "null"]);
+    let own2 = "str";
+    if (name.startsWith("safe_bool"))
+      own2 = "bool";
+    else if (name.startsWith("safe_float") || name.startsWith("safe_number") || name === "parse_float")
+      own2 = "float";
+    else if (!name.startsWith("safe_string") && name !== "parse_to_int")
+      own2 = "int";
+    const out = /* @__PURE__ */ new Set([own2]);
+    if (name.startsWith("safe")) {
+      const args = splitArgs3(e, open + 1, e.length - 1);
+      if (args === void 0)
+        return void 0;
+      const last = args[args.length - 1].trim();
+      if (last === "&[]")
+        out.add("null");
+      else {
+        const inner = /^&\[(.*)\]$/.exec(last);
+        if (inner === null)
+          return void 0;
+        const lit = strBox(`&${inner[1]}`);
+        const num = intBox(`&${inner[1]}`);
+        if (lit !== void 0)
+          out.add("str");
+        else if (num !== void 0)
+          out.add("int");
+        else
+          return void 0;
+      }
+    } else {
+      out.add("null");
+    }
+    return out;
+  }
+  if (/^(?:Value::(?:Array|List)\(|Value::from\(vec!\[|vec!\[)/.test(e))
+    return /* @__PURE__ */ new Set(["arr"]);
+  const slice = /^(?:crate::value::)?(?:self\.)?(?:array_slice|array_concat)\(\s*&?([A-Za-z_]\w*)/.exec(e);
+  if (slice !== null) {
+    const src = locals.get(slice[1]);
+    return src === void 0 || src.set === void 0 ? void 0 : new Set(src.set);
+  }
+  if (/^\(match &\w+ \{ Value::Str\(__parse_s\) => __parse_s\.trim\(\)\.parse::<f64>\(\)\.map\(Value::Float\)/.test(e))
+    return /* @__PURE__ */ new Set(["float", "null"]);
+  if (/^\(match &\w+ \{ Value::Str\(__parse_s\) => __parse_s\.trim\(\)\.parse::<i64>\(\)\.map\(Value::Int\)/.test(e))
+    return /* @__PURE__ */ new Set(["int", "null"]);
+  if (/^\(match \(&\(/.test(e))
+    return /* @__PURE__ */ new Set(["int", "float", "null"]);
+  return void 0;
+}
+function valueSets(region, maskedRegion, sig) {
+  const locals = /* @__PURE__ */ new Map();
+  const declRe = /let\s+(?:mut\s+)?([A-Za-z_]\w*)\s*:\s*([^=;]+?)\s*=/g;
+  const decls = [];
+  let m;
+  while ((m = declRe.exec(maskedRegion)) !== null) {
+    const rel = new RegExp(`\\b${m[1]}\\b`).exec(m[0]);
+    decls.push({ name: m[1], ty: m[2].replace(/\s+/g, ""), at: m.index + (rel === null ? 0 : rel.index), init: m.index + m[0].length });
+  }
+  const multi = /* @__PURE__ */ new Map();
+  for (const d of decls)
+    multi.set(d.name, (multi.get(d.name) ?? 0) + 1);
+  for (const p of sig.matchAll(/\(\s*(?:&?\s*(?:mut\s+)?([A-Za-z_]\w*)\s*:\s*([^,)]+)|&[A-Za-z_]\w*)|,\s*(?:mut\s+)?([A-Za-z_]\w*)\s*:\s*([^,)]+)/g)) {
+    const name = p[1] ?? p[3];
+    const ty = (p[2] ?? p[4] ?? "").replace(/\s+/g, "");
+    if (name !== void 0 && NATIVE_TY.has(ty))
+      locals.set(name, { ty });
+  }
+  for (const d of decls) {
+    if (multi.get(d.name) !== 1)
+      continue;
+    locals.set(d.name, { ty: d.ty });
+    if (d.ty !== "Value")
+      continue;
+    const bind = new RegExp(`(?:[(,|]\\s*(?:mut\\s+)?${d.name}\\s*:|\\bfor\\s+(?:mut\\s+)?${d.name}\\b)`);
+    if (bind.test(sig))
+      continue;
+    const set = /* @__PURE__ */ new Set();
+    let ok = true;
+    let elems = "str";
+    const word = new RegExp(`(?<![A-Za-z0-9_.])${d.name}(?![A-Za-z0-9_])`, "g");
+    for (let k = 0; k < maskedRegion.length; k++) {
+      word.lastIndex = k;
+      const hit = word.exec(maskedRegion);
+      if (hit === null)
+        break;
+      const s = hit.index;
+      k = s;
+      if (/&\s*mut\s*$/.test(maskedRegion.slice(Math.max(0, s - 12), s))) {
+        ok = false;
+        break;
+      }
+      const tail = maskedRegion.slice(s + d.name.length);
+      const rhs = /^\s*=(?!=)/.exec(tail);
+      if (s === d.at) {
+        const end = stmtEnd2(maskedRegion, d.init);
+        const ex = end < 0 ? "" : region.slice(d.init, end);
+        const got = end < 0 ? void 0 : inferSet(ex, locals);
+        if (got === void 0) {
+          ok = false;
+          break;
+        }
+        got.forEach((v) => set.add(v));
+        if (elemKind(ex, locals) !== "str")
+          elems = void 0;
+        k = end < 0 ? s + d.name.length : end;
+        continue;
+      }
+      if (rhs !== null) {
+        const from = s + d.name.length + rhs[0].length;
+        const end = stmtEnd2(maskedRegion, from);
+        const ex = end < 0 ? "" : region.slice(from, end);
+        const got = end < 0 ? void 0 : inferSet(ex, locals);
+        if (got === void 0) {
+          ok = false;
+          break;
+        }
+        got.forEach((v) => set.add(v));
+        if (elemKind(ex, locals) !== "str")
+          elems = void 0;
+        k = end < 0 ? from : end;
+        continue;
+      }
+    }
+    if (ok && set.size > 0)
+      locals.set(d.name, { ty: d.ty, set, elems });
+  }
+  return locals;
+}
+function rewrite(name, args, locals) {
+  const arg0 = (args[0] ?? "").trim();
+  const recv = /^&\s*([A-Za-z_]\w*)$/.exec(arg0);
+  const x = recv === null ? void 0 : recv[1];
+  const local = x === void 0 ? void 0 : locals.get(x);
+  const set = local?.set;
+  const ty = local?.ty;
+  const provenScalar = set !== void 0 && set.size > 0 && [...set].every((v) => SCALAR.has(v));
+  const strTyped = ty === "String";
+  const strProven = strTyped || set !== void 0 && set.size === 1 && set.has("str");
+  const scalarProven = strTyped || provenScalar;
+  const numProven = ty === "i64" || ty === "f64" || set !== void 0 && set.size > 0 && [...set].every((v) => v === "int" || v === "float" || v === "null");
+  if (x === void 0) {
+    if (name !== "to_string_val")
+      return void 0;
+    const held = arg0.replace(/^&/, "").replace(/;$/, "").trim();
+    const got = inferSet(held, locals);
+    if (got === void 0 || [...got].some((v) => !SCALAR.has(v)))
+      return void 0;
+    return `Value::str(${held}.to_string())`;
+  }
+  switch (name) {
+    case "to_string_val": {
+      if (args.length !== 1)
+        return void 0;
+      if (strProven)
+        return `Value::str(${x}.clone())`;
+      if (scalarProven)
+        return `Value::str(${x}.to_string())`;
+      return void 0;
+    }
+    case "replace_str":
+    case "replace_all_str": {
+      if (!strProven || args.length !== 3)
+        return void 0;
+      const a = strBox(args[1]);
+      const b = strBox(args[2]);
+      if (a === void 0 || b === void 0)
+        return void 0;
+      const holder = strTyped ? x : `${x}.as_str().unwrap_or_default()`;
+      return `Value::str(${holder}.replace(${a}, ${b}))`;
+    }
+    case "split": {
+      if (!strProven || args.length !== 2)
+        return void 0;
+      const d = strBox(args[1]);
+      if (d === void 0)
+        return void 0;
+      const holder = strTyped ? x : `${x}.as_str().unwrap_or_default()`;
+      return `Value::Array(${holder}.split(${d}).map(Value::str).collect())`;
+    }
+    case "starts_with":
+    case "ends_with": {
+      if (!strProven || args.length !== 2)
+        return void 0;
+      const s = strBox(args[1]);
+      if (s === void 0)
+        return void 0;
+      const holder = strTyped ? x : `${x}.as_str().unwrap_or_default()`;
+      return `${holder}.${name}(${s})`;
+    }
+    case "to_fixed": {
+      if (!numProven || args.length !== 2)
+        return void 0;
+      const d = intBox(args[1]);
+      if (d === void 0)
+        return void 0;
+      const n = ty === "f64" ? x : ty === "i64" ? `(${x} as f64)` : `${x}.as_f64().unwrap_or(0.0)`;
+      return `Value::str(format!("{:.*}", ${d}, ${n}))`;
+    }
+    case "join": {
+      if (args.length !== 2)
+        return void 0;
+      const s = strBox(args[1]);
+      if (s === void 0)
+        return void 0;
+      if (ty === "Vec<String>")
+        return `Value::str(${x}.join(${s}))`;
+      if (local?.elems === "str" && set !== void 0 && set.size === 1 && set.has("arr")) {
+        return `Value::str(${x}.as_array().cloned().unwrap_or_default().iter().filter_map(Value::as_str).collect::<Vec<_>>().join(${s}))`;
+      }
+      return void 0;
+    }
+    default:
+      return void 0;
+  }
+}
+function r07StringNatives(content) {
+  if (!/to_string_val\(|replace_str\(|replace_all_str\(|split\(|join\(|starts_with\(|ends_with\(|to_fixed\(/.test(content))
+    return content;
+  const masked = maskText4(content);
+  const rx = /(?<![A-Za-z0-9_:.])(to_string_val|replace_str|replace_all_str|split|join|starts_with|ends_with|to_fixed)\(/g;
+  const hits = [];
+  for (const m of masked.matchAll(rx)) {
+    const start = m.index;
+    if (/\bfn\s+$/.test(masked.slice(Math.max(0, start - 8), start)))
+      continue;
+    const open = start + m[1].length;
+    const close = closeParen3(masked, open);
+    if (close < 0)
+      continue;
+    hits.push({ start, end: close, name: m[1] });
+  }
+  if (hits.length === 0)
+    return content;
+  const rewrites = [];
+  const cache = /* @__PURE__ */ new Map();
+  for (const h of hits) {
+    const [lo, hi] = fnBounds(masked, h.start);
+    let locals = cache.get(lo);
+    if (locals === void 0) {
+      const region = content.slice(lo, hi);
+      const head = content.slice(lo, hi).indexOf("{");
+      const sig = head < 0 ? "" : region.slice(0, head);
+      locals = valueSets(region, masked.slice(lo, hi), sig);
+      cache.set(lo, locals);
+    }
+    const args = splitArgs3(content, h.start + h.name.length + 1, h.end - 1);
+    if (args === void 0)
+      continue;
+    const text = rewrite(h.name, args, locals);
+    if (text === void 0)
+      continue;
+    const lineStart = content.lastIndexOf("\n", h.start) + 1;
+    const lineEnd = content.indexOf("\n", h.end);
+    const len = (lineEnd < 0 ? content.length : lineEnd) - lineStart;
+    if (len <= 400 && len - (h.end - h.start) + text.length > 400)
+      continue;
+    rewrites.push({ start: h.start, end: h.end, text });
+  }
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start);
+  let out = "";
+  let at = 0;
+  for (const r of rewrites) {
+    if (r.start < at)
+      continue;
+    out += content.slice(at, r.start) + r.text;
+    at = r.end;
+  }
+  return out + content.slice(at);
+}
+
+// src/rustPasses/hx10w3-R08.ts
+init_esm_shims();
+var ROUTED = /^(?:timestamp|datetime|nonce|symbol|checksum|cache|hashmap|subscriptions|futures)$/;
+var PLAIN_INIT = /^Value::Map\(/;
+var DICT_INIT2 = /^(?:Value::Map\(|self\.safe_dict|self\.safe_dictionary|self\.create_safe_dictionary|self\.extend\(|self\.deep_extend\(|self\.omit\(|self\.group_by\(|self\.index_by\(|self\.filter_by_array\()/;
+var WRITE_HELPER = /(?:add_element_to_object|get_value_mut|set_value|remove)\(\s*$/;
+var CALL2 = /(?<![A-Za-z0-9_:.])(get_value|in_op)\(/g;
+var STR_LIT2 = /^&Value::Str\("((?:[^"\\]|\\.)*)"\.(?:into|to_string)\(\)\)$/;
+function maskSrc3(src) {
+  const out = src.split("");
+  const blank = (from, to) => {
+    for (let i2 = from; i2 < to && i2 < out.length; i2++)
+      if (out[i2] !== "\n")
+        out[i2] = " ";
+  };
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      const end = src.indexOf("\n", i);
+      const stop = end < 0 ? src.length : end;
+      blank(i, stop);
+      i = stop;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      const end = src.indexOf("*/", i + 2);
+      const stop = end < 0 ? src.length : end + 2;
+      blank(i, stop);
+      i = stop;
+      continue;
+    }
+    if (c === "'") {
+      const m = /^'(?:\\.|[^\\'])'/.exec(src.slice(i, i + 5));
+      if (m !== null) {
+        i += m[0].length;
+        continue;
+      }
+    }
+    if (c === '"') {
+      let j = i + 1;
+      while (j < src.length) {
+        if (src[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (src[j] === '"')
+          break;
+        j++;
+      }
+      blank(i, Math.min(j + 1, src.length));
+      i = j + 1;
+      continue;
+    }
+    i++;
+  }
+  return out.join("");
+}
+function callEnd3(masked, open) {
+  let depth = 0;
+  for (let j = open; j < masked.length; j++) {
+    const c = masked[j];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0)
+        return j + 1;
+    }
+  }
+  return -1;
+}
+function argSpans3(masked, open) {
+  const spans = [];
+  let depth = 0;
+  let start = open + 1;
+  for (let j = open; j < masked.length; j++) {
+    const c = masked[j];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0) {
+        spans.push([start, j]);
+        return spans;
+      }
+    } else if (c === "," && depth === 1) {
+      spans.push([start, j]);
+      start = j + 1;
+    }
+  }
+  return spans;
+}
+function initOf(masked, from) {
+  let depth = 0;
+  let j = from;
+  while (j < masked.length) {
+    const c = masked[j];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}")
+      depth--;
+    else if (c === ";" && depth === 0)
+      break;
+    j++;
+  }
+  return [from, j];
+}
+function proofOf(masked, raw, name, header) {
+  if (new RegExp("(?:^|[\\s,(])" + name + "\\s*:").test(header))
+    return void 0;
+  if (new RegExp("(?:^|[^|A-Za-z0-9_])\\|\\s*(?:mut\\s+)?(?:[A-Za-z_][A-Za-z0-9_]*\\s*(?::[^|]*?)?,?\\s*)+\\|").test(masked)) {
+    const lists = masked.match(/\|\s*(?:mut\s+)?[A-Za-z_][A-Za-z0-9_]*\s*(?:,[^|]*)?\|/g) ?? [];
+    for (const l of lists) {
+      if (new RegExp("\\b" + name + "\\b").test(l.replace(/::[A-Za-z0-9_:]*/g, "")))
+        return void 0;
+    }
+  }
+  if (new RegExp("\\bfor\\s+" + name + "\\s+in\\b").test(masked))
+    return void 0;
+  if (new RegExp("\\b(?:Some|Ok|Err|Value::(?:Dict|Arr|Str|Int|Float|Bool))\\(\\s*(?:mut\\s+)?" + name + "\\s*[),]").test(masked))
+    return void 0;
+  const declRe = new RegExp("let (?:mut )?" + name + "(?:: Value)? = ", "g");
+  let cls;
+  let decls = 0;
+  let dm;
+  while ((dm = declRe.exec(masked)) !== null) {
+    decls++;
+    const span = initOf(masked, dm.index + dm[0].length);
+    const init = raw.slice(span[0], span[1]).trim();
+    const this_cls = PLAIN_INIT.test(init) ? "plain" : DICT_INIT2.test(init) ? "dicty" : void 0;
+    if (this_cls === void 0)
+      return void 0;
+    if (cls === void 0)
+      cls = this_cls;
+    else if (this_cls === "dicty")
+      cls = "dicty";
+  }
+  if (decls === 0 || cls === void 0)
+    return void 0;
+  const assignRe = new RegExp("(?<![&A-Za-z0-9_.])" + name + "\\s*=(?!=)", "g");
+  let am;
+  while ((am = assignRe.exec(masked)) !== null) {
+    const span = initOf(masked, am.index + am[0].length);
+    const rhs = raw.slice(span[0], span[1]).trim();
+    if (/^Value::Map\(/.test(rhs) || /^Value::Null\b/.test(rhs))
+      continue;
+    if (DICT_INIT2.test(rhs)) {
+      cls = "dicty";
+      continue;
+    }
+    return void 0;
+  }
+  const mutRe = new RegExp("&mut\\s+" + name + "\\b", "g");
+  let mm;
+  while ((mm = mutRe.exec(masked)) !== null) {
+    const pre = masked.slice(Math.max(0, mm.index - 60), mm.index);
+    if (WRITE_HELPER.test(pre) || /(?:crate::)?Value::Dict\(\w+\)\s*=\s*$/.test(pre))
+      continue;
+    return void 0;
+  }
+  return cls;
+}
+function runPass3(content) {
+  if (!content.includes("get_value(") && !content.includes("in_op("))
+    return content;
+  const masked = maskSrc3(content);
+  const starts = [];
+  const headerRe = /(?:^|\n)[ \t]*(?:pub )?(?:async )?fn /g;
+  let hm;
+  while ((hm = headerRe.exec(masked)) !== null)
+    starts.push(hm.index + (hm[0][0] === "\n" ? 1 : 0));
+  starts.push(content.length);
+  const rewrites = [];
+  for (let h = 0; h + 1 < starts.length; h++) {
+    const from = starts[h];
+    const to = starts[h + 1];
+    const region = masked.slice(from, to);
+    const hit = region.indexOf("get_value(") >= 0 || region.indexOf("in_op(") >= 0;
+    if (!hit)
+      continue;
+    const raw = content.slice(from, to);
+    const header = region.slice(0, region.indexOf("{") < 0 ? 200 : region.indexOf("{"));
+    const proofs = /* @__PURE__ */ new Map();
+    let cm;
+    CALL2.lastIndex = 0;
+    while ((cm = CALL2.exec(region)) !== null) {
+      const name = cm[1];
+      const open = cm.index + name.length;
+      const end = callEnd3(region, open);
+      if (end < 0)
+        continue;
+      const spans = argSpans3(region, open);
+      if (spans.length !== 2)
+        continue;
+      const recvRaw = raw.slice(spans[0][0], spans[0][1]).trim();
+      const recvMasked = region.slice(spans[0][0], spans[0][1]).trim();
+      const ident = /^&\s*([A-Za-z_][A-Za-z0-9_]*)$/.exec(recvMasked);
+      if (ident === null)
+        continue;
+      const local = ident[1];
+      if (recvRaw !== "&" + local)
+        continue;
+      if (!proofs.has(local))
+        proofs.set(local, proofOf(region, raw, local, header));
+      const proof = proofs.get(local);
+      if (proof === void 0)
+        continue;
+      const keyRaw = raw.slice(spans[1][0], spans[1][1]).trim();
+      const lit = STR_LIT2.exec(keyRaw);
+      let key;
+      if (lit !== null) {
+        const k = lit[1];
+        if (ROUTED.test(k) || /^[0-9]+$/.test(k))
+          continue;
+        key = '"' + k + '"';
+      } else {
+        if (proof !== "plain")
+          continue;
+        const dyn = /^&\s*(.+)$/s.exec(keyRaw);
+        if (dyn === null)
+          continue;
+        if (/^(?:crate::)?Value::(?:Str|Int|Float|Bool|Null)\b/.test(dyn[1].trim()))
+          continue;
+        key = dyn[1].trim();
+      }
+      const dynKey = key.startsWith('"') ? void 0 : key;
+      const text = cm[1] === "get_value" ? `${local}.as_map().and_then(|__m| ${dynKey === void 0 ? `__m.get(${key})` : `${dynKey}.as_str().and_then(|__k| __m.get(__k))`}).cloned().unwrap_or(Value::Null)` : `${local}.as_map().is_some_and(|__m| ${dynKey === void 0 ? `__m.contains_key(${key})` : `${dynKey}.as_str().is_some_and(|__k| __m.contains_key(__k))`})`;
+      const start = from + cm.index;
+      const stop = from + end;
+      const lineStart = content.lastIndexOf("\n", start) + 1;
+      const lineStop = content.indexOf("\n", stop);
+      const lineLen = (lineStop < 0 ? content.length : lineStop) - lineStart;
+      if (lineLen <= 400 && lineLen - (stop - start) + text.length > 400)
+        continue;
+      rewrites.push({ start, end: stop, text });
+    }
+  }
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start);
+  let out = "";
+  let at = 0;
+  for (const r of rewrites) {
+    if (r.start < at)
+      continue;
+    out += content.slice(at, r.start) + r.text;
+    at = r.end;
+  }
+  return out + content.slice(at);
+}
+function r08DictReads(content) {
+  let out = content;
+  for (let i = 0; i < 2; i++) {
+    const next = runPass3(out);
+    if (next === out)
+      break;
+    out = next;
+  }
+  return out;
+}
+
+// src/rustPasses/hx10w4-BF03.ts
+init_esm_shims();
+var FIELDS = ["options", "markets", "balance"];
+var RECV3 = "self\\.(?:(?:core|parent)\\.)*(" + FIELDS.join("|") + ")";
+var STR_KEY3 = /^&Value::Str\("((?:[^"\\]|\\.)*)"\.(?:into|to_string)\(\)\)$/;
+var ROOT = new RegExp("^&mut\\s+" + RECV3 + "$");
+var COERCED = new RegExp("^unsafe\\s*\\{\\s*crate::runtime::coerce_value_to_mut\\(&" + RECV3 + "\\)\\s*\\}$");
+var MAX_LINE2 = 400;
+function maskSrc4(src) {
+  const out = src.split("");
+  const blank = (from, to) => {
+    for (let i2 = from; i2 < to && i2 < out.length; i2++)
+      if (out[i2] !== "\n")
+        out[i2] = " ";
+  };
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      const end = src.indexOf("\n", i);
+      const stop = end < 0 ? src.length : end;
+      blank(i, stop);
+      i = stop;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      const end = src.indexOf("*/", i + 2);
+      const stop = end < 0 ? src.length : end + 2;
+      blank(i, stop);
+      i = stop;
+      continue;
+    }
+    if (c === "'") {
+      const m = /^'(?:\\.|[^\\'])'/.exec(src.slice(i, i + 4));
+      if (m !== null) {
+        i += m[0].length;
+        continue;
+      }
+    }
+    if (c === '"') {
+      let j = i + 1;
+      while (j < src.length) {
+        if (src[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (src[j] === '"')
+          break;
+        j++;
+      }
+      blank(i, Math.min(j + 1, src.length));
+      i = j + 1;
+      continue;
+    }
+    i++;
+  }
+  return out.join("");
+}
+function argSpans4(masked, open) {
+  let depth = 0;
+  const spans = [];
+  let start = open + 1;
+  for (let j = open; j < masked.length; j++) {
+    const c = masked[j];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0) {
+        spans.push([start, j]);
+        return spans;
+      }
+    } else if (c === "," && depth === 1) {
+      spans.push([start, j]);
+      start = j + 1;
+    }
+  }
+  return void 0;
+}
+function closeOf(masked, open) {
+  let depth = 0;
+  for (let j = open; j < masked.length; j++) {
+    const c = masked[j];
+    if (c === "(" || c === "[" || c === "{")
+      depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0)
+        return j;
+    }
+  }
+  return -1;
+}
+function hopAt(content, masked, at) {
+  if (!/^get_value_mut\(/.test(masked.slice(at, at + 14)))
+    return void 0;
+  const open = at + "get_value_mut".length;
+  const spans = argSpans4(masked, open);
+  if (spans === void 0 || spans.length !== 2)
+    return void 0;
+  const close = closeOf(masked, open);
+  if (close < 0)
+    return void 0;
+  const key = content.slice(spans[1][0], spans[1][1]).trim();
+  const lit = STR_KEY3.exec(key);
+  return {
+    recv: content.slice(spans[0][0], spans[0][1]).trim(),
+    key,
+    literal: lit === null ? void 0 : lit[1],
+    close
+  };
+}
+function chainAt(content, masked, at) {
+  const hops = [];
+  let cur = at;
+  for (let n = 0; n < 8; n++) {
+    const h = hopAt(content, masked, cur);
+    if (h === void 0)
+      return void 0;
+    hops.push(h);
+    const lead = h.recv.length - h.recv.replace(/^\s+/, "").length;
+    if (!/^get_value_mut\(/.test(h.recv))
+      return { hops, root: h.recv };
+    cur = content.indexOf(h.recv, cur) + lead;
+  }
+  return void 0;
+}
+function runPass4(content) {
+  if (!content.includes("get_value_mut("))
+    return content;
+  const masked = maskSrc4(content);
+  const headRe = /if let Value::Dict\(\s*(\w+)\s*\)\s*=\s*get_value_mut\(/g;
+  const rws = [];
+  let m;
+  while ((m = headRe.exec(masked)) !== null) {
+    const bind = m[1];
+    const at2 = m.index + m[0].length - "get_value_mut(".length;
+    const chain = chainAt(content, masked, at2);
+    if (chain === void 0)
+      continue;
+    if (!ROOT.test(chain.root) && !COERCED.test(chain.root))
+      continue;
+    const outer = chain.hops[0];
+    const allLiteral = chain.hops.every((h) => h.literal !== void 0);
+    if (!allLiteral && outer.literal === void 0)
+      continue;
+    const end = chain.hops[0].close + 1;
+    const braceOpen = masked.indexOf("{", end);
+    if (braceOpen < 0)
+      continue;
+    if (masked.slice(end, braceOpen).trim() !== "")
+      continue;
+    let depth = 0;
+    let braceClose = -1;
+    for (let j = braceOpen; j < masked.length; j++) {
+      const c = masked[j];
+      if (c === "{")
+        depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth === 0) {
+          braceClose = j;
+          break;
+        }
+      }
+    }
+    if (braceClose < 0)
+      continue;
+    const body = content.slice(braceOpen + 1, braceClose);
+    if (body.includes("__bf03"))
+      continue;
+    const lineStart = content.lastIndexOf("\n", m.index) + 1;
+    const pad = /^[ \t]*/.exec(content.slice(lineStart, m.index));
+    const level = (n) => pad[0] + "    ".repeat(n + 1);
+    const keys = allLiteral ? chain.hops.map((h) => h.literal).reverse() : [outer.literal];
+    const head = allLiteral ? chain.root : outer.recv;
+    const lines = ["if let Value::Dict(__bf03d0) = " + head + " {"];
+    const parts = ["if let Value::Dict(__bf03d0) = " + head + " {"];
+    const bodyText = body.replace(/\s+$/, "");
+    let tooLong = false;
+    for (let i = 0; i < keys.length; i++) {
+      const last = i === keys.length - 1;
+      const entry = "let __bf03e" + (i + 1) + " = std::sync::Arc::make_mut(__bf03d" + i + ').entry("' + keys[i] + '".to_string()).or_insert(Value::Null);';
+      const test = last ? "if let Value::Dict(" + bind + ") = __bf03e" + (i + 1) + " {" : "if let Value::Dict(__bf03d" + (i + 1) + ") = __bf03e" + (i + 1) + " {";
+      if (level(i).length + entry.length > MAX_LINE2) {
+        tooLong = true;
+        break;
+      }
+      lines.push(level(i) + entry);
+      lines.push(level(i) + test);
+      parts.push(entry + " " + test);
+    }
+    if (tooLong)
+      continue;
+    const closers = [];
+    for (let k = keys.length; k >= 0; k--)
+      closers.push(pad[0] + "    ".repeat(k) + "}");
+    const inline = new Array(keys.length + 1).fill("}").join(" ");
+    const compact = parts.join(" ") + " " + bodyText.trim() + " " + inline;
+    const multi = lines.join("\n") + bodyText + "\n" + closers.join("\n");
+    const text = bodyText.indexOf("\n") < 0 && pad[0].length + compact.length <= MAX_LINE2 ? compact : multi;
+    rws.push({ start: m.index, end: braceClose + 1, text });
+    headRe.lastIndex = braceClose + 1;
+  }
+  if (rws.length === 0)
+    return content;
+  rws.sort((a, b) => a.start - b.start);
+  let out = "";
+  let at = 0;
+  for (const r of rws) {
+    if (r.start < at)
+      continue;
+    out += content.slice(at, r.start) + r.text;
+    at = r.end;
+  }
+  return out + content.slice(at);
+}
+function bf03PlainDictChains(content) {
+  return runPass4(content);
+}
+
+// src/rustPasses/hx10w7-R10.ts
+init_esm_shims();
+var R10_KEYS = ["subscriptions", "futures", "rejections", "url"];
+var R10_HANDLE = "crate::pro::ws_client::ClientHandle";
+function r10Mask(src) {
+  let out = "";
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "/") {
+      while (i < n && src[i] !== "\n") {
+        out += " ";
+        i++;
+      }
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      out += "  ";
+      i += 2;
+      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) {
+        out += src[i] === "\n" ? "\n" : " ";
+        i++;
+      }
+      if (i < n) {
+        out += "  ";
+        i += 2;
+      }
+      continue;
+    }
+    if (c === '"') {
+      out += '"';
+      i++;
+      while (i < n && src[i] !== '"') {
+        if (src[i] === "\\") {
+          out += "  ";
+          i += 2;
+          continue;
+        }
+        out += src[i] === "\n" ? "\n" : " ";
+        i++;
+      }
+      if (i < n) {
+        out += '"';
+        i++;
+      }
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
+}
+function r10ClientHandle(content) {
+  if (!content.includes("&client"))
+    return content;
+  const lines = content.split("\n");
+  const braces = r10BraceDeltas(content).split("\n");
+  const out = [];
+  let depth = 0;
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const startsMethod = depth === 1 && /^\s*pub\s+(?:async\s+)?fn\s+[A-Za-z_][A-Za-z0-9_]*\s*\(/.test(line);
+    if (!startsMethod) {
+      out.push(line);
+      depth += r10DeltaAt(braces, i);
+      i++;
+      continue;
+    }
+    let j = i;
+    let level = depth;
+    while (j < lines.length) {
+      level += r10DeltaAt(braces, j);
+      if (j > i && level <= depth)
+        break;
+      j++;
+    }
+    if (j >= lines.length) {
+      out.push(line);
+      depth += r10DeltaAt(braces, i);
+      i++;
+      continue;
+    }
+    out.push(...r10Block(lines.slice(i, j + 1)));
+    for (let k = i; k <= j; k++)
+      depth += r10DeltaAt(braces, k);
+    i = j + 1;
+  }
+  return out.join("\n");
+}
+function r10BraceDeltas(content) {
+  return r10Mask(content);
+}
+function r10DeltaAt(maskedLines, idx) {
+  const line = maskedLines[idx] ?? "";
+  let d = 0;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === "{")
+      d++;
+    else if (c === "}")
+      d--;
+  }
+  return d;
+}
+var R10_LET_CLIENT = /^ {8}let mut client: Value = /;
+var R10_REASSIGN = /^\s*client\s*=[^=]/;
+var R10_COMMENT = /^\s*(?:\/\/|\/\*|\*)/;
+function r10Block(block) {
+  const header = block[0];
+  const fromParam = /\bclient\s*:\s*Value\b/.test(header);
+  let anchor;
+  let bodyStart;
+  if (fromParam) {
+    if (/\blet\s+(?:mut\s+)?client\b/.test(block.join("\n")))
+      return block;
+    anchor = 0;
+    bodyStart = 1;
+  } else {
+    const decls = [];
+    for (let k = 1; k < block.length; k++)
+      if (R10_LET_CLIENT.test(block[k]))
+        decls.push(k);
+    if (decls.length !== 1)
+      return block;
+    anchor = decls[0];
+    bodyStart = anchor + 1;
+  }
+  for (let k = bodyStart; k < block.length; k++)
+    if (R10_REASSIGN.test(block[k]))
+      return block;
+  const rewritten = /* @__PURE__ */ new Map();
+  let needsMut = false;
+  let touched = false;
+  for (const key of R10_KEYS) {
+    const rx = new RegExp('get_value\\(\\s*&client\\s*,\\s*&Value::Str\\("' + key + '"\\.(?:into|to_string)\\(\\)\\)\\s*\\)', "g");
+    const reads = [];
+    const writes = [];
+    for (let k = bodyStart; k < block.length; k++) {
+      const text = block[k];
+      if (R10_COMMENT.test(text))
+        continue;
+      rx.lastIndex = 0;
+      let m;
+      while ((m = rx.exec(text)) !== null) {
+        const before = text.slice(Math.max(0, m.index - 8), m.index);
+        (/(?<![\w.])&mut\s*$/.test(before) ? writes : reads).push({ line: k, col: m.index, len: m[0].length });
+      }
+    }
+    if (reads.length === 0 && writes.length === 0)
+      continue;
+    const firstWriteLine = writes.length > 0 ? writes[0].line : Number.MAX_SAFE_INTEGER;
+    for (const r of reads) {
+      if (r.line >= firstWriteLine)
+        continue;
+      if (!rewritten.has(r.line))
+        rewritten.set(r.line, []);
+      rewritten.get(r.line).push(...r10Span(r.col, r.len, "__ch." + key + ".clone()"));
+      touched = true;
+    }
+    for (const w of writes) {
+      if (!rewritten.has(w.line))
+        rewritten.set(w.line, []);
+      rewritten.get(w.line).push(...r10Span(w.col, w.len, "__ch." + key));
+      needsMut = true;
+      touched = true;
+    }
+  }
+  if (!touched)
+    return block;
+  const binding = "        let " + (needsMut ? "mut " : "") + "__ch = " + R10_HANDLE + "::from_value(client.clone());";
+  const result = [];
+  for (let k = 0; k < block.length; k++) {
+    const spans = rewritten.get(k);
+    result.push(spans === void 0 ? block[k] : r10Apply(block[k], spans));
+    if (k === anchor)
+      result.push(binding);
+  }
+  return result;
+}
+function r10Span(col, len, text) {
+  return [col + ":" + len + ":" + text];
+}
+function r10Apply(line, spans) {
+  const parsed = spans.map((s) => {
+    const first = s.indexOf(":");
+    const second = s.indexOf(":", first + 1);
+    return { col: Number(s.slice(0, first)), len: Number(s.slice(first + 1, second)), text: s.slice(second + 1) };
+  }).sort((a, b) => b.col - a.col);
+  let out = line;
+  for (const p of parsed)
+    out = out.slice(0, p.col) + p.text + out.slice(p.col + p.len);
+  return out;
+}
+
+// src/rustPasses/hx10w9-RP02.ts
+init_esm_shims();
+var MAP_PARAM_RE = /:\s*&mut\s+indexmap::IndexMap<String, Value>/;
+function hx10w9Rp02ParamKind(printedParam) {
+  return MAP_PARAM_RE.test(printedParam) ? "map" : void 0;
+}
+function hx10w9Rp02DispatchArg(index) {
+  return `&mut { let mut __m = args.get(${index}).cloned().unwrap_or_default().as_map().cloned().unwrap_or_default();
+                    __m }`;
+}
+function hx10w9Rp02SplitArgs(argList) {
+  return splitArgs4(argList);
+}
+function splitArgs4(argList) {
+  const out = [];
+  let depth = 0;
+  let current = "";
+  for (const char of argList) {
+    if (char === "<" || char === "(" || char === "[") {
+      depth++;
+    } else if (char === ">" || char === ")" || char === "]") {
+      depth--;
+    }
+    if (char === "," && depth === 0) {
+      out.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  out.push(current);
+  return out;
+}
+var REF_MAP_PARAM_RE = /([A-Za-z_][A-Za-z0-9_]*)\s*:\s*&mut\s+indexmap::IndexMap<String, Value>/g;
+function hx10w9Rp02RefMapParamNames(content) {
+  const names = /* @__PURE__ */ new Set();
+  REF_MAP_PARAM_RE.lastIndex = 0;
+  let m;
+  while ((m = REF_MAP_PARAM_RE.exec(content)) !== null) {
+    names.add(m[1]);
+  }
+  return names;
+}
+
+// src/rustPasses/hx11-narrow-str.ts
+init_esm_shims();
+function narrowStrSinkLocals(content) {
+  const OPT = {
+    safe_string: "safe_string_opt",
+    safe_string_k: "safe_string_k_opt",
+    safe_string_lower_k: "safe_string_lower_k_opt",
+    safe_string_upper_k: "safe_string_upper_k_opt"
+  };
+  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_string[a-z_0-9]*)\(/gm;
+  const strKeyRe = /^"(?:[^"\\]|\\.)*"$/;
+  const maskText5 = (src) => {
+    let out2 = "";
+    let i = 0;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "/" && src[i + 1] === "/") {
+        while (i < src.length && src[i] !== "\n") {
+          out2 += " ";
+          i++;
+        }
+        continue;
+      }
+      if (c === '"') {
+        out2 += '"';
+        i++;
+        while (i < src.length && src[i] !== '"') {
+          if (src[i] === "\\") {
+            out2 += "  ";
+            i += 2;
+            continue;
+          }
+          out2 += src[i] === "\n" ? "\n" : " ";
+          i++;
+        }
+        if (i < src.length) {
+          out2 += '"';
+          i++;
+        }
+        continue;
+      }
+      out2 += c;
+      i++;
+    }
+    return out2;
+  };
+  const closeParen4 = (src, open) => {
+    let depth = 0;
+    for (let k = open; k < src.length; k++) {
+      const c = src[k];
+      if (c === "(")
+        depth++;
+      else if (c === ")") {
+        depth--;
+        if (depth === 0)
+          return k + 1;
+      }
+    }
+    return -1;
+  };
+  const braceEnd = (src, from) => {
+    let depth = 0;
+    for (let k = from; k < src.length; k++) {
+      const c = src[k];
+      if (c === "{")
+        depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth < 0)
+          return k;
+      }
+    }
+    return src.length;
+  };
+  const argSpans5 = (src) => {
+    const out2 = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      else if (c === "," && depth === 0) {
+        out2.push([start, i]);
+        start = i + 1;
+      }
+    }
+    out2.push([start, src.length]);
+    return out2;
+  };
+  const masked = maskText5(content);
+  const rewrites = [];
+  let m;
+  while ((m = declRe.exec(masked)) !== null) {
+    const fam = m[4];
+    const opt = OPT[fam];
+    if (opt === void 0)
+      continue;
+    const name = m[3];
+    const callOpen = m.index + m[0].length - 1;
+    const callClose = closeParen4(masked, callOpen);
+    if (callClose < 0)
+      continue;
+    const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
+    if (tail === null)
+      continue;
+    const stmtEnd3 = callClose + tail[0].length;
+    const base = callOpen + 1;
+    const spans = argSpans5(masked.slice(base, callClose - 1));
+    if (spans.length !== 3)
+      continue;
+    const obj = content.slice(base + spans[0][0], base + spans[0][1]).trim();
+    const keyRaw = content.slice(base + spans[1][0], base + spans[1][1]).trim();
+    const defRaw = content.slice(base + spans[2][0], base + spans[2][1]).trim();
+    if (obj.length === 0 || keyRaw.length === 0)
+      continue;
+    if (fam.endsWith("_k") && !strKeyRe.test(keyRaw))
+      continue;
+    if (defRaw !== "&[]" && !/^&\[\s*Value::Str\(/.test(defRaw))
+      continue;
+    const end = braceEnd(masked, stmtEnd3);
+    const body = masked.slice(stmtEnd3, end);
+    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
+      continue;
+    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
+      continue;
+    const fRe = /format!\(/g;
+    const fSpans = [];
+    let f;
+    while ((f = fRe.exec(body)) !== null) {
+      const close = closeParen4(body, f.index + f[0].length - 1);
+      if (close < 0)
+        continue;
+      const lit = /^"(?:[^"\\]|\\.)*"/.exec(body.slice(f.index + f[0].length, close));
+      fSpans.push([f.index, close, lit !== null && /:\?/.test(lit[0])]);
+    }
+    const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, "g");
+    let ok = true;
+    let uses = 0;
+    let u;
+    while ((u = useRe.exec(body)) !== null) {
+      const at = u.index;
+      const cand = fSpans.filter(([s, e]) => at > s && at < e);
+      if (cand.length === 0) {
+        ok = false;
+        break;
+      }
+      const hit = cand.reduce((a, b) => b[0] > a[0] ? b : a);
+      if (hit[2]) {
+        ok = false;
+        break;
+      }
+      const inner = hit[0] + "format!(".length;
+      const slot = argSpans5(body.slice(inner, hit[1] - 1)).filter(([a, b]) => inner + a <= at && at + name.length <= inner + b);
+      if (slot.length === 0) {
+        ok = false;
+        break;
+      }
+      if (body.slice(inner + slot[0][0], inner + slot[0][1]).replace(/\s+/g, "") !== name) {
+        ok = false;
+        break;
+      }
+      uses++;
+    }
+    if (!ok || uses === 0)
+      continue;
+    const indent = m[1];
+    const text = `${indent}let ${name}: String = self.${opt}(${obj}, ${keyRaw}, ${defRaw}).unwrap_or_default();`;
+    if (indent.length + text.length > 400 && stmtEnd3 - m.index <= 400)
+      continue;
+    rewrites.push({ start: m.index, end: stmtEnd3, text });
+  }
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start);
+  let out = "";
+  let last = 0;
+  for (const r of rewrites) {
+    if (r.start < last)
+      continue;
+    out += content.slice(last, r.start) + r.text;
+    last = r.end;
+  }
+  out += content.slice(last);
+  return out;
+}
+function narrowStrNullLocals(content) {
+  const OPT = {
+    safe_string: "safe_string_opt",
+    safe_string_k: "safe_string_k_opt",
+    safe_string_lower_k: "safe_string_lower_k_opt",
+    safe_string_upper_k: "safe_string_upper_k_opt"
+  };
+  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_string[a-z_0-9]*)\(/gm;
+  const strKeyRe = /^"(?:[^"\\]|\\.)*"$/;
+  const maskText5 = (src) => {
+    let out2 = "";
+    let i = 0;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "/" && src[i + 1] === "/") {
+        while (i < src.length && src[i] !== "\n") {
+          out2 += " ";
+          i++;
+        }
+        continue;
+      }
+      if (c === '"') {
+        out2 += '"';
+        i++;
+        while (i < src.length && src[i] !== '"') {
+          if (src[i] === "\\") {
+            out2 += "  ";
+            i += 2;
+            continue;
+          }
+          out2 += src[i] === "\n" ? "\n" : " ";
+          i++;
+        }
+        if (i < src.length) {
+          out2 += '"';
+          i++;
+        }
+        continue;
+      }
+      out2 += c;
+      i++;
+    }
+    return out2;
+  };
+  const closeParen4 = (src, open) => {
+    let depth = 0;
+    for (let k = open; k < src.length; k++) {
+      const c = src[k];
+      if (c === "(")
+        depth++;
+      else if (c === ")") {
+        depth--;
+        if (depth === 0)
+          return k + 1;
+      }
+    }
+    return -1;
+  };
+  const braceEnd = (src, from) => {
+    let depth = 0;
+    for (let k = from; k < src.length; k++) {
+      const c = src[k];
+      if (c === "{")
+        depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth < 0)
+          return k;
+      }
+    }
+    return src.length;
+  };
+  const argSpans5 = (src) => {
+    const out2 = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      else if (c === "," && depth === 0) {
+        out2.push([start, i]);
+        start = i + 1;
+      }
+    }
+    out2.push([start, src.length]);
+    return out2;
+  };
+  const masked = maskText5(content);
+  const grown = /* @__PURE__ */ new Map();
+  const groups = [];
+  const rewrites = [];
+  let m;
+  while ((m = declRe.exec(masked)) !== null) {
+    const opt = OPT[m[4]];
+    if (opt === void 0)
+      continue;
+    const name = m[3];
+    const callOpen = m.index + m[0].length - 1;
+    const callClose = closeParen4(masked, callOpen);
+    if (callClose < 0)
+      continue;
+    const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
+    if (tail === null)
+      continue;
+    const stmtEnd3 = callClose + tail[0].length;
+    const base = callOpen + 1;
+    const spans = argSpans5(masked.slice(base, callClose - 1));
+    if (spans.length !== 3)
+      continue;
+    const obj = content.slice(base + spans[0][0], base + spans[0][1]).trim();
+    const keyRaw = content.slice(base + spans[1][0], base + spans[1][1]).trim();
+    const defRaw = content.slice(base + spans[2][0], base + spans[2][1]).trim();
+    if (obj.length === 0 || keyRaw.length === 0)
+      continue;
+    if (m[4].endsWith("_k") && !strKeyRe.test(keyRaw))
+      continue;
+    if (defRaw !== "&[]")
+      continue;
+    const end = braceEnd(masked, stmtEnd3);
+    const body = masked.slice(stmtEnd3, end);
+    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
+      continue;
+    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
+      continue;
+    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
+    const edits = [];
+    let ok = true;
+    let u;
+    while ((u = useRe.exec(body)) !== null) {
+      const at = u.index;
+      const abs = stmtEnd3 + at;
+      const after = body.slice(at + name.length);
+      const before = body.slice(0, at);
+      let g;
+      if ((g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === "==" ? "is_none" : "is_some"}()` });
+      } else if ((g = /^\.as_str\(\)(?=\s*(?:==|!=)\s*Some\()/.exec(after)) !== null) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.as_deref()` });
+      } else if (/get_value\(&$/.test(before) && (g = /^, &Value::Int\(0\)\)\.as_str\(\) (==|!=) Some\("/.exec(after)) !== null) {
+        const chPos = abs + name.length + g[0].length;
+        const ch = /^([^"\\])"\)/.exec(content.slice(chPos, chPos + 3));
+        if (ch === null) {
+          ok = false;
+          break;
+        }
+        const probe = `${name}.as_deref().unwrap_or("").starts_with("${ch[1]}")`;
+        edits.push({ start: abs - "get_value(&".length, end: chPos + ch[0].length, text: g[1] === "==" ? probe : `!${probe}` });
+      } else if (/crate::runtime::stringify_param\(&$/.test(before) && /^\)/.test(after)) {
+        const from = abs - "crate::runtime::stringify_param(&".length;
+        edits.push({ start: from, end: abs + name.length + 1, text: `${name}.as_deref().unwrap_or("null").to_string()` });
+      } else if (/(?:[(,\[]\s*&?|(?<![=!<>])=\s)$/.test(before) && !/&\s*mut\s*$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[,)\];])/.exec(after)) !== null && !/==\s*$/.test(before)) {
+        const lastUse = !new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`).test(after.slice(g[0].length));
+        const inLoop = /\b(?:loop|while|for)\b/.test(body);
+        const move = lastUse && !inLoop && !/&\s*$/.test(before);
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}${move ? "" : ".clone()"}.map(Value::from).unwrap_or(Value::Null)` });
+      } else {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok || edits.length === 0)
+      continue;
+    const declText = `${m[1]}let ${m[2] ?? ""}${name}: Option<String> = self.${opt}(${obj}, ${keyRaw}, ${defRaw});`;
+    const all = [{ start: m.index, end: stmtEnd3, text: declText }, ...edits];
+    const lineGrow = /* @__PURE__ */ new Map();
+    for (const e of all) {
+      const ls = content.lastIndexOf("\n", e.start) + 1;
+      lineGrow.set(ls, (lineGrow.get(ls) ?? 0) + e.text.length - (e.end - e.start));
+    }
+    let longer = false;
+    for (const [ls, grow] of lineGrow) {
+      let le = content.indexOf("\n", ls);
+      if (le < 0)
+        le = content.length;
+      const cur = le - ls + (grown.get(ls) ?? 0);
+      if (cur <= 400 && cur + grow > 400)
+        longer = true;
+    }
+    if (longer)
+      continue;
+    for (const [ls, grow] of lineGrow)
+      grown.set(ls, (grown.get(ls) ?? 0) + grow);
+    groups.push({ decl: { start: m.index, end: stmtEnd3, text: declText }, edits });
+  }
+  for (let again = true; again; ) {
+    again = false;
+    for (let a = 0; a < groups.length; a++) {
+      const hit = groups.some((b, bi) => bi !== a && groups[a].edits.some((e) => e.start >= b.decl.start && e.start < b.decl.end));
+      if (hit) {
+        groups.splice(a, 1);
+        again = true;
+        break;
+      }
+    }
+  }
+  for (const gr of groups) {
+    rewrites.push(gr.decl);
+    for (const e of gr.edits)
+      rewrites.push(e);
+  }
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start);
+  let out = "";
+  let last = 0;
+  for (const r of rewrites) {
+    if (r.start < last)
+      continue;
+    out += content.slice(last, r.start) + r.text;
+    last = r.end;
+  }
+  out += content.slice(last);
+  return out;
+}
+
+// src/rustPasses/hx11-sign-api.ts
+init_esm_shims();
+function hx11RustSignApiStr(content) {
+  content = content.replace(/\b(api|section)\.as_array\(\)\.and_then\(\|__arr\| __arr\.get\((\d+)\)\)/g, "$1.as_array().into_iter().flatten().nth($2)");
+  if (content.indexOf(".get(") < 0) {
+    return content;
+  }
+  const lines = content.split("\n");
+  const decl = /^(\s*)let mut (\w+): Value = (?:api|section)\.get\((\d+)\)\.cloned\(\)\.unwrap_or\(Value::Null\);$/;
+  const fnHead = /^ {4}(?:pub )?(?:async )?fn /;
+  for (let i = 0; i < lines.length; i++) {
+    const m = decl.exec(lines[i]);
+    if (m === null) {
+      continue;
+    }
+    let end = i + 1;
+    while (end < lines.length && !fnHead.test(lines[end])) {
+      end++;
+    }
+    const name = new RegExp("(?<![\\w.])" + m[2] + "(?![\\w])", "g");
+    const use = new RegExp("(?<![\\w.])" + m[2] + '\\.as_str\\(\\) (==|!=) Some\\("', "g");
+    let uses = 0;
+    let others = 0;
+    for (let j = i + 1; j < end; j++) {
+      const masked = lines[j].replace(/"(?:[^"\\]|\\.)*"/g, '""');
+      uses += (lines[j].match(use) ?? []).length;
+      others += (masked.match(name) ?? []).length;
+    }
+    if (uses === 0 || uses !== others) {
+      continue;
+    }
+    lines[i] = m[1] + "let mut " + m[2] + ": Option<String> = " + (m[0].indexOf("section") >= 0 ? "section" : "api") + ".get(" + m[3] + ").and_then(Value::as_str).map(str::to_owned);";
+    for (let j = i + 1; j < end; j++) {
+      lines[j] = lines[j].replace(use, (all, op) => m[2] + ".as_deref() " + op + ' Some("');
+    }
+  }
+  return lines.join("\n");
+}
+
 // src/transpiler.ts
 var __dirname_mock = import_dirname.default;
 var fastCompilerOptions = {
@@ -36133,7 +42120,7 @@ var Transpiler = class _Transpiler {
       return void 0;
     }
     const src = shared.program.getSourceFile(path2.resolve(filePath));
-    if (src === void 0 || !fs2.existsSync(filePath) || fs2.readFileSync(filePath, "utf8") !== src.text) {
+    if (src === void 0 || !fs3.existsSync(filePath) || fs3.readFileSync(filePath, "utf8") !== src.text) {
       return void 0;
     }
     return { src, checker: shared.checker, program: shared.program };
@@ -36445,6 +42432,28 @@ export {
   TypeFlags7 as TypeFlags,
   TypeFormatFlags,
   alignGoTrailingComments,
-  Transpiler as default
+  bf03PlainDictChains,
+  Transpiler as default,
+  hx10w2R03,
+  hx10w2R08,
+  hx10w3R03,
+  hx10w9Rp02DispatchArg,
+  hx10w9Rp02ParamKind,
+  hx10w9Rp02RefMapParamNames,
+  hx10w9Rp02SplitArgs,
+  hx11RustSignApiStr,
+  narrowStrNullLocals,
+  narrowStrSinkLocals,
+  nativeGetValue,
+  r01TypedLocals,
+  r02NativeInserts,
+  r04Callee,
+  r04Scalars,
+  r05FieldChainInserts,
+  r06Push,
+  r06w3Push,
+  r07StringNatives,
+  r08DictReads,
+  r10ClientHandle
 };
 //# sourceMappingURL=transpiler.js.map

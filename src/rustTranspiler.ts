@@ -1890,6 +1890,10 @@ export class RustTranspiler extends BaseTranspiler {
         }
         const typedStr = this.rustSafeStringLocalIsTyped(declaration);
         const nativeStr = this.rustNativeStrCalleeKind(declaration.initializer) === 'str';
+        const signApi = typedStr ? this.rustSignApiElementInit(declaration) : undefined;
+        if (signApi !== undefined) {
+            return `${indent}let mut ${varName}: Option<String> = ${signApi.receiver}.get(${signApi.index}).and_then(Value::as_str).map(str::to_owned)`;
+        }
         if (typedStr) {
             // A native-`Option<String>` callee already carries the payload; `safeString` helpers need the unwrap.
             return `${indent}let mut ${varName}: Option<String> = ${parsedValue}${nativeStr ? '' : '.as_str().map(str::to_owned)'}`;
@@ -2682,9 +2686,24 @@ export class RustTranspiler extends BaseTranspiler {
             return cached;
         }
         this.rustStringLocalDecisions.set(declaration, false); // re-entrancy guard
-        const decision = this.rustSafeStringLocalIsTypedUncached(declaration);
+        const decision = this.rustSignApiElementInit(declaration) !== undefined
+            ? this.rustSignApiStringLocalIsTyped(declaration)
+            : this.rustSafeStringLocalIsTypedUncached(declaration);
         this.rustStringLocalDecisions.set(declaration, decision);
         return decision;
+    }
+
+    // Only string-literal compares: the null compare prints `!= Value::Null` and needs the box.
+    rustSignApiStringLocalIsTyped(declaration): boolean {
+        if (this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) !== 'string') return false;
+        let literalUses = 0;
+        const safe = this.rustLocalUsesAll(declaration, declaration.name.text, true, (n) => {
+            const other = n.parent?.kind === SyntaxKind.BinaryExpression ? (n.parent.left === n ? n.parent.right : n.parent.left) : undefined;
+            if (other === undefined || this.literalKindOfNode(other) !== 'string' || !this.rustStringLocalUseIsNative(n)) return false;
+            literalUses++;
+            return true;
+        });
+        return safe && literalUses > 0;
     }
 
     rustSafeStringLocalIsTypedUncached(declaration): boolean {
@@ -2696,6 +2715,29 @@ export class RustTranspiler extends BaseTranspiler {
         const safe = this.rustLocalUsesAll(declaration, declaration.name.text, true,
             (n) => this.rustStringLocalUseIsNative(n) && ++nativeUses > 0);
         return safe && nativeUses > 0;
+    }
+
+    private static readonly RUST_SIGN_API_METHODS = new Set(['sign', 'fetch2', 'request']);
+
+    /** The `api: string[]` / `section: string[]` parameter (position 1) of sign/fetch2/request an identifier names. */
+    rustSignApiParam(node): ParameterDeclaration | undefined {
+        if (node === undefined || !isIdentifier(node) || (node.text !== 'api' && node.text !== 'section')) return undefined;
+        const declaration: any = this.rustDeclarationOfIdentifier(node);
+        if (declaration === undefined || !isParameterDeclaration(declaration)) return undefined;
+        const fn: any = declaration.parent;
+        if (fn === undefined || !isMethodDeclaration(fn) || !isIdentifier(fn.name)) return undefined;
+        if (!RustTranspiler.RUST_SIGN_API_METHODS.has(fn.name.text) || fn.parameters.indexOf(declaration) !== 1) return undefined;
+        return String(declaration.type?.getText?.() ?? '').replace(/\s+/g, '') === 'string[]' ? declaration : undefined;
+    }
+
+    /** `api[N]` on a shadowed sign-api parameter: the element read the shadow prints as `api.get(N)`. */
+    rustSignApiElementInit(declaration): { receiver: string, index: number } | undefined {
+        const init: any = declaration.initializer;
+        if (declaration.name?.kind !== SyntaxKind.Identifier || init === undefined || !isElementAccessExpression(init)) return undefined;
+        const key: any = init.argumentExpression;
+        if (!isNumericLiteral(key) || !/^\d+$/.test(String(key.text)) || !isIdentifier(init.expression)) return undefined;
+        if (this.rustSignApiParam(init.expression) === undefined || this.rustParamShadowOf(init.expression) === undefined) return undefined;
+        return { receiver: String(init.expression.text), index: Number(key.text) };
     }
 
     // `x.foo` / `{ foo: 1 }` — a property name is not a use of the local.
@@ -3745,7 +3787,11 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** Native list-index read of a generator temp (`__destr_tmp.as_array()…`). */
-    printNativeListIndex(receiverText: string, index: number): string {
+    printNativeListIndex(receiverText: string, index: number, receiverNode?: Node): string {
+        // The unshadowed `api` / `section` list of sign/fetch2/request reads its nth through the iterator.
+        if (receiverNode !== undefined && this.rustSignApiParam(receiverNode) !== undefined) {
+            return `${receiverText}.as_array().into_iter().flatten().nth(${index}).cloned().unwrap_or(Value::Null)`;
+        }
         return `${receiverText}.as_array().and_then(|__arr| __arr.get(${index})).cloned().unwrap_or(Value::Null)`;
     }
 
@@ -3779,7 +3825,7 @@ export class RustTranspiler extends BaseTranspiler {
                 return `${receiverText}.get(${index}).cloned().unwrap_or(Value::Null)`;
             }
             if (!this.isProvenListExpression(receiverNode) && !this.r18ArrReadLocal(receiverNode)) return undefined;
-            return this.printNativeListIndex(receiverText, index);
+            return this.printNativeListIndex(receiverText, index, receiverNode);
         }
         const dictRead = this.rustBearerDictDynamicRead(receiverText, receiverNode, keyNode) ?? this.printNativeDynamicMapAccess(receiverText, receiverNode, keyNode) ?? this.printNativeThisFieldDynamicMapAccess(receiverText, receiverNode, keyNode)
             ?? this.rustR10DynamicRead(receiverText, receiverNode, keyNode);
@@ -5243,13 +5289,27 @@ export class RustTranspiler extends BaseTranspiler {
         return `${this.getIden(identation)}panic!("{}", ${this.printNode(node.expression, 0)});`;
     }
 
+    rustCatchBindingIsRead(block: Node, name: string): boolean {
+        let read = false;
+        const visit = (n: Node) => {
+            if (read) return;
+            if (isIdentifier(n) && n.text === name) { read = true; return; }
+            n.forEachChild(visit);
+        };
+        block.forEachChild(visit);
+        return read;
+    }
+
     printTryStatement(node, identation) {
         const body = (block) => block.statements.map(s => this.printNode(s, identation + 1)).join('\n');
         const rawName = node.catchClause?.variableDeclaration?.name?.text;
         const iden = this.getIden(identation);
         const errorName = rawName ? `_${rawName}` : '_e';
+        // A handler that never reads its binding needs no payload: `is_err()` is native.
+        const head = rawName !== undefined && this.rustCatchBindingIsRead(node.catchClause.block, rawName)
+            ? `if let Err(${errorName}) = _try_result {` : 'if _try_result.is_err() {';
         return `${iden}let _try_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {\n${body(node.tryBlock)}\n${iden}}));\n` +
-            `${iden}if let Err(${errorName}) = _try_result {\n${body(node.catchClause.block)}\n${iden}}`;
+            `${iden}${head}\n${body(node.catchClause.block)}\n${iden}}`;
     }
 
     printReturnStatement(node, identation) {

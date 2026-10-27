@@ -833,3 +833,5 @@ export {
     RUST_DECLARED_DICT_LOCALS,
 };
 export type { RustDeclaredDictLocalEntry };
+// the rust final-text passes the ccxt build script runs after its own post-passes
+export * from './rustPasses/index.js';

@@ -5203,3 +5203,53 @@ ${body}
         expect(out).not.toContain('indexmap::IndexMap');
     });
 });
+
+describe('rust sign api element', () => {
+    const sign = (body: string, name = 'sign') => transpiler.transpileRust(`class Foo {
+    ${name} (path: string, api: string[] = [ 'public' ], method: string = 'GET', params: any = {}) {
+${body}
+    }
+}`).content;
+
+    test('a local read from api and only compared with literals is an Option<String>', () => {
+        const out = sign("        const apiName = api[0];\n        if (apiName === 'private') { return 1; }\n        return 0;");
+        expect(out).toContain('let mut apiName: Option<String> = api.get(0).and_then(Value::as_str).map(str::to_owned);');
+        expect(out).toContain('apiName.as_deref() == Some("private")');
+    });
+
+    test('a use that is not a literal compare keeps the Value', () => {
+        const out = sign("        const apiName = api[0];\n        return this.foo(apiName);");
+        expect(out).toContain('let mut apiName: Value = api.get(0).cloned().unwrap_or(Value::Null);');
+        expect(out).not.toContain('Option<String>');
+    });
+
+    test('a null compare keeps the Value', () => {
+        const out = sign("        const apiName = api[0];\n        if (apiName === 'a' || apiName !== undefined) { return 1; }\n        return 0;");
+        expect(out).toContain('let mut apiName: Value = ');
+    });
+
+    test('a method that is not sign/fetch2/request keeps the Value', () => {
+        const out = sign("        const apiName = api[0];\n        if (apiName === 'private') { return 1; }\n        return 0;", 'other');
+        expect(out).not.toContain('Option<String>');
+    });
+});
+
+describe('rust catch binding', () => {
+    const rs = (body: string) => transpiler.transpileRust(`class Foo {\n    f () {\n${body}\n    }\n}`).content;
+
+    test('a handler that never reads its binding tests is_err', () => {
+        const out = rs("        try { this.foo (); } catch (e) { this.bar (); }");
+        expect(out).toContain('if _try_result.is_err() {');
+        expect(out).not.toContain('Err(_e)');
+    });
+
+    test('a handler that reads its binding keeps the Err pattern', () => {
+        const out = rs("        try { this.foo (); } catch (e) { this.bar (e); }");
+        expect(out).toContain('if let Err(_e) = _try_result {');
+    });
+
+    test('a catch without a binding tests is_err', () => {
+        const out = rs("        try { this.foo (); } catch { this.bar (); }");
+        expect(out).toContain('if _try_result.is_err() {');
+    });
+});
