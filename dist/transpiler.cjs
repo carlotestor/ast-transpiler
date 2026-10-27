@@ -49777,6 +49777,24 @@ function assignRewrite(shape, name, s, after, content, masked) {
   if (end < 0)
     return null;
   const rhs = content.slice(rhsStart, end).trim();
+  if (shape === "Vec" && rhs.startsWith("self.array_concat(")) {
+    const prev = /[^\s]/.exec(content.slice(0, s).split("").reverse().join(""));
+    if (prev === null || ![";", "{", "}"].includes(prev[0]))
+      return null;
+    const open = "self.array_concat".length;
+    if (closeParen2(rhs, open) !== rhs.length)
+      return null;
+    const args = splitArgs2(rhs, open + 1, rhs.length - 1);
+    if (args === void 0 || args.length !== 2)
+      return null;
+    const first = args[0].trim();
+    const second = args[1].trim();
+    if (first !== name && first !== `${name}.clone()`)
+      return null;
+    if (new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`).test(second))
+      return null;
+    return [{ start: s, end, text: `match &${second} { Value::Arr(__b) => ${name}.extend(__b.iter().cloned()), _ => ${name}.clear() }` }];
+  }
   const heads = {
     "String": ["Value::Str("],
     "Int": ["Value::Int("],
@@ -49860,11 +49878,14 @@ function r01TypedLocals(content) {
     let ok = true;
     let gained = 0;
     let lastUse = -1;
+    let skipUntil = -1;
     let u;
     while ((u = useRe.exec(region)) !== null) {
       const s = end + u.index;
       const before = content.slice(Math.max(regionStart, s - 60), s);
       const after = content.slice(s + name.length, s + name.length + 90);
+      if (s < skipUntil)
+        continue;
       lastUse = s;
       const slot = valueSlot(masked, content, s, name, atOpen);
       if (slot > 0) {
@@ -49886,6 +49907,8 @@ function r01TypedLocals(content) {
           break;
         }
         uses.push(...asg);
+        for (const a of asg)
+          skipUntil = Math.max(skipUntil, a.end);
         continue;
       }
       uses.push(...rw);
