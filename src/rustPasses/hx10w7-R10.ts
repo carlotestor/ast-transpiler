@@ -259,6 +259,7 @@ function r10DeltaAt(maskedLines: string[], idx: number): number {
 }
 
 const R10_LET_CLIENT = /^ {8}let mut client: Value = /;
+const R10_LET_CLIENT_NESTED = /^ {9,}let mut client: Value = /;
 const R10_REASSIGN = /^\s*client\s*=[^=]/;
 const R10_COMMENT = /^\s*(?:\/\/|\/\*|\*)/;
 
@@ -275,6 +276,14 @@ function r10Block(block: string[]): string[] {
     } else {
         const decls: number[] = [];
         for (let k = 1; k < block.length; k++) if (R10_LET_CLIENT.test(block[k])) decls.push(k);
+        if (decls.length === 0) {
+            // A single-statement declaration nested in a block (`authenticate`'s
+            // flight client): `client` is scoped to that block, and so is the
+            // binding placed right after it, with every read after the decl.
+            for (let k = 1; k < block.length; k++) if (R10_LET_CLIENT_NESTED.test(block[k])) decls.push(k);
+            const nestedAt: number = decls.length;
+            if (nestedAt === 1 && !block[decls[0]].trimEnd().endsWith(';')) return block;
+        }
         if (decls.length !== 1) return block; // none, or two handles in one method
         anchor = decls[0];
         bodyStart = anchor + 1;
@@ -320,7 +329,8 @@ function r10Block(block: string[]): string[] {
         }
     }
     if (!touched) return block;
-    const binding = '        let ' + (needsMut ? 'mut ' : '') + '__ch = ' + R10_HANDLE + '::from_value(client.clone());';
+    const bindIndent = fromParam ? '        ' : block[anchor].match(/^ */)![0];
+    const binding = bindIndent + 'let ' + (needsMut ? 'mut ' : '') + '__ch = ' + R10_HANDLE + '::from_value(client.clone());';
     const result: string[] = [];
     for (let k = 0; k < block.length; k++) {
         const spans = rewritten.get(k);
@@ -400,10 +410,16 @@ export function r10SelfTest(): string[] {
     // ... but a declaration nested in a block, or a second one, is left alone
     const nestedBody = '        if (is_true(&flag)) {\n            let mut client: Value = self.client(&[url.clone()]);\n' + read('subscriptions') + '\n        }';
     const nested = r10ClientHandle(wrap(nestedBody, '&mut self, mut url: Value'));
-    ok(nested === wrap(nestedBody, '&mut self, mut url: Value'), 'nested decl untouched');
+    ok(nested.includes('self.client(&[url.clone()]);\n            let __ch = ' + R10_HANDLE), 'nested decl typed at its own indent: ' + nested);
     const twoDecls = '        let mut client: Value = self.client(&[url.clone()]);\n        let mut client: Value = self.client(&[other.clone()]);\n' + read('subscriptions');
     const two = r10ClientHandle(wrap(twoDecls, '&mut self, mut url: Value'));
     ok(two === wrap(twoDecls, '&mut self, mut url: Value'), 'two decls untouched');
+
+    // 6c. a lone declaration nested in a block binds at the decl's indent
+    const nestedOne = '        if (is_true(&flag)) {\n            let mut client: Value = self.client(&[url.clone()]);\n' + read('futures').replace('        let', '            let') + '\n        }';
+    const nestedOut = r10ClientHandle(wrap(nestedOne, '&mut self, mut url: Value'));
+    ok(nestedOut.includes('self.client(&[url.clone()]);\n            let __ch = ' + R10_HANDLE), 'nested binding follows the decl: ' + nestedOut);
+    ok(nestedOut.includes('__ch.futures.clone()'), 'nested read typed: ' + nestedOut);
 
     // 7. url / futures / rejections are handle fields too
     for (const k of ['url', 'futures', 'rejections']) {

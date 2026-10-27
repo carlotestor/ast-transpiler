@@ -52277,6 +52277,7 @@ function r10DeltaAt(maskedLines, idx) {
   return d;
 }
 var R10_LET_CLIENT = /^ {8}let mut client: Value = /;
+var R10_LET_CLIENT_NESTED = /^ {9,}let mut client: Value = /;
 var R10_REASSIGN = /^\s*client\s*=[^=]/;
 var R10_COMMENT = /^\s*(?:\/\/|\/\*|\*)/;
 function r10Block(block) {
@@ -52294,6 +52295,14 @@ function r10Block(block) {
     for (let k = 1; k < block.length; k++)
       if (R10_LET_CLIENT.test(block[k]))
         decls.push(k);
+    if (decls.length === 0) {
+      for (let k = 1; k < block.length; k++)
+        if (R10_LET_CLIENT_NESTED.test(block[k]))
+          decls.push(k);
+      const nestedAt = decls.length;
+      if (nestedAt === 1 && !block[decls[0]].trimEnd().endsWith(";"))
+        return block;
+    }
     if (decls.length !== 1)
       return block;
     anchor = decls[0];
@@ -52341,7 +52350,8 @@ function r10Block(block) {
   }
   if (!touched)
     return block;
-  const binding = "        let " + (needsMut ? "mut " : "") + "__ch = " + R10_HANDLE + "::from_value(client.clone());";
+  const bindIndent = fromParam ? "        " : block[anchor].match(/^ */)[0];
+  const binding = bindIndent + "let " + (needsMut ? "mut " : "") + "__ch = " + R10_HANDLE + "::from_value(client.clone());";
   const result = [];
   for (let k = 0; k < block.length; k++) {
     const spans = rewritten.get(k);
