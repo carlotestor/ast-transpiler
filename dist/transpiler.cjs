@@ -52439,7 +52439,28 @@ function r10ClientHandle(content) {
       depth += r10DeltaAt(braces, k);
     i = j + 1;
   }
-  return out.join("\n");
+  return r10SubsWrites(out.join("\n"));
+}
+var R10_SUBS_WRITES = [
+  [/(?<![\w:.])remove\(&mut __ch\.subscriptions,\s*/g, "__ch.remove_subscription("],
+  [/(?<![\w:.])add_element_to_object\(&mut __ch\.subscriptions,\s*/g, "__ch.add_subscription("]
+];
+function r10SubsWrites(content) {
+  if (!content.includes("&mut __ch.subscriptions"))
+    return content;
+  let text = content;
+  for (const [rx, repl] of R10_SUBS_WRITES) {
+    const masked = r10Mask(text);
+    const hits = [];
+    rx.lastIndex = 0;
+    let m;
+    while ((m = rx.exec(masked)) !== null)
+      hits.push({ at: m.index, len: m[0].length });
+    for (let n = hits.length - 1; n >= 0; n--) {
+      text = text.slice(0, hits[n].at) + repl + text.slice(hits[n].at + hits[n].len);
+    }
+  }
+  return text;
 }
 function r10BraceDeltas(content) {
   return r10Mask(content);

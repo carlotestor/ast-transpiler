@@ -238,7 +238,35 @@ export function r10ClientHandle(content: string): string {
         for (let k = i; k <= j; k++) depth += r10DeltaAt(braces, k);
         i = j + 1;
     }
-    return out.join('\n');
+    return r10SubsWrites(out.join('\n'));
+}
+
+const R10_SUBS_WRITES: Array<[RegExp, string]> = [
+    [/(?<![\w:.])remove\(&mut __ch\.subscriptions,\s*/g, '__ch.remove_subscription('],
+    [/(?<![\w:.])add_element_to_object\(&mut __ch\.subscriptions,\s*/g, '__ch.add_subscription('],
+];
+
+/**
+ * `remove(&mut __ch.subscriptions, k)` / `add_element_to_object(&mut __ch.subscriptions, k, v)`
+ * become `__ch.remove_subscription(k)` / `__ch.add_subscription(k, v)`: ClientHandle owns the
+ * `subscriptions` snapshot and the write that persists to the live client, so the venue code
+ * names the operation instead of dispatching a dynamic helper on a Value.
+ */
+function r10SubsWrites(content: string): string {
+    if (!content.includes('&mut __ch.subscriptions')) return content;
+    let text = content;
+    for (const [rx, repl] of R10_SUBS_WRITES) {
+        // Mask comments/strings so only real code is rewritten; indices line up 1:1.
+        const masked = r10Mask(text);
+        const hits: Array<{ at: number, len: number }> = [];
+        rx.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = rx.exec(masked)) !== null) hits.push({ at: m.index, len: m[0].length });
+        for (let n = hits.length - 1; n >= 0; n--) {
+            text = text.slice(0, hits[n].at) + repl + text.slice(hits[n].at + hits[n].len);
+        }
+    }
+    return text;
 }
 
 /** The masked text (comments, strings, char literals blanked) for structure. */
@@ -374,11 +402,11 @@ export function r10SelfTest(): string[] {
     // 2. a read *after* a write of the same key keeps the helper (the field is
     //    mutated by then); a read before the write is safe to type
     const write = r10ClientHandle(wrap('        remove(&mut get_value(&client, &Value::Str("subscriptions".into())), &hash);\n' + read('subscriptions')));
-    ok(write.includes('remove(&mut __ch.subscriptions, &hash);'), 'write goes native: ' + write);
+    ok(write.includes('__ch.remove_subscription(&hash);'), 'write goes native: ' + write);
     ok(write.includes('let mut v: Value = get_value(&client, &Value::Str("subscriptions".into()));'), 'same-key read after the write kept: ' + write);
     const readFirst = r10ClientHandle(wrap(read('subscriptions') + '\n        remove(&mut get_value(&client, &Value::Str("subscriptions".into())), &hash);'));
     ok(readFirst.includes('__ch.subscriptions.clone()'), 'earlier read typed: ' + readFirst);
-    ok(readFirst.includes('remove(&mut __ch.subscriptions, &hash);'), 'later write typed: ' + readFirst);
+    ok(readFirst.includes('__ch.remove_subscription(&hash);'), 'later write typed: ' + readFirst);
 
     // 3. writes on one key do not stop reads of another; a write-only key goes native
     const split = r10ClientHandle(wrap('        remove(&mut get_value(&client, &Value::Str("futures".into())), &hash);\n' + read('subscriptions')));
@@ -444,6 +472,16 @@ export function r10SelfTest(): string[] {
     const allocOut = r10ClientHandle(alloc);
     ok(allocOut.includes('__ch.subscriptions.clone()'), 'allocating spelling typed: ' + allocOut);
     ok(!allocOut.includes('get_value(&client'), 'allocating spelling helper gone: ' + allocOut);
+
+    // 11. subscriptions writes name the handle operation
+    const sw = r10ClientHandle(wrap('        remove(&mut get_value(&client, &Value::Str(\"subscriptions\".into())), &hash);\n        add_element_to_object(&mut get_value(&client, &Value::Str(\"subscriptions\".into())), &hash, Value::Map({ let mut m = HashMap::new(); m.insert(\"a\".to_string(), Value::Int(1)); m }));'));
+    ok(sw.includes('__ch.remove_subscription(&hash);'), 'remove names the handle op: ' + sw);
+    ok(sw.includes('__ch.add_subscription(&hash, Value::Map({'), 'add names the handle op: ' + sw);
+    ok(!sw.includes('add_element_to_object(') && !sw.includes(' remove('), 'helpers gone: ' + sw);
+    ok(sw.includes('let mut __ch = '), 'handle bound mut: ' + sw);
+    ok(r10ClientHandle(sw) === sw, 'writes idempotent');
+    const futW = r10ClientHandle(wrap('        remove(&mut get_value(&client, &Value::Str(\"futures\".into())), &hash);'));
+    ok(futW.includes('remove(&mut __ch.futures, &hash);'), 'other keys keep the helper: ' + futW);
 
     return problems;
 }
