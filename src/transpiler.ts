@@ -839,3 +839,5 @@ export {
     hx10G06Check, g08w3Check, hx10w8GB01Check, hx10w8GB05Check, hx10w9GB11Check,
 };
 export type { RustDeclaredDictLocalEntry };
+// the rust final-text passes the ccxt build script runs after its own post-passes
+export * from './rustPasses/index.js';

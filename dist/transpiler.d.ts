@@ -93,3 +93,4 @@ declare class TranspileProgramBatch {
 }
 export { Transpiler, TranspileProgramBatch, CheckFlags, ElementFlags, IndexKind, ObjectFlags, SignatureKind, SymbolFlags, TypeFlags, TypeFormatFlags, SyntaxKind, alignGoTrailingComments, RUST_DECLARED_DICT_LOCALS, installCcxtGoHooks, installCcxtGoLocalTypes, installCcxtGoIndexableTypes, installCcxtGoParamTypes, installCcxtGoDictParams, installCcxtGoGb05ParamTypes, installCcxtGoGb11HandleErrorsCode, installCcxtGoSignTyping, CCXT_GO_HELPER_RETURN_TYPES, CCXT_GO_BOOL_METHOD_NAMES, CCXT_GO_STRING_PTR_METHOD_NAMES, hx10G06Check, g08w3Check, hx10w8GB01Check, hx10w8GB05Check, hx10w9GB11Check, };
 export type { RustDeclaredDictLocalEntry };
+export * from './rustPasses/index.js';

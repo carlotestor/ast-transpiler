@@ -318,7 +318,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSafeStringLocalInitializer(declaration: any): boolean;
     rustStringLocalUseIsNative(node: any): boolean;
     rustSafeStringLocalIsTyped(declaration: any): boolean;
+    rustSignApiStringLocalIsTyped(declaration: any): boolean;
     rustSafeStringLocalIsTypedUncached(declaration: any): boolean;
+    private static readonly RUST_SIGN_API_METHODS;
+    /** The `api: string[]` / `section: string[]` parameter (position 1) of sign/fetch2/request an identifier names. */
+    rustSignApiParam(node: any): ParameterDeclaration | undefined;
+    /** `api[N]` on a shadowed sign-api parameter: the element read the shadow prints as `api.get(N)`. */
+    rustSignApiElementInit(declaration: any): {
+        receiver: string;
+        index: number;
+    } | undefined;
     rustIdentifierIsPropertyName(node: any): boolean;
     rustStringLocalIdentifierIsTyped(node: any): boolean;
     getRustBoolLocalInitializer(declaration: any, printedValue: string): string | undefined;
@@ -483,7 +492,7 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `Value::Null`) read the same through both forms. */
     private rustFunctionReturnsArrayLiteral;
     /** Native list-index read of a generator temp (`__destr_tmp.as_array()…`). */
-    printNativeListIndex(receiverText: string, index: number): string;
+    printNativeListIndex(receiverText: string, index: number, receiverNode?: Node): string;
     /** Element read of a `Vec<Value>` binding (a destructuring temp the printer declares typed). */
     printTypedVecElementRead(name: string, index: number): string;
     /** Native read for one chain level, or undefined to keep `get_value`. */
@@ -730,6 +739,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     printReplaceCall(node: any, identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;
     printReplaceAllCall(node: any, identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;
     printThrowStatement(node: any, identation: any): string;
+    rustCatchBindingIsRead(block: Node, name: string): boolean;
     printTryStatement(node: any, identation: any): string;
     printReturnStatement(node: any, identation: any): string;
     printBreakStatement(node: any, identation: any): string;
