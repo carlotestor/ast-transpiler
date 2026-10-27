@@ -17,7 +17,7 @@ import path from 'path';
 import { ts } from './tsApi.js';
 
 export const GB01_DICT_PARAMS: { [method: string]: number[] } = {
-    'safeTrade': [ 0 ], 'safeLedgerEntry': [ 0 ],
+    'safeTrade': [ 0 ], 'safeLedgerEntry': [ 0 ], 'safeLiquidation': [ 0 ],
 };
 const GB01_TYPE = 'map[string]any';
 const GB01_DEBUG = (process.env.GB01_DEBUG === '1');
