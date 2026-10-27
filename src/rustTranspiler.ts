@@ -3567,6 +3567,28 @@ export class RustTranspiler extends BaseTranspiler {
         return `${expression}::new(${args})`;
     }
 
+    /** `param.member` where `param` is a class-typed parameter, the member is
+     *  string-typed and the read is a plain rvalue: `get_value_k(&param, "member")`. */
+    printStringMemberOfClassParam(node: any, receiverText: string): string | undefined {
+        const receiver = node.expression;
+        if (!isIdentifier(receiver) || !isIdentifier(node.name)) return undefined;
+        const source = node.getSourceFile ? node.getSourceFile().fileName : '';
+        if (typeof source === 'string' && /\/test\//.test(source)) return undefined;
+        const member = String(node.name.text);
+        if (member === 'length' || member === 'hashmap' || member === 'subscriptions' || member === 'futures') return undefined;
+        const declaration = this.rustSingleLocalDeclaration(receiver);
+        if (declaration === undefined || !isParameterDeclaration(declaration)) return undefined;
+        if (!this.isNativeAccessPositionSafe(node) || this.isNativeWriteTargetBase(node)) return undefined;
+        const parent: any = node.parent;
+        if (parent !== undefined && ((isPropertyAccessExpression(parent) || isElementAccessExpression(parent)) && parent.expression === node)) return undefined;
+        const memberType = this.typeOfNodeIfAny(node);
+        if (memberType === undefined || !this.isStringType(memberType.flags)) return undefined;
+        const receiverType: any = this.typeOfNodeIfAny(receiver);
+        if (receiverType === undefined || !(receiverType.flags & TypeFlags.Object) ||
+            !(((typeTarget(receiverType) ?? receiverType).objectFlags) & ObjectFlags.Class)) return undefined;
+        return `crate::value::get_value_k(&${receiverText}, ${this.quotedStringLiteral(member)})`;
+    }
+
     printPropertyAccessExpression(node, identation) {
         const transformedProperty = this.transformPropertyAcessExpressionIfNeeded(node);
         if (transformedProperty) {
@@ -3593,6 +3615,12 @@ export class RustTranspiler extends BaseTranspiler {
             const native = this.printNativeMapAccess(leftExpr, node.expression, String(rightSide));
             if (native) return native;
         }
+
+        // A string-typed data member read off a class-typed parameter (a `Value`
+        // in Rust, e.g. `sourceExchange.id`) is the `&str`-key lookup itself; the
+        // ccxt field-access pass would turn the bare `x.id` into `get_value`.
+        const stringMember = this.printStringMemberOfClassParam(node, leftExpr);
+        if (stringMember !== undefined) return stringMember;
 
         return `${leftExpr}.${rightSide}`;
     }
