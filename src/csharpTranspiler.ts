@@ -462,6 +462,9 @@ function csharpSliceBoundValue(bound) {
 // receivers the market-typed-local unit owns (market/currency rows); this printer's literal-key
 // read rule leaves them to that family and covers every other declared-collection local
 const CSHARP_MARKET_RECEIVER_NAMES = [ 'market', 'currency' ];
+// base readers that take a dictionary row as their first argument; function kinds that bind their own names
+const CSHARP_ELEMENT_ROW_READERS = [ 'safeString', 'safeInteger', 'safeNumber', 'safeFloat', 'safeBool', 'safeDict', 'safeList', 'safeValue', 'safeStringLower', 'safeStringUpper', 'safeIntegerProduct' ];
+const CSHARP_FUNCTION_SCOPES = [ SyntaxKind.MethodDeclaration, SyntaxKind.FunctionDeclaration, SyntaxKind.FunctionExpression, SyntaxKind.ArrowFunction, SyntaxKind.Constructor, SyntaxKind.GetAccessor, SyntaxKind.SetAccessor ];
 
 // Parameters of a method whose override chain the ts/src census cleared: every declaration (base
 // member + every override) maps to the same spelling AND every call site in the generated tree
@@ -553,6 +556,11 @@ export class CSharpTranspiler extends BaseTranspiler {
     // layer for the (method, position) pairs its own post-print pass retypes: those keep the
     // `object` box this printer would otherwise replace, so that pass still owns the signature
     csharpListParamExclusions?: (name: string, index: number) => boolean;
+    // `const row = list[i]` whose every use reads a string-keyed dictionary prints
+    // `IDictionary<string, object> row = ((IDictionary<string, object>)<read>)`. Native rule: it fires
+    // for exchange sources (ts/src/, never the test/example tiers, whose element reads print against
+    // the bridge helpers); a host may override the per-file answer with this hook
+    csharpElementRowLocalSource?: (fileName: string) => boolean;
     // variable declaration -> the concrete C# type this printer named for it
     // (getCSharpLocalType): 'List<object>' / 'Dictionary<string, object>' / 'string' / ...
     // Only declarations the printer typed itself are kept: the printed `<type> name = `
@@ -4204,6 +4212,13 @@ export class CSharpTranspiler extends BaseTranspiler {
             return this.getIden(identation) + specificVarToken + " " + this.printNode(declaration.name) + " = " + parsedValue;
         }
         const declaredType = isNew ? 'var' : this.getCSharpLocalType(declaration);
+        if (!isNew && declaredType === this.VAR_TOKEN && node.declarations.length === 1) {
+            const rowType = this.csharpElementRowLocalType(declaration);
+            if (rowType !== undefined) {
+                this.csharpTypedLocals.set(declaration, rowType);
+                return this.getIden(identation) + rowType + " " + this.printNode(declaration.name) + " = ((" + rowType + ")" + parsedValue + ")";
+            }
+        }
         // remember the concrete types this printer declared itself: the printed prefix is
         // final (a host wrapper only rewrites untyped `object <name> = ` declarations), so
         // the local's static type is known at every later read
@@ -4211,6 +4226,110 @@ export class CSharpTranspiler extends BaseTranspiler {
             this.csharpTypedLocals.set(declaration, declaredType);
         }
         return this.getIden(identation) + declaredType + " " + this.printNode(declaration.name) + " = " + parsedValue;
+    }
+
+    // `const row = list[i]` (non-string key): when every use of the local in its function reads the
+    // box as a string-keyed dictionary, the box IS a dictionary and the declaration may name it.
+    csharpElementRowLocalType(declaration): string | undefined {
+        if (declaration.name?.kind !== SyntaxKind.Identifier) {
+            return undefined;
+        }
+        let init = declaration.initializer;
+        while (init?.kind === SyntaxKind.ParenthesizedExpression) {
+            init = init.expression;
+        }
+        if (init?.kind !== SyntaxKind.ElementAccessExpression || this.csharpElementRowKeyIsString(init.argumentExpression)) {
+            return undefined;
+        }
+        // `this.<member>[k]` reads (ws caches such as this.orderbooks) belong to the host's member-cache
+        // families, which name their own box; only a local list receiver is this rule's
+        if (init.expression?.kind === SyntaxKind.PropertyAccessExpression) {
+            return undefined;
+        }
+        const name = declaration.name.text;
+        if (CSHARP_MARKET_RECEIVER_NAMES.indexOf(name) >= 0) {
+            return undefined; // the market-row read arms own these names
+        }
+        const fileName = (declaration.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
+        const sourceOk = (typeof this.csharpElementRowLocalSource === 'function')
+            ? this.csharpElementRowLocalSource(fileName)
+            : (fileName.includes('ts/src/') && !fileName.includes('ts/src/test/') && !fileName.includes('examples/'));
+        if (!sourceOk) {
+            return undefined;
+        }
+        const scope = this.csharpEnclosingFunction(declaration);
+        const type = 'IDictionary<string, object>';
+        if (scope === undefined || this.csharpTypeNameIsShadowed(scope, type)) {
+            return undefined;
+        }
+        let bindings = 0;
+        let reads = 0;
+        let bad = false;
+        const visit = (n: any) => {
+            if (bad || n === undefined) {
+                return;
+            }
+            if (n !== scope && CSHARP_FUNCTION_SCOPES.indexOf(n.kind) >= 0) {
+                return;
+            }
+            if ((n.kind === SyntaxKind.Parameter || n.kind === SyntaxKind.VariableDeclaration) && this.csharpBindingNames(n.name).indexOf(name) >= 0) {
+                bindings += 1;
+            }
+            const memberName = n.parent?.kind === SyntaxKind.PropertyAccessExpression && n.parent.name === n;
+            if (n !== declaration.name && !memberName && n.kind === SyntaxKind.Identifier && n.text === name) {
+                if (!this.csharpElementRowUseIsDictionaryShaped(n)) {
+                    bad = true;
+                    return;
+                }
+                const parent = n.parent;
+                if (parent?.kind === SyntaxKind.ElementAccessExpression && parent.expression === n && this.csharpElementRowKeyIsString(parent.argumentExpression)) {
+                    reads += 1;
+                }
+            }
+            n.forEachChild(visit);
+        };
+        scope.forEachChild(visit);
+        return (bad || bindings !== 1 || reads === 0) ? undefined : type;
+    }
+
+    csharpElementRowKeyIsString(node): boolean {
+        return node !== undefined && (node.kind === SyntaxKind.StringLiteral || node.kind === SyntaxKind.NoSubstitutionTemplateLiteral);
+    }
+
+    csharpBindingNames(name): string[] {
+        const names: string[] = [];
+        const visit = (n: any) => {
+            if (n?.kind === SyntaxKind.Identifier) {
+                names.push(n.text);
+            } else if (n?.kind === SyntaxKind.ObjectBindingPattern || n?.kind === SyntaxKind.ArrayBindingPattern) {
+                for (const element of n.elements) {
+                    visit(element?.name);
+                }
+            }
+        };
+        visit(name);
+        return names;
+    }
+
+    csharpElementRowUseIsDictionaryShaped(use): boolean {
+        const parent = use.parent;
+        if (parent === undefined) {
+            return false;
+        }
+        if (parent.kind === SyntaxKind.ElementAccessExpression && parent.expression === use) {
+            return this.csharpElementRowKeyIsString(parent.argumentExpression);
+        }
+        if (parent.kind === SyntaxKind.CallExpression && parent.arguments?.[0] === use) {
+            const callee = parent.expression;
+            return callee?.kind === SyntaxKind.PropertyAccessExpression && callee.expression?.kind === SyntaxKind.ThisKeyword
+                && CSHARP_ELEMENT_ROW_READERS.indexOf(callee.name?.text) >= 0;
+        }
+        if (parent.kind === SyntaxKind.BinaryExpression) {
+            const op = parent.operatorToken?.kind;
+            return op === SyntaxKind.EqualsEqualsEqualsToken || op === SyntaxKind.ExclamationEqualsEqualsToken
+                || op === SyntaxKind.EqualsEqualsToken || op === SyntaxKind.ExclamationEqualsToken;
+        }
+        return false;
     }
 
     transformPropertyAcessExpressionIfNeeded(node) {
