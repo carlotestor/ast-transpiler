@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-5QHB7QM7.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -46096,7 +46096,8 @@ init_esm_shims();
 import path4 from "path";
 var GB01_DICT_PARAMS = {
   "safeTrade": [0],
-  "safeLedgerEntry": [0]
+  "safeLedgerEntry": [0],
+  "safeLiquidation": [0]
 };
 var GB01_TYPE = "map[string]any";
 var GB01_DEBUG = process.env.GB01_DEBUG === "1";
