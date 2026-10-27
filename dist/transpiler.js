@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -27864,6 +27864,39 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // `X["k"] = v` on a checker-proven plain Dict receiver: mutate the Dict
   // natively. The helper's tag hooks (book meta, ws subscriptions, cache
   // hashmap) only fire on tagged dicts, which a plain object type never is.
+  // `book["timestamp"|"datetime"|"nonce"|"symbol"] = v` on a local the checker types as an
+  // order-book class: `Value::set_book_meta` (hand-written, value.rs) does the shared-store
+  // write (`try_book_meta_write`) and otherwise defers to the same `add_element_to_object`.
+  printNativeBookMetaWrite(baseExpr, keyNode, keyText, valueText) {
+    if (!isIdentifier3(baseExpr) || !isStringLiteral3(keyNode)) {
+      return void 0;
+    }
+    if (!_RustTranspiler.RUST_ORDERBOOK_META_FIELDS.has(keyNode.text)) {
+      return void 0;
+    }
+    const type = this.typeOfNodeIfAny(baseExpr);
+    const name = type === void 0 ? void 0 : this.typeSymbolOf(type)?.name;
+    if (name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) {
+      return void 0;
+    }
+    const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
+    if (keyLiteral === null) {
+      return void 0;
+    }
+    let value = valueText;
+    if (this.rustPrintedBoolArg(value)) {
+      value = `Value::Bool(${value})`;
+    }
+    const receiver = baseExpr.text;
+    if (new RegExp(`\\b${receiver}\\b`).test(value)) {
+      return `{ let __be_tmp = ${value}; ${receiver}.set_book_meta(${keyLiteral[1]}, __be_tmp); }`;
+    }
+    const trimmed = value.trim();
+    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed) && trimmed !== "self" && trimmed !== "true" && trimmed !== "false") {
+      value = `${trimmed}.clone()`;
+    }
+    return `${receiver}.set_book_meta(${keyLiteral[1]}, ${value})`;
+  }
   printNativeDictInsert(baseExpr, keyNode, keyText, valueText) {
     const receiver = this.rustNativeInsertReceiver(baseExpr);
     if (receiver === void 0 || !this.rustReceiverStaysDict(baseExpr, receiver)) {
@@ -28462,7 +28495,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const bearerChain = keyStrs.length > 1 ? this.rustBearerChainedWrite(baseExpr, keys, keyStrs, rhs) : void 0;
       if (bearerChain !== void 0)
         return bearerChain;
-      const nativeInsert = keyStrs.length === 1 ? this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustMapParamDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) : void 0;
+      const nativeInsert = keyStrs.length === 1 ? this.printNativeBookMetaWrite(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustMapParamDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) : void 0;
       return nativeInsert ?? `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${rhs})`;
     }
     if (isAssign && isIdentifier3(left) && this.rustDictBearerDeclaration(left) !== void 0 && this.rustR01BearerPlainLiteral(right)) {
@@ -35003,6 +35036,8 @@ _RustTranspiler.RUST_NATIVE_INSERT_RECEIVERS = /* @__PURE__ */ new Set([
 ]);
 // Scalar book fields the shared order-book store keeps instead of the Dict
 // (value.rs `is_book_meta_key` plus the `cache` replacement write).
+_RustTranspiler.RUST_ORDERBOOK_META_FIELDS = /* @__PURE__ */ new Set(["timestamp", "datetime", "nonce", "symbol"]);
+_RustTranspiler.RUST_ORDERBOOK_CLASSES = /* @__PURE__ */ new Set(["OrderBook", "WsOrderBook", "CountedOrderBook", "IndexedOrderBook"]);
 _RustTranspiler.RUST_BOOK_META_KEYS = /* @__PURE__ */ new Set([
   "timestamp",
   "datetime",

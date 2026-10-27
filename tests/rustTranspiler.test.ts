@@ -1858,6 +1858,20 @@ describe('rust native dict inserts', () => {
         expect(output).toContain('add_element_to_object(&mut result');
     });
 
+    test('order-book meta fields print set_book_meta', () => {
+        const ts = 'class OrderBook { timestamp: number; datetime: string; }\nfunction f(orderbook: OrderBook, ts: number) { orderbook["timestamp"] = ts; orderbook["datetime"] = "x"; }';
+        const output = transpiler.transpileRust(ts).content;
+        expect(output).toContain('orderbook.set_book_meta("timestamp", ts.clone())');
+        expect(output).toContain('orderbook.set_book_meta("datetime", ');
+        expect(output).not.toContain('add_element_to_object(&mut orderbook');
+    });
+
+    test('order-book non-meta keys keep the helper', () => {
+        const ts = 'class OrderBook { foo: number; }\nfunction f(orderbook: OrderBook) { orderbook["foo"] = 1; }';
+        const output = transpiler.transpileRust(ts).content;
+        expect(output).toContain('add_element_to_object(&mut orderbook');
+    });
+
     test('class-typed receivers keep the helper', () => {
         const ts = 'class Book { bids: any[] = []; }\nfunction f(book: Book) { book["k"] = 1; }';
         const output = transpiler.transpileRust(ts).content;
