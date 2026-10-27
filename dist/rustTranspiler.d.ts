@@ -447,6 +447,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     printErrorConstructorArg(name: string, index: number, node: any, identation: number): string;
     rustErrorConstructorName(className: string): string;
     printNewExpression(node: any, identation: any): any;
+    /** `param.member` where `param` is a class-typed parameter, the member is
+     *  string-typed and the read is a plain rvalue: `get_value_k(&param, "member")`. */
+    printStringMemberOfClassParam(node: any, receiverText: string): string | undefined;
     printPropertyAccessExpression(node: any, identation: any): any;
     /** Methods whose Rust counterpart takes `&mut self`: a `self.<field>` read in
      *  their args must keep the `get_value(...)` shape the ccxt post-pass hoists. */

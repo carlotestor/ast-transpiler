@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-AWK6QGCM.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -30010,6 +30010,34 @@ ${classMethods}
     const args = typeof expression === "string" ? node.arguments.map((a, index) => this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation)).join(", ") : node.arguments.map((a) => this.printNode(a, identation)).join(", ");
     return `${expression}::new(${args})`;
   }
+  /** `param.member` where `param` is a class-typed parameter, the member is
+   *  string-typed and the read is a plain rvalue: `get_value_k(&param, "member")`. */
+  printStringMemberOfClassParam(node, receiverText) {
+    const receiver = node.expression;
+    if (!isIdentifier3(receiver) || !isIdentifier3(node.name))
+      return void 0;
+    const source = node.getSourceFile ? node.getSourceFile().fileName : "";
+    if (typeof source === "string" && /\/test\//.test(source))
+      return void 0;
+    const member = String(node.name.text);
+    if (member === "length" || member === "hashmap" || member === "subscriptions" || member === "futures")
+      return void 0;
+    const declaration = this.rustSingleLocalDeclaration(receiver);
+    if (declaration === void 0 || !isParameterDeclaration3(declaration))
+      return void 0;
+    if (!this.isNativeAccessPositionSafe(node) || this.isNativeWriteTargetBase(node))
+      return void 0;
+    const parent = node.parent;
+    if (parent !== void 0 && ((isPropertyAccessExpression3(parent) || isElementAccessExpression4(parent)) && parent.expression === node))
+      return void 0;
+    const memberType = this.typeOfNodeIfAny(node);
+    if (memberType === void 0 || !this.isStringType(memberType.flags))
+      return void 0;
+    const receiverType = this.typeOfNodeIfAny(receiver);
+    if (receiverType === void 0 || !(receiverType.flags & TypeFlags6.Object) || !((typeTarget(receiverType) ?? receiverType).objectFlags & ObjectFlags.Class))
+      return void 0;
+    return `crate::value::get_value_k(&${receiverText}, ${this.quotedStringLiteral(member)})`;
+  }
   printPropertyAccessExpression(node, identation) {
     const transformedProperty = this.transformPropertyAcessExpressionIfNeeded(node);
     if (transformedProperty) {
@@ -30029,6 +30057,9 @@ ${classMethods}
       if (native)
         return native;
     }
+    const stringMember = this.printStringMemberOfClassParam(node, leftExpr);
+    if (stringMember !== void 0)
+      return stringMember;
     return `${leftExpr}.${rightSide}`;
   }
   toSnakeCaseName(name) {
