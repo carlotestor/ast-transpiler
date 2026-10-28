@@ -26,7 +26,7 @@
 // non-Str (the helper's wildcard arm then writes to the receiver itself) and
 // stringifying it would only move the call to `stringify_param`.
 
-const FIELDS = ['options', 'markets', 'balance'];
+const FIELDS = ['options', 'markets', 'balance', 'ohlcvs'];
 const RECV = 'self\\.(?:(?:core|parent)\\.)*(' + FIELDS.join('|') + ')';
 const STR_KEY = /^&Value::Str\("((?:[^"\\]|\\.)*)"\.(?:into|to_string)\(\)\)$/;
 const ROOT = new RegExp('^&mut\\s+' + RECV + '$');
@@ -147,6 +147,29 @@ function chainAt(content: string, masked: string, at: number): Chain | undefined
 
 interface Rw { start: number, end: number, text: string }
 
+/** `&ident` key whose binding in the enclosing fn is a proven `Value` (local or param). */
+function valueIdentKey(masked: string, at: number, key: string): string {
+    const id = /^&([A-Za-z_][A-Za-z0-9_]*)$/.exec(key);
+    if (id === null) return '';
+    const fnHead = /(?:^|\n)[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+[A-Za-z_][A-Za-z0-9_]*/g;
+    let start = 0;
+    let m: RegExpExecArray | null;
+    while ((m = fnHead.exec(masked)) !== null) {
+        if (m.index > at) break;
+        start = m.index;
+    }
+    const nl = masked.indexOf('\n', start + 1);
+    const header = masked.slice(start, nl < 0 ? at : nl);
+    const ident = id[1];
+    const local = new RegExp('\\blet\\s+(?:mut\\s+)?' + ident + '\\s*:\\s*Value\\s*=');
+    const other = new RegExp('\\blet\\s+(?:mut\\s+)?' + ident + '\\b(?!\\s*:\\s*Value\\s*=)');
+    const param = new RegExp('(?:^|[(,]\\s*)(?:mut\\s+)?' + ident + '\\s*:\\s*Value\\b');
+    const body = masked.slice(start, at);
+    if (other.test(body)) return '';
+    if (local.test(body) || param.test(header)) return 'crate::runtime::stringify_param(&' + ident + ')';
+    return '';
+}
+
 function runPass(content: string): string {
     if (!content.includes('get_value_mut(')) return content;
     const masked = maskSrc(content);
@@ -161,7 +184,10 @@ function runPass(content: string): string {
         if (!ROOT.test(chain.root) && !COERCED.test(chain.root)) continue;
         const outer = chain.hops[0];
         const allLiteral = chain.hops.every(h => h.literal !== undefined);
-        if (!allLiteral && outer.literal === undefined) continue;
+        // One `get_value_mut(&mut self.<plain field>, &<Value ident>)` hop: stringify_param is the
+        // helper's own key lowering for the dict arm, so the entry form is the same write.
+        const identKey = (!allLiteral && chain.hops.length === 1) ? valueIdentKey(masked, m.index, outer.key) : '';
+        if (!allLiteral && outer.literal === undefined && identKey === '') continue;
 
         const end = chain.hops[0].close + 1;
         const braceOpen = masked.indexOf('{', end);
@@ -186,10 +212,12 @@ function runPass(content: string): string {
         const pad = /^[ \t]*/.exec(content.slice(lineStart, m.index)) as RegExpExecArray;
         const level = (n: number) => pad[0] + '    '.repeat(n + 1);
         // Innermost key first: `keys[i]` is hop i counted from the container.
-        const keys = allLiteral
-            ? chain.hops.map(h => h.literal as string).reverse()
-            : [outer.literal as string];
-        const head = allLiteral ? chain.root : outer.recv;
+        const keys = identKey !== ''
+            ? [identKey]
+            : (allLiteral
+                ? chain.hops.map(h => '"' + (h.literal as string) + '".to_string()').reverse()
+                : ['"' + (outer.literal as string) + '".to_string()']);
+        const head = (allLiteral || identKey !== '') ? chain.root : outer.recv;
         const lines: string[] = ['if let Value::Dict(__bf03d0) = ' + head + ' {'];
         const parts: string[] = ['if let Value::Dict(__bf03d0) = ' + head + ' {'];
         const bodyText = body.replace(/\s+$/, '');
@@ -197,7 +225,7 @@ function runPass(content: string): string {
         for (let i = 0; i < keys.length; i++) {
             const last = i === keys.length - 1;
             const entry = 'let __bf03e' + (i + 1)
-                + ' = std::sync::Arc::make_mut(__bf03d' + i + ').entry("' + keys[i] + '".to_string())'
+                + ' = std::sync::Arc::make_mut(__bf03d' + i + ').entry(' + keys[i] + ')'
                 + '.or_insert(Value::Null);';
             const test = last
                 ? 'if let Value::Dict(' + bind + ') = __bf03e' + (i + 1) + ' {'

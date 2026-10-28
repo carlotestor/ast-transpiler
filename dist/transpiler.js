@@ -52170,7 +52170,7 @@ function r08DictReads(content) {
 
 // src/rustPasses/hx10w4-BF03.ts
 init_esm_shims();
-var FIELDS = ["options", "markets", "balance"];
+var FIELDS = ["options", "markets", "balance", "ohlcvs"];
 var RECV3 = "self\\.(?:(?:core|parent)\\.)*(" + FIELDS.join("|") + ")";
 var STR_KEY3 = /^&Value::Str\("((?:[^"\\]|\\.)*)"\.(?:into|to_string)\(\)\)$/;
 var ROOT = new RegExp("^&mut\\s+" + RECV3 + "$");
@@ -52295,6 +52295,31 @@ function chainAt(content, masked, at) {
   }
   return void 0;
 }
+function valueIdentKey(masked, at, key) {
+  const id = /^&([A-Za-z_][A-Za-z0-9_]*)$/.exec(key);
+  if (id === null)
+    return "";
+  const fnHead = /(?:^|\n)[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+[A-Za-z_][A-Za-z0-9_]*/g;
+  let start = 0;
+  let m;
+  while ((m = fnHead.exec(masked)) !== null) {
+    if (m.index > at)
+      break;
+    start = m.index;
+  }
+  const nl = masked.indexOf("\n", start + 1);
+  const header = masked.slice(start, nl < 0 ? at : nl);
+  const ident = id[1];
+  const local = new RegExp("\\blet\\s+(?:mut\\s+)?" + ident + "\\s*:\\s*Value\\s*=");
+  const other = new RegExp("\\blet\\s+(?:mut\\s+)?" + ident + "\\b(?!\\s*:\\s*Value\\s*=)");
+  const param = new RegExp("(?:^|[(,]\\s*)(?:mut\\s+)?" + ident + "\\s*:\\s*Value\\b");
+  const body = masked.slice(start, at);
+  if (other.test(body))
+    return "";
+  if (local.test(body) || param.test(header))
+    return "crate::runtime::stringify_param(&" + ident + ")";
+  return "";
+}
 function runPass4(content) {
   if (!content.includes("get_value_mut("))
     return content;
@@ -52312,7 +52337,8 @@ function runPass4(content) {
       continue;
     const outer = chain.hops[0];
     const allLiteral = chain.hops.every((h) => h.literal !== void 0);
-    if (!allLiteral && outer.literal === void 0)
+    const identKey2 = !allLiteral && chain.hops.length === 1 ? valueIdentKey(masked, m.index, outer.key) : "";
+    if (!allLiteral && outer.literal === void 0 && identKey2 === "")
       continue;
     const end = chain.hops[0].close + 1;
     const braceOpen = masked.indexOf("{", end);
@@ -52342,15 +52368,15 @@ function runPass4(content) {
     const lineStart = content.lastIndexOf("\n", m.index) + 1;
     const pad = /^[ \t]*/.exec(content.slice(lineStart, m.index));
     const level = (n) => pad[0] + "    ".repeat(n + 1);
-    const keys = allLiteral ? chain.hops.map((h) => h.literal).reverse() : [outer.literal];
-    const head = allLiteral ? chain.root : outer.recv;
+    const keys = identKey2 !== "" ? [identKey2] : allLiteral ? chain.hops.map((h) => '"' + h.literal + '".to_string()').reverse() : ['"' + outer.literal + '".to_string()'];
+    const head = allLiteral || identKey2 !== "" ? chain.root : outer.recv;
     const lines = ["if let Value::Dict(__bf03d0) = " + head + " {"];
     const parts = ["if let Value::Dict(__bf03d0) = " + head + " {"];
     const bodyText = body.replace(/\s+$/, "");
     let tooLong = false;
     for (let i = 0; i < keys.length; i++) {
       const last = i === keys.length - 1;
-      const entry = "let __bf03e" + (i + 1) + " = std::sync::Arc::make_mut(__bf03d" + i + ').entry("' + keys[i] + '".to_string()).or_insert(Value::Null);';
+      const entry = "let __bf03e" + (i + 1) + " = std::sync::Arc::make_mut(__bf03d" + i + ").entry(" + keys[i] + ").or_insert(Value::Null);";
       const test = last ? "if let Value::Dict(" + bind + ") = __bf03e" + (i + 1) + " {" : "if let Value::Dict(__bf03d" + (i + 1) + ") = __bf03e" + (i + 1) + " {";
       if (level(i).length + entry.length > MAX_LINE2) {
         tooLong = true;

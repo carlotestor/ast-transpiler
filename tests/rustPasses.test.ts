@@ -37,4 +37,12 @@ describe('rust final-text passes (moved from ccxt build/)', () => {
         const src = 'fn f() { let x = 1; }\n';
         expect(passes.hx11RustSignApiStr(src)).toBe(src);
     });
+    test('bf03PlainDictChains lowers a Value-ident key on balance/ohlcvs without get_value_mut', () => {
+        const src = 'pub fn f(&mut self, symbol: Value) {\n    let mut tf: Value = Value::Null;\n    if let Value::Dict(__r05d) = get_value_mut(&mut self.ohlcvs, &symbol) { std::sync::Arc::make_mut(__r05d).insert(crate::runtime::stringify_param(&tf), tf.clone()); }\n}\n';
+        const out = passes.bf03PlainDictChains(src);
+        expect(out).not.toContain('get_value_mut');
+        expect(out).toContain('.entry(crate::runtime::stringify_param(&symbol)).or_insert(Value::Null)');
+        const unknown = src.replace('symbol: Value', 'symbol: &str');
+        expect(passes.bf03PlainDictChains(unknown)).toContain('get_value_mut');
+    });
 });
