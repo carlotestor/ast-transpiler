@@ -48,3 +48,16 @@ describe('hx11 go hooks (moved from ccxt build/)', () => {
         expect ((check as () => string[]) ()).toEqual ([]);
     });
 });
+
+describe('hx11 w8 unifiedBoolParams', () => {
+    const SRC = 'class Exchange {\n    setMode (hedged: boolean, symbol: string = undefined): any {\n        if (hedged) { return 1; }\n        return 2;\n    }\n}\n';
+    const print = (table: any): string => new Transpiler ({ 'verbose': false, 'go': { 'unifiedBoolParams': table, 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileGo (SRC).content;
+    test('a tabled required boolean param prints bool and a native if', () => {
+        const out = print ({ 'setMode': [ 0 ] });
+        expect (out).toContain ('hedged bool');
+        expect (out).not.toContain ('EvalTruthy');
+    });
+    test('an absent table keeps the boxed any param', () => {
+        expect (print ({})).toContain ('hedged any');
+    });
+});

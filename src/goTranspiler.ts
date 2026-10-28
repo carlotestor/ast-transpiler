@@ -802,6 +802,9 @@ export class GoTranspiler extends BaseTranspiler {
     // index -> Go slice type (`[]string`/`[][]string`). Same audit: the base and every override
     // print that slice, and every call site passes a literal the printer opens as that slice.
     unifiedSliceParams: { [method: string]: { [index: number]: string } } = {};
+    // hx11 w8: inherited method name -> indexes of required `boolean` params that print `bool` on the
+    // base and every override (dynamic callers convert through BoolArg)
+    unifiedBoolParams: { [method: string]: number[] } = {};
     // array literals the current print opens as a Go slice (set by the call-argument rule)
     goSliceLiteralTypes: Map<any, string> = new Map<any, string>();
     // installed by the ccxt build: GetArg alias -> Go types, and the audited consumer table
@@ -859,6 +862,7 @@ export class GoTranspiler extends BaseTranspiler {
         this.asyncSuffixExemptPaths = (config['asyncSuffixExemptPaths'] ?? []).map((p) => new RegExp(p));
         this.unifiedStringParams = config['unifiedStringParams'] ?? {};
         this.unifiedSliceParams = config['unifiedSliceParams'] ?? {};
+        this.unifiedBoolParams = config['unifiedBoolParams'] ?? {};
     }
 
     initConfig() {
@@ -5275,6 +5279,14 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             }
             return 'string';
         }
+        if (this.goIsUnifiedBoolParameter(fn.name.text, fn.parameters.indexOf(param))) {
+            // the table types the base and every override together: a body that breaks it fails the build
+            if ((this.goNativeParameterTypeCandidates(param)[0] !== 'bool')
+                || !this.goLocalIsSafeToType(fn.body, param, param.name.text, 'bool')) {
+                throw new Error(`unifiedBoolParams: ${fn.name.text} parameter ${param.name.text} is not a required boolean written only as bool`);
+            }
+            return 'bool';
+        }
         // hx10 GP12: the ws frame. `override handleMessage (client, message: Dict)` is the one
         // inherited signature the Go dispatch can type: WsDispatch asserts the decoded object once.
         const frameType = this.goWsFrameParameterType(fn, param);
@@ -5404,6 +5416,11 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         };
         body.forEachChild(visit);
         return found;
+    }
+
+    goIsUnifiedBoolParameter(methodName: string, index: number): boolean {
+        const indexes = Object.prototype.hasOwnProperty.call(this.unifiedBoolParams, methodName) ? this.unifiedBoolParams[methodName] : undefined;
+        return Array.isArray(indexes) && indexes.includes(index);
     }
 
     goIsUnifiedStringParameter(methodName: string, index: number): boolean {

@@ -18,6 +18,9 @@ export declare class GoTranspiler extends BaseTranspiler {
             [index: number]: string;
         };
     };
+    unifiedBoolParams: {
+        [method: string]: number[];
+    };
     goSliceLiteralTypes: Map<any, string>;
     CCXT_GO_GETARG_DECLARED_TYPES: any;
     CCXT_GO_GETARG_SAFE_CONSUMERS: any;
@@ -348,6 +351,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goSliceParameterType(fn: any, param: any, index: number): string | undefined;
     goAnnotatedSliceParameterType(param: any): string | undefined;
     goBodyReadsElement(body: any, name: string): boolean;
+    goIsUnifiedBoolParameter(methodName: string, index: number): boolean;
     goIsUnifiedStringParameter(methodName: string, index: number): boolean;
     goIsUnifiedSliceParameter(methodName: string, index: number): boolean;
     goUnifiedSliceParameterType(fn: any, param: any): string | undefined;

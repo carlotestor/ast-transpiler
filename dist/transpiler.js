@@ -9425,6 +9425,9 @@ var GoTranspiler = class extends BaseTranspiler {
     // index -> Go slice type (`[]string`/`[][]string`). Same audit: the base and every override
     // print that slice, and every call site passes a literal the printer opens as that slice.
     this.unifiedSliceParams = {};
+    // hx11 w8: inherited method name -> indexes of required `boolean` params that print `bool` on the
+    // base and every override (dynamic callers convert through BoolArg)
+    this.unifiedBoolParams = {};
     // array literals the current print opens as a Go slice (set by the call-argument rule)
     this.goSliceLiteralTypes = /* @__PURE__ */ new Map();
     // declarations whose Go local type is being resolved right now (see goLocalStaticType)
@@ -9684,6 +9687,7 @@ var GoTranspiler = class extends BaseTranspiler {
     this.asyncSuffixExemptPaths = (config["asyncSuffixExemptPaths"] ?? []).map((p) => new RegExp(p));
     this.unifiedStringParams = config["unifiedStringParams"] ?? {};
     this.unifiedSliceParams = config["unifiedSliceParams"] ?? {};
+    this.unifiedBoolParams = config["unifiedBoolParams"] ?? {};
   }
   goDescendantsOf(scope) {
     let list = this.goScopeDescendants.get(scope);
@@ -13447,6 +13451,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       }
       return "string";
     }
+    if (this.goIsUnifiedBoolParameter(fn.name.text, fn.parameters.indexOf(param))) {
+      if (this.goNativeParameterTypeCandidates(param)[0] !== "bool" || !this.goLocalIsSafeToType(fn.body, param, param.name.text, "bool")) {
+        throw new Error(`unifiedBoolParams: ${fn.name.text} parameter ${param.name.text} is not a required boolean written only as bool`);
+      }
+      return "bool";
+    }
     const frameType = this.goWsFrameParameterType(fn, param);
     if (frameType !== void 0) {
       return frameType;
@@ -13550,6 +13560,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     };
     body.forEachChild(visit);
     return found;
+  }
+  goIsUnifiedBoolParameter(methodName, index) {
+    const indexes = Object.prototype.hasOwnProperty.call(this.unifiedBoolParams, methodName) ? this.unifiedBoolParams[methodName] : void 0;
+    return Array.isArray(indexes) && indexes.includes(index);
   }
   goIsUnifiedStringParameter(methodName, index) {
     const indexes = Object.prototype.hasOwnProperty.call(this.unifiedStringParams, methodName) ? this.unifiedStringParams[methodName] : void 0;
