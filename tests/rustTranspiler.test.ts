@@ -5267,3 +5267,24 @@ describe('rust catch binding', () => {
         expect(out).toContain('if _try_result.is_err() {');
     });
 });
+
+describe('rust string member read off a class-typed parameter', () => {
+    const rs = (body: string) => transpiler.transpileRust(
+        `class Src {\n    id: string = 'x';\n    markets: any = undefined;\n}\nclass Foo {\n    id: string = 'y';\n    f (other: Src) {\n${body}\n    }\n}`).content;
+
+    test('a concat operand reads the member with get_value_k', () => {
+        const out = rs("        return this.id + ' got ' + other.id;");
+        expect(out).toContain('crate::value::get_value_k(&other, \"id\")');
+        expect(out).not.toContain('other.id');
+    });
+
+    test('a non-string member keeps the default shape', () => {
+        const out = rs("        return other.markets;");
+        expect(out).not.toContain('get_value_k(&other, \"markets\")');
+    });
+
+    test('a string member written through the parameter is untouched', () => {
+        const out = rs("        other.id = 'z';");
+        expect(out).not.toContain('get_value_k(&other, \"id\")');
+    });
+});
