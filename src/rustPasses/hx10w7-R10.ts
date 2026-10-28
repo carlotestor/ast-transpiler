@@ -238,7 +238,7 @@ export function r10ClientHandle(content: string): string {
         for (let k = i; k <= j; k++) depth += r10DeltaAt(braces, k);
         i = j + 1;
     }
-    return r10SubsWrites(out.join('\n'));
+    return r10TypedReads(r10SubsWrites(out.join('\n')));
 }
 
 const R10_SUBS_WRITES: Array<[RegExp, string]> = [
@@ -267,6 +267,25 @@ function r10SubsWrites(content: string): string {
         }
     }
     return text;
+}
+
+const R10_NAMES: { [k: string]: string } = { subscriptions: 'subscription', futures: 'future' };
+
+/**
+ * Remaining reads of the handle snapshots name a typed ClientHandle method:
+ * key test -> `has_subscription(k)` / `has_future(k)`, `get_value(.., k)` ->
+ * `get_subscription(k)` / `get_future(k)`, `object_keys(..)` -> `subscription_keys()` /
+ * `future_keys()`. The methods read the same snapshot value the helpers did.
+ */
+function r10TypedReads(content: string): string {
+    if (!content.includes('__ch.')) return content;
+    return content
+        .replace(/matches!\(\(&__ch\.(subscriptions|futures)\.clone\(\), (&[^\n]+?)\), \(Value::Dict\(__d\), Value::Str\(__k\)\) if __d\.contains_key\(__k\.as_ref\(\)\)\)/g,
+            (_m, k, key) => '__ch.has_' + R10_NAMES[k] + '(' + key + ')')
+        .replace(/(?<![\w:.])get_value\(&__ch\.(subscriptions|futures)\.clone\(\), (&[A-Za-z_][A-Za-z0-9_]*)\)/g,
+            (_m, k, key) => '__ch.get_' + R10_NAMES[k] + '(' + key + ')')
+        .replace(/(?<![\w:.])object_keys\(&__ch\.(subscriptions|futures)\.clone\(\)\)\.as_array\(\)\.cloned\(\)\.unwrap_or_default\(\)/g,
+            (_m, k) => '__ch.' + R10_NAMES[k] + '_keys()');
 }
 
 /** The masked text (comments, strings, char literals blanked) for structure. */
@@ -482,6 +501,14 @@ export function r10SelfTest(): string[] {
     ok(r10ClientHandle(sw) === sw, 'writes idempotent');
     const futW = r10ClientHandle(wrap('        remove(&mut get_value(&client, &Value::Str(\"futures\".into())), &hash);'));
     ok(futW.includes('remove(&mut __ch.futures, &hash);'), 'other keys keep the helper: ' + futW);
+
+    // 12. typed key tests, element reads and key lists
+    const tr = r10ClientHandle(wrap('        if (matches!((&get_value(&client, &Value::Str(\"subscriptions\".into())), &hash), (Value::Dict(__d), Value::Str(__k)) if __d.contains_key(__k.as_ref()))) {}\n        let mut f: Value = get_value(&get_value(&client, &Value::Str(\"futures\".into())), &hash);\n        let mut ks: Vec<Value> = object_keys(&get_value(&client, &Value::Str(\"subscriptions\".into()))).as_array().cloned().unwrap_or_default();'));
+    ok(tr.includes('if (__ch.has_subscription(&hash)) {}'), 'has_subscription: ' + tr);
+    ok(tr.includes('__ch.get_future(&hash)'), 'get_future: ' + tr);
+    ok(tr.includes('= __ch.subscription_keys();'), 'subscription_keys: ' + tr);
+    ok(!tr.includes('.clone()), &') && !tr.includes('object_keys('), 'helpers gone: ' + tr);
+    ok(r10ClientHandle(tr) === tr, 'typed reads idempotent');
 
     return problems;
 }

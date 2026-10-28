@@ -52697,7 +52697,7 @@ function r10ClientHandle(content) {
       depth += r10DeltaAt(braces, k);
     i = j + 1;
   }
-  return r10SubsWrites(out.join("\n"));
+  return r10TypedReads(r10SubsWrites(out.join("\n")));
 }
 var R10_SUBS_WRITES = [
   [/(?<![\w:.])remove\(&mut __ch\.subscriptions,\s*/g, "__ch.remove_subscription("],
@@ -52719,6 +52719,21 @@ function r10SubsWrites(content) {
     }
   }
   return text;
+}
+var R10_NAMES = { subscriptions: "subscription", futures: "future" };
+function r10TypedReads(content) {
+  if (!content.includes("__ch."))
+    return content;
+  return content.replace(
+    /matches!\(\(&__ch\.(subscriptions|futures)\.clone\(\), (&[^\n]+?)\), \(Value::Dict\(__d\), Value::Str\(__k\)\) if __d\.contains_key\(__k\.as_ref\(\)\)\)/g,
+    (_m, k, key) => "__ch.has_" + R10_NAMES[k] + "(" + key + ")"
+  ).replace(
+    /(?<![\w:.])get_value\(&__ch\.(subscriptions|futures)\.clone\(\), (&[A-Za-z_][A-Za-z0-9_]*)\)/g,
+    (_m, k, key) => "__ch.get_" + R10_NAMES[k] + "(" + key + ")"
+  ).replace(
+    /(?<![\w:.])object_keys\(&__ch\.(subscriptions|futures)\.clone\(\)\)\.as_array\(\)\.cloned\(\)\.unwrap_or_default\(\)/g,
+    (_m, k) => "__ch." + R10_NAMES[k] + "_keys()"
+  );
 }
 function r10BraceDeltas(content) {
   return r10Mask(content);
