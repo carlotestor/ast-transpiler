@@ -8436,7 +8436,7 @@ function ccxtGoProducerDeclarationType (goTranspiler, declaration, family) {
 
 // every ts return path of these (all overrides) yields a Dict, so the local is never a nil map:
 // handing it out, returning it or writing into it keeps the boxed value's meaning
-const CCXT_GO_PRODUCER_NEVER_ABSENT = [ 'ParseOrder', 'ParseTrade', 'ParseTicker', 'ParsePosition', 'ParseTransaction', 'ParseWsOrder', 'ParseWsTicker', 'ParseWsTrade',
+const CCXT_GO_PRODUCER_NEVER_ABSENT = [ 'ParseOrder', 'ParseTrade', 'ParseTicker', 'ParsePosition', 'ParseTransaction', 'ParseWsOrder', 'ParseWsTicker', 'ParseWsTrade', 'ParseFundingRate', 'ParseOpenInterest',
     // safeMarket: every override returns super.safeMarket or createExpiredOptionMarket (a dict literal)
     'SafeMarket' ];
 

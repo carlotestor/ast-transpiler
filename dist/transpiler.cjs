@@ -44020,6 +44020,8 @@ var CCXT_GO_PRODUCER_NEVER_ABSENT = [
   "ParseWsOrder",
   "ParseWsTicker",
   "ParseWsTrade",
+  "ParseFundingRate",
+  "ParseOpenInterest",
   // safeMarket: every override returns super.safeMarket or createExpiredOptionMarket (a dict literal)
   "SafeMarket"
 ];
