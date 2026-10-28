@@ -93,6 +93,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly BOOL_PRODUCING_OPERATORS;
     private static readonly BOOL_PRODUCING_CALLS;
     private static readonly RUST_NATIVE_INSERT_RECEIVERS;
+    private static readonly RUST_ORDERBOOK_META_FIELDS;
+    private static readonly RUST_ORDERBOOK_CLASSES;
     private static readonly RUST_BOOK_META_KEYS;
     private static readonly RUST_TAGGED_HANDLE_FIELDS;
     private static readonly RUST_PLAIN_DICT_FIELDS;
@@ -160,6 +162,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     isDictShapedType(type: Type | undefined): boolean;
     printNativeInOperator(key: any, obj: any): string;
     rustStringLiteralOf(printedKey: string): string | undefined;
+    printNativeBookMetaWrite(baseExpr: any, keyNode: any, keyText: any, valueText: any): string | undefined;
     printNativeDictInsert(baseExpr: any, keyNode: any, keyText: any, valueText: any): string | undefined;
     /** The `insert` key argument. A literal becomes `"k".into()`; a proven
      *  string place becomes `crate::runtime::stringify_param(&k)` — the exact

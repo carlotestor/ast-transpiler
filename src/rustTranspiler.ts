@@ -415,6 +415,9 @@ export class RustTranspiler extends BaseTranspiler {
 
     // Scalar book fields the shared order-book store keeps instead of the Dict
     // (value.rs `is_book_meta_key` plus the `cache` replacement write).
+    private static readonly RUST_ORDERBOOK_META_FIELDS = new Set(['timestamp', 'datetime', 'nonce', 'symbol']);
+    private static readonly RUST_ORDERBOOK_CLASSES = new Set(['OrderBook', 'WsOrderBook', 'CountedOrderBook', 'IndexedOrderBook']);
+
     private static readonly RUST_BOOK_META_KEYS = new Set([
         'timestamp',
         'datetime',
@@ -1017,6 +1020,44 @@ export class RustTranspiler extends BaseTranspiler {
     // `X["k"] = v` on a checker-proven plain Dict receiver: mutate the Dict
     // natively. The helper's tag hooks (book meta, ws subscriptions, cache
     // hashmap) only fire on tagged dicts, which a plain object type never is.
+    // `book["timestamp"|"datetime"|"nonce"|"symbol"] = v` on a local the checker types as an
+    // order-book class: `Value::set_book_meta` (hand-written, value.rs) does the shared-store
+    // write (`try_book_meta_write`) and otherwise defers to the same `add_element_to_object`.
+    printNativeBookMetaWrite(baseExpr, keyNode, keyText, valueText): string | undefined {
+        if (!isIdentifier(baseExpr) || !isStringLiteral(keyNode)) {
+            return undefined;
+        }
+        if (!RustTranspiler.RUST_ORDERBOOK_META_FIELDS.has(keyNode.text)) {
+            return undefined;
+        }
+        if (this.rustDictBearerDeclaration(baseExpr) !== undefined || this.rustMapParamDeclaration(baseExpr) !== undefined) {
+            return undefined;
+        }
+        const type = this.typeOfNodeIfAny(baseExpr);
+        const name = type === undefined ? undefined : (this.typeSymbolOf(type) as any)?.name;
+        if (name === undefined || !RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) {
+            return undefined;
+        }
+        const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
+        if (keyLiteral === null) {
+            return undefined;
+        }
+        let value = valueText;
+        if (this.rustPrintedBoolArg(value)) {
+            value = `Value::Bool(${value})`;
+        }
+        const receiver = baseExpr.text;
+        if (new RegExp(`\\b${receiver}\\b`).test(value)) {
+            return `{ let __be_tmp = ${value}; ${receiver}.set_book_meta(${keyLiteral[1]}, __be_tmp); }`;
+        }
+        const trimmed = value.trim();
+        if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed) && trimmed !== 'self'
+            && trimmed !== 'true' && trimmed !== 'false') {
+            value = `${trimmed}.clone()`;
+        }
+        return `${receiver}.set_book_meta(${keyLiteral[1]}, ${value})`;
+    }
+
     printNativeDictInsert(baseExpr, keyNode, keyText, valueText): string | undefined {
         const receiver = this.rustNativeInsertReceiver(baseExpr);
         if (receiver === undefined || !this.rustReceiverStaysDict(baseExpr, receiver)) {
@@ -1749,7 +1790,7 @@ export class RustTranspiler extends BaseTranspiler {
             const bearerChain = keyStrs.length > 1
                 ? this.rustBearerChainedWrite(baseExpr, keys, keyStrs, rhs) : undefined;
             if (bearerChain !== undefined) return bearerChain;
-            const nativeInsert = keyStrs.length === 1 ? (this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustMapParamDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs)) : undefined;
+            const nativeInsert = keyStrs.length === 1 ? (this.rustBearerDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustMapParamDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeBookMetaWrite(baseExpr, keys[0], keyStrs[0], rhs) ?? this.printNativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs) ?? this.rustR01NativeDictInsert(baseExpr, keys[0], keyStrs[0], rhs)) : undefined;
             return nativeInsert ?? `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${rhs})`;
         }
         // hx10w6 R01: rebuilding a typed dict bearer from a plain literal (`x = { .. }`)
