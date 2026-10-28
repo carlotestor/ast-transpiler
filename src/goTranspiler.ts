@@ -10338,9 +10338,57 @@ ${this.getIden(identation)}${returnStatement}`;
     }
 
     printDeleteExpression(node, identation) {
+        const native = this.goNativeDelete(node);
+        if (native !== undefined) {
+            return native;
+        }
         const object = this.printNode (node.expression.expression, 0);
         const key = this.printNode (node.expression.argumentExpression, 0);
         return `Remove(${object}, ${key})`;
+    }
+
+    // `delete m[k]` as a statement on a receiver Go types as map[string]any (a local the printer
+    // declared so, or one book of the map[string]map[string]any `this.ohlcvs`) with a string key.
+    // Remove() ends in the same delete(); a nil map and a missing key are no-ops in both.
+    // A `*string` key needs the checker's non-nil narrowing, else the helper's panic text differs.
+    goNativeDelete(node): string | undefined {
+        const access: any = node.expression;
+        if ((node.parent?.kind !== SyntaxKind.ExpressionStatement) || (access?.kind !== SyntaxKind.ElementAccessExpression)) {
+            return undefined;
+        }
+        const receiver = this.goDeleteReceiverText(access.expression);
+        const key = this.goDeleteKeyText(access.argumentExpression);
+        if ((receiver === undefined) || (key === undefined)) {
+            return undefined;
+        }
+        return `delete(${receiver}, ${key})`;
+    }
+
+    goDeleteReceiverText(node): string | undefined {
+        if (node?.kind === SyntaxKind.Identifier) {
+            return (this.goDeclaredTypeOfIdentifier(node) === 'map[string]any') ? this.printNode(node, 0) : undefined;
+        }
+        const book: any = node;
+        if ((book?.kind !== SyntaxKind.ElementAccessExpression) || (book.expression?.kind !== SyntaxKind.PropertyAccessExpression)
+            || (book.expression.expression?.kind !== SyntaxKind.ThisKeyword) || (book.expression.name?.text !== 'ohlcvs')) {
+            return undefined;
+        }
+        const symbol = this.goDeleteKeyText(book.argumentExpression);
+        return (symbol === undefined) ? undefined : `this.Ohlcvs[${symbol}]`;
+    }
+
+    goDeleteKeyText(node): string | undefined {
+        if ((node?.kind === SyntaxKind.StringLiteral) || (node?.kind === SyntaxKind.NoSubstitutionTemplateLiteral)) {
+            return this.printNode(node, 0);
+        }
+        if (node?.kind !== SyntaxKind.Identifier) {
+            return undefined;
+        }
+        const declared = this.goDeclaredTypeOfIdentifier(node);
+        if (declared === 'string') {
+            return this.printNode(node, 0);
+        }
+        return ((declared === '*string') && this.goDerefableStringOperand(node)) ? ('*' + this.printNode(node, 0)) : undefined;
     }
 
     printThrowStatement(node, identation) {

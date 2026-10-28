@@ -4316,6 +4316,35 @@ describe('slice -> Substring / GetRange with the literal bounds clamped', () => 
         expect(output).toContain("slice(both, 0, 2)");
         expect(output).toContain("slice(abiEncode(types, args), 2, null)");
     });
+    test('a bound written as int arithmetic over a length / int local prints native', () => {
+        const input =
+        "class Exchange {\n" +
+        "    main(baseUrl: string) {\n" +
+        "        const n = baseUrl.length;\n" +
+        "        const a = baseUrl.slice(0, n - 1);\n" +
+        "        const b = baseUrl.slice(0, baseUrl.length - 3);\n" +
+        "        return [a, b];\n" +
+        "    }\n" +
+        "}\n";
+        const output = transpiler.transpileCSharp(input).content;
+        expect(output).not.toContain("slice(baseUrl");
+        expect(output).toContain("((baseUrl == null) ? null : ((string)baseUrl).Substring(0, Math.Max(Math.Min(((n - 1) < 0 ? ((string)baseUrl).Length + ((n - 1)) : (n - 1)), ((string)baseUrl).Length), 0)))");
+        expect(output).toContain("(((string)baseUrl).Length - 3)");
+        expect(output).not.toContain("subtract(");
+    });
+    test('an arithmetic bound over a call, a double or an any operand keeps the helper', () => {
+        const input =
+        "class Exchange {\n" +
+        "    main(x: string, y, d: number) {\n" +
+        "        const a = x.slice(0, this.f() - 1);\n" +
+        "        const b = x.slice(0, y - 1);\n" +
+        "        return [a, b];\n" +
+        "    }\n" +
+        "}\n";
+        const output = transpiler.transpileCSharp(input).content;
+        expect(output).toContain("slice(x, 0,");
+        expect(output).not.toContain("Substring");
+    });
     test('a fractional or out-of-range literal bound keeps the helper', () => {
         const input =
         "class Exchange {\n" +

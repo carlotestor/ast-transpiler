@@ -620,6 +620,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     printLengthProperty(node: any, identation: any, name?: any): string;
     printConditionalExpression(node: any, identation: any): string;
     printDeleteExpression(node: any, identation: any): string;
+    goNativeDelete(node: any): string | undefined;
+    goDeleteReceiverText(node: any): string | undefined;
+    goDeleteKeyText(node: any): string | undefined;
     printThrowStatement(node: any, identation: any): string;
     goExprDepth: number;
     goWithExprDepth<T>(depth: number, callback: () => T): T;

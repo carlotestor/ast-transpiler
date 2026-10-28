@@ -7950,6 +7950,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (isEnd && (node?.kind === SyntaxKind4.NullKeyword || node?.kind === SyntaxKind4.Identifier && node.text === "undefined")) {
       return { kind: "open" };
     }
+    const arithmetic = this.csharpSliceArithmeticBound(node);
+    if (arithmetic !== void 0) {
+      return arithmetic;
+    }
     if (!this.csharpSliceReceiverIsSideEffectFree(node)) {
       return void 0;
     }
@@ -7958,6 +7962,69 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return void 0;
     }
     return { kind, text: this.printNode(node, 0).trim() };
+  }
+  // A bound written as `+` / `-` arithmetic (`n - 1`, `x.length - 3`, `i + 1`) whose operands are
+  // reads or integer literals and whose PRINTED form is native int / Int64 arithmetic (never a
+  // helper call, never double): the clamp repeats the text, which is then pure. A nullable
+  // operand lifts to null and is refused, as is every operand that is a call or an assignment.
+  csharpSliceArithmeticBound(node) {
+    let inner = node;
+    while (inner?.kind === SyntaxKind4.ParenthesizedExpression) {
+      inner = inner.expression;
+    }
+    if (inner?.kind !== SyntaxKind4.BinaryExpression || inner.operatorToken?.kind !== SyntaxKind4.PlusToken && inner.operatorToken?.kind !== SyntaxKind4.MinusToken || !this.csharpSliceArithmeticOperandsArePure(inner)) {
+      return void 0;
+    }
+    const text = this.csharpSliceNativeArithmeticText(inner);
+    if (text === void 0) {
+      return void 0;
+    }
+    return { kind: text.kind, text: text.text };
+  }
+  // `(a - b)` / `(a + b)` over operands that are int / Int64 reads or integer literals: the printed
+  // operator of two integers never overflows into a helper and never turns into a double, so the
+  // value equals the helper's (and JS's) whole number for every length-sized operand.
+  csharpSliceNativeArithmeticText(node) {
+    while (node?.kind === SyntaxKind4.ParenthesizedExpression) {
+      node = node.expression;
+    }
+    if (node?.kind === SyntaxKind4.BinaryExpression) {
+      const left = this.csharpSliceNativeArithmeticText(node.left);
+      const right = this.csharpSliceNativeArithmeticText(node.right);
+      if (left === void 0 || right === void 0) {
+        return void 0;
+      }
+      const op = node.operatorToken.kind === SyntaxKind4.PlusToken ? "+" : "-";
+      const kind2 = left.kind === "int" && right.kind === "int" ? "int" : "Int64";
+      return { kind: kind2, text: `(${left.text} ${op} ${right.text})` };
+    }
+    const literal = this.csharpSliceLiteralBound(node);
+    if (literal !== void 0) {
+      return { kind: "int", text: literal < 0 ? `(${literal})` : String(literal) };
+    }
+    const kind = this.csharpArithmeticOperandKind(this.csharpArithmeticOperandType(node));
+    const raw = this.csharpArithmeticOperandType(node);
+    if (kind !== "int" && kind !== "Int64" || raw?.endsWith("?") === true) {
+      return void 0;
+    }
+    return { kind, text: this.printNode(node, 0).trim() };
+  }
+  csharpSliceArithmeticOperandsArePure(node) {
+    while (node?.kind === SyntaxKind4.ParenthesizedExpression) {
+      node = node.expression;
+    }
+    if (node?.kind === SyntaxKind4.BinaryExpression) {
+      const op = node.operatorToken?.kind;
+      return (op === SyntaxKind4.PlusToken || op === SyntaxKind4.MinusToken) && this.csharpSliceArithmeticOperandsArePure(node.left) && this.csharpSliceArithmeticOperandsArePure(node.right);
+    }
+    if (this.csharpSliceLiteralBound(node) !== void 0) {
+      return true;
+    }
+    if (!this.csharpSliceReceiverIsSideEffectFree(node)) {
+      return false;
+    }
+    const type = this.csharpArithmeticOperandType(node);
+    return type !== void 0 && type.endsWith("?") === false;
   }
   // JS clamps a bound into [0, length] the same way for any integer value: a non-negative one
   // is min (bound, length), a negative one counts from the end. The length is an `int`, so a
@@ -17797,9 +17864,53 @@ ${this.getIden(level)}}()`;
     return `Ternary(${condition}, ${whenTrue}, ${whenFalse})`;
   }
   printDeleteExpression(node, identation) {
+    const native = this.goNativeDelete(node);
+    if (native !== void 0) {
+      return native;
+    }
     const object = this.printNode(node.expression.expression, 0);
     const key = this.printNode(node.expression.argumentExpression, 0);
     return `Remove(${object}, ${key})`;
+  }
+  // `delete m[k]` as a statement on a receiver Go types as map[string]any (a local the printer
+  // declared so, or one book of the map[string]map[string]any `this.ohlcvs`) with a string key.
+  // Remove() ends in the same delete(); a nil map and a missing key are no-ops in both.
+  // A `*string` key needs the checker's non-nil narrowing, else the helper's panic text differs.
+  goNativeDelete(node) {
+    const access = node.expression;
+    if (node.parent?.kind !== SyntaxKind5.ExpressionStatement || access?.kind !== SyntaxKind5.ElementAccessExpression) {
+      return void 0;
+    }
+    const receiver = this.goDeleteReceiverText(access.expression);
+    const key = this.goDeleteKeyText(access.argumentExpression);
+    if (receiver === void 0 || key === void 0) {
+      return void 0;
+    }
+    return `delete(${receiver}, ${key})`;
+  }
+  goDeleteReceiverText(node) {
+    if (node?.kind === SyntaxKind5.Identifier) {
+      return this.goDeclaredTypeOfIdentifier(node) === "map[string]any" ? this.printNode(node, 0) : void 0;
+    }
+    const book = node;
+    if (book?.kind !== SyntaxKind5.ElementAccessExpression || book.expression?.kind !== SyntaxKind5.PropertyAccessExpression || book.expression.expression?.kind !== SyntaxKind5.ThisKeyword || book.expression.name?.text !== "ohlcvs") {
+      return void 0;
+    }
+    const symbol = this.goDeleteKeyText(book.argumentExpression);
+    return symbol === void 0 ? void 0 : `this.Ohlcvs[${symbol}]`;
+  }
+  goDeleteKeyText(node) {
+    if (node?.kind === SyntaxKind5.StringLiteral || node?.kind === SyntaxKind5.NoSubstitutionTemplateLiteral) {
+      return this.printNode(node, 0);
+    }
+    if (node?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    const declared = this.goDeclaredTypeOfIdentifier(node);
+    if (declared === "string") {
+      return this.printNode(node, 0);
+    }
+    return declared === "*string" && this.goDerefableStringOperand(node) ? "*" + this.printNode(node, 0) : void 0;
   }
   printThrowStatement(node, identation) {
     if (node.expression.kind === SyntaxKind5.Identifier) {

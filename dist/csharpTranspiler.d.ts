@@ -339,6 +339,15 @@ export declare class CSharpTranspiler extends BaseTranspiler {
         kind: string;
         text: string;
     };
+    csharpSliceArithmeticBound(node: any): {
+        kind: string;
+        text: string;
+    };
+    csharpSliceNativeArithmeticText(node: any): {
+        kind: string;
+        text: string;
+    } | undefined;
+    csharpSliceArithmeticOperandsArePure(node: any): boolean;
     csharpSliceClampExpression(bound: any, length: any): string;
     csharpSliceReceiverKind(expression: any): "list" | "string";
     csharpSliceStringType(type: any): boolean;

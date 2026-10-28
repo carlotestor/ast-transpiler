@@ -6218,6 +6218,10 @@ export class CSharpTranspiler extends BaseTranspiler {
             || ((node?.kind === SyntaxKind.Identifier) && (node.text === 'undefined')))) {
             return { kind: 'open' };
         }
+        const arithmetic = this.csharpSliceArithmeticBound(node);
+        if (arithmetic !== undefined) {
+            return arithmetic;
+        }
         if (!this.csharpSliceReceiverIsSideEffectFree(node)) {
             return undefined;
         }
@@ -6226,6 +6230,77 @@ export class CSharpTranspiler extends BaseTranspiler {
             return undefined;
         }
         return { kind: kind, text: this.printNode(node, 0).trim() };
+    }
+
+    // A bound written as `+` / `-` arithmetic (`n - 1`, `x.length - 3`, `i + 1`) whose operands are
+    // reads or integer literals and whose PRINTED form is native int / Int64 arithmetic (never a
+    // helper call, never double): the clamp repeats the text, which is then pure. A nullable
+    // operand lifts to null and is refused, as is every operand that is a call or an assignment.
+    csharpSliceArithmeticBound(node) {
+        let inner = node;
+        while (inner?.kind === SyntaxKind.ParenthesizedExpression) {
+            inner = inner.expression;
+        }
+        if ((inner?.kind !== SyntaxKind.BinaryExpression)
+            || ((inner.operatorToken?.kind !== SyntaxKind.PlusToken) && (inner.operatorToken?.kind !== SyntaxKind.MinusToken))
+            || !this.csharpSliceArithmeticOperandsArePure(inner)) {
+            return undefined;
+        }
+        // the operands are printed natively here: the arithmetic helpers (subtract / add) the
+        // generic path prints are exactly what the bound must not repeat
+        const text = this.csharpSliceNativeArithmeticText(inner);
+        if (text === undefined) {
+            return undefined;
+        }
+        return { kind: text.kind, text: text.text };
+    }
+
+    // `(a - b)` / `(a + b)` over operands that are int / Int64 reads or integer literals: the printed
+    // operator of two integers never overflows into a helper and never turns into a double, so the
+    // value equals the helper's (and JS's) whole number for every length-sized operand.
+    csharpSliceNativeArithmeticText(node): { kind: string, text: string } | undefined {
+        while (node?.kind === SyntaxKind.ParenthesizedExpression) {
+            node = node.expression;
+        }
+        if (node?.kind === SyntaxKind.BinaryExpression) {
+            const left = this.csharpSliceNativeArithmeticText(node.left);
+            const right = this.csharpSliceNativeArithmeticText(node.right);
+            if ((left === undefined) || (right === undefined)) {
+                return undefined;
+            }
+            const op = (node.operatorToken.kind === SyntaxKind.PlusToken) ? '+' : '-';
+            const kind = ((left.kind === 'int') && (right.kind === 'int')) ? 'int' : 'Int64';
+            return { kind: kind, text: `(${left.text} ${op} ${right.text})` };
+        }
+        const literal = this.csharpSliceLiteralBound(node);
+        if (literal !== undefined) {
+            return { kind: 'int', text: literal < 0 ? `(${literal})` : String(literal) };
+        }
+        const kind = this.csharpArithmeticOperandKind(this.csharpArithmeticOperandType(node));
+        const raw = this.csharpArithmeticOperandType(node);
+        if (((kind !== 'int') && (kind !== 'Int64')) || (raw?.endsWith('?') === true)) {
+            return undefined;
+        }
+        return { kind: kind, text: this.printNode(node, 0).trim() };
+    }
+
+    csharpSliceArithmeticOperandsArePure(node): boolean {
+        while (node?.kind === SyntaxKind.ParenthesizedExpression) {
+            node = node.expression;
+        }
+        if (node?.kind === SyntaxKind.BinaryExpression) {
+            const op = node.operatorToken?.kind;
+            return ((op === SyntaxKind.PlusToken) || (op === SyntaxKind.MinusToken))
+                && this.csharpSliceArithmeticOperandsArePure(node.left) && this.csharpSliceArithmeticOperandsArePure(node.right);
+        }
+        if (this.csharpSliceLiteralBound(node) !== undefined) {
+            return true;
+        }
+        if (!this.csharpSliceReceiverIsSideEffectFree(node)) {
+            return false;
+        }
+        const type = this.csharpArithmeticOperandType(node);
+        return (type !== undefined) && (type.endsWith('?') === false);
     }
 
     // JS clamps a bound into [0, length] the same way for any integer value: a non-negative one
