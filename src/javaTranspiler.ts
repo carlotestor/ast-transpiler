@@ -9471,3 +9471,48 @@ const JAVA_J16_IMPLICIT_API_FILE = /(^|[\\/])ts[\\/]src[\\/]abstract[\\/][a-z0-9
             && ret.expression.expression.kind === SyntaxKind.ThisKeyword && ret.expression.name.text === 'request';
     };
 }
+
+// hx11 w8: `a !== b` / `a === b` where one side is a never-rewritten const read off
+// `this.crc32(..)` and the other a local declared `Long`. BaseExchange.crc32 returns a Long
+// box on every path, so Objects.equals (Long.equals, null-safe) is isEqual's integral branch.
+const JAVA_CRC32_BASE_FILE = /(^|[\\/])ts[\\/]src[\\/]base[\\/]functions[\\/]crypto\.ts$/;
+{
+    const proto: any = JavaTranspiler.prototype;
+    const printNativeEquality = proto.printNativeEqualityIfProvable;
+    proto.javaCrc32Local = function (node): boolean {
+        if (node === undefined || !isIdentifier(node)) {
+            return false;
+        }
+        const declaration = this.javaDeclarationOfIdentifier(node);
+        if (declaration === undefined || !isVariableDeclaration(declaration)
+            || !isIdentifier(declaration.name) || declaration.name.text !== node.text) {
+            return false;
+        }
+        const init = this.unwrapPrintTransparentExpression(declaration.initializer);
+        if (init === undefined || !isCallExpression(init) || !isPropertyAccessExpression(init.expression)
+            || init.expression.expression.kind !== SyntaxKind.ThisKeyword || init.expression.name.text !== 'crc32') {
+            return false;
+        }
+        let fileName: any;
+        try {
+            fileName = this.checkerOrUndefined()?.getResolvedSignature(init)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
+        } catch (e) {
+            return false;
+        }
+        return typeof fileName === 'string' && JAVA_CRC32_BASE_FILE.test(fileName)
+            && !this.javaLocalIsReassigned(node);
+    };
+    proto.printNativeEqualityIfProvable = function (node, leftText: string, rightText: string): string | undefined {
+        const op = node?.operatorToken?.kind;
+        const negated = op === SyntaxKind.ExclamationEqualsToken || op === SyntaxKind.ExclamationEqualsEqualsToken;
+        if (negated || op === SyntaxKind.EqualsEqualsToken || op === SyntaxKind.EqualsEqualsEqualsToken) {
+            const crcLeft = this.javaCrc32Local(node.left);
+            const crcRight = this.javaCrc32Local(node.right);
+            if ((crcLeft && this.javaDeclaredNumericFamily(node.right) === 'Long' && leftText === node.left.text && rightText === node.right.text)
+                || (crcRight && this.javaDeclaredNumericFamily(node.left) === 'Long' && leftText === node.left.text && rightText === node.right.text)) {
+                return `${negated ? '!' : ''}java.util.Objects.equals(${leftText}, ${rightText})`;
+            }
+        }
+        return printNativeEquality.call(this, node, leftText, rightText);
+    };
+}

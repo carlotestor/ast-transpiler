@@ -27077,6 +27077,43 @@ var JAVA_J16_IMPLICIT_API_FILE = /(^|[\\/])ts[\\/]src[\\/]abstract[\\/][a-z0-9_]
     return ret !== void 0 && isCallExpression5(ret) && isPropertyAccessExpression2(ret.expression) && ret.expression.expression.kind === SyntaxKind6.ThisKeyword && ret.expression.name.text === "request";
   };
 }
+var JAVA_CRC32_BASE_FILE = /(^|[\\/])ts[\\/]src[\\/]base[\\/]functions[\\/]crypto\.ts$/;
+{
+  const proto = JavaTranspiler.prototype;
+  const printNativeEquality = proto.printNativeEqualityIfProvable;
+  proto.javaCrc32Local = function(node) {
+    if (node === void 0 || !isIdentifier2(node)) {
+      return false;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || declaration.name.text !== node.text) {
+      return false;
+    }
+    const init = this.unwrapPrintTransparentExpression(declaration.initializer);
+    if (init === void 0 || !isCallExpression5(init) || !isPropertyAccessExpression2(init.expression) || init.expression.expression.kind !== SyntaxKind6.ThisKeyword || init.expression.name.text !== "crc32") {
+      return false;
+    }
+    let fileName;
+    try {
+      fileName = this.checkerOrUndefined()?.getResolvedSignature(init)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
+    } catch (e) {
+      return false;
+    }
+    return typeof fileName === "string" && JAVA_CRC32_BASE_FILE.test(fileName) && !this.javaLocalIsReassigned(node);
+  };
+  proto.printNativeEqualityIfProvable = function(node, leftText, rightText) {
+    const op = node?.operatorToken?.kind;
+    const negated = op === SyntaxKind6.ExclamationEqualsToken || op === SyntaxKind6.ExclamationEqualsEqualsToken;
+    if (negated || op === SyntaxKind6.EqualsEqualsToken || op === SyntaxKind6.EqualsEqualsEqualsToken) {
+      const crcLeft = this.javaCrc32Local(node.left);
+      const crcRight = this.javaCrc32Local(node.right);
+      if (crcLeft && this.javaDeclaredNumericFamily(node.right) === "Long" && leftText === node.left.text && rightText === node.right.text || crcRight && this.javaDeclaredNumericFamily(node.left) === "Long" && leftText === node.left.text && rightText === node.right.text) {
+        return `${negated ? "!" : ""}java.util.Objects.equals(${leftText}, ${rightText})`;
+      }
+    }
+    return printNativeEquality.call(this, node, leftText, rightText);
+  };
+}
 
 // src/rustTranspiler.ts
 init_esm_shims();
