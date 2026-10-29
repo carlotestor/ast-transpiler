@@ -3669,6 +3669,8 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
     let joinType;
     let writeCount = 0;
     let readUnproven = false;
+    let parsedNumberWrite = false;
+    let elementWriteRead = false;
     const visit = (n) => {
         if (readUnproven) {
             return;
@@ -3680,6 +3682,7 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
             if (isWrite) {
                 writeCount += 1;
                 const written = goTranspiler.goTypeOfInitializer (parent.right, goTranspiler.printNode (parent.right, 0));
+                parsedNumberWrite = parsedNumberWrite || ccxtGoIsOneArgParseNumber (goTranspiler, parent.right);
                 if ((written === undefined) || ((joinType !== undefined) && (written !== joinType))) {
                     readUnproven = true; // divergent or unprovable write
                     return;
@@ -3688,12 +3691,19 @@ export function ccxtGoNilDeclaredJoinType (goTranspiler, declaration) {
             } else if (!nilDeclaredReadIsSafe (goTranspiler, n)) {
                 readUnproven = true;
                 return;
+            } else if ((parent?.kind === ts.SyntaxKind.BinaryExpression) && (parent.right === n)
+                    && (parent.operatorToken.kind === ts.SyntaxKind.EqualsToken)) {
+                elementWriteRead = true;
             }
         }
         n?.forEachChild (visit);
     };
     scope?.forEachChild (visit);
     if (readUnproven || (writeCount === 0) || (joinType === undefined)) {
+        return undefined;
+    }
+    // a ParseNumber pointer stored into a map element prints a deref closure where the boxed local was stored bare
+    if (parsedNumberWrite && elementWriteRead) {
         return undefined;
     }
     if (NIL_DECLARED_SCALAR_POINTER_TYPES.indexOf (joinType) < 0) {

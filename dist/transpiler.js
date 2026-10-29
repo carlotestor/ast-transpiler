@@ -12020,6 +12020,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
     }
     const writes = [];
     let otherUse = false;
+    let elementStored = false;
     const visit = (n) => {
       if (otherUse) {
         return;
@@ -12028,6 +12029,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
         const parent = n.parent;
         if (parent?.kind === SyntaxKind5.VariableDeclaration && parent.name === n) {
           return;
+        }
+        if (parent?.kind === SyntaxKind5.BinaryExpression && parent.right === n && parent.operatorToken?.kind === SyntaxKind5.EqualsToken && parent.left?.kind === SyntaxKind5.ElementAccessExpression) {
+          elementStored = true;
         }
         if (parent?.kind === SyntaxKind5.BinaryExpression && parent.operatorToken?.kind === SyntaxKind5.EqualsToken) {
           if (parent.left === n) {
@@ -12055,6 +12059,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
       return void 0;
     }
     const types = writes.map((right) => this.goTypeOfInitializer(right, this.printNode(right, 0)));
+    if (elementStored && writes.some((right) => this.printNode(right, 0).trim().startsWith("this.ParseNumber("))) {
+      return void 0;
+    }
     let candidate;
     for (const goType of types) {
       if (typeof goType !== "string" || !this.goNilInitPointerTypes.has(goType)) {
@@ -39797,6 +39804,8 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
   let joinType;
   let writeCount = 0;
   let readUnproven = false;
+  let parsedNumberWrite = false;
+  let elementWriteRead = false;
   const visit = (n) => {
     if (readUnproven) {
       return;
@@ -39807,6 +39816,7 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
       if (isWrite) {
         writeCount += 1;
         const written = goTranspiler.goTypeOfInitializer(parent.right, goTranspiler.printNode(parent.right, 0));
+        parsedNumberWrite = parsedNumberWrite || ccxtGoIsOneArgParseNumber(goTranspiler, parent.right);
         if (written === void 0 || joinType !== void 0 && written !== joinType) {
           readUnproven = true;
           return;
@@ -39815,12 +39825,17 @@ function ccxtGoNilDeclaredJoinType(goTranspiler, declaration) {
       } else if (!nilDeclaredReadIsSafe(goTranspiler, n)) {
         readUnproven = true;
         return;
+      } else if (parent?.kind === ts.SyntaxKind.BinaryExpression && parent.right === n && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        elementWriteRead = true;
       }
     }
     n?.forEachChild(visit);
   };
   scope?.forEachChild(visit);
   if (readUnproven || writeCount === 0 || joinType === void 0) {
+    return void 0;
+  }
+  if (parsedNumberWrite && elementWriteRead) {
     return void 0;
   }
   if (NIL_DECLARED_SCALAR_POINTER_TYPES.indexOf(joinType) < 0) {
