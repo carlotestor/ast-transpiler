@@ -256,7 +256,8 @@ export function narrowStrNullLocals(content: string): string {
             let g: RegExpExecArray | null;
             if ((g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
                 edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === '==' ? 'is_none' : 'is_some'}()` });
-            } else if ((g = /^\.as_str\(\)(?=\s*(?:==|!=)\s*Some\()/.exec(after)) !== null) {
+            } else if ((g = /^\.as_str\(\)/.exec(after)) !== null) {
+                // `Option<String>::as_deref()` is the same `Option<&str>` the boxed `as_str()` gave.
                 edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.as_deref()` });
             } else if (/get_value\(&$/.test(before)
                 && (g = /^, &Value::Int\(0\)\)\.as_str\(\) (==|!=) Some\("/.exec(after)) !== null) {
