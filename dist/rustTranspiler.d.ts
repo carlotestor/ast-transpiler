@@ -94,6 +94,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly BOOL_PRODUCING_CALLS;
     private static readonly RUST_NATIVE_INSERT_RECEIVERS;
     private static readonly RUST_ORDERBOOK_META_FIELDS;
+    private static readonly RUST_ORDERBOOK_READ_FIELDS;
     private static readonly RUST_ORDERBOOK_CLASSES;
     private static readonly RUST_BOOK_META_KEYS;
     private static readonly RUST_TAGGED_HANDLE_FIELDS;
@@ -503,6 +504,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Element read of a `Vec<Value>` binding (a destructuring temp the printer declares typed). */
     printTypedVecElementRead(name: string, index: number): string;
     /** Native read for one chain level, or undefined to keep `get_value`. */
+    printNativeBookFieldRead(receiverText: string, receiverNode: Node, keyText: string): string | undefined;
     printNativeContainerAccess(receiverText: string, receiverNode: Node, keyNode: Node): string | undefined;
     /** `get_value(&X, &i)` for a checker-proven list `X` and a dynamic integer
      *  index local `i`: the runtime's own array branch, spelled natively.

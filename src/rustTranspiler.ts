@@ -416,6 +416,7 @@ export class RustTranspiler extends BaseTranspiler {
     // Scalar book fields the shared order-book store keeps instead of the Dict
     // (value.rs `is_book_meta_key` plus the `cache` replacement write).
     private static readonly RUST_ORDERBOOK_META_FIELDS = new Set(['timestamp', 'datetime', 'nonce', 'symbol']);
+    private static readonly RUST_ORDERBOOK_READ_FIELDS = new Set(['bids', 'asks', 'timestamp', 'datetime', 'nonce', 'symbol', 'cache']);
     private static readonly RUST_ORDERBOOK_CLASSES = new Set(['OrderBook', 'WsOrderBook', 'CountedOrderBook', 'IndexedOrderBook']);
 
     private static readonly RUST_BOOK_META_KEYS = new Set([
@@ -3883,6 +3884,19 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** Native read for one chain level, or undefined to keep `get_value`. */
+    // `book['bids'|'asks'|'nonce'|...]` on a checker-typed order-book class: the hand-written
+    // `Value::book_field` serves the same shared-store read as `get_value_k`.
+    printNativeBookFieldRead(receiverText: string, receiverNode: Node, keyText: string): string | undefined {
+        if (!RustTranspiler.RUST_ORDERBOOK_READ_FIELDS.has(keyText)) return undefined;
+        // Test sources keep `get_value(&book, "bids")`: their side-extraction pass matches it.
+        if (/\/test\//.test(String((receiverNode as any).getSourceFile?.().fileName ?? ''))) return undefined;
+        if (this.rustDictBearerDeclaration(receiverNode) !== undefined || this.rustMapParamDeclaration(receiverNode) !== undefined) return undefined;
+        const type = this.typeOfNodeIfAny(receiverNode);
+        const name = type === undefined ? undefined : (this.typeSymbolOf(type) as any)?.name;
+        if (name === undefined || !RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) return undefined;
+        return `${receiverText}.book_field("${keyText}")`;
+    }
+
     printNativeContainerAccess(receiverText: string, receiverNode: Node, keyNode: Node): string | undefined {
         // hx10w6 R02: a read-only bearer holds the container itself.
         const readBearer = this.rustReadBearerKind(receiverNode);
@@ -3897,6 +3911,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (native !== undefined) return native;
         }
         if (isStringLiteralLikeNode(keyNode)) {
+            const bookField = this.printNativeBookFieldRead(receiverText, receiverNode, keyNode.text);
+            if (bookField !== undefined) return bookField;
             return this.printNativeMapAccess(receiverText, receiverNode, keyNode.text);
         }
         if (isNumericLiteral(keyNode)) {
