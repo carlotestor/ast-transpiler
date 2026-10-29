@@ -292,8 +292,9 @@ export const CCXT_GO_HELPER_RETURN_TYPES = {
     //   ParseToInt:     ParseInt(ParseFloat(NumberToString(x))) — the hand-written ParseInt
     //                   always returns int64 (math.MinInt64 on failure), so this one can
     //                   never be nil and is named as a plain int64.
-    // ParseNumber is deliberately absent: its Go body hands `a[0]` — the caller's own
-    // default, of arbitrary type — straight back, so no single Go type names its box.
+    // ParseNumber answers a *float64 (nil = absent or non-numeric), the SafeNumber convention
+    'this.ParseNumber': '*float64',
+    'exchange.ParseNumber': '*float64',
     'this.NumberToString': '*string',
     'this.Parse8601': '*int64',
     'this.Iso8601': '*string',
@@ -1204,22 +1205,6 @@ export function ccxtGoUnboxCurrencyDeclaration (goTranspiler, printed) {
     return match[1] + tail.substring (0, close) + '.(' + CCXT_GO_CURRENCY_LOCAL_TYPE + ')' + rest;
 }
 
-// `var x *float64 = Float64PtrTyped(this.ParseNumber (v))`: one-argument parseNumber answers a
-// float64 or nil (no default to hand back), which the pointer carries unchanged. Declarations only.
-const CCXT_GO_PARSE_NUMBER_LOCAL_TYPE = '*float64';
-
-function ccxtGoTypeOfParseNumberInitializer (goTranspiler, initializer, printedValue) {
-    if ((initializer?.kind !== ts.SyntaxKind.CallExpression) || (initializer.arguments.length !== 1)
-        || (initializer.parent?.kind !== ts.SyntaxKind.VariableDeclaration) || (initializer.parent.initializer !== initializer)
-        || (initializer.parent.parent?.parent?.kind !== ts.SyntaxKind.VariableStatement)) {
-        return undefined;
-    }
-    if (ccxtGoWholePrintedCallee (goTranspiler, printedValue) !== 'this.ParseNumber') {
-        return undefined;
-    }
-    return typeNameIsUsable (goTranspiler, initializer, CCXT_GO_PARSE_NUMBER_LOCAL_TYPE) ? CCXT_GO_PARSE_NUMBER_LOCAL_TYPE : undefined;
-}
-
 // `var url *string = SafeStringPtr(GetValue(GetValue(this.Urls, "api"), "ws"))`: the C#
 // describe()-literal url proof (csharp-local-types.js urlsDescribeStringProducer) makes the box a
 // Go string or nil, which SafeStringPtr carries unchanged, like a SafeString local. Declarations only.
@@ -1397,26 +1382,6 @@ export function ccxtGoWrapUrlsDeclaration (printed) {
     return (match === null) ? printed : match[1] + 'SafeStringPtr(' + match[2] + ')' + match[3];
 }
 
-export function ccxtGoUnboxParseNumberDeclaration (goTranspiler, printed) {
-    if (typeof printed !== 'string') {
-        return printed;
-    }
-    const match = /^([\s\S]*?\bvar [A-Za-z0-9_]+ \*float64 = )(this\.ParseNumber\([^\n]*)$/.exec (printed);
-    if (match === null) {
-        return printed;
-    }
-    const tail = match[2];
-    const close = ccxtGoPrintedCallEnd (tail, tail.indexOf ('('));
-    if (close < 0) {
-        return printed;
-    }
-    const rest = tail.substring (close);
-    if (!/^\s*(;?\s*(\/\/[^\n]*)?)$/.test (rest)) {
-        return printed;
-    }
-    return match[1] + 'Float64PtrTyped(' + tail.substring (0, close) + ')' + rest;
-}
-
 function installCcxtGoCurrencyUnbox (goTranspiler) {
     if (typeof goTranspiler.printVariableDeclarationList !== 'function' || goTranspiler.__ccxtGoCurrencyUnboxInstalled) {
         return;
@@ -1424,7 +1389,7 @@ function installCcxtGoCurrencyUnbox (goTranspiler) {
     const upstream = goTranspiler.printVariableDeclarationList;
     goTranspiler.printVariableDeclarationList = function (node, identation) {
         const printed = upstream.call (this, node, identation);
-        return ccxtGoWrapAddChainDeclaration (ccxtGoWrapUrlsDeclaration (ccxtGoUnboxSumDeclaration (this, ccxtGoUnboxParseNumberDeclaration (this, ccxtGoUnboxCurrencyDeclaration (this, printed)))));
+        return ccxtGoWrapAddChainDeclaration (ccxtGoWrapUrlsDeclaration (ccxtGoUnboxSumDeclaration (this, ccxtGoUnboxCurrencyDeclaration (this, printed))));
     };
     goTranspiler.__ccxtGoCurrencyUnboxInstalled = true;
 }
@@ -7006,10 +6971,6 @@ export function installCcxtGoLocalTypes (goTranspiler, unifiedInt64Params = unde
             if (currencyType !== undefined) {
                 return currencyType;
             }
-            const parseNumberType = ccxtGoTypeOfParseNumberInitializer (this, initializer, printedValue);
-            if (parseNumberType !== undefined) {
-                return parseNumberType;
-            }
             const urlsType = ccxtGoTypeOfUrlsInitializer (this, initializer, printedValue);
             if (urlsType !== undefined) {
                 return urlsType;
@@ -9636,7 +9597,7 @@ function ccxtGoParseNumberJoinDeclarationOf (goTranspiler, node) {
 
 export function installCcxtGoNilDeclaredParseNumberJoins (goTranspiler) {
     if ((goTranspiler === undefined) || goTranspiler.__ccxtGoNilDeclaredParseNumberJoinsInstalled
-            || (typeof goTranspiler.printVariableDeclarationList !== 'function') || (typeof goTranspiler.printBinaryExpression !== 'function')) {
+            || (typeof goTranspiler.printVariableDeclarationList !== 'function')) {
         return;
     }
     const upstream = goTranspiler.printVariableDeclarationList.bind (goTranspiler);
@@ -9648,14 +9609,6 @@ export function installCcxtGoNilDeclaredParseNumberJoins (goTranspiler) {
             return printed;
         }
         return parsed[1] + 'var ' + parsed[2] + ' *float64 = nil';
-    };
-    const binary = goTranspiler.printBinaryExpression;
-    goTranspiler.printBinaryExpression = function (node, identation) {
-        if ((node?.operatorToken?.kind === ts.SyntaxKind.EqualsToken) && ts.isIdentifier (node.left)
-                && ccxtGoIsOneArgParseNumber (this, node.right) && (ccxtGoParseNumberJoinDeclarationOf (this, node.left) !== undefined)) {
-            return this.printNode (node.left, 0) + ' = Float64PtrTyped(' + this.printNode (node.right, identation).trim () + ')';
-        }
-        return binary.call (this, node, identation);
     };
     goTranspiler.__ccxtGoNilDeclaredParseNumberJoinsInstalled = true;
 }
@@ -9673,10 +9626,6 @@ function ccxtGoTernaryLiftArm (goTranspiler, armNode, armText) {
     }
     if ((node?.kind === ts.SyntaxKind.StringLiteral) || (node?.kind === ts.SyntaxKind.NoSubstitutionTemplateLiteral)) {
         return { type: '*string', wrap: 'SafeStringPtr' };
-    }
-    if ((node?.kind === ts.SyntaxKind.CallExpression) && (node.arguments.length === 1)
-            && (ccxtGoWholePrintedCallee (goTranspiler, armText) === 'this.ParseNumber')) {
-        return { type: '*float64', wrap: 'Float64PtrTyped' };
     }
     const armType = ccxtGoClosureArmType (goTranspiler, armNode, armText);
     if (armType === 'nil') {
