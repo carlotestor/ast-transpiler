@@ -93,6 +93,8 @@ export declare const CCXT_GO_HELPER_RETURN_TYPES: {
     'exchange.SafeNumber2': string;
     'exchange.SafeNumberN': string;
     'exchange.SafeNumberOmitZero': string;
+    'this.ParseNumber': string;
+    'exchange.ParseNumber': string;
     'this.NumberToString': string;
     'this.Parse8601': string;
     'this.Iso8601': string;
@@ -156,7 +158,6 @@ export declare function ccxtGoUnboxArithmeticDeclaration(goTranspiler: any, prin
 export declare function ccxtGoUnboxCurrencyDeclaration(goTranspiler: any, printed: any): any;
 export declare function ccxtGoWrapAddChainDeclaration(printed: any): any;
 export declare function ccxtGoWrapUrlsDeclaration(printed: any): any;
-export declare function ccxtGoUnboxParseNumberDeclaration(goTranspiler: any, printed: any): any;
 export declare const CCXT_GO_EXCHANGE_MAP_FIELDS: {
     Has: string;
     Api: string;
