@@ -5288,3 +5288,20 @@ describe('rust string member read off a class-typed parameter', () => {
         expect(out).not.toContain('get_value_k(&other, \"id\")');
     });
 });
+
+describe('rust order-book field read', () => {
+    const rs = (body: string) => transpiler.transpileRust(
+        `class OrderBook { bids: any; nonce: number; foo: any; }\nfunction f (orderbook: OrderBook, other: any) {\n${body}\n}`).content;
+
+    test('book bids/nonce print book_field', () => {
+        const out = rs("    const b = orderbook['bids'];\n    const n = orderbook['nonce'];");
+        expect(out).toContain('orderbook.book_field("bids")');
+        expect(out).toContain('orderbook.book_field("nonce")');
+    });
+
+    test('other keys and untyped receivers keep the default', () => {
+        const out = rs("    const f = orderbook['foo'];\n    const o = other['bids'];");
+        expect(out).not.toContain('book_field("foo")');
+        expect(out).not.toContain('other.book_field');
+    });
+});
