@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-5QHB7QM7.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -28048,7 +28048,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const type = this.typeOfNodeIfAny(baseExpr);
     const name = type === void 0 ? void 0 : this.typeSymbolOf(type)?.name;
-    if (name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) {
+    if ((name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) && !this.rustReadsOrderbooksStore(baseExpr)) {
       return void 0;
     }
     const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
@@ -28068,6 +28068,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       value = `${trimmed}.clone()`;
     }
     return `${receiver}.set_book_meta(${keyLiteral[1]}, ${value})`;
+  }
+  // `let b = this.safeValue (this.orderbooks, k)`: the checker types it `any`, but it is an
+  // order book; `set_book_meta` falls back to the helper on a non-book value.
+  rustReadsOrderbooksStore(ident) {
+    const declaration = this.rustDeclarationOfIdentifier(ident);
+    const init = declaration !== void 0 && isVariableDeclaration3(declaration) ? declaration.initializer : void 0;
+    if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression))
+      return false;
+    if (init.expression.name.text !== "safeValue" || init.arguments.length < 2)
+      return false;
+    const store = init.arguments[0];
+    return isPropertyAccessExpression3(store) && store.expression.kind === SyntaxKind7.ThisKeyword && store.name.text === "orderbooks";
   }
   printNativeDictInsert(baseExpr, keyNode, keyText, valueText) {
     const receiver = this.rustNativeInsertReceiver(baseExpr);

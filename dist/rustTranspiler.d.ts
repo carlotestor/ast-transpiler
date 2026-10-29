@@ -163,6 +163,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     printNativeInOperator(key: any, obj: any): string;
     rustStringLiteralOf(printedKey: string): string | undefined;
     printNativeBookMetaWrite(baseExpr: any, keyNode: any, keyText: any, valueText: any): string | undefined;
+    rustReadsOrderbooksStore(ident: any): boolean;
     printNativeDictInsert(baseExpr: any, keyNode: any, keyText: any, valueText: any): string | undefined;
     /** The `insert` key argument. A literal becomes `"k".into()`; a proven
      *  string place becomes `crate::runtime::stringify_param(&k)` — the exact

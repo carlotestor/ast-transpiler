@@ -1035,7 +1035,8 @@ export class RustTranspiler extends BaseTranspiler {
         }
         const type = this.typeOfNodeIfAny(baseExpr);
         const name = type === undefined ? undefined : (this.typeSymbolOf(type) as any)?.name;
-        if (name === undefined || !RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) {
+        if ((name === undefined || !RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name))
+            && !this.rustReadsOrderbooksStore(baseExpr)) {
             return undefined;
         }
         const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
@@ -1056,6 +1057,18 @@ export class RustTranspiler extends BaseTranspiler {
             value = `${trimmed}.clone()`;
         }
         return `${receiver}.set_book_meta(${keyLiteral[1]}, ${value})`;
+    }
+
+    // `let b = this.safeValue (this.orderbooks, k)`: the checker types it `any`, but it is an
+    // order book; `set_book_meta` falls back to the helper on a non-book value.
+    rustReadsOrderbooksStore(ident): boolean {
+        const declaration: any = this.rustDeclarationOfIdentifier(ident);
+        const init: any = declaration !== undefined && isVariableDeclaration(declaration) ? declaration.initializer : undefined;
+        if (init === undefined || !isCallExpression(init) || !isPropertyAccessExpression(init.expression)) return false;
+        if (init.expression.name.text !== 'safeValue' || init.arguments.length < 2) return false;
+        const store: any = init.arguments[0];
+        return isPropertyAccessExpression(store) && store.expression.kind === SyntaxKind.ThisKeyword
+            && store.name.text === 'orderbooks';
     }
 
     printNativeDictInsert(baseExpr, keyNode, keyText, valueText): string | undefined {

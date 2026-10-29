@@ -1866,6 +1866,13 @@ describe('rust native dict inserts', () => {
         expect(output).not.toContain('add_element_to_object(&mut orderbook');
     });
 
+    test('safeValue(this.orderbooks, k) local prints set_book_meta', () => {
+        const ts = 'class A { orderbooks: any = {}; safeValue(a: any, b: any): any { return a[b]; }\n    f(symbol: string, ts: number) { let orderbook = this.safeValue(this.orderbooks, symbol); orderbook["timestamp"] = ts; } }';
+        const output = transpiler.transpileRust(ts).content;
+        expect(output).toContain('orderbook.set_book_meta(\"timestamp\", ts.clone())');
+        expect(output).not.toContain('add_element_to_object(&mut orderbook');
+    });
+
     test('order-book non-meta keys keep the helper', () => {
         const ts = 'class OrderBook { foo: number; }\nfunction f(orderbook: OrderBook) { orderbook["foo"] = 1; }';
         const output = transpiler.transpileRust(ts).content;
