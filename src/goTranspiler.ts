@@ -3533,6 +3533,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         }
         const writes: any[] = [];
         let otherUse = false;
+        let elementStored = false;
         const visit = (n) => {
             if (otherUse) {
                 return;
@@ -3541,6 +3542,10 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
                 const parent = n.parent;
                 if (parent?.kind === SyntaxKind.VariableDeclaration && parent.name === n) {
                     return; // a sibling block re-declaring the name gets its own type
+                }
+                if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.right === n) && (parent.operatorToken?.kind === SyntaxKind.EqualsToken)
+                    && (parent.left?.kind === SyntaxKind.ElementAccessExpression)) {
+                    elementStored = true;
                 }
                 if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.operatorToken?.kind === SyntaxKind.EqualsToken)) {
                     if (parent.left === n) {
@@ -3569,6 +3574,10 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return undefined;
         }
         const types = writes.map((right) => this.goTypeOfInitializer(right, this.printNode(right, 0)));
+        // a ParseNumber pointer stored into a map element prints a deref closure where the boxed local was stored bare
+        if (elementStored && writes.some((right) => this.printNode(right, 0).trim().startsWith('this.ParseNumber('))) {
+            return undefined;
+        }
         let candidate: string | undefined;
         for (const goType of types) {
             if ((typeof goType !== 'string') || !this.goNilInitPointerTypes.has(goType)) {
