@@ -39689,6 +39689,8 @@ var NIL_DECLARED_SAFE_ARG_CALLEES = ["this.Iso8601", "this.NumberToString", "thi
 var NIL_DECLARED_SAFE_ARG_SLOTS = {
   "this.ParseNumber": 1,
   "this.Parse8601": 1,
+  // x is read only through ToFloat64/NumberToString (derefScalar at entry); the rest are plain values
+  "this.DecimalToPrecision": 1,
   ...Object.fromEntries(["Mul", "Div", "Sub", "Add", "Or", "Max", "Min", "Abs", "Neg", "Mod", "Gt", "Ge", "Lt", "Le", "Eq", "Equals"].map((op) => ["Precise.String" + op, 2]))
 };
 var ASSIGNMENT_KIND_MIN = ts.SyntaxKind.FirstAssignment;
