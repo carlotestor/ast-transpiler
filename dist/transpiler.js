@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-UW53OXLU.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -28048,7 +28048,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const type = this.typeOfNodeIfAny(baseExpr);
     const name = type === void 0 ? void 0 : this.typeSymbolOf(type)?.name;
-    if (name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) {
+    if ((name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) && !this.rustReadsOrderbooksStore(baseExpr)) {
       return void 0;
     }
     const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
@@ -28068,6 +28068,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       value = `${trimmed}.clone()`;
     }
     return `${receiver}.set_book_meta(${keyLiteral[1]}, ${value})`;
+  }
+  // `let b = this.safeValue (this.orderbooks, k)`: the checker types it `any`, but it is an
+  // order book; `set_book_meta` falls back to the helper on a non-book value.
+  rustReadsOrderbooksStore(ident) {
+    const declaration = this.rustDeclarationOfIdentifier(ident);
+    const init = declaration !== void 0 && isVariableDeclaration3(declaration) ? declaration.initializer : void 0;
+    if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression))
+      return false;
+    if (init.expression.name.text !== "safeValue" || init.arguments.length < 2)
+      return false;
+    const store = init.arguments[0];
+    return isPropertyAccessExpression3(store) && store.expression.kind === SyntaxKind7.ThisKeyword && store.name.text === "orderbooks";
   }
   printNativeDictInsert(baseExpr, keyNode, keyText, valueText) {
     const receiver = this.rustNativeInsertReceiver(baseExpr);
@@ -30441,6 +30453,21 @@ ${classMethods}
     return `${name}.get(${index}).cloned().unwrap_or(Value::Null)`;
   }
   /** Native read for one chain level, or undefined to keep `get_value`. */
+  // `book['bids'|'asks'|'nonce'|...]` on a checker-typed order-book class: the hand-written
+  // `Value::book_field` serves the same shared-store read as `get_value_k`.
+  printNativeBookFieldRead(receiverText, receiverNode, keyText) {
+    if (!_RustTranspiler.RUST_ORDERBOOK_READ_FIELDS.has(keyText))
+      return void 0;
+    if (/\/test\//.test(String(receiverNode.getSourceFile?.().fileName ?? "")))
+      return void 0;
+    if (this.rustDictBearerDeclaration(receiverNode) !== void 0 || this.rustMapParamDeclaration(receiverNode) !== void 0)
+      return void 0;
+    const type = this.typeOfNodeIfAny(receiverNode);
+    const name = type === void 0 ? void 0 : this.typeSymbolOf(type)?.name;
+    if (name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name))
+      return void 0;
+    return `${receiverText}.book_field("${keyText}")`;
+  }
   printNativeContainerAccess(receiverText, receiverNode, keyNode) {
     const readBearer = this.rustReadBearerKind(receiverNode);
     if (readBearer !== void 0) {
@@ -30455,6 +30482,9 @@ ${classMethods}
         return native;
     }
     if (isStringLiteralLikeNode4(keyNode)) {
+      const bookField = this.printNativeBookFieldRead(receiverText, receiverNode, keyNode.text);
+      if (bookField !== void 0)
+        return bookField;
       return this.printNativeMapAccess(receiverText, receiverNode, keyNode.text);
     }
     if (isNumericLiteral4(keyNode)) {
@@ -35240,6 +35270,7 @@ _RustTranspiler.RUST_NATIVE_INSERT_RECEIVERS = /* @__PURE__ */ new Set([
 // Scalar book fields the shared order-book store keeps instead of the Dict
 // (value.rs `is_book_meta_key` plus the `cache` replacement write).
 _RustTranspiler.RUST_ORDERBOOK_META_FIELDS = /* @__PURE__ */ new Set(["timestamp", "datetime", "nonce", "symbol"]);
+_RustTranspiler.RUST_ORDERBOOK_READ_FIELDS = /* @__PURE__ */ new Set(["bids", "asks", "timestamp", "datetime", "nonce", "symbol", "cache"]);
 _RustTranspiler.RUST_ORDERBOOK_CLASSES = /* @__PURE__ */ new Set(["OrderBook", "WsOrderBook", "CountedOrderBook", "IndexedOrderBook"]);
 _RustTranspiler.RUST_BOOK_META_KEYS = /* @__PURE__ */ new Set([
   "timestamp",
