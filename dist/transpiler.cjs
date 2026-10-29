@@ -37105,6 +37105,7 @@ var CCXT_GO_HELPER_RETURN_TYPES = {
     "CustomParseBalance",
     "ParseFundingBalance",
     "ParseTradingBalance",
+    "ParseBalanceList",
     // U07
     "ParseADLRank",
     // U16
