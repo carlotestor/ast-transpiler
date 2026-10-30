@@ -30528,7 +30528,7 @@ ${classMethods}
       const place = this.printNode(keyNode, 0).trim();
       if (!place || place.startsWith("&"))
         return void 0;
-      return `${receiverText}.get((${place}).as_i64().map_or(usize::MAX, |__n| __n as usize)).cloned().unwrap_or(Value::Null)`;
+      return `${receiverText}.get((${place}).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
     }
     if (!this.isRustValueIndexKey(keyNode))
       return void 0;
@@ -30943,7 +30943,7 @@ ${classMethods}
     const place = this.printNode(key, 0).trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(place))
       return void 0;
-    return `${shadow.name}.get((${place}).as_i64().map_or(usize::MAX, |__n| __n as usize)).cloned().unwrap_or(Value::Null)`;
+    return `${shadow.name}.get((${place}).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
   }
   /** `'k' in x` on a shadowed dict parameter. */
   printShadowInOperator(shadow, keyNode) {
@@ -31084,11 +31084,10 @@ ${classMethods}
       return void 0;
     const name = String(param.name.text);
     const view = _RustTranspiler.PRO_HANDLER_SHADOW_NAME;
-    const arc = `${view}_arc`;
-    const map = "indexmap::IndexMap<String, Value>";
+    const empty = `${view}_empty`;
     const ind = this.getIden(identation + 2);
-    const lines = `${ind}let ${arc}: std::sync::Arc<${map}> = (match &${name} { Value::Dict(__d) => __d.clone(), _ => std::sync::Arc::new(indexmap::IndexMap::new()) });
-${ind}let ${view}: &${map} = &${arc};
+    const lines = `${ind}let ${empty} = indexmap::IndexMap::new();
+${ind}let ${view} = ${name}.as_map().unwrap_or(&${empty});
 `;
     return { param, lines };
   }
@@ -33885,7 +33884,7 @@ ${this.getIden(identation)}}`;
       return super.printElementAccessExpressionExceptionIfAny(node);
     const name = this.printNode(receiver, 0).trim();
     const key = this.rustStripWrappers(node.argumentExpression);
-    const index = _is.isNumericLiteral.call(void 0, key) ? String(Number(key.text)) : `(${this.printNode(node.argumentExpression, 0).trim()}).as_i64().map_or(usize::MAX, |__n| __n as usize)`;
+    const index = _is.isNumericLiteral.call(void 0, key) ? String(Number(key.text)) : `(${this.printNode(node.argumentExpression, 0).trim()}).as_i64().unwrap_or(-1) as usize`;
     return `${name}.get(${index}).cloned().unwrap_or(Value::Null)`;
   }
   // An expression that always holds a `Value::Arr`: a runtime-split / array-literal-returning call,

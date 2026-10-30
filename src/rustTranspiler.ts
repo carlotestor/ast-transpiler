@@ -3952,7 +3952,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (!this.isRustValueIndexKey(keyNode) || this.isWriteBackBindRead(keyNode.parent)) return undefined;
             const place = this.printNode(keyNode, 0).trim();
             if (!place || place.startsWith('&')) return undefined;
-            return `${receiverText}.get((${place}).as_i64().map_or(usize::MAX, |__n| __n as usize)).cloned().unwrap_or(Value::Null)`;
+            return `${receiverText}.get((${place}).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
         }
         if (!this.isRustValueIndexKey(keyNode)) return undefined;
         // The ccxt `writeBackIndexedMutations` pass matches the `let x = get_value(&C, &K)` text to
@@ -4356,7 +4356,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (!this.isRustValueIndexKey(key)) return undefined;
         const place = this.printNode(key, 0).trim();
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(place)) return undefined;
-        return `${shadow.name}.get((${place}).as_i64().map_or(usize::MAX, |__n| __n as usize)).cloned().unwrap_or(Value::Null)`;
+        return `${shadow.name}.get((${place}).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
     }
 
     /** `'k' in x` on a shadowed dict parameter. */
@@ -4508,12 +4508,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (!hasRead) return undefined;
         const name = String((param.name as any).text);
         const view = RustTranspiler.PRO_HANDLER_SHADOW_NAME;
-        const arc = `${view}_arc`;
-        const map = 'indexmap::IndexMap<String, Value>';
+        const empty = `${view}_empty`;
         const ind = this.getIden(identation + 2);
         const lines =
-            `${ind}let ${arc}: std::sync::Arc<${map}> = (match &${name} { Value::Dict(__d) => __d.clone(), _ => std::sync::Arc::new(indexmap::IndexMap::new()) });\n` +
-            `${ind}let ${view}: &${map} = &${arc};\n`;
+            `${ind}let ${empty} = indexmap::IndexMap::new();\n` +
+            `${ind}let ${view} = ${name}.as_map().unwrap_or(&${empty});\n`;
         return { param, lines };
     }
 
@@ -7424,7 +7423,7 @@ export class RustTranspiler extends BaseTranspiler {
         const key: any = this.rustStripWrappers(node.argumentExpression);
         // `get_value`'s array arm: an Int index by `as usize` (negative misses), anything else misses.
         const index = isNumericLiteral(key) ? String(Number(key.text))
-            : `(${this.printNode(node.argumentExpression, 0).trim()}).as_i64().map_or(usize::MAX, |__n| __n as usize)`;
+            : `(${this.printNode(node.argumentExpression, 0).trim()}).as_i64().unwrap_or(-1) as usize`;
         return `${name}.get(${index}).cloned().unwrap_or(Value::Null)`;
     }
 

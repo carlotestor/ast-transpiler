@@ -3239,7 +3239,7 @@ describe('rust native container reads (B-28)', () => {
 
     const DYNAMIC = '.as_array().and_then(|__arr| match &i { Value::Int(__n) => __arr.get(*__n as usize), Value::Str(__s) => __s.parse::<usize>().ok().and_then(|__n| __arr.get(__n)), _ => None }).cloned().unwrap_or(Value::Null)';
     // A list parameter that is shadowed reads its slice directly.
-    const SHADOW_DYNAMIC = '.get((i).as_i64().map_or(usize::MAX, |__n| __n as usize)).cloned().unwrap_or(Value::Null)';
+    const SHADOW_DYNAMIC = '.get((i).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)';
 
     test('a dynamic index into a proven list reads natively', () => {
         const ts =
@@ -3870,7 +3870,7 @@ describe('rust pro-tier handler message shadow (D-27)', () => {
         "interface Dictionary<T> { [key: string]: T; }\n" +
         "type Dict = Dictionary<any>;\n" +
         "class Client { resolve (v: any): void {} }\n";
-    const SHADOW = 'let __pro_message: &indexmap::IndexMap<String, Value> = &__pro_message_arc;';
+    const SHADOW = 'let __pro_message = message.as_map().unwrap_or(&__pro_message_empty);';
 
     test('a safeString read on the handler message param prints as a native .get match', () => {
         const ts = DECLS +
@@ -4394,7 +4394,7 @@ describe('hx4 R11: relaxed Vec locals and native list length', () => {
     test('index reads on a Vec local use Vec::get', () => {
         const out = rs('        const out = [];\n        out.push (1);\n        for (let i = 0; i < out.length; i++) {\n            const v = out[i];\n            this.parseX (v);\n        }\n        return out[0];');
         expect(out).toContain('let mut out: Vec<Value> = Vec::new();');
-        expect(out).toContain('let mut v: Value = out.get((i).as_i64().map_or(usize::MAX, |__n| __n as usize)).cloned().unwrap_or(Value::Null);');
+        expect(out).toContain('let mut v: Value = out.get((i).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null);');
         expect(out).toContain('return out.get(0).cloned().unwrap_or(Value::Null);');
     });
     test('negative: in-loop this-call arg, element write, chained read, &mut self callee keep the box', () => {
