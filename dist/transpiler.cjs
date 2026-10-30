@@ -54060,6 +54060,252 @@ function hx11w9RustStrLiteralLocalNativeString(content) {
   return out;
 }
 
+// src/rustPasses/hx11w9RustStrConcatLocalNativeString.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+function hx11w9RustStrConcatLocalNativeString(content) {
+  const declRe = /^([ \t]*)let mut ([a-zA-Z_][a-zA-Z0-9_]*): Value = (Value::Str\(format!\(.*\)\.into\(\)\));[ \t]*$/gm;
+  const litRe = /^Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\)$/;
+  const maskText5 = (src) => {
+    let out2 = "";
+    let i = 0;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "/" && src[i + 1] === "/") {
+        while (i < src.length && src[i] !== "\n") {
+          out2 += " ";
+          i++;
+        }
+        continue;
+      }
+      if (c === '"') {
+        out2 += '"';
+        i++;
+        while (i < src.length && src[i] !== '"') {
+          if (src[i] === "\\") {
+            out2 += "  ";
+            i += 2;
+            continue;
+          }
+          out2 += src[i] === "\n" ? "\n" : " ";
+          i++;
+        }
+        if (i < src.length) {
+          out2 += '"';
+          i++;
+        }
+        continue;
+      }
+      out2 += c;
+      i++;
+    }
+    return out2;
+  };
+  const closeParen4 = (src, open) => {
+    let depth = 0;
+    for (let k = open; k < src.length; k++) {
+      const c = src[k];
+      if (c === "(")
+        depth++;
+      else if (c === ")") {
+        depth--;
+        if (depth === 0)
+          return k + 1;
+      }
+    }
+    return -1;
+  };
+  const braceEnd = (src, from) => {
+    let depth = 0;
+    for (let k = from; k < src.length; k++) {
+      const c = src[k];
+      if (c === "{")
+        depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth < 0)
+          return k;
+      }
+    }
+    return src.length;
+  };
+  const argSpans5 = (src) => {
+    const out2 = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      else if (c === "," && depth === 0) {
+        out2.push([start, i]);
+        start = i + 1;
+      }
+    }
+    out2.push([start, src.length]);
+    return out2;
+  };
+  const boxUse = (name, kept, after, used, body) => {
+    const later = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`).test(after.slice(used));
+    const inLoop = /\b(?:loop|while|for)\b/.test(body);
+    const arg = kept === "" && (later || inLoop) ? `${name}.clone()` : `${name}${kept}`;
+    return `Value::from(${arg})`;
+  };
+  const masked = maskText5(content);
+  const concatParts = (text, at) => {
+    const lit = litRe.exec(text);
+    if (lit !== null)
+      return [{ lit: lit[1] }];
+    const f = /^Value::Str\(format!\(("(?:\{\})+"),\s*([\s\S]*)\)\.into\(\)\)$/.exec(text);
+    if (f === null)
+      return void 0;
+    const spans = argSpans5(maskText5(f[2]));
+    if (spans.length !== (f[1].length - 2) / 2)
+      return void 0;
+    const out2 = [];
+    for (const [x, y] of spans) {
+      const arg = f[2].slice(x, y).trim();
+      if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(arg)) {
+        if (!isStringLocal(arg, at))
+          return void 0;
+        out2.push({ id: arg });
+        continue;
+      }
+      const sub = concatParts(arg, at);
+      if (sub === void 0)
+        return void 0;
+      out2.push(...sub);
+    }
+    return out2;
+  };
+  const isStringLocal = (id, at) => {
+    const fnAt = masked.lastIndexOf("fn ", at);
+    if (fnAt < 0)
+      return false;
+    const sig = masked.slice(fnAt, masked.indexOf("{", fnAt));
+    if (new RegExp(`[(,]\\s*(?:mut\\s+)?${id}\\s*:`).test(sig))
+      return false;
+    const seg = masked.slice(fnAt, at);
+    const binds = [...seg.matchAll(new RegExp(`\\b(?:let|for)\\s+(?:mut\\s+)?${id}\\b([^=;\\n]*)`, "g"))];
+    const last2 = binds[binds.length - 1];
+    if (last2 === void 0 || !/^\s*:\s*String\s*$/.test(last2[1]))
+      return false;
+    let depth = 0;
+    for (const ch of seg.slice(last2.index)) {
+      if (ch === "{")
+        depth++;
+      else if (ch === "}" && --depth < 0)
+        return false;
+    }
+    return true;
+  };
+  const groups = [];
+  const grown = /* @__PURE__ */ new Map();
+  let m;
+  while ((m = declRe.exec(masked)) !== null) {
+    const name = m[2];
+    const stmtEnd3 = m.index + m[0].length;
+    const parts = concatParts(content.slice(m.index, stmtEnd3).replace(/^[^=]*=\s*/, "").replace(/;\s*$/, ""), m.index);
+    if (parts === void 0)
+      continue;
+    const end = braceEnd(masked, stmtEnd3);
+    const body = masked.slice(stmtEnd3, end);
+    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
+      continue;
+    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
+      continue;
+    const fRe = /format!\(/g;
+    const fSpans = [];
+    let f;
+    while ((f = fRe.exec(body)) !== null) {
+      const close = closeParen4(body, f.index + f[0].length - 1);
+      if (close < 0)
+        continue;
+      const fl = /^"(?:[^"\\]|\\.)*"/.exec(body.slice(f.index + f[0].length, close));
+      fSpans.push([f.index, close, fl !== null && /:\?/.test(fl[0])]);
+    }
+    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
+    const edits = [];
+    let ok = true;
+    let u;
+    while ((u = useRe.exec(body)) !== null) {
+      const at = u.index;
+      const abs = stmtEnd3 + at;
+      const after = body.slice(at + name.length);
+      const before = body.slice(0, at);
+      let g;
+      if (/^\s*=(?!=)/.test(after) && !/[!<>=&|]\s*$/.test(before)) {
+        ok = false;
+        break;
+      }
+      const cand = fSpans.filter(([s, e]) => at > s && at < e);
+      if (cand.length > 0) {
+        const hit = cand.reduce((a, b) => b[0] > a[0] ? b : a);
+        const inner = hit[0] + "format!(".length;
+        const slot = argSpans5(body.slice(inner, hit[1] - 1)).filter(([a, b]) => inner + a <= at && at + name.length <= inner + b);
+        if (slot.length > 0 && body.slice(inner + slot[0][0], inner + slot[0][1]).replace(/\s+/g, "") === name) {
+          if (hit[2]) {
+            ok = false;
+            break;
+          }
+          continue;
+        }
+      }
+      if ((g = /^\.as_str\(\)/.exec(after)) !== null && !/&\s*$/.test(before)) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `Some(${name}.as_str())` });
+      } else if (/crate::runtime::stringify_param\(&$/.test(before) && /^\)/.test(after)) {
+        const from = abs - "crate::runtime::stringify_param(&".length;
+        edits.push({ start: from, end: abs + name.length + 1, text: `${name}.clone()` });
+      } else if (/(?:[(,\[]\s*)$/.test(before) && !/&\s*$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[,)\];])/.exec(after)) !== null) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: boxUse(name, g[0], after, g[0].length, body) });
+      } else if (/(?<![=!<>])=\s$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[;,)])/.exec(after)) !== null) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: boxUse(name, g[0], after, g[0].length, body) });
+      } else {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok)
+      continue;
+    const declText = `${m[1]}let mut ${name}: String = format!("${parts.map((q) => q.lit !== void 0 ? q.lit.slice(1, -1).replace(/[{}]/g, (c) => c + c) : "{}").join("")}"${parts.filter((q) => q.lit === void 0).map((q) => ", " + q.id).join("")});`;
+    const all = [{ start: m.index, end: stmtEnd3, text: declText }, ...edits];
+    const lineGrow = /* @__PURE__ */ new Map();
+    for (const e of all) {
+      const ls = content.lastIndexOf("\n", e.start) + 1;
+      lineGrow.set(ls, (_nullishCoalesce(lineGrow.get(ls), () => ( 0))) + e.text.length - (e.end - e.start));
+    }
+    let longer = false;
+    for (const [ls, grow] of lineGrow) {
+      let le = content.indexOf("\n", ls);
+      if (le < 0)
+        le = content.length;
+      const cur = le - ls + (_nullishCoalesce(grown.get(ls), () => ( 0)));
+      if (cur <= 400 && cur + grow > 400)
+        longer = true;
+    }
+    if (longer)
+      continue;
+    for (const [ls, grow] of lineGrow)
+      grown.set(ls, (_nullishCoalesce(grown.get(ls), () => ( 0))) + grow);
+    groups.push(all);
+  }
+  const rewrites = groups.flat();
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start);
+  let out = "";
+  let last = 0;
+  for (const r of rewrites) {
+    if (r.start < last)
+      continue;
+    out += content.slice(last, r.start) + r.text;
+    last = r.end;
+  }
+  out += content.slice(last);
+  return out;
+}
+
 // src/rustPasses/hx11w9-str-local-reassign.ts
 _chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9StrLocalReassign(content) {
@@ -55292,5 +55538,6 @@ var TranspileProgramBatch = class {
 
 
 
-exports.CCXT_GO_BOOL_METHOD_NAMES = CCXT_GO_BOOL_METHOD_NAMES; exports.CCXT_GO_HELPER_RETURN_TYPES = CCXT_GO_HELPER_RETURN_TYPES; exports.CCXT_GO_STRING_PTR_METHOD_NAMES = CCXT_GO_STRING_PTR_METHOD_NAMES; exports.CheckFlags = _sync.CheckFlags; exports.ElementFlags = _sync.ElementFlags; exports.IndexKind = _sync.IndexKind; exports.ObjectFlags = _sync.ObjectFlags; exports.RUST_DECLARED_DICT_LOCALS = RUST_DECLARED_DICT_LOCALS; exports.SignatureKind = _sync.SignatureKind; exports.SymbolFlags = _sync.SymbolFlags; exports.SyntaxKind = _ast.SyntaxKind; exports.TranspileProgramBatch = TranspileProgramBatch; exports.Transpiler = Transpiler; exports.TypeFlags = _sync.TypeFlags; exports.TypeFormatFlags = _sync.TypeFormatFlags; exports.alignGoTrailingComments = alignGoTrailingComments; exports.bf03PlainDictChains = bf03PlainDictChains; exports.default = Transpiler; exports.g08w3Check = g08w3Check; exports.hx10G06Check = hx10G06Check; exports.hx10w2R03 = hx10w2R03; exports.hx10w2R08 = hx10w2R08; exports.hx10w3R03 = hx10w3R03; exports.hx10w8GB01Check = hx10w8GB01Check; exports.hx10w8GB05Check = hx10w8GB05Check; exports.hx10w9GB11Check = hx10w9GB11Check; exports.hx10w9Rp02DispatchArg = hx10w9Rp02DispatchArg; exports.hx10w9Rp02ParamKind = hx10w9Rp02ParamKind; exports.hx10w9Rp02RefMapParamNames = hx10w9Rp02RefMapParamNames; exports.hx10w9Rp02SplitArgs = hx10w9Rp02SplitArgs; exports.hx11RustSignApiStr = hx11RustSignApiStr; exports.hx11w9RustBoolKLocalOptionBool = hx11w9RustBoolKLocalOptionBool; exports.hx11w9RustIntLocalNullSinkOptionI64 = hx11w9RustIntLocalNullSinkOptionI64; exports.hx11w9RustStrLiteralLocalNativeString = hx11w9RustStrLiteralLocalNativeString; exports.hx11w9StrLocalReassign = hx11w9StrLocalReassign; exports.installCcxtGoDictParams = installCcxtGoDictParams; exports.installCcxtGoGb05ParamTypes = installCcxtGoGb05ParamTypes; exports.installCcxtGoGb11HandleErrorsCode = installCcxtGoGb11HandleErrorsCode; exports.installCcxtGoHooks = installCcxtGoHooks; exports.installCcxtGoIndexableTypes = installCcxtGoIndexableTypes; exports.installCcxtGoLocalTypes = installCcxtGoLocalTypes; exports.installCcxtGoParamTypes = installCcxtGoParamTypes; exports.installCcxtGoSignTyping = installCcxtGoSignTyping; exports.installHx11w8NumParams = installHx11w8NumParams; exports.narrowStrNullLocals = narrowStrNullLocals; exports.narrowStrSinkLocals = narrowStrSinkLocals; exports.nativeGetValue = nativeGetValue; exports.r01TypedLocals = r01TypedLocals; exports.r02NativeInserts = r02NativeInserts; exports.r04Callee = r04Callee; exports.r04Scalars = r04Scalars; exports.r05FieldChainInserts = r05FieldChainInserts; exports.r06Push = r06Push; exports.r06w3Push = r06w3Push; exports.r07StringNatives = r07StringNatives; exports.r08DictReads = r08DictReads; exports.r10ClientHandle = r10ClientHandle;
+
+exports.CCXT_GO_BOOL_METHOD_NAMES = CCXT_GO_BOOL_METHOD_NAMES; exports.CCXT_GO_HELPER_RETURN_TYPES = CCXT_GO_HELPER_RETURN_TYPES; exports.CCXT_GO_STRING_PTR_METHOD_NAMES = CCXT_GO_STRING_PTR_METHOD_NAMES; exports.CheckFlags = _sync.CheckFlags; exports.ElementFlags = _sync.ElementFlags; exports.IndexKind = _sync.IndexKind; exports.ObjectFlags = _sync.ObjectFlags; exports.RUST_DECLARED_DICT_LOCALS = RUST_DECLARED_DICT_LOCALS; exports.SignatureKind = _sync.SignatureKind; exports.SymbolFlags = _sync.SymbolFlags; exports.SyntaxKind = _ast.SyntaxKind; exports.TranspileProgramBatch = TranspileProgramBatch; exports.Transpiler = Transpiler; exports.TypeFlags = _sync.TypeFlags; exports.TypeFormatFlags = _sync.TypeFormatFlags; exports.alignGoTrailingComments = alignGoTrailingComments; exports.bf03PlainDictChains = bf03PlainDictChains; exports.default = Transpiler; exports.g08w3Check = g08w3Check; exports.hx10G06Check = hx10G06Check; exports.hx10w2R03 = hx10w2R03; exports.hx10w2R08 = hx10w2R08; exports.hx10w3R03 = hx10w3R03; exports.hx10w8GB01Check = hx10w8GB01Check; exports.hx10w8GB05Check = hx10w8GB05Check; exports.hx10w9GB11Check = hx10w9GB11Check; exports.hx10w9Rp02DispatchArg = hx10w9Rp02DispatchArg; exports.hx10w9Rp02ParamKind = hx10w9Rp02ParamKind; exports.hx10w9Rp02RefMapParamNames = hx10w9Rp02RefMapParamNames; exports.hx10w9Rp02SplitArgs = hx10w9Rp02SplitArgs; exports.hx11RustSignApiStr = hx11RustSignApiStr; exports.hx11w9RustBoolKLocalOptionBool = hx11w9RustBoolKLocalOptionBool; exports.hx11w9RustIntLocalNullSinkOptionI64 = hx11w9RustIntLocalNullSinkOptionI64; exports.hx11w9RustStrConcatLocalNativeString = hx11w9RustStrConcatLocalNativeString; exports.hx11w9RustStrLiteralLocalNativeString = hx11w9RustStrLiteralLocalNativeString; exports.hx11w9StrLocalReassign = hx11w9StrLocalReassign; exports.installCcxtGoDictParams = installCcxtGoDictParams; exports.installCcxtGoGb05ParamTypes = installCcxtGoGb05ParamTypes; exports.installCcxtGoGb11HandleErrorsCode = installCcxtGoGb11HandleErrorsCode; exports.installCcxtGoHooks = installCcxtGoHooks; exports.installCcxtGoIndexableTypes = installCcxtGoIndexableTypes; exports.installCcxtGoLocalTypes = installCcxtGoLocalTypes; exports.installCcxtGoParamTypes = installCcxtGoParamTypes; exports.installCcxtGoSignTyping = installCcxtGoSignTyping; exports.installHx11w8NumParams = installHx11w8NumParams; exports.narrowStrNullLocals = narrowStrNullLocals; exports.narrowStrSinkLocals = narrowStrSinkLocals; exports.nativeGetValue = nativeGetValue; exports.r01TypedLocals = r01TypedLocals; exports.r02NativeInserts = r02NativeInserts; exports.r04Callee = r04Callee; exports.r04Scalars = r04Scalars; exports.r05FieldChainInserts = r05FieldChainInserts; exports.r06Push = r06Push; exports.r06w3Push = r06w3Push; exports.r07StringNatives = r07StringNatives; exports.r08DictReads = r08DictReads; exports.r10ClientHandle = r10ClientHandle;
 //# sourceMappingURL=transpiler.cjs.map

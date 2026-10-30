@@ -21,5 +21,6 @@ export { narrowStrSinkLocals, narrowStrNullLocals } from './hx11-narrow-str.js';
 export { hx11RustSignApiStr } from './hx11-sign-api.js';
 export { hx11w9RustIntLocalNullSinkOptionI64 } from './hx11w9RustIntLocalNullSinkOptionI64.js';
 export { hx11w9RustStrLiteralLocalNativeString } from './hx11w9RustStrLiteralLocalNativeString.js';
+export { hx11w9RustStrConcatLocalNativeString } from './hx11w9RustStrConcatLocalNativeString.js';
 export { hx11w9StrLocalReassign } from './hx11w9-str-local-reassign.js';
 export { hx11w9RustBoolKLocalOptionBool } from './hx11w9-rust-bool-k-local-option-bool.js';
