@@ -22,4 +22,8 @@ export default class venue extends Exchange {
         const ids = this.safeList (params, 'ids', []);
         return await this.fetchComputed (ids, params);
     }
+    async fetchNoCaller (ids: string[], symbol: string = undefined, params: Dict = {}) {
+        const request: Dict = { 'txid': ids.join (',') };
+        return request;
+    }
 }

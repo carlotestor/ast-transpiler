@@ -5334,6 +5334,10 @@ describe('rust string[] parameter used only by join', () => {
         expect(output).toContain('self.fetchByIds(vec![id.to_string()]');
     });
 
+    test('a public method with no ts caller also prints Vec<String>', () => {
+        expect(output).toContain('fn fetchNoCaller(&self, ids: Vec<String>');
+    });
+
     test('a param that is also indexed keeps the Value box', () => {
         expect(output).toContain('fn fetchIndexed(&self, ids: Value');
     });
