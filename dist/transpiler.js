@@ -54506,6 +54506,23 @@ function hx11w9RustBoolKLocalOptionBool(content) {
   return out;
 }
 
+// src/rustPasses/hx11w9RustArrayLitIndexReadIfLet.ts
+init_esm_shims();
+function hx11w9RustArrayLitIndexReadIfLet(content) {
+  if (!content.includes("|__arr| __arr.get("))
+    return content;
+  const re = /(?<![A-Za-z0-9_.:])([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\.as_array\(\)\.and_then\(\|__arr\| __arr\.get\(([0-9]+)\)\)\.cloned\(\)\.unwrap_or\(((?:crate::)?Value::Null)\)/g;
+  return content.replace(re, (m, x, n, nul, off, whole) => {
+    const text = `(if let Some(__arr) = ${x}.as_array() { __arr.get(${n}).cloned().unwrap_or(${nul}) } else { ${nul} })`;
+    const ls = whole.lastIndexOf("\n", off) + 1;
+    let le = whole.indexOf("\n", off);
+    if (le < 0)
+      le = whole.length;
+    const oldLen = le - ls;
+    return oldLen <= 400 && oldLen - m.length + text.length > 400 ? m : text;
+  });
+}
+
 // src/transpiler.ts
 var __dirname_mock = import_dirname.default;
 var fastCompilerOptions = {
@@ -55227,6 +55244,7 @@ export {
   hx10w9Rp02RefMapParamNames,
   hx10w9Rp02SplitArgs,
   hx11RustSignApiStr,
+  hx11w9RustArrayLitIndexReadIfLet,
   hx11w9RustBoolKLocalOptionBool,
   hx11w9RustIntLocalNullSinkOptionI64,
   hx11w9RustStrLiteralLocalNativeString,
