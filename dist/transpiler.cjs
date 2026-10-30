@@ -54290,6 +54290,179 @@ function hx11w9RustBoolKLocalOptionBool(content) {
   return out;
 }
 
+// src/rustPasses/hx11w9RustNumber2LocalOptionF64.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+function hx11w9RustNumber2LocalOptionF64(content) {
+  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.safe_number2\(/gm;
+  const mask2 = (src) => {
+    let out2 = "";
+    let i = 0;
+    const blank = (s) => s.replace(/[^\n]/g, " ");
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "/" && src[i + 1] === "/") {
+        while (i < src.length && src[i] !== "\n") {
+          out2 += " ";
+          i++;
+        }
+        continue;
+      }
+      if (c === "/" && src[i + 1] === "*") {
+        const e = src.indexOf("*/", i + 2);
+        const stop = e < 0 ? src.length : e + 2;
+        out2 += blank(src.slice(i, stop));
+        i = stop;
+        continue;
+      }
+      if (c === '"') {
+        out2 += '"';
+        i++;
+        while (i < src.length && src[i] !== '"') {
+          if (src[i] === "\\") {
+            out2 += "  ";
+            i += 2;
+            continue;
+          }
+          out2 += src[i] === "\n" ? "\n" : " ";
+          i++;
+        }
+        if (i < src.length) {
+          out2 += '"';
+          i++;
+        }
+        continue;
+      }
+      out2 += c;
+      i++;
+    }
+    return out2;
+  };
+  const maskedAll = mask2(content);
+  const closeOf2 = (masked, open) => {
+    let depth = 0;
+    for (let k = open; k < masked.length; k++) {
+      if (masked[k] === "(")
+        depth++;
+      else if (masked[k] === ")") {
+        depth--;
+        if (depth === 0)
+          return k + 1;
+      }
+    }
+    return -1;
+  };
+  const scopeEnd = (masked, from) => {
+    let depth = 0;
+    for (let k = from; k < masked.length; k++) {
+      if (masked[k] === "{")
+        depth++;
+      else if (masked[k] === "}") {
+        depth--;
+        if (depth < 0)
+          return k;
+      }
+    }
+    return masked.length;
+  };
+  const splitArgs5 = (src) => {
+    const out2 = [];
+    let cur = "";
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    for (const c of src) {
+      if (inStr) {
+        cur += c;
+        if (esc)
+          esc = false;
+        else if (c === "\\")
+          esc = true;
+        else if (c === '"')
+          inStr = false;
+        continue;
+      }
+      if (c === '"') {
+        inStr = true;
+        cur += c;
+        continue;
+      }
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      if (c === "," && depth === 0) {
+        out2.push(cur);
+        cur = "";
+        continue;
+      }
+      cur += c;
+    }
+    out2.push(cur);
+    return out2;
+  };
+  const rewrites = [];
+  let m;
+  while ((m = declRe.exec(content)) !== null) {
+    const name = m[3];
+    const callOpen = m.index + m[0].length - 1;
+    const callClose = closeOf2(maskedAll, callOpen);
+    if (callClose < 0 || !/^\s*;/.test(content.slice(callClose, callClose + 3)))
+      continue;
+    const stmtEnd3 = callClose + /^\s*;/.exec(content.slice(callClose, callClose + 3))[0].length;
+    const args = splitArgs5(content.slice(callOpen + 1, callClose - 1));
+    if (args.length !== 4 || !/^&\[\s*(?:Value::Null)?\s*\]$/.test(args[3].trim()))
+      continue;
+    const end = scopeEnd(maskedAll, stmtEnd3);
+    const masked = maskedAll.slice(stmtEnd3, end);
+    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(masked))
+      continue;
+    if (new RegExp(`\\blet\\b[^=;\\n]*\\b${name}\\b`).test(masked))
+      continue;
+    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(masked))
+      continue;
+    const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, "g");
+    const uses = [];
+    let ok = true;
+    let u;
+    while ((u = useRe.exec(masked)) !== null) {
+      const s = u.index;
+      const e = s + name.length;
+      const after = masked.slice(e);
+      let g;
+      if ((g = /^\s*(!=|==)\s*Value::Null\b/.exec(after)) !== null) {
+        uses.push({ start: stmtEnd3 + s, end: stmtEnd3 + e + g[0].length, text: `${name}.${g[1] === "!=" ? "is_some" : "is_none"}()` });
+      } else if ((g = /^\.as_f64\(\)\s*(==|!=)\s*Some\((-?\d+\.0)\)/.exec(after)) !== null) {
+        uses.push({ start: stmtEnd3 + s, end: stmtEnd3 + e + g[0].length, text: `${name} ${g[1]} Some(${g[2]})` });
+      } else {
+        ok = false;
+        break;
+      }
+      useRe.lastIndex = e + g[0].length;
+    }
+    if (!ok)
+      continue;
+    rewrites.push({
+      start: m.index,
+      end: callOpen,
+      text: content.slice(m.index, callOpen).replace(": Value =", ": Option<f64> =").replace("safe_number2", "safe_number2_opt")
+    });
+    for (const use of uses)
+      rewrites.push(use);
+  }
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
+  let out = "";
+  let last = 0;
+  for (const r of rewrites) {
+    if (r.start < last)
+      continue;
+    out += content.slice(last, r.start) + r.text;
+    last = r.end;
+  }
+  return out + content.slice(last);
+}
+
 // src/transpiler.ts
 var __dirname_mock = import_dirname.default;
 var fastCompilerOptions = {
@@ -55037,5 +55210,6 @@ var TranspileProgramBatch = class {
 
 
 
-exports.CCXT_GO_BOOL_METHOD_NAMES = CCXT_GO_BOOL_METHOD_NAMES; exports.CCXT_GO_HELPER_RETURN_TYPES = CCXT_GO_HELPER_RETURN_TYPES; exports.CCXT_GO_STRING_PTR_METHOD_NAMES = CCXT_GO_STRING_PTR_METHOD_NAMES; exports.CheckFlags = _sync.CheckFlags; exports.ElementFlags = _sync.ElementFlags; exports.IndexKind = _sync.IndexKind; exports.ObjectFlags = _sync.ObjectFlags; exports.RUST_DECLARED_DICT_LOCALS = RUST_DECLARED_DICT_LOCALS; exports.SignatureKind = _sync.SignatureKind; exports.SymbolFlags = _sync.SymbolFlags; exports.SyntaxKind = _ast.SyntaxKind; exports.TranspileProgramBatch = TranspileProgramBatch; exports.Transpiler = Transpiler; exports.TypeFlags = _sync.TypeFlags; exports.TypeFormatFlags = _sync.TypeFormatFlags; exports.alignGoTrailingComments = alignGoTrailingComments; exports.bf03PlainDictChains = bf03PlainDictChains; exports.default = Transpiler; exports.g08w3Check = g08w3Check; exports.hx10G06Check = hx10G06Check; exports.hx10w2R03 = hx10w2R03; exports.hx10w2R08 = hx10w2R08; exports.hx10w3R03 = hx10w3R03; exports.hx10w8GB01Check = hx10w8GB01Check; exports.hx10w8GB05Check = hx10w8GB05Check; exports.hx10w9GB11Check = hx10w9GB11Check; exports.hx10w9Rp02DispatchArg = hx10w9Rp02DispatchArg; exports.hx10w9Rp02ParamKind = hx10w9Rp02ParamKind; exports.hx10w9Rp02RefMapParamNames = hx10w9Rp02RefMapParamNames; exports.hx10w9Rp02SplitArgs = hx10w9Rp02SplitArgs; exports.hx11RustSignApiStr = hx11RustSignApiStr; exports.hx11w9RustBoolKLocalOptionBool = hx11w9RustBoolKLocalOptionBool; exports.hx11w9RustIntLocalNullSinkOptionI64 = hx11w9RustIntLocalNullSinkOptionI64; exports.hx11w9RustStrLiteralLocalNativeString = hx11w9RustStrLiteralLocalNativeString; exports.hx11w9StrLocalReassign = hx11w9StrLocalReassign; exports.installCcxtGoDictParams = installCcxtGoDictParams; exports.installCcxtGoGb05ParamTypes = installCcxtGoGb05ParamTypes; exports.installCcxtGoGb11HandleErrorsCode = installCcxtGoGb11HandleErrorsCode; exports.installCcxtGoHooks = installCcxtGoHooks; exports.installCcxtGoIndexableTypes = installCcxtGoIndexableTypes; exports.installCcxtGoLocalTypes = installCcxtGoLocalTypes; exports.installCcxtGoParamTypes = installCcxtGoParamTypes; exports.installCcxtGoSignTyping = installCcxtGoSignTyping; exports.installHx11w8NumParams = installHx11w8NumParams; exports.narrowStrNullLocals = narrowStrNullLocals; exports.narrowStrSinkLocals = narrowStrSinkLocals; exports.nativeGetValue = nativeGetValue; exports.r01TypedLocals = r01TypedLocals; exports.r02NativeInserts = r02NativeInserts; exports.r04Callee = r04Callee; exports.r04Scalars = r04Scalars; exports.r05FieldChainInserts = r05FieldChainInserts; exports.r06Push = r06Push; exports.r06w3Push = r06w3Push; exports.r07StringNatives = r07StringNatives; exports.r08DictReads = r08DictReads; exports.r10ClientHandle = r10ClientHandle;
+
+exports.CCXT_GO_BOOL_METHOD_NAMES = CCXT_GO_BOOL_METHOD_NAMES; exports.CCXT_GO_HELPER_RETURN_TYPES = CCXT_GO_HELPER_RETURN_TYPES; exports.CCXT_GO_STRING_PTR_METHOD_NAMES = CCXT_GO_STRING_PTR_METHOD_NAMES; exports.CheckFlags = _sync.CheckFlags; exports.ElementFlags = _sync.ElementFlags; exports.IndexKind = _sync.IndexKind; exports.ObjectFlags = _sync.ObjectFlags; exports.RUST_DECLARED_DICT_LOCALS = RUST_DECLARED_DICT_LOCALS; exports.SignatureKind = _sync.SignatureKind; exports.SymbolFlags = _sync.SymbolFlags; exports.SyntaxKind = _ast.SyntaxKind; exports.TranspileProgramBatch = TranspileProgramBatch; exports.Transpiler = Transpiler; exports.TypeFlags = _sync.TypeFlags; exports.TypeFormatFlags = _sync.TypeFormatFlags; exports.alignGoTrailingComments = alignGoTrailingComments; exports.bf03PlainDictChains = bf03PlainDictChains; exports.default = Transpiler; exports.g08w3Check = g08w3Check; exports.hx10G06Check = hx10G06Check; exports.hx10w2R03 = hx10w2R03; exports.hx10w2R08 = hx10w2R08; exports.hx10w3R03 = hx10w3R03; exports.hx10w8GB01Check = hx10w8GB01Check; exports.hx10w8GB05Check = hx10w8GB05Check; exports.hx10w9GB11Check = hx10w9GB11Check; exports.hx10w9Rp02DispatchArg = hx10w9Rp02DispatchArg; exports.hx10w9Rp02ParamKind = hx10w9Rp02ParamKind; exports.hx10w9Rp02RefMapParamNames = hx10w9Rp02RefMapParamNames; exports.hx10w9Rp02SplitArgs = hx10w9Rp02SplitArgs; exports.hx11RustSignApiStr = hx11RustSignApiStr; exports.hx11w9RustBoolKLocalOptionBool = hx11w9RustBoolKLocalOptionBool; exports.hx11w9RustIntLocalNullSinkOptionI64 = hx11w9RustIntLocalNullSinkOptionI64; exports.hx11w9RustNumber2LocalOptionF64 = hx11w9RustNumber2LocalOptionF64; exports.hx11w9RustStrLiteralLocalNativeString = hx11w9RustStrLiteralLocalNativeString; exports.hx11w9StrLocalReassign = hx11w9StrLocalReassign; exports.installCcxtGoDictParams = installCcxtGoDictParams; exports.installCcxtGoGb05ParamTypes = installCcxtGoGb05ParamTypes; exports.installCcxtGoGb11HandleErrorsCode = installCcxtGoGb11HandleErrorsCode; exports.installCcxtGoHooks = installCcxtGoHooks; exports.installCcxtGoIndexableTypes = installCcxtGoIndexableTypes; exports.installCcxtGoLocalTypes = installCcxtGoLocalTypes; exports.installCcxtGoParamTypes = installCcxtGoParamTypes; exports.installCcxtGoSignTyping = installCcxtGoSignTyping; exports.installHx11w8NumParams = installHx11w8NumParams; exports.narrowStrNullLocals = narrowStrNullLocals; exports.narrowStrSinkLocals = narrowStrSinkLocals; exports.nativeGetValue = nativeGetValue; exports.r01TypedLocals = r01TypedLocals; exports.r02NativeInserts = r02NativeInserts; exports.r04Callee = r04Callee; exports.r04Scalars = r04Scalars; exports.r05FieldChainInserts = r05FieldChainInserts; exports.r06Push = r06Push; exports.r06w3Push = r06w3Push; exports.r07StringNatives = r07StringNatives; exports.r08DictReads = r08DictReads; exports.r10ClientHandle = r10ClientHandle;
 //# sourceMappingURL=transpiler.cjs.map
