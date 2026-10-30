@@ -12450,6 +12450,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
       return "any";
     }
     const scope = this.goEnclosingFunction(declaration);
+    if (this.goAnnotatedStringLocal(declaration, goType, scope, sourceName)) {
+      return "string";
+    }
     const stable = this.goLocalTypeResolution.size <= 1 && this.goDeclaredTypeInProgress.size === 0;
     const memoKey = goType;
     let perDecl = stable ? this.goLocalSafeVerdicts.get(declaration) : void 0;
@@ -12465,6 +12468,32 @@ func New${this.capitalize(this.className)}() *${this.className} {
       perDecl.set(memoKey, result);
     }
     return result;
+  }
+  // `const x: string = this.safeString (o, k, dflt)` with a non-nil default: the author's
+  // `string` annotation holds the call's deref (the method returns a fresh pointer).
+  goAnnotatedStringLocal(declaration, goType, scope, name) {
+    if (goType !== "*string" || declaration.type?.kind !== SyntaxKind5.StringKeyword) {
+      return false;
+    }
+    const call = declaration.initializer;
+    if (!this.goDefaultedSafeStringCallOrTypedDefault(call)) {
+      return false;
+    }
+    return !this.goTypeNameIsShadowed(scope, "string") && this.goLocalIsSafeToType(scope, declaration, name, "string");
+  }
+  // goDefaultedSafeStringCall, also accepting a default that is an identifier of Go type `string`
+  goDefaultedSafeStringCallOrTypedDefault(call) {
+    if (this.goDefaultedSafeStringCall(call)) {
+      return true;
+    }
+    if (call?.kind !== SyntaxKind5.CallExpression || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return false;
+    }
+    const arity = GO_DEFAULTED_SAFE_STRING_ARITY[call.expression.name?.text];
+    if (arity === void 0 || (call.arguments?.length ?? 0) !== arity) {
+      return false;
+    }
+    return this.goDeclaredTypeOfIdentifier(call.arguments[arity - 1]) === "string";
   }
   // Typed async receive: an extension that knows the core's channel element type replaces
   // `x := (<-this.FooAsync(..))` + `PanicOnError(x)` with a typed declaration that runs PanicOnError
@@ -12524,7 +12553,10 @@ ${this.getIden(identation)}PanicOnError(${parsedName})`;
       const varName = this.printNode(declaration.name);
       const declaredType = containerType !== void 0 ? containerType : this.getGoLocalType(declaration, parsedValue);
       const unboxValue = this.goMarketUnboxValue(declaration, parsedValue) ?? (declaredType === GO_SAFE_DICT_LOCAL_TYPE ? this.goSafeDictUnboxValue(declaration, identation) : declaredType === GO_SAFE_LIST_LOCAL_TYPE ? this.goSafeListUnboxValue(declaration, identation) : void 0);
-      const declaredValue = unboxValue !== void 0 ? unboxValue : parsedValue.trimStart();
+      let declaredValue = unboxValue !== void 0 ? unboxValue : parsedValue.trimStart();
+      if (declaredType === "string" && unboxValue === void 0 && this.goTypeOfInitializer(declaration.initializer, parsedValue) === "*string") {
+        declaredValue = "*" + declaredValue;
+      }
       const stm = this.getIden(identation) + "var " + varName + " " + declaredType + " = " + declaredValue;
       if (parsedValue.startsWith("<-this.callInternal(")) {
         return `

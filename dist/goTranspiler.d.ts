@@ -288,6 +288,8 @@ export declare class GoTranspiler extends BaseTranspiler {
     goNilInitReadIsPointerSafe(node: any): boolean;
     getGoLocalType(declaration: any, parsedValue: string): string;
     goLocalSafeVerdicts: WeakMap<object, Map<string, string>>;
+    goAnnotatedStringLocal(declaration: any, goType: string, scope: any, name: string): boolean;
+    goDefaultedSafeStringCallOrTypedDefault(call: any): boolean;
     goAwaitReceiveUnbox(awaitNode: any, printedInitializer: string): {
         goType: string;
         wrap: (recv: string) => string;
