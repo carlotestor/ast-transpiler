@@ -1120,6 +1120,8 @@ export class RustTranspiler extends BaseTranspiler {
             const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
             return keyLiteral === null ? undefined : `${keyLiteral[1]}.into()`;
         }
+        const nativeKey = this.rustStringMethodLocalKeyArg(keyNode);
+        if (nativeKey !== undefined) return nativeKey;
         // Dynamic key: a plain place, never one that reads the receiver (the
         // insert holds its `&mut`). Every other key shape keeps the helper.
         const key = keyText.trim();
@@ -2830,7 +2832,21 @@ export class RustTranspiler extends BaseTranspiler {
         const parent: any = n.parent;
         return isReturnStatement(parent) || this.rustDictWriteValue(n)
             || (parent?.kind === SyntaxKind.PropertyAssignment && parent.initializer === n)
-            || (isCallExpression(parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression));
+            || (isCallExpression(parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression))
+            || this.rustStringMethodLocalKey(n);
+    }
+
+    /** `m[x]` / `m[x] = v` with a string-method local as the key: a native `String`
+     *  place (`x.clone()`, `x` at its final use), boxed by the identifier printer elsewhere. */
+    rustStringMethodLocalKey(n): boolean {
+        return isElementAccessExpression(n.parent) && n.parent.argumentExpression === n;
+    }
+
+    rustStringMethodLocalKeyArg(key): string | undefined {
+        const declaration: any = isIdentifier(key) ? this.rustDeclarationOfIdentifier(key) : undefined;
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.name === key
+            || this.rustStringMethodLocalInit(declaration) === undefined) return undefined;
+        return this.rustVecIsFinalUse(key, String(key.text)) ? String(key.text) : `${String(key.text)}.clone()`;
     }
 
     // Typed string locals: `let x: Value = self.safeString(..)` is declared `Option<String>` when
@@ -6629,6 +6645,8 @@ export class RustTranspiler extends BaseTranspiler {
     rustR01BearerWriteKeyArg(keyNode: any, keyText: string, receiverName: string): string | undefined {
         const key: any = this.rustSkipWrappers(keyNode);
         if (key === undefined || isStringLiteral(key)) return undefined;
+        const nativeKey = this.rustStringMethodLocalKeyArg(key);
+        if (nativeKey !== undefined) return nativeKey;
         if (this.r01PlaceKeyNative(key) === true) return `${String(key.text)}.clone().unwrap_or_default()`;
         const text = String(keyText).trim();
         if (text === '' || new RegExp(`\\b${receiverName}\\b`).test(text)) return undefined;

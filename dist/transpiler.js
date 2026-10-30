@@ -28190,6 +28190,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
       return keyLiteral === null ? void 0 : `${keyLiteral[1]}.into()`;
     }
+    const nativeKey = this.rustStringMethodLocalKeyArg(keyNode);
+    if (nativeKey !== void 0)
+      return nativeKey;
     const key = keyText.trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || (receiver.isField ? key.includes("self") : new RegExp(`\\b${receiver.text}\\b`).test(key))) {
       return void 0;
@@ -29634,7 +29637,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   rustStringMethodLocalBoxUse(n) {
     const parent = n.parent;
-    return isReturnStatement4(parent) || this.rustDictWriteValue(n) || parent?.kind === SyntaxKind7.PropertyAssignment && parent.initializer === n || isCallExpression6(parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression);
+    return isReturnStatement4(parent) || this.rustDictWriteValue(n) || parent?.kind === SyntaxKind7.PropertyAssignment && parent.initializer === n || isCallExpression6(parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression) || this.rustStringMethodLocalKey(n);
+  }
+  /** `m[x]` / `m[x] = v` with a string-method local as the key: a native `String`
+   *  place (`x.clone()`, `x` at its final use), boxed by the identifier printer elsewhere. */
+  rustStringMethodLocalKey(n) {
+    return isElementAccessExpression4(n.parent) && n.parent.argumentExpression === n;
+  }
+  rustStringMethodLocalKeyArg(key) {
+    const declaration = isIdentifier3(key) ? this.rustDeclarationOfIdentifier(key) : void 0;
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.name === key || this.rustStringMethodLocalInit(declaration) === void 0)
+      return void 0;
+    return this.rustVecIsFinalUse(key, String(key.text)) ? String(key.text) : `${String(key.text)}.clone()`;
   }
   // `let x = this.safeString(..)` / `safeString(..)` — the whole initializer;
   // a call whose callee already returns `Option<String>` (a native-`Str`
@@ -33118,6 +33132,9 @@ ${iden}}`;
     const key = this.rustSkipWrappers(keyNode);
     if (key === void 0 || isStringLiteral3(key))
       return void 0;
+    const nativeKey = this.rustStringMethodLocalKeyArg(key);
+    if (nativeKey !== void 0)
+      return nativeKey;
     if (this.r01PlaceKeyNative(key) === true)
       return `${String(key.text)}.clone().unwrap_or_default()`;
     const text = String(keyText).trim();

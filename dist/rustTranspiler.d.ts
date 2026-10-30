@@ -333,6 +333,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStringMethodLocalInit(declaration: any): string | undefined;
     rustStringMethodLocalIsTyped(declaration: any): boolean;
     rustStringMethodLocalBoxUse(n: any): boolean;
+    /** `m[x]` / `m[x] = v` with a string-method local as the key: a native `String`
+     *  place (`x.clone()`, `x` at its final use), boxed by the identifier printer elsewhere. */
+    rustStringMethodLocalKey(n: any): boolean;
+    rustStringMethodLocalKeyArg(key: any): string | undefined;
     private static readonly RUST_STRING_LOCAL_HELPERS;
     private rustStringLocalDecisions;
     rustSafeStringLocalInitializer(declaration: any): boolean;

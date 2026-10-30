@@ -21,3 +21,14 @@ describe('rust string-method locals print a native String', () => {
         expect(out).not.toContain('let mut up: String');
     });
 });
+
+describe('rust string-method local as a map key', () => {
+    const cls = (body: string) => `class A extends Exchange { f(params: Dict, side: string): any { ${body} } }`;
+    test('key of a dict write stays a native String', () => {
+        const out = rust(cls("const networks: Dict = {}; const up: string = side.toUpperCase (); networks[up] = { 'network': up, 'id': 1 }; return networks;"));
+        expect(out).toContain('let mut up: String = side.as_str()');
+        expect(out).toContain('networks.insert(up.clone(),');
+        expect(out).toContain('Value::from(up)');
+        expect(out).not.toContain('stringify_param(&up)');
+    });
+});
