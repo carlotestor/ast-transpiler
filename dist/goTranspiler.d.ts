@@ -236,6 +236,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     goIdentifierRefersToDeclaration(node: any, declaration: any): boolean;
     goMarketUseReadsTheValue(node: any, throwingAccessor: boolean, keepsMap?: boolean): boolean;
     goMarketUseKeepsMap(node: any): boolean;
+    goMarketParamCopyUnbox(declaration: any): string | undefined;
+    goMarketParamCopyInitializer(initializer: any): boolean;
+    goMarketParamCopyWriteIsMap(node: any): boolean;
     goMarketLocalUnboxUncached(declaration: any): string | undefined;
     goMarketUnboxValue(declaration: any, parsedValue: string): string | undefined;
     goDeclarationOfIdentifier(node: any): any;

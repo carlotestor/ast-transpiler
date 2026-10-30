@@ -11528,6 +11528,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
     if (initializer.kind === SyntaxKind5.ObjectLiteralExpression) {
       return true;
     }
+    if (this.goMarketParamCopyInitializer(initializer)) {
+      return true;
+    }
     return initializer.kind === SyntaxKind5.CallExpression && this.goMarketCalleePrintsMap(initializer);
   }
   // the printed return type of a market producer, or undefined to keep the checker's answer
@@ -11618,7 +11621,45 @@ func New${this.capitalize(this.className)}() *${this.className} {
     }
     return this.goGetArgPositionIsDefaulted(callee, argIndex);
   }
+  // `let marketResolved: Market = market` where `market` is the GetArgMap-bound Market parameter:
+  // the local starts as that map, and goMarketParamCopyWriteIsMap admits only map-producing rebinds.
+  goMarketParamCopyUnbox(declaration) {
+    if (!this.goMarketParamCopyInitializer(declaration.initializer)) {
+      return void 0;
+    }
+    return this.goDeclaredLocalTypeIfSafe(
+      declaration,
+      GO_MARKET_LOCAL_TYPE,
+      (n) => this.goMarketParamCopyWriteIsMap(n) || this.goMarketUseReadsTheValue(n, false, true),
+      (n) => n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n || !this.goIdentifierRefersToDeclaration(n, declaration)
+    );
+  }
+  // an identifier bound to a Market/Dict parameter that prints as the `map[string]any` GetArgMap local
+  goMarketParamCopyInitializer(initializer) {
+    if (initializer?.kind !== SyntaxKind5.Identifier) {
+      return false;
+    }
+    let decl;
+    try {
+      decl = this.checkerOrUndefined()?.getSymbolAtLocation(initializer)?.valueDeclaration?.resolve();
+    } catch (e) {
+      return false;
+    }
+    return decl?.kind === SyntaxKind5.Parameter && this.goGetArgParameterType(decl) === GO_MARKET_LOCAL_TYPE;
+  }
+  // `x = this.market (..)` / `x = this.safeMarket (..)`: the right side prints a Go map
+  goMarketParamCopyWriteIsMap(node) {
+    const parent = node.parent;
+    if (parent?.kind !== SyntaxKind5.BinaryExpression || parent.left !== node || parent.operatorToken?.kind !== SyntaxKind5.EqualsToken) {
+      return false;
+    }
+    const right = parent.right;
+    return right?.kind === SyntaxKind5.CallExpression && this.goMarketCallReturnsDict(right) && this.goMarketCalleePrintsMap(right);
+  }
   goMarketLocalUnboxUncached(declaration) {
+    if (this.goMarketParamCopyInitializer(declaration.initializer)) {
+      return this.goMarketParamCopyUnbox(declaration);
+    }
     if (!this.goMarketCallReturnsDict(declaration.initializer)) {
       return void 0;
     }

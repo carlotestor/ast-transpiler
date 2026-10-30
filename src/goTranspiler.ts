@@ -2932,6 +2932,9 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         if (initializer.kind === SyntaxKind.ObjectLiteralExpression) {
             return true;
         }
+        if (this.goMarketParamCopyInitializer(initializer)) {
+            return true;
+        }
         return (initializer.kind === SyntaxKind.CallExpression) && this.goMarketCalleePrintsMap(initializer);
     }
 
@@ -3037,7 +3040,48 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         return this.goGetArgPositionIsDefaulted(callee, argIndex);
     }
 
+    // `let marketResolved: Market = market` where `market` is the GetArgMap-bound Market parameter:
+    // the local starts as that map, and goMarketParamCopyWriteIsMap admits only map-producing rebinds.
+    goMarketParamCopyUnbox(declaration): string | undefined {
+        if (!this.goMarketParamCopyInitializer(declaration.initializer)) {
+            return undefined;
+        }
+        return this.goDeclaredLocalTypeIfSafe(declaration, GO_MARKET_LOCAL_TYPE,
+            (n) => this.goMarketParamCopyWriteIsMap(n) || this.goMarketUseReadsTheValue(n, false, true),
+            (n) => ((n.parent?.kind === SyntaxKind.PropertyAccessExpression) && (n.parent.name === n))
+                || !this.goIdentifierRefersToDeclaration(n, declaration));
+    }
+
+    // an identifier bound to a Market/Dict parameter that prints as the `map[string]any` GetArgMap local
+    goMarketParamCopyInitializer(initializer): boolean {
+        if (initializer?.kind !== SyntaxKind.Identifier) {
+            return false;
+        }
+        let decl: any;
+        try {
+            decl = this.checkerOrUndefined()?.getSymbolAtLocation(initializer)?.valueDeclaration?.resolve();
+        } catch (e) {
+            return false;
+        }
+        return (decl?.kind === SyntaxKind.Parameter) && (this.goGetArgParameterType(decl) === GO_MARKET_LOCAL_TYPE);
+    }
+
+    // `x = this.market (..)` / `x = this.safeMarket (..)`: the right side prints a Go map
+    goMarketParamCopyWriteIsMap(node): boolean {
+        const parent: any = node.parent;
+        if ((parent?.kind !== SyntaxKind.BinaryExpression) || (parent.left !== node)
+            || (parent.operatorToken?.kind !== SyntaxKind.EqualsToken)) {
+            return false;
+        }
+        const right: any = parent.right;
+        return (right?.kind === SyntaxKind.CallExpression) && this.goMarketCallReturnsDict(right)
+            && this.goMarketCalleePrintsMap(right);
+    }
+
     goMarketLocalUnboxUncached(declaration): string | undefined {
+        if (this.goMarketParamCopyInitializer(declaration.initializer)) {
+            return this.goMarketParamCopyUnbox(declaration);
+        }
         if (!this.goMarketCallReturnsDict(declaration.initializer)) {
             return undefined;
         }
