@@ -54294,7 +54294,7 @@ function hx11w9RustBoolKLocalOptionBool(content) {
 _chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9RustBoolNLocalOptionBool(content) {
   const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_bool_n)\(/gm;
-  const keyListRe = /^Value::from\(vec!\[Value::Str\("(?:[^"\\]|\\.)*"\.into\(\)\)(?:, Value::Str\("(?:[^"\\]|\\.)*"\.into\(\)\))*\]\)$/;
+  const keyListRe = /^Value::from\(vec!\[Value::Str\("(?:[^"\\]|\\.)*"\.(?:into|to_string)\(\)\)(?:, Value::Str\("(?:[^"\\]|\\.)*"\.(?:into|to_string)\(\)\))*\]\)$/;
   const maskText5 = (src) => {
     let out2 = "";
     let i = 0;

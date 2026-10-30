@@ -10,7 +10,7 @@
  */
 export function hx11w9RustBoolNLocalOptionBool(content: string): string {
     const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_bool_n)\(/gm;
-    const keyListRe = /^Value::from\(vec!\[Value::Str\("(?:[^"\\]|\\.)*"\.into\(\)\)(?:, Value::Str\("(?:[^"\\]|\\.)*"\.into\(\)\))*\]\)$/;
+    const keyListRe = /^Value::from\(vec!\[Value::Str\("(?:[^"\\]|\\.)*"\.(?:into|to_string)\(\)\)(?:, Value::Str\("(?:[^"\\]|\\.)*"\.(?:into|to_string)\(\)\))*\]\)$/;
     const maskText = (src: string): string => {
         let out = ''; let i = 0;
         while (i < src.length) {
