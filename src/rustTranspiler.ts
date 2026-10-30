@@ -2276,6 +2276,7 @@ export class RustTranspiler extends BaseTranspiler {
     rustParamType(param): string {
         if (this.rustParamPrintsBool(param)) return 'bool';
         if (this.rustParamPrintsMap(param)) return '&mut indexmap::IndexMap<String, Value>';
+        if (this.rustParamPrintsStrVec(param)) return 'Vec<String>';
         return 'Value';
     }
 
@@ -2396,6 +2397,114 @@ export class RustTranspiler extends BaseTranspiler {
     // writes are plain `.insert` with no per-site `Arc::make_mut` guard.
 
     private rustMapParamDecisions = new WeakMap<any, boolean>();
+
+    // ── native `Vec<String>` parameters ───────────────────────────────────────
+    // A required `string[]` parameter of a non-base method whose every body use is
+    // `p.join('lit')` prints `Vec<String>`: the join is the std `.join(..)`, no
+    // closure. The dispatcher builds the list with `Value::to_string_vec`, and
+    // every call site passes an array literal of plain `Value` identifiers.
+
+    private rustStrVecParamDecisions = new WeakMap<any, boolean>();
+
+    rustParamPrintsStrVec(param): boolean {
+        if (param?.kind !== SyntaxKind.Parameter) return false;
+        let decision = this.rustStrVecParamDecisions.get(param);
+        if (decision === undefined) {
+            this.rustStrVecParamDecisions.set(param, false); // re-entrancy guard
+            try {
+                decision = this.rustStrVecParamUncached(param);
+            } catch (e) {
+                decision = false;
+            }
+            this.rustStrVecParamDecisions.set(param, decision);
+        }
+        return decision;
+    }
+
+    rustStrVecParamUncached(param): boolean {
+        const method: any = param.parent;
+        if (!isMethodDeclaration(method) || method.body === undefined) return false;
+        if (param.name?.kind !== SyntaxKind.Identifier || param.dotDotDotToken !== undefined) return false;
+        if (param.initializer !== undefined || param.questionToken !== undefined || param.type === undefined) return false;
+        if ((method.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.StaticKeyword)) return false;
+        const baseFile = RustTranspiler.RUST_BASE_TIER_FILE;
+        if (baseFile.test(param.getSourceFile().fileName)) return false;
+        const hidden: any = this.getMethodOverride(method);
+        if (hidden !== undefined && baseFile.test(hidden.getSourceFile().fileName)) return false;
+        const checker: any = this.checkerOrUndefined();
+        const type: any = checker === undefined ? undefined : this.getCheckedTypeOf(param.type);
+        if (type === undefined || !checker.isArrayType(type)) return false;
+        if (this.primitiveKindOfType(checker.getTypeArguments?.(type)?.[0]) !== 'string') return false;
+        if (this.rustMethodReferencedAsValue(method)) return false;
+        let joins = 0;
+        const usesOk = this.rustLocalUsesAll(param, String(param.name.text), true, (n) => {
+            const access: any = n.parent;
+            if (!isPropertyAccessExpression(access) || access.expression !== n || String(access.name.text) !== 'join') return false;
+            const call: any = access.parent;
+            if (!isCallExpression(call) || call.expression !== access || call.arguments.length !== 1) return false;
+            if (this.rustNativeStringLiteralArg(call.arguments[0]) === undefined) return false;
+            joins++;
+            return true;
+        });
+        if (!usesOk || joins === 0) return false;
+        const index = Array.from(method.parameters as any).indexOf(param);
+        return index >= 0 && this.rustStrVecCallSitesOk(method, index);
+    }
+
+    /** Every call site resolving to `method` passes an array literal of plain `Value` identifiers. */
+    rustStrVecCallSitesOk(method, index: number): boolean {
+        const name = String((method.name as any)?.text ?? '');
+        if (name === '') return false;
+        const key = this.rustDeclarationKey(method);
+        let proven = 0;
+        for (const call of this.rustCallSitesForName(name) as any[]) {
+            const args: any[] = call.arguments ?? [];
+            if (args.some((a: any) => a.kind === SyntaxKind.SpreadElement)) return false;
+            let declaration: any;
+            try {
+                declaration = signatureDeclaration((this.getChecker() as any).getResolvedSignature(call));
+            } catch (e) {
+                return false;
+            }
+            declaration = declaration?.resolve?.() ?? declaration;
+            if (declaration === undefined || declaration === null || this.rustDeclarationKey(declaration) !== key) continue;
+            if (!this.rustStrVecArgumentOk(args[index])) return false;
+            proven++;
+        }
+        return proven > 0;
+    }
+
+    rustStrVecArgumentOk(arg): boolean {
+        const inner: any = arg === undefined ? undefined : this.rustSkipWrappers(arg);
+        if (inner === undefined || !isArrayLiteralExpression(inner) || inner.elements.length === 0) return false;
+        return Array.from(inner.elements as any).every((e: any) => isIdentifier(e)
+            && this.primitiveKindOfType(this.getCheckedTypeOf(e)) === 'string'
+            && this.isDeclaredValueIdentifier(e) && !this.rustStringLocalIdentifierIsTyped(e)
+            && this.rustDeclarationOfIdentifier(e)?.kind !== SyntaxKind.BindingElement);
+    }
+
+    rustNativeStrVecArgumentSlot(params, at: number): boolean {
+        const param: any = params !== undefined && at < params.length ? params[at] : undefined;
+        if (param === undefined || param.initializer !== undefined || param.questionToken !== undefined) return false;
+        return this.rustParamPrintsStrVec(param);
+    }
+
+    /** `vec![a.to_string(), ..]` for an array literal landing in a `Vec<String>` slot. */
+    rustStrVecArgumentText(node, identation): string {
+        const inner: any = this.rustSkipWrappers(node);
+        if (inner === undefined || !isArrayLiteralExpression(inner)) return this.printNode(node, identation).trim();
+        return `vec![${Array.from(inner.elements as any).map((e: any) => `${this.printNode(e, 0).trim()}.to_string()`).join(', ')}]`;
+    }
+
+    printStrVecParamJoin(node): string | undefined {
+        const access: any = node?.expression;
+        if (!isPropertyAccessExpression(access) || !isIdentifier(access.expression) || node.arguments?.length !== 1) return undefined;
+        const declaration: any = this.rustDeclarationOfIdentifier(access.expression);
+        if (declaration === undefined || !isParameterDeclaration(declaration) || !this.rustParamPrintsStrVec(declaration)) return undefined;
+        const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
+        if (literal === undefined) return undefined;
+        return `Value::Str(${this.printNode(access.expression, 0).trim()}.join("${literal}").into())`;
+    }
 
     rustParamPrintsMap(param): boolean {
         if (param?.kind !== SyntaxKind.Parameter) {
@@ -3457,6 +3566,8 @@ export class RustTranspiler extends BaseTranspiler {
                 const calleeParams = this.rustCalleeParams(node);
                 const printArg = (a, at) => this.rustNativeMapArgumentSlot(calleeParams, at) !== undefined
                     ? this.rustMapArgumentText(a, 0)
+                    : this.rustNativeStrVecArgumentSlot(calleeParams, at)
+                    ? this.rustStrVecArgumentText(a, 0)
                     : (this.rustNativeBoolArgumentSlot(calleeParams, at)
                         ? this.rustBoolArgumentText(a, 0)
                         : this.printNode(a, 0));
@@ -3480,6 +3591,9 @@ export class RustTranspiler extends BaseTranspiler {
         return Array.from(node.arguments).map((arg, at) => {
             if (this.rustNativeMapArgumentSlot(params, at) !== undefined) {
                 return this.rustMapArgumentText(arg, identation);
+            }
+            if (this.rustNativeStrVecArgumentSlot(params, at)) {
+                return this.rustStrVecArgumentText(arg, identation);
             }
             return this.rustNativeBoolArgumentSlot(params, at)
                 ? this.rustBoolArgumentText(arg, identation)
@@ -5342,7 +5456,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printJoinCall(node, identation, name = undefined, parsedArg = undefined) {
-        return this.r15PrintVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? `join(&${name}, &${parsedArg})`;
+        return this.printStrVecParamJoin(node) ?? this.r15PrintVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? `join(&${name}, &${parsedArg})`;
     }
 
     printSplitCall(node, identation, name = undefined, parsedArg = undefined) {

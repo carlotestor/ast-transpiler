@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -27322,6 +27322,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // every call site passes a typed dict bearer prints `&mut IndexMap`, so its
     // writes are plain `.insert` with no per-site `Arc::make_mut` guard.
     this.rustMapParamDecisions = /* @__PURE__ */ new WeakMap();
+    // ── native `Vec<String>` parameters ───────────────────────────────────────
+    // A required `string[]` parameter of a non-base method whose every body use is
+    // `p.join('lit')` prints `Vec<String>`: the join is the std `.join(..)`, no
+    // closure. The dispatcher builds the list with `Value::to_string_vec`, and
+    // every call site passes an array literal of plain `Value` identifiers.
+    this.rustStrVecParamDecisions = /* @__PURE__ */ new WeakMap();
     this.rustCallSitesCache = /* @__PURE__ */ new WeakMap();
     this.rustStringLocalDecisions = /* @__PURE__ */ new Map();
     // ── native `Option<String>` returns (`: Str` methods) ─────────────────────
@@ -29071,6 +29077,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "bool";
     if (this.rustParamPrintsMap(param))
       return "&mut indexmap::IndexMap<String, Value>";
+    if (this.rustParamPrintsStrVec(param))
+      return "Vec<String>";
     return "Value";
   }
   // A read of a native-`bool` parameter that still compiles: a condition slot,
@@ -29169,6 +29177,120 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const declaration = this.rustDeclaredNode(inner);
     return declaration?.kind === SyntaxKind7.Parameter && this.rustParamPrintsBool(declaration) ? this.printNode(inner, 0).trim() : void 0;
+  }
+  rustParamPrintsStrVec(param) {
+    if (param?.kind !== SyntaxKind7.Parameter)
+      return false;
+    let decision = this.rustStrVecParamDecisions.get(param);
+    if (decision === void 0) {
+      this.rustStrVecParamDecisions.set(param, false);
+      try {
+        decision = this.rustStrVecParamUncached(param);
+      } catch (e) {
+        decision = false;
+      }
+      this.rustStrVecParamDecisions.set(param, decision);
+    }
+    return decision;
+  }
+  rustStrVecParamUncached(param) {
+    const method = param.parent;
+    if (!isMethodDeclaration5(method) || method.body === void 0)
+      return false;
+    if (param.name?.kind !== SyntaxKind7.Identifier || param.dotDotDotToken !== void 0)
+      return false;
+    if (param.initializer !== void 0 || param.questionToken !== void 0 || param.type === void 0)
+      return false;
+    if ((method.modifiers ?? []).some((m) => m.kind === SyntaxKind7.StaticKeyword))
+      return false;
+    const baseFile = _RustTranspiler.RUST_BASE_TIER_FILE;
+    if (baseFile.test(param.getSourceFile().fileName))
+      return false;
+    const hidden = this.getMethodOverride(method);
+    if (hidden !== void 0 && baseFile.test(hidden.getSourceFile().fileName))
+      return false;
+    const checker = this.checkerOrUndefined();
+    const type = checker === void 0 ? void 0 : this.getCheckedTypeOf(param.type);
+    if (type === void 0 || !checker.isArrayType(type))
+      return false;
+    if (this.primitiveKindOfType(checker.getTypeArguments?.(type)?.[0]) !== "string")
+      return false;
+    if (this.rustMethodReferencedAsValue(method))
+      return false;
+    let joins = 0;
+    const usesOk = this.rustLocalUsesAll(param, String(param.name.text), true, (n) => {
+      const access = n.parent;
+      if (!isPropertyAccessExpression3(access) || access.expression !== n || String(access.name.text) !== "join")
+        return false;
+      const call = access.parent;
+      if (!isCallExpression6(call) || call.expression !== access || call.arguments.length !== 1)
+        return false;
+      if (this.rustNativeStringLiteralArg(call.arguments[0]) === void 0)
+        return false;
+      joins++;
+      return true;
+    });
+    if (!usesOk || joins === 0)
+      return false;
+    const index = Array.from(method.parameters).indexOf(param);
+    return index >= 0 && this.rustStrVecCallSitesOk(method, index);
+  }
+  /** Every call site resolving to `method` passes an array literal of plain `Value` identifiers. */
+  rustStrVecCallSitesOk(method, index) {
+    const name = String(method.name?.text ?? "");
+    if (name === "")
+      return false;
+    const key = this.rustDeclarationKey(method);
+    let proven = 0;
+    for (const call of this.rustCallSitesForName(name)) {
+      const args = call.arguments ?? [];
+      if (args.some((a) => a.kind === SyntaxKind7.SpreadElement))
+        return false;
+      let declaration;
+      try {
+        declaration = signatureDeclaration(this.getChecker().getResolvedSignature(call));
+      } catch (e) {
+        return false;
+      }
+      declaration = declaration?.resolve?.() ?? declaration;
+      if (declaration === void 0 || declaration === null || this.rustDeclarationKey(declaration) !== key)
+        continue;
+      if (!this.rustStrVecArgumentOk(args[index]))
+        return false;
+      proven++;
+    }
+    return proven > 0;
+  }
+  rustStrVecArgumentOk(arg) {
+    const inner = arg === void 0 ? void 0 : this.rustSkipWrappers(arg);
+    if (inner === void 0 || !isArrayLiteralExpression4(inner) || inner.elements.length === 0)
+      return false;
+    return Array.from(inner.elements).every((e) => isIdentifier3(e) && this.primitiveKindOfType(this.getCheckedTypeOf(e)) === "string" && this.isDeclaredValueIdentifier(e) && !this.rustStringLocalIdentifierIsTyped(e) && this.rustDeclarationOfIdentifier(e)?.kind !== SyntaxKind7.BindingElement);
+  }
+  rustNativeStrVecArgumentSlot(params, at) {
+    const param = params !== void 0 && at < params.length ? params[at] : void 0;
+    if (param === void 0 || param.initializer !== void 0 || param.questionToken !== void 0)
+      return false;
+    return this.rustParamPrintsStrVec(param);
+  }
+  /** `vec![a.to_string(), ..]` for an array literal landing in a `Vec<String>` slot. */
+  rustStrVecArgumentText(node, identation) {
+    const inner = this.rustSkipWrappers(node);
+    if (inner === void 0 || !isArrayLiteralExpression4(inner))
+      return this.printNode(node, identation).trim();
+    return `vec![${Array.from(inner.elements).map((e) => `${this.printNode(e, 0).trim()}.to_string()`).join(", ")}]`;
+  }
+  printStrVecParamJoin(node) {
+    const access = node?.expression;
+    if (!isPropertyAccessExpression3(access) || !isIdentifier3(access.expression) || node.arguments?.length !== 1)
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(access.expression);
+    if (declaration === void 0 || !isParameterDeclaration3(declaration) || !this.rustParamPrintsStrVec(declaration))
+      return void 0;
+    const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
+    if (literal === void 0)
+      return void 0;
+    return `Value::Str(${this.printNode(access.expression, 0).trim()}.join("${literal}").into())`;
   }
   rustParamPrintsMap(param) {
     if (param?.kind !== SyntaxKind7.Parameter) {
@@ -30130,7 +30252,7 @@ ${classMethods}
       const sig = this.methodSignatures[methodName];
       if (sig) {
         const calleeParams = this.rustCalleeParams(node);
-        const printArg = (a, at) => this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
+        const printArg = (a, at) => this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
         const printArgs = (list, from = 0) => list.map((a, i) => printArg(a, from + i)).join(", ");
         const requiredArgs = printArgs(args.slice(0, sig.requiredCount));
         const reqPart = requiredArgs ? `${requiredArgs}, ` : "";
@@ -30149,6 +30271,9 @@ ${classMethods}
     return Array.from(node.arguments).map((arg, at) => {
       if (this.rustNativeMapArgumentSlot(params, at) !== void 0) {
         return this.rustMapArgumentText(arg, identation);
+      }
+      if (this.rustNativeStrVecArgumentSlot(params, at)) {
+        return this.rustStrVecArgumentText(arg, identation);
       }
       return this.rustNativeBoolArgumentSlot(params, at) ? this.rustBoolArgumentText(arg, identation) : this.printNode(arg, identation).trim();
     }).join(", ");
@@ -31850,7 +31975,7 @@ ${this.getIden(identation)}}`;
     return this.r17PrintTrim(node, name) ?? `trim(&${name})`;
   }
   printJoinCall(node, identation, name = void 0, parsedArg = void 0) {
-    return this.r15PrintVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? `join(&${name}, &${parsedArg})`;
+    return this.printStrVecParamJoin(node) ?? this.r15PrintVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? `join(&${name}, &${parsedArg})`;
   }
   printSplitCall(node, identation, name = void 0, parsedArg = void 0) {
     return this.printNativeStringSplit(node, name) ?? this.printRustR13Split(node, name) ?? `split(&${name}, &${parsedArg})`;

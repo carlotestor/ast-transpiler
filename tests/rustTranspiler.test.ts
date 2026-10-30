@@ -5318,3 +5318,27 @@ describe('rust order-book field read', () => {
         expect(out).not.toContain('other.book_field');
     });
 });
+
+describe('rust string[] parameter used only by join', () => {
+    let output = '';
+    beforeAll(() => {
+        output = transpiler.transpileRustByPath('./tests/files/input/a15dstrvec/ts/src/venue.ts').content;
+    });
+
+    test('a joined-only string[] param is a Vec<String> with the std join and no closure', () => {
+        expect(output).toContain('pub async fn fetchByIds(&self, ids: Vec<String>, optional_args: &[Value])');
+        expect(output).toContain('Value::Str(ids.join(",").into())');
+    });
+
+    test('the array-literal caller passes vec![..] of strings', () => {
+        expect(output).toContain('self.fetchByIds(vec![id.to_string()]');
+    });
+
+    test('a param that is also indexed keeps the Value box', () => {
+        expect(output).toContain('fn fetchIndexed(&self, ids: Value');
+    });
+
+    test('a caller that is not an array literal keeps the Value box', () => {
+        expect(output).toContain('fn fetchComputed(&self, ids: Value');
+    });
+});
