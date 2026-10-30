@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -46403,7 +46403,8 @@ var GB01_DICT_PARAMS = {
   "safeTrade": [0],
   "safeLedgerEntry": [0],
   "safeLiquidation": [0],
-  "safeCurrencyStructure": [0]
+  "safeCurrencyStructure": [0],
+  "addKeyInArrayItems": [0]
 };
 var GB01_TYPE = "map[string]any";
 var GB01_DEBUG = process.env.GB01_DEBUG === "1";
