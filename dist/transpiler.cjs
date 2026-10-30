@@ -54505,6 +54505,62 @@ function hx11w9RustBoolKLocalOptionBool(content) {
   return out;
 }
 
+// src/rustPasses/hx11w9RustDictLitKeyReadIfLetClosureFree.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+function hx11w9RustDictLitKeyReadIfLetClosureFree(content) {
+  if (!content.includes('.as_map().and_then(|__m| __m.get("'))
+    return content;
+  const P = "[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*";
+  const re = new RegExp(
+    `(?<![A-Za-z0-9_.:])(${P})\\.as_map\\(\\)\\.and_then\\(\\|__m\\| __m\\.get\\(("(?:[^"\\\\\\n]|\\\\.)*")\\)\\)\\.cloned\\(\\)\\.unwrap_or\\(((?:crate::)?Value::Null)\\)`,
+    "g"
+  );
+  return content.replace(re, (m, x, k, nul, off, whole) => {
+    const text = `(if let Some(__m) = ${x}.as_map() { __m.get(${k}).cloned().unwrap_or(${nul}) } else { ${nul} })`;
+    const ls = whole.lastIndexOf("\n", off) + 1;
+    let le = whole.indexOf("\n", off);
+    if (le < 0)
+      le = whole.length;
+    const oldLen = le - ls;
+    return oldLen <= 400 && oldLen - m.length + text.length > 400 ? m : text;
+  });
+}
+
+// src/rustPasses/hx11w9RustArrayLitIndexReadIfLet.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+function hx11w9RustArrayLitIndexReadIfLet(content) {
+  if (!content.includes("|__arr| __arr.get("))
+    return content;
+  const re = /(?<![A-Za-z0-9_.:])([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\.as_array\(\)\.and_then\(\|__arr\| __arr\.get\(([0-9]+)\)\)\.cloned\(\)\.unwrap_or\(((?:crate::)?Value::Null)\)/g;
+  return content.replace(re, (m, x, n, nul, off, whole) => {
+    const text = `(if let Some(__arr) = ${x}.as_array() { __arr.get(${n}).cloned().unwrap_or(${nul}) } else { ${nul} })`;
+    const ls = whole.lastIndexOf("\n", off) + 1;
+    let le = whole.indexOf("\n", off);
+    if (le < 0)
+      le = whole.length;
+    const oldLen = le - ls;
+    return oldLen <= 400 && oldLen - m.length + text.length > 400 ? m : text;
+  });
+}
+
+// src/rustPasses/hx11w9RustObjectKeysValuesIfLetClosureFree.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+function hx11w9RustObjectKeysValuesIfLetClosureFree(content) {
+  const body = "(__m\\.keys\\(\\)\\.map\\(\\|__k\\| Value::Str\\(__k\\.clone\\(\\)\\.into\\(\\)\\)\\)\\.collect\\(\\)|__m\\.values\\(\\)\\.cloned\\(\\)\\.collect\\(\\))";
+  const re = new RegExp("(?<![\\w.:])Value::Array\\(([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*)\\.as_map\\(\\)\\.map\\(\\|__m\\| " + body + "\\)\\.unwrap_or_default\\(\\)\\)", "g");
+  return content.replace(re, (m, recv, inner, off) => {
+    const out = `Value::Array(if let Some(__m) = ${recv}.as_map() { ${inner} } else { Vec::new() })`;
+    const ls = content.lastIndexOf("\n", off - 1) + 1;
+    let le = content.indexOf("\n", off);
+    if (le < 0)
+      le = content.length;
+    const lineLen = le - ls;
+    if (lineLen - m.length + out.length > 400 && out.length > m.length)
+      return m;
+    return out;
+  });
+}
+
 // src/transpiler.ts
 var __dirname_mock = import_dirname.default;
 var fastCompilerOptions = {
@@ -55252,5 +55308,8 @@ var TranspileProgramBatch = class {
 
 
 
-exports.CCXT_GO_BOOL_METHOD_NAMES = CCXT_GO_BOOL_METHOD_NAMES; exports.CCXT_GO_HELPER_RETURN_TYPES = CCXT_GO_HELPER_RETURN_TYPES; exports.CCXT_GO_STRING_PTR_METHOD_NAMES = CCXT_GO_STRING_PTR_METHOD_NAMES; exports.CheckFlags = _sync.CheckFlags; exports.ElementFlags = _sync.ElementFlags; exports.IndexKind = _sync.IndexKind; exports.ObjectFlags = _sync.ObjectFlags; exports.RUST_DECLARED_DICT_LOCALS = RUST_DECLARED_DICT_LOCALS; exports.SignatureKind = _sync.SignatureKind; exports.SymbolFlags = _sync.SymbolFlags; exports.SyntaxKind = _ast.SyntaxKind; exports.TranspileProgramBatch = TranspileProgramBatch; exports.Transpiler = Transpiler; exports.TypeFlags = _sync.TypeFlags; exports.TypeFormatFlags = _sync.TypeFormatFlags; exports.alignGoTrailingComments = alignGoTrailingComments; exports.bf03PlainDictChains = bf03PlainDictChains; exports.default = Transpiler; exports.g08w3Check = g08w3Check; exports.hx10G06Check = hx10G06Check; exports.hx10w2R03 = hx10w2R03; exports.hx10w2R08 = hx10w2R08; exports.hx10w3R03 = hx10w3R03; exports.hx10w8GB01Check = hx10w8GB01Check; exports.hx10w8GB05Check = hx10w8GB05Check; exports.hx10w9GB11Check = hx10w9GB11Check; exports.hx10w9Rp02DispatchArg = hx10w9Rp02DispatchArg; exports.hx10w9Rp02ParamKind = hx10w9Rp02ParamKind; exports.hx10w9Rp02RefMapParamNames = hx10w9Rp02RefMapParamNames; exports.hx10w9Rp02SplitArgs = hx10w9Rp02SplitArgs; exports.hx11RustSignApiStr = hx11RustSignApiStr; exports.hx11w9RustBoolKLocalOptionBool = hx11w9RustBoolKLocalOptionBool; exports.hx11w9RustIntLocalNullSinkOptionI64 = hx11w9RustIntLocalNullSinkOptionI64; exports.hx11w9RustStrLiteralLocalNativeString = hx11w9RustStrLiteralLocalNativeString; exports.hx11w9StrLocalReassign = hx11w9StrLocalReassign; exports.installCcxtGoDictParams = installCcxtGoDictParams; exports.installCcxtGoGb05ParamTypes = installCcxtGoGb05ParamTypes; exports.installCcxtGoGb11HandleErrorsCode = installCcxtGoGb11HandleErrorsCode; exports.installCcxtGoHooks = installCcxtGoHooks; exports.installCcxtGoIndexableTypes = installCcxtGoIndexableTypes; exports.installCcxtGoLocalTypes = installCcxtGoLocalTypes; exports.installCcxtGoParamTypes = installCcxtGoParamTypes; exports.installCcxtGoSignTyping = installCcxtGoSignTyping; exports.installHx11w8NumParams = installHx11w8NumParams; exports.narrowStrNullLocals = narrowStrNullLocals; exports.narrowStrSinkLocals = narrowStrSinkLocals; exports.nativeGetValue = nativeGetValue; exports.r01TypedLocals = r01TypedLocals; exports.r02NativeInserts = r02NativeInserts; exports.r04Callee = r04Callee; exports.r04Scalars = r04Scalars; exports.r05FieldChainInserts = r05FieldChainInserts; exports.r06Push = r06Push; exports.r06w3Push = r06w3Push; exports.r07StringNatives = r07StringNatives; exports.r08DictReads = r08DictReads; exports.r10ClientHandle = r10ClientHandle;
+
+
+
+exports.CCXT_GO_BOOL_METHOD_NAMES = CCXT_GO_BOOL_METHOD_NAMES; exports.CCXT_GO_HELPER_RETURN_TYPES = CCXT_GO_HELPER_RETURN_TYPES; exports.CCXT_GO_STRING_PTR_METHOD_NAMES = CCXT_GO_STRING_PTR_METHOD_NAMES; exports.CheckFlags = _sync.CheckFlags; exports.ElementFlags = _sync.ElementFlags; exports.IndexKind = _sync.IndexKind; exports.ObjectFlags = _sync.ObjectFlags; exports.RUST_DECLARED_DICT_LOCALS = RUST_DECLARED_DICT_LOCALS; exports.SignatureKind = _sync.SignatureKind; exports.SymbolFlags = _sync.SymbolFlags; exports.SyntaxKind = _ast.SyntaxKind; exports.TranspileProgramBatch = TranspileProgramBatch; exports.Transpiler = Transpiler; exports.TypeFlags = _sync.TypeFlags; exports.TypeFormatFlags = _sync.TypeFormatFlags; exports.alignGoTrailingComments = alignGoTrailingComments; exports.bf03PlainDictChains = bf03PlainDictChains; exports.default = Transpiler; exports.g08w3Check = g08w3Check; exports.hx10G06Check = hx10G06Check; exports.hx10w2R03 = hx10w2R03; exports.hx10w2R08 = hx10w2R08; exports.hx10w3R03 = hx10w3R03; exports.hx10w8GB01Check = hx10w8GB01Check; exports.hx10w8GB05Check = hx10w8GB05Check; exports.hx10w9GB11Check = hx10w9GB11Check; exports.hx10w9Rp02DispatchArg = hx10w9Rp02DispatchArg; exports.hx10w9Rp02ParamKind = hx10w9Rp02ParamKind; exports.hx10w9Rp02RefMapParamNames = hx10w9Rp02RefMapParamNames; exports.hx10w9Rp02SplitArgs = hx10w9Rp02SplitArgs; exports.hx11RustSignApiStr = hx11RustSignApiStr; exports.hx11w9RustArrayLitIndexReadIfLet = hx11w9RustArrayLitIndexReadIfLet; exports.hx11w9RustBoolKLocalOptionBool = hx11w9RustBoolKLocalOptionBool; exports.hx11w9RustDictLitKeyReadIfLetClosureFree = hx11w9RustDictLitKeyReadIfLetClosureFree; exports.hx11w9RustIntLocalNullSinkOptionI64 = hx11w9RustIntLocalNullSinkOptionI64; exports.hx11w9RustObjectKeysValuesIfLetClosureFree = hx11w9RustObjectKeysValuesIfLetClosureFree; exports.hx11w9RustStrLiteralLocalNativeString = hx11w9RustStrLiteralLocalNativeString; exports.hx11w9StrLocalReassign = hx11w9StrLocalReassign; exports.installCcxtGoDictParams = installCcxtGoDictParams; exports.installCcxtGoGb05ParamTypes = installCcxtGoGb05ParamTypes; exports.installCcxtGoGb11HandleErrorsCode = installCcxtGoGb11HandleErrorsCode; exports.installCcxtGoHooks = installCcxtGoHooks; exports.installCcxtGoIndexableTypes = installCcxtGoIndexableTypes; exports.installCcxtGoLocalTypes = installCcxtGoLocalTypes; exports.installCcxtGoParamTypes = installCcxtGoParamTypes; exports.installCcxtGoSignTyping = installCcxtGoSignTyping; exports.installHx11w8NumParams = installHx11w8NumParams; exports.narrowStrNullLocals = narrowStrNullLocals; exports.narrowStrSinkLocals = narrowStrSinkLocals; exports.nativeGetValue = nativeGetValue; exports.r01TypedLocals = r01TypedLocals; exports.r02NativeInserts = r02NativeInserts; exports.r04Callee = r04Callee; exports.r04Scalars = r04Scalars; exports.r05FieldChainInserts = r05FieldChainInserts; exports.r06Push = r06Push; exports.r06w3Push = r06w3Push; exports.r07StringNatives = r07StringNatives; exports.r08DictReads = r08DictReads; exports.r10ClientHandle = r10ClientHandle;
 //# sourceMappingURL=transpiler.cjs.map
