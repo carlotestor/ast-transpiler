@@ -3663,6 +3663,12 @@ export class RustTranspiler extends BaseTranspiler {
             return this.printArrayLength(node, 0, leftExpr);
         }
 
+        // `book.cache` / `book.nonce` on an order-book local (typed, or read off `this.orderbooks`).
+        if (isIdentifier(node.name) && isIdentifier(node.expression) && this.isNativeAccessPositionSafe(node) && !this.isNativeWriteTargetBase(node)) {
+            const bookField = this.printNativeBookFieldRead(leftExpr, node.expression, rightSide, true);
+            if (bookField !== undefined) return bookField;
+        }
+
         // Typed field on a checker-proven map local (`x.field`) reads natively;
         // the ccxt post-pass otherwise rewrites it to `get_value(&x, "field")`.
         if (isIdentifier(node.name) && this.isShallowValueReceiver(node.expression) &&
@@ -3886,14 +3892,14 @@ export class RustTranspiler extends BaseTranspiler {
     /** Native read for one chain level, or undefined to keep `get_value`. */
     // `book['bids'|'asks'|'nonce'|...]` on a checker-typed order-book class: the hand-written
     // `Value::book_field` serves the same shared-store read as `get_value_k`.
-    printNativeBookFieldRead(receiverText: string, receiverNode: Node, keyText: string): string | undefined {
+    printNativeBookFieldRead(receiverText: string, receiverNode: Node, keyText: string, viaStore = false): string | undefined {
         if (!RustTranspiler.RUST_ORDERBOOK_READ_FIELDS.has(keyText)) return undefined;
         // Test sources keep `get_value(&book, "bids")`: their side-extraction pass matches it.
         if (/\/test\//.test(String((receiverNode as any).getSourceFile?.().fileName ?? ''))) return undefined;
         if (this.rustDictBearerDeclaration(receiverNode) !== undefined || this.rustMapParamDeclaration(receiverNode) !== undefined) return undefined;
         const type = this.typeOfNodeIfAny(receiverNode);
         const name = type === undefined ? undefined : (this.typeSymbolOf(type) as any)?.name;
-        if (name === undefined || !RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) return undefined;
+        if ((name === undefined || !RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) && !(viaStore && this.rustReadsOrderbooksStore(receiverNode))) return undefined;
         return `${receiverText}.book_field("${keyText}")`;
     }
 

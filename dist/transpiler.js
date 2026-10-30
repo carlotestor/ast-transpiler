@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-UW53OXLU.js";
+} from "./chunk-5QHB7QM7.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -30269,6 +30269,11 @@ ${classMethods}
     if (rightSide === "length") {
       return this.printArrayLength(node, 0, leftExpr);
     }
+    if (isIdentifier3(node.name) && isIdentifier3(node.expression) && this.isNativeAccessPositionSafe(node) && !this.isNativeWriteTargetBase(node)) {
+      const bookField = this.printNativeBookFieldRead(leftExpr, node.expression, rightSide, true);
+      if (bookField !== void 0)
+        return bookField;
+    }
     if (isIdentifier3(node.name) && this.isShallowValueReceiver(node.expression) && this.isNativeAccessPositionSafe(node) && !this.isNativeWriteTargetBase(node)) {
       const native = this.printNativeMapAccess(leftExpr, node.expression, String(rightSide));
       if (native)
@@ -30455,7 +30460,7 @@ ${classMethods}
   /** Native read for one chain level, or undefined to keep `get_value`. */
   // `book['bids'|'asks'|'nonce'|...]` on a checker-typed order-book class: the hand-written
   // `Value::book_field` serves the same shared-store read as `get_value_k`.
-  printNativeBookFieldRead(receiverText, receiverNode, keyText) {
+  printNativeBookFieldRead(receiverText, receiverNode, keyText, viaStore = false) {
     if (!_RustTranspiler.RUST_ORDERBOOK_READ_FIELDS.has(keyText))
       return void 0;
     if (/\/test\//.test(String(receiverNode.getSourceFile?.().fileName ?? "")))
@@ -30464,7 +30469,7 @@ ${classMethods}
       return void 0;
     const type = this.typeOfNodeIfAny(receiverNode);
     const name = type === void 0 ? void 0 : this.typeSymbolOf(type)?.name;
-    if (name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name))
+    if ((name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) && !(viaStore && this.rustReadsOrderbooksStore(receiverNode)))
       return void 0;
     return `${receiverText}.book_field("${keyText}")`;
   }

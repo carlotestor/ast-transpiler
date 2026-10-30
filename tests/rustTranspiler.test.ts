@@ -5306,6 +5306,12 @@ describe('rust order-book field read', () => {
         expect(out).toContain('orderbook.book_field("nonce")');
     });
 
+    test('book.cache / nonce property reads print book_field', () => {
+        const out = rs("    const m = orderbook.cache;\n    const n = orderbook.nonce;");
+        expect(out).toContain('orderbook.book_field("cache")');
+        expect(out).toContain('orderbook.book_field("nonce")');
+    });
+
     test('other keys and untyped receivers keep the default', () => {
         const out = rs("    const f = orderbook['foo'];\n    const o = other['bids'];");
         expect(out).not.toContain('book_field("foo")');
