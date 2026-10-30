@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -29621,7 +29621,21 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (receiver !== void 0)
         text = `${receiver}.as_str().map(str::${method === "toUpperCase" ? "to_uppercase" : "to_lowercase"}).unwrap_or_default()`;
     }
+    if (method === "replace")
+      text = this.rustStringReplaceLocalText(init, callee);
     return text !== void 0 && this.rustStringMethodLocalIsTyped(declaration) ? text : void 0;
+  }
+  // `recv.replace("a", "b")` on a string-typed identifier: the native `String` payload of the
+  // `printNativeStringReplace` arm (same receiver and literal rules).
+  rustStringReplaceLocalText(init, callee) {
+    if (init.arguments.length !== 2 || callee.expression.kind === SyntaxKind7.ThisKeyword || !isIdentifier3(callee.expression) || this.rustParamShadowOf(callee.expression) !== void 0)
+      return void 0;
+    const receiver = this.rustNativeStringReceiver(init, this.printNode(callee.expression, 0));
+    const from = this.rustNativeStringLiteralArg(init.arguments[0]);
+    const to = this.rustNativeStringLiteralArg(init.arguments[1]);
+    if (receiver === void 0 || from === void 0 || to === void 0)
+      return void 0;
+    return `${receiver}.as_str().map(|__s| __s.replace("${from}", "${to}")).unwrap_or_default()`;
   }
   rustStringMethodLocalIsTyped(declaration) {
     let decision = this.rustStringMethodLocalDecisions.get(declaration);
