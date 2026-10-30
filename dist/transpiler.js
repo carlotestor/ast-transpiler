@@ -30269,7 +30269,7 @@ ${classMethods}
     if (rightSide === "length") {
       return this.printArrayLength(node, 0, leftExpr);
     }
-    if (isIdentifier3(node.name) && isIdentifier3(node.expression) && this.isNativeAccessPositionSafe(node) && !this.isNativeWriteTargetBase(node)) {
+    if (isIdentifier3(node.name) && isIdentifier3(node.expression) && !this.isCastOrParenOperand(node) && this.isNativeAccessPositionSafe(node) && !this.isNativeWriteTargetBase(node)) {
       const bookField = this.printNativeBookFieldRead(leftExpr, node.expression, rightSide, true);
       if (bookField !== void 0)
         return bookField;
@@ -31398,6 +31398,10 @@ ${ind}let ${view}: &${map} = &${arc};
       }
     }
     return true;
+  }
+  /** `(x.k as T).push(..)`: the cast wrapper hides the push receiver from the position check. */
+  isCastOrParenOperand(node) {
+    return node.parent !== void 0 && (isAsExpression3(node.parent) || isParenthesizedExpression3(node.parent));
   }
   /** Receiver shapes whose printed text is a single `Value` place (`x`, `this.x`). */
   isShallowValueReceiver(node) {

@@ -3664,7 +3664,7 @@ export class RustTranspiler extends BaseTranspiler {
         }
 
         // `book.cache` / `book.nonce` on an order-book local (typed, or read off `this.orderbooks`).
-        if (isIdentifier(node.name) && isIdentifier(node.expression) && this.isNativeAccessPositionSafe(node) && !this.isNativeWriteTargetBase(node)) {
+        if (isIdentifier(node.name) && isIdentifier(node.expression) && !this.isCastOrParenOperand(node) && this.isNativeAccessPositionSafe(node) && !this.isNativeWriteTargetBase(node)) {
             const bookField = this.printNativeBookFieldRead(leftExpr, node.expression, rightSide, true);
             if (bookField !== undefined) return bookField;
         }
@@ -4833,6 +4833,11 @@ export class RustTranspiler extends BaseTranspiler {
             }
         }
         return true;
+    }
+
+    /** `(x.k as T).push(..)`: the cast wrapper hides the push receiver from the position check. */
+    isCastOrParenOperand(node: Node): boolean {
+        return node.parent !== undefined && (isAsExpression(node.parent) || isParenthesizedExpression(node.parent));
     }
 
     /** Receiver shapes whose printed text is a single `Value` place (`x`, `this.x`). */

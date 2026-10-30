@@ -668,6 +668,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  matching their text; the native form is invisible to them, so it is only
      *  emitted where no such hoist is needed. */
     isNativeAccessPositionSafe(node: Node): boolean;
+    /** `(x.k as T).push(..)`: the cast wrapper hides the push receiver from the position check. */
+    isCastOrParenOperand(node: Node): boolean;
     /** Receiver shapes whose printed text is a single `Value` place (`x`, `this.x`). */
     isShallowValueReceiver(node: Node): boolean;
     /** True when this read is the receiver of an element-access chain that is
