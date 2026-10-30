@@ -46590,7 +46590,7 @@ var GB01_DICT_PARAMS = {
   "safeLedgerEntry": [0],
   "safeLiquidation": [0],
   "safeCurrencyStructure": [0],
-  "mergeBalanceAccount": [0, 2]
+  "mergeBalanceAccount": [0]
 };
 var GB01_TYPE = "map[string]any";
 var GB01_DEBUG = process.env.GB01_DEBUG === "1";

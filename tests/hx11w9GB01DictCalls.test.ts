@@ -49,7 +49,7 @@ describe('hx11 w9 GB01: calls to same-tree methods declared : Dict', () => {
 
     test('a call to a method declared : Dict proves the tabled map parameters', () => {
         const out = printBase('tmp-gb01-dict', 'parseBalanceHelper (entry: Dict): Dict');
-        expect(out).toContain('MergeBalanceAccount(result map[string]any, code any, account map[string]any)');
+        expect(out).toContain('MergeBalanceAccount(result map[string]any, code any, account any)');
     });
 
     test('a call to a method without a Dict return type keeps the box', () => {
