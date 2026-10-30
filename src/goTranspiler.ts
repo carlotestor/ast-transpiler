@@ -6174,11 +6174,19 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return (cls?.name?.kind === SyntaxKind.Identifier) ? cls.name.text : undefined;
     }
 
+    goIsPrivateKeyField(arg): boolean {
+        return (arg?.kind === SyntaxKind.PropertyAccessExpression) && (arg.expression?.kind === SyntaxKind.ThisKeyword)
+            && (arg.name?.text === 'privateKey');
+    }
+
     // the printed Go type of a call-site argument, or undefined when the printer
     // cannot name it (then the call site does not prove anything)
     goPrintedArgType(arg): string | undefined {
         if (arg.kind === SyntaxKind.Identifier) {
             return this.goDeclaredTypeOfIdentifier(arg);
+        }
+        if (this.goIsPrivateKeyField(arg)) {
+            return 'string'; // go/v4/exchange.go declares PrivateKey `string`
         }
         return this.goTypeOfInitializer(arg, this.printNode(arg, 0));
     }
@@ -6444,7 +6452,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             return (match !== null) && accept(match[1].trim());
         };
         if (goType === 'string') {
-            return /^(?:'[^'\\]*'|"[^"\\]*")$/.test(text); // a sibling file proves only a plain literal
+            return /^(?:'[^'\\]*'|"[^"\\]*"|this\.privateKey)$/.test(text); // a sibling file proves a plain literal or the string field
         }
         if (goType === '*string') {
             if (isStringProducer(text)) {

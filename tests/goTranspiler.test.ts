@@ -7109,6 +7109,24 @@ describe('go nil-initialised string accumulators (GP16)', () => {
     });
 });
 
+describe('this.privateKey call sites prove a string parameter', () => {
+    test('signMessage(privateKey: string) takes string and slices natively', () => {
+        const input =
+            "class Base {\n    privateKey: string;\n}\n" +
+            "class Test extends Base {\n" +
+            "    signMessage (message: any, privateKey: string): string {\n" +
+            "        return privateKey.slice (-64);\n" +
+            "    }\n" +
+            "    run (msg) {\n" +
+            "        return this.signMessage (msg, this.privateKey);\n" +
+            "    }\n" +
+            "}\n";
+        const output = new Transpiler({ verbose: false, go: {} }).transpileGo(input).content;
+        expect(output).toContain('SignMessage(message any, privateKey string)');
+        expect(output).toContain('privateKey[max(len(privateKey)');
+    });
+});
+
 describe('go string locals rewritten by self-concatenation', () => {
     const run = (body: string) => new Transpiler({ verbose: false }).transpileGo(
         'type Str = string | undefined;\nclass T {\n    safeString (o, k): Str { return o[k]; }\n    f (q: string, o): string {\n' + body + '    }\n}\n').content;

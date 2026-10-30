@@ -386,6 +386,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goParameterCallSitesPassType(fn: any, index: number, goType: string): boolean;
     goEnclosingClass(fn: any): any;
     goEnclosingClassName(fn: any): string | undefined;
+    goIsPrivateKeyField(arg: any): boolean;
     goPrintedArgType(arg: any): string | undefined;
     gp15NilProvenStringPtrArg(arg: any): boolean;
     gp15SafeStringLiteralDefaultCall(call: any): boolean;
