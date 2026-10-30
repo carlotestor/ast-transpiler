@@ -4513,7 +4513,7 @@ export class RustTranspiler extends BaseTranspiler {
         const ind = this.getIden(identation + 2);
         // an owned Arc clone keeps the shadow from borrowing the parameter (it may move later)
         const lines =
-            `${ind}let ${arc}: std::sync::Arc<${map}> = if let Value::Dict(__d) = &${name} { __d.clone() } else { std::sync::Arc::new(indexmap::IndexMap::new()) };\n` +
+            `${ind}let ${arc}: std::sync::Arc<${map}> = (if let Value::Dict(__d) = &${name} { __d.clone() } else { std::sync::Arc::new(indexmap::IndexMap::new()) });\n` +
             `${ind}let ${view}: &${map} = &${arc};\n`;
         return { param, lines };
     }

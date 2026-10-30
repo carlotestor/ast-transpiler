@@ -31088,7 +31088,7 @@ ${classMethods}
     const arc = `${view}_arc`;
     const map = "indexmap::IndexMap<String, Value>";
     const ind = this.getIden(identation + 2);
-    const lines = `${ind}let ${arc}: std::sync::Arc<${map}> = if let Value::Dict(__d) = &${name} { __d.clone() } else { std::sync::Arc::new(indexmap::IndexMap::new()) };
+    const lines = `${ind}let ${arc}: std::sync::Arc<${map}> = (if let Value::Dict(__d) = &${name} { __d.clone() } else { std::sync::Arc::new(indexmap::IndexMap::new()) });
 ${ind}let ${view}: &${map} = &${arc};
 `;
     return { param, lines };
