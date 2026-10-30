@@ -12,7 +12,7 @@ import {
   symbolValueDeclaration,
   typeParts,
   typeTarget
-} from "./chunk-WD722H3U.js";
+} from "./chunk-QY3VG5GX.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -10889,11 +10889,17 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     const cls = this.goEnclosingClass(fn);
     return cls?.name?.kind === SyntaxKind5.Identifier ? cls.name.text : void 0;
   }
+  goIsPrivateKeyField(arg) {
+    return arg?.kind === SyntaxKind5.PropertyAccessExpression && arg.expression?.kind === SyntaxKind5.ThisKeyword && arg.name?.text === "privateKey";
+  }
   // the printed Go type of a call-site argument, or undefined when the printer
   // cannot name it (then the call site does not prove anything)
   goPrintedArgType(arg) {
     if (arg.kind === SyntaxKind5.Identifier) {
       return this.goDeclaredTypeOfIdentifier(arg);
+    }
+    if (this.goIsPrivateKeyField(arg)) {
+      return "string";
     }
     return this.goTypeOfInitializer(arg, this.printNode(arg, 0));
   }
@@ -11037,7 +11043,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       return match !== null && accept(match[1].trim());
     };
     if (goType === "string") {
-      return /^(?:'[^'\\]*'|"[^"\\]*")$/.test(text);
+      return /^(?:'[^'\\]*'|"[^"\\]*"|this\.privateKey)$/.test(text);
     }
     if (goType === "*string") {
       if (isStringProducer(text)) {

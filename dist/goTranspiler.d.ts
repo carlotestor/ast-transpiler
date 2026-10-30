@@ -295,6 +295,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goParameterCallSitesPassType(fn: any, index: number, goType: string): boolean;
     goEnclosingClass(fn: any): any;
     goEnclosingClassName(fn: any): string | undefined;
+    goIsPrivateKeyField(arg: any): boolean;
     goPrintedArgType(arg: any): string | undefined;
     goSameFileCallsOf(fn: any, name: string): Array<any>;
     goTsSrcTree(file: any): any;
