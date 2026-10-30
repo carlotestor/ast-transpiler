@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-AWK6QGCM.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -19287,8 +19287,10 @@ var JAVA_THIS_BOOLEAN_METHODS = /* @__PURE__ */ new Set([
   // public boolean valueIsDefined (Object value)
   "isJsonEncodedObject",
   // public boolean isJsonEncodedObject (Object str)
-  "isBinaryMessage"
+  "isBinaryMessage",
   // public boolean isBinaryMessage (Object message)
+  "isDictionary"
+  // public boolean isDictionary (Object value)
 ]);
 var JAVA_THIS_BOOLEAN_BOX_METHODS = {
   "safeBool": 2,

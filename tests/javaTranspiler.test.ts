@@ -1247,6 +1247,7 @@ class T {
     isEmpty(a: any): boolean { return true; }
     valueIsDefined(value: any): value is Object { return true; }
     isBinaryMessage(msg: any) { return msg instanceof Uint8Array; }
+    isDictionary(value: any): boolean { return true; }
     safeBool(d: any, k: any, defaultValue: boolean | undefined = undefined): boolean | undefined { return true; }
     safeBool2(d: any, k1: any, k2: any, defaultValue: boolean | undefined = undefined): boolean | undefined { return true; }
     other(x: any): any { return x; }
@@ -1266,6 +1267,9 @@ ${body}
         // a type predicate and an inferred return are both a plain boolean to the checker
         expect(conditionOf('if (this.valueIsDefined(x)) { return; }')).toContain('if (this.valueIsDefined(x))');
         expect(conditionOf('if (this.isBinaryMessage(x)) { return; }')).toContain('if (this.isBinaryMessage(x))');
+        expect(conditionOf('if (this.isDictionary(x)) { return; }')).toContain('if (this.isDictionary(x))');
+        expect(conditionOf('if (this.isDictionary(x)) { return; }')).not.toContain('Helpers.isTrue(this.');
+        expect(conditionOf('if (this.isDictionary(x)) { return; }')).not.toContain('Boolean.TRUE.equals');
         expect(conditionOf('if (this.inArray(x, [])) { return; }')).not.toContain('Helpers.isTrue(this.');
     });
 
