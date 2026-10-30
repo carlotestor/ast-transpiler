@@ -1120,6 +1120,8 @@ export class RustTranspiler extends BaseTranspiler {
             const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
             return keyLiteral === null ? undefined : `${keyLiteral[1]}.into()`;
         }
+        const nativeKey = this.rustStringMethodLocalKeyArg(keyNode);
+        if (nativeKey !== undefined) return nativeKey;
         // Dynamic key: a plain place, never one that reads the receiver (the
         // insert holds its `&mut`). Every other key shape keeps the helper.
         const key = keyText.trim();
@@ -2812,7 +2814,31 @@ export class RustTranspiler extends BaseTranspiler {
             const receiver = this.rustNativeStringReceiver(init, this.printNode(callee.expression, 0));
             if (receiver !== undefined) text = `${receiver}.as_str().map(str::${method === 'toUpperCase' ? 'to_uppercase' : 'to_lowercase'}).unwrap_or_default()`;
         }
+        if (method === 'replace') text = this.rustStringReplaceLocalText(init, callee);
+        text ??= this.rustStringSliceLocalText(init, callee);
         return text !== undefined && this.rustStringMethodLocalIsTyped(declaration) ? text : undefined;
+    }
+
+    // `recv.replace("a", "b")` on a string-typed identifier: the native `String` payload of the
+    // `printNativeStringReplace` arm (same receiver and literal rules).
+    rustStringReplaceLocalText(init, callee): string | undefined {
+        if (init.arguments.length !== 2 || callee.expression.kind === SyntaxKind.ThisKeyword || !isIdentifier(callee.expression)
+            || this.rustParamShadowOf(callee.expression) !== undefined) return undefined;
+        const receiver = this.rustNativeStringReceiver(init, this.printNode(callee.expression, 0));
+        const from = this.rustNativeStringLiteralArg(init.arguments[0]);
+        const to = this.rustNativeStringLiteralArg(init.arguments[1]);
+        if (receiver === undefined || from === undefined || to === undefined) return undefined;
+        return `${receiver}.as_str().map(|__s| __s.replace("${from}", "${to}")).unwrap_or_default()`;
+    }
+
+    // `<string>.slice(lit[, lit])` local: the printed closure blob minus its `Value` boxing tail.
+    rustStringSliceLocalText(init, callee): string | undefined {
+        if (callee.name.text !== 'slice' || !isIdentifier(callee.expression)
+            || this.rustParamShadowOf(callee.expression) !== undefined) return undefined;
+        const receiver = this.rustNativeStringReceiver(init, this.printNode(callee.expression, 0));
+        const text = receiver === undefined ? undefined : this.printNativeStringSlice(init, receiver)?.trim();
+        const tail = '.map(Value::from).unwrap_or(Value::Null)';
+        return text?.endsWith(tail) ? `${text.slice(0, -tail.length)}.unwrap_or_default()` : undefined;
     }
 
     rustStringMethodLocalIsTyped(declaration): boolean {
@@ -2830,7 +2856,21 @@ export class RustTranspiler extends BaseTranspiler {
         const parent: any = n.parent;
         return isReturnStatement(parent) || this.rustDictWriteValue(n)
             || (parent?.kind === SyntaxKind.PropertyAssignment && parent.initializer === n)
-            || (isCallExpression(parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression));
+            || (isCallExpression(parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression))
+            || this.rustStringMethodLocalKey(n);
+    }
+
+    /** `m[x]` / `m[x] = v` with a string-method local as the key: a native `String`
+     *  place (`x.clone()`, `x` at its final use), boxed by the identifier printer elsewhere. */
+    rustStringMethodLocalKey(n): boolean {
+        return isElementAccessExpression(n.parent) && n.parent.argumentExpression === n;
+    }
+
+    rustStringMethodLocalKeyArg(key): string | undefined {
+        const declaration: any = isIdentifier(key) ? this.rustDeclarationOfIdentifier(key) : undefined;
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.name === key
+            || this.rustStringMethodLocalInit(declaration) === undefined) return undefined;
+        return this.rustVecIsFinalUse(key, String(key.text)) ? String(key.text) : `${String(key.text)}.clone()`;
     }
 
     // Typed string locals: `let x: Value = self.safeString(..)` is declared `Option<String>` when
@@ -6629,6 +6669,8 @@ export class RustTranspiler extends BaseTranspiler {
     rustR01BearerWriteKeyArg(keyNode: any, keyText: string, receiverName: string): string | undefined {
         const key: any = this.rustSkipWrappers(keyNode);
         if (key === undefined || isStringLiteral(key)) return undefined;
+        const nativeKey = this.rustStringMethodLocalKeyArg(key);
+        if (nativeKey !== undefined) return nativeKey;
         if (this.r01PlaceKeyNative(key) === true) return `${String(key.text)}.clone().unwrap_or_default()`;
         const text = String(keyText).trim();
         if (text === '' || new RegExp(`\\b${receiverName}\\b`).test(text)) return undefined;
