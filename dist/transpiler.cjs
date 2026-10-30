@@ -29234,13 +29234,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const index = Array.from(method.parameters).indexOf(param);
     return index >= 0 && this.rustStrVecCallSitesOk(method, index);
   }
-  /** Every call site resolving to `method` passes an array literal of plain `Value` identifiers. */
+  /** Every call site resolving to `method` passes an array literal of plain `Value` identifiers (none is fine: the dispatcher converts). */
   rustStrVecCallSitesOk(method, index) {
     const name = String(_nullishCoalesce(_optionalChain([method, 'access', _3120 => _3120.name, 'optionalAccess', _3121 => _3121.text]), () => ( "")));
     if (name === "")
       return false;
     const key = this.rustDeclarationKey(method);
-    let proven = 0;
     for (const call of this.rustCallSitesForName(name)) {
       const args = _nullishCoalesce(call.arguments, () => ( []));
       if (args.some((a) => a.kind === _ast.SyntaxKind.SpreadElement))
@@ -29256,9 +29255,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         continue;
       if (!this.rustStrVecArgumentOk(args[index]))
         return false;
-      proven++;
     }
-    return proven > 0;
+    return true;
   }
   rustStrVecArgumentOk(arg) {
     const inner = arg === void 0 ? void 0 : this.rustSkipWrappers(arg);

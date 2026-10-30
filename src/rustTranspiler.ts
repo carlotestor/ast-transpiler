@@ -2451,12 +2451,11 @@ export class RustTranspiler extends BaseTranspiler {
         return index >= 0 && this.rustStrVecCallSitesOk(method, index);
     }
 
-    /** Every call site resolving to `method` passes an array literal of plain `Value` identifiers. */
+    /** Every call site resolving to `method` passes an array literal of plain `Value` identifiers (none is fine: the dispatcher converts). */
     rustStrVecCallSitesOk(method, index: number): boolean {
         const name = String((method.name as any)?.text ?? '');
         if (name === '') return false;
         const key = this.rustDeclarationKey(method);
-        let proven = 0;
         for (const call of this.rustCallSitesForName(name) as any[]) {
             const args: any[] = call.arguments ?? [];
             if (args.some((a: any) => a.kind === SyntaxKind.SpreadElement)) return false;
@@ -2469,9 +2468,8 @@ export class RustTranspiler extends BaseTranspiler {
             declaration = declaration?.resolve?.() ?? declaration;
             if (declaration === undefined || declaration === null || this.rustDeclarationKey(declaration) !== key) continue;
             if (!this.rustStrVecArgumentOk(args[index])) return false;
-            proven++;
         }
-        return proven > 0;
+        return true;
     }
 
     rustStrVecArgumentOk(arg): boolean {

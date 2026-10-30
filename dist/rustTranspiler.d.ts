@@ -292,7 +292,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustStrVecParamDecisions;
     rustParamPrintsStrVec(param: any): boolean;
     rustStrVecParamUncached(param: any): boolean;
-    /** Every call site resolving to `method` passes an array literal of plain `Value` identifiers. */
+    /** Every call site resolving to `method` passes an array literal of plain `Value` identifiers (none is fine: the dispatcher converts). */
     rustStrVecCallSitesOk(method: any, index: number): boolean;
     rustStrVecArgumentOk(arg: any): boolean;
     rustNativeStrVecArgumentSlot(params: any, at: number): boolean;
