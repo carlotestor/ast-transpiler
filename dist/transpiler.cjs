@@ -9494,6 +9494,8 @@ var GoTranspiler = class extends BaseTranspiler {
       "SafeDictTyped",
       "SafeListTyped",
       "SafeList2Typed",
+      "SafeDictMap",
+      "SafeListSlice",
       "ArrayTyped",
       "ListTyped"
     ];
@@ -11342,7 +11344,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
     const args = this.goSafeDictLocalArgs(declaration.initializer);
     const container = this.printNode(args.container, identation);
     const key = this.printNode(args.key, 0);
-    return `SafeMapTyped(${container}, ${key})`;
+    return `this.SafeDictMap(${container}, ${key})`;
   }
   // the TypeScript return type proves the boxed value is the market dictionary: the checker reports
   // the `MarketInterface` interface for `this.Market(...)` / `this.SafeMarket(...)` (the `Market`
@@ -11789,7 +11791,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
     const args = this.goSafeListLocalArgs(declaration.initializer);
     const container = this.printNode(args.container, identation);
     const key = this.printNode(args.key, 0);
-    return `SafeListTyped(${container}, ${key})`;
+    return `this.SafeListSlice(${container}, ${key})`;
   }
   // ---- container locals from the checker type (Dict / List / string[]) ---------------
   // The TS type of a declaration names the Go container the printer already builds for
@@ -38455,10 +38457,10 @@ function ccxtGoSafeCollectionUnboxValue(goTranspiler, declaration, identation, f
   const handedOut = ccxtGoSafeCollectionLocalType(goTranspiler, declaration, families, false) === void 0;
   const empty = found.fallback === void 0 || !handedOut && (found.family === "dict" || found.family === "dict2" ? found.fallback.properties.length === 0 : found.fallback.elements.length === 0);
   if (found.family === "dict") {
-    return empty ? "SafeMapTyped(" + printed[0] + ", " + printed[1] + ")" : "MapTyped(" + goTranspiler.printNode(found.call, identation) + ")";
+    return empty ? "this.SafeDictMap(" + printed[0] + ", " + printed[1] + ")" : "MapTyped(" + goTranspiler.printNode(found.call, identation) + ")";
   }
   if (found.family === "list") {
-    return empty ? "SafeListTyped(" + printed[0] + ", " + printed[1] + ")" : "SafeListTypedDefault(" + printed[0] + ", " + printed[1] + ", " + printed[2] + ")";
+    return "this.SafeListSlice(" + printed.slice(0, empty ? 2 : 3).join(", ") + ")";
   }
   const reader = found.family === "dict2" ? "SafeDict2Typed" : "SafeList2Typed";
   return reader + "(" + (empty ? printed.slice(0, 3) : printed.slice(0, 4)).join(", ") + ")";

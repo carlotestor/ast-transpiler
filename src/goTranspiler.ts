@@ -2711,7 +2711,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         const args: any = this.goSafeDictLocalArgs(declaration.initializer);
         const container = this.printNode(args.container, identation);
         const key = this.printNode(args.key, 0);
-        return `SafeMapTyped(${container}, ${key})`;
+        return `this.SafeDictMap(${container}, ${key})`;
     }
 
     // the TypeScript return type proves the boxed value is the market dictionary: the checker reports
@@ -3195,7 +3195,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         'SafeValue', 'SafeValue2', 'SafeString', 'SafeString2', 'SafeStringN', 'SafeStringLower',
         'SafeStringUpper', 'SafeInteger', 'SafeInteger2', 'SafeIntegerN', 'SafeNumber', 'SafeBool',
         'SafeFloat', 'SafeFloat2', 'SafeTimestamp', 'SafeDict', 'SafeDict2', 'SafeList', 'SafeList2',
-        'SafeCurrencyCode', 'SafeMapTyped', 'SafeDictTyped', 'SafeListTyped', 'SafeList2Typed',
+        'SafeCurrencyCode', 'SafeMapTyped', 'SafeDictTyped', 'SafeListTyped', 'SafeList2Typed', 'SafeDictMap', 'SafeListSlice',
         'ArrayTyped', 'ListTyped',
     ];
 
@@ -3253,7 +3253,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         const args: any = this.goSafeListLocalArgs(declaration.initializer);
         const container = this.printNode(args.container, identation);
         const key = this.printNode(args.key, 0);
-        return `SafeListTyped(${container}, ${key})`;
+        return `this.SafeListSlice(${container}, ${key})`;
     }
 
     // ---- container locals from the checker type (Dict / List / string[]) ---------------

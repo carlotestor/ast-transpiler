@@ -41,7 +41,7 @@ describe('go .length on a list local from safeList', () => {
         "    }\n" +
         "}";
         const output = transpile(ts);
-        expect(output).toContain('var rows []any = SafeListTyped(response, "rows")');
+        expect(output).toContain('var rows []any = this.SafeListSlice(response, "rows")');
         expect(output).toContain('len(rows)');
         expect(output).not.toContain('GetArrayLength(rows)');
     });
@@ -61,7 +61,7 @@ describe('go .length on a list local from safeList', () => {
         "    }\n" +
         "}";
         const output = transpile(ts);
-        expect(output).toContain('var src []any = SafeListTyped(response, "assets")');
+        expect(output).toContain('var src []any = this.SafeListSlice(response, "assets")');
         expect(output).toContain('assets = src');
         expect(output).toContain('len(src)');
         expect(output).not.toContain('GetArrayLength(src)');
@@ -98,7 +98,7 @@ describe('go .length on a list local from safeList', () => {
         "    }\n" +
         "}";
         const output = transpile(ts);
-        expect(output).toContain('var rows []any = SafeListTyped(response, "rows")');
+        expect(output).toContain('var rows []any = this.SafeListSlice(response, "rows")');
         expect(output).toContain('len(rows)');
     });
 

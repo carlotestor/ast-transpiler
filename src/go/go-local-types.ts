@@ -1882,10 +1882,10 @@ function ccxtGoSafeCollectionUnboxValue (goTranspiler, declaration, identation, 
     const empty = (found.fallback === undefined) || (!handedOut
         && (((found.family === 'dict') || (found.family === 'dict2')) ? (found.fallback.properties.length === 0) : (found.fallback.elements.length === 0)));
     if (found.family === 'dict') {
-        return empty ? 'SafeMapTyped(' + printed[0] + ', ' + printed[1] + ')' : 'MapTyped(' + goTranspiler.printNode (found.call, identation) + ')';
+        return empty ? 'this.SafeDictMap(' + printed[0] + ', ' + printed[1] + ')' : 'MapTyped(' + goTranspiler.printNode (found.call, identation) + ')';
     }
     if (found.family === 'list') {
-        return empty ? 'SafeListTyped(' + printed[0] + ', ' + printed[1] + ')' : 'SafeListTypedDefault(' + printed[0] + ', ' + printed[1] + ', ' + printed[2] + ')';
+        return 'this.SafeListSlice(' + printed.slice (0, empty ? 2 : 3).join (', ') + ')';
     }
     const reader = found.family === 'dict2' ? 'SafeDict2Typed' : 'SafeList2Typed';
     return reader + '(' + (empty ? printed.slice (0, 3) : printed.slice (0, 4)).join (', ') + ')';
