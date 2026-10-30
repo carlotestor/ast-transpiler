@@ -9,8 +9,8 @@
  * another expression) keeps `Value`.
  */
 export function hx11w9RustStrLiteralLocalNativeString(content: string): string {
-    const declRe = /^([ \t]*)let mut ([a-zA-Z_][a-zA-Z0-9_]*): Value = Value::Str\(("(?:[^"\\\n]|\\.)*")\.into\(\)\);[ \t]*$/gm;
-    const litWriteRe = /^\s*=\s*Value::Str\(("(?:[^"\\\n]|\\.)*")\.into\(\)\);/;
+    const declRe = /^([ \t]*)let mut ([a-zA-Z_][a-zA-Z0-9_]*): Value = Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);[ \t]*$/gm;
+    const litWriteRe = /^\s*=\s*Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);/;
     // Blank string bodies and line comments; same length, quotes kept.
     const maskText = (src: string): string => {
         let out = ''; let i = 0;
@@ -73,7 +73,7 @@ export function hx11w9RustStrLiteralLocalNativeString(content: string): string {
     while ((m = declRe.exec(masked)) !== null) {
         const name = m[2];
         const stmtEnd = m.index + m[0].length;
-        const lit = /Value::Str\(("(?:[^"\\\n]|\\.)*")\.into\(\)\);/.exec(content.slice(m.index, stmtEnd));
+        const lit = /Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);/.exec(content.slice(m.index, stmtEnd));
         if (lit === null) continue;
         const end = braceEnd(masked, stmtEnd);
         const body = masked.slice(stmtEnd, end);

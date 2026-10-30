@@ -53367,8 +53367,8 @@ function hx11RustSignApiStr(content) {
 // src/rustPasses/hx11w9RustStrLiteralLocalNativeString.ts
 init_esm_shims();
 function hx11w9RustStrLiteralLocalNativeString(content) {
-  const declRe = /^([ \t]*)let mut ([a-zA-Z_][a-zA-Z0-9_]*): Value = Value::Str\(("(?:[^"\\\n]|\\.)*")\.into\(\)\);[ \t]*$/gm;
-  const litWriteRe = /^\s*=\s*Value::Str\(("(?:[^"\\\n]|\\.)*")\.into\(\)\);/;
+  const declRe = /^([ \t]*)let mut ([a-zA-Z_][a-zA-Z0-9_]*): Value = Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);[ \t]*$/gm;
+  const litWriteRe = /^\s*=\s*Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);/;
   const maskText5 = (src) => {
     let out2 = "";
     let i = 0;
@@ -53457,7 +53457,7 @@ function hx11w9RustStrLiteralLocalNativeString(content) {
   while ((m = declRe.exec(masked)) !== null) {
     const name = m[2];
     const stmtEnd3 = m.index + m[0].length;
-    const lit = /Value::Str\(("(?:[^"\\\n]|\\.)*")\.into\(\)\);/.exec(content.slice(m.index, stmtEnd3));
+    const lit = /Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);/.exec(content.slice(m.index, stmtEnd3));
     if (lit === null)
       continue;
     const end = braceEnd(masked, stmtEnd3);
