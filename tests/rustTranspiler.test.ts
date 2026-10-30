@@ -3239,7 +3239,7 @@ describe('rust native container reads (B-28)', () => {
 
     const DYNAMIC = '.as_array().and_then(|__arr| match &i { Value::Int(__n) => __arr.get(*__n as usize), Value::Str(__s) => __s.parse::<usize>().ok().and_then(|__n| __arr.get(__n)), _ => None }).cloned().unwrap_or(Value::Null)';
     // A list parameter that is shadowed reads its slice directly.
-    const SHADOW_DYNAMIC = '.get((i).as_i64().map_or(usize::MAX, |__n| __n as usize)).cloned().unwrap_or(Value::Null)';
+    const SHADOW_DYNAMIC = '.get((i).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)';
 
     test('a dynamic index into a proven list reads natively', () => {
         const ts =
@@ -4394,7 +4394,7 @@ describe('hx4 R11: relaxed Vec locals and native list length', () => {
     test('index reads on a Vec local use Vec::get', () => {
         const out = rs('        const out = [];\n        out.push (1);\n        for (let i = 0; i < out.length; i++) {\n            const v = out[i];\n            this.parseX (v);\n        }\n        return out[0];');
         expect(out).toContain('let mut out: Vec<Value> = Vec::new();');
-        expect(out).toContain('let mut v: Value = out.get((i).as_i64().map_or(usize::MAX, |__n| __n as usize)).cloned().unwrap_or(Value::Null);');
+        expect(out).toContain('let mut v: Value = out.get((i).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null);');
         expect(out).toContain('return out.get(0).cloned().unwrap_or(Value::Null);');
     });
     test('negative: in-loop this-call arg, element write, chained read, &mut self callee keep the box', () => {
@@ -5316,5 +5316,29 @@ describe('rust order-book field read', () => {
         const out = rs("    const f = orderbook['foo'];\n    const o = other['bids'];");
         expect(out).not.toContain('book_field("foo")');
         expect(out).not.toContain('other.book_field');
+    });
+});
+
+describe('rust string[] parameter used only by join', () => {
+    let output = '';
+    beforeAll(() => {
+        output = transpiler.transpileRustByPath('./tests/files/input/a15dstrvec/ts/src/venue.ts').content;
+    });
+
+    test('a joined-only string[] param is a Vec<String> with the std join and no closure', () => {
+        expect(output).toContain('pub async fn fetchByIds(&self, ids: Vec<String>, optional_args: &[Value])');
+        expect(output).toContain('Value::Str(ids.join(",").into())');
+    });
+
+    test('the array-literal caller passes vec![..] of strings', () => {
+        expect(output).toContain('self.fetchByIds(vec![id.to_string()]');
+    });
+
+    test('a param that is also indexed keeps the Value box', () => {
+        expect(output).toContain('fn fetchIndexed(&self, ids: Value');
+    });
+
+    test('a caller that is not an array literal keeps the Value box', () => {
+        expect(output).toContain('fn fetchComputed(&self, ids: Value');
     });
 });

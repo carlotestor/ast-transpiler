@@ -289,6 +289,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Condition text for a bare identifier of native-`bool` type, else undefined. */
     printNativeBoolParamCondition(node: any): string | undefined;
     private rustMapParamDecisions;
+    private rustStrVecParamDecisions;
+    rustParamPrintsStrVec(param: any): boolean;
+    rustStrVecParamUncached(param: any): boolean;
+    /** Every call site resolving to `method` passes an array literal of plain `Value` identifiers. */
+    rustStrVecCallSitesOk(method: any, index: number): boolean;
+    rustStrVecArgumentOk(arg: any): boolean;
+    rustNativeStrVecArgumentSlot(params: any, at: number): boolean;
+    /** `vec![a.to_string(), ..]` for an array literal landing in a `Vec<String>` slot. */
+    rustStrVecArgumentText(node: any, identation: any): string;
+    printStrVecParamJoin(node: any): string | undefined;
     rustParamPrintsMap(param: any): boolean;
     rustMapParamIsTypedUncached(param: any): boolean;
     /** Every body use is a map operation the bearered printer emits, and at
