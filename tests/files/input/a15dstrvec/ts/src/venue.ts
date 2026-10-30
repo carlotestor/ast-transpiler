@@ -19,11 +19,16 @@ export default class venue extends Exchange {
         return ids.join (',');
     }
     async fetchComputedCaller (params: Dict = {}) {
-        const ids = this.safeList (params, 'ids', []);
-        return await this.fetchComputed (ids, params);
+        return await this.fetchComputed (params['ids'], params);
     }
     async fetchNoCaller (ids: string[], symbol: string = undefined, params: Dict = {}) {
         const request: Dict = { 'txid': ids.join (',') };
         return request;
+    }
+    async fetchChunked (hashes: string[], params: Dict = {}) {
+        const rows = [];
+        const chunk = this.arraySlice (hashes, 0, 2);
+        rows.push (await this.fetchByIds (chunk, undefined, params));
+        return rows;
     }
 }
