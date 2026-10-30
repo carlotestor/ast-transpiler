@@ -4015,6 +4015,9 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return 'any';
         }
         const scope = this.goEnclosingFunction(declaration);
+        if (this.goAnnotatedStringLocal(declaration, goType, scope, sourceName)) {
+            return 'string';
+        }
         // outside any nested resolution the verdict depends only on (declaration, goType)
         const stable = (this.goLocalTypeResolution.size <= 1) && (this.goDeclaredTypeInProgress.size === 0);
         const memoKey = goType;
@@ -4033,6 +4036,59 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         return result;
     }
     goLocalSafeVerdicts = new WeakMap<object, Map<string, string>>();
+
+    // `const x: string = this.safeString (o, k, dflt)` with a non-nil default: the author's
+    // `string` annotation holds the call's deref (the method returns a fresh pointer).
+    goAnnotatedStringLocal(declaration, goType: string, scope, name: string): boolean {
+        if ((goType !== '*string') || (declaration.type?.kind !== SyntaxKind.StringKeyword)) {
+            return false;
+        }
+        const call: any = declaration.initializer;
+        if (!this.goDefaultedSafeStringCallOrTypedDefault(call)) {
+            return false;
+        }
+        return !this.goTypeNameIsShadowed(scope, 'string') && this.goLocalIsSafeToType(scope, declaration, name, 'string')
+            && !this.goAnnotatedStringLocalHasNilShapedRead(scope, declaration, name);
+    }
+
+    // a read a Go string cannot serve natively: a nil comparison (boxes into IsEqual) or a copy
+    // into another variable (a pointer-typed target would lose its type)
+    goAnnotatedStringLocalHasNilShapedRead(scope, declaration, name: string): boolean {
+        const isNilLike = (n: any) => (n?.kind === SyntaxKind.NullKeyword) || (n?.kind === SyntaxKind.UndefinedKeyword)
+            || ((n?.kind === SyntaxKind.Identifier) && (n.text === 'undefined'));
+        return this.hasNodeWhere(scope, (n: any) => {
+            if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name) || (n === declaration.name)) {
+                return false;
+            }
+            const parent: any = n.parent;
+            if (parent?.kind !== SyntaxKind.BinaryExpression) {
+                return false;
+            }
+            const other = (parent.left === n) ? parent.right : parent.left;
+            const op = parent.operatorToken.kind;
+            if ([ SyntaxKind.EqualsEqualsToken, SyntaxKind.ExclamationEqualsToken, SyntaxKind.EqualsEqualsEqualsToken,
+                SyntaxKind.ExclamationEqualsEqualsToken ].indexOf(op) >= 0) {
+                return isNilLike(other);
+            }
+            return (op === SyntaxKind.EqualsToken) && (parent.right === n);
+        });
+    }
+
+    // goDefaultedSafeStringCall, also accepting a default that is an identifier of Go type `string`
+    goDefaultedSafeStringCallOrTypedDefault(call): boolean {
+        if (this.goDefaultedSafeStringCall(call)) {
+            return true;
+        }
+        if ((call?.kind !== SyntaxKind.CallExpression) || (call.expression?.kind !== SyntaxKind.PropertyAccessExpression)
+            || (call.expression.expression?.kind !== SyntaxKind.ThisKeyword)) {
+            return false;
+        }
+        const arity = GO_DEFAULTED_SAFE_STRING_ARITY[call.expression.name?.text];
+        if ((arity === undefined) || ((call.arguments?.length ?? 0) !== arity)) {
+            return false;
+        }
+        return this.goDeclaredTypeOfIdentifier(call.arguments[arity - 1]) === 'string';
+    }
 
     // Typed async receive: an extension that knows the core's channel element type replaces
     // `x := (<-this.FooAsync(..))` + `PanicOnError(x)` with a typed declaration that runs PanicOnError
@@ -4118,7 +4174,12 @@ ${this.getIden(identation)}PanicOnError(${parsedName})`;
                 ?? ((declaredType === GO_SAFE_DICT_LOCAL_TYPE)
                     ? this.goSafeDictUnboxValue(declaration, identation)
                     : ((declaredType === GO_SAFE_LIST_LOCAL_TYPE) ? this.goSafeListUnboxValue(declaration, identation) : undefined));
-            const declaredValue = (unboxValue !== undefined) ? unboxValue : parsedValue.trimStart();
+            let declaredValue = (unboxValue !== undefined) ? unboxValue : parsedValue.trimStart();
+            // an annotated `string` local takes the defaulted SafeString call's deref
+            if ((declaredType === 'string') && (unboxValue === undefined)
+                && (this.goTypeOfInitializer(declaration.initializer, parsedValue) === '*string')) {
+                declaredValue = '*' + declaredValue;
+            }
             // an initializer printed at the declaration's own level (parenthesized expression,
             // helper call) carries that indentation; gofmt puts one space after `=`
             const stm = this.getIden(identation) + "var " + varName + " " + declaredType + " = " + declaredValue;

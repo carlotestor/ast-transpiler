@@ -222,17 +222,19 @@ export function narrowStrNullLocals(content: string): string {
     const grown = new Map<number, number>();
     const groups: Array<{ decl: { start: number, end: number, text: string }, edits: Array<{ start: number, end: number, text: string }> }> = [];
     const rewrites: Array<{ start: number, end: number, text: string }> = [];
+    // Candidate declarations: boxed `self.safe_string*` calls and the inlined reads of a
+    // `__pro_message` shadow (a `match` over `.get(key)` with the same coercion arms).
+    type Cand = { index: number, stmtEnd: number, name: string, declText: string, intOnly?: boolean };
+    const cands: Cand[] = [];
     let m: RegExpExecArray | null;
     while ((m = declRe.exec(masked)) !== null) {
         const opt = OPT[m[4]];
         if (opt === undefined) continue;
-        const name = m[3];
         const callOpen = m.index + m[0].length - 1;
         const callClose = closeParen(masked, callOpen);
         if (callClose < 0) continue;
         const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
         if (tail === null) continue;
-        const stmtEnd = callClose + tail[0].length;
         const base = callOpen + 1;
         const spans = argSpans(masked.slice(base, callClose - 1));
         if (spans.length !== 3) continue;
@@ -243,6 +245,44 @@ export function narrowStrNullLocals(content: string): string {
         if (m[4].endsWith('_k') && !strKeyRe.test(keyRaw)) continue;
         // Only a `Null` default maps to `None`.
         if (defRaw !== '&[]') continue;
+        cands.push({
+            index: m.index, stmtEnd: callClose + tail[0].length, name: m[3],
+            declText: `${m[1]}let ${m[2] ?? ''}${m[3]}: Option<String> = self.${opt}(${obj}, ${keyRaw}, ${defRaw});`,
+        });
+    }
+    const inlineRe = new RegExp('^([ \\t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = \\(match __pro_message\\.get\\(("(?:[^"\\\\]|\\\\.)*")\\)\\.cloned\\(\\) \\{ '
+        + 'Some\\(Value::Str\\(__s\\)\\) if !__s\\.is_empty\\(\\) => Value::Str\\(__s\\), '
+        + 'Some\\(Value::Int\\(__n\\)\\) => Value::Str\\(__n\\.to_string\\(\\)\\.into\\(\\)\\), '
+        + 'Some\\(Value::Float\\(__f\\)\\) => Value::Str\\(__f\\.to_string\\(\\)\\.into\\(\\)\\), '
+        + '_ => Value::Null \\}\\);', 'gm');
+    while ((m = inlineRe.exec(content)) !== null) {
+        cands.push({
+            index: m.index, stmtEnd: m.index + m[0].length, name: m[3],
+            declText: `${m[1]}let ${m[2] ?? ''}${m[3]}: Option<String> = match __pro_message.get(${m[4]}).cloned() { `
+                + 'Some(Value::Str(__s)) if !__s.is_empty() => Some(__s.to_string()), '
+                + 'Some(Value::Int(__n)) => Some(__n.to_string()), '
+                + 'Some(Value::Float(__f)) => Some(__f.to_string()), _ => None };',
+        });
+    }
+    // The `safe_integer` twin narrows to `Option<i64>` and only for null tests.
+    const intRe = new RegExp('^([ \\t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = \\(match __pro_message\\.get\\(("(?:[^"\\\\]|\\\\.)*")\\)\\.cloned\\(\\) \\{ '
+        + 'Some\\(Value::Int\\(__n\\)\\) => Value::Int\\(__n\\), Some\\(Value::Float\\(__f\\)\\) => Value::Int\\(__f as i64\\), '
+        + 'Some\\(Value::Str\\(__s\\)\\) if !__s\\.is_empty\\(\\) => match __s\\.parse::<i64>\\(\\) \\{ Ok\\(__n\\) => Value::Int\\(__n\\), '
+        + 'Err\\(_\\) => match __s\\.parse::<f64>\\(\\) \\{ Ok\\(__f\\) if __f\\.is_finite\\(\\) => Value::Int\\(__f as i64\\), _ => Value::Null \\} \\}, '
+        + '_ => Value::Null \\}\\);', 'gm');
+    while ((m = intRe.exec(content)) !== null) {
+        cands.push({
+            index: m.index, stmtEnd: m.index + m[0].length, name: m[3], intOnly: true,
+            declText: `${m[1]}let ${m[2] ?? ''}${m[3]}: Option<i64> = match __pro_message.get(${m[4]}).cloned() { `
+                + 'Some(Value::Int(__n)) => Some(__n), Some(Value::Float(__f)) => Some(__f as i64), '
+                + 'Some(Value::Str(__s)) if !__s.is_empty() => match __s.parse::<i64>() { Ok(__n) => Some(__n), '
+                + 'Err(_) => match __s.parse::<f64>() { Ok(__f) if __f.is_finite() => Some(__f as i64), _ => None } }, _ => None };',
+        });
+    }
+    cands.sort((a, b) => a.index - b.index);
+    for (const cand of cands) {
+        const name = cand.name;
+        const stmtEnd = cand.stmtEnd;
         const end = braceEnd(masked, stmtEnd);
         const body = masked.slice(stmtEnd, end);
         if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body)) continue;
@@ -254,6 +294,7 @@ export function narrowStrNullLocals(content: string): string {
             const at = u.index; const abs = stmtEnd + at; const after = body.slice(at + name.length);
             const before = body.slice(0, at);
             let g: RegExpExecArray | null;
+            if (cand.intOnly === true && !/^\s*(==|!=)\s*Value::Null\b/.test(after)) { ok = false; break; }
             if ((g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
                 edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === '==' ? 'is_none' : 'is_some'}()` });
             } else if ((g = /^\.as_str\(\)/.exec(after)) !== null) {
@@ -282,8 +323,8 @@ export function narrowStrNullLocals(content: string): string {
         }
         if (!ok || edits.length === 0) continue;
         // A longer line must not newly cross 400 chars, counting growth from earlier locals.
-        const declText = `${m[1]}let ${m[2] ?? ''}${name}: Option<String> = self.${opt}(${obj}, ${keyRaw}, ${defRaw});`;
-        const all = [{ start: m.index, end: stmtEnd, text: declText }, ...edits];
+        const declText = cand.declText;
+        const all = [{ start: cand.index, end: stmtEnd, text: declText }, ...edits];
         const lineGrow = new Map<number, number>();
         for (const e of all) {
             const ls = content.lastIndexOf('\n', e.start) + 1;
@@ -297,7 +338,7 @@ export function narrowStrNullLocals(content: string): string {
         }
         if (longer) continue;
         for (const [ls, grow] of lineGrow) grown.set(ls, (grown.get(ls) ?? 0) + grow);
-        groups.push({ decl: { start: m.index, end: stmtEnd, text: declText }, edits });
+        groups.push({ decl: { start: cand.index, end: stmtEnd, text: declText }, edits });
     }
     // A use that sits inside another narrowed local's initializer would be lost when that
     // statement is reprinted from its original text: leave the used local boxed.
