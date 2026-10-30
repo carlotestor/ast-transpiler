@@ -34338,6 +34338,10 @@ ${this.getIden(identation)}}`;
   // bodiless overload signatures; the implementation in the same class is what runs).
   /** A bodiless overload signature whose class also holds the bodied implementation. */
   r14BaseOverload(declaration) {
+    if (declaration?.kind === SyntaxKind7.FunctionDeclaration && declaration.body === void 0 && isIdentifier3(declaration.name)) {
+      const fname = String(declaration.name.text);
+      return (declaration.parent?.statements ?? []).some((m) => m.kind === SyntaxKind7.FunctionDeclaration && m.body !== void 0 && isIdentifier3(m.name) && String(m.name.text) === fname);
+    }
     if (declaration?.kind !== SyntaxKind7.MethodDeclaration || declaration.body !== void 0 || !isIdentifier3(declaration.name))
       return false;
     const name = String(declaration.name.text);

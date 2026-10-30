@@ -7884,6 +7884,12 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** A bodiless overload signature whose class also holds the bodied implementation. */
     r14BaseOverload(declaration: any): boolean {
+        // a bodiless top-level `function f<T>(…): T;` overload (generic `omit`) whose bodied implementation follows in the same file
+        if (declaration?.kind === SyntaxKind.FunctionDeclaration && declaration.body === undefined && isIdentifier(declaration.name)) {
+            const fname = String(declaration.name.text);
+            return (declaration.parent?.statements ?? []).some((m: any) => m.kind === SyntaxKind.FunctionDeclaration
+                && m.body !== undefined && isIdentifier(m.name) && String(m.name.text) === fname);
+        }
         if (declaration?.kind !== SyntaxKind.MethodDeclaration || declaration.body !== undefined || !isIdentifier(declaration.name)) return false;
         const name = String(declaration.name.text);
         return (declaration.parent?.members ?? []).some((m: any) => m.kind === SyntaxKind.MethodDeclaration
