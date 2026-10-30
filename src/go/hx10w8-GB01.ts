@@ -18,6 +18,7 @@ import { ts } from './tsApi.js';
 
 export const GB01_DICT_PARAMS: { [method: string]: number[] } = {
     'safeTrade': [ 0 ], 'safeLedgerEntry': [ 0 ], 'safeLiquidation': [ 0 ], 'safeCurrencyStructure': [ 0 ],
+    'mergeBalanceAccount': [ 0, 2 ],
 };
 const GB01_TYPE = 'map[string]any';
 const GB01_DEBUG = (process.env.GB01_DEBUG === '1');
@@ -53,6 +54,24 @@ function gb01UsesNullish (go: any, body: any, param: any): boolean {
     return found;
 }
 
+// `this.m(...)` where every `m` declaration in the tree has a `: Dict` return type, which
+// prints map[string]any. Unannotated or differently typed declarations reject the call.
+function gb01IsDictMethodCall (tree: any, text: string): boolean {
+    const call = /^this\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/.exec (text.trim ());
+    if (call === null) { return false; }
+    const declRe = new RegExp ('^[ \\t]+(?:async\\s+)?' + call[1] + '\\s*\\([^)]*\\)\\s*(:[^{;\\n]*)?\\{', 'gm');
+    let found = 0;
+    for (const fileText of tree.fileText.values ()) {
+        let match;
+        declRe.lastIndex = 0;
+        while ((match = declRe.exec (fileText)) !== null) {
+            if ((match[1] === undefined) || (match[1].replace (/^:\s*/, '').trim () !== 'Dict')) { return false; }
+            found++;
+        }
+    }
+    return found > 0;
+}
+
 // every call site of `fn` must pass a printed map. Same-file sites are the printer's own proof;
 // in a sibling file the printer only names an identifier bound to `this.market(...)`, so accept
 // the two declarations whose printed Go IS the map: an object literal and `this.safeDict(...)`
@@ -75,6 +94,7 @@ function gb01CallSitesPassMap (go: any, fn: any, index: number): boolean {
         const arg = String (site.args?.[index] ?? '').trim ();
         if (arg.startsWith ('{')) { continue; }
         if (/^this\s*\.\s*(extend|deepExtend|keysort|indexBy|groupBy)\s*\(/.test (arg)) { continue; }
+        if (gb01IsDictMethodCall (tree, arg)) { continue; }
         const identifier = /^([A-Za-z_$][\w$]*)$/.exec (arg);
         if (identifier === null) { return false; }
         const text = tree.fileText.get (site.file) ?? '';
@@ -88,6 +108,7 @@ function gb01CallSitesPassMap (go: any, fn: any, index: number): boolean {
         if (declaration === undefined) { return false; }
         const initializer = declaration[1].trim ();
         if (initializer.startsWith ('{') || /^this\s*\.\s*(extend|deepExtend|safeDict)\s*\(/.test (initializer)) { continue; }
+        if (gb01IsDictMethodCall (tree, initializer)) { continue; }
         return false;
     }
     return true;
