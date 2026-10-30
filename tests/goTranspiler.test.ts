@@ -573,6 +573,75 @@ describe('go pointer-typed Safe* body locals', () => {
         expect(output).toContain("var flag *bool = this.SafeBool(item, \"flag\")");
         expect(output).toContain("var info any = this.SafeDict(item, \"info\")");
     });
+    test('an annotated string local with a literal default takes the deref', () => {
+        const input =
+        "class Exchange {\n" +
+        "    safeString(a, b, c) { return a; }\n" +
+        "    main(o) {\n" +
+        "        const id: string = this.safeString (o, 'id', 'dflt');\n" +
+        "        return id + 'x';\n" +
+        "    }\n" +
+        "}\n" +
+        "";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("var id string = *this.SafeString(o, \"id\", \"dflt\")");
+        expect(output).not.toContain("var id *string");
+    });
+    test('an annotated string local with a string-typed identifier default takes the deref', () => {
+        const input =
+        "class Exchange {\n" +
+        "    safeString(a, b, c) { return a; }\n" +
+        "    main(o) {\n" +
+        "        const d: string = 'SN_MAIN';\n" +
+        "        const id: string = this.safeString (o, 'id', d);\n" +
+        "        return id + d;\n" +
+        "    }\n" +
+        "}\n" +
+        "";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("var id string = *this.SafeString(o, \"id\", d)");
+        expect(output).not.toContain("var id *string");
+    });
+    test('an annotated string local without a default stays a pointer', () => {
+        const input =
+        "class Exchange {\n" +
+        "    safeString(a, b, c) { return a; }\n" +
+        "    main(o) {\n" +
+        "        const id: string = this.safeString (o, 'id');\n" +
+        "        return id;\n" +
+        "    }\n" +
+        "}\n" +
+        "";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("var id *string = this.SafeString(o, \"id\")");
+    });
+    test('an unannotated local with a literal default stays a pointer', () => {
+        const input =
+        "class Exchange {\n" +
+        "    safeString(a, b, c) { return a; }\n" +
+        "    main(o) {\n" +
+        "        const id = this.safeString (o, 'id', 'dflt');\n" +
+        "        return id;\n" +
+        "    }\n" +
+        "}\n" +
+        "";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("var id *string = this.SafeString(o, \"id\", \"dflt\")");
+    });
+    test('an annotated local later written a nil-able value stays a pointer', () => {
+        const input =
+        "class Exchange {\n" +
+        "    safeString(a, b, c) { return a; }\n" +
+        "    main(o) {\n" +
+        "        let id: string = this.safeString (o, 'id', 'dflt');\n" +
+        "        id = this.safeString (o, 'other');\n" +
+        "        return id;\n" +
+        "    }\n" +
+        "}\n" +
+        "";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("var id *string = this.SafeString(o, \"id\", \"dflt\")");
+    });
     test('the 2/N and lower/upper/product/timestamp variants carry the same pointer type', () => {
         const input =
         "class Exchange {\n" +
