@@ -19,3 +19,7 @@ export { r10ClientHandle } from './hx10w7-R10.js';
 export { hx10w9Rp02ParamKind, hx10w9Rp02DispatchArg, hx10w9Rp02SplitArgs, hx10w9Rp02RefMapParamNames } from './hx10w9-RP02.js';
 export { narrowStrSinkLocals, narrowStrNullLocals } from './hx11-narrow-str.js';
 export { hx11RustSignApiStr } from './hx11-sign-api.js';
+export { hx11w9RustIntLocalNullSinkOptionI64 } from './hx11w9RustIntLocalNullSinkOptionI64.js';
+export { hx11w9RustStrLiteralLocalNativeString } from './hx11w9RustStrLiteralLocalNativeString.js';
+export { hx11w9StrLocalReassign } from './hx11w9-str-local-reassign.js';
+export { hx11w9RustBoolKLocalOptionBool } from './hx11w9-rust-bool-k-local-option-bool.js';

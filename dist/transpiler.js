@@ -53364,6 +53364,933 @@ function hx11RustSignApiStr(content) {
   return lines.join("\n");
 }
 
+// src/rustPasses/hx11w9RustIntLocalNullSinkOptionI64.ts
+init_esm_shims();
+function hx11w9RustIntLocalNullSinkOptionI64(content) {
+  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.safe_integer(_k|2)?\(/gm;
+  const closeOf2 = (src, open) => {
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    let inLine = false;
+    for (let k = open; k < src.length; k++) {
+      const c = src[k];
+      if (inLine) {
+        if (c === "\n")
+          inLine = false;
+        continue;
+      }
+      if (inStr) {
+        if (esc)
+          esc = false;
+        else if (c === "\\")
+          esc = true;
+        else if (c === '"')
+          inStr = false;
+        continue;
+      }
+      if (c === '"') {
+        inStr = true;
+        continue;
+      }
+      if (c === "/" && src[k + 1] === "/") {
+        inLine = true;
+        continue;
+      }
+      if (c === "(")
+        depth++;
+      else if (c === ")") {
+        depth--;
+        if (depth === 0)
+          return k + 1;
+      }
+    }
+    return -1;
+  };
+  const mask2 = (src) => {
+    let out2 = "";
+    let i = 0;
+    const blank = (s) => s.replace(/[^\n]/g, " ");
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "/" && src[i + 1] === "/") {
+        while (i < src.length && src[i] !== "\n") {
+          out2 += " ";
+          i++;
+        }
+        continue;
+      }
+      if (c === "/" && src[i + 1] === "*") {
+        const e = src.indexOf("*/", i + 2);
+        const stop = e < 0 ? src.length : e + 2;
+        out2 += blank(src.slice(i, stop));
+        i = stop;
+        continue;
+      }
+      if (c === '"') {
+        out2 += '"';
+        i++;
+        while (i < src.length && src[i] !== '"') {
+          if (src[i] === "\\") {
+            out2 += "  ";
+            i += 2;
+            continue;
+          }
+          out2 += src[i] === "\n" ? "\n" : " ";
+          i++;
+        }
+        if (i < src.length) {
+          out2 += '"';
+          i++;
+        }
+        continue;
+      }
+      out2 += c;
+      i++;
+    }
+    return out2;
+  };
+  const scopeEnd = (masked, from) => {
+    let depth = 0;
+    for (let k = from; k < masked.length; k++) {
+      if (masked[k] === "{")
+        depth++;
+      else if (masked[k] === "}") {
+        depth--;
+        if (depth < 0)
+          return k;
+      }
+    }
+    return masked.length;
+  };
+  const splitArgs5 = (src) => {
+    const out2 = [];
+    let cur = "";
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    for (const c of src) {
+      if (inStr) {
+        cur += c;
+        if (esc)
+          esc = false;
+        else if (c === "\\")
+          esc = true;
+        else if (c === '"')
+          inStr = false;
+        continue;
+      }
+      if (c === '"') {
+        inStr = true;
+        cur += c;
+        continue;
+      }
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      if (c === "," && depth === 0) {
+        out2.push(cur);
+        cur = "";
+        continue;
+      }
+      cur += c;
+    }
+    out2.push(cur);
+    return out2;
+  };
+  const maskedAll = mask2(content);
+  const rewrites = [];
+  let m;
+  while ((m = declRe.exec(content)) !== null) {
+    const name = m[3];
+    const isTwo = m[4] === "2";
+    const callOpen = m.index + m[0].length - 1;
+    const callClose = closeOf2(content, callOpen);
+    if (callClose < 0)
+      continue;
+    const tail = /^\s*;/.exec(content.slice(callClose, callClose + 3));
+    if (tail === null)
+      continue;
+    const stmtEnd3 = callClose + tail[0].length;
+    const args = splitArgs5(content.slice(callOpen + 1, callClose - 1));
+    if (args.length !== (isTwo ? 4 : 3))
+      continue;
+    if (!/^&\[\s*(?:Value::Null|Value::Int\(-?\d+\))?\s*\]$/.test(args[args.length - 1].trim()))
+      continue;
+    const end = scopeEnd(maskedAll, stmtEnd3);
+    const masked = maskedAll.slice(stmtEnd3, end);
+    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(masked))
+      continue;
+    if (new RegExp(`\\blet\\b[^=;\\n]*\\b${name}\\b`).test(masked))
+      continue;
+    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(masked))
+      continue;
+    const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, "g");
+    const uses = [];
+    let ok = true;
+    let u;
+    while ((u = useRe.exec(masked)) !== null) {
+      const s = u.index;
+      const e = s + name.length;
+      const after = masked.slice(e);
+      const before = masked.slice(0, s);
+      const abs = (x) => stmtEnd3 + x;
+      let g;
+      if (after.startsWith(".clone()")) {
+        uses.push({ start: abs(s), end: abs(e + 8), text: `Value::from(${name})` });
+        useRe.lastIndex = e + 8;
+      } else if ((g = /^\s*(!=|==)\s*Value::Null\b/.exec(after)) !== null) {
+        uses.push({ start: abs(s), end: abs(e + g[0].length), text: `${name}.${g[1] === "!=" ? "is_some" : "is_none"}()` });
+        useRe.lastIndex = e + g[0].length;
+      } else if ((g = /^\.as_f64\(\)\s*(==|!=)\s*Some\((-?\d+)(?:\.0)?\)/.exec(after)) !== null) {
+        uses.push({ start: abs(s), end: abs(e + g[0].length), text: `${name} ${g[1]} Some(${g[2]})` });
+        useRe.lastIndex = e + g[0].length;
+      } else if (/self\.iso8601\($/.test(before) && after.startsWith(")")) {
+        uses.push({ start: abs(s), end: abs(e), text: `Value::from(${name})` });
+      } else if (/\bm\.insert\("[^"\n]*"\.to_string\(\),\s*$/.test(before) && after.startsWith(");")) {
+        uses.push({ start: abs(s), end: abs(e), text: `Value::from(${name})` });
+      } else if (/(?:^|[;{}])\s*$/.test(before) && (g = /^\s*=(?!=)\s*/.exec(after)) !== null) {
+        const rhsAt = stmtEnd3 + e + g[0].length;
+        const rhs = /^(Value::Null|Value::Int\((-?\d+)\))\s*;/.exec(content.slice(rhsAt, rhsAt + 40));
+        if (rhs !== null) {
+          uses.push({ start: rhsAt, end: rhsAt + rhs[1].length, text: rhs[2] === void 0 ? "None" : `Some(${rhs[2]})` });
+        } else {
+          const call = /^self\.safe_integer(?:_k|2)?\(/.exec(content.slice(rhsAt, rhsAt + 30));
+          if (call === null) {
+            ok = false;
+            break;
+          }
+          const o = rhsAt + call[0].length - 1;
+          const c = closeOf2(content, o);
+          if (c < 0 || !/^\s*;/.test(content.slice(c, c + 3))) {
+            ok = false;
+            break;
+          }
+          const a = splitArgs5(content.slice(o + 1, c - 1));
+          const want = call[0].endsWith("2(") ? 4 : 3;
+          if (a.length !== want || !/^&\[\s*(?:Value::Null|Value::Int\(-?\d+\))?\s*\]$/.test(a[a.length - 1].trim())) {
+            ok = false;
+            break;
+          }
+          uses.push({ start: c, end: c, text: ".as_i64()" });
+        }
+        useRe.lastIndex = e;
+      } else {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok)
+      continue;
+    rewrites.push({ start: m.index, end: callOpen, text: content.slice(m.index, callOpen).replace(": Value =", ": Option<i64> =") });
+    rewrites.push({ start: callClose, end: callClose, text: ".as_i64()" });
+    for (const use of uses)
+      rewrites.push(use);
+  }
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
+  let out = "";
+  let last = 0;
+  for (const r of rewrites) {
+    if (r.start < last)
+      continue;
+    out += content.slice(last, r.start) + r.text;
+    last = r.end;
+  }
+  return out + content.slice(last);
+}
+
+// src/rustPasses/hx11w9RustStrLiteralLocalNativeString.ts
+init_esm_shims();
+function hx11w9RustStrLiteralLocalNativeString(content) {
+  const declRe = /^([ \t]*)let mut ([a-zA-Z_][a-zA-Z0-9_]*): Value = Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);[ \t]*$/gm;
+  const litWriteRe = /^\s*=\s*Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);/;
+  const maskText5 = (src) => {
+    let out2 = "";
+    let i = 0;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "/" && src[i + 1] === "/") {
+        while (i < src.length && src[i] !== "\n") {
+          out2 += " ";
+          i++;
+        }
+        continue;
+      }
+      if (c === '"') {
+        out2 += '"';
+        i++;
+        while (i < src.length && src[i] !== '"') {
+          if (src[i] === "\\") {
+            out2 += "  ";
+            i += 2;
+            continue;
+          }
+          out2 += src[i] === "\n" ? "\n" : " ";
+          i++;
+        }
+        if (i < src.length) {
+          out2 += '"';
+          i++;
+        }
+        continue;
+      }
+      out2 += c;
+      i++;
+    }
+    return out2;
+  };
+  const closeParen4 = (src, open) => {
+    let depth = 0;
+    for (let k = open; k < src.length; k++) {
+      const c = src[k];
+      if (c === "(")
+        depth++;
+      else if (c === ")") {
+        depth--;
+        if (depth === 0)
+          return k + 1;
+      }
+    }
+    return -1;
+  };
+  const braceEnd = (src, from) => {
+    let depth = 0;
+    for (let k = from; k < src.length; k++) {
+      const c = src[k];
+      if (c === "{")
+        depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth < 0)
+          return k;
+      }
+    }
+    return src.length;
+  };
+  const argSpans5 = (src) => {
+    const out2 = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      else if (c === "," && depth === 0) {
+        out2.push([start, i]);
+        start = i + 1;
+      }
+    }
+    out2.push([start, src.length]);
+    return out2;
+  };
+  const boxUse = (name, kept, after, used, body) => {
+    const later = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`).test(after.slice(used));
+    const inLoop = /\b(?:loop|while|for)\b/.test(body);
+    const arg = kept === "" && (later || inLoop) ? `${name}.clone()` : `${name}${kept}`;
+    return `Value::from(${arg})`;
+  };
+  const masked = maskText5(content);
+  const groups = [];
+  const grown = /* @__PURE__ */ new Map();
+  let m;
+  while ((m = declRe.exec(masked)) !== null) {
+    const name = m[2];
+    const stmtEnd3 = m.index + m[0].length;
+    const lit = /Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);/.exec(content.slice(m.index, stmtEnd3));
+    if (lit === null)
+      continue;
+    const end = braceEnd(masked, stmtEnd3);
+    const body = masked.slice(stmtEnd3, end);
+    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
+      continue;
+    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
+      continue;
+    const fRe = /format!\(/g;
+    const fSpans = [];
+    let f;
+    while ((f = fRe.exec(body)) !== null) {
+      const close = closeParen4(body, f.index + f[0].length - 1);
+      if (close < 0)
+        continue;
+      const fl = /^"(?:[^"\\]|\\.)*"/.exec(body.slice(f.index + f[0].length, close));
+      fSpans.push([f.index, close, fl !== null && /:\?/.test(fl[0])]);
+    }
+    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
+    const edits = [];
+    let ok = true;
+    let u;
+    while ((u = useRe.exec(body)) !== null) {
+      const at = u.index;
+      const abs = stmtEnd3 + at;
+      const after = body.slice(at + name.length);
+      const before = body.slice(0, at);
+      let g;
+      if ((g = /^\s*=(?!=)/.exec(after)) !== null && !/[!<>=&|]\s*$/.test(before)) {
+        const w = litWriteRe.exec(content.slice(abs + name.length));
+        if (w === null) {
+          ok = false;
+          break;
+        }
+        edits.push({ start: abs + name.length, end: abs + name.length + w[0].length, text: ` = ${w[1]}.to_string();` });
+        continue;
+      }
+      const cand = fSpans.filter(([s, e]) => at > s && at < e);
+      if (cand.length > 0) {
+        const hit = cand.reduce((a, b) => b[0] > a[0] ? b : a);
+        const inner = hit[0] + "format!(".length;
+        const slot = argSpans5(body.slice(inner, hit[1] - 1)).filter(([a, b]) => inner + a <= at && at + name.length <= inner + b);
+        if (slot.length > 0 && body.slice(inner + slot[0][0], inner + slot[0][1]).replace(/\s+/g, "") === name) {
+          if (hit[2]) {
+            ok = false;
+            break;
+          }
+          continue;
+        }
+      }
+      if ((g = /^\.as_str\(\)/.exec(after)) !== null && !/&\s*$/.test(before)) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `Some(${name}.as_str())` });
+      } else if (/crate::runtime::stringify_param\(&$/.test(before) && /^\)/.test(after)) {
+        const from = abs - "crate::runtime::stringify_param(&".length;
+        edits.push({ start: from, end: abs + name.length + 1, text: `${name}.clone()` });
+      } else if (/(?:[(,\[]\s*)$/.test(before) && !/&\s*$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[,)\];])/.exec(after)) !== null) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: boxUse(name, g[0], after, g[0].length, body) });
+      } else if (/(?<![=!<>])=\s$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[;,)])/.exec(after)) !== null) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: boxUse(name, g[0], after, g[0].length, body) });
+      } else {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok)
+      continue;
+    const declText = `${m[1]}let mut ${name}: String = ${lit[1]}.to_string();`;
+    const all = [{ start: m.index, end: stmtEnd3, text: declText }, ...edits];
+    const lineGrow = /* @__PURE__ */ new Map();
+    for (const e of all) {
+      const ls = content.lastIndexOf("\n", e.start) + 1;
+      lineGrow.set(ls, (lineGrow.get(ls) ?? 0) + e.text.length - (e.end - e.start));
+    }
+    let longer = false;
+    for (const [ls, grow] of lineGrow) {
+      let le = content.indexOf("\n", ls);
+      if (le < 0)
+        le = content.length;
+      const cur = le - ls + (grown.get(ls) ?? 0);
+      if (cur <= 400 && cur + grow > 400)
+        longer = true;
+    }
+    if (longer)
+      continue;
+    for (const [ls, grow] of lineGrow)
+      grown.set(ls, (grown.get(ls) ?? 0) + grow);
+    groups.push(all);
+  }
+  const rewrites = groups.flat();
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start);
+  let out = "";
+  let last = 0;
+  for (const r of rewrites) {
+    if (r.start < last)
+      continue;
+    out += content.slice(last, r.start) + r.text;
+    last = r.end;
+  }
+  out += content.slice(last);
+  return out;
+}
+
+// src/rustPasses/hx11w9-str-local-reassign.ts
+init_esm_shims();
+function hx11w9StrLocalReassign(content) {
+  const OPT = {
+    safe_string: "safe_string_opt",
+    safe_string_k: "safe_string_k_opt",
+    safe_string_lower_k: "safe_string_lower_k_opt",
+    safe_string_upper_k: "safe_string_upper_k_opt"
+  };
+  const declRe = /^([ \t]*)let mut ([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_string[a-z_0-9]*)\(/gm;
+  const strKeyRe = /^"(?:[^"\\]|\\.)*"$/;
+  const strLitRe = /^Value::Str\(("(?:[^"\\]|\\.)*")\.into\(\)\)$/;
+  const maskText5 = (src) => {
+    let out2 = "";
+    let i = 0;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "/" && src[i + 1] === "/") {
+        while (i < src.length && src[i] !== "\n") {
+          out2 += " ";
+          i++;
+        }
+        continue;
+      }
+      if (c === '"') {
+        out2 += '"';
+        i++;
+        while (i < src.length && src[i] !== '"') {
+          if (src[i] === "\\") {
+            out2 += "  ";
+            i += 2;
+            continue;
+          }
+          out2 += src[i] === "\n" ? "\n" : " ";
+          i++;
+        }
+        if (i < src.length) {
+          out2 += '"';
+          i++;
+        }
+        continue;
+      }
+      out2 += c;
+      i++;
+    }
+    return out2;
+  };
+  const closeParen4 = (src, open) => {
+    let depth = 0;
+    for (let k = open; k < src.length; k++) {
+      const c = src[k];
+      if (c === "(")
+        depth++;
+      else if (c === ")") {
+        depth--;
+        if (depth === 0)
+          return k + 1;
+      }
+    }
+    return -1;
+  };
+  const braceEnd = (src, from) => {
+    let depth = 0;
+    for (let k = from; k < src.length; k++) {
+      const c = src[k];
+      if (c === "{")
+        depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth < 0)
+          return k;
+      }
+    }
+    return src.length;
+  };
+  const stmtEndAt = (src, from) => {
+    let depth = 0;
+    for (let k = from; k < src.length; k++) {
+      const c = src[k];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}") {
+        depth--;
+        if (depth < 0)
+          return -1;
+      } else if (c === ";" && depth === 0)
+        return k;
+    }
+    return -1;
+  };
+  const argSpans5 = (src) => {
+    const out2 = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      else if (c === "," && depth === 0) {
+        out2.push([start, i]);
+        start = i + 1;
+      }
+    }
+    out2.push([start, src.length]);
+    return out2;
+  };
+  const masked = maskText5(content);
+  const grown = /* @__PURE__ */ new Map();
+  const groups = [];
+  let m;
+  while ((m = declRe.exec(masked)) !== null) {
+    const fam = m[3];
+    const opt = OPT[fam];
+    if (opt === void 0)
+      continue;
+    const name = m[2];
+    const callOpen = m.index + m[0].length - 1;
+    const callClose = closeParen4(masked, callOpen);
+    if (callClose < 0)
+      continue;
+    const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
+    if (tail === null)
+      continue;
+    const stmtEnd3 = callClose + tail[0].length;
+    const callEdit = (famName, open, close) => {
+      const twin = OPT[famName];
+      if (twin === void 0)
+        return null;
+      const base = open + 1;
+      const spans = argSpans5(masked.slice(base, close - 1));
+      if (spans.length !== 3)
+        return null;
+      const keyRaw = content.slice(base + spans[1][0], base + spans[1][1]).trim();
+      if (famName.endsWith("_k") && !strKeyRe.test(keyRaw))
+        return null;
+      if (keyRaw.length === 0)
+        return null;
+      const defRaw = content.slice(base + spans[2][0], base + spans[2][1]).trim();
+      const defMasked = masked.slice(base + spans[2][0], base + spans[2][1]).trim();
+      if (!(defMasked === "&[]" || /^&\[Value::Str\("\s*"\.into\(\)\)\]$/.test(defMasked)))
+        return null;
+      if (defRaw.length === 0)
+        return null;
+      const nameAt = open - famName.length;
+      return { start: nameAt, end: open, text: twin };
+    };
+    const declEdit = callEdit(fam, callOpen, callClose);
+    if (declEdit === null)
+      continue;
+    const end = braceEnd(masked, stmtEnd3);
+    const body = masked.slice(stmtEnd3, end);
+    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
+      continue;
+    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
+      continue;
+    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
+    const edits = [declEdit];
+    let assigned = 0;
+    let ok = true;
+    let u;
+    while ((u = useRe.exec(body)) !== null) {
+      const at = u.index;
+      const abs = stmtEnd3 + at;
+      const after = body.slice(at + name.length);
+      const before = body.slice(0, at);
+      let g;
+      if ((g = /^\s*=(?!=)\s*/.exec(after)) !== null && /(?:^|[;{}])\s*$/.test(before)) {
+        const rhsStart = abs + name.length + g[0].length;
+        const rhsEnd = stmtEndAt(masked, rhsStart);
+        if (rhsEnd < 0) {
+          ok = false;
+          break;
+        }
+        const rhsMasked = masked.slice(rhsStart, rhsEnd).trim();
+        const rhsRaw = content.slice(rhsStart, rhsEnd).trim();
+        let lit;
+        let call;
+        if (rhsMasked === "Value::Null") {
+          edits.push({ start: rhsStart, end: rhsStart + "Value::Null".length, text: "None" });
+        } else if ((lit = strLitRe.exec(rhsRaw)) !== null) {
+          edits.push({ start: rhsStart, end: rhsStart + rhsRaw.length, text: `Some(${lit[1]}.to_string())` });
+        } else if ((call = /^self\.(safe_string[a-z_0-9]*)\(/.exec(rhsMasked)) !== null) {
+          const open = rhsStart + call[0].length - 1;
+          const close = closeParen4(masked, open);
+          if (close < 0 || masked.slice(close, rhsEnd).trim() !== "") {
+            ok = false;
+            break;
+          }
+          const ce = callEdit(call[1], open, close);
+          if (ce === null) {
+            ok = false;
+            break;
+          }
+          edits.push(ce);
+        } else {
+          ok = false;
+          break;
+        }
+        assigned++;
+        useRe.lastIndex = rhsStart - stmtEnd3;
+        continue;
+      }
+      if ((g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === "==" ? "is_none" : "is_some"}()` });
+      } else if ((g = /^\.as_str\(\)/.exec(after)) !== null) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.as_deref()` });
+      } else if (/(?:[(,\[]\s*&?|(?<![=!<>])=\s)$/.test(before) && !/&\s*mut\s*$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[,)\];])/.exec(after)) !== null && !/==\s*$/.test(before)) {
+        const lastUse = !new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`).test(after.slice(g[0].length));
+        const inLoop = /\b(?:loop|while|for)\b/.test(body);
+        const move = lastUse && !inLoop && !/&\s*$/.test(before);
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}${move ? "" : ".clone()"}.map(Value::from).unwrap_or(Value::Null)` });
+      } else {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok || assigned === 0)
+      continue;
+    const declText = `${m[1]}let mut ${name}: Option<String> = `;
+    const all = [{ start: m.index, end: m.index + m[0].length - `self.${fam}(`.length, text: declText }, ...edits];
+    const lineGrow = /* @__PURE__ */ new Map();
+    for (const e of all) {
+      const ls = content.lastIndexOf("\n", e.start) + 1;
+      lineGrow.set(ls, (lineGrow.get(ls) ?? 0) + e.text.length - (e.end - e.start));
+    }
+    let longer = false;
+    for (const [ls, grow] of lineGrow) {
+      let le = content.indexOf("\n", ls);
+      if (le < 0)
+        le = content.length;
+      const cur = le - ls + (grown.get(ls) ?? 0);
+      if (cur <= 400 && cur + grow > 400)
+        longer = true;
+    }
+    if (longer)
+      continue;
+    for (const [ls, grow] of lineGrow)
+      grown.set(ls, (grown.get(ls) ?? 0) + grow);
+    groups.push({ decl: { start: m.index, end: stmtEnd3, text: "" }, edits: all });
+  }
+  for (let again = true; again; ) {
+    again = false;
+    for (let a = 0; a < groups.length && !again; a++) {
+      for (let b = 0; b < groups.length; b++) {
+        if (a === b)
+          continue;
+        const bEdits = groups[b].edits;
+        const bs = groups[b].decl.start;
+        const be = groups[b].decl.end;
+        if (groups[a].edits.some((e) => e.start >= bs && e.start < be && e.start !== bs) && bEdits.length > 0) {
+          groups.splice(a, 1);
+          again = true;
+          break;
+        }
+      }
+    }
+  }
+  const rewrites = [];
+  for (const gr of groups)
+    for (const e of gr.edits)
+      rewrites.push(e);
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start);
+  let out = "";
+  let last = 0;
+  for (const r of rewrites) {
+    if (r.start < last)
+      continue;
+    out += content.slice(last, r.start) + r.text;
+    last = r.end;
+  }
+  out += content.slice(last);
+  return out;
+}
+
+// src/rustPasses/hx11w9-rust-bool-k-local-option-bool.ts
+init_esm_shims();
+function hx11w9RustBoolKLocalOptionBool(content) {
+  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_bool_k|safe_bool)\(/gm;
+  const strKeyRe = /^"(?:[^"\\]|\\.)*"$/;
+  const maskText5 = (src) => {
+    let out2 = "";
+    let i = 0;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "/" && src[i + 1] === "/") {
+        while (i < src.length && src[i] !== "\n") {
+          out2 += " ";
+          i++;
+        }
+        continue;
+      }
+      if (c === '"') {
+        out2 += '"';
+        i++;
+        while (i < src.length && src[i] !== '"') {
+          if (src[i] === "\\") {
+            out2 += "  ";
+            i += 2;
+            continue;
+          }
+          out2 += src[i] === "\n" ? "\n" : " ";
+          i++;
+        }
+        if (i < src.length) {
+          out2 += '"';
+          i++;
+        }
+        continue;
+      }
+      out2 += c;
+      i++;
+    }
+    return out2;
+  };
+  const closeParen4 = (src, open) => {
+    let depth = 0;
+    for (let k = open; k < src.length; k++) {
+      const c = src[k];
+      if (c === "(")
+        depth++;
+      else if (c === ")") {
+        depth--;
+        if (depth === 0)
+          return k + 1;
+      }
+    }
+    return -1;
+  };
+  const braceEnd = (src, from) => {
+    let depth = 0;
+    for (let k = from; k < src.length; k++) {
+      const c = src[k];
+      if (c === "{")
+        depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth < 0)
+          return k;
+      }
+    }
+    return src.length;
+  };
+  const argSpans5 = (src) => {
+    const out2 = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      else if (c === "," && depth === 0) {
+        out2.push([start, i]);
+        start = i + 1;
+      }
+    }
+    out2.push([start, src.length]);
+    return out2;
+  };
+  const masked = maskText5(content);
+  const grown = /* @__PURE__ */ new Map();
+  const rewrites = [];
+  let m;
+  while ((m = declRe.exec(masked)) !== null) {
+    const callee = m[4];
+    const name = m[3];
+    const callOpen = m.index + m[0].length - 1;
+    const callClose = closeParen4(masked, callOpen);
+    if (callClose < 0)
+      continue;
+    const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
+    if (tail === null)
+      continue;
+    const stmtEnd3 = callClose + tail[0].length;
+    const base = callOpen + 1;
+    const spans = argSpans5(masked.slice(base, callClose - 1));
+    if (spans.length !== 3)
+      continue;
+    const obj = content.slice(base + spans[0][0], base + spans[0][1]).trim();
+    const keyRaw = content.slice(base + spans[1][0], base + spans[1][1]).trim();
+    const defRaw = content.slice(base + spans[2][0], base + spans[2][1]).trim();
+    if (obj.length === 0 || keyRaw.length === 0)
+      continue;
+    if (callee === "safe_bool_k" && !strKeyRe.test(keyRaw))
+      continue;
+    let dflt;
+    const dm = /^&\[Value::Bool\((true|false)\)\]$/.exec(defRaw);
+    if (defRaw === "&[]")
+      dflt = null;
+    else if (dm !== null)
+      dflt = dm[1] === "true";
+    else
+      continue;
+    const isOpt = dflt === null;
+    const end = braceEnd(masked, stmtEnd3);
+    const body = masked.slice(stmtEnd3, end);
+    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
+      continue;
+    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
+      continue;
+    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
+    const edits = [];
+    const cmp = (eq, b) => {
+      if (isOpt)
+        return `${name} ${eq ? "==" : "!="} Some(${b})`;
+      return eq === b ? name : `!${name}`;
+    };
+    let ok = true;
+    let u;
+    while ((u = useRe.exec(body)) !== null) {
+      const at = u.index;
+      const abs = stmtEnd3 + at;
+      const after = body.slice(at + name.length);
+      const before = body.slice(0, at);
+      let g;
+      if ((g = /^\.as_bool\(\) (==|!=) Some\((true|false)\)/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: cmp(g[1] === "==", g[2] === "true") });
+      } else if ((g = /^\.is_truthy\(\)/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: isOpt ? `${name} == Some(true)` : name });
+      } else if ((g = /^\s*(==|!=)\s*Value::Bool\((true|false)\)/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: cmp(g[1] === "==", g[2] === "true") });
+      } else if (isOpt && (g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === "==" ? "is_none" : "is_some"}()` });
+      } else if ((g = /^\s*=\s*Value::Bool\((true|false)\);/.exec(after)) !== null && /(?:^|[;{}\s])\s*$/.test(before)) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name} = ${isOpt ? `Some(${g[1]})` : g[1]};` });
+      } else if (!isOpt && /is_true\(&$/.test(before) && /^\)/.test(after)) {
+        continue;
+      } else if (/\.insert\(\s*"[^"]*"(?:\.to_string\(\)|\.into\(\))?,\s*$/.test(before.slice(-80).replace(/\n/g, " ")) && (g = /^(\.clone\(\))?\)/.exec(after)) !== null) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length - 1, text: isOpt ? `${name}.map(Value::Bool).unwrap_or(Value::Null)` : `Value::Bool(${name})` });
+      } else {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok || edits.length === 0)
+      continue;
+    const optName = callee === "safe_bool_k" ? "safe_bool_k_opt" : "safe_bool_opt";
+    const typeStart = m.index + m[1].length + "let ".length + (m[2] ?? "").length + name.length;
+    const declEdits = [
+      { start: typeStart, end: callOpen, text: `: ${isOpt ? "Option<bool>" : "bool"} = self.${optName}` }
+    ];
+    if (!isOpt)
+      declEdits.push({ start: callClose, end: callClose, text: `.unwrap_or(${dflt})` });
+    const all = [...declEdits, ...edits];
+    const lineGrow = /* @__PURE__ */ new Map();
+    for (const e of all) {
+      const ls = content.lastIndexOf("\n", e.start) + 1;
+      lineGrow.set(ls, (lineGrow.get(ls) ?? 0) + e.text.length - (e.end - e.start));
+    }
+    let longer = false;
+    for (const [ls, grow] of lineGrow) {
+      let le = content.indexOf("\n", ls);
+      if (le < 0)
+        le = content.length;
+      const cur = le - ls + (grown.get(ls) ?? 0);
+      if (cur <= 400 && cur + grow > 400)
+        longer = true;
+    }
+    if (longer)
+      continue;
+    for (const [ls, grow] of lineGrow)
+      grown.set(ls, (grown.get(ls) ?? 0) + grow);
+    for (const e of all)
+      rewrites.push(e);
+  }
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
+  let out = "";
+  let last = 0;
+  for (const r of rewrites) {
+    if (r.start < last)
+      continue;
+    out += content.slice(last, r.start) + r.text;
+    last = r.end;
+  }
+  out += content.slice(last);
+  return out;
+}
+
 // src/transpiler.ts
 var __dirname_mock = import_dirname.default;
 var fastCompilerOptions = {
@@ -54085,6 +55012,10 @@ export {
   hx10w9Rp02RefMapParamNames,
   hx10w9Rp02SplitArgs,
   hx11RustSignApiStr,
+  hx11w9RustBoolKLocalOptionBool,
+  hx11w9RustIntLocalNullSinkOptionI64,
+  hx11w9RustStrLiteralLocalNativeString,
+  hx11w9StrLocalReassign,
   installCcxtGoDictParams,
   installCcxtGoGb05ParamTypes,
   installCcxtGoGb11HandleErrorsCode,
