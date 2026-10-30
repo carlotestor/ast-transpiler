@@ -29621,7 +29621,17 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (receiver !== void 0)
         text = `${receiver}.as_str().map(str::${method === "toUpperCase" ? "to_uppercase" : "to_lowercase"}).unwrap_or_default()`;
     }
+    text ??= this.rustStringSliceLocalText(init, callee);
     return text !== void 0 && this.rustStringMethodLocalIsTyped(declaration) ? text : void 0;
+  }
+  // `<string>.slice(lit[, lit])` local: the printed closure blob minus its `Value` boxing tail.
+  rustStringSliceLocalText(init, callee) {
+    if (callee.name.text !== "slice" || !isIdentifier3(callee.expression) || this.rustParamShadowOf(callee.expression) !== void 0)
+      return void 0;
+    const receiver = this.rustNativeStringReceiver(init, this.printNode(callee.expression, 0));
+    const text = receiver === void 0 ? void 0 : this.printNativeStringSlice(init, receiver)?.trim();
+    const tail = ".map(Value::from).unwrap_or(Value::Null)";
+    return text?.endsWith(tail) ? `${text.slice(0, -tail.length)}.unwrap_or_default()` : void 0;
   }
   rustStringMethodLocalIsTyped(declaration) {
     let decision = this.rustStringMethodLocalDecisions.get(declaration);

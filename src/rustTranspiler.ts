@@ -2812,7 +2812,18 @@ export class RustTranspiler extends BaseTranspiler {
             const receiver = this.rustNativeStringReceiver(init, this.printNode(callee.expression, 0));
             if (receiver !== undefined) text = `${receiver}.as_str().map(str::${method === 'toUpperCase' ? 'to_uppercase' : 'to_lowercase'}).unwrap_or_default()`;
         }
+        text ??= this.rustStringSliceLocalText(init, callee);
         return text !== undefined && this.rustStringMethodLocalIsTyped(declaration) ? text : undefined;
+    }
+
+    // `<string>.slice(lit[, lit])` local: the printed closure blob minus its `Value` boxing tail.
+    rustStringSliceLocalText(init, callee): string | undefined {
+        if (callee.name.text !== 'slice' || !isIdentifier(callee.expression)
+            || this.rustParamShadowOf(callee.expression) !== undefined) return undefined;
+        const receiver = this.rustNativeStringReceiver(init, this.printNode(callee.expression, 0));
+        const text = receiver === undefined ? undefined : this.printNativeStringSlice(init, receiver)?.trim();
+        const tail = '.map(Value::from).unwrap_or(Value::Null)';
+        return text?.endsWith(tail) ? `${text.slice(0, -tail.length)}.unwrap_or_default()` : undefined;
     }
 
     rustStringMethodLocalIsTyped(declaration): boolean {

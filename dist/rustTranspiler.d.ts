@@ -331,6 +331,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustStringMethodLocalDecisions;
     /** The native initializer text of a string-method local, else undefined. */
     rustStringMethodLocalInit(declaration: any): string | undefined;
+    rustStringSliceLocalText(init: any, callee: any): string | undefined;
     rustStringMethodLocalIsTyped(declaration: any): boolean;
     rustStringMethodLocalBoxUse(n: any): boolean;
     private static readonly RUST_STRING_LOCAL_HELPERS;
