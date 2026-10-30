@@ -29261,9 +29261,26 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   rustStrVecArgumentOk(arg) {
     const inner = arg === void 0 ? void 0 : this.rustSkipWrappers(arg);
+    if (inner !== void 0 && this.rustStrVecValueLocal(inner))
+      return true;
     if (inner === void 0 || !isArrayLiteralExpression4(inner) || inner.elements.length === 0)
       return false;
     return Array.from(inner.elements).every((e) => isIdentifier3(e) && this.primitiveKindOfType(this.getCheckedTypeOf(e)) === "string" && this.isDeclaredValueIdentifier(e) && !this.rustStringLocalIdentifierIsTyped(e) && this.rustDeclarationOfIdentifier(e)?.kind !== SyntaxKind7.BindingElement);
+  }
+  /** A plain `Value` local (not a param, not a typed container): `x.to_str_vec()` converts it. */
+  rustStrVecValueLocal(node) {
+    if (!isIdentifier3(node) || !this.isDeclaredValueIdentifier(node))
+      return false;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.name === node)
+      return false;
+    if (declaration.initializer === void 0 || declaration.name?.kind !== SyntaxKind7.Identifier)
+      return false;
+    if (this.rustStringLocalIdentifierIsTyped(node) || this.rustReadBearerKindOfDeclaration(declaration) !== false)
+      return false;
+    if (this.rustVecLocalIsTyped(declaration) || this.rustDictLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration))
+      return false;
+    return this.getRustBoolLocalInitializer(declaration, "") === void 0;
   }
   rustNativeStrVecArgumentSlot(params, at) {
     const param = params !== void 0 && at < params.length ? params[at] : void 0;
@@ -29274,6 +29291,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** `vec![a.to_string(), ..]` for an array literal landing in a `Vec<String>` slot. */
   rustStrVecArgumentText(node, identation) {
     const inner = this.rustSkipWrappers(node);
+    if (inner !== void 0 && this.rustStrVecValueLocal(inner))
+      return `${this.printNode(inner, 0).trim()}.to_str_vec()`;
     if (inner === void 0 || !isArrayLiteralExpression4(inner))
       return this.printNode(node, identation).trim();
     return `vec![${Array.from(inner.elements).map((e) => `${this.printNode(e, 0).trim()}.to_string()`).join(", ")}]`;

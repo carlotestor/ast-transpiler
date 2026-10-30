@@ -295,6 +295,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Every call site resolving to `method` passes an array literal of plain `Value` identifiers (none is fine: the dispatcher converts). */
     rustStrVecCallSitesOk(method: any, index: number): boolean;
     rustStrVecArgumentOk(arg: any): boolean;
+    /** A plain `Value` local (not a param, not a typed container): `x.to_str_vec()` converts it. */
+    rustStrVecValueLocal(node: any): boolean;
     rustNativeStrVecArgumentSlot(params: any, at: number): boolean;
     /** `vec![a.to_string(), ..]` for an array literal landing in a `Vec<String>` slot. */
     rustStrVecArgumentText(node: any, identation: any): string;

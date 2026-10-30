@@ -5338,11 +5338,16 @@ describe('rust string[] parameter used only by join', () => {
         expect(output).toContain('fn fetchNoCaller(&self, ids: Vec<String>');
     });
 
+    test('a plain Value local caller converts with to_str_vec', () => {
+        expect(output).toContain('self.fetchByIds(chunk.to_str_vec()');
+    });
+
     test('a param that is also indexed keeps the Value box', () => {
         expect(output).toContain('fn fetchIndexed(&self, ids: Value');
     });
 
     test('a caller that is not an array literal keeps the Value box', () => {
         expect(output).toContain('fn fetchComputed(&self, ids: Value');
+        expect(output).not.toContain('self.fetchComputed(ids.to_str_vec()');
     });
 });
