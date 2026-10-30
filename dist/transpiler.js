@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -28190,6 +28190,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
       return keyLiteral === null ? void 0 : `${keyLiteral[1]}.into()`;
     }
+    const nativeKey = this.rustStringMethodLocalKeyArg(keyNode);
+    if (nativeKey !== void 0)
+      return nativeKey;
     const key = keyText.trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || (receiver.isField ? key.includes("self") : new RegExp(`\\b${receiver.text}\\b`).test(key))) {
       return void 0;
@@ -29621,7 +29624,31 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (receiver !== void 0)
         text = `${receiver}.as_str().map(str::${method === "toUpperCase" ? "to_uppercase" : "to_lowercase"}).unwrap_or_default()`;
     }
+    if (method === "replace")
+      text = this.rustStringReplaceLocalText(init, callee);
+    text ??= this.rustStringSliceLocalText(init, callee);
     return text !== void 0 && this.rustStringMethodLocalIsTyped(declaration) ? text : void 0;
+  }
+  // `recv.replace("a", "b")` on a string-typed identifier: the native `String` payload of the
+  // `printNativeStringReplace` arm (same receiver and literal rules).
+  rustStringReplaceLocalText(init, callee) {
+    if (init.arguments.length !== 2 || callee.expression.kind === SyntaxKind7.ThisKeyword || !isIdentifier3(callee.expression) || this.rustParamShadowOf(callee.expression) !== void 0)
+      return void 0;
+    const receiver = this.rustNativeStringReceiver(init, this.printNode(callee.expression, 0));
+    const from = this.rustNativeStringLiteralArg(init.arguments[0]);
+    const to = this.rustNativeStringLiteralArg(init.arguments[1]);
+    if (receiver === void 0 || from === void 0 || to === void 0)
+      return void 0;
+    return `${receiver}.as_str().map(|__s| __s.replace("${from}", "${to}")).unwrap_or_default()`;
+  }
+  // `<string>.slice(lit[, lit])` local: the printed closure blob minus its `Value` boxing tail.
+  rustStringSliceLocalText(init, callee) {
+    if (callee.name.text !== "slice" || !isIdentifier3(callee.expression) || this.rustParamShadowOf(callee.expression) !== void 0)
+      return void 0;
+    const receiver = this.rustNativeStringReceiver(init, this.printNode(callee.expression, 0));
+    const text = receiver === void 0 ? void 0 : this.printNativeStringSlice(init, receiver)?.trim();
+    const tail = ".map(Value::from).unwrap_or(Value::Null)";
+    return text?.endsWith(tail) ? `${text.slice(0, -tail.length)}.unwrap_or_default()` : void 0;
   }
   rustStringMethodLocalIsTyped(declaration) {
     let decision = this.rustStringMethodLocalDecisions.get(declaration);
@@ -29634,7 +29661,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   rustStringMethodLocalBoxUse(n) {
     const parent = n.parent;
-    return isReturnStatement4(parent) || this.rustDictWriteValue(n) || parent?.kind === SyntaxKind7.PropertyAssignment && parent.initializer === n || isCallExpression6(parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression);
+    return isReturnStatement4(parent) || this.rustDictWriteValue(n) || parent?.kind === SyntaxKind7.PropertyAssignment && parent.initializer === n || isCallExpression6(parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression) || this.rustStringMethodLocalKey(n);
+  }
+  /** `m[x]` / `m[x] = v` with a string-method local as the key: a native `String`
+   *  place (`x.clone()`, `x` at its final use), boxed by the identifier printer elsewhere. */
+  rustStringMethodLocalKey(n) {
+    return isElementAccessExpression4(n.parent) && n.parent.argumentExpression === n;
+  }
+  rustStringMethodLocalKeyArg(key) {
+    const declaration = isIdentifier3(key) ? this.rustDeclarationOfIdentifier(key) : void 0;
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.name === key || this.rustStringMethodLocalInit(declaration) === void 0)
+      return void 0;
+    return this.rustVecIsFinalUse(key, String(key.text)) ? String(key.text) : `${String(key.text)}.clone()`;
   }
   // `let x = this.safeString(..)` / `safeString(..)` — the whole initializer;
   // a call whose callee already returns `Option<String>` (a native-`Str`
@@ -33118,6 +33156,9 @@ ${iden}}`;
     const key = this.rustSkipWrappers(keyNode);
     if (key === void 0 || isStringLiteral3(key))
       return void 0;
+    const nativeKey = this.rustStringMethodLocalKeyArg(key);
+    if (nativeKey !== void 0)
+      return nativeKey;
     if (this.r01PlaceKeyNative(key) === true)
       return `${String(key.text)}.clone().unwrap_or_default()`;
     const text = String(keyText).trim();
@@ -54061,6 +54102,252 @@ function hx11w9RustStrLiteralLocalNativeString(content) {
   return out;
 }
 
+// src/rustPasses/hx11w9RustStrConcatLocalNativeString.ts
+init_esm_shims();
+function hx11w9RustStrConcatLocalNativeString(content) {
+  const declRe = /^([ \t]*)let mut ([a-zA-Z_][a-zA-Z0-9_]*): Value = (Value::Str\(format!\(.*\)\.into\(\)\));[ \t]*$/gm;
+  const litRe = /^Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\)$/;
+  const maskText5 = (src) => {
+    let out2 = "";
+    let i = 0;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "/" && src[i + 1] === "/") {
+        while (i < src.length && src[i] !== "\n") {
+          out2 += " ";
+          i++;
+        }
+        continue;
+      }
+      if (c === '"') {
+        out2 += '"';
+        i++;
+        while (i < src.length && src[i] !== '"') {
+          if (src[i] === "\\") {
+            out2 += "  ";
+            i += 2;
+            continue;
+          }
+          out2 += src[i] === "\n" ? "\n" : " ";
+          i++;
+        }
+        if (i < src.length) {
+          out2 += '"';
+          i++;
+        }
+        continue;
+      }
+      out2 += c;
+      i++;
+    }
+    return out2;
+  };
+  const closeParen4 = (src, open) => {
+    let depth = 0;
+    for (let k = open; k < src.length; k++) {
+      const c = src[k];
+      if (c === "(")
+        depth++;
+      else if (c === ")") {
+        depth--;
+        if (depth === 0)
+          return k + 1;
+      }
+    }
+    return -1;
+  };
+  const braceEnd = (src, from) => {
+    let depth = 0;
+    for (let k = from; k < src.length; k++) {
+      const c = src[k];
+      if (c === "{")
+        depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth < 0)
+          return k;
+      }
+    }
+    return src.length;
+  };
+  const argSpans5 = (src) => {
+    const out2 = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      else if (c === "," && depth === 0) {
+        out2.push([start, i]);
+        start = i + 1;
+      }
+    }
+    out2.push([start, src.length]);
+    return out2;
+  };
+  const boxUse = (name, kept, after, used, body) => {
+    const later = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`).test(after.slice(used));
+    const inLoop = /\b(?:loop|while|for)\b/.test(body);
+    const arg = kept === "" && (later || inLoop) ? `${name}.clone()` : `${name}${kept}`;
+    return `Value::from(${arg})`;
+  };
+  const masked = maskText5(content);
+  const concatParts = (text, at) => {
+    const lit = litRe.exec(text);
+    if (lit !== null)
+      return [{ lit: lit[1] }];
+    const f = /^Value::Str\(format!\(("(?:\{\})+"),\s*([\s\S]*)\)\.into\(\)\)$/.exec(text);
+    if (f === null)
+      return void 0;
+    const spans = argSpans5(maskText5(f[2]));
+    if (spans.length !== (f[1].length - 2) / 2)
+      return void 0;
+    const out2 = [];
+    for (const [x, y] of spans) {
+      const arg = f[2].slice(x, y).trim();
+      if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(arg)) {
+        if (!isStringLocal(arg, at))
+          return void 0;
+        out2.push({ id: arg });
+        continue;
+      }
+      const sub = concatParts(arg, at);
+      if (sub === void 0)
+        return void 0;
+      out2.push(...sub);
+    }
+    return out2;
+  };
+  const isStringLocal = (id, at) => {
+    const fnAt = masked.lastIndexOf("fn ", at);
+    if (fnAt < 0)
+      return false;
+    const sig = masked.slice(fnAt, masked.indexOf("{", fnAt));
+    if (new RegExp(`[(,]\\s*(?:mut\\s+)?${id}\\s*:`).test(sig))
+      return false;
+    const seg = masked.slice(fnAt, at);
+    const binds = [...seg.matchAll(new RegExp(`\\b(?:let|for)\\s+(?:mut\\s+)?${id}\\b([^=;\\n]*)`, "g"))];
+    const last2 = binds[binds.length - 1];
+    if (last2 === void 0 || !/^\s*:\s*String\s*$/.test(last2[1]))
+      return false;
+    let depth = 0;
+    for (const ch of seg.slice(last2.index)) {
+      if (ch === "{")
+        depth++;
+      else if (ch === "}" && --depth < 0)
+        return false;
+    }
+    return true;
+  };
+  const groups = [];
+  const grown = /* @__PURE__ */ new Map();
+  let m;
+  while ((m = declRe.exec(masked)) !== null) {
+    const name = m[2];
+    const stmtEnd3 = m.index + m[0].length;
+    const parts = concatParts(content.slice(m.index, stmtEnd3).replace(/^[^=]*=\s*/, "").replace(/;\s*$/, ""), m.index);
+    if (parts === void 0)
+      continue;
+    const end = braceEnd(masked, stmtEnd3);
+    const body = masked.slice(stmtEnd3, end);
+    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
+      continue;
+    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
+      continue;
+    const fRe = /format!\(/g;
+    const fSpans = [];
+    let f;
+    while ((f = fRe.exec(body)) !== null) {
+      const close = closeParen4(body, f.index + f[0].length - 1);
+      if (close < 0)
+        continue;
+      const fl = /^"(?:[^"\\]|\\.)*"/.exec(body.slice(f.index + f[0].length, close));
+      fSpans.push([f.index, close, fl !== null && /:\?/.test(fl[0])]);
+    }
+    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
+    const edits = [];
+    let ok = true;
+    let u;
+    while ((u = useRe.exec(body)) !== null) {
+      const at = u.index;
+      const abs = stmtEnd3 + at;
+      const after = body.slice(at + name.length);
+      const before = body.slice(0, at);
+      let g;
+      if (/^\s*=(?!=)/.test(after) && !/[!<>=&|]\s*$/.test(before)) {
+        ok = false;
+        break;
+      }
+      const cand = fSpans.filter(([s, e]) => at > s && at < e);
+      if (cand.length > 0) {
+        const hit = cand.reduce((a, b) => b[0] > a[0] ? b : a);
+        const inner = hit[0] + "format!(".length;
+        const slot = argSpans5(body.slice(inner, hit[1] - 1)).filter(([a, b]) => inner + a <= at && at + name.length <= inner + b);
+        if (slot.length > 0 && body.slice(inner + slot[0][0], inner + slot[0][1]).replace(/\s+/g, "") === name) {
+          if (hit[2]) {
+            ok = false;
+            break;
+          }
+          continue;
+        }
+      }
+      if ((g = /^\.as_str\(\)/.exec(after)) !== null && !/&\s*$/.test(before)) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `Some(${name}.as_str())` });
+      } else if (/crate::runtime::stringify_param\(&$/.test(before) && /^\)/.test(after)) {
+        const from = abs - "crate::runtime::stringify_param(&".length;
+        edits.push({ start: from, end: abs + name.length + 1, text: `${name}.clone()` });
+      } else if (/(?:[(,\[]\s*)$/.test(before) && !/&\s*$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[,)\];])/.exec(after)) !== null) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: boxUse(name, g[0], after, g[0].length, body) });
+      } else if (/(?<![=!<>])=\s$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[;,)])/.exec(after)) !== null) {
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: boxUse(name, g[0], after, g[0].length, body) });
+      } else {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok)
+      continue;
+    const declText = `${m[1]}let mut ${name}: String = format!("${parts.map((q) => q.lit !== void 0 ? q.lit.slice(1, -1).replace(/[{}]/g, (c) => c + c) : "{}").join("")}"${parts.filter((q) => q.lit === void 0).map((q) => ", " + q.id).join("")});`;
+    const all = [{ start: m.index, end: stmtEnd3, text: declText }, ...edits];
+    const lineGrow = /* @__PURE__ */ new Map();
+    for (const e of all) {
+      const ls = content.lastIndexOf("\n", e.start) + 1;
+      lineGrow.set(ls, (lineGrow.get(ls) ?? 0) + e.text.length - (e.end - e.start));
+    }
+    let longer = false;
+    for (const [ls, grow] of lineGrow) {
+      let le = content.indexOf("\n", ls);
+      if (le < 0)
+        le = content.length;
+      const cur = le - ls + (grown.get(ls) ?? 0);
+      if (cur <= 400 && cur + grow > 400)
+        longer = true;
+    }
+    if (longer)
+      continue;
+    for (const [ls, grow] of lineGrow)
+      grown.set(ls, (grown.get(ls) ?? 0) + grow);
+    groups.push(all);
+  }
+  const rewrites = groups.flat();
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start);
+  let out = "";
+  let last = 0;
+  for (const r of rewrites) {
+    if (r.start < last)
+      continue;
+    out += content.slice(last, r.start) + r.text;
+    last = r.end;
+  }
+  out += content.slice(last);
+  return out;
+}
+
 // src/rustPasses/hx11w9-str-local-reassign.ts
 init_esm_shims();
 function hx11w9StrLocalReassign(content) {
@@ -55269,6 +55556,7 @@ export {
   hx11RustSignApiStr,
   hx11w9RustBoolKLocalOptionBool,
   hx11w9RustIntLocalNullSinkOptionI64,
+  hx11w9RustStrConcatLocalNativeString,
   hx11w9RustStrLiteralLocalNativeString,
   hx11w9StrLocalReassign,
   installCcxtGoDictParams,
