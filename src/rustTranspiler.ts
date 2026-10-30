@@ -2558,16 +2558,19 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustParamShadowUseCensus(method, param, RUST_PARAM_SHADOWS.LIST) !== undefined) return false;
         const name = String(param.name.text);
         let uses = 0;
+        let reads = 0;
         const usesOk = this.rustLocalUsesAll(param, name, true, (n) => {
             const parent: any = n.parent;
             uses++;
             if (isPropertyAccessExpression(parent) && parent.expression === n) {
+                reads++;
                 if (String(parent.name.text) !== 'length') return false;
                 const up: any = parent.parent;
                 return !(isBinaryExpression(up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind))
                     && up?.kind !== SyntaxKind.PrefixUnaryExpression && up?.kind !== SyntaxKind.PostfixUnaryExpression;
             }
             if (isElementAccessExpression(parent) && parent.expression === n) {
+                reads++;
                 return !this.isNativeWriteTargetBase(n) && this.isNativeAccessPositionSafe(n) && this.r11VecReadShape(parent);
             }
             if (isReturnStatement(parent) || (parent?.kind === SyntaxKind.PropertyAssignment && parent.initializer === n)) {
@@ -2575,7 +2578,8 @@ export class RustTranspiler extends BaseTranspiler {
             }
             return false;
         });
-        if (!usesOk || uses === 0) return false;
+        // a pass-through-only param removes no blob: the conversions would only add calls
+        if (!usesOk || uses === 0 || reads === 0) return false;
         const index = Array.from(method.parameters as any).indexOf(param);
         return index >= 0 && this.rustVecValueCallSitesOk(method, index);
     }
@@ -2634,9 +2638,15 @@ export class RustTranspiler extends BaseTranspiler {
         if (receiver?.kind !== SyntaxKind.Identifier || this.rustVecValueParamOf(receiver) === undefined || !this.r11VecReadShape(node)) return undefined;
         const name = this.printNode(receiver, 0).trim();
         const key: any = this.rustStripWrappers(node.argumentExpression);
-        const index = isNumericLiteral(key) ? String(Number(key.text))
-            : `(${this.printNode(node.argumentExpression, 0).trim()}).as_i64().map_or(usize::MAX, |__n| __n as usize)`;
+        const index = isNumericLiteral(key) ? String(Number(key.text)) : this.vecValueParamIndexText(node.argumentExpression);
+        if (index === undefined) return undefined;
         return `${name}.get(${index}).cloned().unwrap_or(Value::Null)`;
+    }
+
+    /** A `Value` counter place `i` as `i.as_i64().unwrap_or(-1) as usize` (negative or non-Int misses; the x47 pass narrows a length-bounded counter to `i64`). */
+    vecValueParamIndexText(key): string | undefined {
+        const place = this.printNode(key, 0).trim();
+        return /^[A-Za-z_][A-Za-z0-9_]*$/.test(place) ? `${place}.as_i64().unwrap_or(-1) as usize` : undefined;
     }
 
     rustParamPrintsMap(param): boolean {

@@ -29357,16 +29357,19 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const name = String(param.name.text);
     let uses = 0;
+    let reads = 0;
     const usesOk = this.rustLocalUsesAll(param, name, true, (n) => {
       const parent = n.parent;
       uses++;
       if (_is.isPropertyAccessExpression.call(void 0, parent) && parent.expression === n) {
+        reads++;
         if (String(parent.name.text) !== "length")
           return false;
         const up = parent.parent;
         return !(_is.isBinaryExpression.call(void 0, up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind)) && _optionalChain([up, 'optionalAccess', _3135 => _3135.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([up, 'optionalAccess', _3136 => _3136.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression;
       }
       if (_is.isElementAccessExpression.call(void 0, parent) && parent.expression === n) {
+        reads++;
         return !this.isNativeWriteTargetBase(n) && this.isNativeAccessPositionSafe(n) && this.r11VecReadShape(parent);
       }
       if (_is.isReturnStatement.call(void 0, parent) || _optionalChain([parent, 'optionalAccess', _3137 => _3137.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n) {
@@ -29374,7 +29377,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       }
       return false;
     });
-    if (!usesOk || uses === 0)
+    if (!usesOk || uses === 0 || reads === 0)
       return false;
     const index = Array.from(method.parameters).indexOf(param);
     return index >= 0 && this.rustVecValueCallSitesOk(method, index);
@@ -29439,8 +29442,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const name = this.printNode(receiver, 0).trim();
     const key = this.rustStripWrappers(node.argumentExpression);
-    const index = _is.isNumericLiteral.call(void 0, key) ? String(Number(key.text)) : `(${this.printNode(node.argumentExpression, 0).trim()}).as_i64().map_or(usize::MAX, |__n| __n as usize)`;
+    const index = _is.isNumericLiteral.call(void 0, key) ? String(Number(key.text)) : this.vecValueParamIndexText(node.argumentExpression);
+    if (index === void 0)
+      return void 0;
     return `${name}.get(${index}).cloned().unwrap_or(Value::Null)`;
+  }
+  /** A `Value` counter place `i` as `i.as_i64().unwrap_or(-1) as usize` (negative or non-Int misses; the x47 pass narrows a length-bounded counter to `i64`). */
+  vecValueParamIndexText(key) {
+    const place = this.printNode(key, 0).trim();
+    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(place) ? `${place}.as_i64().unwrap_or(-1) as usize` : void 0;
   }
   rustParamPrintsMap(param) {
     if (_optionalChain([param, 'optionalAccess', _3144 => _3144.kind]) !== _ast.SyntaxKind.Parameter) {

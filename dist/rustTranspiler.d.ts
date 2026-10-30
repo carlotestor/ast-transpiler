@@ -313,6 +313,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVecValueParamOf(node: any): any;
     /** `p[i]` read of a `Vec<Value>` parameter: bounds-checked slice read, a miss is `Value::Null`. */
     printVecValueParamIndex(node: any): string | undefined;
+    /** A `Value` counter place `i` as `i.as_i64().unwrap_or(-1) as usize` (negative or non-Int misses; the x47 pass narrows a length-bounded counter to `i64`). */
+    vecValueParamIndexText(key: any): string | undefined;
     rustParamPrintsMap(param: any): boolean;
     rustMapParamIsTypedUncached(param: any): boolean;
     /** Every body use is a map operation the bearered printer emits, and at
