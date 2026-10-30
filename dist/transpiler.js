@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-6PJ6DY2D.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -54506,6 +54506,27 @@ function hx11w9RustBoolKLocalOptionBool(content) {
   return out;
 }
 
+// src/rustPasses/hx11w9RustDictLitKeyReadIfLetClosureFree.ts
+init_esm_shims();
+function hx11w9RustDictLitKeyReadIfLetClosureFree(content) {
+  if (!content.includes('.as_map().and_then(|__m| __m.get("'))
+    return content;
+  const P = "[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*";
+  const re = new RegExp(
+    `(?<![A-Za-z0-9_.:])(${P})\\.as_map\\(\\)\\.and_then\\(\\|__m\\| __m\\.get\\(("(?:[^"\\\\\\n]|\\\\.)*")\\)\\)\\.cloned\\(\\)\\.unwrap_or\\(((?:crate::)?Value::Null)\\)`,
+    "g"
+  );
+  return content.replace(re, (m, x, k, nul, off, whole) => {
+    const text = `(if let Some(__m) = ${x}.as_map() { __m.get(${k}).cloned().unwrap_or(${nul}) } else { ${nul} })`;
+    const ls = whole.lastIndexOf("\n", off) + 1;
+    let le = whole.indexOf("\n", off);
+    if (le < 0)
+      le = whole.length;
+    const oldLen = le - ls;
+    return oldLen <= 400 && oldLen - m.length + text.length > 400 ? m : text;
+  });
+}
+
 // src/transpiler.ts
 var __dirname_mock = import_dirname.default;
 var fastCompilerOptions = {
@@ -55228,6 +55249,7 @@ export {
   hx10w9Rp02SplitArgs,
   hx11RustSignApiStr,
   hx11w9RustBoolKLocalOptionBool,
+  hx11w9RustDictLitKeyReadIfLetClosureFree,
   hx11w9RustIntLocalNullSinkOptionI64,
   hx11w9RustStrLiteralLocalNativeString,
   hx11w9StrLocalReassign,
