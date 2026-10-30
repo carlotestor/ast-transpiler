@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-AWK6QGCM.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -12450,6 +12450,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
       return "any";
     }
     const scope = this.goEnclosingFunction(declaration);
+    if (this.goAnnotatedStringLocal(declaration, goType, scope, sourceName)) {
+      return "string";
+    }
     const stable = this.goLocalTypeResolution.size <= 1 && this.goDeclaredTypeInProgress.size === 0;
     const memoKey = goType;
     let perDecl = stable ? this.goLocalSafeVerdicts.get(declaration) : void 0;
@@ -12465,6 +12468,57 @@ func New${this.capitalize(this.className)}() *${this.className} {
       perDecl.set(memoKey, result);
     }
     return result;
+  }
+  // `const x: string = this.safeString (o, k, dflt)` with a non-nil default: the author's
+  // `string` annotation holds the call's deref (the method returns a fresh pointer).
+  goAnnotatedStringLocal(declaration, goType, scope, name) {
+    if (goType !== "*string" || declaration.type?.kind !== SyntaxKind5.StringKeyword) {
+      return false;
+    }
+    const call = declaration.initializer;
+    if (!this.goDefaultedSafeStringCallOrTypedDefault(call)) {
+      return false;
+    }
+    return !this.goTypeNameIsShadowed(scope, "string") && this.goLocalIsSafeToType(scope, declaration, name, "string") && !this.goAnnotatedStringLocalHasNilShapedRead(scope, declaration, name);
+  }
+  // a read a Go string cannot serve natively: a nil comparison (boxes into IsEqual) or a copy
+  // into another variable (a pointer-typed target would lose its type)
+  goAnnotatedStringLocalHasNilShapedRead(scope, declaration, name) {
+    const isNilLike = (n) => n?.kind === SyntaxKind5.NullKeyword || n?.kind === SyntaxKind5.UndefinedKeyword || n?.kind === SyntaxKind5.Identifier && n.text === "undefined";
+    return this.hasNodeWhere(scope, (n) => {
+      if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
+        return false;
+      }
+      const parent = n.parent;
+      if (parent?.kind !== SyntaxKind5.BinaryExpression) {
+        return false;
+      }
+      const other = parent.left === n ? parent.right : parent.left;
+      const op = parent.operatorToken.kind;
+      if ([
+        SyntaxKind5.EqualsEqualsToken,
+        SyntaxKind5.ExclamationEqualsToken,
+        SyntaxKind5.EqualsEqualsEqualsToken,
+        SyntaxKind5.ExclamationEqualsEqualsToken
+      ].indexOf(op) >= 0) {
+        return isNilLike(other);
+      }
+      return op === SyntaxKind5.EqualsToken && parent.right === n;
+    });
+  }
+  // goDefaultedSafeStringCall, also accepting a default that is an identifier of Go type `string`
+  goDefaultedSafeStringCallOrTypedDefault(call) {
+    if (this.goDefaultedSafeStringCall(call)) {
+      return true;
+    }
+    if (call?.kind !== SyntaxKind5.CallExpression || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return false;
+    }
+    const arity = GO_DEFAULTED_SAFE_STRING_ARITY[call.expression.name?.text];
+    if (arity === void 0 || (call.arguments?.length ?? 0) !== arity) {
+      return false;
+    }
+    return this.goDeclaredTypeOfIdentifier(call.arguments[arity - 1]) === "string";
   }
   // Typed async receive: an extension that knows the core's channel element type replaces
   // `x := (<-this.FooAsync(..))` + `PanicOnError(x)` with a typed declaration that runs PanicOnError
@@ -12524,7 +12578,10 @@ ${this.getIden(identation)}PanicOnError(${parsedName})`;
       const varName = this.printNode(declaration.name);
       const declaredType = containerType !== void 0 ? containerType : this.getGoLocalType(declaration, parsedValue);
       const unboxValue = this.goMarketUnboxValue(declaration, parsedValue) ?? (declaredType === GO_SAFE_DICT_LOCAL_TYPE ? this.goSafeDictUnboxValue(declaration, identation) : declaredType === GO_SAFE_LIST_LOCAL_TYPE ? this.goSafeListUnboxValue(declaration, identation) : void 0);
-      const declaredValue = unboxValue !== void 0 ? unboxValue : parsedValue.trimStart();
+      let declaredValue = unboxValue !== void 0 ? unboxValue : parsedValue.trimStart();
+      if (declaredType === "string" && unboxValue === void 0 && this.goTypeOfInitializer(declaration.initializer, parsedValue) === "*string") {
+        declaredValue = "*" + declaredValue;
+      }
       const stm = this.getIden(identation) + "var " + varName + " " + declaredType + " = " + declaredValue;
       if (parsedValue.startsWith("<-this.callInternal(")) {
         return `
@@ -27322,6 +27379,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // every call site passes a typed dict bearer prints `&mut IndexMap`, so its
     // writes are plain `.insert` with no per-site `Arc::make_mut` guard.
     this.rustMapParamDecisions = /* @__PURE__ */ new WeakMap();
+    // ── native `Vec<String>` parameters ───────────────────────────────────────
+    // A required `string[]` parameter of a non-base method whose every body use is
+    // `p.join('lit')` prints `Vec<String>`: the join is the std `.join(..)`, no
+    // closure. The dispatcher builds the list with `Value::to_string_vec`, and
+    // every call site passes an array literal of plain `Value` identifiers.
+    this.rustStrVecParamDecisions = /* @__PURE__ */ new WeakMap();
     this.rustCallSitesCache = /* @__PURE__ */ new WeakMap();
     this.rustStringLocalDecisions = /* @__PURE__ */ new Map();
     // ── native `Option<String>` returns (`: Str` methods) ─────────────────────
@@ -29071,6 +29134,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "bool";
     if (this.rustParamPrintsMap(param))
       return "&mut indexmap::IndexMap<String, Value>";
+    if (this.rustParamPrintsStrVec(param))
+      return "Vec<String>";
     return "Value";
   }
   // A read of a native-`bool` parameter that still compiles: a condition slot,
@@ -29169,6 +29234,120 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const declaration = this.rustDeclaredNode(inner);
     return declaration?.kind === SyntaxKind7.Parameter && this.rustParamPrintsBool(declaration) ? this.printNode(inner, 0).trim() : void 0;
+  }
+  rustParamPrintsStrVec(param) {
+    if (param?.kind !== SyntaxKind7.Parameter)
+      return false;
+    let decision = this.rustStrVecParamDecisions.get(param);
+    if (decision === void 0) {
+      this.rustStrVecParamDecisions.set(param, false);
+      try {
+        decision = this.rustStrVecParamUncached(param);
+      } catch (e) {
+        decision = false;
+      }
+      this.rustStrVecParamDecisions.set(param, decision);
+    }
+    return decision;
+  }
+  rustStrVecParamUncached(param) {
+    const method = param.parent;
+    if (!isMethodDeclaration5(method) || method.body === void 0)
+      return false;
+    if (param.name?.kind !== SyntaxKind7.Identifier || param.dotDotDotToken !== void 0)
+      return false;
+    if (param.initializer !== void 0 || param.questionToken !== void 0 || param.type === void 0)
+      return false;
+    if ((method.modifiers ?? []).some((m) => m.kind === SyntaxKind7.StaticKeyword))
+      return false;
+    const baseFile = _RustTranspiler.RUST_BASE_TIER_FILE;
+    if (baseFile.test(param.getSourceFile().fileName))
+      return false;
+    const hidden = this.getMethodOverride(method);
+    if (hidden !== void 0 && baseFile.test(hidden.getSourceFile().fileName))
+      return false;
+    const checker = this.checkerOrUndefined();
+    const type = checker === void 0 ? void 0 : this.getCheckedTypeOf(param.type);
+    if (type === void 0 || !checker.isArrayType(type))
+      return false;
+    if (this.primitiveKindOfType(checker.getTypeArguments?.(type)?.[0]) !== "string")
+      return false;
+    if (this.rustMethodReferencedAsValue(method))
+      return false;
+    let joins = 0;
+    const usesOk = this.rustLocalUsesAll(param, String(param.name.text), true, (n) => {
+      const access = n.parent;
+      if (!isPropertyAccessExpression3(access) || access.expression !== n || String(access.name.text) !== "join")
+        return false;
+      const call = access.parent;
+      if (!isCallExpression6(call) || call.expression !== access || call.arguments.length !== 1)
+        return false;
+      if (this.rustNativeStringLiteralArg(call.arguments[0]) === void 0)
+        return false;
+      joins++;
+      return true;
+    });
+    if (!usesOk || joins === 0)
+      return false;
+    const index = Array.from(method.parameters).indexOf(param);
+    return index >= 0 && this.rustStrVecCallSitesOk(method, index);
+  }
+  /** Every call site resolving to `method` passes an array literal of plain `Value` identifiers. */
+  rustStrVecCallSitesOk(method, index) {
+    const name = String(method.name?.text ?? "");
+    if (name === "")
+      return false;
+    const key = this.rustDeclarationKey(method);
+    let proven = 0;
+    for (const call of this.rustCallSitesForName(name)) {
+      const args = call.arguments ?? [];
+      if (args.some((a) => a.kind === SyntaxKind7.SpreadElement))
+        return false;
+      let declaration;
+      try {
+        declaration = signatureDeclaration(this.getChecker().getResolvedSignature(call));
+      } catch (e) {
+        return false;
+      }
+      declaration = declaration?.resolve?.() ?? declaration;
+      if (declaration === void 0 || declaration === null || this.rustDeclarationKey(declaration) !== key)
+        continue;
+      if (!this.rustStrVecArgumentOk(args[index]))
+        return false;
+      proven++;
+    }
+    return proven > 0;
+  }
+  rustStrVecArgumentOk(arg) {
+    const inner = arg === void 0 ? void 0 : this.rustSkipWrappers(arg);
+    if (inner === void 0 || !isArrayLiteralExpression4(inner) || inner.elements.length === 0)
+      return false;
+    return Array.from(inner.elements).every((e) => isIdentifier3(e) && this.primitiveKindOfType(this.getCheckedTypeOf(e)) === "string" && this.isDeclaredValueIdentifier(e) && !this.rustStringLocalIdentifierIsTyped(e) && this.rustDeclarationOfIdentifier(e)?.kind !== SyntaxKind7.BindingElement);
+  }
+  rustNativeStrVecArgumentSlot(params, at) {
+    const param = params !== void 0 && at < params.length ? params[at] : void 0;
+    if (param === void 0 || param.initializer !== void 0 || param.questionToken !== void 0)
+      return false;
+    return this.rustParamPrintsStrVec(param);
+  }
+  /** `vec![a.to_string(), ..]` for an array literal landing in a `Vec<String>` slot. */
+  rustStrVecArgumentText(node, identation) {
+    const inner = this.rustSkipWrappers(node);
+    if (inner === void 0 || !isArrayLiteralExpression4(inner))
+      return this.printNode(node, identation).trim();
+    return `vec![${Array.from(inner.elements).map((e) => `${this.printNode(e, 0).trim()}.to_string()`).join(", ")}]`;
+  }
+  printStrVecParamJoin(node) {
+    const access = node?.expression;
+    if (!isPropertyAccessExpression3(access) || !isIdentifier3(access.expression) || node.arguments?.length !== 1)
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(access.expression);
+    if (declaration === void 0 || !isParameterDeclaration3(declaration) || !this.rustParamPrintsStrVec(declaration))
+      return void 0;
+    const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
+    if (literal === void 0)
+      return void 0;
+    return `Value::Str(${this.printNode(access.expression, 0).trim()}.join("${literal}").into())`;
   }
   rustParamPrintsMap(param) {
     if (param?.kind !== SyntaxKind7.Parameter) {
@@ -30130,7 +30309,7 @@ ${classMethods}
       const sig = this.methodSignatures[methodName];
       if (sig) {
         const calleeParams = this.rustCalleeParams(node);
-        const printArg = (a, at) => this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
+        const printArg = (a, at) => this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
         const printArgs = (list, from = 0) => list.map((a, i) => printArg(a, from + i)).join(", ");
         const requiredArgs = printArgs(args.slice(0, sig.requiredCount));
         const reqPart = requiredArgs ? `${requiredArgs}, ` : "";
@@ -30149,6 +30328,9 @@ ${classMethods}
     return Array.from(node.arguments).map((arg, at) => {
       if (this.rustNativeMapArgumentSlot(params, at) !== void 0) {
         return this.rustMapArgumentText(arg, identation);
+      }
+      if (this.rustNativeStrVecArgumentSlot(params, at)) {
+        return this.rustStrVecArgumentText(arg, identation);
       }
       return this.rustNativeBoolArgumentSlot(params, at) ? this.rustBoolArgumentText(arg, identation) : this.printNode(arg, identation).trim();
     }).join(", ");
@@ -30529,7 +30711,7 @@ ${classMethods}
       const place = this.printNode(keyNode, 0).trim();
       if (!place || place.startsWith("&"))
         return void 0;
-      return `${receiverText}.get((${place}).as_i64().map_or(usize::MAX, |__n| __n as usize)).cloned().unwrap_or(Value::Null)`;
+      return `${receiverText}.get((${place}).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
     }
     if (!this.isRustValueIndexKey(keyNode))
       return void 0;
@@ -30944,7 +31126,7 @@ ${classMethods}
     const place = this.printNode(key, 0).trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(place))
       return void 0;
-    return `${shadow.name}.get((${place}).as_i64().map_or(usize::MAX, |__n| __n as usize)).cloned().unwrap_or(Value::Null)`;
+    return `${shadow.name}.get((${place}).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
   }
   /** `'k' in x` on a shadowed dict parameter. */
   printShadowInOperator(shadow, keyNode) {
@@ -31088,7 +31270,7 @@ ${classMethods}
     const arc = `${view}_arc`;
     const map = "indexmap::IndexMap<String, Value>";
     const ind = this.getIden(identation + 2);
-    const lines = `${ind}let ${arc}: std::sync::Arc<${map}> = (match &${name} { Value::Dict(__d) => __d.clone(), _ => std::sync::Arc::new(indexmap::IndexMap::new()) });
+    const lines = `${ind}let ${arc}: std::sync::Arc<${map}> = (if let Value::Dict(__d) = &${name} { __d.clone() } else { std::sync::Arc::new(indexmap::IndexMap::new()) });
 ${ind}let ${view}: &${map} = &${arc};
 `;
     return { param, lines };
@@ -31850,7 +32032,7 @@ ${this.getIden(identation)}}`;
     return this.r17PrintTrim(node, name) ?? `trim(&${name})`;
   }
   printJoinCall(node, identation, name = void 0, parsedArg = void 0) {
-    return this.r15PrintVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? `join(&${name}, &${parsedArg})`;
+    return this.printStrVecParamJoin(node) ?? this.r15PrintVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? `join(&${name}, &${parsedArg})`;
   }
   printSplitCall(node, identation, name = void 0, parsedArg = void 0) {
     return this.printNativeStringSplit(node, name) ?? this.printRustR13Split(node, name) ?? `split(&${name}, &${parsedArg})`;
@@ -33886,7 +34068,7 @@ ${this.getIden(identation)}}`;
       return super.printElementAccessExpressionExceptionIfAny(node);
     const name = this.printNode(receiver, 0).trim();
     const key = this.rustStripWrappers(node.argumentExpression);
-    const index = isNumericLiteral4(key) ? String(Number(key.text)) : `(${this.printNode(node.argumentExpression, 0).trim()}).as_i64().map_or(usize::MAX, |__n| __n as usize)`;
+    const index = isNumericLiteral4(key) ? String(Number(key.text)) : `(${this.printNode(node.argumentExpression, 0).trim()}).as_i64().unwrap_or(-1) as usize`;
     return `${name}.get(${index}).cloned().unwrap_or(Value::Null)`;
   }
   // An expression that always holds a `Value::Arr`: a runtime-split / array-literal-returning call,
@@ -53201,12 +53383,12 @@ function narrowStrNullLocals(content) {
   const grown = /* @__PURE__ */ new Map();
   const groups = [];
   const rewrites = [];
+  const cands = [];
   let m;
   while ((m = declRe.exec(masked)) !== null) {
     const opt = OPT[m[4]];
     if (opt === void 0)
       continue;
-    const name = m[3];
     const callOpen = m.index + m[0].length - 1;
     const callClose = closeParen4(masked, callOpen);
     if (callClose < 0)
@@ -53214,7 +53396,6 @@ function narrowStrNullLocals(content) {
     const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
     if (tail === null)
       continue;
-    const stmtEnd3 = callClose + tail[0].length;
     const base = callOpen + 1;
     const spans = argSpans5(masked.slice(base, callClose - 1));
     if (spans.length !== 3)
@@ -53228,6 +53409,36 @@ function narrowStrNullLocals(content) {
       continue;
     if (defRaw !== "&[]")
       continue;
+    cands.push({
+      index: m.index,
+      stmtEnd: callClose + tail[0].length,
+      name: m[3],
+      declText: `${m[1]}let ${m[2] ?? ""}${m[3]}: Option<String> = self.${opt}(${obj}, ${keyRaw}, ${defRaw});`
+    });
+  }
+  const inlineRe = new RegExp('^([ \\t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = \\(match __pro_message\\.get\\(("(?:[^"\\\\]|\\\\.)*")\\)\\.cloned\\(\\) \\{ Some\\(Value::Str\\(__s\\)\\) if !__s\\.is_empty\\(\\) => Value::Str\\(__s\\), Some\\(Value::Int\\(__n\\)\\) => Value::Str\\(__n\\.to_string\\(\\)\\.into\\(\\)\\), Some\\(Value::Float\\(__f\\)\\) => Value::Str\\(__f\\.to_string\\(\\)\\.into\\(\\)\\), _ => Value::Null \\}\\);', "gm");
+  while ((m = inlineRe.exec(content)) !== null) {
+    cands.push({
+      index: m.index,
+      stmtEnd: m.index + m[0].length,
+      name: m[3],
+      declText: `${m[1]}let ${m[2] ?? ""}${m[3]}: Option<String> = match __pro_message.get(${m[4]}).cloned() { Some(Value::Str(__s)) if !__s.is_empty() => Some(__s.to_string()), Some(Value::Int(__n)) => Some(__n.to_string()), Some(Value::Float(__f)) => Some(__f.to_string()), _ => None };`
+    });
+  }
+  const intRe = new RegExp('^([ \\t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = \\(match __pro_message\\.get\\(("(?:[^"\\\\]|\\\\.)*")\\)\\.cloned\\(\\) \\{ Some\\(Value::Int\\(__n\\)\\) => Value::Int\\(__n\\), Some\\(Value::Float\\(__f\\)\\) => Value::Int\\(__f as i64\\), Some\\(Value::Str\\(__s\\)\\) if !__s\\.is_empty\\(\\) => match __s\\.parse::<i64>\\(\\) \\{ Ok\\(__n\\) => Value::Int\\(__n\\), Err\\(_\\) => match __s\\.parse::<f64>\\(\\) \\{ Ok\\(__f\\) if __f\\.is_finite\\(\\) => Value::Int\\(__f as i64\\), _ => Value::Null \\} \\}, _ => Value::Null \\}\\);', "gm");
+  while ((m = intRe.exec(content)) !== null) {
+    cands.push({
+      index: m.index,
+      stmtEnd: m.index + m[0].length,
+      name: m[3],
+      intOnly: true,
+      declText: `${m[1]}let ${m[2] ?? ""}${m[3]}: Option<i64> = match __pro_message.get(${m[4]}).cloned() { Some(Value::Int(__n)) => Some(__n), Some(Value::Float(__f)) => Some(__f as i64), Some(Value::Str(__s)) if !__s.is_empty() => match __s.parse::<i64>() { Ok(__n) => Some(__n), Err(_) => match __s.parse::<f64>() { Ok(__f) if __f.is_finite() => Some(__f as i64), _ => None } }, _ => None };`
+    });
+  }
+  cands.sort((a, b) => a.index - b.index);
+  for (const cand of cands) {
+    const name = cand.name;
+    const stmtEnd3 = cand.stmtEnd;
     const end = braceEnd(masked, stmtEnd3);
     const body = masked.slice(stmtEnd3, end);
     if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
@@ -53244,6 +53455,10 @@ function narrowStrNullLocals(content) {
       const after = body.slice(at + name.length);
       const before = body.slice(0, at);
       let g;
+      if (cand.intOnly === true && !/^\s*(==|!=)\s*Value::Null\b/.test(after)) {
+        ok = false;
+        break;
+      }
       if ((g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
         edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === "==" ? "is_none" : "is_some"}()` });
       } else if ((g = /^\.as_str\(\)/.exec(after)) !== null) {
@@ -53272,8 +53487,8 @@ function narrowStrNullLocals(content) {
     }
     if (!ok || edits.length === 0)
       continue;
-    const declText = `${m[1]}let ${m[2] ?? ""}${name}: Option<String> = self.${opt}(${obj}, ${keyRaw}, ${defRaw});`;
-    const all = [{ start: m.index, end: stmtEnd3, text: declText }, ...edits];
+    const declText = cand.declText;
+    const all = [{ start: cand.index, end: stmtEnd3, text: declText }, ...edits];
     const lineGrow = /* @__PURE__ */ new Map();
     for (const e of all) {
       const ls = content.lastIndexOf("\n", e.start) + 1;
@@ -53292,7 +53507,7 @@ function narrowStrNullLocals(content) {
       continue;
     for (const [ls, grow] of lineGrow)
       grown.set(ls, (grown.get(ls) ?? 0) + grow);
-    groups.push({ decl: { start: m.index, end: stmtEnd3, text: declText }, edits });
+    groups.push({ decl: { start: cand.index, end: stmtEnd3, text: declText }, edits });
   }
   for (let again = true; again; ) {
     again = false;
@@ -55083,6 +55298,186 @@ function hx11w9RustNumber2LocalOptionF64(content) {
   return out + content.slice(last);
 }
 
+// src/rustPasses/hx11w9RustNumber2SinkLocalOptionF64R2.ts
+init_esm_shims();
+function hx11w9RustNumber2SinkLocalOptionF64R2(content) {
+  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.safe_number2\(/gm;
+  const mask2 = (src) => {
+    let out2 = "";
+    let i = 0;
+    const blank = (s) => s.replace(/[^\n]/g, " ");
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "/" && src[i + 1] === "/") {
+        while (i < src.length && src[i] !== "\n") {
+          out2 += " ";
+          i++;
+        }
+        continue;
+      }
+      if (c === "/" && src[i + 1] === "*") {
+        const e = src.indexOf("*/", i + 2);
+        const stop = e < 0 ? src.length : e + 2;
+        out2 += blank(src.slice(i, stop));
+        i = stop;
+        continue;
+      }
+      if (c === '"') {
+        out2 += '"';
+        i++;
+        while (i < src.length && src[i] !== '"') {
+          if (src[i] === "\\") {
+            out2 += "  ";
+            i += 2;
+            continue;
+          }
+          out2 += src[i] === "\n" ? "\n" : " ";
+          i++;
+        }
+        if (i < src.length) {
+          out2 += '"';
+          i++;
+        }
+        continue;
+      }
+      out2 += c;
+      i++;
+    }
+    return out2;
+  };
+  const maskedAll = mask2(content);
+  const closeOf2 = (masked, open) => {
+    let depth = 0;
+    for (let k = open; k < masked.length; k++) {
+      if (masked[k] === "(")
+        depth++;
+      else if (masked[k] === ")") {
+        depth--;
+        if (depth === 0)
+          return k + 1;
+      }
+    }
+    return -1;
+  };
+  const scopeEnd = (masked, from) => {
+    let depth = 0;
+    for (let k = from; k < masked.length; k++) {
+      if (masked[k] === "{")
+        depth++;
+      else if (masked[k] === "}") {
+        depth--;
+        if (depth < 0)
+          return k;
+      }
+    }
+    return masked.length;
+  };
+  const splitArgs5 = (src) => {
+    const out2 = [];
+    let cur = "";
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    for (const c of src) {
+      if (inStr) {
+        cur += c;
+        if (esc)
+          esc = false;
+        else if (c === "\\")
+          esc = true;
+        else if (c === '"')
+          inStr = false;
+        continue;
+      }
+      if (c === '"') {
+        inStr = true;
+        cur += c;
+        continue;
+      }
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      if (c === "," && depth === 0) {
+        out2.push(cur);
+        cur = "";
+        continue;
+      }
+      cur += c;
+    }
+    out2.push(cur);
+    return out2;
+  };
+  const rewrites = [];
+  let m;
+  while ((m = declRe.exec(content)) !== null) {
+    const name = m[3];
+    const callOpen = m.index + m[0].length - 1;
+    const callClose = closeOf2(maskedAll, callOpen);
+    if (callClose < 0 || !/^\s*;/.test(content.slice(callClose, callClose + 3)))
+      continue;
+    const stmtEnd3 = callClose + /^\s*;/.exec(content.slice(callClose, callClose + 3))[0].length;
+    const args = splitArgs5(content.slice(callOpen + 1, callClose - 1));
+    if (args.length !== 4 || !/^&\[\s*(?:Value::Null)?\s*\]$/.test(args[3].trim()))
+      continue;
+    const end = scopeEnd(maskedAll, stmtEnd3);
+    const masked = maskedAll.slice(stmtEnd3, end);
+    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(masked))
+      continue;
+    if (new RegExp(`\\blet\\b[^=;\\n]*\\b${name}\\b`).test(masked))
+      continue;
+    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(masked))
+      continue;
+    const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, "g");
+    const uses = [];
+    let ok = true;
+    let u;
+    while ((u = useRe.exec(masked)) !== null) {
+      const s = u.index;
+      const e = s + name.length;
+      const after = masked.slice(e);
+      let g;
+      if ((g = /^\s*(!=|==)\s*Value::Null\b/.exec(after)) !== null) {
+        uses.push({ start: stmtEnd3 + s, end: stmtEnd3 + e + g[0].length, text: `${name}.${g[1] === "!=" ? "is_some" : "is_none"}()` });
+      } else if ((g = /^\.as_f64\(\)\s*(==|!=)\s*Some\((-?\d+\.0)\)/.exec(after)) !== null) {
+        uses.push({ start: stmtEnd3 + s, end: stmtEnd3 + e + g[0].length, text: `${name} ${g[1]} Some(${g[2]})` });
+      } else if (after.startsWith(".clone()")) {
+        uses.push({ start: stmtEnd3 + s, end: stmtEnd3 + e + 8, text: `Value::from(${name})` });
+        useRe.lastIndex = e + 8;
+        continue;
+      } else if (/\bm\.insert\("[^"\n]*"\.to_string\(\),\s*$/.test(masked.slice(0, s)) && after.startsWith(");") || /self\.price_to_precision\([^;\n]*,\s*$/.test(masked.slice(0, s)) && after.startsWith(")")) {
+        uses.push({ start: stmtEnd3 + s, end: stmtEnd3 + e, text: `Value::from(${name})` });
+        continue;
+      } else {
+        ok = false;
+        break;
+      }
+      useRe.lastIndex = e + g[0].length;
+    }
+    if (!ok)
+      continue;
+    rewrites.push({
+      start: m.index,
+      end: callOpen,
+      text: content.slice(m.index, callOpen).replace(": Value =", ": Option<f64> =").replace("safe_number2", "safe_number2_opt")
+    });
+    for (const use of uses)
+      rewrites.push(use);
+  }
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
+  let out = "";
+  let last = 0;
+  for (const r of rewrites) {
+    if (r.start < last)
+      continue;
+    out += content.slice(last, r.start) + r.text;
+    last = r.end;
+  }
+  return out + content.slice(last);
+}
+
 // src/transpiler.ts
 var __dirname_mock = import_dirname.default;
 var fastCompilerOptions = {
@@ -55809,6 +56204,7 @@ export {
   hx11w9RustBoolNLocalOptionBool,
   hx11w9RustIntLocalNullSinkOptionI64,
   hx11w9RustNumber2LocalOptionF64,
+  hx11w9RustNumber2SinkLocalOptionF64R2,
   hx11w9RustStr2LocalOptionString,
   hx11w9RustStrLiteralLocalNativeString,
   hx11w9StrLocalReassign,

@@ -46,3 +46,37 @@ describe('rust final-text passes (moved from ccxt build/)', () => {
         expect(passes.bf03PlainDictChains(unknown)).toContain('get_value_mut');
     });
 });
+
+describe('narrowStrNullLocals inlined __pro_message read', () => {
+    const read = (name: string, key: string, dflt = 'Value::Null'): string => 'let mut ' + name + ': Value = (match __pro_message.get("' + key + '").cloned() { Some(Value::Str(__s)) if !__s.is_empty() => Value::Str(__s), '
+        + 'Some(Value::Int(__n)) => Value::Str(__n.to_string().into()), Some(Value::Float(__f)) => Value::Str(__f.to_string().into()), _ => ' + dflt + ' });';
+    test('narrows an inlined read used by a null test and an as_str compare', () => {
+        const src = 'fn f() {\n    ' + read('topic', 'topic') + '\n    if (topic != Value::Null) {\n        let ok = topic.as_str() == Some("a");\n    }\n}\n';
+        const out = passes.narrowStrNullLocals(src);
+        expect(out).toContain('let mut topic: Option<String> = match __pro_message.get("topic").cloned()');
+        expect(out).toContain('topic.is_some()');
+        expect(out).toContain('topic.as_deref() == Some("a")');
+    });
+    test('keeps Value when a use cannot be rewritten', () => {
+        const src = 'fn f() {\n    ' + read('topic', 'topic') + '\n    self.go(&mut topic);\n}\n';
+        expect(passes.narrowStrNullLocals(src)).toBe(src);
+    });
+    test('keeps a read with a non-Null default', () => {
+        const src = 'fn f() {\n    ' + read('topic', 'topic', 'Value::Str("".into())') + '\n    let a = topic.as_str();\n}\n';
+        expect(passes.narrowStrNullLocals(src)).toBe(src);
+    });
+});
+
+describe('narrowStrNullLocals inlined integer read', () => {
+    const intRead = 'let mut pong: Value = (match __pro_message.get("pong").cloned() { Some(Value::Int(__n)) => Value::Int(__n), Some(Value::Float(__f)) => Value::Int(__f as i64), '
+        + 'Some(Value::Str(__s)) if !__s.is_empty() => match __s.parse::<i64>() { Ok(__n) => Value::Int(__n), Err(_) => match __s.parse::<f64>() { Ok(__f) if __f.is_finite() => Value::Int(__f as i64), _ => Value::Null } }, _ => Value::Null });';
+    test('narrows to Option<i64> for a null test only', () => {
+        const out = passes.narrowStrNullLocals('fn f() {\n    ' + intRead + '\n    if (pong != Value::Null) { return; }\n}\n');
+        expect(out).toContain('let mut pong: Option<i64> = match __pro_message.get("pong").cloned()');
+        expect(out).toContain('pong.is_some()');
+    });
+    test('keeps Value when the integer is used otherwise', () => {
+        const src = 'fn f() {\n    ' + intRead + '\n    self.go(pong);\n}\n';
+        expect(passes.narrowStrNullLocals(src)).toBe(src);
+    });
+});
