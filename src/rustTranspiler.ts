@@ -1943,6 +1943,8 @@ export class RustTranspiler extends BaseTranspiler {
             this.rustBoolDeclaredLocals.add(declaration);
             return `${indent}let mut ${varName}: bool = ${boolValue}`;
         }
+        const methodText = node.declarations.length === 1 ? this.rustStringMethodLocalInit(declaration) : undefined;
+        if (methodText !== undefined) return `${indent}let mut ${varName}: String = ${methodText}`;
         const typedStr = this.rustSafeStringLocalIsTyped(declaration);
         const nativeStr = this.rustNativeStrCalleeKind(declaration.initializer) === 'str';
         const signApi = typedStr ? this.rustSignApiElementInit(declaration) : undefined;
@@ -2787,6 +2789,48 @@ export class RustTranspiler extends BaseTranspiler {
             return undefined;
         }
         return this.rustBearerInsertText(name, keyArg, valueText);
+    }
+
+    // A new string local built by `this.capitalize(v)` / `r.toUpperCase()` / `r.toLowerCase()` is a
+    // native `String` when every use is a boxing move (return, object value, `this.` arg, `m[k] = x`).
+
+    private rustStringMethodLocalDecisions = new WeakMap<any, boolean>();
+
+    /** The native initializer text of a string-method local, else undefined. */
+    rustStringMethodLocalInit(declaration): string | undefined {
+        const init: any = declaration.initializer;
+        if (declaration.name?.kind !== SyntaxKind.Identifier || init === undefined || !isCallExpression(init)
+            || !isPropertyAccessExpression(init.expression)) return undefined;
+        const callee: any = init.expression;
+        const method = String(callee.name.text);
+        let text: string | undefined;
+        if (method === 'capitalize' && callee.expression.kind === SyntaxKind.ThisKeyword && init.arguments.length === 1) {
+            text = `${this.printNode(init, 0).trim()}.to_string()`;
+        } else if ((method === 'toUpperCase' || method === 'toLowerCase') && init.arguments.length === 0
+            && callee.expression.kind !== SyntaxKind.ThisKeyword && isIdentifier(callee.expression)
+            && this.rustParamShadowOf(callee.expression) === undefined) {
+            const receiver = this.rustNativeStringReceiver(init, this.printNode(callee.expression, 0));
+            if (receiver !== undefined) text = `${receiver}.as_str().map(str::${method === 'toUpperCase' ? 'to_uppercase' : 'to_lowercase'}).unwrap_or_default()`;
+        }
+        return text !== undefined && this.rustStringMethodLocalIsTyped(declaration) ? text : undefined;
+    }
+
+    rustStringMethodLocalIsTyped(declaration): boolean {
+        let decision = this.rustStringMethodLocalDecisions.get(declaration);
+        if (decision === undefined) {
+            this.rustStringMethodLocalDecisions.set(declaration, false); // re-entrancy guard
+            decision = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) === 'string'
+                && this.rustLocalUsesAll(declaration, declaration.name.text, true, (n) => this.rustStringMethodLocalBoxUse(n));
+            this.rustStringMethodLocalDecisions.set(declaration, decision);
+        }
+        return decision;
+    }
+
+    rustStringMethodLocalBoxUse(n): boolean {
+        const parent: any = n.parent;
+        return isReturnStatement(parent) || this.rustDictWriteValue(n)
+            || (parent?.kind === SyntaxKind.PropertyAssignment && parent.initializer === n)
+            || (isCallExpression(parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression));
     }
 
     // Typed string locals: `let x: Value = self.safeString(..)` is declared `Option<String>` when
@@ -6045,6 +6089,11 @@ export class RustTranspiler extends BaseTranspiler {
             // hx10w6 R01: only the map's last use moves into the box; an earlier
             // one boxes a clone, so a bearer may be handed out more than once.
             return `Value::Map(${text}${!this.rustDictBearerCloned.has(bearer) && this.rustVecIsFinalUse(node, String(node.text)) ? '' : '.clone()'})`;
+        }
+        const stringMethod: any = this.rustDeclarationOfIdentifier(node);
+        if (stringMethod !== undefined && isVariableDeclaration(stringMethod) && stringMethod.name !== node
+            && this.rustStringMethodLocalInit(stringMethod) !== undefined) {
+            return `Value::from(${text}${this.rustVecIsFinalUse(node, String(node.text)) ? '' : '.clone()'})`;
         }
         if (parent === undefined || !(isReturnStatement(parent) || (isCallExpression(parent) && parent.arguments.some((a) => a === node)
             && this.rustVecBoxingCallee(parent.expression)) || (parent.kind === SyntaxKind.PropertyAssignment && parent.initializer === node))) return text;

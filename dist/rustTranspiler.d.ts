@@ -328,6 +328,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `x['k'] = v` on a native-map parameter: the insert `add_element_to_object`
      *  performs on the same plain dict, on the map the type already is. */
     rustMapParamDictInsert(baseExpr: any, keyNode: any, keyText: string, valueText: string): string | undefined;
+    private rustStringMethodLocalDecisions;
+    /** The native initializer text of a string-method local, else undefined. */
+    rustStringMethodLocalInit(declaration: any): string | undefined;
+    rustStringMethodLocalIsTyped(declaration: any): boolean;
+    rustStringMethodLocalBoxUse(n: any): boolean;
     private static readonly RUST_STRING_LOCAL_HELPERS;
     private rustStringLocalDecisions;
     rustSafeStringLocalInitializer(declaration: any): boolean;
