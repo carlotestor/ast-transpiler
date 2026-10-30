@@ -65,6 +65,14 @@ export function hx11w9RustStrLiteralLocalNativeString(content: string): string {
         return out;
     };
 
+    // The re-box consumes the `String`: only a last use outside any loop may move it.
+    const boxUse = (name: string, kept: string, after: string, used: number, body: string): string => {
+        const later = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`).test(after.slice(used));
+        const inLoop = /\b(?:loop|while|for)\b/.test(body);
+        const arg = kept === '' && (later || inLoop) ? `${name}.clone()` : `${name}${kept}`;
+        return `Value::from(${arg})`;
+    };
+
     const masked = maskText(content);
     type Edit = { start: number, end: number, text: string };
     const groups: Edit[][] = [];
@@ -124,9 +132,9 @@ export function hx11w9RustStrLiteralLocalNativeString(content: string): string {
                 edits.push({ start: from, end: abs + name.length + 1, text: `${name}.clone()` });
             } else if (/(?:[(,\[]\s*)$/.test(before) && !/&\s*$/.test(before)
                 && (g = /^(\.clone\(\))?(?=\s*[,)\];])/.exec(after)) !== null) {
-                edits.push({ start: abs, end: abs + name.length + g[0].length, text: `Value::from(${name}${g[0]})` });
+                edits.push({ start: abs, end: abs + name.length + g[0].length, text: boxUse(name, g[0], after, g[0].length, body) });
             } else if (/(?<![=!<>])=\s$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[;,)])/.exec(after)) !== null) {
-                edits.push({ start: abs, end: abs + name.length + g[0].length, text: `Value::from(${name}${g[0]})` });
+                edits.push({ start: abs, end: abs + name.length + g[0].length, text: boxUse(name, g[0], after, g[0].length, body) });
             } else { ok = false; break; }
         }
         if (!ok) continue;

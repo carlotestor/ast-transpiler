@@ -53449,6 +53449,12 @@ function hx11w9RustStrLiteralLocalNativeString(content) {
     out2.push([start, src.length]);
     return out2;
   };
+  const boxUse = (name, kept, after, used, body) => {
+    const later = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`).test(after.slice(used));
+    const inLoop = /\b(?:loop|while|for)\b/.test(body);
+    const arg = kept === "" && (later || inLoop) ? `${name}.clone()` : `${name}${kept}`;
+    return `Value::from(${arg})`;
+  };
   const masked = maskText5(content);
   const groups = [];
   const grown = /* @__PURE__ */ new Map();
@@ -53513,9 +53519,9 @@ function hx11w9RustStrLiteralLocalNativeString(content) {
         const from = abs - "crate::runtime::stringify_param(&".length;
         edits.push({ start: from, end: abs + name.length + 1, text: `${name}.clone()` });
       } else if (/(?:[(,\[]\s*)$/.test(before) && !/&\s*$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[,)\];])/.exec(after)) !== null) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `Value::from(${name}${g[0]})` });
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: boxUse(name, g[0], after, g[0].length, body) });
       } else if (/(?<![=!<>])=\s$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[;,)])/.exec(after)) !== null) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `Value::from(${name}${g[0]})` });
+        edits.push({ start: abs, end: abs + name.length + g[0].length, text: boxUse(name, g[0], after, g[0].length, body) });
       } else {
         ok = false;
         break;
