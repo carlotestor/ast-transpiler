@@ -19343,8 +19343,10 @@ var JAVA_THIS_BOOLEAN_METHODS = /* @__PURE__ */ new Set([
   // public boolean valueIsDefined (Object value)
   "isJsonEncodedObject",
   // public boolean isJsonEncodedObject (Object str)
-  "isBinaryMessage"
+  "isBinaryMessage",
   // public boolean isBinaryMessage (Object message)
+  "isDictionary"
+  // public boolean isDictionary (Object value)
 ]);
 var JAVA_THIS_BOOLEAN_BOX_METHODS = {
   "safeBool": 2,

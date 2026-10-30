@@ -237,6 +237,7 @@ const JAVA_THIS_BOOLEAN_METHODS = new Set<string>([
     'valueIsDefined',       // public boolean valueIsDefined (Object value)
     'isJsonEncodedObject',  // public boolean isJsonEncodedObject (Object str)
     'isBinaryMessage',      // public boolean isBinaryMessage (Object message)
+    'isDictionary',         // public boolean isDictionary (Object value)
 ]);
 
 // The GENERATED boolean accessors (`Object safeBool (...)`) hand the caller's `defaultValue` back
