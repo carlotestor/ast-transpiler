@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -27328,6 +27328,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // closure. The dispatcher builds the list with `Value::to_string_vec`, and
     // every call site passes an array literal of plain `Value` identifiers.
     this.rustStrVecParamDecisions = /* @__PURE__ */ new WeakMap();
+    // ── native `Vec<Value>` parameters ────────────────────────────────────────
+    // A required array parameter of a non-base method whose every body use is
+    // `p.length`, a bounds-checked `p[i]` read, or a final `return p` / `{ k: p }`
+    // move prints `Vec<Value>`. The dispatcher builds it with `Value::to_value_vec`;
+    // each caller passes `[]` or a plain `Value` local (`x.to_value_vec()`).
+    this.rustVecValueParamDecisions = /* @__PURE__ */ new WeakMap();
     this.rustCallSitesCache = /* @__PURE__ */ new WeakMap();
     this.rustStringLocalDecisions = /* @__PURE__ */ new Map();
     // ── native `Option<String>` returns (`: Str` methods) ─────────────────────
@@ -29079,6 +29085,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "&mut indexmap::IndexMap<String, Value>";
     if (this.rustParamPrintsStrVec(param))
       return "Vec<String>";
+    if (this.rustParamPrintsVecValue(param))
+      return "Vec<Value>";
     return "Value";
   }
   // A read of a native-`bool` parameter that still compiles: a condition slot,
@@ -29308,6 +29316,132 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (literal === void 0)
       return void 0;
     return `Value::Str(${this.printNode(access.expression, 0).trim()}.join("${literal}").into())`;
+  }
+  rustParamPrintsVecValue(param) {
+    if (param?.kind !== SyntaxKind7.Parameter)
+      return false;
+    let decision = this.rustVecValueParamDecisions.get(param);
+    if (decision === void 0) {
+      this.rustVecValueParamDecisions.set(param, false);
+      try {
+        decision = this.rustVecValueParamUncached(param);
+      } catch (e) {
+        decision = false;
+      }
+      this.rustVecValueParamDecisions.set(param, decision);
+    }
+    return decision;
+  }
+  rustVecValueParamUncached(param) {
+    const method = param.parent;
+    if (!isMethodDeclaration5(method) || method.body === void 0)
+      return false;
+    if (param.name?.kind !== SyntaxKind7.Identifier || param.dotDotDotToken !== void 0)
+      return false;
+    if (param.initializer !== void 0 || param.questionToken !== void 0 || param.type === void 0)
+      return false;
+    if ((method.modifiers ?? []).some((m) => m.kind === SyntaxKind7.StaticKeyword))
+      return false;
+    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(param.getSourceFile().fileName))
+      return false;
+    if (/\/test\//.test(param.getSourceFile().fileName))
+      return false;
+    if (this.getMethodOverride(method) !== void 0)
+      return false;
+    const checker = this.checkerOrUndefined();
+    const type = checker === void 0 ? void 0 : this.getCheckedTypeOf(param.type);
+    if (type === void 0 || !this.isProvenShadowListType(type))
+      return false;
+    if (this.rustMethodReferencedAsValue(method))
+      return false;
+    if (this.rustParamShadowUseCensus(method, param, RUST_PARAM_SHADOWS.LIST) !== void 0)
+      return false;
+    const name = String(param.name.text);
+    let uses = 0;
+    const usesOk = this.rustLocalUsesAll(param, name, true, (n) => {
+      const parent = n.parent;
+      uses++;
+      if (isPropertyAccessExpression3(parent) && parent.expression === n) {
+        if (String(parent.name.text) !== "length")
+          return false;
+        const up = parent.parent;
+        return !(isBinaryExpression5(up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind)) && up?.kind !== SyntaxKind7.PrefixUnaryExpression && up?.kind !== SyntaxKind7.PostfixUnaryExpression;
+      }
+      if (isElementAccessExpression4(parent) && parent.expression === n) {
+        return !this.isNativeWriteTargetBase(n) && this.isNativeAccessPositionSafe(n) && this.r11VecReadShape(parent);
+      }
+      if (isReturnStatement4(parent) || parent?.kind === SyntaxKind7.PropertyAssignment && parent.initializer === n) {
+        return this.rustVecValueUse(n, name);
+      }
+      return false;
+    });
+    if (!usesOk || uses === 0)
+      return false;
+    const index = Array.from(method.parameters).indexOf(param);
+    return index >= 0 && this.rustVecValueCallSitesOk(method, index);
+  }
+  /** Every call site resolving to `method` passes `[]` or a plain `Value` local. */
+  rustVecValueCallSitesOk(method, index) {
+    const name = String(method.name?.text ?? "");
+    if (name === "")
+      return false;
+    const key = this.rustDeclarationKey(method);
+    for (const call of this.rustCallSitesForName(name)) {
+      const args = call.arguments ?? [];
+      if (args.some((a) => a.kind === SyntaxKind7.SpreadElement))
+        return false;
+      let declaration;
+      try {
+        declaration = signatureDeclaration(this.getChecker().getResolvedSignature(call));
+      } catch (e) {
+        return false;
+      }
+      declaration = declaration?.resolve?.() ?? declaration;
+      if (declaration === void 0 || declaration === null || this.rustDeclarationKey(declaration) !== key)
+        continue;
+      if (!this.rustVecValueArgumentOk(args[index]))
+        return false;
+    }
+    return true;
+  }
+  rustVecValueArgumentOk(arg) {
+    const inner = arg === void 0 ? void 0 : this.rustSkipWrappers(arg);
+    if (inner === void 0)
+      return false;
+    if (isArrayLiteralExpression4(inner))
+      return inner.elements.length === 0;
+    if (isIdentifier3(inner))
+      return this.rustStrVecValueLocal(inner);
+    return false;
+  }
+  rustNativeVecValueArgumentSlot(params, at) {
+    const param = params !== void 0 && at < params.length ? params[at] : void 0;
+    if (param === void 0 || param.initializer !== void 0 || param.questionToken !== void 0)
+      return false;
+    return this.rustParamPrintsVecValue(param);
+  }
+  rustVecValueArgumentText(node, identation) {
+    const inner = this.rustSkipWrappers(node);
+    if (inner !== void 0 && isArrayLiteralExpression4(inner))
+      return "Vec::new()";
+    return `${this.printNode(inner, 0).trim()}.to_value_vec()`;
+  }
+  /** The `Vec<Value>` parameter an identifier names, if any. */
+  rustVecValueParamOf(node) {
+    if (!isIdentifier3(node))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    return declaration !== void 0 && isParameterDeclaration3(declaration) && this.rustParamPrintsVecValue(declaration) ? declaration : void 0;
+  }
+  /** `p[i]` read of a `Vec<Value>` parameter: bounds-checked slice read, a miss is `Value::Null`. */
+  printVecValueParamIndex(node) {
+    const receiver = node?.expression;
+    if (receiver?.kind !== SyntaxKind7.Identifier || this.rustVecValueParamOf(receiver) === void 0 || !this.r11VecReadShape(node))
+      return void 0;
+    const name = this.printNode(receiver, 0).trim();
+    const key = this.rustStripWrappers(node.argumentExpression);
+    const index = isNumericLiteral4(key) ? String(Number(key.text)) : `(${this.printNode(node.argumentExpression, 0).trim()}).as_i64().map_or(usize::MAX, |__n| __n as usize)`;
+    return `${name}.get(${index}).cloned().unwrap_or(Value::Null)`;
   }
   rustParamPrintsMap(param) {
     if (param?.kind !== SyntaxKind7.Parameter) {
@@ -30269,7 +30403,7 @@ ${classMethods}
       const sig = this.methodSignatures[methodName];
       if (sig) {
         const calleeParams = this.rustCalleeParams(node);
-        const printArg = (a, at) => this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
+        const printArg = (a, at) => this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeVecValueArgumentSlot(calleeParams, at) ? this.rustVecValueArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
         const printArgs = (list, from = 0) => list.map((a, i) => printArg(a, from + i)).join(", ");
         const requiredArgs = printArgs(args.slice(0, sig.requiredCount));
         const reqPart = requiredArgs ? `${requiredArgs}, ` : "";
@@ -30291,6 +30425,9 @@ ${classMethods}
       }
       if (this.rustNativeStrVecArgumentSlot(params, at)) {
         return this.rustStrVecArgumentText(arg, identation);
+      }
+      if (this.rustNativeVecValueArgumentSlot(params, at)) {
+        return this.rustVecValueArgumentText(arg, identation);
       }
       return this.rustNativeBoolArgumentSlot(params, at) ? this.rustBoolArgumentText(arg, identation) : this.printNode(arg, identation).trim();
     }).join(", ");
@@ -32531,6 +32668,9 @@ ${iden}}`;
     }
     if (parent === void 0 || !(isReturnStatement4(parent) || isCallExpression6(parent) && parent.arguments.some((a) => a === node) && this.rustVecBoxingCallee(parent.expression) || parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === node))
       return text;
+    if (parent !== void 0 && (isReturnStatement4(parent) || parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === node) && this.rustVecValueParamOf(node) !== void 0) {
+      return `Value::from(${text})`;
+    }
     if (this.rustVecLocalDeclarationOf(node) === void 0)
       return text;
     return this.rustVecValueUse(node, String(node.text)) ? `Value::from(${text})` : `Value::from(${text}.clone())`;
@@ -34024,6 +34164,9 @@ ${this.getIden(identation)}}`;
   }
   printElementAccessExpressionExceptionIfAny(node) {
     const receiver = node?.expression;
+    const vecValueParamRead = this.printVecValueParamIndex(node);
+    if (vecValueParamRead !== void 0)
+      return vecValueParamRead;
     if (receiver?.kind !== SyntaxKind7.Identifier || this.rustVecLocalDeclarationOf(receiver) === void 0 || !this.r11VecReadShape(node))
       return super.printElementAccessExpressionExceptionIfAny(node);
     const name = this.printNode(receiver, 0).trim();

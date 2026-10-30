@@ -5351,3 +5351,26 @@ describe('rust string[] parameter used only by join', () => {
         expect(output).not.toContain('self.fetchComputed(ids.to_str_vec()');
     });
 });
+
+describe('rust required array parameter used by length/index/pass-through', () => {
+    let output = '';
+    beforeAll(() => {
+        output = transpiler.transpileRustByPath('./tests/files/input/a16vecvalue/ts/src/venue.ts').content;
+    });
+
+    test('a length/index/pass-through array param is a Vec<Value> read natively', () => {
+        expect(output).toContain('fn parseRows(&self, id: Value, rows: Vec<Value>)');
+        expect(output).toContain('rows.len()');
+        expect(output).toContain('rows.get(');
+        expect(output).toContain('Value::from(rows)');
+    });
+
+    test('callers convert with to_value_vec or pass an empty vec', () => {
+        expect(output).toContain('rawRows.to_value_vec()');
+        expect(output).toContain('Vec::new()');
+    });
+
+    test('a param that is pushed into keeps the Value box', () => {
+        expect(output).toContain('fn sumRows(&self, rows: Value, extra: Value');
+    });
+});

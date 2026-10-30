@@ -2277,6 +2277,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustParamPrintsBool(param)) return 'bool';
         if (this.rustParamPrintsMap(param)) return '&mut indexmap::IndexMap<String, Value>';
         if (this.rustParamPrintsStrVec(param)) return 'Vec<String>';
+        if (this.rustParamPrintsVecValue(param)) return 'Vec<Value>';
         return 'Value';
     }
 
@@ -2515,6 +2516,127 @@ export class RustTranspiler extends BaseTranspiler {
         const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
         if (literal === undefined) return undefined;
         return `Value::Str(${this.printNode(access.expression, 0).trim()}.join("${literal}").into())`;
+    }
+
+    // ── native `Vec<Value>` parameters ────────────────────────────────────────
+    // A required array parameter of a non-base method whose every body use is
+    // `p.length`, a bounds-checked `p[i]` read, or a final `return p` / `{ k: p }`
+    // move prints `Vec<Value>`. The dispatcher builds it with `Value::to_value_vec`;
+    // each caller passes `[]` or a plain `Value` local (`x.to_value_vec()`).
+
+    private rustVecValueParamDecisions = new WeakMap<any, boolean>();
+
+    rustParamPrintsVecValue(param): boolean {
+        if (param?.kind !== SyntaxKind.Parameter) return false;
+        let decision = this.rustVecValueParamDecisions.get(param);
+        if (decision === undefined) {
+            this.rustVecValueParamDecisions.set(param, false); // re-entrancy guard
+            try {
+                decision = this.rustVecValueParamUncached(param);
+            } catch (e) {
+                decision = false;
+            }
+            this.rustVecValueParamDecisions.set(param, decision);
+        }
+        return decision;
+    }
+
+    rustVecValueParamUncached(param): boolean {
+        const method: any = param.parent;
+        if (!isMethodDeclaration(method) || method.body === undefined) return false;
+        if (param.name?.kind !== SyntaxKind.Identifier || param.dotDotDotToken !== undefined) return false;
+        if (param.initializer !== undefined || param.questionToken !== undefined || param.type === undefined) return false;
+        if ((method.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.StaticKeyword)) return false;
+        if (RustTranspiler.RUST_BASE_TIER_FILE.test(param.getSourceFile().fileName)) return false;
+        if (/\/test\//.test(param.getSourceFile().fileName)) return false;
+        if (this.getMethodOverride(method) !== undefined) return false;
+        const checker: any = this.checkerOrUndefined();
+        const type: any = checker === undefined ? undefined : this.getCheckedTypeOf(param.type);
+        if (type === undefined || !this.isProvenShadowListType(type)) return false;
+        if (this.rustMethodReferencedAsValue(method)) return false;
+        // A param the list shadow already serves (`as_array()` reads) has no blob to remove.
+        if (this.rustParamShadowUseCensus(method, param, RUST_PARAM_SHADOWS.LIST) !== undefined) return false;
+        const name = String(param.name.text);
+        let uses = 0;
+        const usesOk = this.rustLocalUsesAll(param, name, true, (n) => {
+            const parent: any = n.parent;
+            uses++;
+            if (isPropertyAccessExpression(parent) && parent.expression === n) {
+                if (String(parent.name.text) !== 'length') return false;
+                const up: any = parent.parent;
+                return !(isBinaryExpression(up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind))
+                    && up?.kind !== SyntaxKind.PrefixUnaryExpression && up?.kind !== SyntaxKind.PostfixUnaryExpression;
+            }
+            if (isElementAccessExpression(parent) && parent.expression === n) {
+                return !this.isNativeWriteTargetBase(n) && this.isNativeAccessPositionSafe(n) && this.r11VecReadShape(parent);
+            }
+            if (isReturnStatement(parent) || (parent?.kind === SyntaxKind.PropertyAssignment && parent.initializer === n)) {
+                return this.rustVecValueUse(n, name);
+            }
+            return false;
+        });
+        if (!usesOk || uses === 0) return false;
+        const index = Array.from(method.parameters as any).indexOf(param);
+        return index >= 0 && this.rustVecValueCallSitesOk(method, index);
+    }
+
+    /** Every call site resolving to `method` passes `[]` or a plain `Value` local. */
+    rustVecValueCallSitesOk(method, index: number): boolean {
+        const name = String((method.name as any)?.text ?? '');
+        if (name === '') return false;
+        const key = this.rustDeclarationKey(method);
+        for (const call of this.rustCallSitesForName(name) as any[]) {
+            const args: any[] = call.arguments ?? [];
+            if (args.some((a: any) => a.kind === SyntaxKind.SpreadElement)) return false;
+            let declaration: any;
+            try {
+                declaration = signatureDeclaration((this.getChecker() as any).getResolvedSignature(call));
+            } catch (e) {
+                return false;
+            }
+            declaration = declaration?.resolve?.() ?? declaration;
+            if (declaration === undefined || declaration === null || this.rustDeclarationKey(declaration) !== key) continue;
+            if (!this.rustVecValueArgumentOk(args[index])) return false;
+        }
+        return true;
+    }
+
+    rustVecValueArgumentOk(arg): boolean {
+        const inner: any = arg === undefined ? undefined : this.rustSkipWrappers(arg);
+        if (inner === undefined) return false;
+        if (isArrayLiteralExpression(inner)) return inner.elements.length === 0;
+        if (isIdentifier(inner)) return this.rustStrVecValueLocal(inner);
+        return false;
+    }
+
+    rustNativeVecValueArgumentSlot(params, at: number): boolean {
+        const param: any = params !== undefined && at < params.length ? params[at] : undefined;
+        if (param === undefined || param.initializer !== undefined || param.questionToken !== undefined) return false;
+        return this.rustParamPrintsVecValue(param);
+    }
+
+    rustVecValueArgumentText(node, identation): string {
+        const inner: any = this.rustSkipWrappers(node);
+        if (inner !== undefined && isArrayLiteralExpression(inner)) return 'Vec::new()';
+        return `${this.printNode(inner, 0).trim()}.to_value_vec()`;
+    }
+
+    /** The `Vec<Value>` parameter an identifier names, if any. */
+    rustVecValueParamOf(node): any {
+        if (!isIdentifier(node)) return undefined;
+        const declaration: any = this.rustDeclarationOfIdentifier(node);
+        return declaration !== undefined && isParameterDeclaration(declaration) && this.rustParamPrintsVecValue(declaration) ? declaration : undefined;
+    }
+
+    /** `p[i]` read of a `Vec<Value>` parameter: bounds-checked slice read, a miss is `Value::Null`. */
+    printVecValueParamIndex(node): string | undefined {
+        const receiver: any = node?.expression;
+        if (receiver?.kind !== SyntaxKind.Identifier || this.rustVecValueParamOf(receiver) === undefined || !this.r11VecReadShape(node)) return undefined;
+        const name = this.printNode(receiver, 0).trim();
+        const key: any = this.rustStripWrappers(node.argumentExpression);
+        const index = isNumericLiteral(key) ? String(Number(key.text))
+            : `(${this.printNode(node.argumentExpression, 0).trim()}).as_i64().map_or(usize::MAX, |__n| __n as usize)`;
+        return `${name}.get(${index}).cloned().unwrap_or(Value::Null)`;
     }
 
     rustParamPrintsMap(param): boolean {
@@ -3579,6 +3701,8 @@ export class RustTranspiler extends BaseTranspiler {
                     ? this.rustMapArgumentText(a, 0)
                     : this.rustNativeStrVecArgumentSlot(calleeParams, at)
                     ? this.rustStrVecArgumentText(a, 0)
+                    : this.rustNativeVecValueArgumentSlot(calleeParams, at)
+                    ? this.rustVecValueArgumentText(a, 0)
                     : (this.rustNativeBoolArgumentSlot(calleeParams, at)
                         ? this.rustBoolArgumentText(a, 0)
                         : this.printNode(a, 0));
@@ -3605,6 +3729,9 @@ export class RustTranspiler extends BaseTranspiler {
             }
             if (this.rustNativeStrVecArgumentSlot(params, at)) {
                 return this.rustStrVecArgumentText(arg, identation);
+            }
+            if (this.rustNativeVecValueArgumentSlot(params, at)) {
+                return this.rustVecValueArgumentText(arg, identation);
             }
             return this.rustNativeBoolArgumentSlot(params, at)
                 ? this.rustBoolArgumentText(arg, identation)
@@ -6058,6 +6185,10 @@ export class RustTranspiler extends BaseTranspiler {
         }
         if (parent === undefined || !(isReturnStatement(parent) || (isCallExpression(parent) && parent.arguments.some((a) => a === node)
             && this.rustVecBoxingCallee(parent.expression)) || (parent.kind === SyntaxKind.PropertyAssignment && parent.initializer === node))) return text;
+        if (parent !== undefined && (isReturnStatement(parent) || (parent.kind === SyntaxKind.PropertyAssignment && parent.initializer === node))
+            && this.rustVecValueParamOf(node) !== undefined) {
+            return `Value::from(${text})`;
+        }
         if (this.rustVecLocalDeclarationOf(node) === undefined) return text;
         return this.rustVecValueUse(node, String(node.text)) ? `Value::from(${text})` : `Value::from(${text}.clone())`;
     }
@@ -7543,6 +7674,8 @@ export class RustTranspiler extends BaseTranspiler {
 
     printElementAccessExpressionExceptionIfAny(node) {
         const receiver: any = node?.expression;
+        const vecValueParamRead = this.printVecValueParamIndex(node);
+        if (vecValueParamRead !== undefined) return vecValueParamRead;
         if (receiver?.kind !== SyntaxKind.Identifier || this.rustVecLocalDeclarationOf(receiver) === undefined
             || !this.r11VecReadShape(node)) return super.printElementAccessExpressionExceptionIfAny(node);
         const name = this.printNode(receiver, 0).trim();

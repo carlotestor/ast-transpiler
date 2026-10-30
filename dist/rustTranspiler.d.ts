@@ -301,6 +301,18 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `vec![a.to_string(), ..]` for an array literal landing in a `Vec<String>` slot. */
     rustStrVecArgumentText(node: any, identation: any): string;
     printStrVecParamJoin(node: any): string | undefined;
+    private rustVecValueParamDecisions;
+    rustParamPrintsVecValue(param: any): boolean;
+    rustVecValueParamUncached(param: any): boolean;
+    /** Every call site resolving to `method` passes `[]` or a plain `Value` local. */
+    rustVecValueCallSitesOk(method: any, index: number): boolean;
+    rustVecValueArgumentOk(arg: any): boolean;
+    rustNativeVecValueArgumentSlot(params: any, at: number): boolean;
+    rustVecValueArgumentText(node: any, identation: any): string;
+    /** The `Vec<Value>` parameter an identifier names, if any. */
+    rustVecValueParamOf(node: any): any;
+    /** `p[i]` read of a `Vec<Value>` parameter: bounds-checked slice read, a miss is `Value::Null`. */
+    printVecValueParamIndex(node: any): string | undefined;
     rustParamPrintsMap(param: any): boolean;
     rustMapParamIsTypedUncached(param: any): boolean;
     /** Every body use is a map operation the bearered printer emits, and at
