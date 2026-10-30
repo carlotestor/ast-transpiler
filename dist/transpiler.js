@@ -46589,7 +46589,8 @@ var GB01_DICT_PARAMS = {
   "safeTrade": [0],
   "safeLedgerEntry": [0],
   "safeLiquidation": [0],
-  "safeCurrencyStructure": [0]
+  "safeCurrencyStructure": [0],
+  "mergeBalanceAccount": [0, 2]
 };
 var GB01_TYPE = "map[string]any";
 var GB01_DEBUG = process.env.GB01_DEBUG === "1";
@@ -46623,6 +46624,25 @@ function gb01UsesNullish(go, body, param) {
   };
   body.forEachChild(visit);
   return found;
+}
+function gb01IsDictMethodCall(tree, text) {
+  const call = /^this\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/.exec(text.trim());
+  if (call === null) {
+    return false;
+  }
+  const declRe = new RegExp("^[ \\t]+(?:async\\s+)?" + call[1] + "\\s*\\([^)]*\\)\\s*(:[^{;\\n]*)?\\{", "gm");
+  let found = 0;
+  for (const fileText of tree.fileText.values()) {
+    let match;
+    declRe.lastIndex = 0;
+    while ((match = declRe.exec(fileText)) !== null) {
+      if (match[1] === void 0 || match[1].replace(/^:\s*/, "").trim() !== "Dict") {
+        return false;
+      }
+      found++;
+    }
+  }
+  return found > 0;
 }
 function gb01CallSitesPassMap(go, fn, index) {
   const name = fn.name.text;
@@ -46659,6 +46679,9 @@ function gb01CallSitesPassMap(go, fn, index) {
     if (/^this\s*\.\s*(extend|deepExtend|keysort|indexBy|groupBy)\s*\(/.test(arg)) {
       continue;
     }
+    if (gb01IsDictMethodCall(tree, arg)) {
+      continue;
+    }
     const identifier = /^([A-Za-z_$][\w$]*)$/.exec(arg);
     if (identifier === null) {
       return false;
@@ -46678,6 +46701,9 @@ function gb01CallSitesPassMap(go, fn, index) {
     }
     const initializer = declaration[1].trim();
     if (initializer.startsWith("{") || /^this\s*\.\s*(extend|deepExtend|safeDict)\s*\(/.test(initializer)) {
+      continue;
+    }
+    if (gb01IsDictMethodCall(tree, initializer)) {
       continue;
     }
     return false;
