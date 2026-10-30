@@ -691,7 +691,7 @@ describe('go pointer-typed Safe* body locals', () => {
         expect(output).toContain("var pair any = this.SafeList2(item, \"a\", \"b\")");
         expect(output).toContain("var deepList any = this.SafeListN(");
     });
-    test('a SafeList local read as a list is declared []any and read with SafeListTyped', () => {
+    test('a SafeList local read as a list is declared []any and read with this.SafeListSlice', () => {
         const input =
         "class Exchange {\n" +
         "    safeList(a, b, c?) { return a; }\n" +
@@ -707,13 +707,13 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var data []any = SafeListTyped(item, \"data\")");
+        expect(output).toContain("var data []any = this.SafeListSlice(item, \"data\")");
         expect(output).toContain("i < len(data)");
         expect(output).toContain("DerefScalar(data[i])");
         expect(output).toContain("DerefScalar(data[0])");
         expect(output).not.toContain("GetArrayLength(data)");
     });
-    test('a SafeList local with an empty-array default drops it: SafeListTyped carries no default', () => {
+    test('a SafeList local with an empty-array default drops it: SafeListSlice carries no default', () => {
         const input =
         "class Exchange {\n" +
         "    safeList(a, b, c?) { return a; }\n" +
@@ -724,7 +724,7 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var data []any = SafeListTyped(item, \"data\")");
+        expect(output).toContain("var data []any = this.SafeListSlice(item, \"data\")");
         expect(output).not.toContain("[]any{}");
     });
     test('a SafeList local whose value escapes, is compared with nil or carries a default keeps the box', () => {
@@ -768,11 +768,11 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var data []any = SafeListTyped(item, \"data\")");
+        expect(output).toContain("var data []any = this.SafeListSlice(item, \"data\")");
         expect(output).toContain("data = append(data, \"x\")");
         expect(output).not.toContain("AppendToArray(");
     });
-    test('a SafeDict local read as a map is declared map[string]any and read with SafeMapTyped', () => {
+    test('a SafeDict local read as a map is declared map[string]any and read with this.SafeDictMap', () => {
         const input =
         "class Exchange {\n" +
         "    safeDict(a, b, c?) { return a; }\n" +
@@ -784,10 +784,10 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var info map[string]any = SafeMapTyped(item, \"info\")");
+        expect(output).toContain("var info map[string]any = this.SafeDictMap(item, \"info\")");
         expect(output).toContain("this.SafeString(info, \"name\")");
     });
-    test('a SafeDict local with an empty-map default drops it: SafeMapTyped carries no default', () => {
+    test('a SafeDict local with an empty-map default drops it: SafeDictMap carries no default', () => {
         const input =
         "class Exchange {\n" +
         "    safeDict(a, b, c?) { return a; }\n" +
@@ -798,7 +798,7 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var info map[string]any = SafeMapTyped(item, \"info\")");
+        expect(output).toContain("var info map[string]any = this.SafeDictMap(item, \"info\")");
         expect(output).not.toContain("map[string]any{}");
     });
     test('a SafeDict local read through GetValue/ObjectKeys/InOp/an index stays typed', () => {
@@ -815,7 +815,7 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var info map[string]any = SafeMapTyped(item, \"info\")");
+        expect(output).toContain("var info map[string]any = this.SafeDictMap(item, \"info\")");
     });
     test('a market local (checker: MarketInterface) is declared map[string]any and reads natively', () => {
         const input =
@@ -1063,7 +1063,7 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var info map[string]any = SafeMapTyped(item, \"info\")");
+        expect(output).toContain("var info map[string]any = this.SafeDictMap(item, \"info\")");
         expect(output).toContain("InOp(info, code)");
     });
     test('a SafeDict local handed to another Safe* accessor as its receiver stays typed', () => {
@@ -1078,7 +1078,7 @@ describe('go pointer-typed Safe* body locals', () => {
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("var marginEntry map[string]any = SafeMapTyped(item, \"margin\")");
+        expect(output).toContain("var marginEntry map[string]any = this.SafeDictMap(item, \"margin\")");
     });
     test('a SafeDict local compared with nil is typed and tested natively', () => {
         const input =
@@ -1092,7 +1092,7 @@ describe('go pointer-typed Safe* body locals', () => {
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
         // a nil map and the absent box are both nil: `info == nil` is the helper's predicate
-        expect(output).toContain("var info map[string]any = SafeMapTyped(item, \"info\")");
+        expect(output).toContain("var info map[string]any = this.SafeDictMap(item, \"info\")");
         expect(output).toContain("if info == nil {");
         expect(output).toContain("info[\"id\"]");
     });
