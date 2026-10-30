@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -27323,6 +27323,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // writes are plain `.insert` with no per-site `Arc::make_mut` guard.
     this.rustMapParamDecisions = /* @__PURE__ */ new WeakMap();
     this.rustCallSitesCache = /* @__PURE__ */ new WeakMap();
+    // A new string local built by `this.capitalize(v)` / `r.toUpperCase()` / `r.toLowerCase()` is a
+    // native `String` when every use is a boxing move (return, object value, `this.` arg, `m[k] = x`).
+    this.rustStringMethodLocalDecisions = /* @__PURE__ */ new WeakMap();
     this.rustStringLocalDecisions = /* @__PURE__ */ new Map();
     // ── native `Option<String>` returns (`: Str` methods) ─────────────────────
     //
@@ -28799,6 +28802,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       this.rustBoolDeclaredLocals.add(declaration);
       return `${indent}let mut ${varName}: bool = ${boolValue}`;
     }
+    const methodText = node.declarations.length === 1 ? this.rustStringMethodLocalInit(declaration) : void 0;
+    if (methodText !== void 0)
+      return `${indent}let mut ${varName}: String = ${methodText}`;
     const typedStr = this.rustSafeStringLocalIsTyped(declaration);
     const nativeStr = this.rustNativeStrCalleeKind(declaration.initializer) === "str";
     const signApi = typedStr ? this.rustSignApiElementInit(declaration) : void 0;
@@ -29420,6 +29426,36 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     }
     return this.rustBearerInsertText(name, keyArg, valueText);
+  }
+  /** The native initializer text of a string-method local, else undefined. */
+  rustStringMethodLocalInit(declaration) {
+    const init = declaration.initializer;
+    if (declaration.name?.kind !== SyntaxKind7.Identifier || init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression))
+      return void 0;
+    const callee = init.expression;
+    const method = String(callee.name.text);
+    let text;
+    if (method === "capitalize" && callee.expression.kind === SyntaxKind7.ThisKeyword && init.arguments.length === 1) {
+      text = `${this.printNode(init, 0).trim()}.to_string()`;
+    } else if ((method === "toUpperCase" || method === "toLowerCase") && init.arguments.length === 0 && callee.expression.kind !== SyntaxKind7.ThisKeyword && isIdentifier3(callee.expression) && this.rustParamShadowOf(callee.expression) === void 0) {
+      const receiver = this.rustNativeStringReceiver(init, this.printNode(callee.expression, 0));
+      if (receiver !== void 0)
+        text = `${receiver}.as_str().map(str::${method === "toUpperCase" ? "to_uppercase" : "to_lowercase"}).unwrap_or_default()`;
+    }
+    return text !== void 0 && this.rustStringMethodLocalIsTyped(declaration) ? text : void 0;
+  }
+  rustStringMethodLocalIsTyped(declaration) {
+    let decision = this.rustStringMethodLocalDecisions.get(declaration);
+    if (decision === void 0) {
+      this.rustStringMethodLocalDecisions.set(declaration, false);
+      decision = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) === "string" && this.rustLocalUsesAll(declaration, declaration.name.text, true, (n) => this.rustStringMethodLocalBoxUse(n));
+      this.rustStringMethodLocalDecisions.set(declaration, decision);
+    }
+    return decision;
+  }
+  rustStringMethodLocalBoxUse(n) {
+    const parent = n.parent;
+    return isReturnStatement4(parent) || this.rustDictWriteValue(n) || parent?.kind === SyntaxKind7.PropertyAssignment && parent.initializer === n || isCallExpression6(parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression);
   }
   // `let x = this.safeString(..)` / `safeString(..)` — the whole initializer;
   // a call whose callee already returns `Option<String>` (a native-`Str`
@@ -32386,6 +32422,10 @@ ${iden}}`;
     const bearer = this.rustDictBearerDeclaration(node);
     if (bearer !== void 0 && parent !== void 0 && (isReturnStatement4(parent) && parent.expression === node || isCallExpression6(parent) && parent.arguments.some((a) => a === node) || this.rustDictWriteValue(node) || this.rustR01BearerLiteralMove(node))) {
       return `Value::Map(${text}${!this.rustDictBearerCloned.has(bearer) && this.rustVecIsFinalUse(node, String(node.text)) ? "" : ".clone()"})`;
+    }
+    const stringMethod = this.rustDeclarationOfIdentifier(node);
+    if (stringMethod !== void 0 && isVariableDeclaration3(stringMethod) && stringMethod.name !== node && this.rustStringMethodLocalInit(stringMethod) !== void 0) {
+      return `Value::from(${text}${this.rustVecIsFinalUse(node, String(node.text)) ? "" : ".clone()"})`;
     }
     if (parent === void 0 || !(isReturnStatement4(parent) || isCallExpression6(parent) && parent.arguments.some((a) => a === node) && this.rustVecBoxingCallee(parent.expression) || parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === node))
       return text;
