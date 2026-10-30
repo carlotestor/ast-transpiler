@@ -54506,6 +54506,24 @@ function hx11w9RustBoolKLocalOptionBool(content) {
   return out;
 }
 
+// src/rustPasses/hx11w9RustObjectKeysValuesIfLetClosureFree.ts
+init_esm_shims();
+function hx11w9RustObjectKeysValuesIfLetClosureFree(content) {
+  const body = "(__m\\.keys\\(\\)\\.map\\(\\|__k\\| Value::Str\\(__k\\.clone\\(\\)\\.into\\(\\)\\)\\)\\.collect\\(\\)|__m\\.values\\(\\)\\.cloned\\(\\)\\.collect\\(\\))";
+  const re = new RegExp("(?<![\\w.:])Value::Array\\(([A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*)\\.as_map\\(\\)\\.map\\(\\|__m\\| " + body + "\\)\\.unwrap_or_default\\(\\)\\)", "g");
+  return content.replace(re, (m, recv, inner, off) => {
+    const out = `Value::Array(if let Some(__m) = ${recv}.as_map() { ${inner} } else { Vec::new() })`;
+    const ls = content.lastIndexOf("\n", off - 1) + 1;
+    let le = content.indexOf("\n", off);
+    if (le < 0)
+      le = content.length;
+    const lineLen = le - ls;
+    if (lineLen - m.length + out.length > 400 && out.length > m.length)
+      return m;
+    return out;
+  });
+}
+
 // src/transpiler.ts
 var __dirname_mock = import_dirname.default;
 var fastCompilerOptions = {
@@ -55229,6 +55247,7 @@ export {
   hx11RustSignApiStr,
   hx11w9RustBoolKLocalOptionBool,
   hx11w9RustIntLocalNullSinkOptionI64,
+  hx11w9RustObjectKeysValuesIfLetClosureFree,
   hx11w9RustStrLiteralLocalNativeString,
   hx11w9StrLocalReassign,
   installCcxtGoDictParams,
