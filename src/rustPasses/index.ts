@@ -23,3 +23,4 @@ export { hx11w9RustIntLocalNullSinkOptionI64 } from './hx11w9RustIntLocalNullSin
 export { hx11w9RustStrLiteralLocalNativeString } from './hx11w9RustStrLiteralLocalNativeString.js';
 export { hx11w9StrLocalReassign } from './hx11w9-str-local-reassign.js';
 export { hx11w9RustBoolKLocalOptionBool } from './hx11w9-rust-bool-k-local-option-bool.js';
+export { hx11w9RustStr2LocalOptionString } from './hx11w9RustStr2LocalOptionString.js';
