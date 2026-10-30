@@ -12479,7 +12479,32 @@ func New${this.capitalize(this.className)}() *${this.className} {
     if (!this.goDefaultedSafeStringCallOrTypedDefault(call)) {
       return false;
     }
-    return !this.goTypeNameIsShadowed(scope, "string") && this.goLocalIsSafeToType(scope, declaration, name, "string");
+    return !this.goTypeNameIsShadowed(scope, "string") && this.goLocalIsSafeToType(scope, declaration, name, "string") && !this.goAnnotatedStringLocalHasNilShapedRead(scope, declaration, name);
+  }
+  // a read a Go string cannot serve natively: a nil comparison (boxes into IsEqual) or a copy
+  // into another variable (a pointer-typed target would lose its type)
+  goAnnotatedStringLocalHasNilShapedRead(scope, declaration, name) {
+    const isNilLike = (n) => n?.kind === SyntaxKind5.NullKeyword || n?.kind === SyntaxKind5.UndefinedKeyword || n?.kind === SyntaxKind5.Identifier && n.text === "undefined";
+    return this.hasNodeWhere(scope, (n) => {
+      if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
+        return false;
+      }
+      const parent = n.parent;
+      if (parent?.kind !== SyntaxKind5.BinaryExpression) {
+        return false;
+      }
+      const other = parent.left === n ? parent.right : parent.left;
+      const op = parent.operatorToken.kind;
+      if ([
+        SyntaxKind5.EqualsEqualsToken,
+        SyntaxKind5.ExclamationEqualsToken,
+        SyntaxKind5.EqualsEqualsEqualsToken,
+        SyntaxKind5.ExclamationEqualsEqualsToken
+      ].indexOf(op) >= 0) {
+        return isNilLike(other);
+      }
+      return op === SyntaxKind5.EqualsToken && parent.right === n;
+    });
   }
   // goDefaultedSafeStringCall, also accepting a default that is an identifier of Go type `string`
   goDefaultedSafeStringCallOrTypedDefault(call) {

@@ -642,6 +642,35 @@ describe('go pointer-typed Safe* body locals', () => {
         const output = squash(transpiler.transpileGo(input).content);
         expect(output).toContain("var id *string = this.SafeString(o, \"id\", \"dflt\")");
     });
+    test("an annotated string local compared to undefined keeps the pointer", () => {
+        const input =
+        "class Exchange {\n" +
+        "    safeString(a, b, c) { return a; }\n" +
+        "    main(o, s: string | undefined) {\n" +
+        "        const id: string = this.safeString (o, 'id', 'dflt');\n" +
+        "        if (id !== undefined) { return 1; }\n" +
+        "        return 0;\n" +
+        "    }\n" +
+        "}\n" +
+        "";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("var id *string = this.SafeString(o, \"id\", \"dflt\")");
+    });
+    test("an annotated string local copied into a Str local keeps the pointer", () => {
+        const input =
+        "class Exchange {\n" +
+        "    safeString(a, b, c) { return a; }\n" +
+        "    main(o, s: string | undefined) {\n" +
+        "        let r: string | undefined = s;\n" +
+        "        const id: string = this.safeString (o, 'id', 'dflt');\n" +
+        "        r = id;\n" +
+        "        return r;\n" +
+        "    }\n" +
+        "}\n" +
+        "";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("var id *string = this.SafeString(o, \"id\", \"dflt\")");
+    });
     test('the 2/N and lower/upper/product/timestamp variants carry the same pointer type', () => {
         const input =
         "class Exchange {\n" +
