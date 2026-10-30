@@ -3870,7 +3870,7 @@ describe('rust pro-tier handler message shadow (D-27)', () => {
         "interface Dictionary<T> { [key: string]: T; }\n" +
         "type Dict = Dictionary<any>;\n" +
         "class Client { resolve (v: any): void {} }\n";
-    const SHADOW = 'let __pro_message = message.as_map().unwrap_or(&__pro_message_empty);';
+    const SHADOW = 'let __pro_message: &indexmap::IndexMap<String, Value> = &__pro_message_arc;';
 
     test('a safeString read on the handler message param prints as a native .get match', () => {
         const ts = DECLS +

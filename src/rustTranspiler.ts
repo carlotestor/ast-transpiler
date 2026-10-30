@@ -4508,11 +4508,13 @@ export class RustTranspiler extends BaseTranspiler {
         if (!hasRead) return undefined;
         const name = String((param.name as any).text);
         const view = RustTranspiler.PRO_HANDLER_SHADOW_NAME;
-        const empty = `${view}_empty`;
+        const arc = `${view}_arc`;
+        const map = 'indexmap::IndexMap<String, Value>';
         const ind = this.getIden(identation + 2);
+        // an owned Arc clone keeps the shadow from borrowing the parameter (it may move later)
         const lines =
-            `${ind}let ${empty} = indexmap::IndexMap::new();\n` +
-            `${ind}let ${view} = ${name}.as_map().unwrap_or(&${empty});\n`;
+            `${ind}let ${arc}: std::sync::Arc<${map}> = if let Value::Dict(__d) = &${name} { __d.clone() } else { std::sync::Arc::new(indexmap::IndexMap::new()) };\n` +
+            `${ind}let ${view}: &${map} = &${arc};\n`;
         return { param, lines };
     }
 

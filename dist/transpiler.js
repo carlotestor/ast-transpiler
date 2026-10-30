@@ -31085,10 +31085,11 @@ ${classMethods}
       return void 0;
     const name = String(param.name.text);
     const view = _RustTranspiler.PRO_HANDLER_SHADOW_NAME;
-    const empty = `${view}_empty`;
+    const arc = `${view}_arc`;
+    const map = "indexmap::IndexMap<String, Value>";
     const ind = this.getIden(identation + 2);
-    const lines = `${ind}let ${empty} = indexmap::IndexMap::new();
-${ind}let ${view} = ${name}.as_map().unwrap_or(&${empty});
+    const lines = `${ind}let ${arc}: std::sync::Arc<${map}> = if let Value::Dict(__d) = &${name} { __d.clone() } else { std::sync::Arc::new(indexmap::IndexMap::new()) };
+${ind}let ${view}: &${map} = &${arc};
 `;
     return { param, lines };
   }
