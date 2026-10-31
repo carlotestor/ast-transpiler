@@ -3376,7 +3376,7 @@ describe('rust native container reads (B-28)', () => {
         expect(output).toContain('let mut s: Value = client.subscriptions;');
     });
 
-    test('a bind the next statement mutates keeps the helper (write-back pass)', () => {
+    test('a bind the next statement mutates is the closure-free read the write-back pass recognises', () => {
         const ts =
             'class T {\n' +
             '    m(data: any[]) {\n' +
@@ -3804,7 +3804,7 @@ describe('rust typed-receiver native reads (D-28)', () => {
         expect(output).toContain('get_value(&currencies, &code)');
     });
 
-    test('a bind the next statement mutates keeps the helper (write-back pass)', () => {
+    test('a bind the next statement mutates is the closure-free read the write-back pass recognises', () => {
         const ts =
             PLAIN +
             'class T {\n' +
@@ -3819,7 +3819,8 @@ describe('rust typed-receiver native reads (D-28)', () => {
             '    }\n' +
             '}';
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('let mut row: Value = get_value(&result, &key);');
+        // the ccxt write-back pass matches the printer's closure-free bind of the same container/key
+        expect(output).toContain('let mut row: Value = (if let (Some(__m), Some(__k)) = (result.as_map(), key.as_str()) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null });');
         expect(output).not.toContain('row.as_map()');
     });
 

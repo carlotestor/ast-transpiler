@@ -4967,8 +4967,6 @@ export class RustTranspiler extends BaseTranspiler {
     /** `X[k]` on a proven local with a non-literal key. */
     rustLocalDictRead(receiverText: string, receiverNode: Node, keyNode: Node): string | undefined {
         if (this.rustDictLocalProof(receiverNode) !== 'plain') return undefined;
-        // the ccxt write-back pass keys on the `let x = get_value(&C, &K)` text of a bind the next statement mutates
-        if (this.isWriteBackBindRead(keyNode.parent)) return undefined;
         const key = this.rustDictKeyText(keyNode);
         if (key === undefined) return undefined;
         return this.rustDictRead(receiverText, key, receiverNode, true);
@@ -4978,8 +4976,6 @@ export class RustTranspiler extends BaseTranspiler {
     rustLocalDictLiteralRead(receiverText: string, receiverNode: Node, keyText: string): string | undefined {
         const proof = this.rustDictLocalProof(receiverNode);
         if (proof === undefined || RustTranspiler.RUST_DICT_MARKER_KEYS.test(keyText)) return undefined;
-        const read: any = receiverNode.parent;
-        if (read !== undefined && this.isWriteBackBindRead(read)) return undefined;
         const literal = `"${this.escapeRustStringLiteral(keyText)}"`;
         return this.rustDictSite({
             guarded: true, helper: `get_value(&${receiverText}, &Value::Str(${literal}.into()))`,

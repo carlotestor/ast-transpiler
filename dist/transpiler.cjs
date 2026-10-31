@@ -35355,8 +35355,6 @@ ${ind}let ${view}: &${map} = &${arc};
   rustLocalDictRead(receiverText, receiverNode, keyNode) {
     if (this.rustDictLocalProof(receiverNode) !== "plain")
       return void 0;
-    if (this.isWriteBackBindRead(keyNode.parent))
-      return void 0;
     const key = this.rustDictKeyText(keyNode);
     if (key === void 0)
       return void 0;
@@ -35366,9 +35364,6 @@ ${ind}let ${view}: &${map} = &${arc};
   rustLocalDictLiteralRead(receiverText, receiverNode, keyText) {
     const proof = this.rustDictLocalProof(receiverNode);
     if (proof === void 0 || _RustTranspiler.RUST_DICT_MARKER_KEYS.test(keyText))
-      return void 0;
-    const read = receiverNode.parent;
-    if (read !== void 0 && this.isWriteBackBindRead(read))
       return void 0;
     const literal = `"${this.escapeRustStringLiteral(keyText)}"`;
     return this.rustDictSite({
