@@ -47926,6 +47926,73 @@ function installRfGo5OwnedTables(goTranspiler) {
   };
 }
 
+// src/go/hx11fmgo5-G04.ts
+init_esm_shims();
+var OWNER_CLASSES = ["BaseExchange", "PredictionExchange"];
+var NIL_TESTABLE_FIELDS = /* @__PURE__ */ new Set([
+  "Outcomes",
+  "Outcomes_by_id",
+  "Events_by_slug",
+  "Features",
+  "ProxyUrl",
+  "Proxy",
+  "Proxy_url",
+  "ProxyUrlCallback",
+  "Proxy_url_callback"
+]);
+function isNilLiteral(node) {
+  return node?.kind === ts.SyntaxKind.NullKeyword || node?.kind === ts.SyntaxKind.Identifier && node.text === "undefined";
+}
+function nilTestableBaseField(go, node) {
+  const SK = ts.SyntaxKind;
+  if (node?.kind !== SK.PropertyAccessExpression || node.expression?.kind !== SK.ThisKeyword || node.name?.kind !== SK.Identifier) {
+    return false;
+  }
+  if (!NIL_TESTABLE_FIELDS.has(go.transformPropertyAccessExpressionName(node.name.text, node.name))) {
+    return false;
+  }
+  const decl = go.checkerOrUndefined()?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+  return decl?.kind === SK.PropertyDeclaration && OWNER_CLASSES.includes(decl.parent?.name?.text);
+}
+function negativeIntegerLiteral(node) {
+  const SK = ts.SyntaxKind;
+  return node?.kind === SK.PrefixUnaryExpression && node.operator === SK.MinusToken && node.operand?.kind === SK.NumericLiteral && /^\d{1,15}$/.test(node.operand.text) ? node.operand.text : void 0;
+}
+function installFmGo5G04(goTranspiler) {
+  const flag = "fmGo5G04Installed";
+  if (goTranspiler[flag] === true || typeof goTranspiler.printInlineEquality !== "function") {
+    return;
+  }
+  goTranspiler[flag] = true;
+  const upstream = goTranspiler.printInlineEquality;
+  goTranspiler.printInlineEquality = function(left, right, leftText, rightText, isEq) {
+    const SK = ts.SyntaxKind;
+    const op = isEq ? ["==", "!="] : ["!=", "=="];
+    if (isNilLiteral(right) && nilTestableBaseField(this, left)) {
+      return `(${leftText} ${op[0]} nil)`;
+    }
+    if (isNilLiteral(left) && nilTestableBaseField(this, right)) {
+      return `(${rightText} ${op[0]} nil)`;
+    }
+    for (const [ptr, lit, ptrText, ptrIsLeft] of [[left, right, leftText, true], [right, left, rightText, false]]) {
+      const digits = negativeIntegerLiteral(lit);
+      if (digits === void 0 || ptr?.kind !== SK.Identifier) {
+        continue;
+      }
+      const declared = this.goDeclaredTypeOfIdentifier(ptr);
+      if (declared !== "*int64" && declared !== "*float64" && declared !== "*int") {
+        continue;
+      }
+      const constant = declared === "*int" ? `-${digits}` : `${declared.substring(1)}(-${digits})`;
+      const value = `*${ptrText}`;
+      const lhs = ptrIsLeft ? value : constant;
+      const rhs = ptrIsLeft ? constant : value;
+      return isEq ? `(${ptrText} != nil && ${lhs} == ${rhs})` : `(${ptrText} == nil || ${lhs} != ${rhs})`;
+    }
+    return upstream.call(this, left, right, leftText, rightText, isEq);
+  };
+}
+
 // src/go/index.ts
 function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoLocalTypes(goTranspiler, unifiedInt64Params);
@@ -47937,6 +48004,7 @@ function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoSignTyping(goTranspiler);
   installHx11w8NumParams(goTranspiler);
   installRfGo5OwnedTables(goTranspiler);
+  installFmGo5G04(goTranspiler);
 }
 
 // src/rustPasses/index.ts
@@ -57115,6 +57183,7 @@ export {
   installCcxtGoLocalTypes,
   installCcxtGoParamTypes,
   installCcxtGoSignTyping,
+  installFmGo5G04,
   installHx11w8NumParams,
   installRfGo5OwnedTables,
   narrowStrNullLocals,
