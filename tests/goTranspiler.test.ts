@@ -905,6 +905,10 @@ describe('go pointer-typed Safe* body locals', () => {
             "        }\n" +
             "        return parsed;\n" +
             "    }\n" +
+            "    known (account) {\n" +
+            "        const markets = this.markets;\n" +
+            "        return (markets !== undefined) && (account in markets);\n" +
+            "    }\n" +
             "    store (item) {\n" +
             "        const balance = this.parseBalance (item);\n" +
             "        this.balance['USDT'] = balance;\n" +
@@ -926,6 +930,8 @@ describe('go pointer-typed Safe* body locals', () => {
         }
         expect(output).toContain("var parsed map[string]any = this.ParseMarket(item)");
         expect(output).toContain("var balance map[string]any = this.ParseBalance(item)");
+        expect(output).toContain("var markets map[string]any = this.Markets");
+        expect(output).not.toContain("MapTyped(this.Markets");
         expect(output).not.toContain("var market map[string]any");
     });
     test('a SafeDict local with an empty-map default drops it: SafeMapTyped carries no default', () => {

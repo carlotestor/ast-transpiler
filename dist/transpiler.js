@@ -11557,6 +11557,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
     if (initializer.kind === SyntaxKind5.ObjectLiteralExpression) {
       return true;
     }
+    if (this.goBaseMapResultCall(initializer) && initializer.kind === SyntaxKind5.PropertyAccessExpression) {
+      return true;
+    }
     return initializer.kind === SyntaxKind5.CallExpression && this.goMarketCalleePrintsMap(initializer);
   }
   // the printed return type of a market producer, or undefined to keep the checker's answer
@@ -11651,10 +11654,11 @@ func New${this.capitalize(this.className)}() *${this.className} {
   // answers `map[string]any` in Go (GO_BASE_MAP_RESULT_METHODS). Prediction venues keep the box:
   // their base file declares its own signatures; a program outside ts/src has no such base.
   goBaseMapResultCall(call) {
-    if (call?.kind !== SyntaxKind5.CallExpression) {
+    const isMarketsField = call?.kind === SyntaxKind5.PropertyAccessExpression && call.expression?.kind === SyntaxKind5.ThisKeyword && call.name?.text === "markets";
+    if (!isMarketsField && call?.kind !== SyntaxKind5.CallExpression) {
       return false;
     }
-    const callee = call.expression;
+    const callee = isMarketsField ? call : call.expression;
     if (callee?.kind !== SyntaxKind5.PropertyAccessExpression) {
       return false;
     }
@@ -11701,7 +11705,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
     return this.goDeclaredLocalTypeIfSafe(
       declaration,
       GO_MARKET_LOCAL_TYPE,
-      (n) => this.goSafeDictUseReadsTheMap(n) || this.goBaseMapUseKeepsMap(n),
+      (n) => this.goMarketUseReadsTheValue(n, false) || this.goBaseMapUseKeepsMap(n),
       (n) => n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n || !this.goIdentifierRefersToDeclaration(n, declaration)
     );
   }

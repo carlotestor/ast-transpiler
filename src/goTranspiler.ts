@@ -2959,6 +2959,9 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         if (initializer.kind === SyntaxKind.ObjectLiteralExpression) {
             return true;
         }
+        if (this.goBaseMapResultCall(initializer) && (initializer.kind === SyntaxKind.PropertyAccessExpression)) {
+            return true;
+        }
         return (initializer.kind === SyntaxKind.CallExpression) && this.goMarketCalleePrintsMap(initializer);
     }
 
@@ -3068,10 +3071,13 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
     // answers `map[string]any` in Go (GO_BASE_MAP_RESULT_METHODS). Prediction venues keep the box:
     // their base file declares its own signatures; a program outside ts/src has no such base.
     goBaseMapResultCall(call): boolean {
-        if (call?.kind !== SyntaxKind.CallExpression) {
+        // the `markets` field of the base class prints as its `Markets()` accessor
+        const isMarketsField = (call?.kind === SyntaxKind.PropertyAccessExpression)
+            && (call.expression?.kind === SyntaxKind.ThisKeyword) && (call.name?.text === 'markets');
+        if (!isMarketsField && (call?.kind !== SyntaxKind.CallExpression)) {
             return false;
         }
-        const callee: any = call.expression;
+        const callee: any = isMarketsField ? call : call.expression;
         if (callee?.kind !== SyntaxKind.PropertyAccessExpression) {
             return false;
         }
@@ -3121,7 +3127,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return shipped;
         }
         return this.goDeclaredLocalTypeIfSafe(declaration, GO_MARKET_LOCAL_TYPE,
-            (n) => this.goSafeDictUseReadsTheMap(n) || this.goBaseMapUseKeepsMap(n),
+            (n) => this.goMarketUseReadsTheValue(n, false) || this.goBaseMapUseKeepsMap(n),
             (n) => ((n.parent?.kind === SyntaxKind.PropertyAccessExpression) && (n.parent.name === n))
                 || !this.goIdentifierRefersToDeclaration(n, declaration));
     }
