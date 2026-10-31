@@ -48,6 +48,14 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpDeclaredLocalResolverType(node: any): string | undefined;
     csharpDeclaredLocalResolverRowRead(expression: any, argumentExpression: any): string | undefined;
     csharpMissingKeyFieldRead(expression: any, argumentExpression: any, isStringKey: any): string | undefined;
+    csharpNullableStateField(node: any): {
+        text: string;
+        type: string;
+    } | undefined;
+    csharpNullableStateRead(state: {
+        text: string;
+        type: string;
+    }, argumentExpression: any, isStringKey: boolean, isNumberKey: boolean): string | undefined;
     csharpDeclaredCollectionRead(node: any, expression: any, argumentExpression: any, isStringKey: any, isNumberKey: any): string | undefined;
     csharpDeclaredCollectionType(expression: any): string | undefined;
     csharpProvenDictionaryRead(node: any, expression: any, argumentExpression: any, isStringKey: any): string | undefined;
