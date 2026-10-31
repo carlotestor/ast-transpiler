@@ -12234,7 +12234,8 @@ ${this.getIden(identation)}${this.printNode(node.left, 0)} = &${local}`;
     }
     const valueNode = callee === "mapToSafeMap" && args.length === 1 ? this.goUnwrapParenthesizedNode(args[0]) : right;
     const text = this.printNode(valueNode, 0).trim();
-    const isMap = this.goMarketTable(valueNode) !== void 0 || this.goIndexableTypeOf(valueNode, text) === "map[string]any";
+    const sharesTable = valueNode?.kind === SyntaxKind5.PropertyAccessExpression && valueNode.name?.text === node.left.name?.text && valueNode.expression?.kind === SyntaxKind5.Identifier;
+    const isMap = sharesTable || this.goMarketTable(valueNode) !== void 0 || this.goIndexableTypeOf(valueNode, text) === "map[string]any";
     return `${left} = ${isMap ? text : `MapTyped(${text})`}`;
   }
   // `this.markets` / `this.currencies` (and the `_by_id` twins): plain `map[string]any` fields of the
@@ -20348,6 +20349,8 @@ ${tryBodyBlock}
         return this.goDeclaredTypeOfIdentifier(node) === "string";
       case SyntaxKind5.CallExpression:
         return this.goTypeOfInitializer(node, printed) === "string";
+      case SyntaxKind5.ElementAccessExpression:
+        return node.expression?.kind === SyntaxKind5.Identifier && this.goDeclaredTypeOfIdentifier(node.expression) === "[]string" && /^[A-Za-z_]\w*\[[^\[\]()]+\]$/.test((printed ?? "").trim());
     }
     return false;
   }

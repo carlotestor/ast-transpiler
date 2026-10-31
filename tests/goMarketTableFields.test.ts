@@ -60,6 +60,17 @@ describe ('go market tables are plain map fields', () => {
         expect (out).toContain ('return this.Markets[k]');
         expect (out).not.toMatch (/\b(Markets|Markets_by_id|Currencies|Currencies_by_id)\(\)/);
     });
+    test ('sharing another exchange\'s table assigns the field without a conversion', () => {
+        const out = go ('    share (source: any) {\n        this.markets = source.markets;\n        this.currencies = source.currencies;\n    }\n');
+        expect (out).toContain ('this.Markets = source.Markets');
+        expect (out).toContain ('this.Currencies = source.Currencies');
+        expect (out).not.toContain ('MapTyped');
+    });
+    test ('a slice element key printed as GetValue keeps the helper read', () => {
+        const out = go ('    pick () {\n        const keys: string[] = Object.keys (this.markets);\n        return this.markets[keys[0]];\n    }\n');
+        expect (out).toContain ('GetValue(this.Markets, ');
+        expect (out).not.toMatch (/this\.Markets\[GetValue/);
+    });
     test ('a same-named member of another class is not a market table', () => {
         const out = t ().transpileGo ('class Other {\n    markets: any = {};\n    f (k: string) {\n        this.markets[k] = 1;\n    }\n}\n').content;
         expect (out).not.toContain ('AddMarketsEntry');

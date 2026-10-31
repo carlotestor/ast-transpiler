@@ -2916,7 +2916,10 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         }
         const valueNode = ((callee === 'mapToSafeMap') && (args.length === 1)) ? this.goUnwrapParenthesizedNode(args[0]) : right;
         const text = this.printNode(valueNode, 0).trim();
-        const isMap = (this.goMarketTable(valueNode) !== undefined) || (this.goIndexableTypeOf(valueNode, text) === 'map[string]any');
+        // `this.t = other.t` shares another exchange's table (`other: any` leaves the checker blind): the same field
+        const sharesTable = (valueNode?.kind === SyntaxKind.PropertyAccessExpression) && (valueNode.name?.text === node.left.name?.text)
+            && (valueNode.expression?.kind === SyntaxKind.Identifier);
+        const isMap = sharesTable || (this.goMarketTable(valueNode) !== undefined) || (this.goIndexableTypeOf(valueNode, text) === 'map[string]any');
         return `${left} = ${isMap ? text : `MapTyped(${text})`}`;
     }
 
@@ -12452,6 +12455,9 @@ ${tryBodyBlock}
             return this.goDeclaredTypeOfIdentifier(node) === 'string';
         case SyntaxKind.CallExpression:
             return this.goTypeOfInitializer(node, printed) === 'string';
+        case SyntaxKind.ElementAccessExpression: // an element of a declared `[]string` local, printed as the slice index, is a Go string
+            return (node.expression?.kind === SyntaxKind.Identifier) && (this.goDeclaredTypeOfIdentifier(node.expression) === '[]string')
+                && /^[A-Za-z_]\w*\[[^\[\]()]+\]$/.test((printed ?? '').trim());
         }
         return false;
     }
