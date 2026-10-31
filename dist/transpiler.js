@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-AWK6QGCM.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -55924,6 +55924,204 @@ function hx11w9RustInt2IntNLocalOptionI64(content) {
   return out + content.slice(last);
 }
 
+// src/rustPasses/hx11w9RustParseNumberStringLocalOptionF64.ts
+init_esm_shims();
+function hx11w9RustParseNumberStringLocalOptionF64(content) {
+  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.parse_number\(/gm;
+  const mask2 = (src) => {
+    let out2 = "";
+    let i = 0;
+    const blank = (s) => s.replace(/[^\n]/g, " ");
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "/" && src[i + 1] === "/") {
+        while (i < src.length && src[i] !== "\n") {
+          out2 += " ";
+          i++;
+        }
+        continue;
+      }
+      if (c === "/" && src[i + 1] === "*") {
+        const e = src.indexOf("*/", i + 2);
+        const stop = e < 0 ? src.length : e + 2;
+        out2 += blank(src.slice(i, stop));
+        i = stop;
+        continue;
+      }
+      if (c === '"') {
+        out2 += '"';
+        i++;
+        while (i < src.length && src[i] !== '"') {
+          if (src[i] === "\\") {
+            out2 += "  ";
+            i += 2;
+            continue;
+          }
+          out2 += src[i] === "\n" ? "\n" : " ";
+          i++;
+        }
+        if (i < src.length) {
+          out2 += '"';
+          i++;
+        }
+        continue;
+      }
+      out2 += c;
+      i++;
+    }
+    return out2;
+  };
+  const maskedAll = mask2(content);
+  const closeOf2 = (masked, open) => {
+    let depth = 0;
+    for (let k = open; k < masked.length; k++) {
+      if (masked[k] === "(")
+        depth++;
+      else if (masked[k] === ")") {
+        depth--;
+        if (depth === 0)
+          return k + 1;
+      }
+    }
+    return -1;
+  };
+  const scopeEnd = (masked, from) => {
+    let depth = 0;
+    for (let k = from; k < masked.length; k++) {
+      if (masked[k] === "{")
+        depth++;
+      else if (masked[k] === "}") {
+        depth--;
+        if (depth < 0)
+          return k;
+      }
+    }
+    return masked.length;
+  };
+  const splitArgs5 = (src) => {
+    const out2 = [];
+    let cur = "";
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    for (const c of src) {
+      if (inStr) {
+        cur += c;
+        if (esc)
+          esc = false;
+        else if (c === "\\")
+          esc = true;
+        else if (c === '"')
+          inStr = false;
+        continue;
+      }
+      if (c === '"') {
+        inStr = true;
+        cur += c;
+        continue;
+      }
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      if (c === "," && depth === 0) {
+        out2.push(cur);
+        cur = "";
+        continue;
+      }
+      cur += c;
+    }
+    out2.push(cur);
+    return out2;
+  };
+  const rewrites = [];
+  let m;
+  while ((m = declRe.exec(content)) !== null) {
+    const name = m[3];
+    const callOpen = m.index + m[0].length - 1;
+    const callClose = closeOf2(maskedAll, callOpen);
+    if (callClose < 0 || !/^\s*;/.test(content.slice(callClose, callClose + 3)))
+      continue;
+    const stmtEnd3 = callClose + /^\s*;/.exec(content.slice(callClose, callClose + 3))[0].length;
+    const args = splitArgs5(content.slice(callOpen + 1, callClose - 1));
+    if (args.length !== 2 || args[1].trim() !== "&[]")
+      continue;
+    const arg = args[0].trim();
+    const argOpen = arg.indexOf("(");
+    const callEnds = () => argOpen > 0 && closeOf2(mask2(arg), argOpen) === arg.length;
+    let argOk = false;
+    let am;
+    if (/^Value::Str\("(?:[^"\\]|\\.)*"\.into\(\)\)$/.test(arg))
+      argOk = true;
+    else if (/^crate::precise::Precise::string(?:Add|Sub|Mul|Div|DivPrec|Abs|Neg|Min|Max)\(/.test(arg))
+      argOk = callEnds();
+    else if (/^self\.safe_string(?:_k)?\(/.test(arg)) {
+      const inner = splitArgs5(arg.slice(argOpen + 1, arg.length - 1));
+      argOk = callEnds() && inner.length === 3 && inner[2].trim() === "&[]";
+    } else if ((am = /^([a-zA-Z_][a-zA-Z0-9_]*)(?:\.clone\(\))?\.map\(Value::from\)\.unwrap_or\(Value::Null\)$/.exec(arg)) !== null) {
+      const head = content.slice(0, m.index);
+      const fnAt = Math.max(head.lastIndexOf("\n    fn "), head.lastIndexOf("\n    pub fn "), head.lastIndexOf("\n    pub async fn "), head.lastIndexOf("\n    async fn "));
+      const decls = [...maskedAll.slice(Math.max(fnAt, 0), m.index).matchAll(new RegExp(`\\blet\\s+(?:mut\\s+)?${am[1]}\\s*:\\s*([^=;]+?)\\s*=`, "g"))];
+      argOk = decls.length > 0 && decls[decls.length - 1][1] === "Option<String>";
+    }
+    if (!argOk)
+      continue;
+    const end = scopeEnd(maskedAll, stmtEnd3);
+    const masked = maskedAll.slice(stmtEnd3, end);
+    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(masked))
+      continue;
+    if (new RegExp(`\\blet\\b[^=;\\n]*\\b${name}\\b`).test(masked))
+      continue;
+    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(masked))
+      continue;
+    const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, "g");
+    const uses = [];
+    let ok = true;
+    let u;
+    while ((u = useRe.exec(masked)) !== null) {
+      const s = u.index;
+      const e = s + name.length;
+      const after = masked.slice(e);
+      let g;
+      if ((g = /^\s*(!=|==)\s*Value::Null\b/.exec(after)) !== null) {
+        uses.push({ start: stmtEnd3 + s, end: stmtEnd3 + e + g[0].length, text: `${name}.${g[1] === "!=" ? "is_some" : "is_none"}()` });
+      } else if (after.startsWith(".clone()")) {
+        uses.push({ start: stmtEnd3 + s, end: stmtEnd3 + e + 8, text: `Value::from(${name})` });
+        useRe.lastIndex = e + 8;
+        continue;
+      } else if (/\bm\.insert\("[^"\n]*"\.to_string\(\),\s*$/.test(masked.slice(0, s)) && after.startsWith(");")) {
+        uses.push({ start: stmtEnd3 + s, end: stmtEnd3 + e, text: `Value::from(${name})` });
+        continue;
+      } else {
+        ok = false;
+        break;
+      }
+      useRe.lastIndex = e + g[0].length;
+    }
+    if (!ok)
+      continue;
+    rewrites.push({
+      start: m.index,
+      end: callOpen,
+      text: content.slice(m.index, callOpen).replace(": Value =", ": Option<f64> =").replace("parse_number", "parse_number_opt")
+    });
+    for (const use of uses)
+      rewrites.push(use);
+  }
+  if (rewrites.length === 0)
+    return content;
+  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
+  let out = "";
+  let last = 0;
+  for (const r of rewrites) {
+    if (r.start < last)
+      continue;
+    out += content.slice(last, r.start) + r.text;
+    last = r.end;
+  }
+  return out + content.slice(last);
+}
+
 // src/transpiler.ts
 var __dirname_mock = import_dirname.default;
 var fastCompilerOptions = {
@@ -56652,6 +56850,7 @@ export {
   hx11w9RustIntLocalNullSinkOptionI64,
   hx11w9RustNumber2LocalOptionF64,
   hx11w9RustNumber2SinkLocalOptionF64R2,
+  hx11w9RustParseNumberStringLocalOptionF64,
   hx11w9RustStr2LocalOptionString,
   hx11w9RustStrLiteralLocalNativeString,
   hx11w9RustStrNLocalOptionString,

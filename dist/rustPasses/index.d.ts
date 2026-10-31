@@ -27,3 +27,4 @@ export { hx11w9RustNumber2LocalOptionF64 } from './hx11w9RustNumber2LocalOptionF
 export { hx11w9RustNumber2SinkLocalOptionF64R2 } from './hx11w9RustNumber2SinkLocalOptionF64R2.js';
 export { hx11w9RustStrNLocalOptionString } from './hx11w9RustStrNLocalOptionString.js';
 export { hx11w9RustInt2IntNLocalOptionI64 } from './hx11w9RustInt2IntNLocalOptionI64.js';
+export { hx11w9RustParseNumberStringLocalOptionF64 } from './hx11w9RustParseNumberStringLocalOptionF64.js';
