@@ -780,8 +780,8 @@ const GO_TUPLE_POINTER_SLOT_PRODUCERS: { [name: string]: { goType: string, defau
     'handleParamString': { 'goType': '*string', 'safe': 'SafeStringPtr' }, 'handleParamString2': { 'goType': '*string', 'safe': 'SafeStringPtr' },
     'handleParamBool': { 'goType': '*bool', 'safe': 'SafeBoolPtr' }, 'handleParamBool2': { 'goType': '*bool', 'safe': 'SafeBoolPtr' },
     'handleParamInteger': { 'goType': '*int64' }, 'handleParamInteger2': { 'goType': '*int64' },
-    'handleOptionBoolAndParams': { 'goType': '*bool', 'defaultSlot': 3, 'safe': 'SafeBoolPtr' },
-    'handleOptionBoolAndParams2': { 'goType': '*bool', 'defaultSlot': 4, 'safe': 'SafeBoolPtr' },
+    'handleOptionBoolAndParams': { 'goType': '*bool', 'defaultSlot': 3 },
+    'handleOptionBoolAndParams2': { 'goType': '*bool', 'defaultSlot': 4 },
     'handleOptionIntegerAndParams': { 'goType': '*int64', 'defaultSlot': 3 },
     'handleOptionIntegerAndParams2': { 'goType': '*int64', 'defaultSlot': 4 },
 };
@@ -11060,6 +11060,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     // `m[k] = x` of a typed tuple-slot local stores the value the box held
     goTuplePointerSlotStoreText(right): string | undefined {
         const inner: any = this.goUnwrapParenthesizedNode(right);
+        if (this.goTuplePointerSlotProbing) {
+            return undefined;
+        }
         if (inner?.kind !== SyntaxKind.Identifier) {
             return undefined;
         }

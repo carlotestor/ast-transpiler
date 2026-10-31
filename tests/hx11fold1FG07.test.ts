@@ -80,3 +80,12 @@ describe('hx11 fold 1F G07: tuple slot 0 of the pointer helpers is the typed poi
         expect(out).not.toContain('var flag *bool');
     });
 });
+
+describe('hx11 fold 1F G07: option helpers keep the typed assertion read', () => {
+    test('a variable default selects the Nullable twin: the slot reads through the typed assertion', () => {
+        const out = fn("        const dflt = true;\n        const [ stock, paramsStock ] = this.handleOptionBoolAndParams (params, 'f', 'stock', dflt);\n",
+            "        if (stock === true) {\n            request['s'] = 1;\n        }\n");
+        expect(out).toContain('var stock *bool = nil');
+        expect(out).toContain('.(*bool); ok { stock = p }');
+    });
+});

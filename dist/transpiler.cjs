@@ -10067,8 +10067,8 @@ var GO_TUPLE_POINTER_SLOT_PRODUCERS = {
   "handleParamBool2": { "goType": "*bool", "safe": "SafeBoolPtr" },
   "handleParamInteger": { "goType": "*int64" },
   "handleParamInteger2": { "goType": "*int64" },
-  "handleOptionBoolAndParams": { "goType": "*bool", "defaultSlot": 3, "safe": "SafeBoolPtr" },
-  "handleOptionBoolAndParams2": { "goType": "*bool", "defaultSlot": 4, "safe": "SafeBoolPtr" },
+  "handleOptionBoolAndParams": { "goType": "*bool", "defaultSlot": 3 },
+  "handleOptionBoolAndParams2": { "goType": "*bool", "defaultSlot": 4 },
   "handleOptionIntegerAndParams": { "goType": "*int64", "defaultSlot": 3 },
   "handleOptionIntegerAndParams2": { "goType": "*int64", "defaultSlot": 4 }
 };
@@ -19219,6 +19219,9 @@ ${indent}}`);
   // `m[k] = x` of a typed tuple-slot local stores the value the box held
   goTuplePointerSlotStoreText(right) {
     const inner = this.goUnwrapParenthesizedNode(right);
+    if (this.goTuplePointerSlotProbing) {
+      return void 0;
+    }
     if (_optionalChain([inner, 'optionalAccess', _2459 => _2459.kind]) !== _ast.SyntaxKind.Identifier) {
       return void 0;
     }
