@@ -218,6 +218,11 @@ export declare class GoTranspiler extends BaseTranspiler {
     goDeclaredLocalTypeIfSafe(declaration: any, goType: string, readsTheValue: (n: any) => boolean, skipUse?: (n: any) => boolean): string | undefined;
     goSafeDictLocalUnboxUncached(declaration: any): string | undefined;
     goSafeDictUnboxValue(declaration: any, identation: number): string | undefined;
+    goBaseMapCalleeName(name: string): boolean;
+    goNodeIsInPredictionTree(node: any): boolean;
+    goBookAccessorRead(initializer: any): boolean;
+    goIsBaseMapResultLocal(node: any): boolean;
+    goBaseMapResultLocal(initializer: any): boolean;
     goMarketCallReturnsDict(initializer: any): boolean;
     goMarketProducerMethods: string[];
     goMarketMapCalls: string[];
@@ -234,8 +239,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     goMarketLocalUnboxCache: Map<any, string>;
     goMarketLocalUnbox(declaration: any): string | undefined;
     goIdentifierRefersToDeclaration(node: any, declaration: any): boolean;
-    goMarketUseReadsTheValue(node: any, throwingAccessor: boolean, keepsMap?: boolean): boolean;
-    goMarketUseKeepsMap(node: any): boolean;
+    goMarketUseReadsTheValue(node: any, throwingAccessor: boolean, keepsMap?: boolean, handsOn?: boolean): boolean;
+    goMarketUseKeepsMap(node: any, handsOn?: boolean): boolean;
+    goMarketUseHandsTheMapOn(node: any, parent: any): boolean;
     goMarketLocalUnboxUncached(declaration: any): string | undefined;
     goMarketUnboxValue(declaration: any, parsedValue: string): string | undefined;
     goDeclarationOfIdentifier(node: any): any;

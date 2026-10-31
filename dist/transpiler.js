@@ -8980,7 +8980,17 @@ var GO_MARKET_LOCAL_TYPE = "map[string]any";
 var GO_MARKET_PRODUCER_METHODS = ["parseMarket", "getMarketFromSymbols", "getMarketFromClientAndMessage"];
 var GO_ANY_FRAMED_VENUES = /* @__PURE__ */ new Set(["bitfinex", "toobit", "coincheck", "phemex", "sxbet", "gemini"]);
 var GO_MARKET_MAP_CALLS = ["Market", "SafeMarket", "SafeMarketStructure", "Extend", "DeepExtend", "MapTyped", "MarketTyped"];
-var GO_MARKET_MAP_BASE_CALLS = ["getMarketFromSymbols"];
+var GO_MARKET_MAP_BASE_CALLS = [
+  "getMarketFromSymbols",
+  // BaseExchange methods whose Go signature is `map[string]any` on the base, on every venue override
+  // and on IDerivedExchange (go/v4 exchange_generated.go + exchange_interface.go; the ccxt build retypes
+  // the overrides). The Go result is the map itself, so the box a local held was always that map - a
+  // typed nil when the callee answers absent, never an untyped nil: see goMarketUseHandsTheMapOn.
+  "parseBalance",
+  "parseWsTrade",
+  "parseWsOrder",
+  "describe"
+];
 var GO_MARKET_READ_COMPARISON_OPERATORS = [
   SyntaxKind5.EqualsEqualsToken,
   SyntaxKind5.ExclamationEqualsToken,
@@ -11345,6 +11355,53 @@ func New${this.capitalize(this.className)}() *${this.className} {
     const key = this.printNode(args.key, 0);
     return `SafeMapTyped(${container}, ${key})`;
   }
+  // `name` (TS spelling) is a base method whose generated Go result is `map[string]any`
+  goBaseMapCalleeName(name) {
+    return GO_MARKET_MAP_BASE_CALLS.indexOf(name) >= 0;
+  }
+  // the source file sits under ts/src/prediction (its base class is exchange_prediction.go)
+  goNodeIsInPredictionTree(node) {
+    const fileName = String(node?.getSourceFile?.()?.fileName ?? "");
+    return /(^|[\\/])ts[\\/]src[\\/](prediction[\\/]|base[\\/]PredictionExchange\.ts$)/.test(fileName);
+  }
+  // `this.markets` / `this.currencies` (and the `_by_id` twins): the hand-written book getters of
+  // go/v4/exchange_markets_book.go print `this.Markets()` and answer a `map[string]any` (nil before
+  // the first load). Same box argument as the base callees above.
+  goBookAccessorRead(initializer) {
+    if (initializer?.kind !== SyntaxKind5.PropertyAccessExpression || initializer.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return false;
+    }
+    const name = String(initializer.name?.text ?? "");
+    if (this.GO_NATIVE_MAP_ACCESSORS.indexOf(name.charAt(0).toUpperCase() + name.slice(1)) < 0) {
+      return false;
+    }
+    try {
+      const symbol = this.getChecker().getSymbolAtLocation(initializer.name);
+      return (symbol?.declarations ?? []).some((d) => /(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange(\.nooverloads\.\d+)?\.ts$/.test(String(d.resolve?.()?.getSourceFile?.()?.fileName ?? "")));
+    } catch (e) {
+      return false;
+    }
+  }
+  // `node` is a local the base-map-result rule typed (see goBaseMapResultLocal)
+  goIsBaseMapResultLocal(node) {
+    if (node?.kind !== SyntaxKind5.Identifier) {
+      return false;
+    }
+    const declaration = this.goDeclarationOfIdentifier(node);
+    return declaration !== void 0 && this.goBaseMapResultLocal(declaration.initializer) && this.goSafeDictLocalUnbox(declaration) === void 0 && this.goMarketLocalUnbox(declaration) === GO_MARKET_LOCAL_TYPE;
+  }
+  // the callee of a market local is a base map method / book accessor whose Go result is the map
+  // itself (so the use arms of goMarketUseHandsTheMapOn apply); the prediction tree keeps its box
+  goBaseMapResultLocal(initializer) {
+    if (this.goNodeIsInPredictionTree(initializer)) {
+      return false;
+    }
+    if (this.goBookAccessorRead(initializer)) {
+      return true;
+    }
+    const name = initializer?.expression?.name?.text;
+    return initializer?.kind === SyntaxKind5.CallExpression && typeof name === "string" && (GO_MARKET_MAP_BASE_CALLS.indexOf(name) >= 0 || GO_MARKET_PRODUCER_METHODS.indexOf(name) >= 0);
+  }
   // the TypeScript return type proves the boxed value is the market dictionary: the checker reports
   // the `MarketInterface` interface for `this.Market(...)` / `this.SafeMarket(...)` (the `Market`
   // alias is the same interface unioned with undefined). Read from the checker, never a printed name.
@@ -11365,6 +11422,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
     const onDerived = receiver?.kind === SyntaxKind5.PropertyAccessExpression && receiver.expression?.kind === SyntaxKind5.ThisKeyword && receiver.name?.text === "DerivedExchange";
     if (!onThis && !onDerived) {
       return false;
+    }
+    if (this.goBaseMapCalleeName(name) && !this.goNodeIsInPredictionTree(initializer)) {
+      return true;
     }
     const checker = this.checkerOrUndefined();
     if (checker === void 0) {
@@ -11564,7 +11624,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
   // one later use of the market local: the dictionary read shapes SafeDict proves (element read,
   // `in`, read-helper argument), plus — only when the accessor throws rather than answers absent —
   // a plain argument position, since Go re-boxes the map into the callee's `any` as the box did.
-  goMarketUseReadsTheValue(node, throwingAccessor, keepsMap = false) {
+  goMarketUseReadsTheValue(node, throwingAccessor, keepsMap = false, handsOn = false) {
     if (this.goSafeDictUseReadsTheMap(node)) {
       return true;
     }
@@ -11572,7 +11632,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
     if (parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === node && this.goIsComparedOperand(parent)) {
       return true;
     }
-    if (keepsMap && this.goMarketUseKeepsMap(node)) {
+    if (keepsMap && this.goMarketUseKeepsMap(node, handsOn)) {
       return true;
     }
     if (!throwingAccessor) {
@@ -11583,8 +11643,11 @@ func New${this.capitalize(this.className)}() *${this.className} {
   // a use that answers what the boxed local answered even for a nil box: IsEqual derefScalars a
   // typed nil map to an untyped nil, PanicOnError only inspects an error, a GetArg-bound slot folds
   // a nil map to its default, and a map-returning body hands the map on.
-  goMarketUseKeepsMap(node) {
+  goMarketUseKeepsMap(node, handsOn = false) {
     const parent = node.parent;
+    if (handsOn && this.goMarketUseHandsTheMapOn(node, parent)) {
+      return true;
+    }
     if (parent?.kind === SyntaxKind5.ReturnStatement) {
       if (parent.expression !== node) {
         return false;
@@ -11618,17 +11681,52 @@ func New${this.capitalize(this.className)}() *${this.className} {
     }
     return this.goGetArgPositionIsDefaulted(callee, argIndex);
   }
+  // The callee's Go result is the map itself, so the `any` the local used to hold was already that
+  // map (a nil one stays a typed nil in the box): every use that only hands the value on - a branch
+  // value, a container element, a copy, an element write (a nil map panics in the helper and in the
+  // native store alike) or a call argument - sees the same dynamic value through the narrower static
+  // type. Rebinding, member access, spread and `Array.isArray` keep the box. Prediction keeps its box.
+  goMarketUseHandsTheMapOn(node, parent) {
+    switch (parent?.kind) {
+      case SyntaxKind5.ConditionalExpression:
+        return parent.whenTrue === node || parent.whenFalse === node;
+      case SyntaxKind5.PropertyAssignment:
+        return parent.initializer === node;
+      case SyntaxKind5.ShorthandPropertyAssignment:
+        return parent.name === node;
+      case SyntaxKind5.ArrayLiteralExpression:
+        return true;
+      case SyntaxKind5.ParenthesizedExpression:
+        return this.goMarketUseHandsTheMapOn(parent, parent.parent);
+      case SyntaxKind5.BinaryExpression:
+        return parent.operatorToken?.kind === SyntaxKind5.EqualsToken && parent.right === node;
+      case SyntaxKind5.ElementAccessExpression: {
+        const above = parent.parent;
+        return parent.expression === node && above?.kind === SyntaxKind5.BinaryExpression && above.left === parent && above.operatorToken?.kind === SyntaxKind5.EqualsToken;
+      }
+      case SyntaxKind5.CallExpression: {
+        if (parent.expression === node || parent.arguments.indexOf(node) < 0) {
+          return false;
+        }
+        const callee = parent.expression;
+        return !(callee?.kind === SyntaxKind5.PropertyAccessExpression && callee.name?.text === "isArray");
+      }
+    }
+    return false;
+  }
   goMarketLocalUnboxUncached(declaration) {
-    if (!this.goMarketCallReturnsDict(declaration.initializer)) {
+    const bookRead = this.goBookAccessorRead(declaration.initializer) && !this.goNodeIsInPredictionTree(declaration.initializer);
+    if (!bookRead && !this.goMarketCallReturnsDict(declaration.initializer)) {
       return void 0;
     }
     const accessorName = declaration.initializer.expression?.name?.text;
-    const throwingAccessor = accessorName === "market" || accessorName === "currency";
-    const keepsMap = this.goMarketCalleePrintsMap(declaration.initializer);
+    const throwingAccessor = !bookRead && (accessorName === "market" || accessorName === "currency");
+    const keepsMap = bookRead || this.goMarketCalleePrintsMap(declaration.initializer);
+    const handsOn = keepsMap && this.goBaseMapResultLocal(declaration.initializer);
     return this.goDeclaredLocalTypeIfSafe(
       declaration,
       GO_MARKET_LOCAL_TYPE,
-      (n) => this.goMarketUseReadsTheValue(n, throwingAccessor, keepsMap),
+      (n) => this.goMarketUseReadsTheValue(n, throwingAccessor, keepsMap, handsOn),
       (n) => n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n || !this.goIdentifierRefersToDeclaration(n, declaration)
     );
   }
@@ -11638,7 +11736,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
     if (this.goMarketLocalUnbox(declaration) !== GO_MARKET_LOCAL_TYPE) {
       return void 0;
     }
-    if (this.goMarketLocalInitializerIsMap(declaration.name, declaration)) {
+    if (this.goMarketLocalInitializerIsMap(declaration.name, declaration) || this.goBookAccessorRead(declaration.initializer)) {
       return parsedValue.trimStart();
     }
     return `MapTyped(${parsedValue.trimStart()})`;
@@ -14772,6 +14870,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   // native `container[key] = value` when the receiver's Go type is proved by the
   // printer, otherwise undefined and the caller keeps the runtime helper
   printNativeElementAssignment(containerNode, containerStr, keyNode, keyStr, valueStr, compound = false, valueNode) {
+    if (this.goIsBaseMapResultLocal(containerNode) && !this.goMapWriteValueIsNotPointer(valueNode)) {
+      return void 0;
+    }
     const containerType = this.goElementAssignmentContainerType(containerNode, containerStr);
     const fieldType = this.goFieldContainerTypeNative(containerNode);
     if (fieldType !== void 0 || containerType === "map[string]any") {
