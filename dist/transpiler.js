@@ -20825,7 +20825,8 @@ ${this.getIden(level)}}()`;
     if (this.isGoElementAccessAssignmentTarget(node) || containerStr.includes("\n") || keyStr.includes("\n")) {
       return void 0;
     }
-    if (this.goResolvedLocalGoType(baseExpr) !== GO_STRING_LIST_LOCAL_TYPE) {
+    const listType = this.goResolvedLocalGoType(baseExpr);
+    if (listType !== GO_STRING_LIST_LOCAL_TYPE && !(listType === GO_SAFE_LIST_LOCAL_TYPE && this.goListElementsAreObjects(baseExpr))) {
       return void 0;
     }
     const mutators = ["push", "pop", "shift", "unshift", "splice", "sort", "reverse", "fill", "copyWithin"];
@@ -20846,6 +20847,24 @@ ${this.getIden(level)}}()`;
       return disturbed ? void 0 : `${containerStr}[${keyStr}]`;
     }
     return void 0;
+  }
+  // RF-go-6-C (DerefScalar follow-up): the checker types every element of this list as an object type
+  // (a Trade / Order / Position interface, a Dict, a nested array), never a scalar, `any` or a union with
+  // one. A Go `[]any` holding such elements holds maps or slices, never a *string/*int64/*float64/*bool, so
+  // the DerefScalar the guarded element read carries is the identity and the read is the slice index.
+  goListElementsAreObjects(baseExpr) {
+    const checker = this.checkerOrUndefined();
+    const type = checker?.getTypeAtLocation(baseExpr);
+    if (type === void 0 || typeof checker.isArrayType !== "function" || !checker.isArrayType(type)) {
+      return false;
+    }
+    const element = checker.getIndexTypeOfType(type, IndexKind2.Number);
+    if (element === void 0) {
+      return false;
+    }
+    const parts = typeof element.isUnionType === "function" && element.isUnionType() ? element.getTypes().slice() : [element];
+    const real = parts.filter((p) => !(p.flags & (TypeFlags4.Undefined | TypeFlags4.Null)));
+    return real.length > 0 && real.every((p) => (p.flags & TypeFlags4.Object) !== 0 && (p.flags & (TypeFlags4.Any | TypeFlags4.Unknown)) === 0);
   }
   // a same-named identifier that the checker binds to ANOTHER declaration (a sibling block's
   // `let quote`) is not a write of this loop-bounded element local
@@ -20886,6 +20905,9 @@ ${this.getIden(level)}}()`;
       return void 0;
     }
     const index = `${base.text}[${key.text}]`;
+    if (this.goResolvedLocalGoType(base) !== GO_STRING_LIST_LOCAL_TYPE) {
+      return void 0;
+    }
     return printedValue.trim() === index && this.goLoopBoundedSliceRead(node, base, key, base.text, key.text) === index ? "string" : void 0;
   }
   // ===== end RF-go-6-C =====

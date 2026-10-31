@@ -840,6 +840,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goHostListCalleeType(callee: string, initializer: any): string | undefined;
     goWritesOrRebindsName(n: any, name: string, mutators: string[]): boolean;
     goLoopBoundedSliceRead(node: any, baseExpr: any, keyNode: any, containerStr: string, keyStr: string): string | undefined;
+    goListElementsAreObjects(baseExpr: any): boolean;
     goOtherBindingOfLoopBoundedElement(n: any, declaration: any): boolean;
     goBoundIsLengthOf(bound: any, baseExpr: any, loop: any): boolean;
     goLoopBoundedStringElementType(node: any, printedValue: string): string | undefined;
