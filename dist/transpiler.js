@@ -19177,7 +19177,7 @@ ${indent}}`);
   goTuplePointerSlotNilInitType(declaration) {
     const scope = this.goEnclosingFunction(declaration);
     const name = declaration?.name?.text;
-    if (scope === void 0 || name === void 0 || ["p", "ok"].includes(name)) {
+    if (declaration?.kind !== SyntaxKind5.VariableDeclaration || !this.goNilInitInitializer(declaration.initializer) || scope === void 0 || name === void 0 || ["p", "ok"].includes(name)) {
       return void 0;
     }
     const written = { "goType": void 0 };

@@ -11004,7 +11004,8 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     goTuplePointerSlotNilInitType(declaration): string | undefined {
         const scope = this.goEnclosingFunction(declaration);
         const name = declaration?.name?.text;
-        if ((scope === undefined) || (name === undefined) || ['p', 'ok'].includes(name)) {
+        if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || !this.goNilInitInitializer(declaration.initializer)
+            || (scope === undefined) || (name === undefined) || ['p', 'ok'].includes(name)) {
             return undefined;
         }
         const written: { goType: string | undefined } = { 'goType': undefined };

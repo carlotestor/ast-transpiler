@@ -48,6 +48,12 @@ describe('hx11 fold 1F G07: tuple slot 0 of the pointer helpers is the typed poi
         expect(out).toContain('hedged != nil && *hedged == true');
         expect(out).not.toContain('hedged = GetValue(');
     });
+    test('a local initialised to a value (not nil) keeps the pair assignment', () => {
+        const out = fn("        let hedged: Bool = false;\n        [ hedged, params ] = this.handleParamBool (params, 'hedged', false);\n",
+            "        if (hedged === true) {\n            request['h'] = 1;\n        }\n");
+        expect(out).not.toContain('var hedged *bool');
+        expect(out).not.toContain('.(*bool); ok { hedged = p }');
+    });
     test('a store without a nil proof keeps the box', () => {
         const out = fn(TAG, "        request['memo'] = tag;\n");
         expect(out).toContain('tag := GetValue(tagparamsTagVariable, 0)');
