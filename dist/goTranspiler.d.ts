@@ -26,6 +26,13 @@ export declare class GoTranspiler extends BaseTranspiler {
     };
     stringPointerTupleCalls: string[];
     siblingStringPassthroughPattern: RegExp | undefined;
+    goOwnedField: {
+        field: string;
+        declaredIn: string;
+        snapshot: string;
+        remove: string;
+        ownerSide: RegExp[];
+    } | undefined;
     goSliceLiteralTypes: Map<any, string>;
     CCXT_GO_GETARG_DECLARED_TYPES: any;
     CCXT_GO_GETARG_SAFE_CONSUMERS: any;
@@ -643,6 +650,11 @@ export declare class GoTranspiler extends BaseTranspiler {
     printDateNowCall(node: any, identation: any): string;
     printLengthProperty(node: any, identation: any, name?: any): string;
     printConditionalExpression(node: any, identation: any): string;
+    goOwnedFieldAccess(node: any): boolean;
+    goOwnedFieldUserPath(node: any): boolean;
+    goOwnedFieldIsWrite(node: any): boolean;
+    printPropertyAccessExpression(node: any, identation: any): any;
+    goOwnedFieldRemove(node: any): string | undefined;
     printDeleteExpression(node: any, identation: any): string;
     goNativeDelete(node: any): string | undefined;
     goDeleteReceiverText(node: any): string | undefined;

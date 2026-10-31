@@ -9713,6 +9713,14 @@ var GoTranspiler = class extends BaseTranspiler {
     this.uncalledStringParams = config["uncalledStringParams"] ?? {};
     this.stringPointerTupleCalls = config["stringPointerTupleCalls"] ?? [];
     this.siblingStringPassthroughPattern = typeof config["siblingStringPassthroughPattern"] === "string" ? new RegExp(config["siblingStringPassthroughPattern"]) : void 0;
+    const owned = config["ownedField"];
+    this.goOwnedField = owned === void 0 ? void 0 : {
+      field: owned["field"],
+      declaredIn: owned["declaredIn"],
+      snapshot: owned["snapshot"],
+      remove: owned["remove"],
+      ownerSide: (owned["ownerSideMethods"] ?? []).map((p) => new RegExp(p))
+    };
   }
   goDescendantsOf(scope) {
     let list = this.goScopeDescendants.get(scope);
@@ -18161,7 +18169,57 @@ ${this.getIden(level)}}()`;
     const whenFalse = this.printNode(node.whenFalse, 0);
     return `Ternary(${condition}, ${whenTrue}, ${whenFalse})`;
   }
+  // ---- hx11 rfm-X4 OG03: reads of an owner-goroutine base field ------------------------
+  // `this.<field>` whose symbol is the `declaredIn` class's own property declaration (the
+  // checker, not the spelling: a local or another class's field of that name is not it)
+  goOwnedFieldAccess(node) {
+    const owned = this.goOwnedField;
+    if (owned === void 0 || node?.kind !== SyntaxKind5.PropertyAccessExpression || node.expression?.kind !== SyntaxKind5.ThisKeyword || node.name?.text !== owned.field) {
+      return false;
+    }
+    const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+    return declaration?.kind === SyntaxKind5.PropertyDeclaration && declaration.parent?.name?.text === owned.declaredIn;
+  }
+  // user-path code runs off the owner goroutine: the nearest enclosing method (an arrow or
+  // catch closure belongs to it) is not one of the owner-side patterns. No enclosing method
+  // (constructor, initializer) keeps the field.
+  goOwnedFieldUserPath(node) {
+    for (let current = node?.parent; current; current = current.parent) {
+      if (current.kind === SyntaxKind5.MethodDeclaration || current.kind === SyntaxKind5.FunctionDeclaration) {
+        const name = current.name?.text;
+        return typeof name === "string" && !this.goOwnedField.ownerSide.some((pattern) => pattern.test(name));
+      }
+    }
+    return false;
+  }
+  // `this.<field> = v`, `this.<field>[k] = v` and `delete this.<field>[k]` happen on the owner
+  goOwnedFieldIsWrite(node) {
+    const isAssignment = (parent2, child) => parent2?.kind === SyntaxKind5.BinaryExpression && parent2.left === child && parent2.operatorToken.kind >= SyntaxKind5.FirstAssignment && parent2.operatorToken.kind <= SyntaxKind5.LastAssignment;
+    const parent = node.parent;
+    if (isAssignment(parent, node)) {
+      return true;
+    }
+    return parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === node && (isAssignment(parent.parent, parent) || parent.parent?.kind === SyntaxKind5.DeleteExpression);
+  }
+  printPropertyAccessExpression(node, identation) {
+    if (this.goOwnedFieldAccess(node) && !this.goOwnedFieldIsWrite(node) && this.goOwnedFieldUserPath(node)) {
+      return `${this.printNode(node.expression, 0)}.${this.goOwnedField.snapshot}()`;
+    }
+    return super.printPropertyAccessExpression(node, identation);
+  }
+  // `delete this.<field>[k]` on the user path is the owner's delete op
+  goOwnedFieldRemove(node) {
+    const access = node.expression;
+    if (access?.kind !== SyntaxKind5.ElementAccessExpression || !this.goOwnedFieldAccess(access.expression) || !this.goOwnedFieldUserPath(node)) {
+      return void 0;
+    }
+    return `${this.printNode(access.expression.expression, 0)}.${this.goOwnedField.remove}(${this.printNode(access.argumentExpression, 0).trim()})`;
+  }
   printDeleteExpression(node, identation) {
+    const owned = this.goOwnedFieldRemove(node);
+    if (owned !== void 0) {
+      return owned;
+    }
     const native = this.goNativeDelete(node);
     if (native !== void 0) {
       return native;
