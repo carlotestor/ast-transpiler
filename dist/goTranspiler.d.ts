@@ -705,6 +705,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     goIntOperandIdentifier(node: any): boolean;
     goSafeListUnboxIdentifier(node: any): boolean;
     goDeclaredListIdentifier(node: any): boolean;
+    goNameWriteSites(scope: any, name: string, declaration?: any): any[];
+    goBoundedLoopListRead(node: any): boolean;
+    goListElementsArePointerFree(list: any): boolean;
     goNativeListElementRead(node: any, containerStr: string, keyNode: any, keyStr: string): string | undefined;
     printElementAccessExpression(node: any, identation: any): string;
     isInsideVoidFunction(node: Node): boolean;
