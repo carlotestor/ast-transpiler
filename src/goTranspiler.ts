@@ -2,6 +2,7 @@ import { BaseTranspiler } from "./baseTranspiler.js";
 import * as fs from "fs";
 import * as path from "path";
 import { SyntaxKind, getLeadingCommentRanges } from 'typescript/unstable/ast';
+import { NodeFlags } from 'typescript/unstable/ast';  // RF-go-7
 import { isArrowFunction, isBinaryExpression, isBlock, isBooleanLiteral, isCallExpression, isClassDeclaration as isClassDeclarationNode, isElementAccessExpression, isExpressionStatement, isFunctionDeclaration, isFunctionExpression, isIfStatement, isMethodDeclaration, isReturnStatement, isSourceFile, isStatement as isStatementNode, isThrowStatement, isTryStatement } from 'typescript/unstable/ast/is';
 import { Checker, IndexKind, SymbolFlags, TypeFlags } from 'typescript/unstable/sync';
 import type { BinaryExpression, CallExpression, Node, NodeArray, Statement } from 'typescript/unstable/ast';
@@ -805,6 +806,15 @@ export class GoTranspiler extends BaseTranspiler {
     // hx11 w8: inherited method name -> indexes of required `boolean` params that print `bool` on the
     // base and every override (dynamic callers convert through BoolArg)
     unifiedBoolParams: { [method: string]: number[] } = {};
+    // hx11 RF-go-7: `<class>.<method>` -> indexes of required `string` params of an exchange-local method that
+    // no file in ts/src calls (the call-site proof is vacuous, so the table names the methods whose Go
+    // signature may print `string`)
+    uncalledStringParams: { [method: string]: number[] } = {};
+    // hx11 RF-go-7: base methods whose tuple result slot 0 is the Go `*string` (TS declares `string`)
+    stringPointerTupleCalls: string[] = [];
+    // hx11 RF-go-7: exchange-local methods (by name pattern) whose sibling-file call sites may pass a unified-string
+    // parameter of their enclosing method straight through
+    siblingStringPassthroughPattern: RegExp | undefined = undefined;
     // array literals the current print opens as a Go slice (set by the call-argument rule)
     goSliceLiteralTypes: Map<any, string> = new Map<any, string>();
     // installed by the ccxt build: GetArg alias -> Go types, and the audited consumer table
@@ -863,6 +873,9 @@ export class GoTranspiler extends BaseTranspiler {
         this.unifiedStringParams = config['unifiedStringParams'] ?? {};
         this.unifiedSliceParams = config['unifiedSliceParams'] ?? {};
         this.unifiedBoolParams = config['unifiedBoolParams'] ?? {};
+        this.uncalledStringParams = config['uncalledStringParams'] ?? {};
+        this.stringPointerTupleCalls = config['stringPointerTupleCalls'] ?? [];
+        this.siblingStringPassthroughPattern = (typeof config['siblingStringPassthroughPattern'] === 'string') ? new RegExp(config['siblingStringPassthroughPattern']) : undefined;
     }
 
     initConfig() {
@@ -5320,7 +5333,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         }
         // the call-site proof prints argument expressions, which can land back here
         this.goNativeParameterTypeCache.set(param, undefined);
-        const result = this.goNativeParameterTypeOf(param);
+        const result = this.goNativeParameterTypeOf(param) ?? this.goUncalledStringParameterType(param);
         this.goNativeParameterTypeCache.set(param, result);
         return result;
     }
@@ -5515,6 +5528,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             return undefined;
         }
         const goType = entry[fn.parameters.indexOf(param)];
+        if (goType === '[]any') {
+            return this.goUnifiedAnySliceParameterType(fn, param);
+        }
         const annotation = (goType === '[]string') ? 'string[]' : ((goType === '[][]string') ? 'string[][]' : undefined);
         if ((annotation === undefined) || (this.goAnnotatedParameterText(param) !== annotation)) {
             return undefined;
@@ -5541,6 +5557,37 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             return undefined;
         }
         return goType;
+    }
+
+    // hx11 RF-go-7: a table slot of `[]any` types a required array-typed parameter whose elements are
+    // objects (a request-row list) as the `[]any` every caller already hands over. The table types the
+    // base and every override together (one interface signature): a body that breaks it fails the build.
+    goUnifiedAnySliceParameterType(fn, param): string | undefined {
+        const checker: any = this.checkerOrUndefined();
+        const type = checker?.getTypeAtLocation(param);
+        if ((type === undefined) || (param.initializer !== undefined) || (param.dotDotDotToken !== undefined)
+            || (param.name?.kind !== SyntaxKind.Identifier) || (fn.body === undefined) || !checker.isArrayType(type)) {
+            return undefined;
+        }
+        const element = checker.getIndexTypeOfType(type, IndexKind.Number);
+        if ((element === undefined) || !(element.flags & TypeFlags.Object)) {
+            return undefined;
+        }
+        if (!this.goLocalIsSafeToType(fn.body, param, param.name.text, '[]any')) {
+            throw new Error(`unifiedSliceParams: ${fn.name.text} parameter ${param.name.text} is written as something other than []any`);
+        }
+        return '[]any';
+    }
+
+    // the parameter node a unified `[]any` slot belongs to: its element reads keep GetValue, the native
+    // read would trade it for DerefScalar
+    goIsUnifiedAnySliceParameterNode(decl: any): boolean {
+        const fn: any = decl?.parent;
+        if ((decl?.kind !== SyntaxKind.Parameter) || (fn?.name?.kind !== SyntaxKind.Identifier)) {
+            return false;
+        }
+        const entry = Object.prototype.hasOwnProperty.call(this.unifiedSliceParams, fn.name.text) ? this.unifiedSliceParams[fn.name.text] : undefined;
+        return entry?.[fn.parameters.indexOf(decl)] === '[]any';
     }
 
     // the parameter the class chain's own declaration of this method takes: an override prints the
@@ -6214,7 +6261,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
                         arg = callArgs[index];
                     }
                 }
-                if ((arg === undefined) || !this.goTextArgMatchesType(arg, goType, site.file, tree, site.at)) {
+                // hx11 RF-go-7: a callee the build names takes a sibling-file passthrough of a unified-string parameter
+                const passthrough = (goType === 'string') && (this.siblingStringPassthroughPattern !== undefined) && this.siblingStringPassthroughPattern.test(name)
+                    && (arg !== undefined) && this.goSiblingPassesUnifiedString(arg, tree.fileText.get(site.file) ?? '', site.at);
+                if ((arg === undefined) || !(this.goTextArgMatchesType(arg, goType, site.file, tree, site.at) || passthrough)) {
                     return false;
                 }
             }
@@ -6244,12 +6294,95 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     // cannot name it (then the call site does not prove anything)
     goPrintedArgType(arg): string | undefined {
         if (arg.kind === SyntaxKind.Identifier) {
-            return this.goDeclaredTypeOfIdentifier(arg);
+            return this.goDeclaredTypeOfIdentifier(arg) ?? this.goBoundIdentifierType(arg);
+        }
+        if (this.goIsClientUrl(arg)) {
+            return 'string'; // Client.url prints the string GetUrl()
         }
         if (this.goIsPrivateKeyField(arg)) {
             return 'string'; // go/v4/exchange.go declares PrivateKey `string`
         }
         return this.goTypeOfInitializer(arg, this.printNode(arg, 0));
+    }
+
+    // hx11 RF-go-7: `<param>.url` of a `<param>: Client` parameter
+    goIsClientUrl(arg): boolean {
+        if ((arg?.kind !== SyntaxKind.PropertyAccessExpression) || (arg.name?.text !== 'url') || (arg.expression?.kind !== SyntaxKind.Identifier)) {
+            return false;
+        }
+        const decl: any = this.checkerOrUndefined()?.getSymbolAtLocation(arg.expression)?.valueDeclaration?.resolve?.();
+        return (decl?.kind === SyntaxKind.Parameter) && (decl.type?.getText() === 'Client');
+    }
+
+    // hx11 RF-go-7: the Go type an identifier is bound to when its declaration is not a typed local: a defaulted
+    // `x: string = 'lit'` parameter is bound by GetArgString (a Go string at every consumer), and slot 0 of
+    // `const [ x, y ] = this.<stringPointerTupleCall> (...)` is the *string tuple result
+    goBoundIdentifierType(arg): string | undefined {
+        const decl: any = this.checkerOrUndefined()?.getSymbolAtLocation(arg)?.valueDeclaration?.resolve?.();
+        if (decl?.kind === SyntaxKind.Parameter) {
+            return (this.goGetArgParameterType(decl) === 'string') ? 'string' : undefined;
+        }
+        const isSlot0 = (decl?.kind === SyntaxKind.BindingElement) && (decl.parent?.kind === SyntaxKind.ArrayBindingPattern) && (decl.parent.elements[0] === decl);
+        const holder = isSlot0 ? decl.parent.parent : undefined;
+        const init = holder?.initializer;
+        const constant = ((holder?.parent?.flags ?? 0) & NodeFlags.Const) !== 0;
+        return (constant && (init?.kind === SyntaxKind.CallExpression) && this.stringPointerTupleCalls.includes(init.expression?.name?.text)) ? '*string' : undefined;
+    }
+
+    // hx11 RF-go-7: a required `string` parameter of a table-listed exchange-local method that no ts/src file calls
+    goUncalledStringParameterType(param): string | undefined {
+        const fn: any = param?.parent;
+        if ((fn?.kind !== SyntaxKind.MethodDeclaration) || (fn.name?.kind !== SyntaxKind.Identifier) || (param.initializer !== undefined)
+            || (param.dotDotDotToken !== undefined) || (param.name?.kind !== SyntaxKind.Identifier)) {
+            return undefined;
+        }
+        const key = `${this.goEnclosingClassName(fn)}.${fn.name.text}`;
+        const indexes = Object.prototype.hasOwnProperty.call(this.uncalledStringParams, key) ? this.uncalledStringParams[key] : undefined;
+        if (!Array.isArray(indexes) || !indexes.includes(fn.parameters.indexOf(param)) || (this.goRequiredStringParameterType(param) !== 'string')
+            || this.goHasTreeCallSite(fn) || (this.goTsSrcTree(fn.getSourceFile())?.callIndex.get(fn.name.text) ?? []).length > 0) {
+            return undefined;
+        }
+        return (this.goLocalIsSafeToType(fn.body, param, param.name.text, 'string')
+            && this.goParameterKeepsNilCompareNative(fn.body, param, 'string')) ? 'string' : undefined;
+    }
+
+    // hx11 RF-go-7: a sibling-file call site that hands over a parameter of its enclosing method straight through is a
+    // Go `string` when that method's slot is in the unified string table (the base, every override and the
+    // interface print `string` there) and the method never reassigns the parameter
+    goSiblingPassesUnifiedString(argText: string, fileText: string, at: number | undefined): boolean {
+        const name = /^([A-Za-z_$][\w$]*)$/.exec((argText ?? '').trim())?.[1];
+        if ((name === undefined) || (at === undefined)) {
+            return false;
+        }
+        const head = fileText.substring(0, at);
+        const signature = /\n {4}(?:(?:override|async|public|private|protected) )*([A-Za-z_$][\w$]*) \(([^\n]*)\)(?:: [^\n{]*)? \{/g;
+        let last: RegExpExecArray | null = null;
+        let m: RegExpExecArray | null;
+        while ((m = signature.exec(head)) !== null) {
+            last = m;
+        }
+        if (last === null) {
+            return false;
+        }
+        const indexes = Object.prototype.hasOwnProperty.call(this.unifiedStringParams, last[1]) ? this.unifiedStringParams[last[1]] : undefined;
+        if (indexes === undefined) {
+            return false;
+        }
+        const params: string[] = [];
+        let depth = 0;
+        let cur = '';
+        for (const c of last[2]) {
+            if ('([{<'.includes(c)) { depth++; } else if (')]}>'.includes(c)) { depth--; }
+            if ((c === ',') && (depth === 0)) { params.push(cur.trim()); cur = ''; } else { cur += c; }
+        }
+        params.push(cur.trim());
+        const escaped = name.replace(/\$/g, '\\$');
+        const index = params.findIndex((p) => new RegExp('^' + escaped + ':').test(p));
+        if ((index < 0) || !indexes.includes(index) || /=/.test(params[index]) || /[?]/.test(params[index].split(':')[0])) {
+            return false;
+        }
+        const body = head.substring(last.index + last[0].length);
+        return !new RegExp('(?<![\\w.$])' + escaped + '\\s*(?:[-+*/]?=(?!=)|\\+\\+|--)').test(body);
     }
 
     // hx10 GP15: a `*string` argument the source itself proves non-nil at the call site — a
@@ -11131,6 +11264,11 @@ ${tryBodyBlock}
             return undefined;
         }
         if (this.isGoElementAccessAssignmentTarget(node) || !this.goIntIndexExpression(keyNode)) {
+            return undefined;
+        }
+        const readBase: any = node?.expression;
+        if ((readBase?.kind === SyntaxKind.Identifier)
+            && this.goIsUnifiedAnySliceParameterNode(this.checkerOrUndefined()?.getSymbolAtLocation(readBase)?.valueDeclaration?.resolve?.())) {
             return undefined;
         }
         const level = this.goStatementLevel;
