@@ -3,6 +3,7 @@ import { NodeFlags, SyntaxKind, type Block, type CallExpression, type Declaratio
 import { isArrayLiteralExpression, isArrowFunction, isAsExpression, isBinaryExpression, isBindingElement, isBlock, isCallExpression, isClassDeclaration, isClassExpression, isConditionalExpression, isDeleteExpression, isElementAccessExpression, isForInStatement, isForOfStatement, isIdentifier, isMethodDeclaration, isNoSubstitutionTemplateLiteral, isNonNullExpression, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isReturnStatement, isShorthandPropertyAssignment, isSourceFile, isStatement, isStringLiteral, isStringLiteralLikeNode, isTypeAssertion, isVariableDeclaration } from "typescript/unstable/ast/is";
 import { IndexKind, ObjectFlags, SignatureKind, SymbolFlags, TypeFlags, type Symbol as TsSymbol, type Type } from "typescript/unstable/sync";
 import { findAncestor, getAllSuperTypeNodes, isFunctionLike, signatureDeclaration, symbolDeclarations, symbolValueDeclaration, typeParts, typeTarget } from "./tsUtils.js";
+import { RUST_PLAIN_PLACE } from "./rustNativeForms.js";
 
 const parserConfig = {
     'ELSEIF_TOKEN': 'else if',
@@ -1652,7 +1653,34 @@ export class RustTranspiler extends BaseTranspiler {
         if (!proven && !this.rustR16OrderedProven(op, left, right)) {
             return this.r22StrOrderedComparison(node, op, left, right) ?? this.r25NativeLooseOrderedComparison(node, op, left, right);
         }
-        return this.printNativeNumericComparison(node, operator, this.printNode(left, 0), this.printNode(right, 0));
+        return this.printNativeIndexOfLiteralTest(node, op, left, right)
+            ?? this.printNativeNumericComparison(node, operator, this.printNode(left, 0), this.printNode(right, 0));
+    }
+
+    // `s.indexOf("lit") >= 0` / `> -1` / `< 0` on a proven string place and a non-empty literal needle is a `contains`
+    // test: a non-Str receiver gives `""`, which contains no non-empty literal, like the `None` -> -1 arm.
+    printNativeIndexOfLiteralTest(node, op, left, right): string | undefined {
+        const test = this.nativeIndexOfLiteralTestText(op, left, right);
+        if (test === undefined) return undefined;
+        return this.isBooleanPosition(node) ? test : `Value::Bool(${test})`;
+    }
+
+    nativeIndexOfLiteralTestText(op, left, right): string | undefined {
+        const call: any = this.orderedComparisonOperand(left);
+        if (call === undefined || !isCallExpression(call) || !isPropertyAccessExpression(call.expression) ||
+            call.expression.name.text !== 'indexOf' || call.arguments?.length !== 1) {
+            return undefined;
+        }
+        const bound = this.rustSliceLiteralBound(this.orderedComparisonOperand(right));
+        const yes = (op === SyntaxKind.GreaterThanEqualsToken && bound === 0) || (op === SyntaxKind.GreaterThanToken && bound === -1);
+        const no = op === SyntaxKind.LessThanToken && bound === 0;
+        if (!yes && !no) return undefined;
+        const needle = call.arguments[0];
+        if ((!isStringLiteral(needle) && !isNoSubstitutionTemplateLiteral(needle)) || needle.text === '') return undefined;
+        const literal = this.rustNativeStringLiteralArg(needle);
+        const receiver = literal === undefined ? undefined : this.rustNativeStringReceiver(call, this.printNode(call.expression.expression, 0));
+        if (literal === undefined || receiver === undefined || !RUST_PLAIN_PLACE.test(receiver)) return undefined;
+        return `${no ? '!' : ''}${receiver}.as_str().unwrap_or("").contains("${literal}")`;
     }
 
     // ── native arithmetic (`+ - * /`) ────────────────────────────────────────
@@ -5274,6 +5302,7 @@ export class RustTranspiler extends BaseTranspiler {
             return this.hasNativeComparisonOperand(inner.operand);
         }
         if (this.nativeEqualityText(inner) !== undefined) return true;
+        if (inner.kind === SyntaxKind.BinaryExpression && this.nativeIndexOfLiteralTestText(inner.operatorToken.kind, inner.left, inner.right) !== undefined) return true;
         return inner.kind === SyntaxKind.BinaryExpression && this.isLogicalOp(inner.operatorToken.kind) &&
             (this.hasNativeComparisonOperand(inner.left) || this.hasNativeComparisonOperand(inner.right));
     }
@@ -7295,6 +7324,14 @@ export class RustTranspiler extends BaseTranspiler {
     printNativeStringCase(node, receiverText: string, method: string): string | undefined {
         const receiver = this.rustNativeStringReceiver(node, receiverText);
         if (receiver === undefined || (node.arguments?.length ?? 0) !== 0) return undefined;
+        return this.rustStrCaseConvert(receiver, method);
+    }
+
+    // Case conversion of a Str place: non-Str stays Null. Closure-free for a plain place (read once either way).
+    rustStrCaseConvert(receiver: string, method: string): string {
+        if (RUST_PLAIN_PLACE.test(receiver)) {
+            return `(if let Some(__s) = ${receiver}.as_str() { Value::Str(__s.${method}().into()) } else { Value::Null })`;
+        }
         return `${receiver}.as_str().map(|__s| Value::Str(__s.${method}().into())).unwrap_or(Value::Null)`;
     }
 
@@ -7304,6 +7341,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (receiver === undefined || node.arguments?.length !== 1) return undefined;
         const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
         if (literal === undefined) return undefined;
+        // A non-empty literal is never matched by the `""` a non-Str receiver gives: closure-free.
+        if (literal !== '' && RUST_PLAIN_PLACE.test(receiver)) return `${receiver}.as_str().unwrap_or("").${method}("${literal}")`;
         return `${receiver}.as_str().is_some_and(|__s| __s.${method}("${literal}"))`;
     }
 
@@ -7313,6 +7352,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (receiver === undefined || node.arguments?.length !== 1) return undefined;
         const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
         if (literal === undefined) return undefined;
+        if (RUST_PLAIN_PLACE.test(receiver)) {
+            return `Value::Array(if let Some(__s) = ${receiver}.as_str() { __s.split("${literal}").map(Value::from).collect() } else { Vec::new() })`;
+        }
         return `Value::Array(${receiver}.as_str().map(|__s| __s.split("${literal}").map(Value::from).collect()).unwrap_or_default())`;
     }
 
@@ -8051,7 +8093,7 @@ export class RustTranspiler extends BaseTranspiler {
     // `x.toUpperCase()` / `x.toLowerCase()` on a proven-`Str` local (any TS type).
     printRustR13Case(node, receiverText: string, method: string): string | undefined {
         const receiver = this.rustR13Receiver(node, receiverText);
-        return receiver === undefined || (node.arguments?.length ?? 0) !== 0 ? undefined : `${receiver}.as_str().map(|__s| Value::Str(__s.${method}().into())).unwrap_or(Value::Null)`;
+        return receiver === undefined || (node.arguments?.length ?? 0) !== 0 ? undefined : this.rustStrCaseConvert(receiver, method);
     }
 
     // hx4 R14 — the R12 plain-dict proof reaches overloaded base readers (`safeDict` declares
@@ -8899,6 +8941,14 @@ export class RustTranspiler extends BaseTranspiler {
         return `(match &(${expr}) { Value::Int(__n) => Some(*__n), Value::Float(__f) => Some(*__f as i64), Value::Str(__s) => __s.parse::<i64>().ok(), Value::Bool(__b) => Some(if *__b { 1 } else { 0 }), _ => None })`;
     }
 
+    // The start bound of a slice: an Int literal is its own i64, a Null literal is 0 (the helper's Int / Null arms).
+    r30LooseI64OrZero(expr: string): string {
+        const lit = /^Value::Int\((-?[0-9]+)\)$/.exec(expr);
+        if (lit !== null && Math.abs(Number(lit[1])) < 2 ** 53) return lit[1].startsWith('-') ? `(${lit[1]}i64)` : `${lit[1]}i64`;
+        if (expr === 'Value::Null') return '0i64';
+        return `${this.r30LooseI64(expr)}.unwrap_or(0)`;
+    }
+
     r30SliceArm(variant: string, len: string, take: string, empty: string): string {
         const bound = (b: string) => `if ${b} < 0 { (__l + ${b}).max(0) } else { ${b}.min(__l) }`;
         return `(${variant}, __b, __e) => match (${len}) { __l => match (${bound('__b')}, match __e { None => __l, Some(__k) => ${bound('__k')} }) { (__i, __j) => if __i <= __j { ${take} } else { ${empty} } } }`;
@@ -8909,7 +8959,7 @@ export class RustTranspiler extends BaseTranspiler {
             'Value::Str(__sv.chars().skip(__i as usize).take((__j - __i) as usize).collect::<String>().into())', 'Value::Str(String::new().into())');
         const arr = this.r30SliceArm('Value::Arr(__a)', '__a.len() as i64',
             'Value::Array(__a[__i as usize..__j as usize].to_vec())', 'Value::Array(vec![])');
-        return `(match (&(${name}), ${this.r30LooseI64(start)}.unwrap_or(0), ${this.r30LooseI64(end)}) { ${str}, ${arr}, _ => Value::Null })`;
+        return `(match (&(${name}), ${this.r30LooseI64OrZero(start)}, ${this.r30LooseI64(end)}) { ${str}, ${arr}, _ => Value::Null })`;
     }
 
     r30IndexOf(name: string, needle: string): string {
@@ -8918,6 +8968,10 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     r30Case(name: string, method: string): string {
+        // An unproven operand: the helper's own dispatch inline (a place without literals/newlines reads as `if let`).
+        if (!name.includes('"') && !name.includes('\n')) {
+            return `(if let Some(__s) = (${name}).as_str() { Value::Str(__s.${method}().into()) } else { Value::Null })`;
+        }
         return `(match &(${name}) { Value::Str(__s) => Value::Str(__s.${method}().into()), _ => Value::Null })`;
     }
 }
