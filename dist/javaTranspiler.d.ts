@@ -10,6 +10,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     private javaMethodOverrideFromIndex;
     checkerOrUndefined(): Checker | undefined;
     javaExpressionTypeResolver?: (node: any) => string | undefined;
+    javaBoxedLongResolver?: (node: any) => boolean;
     countRequiredParameters(declaration: any): any;
     printArgsForCallExpression(node: any, identation: any): any;
     javaPrintCallArguments(args: any, node: any, identation: any): any;
@@ -282,6 +283,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaWidenedNumericKind(node: any): any;
     javaWidenedAddKind(node: any): any;
     printWidenedNativeAdd(left: any, right: any, leftText: any, rightText: any): string;
+    printBoxedLongLiteralAdd(left: any, right: any, leftText: any, rightText: any): string;
     javaPrintWidenedOperand(kind: any, resultKind: any, node: any, text: any): any;
     javaSplitTernaryReceiver(node: any): boolean;
     javaNativeSplitCall(node: any, name: any, parsedArg: any): string | undefined;
@@ -363,6 +365,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaTypeFlagsOnly(type: any, mask: number, depth?: number): boolean;
     printObjectKeysCall(node: any, _identation: any, parsedArg?: any): string;
     printNativeObjectKeysCall(node: any): string;
+    printNativeBaseMapFieldKeys(access: any): string;
     printObjectValuesCall(_node: any, _identation: any, parsedArg?: any): string;
     printJsonParseCall(_node: any, _identation: any, parsedArg?: any): string;
     printJsonStringifyCall(_node: any, _identation: any, parsedArg?: any): string;

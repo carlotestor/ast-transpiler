@@ -27165,6 +27165,21 @@ ${this.getIden(identation)}}}`;
     const rightOperand = this.javaPrintWidenedOperand(rightKind, resultKind, right, rightText);
     return `(${leftOperand} + ${rightOperand})`;
   }
+  // `x + <int literal>` where the embedding layer reports x printed as the nullable box `Long x`:
+  // Helpers.add's Long arm is the long sum and its null arm answers null, so the null test
+  // keeps both. Only a plain name (read twice) qualifies.
+  printBoxedLongLiteralAdd(left, right, leftText, rightText) {
+    if (this.javaBoxedLongResolver === void 0 || !isIdentifier2(left) || !isNumericLiteral3(right) || this.javaIntegerLiteralKind(right) === void 0 || !/^\d{1,15}$/.test(rightText) || leftText !== left.text) {
+      return void 0;
+    }
+    let boxed2 = false;
+    try {
+      boxed2 = this.javaBoxedLongResolver(left) === true;
+    } catch (e) {
+      boxed2 = false;
+    }
+    return boxed2 ? `(${leftText} == null ? null : (Object) (${leftText} + ${rightText}L))` : void 0;
+  }
   // an int operand is widened to long explicitly: `i + 1` would box an Integer where
   // Helpers.add hands back a Long, and an all-int sum wraps where the helper's long
   // does not. Integer literals print long; a Double result needs no widening.
@@ -27319,7 +27334,7 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     if (op === SyntaxKind6.PlusToken) {
-      return this.printWidenedNativeAdd(left, right, leftText, rightText);
+      return this.printWidenedNativeAdd(left, right, leftText, rightText) ?? this.printBoxedLongLiteralAdd(left, right, leftText, rightText);
     }
     if (isMod) {
       if (!this.javaProvableNumericDoubleOperand(left) || !this.javaProvableNumericDoubleOperand(right)) {
@@ -28537,8 +28552,11 @@ ${this.getIden(identation)}}}`;
   }
   printNativeObjectKeysCall(node) {
     const argument = node?.arguments?.[0];
-    if (argument === void 0 || isPropertyAccessExpression2(argument)) {
+    if (argument === void 0) {
       return void 0;
+    }
+    if (isPropertyAccessExpression2(argument)) {
+      return this.printNativeBaseMapFieldKeys(argument);
     }
     if (this.javaDeclaredMapReceiver(argument)) {
       return `new java.util.ArrayList<Object>(${this.printNode(argument, 0)}.keySet())`;
@@ -28552,6 +28570,30 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     return `new java.util.ArrayList<Object>(((java.util.Map<String, Object>)${this.printNode(argument, 0)}).keySet())`;
+  }
+  // `Object.keys(this.<f>)` where f is a BaseExchange field the hand-written Java declares
+  // Map<String, Object>: the key copy of that Map, an empty list for the null the field may hold
+  // (the helper's non-Map branch). Owner stores and every other receiver keep the helper.
+  printNativeBaseMapFieldKeys(access) {
+    if (access.expression.kind !== SyntaxKind6.ThisKeyword) {
+      return void 0;
+    }
+    const name = String(access.name.text);
+    if (!JAVA_DECLARED_MAP_FIELD_NAMES.has(name) || this.javaOwnerStoreFields.has(name)) {
+      return void 0;
+    }
+    let file = "";
+    try {
+      const symbol = this.checkerOrUndefined()?.getSymbolAtLocation(access.name);
+      file = symbol?.valueDeclaration?.resolve()?.getSourceFile?.()?.fileName ?? "";
+    } catch (e) {
+      return void 0;
+    }
+    if (!/(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange\.ts$/.test(file)) {
+      return void 0;
+    }
+    const receiver = this.printNode(access, 0);
+    return `(${receiver} == null ? new java.util.ArrayList<Object>() : new java.util.ArrayList<Object>(${receiver}.keySet()))`;
   }
   printObjectValuesCall(_node, _identation, parsedArg = void 0) {
     return `Helpers.objectValues(${parsedArg})`;
