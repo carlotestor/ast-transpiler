@@ -1,4 +1,5 @@
 import { Transpiler } from '../src/transpiler';
+import { SyntaxKind } from 'typescript/unstable/ast';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -1131,9 +1132,10 @@ describe('java boolean conditions emitted without the Helpers.isTrue wrapper', (
         expect(conditionOf("        if (x) { return; }\n", 'test(x: string): void'))
             .toContain("if (Helpers.isTrue(x))");
         expect(conditionOf("        if (x) { return; }\n")).toContain("if (Helpers.isTrue(x))");
-        // `boolean | undefined` is not proven boolean - the helper must stay
+        // a `boolean | undefined` METHOD parameter is a Boolean-or-null box: the null-safe TRUE test
+        // (hx11 RFM-J2 leaf C; it was a ccxt-side printCondition hook)
         expect(conditionOf("        if (x) { return; }\n", 'test(x: boolean | undefined): void'))
-            .toContain("if (Helpers.isTrue(x))");
+            .toContain("if (Boolean.TRUE.equals(x))");
         // negation of a non-boolean keeps the helper inside the `!`
         expect(conditionOf("        if (!x) { return; }\n", 'test(x: string): void'))
             .toContain("if (!Helpers.isTrue(x))");
@@ -4611,11 +4613,11 @@ describe('falsy-wrapper removal: boolean identifiers and Array.isArray', () => {
 
     test('nullable, any and parameter identifiers keep the helper', () => {
         const output = wrapped("        if (maybe) { return; }\n", '', 'test(x: any, maybe: boolean | undefined): void');
-        expect(output).toContain("if (Helpers.isTrue(maybe))");
+        expect(output).toContain("if (Boolean.TRUE.equals(maybe))");
         const implicitAny = wrapped("        let a;\n        if (a) { return; }\n");
         expect(implicitAny).toContain("if (Helpers.isTrue(a))");
         const parameter = wrapped("        if (flag) { return; }\n", '', 'test(x: any, flag: boolean): void');
-        expect(parameter).toContain("if (Helpers.isTrue(flag))");
+        expect(parameter).toContain("if (Boolean.TRUE.equals(flag))");
     });
 
     test('a destructured binding element keeps the helper', () => {
@@ -6821,7 +6823,8 @@ describe('java native arithmetic on printer-proven numeric operands', () => {
     });
 
     test('an unguarded Long parameter read keeps the helper', () => {
-        expect(out).toContain('Helpers.subtract(since, 1)');
+        // a declared Long core parameter: the helper's null arm is the explicit ternary
+        expect(out).toContain('((since == null) ? null : (since - 1L))');
     });
 
     test('a written Long parameter keeps the helper', () => {
@@ -7428,7 +7431,7 @@ describe('hx4 J09: isTrue / isInstance / core-argument residual', () => {
     test('a boolean local written from a proven local prints Boolean.TRUE.equals', () => {
         expect(out).toContain('if (Boolean.TRUE.equals(y1))');
         expect(out).toContain('if (Helpers.isTrue(y2))');
-        expect(out).not.toContain('Boolean.TRUE.equals(flag)');
+        expect(out).toContain('Boolean.TRUE.equals(flag)'); // an unwritten `boolean` method parameter
     });
 
     test('a base tuple method returning boolean literals binds a Boolean element', () => {
@@ -8540,5 +8543,274 @@ describe('ws client owner maps and base-typed reads: Helpers.GetValue -> guarded
     test('no put, a rewritten symbol or a deleted entry keep the helper', () => {
         const helperReads = out.split('\n').filter((line) => /Helpers\.GetValue\(\(\(java\.util\.Map<\?, \?>\)this\.ohlcvs\)\.get\(symbol\), timeframe\)/.test(line));
         expect(helperReads.length).toBe(3);
+    });
+});
+
+describe('java plain map field writes from owner-executor members', () => {
+    const cls = (member: string, body: string) =>
+        "class T {\n" +
+        "    tickers: any = {};\n" +
+        "    has: any = {};\n" +
+        `    ${member}(symbol: string, k: any, v: any): void {\n` +
+        `        ${body}\n` +
+        "    }\n" +
+        "}";
+    // the build layer's local-type resolver declares `symbol` a Java String
+    const java = (member: string, body: string) => {
+        const printer: any = (transpiler as any).javaTranspiler;
+        const previous = printer.javaDeclaredLocalTypeResolver;
+        printer.javaDeclaredLocalTypeResolver = (declaration: any) => (declaration?.name?.text === 'symbol' ? 'String' : undefined);
+        try {
+            return transpiler.transpileJava(cls(member, body)).content;
+        } finally {
+            printer.javaDeclaredLocalTypeResolver = previous;
+        }
+    };
+
+    test('a String-keyed write of a plain map field in a ws handler prints put', () => {
+        const output = java('handleTicker', "this.tickers[symbol] = v;");
+        expect(output).toContain("this.tickers.put(symbol, v);");
+        expect(output).not.toContain("Helpers.addElementToObject(this.tickers");
+    });
+
+    test('a literal key prints put too', () => {
+        expect(java('handleTicker', "this.tickers['a'] = 1;")).toContain("this.tickers.put(\"a\", 1);");
+    });
+
+    test('a member that can run off the owner executor keeps the helper', () => {
+        expect(java('watchTicker', "this.tickers[symbol] = v;")).toContain("Helpers.addElementToObject(this.tickers, symbol, v);");
+    });
+
+    test('a field outside the plain map set keeps the helper', () => {
+        expect(java('handleTicker', "this.has[symbol] = v;")).toContain("Helpers.addElementToObject(this.has, symbol, v);");
+    });
+
+    test('a key that is not a proven String keeps the helper', () => {
+        expect(java('handleTicker', "this.tickers[k] = v;")).toContain("Helpers.addElementToObject(this.tickers, k, v);");
+    });
+
+    test('a String key written through an `as IndexType` assertion prints put (blofin handleTrades)', () => {
+        const output = java('handleTicker', "this.tickers[symbol as IndexType] = v;");
+        expect(output).toContain("this.tickers.put(symbol, v);");
+        expect(output).not.toContain("Helpers.addElementToObject(this.tickers");
+    });
+
+    test('an asserted key that is not a proven String keeps the helper', () => {
+        expect(java('handleTicker', "this.tickers[k as IndexType] = v;")).toContain("Helpers.addElementToObject(this.tickers, k, v);");
+    });
+});
+
+
+// FJ4-A2: a fixed `any[]` / `number[]` parameter of a base-tier (ts/src/base/Exchange.ts, below the transpile
+// delimiter) method prints `java.util.List<Object>` when the checker types it a plain array, the body never
+// writes it, no ancestor declares the method, the repo declares the name once with no reference other than
+// `this.name (..)` and no hand-written Java caller, and EVERY caller hands a value that already prints a List
+// (so no call gains a checkcast). The whole-repo facts arrive through printer.javaRepoMethodUses (plain data).
+describe('java base-tier list parameters (FJ4-A2)', () => {
+    const TMP = path.join(__dirname, 'files', 'tmp-fj4a2');
+    const BASE_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'Exchange.ts');
+    const LITERAL = { kind: SyntaxKind.ArrayLiteralExpression, elements: [] };
+    const OPAQUE = { kind: SyntaxKind.Identifier, text: 'anything' };
+    const CLEAN = { declared: 1, mentions: 0, handWritten: false, calls: [] as any[] };
+
+    const BASE_SOURCE =
+        "export class BaseExchange {\n" +
+        "    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n" +
+        "    toArray (x: any): any[] { return x; }\n" +
+        "    pick (array: any[], limit: number): any[] {\n" +
+        "        return array;\n" +
+        "    }\n" +
+        "    ceiling (arr: number[], value: number): number {\n" +
+        "        return arr[0];\n" +
+        "    }\n" +
+        "    rewritten (list: any[]): any[] {\n" +
+        "        list = list.slice ();\n" +
+        "        return list;\n" +
+        "    }\n" +
+        "    names (items: string[]): any[] {\n" +
+        "        return items;\n" +
+        "    }\n" +
+        "    opaqueCaller (list: any[]): any[] {\n" +
+        "        return list;\n" +
+        "    }\n" +
+        "    run (x: any, y: any): any {\n" +
+        "        const local: any[] = this.toArray (x);\n" +
+        "        this.pick (local, 1);\n" +
+        "        this.pick (this.toArray (x), 2);\n" +
+        "        this.ceiling ([ 1, 2, 3 ], 2);\n" +
+        "        this.rewritten ([ 1 ]);\n" +
+        "        this.names ([ 'a' ]);\n" +
+        "        this.opaqueCaller (y);\n" +
+        "    }\n" +
+        "}\n";
+
+    const print = (uses: any) => {
+        const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const printer: any = (byPath as any).javaTranspiler;
+        if (uses !== undefined) {
+            printer.javaRepoMethodUses = (name: string) => uses(name);
+        }
+        // the build layer publishes `local` as a declared List<Object>; here it is a `: any[]` annotation only
+        return byPath.transpileJavaByPath(BASE_FIXTURE).content as string;
+    };
+
+    beforeAll(() => {
+        fs.mkdirSync(path.dirname(BASE_FIXTURE), { recursive: true });
+        fs.writeFileSync(BASE_FIXTURE, BASE_SOURCE);
+    });
+
+    afterAll(() => {
+        fs.rmSync(TMP, { recursive: true, force: true });
+    });
+
+    test('literal and list-producer callers type both array parameters', () => {
+        const output = print((name: string) => ({ ...CLEAN, calls: name === 'pick' || name === 'ceiling' ? [] : CLEAN.calls }));
+        expect(output).toContain('ceiling(java.util.List<Object> arr, Object value)');
+        // `pick` is also called with a `: any[]` local that nothing declares List<Object>: that caller is unproven
+        expect(output).toContain('pick(Object array, Object limit)');
+    });
+
+    test('callers handing a base list producer or an array literal leave no checkcast behind', () => {
+        const source = BASE_SOURCE.replace("        const local: any[] = this.toArray (x);\n        this.pick (local, 1);\n", '');
+        fs.writeFileSync(BASE_FIXTURE, source);
+        try {
+            const output = print(() => CLEAN);
+            expect(output).toContain('pick(java.util.List<Object> array, Object limit)');
+            expect(output).toContain('this.pick(this.toArray(x), 2)');
+            expect(output).toContain('this.ceiling(new java.util.ArrayList<Object>(java.util.Arrays.asList(1, 2, 3)), 2)');
+            expect(output).not.toContain('(java.util.List<Object>) (');
+        } finally {
+            fs.writeFileSync(BASE_FIXTURE, BASE_SOURCE);
+        }
+    });
+
+    test('an outside caller proves the parameter only when it hands a List', () => {
+        const withCalls = (calls: any[][]) => print((name: string) => ({ ...CLEAN, calls: name === 'ceiling' ? calls : [] }));
+        expect(withCalls([ [ LITERAL, OPAQUE ] ])).toContain('ceiling(java.util.List<Object> arr, Object value)');
+        expect(withCalls([ [ LITERAL, OPAQUE ], [ OPAQUE, OPAQUE ] ])).toContain('ceiling(Object arr, Object value)');
+        expect(withCalls([ [] ])).toContain('ceiling(Object arr, Object value)');
+    });
+
+    test('a written parameter, a string[] slot and an opaque caller keep Object', () => {
+        const output = print(() => CLEAN);
+        expect(output).toContain('rewritten(Object list)');
+        expect(output).not.toContain('java.util.List<Object> items');
+        expect(output).toContain('opaqueCaller(Object list)');
+    });
+
+    test('a name declared twice, referenced elsewhere or called by hand-written Java keeps Object', () => {
+        for (const uses of [ { ...CLEAN, declared: 2 }, { ...CLEAN, mentions: 1 }, { ...CLEAN, handWritten: true } ]) {
+            const output = print(() => uses);
+            expect(output).toContain('ceiling(Object arr, Object value)');
+        }
+    });
+
+    test('with no repo index installed nothing changes', () => {
+        const output = print(undefined);
+        expect(output).toContain('ceiling(Object arr, Object value)');
+        expect(output).toContain('pick(Object array, Object limit)');
+    });
+});
+
+// RFM-J2 leaf D: hx10w2-J05 (objectValues / isInstance) and hx10w3-J06 (awaited / tuple box locals) as
+// checker-keyed printer rules. The proofs anchor on base-tier declarations, so the fixture mirrors the layout.
+describe('rfm-j2d: objectValues copy, catch isInstance, awaited / tuple box locals', () => {
+    const TMP = path.join(__dirname, 'files', 'tmp-rfm-j2d');
+    const TYPES_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'types.ts');
+    const ERRORS_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'errors.ts');
+    const BASE_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'Exchange.ts');
+    const VENUE_FIXTURE = path.join(TMP, 'ts', 'src', 'venuej2d.ts');
+    let out: string;
+
+    beforeAll(() => {
+        fs.mkdirSync(path.dirname(TYPES_FIXTURE), { recursive: true });
+        fs.writeFileSync(TYPES_FIXTURE,
+            "export interface Dictionary<T> {\n    [key: string]: T;\n}\n" +
+            "export type Dict = Dictionary<any>;\n" +
+            "export type Str = string | undefined;\n");
+        fs.writeFileSync(ERRORS_FIXTURE,
+            "class BaseError extends Error {\n}\n" +
+            "class BadSymbol extends BaseError {\n}\n" +
+            "export { BaseError, BadSymbol };\n");
+        fs.writeFileSync(BASE_FIXTURE,
+            "import type { Dict, Str } from './types';\n" +
+            "export default class Exchange {\n" +
+            "    safeString (d: any, k: any, defaultValue: Str = undefined): Str {\n        return defaultValue;\n    }\n" +
+            "    omit (d: Dict, k: any): Dict {\n        return d;\n    }\n" +
+            "    throwExactlyMatchedException (exact: any, str: string, message: string): void {\n    }\n" +
+            "}\n");
+        fs.writeFileSync(VENUE_FIXTURE,
+            "import type { Dict, Str } from './base/types';\n" +
+            "import Exchange from './base/Exchange';\n" +
+            "import { BadSymbol } from './base/errors';\n" +
+            "class Venue extends Exchange {\n" +
+            "    async loadDict (): Promise<Dict> { return {}; }\n" +
+            "    async loadList (): Promise<any[]> { return []; }\n" +
+            "    ownSync (x: any): any { return x; }\n" +
+            "    prepareTuple (): [Dict, Dict] { return [ {}, {} ]; }\n" +
+            // objectValues
+            "    valuesOfMap (): any { const data = { 'a': 1 }; const v = Object.values (data); return v; }\n" +
+            "    valuesOfRewritten (other: any): any { let data = { 'a': 1 }; data = other; const v = Object.values (data); return v; }\n" +
+            "    valuesOfParam (data: any): any { const v = Object.values (data); return v; }\n" +
+            // isInstance
+            "    catchOmit (d: Dict): void { try { this.omit (d, 'a'); this.safeString (d, 'a'); } catch (e1) { if (e1 instanceof BadSymbol) { return; } } }\n" +
+            "    catchOwnSync (d: Dict): void { try { this.ownSync (d); } catch (e2) { if (e2 instanceof BadSymbol) { return; } } }\n" +
+            "    catchPromise (d: Dict): void { try { this.loadDict (); } catch (e3) { if (e3 instanceof BadSymbol) { return; } } }\n" +
+            "    async catchAwait (d: Dict) { try { await this.loadDict (); } catch (e4) { if (e4 instanceof BadSymbol) { return; } } }\n" +
+            // awaited / tuple box locals
+            "    async readDict (symbol: string) { const data = await this.loadDict (); return data[symbol]; }\n" +
+            "    async readDictLit () { const data2 = await this.loadDict (); return data2['walletAddress']; }\n" +
+            "    async readDictOther (params = {}) { const data3 = await this.loadDict (); return this.omit (data3, params); }\n" +
+            "    async readList (symbol: string) { const xs = await this.loadList (); return xs[0]; }\n" +
+            "    readTuple (symbol: string) { const [ request, query ] = this.prepareTuple (); return request[symbol]; }\n" +
+            "    readTupleMixed (symbol: string) { const [ request2, query2 ] = this.prepareTuple (); return this.omit (request2, query2); }\n" +
+            "}\n");
+        const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        out = byPath.transpileJavaByPath(VENUE_FIXTURE).content;
+    });
+
+    afterAll(() => {
+        fs.rmSync(TMP, { recursive: true, force: true });
+    });
+
+    const method = (name: string) => {
+        const at = out.indexOf(' ' + name + '(');
+        const next = out.indexOf('\n    public ', at + 1);
+        return out.slice(at, next === -1 ? undefined : next);
+    };
+
+    test('Object.values of a printer-declared Map local copies the map values', () => {
+        expect(method('valuesOfMap')).toContain('new java.util.ArrayList<Object>(data.values())');
+    });
+
+    test('Object.values keeps the helper for a rewritten local and for an untyped parameter', () => {
+        expect(method('valuesOfRewritten')).toContain('Helpers.objectValues(data)');
+        expect(method('valuesOfParam')).toContain('Helpers.objectValues(data)');
+    });
+
+    test('instanceof on a catch variable is native when every call in the try resolves to a synchronous base member', () => {
+        expect(method('catchOmit')).toContain('(e1 instanceof BadSymbol)');
+    });
+
+    test('instanceof keeps the helper when the try calls a venue member, an unawaited promise or awaits', () => {
+        expect(method('catchOwnSync')).toContain('Helpers.isInstance(e2, BadSymbol.class)');
+        expect(method('catchPromise')).toContain('Helpers.isInstance(e3, BadSymbol.class)');
+        expect(method('catchAwait')).toContain('Helpers.isInstance(e4, BadSymbol.class)');
+    });
+
+    test('an awaited Dict local that is only element-accessed takes the Map box', () => {
+        expect(method('readDict')).toContain('java.util.Map<String, Object> data = (java.util.Map<String, Object>) (this.loadDict()).join();');
+        expect(method('readDict')).toContain('data.get(symbol)');
+        expect(method('readDictLit')).toContain('data2.get("walletAddress")');
+    });
+
+    test('an awaited local with a non-element use, and an awaited list, stay Object', () => {
+        expect(method('readDictOther')).toContain('Object data3 = (this.loadDict()).join();');
+        expect(method('readList')).toContain('Object xs = (this.loadList()).join();');
+    });
+
+    test('a destructured Dict slot that is only element-accessed takes the Map box', () => {
+        expect(method('readTuple')).toContain('java.util.Map<String, Object> request = (java.util.Map<String, Object>) ((java.util.List<Object>) requestqueryVariable).get(0);');
+        expect(method('readTupleMixed')).toContain('var request2 = ((java.util.List<Object>) request2query2Variable).get(0);');
     });
 });

@@ -40,6 +40,32 @@ export declare class GoTranspiler extends BaseTranspiler {
     goTupleValueDefaultArg: {
         [producer: string]: number;
     };
+    goOwnedCaches: {
+        declaredIn: string;
+        maps: {
+            [field: string]: string;
+        };
+        objects: {
+            [field: string]: string;
+        };
+        mapLiteral: string;
+        asyncUserPath: RegExp;
+        syncUserPath: RegExp;
+        ops: {
+            [op: string]: string;
+        };
+        typedMapRead: string | undefined;
+    } | undefined;
+    goOwnedBalance: {
+        field: string;
+        declaredIn: string;
+        entryRead: string;
+        entryWrite: string;
+        replace: string;
+        asyncUserPath: RegExp;
+        userPath: RegExp;
+        boxedKeys: string[];
+    } | undefined;
     goSliceLiteralTypes: Map<any, string>;
     CCXT_GO_GETARG_DECLARED_TYPES: any;
     CCXT_GO_GETARG_SAFE_CONSUMERS: any;
@@ -244,6 +270,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goSafeDictLocalUnbox(declaration: any): string | undefined;
     goDeclaredLocalTypeIfSafe(declaration: any, goType: string, readsTheValue: (n: any) => boolean, skipUse?: (n: any) => boolean): string | undefined;
     goSafeDictLocalUnboxUncached(declaration: any): string | undefined;
+    goSafeDictLocalUnboxStandard(declaration: any): string | undefined;
     goSafeDictUnboxValue(declaration: any, identation: number): string | undefined;
     goBaseMapCalleeName(name: string): boolean;
     goNodeIsInPredictionTree(node: any): boolean;
@@ -354,6 +381,13 @@ export declare class GoTranspiler extends BaseTranspiler {
     getGoLocalType(declaration: any, parsedValue: string): string;
     goLocalSafeVerdicts: WeakMap<object, Map<string, string>>;
     goAnnotatedStringLocal(declaration: any, goType: string, scope: any, name: string): boolean;
+    goLiteralDefaultStringLocal(declaration: any, goType: string, scope: any, name: string): boolean;
+    goLiteralDefaultStringLocalCache: WeakMap<object, boolean>;
+    goLiteralDefaultStringCall(node: any, name: string | undefined): boolean;
+    goLiteralDefaultStringLocalUsesAreSafe(scope: any, declaration: any, name: string): boolean;
+    goLiteralDefaultStringLocalReadIsSafe(node: any): boolean;
+    goLiteralDefaultStringCallArgument(call: any, argument: any): boolean;
+    goLiteralDefaultStringWrite(left: any, right: any): boolean;
     goAnnotatedStringLocalHasNilShapedRead(scope: any, declaration: any, name: string): boolean;
     goDefaultedSafeStringCallOrTypedDefault(call: any): boolean;
     goAwaitReceiveUnbox(awaitNode: any, printedInitializer: string): {
@@ -558,6 +592,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     printNativeGuardedPointerKeyAssignment(containerNode: any, containerStr: string, containerType: any, fieldType: any, keyNode: any, keyStr: string, valueStr: string, compound: boolean, valueNode: any): string | undefined;
     goGetArgMapParameterIsMapLocal(node: any): boolean;
     printNativeMapWriteOnProvenLocal(containerNode: any, containerStr: string, keyNode: any, keyStr: string, valueStr: string, valueNode?: any, identation?: number): string | undefined;
+    printOptionDictFieldWrite(containerNode: any, containerStr: string, keyNode: any, keyStr: string, valueNode: any, identation: number): string | undefined;
     goMapWriteValueIsNotPointer(valueNode: any): boolean;
     nativeStoreFields: {
         [tsName: string]: any;
@@ -591,6 +626,21 @@ export declare class GoTranspiler extends BaseTranspiler {
     goStripControlClauseParens(text: string): string;
     goPrintTernaryBranch(node: any, levels: number): string;
     printInlineInOp(dictNode: any, keyNode: any, dictText: string, keyText: string): string | undefined;
+    goL3BookReceiver(node: any): boolean;
+    goL3BookEntryText(node: any): string | undefined;
+    goL3UnderNegation(inNode: any): boolean;
+    goL3MapReceiver(node: any): boolean;
+    goL3DefaultedDictLocal(node: any): boolean;
+    goL3DefaultedDictDeclaration(declaration: any): boolean;
+    goL3DictLocalBacksHoist(declaration: any): boolean;
+    goL3PlainDictContainer(node: any): boolean;
+    goL3DictUseKeepsMap(node: any): boolean;
+    goL3PureLeaf(node: any): boolean;
+    goL3OrHoistTerms(node: any, reads: any[]): boolean;
+    goL3NameIsUsed(scope: any, name: string): boolean;
+    goL3NilMapTermIsRedundant(condition: any, read: any): boolean;
+    goL3HoistShape(node: any): any;
+    goL3OrHoistIf(node: any, identation: any): string | undefined;
     goInOpSubstitution: any;
     GO_IN_OP_SENTINEL: string;
     goInOpSubstitutedText(node: any): string | undefined;
@@ -715,6 +765,7 @@ export declare class GoTranspiler extends BaseTranspiler {
      * owns the single `return ch`, emitted by printFunctionBody.
      */
     getAsyncReturnStatement(node: any): string;
+    goTickerCacheTypedRead(node: any): string | undefined;
     printReturnStatement(node: any, identation: any): string;
     printArrayLiteralExpression(node: any, identation?: number): string;
     printArgsForCallExpression(node: any, identation: any): any;
@@ -790,8 +841,35 @@ export declare class GoTranspiler extends BaseTranspiler {
     goOwnedFieldAccess(node: any): boolean;
     goOwnedFieldUserPath(node: any): boolean;
     goOwnedFieldIsWrite(node: any): boolean;
+    goOwnedBalanceField(node: any): boolean;
+    goOwnedBalanceOwnerSide(node: any): boolean;
+    goOwnedBalanceKey(node: any, boxedOk?: boolean): string | undefined;
+    goInitializedByAssertion(node: any): boolean;
+    goOwnedBalancePlainValue(valueNode: any): boolean;
+    goOwnedBalanceReplace(node: any, identation: any): string | undefined;
+    goOwnedBalanceRead(node: any, baseExpr: any, keys: any[], keyStrs: string[]): string | undefined;
+    goOwnedBalanceWrite(node: any, baseExpr: any, keys: any[], rhs: string, valueNode: any): string | undefined;
+    goOwnedBalanceDelete(node: any): string | undefined;
+    goOwnedBalanceWriteContainer(baseExpr: any, containerStr: string, keyNodes: any): string | undefined;
     printPropertyAccessExpression(node: any, identation: any): any;
     goOwnedFieldRemove(node: any): string | undefined;
+    goOwnedCacheRef(node: any): {
+        kind: string;
+        name: string;
+    } | undefined;
+    goOwnedCacheUserPath(node: any): boolean;
+    goOwnedCacheUser(node: any, kind: string): {
+        kind: string;
+        name: string;
+    } | undefined;
+    goOwnedCacheOp(receiver: any, op: string, name: string, args: string[]): string;
+    goOwnedCacheLiteral(node: any): string;
+    goIsCreateSafeDictionary(node: any): boolean;
+    goOwnedCacheBinary(node: any, identation: any): string | undefined;
+    goOwnedCacheRead(node: any): string | undefined;
+    goOwnedCacheDelete(node: any): string | undefined;
+    goOwnedCacheValue(node: any): string | undefined;
+    goReturnsTickerMap(node: any): boolean;
     printDeleteExpression(node: any, identation: any): string;
     goNativeDelete(node: any): string | undefined;
     goDeleteReceiverText(node: any): string | undefined;
@@ -865,6 +943,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goGb08PredictionFile(): boolean;
     goGb08IsDictExpression(expr: any): boolean;
     goGb08BoundedListRead(node: any, keyNode: any): 'native' | 'deref' | undefined;
+    goG21AwaitedObjectListRead(node: any, keyNode: any): boolean;
     printElementAccessExpression(node: any, identation: any): string;
     isInsideVoidFunction(node: Node): boolean;
     /**
