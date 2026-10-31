@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -21615,6 +21615,10 @@ var JavaTranspiler = class extends BaseTranspiler {
     // of a store entry (loadMarketsHelper sets it, the same chain clears it). Value = [accessor with a
     // null default, accessor with an empty-map default]; filled by the build layer from the header.
     this.javaOwnerStoreHandoffs = {};
+    // BaseExchange.java fields declared `Map<String, Object> f = new HashMap<>()` that the header only
+    // ever reassigns to a fresh HashMap: `m.put(k, v)` stores a null value like the helper does.
+    // Named by the build layer from the header; empty = every site keeps the helper.
+    this.javaPlainCacheFields = /* @__PURE__ */ new Set();
     // a literal-defaulted parameter is read as `Objects.requireNonNullElse(x, <default>)`: a dynamic
     // caller pads omitted slots with null, and the parameter stays final with no local copy
     this.javaDefaultedLocalNames = /* @__PURE__ */ new Map();
@@ -25136,6 +25140,9 @@ ${this.getIden(identation)}}}`;
       if (keys.length === 1 && this.javaMapWriteFieldReceiver(baseExpr) && (isStringLiteralLikeNode3(keys[0]) || this.javaDeclaredStringType(keys[0])) && !this.elementWriteValueMayBeNull(right)) {
         return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
       }
+      if (keys.length === 1 && this.javaPlainCacheFieldReceiver(baseExpr) && this.javaStringProvenKey(keys[0])) {
+        return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
+      }
       if (keys.length === 1 && this.javaOwnerStoreFieldReceiver(baseExpr) && isStringLiteralLikeNode3(keys[0]) && !this.isNullishLiteral(this.unwrapPrintTransparentExpression(right))) {
         return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
       }
@@ -25343,6 +25350,46 @@ ${this.getIden(identation)}}}`;
       return false;
     }
     return JAVA_MAP_WRITE_FIELDS.has(expression.name.text);
+  }
+  // `this.<cache>` whose TS declaration types the values (an `any`-valued bag is reassigned freely)
+  javaPlainCacheFieldReceiver(expression) {
+    if (expression === void 0 || !isPropertyAccessExpression2(expression) || expression.expression.kind !== SyntaxKind6.ThisKeyword || !this.javaPlainCacheFields.has(expression.name.text)) {
+      return false;
+    }
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return false;
+    }
+    const value = checker.getIndexTypeOfType(checker.getTypeAtLocation(expression), IndexKind3.String);
+    return value !== void 0 && (value.flags & (TypeFlags5.Any | TypeFlags5.Unknown)) === 0;
+  }
+  // a key Java proves String: a literal, an `x as string` (prints `((String)x)`) or a String-declared name
+  javaStringProvenKey(key) {
+    if (isStringLiteralLikeNode3(key)) {
+      return true;
+    }
+    let node = key;
+    while (isParenthesizedExpression2(node)) {
+      node = node.expression;
+    }
+    return isAsExpression2(node) && node.type?.kind === SyntaxKind6.StringKeyword || this.javaDeclaredStringType(node);
+  }
+  // `this.<cache>[k]` with a non-literal String key: GetValue answers null for a null receiver or
+  // key and the plain map get is its Map branch. The key prints twice, so it must be repeatable.
+  javaPlainCacheReadText(receiver, key) {
+    if (isStringLiteralLikeNode3(key) || !this.javaPlainCacheFieldReceiver(receiver) || !this.javaStringProvenKey(key)) {
+      return void 0;
+    }
+    let operand = key;
+    while (isParenthesizedExpression2(operand) || isAsExpression2(operand)) {
+      operand = operand.expression;
+    }
+    if (!isIdentifier2(operand)) {
+      return void 0;
+    }
+    const target = this.printNode(receiver, 0);
+    const keyText = this.printNode(operand, 0);
+    return `(${target} == null || ${keyText} == null ? null : ${target}.get(${keyText}))`;
   }
   // `this.<field>` for a BaseExchange.java field declared over a single-owner store
   javaOwnerStoreFieldReceiver(expression) {
@@ -25610,7 +25657,7 @@ ${this.getIden(identation)}}}`;
     const name = receiver.name?.text;
     const field = typeof name === "string" ? JAVA_FIELD_TYPES[name] : void 0;
     if (field === void 0 || field.map !== true) {
-      return this.javaJ02FieldMapReadText(receiver, key);
+      return this.javaJ02FieldMapReadText(receiver, key) ?? this.javaPlainCacheReadText(receiver, key);
     }
     const keyText = this.printNode(key, 0);
     let keyGuarded = false;

@@ -223,6 +223,10 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaOwnerStoreHandoffs: {
         [key: string]: [string, string];
     };
+    javaPlainCacheFields: ReadonlySet<string>;
+    javaPlainCacheFieldReceiver(expression: any): boolean;
+    javaStringProvenKey(key: any): boolean;
+    javaPlainCacheReadText(receiver: any, key: any): string | undefined;
     javaOwnerStoreFieldReceiver(expression: any): boolean;
     javaWsClientMapField(expression: any): string | undefined;
     javaWsClientMapReadText(receiver: any, key: any): string | undefined;
