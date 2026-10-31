@@ -19680,6 +19680,16 @@ var JAVA_HANDWRITTEN_TIER_FILES = /(^|\/)ts\/src\/(?:base|static_dependencies)\/
 var JAVA_NATIVE_PARAMETER_BASE_FILES = /(^|[\\/])ts[\\/]src[\\/]base[\\/](Prediction)?Exchange(\.nooverloads[^/]*)?\.ts$/;
 var JAVA_NATIVE_RETURN_MAP_TYPE = "java.util.Map<String, Object>";
 var JAVA_NATIVE_RETURN_LIST_TYPE = "java.util.List<Object>";
+function javaVenueCalleeNativeType(printed) {
+  if (typeof printed !== "string") {
+    return void 0;
+  }
+  const type = printed.replace(/\s+/g, "").replace(/^java\.util\./, "");
+  if (type === "Map<String,Object>") {
+    return JAVA_NATIVE_RETURN_MAP_TYPE;
+  }
+  return type === "List<Object>" ? JAVA_NATIVE_RETURN_LIST_TYPE : void 0;
+}
 var JAVA_LIST_RETURN_BASE_METHODS = /* @__PURE__ */ new Set(["toArray"]);
 var JAVA_OBJECT_LIST_CALL_NAMES = /* @__PURE__ */ new Set(["keys", "values"]);
 var JAVA_STRING_RETURN_BASE_METHODS = /* @__PURE__ */ new Set([
@@ -19867,6 +19877,8 @@ var JavaTranspiler = class extends BaseTranspiler {
     this.javaHandlerReads = /* @__PURE__ */ new Set();
     this.javaHandlerScannedFile = void 0;
     this.javaHandBackVisiting = /* @__PURE__ */ new Set();
+    this.javaVenueCalleeInProgress = /* @__PURE__ */ new Set();
+    this.javaVenueCalleeDeclarations = /* @__PURE__ */ new WeakMap();
     // javaOptionalParameterType walks the heritage chain, and every element access consults it
     this.javaOptionalParameterTypeCache = /* @__PURE__ */ new WeakMap();
     // method declarations (first per name) of the `Exchange` class of ts/src/base/Exchange.ts, read off the
@@ -22181,11 +22193,10 @@ ${this.getIden(identation)}}}`;
   // declarations it retypes itself, and a parameter the printer retypes
   // (javaNativeParameterType) answers for itself, so its element reads go native too
   javaDeclaredTypeOfDeclaration(declaration) {
-    const resolver = this.javaDeclaredLocalTypeResolver;
-    if (resolver !== void 0) {
+    if (this.javaDeclaredLocalTypeResolver !== void 0) {
       let type;
       try {
-        type = resolver(declaration);
+        type = this.javaDeclaredLocalType(declaration);
       } catch (e) {
         type = void 0;
       }
@@ -22210,6 +22221,96 @@ ${this.getIden(identation)}}}`;
       return optional === JAVA_NATIVE_DICT_PARAMETER_TYPE ? optional : void 0;
     }
     return void 0;
+  }
+  // The declared Java type of a local as the embedding build layer publishes it
+  // (javaDeclaredLocalTypeResolver), else the type its own initialiser prints when that is a
+  // sync `this.<m> (...)` call of a generated venue method whose declaration prints a native
+  // Map/List (javaVenueCalleeReturnType). The resolver only knows the files the calling worker
+  // printed, and a callee's local can sit in another file: the fallback answers from the callee's
+  // declaration, so the answer never depends on what an earlier generation or worker printed.
+  // No resolver installed (no consumer) = no fallback, every read keeps the helper.
+  javaDeclaredLocalType(declaration) {
+    const resolver = this.javaDeclaredLocalTypeResolver;
+    if (typeof resolver !== "function") {
+      return void 0;
+    }
+    const own = resolver(declaration);
+    if (own !== void 0 || declaration === void 0) {
+      return own;
+    }
+    try {
+      return this.javaVenueCalleeLocalType(declaration);
+    } catch (e) {
+      return void 0;
+    }
+  }
+  javaVenueCalleeLocalType(declaration) {
+    if (!isVariableDeclaration2(declaration) || declaration.initializer === void 0) {
+      return void 0;
+    }
+    let initializer = declaration.initializer;
+    while (isParenthesizedExpression2(initializer)) {
+      initializer = initializer.expression;
+    }
+    return this.javaVenueCalleeReturnType(initializer);
+  }
+  // the emitted Java type of a sync `this.<m> (...)` / `super.<m> (...)` call whose resolved callee
+  // is a generated venue method (ts/src/<id>.ts, pro/, prediction/) and whose declaration prints a
+  // native Map<String, Object> / List<Object> return: the annotation print, or the native fallback
+  // printMethodDefinition takes when that prints the boxed `Object`. A base-tier or hand-written
+  // callee, a future, a DTO or a scalar answers undefined (the build layer's tables stay the proof).
+  javaVenueCalleeReturnType(call) {
+    if (call === void 0 || !isCallExpression5(call)) {
+      return void 0;
+    }
+    const callee = call.expression;
+    if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword && !(isIdentifier2(callee.expression) && callee.expression.text === "super")) {
+      return void 0;
+    }
+    if (this.javaVenueCalleeInProgress.has(call)) {
+      return void 0;
+    }
+    this.javaVenueCalleeInProgress.add(call);
+    try {
+      let declaration = this.javaVenueCalleeDeclarations.get(call);
+      for (let attempt = 0; attempt < 2 && declaration === void 0; attempt++) {
+        try {
+          declaration = this.getChecker().getResolvedSignature(call)?.declaration?.resolve();
+        } catch (e) {
+          declaration = void 0;
+        }
+      }
+      if (declaration !== void 0) {
+        this.javaVenueCalleeDeclarations.set(call, declaration);
+      }
+      if (declaration === void 0 || declaration.kind !== SyntaxKind6.MethodDeclaration || declaration.body === void 0) {
+        return void 0;
+      }
+      const fileName = String(declaration.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+      if (!JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName)) {
+        return void 0;
+      }
+      let printed;
+      try {
+        printed = this.printFunctionType(declaration);
+      } catch (e) {
+        return void 0;
+      }
+      const direct = javaVenueCalleeNativeType(printed);
+      if (direct !== void 0) {
+        return direct;
+      }
+      if (printed !== this.DEFAULT_RETURN_TYPE) {
+        return void 0;
+      }
+      try {
+        return javaVenueCalleeNativeType(this.javaNativeReturnType(declaration));
+      } catch (e) {
+        return void 0;
+      }
+    } finally {
+      this.javaVenueCalleeInProgress.delete(call);
+    }
   }
   javaOptionalParameterTypeCached(node) {
     const cached = this.javaOptionalParameterTypeCache.get(node);
@@ -22964,7 +23065,7 @@ ${this.getIden(identation)}}}`;
     }
     let declared;
     try {
-      declared = this.javaDeclaredLocalTypeResolver(declaration);
+      declared = this.javaDeclaredLocalType(declaration);
     } catch (e) {
       return false;
     }
