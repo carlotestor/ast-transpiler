@@ -952,13 +952,13 @@ describe('rust transpiling tests', () => {
     test('toUpperCase call', () => {
         const ts = 'const r = s.toUpperCase();'
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('(match &(s) { Value::Str(__s) => Value::Str(__s.to_uppercase().into())');
+        expect(output).toContain('(if let Some(__s) = (s).as_str() { Value::Str(__s.to_uppercase().into()) } else { Value::Null })');
     });
 
     test('toLowerCase call', () => {
         const ts = 'const r = s.toLowerCase();'
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('(match &(s) { Value::Str(__s) => Value::Str(__s.to_lowercase().into())');
+        expect(output).toContain('(if let Some(__s) = (s).as_str() { Value::Str(__s.to_lowercase().into()) } else { Value::Null })');
     });
 
     test('shift call', () => {
@@ -1090,7 +1090,7 @@ describe('rust transpiling tests', () => {
             '    }\n' +
             '}';
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('let mut ok: bool = s.as_str().is_some_and(|__s| __s.starts_with("x"));');
+        expect(output).toContain('let mut ok: bool = s.as_str().unwrap_or("").starts_with("x");');
     });
 
     // Rejected shapes: any sink that takes `&Value` keeps the local boxed.
@@ -2599,12 +2599,12 @@ describe('rust native string search and slicing', () => {
 
     test('slice keeps the helper for an expression bound', () => {
         const output = transpiler.transpileRust(stringMethod('        return a.slice(0, b);', 'a: string, b: number')).content;
-        expect(output).toContain('(match (&(a), (match &(Value::Int(0)) {');
+        expect(output).toContain('(match (&(a), 0i64,');
     });
 
     test('slice keeps the helper for an unproven receiver', () => {
         const output = transpiler.transpileRust(stringMethod('        return a.slice(0, 2);', 'a: any')).content;
-        expect(output).toContain('(match (&(a), (match &(Value::Int(0)) {');
+        expect(output).toContain('(match (&(a), 0i64,');
     });
 
     test('length on a nullable array or string is native', () => {
@@ -4209,12 +4209,12 @@ describe('hx4 R06 native string methods on proven strings', () => {
 
     test('toUpperCase / toLowerCase', () => {
         const o = out("        const u = a.toUpperCase();\n        const l = a.toLowerCase();\n        return [u, l];");
-        expect(o).toContain('let mut u: Value = a.as_str().map(|__s| Value::Str(__s.to_uppercase().into())).unwrap_or(Value::Null);');
-        expect(o).toContain('let mut l: Value = a.as_str().map(|__s| Value::Str(__s.to_lowercase().into())).unwrap_or(Value::Null);');
+        expect(o).toContain('let mut u: Value = (if let Some(__s) = a.as_str() { Value::Str(__s.to_uppercase().into()) } else { Value::Null });');
+        expect(o).toContain('let mut l: Value = (if let Some(__s) = a.as_str() { Value::Str(__s.to_lowercase().into()) } else { Value::Null });');
         expect(o).not.toContain('to_upper(&');
     });
     test('split with a literal separator', () => {
-        expect(out("        return a.split('-');")).toContain('return Value::Array(a.as_str().map(|__s| __s.split("-").map(Value::from).collect()).unwrap_or_default());');
+        expect(out("        return a.split('-');")).toContain('return Value::Array(if let Some(__s) = a.as_str() { __s.split("-").map(Value::from).collect() } else { Vec::new() });');
     });
     test('replace keeps the receiver for a non-string box', () => {
         expect(out("        return a.replace('x', 'y');")).toContain('return a.as_str().map(|__s| Value::Str(__s.replace("x", "y").into())).unwrap_or_else(|| a.clone());');
@@ -4225,8 +4225,8 @@ describe('hx4 R06 native string methods on proven strings', () => {
     });
     test('startsWith / endsWith in a condition', () => {
         const o = out("        if (a.startsWith('0x') || a.endsWith('%')) {\n            return 1;\n        }\n        return 0;");
-        expect(o).toContain('a.as_str().is_some_and(|__s| __s.starts_with("0x"))');
-        expect(o).toContain('a.as_str().is_some_and(|__s| __s.ends_with("%"))');
+        expect(o).toContain('a.as_str().unwrap_or("").starts_with("0x")');
+        expect(o).toContain('a.as_str().unwrap_or("").ends_with("%")');
         expect(o).not.toContain('starts_with(&a');
     });
     test('indexOf with a proven-string identifier needle', () => {
@@ -4237,7 +4237,7 @@ describe('hx4 R06 native string methods on proven strings', () => {
     });
     test('unproven receivers keep the helpers', () => {
         const o = out("        const u = a.toUpperCase();\n        const p = a.split(',');\n        const j = xs.join(',');\n        const r = a.replace('x', 'y');\n        return [u, p, j, r, a.startsWith('x')];", 'a: any, xs: any[]');
-        expect(o).toContain('(match &(a) { Value::Str(__s) => Value::Str(__s.to_uppercase().into())');
+        expect(o).toContain('(if let Some(__s) = (a).as_str() { Value::Str(__s.to_uppercase().into()) } else { Value::Null })');
         expect(o).toContain('split(&a, &Value::Str(",".into()))');
         expect(o).toContain('join(&xs, &Value::Str(",".into()))');
         expect(o).toContain('replace_str(&a,');
@@ -4480,7 +4480,7 @@ describe('hx4 R13 proven-Str safeString locals: native equality / replace / spli
     test('two proven-Str `any` locals compare with PartialEq', () => {
         expect(eqOut).toContain('if (a == b) {');
         expect(eqOut).toContain('if (a == c) {');
-        expect(eqOut).toContain('let mut u: Value = g.as_str().map(|__s| Value::Str(__s.to_uppercase().into())).unwrap_or(Value::Null);');
+        expect(eqOut).toContain('let mut u: Value = (if let Some(__s) = g.as_str() { Value::Str(__s.to_uppercase().into()) } else { Value::Null });');
         expect(eqOut).toContain('let mut t: Value = Value::Str(format!("{}", a).into());');
     });
 
@@ -5349,5 +5349,57 @@ describe('rust string[] parameter used only by join', () => {
     test('a caller that is not an array literal keeps the Value box', () => {
         expect(output).toContain('fn fetchComputed(&self, ids: Value');
         expect(output).not.toContain('self.fetchComputed(ids.to_str_vec()');
+    });
+});
+
+describe('RF-rust-1 type-keyed closure-free native forms', () => {
+    const body = (stmts: string, params = 'a: string, b: any') =>
+        transpiler.transpileRust(`class A {\n    run(${params}) {\n${stmts}\n    }\n}`).content;
+
+    test('indexOf("lit") >= 0 / > -1 on a string place is a contains test', () => {
+        const o = body("        if (a.indexOf('x') >= 0) { return 1; }\n        if (a.indexOf('y') > -1) { return 2; }\n        return 0;");
+        expect(o).toContain('if a.as_str().unwrap_or("").contains("x") {');
+        expect(o).toContain('if a.as_str().unwrap_or("").contains("y") {');
+        expect(o).not.toContain('__s.find');
+    });
+
+    test('indexOf("lit") < 0 negates; > 0 and an empty needle keep the position', () => {
+        const o = body("        if (a.indexOf('x') < 0) { return 1; }\n        if (a.indexOf('y') > 0) { return 2; }\n        if (a.indexOf('') >= 0) { return 3; }\n        return 0;");
+        expect(o).toContain('if !a.as_str().unwrap_or("").contains("x") {');
+        expect(o).toContain('__s.find("y")');
+        expect(o).toContain('__s.find("")');
+    });
+
+    test('indexOf("lit") >= 0 on an unproven receiver keeps the helper', () => {
+        const o = body("        if (b.indexOf('x') >= 0) { return 1; }\n        return 0;");
+        expect(o).not.toContain('.contains("x")');
+    });
+
+    test('indexOf("lit") >= 0 outside a condition boxes the bool', () => {
+        const o = body("        const f = a.indexOf('x') >= 0;\n        return f;");
+        expect(o).toContain('Value::Bool(a.as_str().unwrap_or("").contains("x"))');
+    });
+
+    test('slice start literal folds its Int cast', () => {
+        const o = body("        return a.slice(0, b);", 'a: any, b: number');
+        expect(o).toContain('(match (&(a), 0i64,');
+        expect(o).not.toContain('unwrap_or(0)');
+    });
+
+    test('toLowerCase on a string place is closure-free', () => {
+        const o = body("        return a.toLowerCase();");
+        expect(o).toContain('(if let Some(__s) = a.as_str() { Value::Str(__s.to_lowercase().into()) } else { Value::Null })');
+        expect(o).not.toContain('|__s|');
+    });
+
+    test('startsWith / split with a non-empty literal on a string place are closure-free', () => {
+        const o = body("        const p = a.split(',');\n        return [p, a.startsWith('0x')];");
+        expect(o).toContain('Value::Array(if let Some(__s) = a.as_str() { __s.split(",").map(Value::from).collect() } else { Vec::new() })');
+        expect(o).toContain('a.as_str().unwrap_or("").starts_with("0x")');
+    });
+
+    test('an empty startsWith literal keeps the closure (an empty prefix matches only a Str)', () => {
+        const o = body("        return a.startsWith('');");
+        expect(o).toContain('a.as_str().is_some_and(|__s| __s.starts_with(""))');
     });
 });

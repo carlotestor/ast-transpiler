@@ -27214,6 +27214,12 @@ init_esm_shims();
 import { NodeFlags as NodeFlags3, SyntaxKind as SyntaxKind7 } from "typescript/unstable/ast";
 import { isArrayLiteralExpression as isArrayLiteralExpression4, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression3, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isMethodDeclaration as isMethodDeclaration5, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isVariableDeclaration as isVariableDeclaration3 } from "typescript/unstable/ast/is";
 import { IndexKind as IndexKind4, ObjectFlags, SignatureKind as SignatureKind2, SymbolFlags as SymbolFlags3, TypeFlags as TypeFlags6 } from "typescript/unstable/sync";
+
+// src/rustNativeForms.ts
+init_esm_shims();
+var RUST_PLAIN_PLACE = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+
+// src/rustTranspiler.ts
 var parserConfig6 = {
   "ELSEIF_TOKEN": "else if",
   "OBJECT_OPENING": "{",
@@ -28644,7 +28650,34 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!proven && !this.rustR16OrderedProven(op, left, right)) {
       return this.r22StrOrderedComparison(node, op, left, right) ?? this.r25NativeLooseOrderedComparison(node, op, left, right);
     }
-    return this.printNativeNumericComparison(node, operator, this.printNode(left, 0), this.printNode(right, 0));
+    return this.printNativeIndexOfLiteralTest(node, op, left, right) ?? this.printNativeNumericComparison(node, operator, this.printNode(left, 0), this.printNode(right, 0));
+  }
+  // `s.indexOf("lit") >= 0` / `> -1` / `< 0` on a proven string place and a non-empty literal needle is a `contains`
+  // test: a non-Str receiver gives `""`, which contains no non-empty literal, like the `None` -> -1 arm.
+  printNativeIndexOfLiteralTest(node, op, left, right) {
+    const test = this.nativeIndexOfLiteralTestText(op, left, right);
+    if (test === void 0)
+      return void 0;
+    return this.isBooleanPosition(node) ? test : `Value::Bool(${test})`;
+  }
+  nativeIndexOfLiteralTestText(op, left, right) {
+    const call = this.orderedComparisonOperand(left);
+    if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.name.text !== "indexOf" || call.arguments?.length !== 1) {
+      return void 0;
+    }
+    const bound = this.rustSliceLiteralBound(this.orderedComparisonOperand(right));
+    const yes = op === SyntaxKind7.GreaterThanEqualsToken && bound === 0 || op === SyntaxKind7.GreaterThanToken && bound === -1;
+    const no = op === SyntaxKind7.LessThanToken && bound === 0;
+    if (!yes && !no)
+      return void 0;
+    const needle = call.arguments[0];
+    if (!isStringLiteral3(needle) && !isNoSubstitutionTemplateLiteral(needle) || needle.text === "")
+      return void 0;
+    const literal = this.rustNativeStringLiteralArg(needle);
+    const receiver = literal === void 0 ? void 0 : this.rustNativeStringReceiver(call, this.printNode(call.expression.expression, 0));
+    if (literal === void 0 || receiver === void 0 || !RUST_PLAIN_PLACE.test(receiver))
+      return void 0;
+    return `${no ? "!" : ""}${receiver}.as_str().unwrap_or("").contains("${literal}")`;
   }
   // ── native arithmetic (`+ - * /`) ────────────────────────────────────────
   // When the checker proves both operands are numbers (`Int`/`Float` at
@@ -31892,6 +31925,8 @@ ${idn}}`;
     }
     if (this.nativeEqualityText(inner) !== void 0)
       return true;
+    if (inner.kind === SyntaxKind7.BinaryExpression && this.nativeIndexOfLiteralTestText(inner.operatorToken.kind, inner.left, inner.right) !== void 0)
+      return true;
     return inner.kind === SyntaxKind7.BinaryExpression && this.isLogicalOp(inner.operatorToken.kind) && (this.hasNativeComparisonOperand(inner.left) || this.hasNativeComparisonOperand(inner.right));
   }
   // Bare `&&`/`||` text of a logical expression (its operands are bools).
@@ -33792,6 +33827,13 @@ ${this.getIden(identation)}}`;
     const receiver = this.rustNativeStringReceiver(node, receiverText);
     if (receiver === void 0 || (node.arguments?.length ?? 0) !== 0)
       return void 0;
+    return this.rustStrCaseConvert(receiver, method);
+  }
+  // Case conversion of a Str place: non-Str stays Null. Closure-free for a plain place (read once either way).
+  rustStrCaseConvert(receiver, method) {
+    if (RUST_PLAIN_PLACE.test(receiver)) {
+      return `(if let Some(__s) = ${receiver}.as_str() { Value::Str(__s.${method}().into()) } else { Value::Null })`;
+    }
     return `${receiver}.as_str().map(|__s| Value::Str(__s.${method}().into())).unwrap_or(Value::Null)`;
   }
   // `x.startsWith("lit")` / `x.endsWith("lit")` → a bool (false for a non-`Str` receiver).
@@ -33802,6 +33844,8 @@ ${this.getIden(identation)}}`;
     const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
     if (literal === void 0)
       return void 0;
+    if (literal !== "" && RUST_PLAIN_PLACE.test(receiver))
+      return `${receiver}.as_str().unwrap_or("").${method}("${literal}")`;
     return `${receiver}.as_str().is_some_and(|__s| __s.${method}("${literal}"))`;
   }
   // `x.split("lit")`: an array of the parts, the empty array for a non-`Str` receiver.
@@ -33812,6 +33856,9 @@ ${this.getIden(identation)}}`;
     const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
     if (literal === void 0)
       return void 0;
+    if (RUST_PLAIN_PLACE.test(receiver)) {
+      return `Value::Array(if let Some(__s) = ${receiver}.as_str() { __s.split("${literal}").map(Value::from).collect() } else { Vec::new() })`;
+    }
     return `Value::Array(${receiver}.as_str().map(|__s| __s.split("${literal}").map(Value::from).collect()).unwrap_or_default())`;
   }
   // `x.replace("a", "b")`: the helper replaces every occurrence (`str::replace`), else the receiver.
@@ -34581,7 +34628,7 @@ ${this.getIden(identation)}}`;
   // `x.toUpperCase()` / `x.toLowerCase()` on a proven-`Str` local (any TS type).
   printRustR13Case(node, receiverText, method) {
     const receiver = this.rustR13Receiver(node, receiverText);
-    return receiver === void 0 || (node.arguments?.length ?? 0) !== 0 ? void 0 : `${receiver}.as_str().map(|__s| Value::Str(__s.${method}().into())).unwrap_or(Value::Null)`;
+    return receiver === void 0 || (node.arguments?.length ?? 0) !== 0 ? void 0 : this.rustStrCaseConvert(receiver, method);
   }
   // hx4 R14 — the R12 plain-dict proof reaches overloaded base readers (`safeDict` declares
   // bodiless overload signatures; the implementation in the same class is what runs).
@@ -35461,6 +35508,15 @@ ${this.getIden(identation)}}`;
   r30LooseI64(expr) {
     return `(match &(${expr}) { Value::Int(__n) => Some(*__n), Value::Float(__f) => Some(*__f as i64), Value::Str(__s) => __s.parse::<i64>().ok(), Value::Bool(__b) => Some(if *__b { 1 } else { 0 }), _ => None })`;
   }
+  // The start bound of a slice: an Int literal is its own i64, a Null literal is 0 (the helper's Int / Null arms).
+  r30LooseI64OrZero(expr) {
+    const lit = /^Value::Int\((-?[0-9]+)\)$/.exec(expr);
+    if (lit !== null && Math.abs(Number(lit[1])) < 2 ** 53)
+      return lit[1].startsWith("-") ? `(${lit[1]}i64)` : `${lit[1]}i64`;
+    if (expr === "Value::Null")
+      return "0i64";
+    return `${this.r30LooseI64(expr)}.unwrap_or(0)`;
+  }
   r30SliceArm(variant, len, take, empty) {
     const bound = (b) => `if ${b} < 0 { (__l + ${b}).max(0) } else { ${b}.min(__l) }`;
     return `(${variant}, __b, __e) => match (${len}) { __l => match (${bound("__b")}, match __e { None => __l, Some(__k) => ${bound("__k")} }) { (__i, __j) => if __i <= __j { ${take} } else { ${empty} } } }`;
@@ -35478,13 +35534,16 @@ ${this.getIden(identation)}}`;
       "Value::Array(__a[__i as usize..__j as usize].to_vec())",
       "Value::Array(vec![])"
     );
-    return `(match (&(${name}), ${this.r30LooseI64(start)}.unwrap_or(0), ${this.r30LooseI64(end)}) { ${str}, ${arr}, _ => Value::Null })`;
+    return `(match (&(${name}), ${this.r30LooseI64OrZero(start)}, ${this.r30LooseI64(end)}) { ${str}, ${arr}, _ => Value::Null })`;
   }
   r30IndexOf(name, needle) {
     const eq = `match (__it, __nd) { (Value::Null, Value::Null) => true, (Value::Bool(__x), Value::Bool(__y)) => __x == __y, (Value::Str(__x), Value::Str(__y)) => __x == __y, (Value::Int(__x), Value::Int(__y)) => __x == __y, (Value::Float(__x), Value::Float(__y)) => __x == __y, (__p, __q) => match (${this.r25LooseF64("__p")}, ${this.r25LooseF64("__q")}) { (Some(__x), Some(__y)) => __x == __y, _ => false } }`;
     return `(match (&(${name}), &(${needle})) { (Value::Arr(__a), __nd) => Value::Int(__a.iter().position(|__it| ${eq}).map(|__i| __i as i64).unwrap_or(-1)), (Value::Str(__s), Value::Str(__nd)) => Value::Int(__s.find(&**__nd).map(|__i| __i as i64).unwrap_or(-1)), _ => Value::Int(-1) })`;
   }
   r30Case(name, method) {
+    if (!name.includes('"') && !name.includes("\n")) {
+      return `(if let Some(__s) = (${name}).as_str() { Value::Str(__s.${method}().into()) } else { Value::Null })`;
+    }
     return `(match &(${name}) { Value::Str(__s) => Value::Str(__s.${method}().into()), _ => Value::Null })`;
   }
 };
