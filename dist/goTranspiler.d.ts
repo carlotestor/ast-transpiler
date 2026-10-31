@@ -465,6 +465,35 @@ export declare class GoTranspiler extends BaseTranspiler {
     goInOpSubstitutedText(node: any): string | undefined;
     goInOpIfInitClause(node: any): string | undefined;
     goInOpGuardedNestedIf(node: any, identation: any): string | undefined;
+    goWsCaches: {
+        declaredIn: string;
+        fields: Set<string>;
+        ops: {
+            [op: string]: string;
+        };
+        readCalls: string[];
+        walkCalls: string[];
+        userPath: Array<{
+            name: RegExp;
+            async: boolean | undefined;
+        }>;
+    } | undefined;
+    goWsCacheOwned(node: any): string | undefined;
+    goWsCacheCall(op: string, field: string, args: string[]): string;
+    goWsCacheArgText(node: any): string;
+    goWsCacheKeyText(node: any): string;
+    goWsCacheCallText(node: any): string | undefined;
+    goWsCacheSnapshotText(node: any): string | undefined;
+    goWsCacheMembership(node: any): {
+        field: string;
+        key: any;
+    } | undefined;
+    goWsCacheMembershipText(node: any): string | undefined;
+    goWsCacheNegatedIfCondition(node: any): boolean;
+    goWsCacheReadText(node: any): string | undefined;
+    goWsCacheWriteText(node: any, identation: any): string | undefined;
+    goWsCacheGuardedMembership(node: any, identation: any): string | undefined;
+    goWsCachePureDeclaration(statement: any): boolean;
     goIfInOpRead(condition: any, statement?: any): any;
     GO_NATIVE_MAP_FIELDS: {
         [name: string]: string;

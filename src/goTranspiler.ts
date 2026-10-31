@@ -875,6 +875,12 @@ export class GoTranspiler extends BaseTranspiler {
         this.wrapCallMethods = config['wrapCallMethods'] ?? [];
         this.asyncMethodSuffix = config['asyncMethodSuffix'] ?? '';
         this.asyncSuffixExemptPaths = (config['asyncSuffixExemptPaths'] ?? []).map((p) => new RegExp(p));
+        const wsCaches = config['wsCaches'];
+        this.goWsCaches = (wsCaches === undefined) ? undefined : {
+            declaredIn: wsCaches['declaredIn'], fields: new Set<string>(wsCaches['fields'] ?? []), ops: wsCaches['ops'] ?? {},
+            readCalls: wsCaches['readCalls'] ?? [], walkCalls: wsCaches['walkCalls'] ?? [],
+            userPath: (wsCaches['userPath'] ?? []).map((m: any) => ({ name: new RegExp(m['name']), async: m['async'] })),
+        };
         this.unifiedStringParams = config['unifiedStringParams'] ?? {};
         this.unifiedSliceParams = config['unifiedSliceParams'] ?? {};
         this.unifiedBoolParams = config['unifiedBoolParams'] ?? {};
@@ -4568,6 +4574,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
 
     printOutOfOrderCallExpressionIfAny(node, identation) {
+        const cacheCall = this.goWsCacheCallText(node);
+        if (cacheCall !== undefined) {
+            return cacheCall;
+        }
         if (node.expression.kind === SyntaxKind.PropertyAccessExpression) {
             const args = node.arguments;
 
@@ -4695,6 +4705,11 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             return arrayBindingStatement;
         }
 
+        const cacheWrite = this.goWsCacheWriteText(node, identation);
+        if (cacheWrite !== undefined) {
+            return cacheWrite;
+        }
+
         // ---------------------------------------------------------------
         // Go-style setter for element-access assignments:  a[b] = v  and  a[b] += v
         // ---------------------------------------------------------------
@@ -4762,6 +4777,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             const substituted = this.goInOpSubstitutedText(node);
             if (substituted !== undefined) {
                 return substituted;
+            }
+            const cacheMembership = this.goWsCacheMembershipText(node);
+            if (cacheMembership !== undefined) {
+                return cacheMembership;
             }
             const dictText = this.printNode(right, 0);
             const keyText = this.printNode(left, 0);
@@ -7426,6 +7445,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     // hence the func literal; present-but-nil is ok=true like InOp. A `*string` key derefs, nil
     // answering false. InOp also covers nil/number keys and sync.Map/orderbook receivers: else keep it.
     printInlineInOp(dictNode, keyNode, dictText: string, keyText: string): string | undefined {
+        if (this.goWsCacheOwned(dictNode) !== undefined) {
+            return undefined;
+        }
         if (dictText.includes('\n') || keyText.includes('\n')) {
             return undefined;
         }
@@ -7569,6 +7591,186 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return this.printNodeCommentsIfAny(node, identation, `${indent}if ${guardText} {\n${inner}${body}\n${indent}}`);
     }
 
+    // ---- hx11 rfm-G1 G02w3: base-class ws caches owned by the exchange dispatch loop ------------
+    // `this.<field>` whose symbol is the `declaredIn` class's own property declaration (the checker, not
+    // the spelling). User-path code (a method matching `userPath`; an arrow closure belongs to its method)
+    // runs off the loop, so its reads, membership tests, stores, walks and resets print accessor calls the
+    // loop performs; handlers keep indexing the map. Absent config = unchanged output.
+    goWsCaches: {
+        declaredIn: string; fields: Set<string>; ops: { [op: string]: string }; readCalls: string[]; walkCalls: string[];
+        userPath: Array<{ name: RegExp; async: boolean | undefined }>;
+    } | undefined;
+
+    goWsCacheOwned(node): string | undefined {
+        const caches = this.goWsCaches;
+        const access = this.goUnwrapParenthesizedNode(node);
+        if ((caches === undefined) || (access?.kind !== SyntaxKind.PropertyAccessExpression) || (access.expression?.kind !== SyntaxKind.ThisKeyword)
+            || !caches.fields.has(access.name?.text)) {
+            return undefined;
+        }
+        const declaration: any = this.checkerOrUndefined()?.getSymbolAtLocation(access.name)?.valueDeclaration?.resolve();
+        if ((declaration?.kind !== SyntaxKind.PropertyDeclaration) || (declaration.parent?.name?.text !== caches.declaredIn)) {
+            return undefined;
+        }
+        for (let current = access.parent; current; current = current.parent) {
+            if (current.kind === SyntaxKind.MethodDeclaration) {
+                const name = current.name?.text;
+                const isAsync = this.isAsyncFunction(current);
+                return ((typeof name === 'string') && caches.userPath.some((m) => m.name.test(name) && ((m.async === undefined) || (m.async === isAsync))))
+                    ? this.capitalize(access.name.text) : undefined;
+            }
+        }
+        return undefined;
+    }
+
+    // `this.<op>("Field", args)`
+    goWsCacheCall(op: string, field: string, args: string[]): string {
+        return `this.${this.goWsCaches.ops[op]}("${field}"${args.map((a) => ', ' + a).join('')})`;
+    }
+
+    goWsCacheArgText(node): string {
+        return this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(node, 0)).trim();
+    }
+
+    // the key of a store or membership test: a `*string` local the checker narrowed, a nil test or an exiting nil test
+    // proves, or a literal-defaulted SafeString write, prints through the deref; any other key prints as is
+    goWsCacheKeyText(node): string {
+        let inner: any = node;
+        while ((inner?.kind === SyntaxKind.ParenthesizedExpression) || (inner?.kind === SyntaxKind.AsExpression)) {
+            inner = inner.expression;
+        }
+        const text = this.goWsCacheArgText(node);
+        if ((inner?.kind === SyntaxKind.Identifier) && (this.goDeclaredTypeOfIdentifier(inner) === '*string')) {
+            let statement: any = inner;
+            while ((statement !== undefined) && !isStatementNode(statement)) {
+                statement = statement.parent;
+            }
+            if (this.goNilProvenStringDeref(inner) || this.goDefaultedSafeStringLocal(inner) || this.goHasEnclosingNilGuard(inner)
+                || this.goInOpPointerKeyProvenNonNil(statement, inner)) {
+                return '*' + text;
+            }
+        }
+        return text;
+    }
+
+    // `this.safeValue(this.F, k)` / `this.safeDict(this.F, k)` (no default argument)
+    goWsCacheCallText(node): string | undefined {
+        const caches = this.goWsCaches;
+        const callee: any = node.expression;
+        if ((caches === undefined) || (callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)) {
+            return undefined;
+        }
+        const args = node.arguments ?? [];
+        if ((args.length === 2) && caches.readCalls.includes(callee.name?.text)) {
+            const field = this.goWsCacheOwned(args[0]);
+            return (field === undefined) ? undefined : this.goWsCacheCall('get', field, [ this.goWsCacheArgText(args[1]) ]);
+        }
+        return undefined;
+    }
+
+    // the first argument of a walking call (`this.filterByArray(this.F, ...)`) reads every entry: a copy taken on the loop
+    goWsCacheSnapshotText(node): string | undefined {
+        const call: any = node?.parent;
+        if ((this.goWsCaches === undefined) || (call?.kind !== SyntaxKind.CallExpression) || (call.arguments?.[0] !== node)
+            || (call.expression?.kind !== SyntaxKind.PropertyAccessExpression) || (call.expression.expression?.kind !== SyntaxKind.ThisKeyword)
+            || !this.goWsCaches.walkCalls.includes(call.expression.name?.text)) {
+            return undefined;
+        }
+        const field = this.goWsCacheOwned(node);
+        return (field === undefined) ? undefined : this.goWsCacheCall('snapshot', field, []);
+    }
+
+    // `k in this.F`
+    goWsCacheMembership(node): { field: string; key: any } | undefined {
+        const inner: any = this.goUnwrapParenthesizedNode(node);
+        if ((this.goWsCaches === undefined) || (inner?.kind !== SyntaxKind.BinaryExpression) || (inner.operatorToken?.kind !== SyntaxKind.InKeyword)) {
+            return undefined;
+        }
+        const field = this.goWsCacheOwned(inner.right);
+        return (field === undefined) ? undefined : { field, key: inner.left };
+    }
+
+    goWsCacheMembershipText(node): string | undefined {
+        const found = this.goWsCacheMembership(node);
+        return (found === undefined) ? undefined : this.goWsCacheCall('has', found.field, [ this.goWsCacheKeyText(found.key) ]);
+    }
+
+    // `if (!(k in this.F)) {` prints `if !this.WsCacheHas(...) {`: the parentheses only guarded the helper call
+    goWsCacheNegatedIfCondition(node): boolean {
+        const not: any = node?.parent;
+        return (node?.kind === SyntaxKind.ParenthesizedExpression) && (not?.kind === SyntaxKind.PrefixUnaryExpression)
+            && (not.operator === SyntaxKind.ExclamationToken) && (not.parent?.kind === SyntaxKind.IfStatement)
+            && (not.parent.expression === not) && (this.goWsCacheMembership(node) !== undefined);
+    }
+
+    // `this.F[k]` read
+    goWsCacheReadText(node): string | undefined {
+        if ((this.goWsCaches === undefined) || this.isGoElementAccessAssignmentTarget(node) || (node.parent?.kind === SyntaxKind.DeleteExpression)
+            || ((node.parent?.kind === SyntaxKind.ElementAccessExpression) && (node.parent.expression === node))) {
+            return undefined;
+        }
+        const field = this.goWsCacheOwned(node.expression);
+        return (field === undefined) ? undefined : this.goWsCacheCall('get', field, [ this.goWsCacheKeyText(node.argumentExpression) ]);
+    }
+
+    // statements: `this.F[k] = v` stores through the loop, `this.F = <fresh map>` resets it
+    goWsCacheWriteText(node, identation): string | undefined {
+        const left: any = node.left;
+        if ((this.goWsCaches === undefined) || (node.operatorToken?.kind !== SyntaxKind.EqualsToken) || (node.parent?.kind !== SyntaxKind.ExpressionStatement)) {
+            return undefined;
+        }
+        if (left?.kind === SyntaxKind.ElementAccessExpression) {
+            const field = this.goWsCacheOwned(left.expression);
+            if (field === undefined) {
+                return undefined;
+            }
+            const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(node.right, identation)).trimStart();
+            return this.goWsCacheCall('set', field, [ this.goWsCacheKeyText(left.argumentExpression), value ]);
+        }
+        const field = this.goWsCacheOwned(left);
+        const right: any = node.right;
+        const fresh = (right?.kind === SyntaxKind.ObjectLiteralExpression)
+            || ((right?.kind === SyntaxKind.CallExpression) && (right.expression?.kind === SyntaxKind.PropertyAccessExpression)
+                && (right.expression.expression?.kind === SyntaxKind.ThisKeyword) && (right.expression.name?.text === 'createSafeDictionary'));
+        return ((field === undefined) || !fresh) ? undefined : this.goWsCacheCall('reset', field, []);
+    }
+
+    // `if (!(k in this.F)) { const x = this.safe*(..); if (k !== undefined) { body } }` with a `*string` key k: a nil key
+    // skips the whole block, so the nil test goes outside and the membership test runs behind it on the deref
+    goWsCacheGuardedMembership(node, identation): string | undefined {
+        const not: any = node.expression;
+        if ((this.goWsCaches === undefined) || (node.elseStatement !== undefined) || (node.thenStatement?.kind !== SyntaxKind.Block)
+            || (not?.kind !== SyntaxKind.PrefixUnaryExpression) || (not.operator !== SyntaxKind.ExclamationToken)) {
+            return undefined;
+        }
+        const found = this.goWsCacheMembership(not.operand);
+        const key = found?.key;
+        const statements: any[] = [ ...node.thenStatement.statements ];
+        const guard: any = statements.pop();
+        if ((found === undefined) || (key?.kind !== SyntaxKind.Identifier) || (this.goDeclaredTypeOfIdentifier(key) !== '*string')
+            || (guard?.kind !== SyntaxKind.IfStatement) || (guard.elseStatement !== undefined)
+            || !this.goIsNonNilTestOf(this.goUnwrapParenthesizedNode(guard.expression), key)
+            || (guard.thenStatement?.kind !== SyntaxKind.Block) || this.goLocalIsRebound(this.goEnclosingFunction(key), key)
+            || !statements.every((statement) => this.goWsCachePureDeclaration(statement))) {
+            return undefined;
+        }
+        const indent = this.getIden(identation);
+        const keyText = this.goWsCacheArgText(key);
+        const declarations = statements.map((statement) => this.printNode(statement, identation + 1) + '\n').join('');
+        const body = this.printBlock(guard.thenStatement, identation + 1, false);
+        const inner = `${this.getIden(identation + 1)}if !${this.goWsCacheCall('has', found.field, [ '*' + keyText ])}${body}`;
+        return this.printNodeCommentsIfAny(node, identation, `${indent}if ${keyText} != nil {\n${declarations}${inner}\n${indent}}`);
+    }
+
+    // `const x = this.safe*(..)` / `this.orderBook(..)`: a read or a constructor, nothing the skipped block could observe
+    goWsCachePureDeclaration(statement): boolean {
+        const list: any = (statement?.kind === SyntaxKind.VariableStatement) ? statement.declarationList?.declarations : undefined;
+        const init: any = (list?.length === 1) ? list[0].initializer : undefined;
+        return (init?.kind === SyntaxKind.CallExpression) && (init.expression?.kind === SyntaxKind.PropertyAccessExpression)
+            && (init.expression.expression?.kind === SyntaxKind.ThisKeyword)
+            && /^(?:safe[A-Z]\w*|orderBook|indexedOrderBook|countedOrderBook)$/.test(init.expression.name?.text ?? '');
+    }
+
     // the single `key in dict` read the condition can bind: a map-typed identifier
     // receiver, a hand-written base map field or a pure book accessor, and a Go-string key.
     // The hoisted operands are identifiers/literals or side-effect-free getters, so moving the
@@ -7630,6 +7832,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     // book getter. undefined for every other receiver, which keeps the runtime helper. The field
     // and accessor names are matched on the *printed* Go text (this.Orderbooks, this.Markets()).
     goInOpDictMapType(dictNode, dictText?: string): string | undefined {
+        if (this.goWsCacheOwned(dictNode) !== undefined) {
+            return undefined; // a ws cache the loop owns: the membership test is the loop's
+        }
         if (dictNode?.kind === SyntaxKind.Identifier) {
             // a GetArgMap-bound parameter is that Go map in the line that binds it; InOp only asks
             // membership, which the two-value read answers without the helper's deref of the value
@@ -7823,12 +8028,18 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             if (inner === undefined) {
                 return undefined;
             }
+            if (this.goWsCacheNegatedIfCondition(node)) {
+                return inner;
+            }
             return (inner.startsWith('(') && this.isWholePrintedCall(inner, 0)) ? inner : `(${inner})`;
         }
         // an expression that already prints a Go `bool` needs no EvalTruthy round-trip:
         // `a || b`, `!x`, `a === b` and the Is*/Precise.String* predicates are all
         // bool-typed, so `EvalTruthy(<bool>)` is the identity function on them
         const printed = this.printNode(node, 0);
+        if (this.goWsCacheMembership(node) !== undefined) {
+            return printed; // the accessor answers a Go bool
+        }
         const pointerTruthy = this.printInlineBoolPointerTruthy(node, printed);
         if (pointerTruthy !== undefined) {
             return pointerTruthy;
@@ -8100,6 +8311,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         const nested = this.goInOpGuardedNestedIf(node, identation);
         if (nested !== undefined) {
             return nested;
+        }
+        const cacheSeed = this.goWsCacheGuardedMembership(node, identation);
+        if (cacheSeed !== undefined) {
+            return cacheSeed;
         }
         return super.printIfStatement(node, identation);
     }
@@ -8866,6 +9081,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     // }
 
     transformPropertyAcessExpressionIfNeeded(node) {
+        const cacheSnapshot = this.goWsCacheSnapshotText(node);
+        if (cacheSnapshot !== undefined) {
+            return cacheSnapshot;
+        }
         const expression = node.expression;
         const leftSide = this.printNode(expression, 0);
         const rightSide = node.name.text;
@@ -11370,6 +11589,10 @@ ${tryBodyBlock}
     }
 
     printElementAccessExpression(node, identation) {
+        const cacheRead = this.goWsCacheReadText(node);
+        if (cacheRead !== undefined) {
+            return cacheRead;
+        }
         // Maintain original special-case handling first.
         const special = this.printElementAccessExpressionExceptionIfAny(node);
         if (special) {
