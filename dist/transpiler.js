@@ -15670,6 +15670,9 @@ ${this.getIden(level)}}()`;
     if (this.goDeclaredTypeOfIdentifier(key) !== "*string" || !this.goL3MapReceiver(dict)) {
       return void 0;
     }
+    if (this.goDefaultedSafeStringLocal(key) || this.goInOpPointerKeyProvenNonNil(node, key)) {
+      return void 0;
+    }
     if (this.goInOpIfInitClause(node.expression) !== void 0) {
       return void 0;
     }
