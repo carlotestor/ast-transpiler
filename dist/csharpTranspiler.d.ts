@@ -10,6 +10,9 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpGuardIndex: WeakMap<Node, Map<string, any[]>>;
     csharpExpressionTypeResolver?: (node: any) => string | undefined;
     csharpDeclaredLocalTypeResolver?: (declaration: any) => string | undefined;
+    csharpClientStateMember?: (member: string) => {
+        reader?: string;
+    } | undefined;
     csharpListParamExclusions?: (name: string, index: number) => boolean;
     csharpElementRowLocalSource?: (fileName: string) => boolean;
     csharpTypedLocals: WeakMap<Node, string>;
@@ -41,6 +44,11 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpDictionaryElementWriteTarget(node: any): string | undefined;
     printElementAccessExpressionExceptionIfAny(node: any): void;
     printElementAccessExpression(node: any, identation: any): any;
+    csharpNativeClientStateRead(node: any): string | undefined;
+    csharpNativeClientStateReader(node: any): string | undefined;
+    csharpClientStateKeyIsString(key: any): boolean;
+    csharpReceiverIsWsClient(receiver: any): boolean;
+    csharpClientStateReadIsTyped(initializer: any): boolean;
     csharpNativeElementAccess(node: any): string | undefined;
     csharpIsMarketRowKeyRead(expression: any, argumentExpression: any): boolean;
     csharpNativeDeclaredDictionaryRead(expression: any, argumentExpression: any): string | undefined;

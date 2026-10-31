@@ -552,6 +552,12 @@ export class CSharpTranspiler extends BaseTranspiler {
     // embedding build layer for declarations it retyped itself; the member-access rules read it
     // only after this printer's own declared-local table declined
     csharpDeclaredLocalTypeResolver?: (declaration) => string | undefined;
+    // optional table of the hand-written ws Client's shared-state dictionaries (ccxt: derived from the
+    // `public OwnedTable<Future> futures;` / `getFuture(string)` declarations in cs/ccxt/ws/Client.cs):
+    // member name -> the settle-api reader that answers the helper's read of it, when the class has one.
+    // A member in the table holds a reference value type (null-safe ternary needs no re-box).
+    // Undefined by default, so an untyped run keeps the helper.
+    csharpClientStateMember?: (member: string) => { reader?: string } | undefined;
     // optional exclusion of the array-parameter rule below, installed by the embedding build
     // layer for the (method, position) pairs its own post-print pass retypes: those keep the
     // `object` box this printer would otherwise replace, so that pass still owns the signature
@@ -930,6 +936,10 @@ export class CSharpTranspiler extends BaseTranspiler {
         if (native !== undefined) {
             return native;
         }
+        const clientState = this.csharpNativeClientStateRead(node);
+        if (clientState !== undefined) {
+            return clientState;
+        }
         const dictWrite = this.csharpDictionaryElementWriteTarget(node);
         if (dictWrite !== undefined) {
             return dictWrite;
@@ -961,6 +971,115 @@ export class CSharpTranspiler extends BaseTranspiler {
             return keyRead; // hx4 C11
         }
         return super.printElementAccessExpression(node, identation);
+    }
+
+    // RFM-C1 w3C03: `client.futures[key]` / `client.subscriptions[key]` over the ws Client's shared-state
+    // dictionaries. The receiver is a `client` the ws tree declares WebSocketClient (a `client: Client`
+    // parameter or the `this.client (url)` local; the ws regexes type both), the member is a field the
+    // hand-written class declares with a reference value type (csharpClientStateValueType), and the key is
+    // a string literal or an identifier whose emitted declaration is string / string?. The emission carries
+    // GetValue's own null-receiver / null-key / missing-key tests, so a missing key still reads null.
+    csharpNativeClientStateRead(node): string | undefined {
+        if (typeof this.csharpClientStateMember !== 'function') {
+            return undefined;
+        }
+        const { expression, argumentExpression } = node;
+        if (!isPropertyAccessExpression(expression) || !isIdentifier(expression.expression) || !isIdentifier(expression.name)) {
+            return undefined;
+        }
+        if (!this.csharpHx4IsPlainRead(node)) {
+            return undefined;
+        }
+        if (this.csharpClientStateMember(expression.name.text as string) === undefined) {
+            return undefined;
+        }
+        if (!this.csharpReceiverIsWsClient(expression.expression)) {
+            return undefined;
+        }
+        const receiver = this.printNode(expression, 0);
+        const printedKey = this.printNode(argumentExpression, 0);
+        if (isStringLiteralLikeNode(argumentExpression)) {
+            return `(${receiver} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
+        }
+        if (!isIdentifier(argumentExpression)) {
+            return undefined;
+        }
+        if (!this.csharpClientStateKeyIsString(argumentExpression)) {
+            return undefined;
+        }
+        return `(${receiver} != null && ${printedKey} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
+    }
+
+    // `this.safeValue (client.futures|subscriptions, key)`: the hand-written Client declares a typed
+    // reader for the member (getFuture / getSubscription) that answers the helper's read: null for a
+    // null or missing key (and, for subscriptions, a null or empty value). Two arguments only; a
+    // default argument keeps the helper.
+    csharpNativeClientStateReader(node): string | undefined {
+        if (typeof this.csharpClientStateMember !== 'function') {
+            return undefined;
+        }
+        const callee = node.expression;
+        if (!isPropertyAccessExpression(callee) || callee.expression?.kind !== SyntaxKind.ThisKeyword || callee.name?.text !== 'safeValue') {
+            return undefined;
+        }
+        const args = node.arguments;
+        if (args?.length !== 2) {
+            return undefined;
+        }
+        const state = args[0];
+        if (!isPropertyAccessExpression(state) || !isIdentifier(state.expression) || !isIdentifier(state.name)) {
+            return undefined;
+        }
+        const reader = this.csharpClientStateMember(state.name.text as string)?.reader;
+        if ((reader === undefined) || !this.csharpReceiverIsWsClient(state.expression)) {
+            return undefined;
+        }
+        const key = args[1];
+        if (!isStringLiteralLikeNode(key) && !(isIdentifier(key) && this.csharpClientStateKeyIsString(key))) {
+            return undefined;
+        }
+        return `${this.printNode(state.expression, 0)}.${reader}(${this.printNode(key, 0)})`;
+    }
+
+    // the identifier key's emitted declaration is string / string? (a parameter the build layer prints
+    // string, or a local it declares so)
+    csharpClientStateKeyIsString(key): boolean {
+        const keyType = this.csharpHx4DeclaredKeyType(key) ?? this.csharpDeclaredLocalResolverType(key)
+            ?? this.csharpPrintedParamType(key);
+        return (keyType === 'string') || (keyType === 'string?');
+    }
+
+    // a `client` identifier the ws tree declares WebSocketClient: the checker type is the base ws `Client`
+    // class, and the binding is a parameter or the `this.client (...)` local the ws regexes retype
+    csharpReceiverIsWsClient(receiver): boolean {
+        if (receiver?.text !== 'client') {
+            return false;
+        }
+        const declaration = this.csharpReceiverBinding(receiver);
+        if (declaration === undefined) {
+            return false;
+        }
+        const file = declaration.getSourceFile?.()?.fileName ?? '';
+        if (file.indexOf('ts/src/pro/') < 0 || file.indexOf('/test/') >= 0) {
+            return false;
+        }
+        // the exported class symbol is named `default`; its declaration name is the class
+        const symbol = this.getChecker().getTypeAtLocation(receiver)?.getSymbol();
+        const declared: any[] = (symbol?.declarations ?? []).map((d) => d.resolve());
+        return declared.some((d) => (d.name?.text === 'Client') && ((d.getSourceFile?.()?.fileName ?? '').indexOf('base/ws/Client') >= 0));
+    }
+
+    // is this initializer read printed through the typed Client state (the native index read or the
+    // settle-api reader)? Then the printed value already has the member's value type, and a local
+    // declared with that type needs no cast back.
+    csharpClientStateReadIsTyped(initializer): boolean {
+        if (initializer?.kind === SyntaxKind.ElementAccessExpression) {
+            return this.csharpNativeClientStateRead(initializer) !== undefined;
+        }
+        if (initializer?.kind === SyntaxKind.CallExpression) {
+            return this.csharpNativeClientStateReader(initializer) !== undefined;
+        }
+        return false;
     }
 
     csharpNativeElementAccess(node): string | undefined {
@@ -2794,6 +2913,10 @@ export class CSharpTranspiler extends BaseTranspiler {
         const nativeParse = this.csharpNativeParseCall(node);
         if (nativeParse !== undefined) {
             return nativeParse;
+        }
+        const clientState = this.csharpNativeClientStateReader(node);
+        if (clientState !== undefined) {
+            return clientState;
         }
         return super.printCallExpression(node, identation);
     }
