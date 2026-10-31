@@ -13975,8 +13975,26 @@ ${tryBodyBlock}
     // the identifier occurrences of `name` under `scope` that write it (or bind it again)
     goNameWriteSites(scope, name: string, declaration?: any): any[] {
         const sites: any[] = [];
+        const checker: any = this.checkerOrUndefined();
+        // with a declaration, only the identifiers that resolve to THAT variable count: a second
+        // `const data` in another block of the method is another Go variable
+        const sameVariable = (n: any): boolean => {
+            if ((declaration === undefined) || (checker === undefined)) {
+                return true;
+            }
+            try {
+                const symbol: any = checker.getSymbolAtLocation(n);
+                if (symbol === undefined) {
+                    return true;
+                }
+                const found: any = symbol.valueDeclaration?.resolve?.() ?? symbol.valueDeclaration;
+                return (found === undefined) || (found === declaration) || (found.pos === declaration.pos && found.end === declaration.end);
+            } catch (e) {
+                return true;
+            }
+        };
         const visit = (n: any) => {
-            if ((n.kind === SyntaxKind.Identifier) && (n.text === name) && (n !== declaration?.name)) {
+            if ((n.kind === SyntaxKind.Identifier) && (n.text === name) && (n !== declaration?.name) && sameVariable(n)) {
                 let up: any = n;
                 let parent: any = n.parent;
                 // a destructuring assignment target: `[x, y] = ...`
