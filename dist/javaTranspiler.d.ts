@@ -461,6 +461,10 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaHx4InProgress: Set<any>;
     javaHx4NonSharedValue(value: any, depth: number): boolean;
     javaJ02FieldMapReadText(receiver: any, key: any): string | undefined;
+    javaBaseMapFieldReadText(receiver: any, key: any, field: {
+        declared: boolean;
+        anyKey: boolean;
+    }): string | undefined;
     javaHx4J05IntegralModOperand(node: any): boolean;
     printHx4J05ModComparison(left: any, right: any, op: any): string | undefined;
     javaHx4J06NarrowedIndexOf(node: any, name: any, parsedArg: any): string;

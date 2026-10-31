@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -25481,14 +25481,15 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     const key = node.argumentExpression;
-    if (!isIdentifier2(key) || !this.javaRepeatableOperand(key)) {
+    const operand = isAsExpression2(key) && key.type?.kind === SyntaxKind6.StringKeyword ? key.expression : key;
+    if (!isIdentifier2(operand) || !this.javaRepeatableOperand(operand)) {
       return void 0;
     }
-    const declared = this.javaDeclaredTypeOf(key);
+    const declared = this.javaDeclaredTypeOf(operand);
     if (declared !== void 0 && JAVA_PRIMITIVE_DECLARED_TYPES.has(declared.trim())) {
       return void 0;
     }
-    if (declared === void 0 && this.javaOperandPrintsPrimitiveNumber(key)) {
+    if (declared === void 0 && this.javaOperandPrintsPrimitiveNumber(operand)) {
       return void 0;
     }
     let keyType;
@@ -25503,7 +25504,7 @@ ${this.getIden(identation)}}}`;
     const target = this.printNode(node.expression, 0);
     const keyText = this.printNode(key, 0);
     if (keyType.getAliasSymbol?.() === void 0 && keyType.flags === TypeFlags5.String) {
-      return `(${target} == null || ${keyText} == null ? null : ${target}.get(${keyText}))`;
+      return `(${target} == null || ${this.printNode(operand, 0)} == null ? null : ${target}.get(${keyText}))`;
     }
     return `(${target} == null || !(${keyText} instanceof String) ? null : ${target}.get(${keyText}))`;
   }
@@ -29119,6 +29120,9 @@ ${this.getIden(identation)}}}`;
   // be null too. Key and receiver print twice, so both must be side-effect free.
   javaJ02FieldMapReadText(receiver, key) {
     const name = receiver?.name?.text;
+    if (typeof name === "string" && Object.prototype.hasOwnProperty.call(JAVA_BASE_MAP_READ_FIELDS, name)) {
+      return this.javaBaseMapFieldReadText(receiver, key, JAVA_BASE_MAP_READ_FIELDS[name]);
+    }
     if (typeof name !== "string" || !Object.prototype.hasOwnProperty.call(JAVA_J02_MAP_FIELDS, name)) {
       return void 0;
     }
@@ -29130,6 +29134,22 @@ ${this.getIden(identation)}}}`;
     const keyText = this.printNode(key, 0);
     const keyGuard = literal ? "" : `${keyText} == null || `;
     return `(${keyGuard}${target} == null ? null : ((java.util.Map<?, ?>)${target}).get(${keyText}))`;
+  }
+  javaBaseMapFieldReadText(receiver, key, field) {
+    const operand = isAsExpression2(key) && key.type?.kind === SyntaxKind6.StringKeyword ? key.expression : key;
+    const literal = isStringLiteralLikeNode3(key);
+    if (!literal) {
+      if (!isIdentifier2(operand) || !this.javaRepeatableOperand(operand)) {
+        return void 0;
+      }
+      if (!field.anyKey && !this.isJavaStringType(this.getChecker().getTypeAtLocation(key)) && !this.javaDeclaredStringType(operand)) {
+        return void 0;
+      }
+    }
+    const target = this.printNode(receiver, 0);
+    const read = field.declared ? target : `((java.util.Map<?, ?>)${target})`;
+    const guard = literal ? `${target} == null` : `${target} == null || ${this.printNode(operand, 0)} == null`;
+    return `(${guard} ? null : ${read}.get(${this.printNode(key, 0)}))`;
   }
   // hx4 J05
   // `(a % N) <op> M` (N a non-zero integer literal, a an int/long operand, M an int literal): the
@@ -29228,6 +29248,12 @@ var JAVA_J02_MAP_FIELDS = {
   "fees": true,
   "urls": true,
   "markets_by_id": true
+};
+var JAVA_BASE_MAP_READ_FIELDS = {
+  "has": { declared: true, anyKey: true },
+  "features": { declared: true, anyKey: true },
+  "currencies": { declared: true, anyKey: false },
+  "requiredCredentials": { declared: false, anyKey: true }
 };
 var HX4_J09_SYNC_BASE_CALLS = /* @__PURE__ */ new Set([
   "safeString",
