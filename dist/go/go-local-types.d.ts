@@ -77,6 +77,7 @@ export declare const CCXT_GO_HELPER_RETURN_TYPES: {
     'this.Base58ToBinary': string;
     'this.BinaryConcat': string;
     'this.EthGetAddressFromPrivateKey': string;
+    'this.EthEncodeStructuredData': string;
     'this.DecimalToPrecision': string;
     'this.ExceptionMessage': string;
     'this.Strip': string;

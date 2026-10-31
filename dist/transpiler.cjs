@@ -37474,6 +37474,9 @@ var CCXT_GO_HELPER_RETURN_TYPES = {
   "this.BinaryConcat": "[]byte",
   // exchange_eth.go
   "this.EthGetAddressFromPrivateKey": "string",
+  // hand-written (exchange_eth.go): a Go []uint8 on every return path, so a `const msg = this.ethEncodeStructuredData (..)`
+  // local holds the very value its `any` box did; goLocalIsSafeToType keeps the box when a write or use needs it
+  "this.EthEncodeStructuredData": "[]uint8",
   // exchange_number.go / exchange.go / exchange_string.go — hand-written helpers whose every
   // return path is a Go `string` (audited by the go-locals U24 unit; REPORT.md lists the
   // look-alikes that must stay `any`: implodeParams/implodeHostname return the raw path or nil,

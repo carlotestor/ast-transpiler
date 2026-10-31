@@ -61,3 +61,32 @@ describe('hx11 w8 unifiedBoolParams', () => {
         expect (print ({})).toContain ('hedged any');
     });
 });
+
+describe('hx11 rfm-x6 B: hand-written []uint8 producer types its local', () => {
+    const SRC = 'class Exchange {\n'
+        + '    ethEncodeStructuredData (domain: any, types: any, data: any): any { return undefined; }\n'
+        + '    signMessage (message: any, key: any): any { return undefined; }\n'
+        + '    sign (domain: any, types: any, data: any, key: any): any {\n'
+        + '        const msg = this.ethEncodeStructuredData (domain, types, data);\n'
+        + '        return this.signMessage (msg, key);\n'
+        + '    }\n'
+        + '    rebound (domain: any, types: any, data: any, key: any): any {\n'
+        + '        let msg = this.ethEncodeStructuredData (domain, types, data);\n'
+        + '        msg = this.signMessage (msg, key);\n'
+        + '        return msg;\n'
+        + '    }\n'
+        + '}\n';
+    const print = (install: boolean): string => {
+        const t = new Transpiler ({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        if (install) { installCcxtGoHooks (t.goTranspiler); }
+        return t.transpileGo (SRC).content;
+    };
+    const fn = (out: string, name: string): string => out.split (/\nfunc /).find ((f) => f.indexOf (name + '(') >= 0) ?? '';
+    test('const local initialised by EthEncodeStructuredData is declared []uint8 (fails on the base printer)', () => {
+        expect (fn (print (false), 'Sign')).toContain ('var msg any = this.EthEncodeStructuredData(');
+        expect (fn (print (true), 'Sign')).toContain ('var msg []uint8 = this.EthEncodeStructuredData(');
+    });
+    test('a local rebound to another type keeps the any box', () => {
+        expect (fn (print (true), 'Rebound')).not.toContain ('[]uint8');
+    });
+});
