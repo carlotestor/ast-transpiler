@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -10318,7 +10318,16 @@ var GO_MARKET_MAP_BASE_CALLS = [
   "parseBalance",
   "parseWsTrade",
   "parseWsOrder",
-  "describe"
+  "describe",
+  // dict producers whose base and every override print `map[string]any` (ccxt retypeGoProvenParseMethods)
+  "parseBalanceList",
+  "parseTickers",
+  "parseCurrencies",
+  "parseFundingRates",
+  "parseOpenInterests",
+  "parseAccount",
+  "handleRouteAndParams",
+  "sign"
 ];
 var GO_MARKET_READ_COMPARISON_OPERATORS = [
   SyntaxKind5.EqualsEqualsToken,

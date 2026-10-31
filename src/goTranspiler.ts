@@ -320,7 +320,10 @@ const GO_MARKET_MAP_BASE_CALLS = [ 'getMarketFromSymbols',
     // and on IDerivedExchange (go/v4 exchange_generated.go + exchange_interface.go; the ccxt build retypes
     // the overrides). The Go result is the map itself, so the box a local held was always that map - a
     // typed nil when the callee answers absent, never an untyped nil: see goMarketUseHandsTheMapOn.
-    'parseBalance', 'parseWsTrade', 'parseWsOrder', 'describe' ];
+    'parseBalance', 'parseWsTrade', 'parseWsOrder', 'describe',
+    // dict producers whose base and every override print `map[string]any` (ccxt retypeGoProvenParseMethods)
+    'parseBalanceList', 'parseTickers', 'parseCurrencies', 'parseFundingRates', 'parseOpenInterests', 'parseAccount',
+    'handleRouteAndParams', 'sign' ];
 
 // the binary operators under which a market/currency local's element read is a pure READ: the
 // element is derefed by the GetValue the element-read printer keeps for these operands
