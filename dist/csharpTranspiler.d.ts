@@ -189,6 +189,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpNonNullStringOperandType(node: any, self?: any, guardedConcat?: boolean): string | undefined;
     csharpNonNullStringLeafType(value: any, self?: any, guardedConcat?: boolean): string | undefined;
     csharpBoolCallTyped(node: any): boolean;
+    csharpClassIsOrExtends(cls: any, owner: any): boolean;
     csharpEnclosingFunction(node: any): any;
     csharpTypeNameIsShadowed(scope: any, csharpType: string): boolean;
     csharpLocalIsSafeToType(scope: any, declaration: any, varName: string, csharpType: string, safeAccessor?: boolean): boolean;
@@ -235,6 +236,11 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpBooleanParamType(node: any): string;
     csharpBooleanParamProofs: WeakMap<Program<import("typescript/unstable/sync").ProjectId>, Map<Node, Set<number>>>;
     csharpBooleanParamCensus(): Map<Node, Set<number>>;
+    csharpSpawnedMethodCall(node: any): {
+        name: string;
+        key: string;
+        arguments: any[];
+    } | undefined;
     csharpNodeText(node: any): string;
     csharpNodePositionKey(node: any): string;
     csharpBooleanParamCandidateRows(node: any, candidates: any, byName: any): void;
