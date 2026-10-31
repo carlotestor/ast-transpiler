@@ -423,6 +423,17 @@ export declare class GoTranspiler extends BaseTranspiler {
     goGetArgMapParameterIsMapLocal(node: any): boolean;
     printNativeMapWriteOnProvenLocal(containerNode: any, containerStr: string, keyNode: any, keyStr: string, valueStr: string, valueNode?: any, identation?: number): string | undefined;
     goMapWriteValueIsNotPointer(valueNode: any): boolean;
+    nativeStoreFields: {
+        [tsName: string]: any;
+    } | undefined;
+    rfGo6bNeverNilCache: Map<any, Map<string, boolean>>;
+    rfGo6bStoreField(containerNode: any): any;
+    rfGo6bThisCallName(call: any): string | undefined;
+    rfGo6bFieldNeverNil(sourceFile: any, name: string, field: any): boolean;
+    rfGo6bRunsOnMessageLoop(containerNode: any, field: any): boolean;
+    rfGo6bValueIsPlain(valueNode: any, field: any): boolean;
+    rfGo6bEmptyDefaultCall(call: any, field: any): boolean;
+    rfGo6bStoreAssignment(containerNode: any, containerStr: string, keyNode: any, keyStr: string, valueStr: string, valueNode: any, identation?: number): string | undefined;
     goIsNilGuardedStringPointerKey(keyNode: any): boolean;
     goInOpPointerKeyProvenNonNil(statement: any, ident: any): boolean;
     goBlockExitsOnNilTest(block: any, statement: any, ident: any): boolean;
