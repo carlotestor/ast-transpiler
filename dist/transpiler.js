@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-AWK6QGCM.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -9742,6 +9742,7 @@ var GO_FIELD_CONTAINER_TYPES_NATIVE = Object.fromEntries([
   ...GO_SYNC_MAP_FIELDS.filter((name) => name !== "Options").map((name) => [name, "*sync.Map"])
 ]);
 var GO_PLAIN_VALUED_MAP_FIELDS = ["Options"];
+var GO_OPTION_DICT_FIELDS = ["Options", "Has", "Features", "Fees", "Limits"];
 var GO_ARITHMETIC_KINDS = [
   SyntaxKind5.PlusToken,
   SyntaxKind5.MinusToken,
@@ -10278,8 +10279,11 @@ var GoTranspiler = class extends BaseTranspiler {
     // Orderbooks is absent on purpose: the go book-local pass proves a stored book from the
     // `!InOp(this.Orderbooks, key)` guard, so that guard must reach it as the helper call.
     this.GO_NATIVE_MAP_FIELDS = {
+      "Options": "map[string]any",
       "Has": "map[string]any",
       "Features": "map[string]any",
+      "Fees": "map[string]any",
+      "Limits": "map[string]any",
       "Trades": "map[string]any",
       "Ohlcvs": "map[string]map[string]any",
       // hx10w8-GP03: declared `map[string]any` in go/v4/exchange.go
@@ -14080,7 +14084,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       }
       const rhs = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trimStart();
       const nativeRhs = right.kind === SyntaxKind5.BinaryExpression ? this.goWithExprDepth(this.goExprDepth, () => this.printNode(right, identation)).trimStart() : rhs;
-      const native = keyStrs.length === 1 ? this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, nativeRhs, false, right) ?? this.printNativeMapWriteOnProvenLocal(baseExpr, containerStr, keys[0], lastKey, nativeRhs, right, identation) : void 0;
+      const native = keyStrs.length === 1 ? this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, nativeRhs, false, right) ?? this.printNativeMapWriteOnProvenLocal(baseExpr, containerStr, keys[0], lastKey, nativeRhs, right, identation) ?? this.printOptionDictFieldWrite(baseExpr, containerStr, keys[0], lastKey, right, identation) : void 0;
       return native !== void 0 ? native : `AddElementToObject(${acc}, ${lastKey}, ${rhs})`;
     }
     if (left.kind === SyntaxKind5.TypeOfExpression) {
@@ -16421,6 +16425,38 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     const iden = this.getIden(identation);
     return `if ${keyStr} != nil {
 ${iden}	${containerStr}[*${keyStr}] = ${valueStr}
+${iden}}`;
+  }
+  // `this.<option dict>[k] = v` with a string-typed or nil-guarded *string key: the helper's map store
+  // behind the nil checks it applies; a pointer value is stored dereferenced, any other `any` keeps it
+  printOptionDictFieldWrite(containerNode, containerStr, keyNode, keyStr, valueNode, identation) {
+    const name = containerNode?.kind === SyntaxKind5.PropertyAccessExpression && containerNode.expression?.kind === SyntaxKind5.ThisKeyword ? this.transformPropertyAccessExpressionName(containerNode.name.text, containerNode.name) : void 0;
+    if (name === void 0 || !GO_OPTION_DICT_FIELDS.includes(name) || valueNode === void 0) {
+      return void 0;
+    }
+    let keyType = this.goDeclaredTypeOfIdentifier(keyNode);
+    if (keyType === void 0 && keyNode?.kind === SyntaxKind5.Identifier) {
+      const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(keyNode)?.valueDeclaration?.resolve();
+      keyType = this.goGetArgParameterType(declaration);
+    }
+    if (keyType !== "string" && keyType !== "*string") {
+      return void 0;
+    }
+    const inner = this.goUnwrapParenthesizedNode(valueNode);
+    let storeValue;
+    if (this.goMapWriteValueIsNotPointer(valueNode)) {
+      storeValue = (text) => text;
+    } else if (inner?.kind === SyntaxKind5.Identifier && this.goWritePrintsPointerBox(inner)) {
+      storeValue = (text) => `DerefScalar(${text})`;
+    } else {
+      return void 0;
+    }
+    const value = storeValue(this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(valueNode, identation + 1)).trimStart());
+    const pointerKey = keyType === "*string";
+    const guard = pointerKey ? `${containerStr} != nil && ${keyStr} != nil` : `${containerStr} != nil`;
+    const iden = this.getIden(identation);
+    return `if ${guard} {
+${iden}	${containerStr}[${pointerKey ? "*" : ""}${keyStr}] = ${value}
 ${iden}}`;
   }
   // the helper stores derefScalar(value): a numeric literal is already the value it stores
