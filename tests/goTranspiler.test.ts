@@ -1,5 +1,5 @@
 import { assert } from 'console';
-import { Transpiler, alignGoTrailingComments } from '../src/transpiler';
+import { Transpiler, alignGoTrailingComments, installCcxtGoHooks } from '../src/transpiler';
 
 import { SyntaxKind } from 'typescript/unstable/ast';
 import { readFileSync } from 'fs';
@@ -6802,6 +6802,35 @@ describe('hx11 FM-GO1-B GP19: a list read bounded by its own counting loop is th
         const output = transpile(fixture("for (let i = 0; i < list.length; i++)", "const v = list[i]; a += v;", "const list = [ a ];\n        "));
         expect(output).toContain('var v any = DerefScalar(list[i])');
         expect(output).not.toContain('func() any');
+    });
+
+    test('a list proven pointer-free through an endpoint response, arrayConcat of lists, Object.values and a pointer-free list element drops DerefScalar', () => {
+        const hooked = new Transpiler({ verbose: false, go: {} });
+        installCcxtGoHooks(hooked.goTranspiler);
+        const transpile = (ts: string) => squash(hooked.transpileGo(ts).content);
+        const cls = (body: string) =>
+            "class Test {\n    safeList (a, b, c?) { return undefined; }\n    arrayConcat (a, b) { return a; }\n    publicGetRows (p) { return undefined; }\n    async f (a: any) {\n" + body + "        return a;\n    }\n}\n";
+        const endpoint = transpile(cls(
+            "        const response = await this.publicGetRows (a);\n        let rows = [];\n        if (Array.isArray (response)) {\n            rows = response;\n        }\n" +
+            "        for (let i = 0; i < rows.length; i++) {\n            const v = rows[i];\n            a += v;\n        }\n"));
+        expect(endpoint).toContain('var v any = rows[i]');
+        expect(endpoint).not.toContain('DerefScalar(rows[i])');
+        const concat = transpile(cls(
+            "        let rows = [];\n        const data = this.safeList (a, 'd', []);\n        rows = this.arrayConcat (rows, data);\n" +
+            "        for (let i = 0; i < rows.length; i++) {\n            const v = rows[i];\n            a += v;\n        }\n"));
+        expect(concat).toContain('var v any = rows[i]');
+        const values = transpile(cls(
+            "        const rows = Object.values (a);\n        for (let i = 0; i < rows.length; i++) {\n            const v = rows[i];\n            a += v;\n        }\n"));
+        expect(values).toContain('var v any = rows[i]');
+        const element = transpile(cls(
+            "        const all = this.safeList (a, 'd', []);\n        const ids = [];\n        for (let i = 0; i < all.length; i++) {\n            ids.push (all[i]);\n        }\n" +
+            "        for (let j = 0; j < ids.length; j++) {\n            const v = ids[j];\n            a += v;\n        }\n"));
+        expect(element).toContain('var v any = ids[j]');
+        // negative: a list also fed a scalar from a Safe* accessor keeps DerefScalar
+        const mixed = transpile(cls(
+            "        const ids = [];\n        ids.push (this.safeList (a, 'd', []));\n        ids.push (this.safeString (a, 'x'));\n" +
+            "        for (let j = 0; j < ids.length; j++) {\n            const v = ids[j];\n            a += v;\n        }\n").replace('safeList (a, b, c?)', 'safeString (a, b) { return undefined; }\n    safeList (a, b, c?)'));
+        expect(mixed).not.toContain('var v any = ids[j]');
     });
 
     test('negative controls keep the guard closure', () => {
