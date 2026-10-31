@@ -5155,7 +5155,8 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
                 : rhs;
             const native = (keyStrs.length === 1)
                 ? (this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, nativeRhs, false, right)
-                    ?? this.printNativeMapWriteOnProvenLocal(baseExpr, containerStr, keys[0], lastKey, nativeRhs, right, identation))
+                    ?? this.printNativeMapWriteOnProvenLocal(baseExpr, containerStr, keys[0], lastKey, nativeRhs, right, identation)
+                    ?? this.printNativeCacheFieldStore(baseExpr, containerStr, keys[0], lastKey, nativeRhs, right, identation))
                 : undefined;
             return (native !== undefined) ? native : `AddElementToObject(${acc}, ${lastKey}, ${rhs})`;
         }
@@ -7840,6 +7841,97 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         if ((keyNode?.kind !== SyntaxKind.Identifier) || (this.goDeclaredTypeOfIdentifier(keyNode) !== '*string')
             || !(getArgMap || this.goIsFreshUnsharedMapLocal(containerNode, containerNode)) || !this.goMapWriteValueIsNotPointer(valueNode)) {
             return undefined;
+        }
+        const iden = this.getIden(identation);
+        return `if ${keyStr} != nil {\n${iden}\t${containerStr}[*${keyStr}] = ${valueStr}\n${iden}}`;
+    }
+
+    // BaseExchange.Trades (go/v4/exchange.go) is a map the base only ever resets to a fresh literal, so a
+    // store into it is the helper's map branch: `m[key] = derefScalar(value)` with a nil key skipped.
+    // A ws list cache is outside derefScalar's switch, so the value needs no deref.
+    GO_CACHE_STORE_MAP_FIELDS = [ 'Trades' ];
+
+    goIsCacheStoreField(node): boolean {
+        if ((node?.kind !== SyntaxKind.PropertyAccessExpression) || (node.expression?.kind !== SyntaxKind.ThisKeyword)) {
+            return false;
+        }
+        const name = node.name?.text;
+        return (typeof name === 'string') && (this.GO_CACHE_STORE_MAP_FIELDS.indexOf(this.transformPropertyAccessExpressionName(name, node.name)) >= 0);
+    }
+
+    // a list-cache constructor, a read back from the same field, or an absent value
+    goIsCacheStoreSource(expr, includeRead = true): boolean {
+        expr = this.goUnwrapParenthesizedNode(expr);
+        if ((expr === undefined) || (expr.kind === SyntaxKind.NullKeyword) || ((expr.kind === SyntaxKind.Identifier) && (expr.text === 'undefined'))) {
+            return true;
+        }
+        if (expr.kind === SyntaxKind.NewExpression) {
+            return (expr.expression?.kind === SyntaxKind.Identifier) && (GO_G02_CACHE_CLASSES.indexOf(expr.expression.text) >= 0);
+        }
+        if (!includeRead) {
+            return false;
+        }
+        if ((expr.kind === SyntaxKind.ElementAccessExpression) && this.goIsCacheStoreField(expr.expression)) {
+            return true;
+        }
+        const callee: any = (expr.kind === SyntaxKind.CallExpression) ? expr.expression : undefined;
+        return (callee?.kind === SyntaxKind.PropertyAccessExpression) && (callee.expression?.kind === SyntaxKind.ThisKeyword)
+            && (callee.name?.text === 'safeValue') && (expr.arguments.length === 2) && this.goIsCacheStoreField(expr.arguments[0]);
+    }
+
+    // a constructor call, or a local whose initializer and every later write is one of those sources
+    goCacheStoreValueProven(valueNode): boolean {
+        const value = this.goUnwrapParenthesizedNode(valueNode);
+        if (value?.kind === SyntaxKind.NewExpression) {
+            return this.goIsCacheStoreSource(value);
+        }
+        const decl: any = (value?.kind === SyntaxKind.Identifier)
+            ? this.checkerOrUndefined()?.getSymbolAtLocation(value)?.valueDeclaration?.resolve() : undefined;
+        if ((decl?.kind !== SyntaxKind.VariableDeclaration) || (decl.name?.kind !== SyntaxKind.Identifier) || !this.goIsCacheStoreSource(decl.initializer)) {
+            return false;
+        }
+        const scope = this.goEnclosingFunction(decl);
+        if (scope === undefined) {
+            return false;
+        }
+        let proven = true;
+        const visit = (n) => {
+            if (!proven) {
+                return;
+            }
+            if ((n.kind === SyntaxKind.Identifier) && (n.text === decl.name.text) && (n !== decl.name) && (this.goRebindingTargetOf(n) !== undefined)) {
+                const parent = this.goRebindingTargetOf(n);
+                proven = (parent.kind === SyntaxKind.BinaryExpression) && (parent.operatorToken.kind === SyntaxKind.EqualsToken)
+                    && (parent.left === n) && this.goIsCacheStoreSource(parent.right);
+                return;
+            }
+            n.forEachChild(visit);
+        };
+        visit(scope);
+        return proven;
+    }
+
+    // `this.Trades[k] = cache`: native for a string key, and for a *string key either bare (a guard or an
+    // earlier exit proves it non-nil) or under `if k != nil {`, the helper's skip of a nil key
+    printNativeCacheFieldStore(containerNode, containerStr: string, keyNode, keyStr: string, valueStr: string, valueNode?, identation = 0): string | undefined {
+        if (!this.goIsCacheStoreField(containerNode) || valueStr.includes('\n') || (keyNode?.kind !== SyntaxKind.Identifier)
+            || !this.goCacheStoreValueProven(valueNode)) {
+            return undefined;
+        }
+        const keyType = this.goDeclaredTypeOfIdentifier(keyNode);
+        const declaration = this.goDeclarationOfIdentifier(keyNode);
+        if (((keyType !== 'string') && (keyType !== '*string')) || this.goLocalIsRebound(this.goEnclosingFunction(declaration ?? keyNode), keyNode)) {
+            return undefined;
+        }
+        if (keyType === 'string') {
+            return `${containerStr}[${keyStr}] = ${valueStr}`;
+        }
+        let statement: any = keyNode;
+        while ((statement !== undefined) && (statement.kind !== SyntaxKind.ExpressionStatement)) {
+            statement = statement.parent;
+        }
+        if ((statement !== undefined) && (this.goHasEnclosingNilGuard(keyNode) || this.goInOpPointerKeyProvenNonNil(statement, keyNode))) {
+            return `${containerStr}[*${keyStr}] = ${valueStr}`;
         }
         const iden = this.getIden(identation);
         return `if ${keyStr} != nil {\n${iden}\t${containerStr}[*${keyStr}] = ${valueStr}\n${iden}}`;
@@ -11954,7 +12046,8 @@ ${this.getIden(identation)}${returnStatement}`;
                 const propName = this.printNode(elementAccess.argumentExpression, 0);
                 const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trimStart();
                 const native = this.printNativeElementAssignment(elementAccess.expression, leftSide, elementAccess.argumentExpression, propName, value, false, right)
-                    ?? this.printNativeMapWriteOnProvenLocal(elementAccess.expression, leftSide, elementAccess.argumentExpression, propName, value, right);
+                    ?? this.printNativeMapWriteOnProvenLocal(elementAccess.expression, leftSide, elementAccess.argumentExpression, propName, value, right)
+                    ?? this.printNativeCacheFieldStore(elementAccess.expression, leftSide, elementAccess.argumentExpression, propName, value, right, identation);
                 if (native !== undefined) {
                     return native;
                 }

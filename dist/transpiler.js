@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -10241,6 +10241,10 @@ var GoTranspiler = class extends BaseTranspiler {
     // per-occurrence cost at one scope scan per declaration.
     this.goDeclaredTypeCache = /* @__PURE__ */ new Map();
     this.goDeclaredTypeInProgress = /* @__PURE__ */ new Set();
+    // BaseExchange.Trades (go/v4/exchange.go) is a map the base only ever resets to a fresh literal, so a
+    // store into it is the helper's map branch: `m[key] = derefScalar(value)` with a nil key skipped.
+    // A ws list cache is outside derefScalar's switch, so the value needs no deref.
+    this.GO_CACHE_STORE_MAP_FIELDS = ["Trades"];
     // ===== RF-go-6-B =====
     // Element write on a hand-written BaseExchange map field (`this.balance[k] = v`): the field's Go type
     // is `map[string]any` (table passed by the embedder through parser.nativeStoreFields, keyed by the TS
@@ -14080,7 +14084,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       }
       const rhs = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trimStart();
       const nativeRhs = right.kind === SyntaxKind5.BinaryExpression ? this.goWithExprDepth(this.goExprDepth, () => this.printNode(right, identation)).trimStart() : rhs;
-      const native = keyStrs.length === 1 ? this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, nativeRhs, false, right) ?? this.printNativeMapWriteOnProvenLocal(baseExpr, containerStr, keys[0], lastKey, nativeRhs, right, identation) : void 0;
+      const native = keyStrs.length === 1 ? this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, nativeRhs, false, right) ?? this.printNativeMapWriteOnProvenLocal(baseExpr, containerStr, keys[0], lastKey, nativeRhs, right, identation) ?? this.printNativeCacheFieldStore(baseExpr, containerStr, keys[0], lastKey, nativeRhs, right, identation) : void 0;
       return native !== void 0 ? native : `AddElementToObject(${acc}, ${lastKey}, ${rhs})`;
     }
     if (left.kind === SyntaxKind5.TypeOfExpression) {
@@ -16417,6 +16421,86 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
     if (keyNode?.kind !== SyntaxKind5.Identifier || this.goDeclaredTypeOfIdentifier(keyNode) !== "*string" || !(getArgMap || this.goIsFreshUnsharedMapLocal(containerNode, containerNode)) || !this.goMapWriteValueIsNotPointer(valueNode)) {
       return void 0;
+    }
+    const iden = this.getIden(identation);
+    return `if ${keyStr} != nil {
+${iden}	${containerStr}[*${keyStr}] = ${valueStr}
+${iden}}`;
+  }
+  goIsCacheStoreField(node) {
+    if (node?.kind !== SyntaxKind5.PropertyAccessExpression || node.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return false;
+    }
+    const name = node.name?.text;
+    return typeof name === "string" && this.GO_CACHE_STORE_MAP_FIELDS.indexOf(this.transformPropertyAccessExpressionName(name, node.name)) >= 0;
+  }
+  // a list-cache constructor, a read back from the same field, or an absent value
+  goIsCacheStoreSource(expr, includeRead = true) {
+    expr = this.goUnwrapParenthesizedNode(expr);
+    if (expr === void 0 || expr.kind === SyntaxKind5.NullKeyword || expr.kind === SyntaxKind5.Identifier && expr.text === "undefined") {
+      return true;
+    }
+    if (expr.kind === SyntaxKind5.NewExpression) {
+      return expr.expression?.kind === SyntaxKind5.Identifier && GO_G02_CACHE_CLASSES.indexOf(expr.expression.text) >= 0;
+    }
+    if (!includeRead) {
+      return false;
+    }
+    if (expr.kind === SyntaxKind5.ElementAccessExpression && this.goIsCacheStoreField(expr.expression)) {
+      return true;
+    }
+    const callee = expr.kind === SyntaxKind5.CallExpression ? expr.expression : void 0;
+    return callee?.kind === SyntaxKind5.PropertyAccessExpression && callee.expression?.kind === SyntaxKind5.ThisKeyword && callee.name?.text === "safeValue" && expr.arguments.length === 2 && this.goIsCacheStoreField(expr.arguments[0]);
+  }
+  // a constructor call, or a local whose initializer and every later write is one of those sources
+  goCacheStoreValueProven(valueNode) {
+    const value = this.goUnwrapParenthesizedNode(valueNode);
+    if (value?.kind === SyntaxKind5.NewExpression) {
+      return this.goIsCacheStoreSource(value);
+    }
+    const decl = value?.kind === SyntaxKind5.Identifier ? this.checkerOrUndefined()?.getSymbolAtLocation(value)?.valueDeclaration?.resolve() : void 0;
+    if (decl?.kind !== SyntaxKind5.VariableDeclaration || decl.name?.kind !== SyntaxKind5.Identifier || !this.goIsCacheStoreSource(decl.initializer)) {
+      return false;
+    }
+    const scope = this.goEnclosingFunction(decl);
+    if (scope === void 0) {
+      return false;
+    }
+    let proven = true;
+    const visit = (n) => {
+      if (!proven) {
+        return;
+      }
+      if (n.kind === SyntaxKind5.Identifier && n.text === decl.name.text && n !== decl.name && this.goRebindingTargetOf(n) !== void 0) {
+        const parent = this.goRebindingTargetOf(n);
+        proven = parent.kind === SyntaxKind5.BinaryExpression && parent.operatorToken.kind === SyntaxKind5.EqualsToken && parent.left === n && this.goIsCacheStoreSource(parent.right);
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    visit(scope);
+    return proven;
+  }
+  // `this.Trades[k] = cache`: native for a string key, and for a *string key either bare (a guard or an
+  // earlier exit proves it non-nil) or under `if k != nil {`, the helper's skip of a nil key
+  printNativeCacheFieldStore(containerNode, containerStr, keyNode, keyStr, valueStr, valueNode, identation = 0) {
+    if (!this.goIsCacheStoreField(containerNode) || valueStr.includes("\n") || keyNode?.kind !== SyntaxKind5.Identifier || !this.goCacheStoreValueProven(valueNode)) {
+      return void 0;
+    }
+    const keyType = this.goDeclaredTypeOfIdentifier(keyNode);
+    const declaration = this.goDeclarationOfIdentifier(keyNode);
+    if (keyType !== "string" && keyType !== "*string" || this.goLocalIsRebound(this.goEnclosingFunction(declaration ?? keyNode), keyNode)) {
+      return void 0;
+    }
+    if (keyType === "string") {
+      return `${containerStr}[${keyStr}] = ${valueStr}`;
+    }
+    let statement = keyNode;
+    while (statement !== void 0 && statement.kind !== SyntaxKind5.ExpressionStatement) {
+      statement = statement.parent;
+    }
+    if (statement !== void 0 && (this.goHasEnclosingNilGuard(keyNode) || this.goInOpPointerKeyProvenNonNil(statement, keyNode))) {
+      return `${containerStr}[*${keyStr}] = ${valueStr}`;
     }
     const iden = this.getIden(identation);
     return `if ${keyStr} != nil {
@@ -19946,7 +20030,7 @@ ${this.getIden(identation)}return nil`;
         const leftSide = this.printNode(elementAccess.expression, 0);
         const propName = this.printNode(elementAccess.argumentExpression, 0);
         const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trimStart();
-        const native = this.printNativeElementAssignment(elementAccess.expression, leftSide, elementAccess.argumentExpression, propName, value, false, right) ?? this.printNativeMapWriteOnProvenLocal(elementAccess.expression, leftSide, elementAccess.argumentExpression, propName, value, right);
+        const native = this.printNativeElementAssignment(elementAccess.expression, leftSide, elementAccess.argumentExpression, propName, value, false, right) ?? this.printNativeMapWriteOnProvenLocal(elementAccess.expression, leftSide, elementAccess.argumentExpression, propName, value, right) ?? this.printNativeCacheFieldStore(elementAccess.expression, leftSide, elementAccess.argumentExpression, propName, value, right, identation);
         if (native !== void 0) {
           return native;
         }
