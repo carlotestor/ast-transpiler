@@ -662,6 +662,16 @@ describe('go pointer-typed Safe* body locals', () => {
         "        const c = this.safeString (o, 'c', 'z');\n" +
         "        return this.bar (c, 1);\n" +
         "    }\n" +
+        "    needs(a: string, b: number) { return a; }\n" +
+        "    maybe(a: string | undefined, b: number) { return a; }\n" +
+        "    asString(o) {\n" +
+        "        const raw = this.safeString (o, 'raw', '') as string;\n" +
+        "        const frac = this.safeString (o, 'frac', '');\n" +
+        "        const r = this.needs (raw, 1);\n" +
+        "        const q = this.safeString (o, 'q', 'z');\n" +
+        "        const m = this.maybe (q, 1);\n" +
+        "        return [ raw.length, frac.padEnd (6, '0'), r, m ];\n" +
+        "    }\n" +
         "    foreignWrite(o) {\n" +
         "        let e = this.safeString (o, 'e', 'z');\n" +
         "        e = this.safeString (o, 'f');\n" +
@@ -682,6 +692,10 @@ describe('go pointer-typed Safe* body locals', () => {
         expect(output).toContain("var b *string = this.SafeString(o, \"b\", \"z\")");
         expect(output).toContain("var c *string = this.SafeString(o, \"c\", \"z\")");
         expect(output).toContain("var e *string = this.SafeString(o, \"e\", \"z\")");
+        expect(output).toContain("var raw string = *this.SafeString(o, \"raw\", \"\")");
+        expect(output).toContain("var frac string = *this.SafeString(o, \"frac\", \"\")");
+        expect(output).toContain("this.Needs(raw, 1)");
+        expect(output).toContain("var q *string = this.SafeString(o, \"q\", \"z\")");
     });
     test('an annotated local later written a nil-able value stays a pointer', () => {
         const input =

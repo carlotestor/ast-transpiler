@@ -4128,7 +4128,12 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         if ((declaration.type !== undefined) && ![ 'Str', 'string' ].includes(declaration.type.getText().trim())) {
             return false;
         }
-        if (!this.goDefaultedStringSafeStringCall(declaration.initializer, undefined)) {
+        let initializer: any = declaration.initializer;
+        while ((initializer?.kind === SyntaxKind.ParenthesizedExpression)
+            || ((initializer?.kind === SyntaxKind.AsExpression) && (initializer.type?.kind === SyntaxKind.StringKeyword))) {
+            initializer = initializer.expression;
+        }
+        if (!this.goDefaultedStringSafeStringCall(initializer, undefined)) {
             return false;
         }
         return this.goDeclaredLocalTypeIfSafe(declaration, 'string', (n) => this.goDefaultedStringUseIsNative(n, name),
@@ -4148,7 +4153,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         return this.goIsStringLiteralNode(last) || ((selfName !== undefined) && (last?.kind === SyntaxKind.Identifier) && (last.text === selfName));
     }
 
-    goDefaultedStringMethods = new Set([ 'split', 'indexOf', 'toLowerCase', 'toUpperCase', 'replace', 'startsWith', 'endsWith', 'padStart', 'trim', 'toString' ]);
+    goDefaultedStringMethods = new Set([ 'split', 'indexOf', 'toLowerCase', 'toUpperCase', 'replace', 'startsWith', 'endsWith', 'padStart', 'padEnd', 'trim', 'toString' ]);
     goDefaultedStringContainers = new Set([ 'ohlcvs', 'trades', 'fundingRates', 'orderbooks', 'markets_by_id' ]);
 
     // one read or write of the local that a Go `string` serves natively
@@ -4190,11 +4195,24 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             if (current === parent.arguments?.[2]) {
                 return this.goDefaultedStringSafeStringCall(parent, name);
             }
-            // the runtime accessors take `any` and deref a pointer, so the string reads the same. A parameter the
-            // printer signs as Go `string` is not accepted: that proof prints this very call site, which asks for
-            // this local's type again, so the answer would depend on evaluation order
+            // the runtime accessors take `any` and deref a pointer, so the string reads the same
             const index = (parent.arguments ?? []).indexOf(current);
-            return (index >= 0) && GO_NIL_INIT_ANY_ARG_CALLEES.has(this.printNode(parent.expression, 0).trim());
+            if (index < 0) {
+                return false;
+            }
+            if (GO_NIL_INIT_ANY_ARG_CALLEES.has(this.printNode(parent.expression, 0).trim())) {
+                return true;
+            }
+            // a required TS `string` parameter of a `this.<method>` with a body prints `string` or `any` in Go, both of
+            // which take the string. goNativeParameterType is not asked: its call-site proof prints this very argument
+            // and so reads this local's type again, which would make the answer depend on evaluation order
+            const callee: any = parent.expression;
+            if ((callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)) {
+                return false;
+            }
+            const param: any = this.gp15CallParamAt(parent, index);
+            return (param !== undefined) && (param.initializer === undefined) && (param.questionToken === undefined)
+                && (this.goRequiredStringParameterType(param) === 'string');
         }
         }
         return false;

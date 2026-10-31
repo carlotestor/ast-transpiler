@@ -9688,7 +9688,7 @@ var GoTranspiler = class extends BaseTranspiler {
     this.goNilInitStringScanInProgress = /* @__PURE__ */ new Set();
     this.goFieldStringLocalTypeCache = /* @__PURE__ */ new WeakMap();
     this.goLocalSafeVerdicts = /* @__PURE__ */ new WeakMap();
-    this.goDefaultedStringMethods = /* @__PURE__ */ new Set(["split", "indexOf", "toLowerCase", "toUpperCase", "replace", "startsWith", "endsWith", "padStart", "trim", "toString"]);
+    this.goDefaultedStringMethods = /* @__PURE__ */ new Set(["split", "indexOf", "toLowerCase", "toUpperCase", "replace", "startsWith", "endsWith", "padStart", "padEnd", "trim", "toString"]);
     this.goDefaultedStringContainers = /* @__PURE__ */ new Set(["ohlcvs", "trades", "fundingRates", "orderbooks", "markets_by_id"]);
     // `typeof x === "<name>"` checks and the Go predicate helper each maps to
     this.goTypeOfHelpers = /* @__PURE__ */ new Map([
@@ -12730,7 +12730,11 @@ func New${this.capitalize(this.className)}() *${this.className} {
     if (declaration.type !== void 0 && !["Str", "string"].includes(declaration.type.getText().trim())) {
       return false;
     }
-    if (!this.goDefaultedStringSafeStringCall(declaration.initializer, void 0)) {
+    let initializer = declaration.initializer;
+    while (initializer?.kind === SyntaxKind5.ParenthesizedExpression || initializer?.kind === SyntaxKind5.AsExpression && initializer.type?.kind === SyntaxKind5.StringKeyword) {
+      initializer = initializer.expression;
+    }
+    if (!this.goDefaultedStringSafeStringCall(initializer, void 0)) {
       return false;
     }
     return this.goDeclaredLocalTypeIfSafe(
@@ -12784,7 +12788,18 @@ func New${this.capitalize(this.className)}() *${this.className} {
           return this.goDefaultedStringSafeStringCall(parent, name);
         }
         const index = (parent.arguments ?? []).indexOf(current);
-        return index >= 0 && GO_NIL_INIT_ANY_ARG_CALLEES.has(this.printNode(parent.expression, 0).trim());
+        if (index < 0) {
+          return false;
+        }
+        if (GO_NIL_INIT_ANY_ARG_CALLEES.has(this.printNode(parent.expression, 0).trim())) {
+          return true;
+        }
+        const callee = parent.expression;
+        if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+          return false;
+        }
+        const param = this.gp15CallParamAt(parent, index);
+        return param !== void 0 && param.initializer === void 0 && param.questionToken === void 0 && this.goRequiredStringParameterType(param) === "string";
       }
     }
     return false;
