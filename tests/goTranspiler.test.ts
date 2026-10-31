@@ -885,6 +885,42 @@ describe('go pointer-typed Safe* body locals', () => {
         expect(output).toContain("var info map[string]any = SafeMapTyped(item, \"info\")");
         expect(output).toContain("this.SafeString(info, \"name\")");
     });
+    test('a local bound to a base map-returning method is map[string]any when its uses are nil compares, returns and plain call arguments; a rebound one stays boxed', () => {
+        const name = 'tmp-base-map-result';
+        const src = nodepath.join(__dirname, 'files', name, 'ts', 'src');
+        nodefs.mkdirSync(nodepath.join(src, 'base'), { recursive: true });
+        nodefs.writeFileSync(nodepath.join(src, 'base', 'Exchange.ts'),
+            "export class Exchange {\n" +
+            "    parseMarket (a) { return a; }\n" +
+            "}\n");
+        nodefs.writeFileSync(nodepath.join(src, 'ex.ts'),
+            "import { Exchange } from './base/Exchange';\n" +
+            "export class ex extends Exchange {\n" +
+            "    main (item, result) {\n" +
+            "        const parsed = this.parseMarket (item);\n" +
+            "        if (parsed !== undefined) {\n" +
+            "            result.push (parsed);\n" +
+            "        }\n" +
+            "        return parsed;\n" +
+            "    }\n" +
+            "    keep (item) {\n" +
+            "        let market = this.parseMarket (item);\n" +
+            "        market = 'x';\n" +
+            "        return market;\n" +
+            "    }\n" +
+            "}\n");
+        const cwd = process.cwd();
+        let output;
+        try {
+            process.chdir(nodepath.join(__dirname, 'files', name));
+            output = squash(new Transpiler({ verbose: false, go: {} }).transpileGoByPath('ts/src/ex.ts').content);
+        } finally {
+            process.chdir(cwd);
+            nodefs.rmSync(nodepath.join(__dirname, 'files', name), { recursive: true, force: true });
+        }
+        expect(output).toContain("var parsed map[string]any = this.ParseMarket(item)");
+        expect(output).not.toContain("var market map[string]any");
+    });
     test('a SafeDict local with an empty-map default drops it: SafeMapTyped carries no default', () => {
         const input =
         "class Exchange {\n" +

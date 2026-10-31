@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-AWK6QGCM.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -8992,6 +8992,7 @@ var GO_MARKET_PRODUCER_METHODS = ["parseMarket", "getMarketFromSymbols", "getMar
 var GO_ANY_FRAMED_VENUES = /* @__PURE__ */ new Set(["bitfinex", "toobit", "coincheck", "phemex", "sxbet", "gemini"]);
 var GO_MARKET_MAP_CALLS = ["Market", "SafeMarket", "SafeMarketStructure", "Extend", "DeepExtend", "MapTyped", "MarketTyped"];
 var GO_MARKET_MAP_BASE_CALLS = ["getMarketFromSymbols"];
+var GO_BASE_MAP_RESULT_METHODS = ["ParseMarket", "Markets", "ParseWsTrade", "ParseWsOrder", "ParseBalance", "Account", "GetMarketFromSymbols", "Extend", "Currency", "Describe"];
 var GO_MARKET_READ_COMPARISON_OPERATORS = [
   SyntaxKind5.EqualsEqualsToken,
   SyntaxKind5.ExclamationEqualsToken,
@@ -11499,6 +11500,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
     if (GO_MARKET_MAP_BASE_CALLS.indexOf(name) >= 0 || GO_MARKET_MAP_BASE_CALLS.indexOf(printed) >= 0) {
       return true;
     }
+    if (this.goBaseMapResultCall(call)) {
+      return true;
+    }
     if (GO_MARKET_PRODUCER_METHODS.indexOf(name) < 0) {
       return false;
     }
@@ -11643,7 +11647,61 @@ func New${this.capitalize(this.className)}() *${this.className} {
     }
     return this.goGetArgPositionIsDefaulted(callee, argIndex);
   }
+  // `this.<M>(..)` / `this.derivedExchange.<M>(..)` where <M> is a BaseExchange method that
+  // answers `map[string]any` in Go (GO_BASE_MAP_RESULT_METHODS). Prediction venues keep the box:
+  // their base file declares its own signatures; a program outside ts/src has no such base.
+  goBaseMapResultCall(call) {
+    if (call?.kind !== SyntaxKind5.CallExpression) {
+      return false;
+    }
+    const callee = call.expression;
+    if (callee?.kind !== SyntaxKind5.PropertyAccessExpression) {
+      return false;
+    }
+    const name = callee.name?.text;
+    if (name === void 0) {
+      return false;
+    }
+    const printed = name.charAt(0).toUpperCase() + name.slice(1);
+    if (GO_BASE_MAP_RESULT_METHODS.indexOf(printed) < 0) {
+      return false;
+    }
+    const receiver = callee.expression;
+    const onThis = receiver?.kind === SyntaxKind5.ThisKeyword;
+    const onDerived = receiver?.kind === SyntaxKind5.PropertyAccessExpression && receiver.expression?.kind === SyntaxKind5.ThisKeyword && receiver.name?.text === "DerivedExchange";
+    if (!onThis && !onDerived) {
+      return false;
+    }
+    const fileName = String(call.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    return /(^|\/)ts\/src\//.test(fileName) && fileName.indexOf("ts/src/prediction/") < 0;
+  }
+  // a use of a local that holds a base map result and answers the same for the map as for the
+  // box that held it: the Go box is an interface around that very (possibly nil) map, so a
+  // nil test, a returned value or a plain call argument (`result.push (parsed)` included)
+  // observes nothing the named type changes. Indexing, selection, assertion, rebinding and
+  // address-taking are rejected by the callers' scan (they are not in this list).
+  goBaseMapUseKeepsMap(node) {
+    const parent = node.parent;
+    if (parent?.kind === SyntaxKind5.ReturnStatement) {
+      return parent.expression === node;
+    }
+    if (parent?.kind === SyntaxKind5.BinaryExpression) {
+      return this.goIsNilComparisonOperand(node, parent);
+    }
+    if (parent?.kind === SyntaxKind5.CallExpression) {
+      return parent.expression !== node && parent.arguments.indexOf(node) >= 0;
+    }
+    return false;
+  }
   goMarketLocalUnboxUncached(declaration) {
+    if (this.goBaseMapResultCall(declaration.initializer)) {
+      return this.goDeclaredLocalTypeIfSafe(
+        declaration,
+        GO_MARKET_LOCAL_TYPE,
+        (n) => this.goSafeDictUseReadsTheMap(n) || this.goBaseMapUseKeepsMap(n),
+        (n) => n.parent?.kind === SyntaxKind5.PropertyAccessExpression && n.parent.name === n || !this.goIdentifierRefersToDeclaration(n, declaration)
+      );
+    }
     if (!this.goMarketCallReturnsDict(declaration.initializer)) {
       return void 0;
     }
