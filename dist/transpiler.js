@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -9708,6 +9708,21 @@ var GO_NON_NIL_DEFAULT_KINDS = [
   SyntaxKind5.TrueKeyword,
   SyntaxKind5.FalseKeyword
 ];
+var GO_STRING_METHOD_NAMES = [
+  "split",
+  "replace",
+  "replaceAll",
+  "startsWith",
+  "endsWith",
+  "toUpperCase",
+  "toLowerCase",
+  "indexOf",
+  "length",
+  "trim",
+  "padStart",
+  "padEnd",
+  "toString"
+];
 var GO_WRITE_OPERATOR_KINDS = [
   SyntaxKind5.EqualsToken,
   SyntaxKind5.PlusEqualsToken,
@@ -10206,6 +10221,7 @@ var GoTranspiler = class extends BaseTranspiler {
     this.goNilInitStringScanInProgress = /* @__PURE__ */ new Set();
     this.goFieldStringLocalTypeCache = /* @__PURE__ */ new WeakMap();
     this.goLocalSafeVerdicts = /* @__PURE__ */ new WeakMap();
+    this.goLiteralDefaultStringLocalCache = /* @__PURE__ */ new WeakMap();
     // `typeof x === "<name>"` checks and the Go predicate helper each maps to
     this.goTypeOfHelpers = /* @__PURE__ */ new Map([
       ["string", "IsString"],
@@ -11945,6 +11961,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
       return void 0;
     }
     const goType = this.goDeclaredTypeOfIdentifier(left);
+    if (goType === "string" && this.goLiteralDefaultStringWrite(left, right)) {
+      return `${this.printNode(left, 0)} = *${this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trim()}`;
+    }
     if (goType === void 0 || this.goPointerWriteConversion(right, goType) !== "wrap") {
       return void 0;
     }
@@ -13530,7 +13549,7 @@ ${this.getIden(identation)}${this.printNode(node.left, 0)} = &${local}`;
       return "any";
     }
     const scope = this.goEnclosingFunction(declaration);
-    if (this.goAnnotatedStringLocal(declaration, goType, scope, sourceName)) {
+    if (this.goAnnotatedStringLocal(declaration, goType, scope, sourceName) || this.goLiteralDefaultStringLocal(declaration, goType, scope, sourceName)) {
       return "string";
     }
     const stable = this.goLocalTypeResolution.size <= 1 && this.goDeclaredTypeInProgress.size === 0;
@@ -13560,6 +13579,118 @@ ${this.getIden(identation)}${this.printNode(node.left, 0)} = &${local}`;
       return false;
     }
     return !this.goTypeNameIsShadowed(scope, "string") && this.goLocalIsSafeToType(scope, declaration, name, "string") && !this.goAnnotatedStringLocalHasNilShapedRead(scope, declaration, name);
+  }
+  // `const x = this.safeString (o, k, 'lit')`: the call returns a fresh non-nil pointer, so a local
+  // that is never rebound and is only read as a string consumer, a literal comparison or a concat
+  // operand, and written only with a literal or such a call, is a plain Go `string`.
+  goLiteralDefaultStringLocal(declaration, goType, scope, name) {
+    if (goType !== "*string" || scope === void 0 || declaration.type !== void 0 || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement) {
+      return false;
+    }
+    if (this.goLiteralDefaultStringLocalCache.has(declaration)) {
+      return this.goLiteralDefaultStringLocalCache.get(declaration);
+    }
+    const verdict = !this.goTypeNameIsShadowed(scope, "string") && this.goLiteralDefaultStringCall(declaration.initializer, void 0) && this.goLiteralDefaultStringLocalUsesAreSafe(scope, declaration, name);
+    this.goLiteralDefaultStringLocalCache.set(declaration, verdict);
+    return verdict;
+  }
+  // `this.safeString (o, k, 'lit')` (or the Lower/Upper twin): exactly three arguments, the last a
+  // string literal (or, for a rewrite of `name`, the local itself)
+  goLiteralDefaultStringCall(node, name) {
+    const call = node;
+    if (call?.kind !== SyntaxKind5.CallExpression || call.arguments?.length !== 3 || call.expression?.kind !== SyntaxKind5.PropertyAccessExpression || call.expression.expression?.kind !== SyntaxKind5.ThisKeyword || ["safeString", "safeStringLower", "safeStringUpper"].indexOf(call.expression.name?.text) < 0) {
+      return false;
+    }
+    const last = call.arguments[2];
+    return last?.kind === SyntaxKind5.StringLiteral || last?.kind === SyntaxKind5.NoSubstitutionTemplateLiteral || name !== void 0 && last?.kind === SyntaxKind5.Identifier && last.text === name;
+  }
+  goLiteralDefaultStringLocalUsesAreSafe(scope, declaration, name) {
+    let safe = true;
+    const visit = (n) => {
+      if (!safe) {
+        return;
+      }
+      if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
+        n.forEachChild(visit);
+        return;
+      }
+      const parent = n.parent;
+      if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.name === n || parent?.kind === SyntaxKind5.PropertyAssignment && parent.name === n) {
+        return;
+      }
+      if ((parent?.kind === SyntaxKind5.VariableDeclaration || parent?.kind === SyntaxKind5.Parameter || parent?.kind === SyntaxKind5.BindingElement) && parent.name === n) {
+        safe = false;
+        return;
+      }
+      if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === n && GO_WRITE_OPERATOR_KINDS.indexOf(parent.operatorToken?.kind) >= 0) {
+        const right = parent.right;
+        safe = parent.operatorToken.kind === SyntaxKind5.EqualsToken && (right?.kind === SyntaxKind5.StringLiteral || this.goLiteralDefaultStringCall(right, name));
+        return;
+      }
+      safe = this.goLiteralDefaultStringLocalReadIsSafe(n);
+    };
+    scope.forEachChild(visit);
+    return safe;
+  }
+  // a read the printer answers with the same Go value whether the local is `*string` or `string`
+  goLiteralDefaultStringLocalReadIsSafe(node) {
+    let current = node;
+    let parent = current.parent;
+    while (parent?.kind === SyntaxKind5.ParenthesizedExpression || parent?.kind === SyntaxKind5.AsExpression || parent?.kind === SyntaxKind5.NonNullExpression) {
+      current = parent;
+      parent = parent.parent;
+    }
+    if (parent?.kind === SyntaxKind5.CallExpression && parent.arguments?.[2] === current && this.goLiteralDefaultStringCall(parent, node.text)) {
+      const write = parent.parent;
+      return write?.kind === SyntaxKind5.BinaryExpression && write.right === parent && write.operatorToken?.kind === SyntaxKind5.EqualsToken && write.left?.text === node.text;
+    }
+    switch (parent?.kind) {
+      case SyntaxKind5.BinaryExpression: {
+        const operator = parent.operatorToken?.kind;
+        if (operator === SyntaxKind5.PlusToken) {
+          return true;
+        }
+        if (operator === SyntaxKind5.InKeyword) {
+          return parent.left === current;
+        }
+        if (operator === SyntaxKind5.EqualsEqualsToken || operator === SyntaxKind5.ExclamationEqualsToken || operator === SyntaxKind5.EqualsEqualsEqualsToken || operator === SyntaxKind5.ExclamationEqualsEqualsToken) {
+          const other = parent.left === current ? parent.right : parent.left;
+          return other?.kind === SyntaxKind5.StringLiteral || other?.kind === SyntaxKind5.NoSubstitutionTemplateLiteral;
+        }
+        return false;
+      }
+      case SyntaxKind5.PropertyAccessExpression:
+        return parent.expression === current && GO_STRING_METHOD_NAMES.indexOf(parent.name?.text) >= 0;
+      case SyntaxKind5.ElementAccessExpression:
+        return parent.argumentExpression === current;
+      case SyntaxKind5.CallExpression:
+        return this.goLiteralDefaultStringCallArgument(parent, current);
+    }
+    return false;
+  }
+  // an argument the callee takes as a Go `string` (its printed parameter), or a runtime accessor that
+  // derefs its `any` arguments: the string passes where the pointer did
+  goLiteralDefaultStringCallArgument(call, argument) {
+    const index = call.arguments?.indexOf(argument) ?? -1;
+    if (index < 0) {
+      return false;
+    }
+    const name = this.goAstCalleeName(call);
+    if (name !== void 0 && GO_NIL_INIT_ANY_ARG_CALLEES.has(name) && !(name.startsWith("this.Safe") && index === call.arguments.length - 1 && call.arguments.length > 2)) {
+      return true;
+    }
+    try {
+      const declaration = this.getChecker().getResolvedSignature(call)?.declaration?.resolve();
+      const parameter = declaration?.parameters?.[index];
+      return parameter?.kind === SyntaxKind5.Parameter && parameter.type?.kind === SyntaxKind5.StringKeyword && parameter.initializer === void 0 && parameter.questionToken === void 0 && parameter.dotDotDotToken === void 0;
+    } catch (e) {
+      return false;
+    }
+  }
+  // `x = this.safeString (o, k, x)` on a local the rule above typed `string`: the call's deref
+  goLiteralDefaultStringWrite(left, right) {
+    const decl = this.checkerOrUndefined()?.getSymbolAtLocation(left)?.valueDeclaration?.resolve();
+    return decl?.kind === SyntaxKind5.VariableDeclaration && this.goLiteralDefaultStringLocalCache.get(decl) === true && this.goLiteralDefaultStringCall(right, left.text);
   }
   // a read a Go string cannot serve natively: a nil comparison (boxes into IsEqual) or a copy
   // into another variable (a pointer-typed target would lose its type)
