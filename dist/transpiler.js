@@ -19866,6 +19866,7 @@ var JavaTranspiler = class extends BaseTranspiler {
     this.javaHandlerCalls = /* @__PURE__ */ new Map();
     this.javaHandlerReads = /* @__PURE__ */ new Set();
     this.javaHandlerScannedFile = void 0;
+    this.javaCheckedBoxLocalTypeCache = /* @__PURE__ */ new WeakMap();
     this.javaHandBackVisiting = /* @__PURE__ */ new Set();
     // javaOptionalParameterType walks the heritage chain, and every element access consults it
     this.javaOptionalParameterTypeCache = /* @__PURE__ */ new WeakMap();
@@ -21468,6 +21469,182 @@ ${this.getIden(identation)}}}`;
     }
     return JAVA_ELEMENT_WRITE_MAP_TYPE;
   }
+  // RF-java-2: `const x = Object.values(..)` with no other write prints the helper's exact return type
+  javaObjectValuesLocalType(declaration) {
+    if (!isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || !declaration.initializer) {
+      return void 0;
+    }
+    const init = this.unwrapPrintTransparentExpression(declaration.initializer);
+    if (init === void 0 || !isCallExpression5(init) || !isPropertyAccessExpression2(init.expression) || !isIdentifier2(init.expression.expression) || init.expression.expression.text !== "Object" || init.expression.name.text !== "values" || init.arguments.length !== 1) {
+      return void 0;
+    }
+    if (this.javaLocalHasWriteAtAll(declaration.name)) {
+      return void 0;
+    }
+    return "List<Object>";
+  }
+  // a json object box: the generic `Dictionary<T>` of ts/src/base/types.ts (so `Dict` and
+  // `Dictionary<Dictionary<..>>`): an object type with a string index signature and no numeric one.
+  // Arrays, tuples, DTOs, primitives, unions and the named typed views that extend it (Balances,
+  // Tickers, ..., which own a typed print) all decline.
+  javaJsonBoxType(type) {
+    if (type === void 0 || type === null || !(type.flags & TypeFlags5.Object)) {
+      return false;
+    }
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return false;
+    }
+    try {
+      if (checker.isArrayType(type) || checker.isTupleType(type)) {
+        return false;
+      }
+      const symbol = type.getSymbol?.();
+      const declaration = symbol?.declarations?.[0]?.resolve();
+      if (symbol?.escapedName !== "Dictionary" || !/(^|[\\/])ts[\\/]src[\\/]base[\\/]types\.ts$/.test(declaration?.getSourceFile?.()?.fileName ?? "")) {
+        return false;
+      }
+      return checker.getIndexTypeOfType(type, IndexKind3.String) !== void 0 && checker.getIndexTypeOfType(type, IndexKind3.Number) === void 0;
+    } catch (e) {
+      return false;
+    }
+  }
+  // How the identifier at `node` is used. 'element' = the printed Java is a native get/put on the
+  // local; 'neutral' = a property NAME, not a read of the local; 'value' = a position that takes the
+  // box as an Object (return, copy, the value of an element write); 'other' = any use that would see
+  // the local's new static type (argument, receiver, comparison, delete, spread, call of an element)
+  javaBoxUseVerdict(node) {
+    const parent = node.parent;
+    if (parent === void 0 || parent === null) {
+      return "other";
+    }
+    if (isPropertyAccessExpression2(parent) && parent.name === node) {
+      return "neutral";
+    }
+    if (parent.kind === SyntaxKind6.ReturnStatement && parent.expression === node || parent.kind === SyntaxKind6.VariableDeclaration && parent.initializer === node || parent.kind === SyntaxKind6.BinaryExpression && parent.right === node && parent.operatorToken?.kind === SyntaxKind6.EqualsToken) {
+      return "value";
+    }
+    if (isElementAccessExpression3(parent) && parent.expression === node) {
+      const grand = parent.parent;
+      if (grand?.kind === SyntaxKind6.DeleteExpression || isSpreadElement2(grand) || isSpreadAssignment2(grand) || isCallExpression5(grand) && grand.expression === parent) {
+        return "other";
+      }
+      const key = parent.argumentExpression;
+      return key !== void 0 && (isStringLiteralLikeNode3(key) || isIdentifier2(key)) ? "element" : "other";
+    }
+    return "other";
+  }
+  // every use of the local in its function is an element access (at least one), so declaring it a
+  // Map cannot rebind any call in the file through the new static type
+  javaBoxLocalUsedOnlyAsElements(nameNode) {
+    const checker = this.checkerOrUndefined();
+    const symbol = checker?.getSymbolAtLocation(nameNode);
+    if (symbol === void 0) {
+      return false;
+    }
+    let scope = nameNode.parent;
+    while (scope && !isFunctionLike(scope)) {
+      scope = scope.parent;
+    }
+    if (!scope) {
+      return false;
+    }
+    let uses = 0;
+    let ok = true;
+    const walk = (current) => {
+      if (!ok || current === void 0) {
+        return;
+      }
+      if (current !== nameNode && isIdentifier2(current) && current.text === nameNode.text && checker.getSymbolAtLocation(current) === symbol) {
+        const verdict = this.javaBoxUseVerdict(current);
+        if (verdict === "element") {
+          uses++;
+        } else if (verdict === "other") {
+          ok = false;
+          return;
+        }
+      }
+      current.forEachChild(walk);
+    };
+    scope.forEachChild(walk);
+    return ok && uses > 0;
+  }
+  // `const x = await this.m(..)` / `[a, b] = this.m(..)` slot: the awaited / tuple-element TS type is
+  // a json object box and the local is only element-accessed. The erased `.join()` / list `get` needs
+  // the checkcast the declaration carries.
+  javaCheckedBoxLocalType(declaration) {
+    if (declaration === void 0) {
+      return void 0;
+    }
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return void 0;
+    }
+    if (isVariableDeclaration2(declaration) && isIdentifier2(declaration.name) && declaration.initializer?.kind === SyntaxKind6.AwaitExpression) {
+      const call = this.unwrapParenthesesOnly(declaration.initializer.expression);
+      if (!isCallExpression5(call) || !isPropertyAccessExpression2(call.expression) || call.expression.expression.kind !== SyntaxKind6.ThisKeyword && call.expression.expression.kind !== SyntaxKind6.SuperKeyword) {
+        return void 0;
+      }
+      let type;
+      try {
+        type = checker.getTypeAtLocation(declaration.initializer);
+      } catch (e) {
+        return void 0;
+      }
+      return this.javaJsonBoxType(type) && this.javaBoxLocalUsedOnlyAsElements(declaration.name) ? JAVA_ELEMENT_WRITE_MAP_TYPE : void 0;
+    }
+    if (declaration.kind === SyntaxKind6.BindingElement && isIdentifier2(declaration.name) && declaration.dotDotDotToken === void 0 && declaration.initializer === void 0) {
+      const pattern = declaration.parent;
+      const owner = pattern?.parent;
+      if (pattern?.kind !== SyntaxKind6.ArrayBindingPattern || owner === void 0 || !isVariableDeclaration2(owner) || owner.name !== pattern || owner.initializer === void 0) {
+        return void 0;
+      }
+      const call = this.unwrapParenthesesOnly(owner.initializer);
+      if (!isCallExpression5(call)) {
+        return void 0;
+      }
+      let element;
+      try {
+        const type = checker.getTypeAtLocation(call);
+        if (!checker.isTupleType(type)) {
+          return void 0;
+        }
+        const arguments_ = checker.getTypeArguments(type);
+        if (arguments_ === void 0 || arguments_.length !== pattern.elements.length) {
+          return void 0;
+        }
+        element = arguments_[pattern.elements.indexOf(declaration)];
+      } catch (e) {
+        return void 0;
+      }
+      return this.javaJsonBoxType(element) && this.javaBoxLocalUsedOnlyAsElements(declaration.name) ? JAVA_ELEMENT_WRITE_MAP_TYPE : void 0;
+    }
+    return void 0;
+  }
+  javaCheckedBoxLocalTypeCached(declaration) {
+    if (declaration === void 0) {
+      return void 0;
+    }
+    const cached = this.javaCheckedBoxLocalTypeCache.get(declaration);
+    if (cached !== void 0) {
+      return cached === JAVA_MEMO_UNDEFINED ? void 0 : cached;
+    }
+    let type;
+    try {
+      type = this.javaCheckedBoxLocalType(declaration);
+    } catch (e) {
+      type = void 0;
+    }
+    this.javaCheckedBoxLocalTypeCache.set(declaration, type ?? JAVA_MEMO_UNDEFINED);
+    return type;
+  }
+  unwrapParenthesesOnly(node) {
+    let current = node;
+    while (current !== void 0 && isParenthesizedExpression2(current)) {
+      current = current.expression;
+    }
+    return current;
+  }
   // every other mention of the local must be a read a `Map<String, Object>` declaration leaves
   // unchanged: an element-access receiver, a call argument, a return value, an assignment's
   // right-hand side, a comparison or a container element. A cast, a method call, a spread or a
@@ -22200,6 +22377,10 @@ ${this.getIden(identation)}}}`;
     const baseField = this.javaBaseMapFieldLocalType(declaration);
     if (baseField !== void 0) {
       return baseField;
+    }
+    const checkedBox = this.javaCheckedBoxLocalTypeCached(declaration);
+    if (checkedBox !== void 0) {
+      return checkedBox;
     }
     if (isParameterDeclaration2(declaration)) {
       const fixed = this.javaNativeParameterType(declaration);
@@ -25237,9 +25418,13 @@ ${this.getIden(identation)}}}`;
         0
       )};
 `;
-      return arrayBindingStatement + parsedArrayBindingElements.map(
-        (e, index) => this.getIden(identation) + `var ${e} = ((java.util.List<Object>) ${syntheticName}).get(${index})`
-      ).join(";\n");
+      return arrayBindingStatement + parsedArrayBindingElements.map((e, index) => {
+        const boxType = this.javaCheckedBoxLocalTypeCached(arrayBindingPatternElements[index]);
+        if (boxType !== void 0) {
+          return this.getIden(identation) + `${boxType} ${e} = (${boxType}) ((java.util.List<Object>) ${syntheticName}).get(${index})`;
+        }
+        return this.getIden(identation) + `var ${e} = ((java.util.List<Object>) ${syntheticName}).get(${index})`;
+      }).join(";\n");
     }
     const isNew = declaration?.initializer && declaration.initializer.kind === SyntaxKind6.NewExpression;
     let varToken = isNew ? "var " : this.VAR_TOKEN + " ";
@@ -25256,6 +25441,10 @@ ${this.getIden(identation)}}}`;
         if (baseFieldType !== void 0) {
           varToken = baseFieldType + " ";
         }
+      }
+      const valuesType = this.javaObjectValuesLocalType(declaration);
+      if (valuesType !== void 0) {
+        varToken = valuesType + " ";
       }
       const handlerType = this.javaHandlerDeclarationType(declaration);
       if (handlerType !== void 0) {
@@ -25277,6 +25466,10 @@ ${this.getIden(identation)}}}`;
         }
       }
       return this.getIden(identation) + specificVarToken + " " + this.printNode(declaration.name) + " = " + parsedValue;
+    }
+    const awaitedBox = !isNew && declaration.initializer.kind === SyntaxKind6.AwaitExpression ? this.javaCheckedBoxLocalTypeCached(declaration) : void 0;
+    if (awaitedBox !== void 0) {
+      return this.getIden(identation) + awaitedBox + " " + this.printNode(declaration.name) + " = (" + awaitedBox + ") " + parsedValue;
     }
     return this.getIden(identation) + varToken + this.printNode(declaration.name) + " = " + parsedValue;
   }
@@ -25787,8 +25980,22 @@ ${this.getIden(identation)}}}`;
     }
     return `new java.util.ArrayList<Object>(((java.util.Map<String, Object>)${this.printNode(argument, 0)}).keySet())`;
   }
-  printObjectValuesCall(_node, _identation, parsedArg = void 0) {
-    return `Helpers.objectValues(${parsedArg})`;
+  printObjectValuesCall(node, _identation, parsedArg = void 0) {
+    return this.printNativeObjectValuesCall(node) ?? `Helpers.objectValues(${parsedArg})`;
+  }
+  // `Object.values(m)` where m is a local the printer declares `Map<String, Object>` and nothing
+  // else writes: the helper's only surviving branch is the `Map.values()` copy (a declared map is
+  // never the null / non-map fallback), so the copy binds on the declaration's own type
+  printNativeObjectValuesCall(node) {
+    const argument = node?.arguments?.[0];
+    if (argument === void 0 || node.arguments.length !== 1 || !isIdentifier2(argument)) {
+      return void 0;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(argument);
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || !declaration.initializer || !this.javaDeclaredMapReceiver(argument) || this.javaLocalHasWriteAtAll(declaration.name)) {
+      return void 0;
+    }
+    return `new java.util.ArrayList<Object>(${this.printNode(argument, 0)}.values())`;
   }
   printJsonParseCall(_node, _identation, parsedArg = void 0) {
     return `Helpers.parseJson(${parsedArg})`;
@@ -27124,17 +27331,7 @@ var JAVA_J02_MAP_FIELDS = {
   "urls": true,
   "markets_by_id": true
 };
-var HX4_J09_SYNC_BASE_CALLS = /* @__PURE__ */ new Set([
-  "safeString",
-  "safeString2",
-  "safeStringN",
-  "safeValue",
-  "safeDict",
-  "safeInteger",
-  "json",
-  "throwExactlyMatchedException",
-  "throwBroadlyMatchedException"
-]);
+var JAVA_SYNC_CALL_FILE = /(^|[\\/])ts[\\/]src[\\/]base[\\/](functions[\\/][^\\/]+|Exchange(\.nooverloads\.\d+)?)\.ts$|(^|[\\/])lib\.[^\\/]*\.d\.ts$/;
 JavaTranspiler.prototype.hx4J09CcxtErrorClass = function(node) {
   const checker = this.checkerOrUndefined();
   let symbol;
@@ -27288,13 +27485,9 @@ JavaTranspiler.prototype.hx4J09CatchCannotWrap = function(node) {
       return;
     }
     if (current.kind === SyntaxKind6.CallExpression) {
-      const callee = current.expression;
-      if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword || !HX4_J09_SYNC_BASE_CALLS.has(String(callee.name.text))) {
-        ok = false;
-        return;
-      }
-      const declaration = checker.getResolvedSignature(current)?.declaration?.resolve();
-      if (declaration === void 0 || !JAVA_THIS_RETURN_TYPES_BASE_FILE.test(declaration.getSourceFile?.()?.fileName ?? "")) {
+      const signature = checker.getResolvedSignature(current);
+      const declaration = signature?.declaration?.resolve();
+      if (declaration === void 0 || !isPropertyAccessExpression2(current.expression) || !JAVA_SYNC_CALL_FILE.test(declaration.getSourceFile?.()?.fileName ?? "") || this.hasAsyncModifier(declaration) || this.isPromiseType(checker.getReturnTypeOfSignature(signature))) {
         ok = false;
         return;
       }
