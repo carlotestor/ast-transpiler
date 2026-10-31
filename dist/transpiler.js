@@ -18739,6 +18739,10 @@ ${this.getIden(level)}}()`;
     if (readBase?.kind === SyntaxKind5.Identifier && this.goIsUnifiedAnySliceParameterNode(this.checkerOrUndefined()?.getSymbolAtLocation(readBase)?.valueDeclaration?.resolve?.())) {
       return void 0;
     }
+    const bounded = this.goGb08BoundedListRead(node, keyNode);
+    if (bounded !== void 0) {
+      return bounded === "native" ? `${containerStr}[${keyStr}]` : `DerefScalar(${containerStr}[${keyStr}])`;
+    }
     const level = this.goStatementLevel;
     const body = this.getIden(level + 1);
     return `func() any {
@@ -18747,6 +18751,126 @@ ${this.getIden(level + 2)}return DerefScalar(${containerStr}[${keyStr}])
 ${body}}
 ${body}return nil
 ${this.getIden(level)}}()`;
+  }
+  // ===== RFM-G4 GB08 (folded from build/hx10w8-GB08.ts): the prediction tier's dead bounds guard =====
+  // `list[i]` inside `for (let i = 0; i < list.length; i++)` (or `i < n` with `const n = list.length`)
+  // can never leave the slice, so the guard closure's nil branch is unreachable. Proof, all on the AST:
+  // the counter starts at a non-negative literal and only the incrementor `i++` writes it, the list
+  // local is never rebound in its function and no method call on it can resize it while the bound
+  // is live. 'native' = `list[i]` (the list is a SafeList unbox or `[]` whose every write is a
+  // dictionary, so DerefScalar cannot warp an element); 'deref' = `DerefScalar(list[i])`.
+  goGb08PredictionFile() {
+    const fileName = String(this.getSrc()?.fileName ?? "").replace(/\\/g, "/");
+    return /(^|\/)ts\/src\/(prediction\/[^/]+|base\/PredictionExchange(\.nooverloads[^/]*)?)\.ts$/.test(fileName);
+  }
+  // an element written into the list that is an object (not a scalar, not an array): the Go value is
+  // a map or struct, never one of derefScalar's `*string *int64 *float64 *bool *[]…` pointers
+  goGb08IsDictExpression(expr) {
+    if (expr?.kind === SyntaxKind5.ObjectLiteralExpression) {
+      return true;
+    }
+    if (expr?.kind === SyntaxKind5.ElementAccessExpression && expr.expression?.kind === SyntaxKind5.Identifier && this.goSafeListUnboxIdentifier(expr.expression)) {
+      return true;
+    }
+    const checker = this.checkerOrUndefined();
+    const type = checker !== void 0 && expr !== void 0 ? checker.getTypeAtLocation(expr) : void 0;
+    if (type === void 0) {
+      return false;
+    }
+    const parts = typeof type.isUnionType === "function" && type.isUnionType() ? type.getTypes().slice() : [type];
+    const real = parts.filter((p) => !(p.flags & (TypeFlags4.Undefined | TypeFlags4.Null)));
+    return real.length === 1 && (real[0].flags & TypeFlags4.Object) !== 0 && !checker.isArrayType(real[0]) && !checker.isTupleType?.(real[0]);
+  }
+  goGb08BoundedListRead(node, keyNode) {
+    const checker = this.checkerOrUndefined();
+    const base = node?.expression;
+    if (checker === void 0 || keyNode?.kind !== SyntaxKind5.Identifier || base?.kind !== SyntaxKind5.Identifier || !this.goGb08PredictionFile()) {
+      return void 0;
+    }
+    const symbolOf = (n) => checker.getSymbolAtLocation(n);
+    const counterSymbol = symbolOf(keyNode);
+    const counterDecl = counterSymbol?.valueDeclaration?.resolve?.();
+    const counterList = counterDecl?.parent;
+    const loop = counterList?.parent;
+    if (counterDecl?.kind !== SyntaxKind5.VariableDeclaration || counterList?.kind !== SyntaxKind5.VariableDeclarationList || loop?.kind !== SyntaxKind5.ForStatement || loop.initializer !== counterList || counterList.declarations?.length !== 1 || counterDecl.initializer?.kind !== SyntaxKind5.NumericLiteral || !/^\d+$/.test(`${counterDecl.initializer.text ?? ""}`) || loop.statement === void 0 || node.pos < loop.statement.pos || node.end > loop.statement.end) {
+      return void 0;
+    }
+    const listSymbol = symbolOf(base);
+    const listDecl = listSymbol?.valueDeclaration?.resolve?.();
+    const fn = this.goEnclosingFunction(node);
+    if (listDecl === void 0 || fn === void 0 || this.goEnclosingFunction(loop) !== fn || this.goEnclosingFunction(listDecl) !== fn || listDecl.kind !== SyntaxKind5.VariableDeclaration && listDecl.kind !== SyntaxKind5.Parameter || this.goLocalIsRebound(fn, listDecl.name)) {
+      return void 0;
+    }
+    const cond = loop.condition;
+    if (cond?.kind !== SyntaxKind5.BinaryExpression || cond.operatorToken?.kind !== SyntaxKind5.LessThanToken || cond.left?.kind !== SyntaxKind5.Identifier || symbolOf(cond.left) !== counterSymbol) {
+      return void 0;
+    }
+    let bound = cond.right;
+    let hoistedEnd = -1;
+    if (bound?.kind === SyntaxKind5.Identifier) {
+      const hoisted = symbolOf(bound)?.valueDeclaration?.resolve?.();
+      if (hoisted?.kind !== SyntaxKind5.VariableDeclaration || hoisted.initializer === void 0 || ((hoisted.parent?.flags ?? 0) & NodeFlags2.Const) === 0 || hoisted.end > loop.pos || this.goEnclosingFunction(hoisted) !== fn) {
+        return void 0;
+      }
+      hoistedEnd = hoisted.end;
+      bound = hoisted.initializer;
+    }
+    if (bound?.kind !== SyntaxKind5.PropertyAccessExpression || bound.name?.text !== "length" || bound.expression?.kind !== SyntaxKind5.Identifier || symbolOf(bound.expression) !== listSymbol) {
+      return void 0;
+    }
+    const step = loop.incrementor;
+    if (step?.kind !== SyntaxKind5.PostfixUnaryExpression && step?.kind !== SyntaxKind5.PrefixUnaryExpression || step.operator !== SyntaxKind5.PlusPlusToken || step.operand?.kind !== SyntaxKind5.Identifier || symbolOf(step.operand) !== counterSymbol) {
+      return void 0;
+    }
+    const isAssignment = (n) => {
+      const op = n?.operatorToken?.kind;
+      return n?.kind === SyntaxKind5.BinaryExpression && (op === SyntaxKind5.EqualsToken || op >= SyntaxKind5.FirstCompoundAssignment && op <= SyntaxKind5.LastCompoundAssignment);
+    };
+    let sound = true;
+    let dictOnly = true;
+    const visit = (n) => {
+      if (!sound) {
+        return;
+      }
+      if (n.kind === SyntaxKind5.Identifier) {
+        const inLoop = n.pos >= loop.pos && n.end <= loop.end;
+        if (n.text === keyNode.text && inLoop && symbolOf(n) === counterSymbol) {
+          const parent = n.parent;
+          const moved = this.goRebindingTargetOf(n) !== void 0 || (parent?.kind === SyntaxKind5.PostfixUnaryExpression || parent?.kind === SyntaxKind5.PrefixUnaryExpression) && parent !== step && (parent.operator === SyntaxKind5.PlusPlusToken || parent.operator === SyntaxKind5.MinusMinusToken);
+          if (moved) {
+            sound = false;
+            return;
+          }
+        }
+        if (n.text === base.text && n !== listDecl.name && symbolOf(n) === listSymbol) {
+          const parent = n.parent;
+          const live = inLoop || hoistedEnd >= 0 && n.pos > hoistedEnd;
+          if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === n) {
+            const lengthWrite = parent.name?.text === "length" && isAssignment(parent.parent) && parent.parent.left === parent;
+            const call = parent.parent?.kind === SyntaxKind5.CallExpression && parent.parent.expression === parent;
+            if (lengthWrite || call && live) {
+              sound = false;
+              return;
+            }
+            if (call && !(parent.name?.text === "push" && parent.parent.arguments.length === 1 && this.goGb08IsDictExpression(parent.parent.arguments[0]))) {
+              dictOnly = false;
+            }
+          } else if (parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === n && isAssignment(parent.parent) && parent.parent.left === parent) {
+            if (!(parent.parent.operatorToken.kind === SyntaxKind5.EqualsToken && this.goGb08IsDictExpression(parent.parent.right))) {
+              dictOnly = false;
+            }
+          }
+        }
+      }
+      n.forEachChild(visit);
+    };
+    visit(fn);
+    if (!sound) {
+      return void 0;
+    }
+    const init = listDecl.initializer;
+    const fromJson = listDecl.kind === SyntaxKind5.VariableDeclaration && (this.goSafeListUnboxIdentifier(base) || init?.kind === SyntaxKind5.ArrayLiteralExpression && init.elements.length === 0);
+    return fromJson && dictOnly ? "native" : "deref";
   }
   printElementAccessExpression(node, identation) {
     const special = this.printElementAccessExpressionExceptionIfAny(node);

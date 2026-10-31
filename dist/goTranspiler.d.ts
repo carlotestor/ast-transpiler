@@ -701,6 +701,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     goSafeListUnboxIdentifier(node: any): boolean;
     goDeclaredListIdentifier(node: any): boolean;
     goNativeListElementRead(node: any, containerStr: string, keyNode: any, keyStr: string): string | undefined;
+    goGb08PredictionFile(): boolean;
+    goGb08IsDictExpression(expr: any): boolean;
+    goGb08BoundedListRead(node: any, keyNode: any): 'native' | 'deref' | undefined;
     printElementAccessExpression(node: any, identation: any): string;
     isInsideVoidFunction(node: Node): boolean;
     /**
