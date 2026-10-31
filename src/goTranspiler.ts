@@ -782,14 +782,16 @@ const GO_TUPLE_NATIVE_BINDING_PRODUCERS = [
 
 // slot 0 of the base `[value, params]` helpers: the Go twin boxes a nil-able pointer there. The
 // bool option helpers answer it only through their Nullable twin (non-literal default); the
-// integer option helpers are the RF-go-6-F table slots.
+// integer option helpers (`tabled`) count only where the embedder's goTupleSlotTypes names the slot.
 // `safe` names the runtime constructor that reads the pointer out of the holder element.
-const GO_TUPLE_POINTER_SLOT_PRODUCERS: { [name: string]: { goType: string, defaultSlot?: number, safe?: string } } = {
+const GO_TUPLE_POINTER_SLOT_PRODUCERS: { [name: string]: { goType: string, defaultSlot?: number, safe?: string, tabled?: boolean } } = {
     'handleParamString': { 'goType': '*string', 'safe': 'SafeStringPtr' }, 'handleParamString2': { 'goType': '*string', 'safe': 'SafeStringPtr' },
     'handleParamBool': { 'goType': '*bool', 'safe': 'SafeBoolPtr' }, 'handleParamBool2': { 'goType': '*bool', 'safe': 'SafeBoolPtr' },
     'handleParamInteger': { 'goType': '*int64' }, 'handleParamInteger2': { 'goType': '*int64' },
     'handleOptionBoolAndParams': { 'goType': '*bool', 'defaultSlot': 3 },
     'handleOptionBoolAndParams2': { 'goType': '*bool', 'defaultSlot': 4 },
+    'handleOptionIntegerAndParams': { 'goType': '*int64', 'defaultSlot': 3, 'tabled': true },
+    'handleOptionIntegerAndParams2': { 'goType': '*int64', 'defaultSlot': 4, 'tabled': true },
 };
 
 // callees whose Go body derefs every argument, so the pointer reads like the value it holds
@@ -11897,6 +11899,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         const entry = GO_TUPLE_POINTER_SLOT_PRODUCERS[String(callee.name?.text)];
         if (entry === undefined) {
             return undefined;
+        }
+        if (entry.tabled === true) {
+            const producer = String(callee.name.text).charAt(0).toUpperCase() + String(callee.name.text).slice(1);
+            if (this.goTupleSlotTypes[producer]?.[0] !== entry.goType) {
+                return undefined;
+            }
         }
         if (entry.defaultSlot !== undefined) {
             // a literal default selects the native pair twin, whose first result is the value itself

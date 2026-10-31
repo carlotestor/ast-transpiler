@@ -12,11 +12,13 @@ const PRELUDE = 'type Dict = { [key: string]: any };\n'
     + '    other (a: any): any { return a; }\n'
     + '}\n';
 
-const go = (body: string): string => new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } })
+const TABLED = { 'goTupleSlotTypes': { 'HandleOptionIntegerAndParams': [ '*int64' ] } };
+
+const go = (body: string, tables: object = {}): string => new Transpiler({ 'verbose': false, 'go': Object.assign({ 'parser': { 'NUM_LINES_END_FILE': 0 } }, tables) })
     .transpileGo(PRELUDE + 'class V extends Base {\n' + body + '}\n').content;
 
-const fn = (decl: string, uses: string): string => go('    f (address: string, params: Dict = {}): any {\n        const request: Dict = {};\n'
-    + decl + uses + '        return request;\n    }\n');
+const fn = (decl: string, uses: string, tables: object = {}): string => go('    f (address: string, params: Dict = {}): any {\n        const request: Dict = {};\n'
+    + decl + uses + '        return request;\n    }\n', tables);
 
 const TAG = "        const [ tag, paramsTag ] = this.handleParamString (params, 'tag');\n";
 
@@ -87,5 +89,22 @@ describe('hx11 fold 1F G07: option helpers keep the typed assertion read', () =>
             "        if (stock === true) {\n            request['s'] = 1;\n        }\n");
         expect(out).toContain('var stock *bool = nil');
         expect(out).toContain('.(*bool); ok { stock = p }');
+    });
+});
+
+describe('hx11 fold 1F G07: tabled integer option slots', () => {
+    const decl = "        const [ calls, paramsCalls ] = this.handleOptionIntegerAndParams (params, 'f', 'calls', address);\n";
+    const uses = "        const n = this.other (calls);\n        request['n'] = this.checkAddress (calls);\n";
+    test('a slot the embedder tables as *int64 is the pointer when a deref-ing callee reads it', () => {
+        const out = fn(decl, "        request['n'] = this.checkAddress (address, 'c', calls);\n", TABLED);
+        expect(out).toContain('var calls *int64 = nil');
+        expect(out).toContain('.(*int64); ok { calls = p }');
+    });
+    test('without the table nothing changes', () => {
+        const out = fn(decl, "        request['n'] = this.checkAddress (address, 'c', calls);\n");
+        expect(out).not.toContain('var calls *int64');
+    });
+    test('a foreign callee keeps the box even when tabled', () => {
+        expect(fn(decl, uses, TABLED)).not.toContain('var calls *int64');
     });
 });

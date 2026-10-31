@@ -10542,7 +10542,9 @@ var GO_TUPLE_POINTER_SLOT_PRODUCERS = {
   "handleParamInteger": { "goType": "*int64" },
   "handleParamInteger2": { "goType": "*int64" },
   "handleOptionBoolAndParams": { "goType": "*bool", "defaultSlot": 3 },
-  "handleOptionBoolAndParams2": { "goType": "*bool", "defaultSlot": 4 }
+  "handleOptionBoolAndParams2": { "goType": "*bool", "defaultSlot": 4 },
+  "handleOptionIntegerAndParams": { "goType": "*int64", "defaultSlot": 3, "tabled": true },
+  "handleOptionIntegerAndParams2": { "goType": "*int64", "defaultSlot": 4, "tabled": true }
 };
 var GO_TUPLE_POINTER_SLOT_CALLEES = /* @__PURE__ */ new Set([
   "checkAddress",
@@ -20445,6 +20447,12 @@ ${indent}}`);
     const entry = GO_TUPLE_POINTER_SLOT_PRODUCERS[String(callee.name?.text)];
     if (entry === void 0) {
       return void 0;
+    }
+    if (entry.tabled === true) {
+      const producer = String(callee.name.text).charAt(0).toUpperCase() + String(callee.name.text).slice(1);
+      if (this.goTupleSlotTypes[producer]?.[0] !== entry.goType) {
+        return void 0;
+      }
     }
     if (entry.defaultSlot !== void 0) {
       let arg = call.arguments?.[entry.defaultSlot];
