@@ -223,6 +223,7 @@ class TupleSlots {
 
     // a method of the same name declared by the Exchange base class in the class chain above
     baseDeclares (method: any): boolean {
+        if (G08_BASE_FILE.test (String (method.getSourceFile ().fileName ?? ''))) { return true; }
         const checker = this.go.getChecker ();
         let cls = method.parent;
         for (let depth = 0; (cls !== undefined) && (depth < 12); depth++) {
