@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -23761,10 +23761,26 @@ ${this.getIden(identation)}}}`;
     if (checker === void 0 || value === void 0) {
       return true;
     }
+    if (this.javaFreshMapLocalValue(value)) {
+      return false;
+    }
     const type = checker.getTypeAtLocation(value);
     const parts = type.flags & TypeFlags5.Union ? type.getTypes?.() ?? [] : [type];
     const nullable = TypeFlags5.Any | TypeFlags5.Unknown | JAVA_NULLISH_TYPE_FLAGS | TypeFlags5.TypeParameter;
     return parts.length === 0 || parts.some((t) => (t.flags & nullable) !== 0);
+  }
+  // an identifier bound once to a fresh map (object literal, two-argument extend, this.account()) and
+  // never reassigned: it holds that map on every path, so the written value is never null
+  javaFreshMapLocalValue(value) {
+    const node = this.unwrapPrintTransparentExpression(value);
+    if (node === void 0 || !isIdentifier2(node)) {
+      return false;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration === void 0 || declaration.kind !== SyntaxKind6.VariableDeclaration || !declaration.initializer || !this.javaElementWriteMapSource(declaration.initializer)) {
+      return false;
+    }
+    return !this.javaLocalIsReassigned(node, (rhs) => this.javaElementWriteMapSource(rhs));
   }
   // a key proven by the checker to be a string prints as a java String: the read is
   // the same expression, only the key needs the (String) cast the typed put demands

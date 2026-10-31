@@ -104,6 +104,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaDeclaredNumericFamily(expression: any): string | undefined;
     elementWriteTargetsMap(container: any, base: any, keys: any, value: any): boolean;
     elementWriteValueMayBeNull(value: any): boolean;
+    javaFreshMapLocalValue(value: any): boolean;
     elementWriteKeyText(key: any, keyText: string): string;
     isPlainHashMapReceiver(container: any, keys: any[]): boolean;
     javaFreshHashMapValue(container: any, value: any): boolean;
