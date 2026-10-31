@@ -370,7 +370,8 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaTypeFlagsOnly(type: any, mask: number, depth?: number): boolean;
     printObjectKeysCall(node: any, _identation: any, parsedArg?: any): string;
     printNativeObjectKeysCall(node: any): string;
-    printObjectValuesCall(_node: any, _identation: any, parsedArg?: any): string;
+    printObjectValuesCall(node: any, _identation: any, parsedArg?: any): string;
+    printNativeObjectValuesCall(node: any): string | undefined;
     printJsonParseCall(_node: any, _identation: any, parsedArg?: any): string;
     printJsonStringifyCall(_node: any, _identation: any, parsedArg?: any): string;
     printNativePromiseAllCall(node: any): string;
@@ -485,6 +486,8 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaHx4J06NarrowedIndexOf(node: any, name: any, parsedArg: any): string;
 }
 export interface JavaTranspiler {
+    javaCounterPlan(statements: any, identation: number): Map<any, any> | undefined;
+    javaPrintBodyStatements(statements: any, identation: number): string[];
     hx4J09BoxIdentifier(node: any, seen: Set<any>, depth: number): boolean;
     hx4J09BoxValue(node: any, seen: Set<any>, depth: number): boolean;
     hx4J09LiteralTupleElement(node: any, index: number): boolean;
