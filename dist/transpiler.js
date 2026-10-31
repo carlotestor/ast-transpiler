@@ -10061,6 +10061,35 @@ var GO_TUPLE_NATIVE_BINDING_PRODUCERS = [
   "HandleParamBool",
   "HandleParamBool2"
 ];
+var GO_TUPLE_POINTER_SLOT_PRODUCERS = {
+  "handleParamString": { "goType": "*string" },
+  "handleParamString2": { "goType": "*string" },
+  "handleParamBool": { "goType": "*bool" },
+  "handleParamBool2": { "goType": "*bool" },
+  "handleParamInteger": { "goType": "*int64" },
+  "handleParamInteger2": { "goType": "*int64" },
+  "handleOptionBoolAndParams": { "goType": "*bool", "defaultSlot": 3 },
+  "handleOptionBoolAndParams2": { "goType": "*bool", "defaultSlot": 4 },
+  "handleOptionIntegerAndParams": { "goType": "*int64", "defaultSlot": 3 },
+  "handleOptionIntegerAndParams2": { "goType": "*int64", "defaultSlot": 4 }
+};
+var GO_TUPLE_POINTER_SLOT_CALLEES = /* @__PURE__ */ new Set([
+  "checkAddress",
+  "currencyToPrecision",
+  "priceToPrecision",
+  "costToPrecision",
+  "networkCodeToId",
+  "networkIdToCode",
+  "networkCodeToChainId",
+  "selectNetworkKeyFromNetworks",
+  "parseToInt",
+  "safeDict",
+  "safeString",
+  "safeString2",
+  "safeValue",
+  "market",
+  "iso8601"
+]);
 var GO_GETARG_NIL_MAP_READERS = [
   "GetValue",
   "InOp",
@@ -10315,6 +10344,7 @@ var GoTranspiler = class extends BaseTranspiler {
       [SyntaxKind5.ForStatement]: ["statement", "condition"],
       [SyntaxKind5.ConditionalExpression]: ["whenTrue", "condition"]
     };
+    this.goTuplePointerSlotCache = /* @__PURE__ */ new WeakMap();
     // check this out later
     // IsArray(v) answers true exactly for the slice types its runtime type switch lists
     // and false for every other box, a nil box included. On an operand whose Go type the
@@ -13035,7 +13065,7 @@ ${this.getIden(identation)}${this.printNode(node.left, 0)} = &${local}`;
     this.goNilInitLocalTypeInProgress.add(declaration);
     let result;
     try {
-      result = this.goNilInitLocalTypeScan(declaration) ?? this.goNilInitStringLocalType(declaration) ?? this.goNilInitListLocalType(declaration);
+      result = this.goNilInitLocalTypeScan(declaration) ?? this.goTuplePointerSlotNilInitType(declaration) ?? this.goNilInitStringLocalType(declaration) ?? this.goNilInitListLocalType(declaration);
     } finally {
       this.goNilInitLocalTypeInProgress.delete(declaration);
     }
@@ -14058,7 +14088,8 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       let arrayBindingStatement = `${syntheticName} := ${this.printNode(right, 0)}
 `;
       parsedArrayBindingElements.forEach((e, index) => {
-        const statement = this.getIden(identation) + (this.goGetArgBindsDictElement(arrayBindingPatternElements[index], right, index) ? `${e} = MapTyped(GetValue(${syntheticName}, ${index}))` : `${e} = GetValue(${syntheticName}, ${index})`);
+        const pointerWrite = index === 0 ? this.goTuplePointerSlotWriteType(arrayBindingPatternElements[0]) : void 0;
+        const statement = this.getIden(identation) + (pointerWrite !== void 0 ? `if p, ok := ${syntheticName}[0].(${pointerWrite}); ok { ${e} = p }` : this.goGetArgBindsDictElement(arrayBindingPatternElements[index], right, index) ? `${e} = MapTyped(GetValue(${syntheticName}, ${index}))` : `${e} = GetValue(${syntheticName}, ${index})`);
         if (index < parsedArrayBindingElements.length - 1) {
           arrayBindingStatement += statement + "\n";
         } else {
@@ -14090,8 +14121,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         const native2 = keyStrs.length === 1 ? this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, `Add(${containerStr}[${lastKey}], ${rhs2})`, true) : void 0;
         return native2 !== void 0 ? native2 : `AddElementToObject(${acc}, ${lastKey}, Add(${currentValue}, ${rhs2}))`;
       }
-      const rhs = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trimStart();
-      const nativeRhs = right.kind === SyntaxKind5.BinaryExpression ? this.goWithExprDepth(this.goExprDepth, () => this.printNode(right, identation)).trimStart() : rhs;
+      const slotStore = this.goTuplePointerSlotStoreText(right);
+      const rhs = slotStore ?? this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trimStart();
+      const nativeRhs = slotStore === void 0 && right.kind === SyntaxKind5.BinaryExpression ? this.goWithExprDepth(this.goExprDepth, () => this.printNode(right, identation)).trimStart() : rhs;
       const native = keyStrs.length === 1 ? this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, nativeRhs, false, right) ?? this.printNativeMapWriteOnProvenLocal(baseExpr, containerStr, keys[0], lastKey, nativeRhs, right, identation) : void 0;
       return native !== void 0 ? native : `AddElementToObject(${acc}, ${lastKey}, ${rhs})`;
     }
@@ -16194,6 +16226,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return bound;
       }
       return this.goNativeParameterType(decl);
+    }
+    if (decl.kind === SyntaxKind5.BindingElement) {
+      return this.goTuplePointerSlotOfBinding(decl);
     }
     if (decl.kind !== SyntaxKind5.VariableDeclaration || decl.name?.kind !== SyntaxKind5.Identifier) {
       return void 0;
@@ -18999,6 +19034,167 @@ ${indent}}`);
     const calleeFile = String(declared.getSourceFile?.()?.fileName ?? "");
     return calleeFile !== "" && !/(^|[\/])base[\/]Exchange\.ts$/.test(calleeFile);
   }
+  // the pointer type `this.<producer> (…)` boxes at element 0, undefined for any other call
+  goTuplePointerSlotCallType(call) {
+    const callee = call?.kind === SyntaxKind5.CallExpression ? call.expression : void 0;
+    if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return void 0;
+    }
+    const entry = GO_TUPLE_POINTER_SLOT_PRODUCERS[String(callee.name?.text)];
+    if (entry === void 0) {
+      return void 0;
+    }
+    if (entry.defaultSlot !== void 0) {
+      let arg = call.arguments?.[entry.defaultSlot];
+      if (arg?.kind === SyntaxKind5.PrefixUnaryExpression && arg.operator === SyntaxKind5.MinusToken) {
+        arg = arg.operand;
+      }
+      const literal = entry.goType === "*bool" ? arg?.kind === SyntaxKind5.TrueKeyword || arg?.kind === SyntaxKind5.FalseKeyword : arg?.kind === SyntaxKind5.NumericLiteral && /^\d+$/.test(String(arg.text ?? ""));
+      if (literal) {
+        return void 0;
+      }
+    }
+    return entry.goType;
+  }
+  // one read of a tuple-slot local that the pointer answers like the value did: a nil test, a
+  // literal comparison, a `+` operand, `.length`, an argument of a callee that derefs, or (when
+  // nil-proven and allowed) the value of a map store, which prints `*x`
+  goTuplePointerSlotReadAdmissible(ident, allowStore) {
+    let current = ident;
+    let parent = ident.parent;
+    while (parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = parent;
+      parent = parent.parent;
+    }
+    switch (parent?.kind) {
+      case SyntaxKind5.BinaryExpression: {
+        const op = parent.operatorToken?.kind;
+        if (op === SyntaxKind5.EqualsEqualsToken || op === SyntaxKind5.EqualsEqualsEqualsToken || op === SyntaxKind5.ExclamationEqualsToken || op === SyntaxKind5.ExclamationEqualsEqualsToken) {
+          const other = parent.left === current ? parent.right : parent.left;
+          return this.goIsNilLiteral(other) || [
+            SyntaxKind5.StringLiteral,
+            SyntaxKind5.NoSubstitutionTemplateLiteral,
+            SyntaxKind5.NumericLiteral,
+            SyntaxKind5.TrueKeyword,
+            SyntaxKind5.FalseKeyword
+          ].includes(other?.kind);
+        }
+        if (op === SyntaxKind5.PlusToken) {
+          return true;
+        }
+        return op === SyntaxKind5.EqualsToken && allowStore && parent.right === current && parent.left?.kind === SyntaxKind5.ElementAccessExpression && parent.parent?.kind === SyntaxKind5.ExpressionStatement && (this.goHasEnclosingNilGuard(ident) || this.gp15HasExitingNilGuard(ident));
+      }
+      case SyntaxKind5.CallExpression: {
+        const callee = parent.expression;
+        return callee?.kind === SyntaxKind5.PropertyAccessExpression && callee.expression?.kind === SyntaxKind5.ThisKeyword && GO_TUPLE_POINTER_SLOT_CALLEES.has(String(callee.name?.text)) && parent.arguments.some((a) => a === current);
+      }
+      case SyntaxKind5.PropertyAccessExpression:
+        return parent.expression === current && parent.name?.text === "length";
+    }
+    return false;
+  }
+  // the references of `declaration`'s local in its function: true when every one is a read the
+  // pointer answers (and, with `writes`, every other reference is a tuple write of slot 0)
+  goTuplePointerSlotScan(declaration, name, scope, allowStore, writeType) {
+    let reads = 0;
+    let writes = 0;
+    const bad = this.hasNodeWhere(scope, (n) => {
+      if (n.kind !== SyntaxKind5.Identifier || n.text !== name || n === declaration.name) {
+        return false;
+      }
+      const parent = n.parent;
+      if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.name === n || parent?.kind === SyntaxKind5.PropertyAssignment && parent.name === n || !this.goIdentifierRefersToDeclaration(n, declaration)) {
+        return false;
+      }
+      if (writeType !== void 0) {
+        const assign = parent?.parent;
+        if (parent?.kind === SyntaxKind5.ArrayLiteralExpression && assign?.kind === SyntaxKind5.BinaryExpression && assign.operatorToken?.kind === SyntaxKind5.EqualsToken && assign.left === parent) {
+          const goType = this.goTuplePointerSlotCallType(assign.right);
+          if (goType === void 0 || parent.elements.length !== 2 || parent.elements[0] !== n || !parent.elements.every((e) => e?.kind === SyntaxKind5.Identifier) || assign.parent?.kind !== SyntaxKind5.ExpressionStatement || writeType.goType !== void 0 && writeType.goType !== goType) {
+            return true;
+          }
+          if (this.goTupleWriteRepeats(assign, declaration)) {
+            return true;
+          }
+          writeType.goType = goType;
+          writes++;
+          return false;
+        }
+        if (this.goRebindingTargetOf(n) !== void 0) {
+          return true;
+        }
+      }
+      reads++;
+      return !this.goTuplePointerSlotReadAdmissible(n, allowStore);
+    });
+    return !bad && reads > 0 && (writeType === void 0 || writes === 1);
+  }
+  // a write the assertion would not reset: it sits in a loop that does not also hold the declaration
+  goTupleWriteRepeats(write, declaration) {
+    for (let n = write.parent; n !== void 0 && !isFunctionLike(n) && n !== declaration.parent; n = n.parent) {
+      if ([
+        SyntaxKind5.ForStatement,
+        SyntaxKind5.ForInStatement,
+        SyntaxKind5.ForOfStatement,
+        SyntaxKind5.WhileStatement,
+        SyntaxKind5.DoStatement
+      ].includes(n.kind)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  // slot 0 of `[ x, params ] = this.handleParamBool (…)` when x is a nil-initialised local the
+  // printer declares as that pointer
+  goTuplePointerSlotWriteType(element) {
+    if (element?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    const declaration = this.goDeclarationOfIdentifier(element);
+    return declaration === void 0 ? void 0 : this.goTuplePointerSlotNilInitType(declaration);
+  }
+  // `const [ x, params ] = this.handleParamString (…)`: x is the pointer itself when every read of
+  // it is one the pointer answers; the binding prints `var x *T = nil` + a typed assertion
+  goTuplePointerSlotOfBinding(element) {
+    if (this.goTuplePointerSlotCache.has(element)) {
+      return this.goTuplePointerSlotCache.get(element);
+    }
+    const pattern = element?.parent;
+    const declaration = pattern?.parent;
+    let result;
+    if (element?.kind === SyntaxKind5.BindingElement && pattern?.kind === SyntaxKind5.ArrayBindingPattern && declaration?.kind === SyntaxKind5.VariableDeclaration && pattern.elements.length === 2 && pattern.elements[0] === element && pattern.elements[1]?.kind === SyntaxKind5.BindingElement && pattern.elements[1].name?.kind === SyntaxKind5.Identifier && element.name?.kind === SyntaxKind5.Identifier && element.dotDotDotToken === void 0 && element.initializer === void 0 && !["p", "ok"].includes(element.name.text)) {
+      const goType = this.goTuplePointerSlotCallType(declaration.initializer);
+      const scope = this.goEnclosingFunction(declaration);
+      if (goType !== void 0 && scope !== void 0 && !this.goTypeNameIsShadowed(scope, goType) && this.goTuplePointerSlotScan(element, element.name.text, scope, true)) {
+        result = goType;
+      }
+    }
+    this.goTuplePointerSlotCache.set(element, result);
+    return result;
+  }
+  // `let x: Bool = undefined; [ x, params ] = this.handleParamBool (…)`: the destructuring writes
+  // are the only writes, so the nil-initialised local is the pointer
+  goTuplePointerSlotNilInitType(declaration) {
+    const scope = this.goEnclosingFunction(declaration);
+    const name = declaration?.name?.text;
+    if (scope === void 0 || name === void 0 || ["p", "ok"].includes(name)) {
+      return void 0;
+    }
+    const written = { "goType": void 0 };
+    if (!this.goTuplePointerSlotScan(declaration, name, scope, false, written) || written.goType === void 0 || this.goTypeNameIsShadowed(scope, written.goType)) {
+      return void 0;
+    }
+    return written.goType;
+  }
+  // `m[k] = x` of a typed tuple-slot local stores the value the box held
+  goTuplePointerSlotStoreText(right) {
+    const inner = this.goUnwrapParenthesizedNode(right);
+    if (inner?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(inner)?.valueDeclaration?.resolve();
+    return declaration?.kind === SyntaxKind5.BindingElement && this.goTuplePointerSlotOfBinding(declaration) !== void 0 ? "*" + this.printNode(inner, 0) : void 0;
+  }
   goTupleSlotBindingLines(elements, holder, identation, declaration) {
     const iden = this.getIden(identation);
     const producer = this.goTupleBindingProducerName(declaration);
@@ -19006,6 +19202,10 @@ ${indent}}`);
     const sliceHolder = !nativeBinding && this.goTupleBindingIsSliceHolder(declaration);
     return elements.map((element, index) => {
       const name = this.printNode(element.name, 0);
+      const pointerType = index === 0 ? this.goTuplePointerSlotOfBinding(element) : void 0;
+      if (pointerType !== void 0) {
+        return iden + "var " + name + " " + pointerType + " = nil\n" + iden + "if p, ok := " + holder + "[0].(" + pointerType + "); ok { " + name + " = p }";
+      }
       const unbox = element.name?.kind === SyntaxKind5.Identifier ? this.goTupleSlotUnbox(element) : void 0;
       if (!sliceHolder || unbox === void 0 || !this.goTupleSlotNameIsSafe(element.name, declaration)) {
         return iden + name + " := GetValue(" + holder + ", " + index + ")";
