@@ -13,34 +13,34 @@
 
 
 
-var _chunkQYYT7MP4cjs = require('./chunk-QYYT7MP4.cjs');
+var _chunkC7C726CWcjs = require('./chunk-C7C726CW.cjs');
 
 // src/dirname.cjs
-var require_dirname = _chunkQYYT7MP4cjs.__commonJS.call(void 0, {
+var require_dirname = _chunkC7C726CWcjs.__commonJS.call(void 0, {
   "src/dirname.cjs"(exports, module) {
-    _chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+    _chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
     module.exports = __dirname;
   }
 });
 
 // src/transpiler.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
-var import_dirname = _chunkQYYT7MP4cjs.__toESM.call(void 0, require_dirname(), 1);
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+var import_dirname = _chunkC7C726CWcjs.__toESM.call(void 0, require_dirname(), 1);
 var _ast = require('typescript/unstable/ast'); var tsAst = _interopRequireWildcard(_ast);
 var _sync = require('typescript/unstable/sync'); var tsSync = _interopRequireWildcard(_sync);
 
 // src/pythonTranspiler.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 // src/baseTranspiler.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 var _is = require('typescript/unstable/ast/is'); var tsIs = _interopRequireWildcard(_is);
 var _factory = require('typescript/unstable/ast/factory');
 
 
 // src/types.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var TranspilationError = class extends Error {
   constructor(id, message, nodeText, start, end) {
     const parsedMessage = `Lang: ${id} Error: ${message} at ${start}:${end} node: "${nodeText}"`;
@@ -50,7 +50,7 @@ var TranspilationError = class extends Error {
 };
 
 // src/utils.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function regexAll(text, array) {
   for (const i in array) {
     let regex = array[i][0];
@@ -65,7 +65,7 @@ function unCamelCase(s) {
 }
 
 // src/logger.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var _colorette = require('colorette');
 var Logger = class {
   // static createInstanceIfNeeded(): void {
@@ -390,7 +390,7 @@ var BaseTranspiler = class {
     return type !== void 0 && this.getTypeFromRawType(type) === this.PROMISE_TYPE_KEYWORD;
   }
   isImplicitAsyncFunction(node) {
-    if (!this.implicitAsyncTranspiling || !_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, node) || this.hasAsyncModifier(node)) {
+    if (!this.implicitAsyncTranspiling || !_chunkC7C726CWcjs.isFunctionLike.call(void 0, node) || this.hasAsyncModifier(node)) {
       return false;
     }
     const signature = this.getChecker().getSignatureFromDeclaration(node);
@@ -411,7 +411,7 @@ var BaseTranspiler = class {
       return void 0;
     }
     let method = void 0;
-    let parentClass = _chunkQYYT7MP4cjs.getAllSuperTypeNodes.call(void 0, node.parent)[0];
+    let parentClass = _chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, node.parent)[0];
     while (parentClass !== void 0) {
       const parentClassType = this.getChecker().getTypeAtLocation(parentClass);
       const parentClassDecl = _optionalChain([parentClassType, 'optionalAccess', _4 => _4.getSymbol, 'call', _5 => _5(), 'optionalAccess', _6 => _6.valueDeclaration, 'optionalAccess', _7 => _7.resolve, 'call', _8 => _8()]);
@@ -428,7 +428,7 @@ var BaseTranspiler = class {
           }
         }
       });
-      parentClass = _nullishCoalesce(_chunkQYYT7MP4cjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
+      parentClass = _nullishCoalesce(_chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
     }
     return method;
   }
@@ -1392,7 +1392,7 @@ var BaseTranspiler = class {
   }
   wrapImplicitReturnAwait(node) {
     let exp = node.expression;
-    if (!exp || _is.isAwaitExpression.call(void 0, exp) || !this.isImplicitAsyncFunction(_chunkQYYT7MP4cjs.findAncestor.call(void 0, node, _chunkQYYT7MP4cjs.isFunctionLike)) || !this.isPromiseType(this.getChecker().getTypeAtLocation(exp))) {
+    if (!exp || _is.isAwaitExpression.call(void 0, exp) || !this.isImplicitAsyncFunction(_chunkC7C726CWcjs.findAncestor.call(void 0, node, _chunkC7C726CWcjs.isFunctionLike)) || !this.isPromiseType(this.getChecker().getTypeAtLocation(exp))) {
       return node;
     }
     if (_is.isConditionalExpression.call(void 0, exp) || _is.isBinaryExpression.call(void 0, exp)) {
@@ -2213,7 +2213,7 @@ var PythonTranspiler = class extends BaseTranspiler {
 };
 
 // src/phpTranspiler.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
@@ -2608,7 +2608,7 @@ var PhpTranspiler = class extends BaseTranspiler {
 };
 
 // src/csharpTranspiler.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
@@ -3368,7 +3368,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return _nullishCoalesce(cached, () => ( void 0));
     }
     let method = void 0;
-    let parentClass = _chunkQYYT7MP4cjs.getAllSuperTypeNodes.call(void 0, node.parent)[0];
+    let parentClass = _chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, node.parent)[0];
     while (parentClass !== void 0) {
       const parentClassDecl = _optionalChain([this, 'access', _69 => _69.getChecker, 'call', _70 => _70(), 'access', _71 => _71.getTypeAtLocation, 'call', _72 => _72(parentClass), 'optionalAccess', _73 => _73.getSymbol, 'call', _74 => _74(), 'optionalAccess', _75 => _75.valueDeclaration, 'optionalAccess', _76 => _76.resolve, 'call', _77 => _77()]);
       if (parentClassDecl === void 0) {
@@ -3377,7 +3377,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
         break;
       }
       method = _nullishCoalesce(this.csharpMethodsByName(parentClassDecl).get(node.name.text), () => ( method));
-      parentClass = _nullishCoalesce(_chunkQYYT7MP4cjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
+      parentClass = _nullishCoalesce(_chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
     }
     this.csharpMethodOverrides.set(node, _nullishCoalesce(method, () => ( null)));
     return method;
@@ -3832,7 +3832,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     let node = counter;
     while (node.parent !== void 0) {
       const parent = node.parent;
-      if (_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, parent)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, parent)) {
         return void 0;
       }
       if (_is.isForStatement.call(void 0, parent) && this.csharpContains(parent.statement, counter) && this.csharpForBoundsCounter(parent, counter, receiver)) {
@@ -4000,7 +4000,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     const index = /* @__PURE__ */ new Map();
     const collect = (n) => {
-      if (n !== func && _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, n)) {
+      if (n !== func && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n)) {
         return;
       }
       if (_is.isBinaryExpression.call(void 0, n) && n.operatorToken.kind === _ast.SyntaxKind.InKeyword) {
@@ -4369,7 +4369,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     let node = read;
     while (_optionalChain([node, 'optionalAccess', _224 => _224.parent]) !== void 0) {
       const parent = node.parent;
-      if (_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, parent)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, parent)) {
         return false;
       }
       if (_is.isForStatement.call(void 0, parent) && this.csharpForBoundsIndex(parent, read, receiverSymbol, indexSymbol)) {
@@ -5461,9 +5461,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (receiver === void 0 || key === void 0) {
       return void 0;
     }
-    const keyText = key.kind === "object" ? `(string)${key.text}` : key.text;
+    const keyText2 = key.kind === "object" ? `(string)${key.text}` : key.text;
     const keyTest = key.kind === "literal" || key.kind === "string" && this.csharpBaseFieldDeclaredDictionary(receiver.name) ? "" : ` && ${key.text} != null`;
-    return `(${receiver.field} != null${keyTest} && ${receiver.text}.ContainsKey(${keyText}) ? ${receiver.text}[${keyText}] : null)`;
+    return `(${receiver.field} != null${keyTest} && ${receiver.text}.ContainsKey(${keyText2}) ? ${receiver.text}[${keyText2}] : null)`;
   }
   // `key in this.<field>`: inOp's dictionary branch (a non-string key answers false)
   csharpBaseFieldInExpression(key, obj) {
@@ -6587,11 +6587,11 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (!_is.isMethodDeclaration.call(void 0, declaration) || this.csharpBooleanReturnType(declaration) !== "bool") {
       return false;
     }
-    const owner = _chunkQYYT7MP4cjs.findAncestor.call(void 0, declaration, _is.isClassLikeDeclaration);
-    if (owner === void 0 || !this.csharpClassIsOrExtends(_chunkQYYT7MP4cjs.findAncestor.call(void 0, node, _is.isClassLikeDeclaration), owner)) {
+    const owner = _chunkC7C726CWcjs.findAncestor.call(void 0, declaration, _is.isClassLikeDeclaration);
+    if (owner === void 0 || !this.csharpClassIsOrExtends(_chunkC7C726CWcjs.findAncestor.call(void 0, node, _is.isClassLikeDeclaration), owner)) {
       return false;
     }
-    if (owner !== _chunkQYYT7MP4cjs.findAncestor.call(void 0, node, _is.isClassLikeDeclaration) && _chunkQYYT7MP4cjs.getAllSuperTypeNodes.call(void 0, owner).length === 0) {
+    if (owner !== _chunkC7C726CWcjs.findAncestor.call(void 0, node, _is.isClassLikeDeclaration) && _chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, owner).length === 0) {
       return false;
     }
     return _optionalChain([checker, 'access', _493 => _493.getSymbolAtLocation, 'call', _494 => _494(declaration.name), 'optionalAccess', _495 => _495.declarations, 'optionalAccess', _496 => _496.length]) === 1;
@@ -6605,7 +6605,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
       if (this.csharpNodePositionKey(current) === wanted) {
         return true;
       }
-      const parent = _chunkQYYT7MP4cjs.getAllSuperTypeNodes.call(void 0, current)[0];
+      const parent = _chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, current)[0];
       current = parent === void 0 ? void 0 : _optionalChain([this, 'access', _497 => _497.getChecker, 'call', _498 => _498(), 'access', _499 => _499.getTypeAtLocation, 'call', _500 => _500(parent), 'optionalAccess', _501 => _501.getSymbol, 'call', _502 => _502(), 'optionalAccess', _503 => _503.valueDeclaration, 'optionalAccess', _504 => _504.resolve, 'call', _505 => _505()]);
     }
     return false;
@@ -7253,7 +7253,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (csharpListParamFileIsPrintedAlone(node)) {
       return void 0;
     }
-    const method = _chunkQYYT7MP4cjs.findAncestor.call(void 0, node, (n) => _is.isMethodDeclaration.call(void 0, n));
+    const method = _chunkC7C726CWcjs.findAncestor.call(void 0, node, (n) => _is.isMethodDeclaration.call(void 0, n));
     if (method === void 0 || method.name === void 0 || method.parameters === void 0) {
       return void 0;
     }
@@ -7410,7 +7410,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (name === "") {
       return true;
     }
-    const method = _chunkQYYT7MP4cjs.findAncestor.call(void 0, parameter, (n) => _is.isMethodDeclaration.call(void 0, n));
+    const method = _chunkC7C726CWcjs.findAncestor.call(void 0, parameter, (n) => _is.isMethodDeclaration.call(void 0, n));
     if (method === void 0 || method.body === void 0) {
       return false;
     }
@@ -7438,7 +7438,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (name === "") {
       return true;
     }
-    const fn = _chunkQYYT7MP4cjs.findAncestor.call(void 0, declaration, (n) => _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, n));
+    const fn = _chunkC7C726CWcjs.findAncestor.call(void 0, declaration, (n) => _chunkC7C726CWcjs.isFunctionLike.call(void 0, n));
     if (fn === void 0 || fn.body === void 0) {
       return false;
     }
@@ -7480,7 +7480,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
         return false;
       }
       if (declaration.kind === _ast.SyntaxKind.Parameter) {
-        const method = _chunkQYYT7MP4cjs.findAncestor.call(void 0, declaration, (n) => _is.isMethodDeclaration.call(void 0, n));
+        const method = _chunkC7C726CWcjs.findAncestor.call(void 0, declaration, (n) => _is.isMethodDeclaration.call(void 0, n));
         if (decide === void 0 || method === void 0 || method.name === void 0 || method.parameters === void 0) {
           return false;
         }
@@ -7513,7 +7513,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (listType !== void 0) {
       return listType;
     }
-    const method = _chunkQYYT7MP4cjs.findAncestor.call(void 0, node, (n) => _is.isMethodDeclaration.call(void 0, n));
+    const method = _chunkC7C726CWcjs.findAncestor.call(void 0, node, (n) => _is.isMethodDeclaration.call(void 0, n));
     const name = method === void 0 || method.name === void 0 ? void 0 : method.name.getText().trim();
     const row = name === void 0 ? void 0 : CSHARP_OVERRIDE_PARAM_TYPES[name];
     const wanted = row === void 0 ? void 0 : row[method.parameters.indexOf(node)];
@@ -7577,7 +7577,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (this.checkerOrUndefined() === void 0) {
       return void 0;
     }
-    const method = _chunkQYYT7MP4cjs.findAncestor.call(void 0, node, (n) => _is.isMethodDeclaration.call(void 0, n));
+    const method = _chunkC7C726CWcjs.findAncestor.call(void 0, node, (n) => _is.isMethodDeclaration.call(void 0, n));
     if (method === void 0) {
       return void 0;
     }
@@ -7787,7 +7787,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
         const local = this.csharpDeclaredLocalType(value);
         return local === "bool" || local === "bool?";
       }
-      const method = _chunkQYYT7MP4cjs.findAncestor.call(void 0, declaration, (n) => _is.isMethodDeclaration.call(void 0, n));
+      const method = _chunkC7C726CWcjs.findAncestor.call(void 0, declaration, (n) => _is.isMethodDeclaration.call(void 0, n));
       const parameterIndex = method === void 0 ? -1 : method.parameters.indexOf(declaration);
       return parameterIndex >= 0 && _optionalChain([accepted, 'access', _683 => _683.get, 'call', _684 => _684(method), 'optionalAccess', _685 => _685.has, 'call', _686 => _686(parameterIndex)]) === true;
     }
@@ -7970,8 +7970,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (declaration === void 0 || !_is.isMethodDeclaration.call(void 0, declaration)) {
       return void 0;
     }
-    const owner = _chunkQYYT7MP4cjs.findAncestor.call(void 0, declaration, _is.isClassLikeDeclaration);
-    if (owner === void 0 || owner !== _chunkQYYT7MP4cjs.findAncestor.call(void 0, node, _is.isClassLikeDeclaration)) {
+    const owner = _chunkC7C726CWcjs.findAncestor.call(void 0, declaration, _is.isClassLikeDeclaration);
+    if (owner === void 0 || owner !== _chunkC7C726CWcjs.findAncestor.call(void 0, node, _is.isClassLikeDeclaration)) {
       return void 0;
     }
     const printed = this.csharpPrintedReturnType(declaration);
@@ -8054,7 +8054,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // NullReferenceException a `: boolean` method returning null deserves (a `: string` one
   // answers null, the reference-type cast the box already has)
   printReturnStatement(node, identation) {
-    const owner = _chunkQYYT7MP4cjs.findAncestor.call(void 0, node.parent, _chunkQYYT7MP4cjs.isFunctionLike);
+    const owner = _chunkC7C726CWcjs.findAncestor.call(void 0, node.parent, _chunkC7C726CWcjs.isFunctionLike);
     const booleanType = this.csharpBooleanReturnType(owner);
     if (booleanType === void 0) {
       const stringType = this.csharpStringReturnType(owner);
@@ -9793,7 +9793,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
 
 
 // src/goTranspiler.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
@@ -14940,12 +14940,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return substituted;
       }
       const dictText = this.printNode(right, 0);
-      const keyText = this.printNode(left, 0);
-      const inlined = this.printInlineInOp(right, left, dictText, keyText);
+      const keyText2 = this.printNode(left, 0);
+      const inlined = this.printInlineInOp(right, left, dictText, keyText2);
       if (inlined !== void 0) {
         return inlined;
       }
-      return `InOp(${dictText}, ${keyText})`;
+      return `InOp(${dictText}, ${keyText2})`;
     }
     if (op === _ast.SyntaxKind.PlusEqualsToken || op === _ast.SyntaxKind.MinusEqualsToken || op in this.binaryExpressionsWrappers) {
       const operandDepth = this.goExprDepth + 1;
@@ -15511,7 +15511,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   goOrderBookEntryPresent(at, read) {
     let child = at;
     for (let parent = at.parent; parent !== void 0; child = parent, parent = parent.parent) {
-      if (_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, parent)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, parent)) {
         return false;
       }
       if (parent.kind === _ast.SyntaxKind.IfStatement && parent.thenStatement === child && this.goConditionHasPresence(parent.expression, read)) {
@@ -15545,7 +15545,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   goDominatedByProducerWrite(at, name) {
     let child = at;
     for (let parent = at.parent; parent !== void 0; child = parent, parent = parent.parent) {
-      if (_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, parent)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, parent)) {
         return false;
       }
       if (parent.kind === _ast.SyntaxKind.Block) {
@@ -16033,7 +16033,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
           continue;
         }
         if (process.env.GP13_DEBUG) {
-          _chunkQYYT7MP4cjs.__require.call(void 0, "fs").appendFileSync(process.env.GP13_DEBUG, "site " + methodName + " " + file + " arg=" + JSON.stringify((_nullishCoalesce(arg, () => ( ""))).substring(0, 50)) + " ok=" + String(this.goTextSliceArgumentMatches(arg, goType, file, tree, match.index)) + "\n");
+          _chunkC7C726CWcjs.__require.call(void 0, "fs").appendFileSync(process.env.GP13_DEBUG, "site " + methodName + " " + file + " arg=" + JSON.stringify((_nullishCoalesce(arg, () => ( ""))).substring(0, 50)) + " ok=" + String(this.goTextSliceArgumentMatches(arg, goType, file, tree, match.index)) + "\n");
         }
         if (!this.goTextSliceArgumentMatches(arg, goType, file, tree, match.index)) {
           passes = false;
@@ -16760,7 +16760,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
     let child = ident;
     let parent = ident.parent;
-    while (parent !== void 0 && !_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, parent)) {
+    while (parent !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, parent)) {
       if (parent.kind === _ast.SyntaxKind.Block) {
         const statements = _nullishCoalesce(parent.statements, () => ( []));
         const at = statements.indexOf(child);
@@ -17188,7 +17188,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       if (at === loop.statement) {
         break;
       }
-      if (at === loop || _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, at) || at.parent === void 0) {
+      if (at === loop || _chunkC7C726CWcjs.isFunctionLike.call(void 0, at) || at.parent === void 0) {
         return false;
       }
     }
@@ -17367,7 +17367,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     };
     let child = access;
     for (let parent = access.parent; parent !== void 0; child = parent, parent = parent.parent) {
-      if (_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, parent) || parent.kind === _ast.SyntaxKind.SourceFile) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, parent) || parent.kind === _ast.SyntaxKind.SourceFile) {
         return false;
       }
       const statements = parent.kind === _ast.SyntaxKind.Block || parent.kind === _ast.SyntaxKind.CaseClause || parent.kind === _ast.SyntaxKind.DefaultClause ? parent.statements : void 0;
@@ -17800,7 +17800,7 @@ ${iden}}`;
         }
         return;
       }
-      const inner = nested || _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, n);
+      const inner = nested || _chunkC7C726CWcjs.isFunctionLike.call(void 0, n);
       n.forEachChild((c) => visit(c, inner));
     };
     scope.forEachChild((c) => visit(c, false));
@@ -17998,28 +17998,28 @@ ${this.getIden(level)}}()`;
   // `key in obj` on a Go map[string]any with a Go string key: the two-value read is a statement,
   // hence the func literal; present-but-nil is ok=true like InOp. A `*string` key derefs, nil
   // answering false. InOp also covers nil/number keys and sync.Map/orderbook receivers: else keep it.
-  printInlineInOp(dictNode, keyNode, dictText, keyText) {
-    if (dictText.includes("\n") || keyText.includes("\n")) {
+  printInlineInOp(dictNode, keyNode, dictText, keyText2) {
+    if (dictText.includes("\n") || keyText2.includes("\n")) {
       return void 0;
     }
     if (this.goPrintedTypeOfExpression(dictNode, dictText) !== "map[string]any") {
       return void 0;
     }
-    if (this.goPrintedTypeOfExpression(keyNode, keyText) !== "string") {
+    if (this.goPrintedTypeOfExpression(keyNode, keyText2) !== "string") {
       if (_optionalChain([keyNode, 'optionalAccess', _2289 => _2289.kind]) !== _ast.SyntaxKind.Identifier || this.goDeclaredTypeOfIdentifier(keyNode) !== "*string") {
         return void 0;
       }
       const level2 = this.goStatementLevel;
       const body = this.getIden(level2 + 1);
       return `func() bool {
-${body}if ${keyText} == nil {
+${body}if ${keyText2} == nil {
 ${this.getIden(level2 + 2)}return false
 ${body}}
-${body}_, ok := ${dictText}[*${keyText}]
+${body}_, ok := ${dictText}[*${keyText2}]
 ${body}return ok
 ${this.getIden(level2)}}()`;
     }
-    const read = `_, ok := ${dictText}[${keyText}]`;
+    const read = `_, ok := ${dictText}[${keyText2}]`;
     if (11 + read.length + 2 + "return ok".length <= 100) {
       return `func() bool { ${read}; return ok }()`;
     }
@@ -18113,8 +18113,8 @@ ${this.getIden(level)}}()`;
     }
     const dictText = this.printNode(dict, 0);
     const dictMapType = _nullishCoalesce((_optionalChain([dict, 'optionalAccess', _2305 => _2305.kind]) === _ast.SyntaxKind.Identifier ? this.goPrintedTypeOfExpression(dict, dictText) : void 0), () => ( this.goInOpDictMapType(dict, dictText)));
-    const keyText = this.printNode(keyNode, 0);
-    if (dictText.includes("\n") || keyText.includes("\n") || dictMapType !== "map[string]any" && dictMapType !== "map[string]map[string]any") {
+    const keyText2 = this.printNode(keyNode, 0);
+    if (dictText.includes("\n") || keyText2.includes("\n") || dictMapType !== "map[string]any" && dictMapType !== "map[string]map[string]any") {
       return void 0;
     }
     const name = this.goIfInOpBindingName(node);
@@ -18123,7 +18123,7 @@ ${this.getIden(level)}}()`;
       return void 0;
     }
     const indent = this.getIden(identation);
-    const inner = `${this.getIden(identation + 1)}if _, ${name} := ${dictText}[*${keyText}]; ${negated ? "!" : ""}${name}`;
+    const inner = `${this.getIden(identation + 1)}if _, ${name} := ${dictText}[*${keyText2}]; ${negated ? "!" : ""}${name}`;
     const body = this.printBlock(node.thenStatement, identation + 1, false);
     return this.printNodeCommentsIfAny(node, identation, `${indent}if ${guardText} {
 ${inner}${body}
@@ -18143,15 +18143,15 @@ ${indent}}`);
         const identifier = _optionalChain([dict, 'optionalAccess', _2311 => _2311.kind]) === _ast.SyntaxKind.Identifier;
         if ((identifier || _optionalChain([dict, 'optionalAccess', _2312 => _2312.kind]) === _ast.SyntaxKind.PropertyAccessExpression || _optionalChain([dict, 'optionalAccess', _2313 => _2313.kind]) === _ast.SyntaxKind.CallExpression) && keyIsText) {
           const dictText = this.printNode(dict, 0);
-          let keyText = this.printNode(key, 0);
+          let keyText2 = this.printNode(key, 0);
           const dictMapType = _nullishCoalesce((identifier ? this.goPrintedTypeOfExpression(dict, dictText) : void 0), () => ( this.goInOpDictMapType(dict, dictText)));
-          let keyType = this.goPrintedTypeOfExpression(key, keyText);
+          let keyType = this.goPrintedTypeOfExpression(key, keyText2);
           if (keyType !== "string" && this.goInOpPointerKeyProvenNonNil(statement, key)) {
-            keyText = "*" + keyText;
+            keyText2 = "*" + keyText2;
             keyType = "string";
           }
-          if (!dictText.includes("\n") && !keyText.includes("\n") && (dictMapType === "map[string]any" || dictMapType === "map[string]map[string]any") && keyType === "string") {
-            reads.push({ inNode: n, dictText, keyText });
+          if (!dictText.includes("\n") && !keyText2.includes("\n") && (dictMapType === "map[string]any" || dictMapType === "map[string]map[string]any") && keyType === "string") {
+            reads.push({ inNode: n, dictText, keyText: keyText2 });
           }
         }
       }
@@ -19694,7 +19694,7 @@ ${indent}}`);
     const parent = n.parent;
     const stored = _optionalChain([parent, 'optionalAccess', _2540 => _2540.kind]) === _ast.SyntaxKind.BinaryExpression && parent.right === n && _optionalChain([parent, 'access', _2541 => _2541.operatorToken, 'optionalAccess', _2542 => _2542.kind]) === _ast.SyntaxKind.EqualsToken && _optionalChain([parent, 'access', _2543 => _2543.left, 'optionalAccess', _2544 => _2544.kind]) === _ast.SyntaxKind.ElementAccessExpression || _optionalChain([parent, 'optionalAccess', _2545 => _2545.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n;
     let method = _optionalChain([param, 'optionalAccess', _2546 => _2546.parent]);
-    while (method !== void 0 && !_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, method)) {
+    while (method !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, method)) {
       method = method.parent;
     }
     const methodName = String(_nullishCoalesce(_optionalChain([method, 'optionalAccess', _2547 => _2547.name, 'optionalAccess', _2548 => _2548.text]), () => ( "")));
@@ -21002,12 +21002,12 @@ ${this.getIden(level)}}()`;
   }
   // `this.<field> = v`, `this.<field>[k] = v` and `delete this.<field>[k]` happen on the owner
   goOwnedFieldIsWrite(node) {
-    const isAssignment = (parent2, child) => _optionalChain([parent2, 'optionalAccess', _2794 => _2794.kind]) === _ast.SyntaxKind.BinaryExpression && parent2.left === child && parent2.operatorToken.kind >= _ast.SyntaxKind.FirstAssignment && parent2.operatorToken.kind <= _ast.SyntaxKind.LastAssignment;
+    const isAssignment2 = (parent2, child) => _optionalChain([parent2, 'optionalAccess', _2794 => _2794.kind]) === _ast.SyntaxKind.BinaryExpression && parent2.left === child && parent2.operatorToken.kind >= _ast.SyntaxKind.FirstAssignment && parent2.operatorToken.kind <= _ast.SyntaxKind.LastAssignment;
     const parent = node.parent;
-    if (isAssignment(parent, node)) {
+    if (isAssignment2(parent, node)) {
       return true;
     }
-    return _optionalChain([parent, 'optionalAccess', _2795 => _2795.kind]) === _ast.SyntaxKind.ElementAccessExpression && parent.expression === node && (isAssignment(parent.parent, parent) || _optionalChain([parent, 'access', _2796 => _2796.parent, 'optionalAccess', _2797 => _2797.kind]) === _ast.SyntaxKind.DeleteExpression);
+    return _optionalChain([parent, 'optionalAccess', _2795 => _2795.kind]) === _ast.SyntaxKind.ElementAccessExpression && parent.expression === node && (isAssignment2(parent.parent, parent) || _optionalChain([parent, 'access', _2796 => _2796.parent, 'optionalAccess', _2797 => _2797.kind]) === _ast.SyntaxKind.DeleteExpression);
   }
   printPropertyAccessExpression(node, identation) {
     if (this.goOwnedFieldAccess(node) && !this.goOwnedFieldIsWrite(node) && this.goOwnedFieldUserPath(node)) {
@@ -21752,7 +21752,7 @@ ${this.getIden(level)}}()`;
     }
     const mutators = ["push", "pop", "shift", "unshift", "splice", "sort", "reverse", "fill", "copyWithin"];
     let child = node;
-    for (let current = node.parent; current !== void 0 && !_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, current); child = current, current = current.parent) {
+    for (let current = node.parent; current !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, current); child = current, current = current.parent) {
       if (current.kind !== _ast.SyntaxKind.ForStatement || current.statement !== child) {
         continue;
       }
@@ -21902,7 +21902,7 @@ ${this.getIden(level)}}()`;
     if (_optionalChain([step, 'optionalAccess', _2965 => _2965.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression && _optionalChain([step, 'optionalAccess', _2966 => _2966.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression || step.operator !== _ast.SyntaxKind.PlusPlusToken || _optionalChain([step, 'access', _2967 => _2967.operand, 'optionalAccess', _2968 => _2968.kind]) !== _ast.SyntaxKind.Identifier || symbolOf(step.operand) !== counterSymbol) {
       return void 0;
     }
-    const isAssignment = (n) => {
+    const isAssignment2 = (n) => {
       const op = _optionalChain([n, 'optionalAccess', _2969 => _2969.operatorToken, 'optionalAccess', _2970 => _2970.kind]);
       return _optionalChain([n, 'optionalAccess', _2971 => _2971.kind]) === _ast.SyntaxKind.BinaryExpression && (op === _ast.SyntaxKind.EqualsToken || op >= _ast.SyntaxKind.FirstCompoundAssignment && op <= _ast.SyntaxKind.LastCompoundAssignment);
     };
@@ -21926,7 +21926,7 @@ ${this.getIden(level)}}()`;
           const parent = n.parent;
           const live = inLoop || hoistedEnd >= 0 && n.pos > hoistedEnd;
           if (_optionalChain([parent, 'optionalAccess', _2974 => _2974.kind]) === _ast.SyntaxKind.PropertyAccessExpression && parent.expression === n) {
-            const lengthWrite = _optionalChain([parent, 'access', _2975 => _2975.name, 'optionalAccess', _2976 => _2976.text]) === "length" && isAssignment(parent.parent) && parent.parent.left === parent;
+            const lengthWrite = _optionalChain([parent, 'access', _2975 => _2975.name, 'optionalAccess', _2976 => _2976.text]) === "length" && isAssignment2(parent.parent) && parent.parent.left === parent;
             const call = _optionalChain([parent, 'access', _2977 => _2977.parent, 'optionalAccess', _2978 => _2978.kind]) === _ast.SyntaxKind.CallExpression && parent.parent.expression === parent;
             if (lengthWrite || call && live) {
               sound = false;
@@ -21935,7 +21935,7 @@ ${this.getIden(level)}}()`;
             if (call && !(_optionalChain([parent, 'access', _2979 => _2979.name, 'optionalAccess', _2980 => _2980.text]) === "push" && parent.parent.arguments.length === 1 && this.goGb08IsDictExpression(parent.parent.arguments[0]))) {
               dictOnly = false;
             }
-          } else if (_optionalChain([parent, 'optionalAccess', _2981 => _2981.kind]) === _ast.SyntaxKind.ElementAccessExpression && parent.expression === n && isAssignment(parent.parent) && parent.parent.left === parent) {
+          } else if (_optionalChain([parent, 'optionalAccess', _2981 => _2981.kind]) === _ast.SyntaxKind.ElementAccessExpression && parent.expression === n && isAssignment2(parent.parent) && parent.parent.left === parent) {
             if (!(parent.parent.operatorToken.kind === _ast.SyntaxKind.EqualsToken && this.goGb08IsDictExpression(parent.parent.right))) {
               dictOnly = false;
             }
@@ -22013,7 +22013,7 @@ ${this.getIden(level)}}()`;
   }
   isInsideVoidFunction(node) {
     for (let cur = node.parent; cur; cur = cur.parent) {
-      if (_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, cur)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, cur)) {
         return cur.type === void 0 || cur.type.kind === _ast.SyntaxKind.VoidKeyword;
       }
     }
@@ -22636,7 +22636,7 @@ GoTranspiler.prototype.goA9fL1CacheInitText = function(node) {
 };
 
 // src/javaTranspiler.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
@@ -23232,7 +23232,7 @@ var JavaTranspiler = class extends BaseTranspiler {
     let chain = this.overrideChainCache.get(classDeclaration);
     if (chain === void 0) {
       chain = [];
-      let parentClass = _chunkQYYT7MP4cjs.getAllSuperTypeNodes.call(void 0, classDeclaration)[0];
+      let parentClass = _chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, classDeclaration)[0];
       while (parentClass !== void 0) {
         const parentClassDecl = _optionalChain([this, 'access', _3172 => _3172.getChecker, 'call', _3173 => _3173(), 'access', _3174 => _3174.getTypeAtLocation, 'call', _3175 => _3175(parentClass), 'optionalAccess', _3176 => _3176.getSymbol, 'call', _3177 => _3177(), 'optionalAccess', _3178 => _3178.valueDeclaration, 'optionalAccess', _3179 => _3179.resolve, 'call', _3180 => _3180()]);
         if (parentClassDecl === void 0) {
@@ -23246,7 +23246,7 @@ var JavaTranspiler = class extends BaseTranspiler {
           }
         }
         chain.push(byName);
-        parentClass = _nullishCoalesce(_chunkQYYT7MP4cjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
+        parentClass = _nullishCoalesce(_chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
       }
       this.overrideChainCache.set(classDeclaration, chain);
     }
@@ -24566,7 +24566,7 @@ ${this.getIden(identation)}}}`;
   enclosingFunctionLike(node) {
     let current = _optionalChain([node, 'optionalAccess', _3398 => _3398.parent]);
     while (current) {
-      if (_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, current)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, current)) {
         return current;
       }
       current = current.parent;
@@ -24697,8 +24697,8 @@ ${this.getIden(identation)}}}`;
   }
   // a key proven by the checker to be a string prints as a java String: the read is
   // the same expression, only the key needs the (String) cast the typed put demands
-  elementWriteKeyText(key, keyText) {
-    return _is.isStringLiteral.call(void 0, key) ? keyText : `(String)${keyText}`;
+  elementWriteKeyText(key, keyText2) {
+    return _is.isStringLiteral.call(void 0, key) ? keyText2 : `(String)${keyText2}`;
   }
   // Receivers that are a plain java.util.HashMap at runtime, where ".put" and the helper's map branch
   // are the same write: a local initialized with an object literal or a call whose every return is
@@ -24803,7 +24803,7 @@ ${this.getIden(identation)}}}`;
       return false;
     }
     let scope = node;
-    while (scope && !_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope)) {
+    while (scope && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope)) {
       scope = scope.parent;
     }
     if (!scope) {
@@ -24860,7 +24860,7 @@ ${this.getIden(identation)}}}`;
       return true;
     }
     let scope = node;
-    while (scope && !_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope)) {
+    while (scope && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope)) {
       scope = scope.parent;
     }
     if (!scope) {
@@ -24960,7 +24960,7 @@ ${this.getIden(identation)}}}`;
   // itself; an assignment could replace the HashMap with a List or a class instance.
   javaLocalIsReassigned(node, admitsWrite) {
     let scope = node;
-    while (scope && !_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope)) {
+    while (scope && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope)) {
       scope = scope.parent;
     }
     if (!scope) {
@@ -25021,7 +25021,7 @@ ${this.getIden(identation)}}}`;
     let returns = 0;
     let proven = true;
     const walk = (n) => {
-      if (!proven || n === void 0 || n !== declaration.body && _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, n)) {
+      if (!proven || n === void 0 || n !== declaration.body && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n)) {
         return;
       }
       if (_is.isReturnStatement.call(void 0, n)) {
@@ -25100,7 +25100,7 @@ ${this.getIden(identation)}}}`;
       if (!plain || current === void 0) {
         return;
       }
-      if (_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, current) && current !== declaration) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, current) && current !== declaration) {
         return;
       }
       if (_is.isReturnStatement.call(void 0, current)) {
@@ -26173,7 +26173,7 @@ ${this.getIden(identation)}}}`;
     let returns = 0;
     let ok = true;
     const scan = (n) => {
-      if (!ok || n !== method && _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, n)) {
+      if (!ok || n !== method && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n)) {
         return;
       }
       if (_is.isReturnStatement.call(void 0, n)) {
@@ -26305,7 +26305,7 @@ ${this.getIden(identation)}}}`;
       if (n === void 0) {
         return;
       }
-      if (n !== method && _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, n)) {
+      if (n !== method && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n)) {
         return;
       }
       if (_is.isReturnStatement.call(void 0, n)) {
@@ -26716,26 +26716,26 @@ ${this.getIden(identation)}}}`;
       const objectType = this.getChecker().getTypeAtLocation(right);
       const keyType = this.getChecker().getTypeAtLocation(left);
       const objText = this.printNode(right, 0);
-      const keyText = this.printNode(left, 0);
+      const keyText2 = this.printNode(left, 0);
       let guarded;
       if (this.isJavaStringType(keyType) || this.javaDeclaredStringType(left)) {
         guarded = "";
       } else if (this.javaSideEffectFreeReference(left) && !this.javaOperandPrintsPrimitiveNumber(left) && !this.isNullishLiteral(left) && left.kind !== _ast.SyntaxKind.TrueKeyword && left.kind !== _ast.SyntaxKind.FalseKeyword) {
-        guarded = `${keyText} != null && `;
+        guarded = `${keyText2} != null && `;
       }
       const withGuard = (read) => guarded ? `(${guarded}${read})` : read;
       if (guarded !== void 0) {
         if (this.javaDeclaredMapReceiver(right)) {
-          return withGuard(`${objText}.containsKey(${keyText})`);
+          return withGuard(`${objText}.containsKey(${keyText2})`);
         }
         if (this.isJavaMapType(objectType)) {
-          return withGuard(`((java.util.Map<?, ?>)${objText}).containsKey(${keyText})`);
+          return withGuard(`((java.util.Map<?, ?>)${objText}).containsKey(${keyText2})`);
         }
         if (this.isJavaNullableMapType(objectType) && this.javaRepeatableOperand(right)) {
-          return `(${objText} != null && ${guarded}((java.util.Map<?, ?>)${objText}).containsKey(${keyText}))`;
+          return `(${objText} != null && ${guarded}((java.util.Map<?, ?>)${objText}).containsKey(${keyText2}))`;
         }
       }
-      return `Helpers.inOp(${objText}, ${keyText})`;
+      return `Helpers.inOp(${objText}, ${keyText2})`;
     }
     const hx4J05 = this.printHx4J05ModComparison(left, right, op);
     if (hx4J05 !== void 0) {
@@ -26949,8 +26949,8 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     const target = this.printNode(receiver, 0);
-    const keyText = this.printNode(operand, 0);
-    return `(${target} == null || ${keyText} == null ? null : ${target}.get(${keyText}))`;
+    const keyText2 = this.printNode(operand, 0);
+    return `(${target} == null || ${keyText2} == null ? null : ${target}.get(${keyText2}))`;
   }
   // `this.<field>` for a BaseExchange.java field declared over a single-owner store
   javaOwnerStoreFieldReceiver(expression) {
@@ -27020,14 +27020,14 @@ ${this.getIden(identation)}}}`;
     if (symbolText !== symbolNode.text || this.printNode(key, 0).trim() !== key.text) {
       return void 0;
     }
-    const keyText = key.text;
+    const keyText2 = key.text;
     if (!this.isJavaMapStructureType(this.getChecker().getTypeAtLocation(inner))) {
       return void 0;
     }
     if (!this.javaOhlcvsEntryIsFresh(node, symbolNode)) {
       return void 0;
     }
-    return `((java.util.Map<?, ?>)this.ohlcvs.get(${symbolText})).get(${keyText})`;
+    return `((java.util.Map<?, ?>)this.ohlcvs.get(${symbolText})).get(${keyText2})`;
   }
   javaIsOhlcvsField(node) {
     const field = this.unwrapPrintTransparentExpression(node);
@@ -27046,7 +27046,7 @@ ${this.getIden(identation)}}}`;
     let child = site;
     while (_optionalChain([child, 'optionalAccess', _3690 => _3690.parent]) !== void 0) {
       const parent = child.parent;
-      if (_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, parent)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, parent)) {
         return false;
       }
       if (_is.isBlock.call(void 0, parent) || _is.isSourceFile.call(void 0, parent)) {
@@ -27168,8 +27168,8 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     const target = this.printNode(receiver, 0);
-    const keyText = this.printNode(key, 0);
-    return `(${target} == null || ${keyText} == null ? null : ${target}.get(${keyText}))`;
+    const keyText2 = this.printNode(key, 0);
+    return `(${target} == null || ${keyText2} == null ? null : ${target}.get(${keyText2}))`;
   }
   javaWsClientMapRead(node) {
     if (_optionalChain([node, 'access', _3709 => _3709.parent, 'optionalAccess', _3710 => _3710.kind]) === _ast.SyntaxKind.ExpressionStatement || this.printElementAccessExpressionExceptionIfAny(node) !== void 0 || this.isLeftSideOfAssignment(node)) {
@@ -27291,11 +27291,11 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     const target = this.printNode(node.expression, 0);
-    const keyText = this.printNode(key, 0);
+    const keyText2 = this.printNode(key, 0);
     if (_optionalChain([keyType, 'access', _3732 => _3732.getAliasSymbol, 'optionalCall', _3733 => _3733()]) === void 0 && keyType.flags === _sync.TypeFlags.String) {
-      return `(${target} == null || ${this.printNode(operand, 0)} == null ? null : ${target}.get(${keyText}))`;
+      return `(${target} == null || ${this.printNode(operand, 0)} == null ? null : ${target}.get(${keyText2}))`;
     }
-    return `(${target} == null || !(${keyText} instanceof String) ? null : ${target}.get(${keyText}))`;
+    return `(${target} == null || !(${keyText2} instanceof String) ? null : ${target}.get(${keyText2}))`;
   }
   // `x[<integer expression>]` on a declared List. Helpers.GetValue truncates the key to an int
   // and answers null outside [0, size), so the read carries both tests on the narrowed index.
@@ -27402,7 +27402,7 @@ ${this.getIden(identation)}}}`;
     if (field === void 0 || field.map !== true) {
       return _nullishCoalesce(this.javaJ02FieldMapReadText(receiver, key), () => ( this.javaPlainCacheReadText(receiver, key)));
     }
-    const keyText = this.printNode(key, 0);
+    const keyText2 = this.printNode(key, 0);
     let keyGuarded = false;
     const checker = this.checkerOrUndefined();
     if (checker === void 0) {
@@ -27416,12 +27416,12 @@ ${this.getIden(identation)}}}`;
       keyGuarded = true;
     }
     const target = this.printNode(receiver, 0);
-    const read = `((java.util.Map<?, ?>)${target}).get(${keyText})`;
+    const read = `((java.util.Map<?, ?>)${target}).get(${keyText2})`;
     if (!keyGuarded && field.nullable !== true) {
       return read;
     }
     const receiverGuard = field.nullable === true ? `${target} == null ? null : ` : "";
-    return `(${keyGuarded ? `${keyText} == null ? null : ` : ""}${receiverGuard}${read})`;
+    return `(${keyGuarded ? `${keyText2} == null ? null : ` : ""}${receiverGuard}${read})`;
   }
   // the read stands only where no exchange-specific override claims the site and the node
   // is not a write target
@@ -27511,8 +27511,8 @@ ${this.getIden(identation)}}}`;
     }
     const target = this.printNode(node.expression, 0);
     const list = `((java.util.List<?>)${target})`;
-    const keyText = this.printNode(key, 0);
-    return `(${target} == null || ${keyText} >= ${list}.size() ? null : ${list}.get(${keyText}))`;
+    const keyText2 = this.printNode(key, 0);
+    return `(${target} == null || ${keyText2} >= ${list}.size() ? null : ${list}.get(${keyText2}))`;
   }
   printElementAccessExpression(node, identation) {
     return _nullishCoalesce(this.printCheckerTypedElementAccessRead(node), () => ( super.printElementAccessExpression(node, identation)));
@@ -28053,7 +28053,7 @@ ${this.getIden(identation)}}}`;
   // `++`/`--` keep the primitive int, any other operator would not
   javaCounterHasNoBoxWrite(node, symbol) {
     let scope = node.parent;
-    while (scope !== void 0 && !_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, scope) && scope.kind !== _ast.SyntaxKind.SourceFile) {
+    while (scope !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, scope) && scope.kind !== _ast.SyntaxKind.SourceFile) {
       scope = scope.parent;
     }
     if (scope === void 0) {
@@ -28274,13 +28274,13 @@ ${this.getIden(identation)}}}`;
       return false;
     }
     let enclosing = forStatement.parent;
-    while (enclosing && !_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, enclosing)) {
+    while (enclosing && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, enclosing)) {
       enclosing = enclosing.parent;
     }
     if (enclosing) {
       const body = _nullishCoalesce(enclosing.body, () => ( enclosing));
       const scanOuter = (n) => {
-        if (!safe || !n || n === forStatement || _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, n)) {
+        if (!safe || !n || n === forStatement || _chunkC7C726CWcjs.isFunctionLike.call(void 0, n)) {
           return;
         }
         if (n.kind === _ast.SyntaxKind.BinaryExpression && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(n.operatorToken.kind) && _optionalChain([n, 'access', _3828 => _3828.left, 'optionalAccess', _3829 => _3829.kind]) === _ast.SyntaxKind.Identifier && n.left.text === name) {
@@ -29627,7 +29627,7 @@ ${this.getIden(identation)}}}`;
       return false;
     }
     const declaration = _optionalChain([this, 'access', _3916 => _3916.getChecker, 'call', _3917 => _3917(), 'access', _3918 => _3918.getSymbolAtLocation, 'call', _3919 => _3919(node), 'optionalAccess', _3920 => _3920.valueDeclaration, 'optionalAccess', _3921 => _3921.resolve, 'call', _3922 => _3922()]);
-    return _optionalChain([declaration, 'optionalAccess', _3923 => _3923.kind]) === _ast.SyntaxKind.VariableDeclaration && (_chunkQYYT7MP4cjs.getCombinedNodeFlags.call(void 0, declaration) & _ast.NodeFlags.Const) === _ast.NodeFlags.Const;
+    return _optionalChain([declaration, 'optionalAccess', _3923 => _3923.kind]) === _ast.SyntaxKind.VariableDeclaration && (_chunkC7C726CWcjs.getCombinedNodeFlags.call(void 0, declaration) & _ast.NodeFlags.Const) === _ast.NodeFlags.Const;
   }
   printPromiseAllCall(node, identation, parsedArg = void 0) {
     return _nullishCoalesce(this.printNativePromiseAllCall(node), () => ( `Helpers.promiseAll(${parsedArg})`));
@@ -30302,7 +30302,7 @@ ${this.getIden(identation)}}}`;
       if (!ok) {
         return;
       }
-      if (current !== declaration && _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, current)) {
+      if (current !== declaration && _chunkC7C726CWcjs.isFunctionLike.call(void 0, current)) {
         return;
       }
       if (_is.isReturnStatement.call(void 0, current)) {
@@ -30423,7 +30423,7 @@ ${this.getIden(identation)}}}`;
   // identifier write must pass `accepts`; `tuples` also checks `[ x, params ] = ...` destructures
   javaWritesAreBoxed(symbol, decl, next, accepts, tuples) {
     let fn = decl.parent;
-    while (fn !== void 0 && !_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, fn)) {
+    while (fn !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, fn)) {
       fn = fn.parent;
     }
     if (fn === void 0) {
@@ -30976,9 +30976,9 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     const target = this.printNode(receiver, 0);
-    const keyText = this.printNode(key, 0);
-    const keyGuard = literal ? "" : `${keyText} == null || `;
-    return `(${keyGuard}${target} == null ? null : ((java.util.Map<?, ?>)${target}).get(${keyText}))`;
+    const keyText2 = this.printNode(key, 0);
+    const keyGuard = literal ? "" : `${keyText2} == null || `;
+    return `(${keyGuard}${target} == null ? null : ((java.util.Map<?, ?>)${target}).get(${keyText2}))`;
   }
   javaBaseMapFieldReadText(receiver, key, field) {
     const operand = _is.isAsExpression.call(void 0, key) && _optionalChain([key, 'access', _4080 => _4080.type, 'optionalAccess', _4081 => _4081.kind]) === _ast.SyntaxKind.StringKeyword ? key.expression : key;
@@ -31227,7 +31227,7 @@ JavaTranspiler.prototype.hx4J09LiteralTupleElement = function(node, index) {
   let returns = 0;
   let ok = true;
   const scan = (current) => {
-    if (!ok || current !== declaration && _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, current)) {
+    if (!ok || current !== declaration && _chunkC7C726CWcjs.isFunctionLike.call(void 0, current)) {
       return;
     }
     if (_is.isReturnStatement.call(void 0, current)) {
@@ -31259,7 +31259,7 @@ JavaTranspiler.prototype.hx4J09CatchCannotWrap = function(node) {
     if (!ok) {
       return;
     }
-    if (_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, current) || current.kind === _ast.SyntaxKind.AwaitExpression || current.kind === _ast.SyntaxKind.TryStatement) {
+    if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, current) || current.kind === _ast.SyntaxKind.AwaitExpression || current.kind === _ast.SyntaxKind.TryStatement) {
       ok = false;
       return;
     }
@@ -31285,7 +31285,7 @@ JavaTranspiler.prototype.hx4J09CoreArgument = function(type, printed, node) {
     return void 0;
   }
   const declaration = this.javaDeclarationOfIdentifier(node);
-  if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || _optionalChain([declaration, 'access', _4157 => _4157.name, 'optionalAccess', _4158 => _4158.text]) !== node.text || (_chunkQYYT7MP4cjs.getCombinedNodeFlags.call(void 0, declaration) & _ast.NodeFlags.Const) === 0) {
+  if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || _optionalChain([declaration, 'access', _4157 => _4157.name, 'optionalAccess', _4158 => _4158.text]) !== node.text || (_chunkC7C726CWcjs.getCombinedNodeFlags.call(void 0, declaration) & _ast.NodeFlags.Const) === 0) {
     return void 0;
   }
   const initializer = declaration.initializer;
@@ -31420,13 +31420,13 @@ var JAVA_CRC32_BASE_FILE = /(^|[\\/])ts[\\/]src[\\/]base[\\/]functions[\\/]crypt
 }
 
 // src/rustTranspiler.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
 
 // src/rustNativeForms.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var RUST_PLAIN_PLACE = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
 
 // src/rustTranspiler.ts
@@ -31826,7 +31826,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "boolean";
     if (flags & _sync.TypeFlags.Union) {
       let kind = void 0;
-      for (const member of _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( []))) {
+      for (const member of _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []))) {
         if (member.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Null)) {
           continue;
         }
@@ -31847,7 +31847,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (type === void 0)
       return false;
     if (type.flags & _sync.TypeFlags.Union) {
-      const members = _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( []));
+      const members = _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []));
       return members.length > 0 && members.every((member) => this.isBooleanValueType(member));
     }
     return (type.flags & (_sync.TypeFlags.Boolean | _sync.TypeFlags.BooleanLiteral)) !== 0;
@@ -31857,7 +31857,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   isBooleanOrUndefinedType(type) {
     if (type === void 0)
       return false;
-    const members = type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( [])) : [type];
+    const members = type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( [])) : [type];
     if (members.length === 0)
       return false;
     const onlyBooleanOrEmpty = members.every((member) => this.isBooleanValueType(member) || (member.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Void | _sync.TypeFlags.Null)) !== 0);
@@ -31884,7 +31884,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const inner = this.unwrapParens(node);
     if (inner === void 0 || !_is.isIdentifier.call(void 0, inner) || !this.isDeclaredValueIdentifier(inner))
       return false;
-    const declarations = _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, this.getChecker().getSymbolAtLocation(inner));
+    const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, this.getChecker().getSymbolAtLocation(inner));
     return declarations.length > 0 && declarations.every((declaration) => !this.rustDeclarationPrintsNativeBool(declaration));
   }
   /** The declaration site emits `let mut x: bool = …` (see
@@ -32044,7 +32044,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (node.kind !== _ast.SyntaxKind.Identifier)
       return false;
     const symbol = this.getChecker().getSymbolAtLocation(node);
-    const declarations = _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, symbol);
+    const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, symbol);
     if (declarations.length === 0)
       return false;
     return declarations.every((declaration) => _is.isParameterDeclaration.call(void 0, declaration) || _is.isVariableDeclaration.call(void 0, declaration) && _optionalChain([declaration, 'access', _4201 => _4201.initializer, 'optionalAccess', _4202 => _4202.kind]) !== _ast.SyntaxKind.NewExpression);
@@ -32056,7 +32056,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (type === void 0)
       return false;
     if (type.flags & _sync.TypeFlags.Union) {
-      const members = _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( []));
+      const members = _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []));
       return members.length > 0 && members.every((member) => this.rustBooleanComparableType(member));
     }
     if (type.flags & (_sync.TypeFlags.Boolean | _sync.TypeFlags.BooleanLiteral))
@@ -32148,7 +32148,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (type === void 0)
       return false;
     if (type.flags & _sync.TypeFlags.Union) {
-      const parts = _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( []));
+      const parts = _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []));
       return parts.length > 0 && parts.every((part) => this.isValueLengthType(part));
     }
     return (type.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Null | _sync.TypeFlags.Void)) !== 0 || this.getChecker().isArrayType(type) || this.getChecker().isTupleType(type) || this.isStringType(type.flags);
@@ -32258,7 +32258,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // every one of them as `Value`. Imports, classes and function names print
   // as Rust items rather than as values, so they keep the helper.
   isDeclaredValueIdentifier(node) {
-    const declarations = _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, this.getChecker().getSymbolAtLocation(node));
+    const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, this.getChecker().getSymbolAtLocation(node));
     return declarations.length > 0 && declarations.every((d) => _is.isVariableDeclaration.call(void 0, d) || _is.isParameterDeclaration.call(void 0, d) || _is.isBindingElement.call(void 0, d));
   }
   // A declared `Value` place: a local/param identifier, or a field/element
@@ -32297,7 +32297,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (type === void 0)
       return false;
     if (type.flags & _sync.TypeFlags.Union) {
-      const parts = _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( []));
+      const parts = _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []));
       const valueParts = parts.filter((part) => !this.rustTypeIsNullish(part));
       return parts.length > valueParts.length && valueParts.length > 0 && valueParts.every((part) => this.isDictShapedType(part));
     }
@@ -32334,7 +32334,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // `book["timestamp"|"datetime"|"nonce"|"symbol"] = v` on a local the checker types as an
   // order-book class: `Value::set_book_meta` (hand-written, value.rs) does the shared-store
   // write (`try_book_meta_write`) and otherwise defers to the same `add_element_to_object`.
-  printNativeBookMetaWrite(baseExpr, keyNode, keyText, valueText) {
+  printNativeBookMetaWrite(baseExpr, keyNode, keyText2, valueText) {
     if (!_is.isIdentifier.call(void 0, baseExpr) || !_is.isStringLiteral.call(void 0, keyNode)) {
       return void 0;
     }
@@ -32349,7 +32349,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if ((name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) && !this.rustReadsOrderbooksStore(baseExpr)) {
       return void 0;
     }
-    const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
+    const keyLiteral = keyText2.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
     if (keyLiteral === null) {
       return void 0;
     }
@@ -32379,7 +32379,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const store = init.arguments[0];
     return _is.isPropertyAccessExpression.call(void 0, store) && store.expression.kind === _ast.SyntaxKind.ThisKeyword && store.name.text === "orderbooks";
   }
-  printNativeDictInsert(baseExpr, keyNode, keyText, valueText) {
+  printNativeDictInsert(baseExpr, keyNode, keyText2, valueText) {
     const receiver = this.rustNativeInsertReceiver(baseExpr);
     if (receiver === void 0 || !this.rustReceiverStaysDict(baseExpr, receiver)) {
       return void 0;
@@ -32387,7 +32387,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!receiver.isField && this.rustLocalInitReadsTaggedContainer(baseExpr)) {
       return void 0;
     }
-    const keyArg = this.rustNativeInsertKeyArg(receiver, keyNode, keyText);
+    const keyArg = this.rustNativeInsertKeyArg(receiver, keyNode, keyText2);
     if (keyArg === void 0) {
       return void 0;
     }
@@ -32408,15 +32408,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  string place becomes `crate::runtime::stringify_param(&k)` — the exact
    *  conversion the helper's dict branch applies to a non-string key, and
    *  `k.to_string()` for a string one. */
-  rustNativeInsertKeyArg(receiver, keyNode, keyText) {
+  rustNativeInsertKeyArg(receiver, keyNode, keyText2) {
     if (_is.isStringLiteral.call(void 0, keyNode)) {
       if (_RustTranspiler.RUST_BOOK_META_KEYS.has(keyNode.text) && !receiver.plain) {
         return void 0;
       }
-      const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
+      const keyLiteral = keyText2.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
       return keyLiteral === null ? void 0 : `${keyLiteral[1]}.into()`;
     }
-    const key = keyText.trim();
+    const key = keyText2.trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || (receiver.isField ? key.includes("self") : new RegExp(`\\b${receiver.text}\\b`).test(key))) {
       return void 0;
     }
@@ -32475,12 +32475,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** The `get_mut` key of an rp05 hop: a borrowed `&str` — the literal itself,
    *  or the stringification the insert's key uses. */
-  rp05EntryKeyArg(receiver, keyNode, keyText) {
+  rp05EntryKeyArg(receiver, keyNode, keyText2) {
     if (_is.isStringLiteral.call(void 0, keyNode)) {
-      const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
+      const keyLiteral = keyText2.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
       return keyLiteral === null ? void 0 : keyLiteral[1];
     }
-    const key = keyText.trim();
+    const key = keyText2.trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || key === "self" || !this.rustKeyIsProvenString(keyNode) || new RegExp(`\\b${receiver.text}\\b`).test(key)) {
       return void 0;
     }
@@ -32621,7 +32621,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (checker === void 0) {
       return void 0;
     }
-    const declarations = _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(ident));
+    const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(ident));
     const declaration = declarations.length === 1 ? declarations[0] : void 0;
     return declaration !== void 0 && (_is.isVariableDeclaration.call(void 0, declaration) || _is.isParameterDeclaration.call(void 0, declaration)) ? declaration : void 0;
   }
@@ -32632,14 +32632,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (type === void 0)
       return false;
     if (type.flags & _sync.TypeFlags.Union) {
-      const parts = _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( []));
+      const parts = _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []));
       return parts.length > 0 && parts.every((part) => this.rustWriteDictShape(part));
     }
     if (type.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Void)) {
       return true;
     }
     const checker = this.getChecker();
-    if (!(type.flags & _sync.TypeFlags.Object) || checker.isArrayType(type) || checker.isTupleType(type) || checker.isArrayLikeType(type) || (_nullishCoalesce(_chunkQYYT7MP4cjs.typeTarget.call(void 0, type), () => ( type))).objectFlags & _sync.ObjectFlags.Class) {
+    if (!(type.flags & _sync.TypeFlags.Object) || checker.isArrayType(type) || checker.isTupleType(type) || checker.isArrayLikeType(type) || (_nullishCoalesce(_chunkC7C726CWcjs.typeTarget.call(void 0, type), () => ( type))).objectFlags & _sync.ObjectFlags.Class) {
       return false;
     }
     return type.getCallSignatures().length === 0 && type.getConstructSignatures().length === 0;
@@ -32901,8 +32901,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!type) {
       return false;
     }
-    if (type.flags === _sync.TypeFlags.Union && Array.isArray(_chunkQYYT7MP4cjs.typeParts.call(void 0, type))) {
-      return _chunkQYYT7MP4cjs.typeParts.call(void 0, type).length > 0 && _chunkQYYT7MP4cjs.typeParts.call(void 0, type).every((member) => this.rustTypeFlagsAll(member, flags));
+    if (type.flags === _sync.TypeFlags.Union && Array.isArray(_chunkC7C726CWcjs.typeParts.call(void 0, type))) {
+      return _chunkC7C726CWcjs.typeParts.call(void 0, type).length > 0 && _chunkC7C726CWcjs.typeParts.call(void 0, type).every((member) => this.rustTypeFlagsAll(member, flags));
     }
     return flags.has(type.flags);
   }
@@ -33419,7 +33419,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     let declaration = this.rustCallDeclarations.get(call);
     if (declaration === void 0) {
       try {
-        declaration = _nullishCoalesce(_chunkQYYT7MP4cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call)), () => ( null));
+        declaration = _nullishCoalesce(_chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call)), () => ( null));
       } catch (e) {
         return void 0;
       }
@@ -33483,7 +33483,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     }
     const symbol = checker.getSymbolAtLocation(node);
-    return symbol === void 0 ? void 0 : _nullishCoalesce(_chunkQYYT7MP4cjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, symbol)[0]));
+    return symbol === void 0 ? void 0 : _nullishCoalesce(_chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkC7C726CWcjs.symbolDeclarations.call(void 0, symbol)[0]));
   }
   /** Condition text for a bare identifier of native-`bool` type, else undefined. */
   printNativeBoolParamCondition(node) {
@@ -33563,7 +33563,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return false;
       let declaration;
       try {
-        declaration = _chunkQYYT7MP4cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+        declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
       } catch (e) {
         return false;
       }
@@ -33806,7 +33806,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       }
       let declaration;
       try {
-        declaration = _chunkQYYT7MP4cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+        declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
       } catch (e) {
         return false;
       }
@@ -33861,7 +33861,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** `x['k'] = v` on a native-map parameter: the insert `add_element_to_object`
    *  performs on the same plain dict, on the map the type already is. */
-  rustMapParamDictInsert(baseExpr, keyNode, keyText, valueText) {
+  rustMapParamDictInsert(baseExpr, keyNode, keyText2, valueText) {
     const declaration = this.rustMapParamDeclaration(baseExpr);
     if (declaration === void 0) {
       return void 0;
@@ -33870,7 +33870,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!this.rustDictBearerKeyOk(keyNode) && !this.rustR01BearerWriteKeyOk(keyNode, name)) {
       return void 0;
     }
-    const keyArg = _nullishCoalesce(this.rustNativeInsertKeyArg({ text: name, isField: false, plain: true }, keyNode, keyText), () => ( this.rustR01BearerWriteKeyArg(keyNode, keyText, name)));
+    const keyArg = _nullishCoalesce(this.rustNativeInsertKeyArg({ text: name, isField: false, plain: true }, keyNode, keyText2), () => ( this.rustR01BearerWriteKeyArg(keyNode, keyText2, name)));
     if (keyArg === void 0) {
       return void 0;
     }
@@ -34026,7 +34026,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     }
     const symbol = checker.getSymbolAtLocation(node);
-    const declaration = _nullishCoalesce(_chunkQYYT7MP4cjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, symbol)[0]));
+    const declaration = _nullishCoalesce(_chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkC7C726CWcjs.symbolDeclarations.call(void 0, symbol)[0]));
     return _optionalChain([declaration, 'optionalAccess', _4314 => _4314.kind]) === _ast.SyntaxKind.VariableDeclaration && this.rustSafeStringLocalIsTyped(declaration);
   }
   // `let x = <bool expr>` → the printed bool expression, or undefined.
@@ -34066,7 +34066,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return _nullishCoalesce(cached, () => ( void 0));
     }
     const chain = [];
-    let parentClass = _chunkQYYT7MP4cjs.getAllSuperTypeNodes.call(void 0, classDecl)[0];
+    let parentClass = _chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, classDecl)[0];
     let ok = true;
     while (parentClass !== void 0) {
       const parentClassDecl = _optionalChain([this, 'access', _4317 => _4317.getChecker, 'call', _4318 => _4318(), 'access', _4319 => _4319.getTypeAtLocation, 'call', _4320 => _4320(parentClass), 'optionalAccess', _4321 => _4321.getSymbol, 'call', _4322 => _4322(), 'optionalAccess', _4323 => _4323.valueDeclaration, 'optionalAccess', _4324 => _4324.resolve, 'call', _4325 => _4325()]);
@@ -34081,7 +34081,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         }
       }
       chain.push(byName);
-      parentClass = _nullishCoalesce(_chunkQYYT7MP4cjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
+      parentClass = _nullishCoalesce(_chunkC7C726CWcjs.getAllSuperTypeNodes.call(void 0, parentClassDecl)[0], () => ( void 0));
     }
     this.rustClassAncestorTables.set(classDecl, ok ? chain : null);
     return ok ? chain : void 0;
@@ -34130,7 +34130,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     let ok = true;
     const visit = (n) => {
-      if (!ok || n !== body && _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, n)) {
+      if (!ok || n !== body && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n)) {
         return;
       }
       if (_is.isReturnStatement.call(void 0, n) && !this.rustStrReturnValueConverts(n.expression)) {
@@ -34179,7 +34179,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     let declaration = this.rustCallDeclarations.get(node);
     if (declaration === void 0) {
       try {
-        declaration = _nullishCoalesce(_chunkQYYT7MP4cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(node)), () => ( null));
+        declaration = _nullishCoalesce(_chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(node)), () => ( null));
       } catch (e) {
         return void 0;
       }
@@ -34210,7 +34210,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     }
     if (_is.isReturnStatement.call(void 0, parent) && parent.expression === current) {
-      return this.rustNativeStrReturnKind(_chunkQYYT7MP4cjs.findAncestor.call(void 0, parent.parent, _chunkQYYT7MP4cjs.isFunctionLike)) !== "str";
+      return this.rustNativeStrReturnKind(_chunkC7C726CWcjs.findAncestor.call(void 0, parent.parent, _chunkC7C726CWcjs.isFunctionLike)) !== "str";
     }
     return true;
   }
@@ -34745,7 +34745,7 @@ ${classMethods}
     if (memberType === void 0 || !this.isStringType(memberType.flags))
       return void 0;
     const receiverType = this.typeOfNodeIfAny(receiver);
-    if (receiverType === void 0 || !(receiverType.flags & _sync.TypeFlags.Object) || !((_nullishCoalesce(_chunkQYYT7MP4cjs.typeTarget.call(void 0, receiverType), () => ( receiverType))).objectFlags & _sync.ObjectFlags.Class))
+    if (receiverType === void 0 || !(receiverType.flags & _sync.TypeFlags.Object) || !((_nullishCoalesce(_chunkC7C726CWcjs.typeTarget.call(void 0, receiverType), () => ( receiverType))).objectFlags & _sync.ObjectFlags.Class))
       return void 0;
     return `crate::value::get_value_k(&${receiverText}, ${this.quotedStringLiteral(member)})`;
   }
@@ -34795,7 +34795,7 @@ ${classMethods}
   /** Types declared outside ts/src (Date, Response, Array, Promise, …) are never
    *  backed by a plain `Value` map in the rust port. */
   isLibDeclaredType(type) {
-    const declarations = _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, this.typeSymbolOf(type));
+    const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, this.typeSymbolOf(type));
     return declarations.some((d) => {
       const file = _nullishCoalesce(_optionalChain([d, 'optionalAccess', _4354 => _4354.getSourceFile, 'optionalCall', _4355 => _4355(), 'optionalAccess', _4356 => _4356.fileName]), () => ( ""));
       return /[\\/]lib\.[^\\/]*\.d\.ts$/.test(file) || /[\\/]node_modules[\\/]typescript[\\/]/.test(file);
@@ -34805,12 +34805,12 @@ ${classMethods}
     if (type === void 0)
       return false;
     if (type.flags & (_sync.TypeFlags.Union | _sync.TypeFlags.Intersection)) {
-      return (_nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( []))).some((member) => this.isClassInstanceType(member));
+      return (_nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []))).some((member) => this.isClassInstanceType(member));
     }
     const symbol = _nullishCoalesce(this.typeSymbolOf(type), () => ( type.getAliasSymbol()));
     if (_optionalChain([symbol, 'optionalAccess', _4357 => _4357.flags]) & _sync.SymbolFlags.Class)
       return true;
-    const declarations = _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, symbol);
+    const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, symbol);
     return declarations.some((d) => _is.isClassDeclaration.call(void 0, d) || _is.isClassExpression.call(void 0, d));
   }
   hasCallableShape(type) {
@@ -34820,13 +34820,13 @@ ${classMethods}
   isProvenListType(type) {
     if (!(type.flags & _sync.TypeFlags.Object))
       return false;
-    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkQYYT7MP4cjs.typeTarget.call(void 0, type), 'optionalAccess', _4358 => _4358.objectFlags]), () => ( 0)));
+    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkC7C726CWcjs.typeTarget.call(void 0, type), 'optionalAccess', _4358 => _4358.objectFlags]), () => ( 0)));
     if (objectFlags & _sync.ObjectFlags.Tuple)
       return true;
     const name = _optionalChain([this, 'access', _4359 => _4359.typeSymbolOf, 'call', _4360 => _4360(type), 'optionalAccess', _4361 => _4361.name]);
     if (name === "Array" || name === "ReadonlyArray")
       return true;
-    const targetName = _optionalChain([this, 'access', _4362 => _4362.typeSymbolOf, 'call', _4363 => _4363(_chunkQYYT7MP4cjs.typeTarget.call(void 0, type)), 'optionalAccess', _4364 => _4364.name]);
+    const targetName = _optionalChain([this, 'access', _4362 => _4362.typeSymbolOf, 'call', _4363 => _4363(_chunkC7C726CWcjs.typeTarget.call(void 0, type)), 'optionalAccess', _4364 => _4364.name]);
     return targetName === "Array" || targetName === "ReadonlyArray";
   }
   /** True only for object types the rust port represents as `Value::Dict`
@@ -34835,7 +34835,7 @@ ${classMethods}
     if (type === void 0)
       return false;
     if (type.flags & _sync.TypeFlags.Union) {
-      const parts = _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( []));
+      const parts = _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []));
       const nullish = parts.filter((p) => this.rustTypeIsNullish(p));
       const valueParts = parts.filter((p) => !this.rustTypeIsNullish(p));
       return nullish.length > 0 && valueParts.length > 0 && valueParts.every((p) => this.isProvenMapType(p));
@@ -34903,7 +34903,7 @@ ${classMethods}
     if (!_is.isPropertyAccessExpression.call(void 0, node.expression))
       return void 0;
     try {
-      return _chunkQYYT7MP4cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(node));
+      return _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(node));
     } catch (e) {
       return void 0;
     }
@@ -34924,7 +34924,7 @@ ${classMethods}
       const visit = (node) => {
         if (!all)
           return;
-        if (node !== body && _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, node))
+        if (node !== body && _chunkC7C726CWcjs.isFunctionLike.call(void 0, node))
           return;
         if (_is.isReturnStatement.call(void 0, node)) {
           returns++;
@@ -34954,8 +34954,8 @@ ${classMethods}
   /** Native read for one chain level, or undefined to keep `get_value`. */
   // `book['bids'|'asks'|'nonce'|...]` on a checker-typed order-book class: the hand-written
   // `Value::book_field` serves the same shared-store read as `get_value_k`.
-  printNativeBookFieldRead(receiverText, receiverNode, keyText, viaStore = false) {
-    if (!_RustTranspiler.RUST_ORDERBOOK_READ_FIELDS.has(keyText))
+  printNativeBookFieldRead(receiverText, receiverNode, keyText2, viaStore = false) {
+    if (!_RustTranspiler.RUST_ORDERBOOK_READ_FIELDS.has(keyText2))
       return void 0;
     if (/\/test\//.test(String(_nullishCoalesce(_optionalChain([receiverNode, 'access', _4365 => _4365.getSourceFile, 'optionalCall', _4366 => _4366(), 'access', _4367 => _4367.fileName]), () => ( "")))))
       return void 0;
@@ -34965,7 +34965,7 @@ ${classMethods}
     const name = type === void 0 ? void 0 : _optionalChain([this, 'access', _4368 => _4368.typeSymbolOf, 'call', _4369 => _4369(type), 'optionalAccess', _4370 => _4370.name]);
     if ((name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) && !(viaStore && this.rustReadsOrderbooksStore(receiverNode)))
       return void 0;
-    return `${receiverText}.book_field("${keyText}")`;
+    return `${receiverText}.book_field("${keyText2}")`;
   }
   printNativeContainerAccess(receiverText, receiverNode, keyNode) {
     const readBearer = this.rustReadBearerKind(receiverNode);
@@ -35023,10 +35023,10 @@ ${classMethods}
       return void 0;
     if (this.isWriteBackBindRead(keyNode.parent))
       return void 0;
-    const keyText = this.printNode(keyNode, 0).trim();
-    if (!keyText || keyText.startsWith("&"))
+    const keyText2 = this.printNode(keyNode, 0).trim();
+    if (!keyText2 || keyText2.startsWith("&"))
       return void 0;
-    return `${receiverText}.as_array().and_then(|__arr| match &${keyText} { Value::Int(__n) => __arr.get(*__n as usize), Value::Str(__s) => __s.parse::<usize>().ok().and_then(|__n| __arr.get(__n)), _ => None }).cloned().unwrap_or(Value::Null)`;
+    return `${receiverText}.as_array().and_then(|__arr| match &${keyText2} { Value::Int(__n) => __arr.get(*__n as usize), Value::Str(__s) => __s.parse::<usize>().ok().and_then(|__n| __arr.get(__n)), _ => None }).cloned().unwrap_or(Value::Null)`;
   }
   /** True when this read initialises a local that the very next statement in
    *  the same block mutates (`x['k'] = v` -> `add_element_to_object(&mut x…)`,
@@ -35106,7 +35106,7 @@ ${classMethods}
     const type = this.getCheckedTypeOf(node);
     if (type === void 0)
       return false;
-    const parts = type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( [])) : [type];
+    const parts = type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( [])) : [type];
     let strings = 0;
     for (const part of parts) {
       if (part.flags & (_sync.TypeFlags.String | _sync.TypeFlags.StringLiteral)) {
@@ -35160,18 +35160,18 @@ ${classMethods}
     const read = this.rustElementReadOfKey(keyNode);
     if (read !== void 0 && this.isWriteBackBindRead(read))
       return void 0;
-    const keyText = this.printNode(keyNode, 0).trim();
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyText))
+    const keyText2 = this.printNode(keyNode, 0).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyText2))
       return void 0;
-    if (this.rustNodeIsKeyUnsafePlace(keyText))
+    if (this.rustNodeIsKeyUnsafePlace(keyText2))
       return void 0;
-    return `${receiverText}.as_map().and_then(|__m| ${keyText}.as_str().and_then(|__k| __m.get(__k))).cloned().unwrap_or(Value::Null)`;
+    return `${receiverText}.as_map().and_then(|__m| ${keyText2}.as_str().and_then(|__k| __m.get(__k))).cloned().unwrap_or(Value::Null)`;
   }
   /** Keys `get_value` serves from the book store / cache bucket / live
    *  snapshot instead of the dict itself — a dynamic read cannot prove the
    *  key away, so a place named after one stays boxed. */
-  rustNodeIsKeyUnsafePlace(keyText) {
-    return _RustTranspiler.RUST_DICT_LOCAL_UNSAFE_KEYS.has(keyText);
+  rustNodeIsKeyUnsafePlace(keyText2) {
+    return _RustTranspiler.RUST_DICT_LOCAL_UNSAFE_KEYS.has(keyText2);
   }
   rustParamShadowEmittedSet() {
     const src = this.getSrc();
@@ -35235,7 +35235,7 @@ ${classMethods}
     const emitted = this.rustParamShadowEmittedSet();
     let scope = current.parent;
     while (scope !== void 0) {
-      if (_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, scope)) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, scope)) {
         const entry = emitted.has(scope) ? this.rustParamShadowTable(scope).get(name) : void 0;
         if (entry !== void 0 && entry.declaration === declaration)
           return entry;
@@ -35248,7 +35248,7 @@ ${classMethods}
   rustFunctionDeclaresName(fn, name) {
     let found = false;
     this.rustWalkScope(fn, (node) => {
-      if (_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, node))
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, node))
         return RUST_WALK_SKIP;
       if ((_is.isVariableDeclaration.call(void 0, node) || _is.isParameterDeclaration.call(void 0, node)) && _is.isIdentifier.call(void 0, node.name) && node.name.text === name) {
         found = true;
@@ -35293,7 +35293,7 @@ ${classMethods}
       return false;
     if (!(type.flags & _sync.TypeFlags.Object))
       return false;
-    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkQYYT7MP4cjs.typeTarget.call(void 0, type), 'optionalAccess', _4373 => _4373.objectFlags]), () => ( 0)));
+    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkC7C726CWcjs.typeTarget.call(void 0, type), 'optionalAccess', _4373 => _4373.objectFlags]), () => ( 0)));
     if (objectFlags & _sync.ObjectFlags.Tuple)
       return false;
     if (this.hasCallableShape(type))
@@ -35303,7 +35303,7 @@ ${classMethods}
     const name = _optionalChain([this, 'access', _4374 => _4374.typeSymbolOf, 'call', _4375 => _4375(type), 'optionalAccess', _4376 => _4376.name]);
     if (name === "Array" || name === "ReadonlyArray")
       return true;
-    const targetName = _optionalChain([this, 'access', _4377 => _4377.typeSymbolOf, 'call', _4378 => _4378(_chunkQYYT7MP4cjs.typeTarget.call(void 0, type)), 'optionalAccess', _4379 => _4379.name]);
+    const targetName = _optionalChain([this, 'access', _4377 => _4377.typeSymbolOf, 'call', _4378 => _4378(_chunkC7C726CWcjs.typeTarget.call(void 0, type)), 'optionalAccess', _4379 => _4379.name]);
     return targetName === "Array" || targetName === "ReadonlyArray";
   }
   /** Every reference to the parameter must be a printable read, and at least
@@ -35608,8 +35608,8 @@ ${ind}let ${view}: &${map} = &${arc};
     const key = args[1];
     if (key === void 0 || !_is.isStringLiteral.call(void 0, key))
       return void 0;
-    const keyText = key.text;
-    if (keyText === "" || _RustTranspiler.RUST_DICT_LOCAL_UNSAFE_KEYS.has(keyText))
+    const keyText2 = key.text;
+    if (keyText2 === "" || _RustTranspiler.RUST_DICT_LOCAL_UNSAFE_KEYS.has(keyText2))
       return void 0;
     if (args.length === 3 && !this.rustProHandlerShadowDefaultShape(args[2]))
       return void 0;
@@ -35618,7 +35618,7 @@ ${ind}let ${view}: &${map} = &${arc};
     const dflt = args.length === 3 ? this.rustProHandlerShadowDefault(args[2]) : "Value::Null";
     if (dflt === void 0)
       return void 0;
-    return this.rustProHandlerShadowReadText(kind, this.escapeRustStringLiteral(keyText), dflt);
+    return this.rustProHandlerShadowReadText(kind, this.escapeRustStringLiteral(keyText2), dflt);
   }
   /** A miss-arm default the match can hold: absent (`Value::Null`) or a
    *  literal; a computed default keeps the helper (its Value is not
@@ -35658,24 +35658,24 @@ ${ind}let ${view}: &${map} = &${arc};
     }
     return void 0;
   }
-  printNativeMapAccess(receiverText, receiverNode, keyText) {
-    if (this.rustMapParamDeclaration(receiverNode) !== void 0 && _RustTranspiler.rustBearerKeyTextOk(keyText)) {
-      return `${receiverText}.get("${this.escapeRustStringLiteral(keyText)}").cloned().unwrap_or(Value::Null)`;
+  printNativeMapAccess(receiverText, receiverNode, keyText2) {
+    if (this.rustMapParamDeclaration(receiverNode) !== void 0 && _RustTranspiler.rustBearerKeyTextOk(keyText2)) {
+      return `${receiverText}.get("${this.escapeRustStringLiteral(keyText2)}").cloned().unwrap_or(Value::Null)`;
     }
     if (this.rustDictBearerDeclaration(receiverNode) !== void 0) {
-      if (!_RustTranspiler.rustBearerKeyTextOk(keyText))
+      if (!_RustTranspiler.rustBearerKeyTextOk(keyText2))
         return void 0;
-      return `${receiverText}.get("${this.escapeRustStringLiteral(keyText)}").cloned().unwrap_or(Value::Null)`;
+      return `${receiverText}.get("${this.escapeRustStringLiteral(keyText2)}").cloned().unwrap_or(Value::Null)`;
     }
-    if (!this.isProvenMapExpression(receiverNode) && !this.rustR10LiteralReadOk(receiverNode, keyText)) {
+    if (!this.isProvenMapExpression(receiverNode) && !this.rustR10LiteralReadOk(receiverNode, keyText2)) {
       if (!this.rustIsDeclaredDictLocal(receiverNode))
         return void 0;
-      if (_RustTranspiler.RUST_DICT_LOCAL_UNSAFE_KEYS.has(keyText))
+      if (_RustTranspiler.RUST_DICT_LOCAL_UNSAFE_KEYS.has(keyText2))
         return void 0;
-      if (keyText === "" || /^\d+$/.test(keyText))
+      if (keyText2 === "" || /^\d+$/.test(keyText2))
         return void 0;
     }
-    const key = this.escapeRustStringLiteral(keyText);
+    const key = this.escapeRustStringLiteral(keyText2);
     return `${receiverText}.as_map().and_then(|__m| __m.get("${key}")).cloned().unwrap_or(Value::Null)`;
   }
   rustDeclarationOfIdentifier(node) {
@@ -35683,7 +35683,7 @@ ${ind}let ${view}: &${map} = &${arc};
       return void 0;
     try {
       const symbol = this.getChecker().getSymbolAtLocation(node);
-      return _chunkQYYT7MP4cjs.symbolValueDeclaration.call(void 0, symbol);
+      return _chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, symbol);
     } catch (e) {
       return void 0;
     }
@@ -35728,7 +35728,7 @@ ${ind}let ${view}: &${map} = &${arc};
   /** D2: the proof holds only while nothing re-assigns the local. */
   rustLocalIsReassigned(declaration, name) {
     let scope = declaration;
-    while (scope !== void 0 && !_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope))
+    while (scope !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, scope) && !_is.isSourceFile.call(void 0, scope))
       scope = scope.parent;
     if (scope === void 0)
       return true;
@@ -35765,7 +35765,7 @@ ${ind}let ${view}: &${map} = &${arc};
     if (type === void 0)
       return false;
     if (type.flags & (_sync.TypeFlags.Union | _sync.TypeFlags.Intersection)) {
-      return (_nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( []))).some((member) => this.rustWsOrderBookClassType(member));
+      return (_nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []))).some((member) => this.rustWsOrderBookClassType(member));
     }
     if (!(type.flags & _sync.TypeFlags.Object))
       return false;
@@ -35788,7 +35788,7 @@ ${ind}let ${view}: &${map} = &${arc};
       if (type2 === void 0)
         return false;
       const symbol = this.typeSymbolOf(type2);
-      const declarations = _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, symbol);
+      const declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, symbol);
       return declarations.some((d) => {
         if (!_is.isClassDeclaration.call(void 0, d) || d.name === void 0 || d.name.text !== "Client")
           return false;
@@ -35799,7 +35799,7 @@ ${ind}let ${view}: &${map} = &${arc};
     const type = this.getCheckedTypeOf(declaration.name);
     if (named(type))
       return true;
-    return (_nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( []))).some((member) => named(member));
+    return (_nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( []))).some((member) => named(member));
   }
   /** Constant string argument of `parseInt`/`parseFloat` folded the way rust's
    *  `str::parse` would; undefined when the fold is not obviously exact. */
@@ -35875,7 +35875,7 @@ ${ind}let ${view}: &${map} = &${arc};
       return false;
     const root = this.rootPlaceText(node);
     for (let current = node.parent; current; current = current.parent) {
-      if (_is.isStatement.call(void 0, current) || _is.isSourceFile.call(void 0, current) || _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, current))
+      if (_is.isStatement.call(void 0, current) || _is.isSourceFile.call(void 0, current) || _chunkC7C726CWcjs.isFunctionLike.call(void 0, current))
         break;
       if (_is.isBinaryExpression.call(void 0, current) && this.isNodeInsideNode(node, current.right)) {
         const op = current.operatorToken.kind;
@@ -36201,8 +36201,8 @@ ${idn}}`;
         const name = p.name.text;
         return `${idn2}m.insert("${escapeKey(name)}".to_string(), ${name}.clone());`;
       }
-      const keyText = _is.isStringLiteral.call(void 0, p.name) ? p.name.text : p.name.text;
-      return `${idn2}m.insert("${escapeKey(keyText)}".to_string(), ${this.printNode(p.initializer, 0)});`;
+      const keyText2 = _is.isStringLiteral.call(void 0, p.name) ? p.name.text : p.name.text;
+      return `${idn2}m.insert("${escapeKey(keyText2)}".to_string(), ${this.printNode(p.initializer, 0)});`;
     });
     const idn1 = this.getIden(identation + 1);
     const body = lines.map((l) => l + "\n").join("");
@@ -36414,7 +36414,7 @@ ${iden}}`;
     const idn = this.getIden(identation);
     if (!exp)
       return `${idn}return;`;
-    const fn = _chunkQYYT7MP4cjs.findAncestor.call(void 0, node.parent, _chunkQYYT7MP4cjs.isFunctionLike);
+    const fn = _chunkC7C726CWcjs.findAncestor.call(void 0, node.parent, _chunkC7C726CWcjs.isFunctionLike);
     if (this.rustNativeStrReturnKind(fn) === "str" && this.rustStrReturnValueConverts(exp)) {
       if (this.literalKindOfNode(this.unwrapParensNode(exp)) === "null")
         return `${idn}return None;`;
@@ -36435,12 +36435,12 @@ ${iden}}`;
   printSpreadElement(node, identation) {
     return `${this.getIden(identation)}${this.printNode(node.expression, 0)}`;
   }
-  rustR01NativeDictInsert(baseExpr, keyNode, keyText, valueText) {
+  rustR01NativeDictInsert(baseExpr, keyNode, keyText2, valueText) {
     if (!_is.isIdentifier.call(void 0, baseExpr) || !this.rustR01LocalStaysPlain(baseExpr)) {
       return void 0;
     }
     const receiver = { text: String(baseExpr.text), isField: false, plain: true, nameNode: baseExpr };
-    const keyArg = this.rustNativeInsertKeyArg(receiver, keyNode, keyText);
+    const keyArg = this.rustNativeInsertKeyArg(receiver, keyNode, keyText2);
     if (keyArg === void 0) {
       return void 0;
     }
@@ -36461,7 +36461,7 @@ ${iden}}`;
    *  exactly like the helper's `_ => {}` arm. */
   rustR01LocalStaysPlain(ident, depth = 0) {
     const checker = this.checkerOrUndefined();
-    const declarations = checker === void 0 ? [] : _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(ident));
+    const declarations = checker === void 0 ? [] : _chunkC7C726CWcjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(ident));
     const declaration = declarations.length === 1 ? declarations[0] : void 0;
     if (declaration === void 0 || depth > 4) {
       return false;
@@ -36592,7 +36592,7 @@ ${iden}}`;
     }
     let declaration;
     try {
-      declaration = _chunkQYYT7MP4cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+      declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
     } catch (e) {
       return false;
     }
@@ -36662,7 +36662,7 @@ ${iden}}`;
   rustR01CalleeIsBase(call) {
     let declaration;
     try {
-      declaration = _chunkQYYT7MP4cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+      declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
     } catch (e) {
       return false;
     }
@@ -36678,7 +36678,7 @@ ${iden}}`;
       return void 0;
     let declaration;
     try {
-      declaration = _chunkQYYT7MP4cjs.symbolValueDeclaration.call(void 0, this.getChecker().getSymbolAtLocation(node.name));
+      declaration = _chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, this.getChecker().getSymbolAtLocation(node.name));
     } catch (e) {
       return void 0;
     }
@@ -36696,7 +36696,7 @@ ${iden}}`;
     if (field === void 0)
       return false;
     const fieldType = this.getCheckedTypeOf(field.type);
-    const parts = fieldType.flags & _sync.TypeFlags.Union ? (_nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, fieldType), () => ( []))).filter((p) => !this.rustTypeIsNullish(p)) : [fieldType];
+    const parts = fieldType.flags & _sync.TypeFlags.Union ? (_nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, fieldType), () => ( []))).filter((p) => !this.rustTypeIsNullish(p)) : [fieldType];
     return parts.length === 1 && this.isProvenMapType(this.getChecker().getIndexTypeOfType(parts[0], _sync.IndexKind.String));
   }
   /** `this.<field>[k]` with a proven-dict field and a proven string key place. */
@@ -36705,10 +36705,10 @@ ${iden}}`;
       return void 0;
     if (!this.rustKeyIsProvenString(keyNode))
       return void 0;
-    const keyText = this.printNode(keyNode, 0).trim();
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyText))
+    const keyText2 = this.printNode(keyNode, 0).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyText2))
       return void 0;
-    return `${receiverText}.as_map().and_then(|__m| ${keyText}.as_str().and_then(|__k| __m.get(__k))).cloned().unwrap_or(Value::Null)`;
+    return `${receiverText}.as_map().and_then(|__m| ${keyText2}.as_str().and_then(|__k| __m.get(__k))).cloned().unwrap_or(Value::Null)`;
   }
   rustVecLocalIsTyped(declaration) {
     if (_optionalChain([declaration, 'optionalAccess', _4410 => _4410.kind]) !== _ast.SyntaxKind.VariableDeclaration)
@@ -36847,7 +36847,7 @@ ${iden}}`;
       return void 0;
     const checker = this.checkerOrUndefined();
     const symbol = _optionalChain([checker, 'optionalAccess', _4434 => _4434.getSymbolAtLocation, 'call', _4435 => _4435(node)]);
-    const declaration = _nullishCoalesce(_chunkQYYT7MP4cjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, symbol)[0]));
+    const declaration = _nullishCoalesce(_chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkC7C726CWcjs.symbolDeclarations.call(void 0, symbol)[0]));
     return declaration !== void 0 && declaration.name !== node && this.rustVecLocalIsTyped(declaration) ? declaration : void 0;
   }
   printRustVecPush(node, name, parsedArg) {
@@ -37071,7 +37071,7 @@ ${iden}}`;
     }
     let declaration;
     try {
-      declaration = _chunkQYYT7MP4cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+      declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
     } catch (e) {
       return false;
     }
@@ -37085,7 +37085,7 @@ ${iden}}`;
     const visit = (node) => {
       if (!ok)
         return;
-      if (node !== body && _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, node))
+      if (node !== body && _chunkC7C726CWcjs.isFunctionLike.call(void 0, node))
         return;
       if (_is.isReturnStatement.call(void 0, node)) {
         returns++;
@@ -37300,17 +37300,17 @@ ${iden}}`;
       return void 0;
     if (this.isWriteBackBindRead(this.rustElementReadOfKey(keyNode)))
       return void 0;
-    const keyText = this.printNode(keyNode, 0).trim();
-    return `${receiverText}.get(${keyText}.as_str().unwrap_or("")).cloned().unwrap_or(Value::Null)`;
+    const keyText2 = this.printNode(keyNode, 0).trim();
+    return `${receiverText}.get(${keyText2}.as_str().unwrap_or("")).cloned().unwrap_or(Value::Null)`;
   }
   /** `x['k'] = v` on a bearer: the insert `add_element_to_object` performs on the
    *  same plain dict, minus the box (`Arc::make_mut` guard the type proves). */
-  rustBearerDictInsert(baseExpr, keyNode, keyText, valueText) {
+  rustBearerDictInsert(baseExpr, keyNode, keyText2, valueText) {
     const declaration = this.rustDictBearerDeclaration(baseExpr);
     const name = String(baseExpr.text);
     if (declaration === void 0 || !(this.rustDictBearerKeyOk(keyNode) || this.rustR01BearerWriteKeyOk(keyNode, name)))
       return void 0;
-    const keyArg = _nullishCoalesce(this.rustNativeInsertKeyArg({ text: name, isField: false, plain: true }, keyNode, keyText), () => ( this.rustR01BearerWriteKeyArg(keyNode, keyText, name)));
+    const keyArg = _nullishCoalesce(this.rustNativeInsertKeyArg({ text: name, isField: false, plain: true }, keyNode, keyText2), () => ( this.rustR01BearerWriteKeyArg(keyNode, keyText2, name)));
     if (keyArg === void 0)
       return void 0;
     return this.rustBearerInsertText(name, keyArg, valueText);
@@ -37337,8 +37337,8 @@ ${iden}}`;
   /** The `entry` key of a chained write's first hop, or undefined when the key
    *  cannot be proven. The bearer proof and the emission share this one answer,
    *  so a local is never typed on a chain the printer then prints boxed. */
-  rustBearerChainHopArg(keyNode, keyText, name) {
-    return _nullishCoalesce(this.rustNativeInsertKeyArg({ text: name, isField: false, plain: true }, keyNode, keyText), () => ( this.rustR01BearerWriteKeyArg(keyNode, keyText, name)));
+  rustBearerChainHopArg(keyNode, keyText2, name) {
+    return _nullishCoalesce(this.rustNativeInsertKeyArg({ text: name, isField: false, plain: true }, keyNode, keyText2), () => ( this.rustR01BearerWriteKeyArg(keyNode, keyText2, name)));
   }
   rustBearerChainedWrite(baseExpr, keys, keyStrs, valueText) {
     if (this.rustDictBearerDeclaration(baseExpr) === void 0)
@@ -37386,13 +37386,13 @@ ${iden}}`;
   }
   /** The native map key for a printed bearer-write key, or undefined when the
    *  box's payload is not a `String`. Literal keys stay with the shared path. */
-  rustR01BearerWriteKeyArg(keyNode, keyText, receiverName) {
+  rustR01BearerWriteKeyArg(keyNode, keyText2, receiverName) {
     const key = this.rustSkipWrappers(keyNode);
     if (key === void 0 || _is.isStringLiteral.call(void 0, key))
       return void 0;
     if (this.r01PlaceKeyNative(key) === true)
       return `${String(key.text)}.clone().unwrap_or_default()`;
-    const text = String(keyText).trim();
+    const text = String(keyText2).trim();
     if (text === "" || new RegExp(`\\b${receiverName}\\b`).test(text))
       return void 0;
     if (!this.rustKeyIsProvenString(key))
@@ -37459,7 +37459,7 @@ ${iden}}`;
   r04KeyPrintsAsValue(type) {
     if (type === void 0)
       return false;
-    const parts = type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( [])) : [type];
+    const parts = type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( [])) : [type];
     if (parts.length === 0)
       return false;
     const checker = this.checkerOrUndefined();
@@ -37615,10 +37615,10 @@ ${iden}}`;
     }
     if (_is.isNumericLiteral.call(void 0, key))
       return `${receiverText}.get(${Number(key.text)}).cloned().unwrap_or(Value::Null)`;
-    const keyText = this.printNode(keyNode, 0).trim();
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyText))
+    const keyText2 = this.printNode(keyNode, 0).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyText2))
       return void 0;
-    return `${receiverText}.get(${keyText}.as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
+    return `${receiverText}.get(${keyText2}.as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
   }
   /** Container kind a printed `Value` expression provably yields on every path. */
   rustContainerProducingKind(node, seen) {
@@ -37845,9 +37845,9 @@ ${iden}}`;
       const inner = this.rustSkipWrappers(property.initializer);
       lines.push(`${idn1}let mut __inner = indexmap::IndexMap::<String, Value>::new();`);
       for (const entry of inner.properties) {
-        const keyText = String(entry.name.text);
-        const value = _is.isShorthandPropertyAssignment.call(void 0, entry) ? `${keyText}.clone()` : this.printNode(entry.initializer, 0);
-        lines.push(`${idn1}__inner.insert("${escapeKey(keyText)}".to_string(), ${value});`);
+        const keyText2 = String(entry.name.text);
+        const value = _is.isShorthandPropertyAssignment.call(void 0, entry) ? `${keyText2}.clone()` : this.printNode(entry.initializer, 0);
+        lines.push(`${idn1}__inner.insert("${escapeKey(keyText2)}".to_string(), ${value});`);
       }
       lines.push(`${idn1}m.insert("${escapeKey(property.name.text)}".to_string(), __inner);`);
     }
@@ -37979,7 +37979,7 @@ ${this.getIden(identation)}}`;
   rustProvenDictThisFieldR05(node) {
     let declaration;
     try {
-      declaration = _chunkQYYT7MP4cjs.symbolValueDeclaration.call(void 0, this.getChecker().getSymbolAtLocation(node.name));
+      declaration = _chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, this.getChecker().getSymbolAtLocation(node.name));
     } catch (e) {
       return false;
     }
@@ -37996,7 +37996,7 @@ ${this.getIden(identation)}}`;
       return void 0;
     }
     const type = this.typeOfNodeIfAny(arg);
-    const parts = type === void 0 ? [] : type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( [])) : [type];
+    const parts = type === void 0 ? [] : type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( [])) : [type];
     if (parts.some((p) => this.getChecker().isArrayType(p) || this.getChecker().isTupleType(p) || (p.flags & (_sync.TypeFlags.StringLike | _sync.TypeFlags.NumberLike | _sync.TypeFlags.BooleanLike | _sync.TypeFlags.BigIntLike)) !== 0)) {
       return void 0;
     }
@@ -38291,11 +38291,11 @@ ${this.getIden(identation)}}`;
     }
   }
   /** A literal-key read (`x['k']` / `x.k`) on a proven plain receiver. */
-  rustR10LiteralReadOk(receiverNode, keyText) {
+  rustR10LiteralReadOk(receiverNode, keyText2) {
     const kind = this.rustR10PlainReceiver(receiverNode);
-    if (kind === void 0 || keyText === "")
+    if (kind === void 0 || keyText2 === "")
       return false;
-    if (kind === "param" && _RustTranspiler.RUST_DICT_LOCAL_UNSAFE_KEYS.has(keyText))
+    if (kind === "param" && _RustTranspiler.RUST_DICT_LOCAL_UNSAFE_KEYS.has(keyText2))
       return false;
     const read = receiverNode.parent;
     return read === void 0 || !this.isWriteBackBindRead(read);
@@ -38314,12 +38314,12 @@ ${this.getIden(identation)}}`;
     const read = this.rustElementReadOfKey(keyNode);
     if (read !== void 0 && this.isWriteBackBindRead(read))
       return void 0;
-    const keyText = this.printNode(keyNode, 0).trim();
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyText))
+    const keyText2 = this.printNode(keyNode, 0).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyText2))
       return void 0;
-    if (kind === "param" && this.rustNodeIsKeyUnsafePlace(keyText))
+    if (kind === "param" && this.rustNodeIsKeyUnsafePlace(keyText2))
       return void 0;
-    return `${receiverText}.as_map().and_then(|__m| ${keyText}.as_str().and_then(|__k| __m.get(__k))).cloned().unwrap_or(Value::Null)`;
+    return `${receiverText}.as_map().and_then(|__m| ${keyText2}.as_str().and_then(|__k| __m.get(__k))).cloned().unwrap_or(Value::Null)`;
   }
   // hx4 R11 — typed `Vec<Value>` locals also admit an argument of a non-`&mut self` `this.m(..)`
   // call that is not the final use (boxed as `Value::from(x.clone())`, the clone the post-pass
@@ -38518,7 +38518,7 @@ ${this.getIden(identation)}}`;
     }
     let declarations;
     try {
-      declarations = _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(callee.name)).filter((d) => d.kind === _ast.SyntaxKind.MethodDeclaration && d.body !== void 0);
+      declarations = _chunkC7C726CWcjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(callee.name)).filter((d) => d.kind === _ast.SyntaxKind.MethodDeclaration && d.body !== void 0);
     } catch (e) {
       return void 0;
     }
@@ -38619,7 +38619,7 @@ ${this.getIden(identation)}}`;
     const checker = this.checkerOrUndefined();
     if (depth > 5)
       return false;
-    const declarations = checker === void 0 ? [] : _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(ident));
+    const declarations = checker === void 0 ? [] : _chunkC7C726CWcjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(ident));
     const declaration = declarations.length === 1 ? declarations[0] : void 0;
     if (declaration === void 0)
       return false;
@@ -38723,7 +38723,7 @@ ${this.getIden(identation)}}`;
     if (node === void 0 || !_is.isIdentifier.call(void 0, node) || this.rustStringLocalIdentifierIsTyped(node))
       return false;
     const checker = this.checkerOrUndefined();
-    const declarations = checker === void 0 ? [] : _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(node));
+    const declarations = checker === void 0 ? [] : _chunkC7C726CWcjs.symbolDeclarations.call(void 0, checker.getSymbolAtLocation(node));
     if (declarations.length !== 1 || !_is.isVariableDeclaration.call(void 0, declarations[0]))
       return false;
     const declaration = declarations[0];
@@ -38862,10 +38862,10 @@ ${this.getIden(identation)}}`;
       return void 0;
     if (this.isWriteBackBindRead(keyNode.parent))
       return void 0;
-    const keyText = this.printNode(keyNode, 0).trim();
-    if (!keyText || keyText.startsWith("&"))
+    const keyText2 = this.printNode(keyNode, 0).trim();
+    if (!keyText2 || keyText2.startsWith("&"))
       return void 0;
-    return `${receiverText}.as_array().and_then(|__arr| match &(${keyText}) { Value::Int(__n) if *__n >= 0 => __arr.get(*__n as usize), _ => None }).cloned().unwrap_or(Value::Null)`;
+    return `${receiverText}.as_array().and_then(|__arr| match &(${keyText2}) { Value::Int(__n) if *__n >= 0 => __arr.get(*__n as usize), _ => None }).cloned().unwrap_or(Value::Null)`;
   }
   r14ValueNumberOperand(node) {
     const operand = this.rustSkipWrappers(node);
@@ -38989,7 +38989,7 @@ ${this.getIden(identation)}}`;
     }
     let declaration;
     try {
-      declaration = _chunkQYYT7MP4cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+      declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
     } catch (e) {
       return void 0;
     }
@@ -38997,7 +38997,7 @@ ${this.getIden(identation)}}`;
       return void 0;
     const kinds = [];
     const visit = (n) => {
-      if (n !== declaration && _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, n))
+      if (n !== declaration && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n))
         return;
       if (_is.isReturnStatement.call(void 0, n))
         kinds.push(n.expression === void 0 ? void 0 : this.rustR16NumericKind(n.expression, depth + 1));
@@ -39014,7 +39014,7 @@ ${this.getIden(identation)}}`;
       return void 0;
     const here = this.typeOfNodeIfAny(ident);
     const declared = this.typeOfNodeIfAny(declaration.name);
-    if (here !== void 0 && declared !== void 0 && (here.flags === _sync.TypeFlags.Number || here.flags === _sync.TypeFlags.NumberLiteral) && declared.flags & _sync.TypeFlags.Union && (_nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, declared), () => ( []))).some((t) => t.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Null)) && !this.rustR16HasWrites(declaration)) {
+    if (here !== void 0 && declared !== void 0 && (here.flags === _sync.TypeFlags.Number || here.flags === _sync.TypeFlags.NumberLiteral) && declared.flags & _sync.TypeFlags.Union && (_nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, declared), () => ( []))).some((t) => t.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Null)) && !this.rustR16HasWrites(declaration)) {
       return "definite";
     }
     if (!_is.isVariableDeclaration.call(void 0, declaration) || declaration.initializer === void 0 || declaration.type !== void 0)
@@ -39109,7 +39109,7 @@ ${this.getIden(identation)}}`;
       return false;
     if (_is.isIdentifier.call(void 0, inner) && (this.rustStringLocalIdentifierIsTyped(inner) || this.rustVecLocalDeclarationOf(inner) !== void 0))
       return false;
-    const parts = type === void 0 ? [] : type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( [])) : [type];
+    const parts = type === void 0 ? [] : type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkC7C726CWcjs.typeParts.call(void 0, type), () => ( [])) : [type];
     return parts.length > 0 && parts.every((t) => String(_nullishCoalesce(_nullishCoalesce(_optionalChain([t, 'optionalAccess', _4584 => _4584.symbol, 'optionalAccess', _4585 => _4585.escapedName]), () => ( _optionalChain([t, 'optionalAccess', _4586 => _4586.symbol, 'optionalAccess', _4587 => _4587.name]))), () => ( ""))) !== "Precise");
   }
   r17ConcatIsAnchored(left, right, leftType, rightType) {
@@ -39668,7 +39668,7 @@ ${this.getIden(identation)}}`;
       return false;
     let declaration;
     try {
-      declaration = _chunkQYYT7MP4cjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
+      declaration = _chunkC7C726CWcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(call));
     } catch (e) {
       return false;
     }
@@ -39676,7 +39676,7 @@ ${this.getIden(identation)}}`;
       return false;
     let ok = true;
     const visit = (n) => {
-      if (!ok || n !== declaration && _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, n))
+      if (!ok || n !== declaration && _chunkC7C726CWcjs.isFunctionLike.call(void 0, n))
         return;
       if (_is.isReturnStatement.call(void 0, n) && n.expression !== void 0 && !this.r25DictFieldStrOrNull(n.expression, key, depth + 1))
         ok = false;
@@ -40114,7 +40114,7 @@ _RustTranspiler.R26_PARAMS_SLOT_ARG = {
 var RustTranspiler = _RustTranspiler;
 
 // src/cppTranspiler.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 var parserConfig7 = {
@@ -40305,7 +40305,7 @@ var CppTranspiler = class extends BaseTranspiler {
   printReturnStatement(node, identation) {
     if (this.asyncTranspiling && !node.expression) {
       let fn = node.parent;
-      while (fn !== void 0 && !_chunkQYYT7MP4cjs.isFunctionLike.call(void 0, fn)) {
+      while (fn !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, fn)) {
         fn = fn.parent;
       }
       if (fn !== void 0 && this.isAsyncFunction(fn)) {
@@ -40716,15 +40716,15 @@ var CppTranspiler = class extends BaseTranspiler {
 };
 
 // src/go/index.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 // src/go/go-local-types.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
 // src/go/tsApi.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
@@ -40733,7 +40733,7 @@ var ts = {
   ...tsAst,
   ...tsIs,
   ...tsSync,
-  ..._chunkQYYT7MP4cjs.tsUtils_exports,
+  ..._chunkC7C726CWcjs.tsUtils_exports,
   // standalone parse (no program) over the generator's API process
   createSourceFile: (fileName, text) => (tsApi ??= new tsSync.API({ cwd: process.cwd() })).createSourceFile(fileName, text)
 };
@@ -40932,7 +40932,7 @@ function urlsDescribeStringProducer(initializer) {
 }
 
 // src/go/hx10w3-G06.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var HX10G06_TUPLE_MAP_SLOTS = {
   "handleOptionBoolAndParams": [1],
   "handleOptionBoolAndParams2": [1],
@@ -50726,7 +50726,7 @@ function installHx5X32StringPtrParams(goTranspiler) {
 }
 
 // src/go/hx10w3-G08.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 var _os = require('os'); var _os2 = _interopRequireDefault(_os);
 
@@ -50957,7 +50957,7 @@ function g08w3Check() {
 }
 
 // src/go/hx10w8-GB01.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 var GB01_DICT_PARAMS = {
   "safeTrade": [0],
@@ -51201,7 +51201,7 @@ function hx10w8GB01Check() {
 }
 
 // src/go/hx10w8-GB05.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
@@ -51411,7 +51411,7 @@ function hx10w8GB05Check() {
 }
 
 // src/go/hx10w9-GB11.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 
 
@@ -51749,7 +51749,7 @@ function hx10w9GB11Check() {
 }
 
 // src/go/hx11-sign-typing.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var SIGN_API_METHODS = { "sign": 1, "fetch2": 1, "request": 1 };
 function signApiParameter(param) {
   const SK = ts.SyntaxKind;
@@ -51815,7 +51815,7 @@ function installCcxtGoSignTyping(goTranspiler) {
 }
 
 // src/go/hx11w8-num-param.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 var NUM_SIGNATURE = /\n {4}(?:(?:override|async|public|private|protected) )*[A-Za-z_$][\w$]* \(([^\n]*)\)(?:: [^\n{]*)? \{/g;
 function hx11w8SiblingNumIdentifier(text, at, arg) {
@@ -51879,7 +51879,7 @@ function installHx11w8NumParams(goTranspiler) {
 }
 
 // src/go/hx11rf-go5.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var OWNED_TABLES = {
   "baseCurrencies": { "publish": "PublishBaseCurrencies", "read": "BaseCurrenciesTable" },
   "quoteCurrencies": { "publish": "PublishQuoteCurrencies", "read": "QuoteCurrenciesTable" },
@@ -51939,7 +51939,7 @@ function installRfGo5OwnedTables(goTranspiler) {
 }
 
 // src/go/hx11fmgo5-G01.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 var SUBSCRIPTIONS_CLASS = "Client";
 function clientSubscriptions(go, node) {
@@ -52096,7 +52096,7 @@ function installFmGo5G01(goTranspiler) {
 }
 
 // src/go/hx11fmgo5-OG02.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var OWNER_CLASS2 = "BaseExchange";
 function unparen(node) {
   while (_optionalChain([node, 'optionalAccess', _6550 => _6550.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
@@ -52350,7 +52350,7 @@ function installFmGo5OG02(goTranspiler) {
 }
 
 // src/go/hx11fmgo5-GP08.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var SLOT_TYPE = { "SafeStringPtr": "*string", "MapTyped": "map[string]any", "GetValueBool": "bool", "Int64Value": "int64" };
 var POINTER_TWIN = { "bool": "*bool", "int64": "*int64" };
 var OWNER_CLASS3 = "BaseExchange";
@@ -52475,7 +52475,7 @@ function installFmGo5GP08(goTranspiler) {
 }
 
 // src/go/hx11fmgo5-G04.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var OWNER_CLASSES = ["BaseExchange", "PredictionExchange"];
 var NIL_TESTABLE_FIELDS = /* @__PURE__ */ new Set([
   "Outcomes",
@@ -52541,6 +52541,195 @@ function installFmGo5G04(goTranspiler) {
   };
 }
 
+// src/go/hx11rdgo2-wscache.ts
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
+var OWNER_CLASS4 = "BaseExchange";
+var CACHES = {
+  "orderbooks": { "go": "Orderbooks", "get": "WsCacheGet", "set": "WsCacheSet", "scalar": false },
+  "ohlcvs": { "go": "Ohlcvs", "get": "WsCacheGet", "set": "WsCacheSet", "scalar": false },
+  "trades": { "go": "Trades", "get": "WsCacheGet", "set": "WsCacheSet", "scalar": false },
+  "fundingRates": { "go": "FundingRates", "get": "WsCacheGet", "set": "WsCacheSet", "scalar": false },
+  "balance": { "go": "Balance", "get": "WsCacheGetScalar", "set": "WsCacheSetScalar", "scalar": true }
+};
+var SYNC_USER_PATH = ["setBalanceCache", "cleanWsData"];
+function cacheField(go, node) {
+  const SK = ts.SyntaxKind;
+  const name = _optionalChain([node, 'optionalAccess', _6700 => _6700.name, 'optionalAccess', _6701 => _6701.text]);
+  if (_optionalChain([node, 'optionalAccess', _6702 => _6702.kind]) !== SK.PropertyAccessExpression || _optionalChain([node, 'access', _6703 => _6703.expression, 'optionalAccess', _6704 => _6704.kind]) !== SK.ThisKeyword || typeof name !== "string" || !Object.prototype.hasOwnProperty.call(CACHES, name)) {
+    return void 0;
+  }
+  const decl = _optionalChain([go, 'access', _6705 => _6705.checkerOrUndefined, 'call', _6706 => _6706(), 'optionalAccess', _6707 => _6707.getSymbolAtLocation, 'call', _6708 => _6708(node.name), 'optionalAccess', _6709 => _6709.valueDeclaration, 'optionalAccess', _6710 => _6710.resolve, 'call', _6711 => _6711()]);
+  return _optionalChain([decl, 'optionalAccess', _6712 => _6712.kind]) === SK.PropertyDeclaration && _optionalChain([decl, 'access', _6713 => _6713.parent, 'optionalAccess', _6714 => _6714.name, 'optionalAccess', _6715 => _6715.text]) === OWNER_CLASS4 ? CACHES[name] : void 0;
+}
+function userPath(node) {
+  const SK = ts.SyntaxKind;
+  for (let current = _optionalChain([node, 'optionalAccess', _6716 => _6716.parent]); current; current = current.parent) {
+    if (current.kind === SK.MethodDeclaration || current.kind === SK.FunctionDeclaration) {
+      const isAsync = (_nullishCoalesce(current.modifiers, () => ( []))).some((m) => m.kind === SK.AsyncKeyword);
+      return isAsync || SYNC_USER_PATH.includes(_optionalChain([current, 'access', _6717 => _6717.name, 'optionalAccess', _6718 => _6718.text]));
+    }
+  }
+  return false;
+}
+function ownedField(go, node) {
+  const field = cacheField(go, node);
+  return field !== void 0 && userPath(node) ? field : void 0;
+}
+function isAssignment(parent, child) {
+  const SK = ts.SyntaxKind;
+  return _optionalChain([parent, 'optionalAccess', _6719 => _6719.kind]) === SK.BinaryExpression && parent.left === child && parent.operatorToken.kind >= SK.FirstAssignment && parent.operatorToken.kind <= SK.LastAssignment;
+}
+function isWriteTarget(node) {
+  const SK = ts.SyntaxKind;
+  const parent = node.parent;
+  if (isAssignment(parent, node)) {
+    return true;
+  }
+  return _optionalChain([parent, 'optionalAccess', _6720 => _6720.kind]) === SK.ElementAccessExpression && parent.expression === node && (isAssignment(parent.parent, parent) || _optionalChain([parent, 'access', _6721 => _6721.parent, 'optionalAccess', _6722 => _6722.kind]) === SK.DeleteExpression);
+}
+function unparen2(node) {
+  while (_optionalChain([node, 'optionalAccess', _6723 => _6723.kind]) === ts.SyntaxKind.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  return node;
+}
+function safeRead(go, node) {
+  const SK = ts.SyntaxKind;
+  const callee = _optionalChain([node, 'optionalAccess', _6724 => _6724.expression]);
+  if (_optionalChain([node, 'optionalAccess', _6725 => _6725.kind]) !== SK.CallExpression || _optionalChain([callee, 'optionalAccess', _6726 => _6726.kind]) !== SK.PropertyAccessExpression || _optionalChain([callee, 'access', _6727 => _6727.expression, 'optionalAccess', _6728 => _6728.kind]) !== SK.ThisKeyword || _optionalChain([callee, 'access', _6729 => _6729.name, 'optionalAccess', _6730 => _6730.text]) !== "safeValue" && _optionalChain([callee, 'access', _6731 => _6731.name, 'optionalAccess', _6732 => _6732.text]) !== "safeDict" || _optionalChain([node, 'access', _6733 => _6733.arguments, 'optionalAccess', _6734 => _6734.length]) !== 2) {
+    return void 0;
+  }
+  const field = ownedField(go, node.arguments[0]);
+  if (field === void 0 || field.scalar) {
+    return void 0;
+  }
+  const decl = _optionalChain([go, 'access', _6735 => _6735.checkerOrUndefined, 'call', _6736 => _6736(), 'optionalAccess', _6737 => _6737.getSymbolAtLocation, 'call', _6738 => _6738(callee.name), 'optionalAccess', _6739 => _6739.valueDeclaration, 'optionalAccess', _6740 => _6740.resolve, 'call', _6741 => _6741()]);
+  return _optionalChain([decl, 'optionalAccess', _6742 => _6742.parent, 'optionalAccess', _6743 => _6743.name, 'optionalAccess', _6744 => _6744.text]) === OWNER_CLASS4 ? field : void 0;
+}
+function keyText(go, key) {
+  const text = go.printNode(key, 0).trim();
+  const proven = go.goAssertedStringDeref(key) || _optionalChain([key, 'optionalAccess', _6745 => _6745.kind]) === ts.SyntaxKind.Identifier && go.goDeclaredTypeOfIdentifier(key) === "*string" && (go.goHasEnclosingNilGuard(key) || go.goDefaultedSafeStringLocal(key));
+  return proven ? "*" + text : text;
+}
+function isNilLiteral2(node) {
+  return _optionalChain([node, 'optionalAccess', _6746 => _6746.kind]) === ts.SyntaxKind.NullKeyword || _optionalChain([node, 'optionalAccess', _6747 => _6747.kind]) === ts.SyntaxKind.Identifier && node.text === "undefined";
+}
+function installRdGo2WsCache(goTranspiler) {
+  const flag = "rdGo2WsCacheInstalled";
+  if (goTranspiler[flag] === true) {
+    return;
+  }
+  goTranspiler[flag] = true;
+  const SK = ts.SyntaxKind;
+  const printAccess = goTranspiler.printPropertyAccessExpression;
+  goTranspiler.printPropertyAccessExpression = function(node, identation) {
+    if (ownedField(this, node) !== void 0 && !isWriteTarget(node)) {
+      return 'this.WsCacheSnapshot("' + cacheField(this, node).go + '")';
+    }
+    return printAccess.call(this, node, identation);
+  };
+  const printElement = goTranspiler.printElementAccessExpression;
+  goTranspiler.printElementAccessExpression = function(node, ...rest) {
+    if (this.isGoElementAccessAssignmentTarget(node)) {
+      return printElement.call(this, node, ...rest);
+    }
+    const keys = [];
+    let root = node;
+    while (_optionalChain([root, 'optionalAccess', _6748 => _6748.kind]) === SK.ElementAccessExpression) {
+      keys.unshift(root.argumentExpression);
+      root = root.expression;
+    }
+    const field = ownedField(this, root);
+    if (field === void 0 || isWriteTarget(root) || _optionalChain([node, 'access', _6749 => _6749.parent, 'optionalAccess', _6750 => _6750.kind]) === SK.DeleteExpression) {
+      return printElement.call(this, node, ...rest);
+    }
+    let acc = "this." + field.get + '("' + field.go + '", ' + this.printNode(keys[0], 0).trim() + ")";
+    for (let i = 1; i < keys.length; i++) {
+      acc = this.ELEMENT_ACCESS_WRAPPER_OPEN + acc + ", " + this.printNode(keys[i], 0) + this.ELEMENT_ACCESS_WRAPPER_CLOSE;
+    }
+    return acc;
+  };
+  const printBinary = goTranspiler.printBinaryExpression;
+  goTranspiler.printBinaryExpression = function(node, identation) {
+    const op = _optionalChain([node, 'access', _6751 => _6751.operatorToken, 'optionalAccess', _6752 => _6752.kind]);
+    if (op === SK.EqualsToken) {
+      const left = node.left;
+      if (_optionalChain([left, 'optionalAccess', _6753 => _6753.kind]) === SK.ElementAccessExpression) {
+        const field = ownedField(this, left.expression);
+        if (field !== void 0 && _optionalChain([left, 'access', _6754 => _6754.expression, 'optionalAccess', _6755 => _6755.kind]) === SK.PropertyAccessExpression) {
+          const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(node.right, identation)).trimStart();
+          return "this." + field.set + '("' + field.go + '", ' + keyText(this, left.argumentExpression) + ", " + value + ")";
+        }
+      } else {
+        const field = ownedField(this, left);
+        if (field !== void 0) {
+          const right = unparen2(node.right);
+          const callee = _optionalChain([right, 'optionalAccess', _6756 => _6756.kind]) === SK.CallExpression ? right.expression : void 0;
+          if (_optionalChain([callee, 'optionalAccess', _6757 => _6757.kind]) === SK.PropertyAccessExpression && _optionalChain([callee, 'access', _6758 => _6758.expression, 'optionalAccess', _6759 => _6759.kind]) === SK.ThisKeyword && _optionalChain([callee, 'access', _6760 => _6760.name, 'optionalAccess', _6761 => _6761.text]) === "createSafeDictionary") {
+            return 'this.WsCacheReset("' + field.go + '")';
+          }
+          if (field.scalar) {
+            const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(node.right, identation)).trimStart();
+            return 'this.WsCacheReplace("' + field.go + '", ' + value + ")";
+          }
+        }
+      }
+    }
+    return printBinary.call(this, node, identation);
+  };
+  const printInlineInOp = goTranspiler.printInlineInOp;
+  goTranspiler.printInlineInOp = function(dictNode, keyNode, dictText, keyText2) {
+    const field = ownedField(this, unparen2(dictNode));
+    if (field !== void 0) {
+      return 'this.WsCacheHas("' + field.go + '", ' + keyText2.trim() + ")";
+    }
+    return printInlineInOp.call(this, dictNode, keyNode, dictText, keyText2);
+  };
+  const printPrefix = goTranspiler.printPrefixUnaryExpression;
+  goTranspiler.printPrefixUnaryExpression = function(node, identation) {
+    const inner = unparen2(node.operand);
+    if (node.operator === SK.ExclamationToken && _optionalChain([node, 'access', _6762 => _6762.parent, 'optionalAccess', _6763 => _6763.kind]) === SK.IfStatement && _optionalChain([inner, 'optionalAccess', _6764 => _6764.kind]) === SK.BinaryExpression && _optionalChain([inner, 'access', _6765 => _6765.operatorToken, 'optionalAccess', _6766 => _6766.kind]) === SK.InKeyword && _optionalChain([ownedField, 'call', _6767 => _6767(this, unparen2(inner.right)), 'optionalAccess', _6768 => _6768.scalar]) === false) {
+      return this.getIden(identation) + "!" + this.printNode(inner, 0).trim();
+    }
+    return printPrefix.call(this, node, identation);
+  };
+  const printEquality = goTranspiler.printInlineEquality;
+  goTranspiler.printInlineEquality = function(left, right, leftText, rightText, isEq) {
+    const [eq, ne] = ["==", "!="];
+    if (isNilLiteral2(right) && ownedField(this, unparen2(left)) !== void 0 && leftText.indexOf("WsCacheSnapshot") >= 0) {
+      return "(" + leftText + " " + (isEq ? eq : ne) + " nil)";
+    }
+    if (isNilLiteral2(left) && ownedField(this, unparen2(right)) !== void 0 && rightText.indexOf("WsCacheSnapshot") >= 0) {
+      return "(" + rightText + " " + (isEq ? eq : ne) + " nil)";
+    }
+    return printEquality.call(this, left, right, leftText, rightText, isEq);
+  };
+  const dictMapType = goTranspiler.goInOpDictMapType;
+  goTranspiler.goInOpDictMapType = function(dictNode, dictText) {
+    const field = ownedField(this, unparen2(dictNode));
+    if (field === void 0) {
+      return dictMapType.call(this, dictNode, dictText);
+    }
+    return field.scalar ? dictMapType.call(this, unparen2(dictNode), "this." + field.go) : void 0;
+  };
+  const printCall = goTranspiler.printCallExpression;
+  goTranspiler.printCallExpression = function(node, identation) {
+    const field = safeRead(this, node);
+    if (field !== void 0) {
+      return "this." + field.get + '("' + field.go + '", ' + this.printNode(node.arguments[1], 0).trim() + ")";
+    }
+    return printCall.call(this, node, identation);
+  };
+  const initType = goTranspiler.goTypeOfInitializer;
+  goTranspiler.goTypeOfInitializer = function(node, printed) {
+    const inner = unparen2(node);
+    if (_optionalChain([inner, 'optionalAccess', _6769 => _6769.kind]) === SK.BinaryExpression && _optionalChain([inner, 'access', _6770 => _6770.operatorToken, 'optionalAccess', _6771 => _6771.kind]) === SK.InKeyword && ownedField(this, unparen2(inner.right)) !== void 0) {
+      return "bool";
+    }
+    return initType.call(this, node, printed);
+  };
+}
+
 // src/go/index.ts
 function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoLocalTypes(goTranspiler, unifiedInt64Params);
@@ -52556,13 +52745,14 @@ function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installFmGo5OG02(goTranspiler);
   installFmGo5GP08(goTranspiler);
   installFmGo5G04(goTranspiler);
+  installRdGo2WsCache(goTranspiler);
 }
 
 // src/rustPasses/index.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 // src/rustPasses/hx10w2-R01.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var IDENT = "[A-Za-z_][A-Za-z0-9_]*";
 var MARKER_KEYS = ["__book_id", "__cache_id", "__cacheKind", "__sideKind", "__live_id"];
 var ROUTED_KEYS = ["cache", "hashmap", "subscriptions", "futures", "timestamp", "datetime", "nonce", "symbol", "checksum"];
@@ -52636,8 +52826,8 @@ var ARRAY_INIT = /^(?:Value::Array\(|Value::from\(\s*vec!\[|Value::from\(\s*std:
 var DICT_INIT = /^(?:Value::Map\(|Value::Dict\()/;
 var SEQ_TYPE = /^(?:&)?(?:mut )?(?:Vec<(?:crate::)?Value>|\[(?:crate::)?Value\])$/;
 var INDEXED = ".cloned().unwrap_or(Value::Null)";
-function literalIndex(keyText) {
-  const key = keyText.trim().replace(/^&/, "").trim();
+function literalIndex(keyText2) {
+  const key = keyText2.trim().replace(/^&/, "").trim();
   const int = /^Value::Int\(\s*(\d+)\s*\)$/.exec(key);
   if (int !== null)
     return Number(int[1]);
@@ -52646,13 +52836,13 @@ function literalIndex(keyText) {
     return Number(str[1]);
   return -1;
 }
-function literalStrKey(keyText) {
-  const key = keyText.trim().replace(/^&/, "").trim();
+function literalStrKey(keyText2) {
+  const key = keyText2.trim().replace(/^&/, "").trim();
   const m = /^Value::Str\(\s*"([^"\\]*)"\s*(?:\.into\(\)|\.to_string\(\))?\s*\)$/.exec(key);
   return m === null ? void 0 : m[1];
 }
-function identKey(keyText) {
-  const m = /^&?([A-Za-z_][A-Za-z0-9_]*)$/.exec(keyText.trim());
+function identKey(keyText2) {
+  const m = /^&?([A-Za-z_][A-Za-z0-9_]*)$/.exec(keyText2.trim());
   return m === null ? void 0 : m[1];
 }
 function callArgs(masked, callStart, recv) {
@@ -52704,18 +52894,18 @@ function nativeGetValue(content, stats) {
     const from = headers[h];
     const to = h + 2 < headers.length ? headers[h + 1] : content.length;
     const region = masked.slice(from, to);
-    const readText = (recv, seq, keyText) => {
+    const readText = (recv, seq, keyText2) => {
       if (seq) {
-        const idx = literalIndex(keyText);
+        const idx = literalIndex(keyText2);
         if (idx >= 0)
           return recv + ".get(" + idx + ")" + INDEXED;
-        const key = identKey(keyText);
+        const key = identKey(keyText2);
         if (key !== void 0 && intPinned(region, key)) {
           return recv + ".get(" + key + ".as_i64().unwrap() as usize)" + INDEXED;
         }
         return void 0;
       }
-      const str = literalStrKey(keyText);
+      const str = literalStrKey(keyText2);
       if (str === void 0 || ROUTED_KEYS.indexOf(str) >= 0)
         return void 0;
       return recv + '.as_map().unwrap().get("' + str + '").cloned().unwrap_or(Value::Null)';
@@ -53025,7 +53215,7 @@ var CASES = [
 ];
 
 // src/rustPasses/hx10w2-R02.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var CALL = "add_element_to_object(";
 var TAGFREE_FIELDS = /* @__PURE__ */ new Set([
   "balance",
@@ -53478,7 +53668,7 @@ function r02NativeInserts(content) {
 }
 
 // src/rustPasses/hx10w2-R03.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var R03_SITE_RX = /(?<![A-Za-z0-9_:.])(in_op|object_keys|object_values|get_array_length)\(/g;
 var R03_LITERAL_KEY = /^&Value::Str\(("(?:[^"\\]|\\.)*")\.(?:to_string|into)\(\)\)$/;
 var R03_IDENT_ARG = /^&([a-z_][A-Za-z0-9_]*)$/;
@@ -53761,7 +53951,7 @@ var R03Prover = class {
       if (seen.has(alias[1]))
         return void 0;
       seen.add(alias[1]);
-      return _optionalChain([this, 'access', _6700 => _6700.facts, 'call', _6701 => _6701(alias[1], absPos), 'optionalAccess', _6702 => _6702.proof]);
+      return _optionalChain([this, 'access', _6772 => _6772.facts, 'call', _6773 => _6773(alias[1], absPos), 'optionalAccess', _6774 => _6774.proof]);
     }
     return void 0;
   }
@@ -53805,8 +53995,8 @@ function hx10w2R03(content) {
         if (facts === void 0)
           continue;
         expr = recv[1];
-        kind = _optionalChain([facts, 'access', _6703 => _6703.proof, 'optionalAccess', _6704 => _6704.kind]);
-        untagged = _optionalChain([facts, 'access', _6705 => _6705.proof, 'optionalAccess', _6706 => _6706.untagged]) === true;
+        kind = _optionalChain([facts, 'access', _6775 => _6775.proof, 'optionalAccess', _6776 => _6776.kind]);
+        untagged = _optionalChain([facts, 'access', _6777 => _6777.proof, 'optionalAccess', _6778 => _6778.untagged]) === true;
         lenSafe = facts.lenSafe;
       } else if (state !== null) {
         expr = (_nullishCoalesce(args[0], () => ( ""))).trim().slice(1);
@@ -53849,7 +54039,7 @@ function hx10w2R03(content) {
 }
 
 // src/rustPasses/hx10w2-R04.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var BOOL_FNS = /* @__PURE__ */ new Set(["safe_bool", "safe_bool_k", "safe_bool_2", "get_arg_bool"]);
 var INT_FNS = /* @__PURE__ */ new Set(["safe_integer", "safe_integer_k", "safe_integer_2", "safe_int", "safe_timestamp"]);
 var STR_FNS = /* @__PURE__ */ new Set(["safe_string", "safe_string_k", "safe_string_2", "safe_string_lower", "safe_string_upper", "safe_string_lower_k", "safe_string_upper_k"]);
@@ -54202,7 +54392,7 @@ function r04Scalars(content) {
 }
 
 // src/rustPasses/hx10w2-R08.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var FIELDS_ARR = [
   "options",
   "urls",
@@ -54405,13 +54595,13 @@ function runPass(content) {
       const dynKey = /^&\s*(.+)$/.exec(raw[1]);
       if (dynKey === null)
         continue;
-      const keyText = dynKey[1].trim();
-      if (/^Value::(?:Str|Int|Float|Bool|Null)\(/.test(keyText) || keyText === "Value::Null")
+      const keyText2 = dynKey[1].trim();
+      if (/^Value::(?:Str|Int|Float|Bool|Null)\(/.test(keyText2) || keyText2 === "Value::Null")
         continue;
       rws.push({
         start: m.index,
         end,
-        text: name === "get_value" ? recv.text + ".as_map().and_then(|__m| " + keyText + ".as_str().and_then(|__k| __m.get(__k))).cloned().unwrap_or(" + NULL + ")" : recv.text + ".as_map().is_some_and(|__m| " + keyText + ".as_str().is_some_and(|__k| __m.contains_key(__k)))"
+        text: name === "get_value" ? recv.text + ".as_map().and_then(|__m| " + keyText2 + ".as_str().and_then(|__k| __m.get(__k))).cloned().unwrap_or(" + NULL + ")" : recv.text + ".as_map().is_some_and(|__m| " + keyText2 + ".as_str().is_some_and(|__k| __m.contains_key(__k)))"
       });
       continue;
     }
@@ -54470,7 +54660,7 @@ function hx10w2R08(content) {
 }
 
 // src/rustPasses/hx10w2-r06.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var R06_HELPER = "append_to_array";
 var R06_MAX_LINE = 400;
 var R06_CALL_RX = new RegExp("(?<![\\w.:])" + R06_HELPER + "\\(", "g");
@@ -54750,7 +54940,7 @@ function r06Push(content) {
 }
 
 // src/rustPasses/hx10w3-R01.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var STR_LIT = String.raw`"(?:[^"\\]|\\.)*"`;
 function maskText2(src) {
   let out = "";
@@ -55507,7 +55697,7 @@ function r01TypedLocals(content) {
 }
 
 // src/rustPasses/hx10w3-R03.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 var R03_ROUTED = /* @__PURE__ */ new Set(["cache", "hashmap", "subscriptions", "futures", "timestamp", "datetime", "nonce", "symbol", "checksum"]);
 var R03_MARKER = ["__book_id", "__cache_id", "__cacheKind", "__sideKind", "__live_id"];
@@ -55956,7 +56146,7 @@ function r03BoolPosition(masked, pos) {
 }
 
 // src/rustPasses/hx10w3-R04.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx10R04Mask(text) {
   const out = text.split("");
   const n = out.length;
@@ -56329,7 +56519,7 @@ function r04Callee(content) {
 }
 
 // src/rustPasses/hx10w3-R05.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var FIELDS_ARR2 = ["balance", "ohlcvs", "options"];
 var RECV2 = "self\\.(?:(?:core|parent)\\.)*(" + FIELDS_ARR2.join("|") + ")";
 var STR_KEY2 = '&Value::Str\\("((?:[^"\\\\]|\\\\.)*)"\\.(?:into|to_string)\\(\\)\\)';
@@ -56573,7 +56763,7 @@ function r05FieldChainInserts(content) {
 }
 
 // src/rustPasses/hx10w3-R06.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var helperName = "append_to_array";
 var lineBudget = 400;
 var plainFields = /* @__PURE__ */ new Set([
@@ -56917,7 +57107,7 @@ function r06w3Push(content) {
 }
 
 // src/rustPasses/hx10w3-R07.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var SCALAR = /* @__PURE__ */ new Set(["str", "int", "float", "bool", "null"]);
 var NATIVE_TY = /* @__PURE__ */ new Set(["String", "Vec<String>", "i64", "f64", "bool", "usize", "u32", "isize"]);
 function maskText4(src) {
@@ -57237,8 +57427,8 @@ function rewrite(name, args, locals) {
   const recv = /^&\s*([A-Za-z_]\w*)$/.exec(arg0);
   const x = recv === null ? void 0 : recv[1];
   const local = x === void 0 ? void 0 : locals.get(x);
-  const set = _optionalChain([local, 'optionalAccess', _6707 => _6707.set]);
-  const ty = _optionalChain([local, 'optionalAccess', _6708 => _6708.ty]);
+  const set = _optionalChain([local, 'optionalAccess', _6779 => _6779.set]);
+  const ty = _optionalChain([local, 'optionalAccess', _6780 => _6780.ty]);
   const provenScalar = set !== void 0 && set.size > 0 && [...set].every((v) => SCALAR.has(v));
   const strTyped = ty === "String";
   const strProven = strTyped || set !== void 0 && set.size === 1 && set.has("str");
@@ -57310,7 +57500,7 @@ function rewrite(name, args, locals) {
         return void 0;
       if (ty === "Vec<String>")
         return `Value::str(${x}.join(${s}))`;
-      if (_optionalChain([local, 'optionalAccess', _6709 => _6709.elems]) === "str" && set !== void 0 && set.size === 1 && set.has("arr")) {
+      if (_optionalChain([local, 'optionalAccess', _6781 => _6781.elems]) === "str" && set !== void 0 && set.size === 1 && set.has("arr")) {
         return `Value::str(${x}.as_array().cloned().unwrap_or_default().iter().filter_map(Value::as_str).collect::<Vec<_>>().join(${s}))`;
       }
       return void 0;
@@ -57377,7 +57567,7 @@ function r07StringNatives(content) {
 }
 
 // src/rustPasses/hx10w3-R08.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var ROUTED = /^(?:timestamp|datetime|nonce|symbol|checksum|cache|hashmap|subscriptions|futures)$/;
 var PLAIN_INIT = /^Value::Map\(/;
 var DICT_INIT2 = /^(?:Value::Map\(|self\.safe_dict|self\.safe_dictionary|self\.create_safe_dictionary|self\.extend\(|self\.deep_extend\(|self\.omit\(|self\.group_by\(|self\.index_by\(|self\.filter_by_array\()/;
@@ -57639,7 +57829,7 @@ function r08DictReads(content) {
 }
 
 // src/rustPasses/hx10w4-BF03.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var FIELDS = ["options", "markets", "balance", "ohlcvs"];
 var RECV3 = "self\\.(?:(?:core|parent)\\.)*(" + FIELDS.join("|") + ")";
 var STR_KEY3 = /^&Value::Str\("((?:[^"\\]|\\.)*)"\.(?:into|to_string)\(\)\)$/;
@@ -57886,7 +58076,7 @@ function bf03PlainDictChains(content) {
 }
 
 // src/rustPasses/hx10w7-R10.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var R10_KEYS = ["subscriptions", "futures", "rejections", "url"];
 var R10_HANDLE = "crate::pro::ws_client::ClientHandle";
 function r10Mask(src) {
@@ -58128,7 +58318,7 @@ function r10Apply(line, spans) {
 }
 
 // src/rustPasses/hx10w9-RP02.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var MAP_PARAM_RE = /:\s*&mut\s+indexmap::IndexMap<String, Value>/;
 function hx10w9Rp02ParamKind(printedParam) {
   return MAP_PARAM_RE.test(printedParam) ? "map" : void 0;
@@ -58172,7 +58362,7 @@ function hx10w9Rp02RefMapParamNames(content) {
 }
 
 // src/rustPasses/hx11-narrow-str.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function narrowStrSinkLocals(content) {
   const OPT = {
     safe_string: "safe_string_opt",
@@ -58611,7 +58801,7 @@ function narrowStrNullLocals(content) {
 }
 
 // src/rustPasses/hx11-sign-api.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11RustSignApiStr(content) {
   content = content.replace(/\b(api|section)\.as_array\(\)\.and_then\(\|__arr\| __arr\.get\((\d+)\)\)/g, "$1.as_array().into_iter().flatten().nth($2)");
   if (content.indexOf(".get(") < 0) {
@@ -58650,7 +58840,7 @@ function hx11RustSignApiStr(content) {
 }
 
 // src/rustPasses/hx11w9RustIntLocalNullSinkOptionI64.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9RustIntLocalNullSinkOptionI64(content) {
   const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.safe_integer(_k|2)?\(/gm;
   const closeOf2 = (src, open) => {
@@ -58888,7 +59078,7 @@ function hx11w9RustIntLocalNullSinkOptionI64(content) {
 }
 
 // src/rustPasses/hx11w9RustStrLiteralLocalNativeString.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9RustStrLiteralLocalNativeString(content) {
   const declRe = /^([ \t]*)let mut ([a-zA-Z_][a-zA-Z0-9_]*): Value = Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);[ \t]*$/gm;
   const litWriteRe = /^\s*=\s*Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);/;
@@ -59092,7 +59282,7 @@ function hx11w9RustStrLiteralLocalNativeString(content) {
 }
 
 // src/rustPasses/hx11w9-str-local-reassign.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9StrLocalReassign(content) {
   const OPT = {
     safe_string: "safe_string_opt",
@@ -59370,7 +59560,7 @@ function hx11w9StrLocalReassign(content) {
 }
 
 // src/rustPasses/hx11w9-rust-bool-k-local-option-bool.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9RustBoolKLocalOptionBool(content) {
   const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_bool_k|safe_bool)\(/gm;
   const strKeyRe = /^"(?:[^"\\]|\\.)*"$/;
@@ -59577,7 +59767,7 @@ function hx11w9RustBoolKLocalOptionBool(content) {
 }
 
 // src/rustPasses/hx11w9RustBool2LocalOptionBool.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9RustBool2LocalOptionBool(content) {
   const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_bool2)\(/gm;
   const maskText5 = (src) => {
@@ -59781,7 +59971,7 @@ function hx11w9RustBool2LocalOptionBool(content) {
 }
 
 // src/rustPasses/hx11w9RustBoolNLocalOptionBool.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9RustBoolNLocalOptionBool(content) {
   const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_bool_n)\(/gm;
   const keyListRe = /^Value::from\(vec!\[Value::Str\("(?:[^"\\]|\\.)*"\.(?:into|to_string)\(\)\)(?:, Value::Str\("(?:[^"\\]|\\.)*"\.(?:into|to_string)\(\)\))*\]\)$/;
@@ -59987,7 +60177,7 @@ function hx11w9RustBoolNLocalOptionBool(content) {
 }
 
 // src/rustPasses/hx11w9RustStr2LocalOptionString.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9RustStr2LocalOptionString(content) {
   const opt = "safe_string2_opt";
   const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_string2)\(/gm;
@@ -60196,7 +60386,7 @@ function hx11w9RustStr2LocalOptionString(content) {
 }
 
 // src/rustPasses/hx11w9RustNumber2LocalOptionF64.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9RustNumber2LocalOptionF64(content) {
   const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.safe_number2\(/gm;
   const mask2 = (src) => {
@@ -60369,7 +60559,7 @@ function hx11w9RustNumber2LocalOptionF64(content) {
 }
 
 // src/rustPasses/hx11w9RustInt2IntNLocalOptionI64.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9RustInt2IntNLocalOptionI64(content) {
   const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.safe_integer(2|_n)\(/gm;
   const closeOf2 = (src, open) => {
@@ -60606,7 +60796,7 @@ function hx11w9RustInt2IntNLocalOptionI64(content) {
 }
 
 // src/rustPasses/hx11w9RustStrNLocalOptionString.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9RustStrNLocalOptionString(content) {
   const opt = "safe_string_n_opt";
   const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_string_n)\(/gm;
@@ -60815,7 +61005,7 @@ function hx11w9RustStrNLocalOptionString(content) {
 }
 
 // src/rustPasses/hx11w9RustNumber2SinkLocalOptionF64R2.ts
-_chunkQYYT7MP4cjs.init_cjs_shims.call(void 0, );
+_chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 function hx11w9RustNumber2SinkLocalOptionF64R2(content) {
   const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.safe_number2\(/gm;
   const mask2 = (src) => {
@@ -61084,7 +61274,7 @@ function memoizePairMethod(owner, name) {
     if (args.length !== 2 || a === null || typeof a !== "object" || b === null || typeof b !== "object") {
       return original.apply(owner, args);
     }
-    const cached = _optionalChain([cache, 'access', _6710 => _6710.get, 'call', _6711 => _6711(a), 'optionalAccess', _6712 => _6712.get, 'call', _6713 => _6713(b)]);
+    const cached = _optionalChain([cache, 'access', _6782 => _6782.get, 'call', _6783 => _6783(a), 'optionalAccess', _6784 => _6784.get, 'call', _6785 => _6785(b)]);
     if (cached !== void 0) {
       return cached === UNDEFINED_SENTINEL ? void 0 : cached;
     }
@@ -61124,7 +61314,7 @@ function memoizeUnaryMethod(owner, name) {
 }
 function memoizeBinaryKindMethod(owner, name) {
   const unary = owner[name];
-  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _6714 => _6714.original]), () => ( unary));
+  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _6786 => _6786.original]), () => ( unary));
   if (typeof original !== "function") {
     return;
   }
@@ -61174,17 +61364,17 @@ function prefetchChecker(checker, root, options = {}) {
   const typeNodes = [], symbolNodes = [], callNodes = [];
   const visit = (node) => {
     const kind = node.kind;
-    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _6715 => _6715.has, 'optionalCall', _6716 => _6716(node)]))
+    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _6787 => _6787.has, 'optionalCall', _6788 => _6788(node)]))
       typeNodes.push(node);
-    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _6717 => _6717.has, 'optionalCall', _6718 => _6718(node)]))
+    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _6789 => _6789.has, 'optionalCall', _6790 => _6790(node)]))
       symbolNodes.push(node);
-    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _6719 => _6719.has, 'optionalCall', _6720 => _6720(node)]))
+    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _6791 => _6791.has, 'optionalCall', _6792 => _6792(node)]))
       callNodes.push(node);
     node.forEachChild(visit);
   };
   visit(root);
   const run = (nodes, fn) => {
-    if (_optionalChain([fn, 'optionalAccess', _6721 => _6721.seed]) === void 0 || fn.original === void 0)
+    if (_optionalChain([fn, 'optionalAccess', _6793 => _6793.seed]) === void 0 || fn.original === void 0)
       return;
     for (let i = 0; i < nodes.length; i += PREFETCH_BATCH) {
       const chunk = nodes.slice(i, i + PREFETCH_BATCH);
@@ -61200,7 +61390,7 @@ function prefetchChecker(checker, root, options = {}) {
   run(typeNodes, getType);
   run(symbolNodes, getSymbol);
   const api = checker.__astTranspilerApi;
-  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _6722 => _6722.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _6723 => _6723.original, 'optionalAccess', _6724 => _6724.gen]) !== void 0) {
+  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _6794 => _6794.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _6795 => _6795.original, 'optionalAccess', _6796 => _6796.gen]) !== void 0) {
     for (let i = 0; i < callNodes.length; i += PREFETCH_BATCH) {
       const chunk = callNodes.slice(i, i + PREFETCH_BATCH);
       const gens = chunk.map((n) => {
@@ -61227,7 +61417,7 @@ function prefetchChecker(checker, root, options = {}) {
 function prefetchDeclarationSignatures(checker, api, root) {
   const getSigDecl = checker.getSignatureFromDeclaration;
   const getTypeOfSymbolAtLocation = checker.getTypeOfSymbolAtLocation;
-  if (_optionalChain([getSigDecl, 'optionalAccess', _6725 => _6725.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _6726 => _6726.original, 'optionalAccess', _6727 => _6727.gen]) === void 0)
+  if (_optionalChain([getSigDecl, 'optionalAccess', _6797 => _6797.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _6798 => _6798.original, 'optionalAccess', _6799 => _6799.gen]) === void 0)
     return;
   const decls = [];
   const visit = (node) => {
@@ -61253,9 +61443,9 @@ function prefetchDeclarationSignatures(checker, api, root) {
     }())));
     api.batch(...chunk.map((decl) => safe(function* () {
       const type = checker.getTypeAtLocation(decl);
-      const symbol = _optionalChain([type, 'optionalAccess', _6728 => _6728.getSymbol, 'optionalAccess', _6729 => _6729.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
-      const location = _optionalChain([symbol, 'optionalAccess', _6730 => _6730.valueDeclaration, 'optionalAccess', _6731 => _6731.resolve, 'call', _6732 => _6732()]);
-      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _6733 => _6733.seed2]) === void 0)
+      const symbol = _optionalChain([type, 'optionalAccess', _6800 => _6800.getSymbol, 'optionalAccess', _6801 => _6801.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
+      const location = _optionalChain([symbol, 'optionalAccess', _6802 => _6802.valueDeclaration, 'optionalAccess', _6803 => _6803.resolve, 'call', _6804 => _6804()]);
+      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _6805 => _6805.seed2]) === void 0)
         return;
       const symbolType = yield* getTypeOfSymbolAtLocation.original.gen(symbol, location);
       getTypeOfSymbolAtLocation.seed2(symbol, location, symbolType);
@@ -61347,7 +61537,7 @@ var Transpiler = class _Transpiler {
     const src = _nullishCoalesce(program.getSourceFile(fileName), () => ( program.getSourceFile(path9.resolve(fileName))));
     const previous = this.snapshot;
     this.snapshot = snapshot;
-    _optionalChain([previous, 'optionalAccess', _6734 => _6734.dispose, 'call', _6735 => _6735()]);
+    _optionalChain([previous, 'optionalAccess', _6806 => _6806.dispose, 'call', _6807 => _6807()]);
     return this.setContext({ src, checker, program });
   }
   createProgramInMemoryAndSetContext(content) {
@@ -61371,7 +61561,7 @@ var Transpiler = class _Transpiler {
   // long as the file's text on disk still equals the snapshot's. Replaces any
   // previous shared program; pass [] to drop it.
   setSharedProgram(paths) {
-    _optionalChain([this, 'access', _6736 => _6736.programCache, 'access', _6737 => _6737.shared, 'optionalAccess', _6738 => _6738.snapshot, 'access', _6739 => _6739.dispose, 'call', _6740 => _6740()]);
+    _optionalChain([this, 'access', _6808 => _6808.programCache, 'access', _6809 => _6809.shared, 'optionalAccess', _6810 => _6810.snapshot, 'access', _6811 => _6811.dispose, 'call', _6812 => _6812()]);
     this.programCache.shared = void 0;
     if (paths.length === 0) {
       return;
@@ -61756,5 +61946,6 @@ var TranspileProgramBatch = class {
 
 
 
-exports.CCXT_GO_BOOL_METHOD_NAMES = CCXT_GO_BOOL_METHOD_NAMES; exports.CCXT_GO_HELPER_RETURN_TYPES = CCXT_GO_HELPER_RETURN_TYPES; exports.CCXT_GO_STRING_PTR_METHOD_NAMES = CCXT_GO_STRING_PTR_METHOD_NAMES; exports.CheckFlags = _sync.CheckFlags; exports.ElementFlags = _sync.ElementFlags; exports.IndexKind = _sync.IndexKind; exports.ObjectFlags = _sync.ObjectFlags; exports.RUST_DECLARED_DICT_LOCALS = RUST_DECLARED_DICT_LOCALS; exports.SignatureKind = _sync.SignatureKind; exports.SymbolFlags = _sync.SymbolFlags; exports.SyntaxKind = _ast.SyntaxKind; exports.TranspileProgramBatch = TranspileProgramBatch; exports.Transpiler = Transpiler; exports.TypeFlags = _sync.TypeFlags; exports.TypeFormatFlags = _sync.TypeFormatFlags; exports.alignGoTrailingComments = alignGoTrailingComments; exports.bf03PlainDictChains = bf03PlainDictChains; exports.default = Transpiler; exports.g08w3Check = g08w3Check; exports.hx10G06Check = hx10G06Check; exports.hx10w2R03 = hx10w2R03; exports.hx10w2R08 = hx10w2R08; exports.hx10w3R03 = hx10w3R03; exports.hx10w8GB01Check = hx10w8GB01Check; exports.hx10w8GB05Check = hx10w8GB05Check; exports.hx10w9GB11Check = hx10w9GB11Check; exports.hx10w9Rp02DispatchArg = hx10w9Rp02DispatchArg; exports.hx10w9Rp02ParamKind = hx10w9Rp02ParamKind; exports.hx10w9Rp02RefMapParamNames = hx10w9Rp02RefMapParamNames; exports.hx10w9Rp02SplitArgs = hx10w9Rp02SplitArgs; exports.hx11RustSignApiStr = hx11RustSignApiStr; exports.hx11w9RustBool2LocalOptionBool = hx11w9RustBool2LocalOptionBool; exports.hx11w9RustBoolKLocalOptionBool = hx11w9RustBoolKLocalOptionBool; exports.hx11w9RustBoolNLocalOptionBool = hx11w9RustBoolNLocalOptionBool; exports.hx11w9RustInt2IntNLocalOptionI64 = hx11w9RustInt2IntNLocalOptionI64; exports.hx11w9RustIntLocalNullSinkOptionI64 = hx11w9RustIntLocalNullSinkOptionI64; exports.hx11w9RustNumber2LocalOptionF64 = hx11w9RustNumber2LocalOptionF64; exports.hx11w9RustNumber2SinkLocalOptionF64R2 = hx11w9RustNumber2SinkLocalOptionF64R2; exports.hx11w9RustStr2LocalOptionString = hx11w9RustStr2LocalOptionString; exports.hx11w9RustStrLiteralLocalNativeString = hx11w9RustStrLiteralLocalNativeString; exports.hx11w9RustStrNLocalOptionString = hx11w9RustStrNLocalOptionString; exports.hx11w9StrLocalReassign = hx11w9StrLocalReassign; exports.installCcxtGoDictParams = installCcxtGoDictParams; exports.installCcxtGoGb05ParamTypes = installCcxtGoGb05ParamTypes; exports.installCcxtGoGb11HandleErrorsCode = installCcxtGoGb11HandleErrorsCode; exports.installCcxtGoHooks = installCcxtGoHooks; exports.installCcxtGoIndexableTypes = installCcxtGoIndexableTypes; exports.installCcxtGoLocalTypes = installCcxtGoLocalTypes; exports.installCcxtGoParamTypes = installCcxtGoParamTypes; exports.installCcxtGoSignTyping = installCcxtGoSignTyping; exports.installFmGo5G01 = installFmGo5G01; exports.installFmGo5G04 = installFmGo5G04; exports.installFmGo5GP08 = installFmGo5GP08; exports.installFmGo5OG02 = installFmGo5OG02; exports.installHx11w8NumParams = installHx11w8NumParams; exports.installRfGo5OwnedTables = installRfGo5OwnedTables; exports.narrowStrNullLocals = narrowStrNullLocals; exports.narrowStrSinkLocals = narrowStrSinkLocals; exports.nativeGetValue = nativeGetValue; exports.r01TypedLocals = r01TypedLocals; exports.r02NativeInserts = r02NativeInserts; exports.r04Callee = r04Callee; exports.r04Scalars = r04Scalars; exports.r05FieldChainInserts = r05FieldChainInserts; exports.r06Push = r06Push; exports.r06w3Push = r06w3Push; exports.r07StringNatives = r07StringNatives; exports.r08DictReads = r08DictReads; exports.r10ClientHandle = r10ClientHandle;
+
+exports.CCXT_GO_BOOL_METHOD_NAMES = CCXT_GO_BOOL_METHOD_NAMES; exports.CCXT_GO_HELPER_RETURN_TYPES = CCXT_GO_HELPER_RETURN_TYPES; exports.CCXT_GO_STRING_PTR_METHOD_NAMES = CCXT_GO_STRING_PTR_METHOD_NAMES; exports.CheckFlags = _sync.CheckFlags; exports.ElementFlags = _sync.ElementFlags; exports.IndexKind = _sync.IndexKind; exports.ObjectFlags = _sync.ObjectFlags; exports.RUST_DECLARED_DICT_LOCALS = RUST_DECLARED_DICT_LOCALS; exports.SignatureKind = _sync.SignatureKind; exports.SymbolFlags = _sync.SymbolFlags; exports.SyntaxKind = _ast.SyntaxKind; exports.TranspileProgramBatch = TranspileProgramBatch; exports.Transpiler = Transpiler; exports.TypeFlags = _sync.TypeFlags; exports.TypeFormatFlags = _sync.TypeFormatFlags; exports.alignGoTrailingComments = alignGoTrailingComments; exports.bf03PlainDictChains = bf03PlainDictChains; exports.default = Transpiler; exports.g08w3Check = g08w3Check; exports.hx10G06Check = hx10G06Check; exports.hx10w2R03 = hx10w2R03; exports.hx10w2R08 = hx10w2R08; exports.hx10w3R03 = hx10w3R03; exports.hx10w8GB01Check = hx10w8GB01Check; exports.hx10w8GB05Check = hx10w8GB05Check; exports.hx10w9GB11Check = hx10w9GB11Check; exports.hx10w9Rp02DispatchArg = hx10w9Rp02DispatchArg; exports.hx10w9Rp02ParamKind = hx10w9Rp02ParamKind; exports.hx10w9Rp02RefMapParamNames = hx10w9Rp02RefMapParamNames; exports.hx10w9Rp02SplitArgs = hx10w9Rp02SplitArgs; exports.hx11RustSignApiStr = hx11RustSignApiStr; exports.hx11w9RustBool2LocalOptionBool = hx11w9RustBool2LocalOptionBool; exports.hx11w9RustBoolKLocalOptionBool = hx11w9RustBoolKLocalOptionBool; exports.hx11w9RustBoolNLocalOptionBool = hx11w9RustBoolNLocalOptionBool; exports.hx11w9RustInt2IntNLocalOptionI64 = hx11w9RustInt2IntNLocalOptionI64; exports.hx11w9RustIntLocalNullSinkOptionI64 = hx11w9RustIntLocalNullSinkOptionI64; exports.hx11w9RustNumber2LocalOptionF64 = hx11w9RustNumber2LocalOptionF64; exports.hx11w9RustNumber2SinkLocalOptionF64R2 = hx11w9RustNumber2SinkLocalOptionF64R2; exports.hx11w9RustStr2LocalOptionString = hx11w9RustStr2LocalOptionString; exports.hx11w9RustStrLiteralLocalNativeString = hx11w9RustStrLiteralLocalNativeString; exports.hx11w9RustStrNLocalOptionString = hx11w9RustStrNLocalOptionString; exports.hx11w9StrLocalReassign = hx11w9StrLocalReassign; exports.installCcxtGoDictParams = installCcxtGoDictParams; exports.installCcxtGoGb05ParamTypes = installCcxtGoGb05ParamTypes; exports.installCcxtGoGb11HandleErrorsCode = installCcxtGoGb11HandleErrorsCode; exports.installCcxtGoHooks = installCcxtGoHooks; exports.installCcxtGoIndexableTypes = installCcxtGoIndexableTypes; exports.installCcxtGoLocalTypes = installCcxtGoLocalTypes; exports.installCcxtGoParamTypes = installCcxtGoParamTypes; exports.installCcxtGoSignTyping = installCcxtGoSignTyping; exports.installFmGo5G01 = installFmGo5G01; exports.installFmGo5G04 = installFmGo5G04; exports.installFmGo5GP08 = installFmGo5GP08; exports.installFmGo5OG02 = installFmGo5OG02; exports.installHx11w8NumParams = installHx11w8NumParams; exports.installRdGo2WsCache = installRdGo2WsCache; exports.installRfGo5OwnedTables = installRfGo5OwnedTables; exports.narrowStrNullLocals = narrowStrNullLocals; exports.narrowStrSinkLocals = narrowStrSinkLocals; exports.nativeGetValue = nativeGetValue; exports.r01TypedLocals = r01TypedLocals; exports.r02NativeInserts = r02NativeInserts; exports.r04Callee = r04Callee; exports.r04Scalars = r04Scalars; exports.r05FieldChainInserts = r05FieldChainInserts; exports.r06Push = r06Push; exports.r06w3Push = r06w3Push; exports.r07StringNatives = r07StringNatives; exports.r08DictReads = r08DictReads; exports.r10ClientHandle = r10ClientHandle;
 //# sourceMappingURL=transpiler.cjs.map
