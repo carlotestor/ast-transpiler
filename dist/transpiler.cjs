@@ -48020,17 +48020,29 @@ function installFmGo5G01(goTranspiler) {
         return owner(this, table) + ".SubscriptionHas(" + this.printNode(node.left, 0) + ")";
       }
     } else if (op === SK.EqualsToken && _optionalChain([node, 'access', _5494 => _5494.left, 'optionalAccess', _5495 => _5495.kind]) === SK.ElementAccessExpression) {
-      const table = clientSubscriptions(this, node.left.expression);
+      const keys = [];
+      let root = node.left;
+      while (_optionalChain([root, 'optionalAccess', _5496 => _5496.kind]) === SK.ElementAccessExpression) {
+        keys.unshift(root.argumentExpression);
+        root = root.expression;
+      }
+      const table = clientSubscriptions(this, root);
       if (table !== void 0) {
-        const key = this.printNode(node.left.argumentExpression, 0);
         const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(node.right, identation)).trimStart();
-        return owner(this, table) + ".SubscriptionSet(" + key + ", " + value + ")";
+        if (keys.length === 1) {
+          return owner(this, table) + ".SubscriptionSet(" + this.printNode(keys[0], 0) + ", " + value + ")";
+        }
+        let acc = owner(this, table) + ".SubscriptionGet(" + this.printNode(keys[0], 0) + ")";
+        for (let i = 1; i < keys.length - 1; i++) {
+          acc = this.ELEMENT_ACCESS_WRAPPER_OPEN + acc + ", " + this.printNode(keys[i], 0) + this.ELEMENT_ACCESS_WRAPPER_CLOSE;
+        }
+        return "AddElementToObject(" + acc + ", " + this.printNode(keys[keys.length - 1], 0) + ", " + value + ")";
       }
     }
     return printBinary.call(this, node, identation);
   };
   const tableCall = (original, suffix) => function(node, identation, parsedArg = void 0) {
-    const table = clientSubscriptions(this, _optionalChain([node, 'access', _5496 => _5496.arguments, 'optionalAccess', _5497 => _5497[0]]));
+    const table = clientSubscriptions(this, _optionalChain([node, 'access', _5497 => _5497.arguments, 'optionalAccess', _5498 => _5498[0]]));
     if (table !== void 0) {
       return owner(this, table) + "." + suffix + "()";
     }
@@ -48040,11 +48052,11 @@ function installFmGo5G01(goTranspiler) {
   goTranspiler.printObjectValuesCall = tableCall(goTranspiler.printObjectValuesCall, "SubscriptionValues");
   const initType = goTranspiler.goTypeOfInitializer;
   goTranspiler.goTypeOfInitializer = function(node, printed) {
-    if (_optionalChain([node, 'optionalAccess', _5498 => _5498.kind]) === SK.BinaryExpression && _optionalChain([node, 'access', _5499 => _5499.operatorToken, 'optionalAccess', _5500 => _5500.kind]) === SK.InKeyword && clientSubscriptions(this, node.right) !== void 0) {
+    if (_optionalChain([node, 'optionalAccess', _5499 => _5499.kind]) === SK.BinaryExpression && _optionalChain([node, 'access', _5500 => _5500.operatorToken, 'optionalAccess', _5501 => _5501.kind]) === SK.InKeyword && clientSubscriptions(this, node.right) !== void 0) {
       return "bool";
     }
-    if (_optionalChain([node, 'optionalAccess', _5501 => _5501.kind]) === SK.CallExpression && _optionalChain([node, 'access', _5502 => _5502.arguments, 'optionalAccess', _5503 => _5503.length]) === 1 && clientSubscriptions(this, node.arguments[0]) !== void 0) {
-      const callee = _optionalChain([node, 'access', _5504 => _5504.expression, 'optionalAccess', _5505 => _5505.getText, 'optionalCall', _5506 => _5506()]);
+    if (_optionalChain([node, 'optionalAccess', _5502 => _5502.kind]) === SK.CallExpression && _optionalChain([node, 'access', _5503 => _5503.arguments, 'optionalAccess', _5504 => _5504.length]) === 1 && clientSubscriptions(this, node.arguments[0]) !== void 0) {
+      const callee = _optionalChain([node, 'access', _5505 => _5505.expression, 'optionalAccess', _5506 => _5506.getText, 'optionalCall', _5507 => _5507()]);
       if (callee === "Object.keys") {
         return "[]string";
       }
@@ -48057,7 +48069,11 @@ function installFmGo5G01(goTranspiler) {
   const dictValue = goTranspiler.goSafeDictUnboxValue;
   goTranspiler.goSafeDictUnboxValue = function(declaration, identation) {
     const known = dictValue.call(this, declaration, identation);
-    const args = known !== void 0 ? this.goSafeDictLocalArgs(declaration.initializer) : void 0;
+    let initializer = declaration.initializer;
+    while (_optionalChain([initializer, 'optionalAccess', _5508 => _5508.kind]) === SK.AsExpression || _optionalChain([initializer, 'optionalAccess', _5509 => _5509.kind]) === SK.ParenthesizedExpression || _optionalChain([initializer, 'optionalAccess', _5510 => _5510.kind]) === SK.NonNullExpression) {
+      initializer = initializer.expression;
+    }
+    const args = known !== void 0 ? this.goSafeDictLocalArgs(initializer) : void 0;
     const table = args !== void 0 ? clientSubscriptions(this, args.container) : void 0;
     if (table !== void 0 && known.startsWith("SafeMapTyped(")) {
       return owner(this, table) + ".SubscriptionDict(" + this.printNode(args.key, 0) + ")";
@@ -49283,7 +49299,7 @@ var R03Prover = class {
       if (seen.has(alias[1]))
         return void 0;
       seen.add(alias[1]);
-      return _optionalChain([this, 'access', _5507 => _5507.facts, 'call', _5508 => _5508(alias[1], absPos), 'optionalAccess', _5509 => _5509.proof]);
+      return _optionalChain([this, 'access', _5511 => _5511.facts, 'call', _5512 => _5512(alias[1], absPos), 'optionalAccess', _5513 => _5513.proof]);
     }
     return void 0;
   }
@@ -49327,8 +49343,8 @@ function hx10w2R03(content) {
         if (facts === void 0)
           continue;
         expr = recv[1];
-        kind = _optionalChain([facts, 'access', _5510 => _5510.proof, 'optionalAccess', _5511 => _5511.kind]);
-        untagged = _optionalChain([facts, 'access', _5512 => _5512.proof, 'optionalAccess', _5513 => _5513.untagged]) === true;
+        kind = _optionalChain([facts, 'access', _5514 => _5514.proof, 'optionalAccess', _5515 => _5515.kind]);
+        untagged = _optionalChain([facts, 'access', _5516 => _5516.proof, 'optionalAccess', _5517 => _5517.untagged]) === true;
         lenSafe = facts.lenSafe;
       } else if (state !== null) {
         expr = (_nullishCoalesce(args[0], () => ( ""))).trim().slice(1);
@@ -52759,8 +52775,8 @@ function rewrite(name, args, locals) {
   const recv = /^&\s*([A-Za-z_]\w*)$/.exec(arg0);
   const x = recv === null ? void 0 : recv[1];
   const local = x === void 0 ? void 0 : locals.get(x);
-  const set = _optionalChain([local, 'optionalAccess', _5514 => _5514.set]);
-  const ty = _optionalChain([local, 'optionalAccess', _5515 => _5515.ty]);
+  const set = _optionalChain([local, 'optionalAccess', _5518 => _5518.set]);
+  const ty = _optionalChain([local, 'optionalAccess', _5519 => _5519.ty]);
   const provenScalar = set !== void 0 && set.size > 0 && [...set].every((v) => SCALAR.has(v));
   const strTyped = ty === "String";
   const strProven = strTyped || set !== void 0 && set.size === 1 && set.has("str");
@@ -52832,7 +52848,7 @@ function rewrite(name, args, locals) {
         return void 0;
       if (ty === "Vec<String>")
         return `Value::str(${x}.join(${s}))`;
-      if (_optionalChain([local, 'optionalAccess', _5516 => _5516.elems]) === "str" && set !== void 0 && set.size === 1 && set.has("arr")) {
+      if (_optionalChain([local, 'optionalAccess', _5520 => _5520.elems]) === "str" && set !== void 0 && set.size === 1 && set.has("arr")) {
         return `Value::str(${x}.as_array().cloned().unwrap_or_default().iter().filter_map(Value::as_str).collect::<Vec<_>>().join(${s}))`;
       }
       return void 0;
@@ -56606,7 +56622,7 @@ function memoizePairMethod(owner, name) {
     if (args.length !== 2 || a === null || typeof a !== "object" || b === null || typeof b !== "object") {
       return original.apply(owner, args);
     }
-    const cached = _optionalChain([cache, 'access', _5517 => _5517.get, 'call', _5518 => _5518(a), 'optionalAccess', _5519 => _5519.get, 'call', _5520 => _5520(b)]);
+    const cached = _optionalChain([cache, 'access', _5521 => _5521.get, 'call', _5522 => _5522(a), 'optionalAccess', _5523 => _5523.get, 'call', _5524 => _5524(b)]);
     if (cached !== void 0) {
       return cached === UNDEFINED_SENTINEL ? void 0 : cached;
     }
@@ -56646,7 +56662,7 @@ function memoizeUnaryMethod(owner, name) {
 }
 function memoizeBinaryKindMethod(owner, name) {
   const unary = owner[name];
-  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _5521 => _5521.original]), () => ( unary));
+  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _5525 => _5525.original]), () => ( unary));
   if (typeof original !== "function") {
     return;
   }
@@ -56696,17 +56712,17 @@ function prefetchChecker(checker, root, options = {}) {
   const typeNodes = [], symbolNodes = [], callNodes = [];
   const visit = (node) => {
     const kind = node.kind;
-    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _5522 => _5522.has, 'optionalCall', _5523 => _5523(node)]))
+    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _5526 => _5526.has, 'optionalCall', _5527 => _5527(node)]))
       typeNodes.push(node);
-    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _5524 => _5524.has, 'optionalCall', _5525 => _5525(node)]))
+    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _5528 => _5528.has, 'optionalCall', _5529 => _5529(node)]))
       symbolNodes.push(node);
-    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _5526 => _5526.has, 'optionalCall', _5527 => _5527(node)]))
+    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _5530 => _5530.has, 'optionalCall', _5531 => _5531(node)]))
       callNodes.push(node);
     node.forEachChild(visit);
   };
   visit(root);
   const run = (nodes, fn) => {
-    if (_optionalChain([fn, 'optionalAccess', _5528 => _5528.seed]) === void 0 || fn.original === void 0)
+    if (_optionalChain([fn, 'optionalAccess', _5532 => _5532.seed]) === void 0 || fn.original === void 0)
       return;
     for (let i = 0; i < nodes.length; i += PREFETCH_BATCH) {
       const chunk = nodes.slice(i, i + PREFETCH_BATCH);
@@ -56722,7 +56738,7 @@ function prefetchChecker(checker, root, options = {}) {
   run(typeNodes, getType);
   run(symbolNodes, getSymbol);
   const api = checker.__astTranspilerApi;
-  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _5529 => _5529.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _5530 => _5530.original, 'optionalAccess', _5531 => _5531.gen]) !== void 0) {
+  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _5533 => _5533.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _5534 => _5534.original, 'optionalAccess', _5535 => _5535.gen]) !== void 0) {
     for (let i = 0; i < callNodes.length; i += PREFETCH_BATCH) {
       const chunk = callNodes.slice(i, i + PREFETCH_BATCH);
       const gens = chunk.map((n) => {
@@ -56749,7 +56765,7 @@ function prefetchChecker(checker, root, options = {}) {
 function prefetchDeclarationSignatures(checker, api, root) {
   const getSigDecl = checker.getSignatureFromDeclaration;
   const getTypeOfSymbolAtLocation = checker.getTypeOfSymbolAtLocation;
-  if (_optionalChain([getSigDecl, 'optionalAccess', _5532 => _5532.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _5533 => _5533.original, 'optionalAccess', _5534 => _5534.gen]) === void 0)
+  if (_optionalChain([getSigDecl, 'optionalAccess', _5536 => _5536.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _5537 => _5537.original, 'optionalAccess', _5538 => _5538.gen]) === void 0)
     return;
   const decls = [];
   const visit = (node) => {
@@ -56775,9 +56791,9 @@ function prefetchDeclarationSignatures(checker, api, root) {
     }())));
     api.batch(...chunk.map((decl) => safe(function* () {
       const type = checker.getTypeAtLocation(decl);
-      const symbol = _optionalChain([type, 'optionalAccess', _5535 => _5535.getSymbol, 'optionalAccess', _5536 => _5536.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
-      const location = _optionalChain([symbol, 'optionalAccess', _5537 => _5537.valueDeclaration, 'optionalAccess', _5538 => _5538.resolve, 'call', _5539 => _5539()]);
-      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _5540 => _5540.seed2]) === void 0)
+      const symbol = _optionalChain([type, 'optionalAccess', _5539 => _5539.getSymbol, 'optionalAccess', _5540 => _5540.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
+      const location = _optionalChain([symbol, 'optionalAccess', _5541 => _5541.valueDeclaration, 'optionalAccess', _5542 => _5542.resolve, 'call', _5543 => _5543()]);
+      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _5544 => _5544.seed2]) === void 0)
         return;
       const symbolType = yield* getTypeOfSymbolAtLocation.original.gen(symbol, location);
       getTypeOfSymbolAtLocation.seed2(symbol, location, symbolType);
@@ -56869,7 +56885,7 @@ var Transpiler = class _Transpiler {
     const src = _nullishCoalesce(program.getSourceFile(fileName), () => ( program.getSourceFile(path8.resolve(fileName))));
     const previous = this.snapshot;
     this.snapshot = snapshot;
-    _optionalChain([previous, 'optionalAccess', _5541 => _5541.dispose, 'call', _5542 => _5542()]);
+    _optionalChain([previous, 'optionalAccess', _5545 => _5545.dispose, 'call', _5546 => _5546()]);
     return this.setContext({ src, checker, program });
   }
   createProgramInMemoryAndSetContext(content) {
@@ -56893,7 +56909,7 @@ var Transpiler = class _Transpiler {
   // long as the file's text on disk still equals the snapshot's. Replaces any
   // previous shared program; pass [] to drop it.
   setSharedProgram(paths) {
-    _optionalChain([this, 'access', _5543 => _5543.programCache, 'access', _5544 => _5544.shared, 'optionalAccess', _5545 => _5545.snapshot, 'access', _5546 => _5546.dispose, 'call', _5547 => _5547()]);
+    _optionalChain([this, 'access', _5547 => _5547.programCache, 'access', _5548 => _5548.shared, 'optionalAccess', _5549 => _5549.snapshot, 'access', _5550 => _5550.dispose, 'call', _5551 => _5551()]);
     this.programCache.shared = void 0;
     if (paths.length === 0) {
       return;

@@ -48021,11 +48021,23 @@ function installFmGo5G01(goTranspiler) {
         return owner(this, table) + ".SubscriptionHas(" + this.printNode(node.left, 0) + ")";
       }
     } else if (op === SK.EqualsToken && node.left?.kind === SK.ElementAccessExpression) {
-      const table = clientSubscriptions(this, node.left.expression);
+      const keys = [];
+      let root = node.left;
+      while (root?.kind === SK.ElementAccessExpression) {
+        keys.unshift(root.argumentExpression);
+        root = root.expression;
+      }
+      const table = clientSubscriptions(this, root);
       if (table !== void 0) {
-        const key = this.printNode(node.left.argumentExpression, 0);
         const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(node.right, identation)).trimStart();
-        return owner(this, table) + ".SubscriptionSet(" + key + ", " + value + ")";
+        if (keys.length === 1) {
+          return owner(this, table) + ".SubscriptionSet(" + this.printNode(keys[0], 0) + ", " + value + ")";
+        }
+        let acc = owner(this, table) + ".SubscriptionGet(" + this.printNode(keys[0], 0) + ")";
+        for (let i = 1; i < keys.length - 1; i++) {
+          acc = this.ELEMENT_ACCESS_WRAPPER_OPEN + acc + ", " + this.printNode(keys[i], 0) + this.ELEMENT_ACCESS_WRAPPER_CLOSE;
+        }
+        return "AddElementToObject(" + acc + ", " + this.printNode(keys[keys.length - 1], 0) + ", " + value + ")";
       }
     }
     return printBinary.call(this, node, identation);
@@ -48058,7 +48070,11 @@ function installFmGo5G01(goTranspiler) {
   const dictValue = goTranspiler.goSafeDictUnboxValue;
   goTranspiler.goSafeDictUnboxValue = function(declaration, identation) {
     const known = dictValue.call(this, declaration, identation);
-    const args = known !== void 0 ? this.goSafeDictLocalArgs(declaration.initializer) : void 0;
+    let initializer = declaration.initializer;
+    while (initializer?.kind === SK.AsExpression || initializer?.kind === SK.ParenthesizedExpression || initializer?.kind === SK.NonNullExpression) {
+      initializer = initializer.expression;
+    }
+    const args = known !== void 0 ? this.goSafeDictLocalArgs(initializer) : void 0;
     const table = args !== void 0 ? clientSubscriptions(this, args.container) : void 0;
     if (table !== void 0 && known.startsWith("SafeMapTyped(")) {
       return owner(this, table) + ".SubscriptionDict(" + this.printNode(args.key, 0) + ")";
