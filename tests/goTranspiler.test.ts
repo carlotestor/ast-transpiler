@@ -2303,10 +2303,10 @@ describe('go inline equality', () => {
         const input =
         "class T {\n" +
         "    f () {\n" +
-        "        if (this.markets === undefined) { return 1; }\n" +
-        "        if (this.markets !== undefined) { return 2; }\n" +
-        "        const a = this.markets_by_id === undefined;\n" +
-        "        const b = this.currencies_by_id !== undefined;\n" +
+        "        if (this.orderbooks === undefined) { return 1; }\n" +
+        "        if (this.orderbooks !== undefined) { return 2; }\n" +
+        "        const a = this.transactions === undefined;\n" +
+        "        const b = this.baseCurrencies !== undefined;\n" +
         "        const c = this.tickers === undefined;\n" +
         "        return [ a, b, c ];\n" +
         "    }\n" +
@@ -2314,12 +2314,12 @@ describe('go inline equality', () => {
         const output = transpiler.transpileGo(input).content;
         // go/v4/exchange.go declares these BaseExchange fields as *sync.Map: the Go nil
         // test answers exactly what the IsEqual helper answers for a nil pointer
-        expect(output).toContain("if this.Markets == nil {");
-        expect(output).toContain("if this.Markets != nil {");
-        expect(output).toContain("var a bool = (this.Markets_by_id == nil)");
-        expect(output).toContain("var b bool = (this.Currencies_by_id != nil)");
+        expect(output).toContain("if this.Orderbooks == nil {");
+        expect(output).toContain("if this.Orderbooks != nil {");
+        expect(output).toContain("var a bool = (this.Transactions == nil)");
+        expect(output).toContain("var b bool = (this.BaseCurrencies != nil)");
         expect(output).toContain("var c bool = (this.Tickers == nil)");
-        expect(output).not.toContain("IsEqual(this.Markets");
+        expect(output).not.toContain("IsEqual(this.Orderbooks");
     });
     test('fields whose Go nil test the helpers do not reproduce keep IsEqual', () => {
         // Orders is an `any` field, Hostname a plain string, Clients a map, Ids a slice,
@@ -5333,12 +5333,12 @@ describe('go native element assignment on a hand-written container field', () =>
         const input =
         "class Exchange {\n" +
         "    main() {\n" +
-        "        this.markets['a'] = 1;\n" +
+        "        this.tickers['a'] = 1;\n" +
         "        return this.options;\n" +
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("this.Markets.Store(\"a\", 1)");
+        expect(output).toContain("this.Tickers.Store(\"a\", 1)");
         expect(output).not.toContain("AddElementToObject");
     });
     test('a sync.Map field with a string-typed local key assigns through Store', () => {
@@ -5383,12 +5383,12 @@ describe('go native element assignment on a hand-written container field', () =>
         const input =
         "class Exchange {\n" +
         "    main() {\n" +
-        "        this.markets['a'] += 1;\n" +
+        "        this.tickers['a'] += 1;\n" +
         "        return this.options;\n" +
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("AddElementToObject(this.Markets, \"a\", Add(GetValue(this.Markets, \"a\"), 1))");
+        expect(output).toContain("AddElementToObject(this.Tickers, \"a\", Add(GetValue(this.Tickers, \"a\"), 1))");
     });
     test('the field table never types a local of the same name', () => {
         const input =
