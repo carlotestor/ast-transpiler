@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -6175,9 +6175,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     return void 0;
   }
-  // A `this.<name>(...)` call to a method the enclosing class declares with a plain `bool` return
-  // (csharpBooleanReturnType prints that `bool`) hands back an unboxed bool, so a local holding it is
-  // `bool`. Base helpers, names the table answers and overloaded families keep their box.
+  // A `this.<name>(...)` call to a method the enclosing class (or a non-root class it extends) declares
+  // with a plain `bool` return (csharpBooleanReturnType prints that `bool`) hands back an unboxed bool,
+  // so a local holding it is `bool`. Root-class helpers, names the table answers and overloaded families
+  // keep their box.
   csharpBoolCallTyped(node) {
     if (node?.kind !== SyntaxKind4.CallExpression || !this.csharpIsCheckedBoolean(node)) {
       return false;
@@ -6198,10 +6199,27 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return false;
     }
     const owner = findAncestor(declaration, isClassLikeDeclaration);
-    if (owner === void 0 || owner !== findAncestor(node, isClassLikeDeclaration)) {
+    if (owner === void 0 || !this.csharpClassIsOrExtends(findAncestor(node, isClassLikeDeclaration), owner)) {
+      return false;
+    }
+    if (owner !== findAncestor(node, isClassLikeDeclaration) && getAllSuperTypeNodes(owner).length === 0) {
       return false;
     }
     return checker.getSymbolAtLocation(declaration.name)?.declarations?.length === 1;
+  }
+  // the class `cls` is `owner` or inherits from it: an inherited member prints the one C# signature
+  // the owner declares, so a method declared once tree-wide answers the same type to every subclass
+  csharpClassIsOrExtends(cls, owner) {
+    const wanted = this.csharpNodePositionKey(owner);
+    let current = cls;
+    for (let depth = 0; current !== void 0 && depth < 16; depth++) {
+      if (this.csharpNodePositionKey(current) === wanted) {
+        return true;
+      }
+      const parent = getAllSuperTypeNodes(current)[0];
+      current = parent === void 0 ? void 0 : this.getChecker().getTypeAtLocation(parent)?.getSymbol()?.valueDeclaration?.resolve();
+    }
+    return false;
   }
   csharpEnclosingFunction(node) {
     let current = node?.parent;
@@ -7201,7 +7219,16 @@ var CSharpTranspiler = class extends BaseTranspiler {
           const key = this.csharpNodePositionKey(declaration);
           for (const row of rows) {
             if (key !== void 0 && row.key === key) {
-              row.calls.push(node);
+              row.calls.push({ arguments: node.arguments ?? [] });
+            }
+          }
+        }
+        const spawned = this.csharpSpawnedMethodCall(node);
+        if (spawned !== void 0) {
+          const spawnedRows = byName.get(spawned.name);
+          for (const row of spawnedRows ?? []) {
+            if (row.key === spawned.key) {
+              row.calls.push({ arguments: spawned.arguments });
             }
           }
         }
@@ -7216,7 +7243,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     for (const row of candidates) {
       for (const call of row.calls) {
-        const args = call.arguments ?? [];
+        const args = call.arguments;
         const spread = args.some((a) => a.kind === SyntaxKind4.SpreadElement);
         if (spread || args.length > row.method.parameters.length) {
           blocked.add(row.method);
@@ -7242,6 +7269,22 @@ var CSharpTranspiler = class extends BaseTranspiler {
       }
     }
     return accepted;
+  }
+  // `this.spawn (this.method, a, b)`: the method name, its declaration's position key and the
+  // arguments it is invoked with (undefined for any other call)
+  csharpSpawnedMethodCall(node) {
+    const callee = node.expression;
+    if (callee?.kind !== SyntaxKind4.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind4.ThisKeyword || this.csharpNodeText(callee.name) !== "spawn") {
+      return void 0;
+    }
+    const target = node.arguments?.[0];
+    if (target?.kind !== SyntaxKind4.PropertyAccessExpression || target.expression?.kind !== SyntaxKind4.ThisKeyword) {
+      return void 0;
+    }
+    const name = this.csharpNodeText(target.name);
+    const declaration = name === void 0 ? void 0 : this.getChecker().getSymbolAtLocation(target.name)?.valueDeclaration?.resolve();
+    const key = this.csharpNodePositionKey(declaration);
+    return key === void 0 ? void 0 : { name, key, arguments: node.arguments.slice(1) };
   }
   // an identifier's spelling in the ts7 ast (`text`; `escapedText` no longer exists)
   csharpNodeText(node) {
@@ -7289,7 +7332,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // or `any` keeps the parameter `object`
   csharpParamIsBooleanTyped(parameter) {
     if (parameter.type === void 0) {
-      return false;
+      const init = parameter.initializer;
+      return init?.kind === SyntaxKind4.TrueKeyword || init?.kind === SyntaxKind4.FalseKeyword;
     }
     const type = this.getChecker().getTypeFromTypeNode(parameter.type);
     if (type === void 0) {
@@ -7334,7 +7378,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
       }
       const declaration = this.getChecker().getSymbolAtLocation(value)?.valueDeclaration?.resolve();
       if (declaration?.kind !== SyntaxKind4.Parameter) {
-        return this.csharpDeclaredLocalType(value) === "bool";
+        const local = this.csharpDeclaredLocalType(value);
+        return local === "bool" || local === "bool?";
       }
       const method = findAncestor(declaration, (n) => isMethodDeclaration2(n));
       const parameterIndex = method === void 0 ? -1 : method.parameters.indexOf(declaration);
