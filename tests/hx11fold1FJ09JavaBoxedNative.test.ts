@@ -18,6 +18,8 @@ describe('java boxed native forms', () => {
         "export class fake extends Exchange {\n" +
         "    k1 () {\n" +
         "        const a = Object.keys (this.tickers);\n" +
+        "        const e = Object.keys (this.tickers);\n" +
+        "        for (let i = 0; i < e.length; i++) { this.pair (e[i]); }\n" +
         "        const b = Object.keys (this.options);\n" +
         "        const c = Object.keys (this.currencies);\n" +
         "        const d = Object.keys (this.own);\n" +
@@ -27,6 +29,7 @@ describe('java boxed native forms', () => {
         "        let m = n;\n" +
         "        const [ r, p ] = this.pair (o);\n" +
         "        const x = r + 1;\n" +
+        "        for (let j = 0; j < r + 1; j++) { this.pair (j); }\n" +
         "        const y = m + 1;\n" +
         "        const z = o + 1;\n" +
         "        return [ x, y, z ];\n" +
@@ -74,6 +77,10 @@ describe('java boxed native forms', () => {
     test('Object.keys on a base Map field is the null-guarded key copy', () => {
         const k1 = method(out, 'k1');
         expect(k1).toContain('(this.tickers == null ? new java.util.ArrayList<Object>() : new java.util.ArrayList<Object>(this.tickers.keySet()))');
+    });
+
+    test('a local fed by it declares the List<Object> its copy is', () => {
+        expect(method(out, 'k1')).toContain('List<Object> e = (this.tickers == null');
     });
 
     test('an owner store, an unlisted field and a venue field keep the helper', () => {

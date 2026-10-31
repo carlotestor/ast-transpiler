@@ -23846,12 +23846,19 @@ ${this.getIden(identation)}}}`;
     return JAVA_ELEMENT_WRITE_MAP_TYPE;
   }
   // RF-java-2: `const x = Object.values(..)` with no other write prints the helper's exact return type
+  // `const x = Object.keys(this.<BaseExchange Map field>)` prints the null-guarded key copy
+  // (printNativeBaseMapFieldKeys), a fresh ArrayList, so the same List<Object> local applies.
   javaObjectValuesLocalType(declaration) {
     if (!_is.isVariableDeclaration.call(void 0, declaration) || !_is.isIdentifier.call(void 0, declaration.name) || !declaration.initializer) {
       return void 0;
     }
     const init = this.unwrapPrintTransparentExpression(declaration.initializer);
-    if (init === void 0 || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression) || !_is.isIdentifier.call(void 0, init.expression.expression) || init.expression.expression.text !== "Object" || init.expression.name.text !== "values" || init.arguments.length !== 1) {
+    if (init === void 0 || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression) || !_is.isIdentifier.call(void 0, init.expression.expression) || init.expression.expression.text !== "Object" || init.arguments.length !== 1) {
+      return void 0;
+    }
+    const method = init.expression.name.text;
+    const arg = init.arguments[0];
+    if (method === "keys" ? !(_is.isPropertyAccessExpression.call(void 0, arg) && this.printNativeBaseMapFieldKeys(arg) !== void 0) : method !== "values") {
       return void 0;
     }
     if (this.javaLocalHasWriteAtAll(declaration.name)) {
@@ -27330,7 +27337,7 @@ ${this.getIden(identation)}}}`;
       }
     }
     if (leftFamily !== "number" || rightFamily !== "number") {
-      return void 0;
+      return op === _ast.SyntaxKind.PlusToken ? this.printBoxedLongLiteralAdd(left, right, leftText, rightText) : void 0;
     }
     if (op === _ast.SyntaxKind.PlusToken) {
       return _nullishCoalesce(this.printWidenedNativeAdd(left, right, leftText, rightText), () => ( this.printBoxedLongLiteralAdd(left, right, leftText, rightText)));
@@ -28588,7 +28595,7 @@ ${this.getIden(identation)}}}`;
     } catch (e) {
       return void 0;
     }
-    if (!/(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange\.ts$/.test(file)) {
+    if (!/(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange(\.nooverloads\.\d+)?\.ts$/.test(file)) {
       return void 0;
     }
     const receiver = this.printNode(access, 0);

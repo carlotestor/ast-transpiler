@@ -2516,6 +2516,8 @@ export class JavaTranspiler extends BaseTranspiler {
     }
 
     // RF-java-2: `const x = Object.values(..)` with no other write prints the helper's exact return type
+    // `const x = Object.keys(this.<BaseExchange Map field>)` prints the null-guarded key copy
+    // (printNativeBaseMapFieldKeys), a fresh ArrayList, so the same List<Object> local applies.
     javaObjectValuesLocalType(declaration): string | undefined {
         if (!isVariableDeclaration(declaration) || !isIdentifier(declaration.name) || !declaration.initializer) {
             return undefined;
@@ -2523,7 +2525,12 @@ export class JavaTranspiler extends BaseTranspiler {
         const init = this.unwrapPrintTransparentExpression(declaration.initializer);
         if (init === undefined || !isCallExpression(init) || !isPropertyAccessExpression(init.expression)
             || !isIdentifier(init.expression.expression) || init.expression.expression.text !== 'Object'
-            || init.expression.name.text !== 'values' || init.arguments.length !== 1) {
+            || init.arguments.length !== 1) {
+            return undefined;
+        }
+        const method = init.expression.name.text;
+        const arg = init.arguments[0];
+        if (method === 'keys' ? !(isPropertyAccessExpression(arg) && this.printNativeBaseMapFieldKeys(arg) !== undefined) : method !== 'values') {
             return undefined;
         }
         if (this.javaLocalHasWriteAtAll(declaration.name)) {
@@ -6514,7 +6521,8 @@ export class JavaTranspiler extends BaseTranspiler {
             }
         }
         if (leftFamily !== 'number' || rightFamily !== 'number') {
-            return undefined;
+            // a tuple element typed `Int` (nullable alias) has no plain-number family; the printed `Long` box decides
+            return op === SyntaxKind.PlusToken ? this.printBoxedLongLiteralAdd(left, right, leftText, rightText) : undefined;
         }
         if (op === SyntaxKind.PlusToken) {
             // the widened rule: literals + the non-null numeric proofs this printer owns
@@ -8132,7 +8140,7 @@ export class JavaTranspiler extends BaseTranspiler {
         } catch (e) {
             return undefined;
         }
-        if (!/(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange\.ts$/.test(file)) {
+        if (!/(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange(\.nooverloads\.\d+)?\.ts$/.test(file)) {
             return undefined;
         }
         const receiver = this.printNode(access, 0);

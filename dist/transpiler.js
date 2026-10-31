@@ -23847,12 +23847,19 @@ ${this.getIden(identation)}}}`;
     return JAVA_ELEMENT_WRITE_MAP_TYPE;
   }
   // RF-java-2: `const x = Object.values(..)` with no other write prints the helper's exact return type
+  // `const x = Object.keys(this.<BaseExchange Map field>)` prints the null-guarded key copy
+  // (printNativeBaseMapFieldKeys), a fresh ArrayList, so the same List<Object> local applies.
   javaObjectValuesLocalType(declaration) {
     if (!isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || !declaration.initializer) {
       return void 0;
     }
     const init = this.unwrapPrintTransparentExpression(declaration.initializer);
-    if (init === void 0 || !isCallExpression5(init) || !isPropertyAccessExpression2(init.expression) || !isIdentifier2(init.expression.expression) || init.expression.expression.text !== "Object" || init.expression.name.text !== "values" || init.arguments.length !== 1) {
+    if (init === void 0 || !isCallExpression5(init) || !isPropertyAccessExpression2(init.expression) || !isIdentifier2(init.expression.expression) || init.expression.expression.text !== "Object" || init.arguments.length !== 1) {
+      return void 0;
+    }
+    const method = init.expression.name.text;
+    const arg = init.arguments[0];
+    if (method === "keys" ? !(isPropertyAccessExpression2(arg) && this.printNativeBaseMapFieldKeys(arg) !== void 0) : method !== "values") {
       return void 0;
     }
     if (this.javaLocalHasWriteAtAll(declaration.name)) {
@@ -27331,7 +27338,7 @@ ${this.getIden(identation)}}}`;
       }
     }
     if (leftFamily !== "number" || rightFamily !== "number") {
-      return void 0;
+      return op === SyntaxKind6.PlusToken ? this.printBoxedLongLiteralAdd(left, right, leftText, rightText) : void 0;
     }
     if (op === SyntaxKind6.PlusToken) {
       return this.printWidenedNativeAdd(left, right, leftText, rightText) ?? this.printBoxedLongLiteralAdd(left, right, leftText, rightText);
@@ -28589,7 +28596,7 @@ ${this.getIden(identation)}}}`;
     } catch (e) {
       return void 0;
     }
-    if (!/(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange\.ts$/.test(file)) {
+    if (!/(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange(\.nooverloads\.\d+)?\.ts$/.test(file)) {
       return void 0;
     }
     const receiver = this.printNode(access, 0);
