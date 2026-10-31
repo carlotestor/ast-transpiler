@@ -5332,12 +5332,12 @@ describe('go native element assignment on a hand-written container field', () =>
         const input =
         "class Exchange {\n" +
         "    main() {\n" +
-        "        this.options['a'] = 1;\n" +
+        "        this.markets['a'] = 1;\n" +
         "        return this.options;\n" +
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("this.Options.Store(\"a\", 1)");
+        expect(output).toContain("this.Markets.Store(\"a\", 1)");
         expect(output).not.toContain("AddElementToObject");
     });
     test('a sync.Map field with a string-typed local key assigns through Store', () => {
@@ -5382,12 +5382,12 @@ describe('go native element assignment on a hand-written container field', () =>
         const input =
         "class Exchange {\n" +
         "    main() {\n" +
-        "        this.options['a'] += 1;\n" +
+        "        this.markets['a'] += 1;\n" +
         "        return this.options;\n" +
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("AddElementToObject(this.Options, \"a\", Add(GetValue(this.Options, \"a\"), 1))");
+        expect(output).toContain("AddElementToObject(this.Markets, \"a\", Add(GetValue(this.Markets, \"a\"), 1))");
     });
     test('the field table never types a local of the same name', () => {
         const input =
