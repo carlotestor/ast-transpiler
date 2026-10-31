@@ -820,6 +820,14 @@ export class GoTranspiler extends BaseTranspiler {
     // hx11 RF-go-7: exchange-local methods (by name pattern) whose sibling-file call sites may pass a unified-string
     // parameter of their enclosing method straight through
     siblingStringPassthroughPattern: RegExp | undefined = undefined;
+    // ===== RF-go-6-F (config) =====
+    // base methods whose hand-written Go signature returns a plain `string`, and per tuple producer the Go
+    // type of each slot (`HandleOptionIntegerAndParamsNullable` -> [ '*int64' ]); both are ccxt runtime facts
+    goStringReturnMethods: string[] = [];
+    goTupleSlotTypes: { [producer: string]: string[] } = {};
+    // producer -> index of its default-value argument: an integer-literal default selects the value form,
+    // which returns a Go pair instead of the `[]any` holder
+    goTupleValueDefaultArg: { [producer: string]: number } = {};
     // array literals the current print opens as a Go slice (set by the call-argument rule)
     goSliceLiteralTypes: Map<any, string> = new Map<any, string>();
     // installed by the ccxt build: GetArg alias -> Go types, and the audited consumer table
@@ -881,6 +889,9 @@ export class GoTranspiler extends BaseTranspiler {
         this.uncalledStringParams = config['uncalledStringParams'] ?? {};
         this.stringPointerTupleCalls = config['stringPointerTupleCalls'] ?? [];
         this.siblingStringPassthroughPattern = (typeof config['siblingStringPassthroughPattern'] === 'string') ? new RegExp(config['siblingStringPassthroughPattern']) : undefined;
+        this.goStringReturnMethods = config['goStringReturnMethods'] ?? [];
+        this.goTupleSlotTypes = config['goTupleSlotTypes'] ?? {};
+        this.goTupleValueDefaultArg = config['goTupleValueDefaultArg'] ?? {};
     }
 
     initConfig() {
@@ -2549,6 +2560,10 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         const goType = this.goDeclaredTypeOfIdentifier(left);
         if ((goType === undefined) || (this.goPointerWriteConversion(right, goType) !== 'wrap')) {
             return undefined;
+        }
+        const addressed = this.goRf6fStringWriteText(node, this.printNode(left, 0), identation);
+        if (addressed !== undefined) {
+            return addressed;
         }
         const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trim();
         return `${this.printNode(left, 0)} = SafeStringPtr(${value})`;
@@ -6798,6 +6813,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             // B-02: a parameter the call-site proof typed prints its native Go type
             return this.goNativeParameterType(decl);
         }
+        if (decl.kind === SyntaxKind.BindingElement) {
+            return this.goRf6fTupleSlotPointerType(decl); // RF-go-6-F
+        }
         if (decl.kind !== SyntaxKind.VariableDeclaration || decl.name?.kind !== SyntaxKind.Identifier) {
             return undefined;
         }
@@ -6979,6 +6997,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     // native `container[key] = value` when the receiver's Go type is proved by the
     // printer, otherwise undefined and the caller keeps the runtime helper
     printNativeElementAssignment(containerNode, containerStr: string, keyNode, keyStr: string, valueStr: string, compound = false, valueNode?): string | undefined {
+        valueStr = this.goRf6fSlotStoreText(valueNode, valueStr); // RF-go-6-F
         const containerType = this.goElementAssignmentContainerType(containerNode, containerStr);
         const fieldType = this.goFieldContainerTypeNative(containerNode);
         if ((fieldType !== undefined) || (containerType === 'map[string]any')) {
@@ -9416,6 +9435,163 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return undefined;
     }
 
+    // ===== RF-go-6-F =====
+    // (1) a Go `string`-returning base method assigned/returned into a `*string` target: the string is
+    //     already a string, so it is bound to a temp and its address is taken instead of boxing it through
+    //     SafeStringPtr. (2) a destructured tuple slot whose producer's Go slot type is `*int64` (the checker
+    //     types the slot `number | undefined`): the local is declared `*int64` and read natively.
+    // the base-method name when `node` (through parens) is a whole `this.<m>(..)` call of a table method
+    goRf6fStringMethodCall(node): string | undefined {
+        let call: any = node;
+        while (call?.kind === SyntaxKind.ParenthesizedExpression) {
+            call = call.expression;
+        }
+        const callee: any = (call?.kind === SyntaxKind.CallExpression) ? call.expression : undefined;
+        if ((callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)) {
+            return undefined;
+        }
+        const name = String(callee.name?.text ?? '');
+        return this.goStringReturnMethods.includes(name) ? name : undefined;
+    }
+
+    // the call sits where a `*string` target receives it whole: `x = this.m(..)` as a statement on a
+    // `*string` local, or an arm of a conditional that initialises a local
+    goRf6fStringSite(call): boolean {
+        if (this.goRf6fStringMethodCall(call) === undefined) {
+            return false;
+        }
+        let child: any = call;
+        let parent: any = call.parent;
+        while (parent?.kind === SyntaxKind.ParenthesizedExpression) {
+            child = parent;
+            parent = parent.parent;
+        }
+        if ((parent?.kind === SyntaxKind.ConditionalExpression) && (parent.whenTrue === child || parent.whenFalse === child)) {
+            return parent.parent?.kind === SyntaxKind.VariableDeclaration;
+        }
+        return (parent?.kind === SyntaxKind.BinaryExpression) && (parent.operatorToken.kind === SyntaxKind.EqualsToken)
+            && (parent.right === child) && (parent.parent?.kind === SyntaxKind.ExpressionStatement)
+            && (this.goDeclaredTypeOfIdentifier(parent.left) === '*string');
+    }
+
+    // `<method>Text`, numbered by the site's order among the enclosing function's sites; undefined when
+    // the function already names a local that way
+    goRf6fStringTempName(call): string | undefined {
+        const method = this.goRf6fStringMethodCall(call);
+        const scope: any = this.goEnclosingFunction(call);
+        if ((method === undefined) || (scope === undefined)) {
+            return undefined;
+        }
+        const base = method + 'Text';
+        const taken = new RegExp('^' + base + '\\d*$');
+        const sites: any[] = [];
+        const collides = this.hasNodeWhere(scope, (n: any) => {
+            if ((n.kind === SyntaxKind.Identifier) && taken.test(n.text)) {
+                return true;
+            }
+            if ((n.kind === SyntaxKind.CallExpression) && this.goRf6fStringSite(n)) {
+                sites.push(n);
+            }
+            return false;
+        });
+        let core: any = call;
+        while (core?.kind === SyntaxKind.ParenthesizedExpression) {
+            core = core.expression;
+        }
+        const at = sites.indexOf(core);
+        return (collides || (at < 0)) ? undefined : (base + ((at === 0) ? '' : String(at + 1)));
+    }
+
+    // `x = this.m(..)` -> `mText := this.m(..)` + `x = &mText`; undefined keeps the SafeStringPtr box
+    goRf6fStringWriteText(node, leftText: string, identation): string | undefined {
+        if (!this.goRf6fStringSite(node.right) || (node.parent?.kind !== SyntaxKind.ExpressionStatement)) {
+            return undefined;
+        }
+        let call: any = node.right;
+        while (call?.kind === SyntaxKind.ParenthesizedExpression) {
+            call = call.expression;
+        }
+        const temp = this.goRf6fStringTempName(call);
+        if (temp === undefined) {
+            return undefined;
+        }
+        const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(call, identation)).trim();
+        return `${temp} := ${value}\n${this.getIden(identation)}${leftText} = &${temp}`;
+    }
+
+    // `*int64` when this binding element is slot i of a `this.<producer>(..)` tuple whose table row names
+    // `*int64` there, the checker types the slot `number | undefined`, the local is declared at the top
+    // of its function, never written, and every read is a nil test or sits under a dominating non-nil guard
+    goRf6fTupleSlotCache = new Map<any, string | undefined>();
+    goRf6fTupleSlotPointerType(element): string | undefined {
+        if (this.goRf6fTupleSlotCache.has(element)) {
+            return this.goRf6fTupleSlotCache.get(element);
+        }
+        this.goRf6fTupleSlotCache.set(element, undefined);
+        const result = this.goRf6fTupleSlotPointerTypeOf(element);
+        this.goRf6fTupleSlotCache.set(element, result);
+        return result;
+    }
+
+    goRf6fTupleSlotPointerTypeOf(element): string | undefined {
+        const checker: any = this.checkerOrUndefined();
+        const pattern: any = element?.parent;
+        const holder: any = pattern?.parent;
+        if ((checker === undefined) || (element?.kind !== SyntaxKind.BindingElement) || (pattern?.kind !== SyntaxKind.ArrayBindingPattern)
+            || (holder?.kind !== SyntaxKind.VariableDeclaration) || (holder.name !== pattern)
+            || (element.dotDotDotToken !== undefined) || (element.initializer !== undefined) || (element.name?.kind !== SyntaxKind.Identifier)) {
+            return undefined;
+        }
+        const producer = this.goTupleBindingProducerName(holder);
+        const index = pattern.elements.indexOf(element);
+        const slotType = (producer === undefined) ? undefined : this.goTupleSlotTypes[producer]?.[index];
+        const scope: any = this.goEnclosingFunction(element);
+        if ((slotType !== '*int64') || (scope === undefined) || (holder.parent?.parent?.parent !== scope.body)) {
+            return undefined;
+        }
+        const defaultAt = this.goTupleValueDefaultArg[producer as string];
+        const defaultArg: any = (defaultAt === undefined) ? undefined : holder.initializer?.arguments?.[defaultAt];
+        const literal: any = (defaultArg?.kind === SyntaxKind.PrefixUnaryExpression) ? defaultArg.operand : defaultArg;
+        if ((literal?.kind === SyntaxKind.NumericLiteral) || this.goTypeNameIsShadowed(scope, '*int64')) {
+            return undefined;
+        }
+        const name = element.name.text;
+        const unread = this.hasNodeWhere(scope, (n: any) => {
+            if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name) || (n === element.name)) {
+                return (n !== element) && (n.kind === SyntaxKind.BindingElement || n.kind === SyntaxKind.VariableDeclaration || n.kind === SyntaxKind.Parameter)
+                    && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === name); // a shadowing binding
+            }
+            const parent: any = this.goUnwrapParenthesizedNode(n)?.parent;
+            if (((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n)
+                    && (parent.operatorToken.kind >= SyntaxKind.FirstAssignment) && (parent.operatorToken.kind <= SyntaxKind.LastAssignment))
+                || (parent?.kind === SyntaxKind.PrefixUnaryExpression) && (parent.operator !== SyntaxKind.ExclamationToken)
+                || (parent?.kind === SyntaxKind.PostfixUnaryExpression) || (parent?.kind === SyntaxKind.ArrayLiteralExpression)
+                || (parent?.kind === SyntaxKind.SpreadElement)) {
+                return true; // a write, or a destructuring target
+            }
+            const nilTest = (parent?.kind === SyntaxKind.BinaryExpression) && [SyntaxKind.EqualsEqualsToken, SyntaxKind.EqualsEqualsEqualsToken,
+                SyntaxKind.ExclamationEqualsToken, SyntaxKind.ExclamationEqualsEqualsToken].includes(parent.operatorToken.kind)
+                && this.goIsNilLiteral((parent.left === n) ? parent.right : parent.left);
+            return !nilTest && !this.goHasEnclosingNilGuard(n) && !this.gp15HasExitingNilGuard(n);
+        });
+        return unread ? undefined : '*int64';
+    }
+
+    // the helper this store replaces stores derefScalar(value): a guarded `*int64` tuple-slot local stores its value
+    goRf6fSlotStoreText(valueNode, valueStr: string): string {
+        const value: any = this.goUnwrapParenthesizedNode(valueNode);
+        const declaration: any = (value?.kind === SyntaxKind.Identifier)
+            ? this.checkerOrUndefined()?.getSymbolAtLocation(value)?.valueDeclaration?.resolve() : undefined;
+        return ((declaration?.kind === SyntaxKind.BindingElement) && (this.goRf6fTupleSlotPointerType(declaration) === '*int64')
+            && this.goHasEnclosingNilGuard(value)) ? '*' + valueStr : valueStr;
+    }
+
+    goRf6fTupleSlotPointerLines(name: string, holder: string, index: number, iden: string): string {
+        return iden + 'var ' + name + ' *int64 = nil\n' + iden + 'if p, ok := ' + holder + '[' + index + '].(*int64); ok {\n'
+            + iden + '\t' + name + ' = p\n' + iden + '}';
+    }
+    // ===== end RF-go-6-F =====
+
     // a typed slot local is only printed when every later use reads it as that type: a write, an
     // address, a switch/case subject or an element-access index all need the box
     goTupleSlotNameIsSafe(nameNode: any, declaration: any): boolean {
@@ -9514,6 +9690,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return elements.map((element: any, index: number) => {
             const name = this.printNode(element.name, 0);
             const unbox = (element.name?.kind === SyntaxKind.Identifier) ? this.goTupleSlotUnbox(element) : undefined;
+            if (nativeBinding && (this.goRf6fTupleSlotPointerType(element) === '*int64')) {
+                return this.goRf6fTupleSlotPointerLines(name, holder, index, iden); // RF-go-6-F
+            }
             if (!sliceHolder || (unbox === undefined) || !this.goTupleSlotNameIsSafe(element.name, declaration)) {
                 return iden + name + ' := GetValue(' + holder + ', ' + index + ')';
             }
