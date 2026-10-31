@@ -39,6 +39,30 @@ export declare class GoTranspiler extends BaseTranspiler {
     ASYNC_BODY_SUFFIX: string;
     DEFAULT_IDENTATION: string;
     constructor(config?: {});
+    goOwnedFields: {
+        [field: string]: {
+            owner: string;
+            snapshot: string;
+            remove: string;
+        };
+    };
+    goOwnerLoopMethods: RegExp | undefined;
+    goSkipRegionMarkers: string[];
+    goInSkippedRegion: boolean;
+    goSkippedRegionCache: WeakMap<object, number[][]>;
+    goLastFileStdlibImports: string[];
+    goConfigureRf6E(config: any): void;
+    goOwnedFieldOf(node: any): {
+        owner: string;
+        snapshot: string;
+        remove: string;
+    } | undefined;
+    goEnclosingMethodName(node: any): string | undefined;
+    goRunsOnOwnerLoop(node: any): boolean;
+    goOwnedFieldIsWritten(node: any): boolean;
+    printPropertyAccessExpression(node: any, identation: any): any;
+    goOwnedFieldRemove(node: any): string | undefined;
+    goStatementIsInSkippedRegion(node: any): boolean;
     initConfig(): void;
     printSuperCallInsideConstructor(node: any, identation: any): string;
     printStringLiteral(node: any): any;

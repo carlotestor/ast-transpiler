@@ -562,12 +562,16 @@ export default class Transpiler {
         }
         Logger.success("transpilation finished successfully");
 
-        return {
+        const transpiled: ITranspiledFile = {
             content: transpiledContent,
             imports,
             exports,
             methodsTypes
         };
+        if (lang === Languages.Go) {
+            transpiled.goStdlibImports = [...this.goTranspiler.goLastFileStdlibImports];  // RF-go-6-E
+        }
+        return transpiled;
     }
 
     transpileDifferentLanguagesGeneric(mode: TranspilationMode, input: IInput[], content: string): ITranspiledFile[] {
