@@ -142,6 +142,25 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpNativeNumericComparison(node: any, identation: any): string | undefined;
     csharpNativeMathMinMax(node: any, name: string, parsedArg1: string, parsedArg2: string): string | undefined;
     csharpMinMaxResultIsPlainValue(node: any): boolean;
+    csharpDeclaredBaseFieldType(name: string): string | undefined;
+    csharpBaseFieldDeclaredDictionary(name: string): boolean;
+    csharpBaseFieldName(node: any): string | undefined;
+    csharpBaseFieldWritesAreDictionaries(node: any, name: string): boolean;
+    csharpBaseFieldDictionary(node: any): {
+        text: string;
+        type: string;
+        field: string;
+        name: string;
+    } | undefined;
+    csharpParameterWrittenAnywhere(identifier: any): boolean;
+    csharpBaseFieldKey(key: any, allowObject: boolean): {
+        text: string;
+        kind: 'literal' | 'string' | 'string?' | 'object';
+    } | undefined;
+    csharpBaseFieldElementRead(node: any): string | undefined;
+    csharpBaseFieldInExpression(key: any, obj: any): string | undefined;
+    csharpBaseFieldKeyNames: WeakMap<object, number>;
+    csharpNativeModLiteralEquality(left: any, right: any, isEquality: boolean): string | undefined;
     printCallExpression(node: any, identation: any): any;
     csharpNativeParseCall(node: any): string;
     csharpCalleeIsGlobalFunction(node: any): boolean;
