@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -10435,6 +10435,16 @@ var GoTranspiler = class extends BaseTranspiler {
       ownerSide: (owned["ownerSideMethods"] ?? []).map((p) => new RegExp(p))
     };
     this.generatedListCallees = new Set(config["generatedListCallees"] ?? []);
+    const caches = config["ownedCaches"];
+    this.goOwnedCaches = caches === void 0 ? void 0 : {
+      declaredIn: caches["declaredIn"],
+      maps: caches["maps"] ?? {},
+      objects: caches["objects"] ?? {},
+      mapLiteral: caches["mapLiteral"],
+      asyncUserPath: new RegExp(caches["asyncUserPath"]),
+      syncUserPath: new RegExp(caches["syncUserPath"]),
+      ops: caches["ops"]
+    };
   }
   goDescendantsOf(scope) {
     let list = this.goScopeDescendants.get(scope);
@@ -13978,6 +13988,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     return this.applyAsyncSuffixToCallee(nameNode, this.capitalize(name));
   }
   printOutOfOrderCallExpressionIfAny(node, identation) {
+    const ownedCache = this.goOwnedCacheRead(node);
+    if (ownedCache !== void 0) {
+      return ownedCache;
+    }
     const nonceSum = this.goNonceSumText(node);
     if (nonceSum !== void 0) {
       return nonceSum;
@@ -19182,6 +19196,10 @@ ${this.getIden(level)}}()`;
     return this.printNativeIsArray(node, parsedArg) ?? `IsArray(${parsedArg})`;
   }
   printObjectKeysCall(node, identation, parsedArg = void 0) {
+    const ownedMap = this.goOwnedCaches === void 0 ? void 0 : this.goOwnedCacheUser(node.arguments?.[0], "map");
+    if (ownedMap !== void 0) {
+      return this.goOwnedCacheOp(node.arguments[0], "keys", ownedMap.name, []);
+    }
     return `ObjectKeys(${parsedArg})`;
   }
   printObjectValuesCall(node, identation, parsedArg = void 0) {
@@ -19728,6 +19746,10 @@ ${this.getIden(level)}}()`;
     return parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === node && (isAssignment(parent.parent, parent) || parent.parent?.kind === SyntaxKind5.DeleteExpression);
   }
   printPropertyAccessExpression(node, identation) {
+    const ownedCache = this.goOwnedCacheValue(node);
+    if (ownedCache !== void 0) {
+      return ownedCache;
+    }
     if (this.goOwnedFieldAccess(node) && !this.goOwnedFieldIsWrite(node) && this.goOwnedFieldUserPath(node)) {
       return `${this.printNode(node.expression, 0)}.${this.goOwnedField.snapshot}()`;
     }
@@ -19741,7 +19763,143 @@ ${this.getIden(level)}}()`;
     }
     return `${this.printNode(access.expression.expression, 0)}.${this.goOwnedField.remove}(${this.printNode(access.argumentExpression, 0).trim()})`;
   }
+  // ---- hx11 1F hx10w4-OG03: ws caches owned by the dispatch loop (ticker/bidask maps, positions) ----------
+  // `this.<field>` that resolves to the `declaredIn` class's own property. Handlers run on the loop and
+  // keep the field; the user path (async watch/load/subscribe methods and the listed sync ones) hands
+  // every operation to the owner: set/get/has/delete/reset on the maps, a snapshot for a whole-map read,
+  // objGet/objSet on the object field. Absent config = unchanged output.
+  goOwnedCacheRef(node) {
+    const caches = this.goOwnedCaches;
+    if (caches === void 0 || node?.kind !== SyntaxKind5.PropertyAccessExpression || node.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return void 0;
+    }
+    const field = node.name?.text;
+    const kind = Object.prototype.hasOwnProperty.call(caches.maps, field) ? "map" : Object.prototype.hasOwnProperty.call(caches.objects, field) ? "object" : void 0;
+    if (kind === void 0) {
+      return void 0;
+    }
+    const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+    if (declaration?.kind !== SyntaxKind5.PropertyDeclaration || declaration.parent?.name?.text !== caches.declaredIn) {
+      return void 0;
+    }
+    return { kind, name: kind === "map" ? caches.maps[field] : caches.objects[field] };
+  }
+  goOwnedCacheUserPath(node) {
+    for (let current = node?.parent; current; current = current.parent) {
+      if (current.kind === SyntaxKind5.MethodDeclaration || current.kind === SyntaxKind5.FunctionDeclaration) {
+        const name = current.name?.text;
+        return typeof name === "string" && (this.isAsyncFunction(current) ? this.goOwnedCaches.asyncUserPath.test(name) : this.goOwnedCaches.syncUserPath.test(name));
+      }
+    }
+    return false;
+  }
+  // the owned cache the node names on the user path (kind 'map' or 'object'), else undefined
+  goOwnedCacheUser(node, kind) {
+    const ref = this.goOwnedCacheRef(node);
+    return ref !== void 0 && ref.kind === kind && this.goOwnedCacheUserPath(node) ? ref : void 0;
+  }
+  goOwnedCacheOp(receiver, op, name, args) {
+    return `${this.printNode(receiver.expression, 0)}.${this.goOwnedCaches.ops[op]}(${[`"${name}"`].concat(args).join(", ")})`;
+  }
+  // the base files are package ccxt itself; every other file names the type through its package
+  goOwnedCacheLiteral(node) {
+    const file = node.getSourceFile?.()?.fileName ?? "";
+    const inBase = this.goBaseFileStdlibImportSeamPaths !== void 0 && this.goBaseFileStdlibImportSeamPaths.test(file);
+    return (inBase ? "" : "ccxt.") + this.goOwnedCaches.mapLiteral;
+  }
+  goIsCreateSafeDictionary(node) {
+    return node?.kind === SyntaxKind5.CallExpression && node.expression?.kind === SyntaxKind5.PropertyAccessExpression && node.expression.expression?.kind === SyntaxKind5.ThisKeyword && node.expression.name?.text === "createSafeDictionary" && (node.arguments?.length ?? 0) <= 1 && ((node.arguments?.length ?? 0) === 0 || node.arguments[0].kind === SyntaxKind5.TrueKeyword);
+  }
+  // assignments to the field, an element of the map, and `key in map`
+  goOwnedCacheBinary(node, identation) {
+    if (this.goOwnedCaches === void 0) {
+      return void 0;
+    }
+    const { left, right, operatorToken } = node;
+    if (operatorToken.kind === SyntaxKind5.InKeyword) {
+      const map2 = this.goOwnedCacheUser(right, "map");
+      return map2 === void 0 ? void 0 : this.goOwnedCacheOp(right, "has", map2.name, [this.printNode(left, 0).trim()]);
+    }
+    if (operatorToken.kind !== SyntaxKind5.EqualsToken || right?.kind === SyntaxKind5.AwaitExpression) {
+      return void 0;
+    }
+    const depth = this.goExprDepth + 1;
+    const printedRight = () => this.goWithExprDepth(depth, () => this.printNode(right, identation)).trim();
+    if (this.goOwnedCacheRef(left)?.kind === "map") {
+      if (!this.goIsCreateSafeDictionary(right)) {
+        return void 0;
+      }
+      return this.goOwnedCacheUserPath(left) ? this.goOwnedCacheOp(left, "reset", this.goOwnedCacheRef(left).name, []) : `${this.printNode(left, 0)} = ${this.goOwnedCacheLiteral(node)}`;
+    }
+    const object = this.goOwnedCacheUser(left, "object");
+    if (object !== void 0) {
+      return this.goOwnedCacheOp(left, "objSet", object.name, [printedRight()]);
+    }
+    const map = left?.kind === SyntaxKind5.ElementAccessExpression ? this.goOwnedCacheUser(left.expression, "map") : void 0;
+    return map === void 0 ? void 0 : this.goOwnedCacheOp(left.expression, "set", map.name, [this.printNode(left.argumentExpression, 0).trim(), printedRight()]);
+  }
+  // `m[k]` read, and `this.safeValue(m, k)` / `this.safeDict(m, k)`
+  goOwnedCacheRead(node) {
+    if (this.goOwnedCaches === void 0) {
+      return void 0;
+    }
+    if (node.kind === SyntaxKind5.ElementAccessExpression) {
+      const map2 = this.goOwnedCacheUser(node.expression, "map");
+      const p = node.parent;
+      const isTarget = p?.kind === SyntaxKind5.BinaryExpression && p.left === node && p.operatorToken.kind >= SyntaxKind5.FirstAssignment && p.operatorToken.kind <= SyntaxKind5.LastAssignment || p?.kind === SyntaxKind5.DeleteExpression;
+      return map2 === void 0 || isTarget ? void 0 : this.goOwnedCacheOp(node.expression, "get", map2.name, [this.printNode(node.argumentExpression, 0).trim()]);
+    }
+    const callee = node.expression;
+    if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || !["safeValue", "safeDict"].includes(callee.name?.text) || node.arguments?.length !== 2) {
+      return void 0;
+    }
+    const map = this.goOwnedCacheUser(node.arguments[0], "map");
+    return map === void 0 ? void 0 : this.goOwnedCacheOp(node.arguments[0], "get", map.name, [this.printNode(node.arguments[1], 0).trim()]);
+  }
+  // `delete m[k]`
+  goOwnedCacheDelete(node) {
+    const access = node.expression;
+    const map = access?.kind === SyntaxKind5.ElementAccessExpression ? this.goOwnedCacheUser(access.expression, "map") : void 0;
+    return map === void 0 ? void 0 : this.goOwnedCacheOp(access.expression, "delete", map.name, [this.printNode(access.argumentExpression, 0).trim()]);
+  }
+  // any other read: the map as a snapshot copy, the object field through the owner
+  goOwnedCacheValue(node) {
+    const ref = this.goOwnedCacheRef(node);
+    if (ref === void 0 || !this.goOwnedCacheUserPath(node)) {
+      return void 0;
+    }
+    const p = node.parent;
+    const isAssignmentTarget = (parent, child) => parent?.kind === SyntaxKind5.BinaryExpression && parent.left === child && parent.operatorToken.kind >= SyntaxKind5.FirstAssignment && parent.operatorToken.kind <= SyntaxKind5.LastAssignment;
+    if (ref.kind === "object") {
+      return isAssignmentTarget(p, node) ? void 0 : this.goOwnedCacheOp(node, "objGet", ref.name, []);
+    }
+    const writesElement = p?.kind === SyntaxKind5.ElementAccessExpression && p.expression === node && (isAssignmentTarget(p.parent, p) || p.parent?.kind === SyntaxKind5.DeleteExpression);
+    if (isAssignmentTarget(p, node) || writesElement) {
+      return void 0;
+    }
+    if (p?.kind === SyntaxKind5.ReturnStatement && this.goReturnsTickerMap(node)) {
+      return `any(${this.goOwnedCacheOp(node, "snapshot", ref.name, [])})`;
+    }
+    return this.goOwnedCacheOp(node, "snapshot", ref.name, []);
+  }
+  goReturnsTickerMap(node) {
+    for (let current = node?.parent; current; current = current.parent) {
+      if (current.kind === SyntaxKind5.MethodDeclaration) {
+        const checker = this.checkerOrUndefined();
+        const signature = checker?.getSignatureFromDeclaration(current);
+        const returned = signature && checker.getReturnTypeOfSignature(signature);
+        const text = returned && checker.typeToString(returned);
+        return typeof text === "string" && /^Promise<Tickers>$/.test(text);
+      }
+    }
+    return false;
+  }
+  // ---- end hx10w4-OG03 ----------------------------------------------------------------------------------
   printDeleteExpression(node, identation) {
+    const ownedCache = this.goOwnedCacheDelete(node);
+    if (ownedCache !== void 0) {
+      return ownedCache;
+    }
     const owned = this.goOwnedFieldRemove(node);
     if (owned !== void 0) {
       return owned;
@@ -19928,6 +20086,10 @@ ${this.getIden(identation)}return nil`;
   }
   printBinaryExpression(node, identation) {
     const { left, right, operatorToken } = node;
+    const ownedCache = this.goOwnedCacheBinary(node, identation);
+    if (ownedCache !== void 0) {
+      return ownedCache;
+    }
     const customBinaryExp = this.printCustomBinaryExpressionIfAny(node, identation);
     if (customBinaryExp) {
       return customBinaryExp;
@@ -20446,6 +20608,10 @@ ${this.getIden(level)}}()`;
   }
   // ===== end RF-go-6-C =====
   printElementAccessExpression(node, identation) {
+    const ownedCache = this.goOwnedCacheRead(node);
+    if (ownedCache !== void 0) {
+      return ownedCache;
+    }
     const bookSide = this.goOrderBookSideRead(node);
     if (bookSide !== void 0) {
       return bookSide;
