@@ -4820,15 +4820,17 @@ describe('java native split (Helpers.split -> Arrays.asList(String.split(Pattern
         expect(output).toContain("Helpers.split(s, \",\")");
     });
 
-    test('a non-literal separator keeps the helper', () => {
+    test('a string-typed separator prints native, an untyped one keeps the helper', () => {
         const input =
         "class T {\n" +
-        "    test(s: string, sep: string): void {\n" +
+        "    test(s: string, sep: string, o: any): void {\n" +
         "        const parts = s.split(sep);\n" +
+        "        const rest = s.split(o);\n" +
         "    }\n" +
         "}"
         const output = transpiler.transpileJava(input).content;
-        expect(output).toContain("Helpers.split(s, sep)");
+        expect(output).toContain("((String)s).split(java.util.regex.Pattern.quote(sep))");
+        expect(output).toContain("Helpers.split(s, o)");
     });
 
     test('a two-argument split keeps the helper (the printed call drops no limit)', () => {
@@ -5102,7 +5104,7 @@ describe('java slice native emission (Helpers.slice -> substring / subList)', ()
         expect(output).toContain("Helpers.slice(s, 0.5, 2)");
     });
 
-    test('a bound outside the Java int range keeps the helper', () => {
+    test('a long-literal bound is clamped in long before the (int) cast (typed String slice)', () => {
         const input =
         "class T {\n" +
         "    f(s: string): void {\n" +
@@ -5110,7 +5112,8 @@ describe('java slice native emission (Helpers.slice -> substring / subList)', ()
         "    }\n" +
         "}"
         const output = transpiler.transpileJava(input).content;
-        expect(output).toContain("Helpers.slice(s, 0, 9007199254740992L)");
+        expect(output).toContain("(int) Math.min(9007199254740992L < 0 ?");
+        expect(output).not.toContain("Helpers.slice");
     });
 });
 
@@ -8197,5 +8200,118 @@ describe('hx10 J08: element access on a typed parameter', () => {
         expect(venueOutput).toContain('Object parameters');
         expect(venueOutput).toContain('Helpers.GetValue(parameters, "value")');
         expect(venueOutput).toContain('Helpers.addElementToObject(parameters, "seen", "yes")');
+    });
+});
+
+describe('java Object.values local (RF-java-2)', () => {
+    const wrap = (body: string) => "class T {\n    m(d: any): any {\n" + body + "\n    }\n}";
+    test('unwritten Object.values local is a List<Object>', () => {
+        const out = transpiler.transpileJava(wrap("const v = Object.values(d);\n        return v;")).content;
+        expect(out).toContain('List<Object> v = Helpers.objectValues(d)');
+    });
+    test('a rewritten Object.values local keeps Object', () => {
+        const out = transpiler.transpileJava(wrap("let v = Object.values(d);\n        v = d;\n        return v;")).content;
+        expect(out).toContain('Object v = Helpers.objectValues(d)');
+    });
+});
+
+describe('java typed String slice / split / replaceAll (RF-java-1)', () => {
+    const run = (body: string) => transpiler.transpileJava(
+        "class T {\n    test(s: string, sep: string, repl: string, o: any): any {\n" + body + "\n    }\n}").content;
+
+    test('an untyped receiver keeps the slice helper', () => {
+        expect(run("        return o.slice(1, 3);")).toContain("Helpers.slice(o, 1, 3)");
+    });
+
+    test('a fractional bound keeps the slice helper', () => {
+        expect(run("        return s.slice(1.5, 3);")).toContain("Helpers.slice(s,");
+    });
+
+    test('a string separator prints the native split, an untyped one keeps the helper', () => {
+        const output = run("        return [ s.split(sep), s.split(o) ];");
+        expect(output).toContain("((String)s).split(java.util.regex.Pattern.quote(sep))");
+        expect(output).toContain("Helpers.split(s, o)");
+    });
+
+    test('a literal pattern with a typed string replacement prints String.replace', () => {
+        const output = run("        return s.replaceAll('ab', repl);");
+        expect(output).toContain(".replace(\"ab\", ");
+        expect(output).not.toContain("Helpers.replaceAll");
+    });
+});
+
+// hx11 FJ4-D: a local initialised from a sync `this.<m> (...)` call of a generated venue method whose own
+// declaration prints a native Map/List takes that type in the printer (javaDeclaredLocalType), with no
+// build-side resolver wrapper: the consumer's tables know nothing about this file or its first generation
+describe('java venue-callee local type (hx11 FJ4-D)', () => {
+    const TMP = path.join(__dirname, 'files', 'tmp-javafj4d');
+    const TYPES_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'types.ts');
+    const BASE_FIXTURE = path.join(TMP, 'ts', 'src', 'base', 'Exchange.ts');
+    const VENUE_FIXTURE = path.join(TMP, 'ts', 'src', 'venuefj4d.ts');
+    const BASE_SOURCE =
+        'export class Exchange {\n' +
+        '    safeValue (a: any, k: any, d: any = undefined): any { return d; }\n' +
+        '    baseDict (a: any): any { return a; }\n' +
+        '    sink (...args: any[]): void {}\n' +
+        '}\n';
+    const VENUE_SOURCE =
+        "import { Dict } from './base/types';\n" +
+        "import { Exchange } from './base/Exchange';\n" +
+        'export default class venuefj4d extends Exchange {\n' +
+        '    parseMap (data: Dict): any { return { "a": data }; }\n' +
+        '    parseList (data: Dict): any { return [ data ]; }\n' +
+        '    parseUnproven (data: Dict): any { return this.safeValue (data, "k"); }\n' +
+        '    parseScalar (data: Dict): string { return "x"; }\n' +
+        '    async parseFuture (data: Dict): Promise<Dict> { return { "a": data }; }\n' +
+        '    useCalls (data: Dict) {\n' +
+        '        const viaMap = this.parseMap (data);\n' +
+        '        const viaParens = (this.parseMap (data));\n' +
+        '        const viaList = this.parseList (data);\n' +
+        '        const viaUnproven = this.parseUnproven (data);\n' +
+        '        const viaScalar = this.parseScalar (data);\n' +
+        '        const viaBase = this.baseDict (data);\n' +
+        '        this.sink (viaMap["k"], viaParens["k"], viaList[0], viaUnproven["k"], viaScalar, viaBase["k"]);\n' +
+        '    }\n' +
+        '}\n';
+    const run = (resolver: any): string => {
+        fs.mkdirSync(path.dirname(TYPES_FIXTURE), { recursive: true });
+        fs.writeFileSync(TYPES_FIXTURE, 'export type Dict = Record<string, any>;\n');
+        fs.writeFileSync(BASE_FIXTURE, BASE_SOURCE);
+        fs.writeFileSync(VENUE_FIXTURE, VENUE_SOURCE);
+        const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        (byPath as any).javaTranspiler.javaDeclaredLocalTypeResolver = resolver;
+        return byPath.transpileJavaByPath(VENUE_FIXTURE).content;
+    };
+
+    afterAll(() => {
+        fs.rmSync(TMP, { recursive: true, force: true });
+    });
+
+    test('a consumer that published nothing: the callee declaration decides the local', () => {
+        const out = run(() => undefined);
+        expect(out).toContain('public java.util.Map<String, Object> parseMap(');
+        expect(out).toContain('viaMap.get("k")');
+        expect(out).toContain('viaParens.get("k")');
+        expect(out).toContain('viaList.get(0)');
+    });
+
+    test('an unproven, scalar or base-tier callee keeps the helper', () => {
+        const out = run(() => undefined);
+        expect(out).toContain('Helpers.GetValue(viaUnproven, "k")');
+        expect(out).toContain('Helpers.GetValue(viaBase, "k")');
+        expect(out).not.toContain('viaUnproven.get(');
+        expect(out).not.toContain('viaBase.get(');
+    });
+
+    test('a published answer wins over the callee declaration', () => {
+        const out = run((declaration: any) => declaration?.name?.text === 'viaMap' ? 'java.util.List<Object>' : undefined);
+        expect(out).not.toContain('viaMap.get("k")');
+        expect(out).toContain('viaParens.get("k")');
+    });
+
+    test('no consumer installed: every read keeps the helper', () => {
+        const out = run(undefined);
+        expect(out).not.toContain('viaMap.get("k")');
+        expect(out).toContain('Helpers.GetValue(viaMap, "k")');
     });
 });

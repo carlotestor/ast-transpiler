@@ -1213,7 +1213,7 @@ export function ccxtGoUnboxCurrencyDeclaration (goTranspiler, printed) {
 function ccxtGoTypeOfUrlsInitializer (goTranspiler, initializer, printedValue) {
     if ((initializer?.parent?.kind !== ts.SyntaxKind.VariableDeclaration) || (initializer.parent.initializer !== initializer)
         || (initializer.parent.parent?.parent?.kind !== ts.SyntaxKind.VariableStatement)
-        || !/^GetValue\(/.test ((printedValue ?? '').trim ()) || !urlsDescribeStringProducer (initializer)) {
+        || !/^(?:GetValue\(|this\.UrlsApi(?:Sections)?\[)/.test ((printedValue ?? '').trim ()) || !urlsDescribeStringProducer (initializer)) {
         return undefined;
     }
     const declaration = initializer.parent;
@@ -1380,7 +1380,7 @@ export function ccxtGoWrapUrlsDeclaration (printed) {
     if (typeof printed !== 'string') {
         return printed;
     }
-    const match = /^([\s\S]*?\bvar [A-Za-z0-9_]+ \*string = )(GetValue\((?:GetValue\()?[^\n]*this\.Urls[^\n]*\))(\s*)$/.exec (printed);
+    const match = /^([\s\S]*?\bvar [A-Za-z0-9_]+ \*string = )(GetValue\((?:GetValue\()?[^\n]*this\.Urls[^\n]*\)|this\.UrlsApi(?:Sections)?\[[^\n]*\])(\s*)$/.exec (printed);
     return (match === null) ? printed : match[1] + 'SafeStringPtr(' + match[2] + ')' + match[3];
 }
 
@@ -4462,6 +4462,10 @@ function ccxtGoWriteSiteAssignment (goTranspiler, node, identation) {
     const rightVar = goTranspiler.printNode (node.right, identation);
     if (node.right.kind === ts.SyntaxKind.AwaitExpression) {
         // PanicOnError sees the received Raw before the conversion, as the const receive does
+        const checked = ccxtGoEndpointCheckedRead (goTranspiler, node.right, goType, rightVar);
+        if (checked !== undefined) {
+            return '\n' + goTranspiler.getIden (identation) + leftVar + ' = ' + checked;
+        }
         return '\n' + goTranspiler.getIden (identation) + leftVar + ' = ' + conversion + '(PanicOnError(' + rightVar.trim () + '))';
     }
     const separator = (typeof goTranspiler.goBinarySeparator === 'function')
@@ -6191,6 +6195,29 @@ export function ccxtGoEndpointElement (goTranspiler, call) {
     return element;
 }
 
+// A receive from an implicit endpoint whose declared Go type IS the stub's EndpointResult element
+// reads the carrier's typed view: Fetch2Result fills `Value: endpointValue[T](Raw)`, and
+// endpointValue[T] is MapTyped(Raw) for map[string]any (ListTyped(Raw) for []any), so
+// `MapTyped(PanicOnError((<-this.Stub(..)).Raw))` and `(<-this.Stub(..)).Checked()` read the same
+// map after the same failure check. The element comes from the receiver's own `*_api.go` stub
+// (ccxtGoEndpointElement), never from the stub name alone.
+// A []any receive printed on one line stays on the ListTyped(PanicOnError(..)) spelling that the
+// line-bound `listEp` rewrite in build/ turns into its own holder; only a receive that spans lines
+// (a multi-line argument literal, which that rewrite cannot read) is printed checked here.
+function ccxtGoEndpointCheckedRead (goTranspiler, awaitNode, goType, printed) {
+    const text = (printed ?? '').trim ();
+    if ((awaitNode?.kind !== ts.SyntaxKind.AwaitExpression) || !text.startsWith ('(<-') || !text.endsWith (').Raw')) {
+        return undefined;
+    }
+    if ((goType === '[]any') && (text.indexOf ('\n') < 0)) {
+        return undefined;
+    }
+    if ((goType !== 'map[string]any') && (goType !== '[]any')) {
+        return undefined;
+    }
+    return (ccxtGoEndpointElement (goTranspiler, awaitNode.expression) === goType) ? (text.slice (0, -'.Raw'.length) + '.Checked()') : undefined;
+}
+
 // a typed endpoint local handed as arg 0 to this.parse*/this.safe*/Object.keys: those readers only read
 // members through safe accessors, so an absent/empty body (typed view nil) reads as the raw box did
 const CCXT_GO_ENDPOINT_PARSER_READ = /^(?:parse[A-Z]\w*|safe[A-Z]\w*|addPaginationCursorToResult|indexBy|groupBy)$/;
@@ -6550,7 +6577,10 @@ export function ccxtGoAwaitReceiveUnbox (goTranspiler, awaitNode, printedInitial
             return undefined;
         }
     }
-    return { goType: goType, wrap: (recv) => conv + '(PanicOnError(' + recv.trim () + '))' };
+    return {
+        goType: goType,
+        wrap: (recv) => ccxtGoEndpointCheckedRead (goTranspiler, awaitNode, goType, recv) ?? (conv + '(PanicOnError(' + recv.trim () + '))'),
+    };
 }
 
 // `var retResN T = ..` + `ch <- retResN`: a nil map/slice would reach the caller as a non-nil
@@ -6925,6 +6955,10 @@ export function installCcxtGoLocalTypes (goTranspiler, unifiedInt64Params = unde
         const known = upstream.call (this, initializer, printedValue);
         if (known !== undefined) {
             return known;
+        }
+        // RF-go-6-C: `const y = x` over a nil-declared local the container join typed `[]any` holds that slice
+        if ((initializer?.kind === ts.SyntaxKind.Identifier) && (ccxtGoNilJoinDeclarationType (this, initializer) === '[]any')) {
+            return '[]any';
         }
         const alias = aliasExchangeReceiver (this, printedValue);
         if (alias !== undefined) {
@@ -7521,6 +7555,12 @@ function ccxtGoTupleStringReadIsSafe (goTranspiler, node) {
         const printed = (goTranspiler.printNode (parent.parent?.kind === ts.SyntaxKind.BinaryExpression && parent.parent.left === parent ? parent.parent : parent, 0) ?? '').trim ();
         return printed.startsWith ('GetValue(') || printed.startsWith ('AddElementToObject(');
     }
+    // `x.toUpperCase ()` / `x.toLowerCase ()` print ToUpper(x) / ToLower(x), which deref the pointer (FM-GO5 GP08)
+    if ((parent.kind === ts.SyntaxKind.PropertyAccessExpression) && (parent.expression === current)
+        && [ 'toUpperCase', 'toLowerCase' ].includes (parent.name?.text)
+        && (parent.parent?.kind === ts.SyntaxKind.CallExpression) && (parent.parent.expression === parent)) {
+        return true;
+    }
     if ((parent.kind === ts.SyntaxKind.CallExpression) && (parent.expression !== current)) {
         const callee = printedCalleeOfCall (goTranspiler, parent);
         const slots = CCXT_GO_TUPLE_STRING_SAFE_ARGS[(callee ?? '').replace (/^ccxt\./, '')];
@@ -7787,7 +7827,9 @@ function installCcxtGoTupleStringJoin (goTranspiler) {
         if ((node?.operatorToken?.kind === ts.SyntaxKind.EqualsToken) && ts.isIdentifier (node.left)
             && ccxtGoTupleStringWriteNeedsLift (this, right)
             && (ccxtGoTupleStringDeclarationOf (this, node.left) !== undefined)) {
-            return this.printNode (node.left, 0) + ' = SafeStringPtr(' + this.printNode (right, 0) + ')';
+            const value = this.printNode (right, 0);
+            return ((typeof this.goStringPointerStore === 'function') ? this.goStringPointerStore (node, value, identation) : undefined)
+                ?? (this.printNode (node.left, 0) + ' = SafeStringPtr(' + value + ')');
         }
         return shippedBinary.call (this, node, identation);
     };
@@ -9649,7 +9691,7 @@ function ccxtGoTernaryLiftArm (goTranspiler, armNode, armText) {
         return { type: armType };
     }
     const lift = CCXT_GO_TERNARY_LIFT[armType];
-    return (lift === undefined) ? undefined : { type: lift[0], wrap: lift[1] };
+    return (lift === undefined) ? undefined : { type: lift[0], wrap: lift[1], call: node };
 }
 
 // { joinType, whenTrue, whenFalse } with the lifted arm texts, or undefined when unproven
@@ -9689,7 +9731,19 @@ export function ccxtGoTernaryLiftJoin (goTranspiler, declaration, literal) {
         return undefined;
     }
     const lifted = (arm, text) => ((arm.wrap === undefined) ? text : arm.wrap + '(' + text + ')');
-    return { joinType: joinType, whenTrue: lifted (arms[0], literal.whenTrue), whenFalse: lifted (arms[1], literal.whenFalse) };
+    // a string-returning `this.<name>(..)` arm is not boxed: its value is kept in a typed local the
+    // arm returns the address of (the arm node order is the source order the local names count in)
+    const hoisted = arms.map ((arm, i) => ((arm.wrap === 'SafeStringPtr') && (typeof goTranspiler.goStringCallLocalName === 'function'))
+        ? goTranspiler.goStringCallLocalName (arm.call) : undefined);
+    return {
+        joinType: joinType,
+        whenTrue: lifted (arms[0], literal.whenTrue),
+        whenFalse: lifted (arms[1], literal.whenFalse),
+        whenTrueLocal: hoisted[0],
+        whenFalseLocal: hoisted[1],
+        whenTrueCall: literal.whenTrue,
+        whenFalseCall: literal.whenFalse,
+    };
 }
 
 function installCcxtGoTernaryLiftJoin (goTranspiler) {
@@ -9715,8 +9769,10 @@ function installCcxtGoTernaryLiftJoin (goTranspiler) {
         const lines = printed.split ('\n');
         const body = literal.indent + '\t';
         lines[0] = literal.indent + 'var ' + literal.name + ' ' + join.joinType + ' = func() ' + join.joinType + ' {';
-        lines[2] = body + '\treturn ' + join.whenTrue;
-        lines[4] = body + 'return ' + join.whenFalse;
+        lines[2] = (join.whenTrueLocal === undefined) ? body + '\treturn ' + join.whenTrue
+            : body + '\t' + join.whenTrueLocal + ' := ' + join.whenTrueCall + '\n' + body + '\treturn &' + join.whenTrueLocal;
+        lines[4] = (join.whenFalseLocal === undefined) ? body + 'return ' + join.whenFalse
+            : body + join.whenFalseLocal + ' := ' + join.whenFalseCall + '\n' + body + 'return &' + join.whenFalseLocal;
         return lines.join ('\n');
     };
     goTranspiler.__ccxtGoTernaryLiftJoinInstalled = true;
@@ -10942,3 +10998,6 @@ function installHx5X32StringPtrParams (goTranspiler) {
         }).join (', ');
     };
 }
+
+// the tuple-result family helpers, for src/go/hx11fmgo5-GP08.ts
+export { ccxtGoTupleResultCall, ccxtGoTupleResultFirst, ccxtGoTupleResultUnwrap };

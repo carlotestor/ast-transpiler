@@ -16,6 +16,10 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpListParamDeclarations: WeakSet<Node>;
     csharpPromiseAllSites: WeakMap<Node, any>;
     csharpPromiseAllTaskDeclarations: WeakSet<Node>;
+    csharpPromiseAllTypedAwaits: Map<string, string>;
+    csharpPromiseAllTypedLists: Map<string, string>;
+    csharpPromiseAllTypedLocals: Map<string, string>;
+    csharpPromiseAllTypedPlanned: Set<string>;
     csharpHandlerMessageTypes: WeakMap<Node, string>;
     csharpHandlerCalled: WeakMap<Node, boolean>;
     csharpListRouteClasses: WeakMap<Node, boolean>;
@@ -48,7 +52,16 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpDeclaredLocalResolverType(node: any): string | undefined;
     csharpDeclaredLocalResolverRowRead(expression: any, argumentExpression: any): string | undefined;
     csharpMissingKeyFieldRead(expression: any, argumentExpression: any, isStringKey: any): string | undefined;
+    csharpNullableStateField(node: any): {
+        text: string;
+        type: string;
+    } | undefined;
+    csharpNullableStateRead(state: {
+        text: string;
+        type: string;
+    }, argumentExpression: any, isStringKey: boolean, isNumberKey: boolean): string | undefined;
     csharpDeclaredCollectionRead(node: any, expression: any, argumentExpression: any, isStringKey: any, isNumberKey: any): string | undefined;
+    csharpDeclaredStringIndexRead(node: any, expression: any, argumentExpression: any, isNumberKey: any): string | undefined;
     csharpDeclaredCollectionType(expression: any): string | undefined;
     csharpProvenDictionaryRead(node: any, expression: any, argumentExpression: any, isStringKey: any): string | undefined;
     csharpKeyPresenceGuarded(node: any, expression: any, key: any): boolean;
@@ -142,6 +155,38 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpNativeNumericComparison(node: any, identation: any): string | undefined;
     csharpNativeMathMinMax(node: any, name: string, parsedArg1: string, parsedArg2: string): string | undefined;
     csharpMinMaxResultIsPlainValue(node: any): boolean;
+    csharpDeclaredDictMemberReads: WeakSet<Node>;
+    csharpDeclaredDictMember(node: any): {
+        getter?: string;
+    } | undefined;
+    csharpIsDeclaredDictMemberRead(node: any): boolean;
+    csharpDeclaredDictMemberReceiverIsParameter(member: any): boolean;
+    csharpDeclaredDictMemberKey(key: any): string | undefined;
+    csharpDeclaredDictMemberElementRead(node: any): string | undefined;
+    csharpDeclaredDictMemberCall(node: any): string | undefined;
+    csharpDeclaredBaseFields: {
+        [name: string]: string;
+    };
+    csharpDeclaredBaseFieldType(name: string): string | undefined;
+    csharpBaseFieldDeclaredDictionary(name: string): boolean;
+    csharpBaseFieldIsDeclaredDictionary(node: any): boolean;
+    csharpBaseFieldName(node: any): string | undefined;
+    csharpBaseFieldWritesAreDictionaries(node: any, name: string): boolean;
+    csharpBaseFieldDictionary(node: any): {
+        text: string;
+        type: string;
+        field: string;
+        name: string;
+    } | undefined;
+    csharpParameterWrittenAnywhere(identifier: any): boolean;
+    csharpBaseFieldKey(key: any, allowObject: boolean): {
+        text: string;
+        kind: 'literal' | 'string' | 'string?' | 'object';
+    } | undefined;
+    csharpBaseFieldElementRead(node: any): string | undefined;
+    csharpBaseFieldInExpression(key: any, obj: any): string | undefined;
+    csharpBaseFieldKeyNames: WeakMap<object, number>;
+    csharpNativeModLiteralEquality(left: any, right: any, isEquality: boolean): string | undefined;
     printCallExpression(node: any, identation: any): any;
     csharpNativeParseCall(node: any): string;
     csharpCalleeIsGlobalFunction(node: any): boolean;
@@ -243,6 +288,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     printParameter(node: any, defaultValue?: boolean): string;
     csharpCallSiteFunctionType(node: any): string;
     printArrayLiteralExpression(node: any): string;
+    csharpPromiseAllPrintList(node: any): string;
     csharpBooleanReturnType(node: any): string | undefined;
     csharpStringReturnType(node: any): string | undefined;
     isOverrideMethod(node: any): boolean;
@@ -283,6 +329,20 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpPromiseAllIsIndexOnlyObject(type: any): boolean;
     csharpPromiseAllIndexType(type: any): any;
     csharpPromiseAllNativeStatement(plan: any, identation: any): string;
+    csharpPromiseAllKey(node: any): string;
+    csharpPromiseAllTypedListRead(receiver: any): string | undefined;
+    printAwaitExpression(node: any, identation: any): string;
+    csharpPromiseAllTypedPlanFunction(fn: any): void;
+    csharpPromiseAllTypedPlanAwait(fn: any, awaited: any): void;
+    csharpPromiseAllLocalDeclaration(fn: any, identifier: any): any;
+    csharpPromiseAllListUsesAreProvable(fn: any, list: any, awaitedArgument: any, elements: any): boolean;
+    csharpPromiseAllTypedElement(fn: any, element: any): {
+        type: string;
+        declaration?: any;
+    } | undefined;
+    csharpPromiseAllMentions(fn: any, declaration: any): number;
+    csharpImplicitApiTaskType(call: any): string | undefined;
+    csharpImplicitApiBodyType(type: any): string | undefined;
     printMathFloorCall(node: any, identation: any, parsedArg?: any): string;
     printMathRoundCall(node: any, identation: any, parsedArg?: any): string;
     printMathCeilCall(node: any, identation: any, parsedArg?: any): string;

@@ -13,7 +13,7 @@ import { JavaTranspiler } from './javaTranspiler.js';
 import { RustTranspiler, RUST_DECLARED_DICT_LOCALS } from './rustTranspiler.js';
 import type { RustDeclaredDictLocalEntry } from './rustTranspiler.js';
 import { CppTranspiler } from './cppTranspiler.js';
-import { installCcxtGoHooks, installCcxtGoLocalTypes, installCcxtGoIndexableTypes, installCcxtGoParamTypes, installCcxtGoDictParams, installCcxtGoGb05ParamTypes, installCcxtGoGb11HandleErrorsCode, installCcxtGoSignTyping, installHx11w8NumParams, installRfGo5OwnedTables, CCXT_GO_HELPER_RETURN_TYPES, CCXT_GO_BOOL_METHOD_NAMES, CCXT_GO_STRING_PTR_METHOD_NAMES, hx10G06Check, g08w3Check, hx10w8GB01Check, hx10w8GB05Check, hx10w9GB11Check } from './go/index.js';
+import { installCcxtGoHooks, installCcxtGoLocalTypes, installCcxtGoIndexableTypes, installCcxtGoParamTypes, installCcxtGoDictParams, installCcxtGoGb05ParamTypes, installCcxtGoGb11HandleErrorsCode, installCcxtGoSignTyping, installHx11w8NumParams, installRfGo5OwnedTables, installFmGo5G01, installFmGo5OG02, installFmGo5GP08, installFmGo5G04, CCXT_GO_HELPER_RETURN_TYPES, CCXT_GO_BOOL_METHOD_NAMES, CCXT_GO_STRING_PTR_METHOD_NAMES, hx10G06Check, g08w3Check, hx10w8GB01Check, hx10w8GB05Check, hx10w9GB11Check } from './go/index.js';
 
 const __dirname_mock = currentPath;
 
@@ -517,6 +517,7 @@ export default class Transpiler {
         }
 
         let transpiledContent = undefined;
+        let stdlibImports = undefined;
         switch(lang) {
         case Languages.Python:
             this.pythonTranspiler.asyncTranspiling = !sync;
@@ -535,6 +536,7 @@ export default class Transpiler {
             // gofmt aligns trailing `//` comments through its tabwriter; the printer has to do
             // that itself so the emitted Go is already gofmt-clean (see alignGoTrailingComments)
             transpiledContent = alignGoTrailingComments (this.goTranspiler.printNode(src, -1));
+            stdlibImports = this.goTranspiler.goPrintedFileStdlibImports;
             break;
         case Languages.Java:
             transpiledContent = this.javaTranspiler.printNode(src, -1);
@@ -566,7 +568,8 @@ export default class Transpiler {
             content: transpiledContent,
             imports,
             exports,
-            methodsTypes
+            methodsTypes,
+            stdlibImports
         };
     }
 
@@ -834,7 +837,7 @@ export {
     RUST_DECLARED_DICT_LOCALS,
     // ccxt's Go printer hooks (moved from ccxt build/, hx11 ast-move)
     installCcxtGoHooks, installCcxtGoLocalTypes, installCcxtGoIndexableTypes, installCcxtGoParamTypes, installCcxtGoDictParams,
-    installCcxtGoGb05ParamTypes, installCcxtGoGb11HandleErrorsCode, installCcxtGoSignTyping, installHx11w8NumParams, installRfGo5OwnedTables,
+    installCcxtGoGb05ParamTypes, installCcxtGoGb11HandleErrorsCode, installCcxtGoSignTyping, installHx11w8NumParams, installRfGo5OwnedTables, installFmGo5G01, installFmGo5OG02, installFmGo5GP08, installFmGo5G04,
     CCXT_GO_HELPER_RETURN_TYPES, CCXT_GO_BOOL_METHOD_NAMES, CCXT_GO_STRING_PTR_METHOD_NAMES,
     hx10G06Check, g08w3Check, hx10w8GB01Check, hx10w8GB05Check, hx10w9GB11Check,
 };

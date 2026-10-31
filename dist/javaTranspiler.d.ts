@@ -110,6 +110,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaFreshMapBaseCall(node: any): boolean;
     javaElementWriteMapLocalType(declaration: any): string | undefined;
     javaBaseMapFieldLocalType(declaration: any): string | undefined;
+    javaObjectValuesLocalType(declaration: any): string | undefined;
     javaLocalUsesKeepContainerType(node: any): boolean;
     javaContainerNeutralIdentifierUse(node: any): boolean;
     javaLocalHasWriteAtAll(node: any): boolean;
@@ -147,6 +148,11 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaRepeatableOperand(node: any): any;
     javaDeclaredTypeOf(expression: any): string | undefined;
     javaDeclaredTypeOfDeclaration(declaration: any): string | undefined;
+    javaDeclaredLocalType(declaration: any): string | undefined;
+    javaVenueCalleeLocalType(declaration: any): string | undefined;
+    javaVenueCalleeReturnType(call: any): string | undefined;
+    javaVenueCalleeInProgress: Set<Node>;
+    javaVenueCalleeDeclarations: WeakMap<Node, Node>;
     javaOptionalParameterTypeCache: WeakMap<Node, string | typeof JAVA_MEMO_UNDEFINED>;
     javaOptionalParameterTypeCached(node: any): string | undefined;
     javaNativeParameterType(node: any): string | undefined;
@@ -213,6 +219,16 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaDeclarationOfIdentifier(expression: any): any;
     javaDeclaredMapReceiver(expression: any): boolean;
     javaMapWriteFieldReceiver(expression: any): boolean;
+    javaOwnerStoreFields: ReadonlySet<string>;
+    javaOwnerStoreHandoffs: {
+        [key: string]: [string, string];
+    };
+    javaOwnerStoreFieldReceiver(expression: any): boolean;
+    javaWsClientMapField(expression: any): string | undefined;
+    javaWsClientMapReadText(receiver: any, key: any): string | undefined;
+    javaWsClientMapRead(node: any): string | undefined;
+    javaWsClientLocalType(declaration: any): string | undefined;
+    printOptionsHandoffRead(node: any): string | undefined;
     javaDeclaredListElementRead(node: any, isCounter: any): string;
     javaDeclaredMapElementRead(node: any): string;
     javaDeclaredListIndexRead(node: any): string | undefined;
@@ -374,6 +390,18 @@ export declare class JavaTranspiler extends BaseTranspiler {
     nativeSliceCallIfProvable(node: any, name: any): string;
     printReplaceCall(_node: any, _identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;
     printReplaceAllCall(node: any, identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;
+    javaIntegralDeclaredTypes: Set<string>;
+    javaTypedSliceMaxLength: number;
+    javaUnwrapParens(node: any): any;
+    javaIsAtomOperand(node: any): boolean;
+    javaIsRepeatableBound(node: any): boolean;
+    javaPrintsIntegralNumber(node: any): boolean;
+    javaSliceBoundOperand(node: any, printed: any): {
+        text: string;
+    } | undefined;
+    javaPrintsAsString(node: any): boolean;
+    javaTypedStringSliceCall(node: any, name: any, parsedArg: any, parsedArg2: any, identation: any): string | undefined;
+    javaTypedStringReplaceAllCall(node: any, name: any, parsedArg: any, parsedArg2: any): string | undefined;
     stringLiteralArgument(argument: any): string;
     sideEffectFreeReceiver(expression: any): any;
     printPadEndCall(_node: any, _identation: any, name: any, parsedArg: any, parsedArg2: any): string;
