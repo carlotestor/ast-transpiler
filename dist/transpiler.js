@@ -18938,8 +18938,24 @@ ${this.getIden(level)}}()`;
   // the identifier occurrences of `name` under `scope` that write it (or bind it again)
   goNameWriteSites(scope, name, declaration) {
     const sites = [];
+    const checker = this.checkerOrUndefined();
+    const sameVariable = (n) => {
+      if (declaration === void 0 || checker === void 0) {
+        return true;
+      }
+      try {
+        const symbol = checker.getSymbolAtLocation(n);
+        if (symbol === void 0) {
+          return true;
+        }
+        const found = symbol.valueDeclaration?.resolve?.() ?? symbol.valueDeclaration;
+        return found === void 0 || found === declaration || found.pos === declaration.pos && found.end === declaration.end;
+      } catch (e) {
+        return true;
+      }
+    };
     const visit = (n) => {
-      if (n.kind === SyntaxKind5.Identifier && n.text === name && n !== declaration?.name) {
+      if (n.kind === SyntaxKind5.Identifier && n.text === name && n !== declaration?.name && sameVariable(n)) {
         let up = n;
         let parent = n.parent;
         while (parent !== void 0 && (parent.kind === SyntaxKind5.ArrayLiteralExpression || parent.kind === SyntaxKind5.ObjectLiteralExpression || parent.kind === SyntaxKind5.SpreadElement || parent.kind === SyntaxKind5.ShorthandPropertyAssignment || parent.kind === SyntaxKind5.PropertyAssignment || parent.kind === SyntaxKind5.ParenthesizedExpression)) {
