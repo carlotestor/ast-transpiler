@@ -351,6 +351,56 @@ export declare class GoTranspiler extends BaseTranspiler {
     goParameterLaterWritesPointerBox(decl: any): boolean;
     goWritePrintsPointerBox(expr: any): boolean;
     goScalarFamilyOfType(type: any, allowNil?: boolean): string | undefined;
+    goOrderBook: {
+        classes: string[];
+        constructors: string[];
+        cacheReaders: string[];
+        type: string;
+        sideType: string;
+        unbox: string;
+        sides: {
+            [side: string]: string;
+        };
+    } | undefined;
+    goOrderBookLocalCache: Map<any, string>;
+    goOrderBookEntryProven: Map<any, boolean>;
+    goIsOrderBookType(type: any): boolean;
+    goNodeIsOrderBook(node: any): boolean;
+    goIsOrderBookProducer(node: any): boolean;
+    goOrderBookCacheRead(node: any): {
+        obj: any;
+        key: any;
+    } | undefined;
+    goSameExpressionText(a: any, b: any): boolean;
+    goConditionHasPresence(cond: any, read: {
+        obj: any;
+        key: any;
+    }): boolean;
+    goConditionIsNegatedPresence(cond: any, read: {
+        obj: any;
+        key: any;
+    }): boolean;
+    goBlockStatements(node: any): any[];
+    goStatementExits(statement: any): boolean;
+    goStoresBookInCache(statements: any[], read: {
+        obj: any;
+        key: any;
+    }): boolean;
+    goOrderBookEntryPresent(at: any, read: {
+        obj: any;
+        key: any;
+    }): boolean;
+    goIsProducerAssignment(statement: any, name: string): boolean;
+    goDominatedByProducerWrite(at: any, name: string): boolean;
+    goOrderBookRepairGuard(declaration: any, name: string): any;
+    goOrderBookRefIsRead(id: any): boolean;
+    goIsOrderBookSideAccess(node: any): boolean;
+    goOrderBookLocalUnbox(declaration: any): string | undefined;
+    goOrderBookLocalUnboxUncached(declaration: any): string | undefined;
+    goOrderBookUnboxValue(declaration: any, parsedValue: string): string | undefined;
+    goOrderBookSideLocalType(declaration: any): string | undefined;
+    goOrderBookSideRead(node: any): string | undefined;
+    goOrderBookParameterType(fn: any, param: any): string | undefined;
     goNativeParameterTypeCache: Map<any, string>;
     goSameFileCallCache: Map<any, Map<string, any[]>>;
     goTsSrcTreeCache: Map<string, any>;
