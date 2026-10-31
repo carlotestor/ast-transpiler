@@ -47926,6 +47926,260 @@ function installRfGo5OwnedTables(goTranspiler) {
   };
 }
 
+// src/go/hx11fmgo5-OG02.ts
+init_esm_shims();
+var OWNER_CLASS2 = "BaseExchange";
+function unparen(node) {
+  while (node?.kind === ts.SyntaxKind.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  return node;
+}
+function baseMemberDecl(go, node, name) {
+  const SK = ts.SyntaxKind;
+  if (node?.kind !== SK.PropertyAccessExpression || node.expression?.kind !== SK.ThisKeyword || node.name?.text !== name) {
+    return void 0;
+  }
+  const decl = go.checkerOrUndefined()?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+  if (decl === void 0 || decl.parent?.name?.text !== OWNER_CLASS2) {
+    return void 0;
+  }
+  return decl;
+}
+function isBaseCall(go, node, name, args) {
+  node = unparen(node);
+  return node?.kind === ts.SyntaxKind.CallExpression && (node.arguments?.length ?? 0) === args && baseMemberDecl(go, node.expression, name) !== void 0;
+}
+function callStatement(go, stmt, name) {
+  return stmt?.kind === ts.SyntaxKind.ExpressionStatement && isBaseCall(go, stmt.expression, name, 0);
+}
+function constDecl(stmt) {
+  const SK = ts.SyntaxKind;
+  if (stmt?.kind !== SK.VariableStatement) {
+    return void 0;
+  }
+  const declarations = stmt.declarationList?.declarations;
+  if (declarations?.length !== 1 || declarations[0].name?.kind !== SK.Identifier || declarations[0].initializer === void 0) {
+    return void 0;
+  }
+  return declarations[0];
+}
+function stringLiteral(node) {
+  return node?.kind === ts.SyntaxKind.StringLiteral ? node : void 0;
+}
+function optionWrite(go, stmt) {
+  const SK = ts.SyntaxKind;
+  const e = stmt?.kind === SK.ExpressionStatement ? stmt.expression : void 0;
+  if (e?.kind !== SK.BinaryExpression || e.operatorToken?.kind !== SK.EqualsToken) {
+    return void 0;
+  }
+  const target = e.left;
+  if (target?.kind !== SK.ElementAccessExpression || baseMemberDecl(go, target.expression, "options") === void 0 || stringLiteral(target.argumentExpression) === void 0 || e.right?.kind !== SK.Identifier) {
+    return void 0;
+  }
+  return [target.argumentExpression, e.right.text];
+}
+function counterRead(go, node) {
+  node = unparen(node);
+  if (!isBaseCall(go, node, "safeInteger", 3)) {
+    return void 0;
+  }
+  const [options, key, dflt] = node.arguments;
+  if (baseMemberDecl(go, options, "options") === void 0 || stringLiteral(key) === void 0 || dflt?.kind !== ts.SyntaxKind.NumericLiteral || dflt.text !== "0") {
+    return void 0;
+  }
+  return key;
+}
+function countIdentifier(root, name) {
+  let n = 0;
+  const visit = (node) => {
+    if (node.kind === ts.SyntaxKind.Identifier && node.text === name) {
+      n++;
+    }
+    node.forEachChild(visit);
+  };
+  visit(root);
+  return n;
+}
+function counterSpan(go, body, fn) {
+  const SK = ts.SyntaxKind;
+  const sumOfOne = (call) => {
+    call = unparen(call);
+    return isBaseCall(go, call, "sum", 2) && call.arguments[1]?.kind === SK.NumericLiteral && call.arguments[1].text === "1" ? call : void 0;
+  };
+  if (body.length === 2) {
+    const decl = constDecl(body[0]);
+    const write = optionWrite(go, body[1]);
+    const sum = decl !== void 0 ? sumOfOne(decl.initializer) : void 0;
+    const key = sum !== void 0 ? counterRead(go, sum.arguments[0]) : void 0;
+    if (key !== void 0 && write !== void 0 && write[0].text === key.text && write[1] === decl.name.text) {
+      return [decl.name, key];
+    }
+    return void 0;
+  }
+  if (body.length === 3) {
+    const seed = constDecl(body[0]);
+    const next = constDecl(body[1]);
+    const write = optionWrite(go, body[2]);
+    const key = seed !== void 0 ? counterRead(go, seed.initializer) : void 0;
+    const sum = next !== void 0 ? sumOfOne(next.initializer) : void 0;
+    if (key !== void 0 && sum !== void 0 && write !== void 0 && sum.arguments[0]?.kind === SK.Identifier && sum.arguments[0].text === seed.name.text && write[0].text === key.text && write[1] === next.name.text && countIdentifier(fn, seed.name.text) === 2) {
+      return [next.name, key];
+    }
+  }
+  return void 0;
+}
+function bareStatement(go, stmt) {
+  return go.printLeadingComments(stmt, 0) === "" && go.printTraillingComment(stmt, 0) === "";
+}
+function nonceShape(go, method) {
+  const SK = ts.SyntaxKind;
+  if (method?.kind !== SK.MethodDeclaration || method.name?.text !== "incrementingNonce" || method.parent?.name?.text !== OWNER_CLASS2 || method.parameters?.length !== 0) {
+    return void 0;
+  }
+  const s = method.body?.statements;
+  if (s === void 0 || s.length !== 7) {
+    return void 0;
+  }
+  const current = constDecl(s[0]);
+  const last = constDecl(s[2]);
+  const result = constDecl(s[3]);
+  const write = optionWrite(go, s[4]);
+  if (current === void 0 || last === void 0 || result === void 0 || write === void 0 || !isBaseCall(go, current.initializer, "nonce", 0) || !callStatement(go, s[1], "lockLastNonce") || !callStatement(go, s[5], "unlockLastNonce")) {
+    return void 0;
+  }
+  const key = counterRead(go, last.initializer);
+  const cond = unparen(result.initializer);
+  if (key?.text !== "lastNonce" || write[0].text !== "lastNonce" || write[1] !== result.name.text || cond?.kind !== SK.ConditionalExpression) {
+    return void 0;
+  }
+  const compare = unparen(cond.condition);
+  const plusOne = unparen(cond.whenFalse);
+  const isId = (n, name) => n?.kind === SK.Identifier && n.text === name;
+  if (compare?.kind !== SK.BinaryExpression || compare.operatorToken?.kind !== SK.GreaterThanToken || !isId(compare.left, current.name.text) || !isId(compare.right, last.name.text) || !isId(cond.whenTrue, current.name.text) || plusOne?.kind !== SK.BinaryExpression || plusOne.operatorToken?.kind !== SK.PlusToken || !isId(plusOne.left, last.name.text) || plusOne.right?.kind !== SK.NumericLiteral || plusOne.right.text !== "1" || s[6].kind !== SK.ReturnStatement || !isId(s[6].expression, result.name.text)) {
+    return void 0;
+  }
+  for (let i = 0; i < 6; i++) {
+    if (!bareStatement(go, s[i])) {
+      return void 0;
+    }
+  }
+  return { "current": current, "result": result };
+}
+function resetOf(go, stmt, field) {
+  const SK = ts.SyntaxKind;
+  const e = stmt?.kind === SK.ExpressionStatement ? stmt.expression : void 0;
+  return e?.kind === SK.BinaryExpression && e.operatorToken?.kind === SK.EqualsToken && e.right?.kind === SK.Identifier && e.right.text === "undefined" && baseMemberDecl(go, e.left, field) !== void 0;
+}
+var HEADER_FIELDS = ["last_response_headers", "last_request_headers"];
+function blockPlan(go, block) {
+  const stmts = block.statements;
+  if (stmts === void 0 || stmts.length === 0) {
+    return void 0;
+  }
+  let plan;
+  const set = (stmt, value) => {
+    (plan ??= /* @__PURE__ */ new Map()).set(stmt, value);
+  };
+  const fn = block.parent;
+  const nonce = nonceShape(go, fn);
+  if (nonce !== void 0) {
+    const s = stmts;
+    set(s[0], { "nonce": nonce });
+    for (let i = 1; i < 6; i++) {
+      set(s[i], { "drop": true, "silent": true });
+    }
+  }
+  for (let i = 0; i < stmts.length; i++) {
+    if (callStatement(go, stmts[i], "lockId")) {
+      let end = i + 1;
+      while (end < stmts.length && !callStatement(go, stmts[end], "unlockId")) {
+        end++;
+      }
+      if (end >= stmts.length) {
+        continue;
+      }
+      const body = Array.from(stmts).slice(i + 1, end);
+      const found = counterSpan(go, body, fn);
+      if (found !== void 0 && body.every((s) => bareStatement(go, s)) && bareStatement(go, stmts[end])) {
+        set(stmts[i], { "counter": found });
+        for (let k = i + 1; k <= end; k++) {
+          set(stmts[k], { "drop": true, "silent": true });
+        }
+        i = end;
+      }
+    }
+  }
+  const reset = Array.from(stmts).find((s) => resetOf(go, s, "last_http_response"));
+  if (reset !== void 0) {
+    set(reset, { "reset": true });
+    for (const s of stmts) {
+      if (HEADER_FIELDS.some((field) => resetOf(go, s, field))) {
+        set(s, { "drop": true });
+      }
+    }
+  }
+  return plan;
+}
+function installFmGo5OG02(goTranspiler) {
+  const flag = "fmGo5OG02Installed";
+  if (goTranspiler[flag] === true) {
+    return;
+  }
+  goTranspiler[flag] = true;
+  const printBlock = goTranspiler.printBlock;
+  goTranspiler.printBlock = function(node, identation, chainBlock = false) {
+    const plan = blockPlan(this, node);
+    if (plan === void 0) {
+      return printBlock.call(this, node, identation, chainBlock);
+    }
+    const iden = this.getIden(identation + 1);
+    const parts = [];
+    for (const stmt of node.statements) {
+      const step = plan.get(stmt);
+      if (step === void 0) {
+        parts.push(this.printNode(stmt, identation + 1));
+      } else if (step.counter !== void 0) {
+        const [name, key] = step.counter;
+        const line = iden + "var " + this.printNode(name, 0) + " int64 = this.NextRequestId(" + this.printNode(key, 0) + ")";
+        parts.push(this.printNodeCommentsIfAny(stmt, identation + 1, line));
+      } else if (step.nonce !== void 0) {
+        const { current, result } = step.nonce;
+        const cn = this.printNode(current.name, 0);
+        const line = iden + "var " + cn + " int64 = " + this.printNode(current.initializer, 0) + "\n" + iden + "var " + this.printNode(result.name, 0) + " int64 = this.nextNonce(" + cn + ")";
+        parts.push(this.printNodeCommentsIfAny(stmt, identation + 1, line));
+      } else if (step.reset === true) {
+        parts.push(this.printNodeCommentsIfAny(stmt, identation + 1, iden + "this.handOffRequestBook(requestBookOp{kind: requestBookReset})"));
+      } else if (step.silent !== true) {
+        const comments = this.printLeadingComments(stmt, identation + 1);
+        if (comments !== "") {
+          parts.push(comments.replace(/\n$/, ""));
+        }
+      }
+    }
+    return this.getBlockOpen(identation) + parts.join("\n") + this.getBlockClose(identation, chainBlock);
+  };
+  const printFunctionType = goTranspiler.printFunctionType;
+  goTranspiler.printFunctionType = function(node) {
+    if (nonceShape(this, node) !== void 0) {
+      return "int64";
+    }
+    return printFunctionType.call(this, node);
+  };
+  const printAccess = goTranspiler.printPropertyAccessExpression;
+  goTranspiler.printPropertyAccessExpression = function(node, identation) {
+    const SK = ts.SyntaxKind;
+    if (node?.name?.text === "last_http_response" && baseMemberDecl(this, node, "last_http_response") !== void 0) {
+      const parent = node.parent;
+      const written = parent?.kind === SK.BinaryExpression && parent.left === node && parent.operatorToken?.kind === SK.EqualsToken;
+      if (!written) {
+        return "this.GetLast_http_response()";
+      }
+    }
+    return printAccess.call(this, node, identation);
+  };
+}
+
 // src/go/index.ts
 function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoLocalTypes(goTranspiler, unifiedInt64Params);
@@ -47937,6 +48191,7 @@ function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoSignTyping(goTranspiler);
   installHx11w8NumParams(goTranspiler);
   installRfGo5OwnedTables(goTranspiler);
+  installFmGo5OG02(goTranspiler);
 }
 
 // src/rustPasses/index.ts
@@ -57115,6 +57370,7 @@ export {
   installCcxtGoLocalTypes,
   installCcxtGoParamTypes,
   installCcxtGoSignTyping,
+  installFmGo5OG02,
   installHx11w8NumParams,
   installRfGo5OwnedTables,
   narrowStrNullLocals,
