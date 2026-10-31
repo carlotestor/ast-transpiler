@@ -811,6 +811,9 @@ export class GoTranspiler extends BaseTranspiler {
     // hx11 w8: inherited method name -> indexes of required `boolean` params that print `bool` on the
     // base and every override (dynamic callers convert through BoolArg)
     unifiedBoolParams: { [method: string]: number[] } = {};
+    // the host's generated methods whose Go signature is retyped to `[]any` (base and every override, fail-closed
+    // at the host): `this.<name>(..)` is that slice, so a local that holds only such results is declared with it
+    listReturnMethods: Set<string> = new Set<string>();
     // hx11 RF-go-7: `<class>.<method>` -> indexes of required `string` params of an exchange-local method that
     // no file in ts/src calls (the call-site proof is vacuous, so the table names the methods whose Go
     // signature may print `string`)
@@ -878,6 +881,7 @@ export class GoTranspiler extends BaseTranspiler {
         this.unifiedStringParams = config['unifiedStringParams'] ?? {};
         this.unifiedSliceParams = config['unifiedSliceParams'] ?? {};
         this.unifiedBoolParams = config['unifiedBoolParams'] ?? {};
+        this.listReturnMethods = new Set<string>(config['listReturnMethods'] ?? []);
         this.uncalledStringParams = config['uncalledStringParams'] ?? {};
         this.stringPointerTupleCalls = config['stringPointerTupleCalls'] ?? [];
         this.siblingStringPassthroughPattern = (typeof config['siblingStringPassthroughPattern'] === 'string') ? new RegExp(config['siblingStringPassthroughPattern']) : undefined;
@@ -1473,6 +1477,18 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             // `x := y` holds exactly what y holds, so it carries y's printed Go type: the
             // alias is declared with that type and reads through it natively [hx10w7 G10]
             return this.goDeclaredTypeOfIdentifier(initializer);
+        case SyntaxKind.AsExpression: {
+            // an assertion prints as its operand: a slice-typed operand (a local, or a call the host retypes to
+            // `[]any`) keeps its slice type through `as T[]`
+            const inner = this.goUnwrapPrintedAssertions(initializer);
+            const innerType = (inner?.kind === SyntaxKind.Identifier) ? this.goDeclaredTypeOfIdentifier(inner)
+                : ((inner?.kind === SyntaxKind.CallExpression) || (inner?.kind === SyntaxKind.ArrayLiteralExpression))
+                    ? this.goTypeOfInitializer(inner, printedValue) : undefined;
+            if ((innerType !== undefined) && this.sliceLengthTypes.indexOf(innerType) >= 0) {
+                return innerType;
+            }
+            break;
+        }
         case SyntaxKind.BinaryExpression: {
             // `a || b` prints `EvalTruthy(a) || EvalTruthy(b)`, a Go bool
             const op = initializer.operatorToken.kind;
@@ -1494,6 +1510,10 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             break;
         }
         case SyntaxKind.CallExpression: {
+            // `this.parseTrades(..)`: the host retypes the callee's signature to `[]any`, so the call is that slice
+            if (this.goCallReturnsPrintedList(initializer)) {
+                return GO_SAFE_LIST_LOCAL_TYPE;
+            }
             // `x.toString()` that printToStringCall inlined to the receiver's own text: the
             // declaration then holds that receiver's value, i.e. the same Go string. Every
             // other receiver keeps the helper call, whose own return type is classified below.
@@ -1530,6 +1550,17 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return undefined;
         }
         return GO_NATIVE_CALL_RETURN_TYPES[callee] ?? GO_HELPER_RETURN_TYPES[callee];
+    }
+
+    // `this.<m>(..)` with <m> in the host's list-returning set (listReturnMethods), not an async call
+    goCallReturnsPrintedList(call): boolean {
+        if ((this.listReturnMethods.size === 0) || (call?.kind !== SyntaxKind.CallExpression)) {
+            return false;
+        }
+        const callee: any = call.expression;
+        return (callee?.kind === SyntaxKind.PropertyAccessExpression) && (callee.expression?.kind === SyntaxKind.ThisKeyword)
+            && this.listReturnMethods.has(this.transformMethodNameIfNeeded(callee.name?.text))
+            && (call.parent?.kind !== SyntaxKind.AwaitExpression);
     }
 
     // strips the wrapping parentheses the source (or an operand) printed around a
@@ -2471,7 +2502,38 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             }
             return false;
         });
+        // a slice that holds a list-returning call's result is a typed nil when the callee answers none: a nil
+        // test would read that typed nil where the box held the untyped one, so such a local keeps the box
+        if (safe && (goType === GO_SAFE_LIST_LOCAL_TYPE) && this.goLocalHoldsListCall(declaration, varName)
+            && this.goListLocalNilTested(scope, varName)) {
+            return false;
+        }
         return safe;
+    }
+
+    // the declaration's initializer, or a later plain write of the name, is a list-returning call
+    goLocalHoldsListCall(declaration, name: string): boolean {
+        if (this.listReturnMethods.size === 0) {
+            return false;
+        }
+        return this.goCallReturnsPrintedList(declaration.initializer)
+            || this.hasNodeWhere(this.goEnclosingFunction(declaration), (n: any) =>
+                (n.kind === SyntaxKind.BinaryExpression) && (n.operatorToken?.kind === SyntaxKind.EqualsToken)
+                && (n.left?.kind === SyntaxKind.Identifier) && (n.left.text === name) && this.goCallReturnsPrintedList(n.right));
+    }
+
+    // a read of the name in a `== null` / `!== undefined` test
+    goListLocalNilTested(scope, name: string): boolean {
+        return this.hasNodeWhere(scope, (n: any) => {
+            if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name)) {
+                return false;
+            }
+            let current = n;
+            while (current.parent?.kind === SyntaxKind.ParenthesizedExpression) {
+                current = current.parent;
+            }
+            return this.goIsNilComparisonOperand(current, current.parent);
+        });
     }
 
     // `x = <+ chain>` that reads x itself: only a whole chain prints native (a bare
@@ -3535,7 +3597,7 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         this.goNilInitLocalTypeInProgress.add(declaration);
         let result;
         try {
-            result = this.goNilInitLocalTypeScan(declaration) ?? this.goNilInitStringLocalType(declaration);
+            result = this.goNilInitLocalTypeScan(declaration) ?? this.goNilInitStringLocalType(declaration) ?? this.goNilInitListLocalType(declaration);
         } finally {
             this.goNilInitLocalTypeInProgress.delete(declaration);
         }
@@ -3625,6 +3687,52 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return undefined;
         }
         return candidate;
+    }
+
+    // a nil-initialised local (`let x: T[]; if (..) { x = this.parseTrades(..) } else { x = [ .. ] }`) whose every
+    // write prints a `[]any` and that no nil test reads is the slice itself: a nil slice is the absent value to
+    // every container reader the printer lets through (length, element read, argument of an `any` parameter)
+    goNilInitListLocalType(declaration): string | undefined {
+        const name = declaration.name?.text;
+        const scope = this.goEnclosingFunction(declaration);
+        if ((name === undefined) || (scope === undefined) || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement)) {
+            return undefined;
+        }
+        const writes: any[] = [];
+        let other = false;
+        const visit = (n: any) => {
+            if (other) {
+                return;
+            }
+            if ((n.kind === SyntaxKind.Identifier) && (n.text === name) && (n !== declaration.name)) {
+                const parent = n.parent;
+                if ((parent?.kind === SyntaxKind.VariableDeclaration) && (parent.name === n)) {
+                    return;
+                }
+                if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.operatorToken?.kind === SyntaxKind.EqualsToken)) {
+                    if (parent.left === n) {
+                        writes.push(parent.right);
+                        return;
+                    }
+                    if (this.goAssignmentWritesName(parent.left, name)) {
+                        other = true;
+                    }
+                }
+                return;
+            }
+            n.forEachChild(visit);
+        };
+        scope.forEachChild(visit);
+        if (other || (writes.length === 0) || this.goListLocalNilTested(scope, name)) {
+            return undefined;
+        }
+        if (!writes.every((right) => this.goTypeOfInitializer(right, this.printNode(right, 0)) === GO_SAFE_LIST_LOCAL_TYPE)) {
+            return undefined;
+        }
+        if (this.goTypeNameIsShadowed(scope, GO_SAFE_LIST_LOCAL_TYPE) || !this.goLocalIsSafeToType(scope, declaration, name, GO_SAFE_LIST_LOCAL_TYPE)) {
+            return undefined;
+        }
+        return GO_SAFE_LIST_LOCAL_TYPE;
     }
 
     // GP16: a nil-initialised local whose every write is a proven Go string is a string
@@ -11419,6 +11527,18 @@ ${tryBodyBlock}
             }
         }
 
+        // `xs[i]` inside `for (let i = 0; i < xs.length; i++)` on a slice of plain elements is the element
+        // GetValue answers (in range by the loop bound, nothing to deref in a string/number/bool)
+        if ((keys.length === 1) && this.goBoundedPlainSliceRead(node, baseExpr, keys[0])) {
+            const holder: any = node.parent;
+            // a declaration prints natively unless the helper form leaves it `any`: that local's later typing
+            // reads the helper call, so it keeps the read
+            if ((holder?.kind !== SyntaxKind.VariableDeclaration) || (holder.initializer !== node)
+                || (this.getGoLocalType(holder, this.goElementHelperText(containerStr, keyStrs[0])) !== 'any')) {
+                return containerStr + '[' + keyStrs[0] + ']';
+            }
+        }
+
         // Now build nested helpers.
         let acc = containerStr;
         keyStrs.forEach(k => {
@@ -11436,6 +11556,126 @@ ${tryBodyBlock}
         }
 
         return acc;
+    }
+
+    // element types a slice holds by value: the element read has no pointer or typed-nil box to unwrap
+    GO_PLAIN_ELEMENT_SLICES = [ '[]string', '[]int64', '[]float64', '[]bool', '[]int' ];
+
+    // `recv[idx]` read (not a write) where recv is an identifier declared as a plain-element slice, idx is the
+    // counter of an enclosing counting loop whose condition bounds it by recv's own length, neither is written in
+    // that loop, and no function literal sits between the loop and the read
+    goBoundedPlainSliceRead(node, recv, idx): boolean {
+        if ((recv?.kind !== SyntaxKind.Identifier) || (idx?.kind !== SyntaxKind.Identifier) || (recv.text === idx.text)) {
+            return false;
+        }
+        if (this.isGoElementAccessAssignmentTarget(node) || (node.parent?.kind === SyntaxKind.DeleteExpression)) {
+            return false;
+        }
+        const declared = this.goDeclaredTypeOfIdentifier(recv);
+        if ((declared === undefined) || (this.GO_PLAIN_ELEMENT_SLICES.indexOf(declared) < 0)) {
+            return false;
+        }
+        // a nil test or an assertion on the element needs the box the helper returns
+        let outer: any = node.parent;
+        while (outer?.kind === SyntaxKind.ParenthesizedExpression) {
+            outer = outer.parent;
+        }
+        if ((outer?.kind === SyntaxKind.BinaryExpression) && this.goIsNilComparisonOperand(node.parent === outer ? node : outer, outer)) {
+            return false;
+        }
+        if ((outer?.kind === SyntaxKind.AsExpression) || (outer?.kind === SyntaxKind.NonNullExpression)) {
+            return false;
+        }
+        const checker: any = this.checkerOrUndefined();
+        const declOf = (id) => checker?.getSymbolAtLocation(id)?.valueDeclaration?.resolve();
+        const recvDecl = declOf(recv);
+        const idxDecl = declOf(idx);
+        if ((recvDecl === undefined) || (idxDecl === undefined)) {
+            return false;
+        }
+        const scope = this.goEnclosingFunction(node);
+        if (this.goEnclosingFunction(recvDecl) !== scope) {
+            return false;
+        }
+        for (let current: any = node.parent, child: any = node; current !== undefined; child = current, current = current.parent) {
+            if (isFunctionLike(current)) {
+                return false;
+            }
+            if ((current.kind !== SyntaxKind.ForStatement) || (current.statement !== child)) {
+                continue;
+            }
+            const init: any = current.initializer;
+            const counter: any = (init?.kind === SyntaxKind.VariableDeclarationList) && (init.declarations?.length === 1) ? init.declarations[0] : undefined;
+            if ((counter === undefined) || (counter !== idxDecl) || (counter.initializer?.kind !== SyntaxKind.NumericLiteral)
+                || (counter.initializer.text !== '0')) {
+                continue;
+            }
+            if (!this.goLoopBoundsCounterByLength(current, idx.text, recvDecl)) {
+                return false;
+            }
+            return !this.goNameWrittenIn(current.statement, idx.text) && !this.goNameWrittenIn(current.statement, recv.text);
+        }
+        return false;
+    }
+
+    goElementHelperText(containerStr: string, keyStr: string): string {
+        return `${this.ELEMENT_ACCESS_WRAPPER_OPEN}${containerStr}, ${keyStr}${this.ELEMENT_ACCESS_WRAPPER_CLOSE}`;
+    }
+
+    // `for (let i = 0; i < recv.length; i++)`, the bound possibly a const local initialised by `recv.length`
+    goLoopBoundsCounterByLength(loop, counterName: string, recvDecl): boolean {
+        const cond: any = loop.condition;
+        const inc: any = loop.incrementor;
+        if ((cond?.kind !== SyntaxKind.BinaryExpression) || (cond.operatorToken?.kind !== SyntaxKind.LessThanToken)
+            || (cond.left?.kind !== SyntaxKind.Identifier) || (cond.left.text !== counterName)) {
+            return false;
+        }
+        if (!(((inc?.kind === SyntaxKind.PostfixUnaryExpression) || (inc?.kind === SyntaxKind.PrefixUnaryExpression))
+            && (inc.operator === SyntaxKind.PlusPlusToken) && (inc.operand?.kind === SyntaxKind.Identifier) && (inc.operand.text === counterName))) {
+            return false;
+        }
+        const isLengthOfRecv = (n: any) => (n?.kind === SyntaxKind.PropertyAccessExpression) && (n.name?.text === 'length')
+            && (n.expression?.kind === SyntaxKind.Identifier)
+            && (this.checkerOrUndefined()?.getSymbolAtLocation(n.expression)?.valueDeclaration?.resolve() === recvDecl);
+        const bound: any = cond.right;
+        if (isLengthOfRecv(bound)) {
+            return true;
+        }
+        if (bound?.kind !== SyntaxKind.Identifier) {
+            return false;
+        }
+        const boundDecl: any = this.checkerOrUndefined()?.getSymbolAtLocation(bound)?.valueDeclaration?.resolve();
+        return (boundDecl?.kind === SyntaxKind.VariableDeclaration) && isLengthOfRecv(boundDecl.initializer)
+            && ((boundDecl.parent?.flags & NodeFlags.Const) !== 0);
+    }
+
+    // does the subtree assign to, mutate through a member call of, or re-bind `name`
+    goNameWrittenIn(root, name: string): boolean {
+        return this.hasNodeWhere(root, (n: any) => {
+            if ((n.kind === SyntaxKind.VariableDeclaration || n.kind === SyntaxKind.Parameter || n.kind === SyntaxKind.BindingElement)
+                && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === name)) {
+                return true;
+            }
+            if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name)) {
+                return false;
+            }
+            const parent: any = n.parent;
+            if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n)) {
+                const op = parent.operatorToken.kind;
+                return (op >= SyntaxKind.FirstAssignment) && (op <= SyntaxKind.LastAssignment);
+            }
+            if (((parent?.kind === SyntaxKind.PrefixUnaryExpression) || (parent?.kind === SyntaxKind.PostfixUnaryExpression))
+                && ((parent.operator === SyntaxKind.PlusPlusToken) || (parent.operator === SyntaxKind.MinusMinusToken))) {
+                return true;
+            }
+            if ((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.expression === n) && (parent.name?.text !== 'length')) {
+                return true; // push/splice/pop/... change the slice
+            }
+            if ((parent?.kind === SyntaxKind.ForOfStatement) || (parent?.kind === SyntaxKind.ForInStatement)) {
+                return parent.initializer === n;
+            }
+            return (parent?.kind === SyntaxKind.DeleteExpression) || (parent?.kind === SyntaxKind.SpreadElement);
+        });
     }
 
     isInsideVoidFunction(node: Node): boolean {

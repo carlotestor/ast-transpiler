@@ -575,7 +575,9 @@ export function ccxtGoElementAccessType (goTranspiler, initializer, printedValue
     // the read has to be the plain GetValue(<recv>, <index>) the printer emits for it
     const receiverText = goTranspiler.printNode (receiver, 0);
     const indexText = goTranspiler.printNode (index, 0);
-    if ((printedValue ?? '').trim () !== `GetValue(${receiverText}, ${indexText})`) {
+    // ... or its native form `<recv>[<idx>]` the printer emits for the same bounded read
+    const printedRead = (printedValue ?? '').trim ();
+    if ((printedRead !== `GetValue(${receiverText}, ${indexText})`) && (printedRead !== `${receiverText}[${indexText}]`)) {
         return undefined;
     }
     const receiverName = receiver.text;
@@ -2488,6 +2490,13 @@ export function ccxtGoTypeOfPrintedCall (goTranspiler, printedValue, wsTree = fa
     }
     if (/^\d+(\.\d+)?([eE][+-]?\d+)?$/.test (value)) {
         return 'float64';
+    }
+    // the bounded native read `xs[i]` has no call to name: the element proof reads the loop itself
+    if (initializer?.kind === ts.SyntaxKind.ElementAccessExpression) {
+        const element = ccxtGoElementAccessType (goTranspiler, initializer, printedValue);
+        if (element !== undefined) {
+            return element;
+        }
     }
     const open = value.indexOf ('(');
     if (open <= 0 || !goTranspiler.isWholePrintedCall (value, open)) {

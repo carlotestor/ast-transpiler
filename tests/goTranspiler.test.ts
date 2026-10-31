@@ -1755,7 +1755,7 @@ describe('go inline equality', () => {
         const input =
         "function f (symbols: any) {\n" +
         "    const keys = Object.keys (symbols);\n" +
-        "    for (let i = 0; i < keys.length; i++) {\n" +
+        "    for (let i = 0; i < 3; i++) {\n" +
         "        const hash = 'myTrades:' + keys[i];\n" +
         "        const key = keys[i];\n" +
         "    }\n" +

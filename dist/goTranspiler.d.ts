@@ -21,6 +21,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     unifiedBoolParams: {
         [method: string]: number[];
     };
+    listReturnMethods: Set<string>;
     uncalledStringParams: {
         [method: string]: number[];
     };
@@ -146,6 +147,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     printFunctionType(node: any): string;
     isWholePrintedCall(value: string, open: number): boolean;
     goTypeOfInitializer(initializer: any, printedValue: string): string | undefined;
+    goCallReturnsPrintedList(call: any): boolean;
     goUnwrapPrintedParens(printedText: string): string;
     goLocalStaticType(node: any): string | undefined;
     goInferredLocalStaticType(node: any): string | undefined;
@@ -203,6 +205,8 @@ export declare class GoTranspiler extends BaseTranspiler {
     goStringListAppendsAString(pushNode: any): boolean;
     goStringValueNodeIsProven(node: any): boolean;
     goLocalIsSafeToType(scope: any, declaration: any, varName: string, goType: string, stringWriteProven?: boolean): boolean;
+    goLocalHoldsListCall(declaration: any, name: string): boolean;
+    goListLocalNilTested(scope: any, name: string): boolean;
     goSelfConcatWriteIsString(node: any, varName: string): boolean;
     goSelfConcatIsString(node: any, varName: string): boolean;
     goPointerWriteConversion(right: any, goType: string): 'nil' | 'wrap' | undefined;
@@ -276,6 +280,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goNilInitInitializer(initializer: any): boolean;
     goNilInitLocalType(declaration: any): string | undefined;
     goNilInitLocalTypeScan(declaration: any): string | undefined;
+    goNilInitListLocalType(declaration: any): string | undefined;
     goNilInitStringLocalType(declaration: any): string | undefined;
     goNilInitStringScanCache: WeakMap<object, string>;
     goNilInitStringScanInProgress: Set<any>;
@@ -702,6 +707,11 @@ export declare class GoTranspiler extends BaseTranspiler {
     goDeclaredListIdentifier(node: any): boolean;
     goNativeListElementRead(node: any, containerStr: string, keyNode: any, keyStr: string): string | undefined;
     printElementAccessExpression(node: any, identation: any): string;
+    GO_PLAIN_ELEMENT_SLICES: string[];
+    goBoundedPlainSliceRead(node: any, recv: any, idx: any): boolean;
+    goElementHelperText(containerStr: string, keyStr: string): string;
+    goLoopBoundsCounterByLength(loop: any, counterName: string, recvDecl: any): boolean;
+    goNameWrittenIn(root: any, name: string): boolean;
     isInsideVoidFunction(node: Node): boolean;
     /**
      * Check if a block or statement contains a return statement or throws an error
