@@ -213,6 +213,16 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaDeclarationOfIdentifier(expression: any): any;
     javaDeclaredMapReceiver(expression: any): boolean;
     javaMapWriteFieldReceiver(expression: any): boolean;
+    javaOwnerStoreFields: ReadonlySet<string>;
+    javaOwnerStoreHandoffs: {
+        [key: string]: [string, string];
+    };
+    javaOwnerStoreFieldReceiver(expression: any): boolean;
+    javaWsClientMapField(expression: any): string | undefined;
+    javaWsClientMapReadText(receiver: any, key: any): string | undefined;
+    javaWsClientMapRead(node: any): string | undefined;
+    javaWsClientLocalType(declaration: any): string | undefined;
+    printOptionsHandoffRead(node: any): string | undefined;
     javaDeclaredListElementRead(node: any, isCounter: any): string;
     javaDeclaredMapElementRead(node: any): string;
     javaDeclaredListIndexRead(node: any): string | undefined;
