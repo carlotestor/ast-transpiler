@@ -21463,6 +21463,20 @@ ${this.getIden(identation)}}}`;
     }
     return JAVA_ELEMENT_WRITE_MAP_TYPE;
   }
+  // RF-java-2: `const x = Object.values(..)` with no other write prints the helper's exact return type
+  javaObjectValuesLocalType(declaration) {
+    if (!_is.isVariableDeclaration.call(void 0, declaration) || !_is.isIdentifier.call(void 0, declaration.name) || !declaration.initializer) {
+      return void 0;
+    }
+    const init = this.unwrapPrintTransparentExpression(declaration.initializer);
+    if (init === void 0 || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression) || !_is.isIdentifier.call(void 0, init.expression.expression) || init.expression.expression.text !== "Object" || init.expression.name.text !== "values" || init.arguments.length !== 1) {
+      return void 0;
+    }
+    if (this.javaLocalHasWriteAtAll(declaration.name)) {
+      return void 0;
+    }
+    return "List<Object>";
+  }
   // every other mention of the local must be a read a `Map<String, Object>` declaration leaves
   // unchanged: an element-access receiver, a call argument, a return value, an assignment's
   // right-hand side, a comparison or a container element. A cast, a method call, a spread or a
@@ -25231,6 +25245,10 @@ ${this.getIden(identation)}}}`;
         if (baseFieldType !== void 0) {
           varToken = baseFieldType + " ";
         }
+      }
+      const valuesType = this.javaObjectValuesLocalType(declaration);
+      if (valuesType !== void 0) {
+        varToken = valuesType + " ";
       }
       const handlerType = this.javaHandlerDeclarationType(declaration);
       if (handlerType !== void 0) {
