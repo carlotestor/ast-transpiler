@@ -9469,6 +9469,7 @@ var GoTranspiler = class extends BaseTranspiler {
     // gofmt indents every nesting level with exactly one tab; the printer emits the
     // same bytes so the generated tree needs no `gofmt` pass (campaign go-gofmt F01)
     this.DEFAULT_IDENTATION = "	";
+    this.goStringCallLocals = /* @__PURE__ */ new WeakMap();
     // `var x any = this.SafeDict(container, key)` -> `var x map[string]any = SafeMapTyped(...)`:
     // same member read, and every later use reads the local; with the absent case a nil map,
     // GetValue/InOp/ObjectKeys/IsDictionary and Safe* normalise a nil receiver. Else keep the box.
@@ -11210,7 +11211,82 @@ func New${this.capitalize(this.className)}() *${this.className} {
       return void 0;
     }
     const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trim();
-    return `${this.printNode(left, 0)} = SafeStringPtr(${value})`;
+    return this.goStringPointerStore(node, value, identation) ?? `${this.printNode(left, 0)} = SafeStringPtr(${value})`;
+  }
+  // `x = <this.m(..)>` on a *string local where the call already returns a Go string: not boxed, the
+  // result is kept in a typed local and the pointer takes its address (statement-level assignments
+  // only; `value` is the printed call). undefined: the caller prints its SafeStringPtr box.
+  goStringPointerStore(node, value, identation) {
+    const local = node.parent?.kind === SyntaxKind5.ExpressionStatement ? this.goStringCallLocalName(node.right) : void 0;
+    if (local === void 0) {
+      return void 0;
+    }
+    return `${local} := ${value.trim()}
+${this.getIden(identation)}${this.printNode(node.left, 0)} = &${local}`;
+  }
+  // the Go func a node prints into: arrow / function expressions inside a method print as closures
+  // of that method's func, so the outermost enclosing function owns the name space
+  goOutermostFunction(node) {
+    let outer = this.goEnclosingFunction(node);
+    while (outer !== void 0 && outer.kind !== SyntaxKind5.SourceFile) {
+      const next = this.goEnclosingFunction(outer);
+      if (next === void 0 || next.kind === SyntaxKind5.SourceFile) {
+        break;
+      }
+      outer = next;
+    }
+    return outer;
+  }
+  // `this.<name>(..)` whose checker type is exactly TS `string` (not `string | undefined`) and whose
+  // printed Go call returns a Go `string` (goTypeOfInitializer): the value needs no SafeStringPtr box
+  goStringReturningThisCall(call) {
+    const callee = call?.expression;
+    if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || callee.name?.text === void 0) {
+      return false;
+    }
+    const checker = this.checkerOrUndefined();
+    const type = checker?.getTypeAtLocation(call);
+    if (type === void 0 || (type.flags & TypeFlags4.String) === 0) {
+      return false;
+    }
+    return this.goTypeOfInitializer(call, this.printNode(call, 0)) === "string";
+  }
+  // the typed local that keeps a string-returning `this.<name>(..)` call (`jsonText`, `jsonText2`, ...):
+  // `<name>Text`, numbered in the order the Go func's statements print (= source order). The name is
+  // stable per call node, so a re-print of the same statement gets the same local. undefined keeps the
+  // SafeStringPtr box: not such a call, or a source identifier already spelled like the family.
+  goStringCallLocalName(call) {
+    if (!this.goStringReturningThisCall(call)) {
+      return void 0;
+    }
+    const scope = this.goOutermostFunction(call);
+    if (scope === void 0) {
+      return void 0;
+    }
+    const base = call.expression.name.text + "Text";
+    let families = this.goStringCallLocals.get(scope);
+    if (families === void 0) {
+      families = /* @__PURE__ */ new Map();
+      this.goStringCallLocals.set(scope, families);
+    }
+    let family = families.get(base);
+    if (family === void 0) {
+      const spelled = new RegExp("^" + base + "\\d*$");
+      family = {
+        clash: this.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.Identifier && spelled.test(n.text)),
+        names: /* @__PURE__ */ new Map()
+      };
+      families.set(base, family);
+    }
+    if (family.clash) {
+      return void 0;
+    }
+    let name = family.names.get(call);
+    if (name === void 0) {
+      name = family.names.size === 0 ? base : base + (family.names.size + 1);
+      family.names.set(call, name);
+    }
+    return name;
   }
   // the container/key argument nodes of a whole `this.SafeDict(container, key)` call, or undefined
   // for another shape. A third argument is droppable only when it is the empty map literal
@@ -44038,7 +44114,8 @@ function installCcxtGoTupleStringJoin(goTranspiler) {
   goTranspiler.printBinaryExpression = function(node, identation) {
     const right = node?.right;
     if (node?.operatorToken?.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(node.left) && ccxtGoTupleStringWriteNeedsLift(this, right) && ccxtGoTupleStringDeclarationOf(this, node.left) !== void 0) {
-      return this.printNode(node.left, 0) + " = SafeStringPtr(" + this.printNode(right, 0) + ")";
+      const value = this.printNode(right, 0);
+      return (typeof this.goStringPointerStore === "function" ? this.goStringPointerStore(node, value, identation) : void 0) ?? this.printNode(node.left, 0) + " = SafeStringPtr(" + value + ")";
     }
     return shippedBinary.call(this, node, identation);
   };
@@ -45629,7 +45706,7 @@ function ccxtGoTernaryLiftArm(goTranspiler, armNode, armText) {
     return { type: armType };
   }
   const lift = CCXT_GO_TERNARY_LIFT[armType];
-  return lift === void 0 ? void 0 : { type: lift[0], wrap: lift[1] };
+  return lift === void 0 ? void 0 : { type: lift[0], wrap: lift[1], call: node };
 }
 function ccxtGoTernaryLiftJoin(goTranspiler, declaration, literal) {
   const initializer = declaration?.initializer;
@@ -45666,7 +45743,16 @@ function ccxtGoTernaryLiftJoin(goTranspiler, declaration, literal) {
     return void 0;
   }
   const lifted = (arm, text) => arm.wrap === void 0 ? text : arm.wrap + "(" + text + ")";
-  return { joinType, whenTrue: lifted(arms[0], literal.whenTrue), whenFalse: lifted(arms[1], literal.whenFalse) };
+  const hoisted = arms.map((arm, i) => arm.wrap === "SafeStringPtr" && typeof goTranspiler.goStringCallLocalName === "function" ? goTranspiler.goStringCallLocalName(arm.call) : void 0);
+  return {
+    joinType,
+    whenTrue: lifted(arms[0], literal.whenTrue),
+    whenFalse: lifted(arms[1], literal.whenFalse),
+    whenTrueLocal: hoisted[0],
+    whenFalseLocal: hoisted[1],
+    whenTrueCall: literal.whenTrue,
+    whenFalseCall: literal.whenFalse
+  };
 }
 function installCcxtGoTernaryLiftJoin(goTranspiler) {
   if (typeof goTranspiler.printVariableDeclarationList !== "function" || typeof goTranspiler.goEnclosingFunction !== "function" || typeof goTranspiler.goLocalIsSafeToType !== "function" || goTranspiler.__ccxtGoTernaryLiftJoinInstalled) {
@@ -45690,8 +45776,8 @@ function installCcxtGoTernaryLiftJoin(goTranspiler) {
     const lines = printed.split("\n");
     const body = literal.indent + "	";
     lines[0] = literal.indent + "var " + literal.name + " " + join3.joinType + " = func() " + join3.joinType + " {";
-    lines[2] = body + "	return " + join3.whenTrue;
-    lines[4] = body + "return " + join3.whenFalse;
+    lines[2] = join3.whenTrueLocal === void 0 ? body + "	return " + join3.whenTrue : body + "	" + join3.whenTrueLocal + " := " + join3.whenTrueCall + "\n" + body + "	return &" + join3.whenTrueLocal;
+    lines[4] = join3.whenFalseLocal === void 0 ? body + "return " + join3.whenFalse : body + join3.whenFalseLocal + " := " + join3.whenFalseCall + "\n" + body + "return &" + join3.whenFalseLocal;
     return lines.join("\n");
   };
   goTranspiler.__ccxtGoTernaryLiftJoinInstalled = true;
