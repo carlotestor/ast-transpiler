@@ -7,6 +7,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     private methodOverrideCache;
     getMethodOverride(node: Node): Node;
     private overrideChainCache;
+    private javaFieldAssignmentKindsCache;
     private javaMethodOverrideFromIndex;
     checkerOrUndefined(): Checker | undefined;
     javaExpressionTypeResolver?: (node: any) => string | undefined;
@@ -468,6 +469,8 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaHx4SourceVerdicts: WeakMap<any, boolean>;
     javaHx4InProgress: Set<any>;
     javaHx4NonSharedValue(value: any, depth: number): boolean;
+    javaFileBuiltMapField(receiver: any, name: string, forWrite: boolean): boolean;
+    javaAssignedMapKind(value: any, depth: number): string;
     javaJ02FieldMapReadText(receiver: any, key: any): string | undefined;
     javaHx4J05IntegralModOperand(node: any): boolean;
     printHx4J05ModComparison(left: any, right: any, op: any): string | undefined;

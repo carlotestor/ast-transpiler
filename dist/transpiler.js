@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -22189,6 +22189,7 @@ var JavaTranspiler = class extends BaseTranspiler {
     // BaseTranspiler.getMethodOverride answered from a per-class ancestor chain of
     // name -> last method maps (the furthest ancestor declaring the name wins, as there)
     this.overrideChainCache = /* @__PURE__ */ new WeakMap();
+    this.javaFieldAssignmentKindsCache = /* @__PURE__ */ new WeakMap();
     this._baseExchangeMethodsByName = /* @__PURE__ */ new WeakMap();
     this.varListFromObjectLiterals = {};
     // binary operators whose printed Java is a primitive boolean: Helpers.isEqual (and the
@@ -25777,6 +25778,9 @@ ${this.getIden(identation)}}}`;
       }
       if (this.javaHx4MapPutIsNative(baseExpr, keys)) {
         return `${prefixes}${acc}.put(${keyArg}, ${rhs})`;
+      }
+      if (keys.length === 1 && isPropertyAccessExpression2(baseExpr) && this.javaFileBuiltMapField(baseExpr, baseExpr.name.text, true)) {
+        return `${prefixes}((java.util.Map<Object, Object>) (java.util.Map<?, ?>) ${acc}).put(${lastKey}, ${rhs})`;
       }
       return `${prefixes}Helpers.addElementToObject(${acc}, ${lastKey}, ${rhs})`;
     }
@@ -29935,12 +29939,70 @@ ${this.getIden(identation)}}}`;
     walk(value);
     return !shared;
   }
+  // `this.<field>` of a base field declared Object/Map whose Java type a file cannot change: the
+  // field is a plain map in this class exactly when every `this.<field> =` in the source file builds
+  // one (an object literal, a zero-arg base createSafeDictionary, a local holding a literal) or
+  // nulls it. A read needs no assignment to be any other kind; a put also needs one plain build,
+  // because the helper removes a null value from a ConcurrentHashMap.
+  javaFileBuiltMapField(receiver, name, forWrite) {
+    if (!JAVA_FILE_BUILT_MAP_FIELDS.has(name) || receiver?.expression?.kind !== SyntaxKind6.ThisKeyword) {
+      return false;
+    }
+    const file = receiver.getSourceFile?.();
+    if (file === void 0) {
+      return false;
+    }
+    let byField = this.javaFieldAssignmentKindsCache.get(file);
+    if (byField === void 0) {
+      const found = /* @__PURE__ */ new Map();
+      const visit = (n) => {
+        if (isBinaryExpression4(n) && n.operatorToken.kind >= SyntaxKind6.FirstAssignment && n.operatorToken.kind <= SyntaxKind6.LastAssignment && isPropertyAccessExpression2(n.left) && n.left.expression.kind === SyntaxKind6.ThisKeyword) {
+          const field = n.left.name.text;
+          const kind = n.operatorToken.kind === SyntaxKind6.EqualsToken ? this.javaAssignedMapKind(n.right, 0) : "other";
+          found.set(field, [...found.get(field) ?? [], kind]);
+        }
+        n.forEachChild(visit);
+      };
+      file.forEachChild(visit);
+      byField = found;
+      this.javaFieldAssignmentKindsCache.set(file, byField);
+    }
+    const kinds = byField.get(name) ?? [];
+    if (kinds.some((k) => k === "other")) {
+      return false;
+    }
+    return forWrite ? kinds.some((k) => k === "plain") : kinds.length > 0;
+  }
+  // 'plain': a java.util.HashMap the code builds; 'null': a null reset; 'other': anything else
+  javaAssignedMapKind(value, depth) {
+    const node = this.unwrapPrintTransparentExpression(value);
+    if (node === void 0) {
+      return "other";
+    }
+    if (node.kind === SyntaxKind6.NullKeyword || node.kind === SyntaxKind6.UndefinedKeyword || isIdentifier2(node) && node.text === "undefined") {
+      return "null";
+    }
+    if (isObjectLiteralExpression3(node)) {
+      return "plain";
+    }
+    if (isCallExpression5(node) && node.arguments.length === 0 && isPropertyAccessExpression2(node.expression) && node.expression.expression.kind === SyntaxKind6.ThisKeyword && node.expression.name.text === "createSafeDictionary") {
+      const fileName = this.checkerOrUndefined()?.getResolvedSignature(node)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
+      return typeof fileName === "string" && JAVA_THIS_RETURN_TYPES_BASE_FILE.test(fileName) ? "plain" : "other";
+    }
+    if (isIdentifier2(node) && depth < 2) {
+      const declaration = this.javaDeclarationOfIdentifier(node);
+      if (declaration !== void 0 && isVariableDeclaration2(declaration) && declaration.initializer && this.javaAssignedMapKind(declaration.initializer, depth + 1) === "plain" && !this.javaLocalIsReassigned(node, (rhs) => this.javaAssignedMapKind(rhs, depth + 1) === "plain")) {
+        return "plain";
+      }
+    }
+    return "other";
+  }
   // hx4 J02: `this.<field>[k]` on the J02 base map fields. ConcurrentHashMap.get(null) throws
   // where the helper answers null, so a non-literal key is always null-tested; the receiver can
   // be null too. Key and receiver print twice, so both must be side-effect free.
   javaJ02FieldMapReadText(receiver, key) {
     const name = receiver?.name?.text;
-    if (typeof name !== "string" || !Object.prototype.hasOwnProperty.call(JAVA_J02_MAP_FIELDS, name)) {
+    if (typeof name !== "string" || !Object.prototype.hasOwnProperty.call(JAVA_J02_MAP_FIELDS, name) && !this.javaFileBuiltMapField(receiver, name, false)) {
       return void 0;
     }
     const literal = isStringLiteralLikeNode3(key);
@@ -30042,6 +30104,7 @@ ${this.getIden(identation)}}}`;
     return void 0;
   }
 };
+var JAVA_FILE_BUILT_MAP_FIELDS = /* @__PURE__ */ new Set(["markets", "positions"]);
 var JAVA_J02_MAP_FIELDS = {
   "tickers": true,
   "bidsasks": true,
