@@ -45,6 +45,9 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpDictionaryElementWriteTarget(node: any): string | undefined;
     printElementAccessExpressionExceptionIfAny(node: any): void;
     printElementAccessExpression(node: any, identation: any): any;
+    csharpUrlsApiSectionRead(node: any): string | undefined;
+    csharpIsThisMember(node: any, name: string): boolean;
+    printExpressionStatement(node: any, identation: any): string;
     csharpNativeElementAccess(node: any): string | undefined;
     csharpIsMarketRowKeyRead(expression: any, argumentExpression: any): boolean;
     csharpNativeDeclaredDictionaryRead(expression: any, argumentExpression: any): string | undefined;

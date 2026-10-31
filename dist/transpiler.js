@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -3414,7 +3414,54 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (baseField !== void 0) {
       return baseField;
     }
+    const sectionRead = this.csharpUrlsApiSectionRead(node);
+    if (sectionRead !== void 0) {
+      return sectionRead;
+    }
     return super.printElementAccessExpression(node, identation);
+  }
+  // Exchange.Options.cs keeps `urlsApiSections` (the dictionary entries of urls['api']) and re-derives it in
+  // RefreshUrlsViews() after every write of urls; a literal-key read through a section is its indexer chain.
+  // Anything else (non-literal section or key, a write target) keeps the helper.
+  csharpUrlsApiSectionRead(node) {
+    if (!this.ELEMENT_ACCESS_WRAPPER_OPEN || !isStringLiteralLikeNode2(node.argumentExpression) || !this.csharpHx4IsPlainRead(node)) {
+      return void 0;
+    }
+    const unwrap = (n) => {
+      while (isParenthesizedExpression(n) || isAsExpression(n)) {
+        n = n.expression;
+      }
+      return n;
+    };
+    const section = unwrap(node.expression);
+    if (!isElementAccessExpression(section) || !isStringLiteralLikeNode2(section.argumentExpression)) {
+      return void 0;
+    }
+    const api = unwrap(section.expression);
+    if (!isElementAccessExpression(api) || !isStringLiteralLikeNode2(api.argumentExpression) || api.argumentExpression.text !== "api") {
+      return void 0;
+    }
+    if (!this.csharpIsThisMember(api.expression, "urls")) {
+      return void 0;
+    }
+    const sectionKey = this.printNode(section.argumentExpression, 0);
+    const key = this.printNode(node.argumentExpression, 0);
+    const view = "this.urlsApiSections";
+    return `(${view}.ContainsKey(${sectionKey}) && ${view}[${sectionKey}].ContainsKey(${key}) ? ${view}[${sectionKey}][${key}] : null)`;
+  }
+  csharpIsThisMember(node, name) {
+    return isPropertyAccessExpression(node) && node.expression.kind === SyntaxKind4.ThisKeyword && node.name?.text === name;
+  }
+  // a write of `this.urls` or of one of its entries re-derives the views over urls['api']
+  printExpressionStatement(node, identation) {
+    const printed = super.printExpressionStatement(node, identation);
+    const expression = node.expression;
+    if (printed.length === 0 || !isBinaryExpression2(expression) || expression.operatorToken.kind !== SyntaxKind4.EqualsToken) {
+      return printed;
+    }
+    const left = expression.left;
+    const writesUrls = this.csharpIsThisMember(left, "urls") || isElementAccessExpression(left) && this.csharpIsThisMember(left.expression, "urls");
+    return writesUrls ? printed + "\n" + this.getIden(identation) + "this.RefreshUrlsViews()" + this.LINE_TERMINATOR : printed;
   }
   csharpNativeElementAccess(node) {
     if (!this.ELEMENT_ACCESS_WRAPPER_OPEN || !this.ELEMENT_ACCESS_WRAPPER_CLOSE) {
