@@ -77,7 +77,7 @@ describe('RFM-C2-B: declared base-field dictionary reads', () => {
         const out = printer(true);
         expect(out).toContain('((x % y) == 0)');
         expect(out).toContain('((x % y) != 3)');
-        expect(out).toContain('isEqual(mod(x, 7), 0)');
+        expect(out).toContain('(((Int64)((double)x % 7)) == 0)');
         expect(out).not.toContain('isEqual(mod(x, y)');
         expect(out).toContain('mod(x, this.foo)');
     });

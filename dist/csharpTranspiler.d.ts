@@ -186,6 +186,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpBaseFieldElementRead(node: any): string | undefined;
     csharpBaseFieldInExpression(key: any, obj: any): string | undefined;
     csharpBaseFieldKeyNames: WeakMap<object, number>;
+    csharpStringTableInExpression(key: any, obj: any): string | undefined;
     csharpNativeModLiteralEquality(left: any, right: any, isEquality: boolean): string | undefined;
     printCallExpression(node: any, identation: any): any;
     csharpNativeParseCall(node: any): string;

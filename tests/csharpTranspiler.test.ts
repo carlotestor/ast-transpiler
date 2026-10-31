@@ -2166,7 +2166,7 @@ describe('isTrue is dropped for a call whose C# signature is a non-nullable bool
         expect(output).toContain("if (this.isInverse(type))");
         expect(output).toContain("if (isTrue(this.isLinear(type)))");
     });
-    test('a hand-written C# shadow and other receivers keep the wrapper', () => {
+    test('a bool-annotated base method, a non-bool method and other receivers', () => {
         const input =
         "class T {\n" +
         "    isDictionary (value: any): boolean { return true; }\n" +
@@ -2178,7 +2178,7 @@ describe('isTrue is dropped for a call whose C# signature is a non-nullable bool
         "    }\n" +
         "}";
         const output = transpiler.transpileCSharp(input).content;
-        expect(output).toContain("if (isTrue(this.isDictionary(v)))");
+        expect(output).toContain("if (this.isDictionary(v))");
         expect(output).toContain("if (this.check(v))");
         expect(output).toContain("if (isTrue(o.check(v)))");
     });

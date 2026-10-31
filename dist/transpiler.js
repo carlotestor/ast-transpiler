@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -2932,7 +2932,6 @@ var CSHARP_BOOL_CALLEES_NATIVE = {
   "Precise.stringEq": true,
   "Precise.stringEquals": true
 };
-var CSHARP_HANDWRITTEN_CALLEES_NATIVE = ["isDictionary"];
 var CSHARP_COUNT_TYPES = ["List<", "IList<", "Dictionary<", "IDictionary<", "ConcurrentDictionary<"];
 var CSHARP_DECIMAL_LITERAL = /^[0-9]+(\.[0-9]+)?$/;
 function csharpDoubleLiteral(value) {
@@ -5354,6 +5353,35 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const bound = `hx10w3Key${used}`;
     return `(${receiver.field} != null && ${printedKey.text} is string ${bound} && ${receiver.text}.ContainsKey(${bound}))`;
   }
+  // `key in recv.<member>` on a member the consumer declares a string-keyed table of a hand-written
+  // class (csharpDeclaredDictMember, no typed accessor needed): inOp's dictionary branch is ContainsKey
+  // behind the receiver and key tests, a non-string key answering false. The receiver must print as
+  // that class: a parameter the consumer retypes, or a local whose printed declaration names a type.
+  csharpStringTableInExpression(key, obj) {
+    if (!isPropertyAccessExpression(obj) || !isIdentifier(obj.expression) || this.csharpDeclaredDictMember(obj) === void 0) {
+      return void 0;
+    }
+    const printedType = this.csharpHx4DeclaredKeyType(obj.expression);
+    if (!this.csharpDeclaredDictMemberReceiverIsParameter(obj) && (printedType === void 0 || printedType === "object" || printedType === "var")) {
+      return void 0;
+    }
+    const printedKey = this.csharpBaseFieldKey(key, true);
+    if (printedKey === void 0) {
+      return void 0;
+    }
+    const table = this.printNode(obj, 0);
+    if (printedKey.kind === "literal") {
+      return `(${table} != null && ${table}.ContainsKey(${printedKey.text}))`;
+    }
+    if (printedKey.kind !== "object") {
+      return `(${table} != null && ${printedKey.text} != null && ${table}.ContainsKey(${printedKey.text}))`;
+    }
+    const source = key.getSourceFile?.();
+    const used = this.csharpBaseFieldKeyNames.get(source) ?? 0;
+    this.csharpBaseFieldKeyNames.set(source, used + 1);
+    const bound = `hx10w3Key${used}`;
+    return `(${table} != null && ${printedKey.text} is string ${bound} && ${table}.ContainsKey(${bound}))`;
+  }
   // `isEqual (a % b, N)` -> `((a % b) == N)` when both operands are Int64 / Int64? locals: the helper takes the double remainder and converts it back, which is the
   // integer remainder for every value the type holds in practice, and the lifted `%` / `==` answer false for a
   // null operand exactly where isEqual does against a non-null integer literal.
@@ -5375,10 +5403,13 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const int64 = (n) => ["Int64", "Int64?", "long", "long?"].indexOf(this.csharpArithmeticOperandType(n)) >= 0;
     const operand = (n) => isIdentifier(n) && int64(n);
     const divisor = mod.right;
-    if (!operand(mod.left) || !operand(divisor)) {
+    const literalDivisor = divisor?.kind === SyntaxKind4.NumericLiteral && this.csharpIntegerLiteralKind(divisor) !== void 0 && Number(divisor.text) > 0;
+    if (!operand(mod.left) || !(operand(divisor) || literalDivisor)) {
       return void 0;
     }
-    const arithmetic = `(${this.printNode(mod.left, 0)} % ${this.printNode(divisor, 0)})`;
+    const leftType = this.csharpArithmeticOperandType(mod.left);
+    const nullable = leftType.endsWith("?");
+    const arithmetic = literalDivisor ? `((${nullable ? "Int64?" : "Int64"})((${nullable ? "double?" : "double"})${this.printNode(mod.left, 0)} % ${this.printNode(divisor, 0)}))` : `(${this.printNode(mod.left, 0)} % ${this.printNode(divisor, 0)})`;
     const literalText = this.printNode(literal, 0);
     return isEquality ? `(${arithmetic} == ${literalText})` : `(${arithmetic} != ${literalText})`;
   }
@@ -5724,14 +5755,14 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     const printedKey = this.csharpNativeStringKey(key);
     if (printedKey === void 0) {
-      return this.csharpDeclaredDictInExpression(key, obj);
+      return this.csharpDeclaredDictInExpression(key, obj) ?? this.csharpStringTableInExpression(key, obj);
     }
     const receiver = this.csharpNativeDictionaryReceiver(obj);
     if (receiver !== void 0) {
       const call = `${receiver.text}.ContainsKey(${printedKey})`;
       return receiver.nullTest === void 0 ? call : `(${receiver.nullTest} != null && ${call})`;
     }
-    return this.csharpDeclaredDictInExpression(key, obj);
+    return this.csharpDeclaredDictInExpression(key, obj) ?? this.csharpStringTableInExpression(key, obj);
   }
   // `key in obj` on a local whose EMITTED declaration is a dictionary the printer cannot name itself
   // (build/csharp-local-types.js retypes it, answers csharpDeclaredDictReceiverType): inOp's dict
@@ -8900,7 +8931,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
   }
   // cs-14: `isTrue(<call>)` goes bare when the call's own C# signature is non-nullable `bool`: (a)
   // hand-written cs/ccxt/base callees (CSHARP_BOOL_CALLEES_NATIVE), (b) `this.<name>(...)` printed by
-  // the same csharpBooleanReturnType. Hand-written overrides and `callDynamically` keep the wrapper.
+  // the same csharpBooleanReturnType (isDictionary included). `callDynamically` keeps the wrapper.
   csharpBoolCall_Native(node) {
     const callee = this.csharpCalleeName_Native(node);
     if (callee !== void 0 && CSHARP_BOOL_CALLEES_NATIVE[callee] === true) {
@@ -8911,9 +8942,6 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // csharpBooleanReturnType of a generator-printed `this.<name>(...)` callee, else undefined
   csharpGeneratedThisCallBoolType_Native(node, callee) {
     if (callee === void 0 || callee.indexOf("this.") !== 0) {
-      return void 0;
-    }
-    if (CSHARP_HANDWRITTEN_CALLEES_NATIVE.indexOf(callee.substring("this.".length)) > -1) {
       return void 0;
     }
     if (!this.csharpCalleeResolves(node)) {
