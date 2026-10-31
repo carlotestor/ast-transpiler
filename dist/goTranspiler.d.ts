@@ -40,6 +40,21 @@ export declare class GoTranspiler extends BaseTranspiler {
     goTupleValueDefaultArg: {
         [producer: string]: number;
     };
+    goOwnedCaches: {
+        declaredIn: string;
+        maps: {
+            [field: string]: string;
+        };
+        objects: {
+            [field: string]: string;
+        };
+        mapLiteral: string;
+        asyncUserPath: RegExp;
+        syncUserPath: RegExp;
+        ops: {
+            [op: string]: string;
+        };
+    } | undefined;
     goSliceLiteralTypes: Map<any, string>;
     CCXT_GO_GETARG_DECLARED_TYPES: any;
     CCXT_GO_GETARG_SAFE_CONSUMERS: any;
@@ -816,6 +831,23 @@ export declare class GoTranspiler extends BaseTranspiler {
     goOwnedFieldIsWrite(node: any): boolean;
     printPropertyAccessExpression(node: any, identation: any): any;
     goOwnedFieldRemove(node: any): string | undefined;
+    goOwnedCacheRef(node: any): {
+        kind: string;
+        name: string;
+    } | undefined;
+    goOwnedCacheUserPath(node: any): boolean;
+    goOwnedCacheUser(node: any, kind: string): {
+        kind: string;
+        name: string;
+    } | undefined;
+    goOwnedCacheOp(receiver: any, op: string, name: string, args: string[]): string;
+    goOwnedCacheLiteral(node: any): string;
+    goIsCreateSafeDictionary(node: any): boolean;
+    goOwnedCacheBinary(node: any, identation: any): string | undefined;
+    goOwnedCacheRead(node: any): string | undefined;
+    goOwnedCacheDelete(node: any): string | undefined;
+    goOwnedCacheValue(node: any): string | undefined;
+    goReturnsTickerMap(node: any): boolean;
     printDeleteExpression(node: any, identation: any): string;
     goNativeDelete(node: any): string | undefined;
     goDeleteReceiverText(node: any): string | undefined;
