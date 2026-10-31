@@ -49595,7 +49595,11 @@ var TupleSlots = class {
     const tsInit = this.resolve(node)?.initializer;
     const initClass = (init) => {
       const c = this.classOfText(fn, void 0, g08Mask(init).trim(), init.trim(), depth + 1);
-      return c === "no" ? this.omitClass(fn, tsInit, depth) : c;
+      if (c.startsWith("plain")) {
+        return c;
+      }
+      const omitted = this.omitClass(fn, tsInit, depth);
+      return omitted === "no" ? c : omitted;
     };
     if (decl.kind === "short") {
       if (writes > 1) {
