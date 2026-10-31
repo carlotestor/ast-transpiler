@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -48858,16 +48858,16 @@ import os from "os";
 import path3 from "path";
 var G08_WHITELIST = /* @__PURE__ */ new Set(["string", "bool", "map[string]any", "[]any"]);
 function g08UsesNullish(go, body, param) {
-  const SK = ts.SyntaxKind;
+  const SK2 = ts.SyntaxKind;
   const name = param.name.text;
   let found = false;
   const visit = (n) => {
     if (found || n === void 0) {
       return;
     }
-    if (n.kind === SK.BinaryExpression && (n.operatorToken?.kind === SK.QuestionQuestionToken || n.operatorToken?.kind === SK.QuestionQuestionEqualsToken)) {
+    if (n.kind === SK2.BinaryExpression && (n.operatorToken?.kind === SK2.QuestionQuestionToken || n.operatorToken?.kind === SK2.QuestionQuestionEqualsToken)) {
       const left = n.left;
-      if (left?.kind === SK.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
+      if (left?.kind === SK2.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
         found = true;
         return;
       }
@@ -48897,18 +48897,18 @@ function g08HasDynamicCall(fn, name) {
   return g08DynamicCallees(fn).has(name);
 }
 function g08Derived(go, param) {
-  const SK = ts.SyntaxKind;
-  if (param?.kind !== SK.Parameter) {
+  const SK2 = ts.SyntaxKind;
+  if (param?.kind !== SK2.Parameter) {
     return void 0;
   }
   if (param.dotDotDotToken !== void 0 || param.initializer !== void 0) {
     return void 0;
   }
-  if (param.name?.kind !== SK.Identifier) {
+  if (param.name?.kind !== SK2.Identifier) {
     return void 0;
   }
   const fn = param.parent;
-  if (fn?.kind !== SK.MethodDeclaration || fn.body === void 0 || fn.name?.kind !== SK.Identifier) {
+  if (fn?.kind !== SK2.MethodDeclaration || fn.body === void 0 || fn.name?.kind !== SK2.Identifier) {
     return void 0;
   }
   const name = param.name.text;
@@ -48945,7 +48945,7 @@ function g08Derived(go, param) {
   const types = /* @__PURE__ */ new Set();
   for (const site of sites) {
     const arg = site.arguments?.[index];
-    if (arg === void 0 || arg.kind === SK.SpreadElement) {
+    if (arg === void 0 || arg.kind === SK2.SpreadElement) {
       return void 0;
     }
     const printed = go.goPrintedArgType(arg);
@@ -49082,6 +49082,659 @@ function g08w3Check() {
   return problems;
 }
 
+// src/go/hx10w2-G08.ts
+init_esm_shims();
+var SK = ts.SyntaxKind;
+var G08_PAIR_MAP_PRODUCERS = ["handleMarketTypeAndParams", "handleSubTypeAndParams"];
+var G08_BASE_SLICE_PRODUCERS = [
+  "handleOptionAndParams",
+  "handleOptionAndParams2",
+  "handleParamString",
+  "handleParamString2",
+  "handleNetworkCodeAndParams",
+  "handleWithdrawTagAndParams",
+  "handlePostOnly",
+  "handleParamBool",
+  "handleParamBool2",
+  "handleParamInteger",
+  "handleParamInteger2",
+  "handleTriggerPricesAndParams",
+  "handleTriggerDirectionAndParams"
+];
+var G08_BASE_FILE = /[\/]base[\/]Exchange(\.nooverloads\.\d+)?\.ts$/;
+var FUNCTION_LIKE = [
+  SK.FunctionDeclaration,
+  SK.FunctionExpression,
+  SK.ArrowFunction,
+  SK.MethodDeclaration,
+  SK.Constructor,
+  SK.GetAccessor,
+  SK.SetAccessor,
+  SK.ClassDeclaration,
+  SK.ClassExpression
+];
+function g08Mask(text) {
+  const out = text.split("");
+  const n = text.length;
+  let i = 0;
+  while (i < n) {
+    const c = text[i];
+    if (c === "/" && text[i + 1] === "/") {
+      while (i < n && text[i] !== "\n") {
+        out[i] = " ";
+        i += 1;
+      }
+    } else if (c === '"' || c === "'") {
+      out[i] = " ";
+      i += 1;
+      while (i < n) {
+        if (text[i] === "\\" && i + 1 < n) {
+          out[i] = " ";
+          out[i + 1] = " ";
+          i += 2;
+          continue;
+        }
+        if (text[i] === c) {
+          out[i] = " ";
+          i += 1;
+          break;
+        }
+        if (text[i] !== "\n") {
+          out[i] = " ";
+        }
+        i += 1;
+      }
+    } else if (c === "`") {
+      out[i] = " ";
+      i += 1;
+      while (i < n && text[i] !== "`") {
+        if (text[i] !== "\n") {
+          out[i] = " ";
+        }
+        i += 1;
+      }
+      if (i < n) {
+        out[i] = " ";
+        i += 1;
+      }
+    } else {
+      i += 1;
+    }
+  }
+  return out.join("");
+}
+function g08CallClass(masked) {
+  if (/^(?:ccxt\.)?(?:GetValue|GetArg|ParseToInt|ParseInt|SafeMapToMap)\(/.test(masked)) {
+    return "plain";
+  }
+  if (/^(?:this\.|ccxt\.)?(?:OmitDict|Extend|DeepExtend)\(/.test(masked)) {
+    return "plain:map";
+  }
+  if (/^(?:this\.)?(?:Omit|OmitN|OmitMap)\(/.test(masked)) {
+    return "plain";
+  }
+  if (/^(?:ccxt\.)?(?:MapTyped|SafeMapTyped)\(/.test(masked)) {
+    return "typedmap";
+  }
+  if (/^GetArgMap\(/.test(masked)) {
+    return "typedmap";
+  }
+  if (/^(?:ccxt\.)?ListTyped\(/.test(masked)) {
+    return "typedslice";
+  }
+  if (/^(?:this\.)?SafeDict2?\(/.test(masked)) {
+    return "deref:map";
+  }
+  return void 0;
+}
+function g08Combine(classes) {
+  if (classes.length === 0 || classes.includes("no")) {
+    return "no";
+  }
+  const unique = [...new Set(classes)];
+  if (unique.length === 1) {
+    return unique[0];
+  }
+  const kind = (list) => list.some((c) => c.endsWith("map")) ? "map" : list.some((c) => c.endsWith("slice")) ? "slice" : "";
+  if (unique.every((c) => c.startsWith("plain"))) {
+    return "plain:" + kind(unique);
+  }
+  if (unique.every((c) => c.startsWith("plain") || c === "typedmap" || c === "typedslice")) {
+    return kind(unique) === "slice" ? "typedslice" : "typedmap";
+  }
+  return "deref:" + kind(unique);
+}
+function g08Balanced(masked, start) {
+  let depth = 0;
+  for (let i = start; i < masked.length; i++) {
+    if ("({[".includes(masked[i])) {
+      depth += 1;
+      continue;
+    }
+    if (")}]".includes(masked[i])) {
+      depth -= 1;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+function g08Unwrap(node) {
+  let current = node;
+  while (current?.kind === SK.ParenthesizedExpression) {
+    current = current.expression;
+  }
+  return current;
+}
+function g08Walk(scope, visit) {
+  const go = (n) => {
+    if (n === void 0) {
+      return;
+    }
+    if (visit(n) === false) {
+      return;
+    }
+    n.forEachChild(go);
+  };
+  scope?.forEachChild(go);
+}
+var TupleSlots = class {
+  constructor(go) {
+    this.producers = /* @__PURE__ */ new WeakMap();
+    this.declLines = /* @__PURE__ */ new WeakMap();
+    this.writeCounts = /* @__PURE__ */ new WeakMap();
+    this.go = go;
+  }
+  resolve(node) {
+    try {
+      return this.go.getChecker().getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+    } catch (e) {
+      return void 0;
+    }
+  }
+  // the implementation (with a body) of the method `this.m (..)` calls
+  producerDeclaration(call) {
+    const callee = call?.expression;
+    if (call?.kind !== SK.CallExpression || callee?.kind !== SK.PropertyAccessExpression || callee.expression?.kind !== SK.ThisKeyword || call.questionDotToken !== void 0) {
+      return void 0;
+    }
+    let declaration;
+    try {
+      declaration = this.go.getChecker().getResolvedSignature(call)?.declaration?.resolve();
+    } catch (e) {
+      return void 0;
+    }
+    if (declaration?.kind !== SK.MethodDeclaration) {
+      return void 0;
+    }
+    const name = declaration.name?.text;
+    let method = declaration;
+    if (method.body === void 0) {
+      method = (declaration.parent?.members ?? []).find((m) => m.kind === SK.MethodDeclaration && m.name?.text === name && m.body !== void 0);
+    }
+    if (method === void 0 || method.body === void 0 || method.type?.kind !== SK.TupleType) {
+      return void 0;
+    }
+    if ((method.modifiers ?? []).some((m) => m.kind === SK.AsyncKeyword || m.kind === SK.StaticKeyword)) {
+      return void 0;
+    }
+    return this.printsSlice(method) ? method : void 0;
+  }
+  // { arity, slots } of the tuple a producer returns, from every own `return [ .. ]`
+  producerInfo(call) {
+    const callee = call?.expression;
+    if (G08_PAIR_MAP_PRODUCERS.includes(callee?.name?.text) && callee.expression?.kind === SK.ThisKeyword) {
+      return this.go.getChecker() !== void 0 ? { "arity": 2, "slots": { 1: "plain:map" }, "pair": true } : void 0;
+    }
+    const method = this.producerDeclaration(call);
+    if (method === void 0) {
+      return void 0;
+    }
+    if (this.producers.has(method)) {
+      return this.producers.get(method);
+    }
+    this.producers.set(method, void 0);
+    const info = this.analyse(method);
+    this.producers.set(method, info);
+    return info;
+  }
+  analyse(method) {
+    const rows = [];
+    let ok = true;
+    g08Walk(method.body, (n) => {
+      if (!ok || FUNCTION_LIKE.includes(n.kind)) {
+        return false;
+      }
+      if (n.kind !== SK.ReturnStatement) {
+        return true;
+      }
+      const array = n.expression;
+      if (array?.kind !== SK.ArrayLiteralExpression || array.elements.some((e) => e.kind === SK.SpreadElement)) {
+        ok = false;
+        return false;
+      }
+      rows.push(array.elements.slice());
+      return false;
+    });
+    if (!ok || rows.length === 0) {
+      return void 0;
+    }
+    const arity = Math.min(...rows.map((row) => row.length));
+    const slots = {};
+    for (let i = 0; i < arity; i++) {
+      const combined = g08Combine(rows.map((row) => this.classOfNode(method, row[i], 0)));
+      if (combined !== "no") {
+        slots[i] = combined;
+      }
+    }
+    return Object.keys(slots).length > 0 ? { arity, slots } : void 0;
+  }
+  // true when the printed Go method returns `[]any`: a tabled base helper, or an exchange-local
+  // method (no base twin) whose every own return prints as one `return []any{..}` line
+  printsSlice(method) {
+    const name = method.name?.text;
+    if (G08_BASE_SLICE_PRODUCERS.includes(name)) {
+      return true;
+    }
+    if (this.baseDeclares(method)) {
+      return false;
+    }
+    let ok = true;
+    let any = false;
+    g08Walk(method.body, (n) => {
+      if (!ok || FUNCTION_LIKE.includes(n.kind)) {
+        return false;
+      }
+      if (n.kind !== SK.ReturnStatement) {
+        return true;
+      }
+      const text = this.printed(n);
+      any = true;
+      ok = text !== void 0 && /^return \[\]any\{.*\}$/.test(text.replace(/\s+\/\/.*$/, "").trim()) && !text.includes("\n");
+      return false;
+    });
+    return ok && any;
+  }
+  // a method of the same name declared by the Exchange base class in the class chain above
+  baseDeclares(method) {
+    const checker = this.go.getChecker();
+    let cls = method.parent;
+    for (let depth = 0; cls !== void 0 && depth < 12; depth++) {
+      const clause = (cls.heritageClauses ?? []).find((c) => c.token === SK.ExtendsKeyword);
+      if (clause === void 0) {
+        return false;
+      }
+      let declaration;
+      try {
+        const symbol = checker.getTypeAtLocation(clause.types?.[0])?.getProperty?.(method.name.text);
+        declaration = symbol?.valueDeclaration?.resolve?.() ?? symbol?.declarations?.map((d) => d.resolve())?.[0];
+      } catch (e) {
+        return false;
+      }
+      if (declaration === void 0) {
+        return false;
+      }
+      if (G08_BASE_FILE.test(String(declaration.getSourceFile().fileName ?? ""))) {
+        return true;
+      }
+      cls = declaration.parent;
+    }
+    return false;
+  }
+  printed(node) {
+    try {
+      const text = this.go.printNode(node, 0);
+      return typeof text === "string" ? text.trim() : void 0;
+    } catch (e) {
+      return void 0;
+    }
+  }
+  classOfNode(fn, node, depth) {
+    if (depth > 4) {
+      return "no";
+    }
+    const raw = this.printed(node);
+    if (raw === void 0 || raw.includes("\n")) {
+      return "no";
+    }
+    return this.classOfText(fn, g08Unwrap(node), g08Mask(raw).trim(), raw, depth);
+  }
+  classOfText(fn, node, m, r, depth) {
+    if (/^(?:true|false)$/.test(m)) {
+      return "plain:bool";
+    }
+    if (/^-?\d+(?:\.\d+)?$/.test(m)) {
+      return "plain:number";
+    }
+    if (m === "" && /^"(?:[^"\\]|\\.)*"$/.test(r)) {
+      return "plain:string";
+    }
+    if (/^map\[string\]any\{/.test(m)) {
+      return "plain:map";
+    }
+    if (/^\[\](?:any|string)\{/.test(m)) {
+      return "plain";
+    }
+    if (/^\[\](?:any|string)$/.test(m)) {
+      return "deref:slice";
+    }
+    if (/^GetArgMap\(\w+, \d+, map\[string\]any\{\}\)$/.test(m)) {
+      return "plain:map";
+    }
+    const call = g08CallClass(m);
+    if (call !== void 0) {
+      if (call === "deref:map" && /^(?:ccxt\.)?MapTyped\(/.test(m)) {
+        const open = m.indexOf("(");
+        const close = g08Balanced(m, open);
+        const arg = g08Unwrap(node)?.arguments?.[0];
+        if (close > 0 && arg !== void 0 && this.classOfNode(fn, arg, depth + 1) === "plain:map") {
+          return "plain:map";
+        }
+      }
+      return call;
+    }
+    const omit = /^(?:ccxt\.)?MapTyped\(this\.Omit\((\w+),/.exec(m);
+    if (omit !== null) {
+      const arg = g08Unwrap(node)?.arguments?.[0]?.arguments?.[0];
+      const argClass = arg?.kind === SK.Identifier ? this.classOfIdent(fn, arg, depth + 1) : "no";
+      return argClass === "typedmap" || argClass === "plain:map" ? "plain:map" : "no";
+    }
+    if (/^func\s*\(/.test(m)) {
+      return "no";
+    }
+    if (node?.kind === SK.Identifier && /^[A-Za-z_]\w*$/.test(m)) {
+      return this.classOfIdent(fn, node, depth);
+    }
+    return "no";
+  }
+  // writes of the name inside the function: `=`, destructuring targets and compound writes
+  writesOf(fn, name) {
+    let counts = this.writeCounts.get(fn);
+    if (counts === void 0) {
+      counts = /* @__PURE__ */ new Map();
+      this.writeCounts.set(fn, counts);
+      const bump = (id) => counts.set(id, (counts.get(id) ?? 0) + 1);
+      const targets = (t) => {
+        const u = g08Unwrap(t);
+        if (u?.kind === SK.Identifier) {
+          bump(u.text);
+        }
+        if (u?.kind === SK.ArrayLiteralExpression) {
+          u.elements.forEach(targets);
+        }
+      };
+      g08Walk(fn.body, (n) => {
+        if ((n.kind === SK.VariableDeclaration || n.kind === SK.BindingElement) && n.name?.kind === SK.Identifier) {
+          bump(n.name.text);
+        } else if (n.kind === SK.BinaryExpression) {
+          const op = n.operatorToken?.kind;
+          if (op >= SK.FirstAssignment && op <= SK.LastAssignment) {
+            targets(n.left);
+          }
+        } else if ((n.kind === SK.PrefixUnaryExpression || n.kind === SK.PostfixUnaryExpression) && (n.operator === SK.PlusPlusToken || n.operator === SK.MinusMinusToken)) {
+          targets(n.operand);
+        }
+        return true;
+      });
+    }
+    return counts.get(name) ?? 0;
+  }
+  // `var x T = init` / `x := init` / `a, b := call` as the printer wrote the declaration of an identifier
+  declOf(node) {
+    const decl = this.resolve(node);
+    if (decl === void 0) {
+      return void 0;
+    }
+    if (this.declLines.has(decl)) {
+      return this.declLines.get(decl);
+    }
+    this.declLines.set(decl, void 0);
+    let result;
+    if (decl.kind === SK.Parameter) {
+      const bound = decl.initializer !== void 0 || decl.questionToken !== void 0;
+      if (bound && decl.dotDotDotToken === void 0 && decl.parent?.body !== void 0) {
+        const type = this.go.goGetArgParameterType(decl);
+        const emptyMap = decl.initializer?.kind === SK.ObjectLiteralExpression && decl.initializer.properties.length === 0;
+        result = type !== void 0 ? { "kind": "var", "type": type, "init": type === "map[string]any" && emptyMap ? "GetArgMap(optionalArgs, 0, map[string]any{})" : "GetArgX(optionalArgs, 0, nil)", "fn": decl.parent, "param": true } : { "kind": "short", "type": void 0, "init": "GetArg(optionalArgs, 0, nil)", "fn": decl.parent, "param": true };
+      }
+    } else if (decl.kind === SK.VariableDeclaration && decl.name?.kind === SK.Identifier) {
+      result = this.printedDeclaration(decl);
+    } else if (decl.kind === SK.BindingElement && decl.name?.kind === SK.Identifier) {
+      result = this.printedBinding(decl);
+    }
+    this.declLines.set(decl, result);
+    return result;
+  }
+  enclosingFunction(node) {
+    let current = node?.parent;
+    while (current !== void 0 && current.kind !== SK.MethodDeclaration && current.kind !== SK.FunctionDeclaration) {
+      current = current.parent;
+    }
+    return current;
+  }
+  printedDeclaration(decl) {
+    const statement = decl.parent?.parent;
+    if (statement?.kind !== SK.VariableStatement || decl.parent.declarations.length !== 1) {
+      return void 0;
+    }
+    const text = this.printed(statement);
+    if (text === void 0) {
+      return void 0;
+    }
+    const name = decl.name.text;
+    const fn = this.enclosingFunction(decl);
+    for (const line of text.split("\n")) {
+      const typed = new RegExp("^\\s*var " + name + " ([\\w\\[\\].*]+) = (.*)$").exec(line);
+      if (typed !== null) {
+        return { "kind": "var", "type": typed[1], "init": typed[2], fn };
+      }
+      const bare = new RegExp("^\\s*var " + name + " ([\\w\\[\\].*]+)\\s*$").exec(line);
+      if (bare !== null) {
+        return { "kind": "var", "type": bare[1], "init": null, fn };
+      }
+      const short = new RegExp("^\\s*" + name + " := (.*)$").exec(line);
+      if (short !== null) {
+        return { "kind": "short", "type": void 0, "init": short[1], fn };
+      }
+    }
+    return void 0;
+  }
+  // a destructured element: the typed pair `a, b := this.m (..)`, or the holder read it printed
+  printedBinding(element) {
+    const pattern = element.parent;
+    const declaration = pattern?.parent;
+    const statement = declaration?.parent?.parent;
+    if (pattern?.kind !== SK.ArrayBindingPattern || statement?.kind !== SK.VariableStatement) {
+      return void 0;
+    }
+    const text = this.printed(statement);
+    if (text === void 0) {
+      return void 0;
+    }
+    const name = element.name.text;
+    const fn = this.enclosingFunction(element);
+    for (const line of text.split("\n")) {
+      const pair = /^\s*([\w\[\].]*(?:\s*,\s*[\w\[\].]*)+)\s*:=\s*(.*)$/.exec(line);
+      if (pair !== null && pair[1].split(",").some((p) => p.trim() === name)) {
+        return { "kind": "multi", "type": void 0, "init": null, "index": pair[1].split(",").map((p) => p.trim()).indexOf(name), "call": declaration.initializer, fn };
+      }
+      const typed = new RegExp("^\\s*var " + name + " ([\\w\\[\\].*]+) = (.*)$").exec(line);
+      if (typed !== null) {
+        return { "kind": "var", "type": typed[1], "init": typed[2], fn };
+      }
+      const short = new RegExp("^\\s*" + name + " := (.*)$").exec(line);
+      if (short !== null) {
+        return { "kind": "short", "type": void 0, "init": short[1], fn };
+      }
+    }
+    return void 0;
+  }
+  classOfIdent(fn, node, depth) {
+    if (depth > 4) {
+      return "no";
+    }
+    const decl = this.declOf(node);
+    if (decl === void 0 || decl.fn !== fn) {
+      return "no";
+    }
+    const name = node.text;
+    if (decl.kind === "multi") {
+      const info = decl.call === void 0 ? void 0 : this.producerInfo(decl.call);
+      return info?.slots?.[decl.index] ?? "no";
+    }
+    const writes = this.writesOf(fn, name) + (decl.param === true ? 1 : 0);
+    const initClass = (init) => this.classOfText(fn, void 0, g08Mask(init).trim(), init.trim(), depth + 1);
+    if (decl.kind === "short") {
+      if (writes > 1) {
+        return "no";
+      }
+      if (/^(?:this\.|ccxt\.)\w+\(/.test(g08Mask(decl.init))) {
+        return "no";
+      }
+      return initClass(decl.init);
+    }
+    const type = decl.type ?? "";
+    if (type === "bool") {
+      return "plain:bool";
+    }
+    if (type === "string") {
+      return "plain:string";
+    }
+    if (["int64", "float64", "int", "uint64"].includes(type)) {
+      return "plain:number";
+    }
+    if (type === "any") {
+      if (writes !== 1) {
+        return "no";
+      }
+      if (decl.init === null || decl.init === void 0) {
+        return "no";
+      }
+      if (decl.init.trim() === "nil") {
+        return "deref";
+      }
+      return initClass(decl.init);
+    }
+    if (type === "map[string]any" || type === "[]any" || type === "[]string") {
+      if (decl.init !== null && decl.init !== void 0 && decl.init.trim() !== "nil") {
+        const init = initClass(decl.init);
+        if (init.startsWith("plain") && writes === 1) {
+          return init;
+        }
+      }
+      return type === "map[string]any" ? "typedmap" : "typedslice";
+    }
+    return "no";
+  }
+  // two destructurings of one function that print the same holder name leave both reads boxed
+  holderIsUnique(statement, holder) {
+    const fn = this.enclosingFunction(statement);
+    if (fn === void 0) {
+      return false;
+    }
+    let count = 0;
+    const join3 = (elements, pattern) => elements.map((e) => this.printed(pattern ? e.name : e)).join("") + "Variable";
+    g08Walk(fn.body, (n) => {
+      if (n.kind === SK.VariableDeclaration && n.name?.kind === SK.ArrayBindingPattern) {
+        if (join3(n.name.elements, true) === holder) {
+          count += 1;
+        }
+      } else if (n.kind === SK.BinaryExpression && n.operatorToken?.kind === SK.EqualsToken && n.left?.kind === SK.ArrayLiteralExpression) {
+        if (join3(n.left.elements, false) === holder) {
+          count += 1;
+        }
+      }
+      return true;
+    });
+    return count === 1;
+  }
+  // rewrite the slot reads of one printed destructuring statement
+  rewrite(printed, holder, call, statement) {
+    if (!/GetValue/.test(printed) || call?.kind !== SK.CallExpression) {
+      return printed;
+    }
+    const info = this.producerInfo(call);
+    if (info === void 0) {
+      return printed;
+    }
+    const first = printed.split("\n")[0].trim();
+    const sliceHolder = new RegExp("^(?:var " + holder + " \\[\\]any = |" + holder + " :?= (?:ccxt\\.)?TupleSlice\\()").test(first) || info.pair !== true && new RegExp("^" + holder + " :?= (?:ccxt\\.)?this\\.").test(first);
+    if (!sliceHolder) {
+      return printed;
+    }
+    const classes = info.slots;
+    const slotClass = (text) => {
+      const i = Number(text);
+      return i < info.arity ? classes[i] : void 0;
+    };
+    let changed = false;
+    const h = holder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const lines = printed.split("\n").map((line) => {
+      let m = new RegExp("^(\\s*(?:var \\w+ map\\[string\\]any = |\\w+ = ))(?:ccxt\\.)?MapTyped\\((?:ccxt\\.)?GetValue\\(" + h + ", (\\d+)\\)\\)$").exec(line);
+      if (m !== null) {
+        const cls = slotClass(m[2]);
+        if (cls === "typedmap" || cls === "plain:map") {
+          changed = true;
+          return m[1] + holder + "[" + m[2] + "].(map[string]any)";
+        }
+        return line;
+      }
+      m = new RegExp("^(\\s*(?:var \\w+ bool = |\\w+ = ))(?:ccxt\\.)?GetValueBool\\(" + h + ", (\\d+), false\\)$").exec(line);
+      if (m !== null) {
+        if (slotClass(m[2]) === "plain:bool") {
+          changed = true;
+          return m[1] + holder + "[" + m[2] + "].(bool)";
+        }
+        return line;
+      }
+      m = new RegExp("^(\\s*\\w+ :?= )(?:ccxt\\.)?GetValue\\(" + h + ", (\\d+)\\)$").exec(line);
+      if (m !== null) {
+        if (slotClass(m[2])?.startsWith("plain")) {
+          changed = true;
+          return m[1] + holder + "[" + m[2] + "]";
+        }
+      }
+      return line;
+    });
+    return changed ? lines.join("\n") : printed;
+  }
+};
+function installCcxtGoTupleSlotReads(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__ccxtGoTupleSlotReadsInstalled || typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  const slots = new TupleSlots(goTranspiler);
+  const printDeclaration = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = printDeclaration.call(this, node, identation);
+    const declaration = node?.declarations?.[0];
+    if (typeof printed !== "string" || declaration?.name?.kind !== SK.ArrayBindingPattern || declaration.initializer?.kind !== SK.CallExpression || !printed.includes("GetValue")) {
+      return printed;
+    }
+    const holder = declaration.name.elements.map((e) => this.printNode(e.name, 0)).join("") + "Variable";
+    if (!slots.holderIsUnique(node.parent ?? node, holder)) {
+      return printed;
+    }
+    return slots.rewrite(printed, holder, declaration.initializer, node);
+  };
+  const printBinary = goTranspiler.printCustomBinaryExpressionIfAny;
+  if (typeof printBinary === "function") {
+    goTranspiler.printCustomBinaryExpressionIfAny = function(node, identation) {
+      const printed = printBinary.call(this, node, identation);
+      if (typeof printed !== "string" || node?.operatorToken?.kind !== SK.EqualsToken || node.left?.kind !== SK.ArrayLiteralExpression || node.right?.kind !== SK.CallExpression || !printed.includes("GetValue")) {
+        return printed;
+      }
+      const holder = node.left.elements.map((e) => this.printNode(e, 0)).join("") + "Variable";
+      if (!slots.holderIsUnique(node, holder)) {
+        return printed;
+      }
+      return slots.rewrite(printed, holder, node.right, node);
+    };
+  }
+  goTranspiler.__ccxtGoTupleSlotReadsInstalled = true;
+}
+
 // src/go/hx10w8-GB01.ts
 init_esm_shims();
 import path4 from "path";
@@ -49106,16 +49759,16 @@ function gb01IsBaseFile(fn) {
   return /(^|[\\/])ts[\\/]src[\\/]base[\\/]/.test(String(fn.getSourceFile().fileName ?? ""));
 }
 function gb01UsesNullish(go, body, param) {
-  const SK = ts.SyntaxKind;
+  const SK2 = ts.SyntaxKind;
   const name = param.name.text;
   let found = false;
   const visit = (n) => {
     if (found || n === void 0) {
       return;
     }
-    if (n.kind === SK.BinaryExpression && (n.operatorToken?.kind === SK.QuestionQuestionToken || n.operatorToken?.kind === SK.QuestionQuestionEqualsToken)) {
+    if (n.kind === SK2.BinaryExpression && (n.operatorToken?.kind === SK2.QuestionQuestionToken || n.operatorToken?.kind === SK2.QuestionQuestionEqualsToken)) {
       const left = n.left;
-      if (left?.kind === SK.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
+      if (left?.kind === SK2.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
         found = true;
         return;
       }
@@ -49211,17 +49864,17 @@ function gb01CallSitesPassMap(go, fn, index) {
   return true;
 }
 function gb01Rejection(go, fn, param) {
-  const SK = ts.SyntaxKind;
-  if (param?.kind !== SK.Parameter) {
+  const SK2 = ts.SyntaxKind;
+  if (param?.kind !== SK2.Parameter) {
     return "not a parameter";
   }
   if (param.dotDotDotToken !== void 0 || param.initializer !== void 0) {
     return "optional/variadic parameter";
   }
-  if (param.name?.kind !== SK.Identifier) {
+  if (param.name?.kind !== SK2.Identifier) {
     return "destructured parameter";
   }
-  if (fn?.kind !== SK.MethodDeclaration || fn.body === void 0 || fn.name?.kind !== SK.Identifier) {
+  if (fn?.kind !== SK2.MethodDeclaration || fn.body === void 0 || fn.name?.kind !== SK2.Identifier) {
     return "not a method with a body";
   }
   if (go.isAsyncFunction(fn)) {
@@ -49229,7 +49882,7 @@ function gb01Rejection(go, fn, param) {
   }
   if (go.goMethodKeepsBaseSignature(fn) && !gb01IsBaseFile(fn)) {
     const cls = go.goEnclosingClass(fn);
-    if ((cls?.heritageClauses ?? []).some((c) => c.token === SK.ExtendsKeyword) === false) {
+    if ((cls?.heritageClauses ?? []).some((c) => c.token === SK2.ExtendsKeyword) === false) {
       return "root class member";
     }
   }
@@ -49354,16 +50007,16 @@ function gb05DynamicCallees(fn) {
   return names;
 }
 function gb05UsesNullish(go, body, param) {
-  const SK = ts.SyntaxKind;
+  const SK2 = ts.SyntaxKind;
   const name = param.name.text;
   let found = false;
   const visit = (n) => {
     if (found || n === void 0) {
       return;
     }
-    if (n.kind === SK.BinaryExpression && (n.operatorToken?.kind === SK.QuestionQuestionToken || n.operatorToken?.kind === SK.QuestionQuestionEqualsToken)) {
+    if (n.kind === SK2.BinaryExpression && (n.operatorToken?.kind === SK2.QuestionQuestionToken || n.operatorToken?.kind === SK2.QuestionQuestionEqualsToken)) {
       const left = n.left;
-      if (left?.kind === SK.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
+      if (left?.kind === SK2.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
         found = true;
         return;
       }
@@ -49374,18 +50027,18 @@ function gb05UsesNullish(go, body, param) {
   return found;
 }
 function gb05Derived(go, param) {
-  const SK = ts.SyntaxKind;
-  if (param?.kind !== SK.Parameter) {
+  const SK2 = ts.SyntaxKind;
+  if (param?.kind !== SK2.Parameter) {
     return void 0;
   }
   if (param.dotDotDotToken !== void 0 || param.initializer !== void 0) {
     return void 0;
   }
-  if (param.name?.kind !== SK.Identifier) {
+  if (param.name?.kind !== SK2.Identifier) {
     return void 0;
   }
   const fn = param.parent;
-  if (fn?.kind !== SK.MethodDeclaration || fn.body === void 0 || fn.name?.kind !== SK.Identifier) {
+  if (fn?.kind !== SK2.MethodDeclaration || fn.body === void 0 || fn.name?.kind !== SK2.Identifier) {
     return void 0;
   }
   const name = param.name.text;
@@ -49545,7 +50198,7 @@ var GB11_METHOD = "handleErrors";
 var GB11_INDEX = 0;
 var GB11_NUMERIC_TYPES = ["int", "number", "Int"];
 var GB11_COMPARISONS = {};
-function gb11ComparisonOperators(SK) {
+function gb11ComparisonOperators(SK2) {
   if (Object.keys(GB11_COMPARISONS).length !== 0) {
     return GB11_COMPARISONS;
   }
@@ -49559,7 +50212,7 @@ function gb11ComparisonOperators(SK) {
     "GreaterThanToken",
     "GreaterThanEqualsToken"
   ]) {
-    GB11_COMPARISONS[SK[op]] = true;
+    GB11_COMPARISONS[SK2[op]] = true;
   }
   return GB11_COMPARISONS;
 }
@@ -49576,30 +50229,30 @@ function gb11RefersToParam(go, node, param) {
   }
 }
 function gb11UsesAreIntOnly(go, body, param) {
-  const SK = ts.SyntaxKind;
-  const comparisons = gb11ComparisonOperators(SK);
+  const SK2 = ts.SyntaxKind;
+  const comparisons = gb11ComparisonOperators(SK2);
   const name = param.name.text;
   let ok = true;
   const visit = (n) => {
     if (!ok || n === void 0) {
       return;
     }
-    if (n.kind === SK.Identifier && n.text === name && gb11RefersToParam(go, n, param)) {
+    if (n.kind === SK2.Identifier && n.text === name && gb11RefersToParam(go, n, param)) {
       const parent = n.parent;
-      if (parent?.kind === SK.PropertyAccessExpression && parent.expression === n && parent.name?.text === "toString") {
+      if (parent?.kind === SK2.PropertyAccessExpression && parent.expression === n && parent.name?.text === "toString") {
         return;
       }
-      if (parent?.kind === SK.BinaryExpression && comparisons[parent.operatorToken?.kind]) {
+      if (parent?.kind === SK2.BinaryExpression && comparisons[parent.operatorToken?.kind]) {
         const other = parent.left === n ? parent.right : parent.left;
-        const literal = other?.kind === SK.NumericLiteral || other?.kind === SK.PrefixUnaryExpression && other.operator === SK.MinusToken && other.operand?.kind === SK.NumericLiteral;
+        const literal = other?.kind === SK2.NumericLiteral || other?.kind === SK2.PrefixUnaryExpression && other.operator === SK2.MinusToken && other.operand?.kind === SK2.NumericLiteral;
         if (!literal) {
           ok = false;
         }
         return;
       }
-      if (parent?.kind === SK.CallExpression && (parent.arguments ?? []).includes(n)) {
+      if (parent?.kind === SK2.CallExpression && (parent.arguments ?? []).includes(n)) {
         const callee = parent.expression;
-        if (callee?.kind === SK.PropertyAccessExpression && callee.name?.text === "parseToInt") {
+        if (callee?.kind === SK2.PropertyAccessExpression && callee.name?.text === "parseToInt") {
           return;
         }
       }
@@ -49612,18 +50265,18 @@ function gb11UsesAreIntOnly(go, body, param) {
   return ok;
 }
 function gb11Derived(go, param) {
-  const SK = ts.SyntaxKind;
-  if (param?.kind !== SK.Parameter) {
+  const SK2 = ts.SyntaxKind;
+  if (param?.kind !== SK2.Parameter) {
     return void 0;
   }
   if (param.dotDotDotToken !== void 0 || param.initializer !== void 0) {
     return void 0;
   }
-  if (param.name?.kind !== SK.Identifier) {
+  if (param.name?.kind !== SK2.Identifier) {
     return void 0;
   }
   const fn = param.parent;
-  if (fn?.kind !== SK.MethodDeclaration || fn.body === void 0 || fn.name?.kind !== SK.Identifier) {
+  if (fn?.kind !== SK2.MethodDeclaration || fn.body === void 0 || fn.name?.kind !== SK2.Identifier) {
     return void 0;
   }
   if (fn.name.text !== GB11_METHOD) {
@@ -49691,29 +50344,29 @@ function gb11SplitArgs(text) {
   return parts;
 }
 function gb11ArgIsInt64(go, arg) {
-  const SK = ts.SyntaxKind;
-  if (arg?.kind === SK.NumericLiteral) {
+  const SK2 = ts.SyntaxKind;
+  if (arg?.kind === SK2.NumericLiteral) {
     return true;
   }
-  if (arg?.kind === SK.PrefixUnaryExpression && arg.operator === SK.MinusToken && arg.operand?.kind === SK.NumericLiteral) {
+  if (arg?.kind === SK2.PrefixUnaryExpression && arg.operator === SK2.MinusToken && arg.operand?.kind === SK2.NumericLiteral) {
     return true;
   }
   return go.goPrintedArgType(arg) === "int64";
 }
 function gb11CodeArg(go, node, printed) {
-  const SK = ts.SyntaxKind;
+  const SK2 = ts.SyntaxKind;
   const callee = node.expression;
-  if (callee?.kind !== SK.PropertyAccessExpression) {
+  if (callee?.kind !== SK2.PropertyAccessExpression) {
     return void 0;
   }
   if (callee.name?.text !== GB11_METHOD) {
     return void 0;
   }
-  if (callee.expression?.kind !== SK.ThisKeyword) {
+  if (callee.expression?.kind !== SK2.ThisKeyword) {
     return void 0;
   }
   const args = node.arguments ?? [];
-  if (args.length === 0 || args.some((a) => a.kind === SK.SpreadElement)) {
+  if (args.length === 0 || args.some((a) => a.kind === SK2.SpreadElement)) {
     return void 0;
   }
   if (gb11ArgIsInt64(go, args[0])) {
@@ -49878,9 +50531,9 @@ function hx10w9GB11Check() {
 init_esm_shims();
 var SIGN_API_METHODS = { "sign": 1, "fetch2": 1, "request": 1 };
 function signApiParameter(param) {
-  const SK = ts.SyntaxKind;
+  const SK2 = ts.SyntaxKind;
   const fn = param?.parent;
-  if (param?.kind !== SK.Parameter || fn?.kind !== SK.MethodDeclaration || fn.name?.kind !== SK.Identifier) {
+  if (param?.kind !== SK2.Parameter || fn?.kind !== SK2.MethodDeclaration || fn.name?.kind !== SK2.Identifier) {
     return false;
   }
   if (SIGN_API_METHODS[fn.name.text] !== fn.parameters.indexOf(param)) {
@@ -49890,11 +50543,11 @@ function signApiParameter(param) {
     return false;
   }
   const init = param.initializer;
-  return init?.kind === SK.ArrayLiteralExpression && (init.elements ?? []).every((e) => e.kind === SK.StringLiteral);
+  return init?.kind === SK2.ArrayLiteralExpression && (init.elements ?? []).every((e) => e.kind === SK2.StringLiteral);
 }
 function signApiElement(go, node) {
-  const SK = ts.SyntaxKind;
-  if (node?.kind !== SK.ElementAccessExpression || node.expression?.kind !== SK.Identifier || node.argumentExpression?.kind !== SK.NumericLiteral || !/^\d+$/.test(String(node.argumentExpression.text))) {
+  const SK2 = ts.SyntaxKind;
+  if (node?.kind !== SK2.ElementAccessExpression || node.expression?.kind !== SK2.Identifier || node.argumentExpression?.kind !== SK2.NumericLiteral || !/^\d+$/.test(String(node.argumentExpression.text))) {
     return false;
   }
   const decl = go.checkerOrUndefined()?.getSymbolAtLocation(node.expression)?.valueDeclaration?.resolve();
@@ -50013,20 +50666,20 @@ var OWNED_TABLES = {
 };
 var OWNER_CLASS = "BaseExchange";
 function ownedTable(go, node) {
-  const SK = ts.SyntaxKind;
-  if (node?.kind !== SK.PropertyAccessExpression || !Object.prototype.hasOwnProperty.call(OWNED_TABLES, node.name?.text)) {
+  const SK2 = ts.SyntaxKind;
+  if (node?.kind !== SK2.PropertyAccessExpression || !Object.prototype.hasOwnProperty.call(OWNED_TABLES, node.name?.text)) {
     return void 0;
   }
   const checker = go.checkerOrUndefined();
   const decl = checker?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
-  if (decl?.kind !== SK.PropertyDeclaration || decl.parent?.name?.text !== OWNER_CLASS) {
+  if (decl?.kind !== SK2.PropertyDeclaration || decl.parent?.name?.text !== OWNER_CLASS) {
     return void 0;
   }
   return OWNED_TABLES[node.name.text];
 }
 function isWrapperCall(node, name, args) {
-  const SK = ts.SyntaxKind;
-  return node?.kind === SK.CallExpression && node.expression?.kind === SK.PropertyAccessExpression && node.expression.expression?.kind === SK.ThisKeyword && node.expression.name?.text === name && (node.arguments?.length ?? 0) <= args;
+  const SK2 = ts.SyntaxKind;
+  return node?.kind === SK2.CallExpression && node.expression?.kind === SK2.PropertyAccessExpression && node.expression.expression?.kind === SK2.ThisKeyword && node.expression.name?.text === name && (node.arguments?.length ?? 0) <= args;
 }
 function installRfGo5OwnedTables(goTranspiler) {
   const flag = "rfGo5OwnedTablesInstalled";
@@ -50044,16 +50697,16 @@ function installRfGo5OwnedTables(goTranspiler) {
   };
   const printBinary = goTranspiler.printBinaryExpression;
   goTranspiler.printBinaryExpression = function(node, identation) {
-    const SK = ts.SyntaxKind;
-    const table = node.operatorToken?.kind === SK.EqualsToken ? ownedTable(this, node.left) : void 0;
-    if (table !== void 0 && node.parent?.kind === SK.ExpressionStatement) {
+    const SK2 = ts.SyntaxKind;
+    const table = node.operatorToken?.kind === SK2.EqualsToken ? ownedTable(this, node.left) : void 0;
+    if (table !== void 0 && node.parent?.kind === SK2.ExpressionStatement) {
       const right = node.right;
       let value;
       if (isWrapperCall(right, "createSafeDictionary", 1)) {
         value = "map[string]any{}";
       } else if (isWrapperCall(right, "mapToSafeMap", 1) && right.arguments.length === 1) {
         value = this.printNode(right.arguments[0], 0);
-      } else if (right?.kind === SK.PropertyAccessExpression && right.name?.text === node.left.name.text) {
+      } else if (right?.kind === SK2.PropertyAccessExpression && right.name?.text === node.left.name.text) {
         value = this.printNode(right.expression, 0) + "." + table.read + "()";
       } else {
         value = this.printNode(right, 0);
@@ -50075,6 +50728,7 @@ function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoSignTyping(goTranspiler);
   installHx11w8NumParams(goTranspiler);
   installRfGo5OwnedTables(goTranspiler);
+  installCcxtGoTupleSlotReads(goTranspiler);
 }
 
 // src/rustPasses/index.ts
@@ -59256,6 +59910,7 @@ export {
   installCcxtGoLocalTypes,
   installCcxtGoParamTypes,
   installCcxtGoSignTyping,
+  installCcxtGoTupleSlotReads,
   installHx11w8NumParams,
   installRfGo5OwnedTables,
   narrowStrNullLocals,
