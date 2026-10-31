@@ -2942,6 +2942,28 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         return this.GO_MARKET_TABLES[node.name.text];
     }
 
+    // the table an element write lands in: `<recv>.markets[k] = v`, or the same through a const local initialised
+    // from `this.markets` (checker-resolved); the owner is the receiver the Add*Entry method is called on
+    goMarketTableWriteTarget(node): { add: string, owner: any } | undefined {
+        const direct = this.goMarketTable(node);
+        if (direct !== undefined) {
+            return { add: direct.add, owner: node.expression };
+        }
+        if (node?.kind !== SyntaxKind.Identifier) {
+            return undefined;
+        }
+        let declaration: any;
+        try {
+            declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+        } catch (e) {
+            declaration = undefined;
+        }
+        const init: any = (declaration?.kind === SyntaxKind.VariableDeclaration) ? this.goUnwrapParenthesizedNode(declaration.initializer) : undefined;
+        const constant = ((declaration?.parent?.flags ?? 0) & NodeFlags.Const) !== 0;
+        const table = (constant && (init?.expression?.kind === SyntaxKind.ThisKeyword)) ? this.goMarketTable(init) : undefined;
+        return (table === undefined) ? undefined : { add: table.add, owner: init.expression };
+    }
+
     // `recv.<table> = v` as a statement: the field takes a whole new map (nil, an empty map, or the map
     // the right side builds), so a reader holding the old map never sees it change
     goMarketTableWriteText(node): string | undefined {
@@ -5792,9 +5814,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
                 const rhs = this.printNode(right, 0);
                 // For +=, we need to get the current value, add to it, then set it back
                 const currentValue = `${this.ELEMENT_ACCESS_WRAPPER_OPEN}${acc}, ${lastKey}${this.ELEMENT_ACCESS_WRAPPER_CLOSE}`;
-                const compoundTable = (keyStrs.length === 1) ? this.goMarketTable(baseExpr) : undefined;
+                const compoundTable = (keyStrs.length === 1) ? this.goMarketTableWriteTarget(baseExpr) : undefined;
                 if (compoundTable !== undefined) {
-                    return `${this.printNode(baseExpr.expression, 0)}.${compoundTable.add}(${lastKey}, Add(${currentValue}, ${rhs}))`;
+                    return `${this.printNode(compoundTable.owner, 0)}.${compoundTable.add}(${lastKey}, Add(${currentValue}, ${rhs}))`;
                 }
                 const native = (keyStrs.length === 1)
                     ? this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, `Add(${containerStr}[${lastKey}], ${rhs})`, true)
@@ -8744,9 +8766,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     // printer, otherwise undefined and the caller keeps the runtime helper
     printNativeElementAssignment(containerNode, containerStr: string, keyNode, keyStr: string, valueStr: string, compound = false, valueNode?): string | undefined {
         // a published market table is never written in place: the base method copies, adds, reassigns
-        const marketTable = this.goMarketTable(containerNode);
+        const marketTable = this.goMarketTableWriteTarget(containerNode);
         if (marketTable !== undefined) {
-            return compound ? undefined : `${this.printNode(containerNode.expression, 0)}.${marketTable.add}(${keyStr}, ${valueStr})`;
+            return compound ? undefined : `${this.printNode(marketTable.owner, 0)}.${marketTable.add}(${keyStr}, ${valueStr})`;
         }
         // a local typed because its base callee already answers the map: the helper this write printed
         // derefs a pointer value (a *int64 from Parse8601, a *bool read back out of a parsed row), a

@@ -71,6 +71,21 @@ describe ('go market tables are plain map fields', () => {
         expect (out).toContain ('GetValue(this.Markets, ');
         expect (out).not.toMatch (/this\.Markets\[GetValue/);
     });
+    test ('a write through a const local aliasing this.markets copies like the field write', () => {
+        const out = go ('    add (k: string, m: any) {\n        const markets = this.markets;\n        markets[k] = m;\n        const byId = this.markets_by_id;\n        byId[k] = [ m ];\n    }\n');
+        expect (out).toContain ('this.AddMarketsEntry(k, m)');
+        expect (out).toContain ('this.AddMarketsByIdEntry(k, []any{m})');
+        expect (out).not.toMatch (/\b(markets|byId)\[k\] =/);
+        expect (out).not.toContain ('AddElementToObject');
+    });
+    test ('a compound write through the alias copies too', () => {
+        const out = go ('    bump (k: string) {\n        const markets = this.markets;\n        markets[k] += 1;\n    }\n');
+        expect (out).toContain ('this.AddMarketsEntry(k, Add(GetValue(markets, k), 1))');
+    });
+    test ('a local that is not an alias of a market table keeps its own write', () => {
+        const out = go ('    other (k: string, m: any) {\n        const local = this.createSafeDictionary ();\n        local[k] = m;\n        let moved = this.markets;\n        moved = {};\n        moved[k] = m;\n    }\n');
+        expect (out).not.toContain ('AddMarketsEntry');
+    });
     test ('a same-named member of another class is not a market table', () => {
         const out = t ().transpileGo ('class Other {\n    markets: any = {};\n    f (k: string) {\n        this.markets[k] = 1;\n    }\n}\n').content;
         expect (out).not.toContain ('AddMarketsEntry');

@@ -274,6 +274,19 @@ export declare class GoTranspiler extends BaseTranspiler {
     goSafeDictUnboxValue(declaration: any, identation: number): string | undefined;
     goBaseMapCalleeName(name: string): boolean;
     goNodeIsInPredictionTree(node: any): boolean;
+    GO_MARKET_TABLES: {
+        [name: string]: {
+            add: string;
+        };
+    };
+    goMarketTable(node: any): {
+        add: string;
+    } | undefined;
+    goMarketTableWriteTarget(node: any): {
+        add: string;
+        owner: any;
+    } | undefined;
+    goMarketTableWriteText(node: any): string | undefined;
     goBookAccessorRead(initializer: any): boolean;
     goIsBaseMapResultLocal(node: any): boolean;
     goBaseMapResultLocal(initializer: any): boolean;
