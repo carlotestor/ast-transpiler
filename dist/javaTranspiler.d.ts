@@ -110,6 +110,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaFreshMapBaseCall(node: any): boolean;
     javaElementWriteMapLocalType(declaration: any): string | undefined;
     javaBaseMapFieldLocalType(declaration: any): string | undefined;
+    javaObjectValuesLocalType(declaration: any): string | undefined;
     javaLocalUsesKeepContainerType(node: any): boolean;
     javaContainerNeutralIdentifierUse(node: any): boolean;
     javaLocalHasWriteAtAll(node: any): boolean;
