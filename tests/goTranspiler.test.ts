@@ -5016,8 +5016,8 @@ describe('go string concat operands -> defaulted SafeString locals', () => {
         const output = squash(transpiler.transpileGo(local(
             "        const fromId = this.safeString (item, 'from', 'x');\n" +
             "        return fromId + '_' + 'ok';\n")).content);
-        expect(output).toContain('var fromId *string = this.SafeString(item, "from", "x")');
-        expect(output).toContain('return *fromId + "_" + "ok"');
+        expect(output).toContain('var fromId string = *this.SafeString(item, "from", "x")');
+        expect(output).toContain('return fromId + "_" + "ok"');
         expect(output).not.toContain('Add(');
     });
     test('a missing default keeps the helper call', () => {
@@ -5051,7 +5051,8 @@ describe('go string concat operands -> defaulted SafeString locals', () => {
             "        let fromId = this.safeString (item, 'from', 'x');\n" +
             "        fromId = this.safeString (item, 'other', 'y');\n" +
             "        return fromId + '_' + 'ok';\n")).content);
-        expect(output).toContain('return *fromId + "_" + "ok"');
+        expect(output).toContain('fromId = *this.SafeString(item, "other", "y")');
+        expect(output).toContain('return fromId + "_" + "ok"');
         expect(output).not.toContain('Add(');
     });
     test('two defaulted locals deref on both sides of the operator', () => {
@@ -5059,7 +5060,7 @@ describe('go string concat operands -> defaulted SafeString locals', () => {
             "        const first = this.safeString (item, 'a', 'x');\n" +
             "        const second = this.safeString (other, 'b', 'y');\n" +
             "        return first + ':' + second;\n")).content);
-        expect(output).toContain('return *first + ":" + *second');
+        expect(output).toContain('return first + ":" + second');
         expect(output).not.toContain('Add(');
     });
     test('a defaulted call inline in the expression is derefable too', () => {
@@ -7512,7 +7513,7 @@ describe('hx4 G06 length / indexOf on proven non-nil *string', () => {
         "    }\n" +
         "}\n";
         const output = sq(transpiler.transpileGo(input).content);
-        expect(output).toContain('len(*tag)');
+        expect(output).toContain('len(tag)');
         expect(output).toMatch(/Get(Array)?Length\(raw\)/);
         expect(output).not.toContain('len(*raw)');
         expect(output).toContain('if raw == nil { return -1 }'); // pre-existing guarded literal
@@ -7836,5 +7837,48 @@ describe('hx11 rfm-X4 OG03: owner-goroutine base field reads (ws client registry
         const out = run("    watch (url: string): any {\n        delete this.clients[url];\n        return Object.values (this.clients);\n    }\n", null);
         expect(out).toContain('ObjectValues(this.Clients)');
         expect(out).not.toContain('WsClient');
+    });
+});
+
+describe('go literal-defaulted safeString locals are strings', () => {
+    const squash = (output: string) => output.replace(/[\t ]+/g, ' ');
+    const body = (input: string) => squash(transpiler.transpileGo(
+        "class Exchange {\n" +
+        "    safeString (a: any, b: string, c: any): string | undefined { return a; }\n" +
+        "    f (x: any): any { return x; }\n" +
+        "    main (p: any, q: any) {\n" + input +
+        "    }\n" +
+        "}\n").content);
+    test('literal comparisons, concat operands and string methods read the string', () => {
+        const output = body(
+            "        const m = this.safeString (p, 'k', 'd');\n" +
+            "        if (m === 'a') { return 1; }\n" +
+            "        return [ m + 'x', m.split ('-'), m.length ];\n");
+        expect(output).toContain('var m string = *this.SafeString(p, "k", "d")');
+        expect(output).toContain('if m == "a" {');
+        expect(output).toContain('strings.Split(m, "-")');
+        expect(output).not.toContain('*m');
+    });
+    test('literal and defaulted-call writes keep the string', () => {
+        const output = body(
+            "        let m = this.safeString (p, 'k', 'd');\n" +
+            "        m = 'z';\n" +
+            "        m = this.safeString (q, 'j', m);\n" +
+            "        return m + 'x';\n");
+        expect(output).toContain('var m string = *this.SafeString(p, "k", "d")');
+        expect(output).toContain('m = "z"');
+        expect(output).toContain('m = *this.SafeString(q, "j", m)');
+        expect(output).toContain('return m + "x"');
+    });
+    test('a nil test, a return, a call argument, an object value or a nilable write keeps the pointer', () => {
+        for (const use of [ "if (m !== undefined) { return 1; }\n        return m + 'x';", 'return m;', 'this.f (m);\n        return 1;',
+            "return { 'k': m };", "m = this.safeString (q, 'j');\n        return m + 'x';" ]) {
+            const output = body("        let m = this.safeString (p, 'k', 'd');\n        " + use + "\n");
+            expect(output).toContain('var m *string = this.SafeString(p, "k", "d")');
+        }
+    });
+    test('a default that is not a literal keeps the pointer', () => {
+        const output = body("        const m = this.safeString (p, 'k', q);\n        return m + 'x';\n");
+        expect(output).toContain('var m *string = this.SafeString(p, "k", q)');
     });
 });
