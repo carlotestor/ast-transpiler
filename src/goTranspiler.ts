@@ -7887,7 +7887,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         }
         const decl: any = (value?.kind === SyntaxKind.Identifier)
             ? this.checkerOrUndefined()?.getSymbolAtLocation(value)?.valueDeclaration?.resolve() : undefined;
-        if ((decl?.kind !== SyntaxKind.VariableDeclaration) || (decl.name?.kind !== SyntaxKind.Identifier) || !this.goIsCacheStoreSource(decl.initializer)) {
+        // a `const x = new ArrayCache` local is typed by its constructor and later stages type its store
+        if ((decl?.kind !== SyntaxKind.VariableDeclaration) || (decl.name?.kind !== SyntaxKind.Identifier)
+            || (decl.initializer?.kind === SyntaxKind.NewExpression) || !this.goIsCacheStoreSource(decl.initializer)) {
             return false;
         }
         const scope = this.goEnclosingFunction(decl);
@@ -7895,9 +7897,13 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             return false;
         }
         let proven = true;
+        let bindings = 0;
         const visit = (n) => {
             if (!proven) {
                 return;
+            }
+            if ((n.kind === SyntaxKind.VariableDeclaration) && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === decl.name.text)) {
+                bindings += 1; // a name bound twice in one function is no single-binding proof
             }
             if ((n.kind === SyntaxKind.Identifier) && (n.text === decl.name.text) && (n !== decl.name) && (this.goRebindingTargetOf(n) !== undefined)) {
                 const parent = this.goRebindingTargetOf(n);
@@ -7908,7 +7914,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             n.forEachChild(visit);
         };
         visit(scope);
-        return proven;
+        return proven && (bindings === 1);
     }
 
     // `this.Trades[k] = cache`: native for a string key, and for a *string key either bare (a guard or an

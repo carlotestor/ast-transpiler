@@ -16459,7 +16459,7 @@ ${iden}}`;
       return this.goIsCacheStoreSource(value);
     }
     const decl = value?.kind === SyntaxKind5.Identifier ? this.checkerOrUndefined()?.getSymbolAtLocation(value)?.valueDeclaration?.resolve() : void 0;
-    if (decl?.kind !== SyntaxKind5.VariableDeclaration || decl.name?.kind !== SyntaxKind5.Identifier || !this.goIsCacheStoreSource(decl.initializer)) {
+    if (decl?.kind !== SyntaxKind5.VariableDeclaration || decl.name?.kind !== SyntaxKind5.Identifier || decl.initializer?.kind === SyntaxKind5.NewExpression || !this.goIsCacheStoreSource(decl.initializer)) {
       return false;
     }
     const scope = this.goEnclosingFunction(decl);
@@ -16467,9 +16467,13 @@ ${iden}}`;
       return false;
     }
     let proven = true;
+    let bindings = 0;
     const visit = (n) => {
       if (!proven) {
         return;
+      }
+      if (n.kind === SyntaxKind5.VariableDeclaration && n.name?.kind === SyntaxKind5.Identifier && n.name.text === decl.name.text) {
+        bindings += 1;
       }
       if (n.kind === SyntaxKind5.Identifier && n.text === decl.name.text && n !== decl.name && this.goRebindingTargetOf(n) !== void 0) {
         const parent = this.goRebindingTargetOf(n);
@@ -16479,7 +16483,7 @@ ${iden}}`;
       n.forEachChild(visit);
     };
     visit(scope);
-    return proven;
+    return proven && bindings === 1;
   }
   // `this.Trades[k] = cache`: native for a string key, and for a *string key either bare (a guard or an
   // earlier exit proves it non-nil) or under `if k != nil {`, the helper's skip of a nil key
