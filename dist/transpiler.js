@@ -3388,7 +3388,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const builtFromLiteral = this.csharpLiteralDeclaresKey(node, expression, key, isNumberKey);
     const guarded = !builtFromLiteral && this.csharpKeyPresenceGuarded(node, expression, key);
     if (!builtFromLiteral && !guarded) {
-      return this.csharpNativeDeclaredDictionaryRead(expression, argumentExpression) ?? this.csharpDeclaredLocalResolverRowRead(expression, argumentExpression) ?? this.csharpDeclaredCollectionRead(node, expression, argumentExpression, isStringKey, isNumberKey) ?? this.csharpProvenDictionaryRead(node, expression, argumentExpression, isStringKey) ?? this.csharpMissingKeyFieldRead(expression, argumentExpression, isStringKey);
+      return this.csharpNativeDeclaredDictionaryRead(expression, argumentExpression) ?? this.csharpDeclaredLocalResolverRowRead(expression, argumentExpression) ?? this.csharpDeclaredCollectionRead(node, expression, argumentExpression, isStringKey, isNumberKey) ?? this.csharpDeclaredStringIndexRead(node, expression, argumentExpression, isNumberKey) ?? this.csharpProvenDictionaryRead(node, expression, argumentExpression, isStringKey) ?? this.csharpMissingKeyFieldRead(expression, argumentExpression, isStringKey);
     }
     const receiver = this.printNode(expression, 0);
     const printedKey = this.printNode(argumentExpression, 0);
@@ -3518,6 +3518,26 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return `(${receiver} != null && ${index} < ${receiver}.Count ? ${receiver}[${index}] : null)`;
     }
     return void 0;
+  }
+  // A literal-index read on a local whose emitted C# declaration is a `string` / `string?` (the type
+  // csharpStringReceiverType names, build-layer retypes included): the string indexer throws on a null
+  // receiver and past the end where GetValue answers null, so the native form carries both tests and
+  // re-boxes the char as the helper's `.ToString ()` string. Only an Identifier qualifies (read up to
+  // three times) and only a plain read (never a write target, delete or ++/--).
+  csharpDeclaredStringIndexRead(node, expression, argumentExpression, isNumberKey) {
+    if (!isNumberKey || !isIdentifier(expression) || !this.csharpHx4IsPlainRead(node)) {
+      return void 0;
+    }
+    const declared = this.csharpStringReceiverType(expression);
+    if (declared !== "string" && declared !== "string?") {
+      return void 0;
+    }
+    const index = Number(argumentExpression.text);
+    if (!Number.isInteger(index) || index < 0) {
+      return void 0;
+    }
+    const receiver = this.printNode(expression, 0);
+    return `(${receiver} != null && ${index} < ${receiver}.Length ? ${receiver}[${index}].ToString () : null)`;
   }
   // The C# collection type a local read was DECLARED with: printed by this printer, or recorded by
   // embedding build layer for a declaration it retyped (csharpDeclaredLocalTypeResolver). The
