@@ -15563,8 +15563,9 @@ ${indent}}`);
   goWsCacheArgText(node) {
     return this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(node, 0)).trim();
   }
-  // the key of a store or membership test: a `*string` local the checker narrowed, a nil test or an exiting nil test
-  // proves, or a literal-defaulted SafeString write, prints through the deref; any other key prints as is
+  // the key of a store or membership test: a `*string` local an enclosing nil test, an exiting nil test or a literal-defaulted
+  // SafeString write proves non-nil prints through the deref; any other key (the checker's own narrowing included: a
+  // SafeSymbol result is typed string and may be nil) prints as is, WsCacheHas/Set deref a boxed pointer themselves
   goWsCacheKeyText(node) {
     let inner = node;
     while (inner?.kind === SyntaxKind5.ParenthesizedExpression || inner?.kind === SyntaxKind5.AsExpression) {
@@ -15576,7 +15577,7 @@ ${indent}}`);
       while (statement !== void 0 && !isStatementNode(statement)) {
         statement = statement.parent;
       }
-      if (this.goNilProvenStringDeref(inner) || this.goDefaultedSafeStringLocal(inner) || this.goHasEnclosingNilGuard(inner) || this.goInOpPointerKeyProvenNonNil(statement, inner)) {
+      if (this.goDefaultedSafeStringLocal(inner) || this.goHasEnclosingNilGuard(inner) || this.goInOpPointerKeyProvenNonNil(statement, inner)) {
         return "*" + text;
       }
     }
