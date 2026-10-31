@@ -9485,6 +9485,7 @@ var GO_FIELD_CONTAINER_TYPES_NATIVE = Object.fromEntries([
   ...GO_SYNC_MAP_FIELDS.filter((name) => name !== "Options").map((name) => [name, "*sync.Map"])
 ]);
 var GO_PLAIN_VALUED_MAP_FIELDS = ["Options"];
+var GO_PREDICTION_CACHE_FIELDS = ["outcomes", "outcomes_by_id", "events", "events_by_slug"];
 var GO_ARITHMETIC_KINDS = [
   SyntaxKind5.PlusToken,
   SyntaxKind5.MinusToken,
@@ -15902,6 +15903,80 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   goIsPlainValuedMapField(node) {
     return this.goFieldContainerTypeNative(node) === "map[string]any" && GO_PLAIN_VALUED_MAP_FIELDS.includes(this.transformPropertyAccessExpressionName(node.name.text, node.name));
   }
+  // `this.outcomes` / `this.outcomes_by_id` / `this.events` / `this.events_by_slug` declared by the PredictionExchange class
+  goPredictionCacheField(node) {
+    if (node?.kind !== SyntaxKind5.PropertyAccessExpression || node.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return void 0;
+    }
+    const name = node.name?.text;
+    if (!GO_PREDICTION_CACHE_FIELDS.includes(name)) {
+      return void 0;
+    }
+    let declarations;
+    try {
+      declarations = this.checkerOrUndefined()?.getSymbolAtLocation(node.name)?.declarations?.map((d) => d.resolve());
+    } catch (e) {
+      return void 0;
+    }
+    const declaredByBase = declarations !== void 0 && declarations.length > 0 && declarations.every((d) => d?.kind === SyntaxKind5.PropertyDeclaration && d.parent?.kind === SyntaxKind5.ClassDeclaration && d.parent.name?.text === "PredictionExchange");
+    return declaredByBase ? name : void 0;
+  }
+  // the cache map is non-nil at `site`: an earlier `if (this.f === undefined) { this.f = {…} }` in an enclosing block, and no
+  // write of the field in this function other than an object literal (a nil map write would panic where the helper no-oped)
+  goPredictionCacheInitialized(fieldNode, site) {
+    const name = this.goPredictionCacheField(fieldNode);
+    const scope = this.goEnclosingFunction(site);
+    if (name === void 0 || scope === void 0 || scope.kind === SyntaxKind5.SourceFile) {
+      return false;
+    }
+    const writesField = (n) => n.kind === SyntaxKind5.BinaryExpression && n.operatorToken?.kind === SyntaxKind5.EqualsToken && n.left?.kind === SyntaxKind5.PropertyAccessExpression && n.left.expression?.kind === SyntaxKind5.ThisKeyword && n.left.name?.text === name;
+    let literalOnly = true;
+    let initialized = false;
+    const visit = (n) => {
+      if (writesField(n)) {
+        const right = this.goUnwrapParenthesizedNode(n.right);
+        literalOnly = literalOnly && right?.kind === SyntaxKind5.ObjectLiteralExpression;
+      }
+      n.forEachChild(visit);
+    };
+    scope.forEachChild(visit);
+    if (!literalOnly) {
+      return false;
+    }
+    for (let block = site.parent; block !== void 0 && block !== scope; block = block.parent) {
+      if (block.kind !== SyntaxKind5.Block) {
+        continue;
+      }
+      for (const statement of block.statements) {
+        if (statement.end > site.pos) {
+          break;
+        }
+        if (statement.kind !== SyntaxKind5.IfStatement) {
+          continue;
+        }
+        const test = this.goUnwrapParenthesizedNode(statement.expression);
+        const isNilTest = test?.kind === SyntaxKind5.BinaryExpression && (test.operatorToken.kind === SyntaxKind5.EqualsEqualsEqualsToken || test.operatorToken.kind === SyntaxKind5.EqualsEqualsToken) && test.left?.kind === SyntaxKind5.PropertyAccessExpression && test.left.expression?.kind === SyntaxKind5.ThisKeyword && test.left.name?.text === name && (test.right?.kind === SyntaxKind5.NullKeyword || test.right?.kind === SyntaxKind5.Identifier && test.right.text === "undefined");
+        const then = statement.thenStatement;
+        const stores = then?.kind === SyntaxKind5.Block && then.statements.some((st) => st.kind === SyntaxKind5.ExpressionStatement && st.expression?.kind === SyntaxKind5.BinaryExpression && writesField(st.expression) && this.goUnwrapParenthesizedNode(st.expression.right)?.kind === SyntaxKind5.ObjectLiteralExpression);
+        initialized = initialized || isNilTest && stores;
+      }
+    }
+    return initialized;
+  }
+  // `this.<cache>[*key] = value` for a nil-guarded *string key and a non-pointer value on an initialised cache: the helper's map
+  // branch minus its derefs (a nil key was a no-op, the guard is the same no-op; the value is stored as it stands)
+  printNativePredictionCacheWrite(containerNode, containerStr, keyNode, keyStr, valueStr, valueNode) {
+    if (valueNode === void 0 || this.goPredictionCacheField(containerNode) === void 0 || valueStr.includes("\n")) {
+      return void 0;
+    }
+    if (this.goValueMayHoldPointer(valueNode) || !this.goPredictionCacheInitialized(containerNode, containerNode)) {
+      return void 0;
+    }
+    if (this.goIsStringKeyExpression(keyNode)) {
+      return `${containerStr}[${keyStr}] = ${valueStr}`;
+    }
+    return this.goIsNilGuardedStringPointerKey(keyNode) ? `${containerStr}[*${keyStr}] = ${valueStr}` : void 0;
+  }
   goIsStringKeyExpression(node) {
     if (node.kind === SyntaxKind5.StringLiteral || node.kind === SyntaxKind5.NoSubstitutionTemplateLiteral) {
       return true;
@@ -15975,6 +16050,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   // native `container[key] = value` when the receiver's Go type is proved by the
   // printer, otherwise undefined and the caller keeps the runtime helper
   printNativeElementAssignment(containerNode, containerStr, keyNode, keyStr, valueStr, compound = false, valueNode) {
+    if (!compound) {
+      const cacheWrite = this.printNativePredictionCacheWrite(containerNode, containerStr, keyNode, keyStr, valueStr, valueNode);
+      if (cacheWrite !== void 0) {
+        return cacheWrite;
+      }
+    }
     if (this.goIsBaseMapResultLocal(containerNode) && !this.goMapWriteValueIsNotPointer(valueNode)) {
       return void 0;
     }
@@ -16845,6 +16926,10 @@ ${indent}}`);
       if (inner === void 0) {
         return void 0;
       }
+      const parentOp = node.parent?.kind === SyntaxKind5.BinaryExpression ? node.parent.operatorToken?.kind : void 0;
+      if (node.expression?.kind === SyntaxKind5.BinaryExpression && /^this\.[A-Za-z_]\w* != nil$/.test(inner) && (parentOp === SyntaxKind5.AmpersandAmpersandToken || parentOp === SyntaxKind5.BarBarToken)) {
+        return inner;
+      }
       return inner.startsWith("(") && this.isWholePrintedCall(inner, 0) ? inner : `(${inner})`;
     }
     const printed = this.printNode(node, 0);
@@ -17201,6 +17286,9 @@ ${indent}}`);
   // true when the operand prints as a declared Go map or slice (never a scalar or a pointer):
   // `x == nil` is then the native absent-value test the helper reproduced
   goDeclaredContainerOperand(node) {
+    if (this.goPredictionCacheField(node) !== void 0) {
+      return "map[string]any";
+    }
     if (node?.kind !== SyntaxKind5.Identifier) {
       return void 0;
     }
@@ -17212,6 +17300,14 @@ ${indent}}`);
       return goType;
     }
     return void 0;
+  }
+  // `x == nil` on a declared map operand; a prediction cache field is a plain selector, so under &&/|| it needs no parentheses
+  goPredictionCacheNilTest(operand, text, isEq) {
+    const test = isEq ? `${text} == nil` : `${text} != nil`;
+    const parent = operand?.parent;
+    const parentOp = parent?.kind === SyntaxKind5.BinaryExpression ? parent.parent?.operatorToken?.kind : void 0;
+    const bare = this.goPredictionCacheField(operand) !== void 0 && parent?.kind === SyntaxKind5.BinaryExpression && parent.parent?.kind === SyntaxKind5.BinaryExpression && (parentOp === SyntaxKind5.AmpersandAmpersandToken || parentOp === SyntaxKind5.BarBarToken);
+    return bare ? test : `(${test})`;
   }
   printInlineEquality(left, right, leftText, rightText, isEq) {
     const lPtr = this.goPointerTypeOfExpression(left, leftText) !== void 0;
@@ -17227,10 +17323,10 @@ ${indent}}`);
       return isEq ? `(${leftText} == nil)` : `(${leftText} != nil)`;
     }
     if (!lPtr && !rPtr && lFam === void 0 && rFam === "nil" && this.goDeclaredContainerOperand(left) !== void 0) {
-      return isEq ? `(${leftText} == nil)` : `(${leftText} != nil)`;
+      return this.goPredictionCacheNilTest(left, leftText, isEq);
     }
     if (!lPtr && !rPtr && rFam === void 0 && lFam === "nil" && this.goDeclaredContainerOperand(right) !== void 0) {
-      return isEq ? `(${rightText} == nil)` : `(${rightText} != nil)`;
+      return this.goPredictionCacheNilTest(right, rightText, isEq);
     }
     if (lPtr && rPtr) {
       const lPointee = this.goPointerTypeOfExpression(left, leftText);
@@ -19654,13 +19750,16 @@ ${this.getIden(identation)}PanicOnError(${leftParsed})`;
   // the left is implied and dropping it cannot change the result.
   goDropRedundantNilGuard(leftVar, rightVar) {
     const guard = /^\(([A-Za-z_]\w*) != nil\)$/.exec(leftVar);
-    if (guard === null) {
+    if (guard !== null) {
+      if (rightVar.startsWith(`(${guard[1]} != nil && `)) {
+        return rightVar;
+      }
       return void 0;
     }
-    if (rightVar.startsWith(`(${guard[1]} != nil && `)) {
-      return rightVar;
-    }
-    return void 0;
+    const field = /^\(?(this\.[A-Za-z_]\w*) != nil\)?$/;
+    const l = field.exec(leftVar);
+    const r = field.exec(rightVar);
+    return l !== null && r !== null && l[1] === r[1] ? `${l[1]} != nil` : void 0;
   }
   printTryStatement(node, identation) {
     let tryBody = node.tryBlock.statements.map((s) => {
@@ -19794,7 +19893,7 @@ ${tryBodyBlock}
       case SyntaxKind5.Identifier:
         return this.goDeclaredTypeOfIdentifier(node) ?? this.g01MapParamType(node);
       case SyntaxKind5.PropertyAccessExpression:
-        return this.goIsPlainValuedMapField(node) ? "map[string]any" : void 0;
+        return this.goIsPlainValuedMapField(node) || this.goPredictionCacheField(node) !== void 0 ? "map[string]any" : void 0;
     }
     return void 0;
   }
@@ -20105,7 +20204,8 @@ ${this.getIden(level)}}()`;
       return boundedRead;
     }
     if (this.goIndexableTypeOf(baseExpr, containerStr) === "map[string]any") {
-      if (this.goKeyIsString(keys[0], keyStrs[0]) && !this.isGoElementAccessAssignmentTarget(node) && !this.goMarketComparisonElementRead(node)) {
+      const cacheLoopKey = this.goPredictionCacheField(baseExpr) !== void 0 && keys[0]?.kind === SyntaxKind5.ElementAccessExpression && this.goLoopBoundedStringElementType(keys[0], keyStrs[0]) === "string";
+      if ((this.goKeyIsString(keys[0], keyStrs[0]) || cacheLoopKey) && !this.isGoElementAccessAssignmentTarget(node) && !this.goMarketComparisonElementRead(node)) {
         return this.goElementAccessChain(`${containerStr}[${keyStrs[0]}]`, keyStrs);
       }
       if (this.goIsDerefStringKeyExpression(keys[0]) && !containerStr.includes("\n") && !this.isGoElementAccessAssignmentTarget(node)) {
