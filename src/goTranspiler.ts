@@ -835,6 +835,12 @@ export class GoTranspiler extends BaseTranspiler {
     // `remove`; owner-side methods (`ownerSideMethods`, TS method-name patterns) keep the field.
     // Absent config = no rewrite. JSON-serializable: the config crosses the worker boundary.
     goOwnedField: { field: string; declaredIn: string; snapshot: string; remove: string; ownerSide: RegExp[] } | undefined;
+    // ===== RF-go-6-F (config) =====
+    // per tuple producer the Go type of each slot (`HandleOptionIntegerAndParams` -> [ '*int64' ]); a ccxt runtime fact
+    goTupleSlotTypes: { [producer: string]: string[] } = {};
+    // producer -> index of its default-value argument: an integer-literal default selects the value form,
+    // which returns a Go pair instead of the `[]any` holder
+    goTupleValueDefaultArg: { [producer: string]: number } = {};
     // array literals the current print opens as a Go slice (set by the call-argument rule)
     goSliceLiteralTypes: Map<any, string> = new Map<any, string>();
     // installed by the ccxt build: GetArg alias -> Go types, and the audited consumer table
@@ -908,6 +914,8 @@ export class GoTranspiler extends BaseTranspiler {
             ownerSide: (owned['ownerSideMethods'] ?? []).map((p: string) => new RegExp(p)),
         };
         this.generatedListCallees = new Set<string>(config['generatedListCallees'] ?? []); // RF-go-6-C
+        this.goTupleSlotTypes = config['goTupleSlotTypes'] ?? {};
+        this.goTupleValueDefaultArg = config['goTupleValueDefaultArg'] ?? {};
     }
 
     initConfig() {
@@ -7978,6 +7986,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             // B-02: a parameter the call-site proof typed prints its native Go type
             return this.goNativeParameterType(decl);
         }
+        if (decl.kind === SyntaxKind.BindingElement) {
+            return this.goRf6fTupleSlotPointerType(decl); // RF-go-6-F
+        }
         if (decl.kind !== SyntaxKind.VariableDeclaration || decl.name?.kind !== SyntaxKind.Identifier) {
             return undefined;
         }
@@ -8165,6 +8176,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         if (this.goIsBaseMapResultLocal(containerNode) && !this.goMapWriteValueIsNotPointer(valueNode)) {
             return undefined;
         }
+        valueStr = this.goRf6fSlotStoreText(valueNode, valueStr); // RF-go-6-F
         const containerType = this.goElementAssignmentContainerType(containerNode, containerStr);
         const fieldType = this.goFieldContainerTypeNative(containerNode);
         if ((fieldType !== undefined) || (containerType === 'map[string]any')) {
@@ -10781,6 +10793,85 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return undefined;
     }
 
+    // ===== RF-go-6-F =====
+    // a destructured tuple slot whose producer's Go slot type is `*int64` (the checker types the slot
+    // `number | undefined`): the local is declared `*int64` and read natively.
+    // `*int64` when this binding element is slot i of a `this.<producer>(..)` tuple whose table row names
+    // `*int64` there, the checker types the slot `number | undefined`, the local is declared at the top
+    // of its function, never written, and every read is a nil test or sits under a dominating non-nil guard
+    goRf6fTupleSlotCache = new Map<any, string | undefined>();
+    goRf6fTupleSlotPointerType(element): string | undefined {
+        if (this.goRf6fTupleSlotCache.has(element)) {
+            return this.goRf6fTupleSlotCache.get(element);
+        }
+        this.goRf6fTupleSlotCache.set(element, undefined);
+        const result = this.goRf6fTupleSlotPointerTypeOf(element);
+        this.goRf6fTupleSlotCache.set(element, result);
+        return result;
+    }
+
+    goRf6fTupleSlotPointerTypeOf(element): string | undefined {
+        const checker: any = this.checkerOrUndefined();
+        const pattern: any = element?.parent;
+        const holder: any = pattern?.parent;
+        if ((checker === undefined) || (element?.kind !== SyntaxKind.BindingElement) || (pattern?.kind !== SyntaxKind.ArrayBindingPattern)
+            || (holder?.kind !== SyntaxKind.VariableDeclaration) || (holder.name !== pattern)
+            || (element.dotDotDotToken !== undefined) || (element.initializer !== undefined) || (element.name?.kind !== SyntaxKind.Identifier)) {
+            return undefined;
+        }
+        const producer = this.goTupleBindingProducerName(holder);
+        const index = pattern.elements.indexOf(element);
+        const slotType = (producer === undefined) ? undefined : this.goTupleSlotTypes[producer]?.[index];
+        const scope: any = this.goEnclosingFunction(element);
+        if ((slotType !== '*int64') || (scope === undefined) || (holder.parent?.parent?.parent !== scope.body)) {
+            return undefined;
+        }
+        const defaultAt = this.goTupleValueDefaultArg[producer as string];
+        const defaultArg: any = (defaultAt === undefined) ? undefined : holder.initializer?.arguments?.[defaultAt];
+        const literal: any = (defaultArg?.kind === SyntaxKind.PrefixUnaryExpression) ? defaultArg.operand : defaultArg;
+        if ((literal?.kind === SyntaxKind.NumericLiteral) || this.goTypeNameIsShadowed(scope, '*int64')) {
+            return undefined;
+        }
+        const name = element.name.text;
+        const unread = this.hasNodeWhere(scope, (n: any) => {
+            if ((n.kind !== SyntaxKind.Identifier) || (n.text !== name) || (n === element.name)) {
+                return (n !== element) && (n.kind === SyntaxKind.BindingElement || n.kind === SyntaxKind.VariableDeclaration || n.kind === SyntaxKind.Parameter)
+                    && (n.name?.kind === SyntaxKind.Identifier) && (n.name.text === name); // a shadowing binding
+            }
+            const parent: any = this.goUnwrapParenthesizedNode(n)?.parent;
+            if (((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === n)
+                    && (parent.operatorToken.kind >= SyntaxKind.FirstAssignment) && (parent.operatorToken.kind <= SyntaxKind.LastAssignment))
+                || (parent?.kind === SyntaxKind.PrefixUnaryExpression) && (parent.operator !== SyntaxKind.ExclamationToken)
+                || (parent?.kind === SyntaxKind.PostfixUnaryExpression) || (parent?.kind === SyntaxKind.ArrayLiteralExpression)
+                || (parent?.kind === SyntaxKind.SpreadElement)) {
+                return true; // a write, or a destructuring target
+            }
+            const nilTest = (parent?.kind === SyntaxKind.BinaryExpression) && [SyntaxKind.EqualsEqualsToken, SyntaxKind.EqualsEqualsEqualsToken,
+                SyntaxKind.ExclamationEqualsToken, SyntaxKind.ExclamationEqualsEqualsToken].includes(parent.operatorToken.kind)
+                && this.goIsNilLiteral((parent.left === n) ? parent.right : parent.left);
+            // RF-go-6-F: `i < slot` is a nil-safe native read (a nil slot compares false)
+            const ordered = (parent?.kind === SyntaxKind.BinaryExpression) && [SyntaxKind.LessThanToken, SyntaxKind.LessThanEqualsToken,
+                SyntaxKind.GreaterThanToken, SyntaxKind.GreaterThanEqualsToken].includes(parent.operatorToken.kind);
+            return !nilTest && !ordered && !this.goHasEnclosingNilGuard(n) && !this.gp15HasExitingNilGuard(n);
+        });
+        return unread ? undefined : '*int64';
+    }
+
+    // the helper this store replaces stores derefScalar(value): a guarded `*int64` tuple-slot local stores its value
+    goRf6fSlotStoreText(valueNode, valueStr: string): string {
+        const value: any = this.goUnwrapParenthesizedNode(valueNode);
+        const declaration: any = (value?.kind === SyntaxKind.Identifier)
+            ? this.checkerOrUndefined()?.getSymbolAtLocation(value)?.valueDeclaration?.resolve() : undefined;
+        return ((declaration?.kind === SyntaxKind.BindingElement) && (this.goRf6fTupleSlotPointerType(declaration) === '*int64')
+            && (this.goHasEnclosingNilGuard(value) || this.gp15HasExitingNilGuard(value))) ? '*' + valueStr : valueStr;
+    }
+
+    goRf6fTupleSlotPointerLines(name: string, holder: string, index: number, iden: string): string {
+        return iden + 'var ' + name + ' *int64 = nil\n' + iden + 'if p, ok := ' + holder + '[' + index + '].(*int64); ok {\n'
+            + iden + '\t' + name + ' = p\n' + iden + '}';
+    }
+    // ===== end RF-go-6-F =====
+
     // a typed slot local is only printed when every later use reads it as that type: a write, an
     // address, a switch/case subject or an element-access index all need the box
     goTupleSlotNameIsSafe(nameNode: any, declaration: any): boolean {
@@ -10879,6 +10970,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return elements.map((element: any, index: number) => {
             const name = this.printNode(element.name, 0);
             const unbox = (element.name?.kind === SyntaxKind.Identifier) ? this.goTupleSlotUnbox(element) : undefined;
+            if (nativeBinding && (this.goRf6fTupleSlotPointerType(element) === '*int64')) {
+                return this.goRf6fTupleSlotPointerLines(name, holder, index, iden); // RF-go-6-F
+            }
             if (!sliceHolder || (unbox === undefined) || !this.goTupleSlotNameIsSafe(element.name, declaration)) {
                 return iden + name + ' := GetValue(' + holder + ', ' + index + ')';
             }
