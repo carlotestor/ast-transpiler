@@ -23120,6 +23120,10 @@ ${this.getIden(identation)}}}`;
       if (inlined !== void 0) {
         return inlined;
       }
+      const declaredBox = this.printDeclaredBoxArithmetic(node, left, right, leftText, rightText, op);
+      if (declaredBox !== void 0) {
+        return declaredBox;
+      }
       if (op === SyntaxKind6.PlusEqualsToken) {
         return `${leftText} = Helpers.add(${leftText}, ${rightText})`;
       }
@@ -23367,7 +23371,7 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     const index = this.printNode(key, 0);
-    if (index.includes("Helpers.") || index.includes("()")) {
+    if (index.includes("Helpers.") || index.includes("()") || index.includes(" ? ")) {
       return void 0;
     }
     if (/^[A-Za-z_$][\w$]*$/.test(index)) {
@@ -24308,6 +24312,140 @@ ${this.getIden(identation)}}}`;
       scanOuter(body);
     }
     return safe;
+  }
+  // ---- declared-box arithmetic (hx11 RFM-J2 leaf C) ----
+  // `Helpers.add/subtract/multiply/divide` on operands whose DECLARED Java type (the embedding layer's
+  // javaDeclaredLocalTypeResolver, or a Long core parameter) is Long/long/Integer/int/Double/double, or an
+  // integer literal. Every helper answers `null` for a null operand, so a boxed operand's null arm is
+  // the explicit ternary; integral operands print widened (`((long) i)`, `1L`) because the helpers
+  // normalize Integer to Long; a double operand promotes natively. `multiply` stays integral-only
+  // (it re-boxes an integral double product as Long), `+ - *` on a double keep `double` boxes.
+  // 'longbox' | 'longprim' | 'intbox' | 'intprim' | 'doublebox' | 'doubleprim' | 'intlit' | 'longlit'
+  javaDeclaredBoxOperandKind(node, text) {
+    let inner = node;
+    while (inner !== void 0 && (isParenthesizedExpression2(inner) || isAsExpression2(inner) || inner.kind === SyntaxKind6.NonNullExpression)) {
+      inner = inner.expression;
+    }
+    if (inner === void 0) {
+      return void 0;
+    }
+    if (isNumericLiteral3(inner)) {
+      const kind = this.javaIntegerLiteralKind(inner);
+      return kind === void 0 ? void 0 : kind === "long" ? "longlit" : "intlit";
+    }
+    if (!isIdentifier2(inner) || this.javaStripPrintedParens(text) !== String(inner.text) || !this.javaIdentifierPrintsDeclaredName(inner)) {
+      return void 0;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(inner);
+    if (declaration !== void 0 && !this.javaIdentifierKeepsDeclaredName(inner)) {
+      return void 0;
+    }
+    let declared;
+    if (declaration !== void 0) {
+      try {
+        declared = this.javaDeclaredTypeOfDeclaration(declaration);
+      } catch (e) {
+        declared = void 0;
+      }
+      if (declared === void 0 && this.javaLongParameterRead(inner)) {
+        declared = "Long";
+      }
+    } else if (typeof this.javaBindingElementTypeResolver === "function") {
+      const symbol = this.getChecker().getSymbolAtLocation(inner);
+      const element = symbol?.valueDeclaration?.resolve();
+      if (element?.kind === SyntaxKind6.BindingElement && element.name?.text === inner.text) {
+        try {
+          declared = this.javaBindingElementTypeResolver(element);
+        } catch (e) {
+          declared = void 0;
+        }
+      }
+    }
+    const kinds = {
+      Long: "longbox",
+      long: "longprim",
+      Integer: "intbox",
+      int: "intprim",
+      Double: "doublebox",
+      double: "doubleprim"
+    };
+    return declared === void 0 ? void 0 : kinds[declared.replace(/^final\s+/, "").trim()];
+  }
+  javaStripPrintedParens(text) {
+    let value = text.trim();
+    while (value.startsWith("(") && value.endsWith(")")) {
+      let depth = 0;
+      let closesAtEnd = true;
+      for (let i = 0; i < value.length; i++) {
+        if (value[i] === "(") {
+          depth++;
+        } else if (value[i] === ")") {
+          depth--;
+          if (depth === 0 && i < value.length - 1) {
+            closesAtEnd = false;
+            break;
+          }
+        }
+      }
+      if (!closesAtEnd) {
+        break;
+      }
+      value = value.slice(1, -1).trim();
+    }
+    return value;
+  }
+  // the value is read as itself: a ternary arm (`c ? (a + b) : 1.5` would binary-promote the boxed
+  // arm and unbox a null) or a member-access receiver keeps the helper's Object box
+  javaArithmeticResultIsBoxSensitive(node) {
+    let child = node;
+    let parent = node?.parent;
+    while (parent !== void 0 && isParenthesizedExpression2(parent)) {
+      child = parent;
+      parent = parent.parent;
+    }
+    if (parent === void 0) {
+      return false;
+    }
+    if (parent.kind === SyntaxKind6.ConditionalExpression) {
+      return parent.condition !== child;
+    }
+    return (isPropertyAccessExpression2(parent) || isElementAccessExpression3(parent)) && parent.expression === child;
+  }
+  printDeclaredBoxArithmetic(node, left, right, leftText, rightText, op) {
+    const operator = op === SyntaxKind6.PlusToken ? "+" : op === SyntaxKind6.MinusToken ? "-" : op === SyntaxKind6.AsteriskToken ? "*" : op === SyntaxKind6.SlashToken ? "/" : void 0;
+    if (operator === void 0 || this.javaArithmeticResultIsBoxSensitive(node)) {
+      return void 0;
+    }
+    const leftKind = this.javaDeclaredBoxOperandKind(left, leftText);
+    const rightKind = this.javaDeclaredBoxOperandKind(right, rightText);
+    if (leftKind === void 0 || rightKind === void 0) {
+      return void 0;
+    }
+    const isLiteral = (kind) => kind === "intlit" || kind === "longlit";
+    if (isLiteral(leftKind) && isLiteral(rightKind)) {
+      return void 0;
+    }
+    const isDouble = (kind) => kind === "doublebox" || kind === "doubleprim";
+    const hasDouble = isDouble(leftKind) || isDouble(rightKind);
+    if (hasDouble && operator === "*") {
+      return void 0;
+    }
+    if (hasDouble && (operator === "+" || operator === "-") && (leftKind.endsWith("box") || rightKind.endsWith("box"))) {
+      return void 0;
+    }
+    const texts = [this.javaStripPrintedParens(leftText), this.javaStripPrintedParens(rightText)];
+    const kinds = [leftKind, rightKind];
+    const asLong = (i) => {
+      if (kinds[i] === "longbox" || kinds[i] === "longprim" || kinds[i] === "longlit") {
+        return texts[i];
+      }
+      return kinds[i] === "intlit" ? `${texts[i]}L` : `((long) ${texts[i]})`;
+    };
+    const asDouble = (i) => isDouble(kinds[i]) ? texts[i] : `((double) ${texts[i]})`;
+    const wide = (i) => operator === "/" || hasDouble ? asDouble(i) : asLong(i);
+    const expression = `(${wide(0)} ${operator} ${wide(1)})`;
+    const boxes = kinds.map((kind, i) => kind.endsWith("box") ? texts[i] : void 0).filter((text, i, all) => text !== void 0 && all.indexOf(text) === i);
+    return boxes.length === 0 ? expression : `((${boxes.map((box) => `${box} == null`).join(" || ")}) ? null : ${expression})`;
   }
   printInlineHelperArithmetic(left, right, leftText, rightText, op) {
     const isPlus = op === SyntaxKind6.PlusToken || op === SyntaxKind6.PlusEqualsToken;
@@ -26285,6 +26423,36 @@ ${this.getIden(identation)}}}`;
     }
     return declared === "boolean" || declared === "Boolean" ? declared : void 0;
   }
+  // a `boolean` / `Bool` (`boolean | undefined`) METHOD parameter the body never writes: its callers
+  // are typed, so the Java slot holds a Boolean or null and `Helpers.isTrue (p)` is exactly
+  // `Boolean.TRUE.equals (p)`. Returns the operand as the printer prints it (the bare name or its
+  // literal-default read), undefined to keep the helper. A lambda parameter is typed by its
+  // functional interface, not by a TS caller contract; a parameter the body writes is filled by
+  // the body; every member of the checker type must be boolean or nullish.
+  javaBooleanParameterBox(node) {
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration === void 0 || !isParameterDeclaration2(declaration) || node.text !== declaration.name?.text || declaration.parent?.kind !== SyntaxKind6.MethodDeclaration || this.javaParameterIsWritten(declaration)) {
+      return void 0;
+    }
+    let type;
+    try {
+      type = this.getChecker().getTypeAtLocation(node);
+    } catch (e) {
+      return void 0;
+    }
+    if (type === void 0) {
+      return void 0;
+    }
+    const booleanish = (t) => ((t?.flags ?? 0) & (TypeFlags5.Boolean | TypeFlags5.BooleanLiteral)) !== 0;
+    if (!booleanish(type)) {
+      const members = (((type.flags ?? 0) & TypeFlags5.Union) !== 0 ? type.getTypes?.() : void 0) ?? [];
+      if (!members.some(booleanish) || !members.every((m) => booleanish(m) || ((m?.flags ?? 0) & (TypeFlags5.Undefined | TypeFlags5.Null | TypeFlags5.Void)) !== 0)) {
+        return void 0;
+      }
+    }
+    const printed = this.printNode(node, 0);
+    return printed === node.text || printed === this.javaDefaultedLocalName(node) ? printed : void 0;
+  }
   // the DECLARED type of the local is a nullable boolean: `Bool` (`boolean | undefined`) or an
   // equivalent union. Every member must be boolean or nullish - an `Int`/`Str`/`any` member can
   // hold a box the isTrue helper tests with its runtime truthiness, so the helper must stay.
@@ -26458,6 +26626,10 @@ ${this.getIden(identation)}}}`;
       }
       if (declared === "Boolean") {
         return `Boolean.TRUE.equals(${this.printNode(node, 0)})`;
+      }
+      const parameterBox = this.javaBooleanParameterBox(node);
+      if (parameterBox !== void 0) {
+        return `Boolean.TRUE.equals(${parameterBox})`;
       }
     }
     const box = this.javaBooleanBoxIdentifier(node, /* @__PURE__ */ new Set()) ?? this.javaNullableBooleanBoxIdentifier(node) ?? this.javaBooleanTupleBindingIdentifier(node);
