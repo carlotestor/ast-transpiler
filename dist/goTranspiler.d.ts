@@ -757,3 +757,7 @@ export interface GoTranspiler {
 export interface GoTranspiler {
     g13NumericParameterCandidates(param: any): string[];
 }
+export interface GoTranspiler {
+    goA9fL1CacheField(node: any): string | undefined;
+    goA9fL1CacheInitText(node: any): string | undefined;
+}
