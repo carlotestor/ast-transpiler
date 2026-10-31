@@ -10287,11 +10287,7 @@ var GO_NIL_EQUIVALENT_POINTER_TYPES_Native = /* @__PURE__ */ new Set([
 ]);
 var GO_SYNC_MAP_FIELDS = [
   "Options",
-  "Markets",
-  "Markets_by_id",
   "MarketsById",
-  "Currencies",
-  "Currencies_by_id",
   "CurrenciesById",
   "BaseCurrencies",
   "QuoteCurrencies",
@@ -10856,6 +10852,12 @@ var GoTranspiler = class extends BaseTranspiler {
     // same member read, and every later use reads the local; with the absent case a nil map,
     // GetValue/InOp/ObjectKeys/IsDictionary and Safe* normalise a nil receiver. Else keep the box.
     this.goSafeDictLocalUnboxCache = /* @__PURE__ */ new Map();
+    this.GO_MARKET_TABLES = {
+      "markets": { add: "AddMarketsEntry" },
+      "markets_by_id": { add: "AddMarketsByIdEntry" },
+      "currencies": { add: "AddCurrenciesEntry" },
+      "currencies_by_id": { add: "AddCurrenciesByIdEntry" }
+    };
     // ===== RF-go-6-A =====
     // Two type-keyed rules for Go map locals (moved out of ccxt build/hx11-m43-safedict-local.ts and
     // build/hx10w10-GP26.ts, which rewrote the printed text):
@@ -11026,8 +11028,8 @@ var GoTranspiler = class extends BaseTranspiler {
       "Timeframes": "map[string]any",
       "Balance": "map[string]any"
     };
-    // the market/currency book accessors hand-written in go/v4/exchange_markets_book.go: each is a
-    // load of the published immutable book, so a call is a pure read of a `map[string]any`
+    // the market/currency tables are plain `map[string]any` fields of BaseExchange (go/v4/exchange.go),
+    // written only by whole-map assignment or AddMarketsEntry-style copy-on-write, never in place
     this.GO_NATIVE_MAP_ACCESSORS = ["Markets", "Markets_by_id", "Currencies", "Currencies_by_id"];
     // comparison helpers that normalize int/int64/float64 against each other, so a
     // literal operand's Go default type (int) behaves like the int64 OpNeg produces
@@ -12977,9 +12979,72 @@ ${this.getIden(identation)}${this.printNode(node.left, 0)} = &${local}`;
     const fileName = String(node?.getSourceFile?.()?.fileName ?? "");
     return /(^|[\\/])ts[\\/]src[\\/](prediction[\\/]|base[\\/]PredictionExchange\.ts$)/.test(fileName);
   }
-  // `this.markets` / `this.currencies` (and the `_by_id` twins): the hand-written book getters of
-  // go/v4/exchange_markets_book.go print `this.Markets()` and answer a `map[string]any` (nil before
-  // the first load). Same box argument as the base callees above.
+  // `<recv>.markets` (and the other three tables) whose checker declaration is the base exchange's own
+  // property: a local or a same-named member of another class is a different declaration
+  goMarketTable(node) {
+    if (node?.kind !== SyntaxKind5.PropertyAccessExpression || !Object.prototype.hasOwnProperty.call(this.GO_MARKET_TABLES, node.name?.text)) {
+      return void 0;
+    }
+    let declaration;
+    try {
+      declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+    } catch (e) {
+      declaration = void 0;
+    }
+    const owner = declaration?.parent;
+    if (declaration?.kind !== SyntaxKind5.PropertyDeclaration || owner?.kind !== SyntaxKind5.ClassDeclaration || owner.name?.text !== "BaseExchange") {
+      return void 0;
+    }
+    return this.GO_MARKET_TABLES[node.name.text];
+  }
+  // the table an element write lands in: `<recv>.markets[k] = v`, or the same through a const local initialised
+  // from `this.markets` (checker-resolved); the owner is the receiver the Add*Entry method is called on
+  goMarketTableWriteTarget(node) {
+    const direct = this.goMarketTable(node);
+    if (direct !== void 0) {
+      return { add: direct.add, owner: node.expression };
+    }
+    if (node?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    let declaration;
+    try {
+      declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+    } catch (e) {
+      declaration = void 0;
+    }
+    const init = declaration?.kind === SyntaxKind5.VariableDeclaration ? this.goUnwrapParenthesizedNode(declaration.initializer) : void 0;
+    const constant = ((declaration?.parent?.flags ?? 0) & NodeFlags2.Const) !== 0;
+    const table = constant && init?.expression?.kind === SyntaxKind5.ThisKeyword ? this.goMarketTable(init) : void 0;
+    return table === void 0 ? void 0 : { add: table.add, owner: init.expression };
+  }
+  // `recv.<table> = v` as a statement: the field takes a whole new map (nil, an empty map, or the map
+  // the right side builds), so a reader holding the old map never sees it change
+  goMarketTableWriteText(node) {
+    if (this.goMarketTable(node.left) === void 0 || node.parent?.kind !== SyntaxKind5.ExpressionStatement) {
+      return void 0;
+    }
+    const right = this.goUnwrapParenthesizedNode(node.right);
+    const callee = right?.kind === SyntaxKind5.CallExpression && right.expression?.kind === SyntaxKind5.PropertyAccessExpression ? right.expression.name?.text : void 0;
+    const args = right?.arguments ?? [];
+    const left = this.printNode(node.left, 0);
+    if (right?.kind === SyntaxKind5.NullKeyword || right?.kind === SyntaxKind5.Identifier && right.text === "undefined") {
+      return `${left} = nil`;
+    }
+    if (callee === "createSafeDictionary" && args.length <= 1) {
+      return `${left} = map[string]any{}`;
+    }
+    if (callee === "indexBySafe" && args.length === 2) {
+      return `${left} = this.IndexBy(${args.map((a) => this.printNode(a, 0)).join(", ")})`;
+    }
+    const valueNode = callee === "mapToSafeMap" && args.length === 1 ? this.goUnwrapParenthesizedNode(args[0]) : right;
+    const text = this.printNode(valueNode, 0).trim();
+    const sharesTable = valueNode?.kind === SyntaxKind5.PropertyAccessExpression && valueNode.name?.text === node.left.name?.text && valueNode.expression?.kind === SyntaxKind5.Identifier;
+    const isMap = sharesTable || this.goMarketTable(valueNode) !== void 0 || this.goIndexableTypeOf(valueNode, text) === "map[string]any";
+    return `${left} = ${isMap ? text : `MapTyped(${text})`}`;
+  }
+  // `this.markets` / `this.currencies` (and the `_by_id` twins): plain `map[string]any` fields of the
+  // Go base (nil before the first load). Same box argument as the base callees above.
   goBookAccessorRead(initializer) {
     if (initializer?.kind !== SyntaxKind5.PropertyAccessExpression || initializer.expression?.kind !== SyntaxKind5.ThisKeyword) {
       return false;
@@ -15332,6 +15397,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       if (op === SyntaxKind5.PlusEqualsToken) {
         const rhs2 = this.printNode(right, 0);
         const currentValue = `${this.ELEMENT_ACCESS_WRAPPER_OPEN}${acc}, ${lastKey}${this.ELEMENT_ACCESS_WRAPPER_CLOSE}`;
+        const compoundTable = keyStrs.length === 1 ? this.goMarketTableWriteTarget(baseExpr) : void 0;
+        if (compoundTable !== void 0) {
+          return `${this.printNode(compoundTable.owner, 0)}.${compoundTable.add}(${lastKey}, Add(${currentValue}, ${rhs2}))`;
+        }
         const native2 = keyStrs.length === 1 ? this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, `Add(${containerStr}[${lastKey}], ${rhs2})`, true) : void 0;
         return native2 !== void 0 ? native2 : `AddElementToObject(${acc}, ${lastKey}, Add(${currentValue}, ${rhs2}))`;
       }
@@ -17520,6 +17589,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     if (typeof name !== "string") {
       return void 0;
     }
+    if (this.goMarketTable(node) !== void 0) {
+      return "map[string]any";
+    }
     return GO_FIELD_CONTAINER_TYPES_NATIVE[this.transformPropertyAccessExpressionName(name, node.name)];
   }
   // the printed key is a Go string when the printer knows it: a string literal, or
@@ -17877,6 +17949,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   // native `container[key] = value` when the receiver's Go type is proved by the
   // printer, otherwise undefined and the caller keeps the runtime helper
   printNativeElementAssignment(containerNode, containerStr, keyNode, keyStr, valueStr, compound = false, valueNode) {
+    const marketTable = this.goMarketTableWriteTarget(containerNode);
+    if (marketTable !== void 0) {
+      return compound ? void 0 : `${this.printNode(marketTable.owner, 0)}.${marketTable.add}(${keyStr}, ${valueStr})`;
+    }
     if (this.goIsBaseMapResultLocal(containerNode) && !this.goMapWriteValueIsNotPointer(valueNode)) {
       return void 0;
     }
@@ -18901,9 +18977,9 @@ ${indent}}`);
     return reads.length === 1 ? reads[0] : void 0;
   }
   // the Go map type a `key in <dict>` receiver is *declared* with, for the dict shapes the
-  // init clause can hold: a `this.<field>` of a hand-written map field, or a `this.<accessor>()`
-  // book getter. undefined for every other receiver, which keeps the runtime helper. The field
-  // and accessor names are matched on the *printed* Go text (this.Orderbooks, this.Markets()).
+  // init clause can hold: a `this.<field>` of a hand-written map field. undefined for every other
+  // receiver, which keeps the runtime helper. The field names are matched on the *printed* Go text
+  // (this.Orderbooks, this.Markets).
   goInOpDictMapType(dictNode, dictText) {
     if (dictText !== void 0 && dictText === this.goL3BookEntryText(dictNode)) {
       return "map[string]any";
@@ -22534,6 +22610,10 @@ ${this.getIden(identation)}return nil`;
       if (a9fL1Init !== void 0) {
         return a9fL1Init;
       }
+      const marketTableWrite = this.goMarketTableWriteText(node);
+      if (marketTableWrite !== void 0) {
+        return marketTableWrite;
+      }
       const pointerWrite = this.goPointerWriteText(node, identation);
       if (pointerWrite !== void 0) {
         return pointerWrite;
@@ -22765,7 +22845,7 @@ ${tryBodyBlock}
       case SyntaxKind5.Identifier:
         return this.goDeclaredTypeOfIdentifier(node) ?? this.g01MapParamType(node);
       case SyntaxKind5.PropertyAccessExpression:
-        return this.goIsPlainValuedMapField(node) ? "map[string]any" : void 0;
+        return this.goIsPlainValuedMapField(node) || this.goMarketTable(node) !== void 0 ? "map[string]any" : void 0;
     }
     return void 0;
   }
@@ -22890,6 +22970,8 @@ ${tryBodyBlock}
         return this.goDeclaredTypeOfIdentifier(node) === "string";
       case SyntaxKind5.CallExpression:
         return this.goTypeOfInitializer(node, printed) === "string";
+      case SyntaxKind5.ElementAccessExpression:
+        return node.expression?.kind === SyntaxKind5.Identifier && this.goDeclaredTypeOfIdentifier(node.expression) === "[]string" && /^[A-Za-z_]\w*\[[^\[\]()]+\]$/.test((printed ?? "").trim());
     }
     return false;
   }
@@ -56229,7 +56311,11 @@ var NIL_TESTABLE_FIELDS = /* @__PURE__ */ new Set([
   "Proxy",
   "Proxy_url",
   "ProxyUrlCallback",
-  "Proxy_url_callback"
+  "Proxy_url_callback",
+  "Markets",
+  "Markets_by_id",
+  "Currencies",
+  "Currencies_by_id"
 ]);
 function isNilLiteral(node) {
   return node?.kind === ts.SyntaxKind.NullKeyword || node?.kind === ts.SyntaxKind.Identifier && node.text === "undefined";
