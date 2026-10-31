@@ -36,6 +36,15 @@ const SRC = 'type Trade = { id: string };\n'
     + '        }\n'
     + '        return out;\n'
     + '    }\n'
+    + '    k (p: any): any {\n'
+    + '        const syms = Object.keys (p) as string[];\n'
+    + '        const n = syms.length;\n'
+    + '        let out = \'\';\n'
+    + '        for (let i = 0; i < n; i++) {\n'
+    + '            out = syms[i];\n'
+    + '        }\n'
+    + '        return out;\n'
+    + '    }\n'
     + '}\n';
 
 const print = (callees: string[]): string => new Transpiler ({ 'verbose': false, 'go': { 'generatedListCallees': callees, 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileGo (SRC).content;
@@ -62,5 +71,8 @@ describe('RF-go-6-C list reads', () => {
         expect (h).toContain ('GetValue(keys, j)');
         expect (h).toContain ('GetValue(keys, k)');
         expect (h).not.toContain ('keys[i]');
+    });
+    test('a const length local and an `as string[]` cast keep the proof', () => {
+        expect (fn (print ([]), 'K')).toContain ('out = syms[i]');
     });
 });

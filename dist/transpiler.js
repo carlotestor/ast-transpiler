@@ -10229,6 +10229,10 @@ func New${this.capitalize(this.className)}() *${this.className} {
         return initializer.operator === SyntaxKind5.ExclamationToken ? "bool" : void 0;
       case SyntaxKind5.ParenthesizedExpression:
         return this.goTypeOfInitializer(initializer.expression, printedValue);
+      case SyntaxKind5.AsExpression: {
+        const inner = this.goTypeOfInitializer(initializer.expression, printedValue);
+        return typeof inner === "string" && inner.startsWith("[]") ? inner : void 0;
+      }
       case SyntaxKind5.ElementAccessExpression:
         return this.goLoopBoundedStringElementType(initializer, printedValue);
       case SyntaxKind5.Identifier:
@@ -18607,7 +18611,7 @@ ${this.getIden(level)}}()`;
       const initializer = current.initializer;
       const step = current.incrementor;
       const declared = initializer?.kind === SyntaxKind5.VariableDeclarationList ? initializer.declarations : void 0;
-      const counts = condition?.kind === SyntaxKind5.BinaryExpression && condition.operatorToken.kind === SyntaxKind5.LessThanToken && condition.left?.kind === SyntaxKind5.Identifier && condition.left.text === keyNode.text && condition.right?.kind === SyntaxKind5.PropertyAccessExpression && condition.right.name?.text === "length" && condition.right.expression?.kind === SyntaxKind5.Identifier && condition.right.expression.text === baseExpr.text && declared?.length === 1 && declared[0].name?.text === keyNode.text && declared[0].initializer?.kind === SyntaxKind5.NumericLiteral && declared[0].initializer.text === "0" && step?.kind === SyntaxKind5.PostfixUnaryExpression && step.operator === SyntaxKind5.PlusPlusToken && step.operand?.kind === SyntaxKind5.Identifier && step.operand.text === keyNode.text;
+      const counts = condition?.kind === SyntaxKind5.BinaryExpression && condition.operatorToken.kind === SyntaxKind5.LessThanToken && condition.left?.kind === SyntaxKind5.Identifier && condition.left.text === keyNode.text && this.goBoundIsLengthOf(condition.right, baseExpr, current) && declared?.length === 1 && declared[0].name?.text === keyNode.text && declared[0].initializer?.kind === SyntaxKind5.NumericLiteral && declared[0].initializer.text === "0" && step?.kind === SyntaxKind5.PostfixUnaryExpression && step.operator === SyntaxKind5.PlusPlusToken && step.operand?.kind === SyntaxKind5.Identifier && step.operand.text === keyNode.text;
       if (!counts) {
         continue;
       }
@@ -18627,6 +18631,25 @@ ${this.getIden(level)}}()`;
     const own = checker?.getSymbolAtLocation(declaration.name);
     const other = checker?.getSymbolAtLocation(n);
     return own !== void 0 && other !== void 0 && own !== other;
+  }
+  // the loop bound is `xs.length`, or a `const n = xs.length` local with no write of xs between that
+  // declaration and the end of the loop
+  goBoundIsLengthOf(bound, baseExpr, loop) {
+    const isLength = (n) => n?.kind === SyntaxKind5.PropertyAccessExpression && n.name?.text === "length" && n.expression?.kind === SyntaxKind5.Identifier && n.expression.text === baseExpr.text;
+    if (isLength(bound)) {
+      return true;
+    }
+    if (bound?.kind !== SyntaxKind5.Identifier) {
+      return false;
+    }
+    const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(bound)?.valueDeclaration?.resolve();
+    const list = declaration?.parent;
+    if (declaration?.kind !== SyntaxKind5.VariableDeclaration || list?.kind !== SyntaxKind5.VariableDeclarationList || !isLength(declaration.initializer)) {
+      return false;
+    }
+    const scope = this.goEnclosingFunction(loop);
+    const mutators = ["push", "pop", "shift", "unshift", "splice", "sort", "reverse", "fill", "copyWithin"];
+    return !this.hasNodeWhere(scope, (n) => n !== declaration.name && this.goWritesOrRebindsName(n, bound.text, []) || n.pos >= declaration.end && n.end <= loop.end && this.goWritesOrRebindsName(n, baseExpr.text, mutators));
   }
   // the element of a loop-bounded `[]string` read prints as the slice index, a Go string
   goLoopBoundedStringElementType(node, printedValue) {

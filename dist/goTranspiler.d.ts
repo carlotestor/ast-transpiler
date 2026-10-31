@@ -690,6 +690,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goWritesOrRebindsName(n: any, name: string, mutators: string[]): boolean;
     goLoopBoundedSliceRead(node: any, baseExpr: any, keyNode: any, containerStr: string, keyStr: string): string | undefined;
     goOtherBindingOfLoopBoundedElement(n: any, declaration: any): boolean;
+    goBoundIsLengthOf(bound: any, baseExpr: any, loop: any): boolean;
     goLoopBoundedStringElementType(node: any, printedValue: string): string | undefined;
     printElementAccessExpression(node: any, identation: any): string;
     isInsideVoidFunction(node: Node): boolean;

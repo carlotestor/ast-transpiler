@@ -1452,6 +1452,10 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return (initializer.operator === SyntaxKind.ExclamationToken) ? 'bool' : undefined;
         case SyntaxKind.ParenthesizedExpression:
             return this.goTypeOfInitializer(initializer.expression, printedValue);
+        case SyntaxKind.AsExpression: { // RF-go-6-C: `x as T[]` prints as its operand, so a slice operand keeps its slice type
+            const inner = this.goTypeOfInitializer(initializer.expression, printedValue);
+            return ((typeof inner === 'string') && inner.startsWith('[]')) ? inner : undefined;
+        }
         case SyntaxKind.ElementAccessExpression: // RF-go-6-C
             return this.goLoopBoundedStringElementType(initializer, printedValue);
         case SyntaxKind.Identifier:
@@ -11222,8 +11226,7 @@ ${tryBodyBlock}
             const declared: any = (initializer?.kind === SyntaxKind.VariableDeclarationList) ? initializer.declarations : undefined;
             const counts = (condition?.kind === SyntaxKind.BinaryExpression) && (condition.operatorToken.kind === SyntaxKind.LessThanToken)
                 && (condition.left?.kind === SyntaxKind.Identifier) && (condition.left.text === keyNode.text)
-                && (condition.right?.kind === SyntaxKind.PropertyAccessExpression) && (condition.right.name?.text === 'length')
-                && (condition.right.expression?.kind === SyntaxKind.Identifier) && (condition.right.expression.text === baseExpr.text)
+                && this.goBoundIsLengthOf(condition.right, baseExpr, current)
                 && (declared?.length === 1) && (declared[0].name?.text === keyNode.text)
                 && (declared[0].initializer?.kind === SyntaxKind.NumericLiteral) && (declared[0].initializer.text === '0')
                 && (step?.kind === SyntaxKind.PostfixUnaryExpression) && (step.operator === SyntaxKind.PlusPlusToken)
@@ -11248,6 +11251,31 @@ ${tryBodyBlock}
         const own: any = checker?.getSymbolAtLocation(declaration.name);
         const other: any = checker?.getSymbolAtLocation(n);
         return (own !== undefined) && (other !== undefined) && (own !== other);
+    }
+
+    // the loop bound is `xs.length`, or a `const n = xs.length` local with no write of xs between that
+    // declaration and the end of the loop
+    goBoundIsLengthOf(bound, baseExpr, loop): boolean {
+        const isLength = (n: any) => (n?.kind === SyntaxKind.PropertyAccessExpression) && (n.name?.text === 'length')
+            && (n.expression?.kind === SyntaxKind.Identifier) && (n.expression.text === baseExpr.text);
+        if (isLength(bound)) {
+            return true;
+        }
+        if (bound?.kind !== SyntaxKind.Identifier) {
+            return false;
+        }
+        const declaration: any = this.checkerOrUndefined()?.getSymbolAtLocation(bound)?.valueDeclaration?.resolve();
+        const list: any = declaration?.parent;
+        if ((declaration?.kind !== SyntaxKind.VariableDeclaration) || (list?.kind !== SyntaxKind.VariableDeclarationList)
+            || !isLength(declaration.initializer)) {
+            return false;
+        }
+        const scope = this.goEnclosingFunction(loop);
+        const mutators = [ 'push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'fill', 'copyWithin' ];
+        // the length local is never written after its declaration; the list is not written between that
+        // declaration and the end of the loop
+        return !this.hasNodeWhere(scope, (n: any) => ((n !== declaration.name) && this.goWritesOrRebindsName(n, bound.text, []))
+            || ((n.pos >= declaration.end) && (n.end <= loop.end) && this.goWritesOrRebindsName(n, baseExpr.text, mutators)));
     }
 
     // the element of a loop-bounded `[]string` read prints as the slice index, a Go string
