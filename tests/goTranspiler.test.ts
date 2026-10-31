@@ -8014,3 +8014,40 @@ describe('go ws cache field init (FM-A9F L1)', () => {
         expect(output).toContain('this.Orderbooks = this.CreateSafeDictionary(true)');
     });
 });
+
+describe('RD-GO-5: ws ticker cache reads answer the owner\'s typed read', () => {
+    const SRC = (body: string, cache = 'tickers: Dictionary<Ticker> = {};') =>
+        'type Dictionary<T> = { [key: string]: T };\n' +
+        'interface Ticker { symbol: string }\n' +
+        'interface Tickers extends Dictionary<Ticker> {}\n' +
+        'class BaseExchange {\n    ' + cache + '\n    bidsasks: Dictionary<Ticker> = {};\n' +
+        '    filterByArray (objects: any, key: string, values: any = undefined, indexed = true): any { return objects; }\n' +
+        '    filterBySymbol (objects: any, key: string, values: any = undefined): any { return objects; }\n}\n' +
+        'class Ex extends BaseExchange {\n' + body + '}\n';
+    const run = (body: string, cache?: string) => new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } })
+        .transpileGo(SRC(body, cache)).content;
+    const watch = (expr: string, ret = 'Promise<Tickers>') => '    async watchTickers (symbols: string[] = undefined): ' + ret + ' {\n        return ' + expr + ';\n    }\n';
+    test('a filtered read of the ticker cache is the owner\'s typed read', () => {
+        const out = run(watch("this.filterByArray (this.tickers, 'symbol', symbols)"));
+        expect(out).toContain('TickerMapToMap(this.WsCacheTickerMap("Tickers", symbols))');
+        expect(out).not.toContain('FilterByArray(this.Tickers');
+    });
+    test('the bidsasks cache and the whole-cache read use their field', () => {
+        expect(run(watch("this.filterByArray (this.bidsasks, 'symbol', symbols)"))).toContain('TickerMapToMap(this.WsCacheTickerMap("Bidsasks", symbols))');
+        expect(run(watch('this.tickers'))).toContain('TickerMapToMap(this.WsCacheTickerMap("Tickers"))');
+    });
+    test('a method not answering Tickers keeps the generic read', () => {
+        const out = run(watch("this.filterByArray (this.tickers, 'symbol', symbols)", 'Promise<any>'));
+        expect(out).not.toContain('WsCacheTickerMap');
+    });
+    test('a cache field not declared Dictionary<Ticker>, or another filter, keeps the generic read', () => {
+        expect(run(watch('this.tickers'), 'tickers: any = {};')).not.toContain('WsCacheTickerMap');
+        expect(run(watch("this.filterBySymbol (this.tickers, 'symbol', symbols)"))).not.toContain('WsCacheTickerMap');
+    });
+    test('a same-named field of an unrelated class keeps the generic read', () => {
+        const src = 'type Dictionary<T> = { [key: string]: T };\ninterface Ticker { symbol: string }\ninterface Tickers extends Dictionary<Ticker> {}\n' +
+            'class Other {\n    tickers: Dictionary<Ticker> = {};\n}\nclass Ex extends Other {\n' + watch('this.tickers') + '}\n';
+        const out = new Transpiler({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileGo(src).content;
+        expect(out).not.toContain('WsCacheTickerMap');
+    });
+});

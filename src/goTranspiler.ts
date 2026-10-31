@@ -11627,6 +11627,64 @@ ${this.getIden(identation)}PanicOnError(${exprStm.trim()})`;
         return "return nil";
     }
 
+    // `return this.tickers` / `return this.filterByArray (this.tickers, 'symbol', symbols)` in an async method
+    // that answers `Promise<Tickers>`: both read the base ticker cache (`tickers` / `bidsasks`, declared
+    // `Dictionary<Ticker>` on BaseExchange) and answer its rows, so the send is the owner's typed read
+    // `this.WsCacheTickerMap(field[, symbols])`, boxed back to the map shape the carrier pass unwraps.
+    goTickerCacheTypedRead(node): string | undefined {
+        const checker: any = this.checkerOrUndefined();
+        const SK = SyntaxKind;
+        const unparen = (n: any) => { while (n?.kind === SK.ParenthesizedExpression) { n = n.expression; } return n; };
+        const exp: any = unparen(node.expression);
+        if ((checker === undefined) || (exp === undefined)) {
+            return undefined;
+        }
+        const baseMember = (n: any, kind: number): string | undefined => {
+            if ((n?.kind !== SK.PropertyAccessExpression) || (n.expression?.kind !== SK.ThisKeyword)) {
+                return undefined;
+            }
+            const declaration: any = checker.getSymbolAtLocation(n.name)?.valueDeclaration?.resolve();
+            return ((declaration?.kind === kind) && (declaration.parent?.name?.text === 'BaseExchange')) ? (n.name.text as string) : undefined;
+        };
+        const cacheField = (n: any): string | undefined => {
+            const name = baseMember(n, SK.PropertyDeclaration);
+            if ((name !== 'tickers') && (name !== 'bidsasks')) {
+                return undefined;
+            }
+            const declared: any = checker.getSymbolAtLocation(n.name)?.valueDeclaration?.resolve()?.type;
+            return (declared?.typeName?.text === 'Dictionary') && (declared.typeArguments?.length === 1)
+                && (declared.typeArguments[0]?.typeName?.text === 'Ticker') ? name : undefined;
+        };
+        let field: string | undefined;
+        let symbols = '';
+        if (exp.kind === SK.CallExpression) {
+            const args: any = exp.arguments ?? [];
+            if ((baseMember(exp.expression, SK.MethodDeclaration) !== 'filterByArray') || (args.length !== 3)
+                || (args[1]?.kind !== SK.StringLiteral) || (args[1].text !== 'symbol') || (args[2]?.kind !== SK.Identifier)) {
+                return undefined;
+            }
+            field = cacheField(unparen(args[0]));
+            symbols = ', ' + this.printNode(args[2], 0).trim();
+        } else {
+            field = cacheField(exp);
+        }
+        if (field === undefined) {
+            return undefined;
+        }
+        let method: any = node.parent;
+        while ((method !== undefined) && (method.kind !== SK.MethodDeclaration) && (method.kind !== SK.FunctionDeclaration)) {
+            method = method.parent;
+        }
+        const returned: any = method?.type;
+        const element: any = (returned?.typeName?.text === 'Promise') ? returned.typeArguments?.[0] : undefined;
+        const answersTickers = (element?.typeName?.text === 'Tickers')
+            || ((element?.typeName?.text === 'Dictionary') && (element.typeArguments?.[0]?.typeName?.text === 'Ticker'));
+        if (!answersTickers) {
+            return undefined;
+        }
+        return `TickerMapToMap(this.WsCacheTickerMap("${this.capitalize(field)}"${symbols}))`;
+    }
+
     printReturnStatement(node, identation) {
 
         const isAsyncFunction = this.isInsideAsyncFunction(node);
@@ -11641,7 +11699,7 @@ ${this.getIden(identation)}PanicOnError(${exprStm.trim()})`;
         let trailingComment = this.printTraillingComment(node, identation);
         trailingComment = trailingComment ? " " + trailingComment : trailingComment;
         const exp =  node.expression;
-        let rightPart = exp ? (' ' + this.printNode(exp, identation)) : '';
+        let rightPart = exp ? (' ' + (this.goTickerCacheTypedRead(node) ?? this.printNode(exp, identation))) : '';
         rightPart = rightPart.trim();
 
         // `return nil` only exits the synthetic try/catch closure; at the function's own
