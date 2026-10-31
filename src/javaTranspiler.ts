@@ -4818,6 +4818,11 @@ export class JavaTranspiler extends BaseTranspiler {
             if (inlined !== undefined) {
                 return inlined;
             }
+            // last: every proof above (and the embedding layer's non-null proofs) keeps its spelling
+            const declaredBoxes = this.printDeclaredBoxArithmetic(left, right, leftText, rightText, op);
+            if (declaredBoxes !== undefined) {
+                return declaredBoxes;
+            }
 
 
             if (op === SyntaxKind.PlusEqualsToken) {
@@ -6553,6 +6558,63 @@ export class JavaTranspiler extends BaseTranspiler {
             scanOuter(body);
         }
         return safe;
+    }
+
+    // `a + b` and `a * b` over operands whose DECLARED Java type is an integral box or primitive
+    // (Long/Integer, long/int) or an int literal: the helper's null answer is an explicit guard on the
+    // boxed operands, its Integer->Long normalization an explicit widening, so the Long box comes back.
+    // `-` and `/` stay with the earlier non-null proofs; a Double operand keeps the helper (it re-boxes
+    // an integral product as Long and sums to a Double).
+    printDeclaredBoxArithmetic(left, right, leftText, rightText, op): string | undefined {
+        const symbol = op === SyntaxKind.PlusToken ? '+' : (op === SyntaxKind.AsteriskToken ? '*' : undefined);
+        if (symbol === undefined) {
+            return undefined;
+        }
+        const l = this.javaDeclaredBoxOperand(left, leftText);
+        const r = this.javaDeclaredBoxOperand(right, rightText);
+        if (l === undefined || r === undefined || l.family === 'double' || r.family === 'double') {
+            return undefined;
+        }
+        const asLong = (o) => (o.family === 'long' || o.text.endsWith('L') ? o.text : (o.literal ? `${o.text}L` : `((long) ${o.text})`));
+        const expression = `(${asLong(l)} ${symbol} ${asLong(r)})`;
+        const boxes = [...new Set([l, r].filter((o) => o.boxed).map((o) => o.text))];
+        return boxes.length === 0 ? expression : `((${boxes.join(' == null || ')} == null) ? null : ${expression})`;
+    }
+
+    javaDeclaredBoxOperand(node, text): { family: string, boxed: boolean, literal: boolean, text: string } | undefined {
+        let inner = node;
+        while (inner !== undefined && (isParenthesizedExpression(inner) || isAsExpression(inner) || isNonNullExpression(inner))) {
+            inner = inner.expression;
+        }
+        if (inner === undefined) {
+            return undefined;
+        }
+        if (isNumericLiteral(inner)) {
+            const printed = String(this.printNode(inner, 0));
+            return /^\d+L?$/.test(printed)
+                ? { family: printed.endsWith('L') ? 'long' : 'int', boxed: false, literal: true, text: printed } : undefined;
+        }
+        // the operand prints as the bare declared name (no `finalX` capture rename, no cast)
+        if (!isIdentifier(inner) || String(text).trim().replace(/^\((.*)\)$/, '$1') !== inner.text
+            || !this.javaIdentifierPrintsDeclaredName(inner)) {
+            return undefined;
+        }
+        const symbol: any = this.checkerOrUndefined()?.getSymbolAtLocation(inner);
+        const binding: any = symbol?.valueDeclaration?.resolve();
+        let declared: string | undefined;
+        if (binding?.kind === SyntaxKind.BindingElement && binding.name?.text === inner.text) {
+            // a destructured element the build layer declares `Long`/`Double`/`Integer` (javaLocalDeclaredAs)
+            declared = [...JAVA_BOXED_NUMERIC_TYPES].find((type) => this.javaLocalDeclaredAs(inner, inner.text, type));
+        } else if (this.javaIdentifierKeepsDeclaredName(inner)) {
+            // an unwritten defaulted Long core parameter prints `Long` and may be null
+            declared = this.javaLongParameterRead(inner) ? 'Long' : this.javaDeclaredNumericFamily(inner);
+        }
+        if (declared === undefined) {
+            return undefined;
+        }
+        const family = declared === 'Double' || declared === 'double' ? 'double'
+            : (declared === 'Long' || declared === 'long' ? 'long' : 'int');
+        return { family, boxed: JAVA_BOXED_NUMERIC_TYPES.has(declared), literal: false, text: inner.text };
     }
 
     printInlineHelperArithmetic(left, right, leftText, rightText, op) {
@@ -9491,7 +9553,43 @@ export class JavaTranspiler extends BaseTranspiler {
             // and FALSE test false, TRUE tests true
             return this.getIden(identation) + `Boolean.TRUE.equals(${this.printNode(node, 0)})`;
         }
+        // a boolean-typed method parameter prints as an Object the callers fill: the null-safe TRUE test
+        const booleanParameter = this.javaBooleanParameterCondition(node);
+        if (booleanParameter !== undefined) {
+            return this.getIden(identation) + `Boolean.TRUE.equals(${booleanParameter})`;
+        }
         return super.printCondition(node, identation);
+    }
+
+    // `if (flag)` over a method parameter whose declared TS type is `boolean` (or `boolean | undefined`)
+    // and that the body never writes: the Java slot holds a Boolean or null, so Helpers.isTrue is
+    // Boolean.TRUE.equals. A lambda parameter is typed by its functional interface instead.
+    javaBooleanParameterCondition(node): string | undefined {
+        let inner = node;
+        while (inner?.kind === SyntaxKind.ParenthesizedExpression) {
+            inner = inner.expression;
+        }
+        if (inner === undefined || !isIdentifier(inner)) {
+            return undefined;
+        }
+        const declaration: any = this.javaDeclarationOfIdentifier(inner);
+        if (declaration === undefined || !isParameterDeclaration(declaration) || (declaration.name as any)?.text !== inner.text
+            || declaration.parent?.kind !== SyntaxKind.MethodDeclaration || this.javaParameterIsWritten(declaration)) {
+            return undefined;
+        }
+        const type: any = this.javaTypeOfDeclaration(declaration);
+        if (type === undefined) {
+            return undefined;
+        }
+        const booleanish = (t: any) => (((t.flags ?? 0) & (TypeFlags.Boolean | TypeFlags.BooleanLiteral)) !== 0);
+        const members: any[] = ((type.flags ?? 0) & TypeFlags.Union) !== 0 ? (type.getTypes?.() ?? []) : [type];
+        const nullish = (t: any) => (((t.flags ?? 0) & JAVA_NULLABLE_BOOLEAN_MEMBER_FLAGS) !== 0) && !booleanish(t);
+        if (!members.some(booleanish) || !members.every((t) => booleanish(t) || nullish(t))) {
+            return undefined;
+        }
+        // the parameter reads bare or through its literal default
+        const printed = this.printNode(inner, 0);
+        return printed === inner.text || printed === this.javaDefaultedLocalName(inner) ? printed : undefined;
     }
 
     printConditionalExpression(node, _identation) {

@@ -1131,8 +1131,11 @@ describe('java boolean conditions emitted without the Helpers.isTrue wrapper', (
         expect(conditionOf("        if (x) { return; }\n", 'test(x: string): void'))
             .toContain("if (Helpers.isTrue(x))");
         expect(conditionOf("        if (x) { return; }\n")).toContain("if (Helpers.isTrue(x))");
-        // `boolean | undefined` is not proven boolean - the helper must stay
+        // an unwritten `boolean | undefined` method parameter is a Boolean-or-null box: the null-safe TRUE test
         expect(conditionOf("        if (x) { return; }\n", 'test(x: boolean | undefined): void'))
+            .toContain("if (Boolean.TRUE.equals(x))");
+        // a union with a non-boolean member keeps the helper
+        expect(conditionOf("        if (x) { return; }\n", 'test(x: boolean | string): void'))
             .toContain("if (Helpers.isTrue(x))");
         // negation of a non-boolean keeps the helper inside the `!`
         expect(conditionOf("        if (!x) { return; }\n", 'test(x: string): void'))
@@ -4610,12 +4613,14 @@ describe('falsy-wrapper removal: boolean identifiers and Array.isArray', () => {
     });
 
     test('nullable, any and parameter identifiers keep the helper', () => {
-        const output = wrapped("        if (maybe) { return; }\n", '', 'test(x: any, maybe: boolean | undefined): void');
+        const output = wrapped("        if (maybe) { return; }\n", '', 'test(x: any, maybe: boolean | string): void');
         expect(output).toContain("if (Helpers.isTrue(maybe))");
         const implicitAny = wrapped("        let a;\n        if (a) { return; }\n");
         expect(implicitAny).toContain("if (Helpers.isTrue(a))");
         const parameter = wrapped("        if (flag) { return; }\n", '', 'test(x: any, flag: boolean): void');
-        expect(parameter).toContain("if (Helpers.isTrue(flag))");
+        expect(parameter).toContain("if (Boolean.TRUE.equals(flag))");
+        const written = wrapped("        flag = this.other(x);\n        if (flag) { return; }\n", '', 'test(x: any, flag: boolean): void');
+        expect(written).toContain("if (Helpers.isTrue(flag))");
     });
 
     test('a destructured binding element keeps the helper', () => {
@@ -7428,7 +7433,7 @@ describe('hx4 J09: isTrue / isInstance / core-argument residual', () => {
     test('a boolean local written from a proven local prints Boolean.TRUE.equals', () => {
         expect(out).toContain('if (Boolean.TRUE.equals(y1))');
         expect(out).toContain('if (Helpers.isTrue(y2))');
-        expect(out).not.toContain('Boolean.TRUE.equals(flag)');
+        expect(out).toContain('Boolean.TRUE.equals(flag)'); // an unwritten boolean method parameter
     });
 
     test('a base tuple method returning boolean literals binds a Boolean element', () => {
@@ -8540,5 +8545,61 @@ describe('ws client owner maps and base-typed reads: Helpers.GetValue -> guarded
     test('no put, a rewritten symbol or a deleted entry keep the helper', () => {
         const helperReads = out.split('\n').filter((line) => /Helpers\.GetValue\(\(\(java\.util\.Map<\?, \?>\)this\.ohlcvs\)\.get\(symbol\), timeframe\)/.test(line));
         expect(helperReads.length).toBe(3);
+    });
+});
+
+describe('java declared-type rules: boolean parameter conditions and numeric box arithmetic (RD-JAVA-2)', () => {
+    const run = (body: string, params = '') => transpiler.transpileJava(
+        `class T {\n    ${body}\n}\n`).content.replace(/\s+/g, ' ');
+    const withResolver = (resolver: any, body: () => void) => {
+        const printer: any = (transpiler as any).javaTranspiler;
+        const previous = printer.javaDeclaredLocalTypeResolver;
+        printer.javaDeclaredLocalTypeResolver = resolver;
+        try {
+            body();
+        } finally {
+            printer.javaDeclaredLocalTypeResolver = previous;
+        }
+    };
+
+    test('a boolean method parameter condition is the null-safe TRUE test', () => {
+        const out = run('m(flag: boolean, opt: boolean | undefined = undefined, raw: any = undefined): number { if (flag) { return 1; } if (opt) { return 2; } if (raw) { return 3; } return 0; }');
+        expect(out).toContain('if (Boolean.TRUE.equals(flag))');
+        expect(out).toContain('if (Boolean.TRUE.equals(opt))');
+        expect(out).toContain('Helpers.isTrue(raw)');
+        expect(out).not.toContain('Helpers.isTrue(flag)');
+    });
+
+    test('a boolean parameter the body writes, or a lambda parameter, keeps the helper', () => {
+        const written = run('m(flag: boolean): number { flag = this.other(); if (flag) { return 1; } return 0; }\n    other(): any { return 1; }');
+        expect(written).toContain('Helpers.isTrue(flag)');
+        const lambda = run('m(xs: any[]): void { xs.forEach((flag: boolean) => { if (flag) { return; } }); }');
+        expect(lambda).not.toContain('Boolean.TRUE.equals(flag)');
+    });
+
+    const declared = (types: { [name: string]: string }) => (declaration: any) => types[declaration?.name?.text];
+
+    test('declared Long/Integer operands print native + and * with the helper null answer', () => {
+        withResolver(declared({ a: 'Long', b: 'Long', i: 'Integer', j: 'Integer', p: 'long' }), () => {
+            const body = (expr: string) => run(`m(a: number | undefined, b: number | undefined, i: number | undefined, j: number | undefined, p: number | undefined): any { return ${expr}; }`);
+            expect(body('a + b')).toContain('return ((a == null || b == null) ? null : (a + b));');
+            expect(body('a * b')).toContain('return ((a == null || b == null) ? null : (a * b));');
+            expect(body('a * i')).toContain('return ((a == null || i == null) ? null : (a * ((long) i)));');
+            expect(body('i * j')).toContain('return ((i == null || j == null) ? null : (((long) i) * ((long) j)));');
+            expect(body('a + p')).toContain('return ((a == null) ? null : (a + p));');
+            expect(body('a + 10000')).toContain('return ((a == null) ? null : (a + 10000L));');
+        });
+    });
+
+    test('the helper stays where its answer is not reproduced', () => {
+        withResolver(declared({ a: 'Long', d: 'Double', i: 'Integer' }), () => {
+            const body = (expr: string) => run(`m(a: number | undefined, d: number | undefined, i: number | undefined): any { return ${expr}; }`);
+            expect(body('a * d')).toContain('Helpers.multiply(a, d)'); // an integral Double product re-boxes as Long
+            expect(body('a + d')).toContain('Helpers.add(a, d)');
+            expect(body('a - i')).toContain('Helpers.subtract(a, i)');
+            expect(body('a + this.other()')).toContain('Helpers.add(a, ');
+        });
+        const none = run('m(a: number | undefined, b: number | undefined): any { return a + b; }');
+        expect(none).toContain('Helpers.add(a, b)');
     });
 });

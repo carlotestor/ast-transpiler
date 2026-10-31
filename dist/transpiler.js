@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -26761,6 +26761,10 @@ ${this.getIden(identation)}}}`;
       if (inlined !== void 0) {
         return inlined;
       }
+      const declaredBoxes = this.printDeclaredBoxArithmetic(left, right, leftText, rightText, op);
+      if (declaredBoxes !== void 0) {
+        return declaredBoxes;
+      }
       if (op === SyntaxKind6.PlusEqualsToken) {
         return `${leftText} = Helpers.add(${leftText}, ${rightText})`;
       }
@@ -28293,6 +28297,55 @@ ${this.getIden(identation)}}}`;
       scanOuter(body);
     }
     return safe;
+  }
+  // `a + b` and `a * b` over operands whose DECLARED Java type is an integral box or primitive
+  // (Long/Integer, long/int) or an int literal: the helper's null answer is an explicit guard on the
+  // boxed operands, its Integer->Long normalization an explicit widening, so the Long box comes back.
+  // `-` and `/` stay with the earlier non-null proofs; a Double operand keeps the helper (it re-boxes
+  // an integral product as Long and sums to a Double).
+  printDeclaredBoxArithmetic(left, right, leftText, rightText, op) {
+    const symbol = op === SyntaxKind6.PlusToken ? "+" : op === SyntaxKind6.AsteriskToken ? "*" : void 0;
+    if (symbol === void 0) {
+      return void 0;
+    }
+    const l = this.javaDeclaredBoxOperand(left, leftText);
+    const r = this.javaDeclaredBoxOperand(right, rightText);
+    if (l === void 0 || r === void 0 || l.family === "double" || r.family === "double") {
+      return void 0;
+    }
+    const asLong = (o) => o.family === "long" || o.text.endsWith("L") ? o.text : o.literal ? `${o.text}L` : `((long) ${o.text})`;
+    const expression = `(${asLong(l)} ${symbol} ${asLong(r)})`;
+    const boxes = [...new Set([l, r].filter((o) => o.boxed).map((o) => o.text))];
+    return boxes.length === 0 ? expression : `((${boxes.join(" == null || ")} == null) ? null : ${expression})`;
+  }
+  javaDeclaredBoxOperand(node, text) {
+    let inner = node;
+    while (inner !== void 0 && (isParenthesizedExpression2(inner) || isAsExpression2(inner) || isNonNullExpression(inner))) {
+      inner = inner.expression;
+    }
+    if (inner === void 0) {
+      return void 0;
+    }
+    if (isNumericLiteral3(inner)) {
+      const printed = String(this.printNode(inner, 0));
+      return /^\d+L?$/.test(printed) ? { family: printed.endsWith("L") ? "long" : "int", boxed: false, literal: true, text: printed } : void 0;
+    }
+    if (!isIdentifier2(inner) || String(text).trim().replace(/^\((.*)\)$/, "$1") !== inner.text || !this.javaIdentifierPrintsDeclaredName(inner)) {
+      return void 0;
+    }
+    const symbol = this.checkerOrUndefined()?.getSymbolAtLocation(inner);
+    const binding = symbol?.valueDeclaration?.resolve();
+    let declared;
+    if (binding?.kind === SyntaxKind6.BindingElement && binding.name?.text === inner.text) {
+      declared = [...JAVA_BOXED_NUMERIC_TYPES].find((type) => this.javaLocalDeclaredAs(inner, inner.text, type));
+    } else if (this.javaIdentifierKeepsDeclaredName(inner)) {
+      declared = this.javaLongParameterRead(inner) ? "Long" : this.javaDeclaredNumericFamily(inner);
+    }
+    if (declared === void 0) {
+      return void 0;
+    }
+    const family = declared === "Double" || declared === "double" ? "double" : declared === "Long" || declared === "long" ? "long" : "int";
+    return { family, boxed: JAVA_BOXED_NUMERIC_TYPES.has(declared), literal: false, text: inner.text };
   }
   printInlineHelperArithmetic(left, right, leftText, rightText, op) {
     const isPlus = op === SyntaxKind6.PlusToken || op === SyntaxKind6.PlusEqualsToken;
@@ -30681,7 +30734,39 @@ ${this.getIden(identation)}}}`;
     if (callKind === "nullableBoolean") {
       return this.getIden(identation) + `Boolean.TRUE.equals(${this.printNode(node, 0)})`;
     }
+    const booleanParameter = this.javaBooleanParameterCondition(node);
+    if (booleanParameter !== void 0) {
+      return this.getIden(identation) + `Boolean.TRUE.equals(${booleanParameter})`;
+    }
     return super.printCondition(node, identation);
+  }
+  // `if (flag)` over a method parameter whose declared TS type is `boolean` (or `boolean | undefined`)
+  // and that the body never writes: the Java slot holds a Boolean or null, so Helpers.isTrue is
+  // Boolean.TRUE.equals. A lambda parameter is typed by its functional interface instead.
+  javaBooleanParameterCondition(node) {
+    let inner = node;
+    while (inner?.kind === SyntaxKind6.ParenthesizedExpression) {
+      inner = inner.expression;
+    }
+    if (inner === void 0 || !isIdentifier2(inner)) {
+      return void 0;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(inner);
+    if (declaration === void 0 || !isParameterDeclaration2(declaration) || declaration.name?.text !== inner.text || declaration.parent?.kind !== SyntaxKind6.MethodDeclaration || this.javaParameterIsWritten(declaration)) {
+      return void 0;
+    }
+    const type = this.javaTypeOfDeclaration(declaration);
+    if (type === void 0) {
+      return void 0;
+    }
+    const booleanish = (t) => ((t.flags ?? 0) & (TypeFlags5.Boolean | TypeFlags5.BooleanLiteral)) !== 0;
+    const members = ((type.flags ?? 0) & TypeFlags5.Union) !== 0 ? type.getTypes?.() ?? [] : [type];
+    const nullish = (t) => ((t.flags ?? 0) & JAVA_NULLABLE_BOOLEAN_MEMBER_FLAGS) !== 0 && !booleanish(t);
+    if (!members.some(booleanish) || !members.every((t) => booleanish(t) || nullish(t))) {
+      return void 0;
+    }
+    const printed = this.printNode(inner, 0);
+    return printed === inner.text || printed === this.javaDefaultedLocalName(inner) ? printed : void 0;
   }
   printConditionalExpression(node, _identation) {
     const condition = this.printCondition(node.condition, 0);

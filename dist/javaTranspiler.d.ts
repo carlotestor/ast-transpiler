@@ -293,6 +293,13 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaNativeSplitIndexRead(node: any, index: number): string | undefined;
     javaPrintOperandAsLong(node: any, text: any): any;
     javaProvableCounterInt(node: any): boolean;
+    printDeclaredBoxArithmetic(left: any, right: any, leftText: any, rightText: any, op: any): string | undefined;
+    javaDeclaredBoxOperand(node: any, text: any): {
+        family: string;
+        boxed: boolean;
+        literal: boolean;
+        text: string;
+    } | undefined;
     printInlineHelperArithmetic(left: any, right: any, leftText: any, rightText: any, op: any): string;
     javaPrintArithmeticOperand(kind: any, node: any, text: any): any;
     javaNativeMathMinMaxOperandKind(node: any): "double" | "integral";
@@ -454,6 +461,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaNullableBooleanBoxIdentifier(node: any, seen?: Set<any>): string | undefined;
     javaBooleanWrapperFreeCondition(node: any): string | undefined;
     printCondition(node: any, identation: any): any;
+    javaBooleanParameterCondition(node: any): string | undefined;
     printConditionalExpression(node: any, _identation: any): string;
     printDeleteExpression(node: any, _identation: any): string;
     printThrowStatement(node: any, identation: any): string;
