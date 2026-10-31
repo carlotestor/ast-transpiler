@@ -97,6 +97,14 @@ describe('RF-go-6-A: safeDict-seeded Dict locals', () => {
         const write = run('    f (p: Dict): any {\n        const d = this.safeDict (p, "data");\n        d["a"] = 1;\n        return 1;\n    }\n');
         expect(write).not.toContain('SafeDictMap');
     });
+    test('ws sources type a Dict field of this and a decoded-message receiver, and a .length read keeps the map', () => {
+        const body = '    f (message: Dict): any {\n        const o = this.safeDict (this.options, "ws", {});\n        const d = this.safeDict (message, "data", {});\n        return [ o, d["x"], d.length ];\n    }\n';
+        const out = run(body, 'ts/src/pro');
+        expect(out).toContain('var o map[string]any = this.SafeDictMap(this.Options, "ws", map[string]any{})');
+        expect(out).toContain('var d map[string]any = this.SafeDictMap(message, "data", map[string]any{})');
+        const member = run('    f (message: Dict): any {\n        const d = this.safeDict (message, "data", {});\n        return d.foo;\n    }\n', 'ts/src/pro');
+        expect(member).not.toContain('SafeDictMap');
+    });
     test('prediction and base sources keep the box', () => {
         const body = '    f (p: Dict): any {\n        const d = this.safeDict (p, "data", {});\n        return this.extend (d, {});\n    }\n';
         expect(run(body, 'ts/src/prediction')).not.toContain('SafeDictMap');

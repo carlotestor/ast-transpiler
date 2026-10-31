@@ -2776,8 +2776,8 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
                 return false;
             }
         }
-        if (!ws) {
-            return true;
+        if (!ws || (this.rf6aContainsThis(container) && (container.kind === SyntaxKind.PropertyAccessExpression))) {
+            return true; // a REST receiver, or an admitted Dict field of `this`
         }
         if ((container.kind === SyntaxKind.PropertyAccessExpression) && (container.name?.text === 'hashmap') && (container.expression?.kind === SyntaxKind.Identifier)) {
             return true; // the ArrayCache hashmap is a map of maps
@@ -2882,8 +2882,8 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             }
             break;
         case SyntaxKind.PropertyAccessExpression:
-            if (parent.expression === node) {
-                return false; // a member of the box
+            if ((parent.expression === node) && (parent.name?.text !== 'length')) {
+                return false; // a member of the box (`.length` prints GetArrayLength(x): 0 for a map and for the nil box)
             }
             break;
         case SyntaxKind.PrefixUnaryExpression:

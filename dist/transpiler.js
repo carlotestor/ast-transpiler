@@ -11401,7 +11401,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
         return false;
       }
     }
-    if (!ws) {
+    if (!ws || this.rf6aContainsThis(container) && container.kind === SyntaxKind5.PropertyAccessExpression) {
       return true;
     }
     if (container.kind === SyntaxKind5.PropertyAccessExpression && container.name?.text === "hashmap" && container.expression?.kind === SyntaxKind5.Identifier) {
@@ -11499,7 +11499,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
         }
         break;
       case SyntaxKind5.PropertyAccessExpression:
-        if (parent.expression === node) {
+        if (parent.expression === node && parent.name?.text !== "length") {
           return false;
         }
         break;
