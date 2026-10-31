@@ -27,4 +27,4 @@ export { hx11w9RustBool2LocalOptionBool } from './hx11w9RustBool2LocalOptionBool
 export { hx11w9RustBoolNLocalOptionBool } from './hx11w9RustBoolNLocalOptionBool.js';
 export { hx11w9RustStr2LocalOptionString } from './hx11w9RustStr2LocalOptionString.js';
 export { hx11w9RustNumber2LocalOptionF64 } from './hx11w9RustNumber2LocalOptionF64.js';
-export { hx11w9RustStrNLocalOptionString } from './hx11w9RustStrNLocalOptionString.js';
+export { hx11w9RustInt2IntNLocalOptionI64 } from './hx11w9RustInt2IntNLocalOptionI64.js';
