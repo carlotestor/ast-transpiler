@@ -3071,6 +3071,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     this.csharpMethodOverrides = /* @__PURE__ */ new WeakMap();
     // class declaration -> member name -> its LAST method of that name (base scan order)
     this.csharpClassMethodsByName = /* @__PURE__ */ new WeakMap();
+    this.csharpBaseFieldKeyNames = /* @__PURE__ */ new WeakMap();
     // method node -> the parameter indexes this printer emits as `bool?`; keyed by the ts.Program
     // the census walked, so a sticky batch program and an in-memory snippet never answer for
     // each other
@@ -3363,6 +3364,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (keyRead !== void 0) {
       return keyRead;
     }
+    const baseField = this.csharpBaseFieldElementRead(node);
+    if (baseField !== void 0) {
+      return baseField;
+    }
     return super.printElementAccessExpression(node, identation);
   }
   csharpNativeElementAccess(node) {
@@ -3480,7 +3485,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const field = this.printNode(expression, 0);
     const printedKey = this.printNode(argumentExpression, 0);
     if (CSHARP_OBJECT_DICT_FIELDS.indexOf(name) >= 0) {
-      const receiver = `((IDictionary<string, object>)${field})`;
+      const receiver = this.csharpBaseFieldDeclaredDictionary(name) ? field : `((IDictionary<string, object>)${field})`;
       return `(${field} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
     }
     return `(${field}.ContainsKey(${printedKey}) ? ${field}[${printedKey}] : null)`;
@@ -5011,6 +5016,203 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     return parent.kind !== SyntaxKind4.AsExpression && parent.kind !== SyntaxKind4.TypeAssertionExpression && parent.kind !== SyntaxKind4.NonNullExpression;
   }
+  // ===== RFM-C2-B: declared dictionary base fields, and `mod` equality against a literal =====
+  // A hand-written BaseExchange field the printer's tables above do not name is declared in the
+  // embedding build layer's derived table (csharpDeclaredBaseFieldType: the field's C# type in
+  // cs/ccxt/base/Exchange.Options.cs). Two declared shapes read natively:
+  //   - `IDictionary<string, object>` / `Dictionary<string, object>` (ccxt: urls, headers): the member IS a
+  //     dictionary, so its indexer and ContainsKey replace getValue / inOp; the helper's null receiver,
+  //     null key and missing key branches are spelled back as tests;
+  //   - `object` (ccxt: positions, currencies): the box is a dictionary whenever every write of the member in the
+  //     source file stores one (`{}` literal, a dictionary-typed value, null, undefined) and at least one
+  //     write exists, so the same reads go through the helper's own `(IDictionary<string,object>)` cast.
+  // The key is a string literal, an identifier whose printed C# type is string / string?, or an identifier
+  // whose TypeScript type is a string (printed `object` or string: `(string)key` is the helper's own cast).
+  // Every other key, a write, a delete and a name no hook declares keep the helper.
+  csharpDeclaredBaseFieldType(name) {
+    return void 0;
+  }
+  // the member is declared a dictionary type in the hand-written base (so `(IDictionary<string, object>)this.<name>` is an identity cast)
+  csharpBaseFieldDeclaredDictionary(name) {
+    const declared = typeof this.csharpDeclaredBaseFieldType === "function" ? this.csharpDeclaredBaseFieldType(name) : void 0;
+    return declared !== void 0 && declared.indexOf("Dictionary<") >= 0;
+  }
+  // `this.<field>` that the table above declares and no printer table names, or undefined
+  csharpBaseFieldName(node) {
+    if (!isPropertyAccessExpression(node) || node.expression?.kind !== SyntaxKind4.ThisKeyword) {
+      return void 0;
+    }
+    const name = node.name?.text;
+    if (CSHARP_NATIVE_FIELDS[name] !== void 0 || CSHARP_OBJECT_DICT_FIELDS.indexOf(name) >= 0 || CSHARP_MISSING_KEY_FIELDS_NATIVE.indexOf(name) >= 0) {
+      return void 0;
+    }
+    return typeof this.csharpDeclaredBaseFieldType === "function" && this.csharpDeclaredBaseFieldType(name) !== void 0 ? name : void 0;
+  }
+  // every write of `this.<name>` in the node's source file stores a dictionary (or null), and there is one
+  csharpBaseFieldWritesAreDictionaries(node, name) {
+    const source = node.getSourceFile?.();
+    if (source === void 0) {
+      return false;
+    }
+    let writes = 0;
+    let ok = true;
+    const isField = (n) => isPropertyAccessExpression(n) && n.expression?.kind === SyntaxKind4.ThisKeyword && n.name?.text === name;
+    const visit = (n) => {
+      if (!ok) {
+        return;
+      }
+      if (isBinaryExpression2(n) && this.csharpIsAssignmentOperator(n.operatorToken.kind) && isField(n.left)) {
+        writes++;
+        const right = n.right;
+        const nullish = right.kind === SyntaxKind4.NullKeyword || isIdentifier(right) && right.text === "undefined";
+        const type = this.getChecker().getTypeAtLocation(right);
+        if (n.operatorToken.kind !== SyntaxKind4.EqualsToken || !(nullish || isObjectLiteralExpression2(right) || this.csharpIsDictionaryType(type) || this.csharpNullableDictionaryType(type))) {
+          ok = false;
+        }
+      }
+      n.forEachChild(visit);
+    };
+    source.forEachChild(visit);
+    return ok && writes > 0;
+  }
+  // the receiver text of a declared base-field dictionary, or undefined
+  csharpBaseFieldDictionary(node) {
+    const name = this.csharpBaseFieldName(node);
+    if (name === void 0) {
+      return void 0;
+    }
+    const declared = this.csharpDeclaredBaseFieldType(name);
+    const field = this.printNode(node, 0);
+    if (declared.indexOf("Dictionary<") >= 0) {
+      return { text: field, type: declared, field, name };
+    }
+    if (declared === "object" && this.csharpBaseFieldWritesAreDictionaries(node, name)) {
+      const cast = `((IDictionary<string,object>)${field})`;
+      return { text: cast, type: "IDictionary<string, object>", field: cast, name };
+    }
+    return void 0;
+  }
+  // the identifier is written (assigned, ++/--) anywhere in its enclosing function
+  csharpParameterWrittenAnywhere(identifier) {
+    const scope = this.csharpEnclosingFunction(identifier);
+    if (scope === void 0) {
+      return true;
+    }
+    const name = identifier.text;
+    let written = false;
+    const visit = (n) => {
+      if (written) {
+        return;
+      }
+      if (n.kind === SyntaxKind4.Identifier && n.text === name) {
+        const parent = n.parent;
+        if (parent?.kind === SyntaxKind4.BinaryExpression && parent.left === n && this.csharpIsAssignmentOperator(parent.operatorToken.kind) || (parent?.kind === SyntaxKind4.PostfixUnaryExpression || parent?.kind === SyntaxKind4.PrefixUnaryExpression) && (parent.operator === SyntaxKind4.PlusPlusToken || parent.operator === SyntaxKind4.MinusMinusToken)) {
+          written = true;
+          return;
+        }
+      }
+      n.forEachChild(visit);
+    };
+    scope.forEachChild(visit);
+    return written;
+  }
+  // the key of a declared base-field read: { text, cast } or undefined
+  csharpBaseFieldKey(key, allowObject) {
+    if (isStringLiteralLikeNode2(key)) {
+      return { text: this.printNode(key, 0), kind: "literal" };
+    }
+    if (!isIdentifier(key)) {
+      return void 0;
+    }
+    const declared = this.csharpHx4DeclaredKeyType(key) ?? this.csharpPrintedParamType(key) ?? this.csharpParameterOperandType(key);
+    if (declared === "string" || declared === "string?") {
+      return { text: this.printNode(key, 0), kind: declared };
+    }
+    if (declared !== void 0 && declared !== "object") {
+      return void 0;
+    }
+    if (!allowObject) {
+      return void 0;
+    }
+    const binding = this.csharpReceiverBinding(key);
+    if (binding?.kind === SyntaxKind4.Parameter && (binding.initializer !== void 0 || this.csharpParameterWrittenAnywhere(key))) {
+      return void 0;
+    }
+    const type = this.getChecker().getTypeAtLocation(key);
+    const members = (type.flags & TypeFlags3.Union) !== 0 ? type.getTypes() ?? [] : [type];
+    const strings = members.filter((t) => this.isStringType(t.flags)).length;
+    const nullish = members.filter((t) => (t.flags & (TypeFlags3.Undefined | TypeFlags3.Null)) !== 0).length;
+    return strings > 0 && strings + nullish === members.length ? { text: this.printNode(key, 0), kind: "object" } : void 0;
+  }
+  // `this.<field>[key]` as a read: the helper's null-receiver, null-key and missing-key answers as tests
+  csharpBaseFieldElementRead(node) {
+    if (node?.kind !== SyntaxKind4.ElementAccessExpression || !isPropertyAccessExpression(node.expression)) {
+      return void 0;
+    }
+    const parent = node.parent;
+    const isWrite = parent?.kind === SyntaxKind4.BinaryExpression && parent.left === node && parent.operatorToken.kind >= SyntaxKind4.FirstAssignment && parent.operatorToken.kind <= SyntaxKind4.LastAssignment || parent?.kind === SyntaxKind4.DeleteExpression || (parent?.kind === SyntaxKind4.PrefixUnaryExpression || parent?.kind === SyntaxKind4.PostfixUnaryExpression) && (parent.operator === SyntaxKind4.PlusPlusToken || parent.operator === SyntaxKind4.MinusMinusToken);
+    if (isWrite || !this.ELEMENT_ACCESS_WRAPPER_OPEN || !this.ELEMENT_ACCESS_WRAPPER_CLOSE || this.printElementAccessExpressionExceptionIfAny(node)) {
+      return void 0;
+    }
+    const receiver = this.csharpBaseFieldDictionary(node.expression);
+    const key = receiver === void 0 ? void 0 : this.csharpBaseFieldKey(node.argumentExpression, !this.csharpBaseFieldDeclaredDictionary(receiver.name));
+    if (receiver === void 0 || key === void 0) {
+      return void 0;
+    }
+    const keyText = key.kind === "object" ? `(string)${key.text}` : key.text;
+    const keyTest = key.kind === "literal" || key.kind === "string" && this.csharpBaseFieldDeclaredDictionary(receiver.name) ? "" : ` && ${key.text} != null`;
+    return `(${receiver.field} != null${keyTest} && ${receiver.text}.ContainsKey(${keyText}) ? ${receiver.text}[${keyText}] : null)`;
+  }
+  // `key in this.<field>`: inOp's dictionary branch (a non-string key answers false)
+  csharpBaseFieldInExpression(key, obj) {
+    const receiver = this.csharpBaseFieldDictionary(obj);
+    const printedKey = receiver === void 0 ? void 0 : this.csharpBaseFieldKey(key, !this.csharpBaseFieldDeclaredDictionary(receiver.name));
+    if (receiver === void 0 || printedKey === void 0) {
+      return void 0;
+    }
+    if (printedKey.kind === "literal") {
+      return `(${receiver.field} != null && ${receiver.text}.ContainsKey(${printedKey.text}))`;
+    }
+    if (printedKey.kind === "string" && this.csharpBaseFieldDeclaredDictionary(receiver.name)) {
+      return `(${receiver.field} != null && ${receiver.text}.ContainsKey(${printedKey.text}))`;
+    }
+    if (printedKey.kind === "string" || printedKey.kind === "string?") {
+      return `(${receiver.field} != null && ${printedKey.text} != null && ${receiver.text}.ContainsKey(${printedKey.text}))`;
+    }
+    const source = key.getSourceFile?.();
+    const used = this.csharpBaseFieldKeyNames.get(source) ?? 0;
+    this.csharpBaseFieldKeyNames.set(source, used + 1);
+    const bound = `baseFieldKey${used}`;
+    return `(${receiver.field} != null && ${printedKey.text} is string ${bound} && ${receiver.text}.ContainsKey(${bound}))`;
+  }
+  // `isEqual (a % b, N)` -> `((a % b) == N)` when both operands are Int64 / Int64? locals: the helper takes the double remainder and converts it back, which is the
+  // integer remainder for every value the type holds in practice, and the lifted `%` / `==` answer false for a
+  // null operand exactly where isEqual does against a non-null integer literal.
+  csharpNativeModLiteralEquality(left, right, isEquality) {
+    const strip = (n) => {
+      while (n?.kind === SyntaxKind4.ParenthesizedExpression) {
+        n = n.expression;
+      }
+      return n;
+    };
+    const l = strip(left);
+    const r = strip(right);
+    const modIsLeft = isBinaryExpression2(l) && l.operatorToken.kind === SyntaxKind4.PercentToken;
+    const mod = modIsLeft ? l : r;
+    const literal = modIsLeft ? r : l;
+    if (!isBinaryExpression2(mod) || mod.operatorToken.kind !== SyntaxKind4.PercentToken || this.csharpIntegerLiteralKind(literal) === void 0) {
+      return void 0;
+    }
+    const int64 = (n) => ["Int64", "Int64?", "long", "long?"].indexOf(this.csharpArithmeticOperandType(n)) >= 0;
+    const operand = (n) => isIdentifier(n) && int64(n);
+    const divisor = mod.right;
+    if (!operand(mod.left) || !operand(divisor)) {
+      return void 0;
+    }
+    const arithmetic = `(${this.printNode(mod.left, 0)} % ${this.printNode(divisor, 0)})`;
+    const literalText = this.printNode(literal, 0);
+    return isEquality ? `(${arithmetic} == ${literalText})` : `(${arithmetic} != ${literalText})`;
+  }
   // `parseInt(...)` / `parseFloat(...)` print the runtime helper call; the folds below replace
   // it with the exact box the helper returns, everything else falls through to the printer
   printCallExpression(node, identation) {
@@ -5131,9 +5333,16 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (isPropertyAccessExpression(node) && node.expression?.kind === SyntaxKind4.ThisKeyword) {
       const name = node.name?.text;
       if (CSHARP_OBJECT_DICT_FIELDS.indexOf(name) >= 0) {
+        if (this.csharpBaseFieldDeclaredDictionary(name)) {
+          return { text: this.printNode(node, 0), type: "IDictionary<string, object>" };
+        }
         return { text: `((IDictionary<string, object>)${this.printNode(node, 0)})`, type: "IDictionary<string, object>" };
       }
-      return CSHARP_NATIVE_FIELDS[name] === void 0 ? void 0 : { text: this.printNode(node, 0), type: CSHARP_NATIVE_FIELDS[name] };
+      if (CSHARP_NATIVE_FIELDS[name] === void 0) {
+        const baseField = this.csharpBaseFieldDictionary(node);
+        return baseField === void 0 ? void 0 : { text: baseField.text, type: baseField.type };
+      }
+      return { text: this.printNode(node, 0), type: CSHARP_NATIVE_FIELDS[name] };
     }
     const callType = this.csharpCallReturnType(node);
     if (callType !== void 0 && CSHARP_NATIVE_COLLECTION_TYPES.indexOf(callType) >= 0) {
@@ -5306,7 +5515,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
       if (receiver.type.indexOf("Dictionary<") < 0) {
         return void 0;
       }
-      return nullable ? { text: receiver.text, nullTest: receiver.text } : { text: receiver.text };
+      const baseField = this.csharpBaseFieldDictionary(obj);
+      return nullable || baseField !== void 0 ? { text: receiver.text, nullTest: baseField !== void 0 ? baseField.field : receiver.text } : { text: receiver.text };
     }
     const declared = this.csharpExpressionTypeOf(obj);
     if (declared !== void 0) {
@@ -5336,6 +5546,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // `key in obj` -> `obj.ContainsKey(key)`, only when both the printed key and the printed
   // operand are already C# string / dictionary values. Every other shape keeps the inOp helper
   csharpNativeInExpression(key, obj) {
+    const baseFieldIn = this.csharpBaseFieldInExpression(key, obj);
+    if (baseFieldIn !== void 0) {
+      return baseFieldIn;
+    }
     const printedKey = this.csharpNativeStringKey(key);
     if (printedKey === void 0) {
       return this.csharpDeclaredDictInExpression(key, obj);
@@ -5593,7 +5807,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
       const isDifference = op === SyntaxKind4.ExclamationEqualsToken || op === SyntaxKind4.ExclamationEqualsEqualsToken;
       if (isEquality || isDifference) {
         const nativeEquality = this.csharpStringLiteralEquality(op, left, right, leftText, rightText);
-        const native = nativeEquality ?? this.csharpNullLiteralEquality(op, left, right, leftText, rightText) ?? this.printInlineEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeScalarFieldEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeArithmeticEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeElementLiteralEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeNumericCallEquality(left, right, leftText, rightText, isEquality);
+        const native = nativeEquality ?? this.csharpNullLiteralEquality(op, left, right, leftText, rightText) ?? this.printInlineEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeScalarFieldEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeModLiteralEquality(left, right, isEquality) ?? this.csharpNativeArithmeticEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeElementLiteralEquality(left, right, leftText, rightText, isEquality) ?? this.csharpNativeNumericCallEquality(left, right, leftText, rightText, isEquality);
         if (native !== void 0) {
           return native;
         }
