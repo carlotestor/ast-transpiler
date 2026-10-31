@@ -21,6 +21,10 @@ export declare class GoTranspiler extends BaseTranspiler {
     unifiedBoolParams: {
         [method: string]: number[];
     };
+    uncalledStringParams: {
+        [method: string]: number[];
+    };
+    stringPointerTupleCalls: string[];
     goSliceLiteralTypes: Map<any, string>;
     CCXT_GO_GETARG_DECLARED_TYPES: any;
     CCXT_GO_GETARG_SAFE_CONSUMERS: any;
@@ -358,6 +362,8 @@ export declare class GoTranspiler extends BaseTranspiler {
     goIsUnifiedStringParameter(methodName: string, index: number): boolean;
     goIsUnifiedSliceParameter(methodName: string, index: number): boolean;
     goUnifiedSliceParameterType(fn: any, param: any): string | undefined;
+    goUnifiedAnySliceParameterType(fn: any, param: any): string | undefined;
+    goIsUnifiedAnySliceParameterNode(decl: any): boolean;
     goSliceTableRootParameter(fn: any, param: any): any;
     goAnnotatedParameterText(param: any): string | undefined;
     goSliceTableDeclarationsMatch(fn: any, annotation: string): boolean;
@@ -391,6 +397,10 @@ export declare class GoTranspiler extends BaseTranspiler {
     goEnclosingClassName(fn: any): string | undefined;
     goIsPrivateKeyField(arg: any): boolean;
     goPrintedArgType(arg: any): string | undefined;
+    goIsClientUrl(arg: any): boolean;
+    goBoundIdentifierType(arg: any): string | undefined;
+    goUncalledStringParameterType(param: any): string | undefined;
+    goSiblingPassesUnifiedString(argText: string, fileText: string, at: number | undefined): boolean;
     gp15NilProvenStringPtrArg(arg: any): boolean;
     gp15SafeStringLiteralDefaultCall(call: any): boolean;
     gp15HasExitingNilGuard(ident: any): boolean;
