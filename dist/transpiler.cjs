@@ -19857,6 +19857,9 @@ var JavaTranspiler = class extends BaseTranspiler {
     // Static method emitted in place of java.util.concurrent.CompletableFuture.supplyAsync
     // for async methods. The callee owns the executor choice, so no second argument is emitted.
     this.asyncSupplier = "";
+    // `new X(args)` spelling of every plain `throw new X(args)` printed so far, keyed by the throw statement:
+    // an async body that is only that throw completes its future exceptionally (printFunctionBody).
+    this.javaThrownConstructions = /* @__PURE__ */ new WeakMap();
     // ── typed ws handler tables (hx10w5-J06) ────────────────────────────────────
     // `const methods = { 'ticker': this.handleTicker }; const method = this.safeValue (methods, topic);
     //  method.call (this, client, message)`: the table and its single read are proven together, so the
@@ -25478,6 +25481,11 @@ ${this.getIden(identation)}}}`;
       const returnNull = lastStmtIsReturn ? "" : this.getIden(identation + 2) + "return null;\n";
       const supplier = this.asyncSupplier || "java.util.concurrent.CompletableFuture.supplyAsync";
       const executorArg = !this.asyncSupplier && this.asyncExecutor ? `, ${this.asyncExecutor}` : "";
+      const onlyThrow = bodyStatements.length === 1 && _is.isThrowStatement.call(void 0, bodyStatements[0]) ? this.javaThrownConstructions.get(bodyStatements[0]) : void 0;
+      if (onlyThrow !== void 0 && executorArg === "" && initParams.length === 0 && (finalWrapperVars + insideWrappers).trim() === "") {
+        return blockOpen + finalWrapperVars + this.getIden(identation + 1) + `return java.util.concurrent.CompletableFuture.failedFuture(${onlyThrow});
+` + blockClose;
+      }
       const asyncBody = this.getIden(identation + 1) + `return ${supplier}(() -> {
 ` + insideWrappers + body + "\n" + returnNull + this.getIden(identation + 1) + `}${executorArg});
 `;
@@ -26761,12 +26769,16 @@ ${this.getIden(identation)}}}`;
             (l) => l.kind === _ast.SyntaxKind.InterfaceDeclaration || l.kind === _ast.SyntaxKind.ClassDeclaration
           );
           if (isClassDeclaration5) {
-            return this.getIden(identation) + `${this.THROW_TOKEN} ${this.NEW_TOKEN} ${exceptionName}((String)${parsedArg}) ${this.LINE_TERMINATOR}`;
+            const thrown2 = `${this.NEW_TOKEN} ${exceptionName}((String)${parsedArg})`;
+            this.javaThrownConstructions.set(node, thrown2);
+            return this.getIden(identation) + `${this.THROW_TOKEN} ${thrown2} ${this.LINE_TERMINATOR}`;
           } else {
             return this.getIden(identation) + `Helpers.throwDynamicException(${exceptionName}, ${parsedArg});return null;`;
           }
         }
-        return this.getIden(identation) + `${this.THROW_TOKEN} ${this.NEW_TOKEN} ${exceptionName}(${parsedArg}) ${this.LINE_TERMINATOR}`;
+        const thrown = `${this.NEW_TOKEN} ${exceptionName}(${parsedArg})`;
+        this.javaThrownConstructions.set(node, thrown);
+        return this.getIden(identation) + `${this.THROW_TOKEN} ${thrown} ${this.LINE_TERMINATOR}`;
       } else if (expression.expression.kind === _ast.SyntaxKind.ElementAccessExpression) {
         return this.getIden(identation) + `Helpers.throwDynamicException(${newExpression}, ${parsedArg});`;
       }

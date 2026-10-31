@@ -1239,6 +1239,9 @@ export class JavaTranspiler extends BaseTranspiler {
     // Static method emitted in place of java.util.concurrent.CompletableFuture.supplyAsync
     // for async methods. The callee owns the executor choice, so no second argument is emitted.
     asyncSupplier = '';
+    // `new X(args)` spelling of every plain `throw new X(args)` printed so far, keyed by the throw statement:
+    // an async body that is only that throw completes its future exceptionally (printFunctionBody).
+    javaThrownConstructions: WeakMap<object, string> = new WeakMap();
 
     constructor(config = {}) {
         config["parser"] = Object.assign({}, parserConfig, config["parser"] ?? {});
@@ -7205,6 +7208,15 @@ export class JavaTranspiler extends BaseTranspiler {
             const returnNull = lastStmtIsReturn ? "" : (this.getIden(identation + 2) + "return null;\n");
             const supplier = this.asyncSupplier || "java.util.concurrent.CompletableFuture.supplyAsync";
             const executorArg = (!this.asyncSupplier && this.asyncExecutor) ? `, ${this.asyncExecutor}` : "";
+            // An async body that is exactly one `throw new X(args)` can only complete its future exceptionally:
+            // the native completion API replaces the supplier lambda (no executor, no wrappers, no parameter unpack).
+            const onlyThrow = bodyStatements.length === 1 && isThrowStatement(bodyStatements[0])
+                ? this.javaThrownConstructions.get(bodyStatements[0]) : undefined;
+            if (onlyThrow !== undefined && executorArg === "" && initParams.length === 0
+                && (finalWrapperVars + insideWrappers).trim() === "") {
+                return blockOpen + finalWrapperVars + this.getIden(identation + 1)
+                    + `return java.util.concurrent.CompletableFuture.failedFuture(${onlyThrow});\n` + blockClose;
+            }
             const asyncBody = this.getIden(identation + 1) + `return ${supplier}(() -> {\n` +
                     insideWrappers +
                     body + "\n" +
@@ -8752,9 +8764,11 @@ export class JavaTranspiler extends BaseTranspiler {
                             l.kind === SyntaxKind.ClassDeclaration
                     );
                     if (isClassDeclaration) {
+                        const thrown = `${this.NEW_TOKEN} ${exceptionName}((String)${parsedArg})`;
+                        this.javaThrownConstructions.set(node, thrown);
                         return (
                             this.getIden(identation) +
-                            `${this.THROW_TOKEN} ${this.NEW_TOKEN} ${exceptionName}((String)${parsedArg}) ${this.LINE_TERMINATOR}`
+                            `${this.THROW_TOKEN} ${thrown} ${this.LINE_TERMINATOR}`
                         );
                     } else {
                         return (
@@ -8763,9 +8777,11 @@ export class JavaTranspiler extends BaseTranspiler {
                         );
                     }
                 }
+                const thrown = `${this.NEW_TOKEN} ${exceptionName}(${parsedArg})`;
+                this.javaThrownConstructions.set(node, thrown);
                 return (
                     this.getIden(identation) +
-                    `${this.THROW_TOKEN} ${this.NEW_TOKEN} ${exceptionName}(${parsedArg}) ${this.LINE_TERMINATOR}`
+                    `${this.THROW_TOKEN} ${thrown} ${this.LINE_TERMINATOR}`
                 );
             } else if (expression.expression.kind === SyntaxKind.ElementAccessExpression) {
                 return this.getIden(identation) + `Helpers.throwDynamicException(${newExpression}, ${parsedArg});`;

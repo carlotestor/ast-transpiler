@@ -50,6 +50,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     }>;
     asyncExecutor: string;
     asyncSupplier: string;
+    javaThrownConstructions: WeakMap<object, string>;
     constructor(config?: {});
     initConfig(): void;
     getBlockOpen(identation: any): string;
