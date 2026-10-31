@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -2987,6 +2987,7 @@ function csharpSliceBoundValue(bound) {
 }
 var CSHARP_MARKET_RECEIVER_NAMES = ["market", "currency"];
 var CSHARP_ELEMENT_ROW_READERS = ["safeString", "safeInteger", "safeNumber", "safeFloat", "safeBool", "safeDict", "safeList", "safeValue", "safeStringLower", "safeStringUpper", "safeIntegerProduct"];
+var CSHARP_IMPLICIT_API_FILE = /(^|[\\/])ts[\\/]src[\\/]abstract[\\/]([a-z0-9_]+[\\/])?[a-z0-9_]+\.ts$/;
 var CSHARP_FUNCTION_SCOPES = [SyntaxKind4.MethodDeclaration, SyntaxKind4.FunctionDeclaration, SyntaxKind4.FunctionExpression, SyntaxKind4.ArrowFunction, SyntaxKind4.Constructor, SyntaxKind4.GetAccessor, SyntaxKind4.SetAccessor];
 var CSHARP_OVERRIDE_PARAM_TYPES = {
   ethRpc: { 2: "IList<object>" },
@@ -3049,6 +3050,13 @@ var CSharpTranspiler = class extends BaseTranspiler {
     // locals + `Task.WhenAll`, and the promise-holding declarations that plan prints as `var`
     this.csharpPromiseAllSites = /* @__PURE__ */ new WeakMap();
     this.csharpPromiseAllTaskDeclarations = /* @__PURE__ */ new WeakSet();
+    // RF-cs-2 a (folds ccxt build/hx10w2-C07): `await Promise.all (list)` over implicit-API tasks of ONE plain
+    // T -> List<Task<T>> + Task.WhenAll. Keyed by position (csharpPromiseAllKey): a declaration reached
+    // through the checker is not the node the printer visits
+    this.csharpPromiseAllTypedAwaits = /* @__PURE__ */ new Map();
+    this.csharpPromiseAllTypedLists = /* @__PURE__ */ new Map();
+    this.csharpPromiseAllTypedLocals = /* @__PURE__ */ new Map();
+    this.csharpPromiseAllTypedPlanned = /* @__PURE__ */ new Set();
     // ws handler `message` parameter -> the typed signature this printer prints for it (D-19)
     this.csharpHandlerMessageTypes = /* @__PURE__ */ new WeakMap();
     // method declaration -> a static call reference exists (a call binds its arguments)
@@ -6317,6 +6325,17 @@ var CSharpTranspiler = class extends BaseTranspiler {
       const parsedPromise = this.printNode(declaration.initializer, identation).trimStart();
       return this.getIden(identation) + "var " + this.printNode(declaration.name) + " = " + parsedPromise;
     }
+    if (declaration?.initializer !== void 0 && declaration.name?.kind === SyntaxKind4.Identifier && this.csharpPromiseAllTypedAwaits.has(this.csharpPromiseAllKey(declaration.initializer))) {
+      return this.getIden(identation) + "List<object> " + this.printNode(declaration.name) + " = " + this.printNode(declaration.initializer, identation).trimStart();
+    }
+    if (declaration?.initializer !== void 0 && declaration.name?.kind === SyntaxKind4.Identifier) {
+      const listType = this.csharpPromiseAllTypedLists.get(this.csharpPromiseAllKey(declaration));
+      const localType = this.csharpPromiseAllTypedLocals.get(this.csharpPromiseAllKey(declaration));
+      if (listType !== void 0 || localType !== void 0) {
+        const taskDeclared = listType !== void 0 ? `List<Task<${listType}>>` : `Task<${localType}>`;
+        return this.getIden(identation) + taskDeclared + " " + this.printNode(declaration.name) + " = " + this.printNode(declaration.initializer, identation).trimStart();
+      }
+    }
     if (this.removeVariableDeclarationForFunctionExpression && declaration?.initializer && isFunctionExpression3(declaration.initializer)) {
       return this.printNode(declaration.initializer, identation).trimEnd();
     }
@@ -6491,6 +6510,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
   }
   printFunctionBody(node, identation) {
     this.csharpPromiseAllPlanBlock(node?.body);
+    this.csharpPromiseAllTypedPlanFunction(node);
     const funcParams = node.parameters;
     const initParams = [];
     if (funcParams.length > 0) {
@@ -7124,6 +7144,11 @@ var CSharpTranspiler = class extends BaseTranspiler {
     return insideTypes.length > 0 ? `${this.PROMISE_TYPE_KEYWORD}<${insideTypes}>` : void 0;
   }
   printArrayLiteralExpression(node) {
+    const taskType = this.csharpPromiseAllTypedLists.get(this.csharpPromiseAllKey(node));
+    const printed = this.csharpPromiseAllPrintList(node);
+    return taskType === void 0 ? printed : "new List<Task<" + taskType + ">>" + printed.substring("new List<object>".length);
+  }
+  csharpPromiseAllPrintList(node) {
     let arrayOpen = this.ARRAY_OPENING_TOKEN;
     const elems = node.elements;
     const elements = node.elements.map((e) => this.printNode(e)).join(", ");
@@ -7456,6 +7481,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // to be emitted as `var` (a concrete Task<T>) by the time the site reads its `.Result`
   printBlock(node, identation, chainBlock = false) {
     this.csharpPromiseAllPlanBlock(node);
+    if (node?.parent !== void 0 && CSHARP_FUNCTION_SCOPES.indexOf(node.parent.kind) >= 0) {
+      this.csharpPromiseAllTypedPlanFunction(node.parent);
+    }
     return super.printBlock(node, identation, chainBlock);
   }
   printVariableStatement(node, identation) {
@@ -7646,6 +7674,227 @@ var CSharpTranspiler = class extends BaseTranspiler {
     });
     return lines.map((line) => indent + line).join("\n");
   }
+  // ---- RF-cs-2 a (folds ccxt build/hx10w2-C07): promiseAll over implicit-API tasks -> Task.WhenAll ----
+  //
+  // PromiseAll re-boxes every element through AsTaskOfObject/FromTyped, which hands a plain box back
+  // unchanged. When EVERY element of the awaited list is the Task<T> of an implicit-API endpoint (a
+  // `this.<m> (...)` call whose resolved signature is declared in the generated ts/src/abstract/<ex>.ts,
+  // so the generated api file prints exactly `Task<T>` for it) and T is one plain box, the list is a
+  // List<Task<T>> and Task.WhenAll waits for exactly those tasks. The list is either an array literal
+  // or a local that is only pushed to, measured by `.length` and awaited here; a task local feeding it
+  // is read nowhere else. Anything unproven keeps the helper call.
+  csharpPromiseAllKey(node) {
+    return (node.getSourceFile?.()?.fileName ?? "") + ":" + node.pos + ":" + node.end + ":" + node.kind;
+  }
+  // the T of the List<Task<T>> an identifier names when the typed plan declared it so, else undefined
+  csharpPromiseAllTypedListRead(receiver) {
+    if (receiver?.kind !== SyntaxKind4.Identifier) {
+      return void 0;
+    }
+    const declaration = this.csharpReceiverBinding(receiver);
+    return declaration === void 0 ? void 0 : this.csharpPromiseAllTypedLists.get(this.csharpPromiseAllKey(declaration));
+  }
+  printAwaitExpression(node, identation) {
+    if (this.csharpPromiseAllTypedAwaits.has(this.csharpPromiseAllKey(node))) {
+      return `new List<object>(await Task.WhenAll(${this.printNode(node.expression.arguments[0], 0)}))`;
+    }
+    return super.printAwaitExpression(node, identation);
+  }
+  // plan every `const r = await Promise.all (list)` of one function (nested functions plan themselves)
+  csharpPromiseAllTypedPlanFunction(fn) {
+    if (fn?.body === void 0 || this.checkerOrUndefined() === void 0) {
+      return;
+    }
+    const functionKey = this.csharpPromiseAllKey(fn);
+    if (this.csharpPromiseAllTypedPlanned.has(functionKey)) {
+      return;
+    }
+    this.csharpPromiseAllTypedPlanned.add(functionKey);
+    const visit = (n) => {
+      if (CSHARP_FUNCTION_SCOPES.indexOf(n.kind) >= 0) {
+        return;
+      }
+      if (n.kind === SyntaxKind4.AwaitExpression) {
+        this.csharpPromiseAllTypedPlanAwait(fn, n);
+      }
+      n.forEachChild(visit);
+    };
+    fn.body.forEachChild(visit);
+  }
+  csharpPromiseAllTypedPlanAwait(fn, awaited) {
+    const call = awaited.expression;
+    if (call?.kind !== SyntaxKind4.CallExpression || call.expression?.getText() !== "Promise.all" || call.arguments?.length !== 1) {
+      return;
+    }
+    const declaration = awaited.parent;
+    if (declaration?.kind !== SyntaxKind4.VariableDeclaration || declaration.initializer !== awaited || declaration.name?.kind === SyntaxKind4.Identifier && (declaration.parent?.flags & NodeFlags.Const) === 0 || declaration.parent?.declarations?.length !== 1 || declaration.parent.parent?.kind !== SyntaxKind4.VariableStatement || this.csharpPromiseAllSites.has(declaration.parent.parent)) {
+      return;
+    }
+    const argument = call.arguments[0];
+    let list = void 0;
+    let literal = void 0;
+    const elements = [];
+    if (argument.kind === SyntaxKind4.ArrayLiteralExpression) {
+      literal = argument;
+    } else if (argument.kind === SyntaxKind4.Identifier) {
+      list = this.csharpPromiseAllLocalDeclaration(fn, argument);
+      literal = list?.initializer;
+      if (literal?.kind !== SyntaxKind4.ArrayLiteralExpression || !this.csharpPromiseAllListUsesAreProvable(fn, list, argument, elements)) {
+        return;
+      }
+    } else {
+      return;
+    }
+    elements.unshift(...literal.elements);
+    if (elements.length === 0) {
+      return;
+    }
+    let taskType = void 0;
+    const taskLocals = [];
+    for (const element of elements) {
+      const resolved = this.csharpPromiseAllTypedElement(fn, element);
+      if (resolved === void 0 || taskType !== void 0 && taskType !== resolved.type) {
+        return;
+      }
+      taskType = resolved.type;
+      if (resolved.declaration !== void 0) {
+        taskLocals.push(resolved.declaration);
+      }
+    }
+    if (taskType === void 0) {
+      return;
+    }
+    this.csharpPromiseAllTypedAwaits.set(this.csharpPromiseAllKey(awaited), taskType);
+    this.csharpPromiseAllTypedLists.set(this.csharpPromiseAllKey(literal), taskType);
+    if (list !== void 0) {
+      this.csharpPromiseAllTypedLists.set(this.csharpPromiseAllKey(list), taskType);
+    }
+    for (const local of taskLocals) {
+      this.csharpPromiseAllTypedLocals.set(this.csharpPromiseAllKey(local), taskType);
+    }
+  }
+  // the single-declarator `const|let name = [...]` statement of this function an identifier names
+  csharpPromiseAllLocalDeclaration(fn, identifier) {
+    const declaration = this.csharpReceiverBinding(identifier);
+    if (declaration?.kind !== SyntaxKind4.VariableDeclaration || declaration.name?.kind !== SyntaxKind4.Identifier || declaration.parent?.declarations?.length !== 1 || declaration.parent.parent?.kind !== SyntaxKind4.VariableStatement || this.csharpEnclosingFunction(declaration)?.pos !== fn.pos) {
+      return void 0;
+    }
+    return declaration;
+  }
+  // every mention of the local other than its declaration is `name.push (x)` as a statement, a
+  // `.length` read, or the awaited argument itself; the pushed values join `elements`
+  csharpPromiseAllListUsesAreProvable(fn, list, awaitedArgument, elements) {
+    const name = list.name.text;
+    const listKey = this.csharpPromiseAllKey(list);
+    let provable = true;
+    const visit = (n) => {
+      if (!provable) {
+        return;
+      }
+      if (n.kind === SyntaxKind4.Identifier && n.text === name && n !== list.name && n.pos !== list.name.pos) {
+        const memberName = n.parent?.kind === SyntaxKind4.PropertyAccessExpression && n.parent.name === n;
+        const binding = memberName ? void 0 : this.csharpReceiverBinding(n);
+        if (binding !== void 0 && this.csharpPromiseAllKey(binding) === listKey && n.pos !== awaitedArgument.pos) {
+          const access = n.parent;
+          const call = access?.parent;
+          const sameFunction = this.csharpEnclosingFunction(n)?.pos === fn.pos;
+          if (!sameFunction || access?.kind !== SyntaxKind4.PropertyAccessExpression || access.expression !== n) {
+            provable = false;
+          } else if (access.name?.text === "push") {
+            if (call?.kind !== SyntaxKind4.CallExpression || call.expression !== access || call.arguments?.length !== 1 || call.parent?.kind !== SyntaxKind4.ExpressionStatement) {
+              provable = false;
+            } else {
+              elements.push(call.arguments[0]);
+            }
+          } else if (access.name?.text !== "length" || call?.kind === SyntaxKind4.BinaryExpression && call.left === access && call.operatorToken?.kind >= SyntaxKind4.FirstAssignment && call.operatorToken?.kind <= SyntaxKind4.LastAssignment) {
+            provable = false;
+          }
+        }
+      }
+      n.forEachChild(visit);
+    };
+    fn.body.forEachChild(visit);
+    return provable;
+  }
+  // one list element: a `this.<endpoint> (...)` call, or a local read nowhere else whose only
+  // initializer is such a call; the T of its Task<T>
+  csharpPromiseAllTypedElement(fn, element) {
+    if (element?.kind === SyntaxKind4.CallExpression) {
+      const type2 = this.csharpImplicitApiTaskType(element);
+      return type2 === void 0 ? void 0 : { type: type2 };
+    }
+    if (element?.kind !== SyntaxKind4.Identifier) {
+      return void 0;
+    }
+    const declaration = this.csharpPromiseAllLocalDeclaration(fn, element);
+    const type = declaration?.initializer === void 0 ? void 0 : this.csharpImplicitApiTaskType(declaration.initializer);
+    if (type === void 0 || this.csharpPromiseAllMentions(fn, declaration) !== 1) {
+      return void 0;
+    }
+    return { type, declaration };
+  }
+  csharpPromiseAllMentions(fn, declaration) {
+    const key = this.csharpPromiseAllKey(declaration);
+    let count = 0;
+    const visit = (n) => {
+      if (n.kind === SyntaxKind4.Identifier && n.text === declaration.name.text && n.pos !== declaration.name.pos && !(n.parent?.kind === SyntaxKind4.PropertyAccessExpression && n.parent.name === n)) {
+        const binding = this.csharpReceiverBinding(n);
+        if (binding !== void 0 && this.csharpPromiseAllKey(binding) === key) {
+          count++;
+        }
+      }
+      n.forEachChild(visit);
+    };
+    fn.body.forEachChild(visit);
+    return count;
+  }
+  // `this.<m> (...)` whose resolved signature is a method of the generated implicit-API abstract class:
+  // the generated C# api prints `Task<T>` with T from the declared Promise<...> (Dict -> a dictionary,
+  // List -> a list, string -> string, a union -> object), which is the T this answers when it is plain
+  csharpImplicitApiTaskType(call) {
+    const callee = call?.expression;
+    if (call?.kind !== SyntaxKind4.CallExpression || callee?.kind !== SyntaxKind4.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind4.ThisKeyword) {
+      return void 0;
+    }
+    const checker = this.checkerOrUndefined();
+    let returned = void 0;
+    try {
+      const signature = checker?.getResolvedSignature(call);
+      const declaration = signature?.declaration?.resolve();
+      const fileName = declaration?.getSourceFile?.()?.fileName;
+      if (declaration?.kind !== SyntaxKind4.MethodDeclaration || typeof fileName !== "string" || !CSHARP_IMPLICIT_API_FILE.test(fileName)) {
+        return void 0;
+      }
+      returned = checker.getReturnTypeOfSignature(signature);
+      if (this.getTypeFromRawType(returned) !== this.PROMISE_TYPE_KEYWORD) {
+        return void 0;
+      }
+      const resolved = checker.getTypeArguments(returned);
+      return resolved?.length === 1 ? this.csharpImplicitApiBodyType(resolved[0]) : void 0;
+    } catch (e) {
+      return void 0;
+    }
+  }
+  csharpImplicitApiBodyType(type) {
+    const members = (type.flags & TypeFlags3.Union) !== 0 ? type.getTypes() : [type];
+    const kinds = /* @__PURE__ */ new Set();
+    for (const member of members) {
+      if ((member.flags & TypeFlags3.String) !== 0) {
+        kinds.add("string");
+      } else if (member.getSymbol()?.escapedName === "Array") {
+        const element = this.csharpPromiseAllIndexType(member);
+        if (element === void 0 || (element.flags & TypeFlags3.Any) === 0) {
+          return void 0;
+        }
+        kinds.add("List<object>");
+      } else if (this.csharpPromiseAllIsIndexOnlyObject(member)) {
+        kinds.add("Dictionary<string, object>");
+      } else {
+        return void 0;
+      }
+    }
+    return kinds.size === 1 ? [...kinds][0] : kinds.size > 1 ? "object" : void 0;
+  }
   printMathFloorCall(node, identation, parsedArg = void 0) {
     return `(Math.Floor(Double.Parse((${parsedArg}).ToString())))`;
   }
@@ -7659,6 +7908,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
     return `((${parsedArg} is int) || (${parsedArg} is long) || (${parsedArg} is Int32) || (${parsedArg} is Int64))`;
   }
   printArrayPushCall(node, identation, name = void 0, parsedArg = void 0) {
+    if (this.csharpPromiseAllTypedListRead(node?.expression?.expression) !== void 0) {
+      return `${name}.Add(${parsedArg})`;
+    }
     if (this.csharpReceiverIsDeclaredList(node?.expression?.expression)) {
       return `${name}.Add(${parsedArg})`;
     }
