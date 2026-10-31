@@ -296,6 +296,13 @@ export declare class GoTranspiler extends BaseTranspiler {
     goAnnotatedStringLocal(declaration: any, goType: string, scope: any, name: string): boolean;
     goAnnotatedStringLocalHasNilShapedRead(scope: any, declaration: any, name: string): boolean;
     goDefaultedSafeStringCallOrTypedDefault(call: any): boolean;
+    goDefaultedStringLocal(declaration: any, goType: string, name: string): boolean;
+    goDefaultedStringSafeStringCall(call: any, selfName: string | undefined): boolean;
+    goDefaultedStringMethods: Set<string>;
+    goDefaultedStringContainers: Set<string>;
+    goDefaultedStringUseIsNative(n: any, name: string): boolean;
+    goDefaultedStringContainer(node: any): boolean;
+    goDefaultedStringWriteText(node: any, identation: any): string | undefined;
     goAwaitReceiveUnbox(awaitNode: any, printedInitializer: string): {
         goType: string;
         wrap: (recv: string) => string;

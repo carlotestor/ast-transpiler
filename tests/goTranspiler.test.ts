@@ -628,6 +628,61 @@ describe('go pointer-typed Safe* body locals', () => {
         const output = squash(transpiler.transpileGo(input).content);
         expect(output).toContain("var id *string = this.SafeString(o, \"id\", \"dflt\")");
     });
+    test('an unannotated local bound to a literal-default safeString is a string when every use reads it as one; a nil-shaped read, a return or a foreign write keeps the pointer', () => {
+        const input =
+        "class Exchange {\n" +
+        "    trades = {};\n" +
+        "    safeString(a, b, c) { return a; }\n" +
+        "    safeStringLower(a, b, c) { return a; }\n" +
+        "    safeDict(a, b, c) { return a; }\n" +
+        "    bar(a, b) { return a; }\n" +
+        "    native(o, trade, result) {\n" +
+        "        const base = this.safeString (o, 'b', '');\n" +
+        "        const lower = this.safeStringLower (o, 'l', '');\n" +
+        "        const m = this.safeString (trade, base);\n" +
+        "        const d = this.safeDict (this.trades, base, {});\n" +
+        "        if (!(base in this.trades)) { this.trades[base] = 1; }\n" +
+        "        if (lower === 'a') { result.push (lower.length); }\n" +
+        "        const parts = lower.split ('_');\n" +
+        "        let t = this.safeString (o, 't', 'limit');\n" +
+        "        if (o['x']) { t = 'market'; }\n" +
+        "        if (o['y']) { t = this.safeString (o, 'y', t); }\n" +
+        "        return [ m, d, parts, base + 'x', 'p' + t ];\n" +
+        "    }\n" +
+        "    nilRead(o) {\n" +
+        "        const a = this.safeString (o, 'a', 'z');\n" +
+        "        if (a !== undefined) { return 1; }\n" +
+        "        return 0;\n" +
+        "    }\n" +
+        "    returned(o) {\n" +
+        "        const b = this.safeString (o, 'b', 'z');\n" +
+        "        return b;\n" +
+        "    }\n" +
+        "    handedOver(o) {\n" +
+        "        const c = this.safeString (o, 'c', 'z');\n" +
+        "        return this.bar (c, 1);\n" +
+        "    }\n" +
+        "    foreignWrite(o) {\n" +
+        "        let e = this.safeString (o, 'e', 'z');\n" +
+        "        e = this.safeString (o, 'f');\n" +
+        "        return e + 'x';\n" +
+        "    }\n" +
+        "}\n" +
+        "";
+        const output = squash(transpiler.transpileGo(input).content);
+        expect(output).toContain("var base string = *this.SafeString(o, \"b\", \"\")");
+        expect(output).toContain("var lower string = *this.SafeStringLower(o, \"l\", \"\")");
+        expect(output).toContain("var t string = *this.SafeString(o, \"t\", \"limit\")");
+        expect(output).toContain("t = \"market\"");
+        expect(output).toContain("t = *this.SafeString(o, \"y\", t)");
+        expect(output).not.toContain("SafeStringPtr(\"market\")");
+        expect(output).toContain("base + \"x\"");
+        expect(output).toContain("strings.Split(lower, \"_\")");
+        expect(output).toContain("var a *string = this.SafeString(o, \"a\", \"z\")");
+        expect(output).toContain("var b *string = this.SafeString(o, \"b\", \"z\")");
+        expect(output).toContain("var c *string = this.SafeString(o, \"c\", \"z\")");
+        expect(output).toContain("var e *string = this.SafeString(o, \"e\", \"z\")");
+    });
     test('an annotated local later written a nil-able value stays a pointer', () => {
         const input =
         "class Exchange {\n" +
@@ -5015,8 +5070,8 @@ describe('go string concat operands -> defaulted SafeString locals', () => {
         const output = squash(transpiler.transpileGo(local(
             "        const fromId = this.safeString (item, 'from', 'x');\n" +
             "        return fromId + '_' + 'ok';\n")).content);
-        expect(output).toContain('var fromId *string = this.SafeString(item, "from", "x")');
-        expect(output).toContain('return *fromId + "_" + "ok"');
+        expect(output).toContain('var fromId string = *this.SafeString(item, "from", "x")');
+        expect(output).toContain('return fromId + "_" + "ok"');
         expect(output).not.toContain('Add(');
     });
     test('a missing default keeps the helper call', () => {
@@ -5050,7 +5105,9 @@ describe('go string concat operands -> defaulted SafeString locals', () => {
             "        let fromId = this.safeString (item, 'from', 'x');\n" +
             "        fromId = this.safeString (item, 'other', 'y');\n" +
             "        return fromId + '_' + 'ok';\n")).content);
-        expect(output).toContain('return *fromId + "_" + "ok"');
+        expect(output).toContain('var fromId string = *this.SafeString(item, "from", "x")');
+        expect(output).toContain('fromId = *this.SafeString(item, "other", "y")');
+        expect(output).toContain('return fromId + "_" + "ok"');
         expect(output).not.toContain('Add(');
     });
     test('two defaulted locals deref on both sides of the operator', () => {
@@ -5058,7 +5115,7 @@ describe('go string concat operands -> defaulted SafeString locals', () => {
             "        const first = this.safeString (item, 'a', 'x');\n" +
             "        const second = this.safeString (other, 'b', 'y');\n" +
             "        return first + ':' + second;\n")).content);
-        expect(output).toContain('return *first + ":" + *second');
+        expect(output).toContain('return first + ":" + second');
         expect(output).not.toContain('Add(');
     });
     test('a defaulted call inline in the expression is derefable too', () => {
@@ -6024,11 +6081,11 @@ describe('go native string operations (strings.*)', () => {
         expect(output).toContain('var p1 []string = Split(a, "-")');
         expect(output).toContain('EndsWith(a, "y")');
         // a literal default makes SafeString's nil return unreachable
-        expect(output).toContain('var p2 []string = strings.Split(*b, "-")');
-        expect(output).toContain('var u string = strings.ToUpper(*b)');
-        expect(output).toContain('var s string = *b');
-        expect(output).toContain('var r string = strings.Replace(*b, "a", "b", 1)');
-        expect(output).toContain('strings.HasPrefix(*b, "x")');
+        expect(output).toContain('var p2 []string = strings.Split(b, "-")');
+        expect(output).toContain('var u string = strings.ToUpper(b)');
+        expect(output).toContain('var s string = b');
+        expect(output).toContain('var r string = strings.Replace(b, "a", "b", 1)');
+        expect(output).toContain('strings.HasPrefix(b, "x")');
         // the checker narrowed `a` inside the guard
         expect(output).toContain('var l string = strings.ToLower(*a)');
     });
@@ -7511,7 +7568,8 @@ describe('hx4 G06 length / indexOf on proven non-nil *string', () => {
         "    }\n" +
         "}\n";
         const output = sq(transpiler.transpileGo(input).content);
-        expect(output).toContain('len(*tag)');
+        expect(output).toContain('var tag string = *this.SafeString(item, "tag", "")');
+        expect(output).toContain('len(tag)');
         expect(output).toMatch(/Get(Array)?Length\(raw\)/);
         expect(output).not.toContain('len(*raw)');
         expect(output).toContain('if raw == nil { return -1 }'); // pre-existing guarded literal

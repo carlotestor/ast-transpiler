@@ -4040,6 +4040,9 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         if (this.goAnnotatedStringLocal(declaration, goType, scope, sourceName)) {
             return 'string';
         }
+        if (this.goDefaultedStringLocal(declaration, goType, sourceName)) {
+            return 'string';
+        }
         // outside any nested resolution the verdict depends only on (declaration, goType)
         const stable = (this.goLocalTypeResolution.size <= 1) && (this.goDeclaredTypeInProgress.size === 0);
         const memoKey = goType;
@@ -4110,6 +4113,120 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return false;
         }
         return this.goDeclaredTypeOfIdentifier(call.arguments[arity - 1]) === 'string';
+    }
+
+    // hx11 FM-GO1 GO1-C: `const x = this.safeString (o, k, 'lit')` (also Lower/Upper, bare or `: Str`). The Go
+    // method answers a fresh non-nil pointer for a literal default, so a local that is never rebound and
+    // only read as a string (`+` operand, `=== 'lit'`, a string method, a key into a ws cache, `as string`),
+    // or rewritten by a literal / defaulted SafeString write, is a plain `string`: `var x string = *this.SafeString(..)`.
+    // A nil compare, truthiness, a call argument or any other read keeps the pointer.
+    goDefaultedStringLocal(declaration, goType: string, name: string): boolean {
+        if ((goType !== '*string') || (declaration.name?.kind !== SyntaxKind.Identifier)
+            || (declaration.parent?.parent?.kind !== SyntaxKind.FirstStatement)) {
+            return false;
+        }
+        if ((declaration.type !== undefined) && ![ 'Str', 'string' ].includes(declaration.type.getText().trim())) {
+            return false;
+        }
+        if (!this.goDefaultedStringSafeStringCall(declaration.initializer, undefined)) {
+            return false;
+        }
+        return this.goDeclaredLocalTypeIfSafe(declaration, 'string', (n) => this.goDefaultedStringUseIsNative(n, name),
+            (n) => ((n.parent?.kind === SyntaxKind.PropertyAccessExpression) && (n.parent.name === n))
+                || ((n.parent?.kind === SyntaxKind.PropertyAssignment) && (n.parent.name === n))
+                || !this.goIdentifierRefersToDeclaration(n, declaration)) === 'string';
+    }
+
+    // `this.safeString (a, b, 'lit')` (Lower/Upper too); with `selfName` the default may also be that local
+    goDefaultedStringSafeStringCall(call, selfName: string | undefined): boolean {
+        if ((call?.kind !== SyntaxKind.CallExpression) || (call.expression?.kind !== SyntaxKind.PropertyAccessExpression)
+            || (call.expression.expression?.kind !== SyntaxKind.ThisKeyword)
+            || !/^safeString(?:Lower|Upper)?$/.test(String(call.expression.name?.text)) || ((call.arguments?.length ?? 0) !== 3)) {
+            return false;
+        }
+        const last: any = call.arguments[2];
+        return this.goIsStringLiteralNode(last) || ((selfName !== undefined) && (last?.kind === SyntaxKind.Identifier) && (last.text === selfName));
+    }
+
+    goDefaultedStringMethods = new Set([ 'split', 'indexOf', 'toLowerCase', 'toUpperCase', 'replace', 'startsWith', 'endsWith', 'padStart', 'trim', 'toString' ]);
+    goDefaultedStringContainers = new Set([ 'ohlcvs', 'trades', 'fundingRates', 'orderbooks', 'markets_by_id' ]);
+
+    // one read or write of the local that a Go `string` serves natively
+    goDefaultedStringUseIsNative(n, name: string): boolean {
+        let current: any = n;
+        while ((current.parent?.kind === SyntaxKind.ParenthesizedExpression)
+            || ((current.parent?.kind === SyntaxKind.AsExpression) && (current.parent.type?.kind === SyntaxKind.StringKeyword))) {
+            current = current.parent;
+        }
+        const parent: any = current.parent;
+        switch (parent?.kind) {
+        case SyntaxKind.BinaryExpression: {
+            const op = parent.operatorToken.kind;
+            if (op === SyntaxKind.PlusToken) {
+                return true;
+            }
+            if ((op === SyntaxKind.EqualsEqualsEqualsToken) || (op === SyntaxKind.ExclamationEqualsEqualsToken)
+                || (op === SyntaxKind.EqualsEqualsToken) || (op === SyntaxKind.ExclamationEqualsToken)) {
+                return this.goIsStringLiteralNode((parent.left === current) ? parent.right : parent.left);
+            }
+            if (op === SyntaxKind.InKeyword) {
+                return (parent.left === current) && this.goDefaultedStringContainer(parent.right);
+            }
+            if ((op === SyntaxKind.EqualsToken) && (parent.left === current)) {
+                return this.goIsStringLiteralNode(parent.right) || this.goDefaultedStringSafeStringCall(parent.right, name);
+            }
+            return false;
+        }
+        case SyntaxKind.PropertyAccessExpression:
+            if (parent.expression !== current) {
+                return false;
+            }
+            return (parent.name?.text === 'length')
+                || (this.goDefaultedStringMethods.has(parent.name?.text) && (parent.parent?.kind === SyntaxKind.CallExpression) && (parent.parent.expression === parent));
+        case SyntaxKind.ElementAccessExpression:
+            return (parent.argumentExpression === current) && this.goDefaultedStringContainer(parent.expression);
+        // the default slot of a defaulted SafeString call takes any
+        case SyntaxKind.CallExpression: {
+            if (current === parent.arguments?.[2]) {
+                return this.goDefaultedStringSafeStringCall(parent, name);
+            }
+            // a plain argument of a parameter the printer already signs as Go `string` (the pointer read printed its deref there)
+            const index = (parent.arguments ?? []).indexOf(current);
+            const callee: any = parent.expression;
+            if (index < 0) {
+                return false;
+            }
+            // the runtime accessors take `any` and deref a pointer, so the string reads the same
+            if (GO_NIL_INIT_ANY_ARG_CALLEES.has(this.printNode(callee, 0).trim())) {
+                return true;
+            }
+            if ((callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)
+                || this.goIsUnifiedStringParameter(String(callee.name?.text), index)) {
+                return false;
+            }
+            const param = this.gp15CallParamAt(parent, index);
+            return (param !== undefined) && (this.goNativeParameterType(param) === 'string');
+        }
+        }
+        return false;
+    }
+
+    // `this.<field>` of the ws caches keyed by symbol
+    goDefaultedStringContainer(node): boolean {
+        const inner: any = this.goUnwrapParenthesizedNode(node);
+        return (inner?.kind === SyntaxKind.PropertyAccessExpression) && (inner.expression?.kind === SyntaxKind.ThisKeyword)
+            && this.goDefaultedStringContainers.has(inner.name?.text);
+    }
+
+    // `x = this.safeString (o, k, 'lit' | x)` on a `string` local: the call answers a pointer, the local holds its pointee
+    goDefaultedStringWriteText(node, identation): string | undefined {
+        const { left, right } = node;
+        if ((left?.kind !== SyntaxKind.Identifier) || !this.goDefaultedStringSafeStringCall(right, left.text)
+            || (this.goDeclaredTypeOfIdentifier(left) !== 'string')) {
+            return undefined;
+        }
+        const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trim();
+        return `${this.printNode(left, 0)} = *${value}`;
     }
 
     // Typed async receive: an extension that knows the core's channel element type replaces
@@ -10938,7 +11055,7 @@ ${this.getIden(identation)}${returnStatement}`;
         }
 
         if (operatorToken.kind === SyntaxKind.EqualsToken) {
-            const pointerWrite = this.goPointerWriteText(node, identation);
+            const pointerWrite = this.goPointerWriteText(node, identation) ?? this.goDefaultedStringWriteText(node, identation);
             if (pointerWrite !== undefined) {
                 return pointerWrite;
             }
