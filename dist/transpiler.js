@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -8683,7 +8683,7 @@ import * as fs7 from "fs";
 init_esm_shims();
 import * as fs from "fs";
 import * as path from "path";
-import { SyntaxKind as SyntaxKind5, getLeadingCommentRanges as getLeadingCommentRanges2 } from "typescript/unstable/ast";
+import { NodeFlags as NodeFlags2, SyntaxKind as SyntaxKind5, getLeadingCommentRanges as getLeadingCommentRanges2 } from "typescript/unstable/ast";
 import { isArrowFunction as isArrowFunction3, isBinaryExpression as isBinaryExpression3, isBlock as isBlock2, isBooleanLiteral as isBooleanLiteral3, isCallExpression as isCallExpression4, isClassDeclaration as isClassDeclarationNode, isElementAccessExpression as isElementAccessExpression2, isExpressionStatement as isExpressionStatement2, isFunctionDeclaration as isFunctionDeclaration3, isFunctionExpression as isFunctionExpression4, isIfStatement as isIfStatement2, isMethodDeclaration as isMethodDeclaration3, isReturnStatement as isReturnStatement2, isSourceFile as isSourceFile3, isStatement as isStatementNode, isThrowStatement as isThrowStatement2, isTryStatement } from "typescript/unstable/ast/is";
 import { IndexKind as IndexKind2, SymbolFlags, TypeFlags as TypeFlags4 } from "typescript/unstable/sync";
 var GO_ITERATION_STATEMENT_KINDS = /* @__PURE__ */ new Set([
@@ -9350,6 +9350,28 @@ var GO_GETARG_EXCLUDED_POSITIONS = {
   "request": [1, 3],
   "sign": [1, 3]
 };
+var GO_TS_METHOD_HEADER = /\n {4}(?:(?:override|async|public|private|protected) )*([A-Za-z_$][\w$]*) \(([^\n]*)\)(?:: [^\n{]*)? \{/g;
+function goSplitHeaderParams(list) {
+  const out = [];
+  let depth = 0;
+  let current = "";
+  for (const c of list) {
+    if ("([{<".includes(c)) {
+      depth++;
+    } else if (")]}>".includes(c)) {
+      depth--;
+    }
+    if (c === "," && depth === 0) {
+      out.push(current);
+      current = "";
+    } else {
+      current += c;
+    }
+  }
+  out.push(current);
+  return out.map((p) => p.trim());
+}
+var GO_ORDER_REQUEST_BUILDER = /^(create|edit)\w*OrderRequest$/;
 var GO_PARAMS_TUPLE_HELPERS = {
   "handleUntilOption": 1,
   "handleNetworkCodeAndParams": 1,
@@ -14248,6 +14270,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   }
   // every call site of `fn` in the whole tree must pass exactly `goType` at `index`
   goParameterCallSitesPassType(fn, index, goType) {
+    return this.goCallSitesPassPrintedType(fn, index, goType) || goType === "string" && this.goCallSitesPassProvenString(fn, index);
+  }
+  goCallSitesPassPrintedType(fn, index, goType) {
     const name = fn.name.text;
     for (const call of this.goSameFileCallsOf(fn, name)) {
       const arg = call.arguments?.[index];
@@ -14285,6 +14310,113 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
     return true;
   }
+  // hx11 RFM-X4: the string call-site proofs the printed-type check cannot make (the ccxt-only
+  // tree knowledge, goTsSrcTree/goSameFileCallsOf, is what they consult). Both leave every call
+  // site of `fn` passing a Go `string` at `index`.
+  goCallSitesPassProvenString(fn, index) {
+    return this.goCallSitesPassClientUrl(fn, index) || this.goCallSitesPassOrderRequestString(fn, index);
+  }
+  // `client.url` of a ws `Client` prints `GetUrl()`, a Go string. A method whose every call site in the
+  // whole ts/src tree (not one derived sibling: the tree's call index has to equal the checker-resolved
+  // same-file sites) passes it at `index` takes a string there.
+  goCallSitesPassClientUrl(fn, index) {
+    const name = fn.name.text;
+    const calls = this.goSameFileCallsOf(fn, name);
+    const tree = this.goTsSrcTree(fn.getSourceFile());
+    if (calls.length === 0 || (tree?.callIndex.get(name) ?? []).length !== calls.length) {
+      return false;
+    }
+    return calls.every((call) => this.goIsWsClientUrl(call.arguments?.[index]));
+  }
+  goIsWsClientUrl(arg) {
+    if (arg?.kind !== SyntaxKind5.PropertyAccessExpression || arg.name?.text !== "url") {
+      return false;
+    }
+    let declaration;
+    try {
+      declaration = this.checkerOrUndefined()?.getTypeAtLocation(arg.expression)?.getSymbol?.()?.declarations?.[0]?.resolve?.();
+    } catch (e) {
+      return false;
+    }
+    return declaration?.kind === SyntaxKind5.ClassDeclaration && declaration.name?.text === "Client" && /(^|[\/])base[\/]ws[\/]Client\.ts$/.test(String(declaration.getSourceFile().fileName));
+  }
+  // the exchange's request builders: a string parameter when every same-file call site prints a Go
+  // string and every sibling (derived-class) call site is a string by text, or passes a parameter
+  // of its enclosing method that the unified string table types as a string
+  goCallSitesPassOrderRequestString(fn, index) {
+    const name = fn.name.text;
+    if (!GO_ORDER_REQUEST_BUILDER.test(name)) {
+      return false;
+    }
+    for (const call of this.goSameFileCallsOf(fn, name)) {
+      const arg = call.arguments?.[index];
+      if (arg === void 0 || arg.kind === SyntaxKind5.SpreadElement || this.goPrintedArgType(arg) !== "string") {
+        return false;
+      }
+    }
+    const tree = this.goTsSrcTree(fn.getSourceFile());
+    if (tree === void 0) {
+      return true;
+    }
+    const myClass = this.goEnclosingClassName(fn);
+    const myFile = tree.relativeOf.get(path.resolve(fn.getSourceFile().fileName));
+    for (const site of tree.callIndex.get(name) ?? []) {
+      if (site.file === myFile || !this.goTsSrcFileDerivesFrom(tree, site.file, myClass)) {
+        continue;
+      }
+      const arg = site.args[index];
+      if (arg === void 0 || !(this.goTextArgMatchesType(arg, "string", site.file, tree, site.at) || this.goSiblingPassesUnifiedString(tree.fileText.get(site.file) ?? "", site.at, arg))) {
+        return false;
+      }
+    }
+    return true;
+  }
+  // a sibling file passes a parameter of its enclosing method straight through: a Go string whenever
+  // that method's slot is in the unified string table (it prints `string` on the base, every override and
+  // the interface) and the method never reassigns it
+  goSiblingPassesUnifiedString(text, at, arg) {
+    const name = /^([A-Za-z_$][\w$]*)$/.exec((arg ?? "").trim())?.[1];
+    if (name === void 0 || at === void 0) {
+      return false;
+    }
+    const head = text.substring(0, at);
+    const header = new RegExp(GO_TS_METHOD_HEADER.source, "g");
+    let last = null;
+    let match;
+    while ((match = header.exec(head)) !== null) {
+      last = match;
+    }
+    if (last === null) {
+      return false;
+    }
+    const method = last[1];
+    const indexes = Object.prototype.hasOwnProperty.call(this.unifiedStringParams, method) ? this.unifiedStringParams[method] : void 0;
+    if (indexes === void 0) {
+      return false;
+    }
+    const params = goSplitHeaderParams(last[2]);
+    const escaped = name.replace(/\$/g, "\\$");
+    const index = params.findIndex((p) => new RegExp("^" + escaped + ":").test(p));
+    if (index < 0 || !indexes.includes(index) || /[=?]/.test(params[index].split(":")[0]) || /=/.test(params[index])) {
+      return false;
+    }
+    const body = head.substring(last.index + last[0].length);
+    return !new RegExp("(?<![\\w.$])" + escaped + "\\s*(?:[-+*/]?=(?!=)|\\+\\+|--)").test(body);
+  }
+  // `const [ marketType, query ] = this.handleMarketTypeAndParams (...)`: slot 0 is the *string tuple
+  // result; a defaulted `method: string = 'GET'` parameter is bound by GetArgString, a Go string at every
+  // consumer (the declared-type proof stops at goNativeParameterType, undefined for any defaulted parameter)
+  goBoundIdentifierArgType(arg) {
+    const decl = this.checkerOrUndefined()?.getSymbolAtLocation(arg)?.valueDeclaration?.resolve();
+    if (decl?.kind === SyntaxKind5.Parameter) {
+      return this.goGetArgParameterType(decl) === "string" ? "string" : void 0;
+    }
+    const isSlot0 = decl?.kind === SyntaxKind5.BindingElement && decl.parent?.kind === SyntaxKind5.ArrayBindingPattern && decl.parent.elements[0] === decl;
+    const holder = isSlot0 ? decl.parent.parent : void 0;
+    const init = holder?.initializer;
+    const constant = ((holder?.parent?.flags ?? 0) & NodeFlags2.Const) !== 0;
+    return constant && init?.kind === SyntaxKind5.CallExpression && init.expression?.name?.text === "handleMarketTypeAndParams" ? "*string" : void 0;
+  }
   goEnclosingClass(fn) {
     let cls = fn.parent;
     while (cls !== void 0 && cls.kind !== SyntaxKind5.ClassDeclaration && cls.kind !== SyntaxKind5.ClassExpression) {
@@ -14302,6 +14434,11 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   // the printed Go type of a call-site argument, or undefined when the printer
   // cannot name it (then the call site does not prove anything)
   goPrintedArgType(arg) {
+    const printed = this.goUnboundPrintedArgType(arg);
+    return printed === void 0 && arg.kind === SyntaxKind5.Identifier ? this.goBoundIdentifierArgType(arg) : printed;
+  }
+  // goPrintedArgType before the binding proofs (goBoundIdentifierArgType)
+  goUnboundPrintedArgType(arg) {
     if (arg.kind === SyntaxKind5.Identifier) {
       return this.goDeclaredTypeOfIdentifier(arg);
     }
@@ -19151,7 +19288,7 @@ GoTranspiler.prototype.g13NumericParameterCandidates = function(param) {
 
 // src/javaTranspiler.ts
 init_esm_shims();
-import { NodeFlags as NodeFlags2, SyntaxKind as SyntaxKind6 } from "typescript/unstable/ast";
+import { NodeFlags as NodeFlags3, SyntaxKind as SyntaxKind6 } from "typescript/unstable/ast";
 import { isArrayLiteralExpression as isArrayLiteralExpression3, isArrayTypeNode, isTupleTypeNode, isArrowFunction as isArrowFunction4, isAsExpression as isAsExpression2, isBinaryExpression as isBinaryExpression4, isBlock as isBlock3, isBooleanLiteral as isBooleanLiteral4, isCallExpression as isCallExpression5, isBreakStatement as isBreakStatement2, isClassDeclaration as isClassDeclaration3, isConditionalExpression as isConditionalExpression2, isContinueStatement as isContinueStatement2, isElementAccessExpression as isElementAccessExpression3, isExpressionStatement as isExpressionStatement3, isForInStatement, isForOfStatement, isFunctionDeclaration as isFunctionDeclaration4, isFunctionExpression as isFunctionExpression5, isIdentifier as isIdentifier2, isIfStatement as isIfStatement3, isMethodDeclaration as isMethodDeclaration4, isNonNullExpression, isNumericLiteral as isNumericLiteral3, isObjectLiteralExpression as isObjectLiteralExpression3, isParameterDeclaration as isParameterDeclaration2, isParenthesizedExpression as isParenthesizedExpression2, isPostfixUnaryExpression as isPostfixUnaryExpression2, isPrefixUnaryExpression as isPrefixUnaryExpression2, isPropertyAccessExpression as isPropertyAccessExpression2, isPropertyAssignment, isReturnStatement as isReturnStatement3, isShorthandPropertyAssignment, isSourceFile as isSourceFile4, isSpreadAssignment as isSpreadAssignment2, isSpreadElement as isSpreadElement2, isStringLiteral as isStringLiteral2, isStringLiteralLikeNode as isStringLiteralLikeNode3, isThrowStatement as isThrowStatement3, isTypeAssertion as isTypeAssertion2, isTypeOfExpression, isTypeReferenceNode, isVariableDeclaration as isVariableDeclaration2, isVariableDeclarationList } from "typescript/unstable/ast/is";
 import { API, ElementFlags, IndexKind as IndexKind3, SymbolFlags as SymbolFlags2, TypeFlags as TypeFlags5 } from "typescript/unstable/sync";
 var parserConfig5 = {
@@ -20976,7 +21113,7 @@ ${this.getIden(identation)}}}`;
     if (kind === void 0) {
       return void 0;
     }
-    const isConst = (declaration.parent?.flags & NodeFlags2.Const) !== 0;
+    const isConst = (declaration.parent?.flags & NodeFlags3.Const) !== 0;
     if (!isConst && !this.javaWritesKeepNumberKind(declaration, symbol, kind)) {
       return void 0;
     }
@@ -25592,7 +25729,7 @@ ${this.getIden(identation)}}}`;
       return false;
     }
     const declaration = this.getChecker().getSymbolAtLocation(node)?.valueDeclaration?.resolve();
-    return declaration?.kind === SyntaxKind6.VariableDeclaration && (getCombinedNodeFlags(declaration) & NodeFlags2.Const) === NodeFlags2.Const;
+    return declaration?.kind === SyntaxKind6.VariableDeclaration && (getCombinedNodeFlags(declaration) & NodeFlags3.Const) === NodeFlags3.Const;
   }
   printPromiseAllCall(node, identation, parsedArg = void 0) {
     return this.printNativePromiseAllCall(node) ?? `Helpers.promiseAll(${parsedArg})`;
@@ -27065,7 +27202,7 @@ JavaTranspiler.prototype.hx4J09CoreArgument = function(type, printed, node) {
     return void 0;
   }
   const declaration = this.javaDeclarationOfIdentifier(node);
-  if (declaration === void 0 || !isVariableDeclaration2(declaration) || declaration.name?.text !== node.text || (getCombinedNodeFlags(declaration) & NodeFlags2.Const) === 0) {
+  if (declaration === void 0 || !isVariableDeclaration2(declaration) || declaration.name?.text !== node.text || (getCombinedNodeFlags(declaration) & NodeFlags3.Const) === 0) {
     return void 0;
   }
   const initializer = declaration.initializer;
@@ -27201,7 +27338,7 @@ var JAVA_CRC32_BASE_FILE = /(^|[\\/])ts[\\/]src[\\/]base[\\/]functions[\\/]crypt
 
 // src/rustTranspiler.ts
 init_esm_shims();
-import { NodeFlags as NodeFlags3, SyntaxKind as SyntaxKind7 } from "typescript/unstable/ast";
+import { NodeFlags as NodeFlags4, SyntaxKind as SyntaxKind7 } from "typescript/unstable/ast";
 import { isArrayLiteralExpression as isArrayLiteralExpression4, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression3, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isMethodDeclaration as isMethodDeclaration5, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isVariableDeclaration as isVariableDeclaration3 } from "typescript/unstable/ast/is";
 import { IndexKind as IndexKind4, ObjectFlags, SignatureKind as SignatureKind2, SymbolFlags as SymbolFlags3, TypeFlags as TypeFlags6 } from "typescript/unstable/sync";
 var parserConfig6 = {
@@ -33949,7 +34086,7 @@ ${this.getIden(identation)}}`;
     const declaration = this.rustSingleLocalDeclaration(inner);
     if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.name?.kind !== SyntaxKind7.Identifier)
       return false;
-    if ((declaration.parent?.flags & NodeFlags3.Const) === 0)
+    if ((declaration.parent?.flags & NodeFlags4.Const) === 0)
       return false;
     const init = this.rustStripWrappers(declaration.initializer);
     return init !== void 0 && isPropertyAccessExpression3(init) && String(init.name.text) === "length";
@@ -34175,7 +34312,7 @@ ${this.getIden(identation)}}`;
       return false;
     if (isParameterDeclaration3(declaration))
       return true;
-    if (!isVariableDeclaration3(declaration) || (declaration.parent?.flags & NodeFlags3.Const) === 0 || declaration.initializer === void 0)
+    if (!isVariableDeclaration3(declaration) || (declaration.parent?.flags & NodeFlags4.Const) === 0 || declaration.initializer === void 0)
       return false;
     let clean = true;
     const visit = (n) => {
@@ -34613,7 +34750,7 @@ ${this.getIden(identation)}}`;
     if (this.rustParamShadowOf(operand) !== void 0 || this.rustStringLocalIdentifierIsTyped(operand))
       return false;
     const declaration = this.rustDeclarationOfIdentifier(operand);
-    if (declaration === void 0 || !isVariableDeclaration3(declaration) || (declaration.parent?.flags & NodeFlags3.Const) === 0)
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || (declaration.parent?.flags & NodeFlags4.Const) === 0)
       return false;
     const init = this.rustSkipWrappers(declaration.initializer);
     return init !== void 0 && isPropertyAccessExpression3(init) && String(init.name.text) === "length";
@@ -35375,7 +35512,7 @@ ${this.getIden(identation)}}`;
     if (!isIdentifier3(inner))
       return false;
     const declaration = this.rustSingleLocalDeclaration(inner);
-    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name) || declaration.initializer === void 0 || (declaration.parent?.flags & NodeFlags3.Const) === 0)
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name) || declaration.initializer === void 0 || (declaration.parent?.flags & NodeFlags4.Const) === 0)
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0)
@@ -46314,7 +46451,7 @@ function installHx5X32StringPtrParams(goTranspiler) {
   }
   goTranspiler.__hx5X32Installed = true;
   const upstreamSites = goTranspiler.goParameterCallSitesPassType;
-  const upstreamArgType = goTranspiler.goPrintedArgType;
+  const upstreamArgType = goTranspiler.goUnboundPrintedArgType ?? goTranspiler.goPrintedArgType;
   const widenedSites = function(self, fn, index) {
     const name = fn.name.text;
     for (const call of self.goSameFileCallsOf(fn, name)) {

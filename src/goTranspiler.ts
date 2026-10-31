@@ -1,7 +1,7 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
 import * as fs from "fs";
 import * as path from "path";
-import { SyntaxKind, getLeadingCommentRanges } from 'typescript/unstable/ast';
+import { NodeFlags, SyntaxKind, getLeadingCommentRanges } from 'typescript/unstable/ast';
 import { isArrowFunction, isBinaryExpression, isBlock, isBooleanLiteral, isCallExpression, isClassDeclaration as isClassDeclarationNode, isElementAccessExpression, isExpressionStatement, isFunctionDeclaration, isFunctionExpression, isIfStatement, isMethodDeclaration, isReturnStatement, isSourceFile, isStatement as isStatementNode, isThrowStatement, isTryStatement } from 'typescript/unstable/ast/is';
 import { Checker, IndexKind, SymbolFlags, TypeFlags } from 'typescript/unstable/sync';
 import type { BinaryExpression, CallExpression, Node, NodeArray, Statement } from 'typescript/unstable/ast';
@@ -732,6 +732,34 @@ const GO_GETARG_EXCLUDED_POSITIONS: { [name: string]: number[] } = {
 
 // base helpers typed `any[]` that hand back, at this index, the params map they were given
 // (unchanged, omitted or extended: always a map[string]any in Go)
+// the one-line `    [override|async|...] name (params)[: ret] {` method header of a ts/src file (4-space members)
+const GO_TS_METHOD_HEADER = /\n {4}(?:(?:override|async|public|private|protected) )*([A-Za-z_$][\w$]*) \(([^\n]*)\)(?:: [^\n{]*)? \{/g;
+
+// top-level comma split of a one-line TS parameter list
+function goSplitHeaderParams(list: string): string[] {
+    const out: string[] = [];
+    let depth = 0;
+    let current = '';
+    for (const c of list) {
+        if ('([{<'.includes(c)) {
+            depth++;
+        } else if (')]}>'.includes(c)) {
+            depth--;
+        }
+        if ((c === ',') && (depth === 0)) {
+            out.push(current);
+            current = '';
+        } else {
+            current += c;
+        }
+    }
+    out.push(current);
+    return out.map((p) => p.trim());
+}
+
+// the request builders of an exchange (`createOrderRequest`, `editOrderRequest`, `createSpotOrderRequest`...)
+const GO_ORDER_REQUEST_BUILDER = /^(create|edit)\w*OrderRequest$/;
+
 const GO_PARAMS_TUPLE_HELPERS: { [name: string]: number } = {
     'handleUntilOption': 1,
     'handleNetworkCodeAndParams': 1,
@@ -6178,6 +6206,11 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
 
     // every call site of `fn` in the whole tree must pass exactly `goType` at `index`
     goParameterCallSitesPassType(fn, index: number, goType: string): boolean {
+        return this.goCallSitesPassPrintedType(fn, index, goType)
+            || ((goType === 'string') && this.goCallSitesPassProvenString(fn, index));
+    }
+
+    goCallSitesPassPrintedType(fn, index: number, goType: string): boolean {
         const name = fn.name.text;
         for (const call of this.goSameFileCallsOf(fn, name)) {
             const arg = call.arguments?.[index];
@@ -6222,6 +6255,122 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return true;
     }
 
+    // hx11 RFM-X4: the string call-site proofs the printed-type check cannot make (the ccxt-only
+    // tree knowledge, goTsSrcTree/goSameFileCallsOf, is what they consult). Both leave every call
+    // site of `fn` passing a Go `string` at `index`.
+    goCallSitesPassProvenString(fn, index: number): boolean {
+        return this.goCallSitesPassClientUrl(fn, index) || this.goCallSitesPassOrderRequestString(fn, index);
+    }
+
+    // `client.url` of a ws `Client` prints `GetUrl()`, a Go string. A method whose every call site in the
+    // whole ts/src tree (not one derived sibling: the tree's call index has to equal the checker-resolved
+    // same-file sites) passes it at `index` takes a string there.
+    goCallSitesPassClientUrl(fn, index: number): boolean {
+        const name = fn.name.text;
+        const calls = this.goSameFileCallsOf(fn, name);
+        const tree = this.goTsSrcTree(fn.getSourceFile());
+        if ((calls.length === 0) || ((tree?.callIndex.get(name) ?? []).length !== calls.length)) {
+            return false;
+        }
+        return calls.every((call: any) => this.goIsWsClientUrl(call.arguments?.[index]));
+    }
+
+    goIsWsClientUrl(arg): boolean {
+        if ((arg?.kind !== SyntaxKind.PropertyAccessExpression) || (arg.name?.text !== 'url')) {
+            return false;
+        }
+        let declaration: any;
+        try {
+            declaration = this.checkerOrUndefined()?.getTypeAtLocation(arg.expression)?.getSymbol?.()?.declarations?.[0]?.resolve?.();
+        } catch (e) {
+            return false;
+        }
+        return (declaration?.kind === SyntaxKind.ClassDeclaration) && (declaration.name?.text === 'Client')
+            && /(^|[\/])base[\/]ws[\/]Client\.ts$/.test(String(declaration.getSourceFile().fileName));
+    }
+
+    // the exchange's request builders: a string parameter when every same-file call site prints a Go
+    // string and every sibling (derived-class) call site is a string by text, or passes a parameter
+    // of its enclosing method that the unified string table types as a string
+    goCallSitesPassOrderRequestString(fn, index: number): boolean {
+        const name = fn.name.text;
+        if (!GO_ORDER_REQUEST_BUILDER.test(name)) {
+            return false;
+        }
+        for (const call of this.goSameFileCallsOf(fn, name)) {
+            const arg = call.arguments?.[index];
+            if ((arg === undefined) || (arg.kind === SyntaxKind.SpreadElement) || (this.goPrintedArgType(arg) !== 'string')) {
+                return false;
+            }
+        }
+        const tree = this.goTsSrcTree(fn.getSourceFile());
+        if (tree === undefined) {
+            return true;
+        }
+        const myClass = this.goEnclosingClassName(fn);
+        const myFile = tree.relativeOf.get(path.resolve(fn.getSourceFile().fileName));
+        for (const site of (tree.callIndex.get(name) ?? [])) {
+            if ((site.file === myFile) || !this.goTsSrcFileDerivesFrom(tree, site.file, myClass)) {
+                continue;
+            }
+            const arg = site.args[index];
+            if ((arg === undefined) || !(this.goTextArgMatchesType(arg, 'string', site.file, tree, site.at)
+                || this.goSiblingPassesUnifiedString(tree.fileText.get(site.file) ?? '', site.at, arg))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // a sibling file passes a parameter of its enclosing method straight through: a Go string whenever
+    // that method's slot is in the unified string table (it prints `string` on the base, every override and
+    // the interface) and the method never reassigns it
+    goSiblingPassesUnifiedString(text: string, at: number | undefined, arg: string): boolean {
+        const name = /^([A-Za-z_$][\w$]*)$/.exec((arg ?? '').trim())?.[1];
+        if ((name === undefined) || (at === undefined)) {
+            return false;
+        }
+        const head = text.substring(0, at);
+        const header = new RegExp(GO_TS_METHOD_HEADER.source, 'g');
+        let last: RegExpExecArray | null = null;
+        let match: RegExpExecArray | null;
+        while ((match = header.exec(head)) !== null) {
+            last = match;
+        }
+        if (last === null) {
+            return false;
+        }
+        const method = last[1];
+        const indexes: number[] | undefined = Object.prototype.hasOwnProperty.call(this.unifiedStringParams, method) ? this.unifiedStringParams[method] : undefined;
+        if (indexes === undefined) {
+            return false;
+        }
+        const params = goSplitHeaderParams(last[2]);
+        const escaped = name.replace(/\$/g, '\\$');
+        const index = params.findIndex((p) => new RegExp('^' + escaped + ':').test(p));
+        if ((index < 0) || !indexes.includes(index) || /[=?]/.test(params[index].split(':')[0]) || /=/.test(params[index])) {
+            return false;
+        }
+        const body = head.substring(last.index + last[0].length);
+        return !new RegExp('(?<![\\w.$])' + escaped + '\\s*(?:[-+*/]?=(?!=)|\\+\\+|--)').test(body);
+    }
+
+    // `const [ marketType, query ] = this.handleMarketTypeAndParams (...)`: slot 0 is the *string tuple
+    // result; a defaulted `method: string = 'GET'` parameter is bound by GetArgString, a Go string at every
+    // consumer (the declared-type proof stops at goNativeParameterType, undefined for any defaulted parameter)
+    goBoundIdentifierArgType(arg): string | undefined {
+        const decl: any = this.checkerOrUndefined()?.getSymbolAtLocation(arg)?.valueDeclaration?.resolve();
+        if (decl?.kind === SyntaxKind.Parameter) {
+            return (this.goGetArgParameterType(decl) === 'string') ? 'string' : undefined;
+        }
+        const isSlot0 = (decl?.kind === SyntaxKind.BindingElement) && (decl.parent?.kind === SyntaxKind.ArrayBindingPattern)
+            && (decl.parent.elements[0] === decl);
+        const holder = isSlot0 ? decl.parent.parent : undefined;
+        const init = holder?.initializer;
+        const constant = ((holder?.parent?.flags ?? 0) & NodeFlags.Const) !== 0;
+        return (constant && (init?.kind === SyntaxKind.CallExpression) && (init.expression?.name?.text === 'handleMarketTypeAndParams')) ? '*string' : undefined;
+    }
+
     goEnclosingClass(fn) {
         let cls = fn.parent;
         while ((cls !== undefined) && (cls.kind !== SyntaxKind.ClassDeclaration) && (cls.kind !== SyntaxKind.ClassExpression)) {
@@ -6243,6 +6392,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     // the printed Go type of a call-site argument, or undefined when the printer
     // cannot name it (then the call site does not prove anything)
     goPrintedArgType(arg): string | undefined {
+        const printed = this.goUnboundPrintedArgType(arg);
+        return ((printed === undefined) && (arg.kind === SyntaxKind.Identifier)) ? this.goBoundIdentifierArgType(arg) : printed;
+    }
+
+    // goPrintedArgType before the binding proofs (goBoundIdentifierArgType)
+    goUnboundPrintedArgType(arg): string | undefined {
         if (arg.kind === SyntaxKind.Identifier) {
             return this.goDeclaredTypeOfIdentifier(arg);
         }

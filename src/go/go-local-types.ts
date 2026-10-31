@@ -10840,7 +10840,8 @@ function installHx5X32StringPtrParams (goTranspiler) {
     }
     goTranspiler.__hx5X32Installed = true;
     const upstreamSites = goTranspiler.goParameterCallSitesPassType;
-    const upstreamArgType = goTranspiler.goPrintedArgType;
+    // the declared-type proof alone: the binding proofs (goBoundIdentifierArgType) are not part of this widening
+    const upstreamArgType = goTranspiler.goUnboundPrintedArgType ?? goTranspiler.goPrintedArgType;
     // the upstream proof with one extra accepted argument shape: a proven Go `string`
     // (same file, by the printer's own type) or a string literal (other files, by text)
     const widenedSites = function (self, fn, index) {

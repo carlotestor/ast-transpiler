@@ -387,10 +387,18 @@ export declare class GoTranspiler extends BaseTranspiler {
     goMethodKeepsBaseSignature(fn: any): boolean;
     goHasTreeCallSite(fn: any): boolean;
     goParameterCallSitesPassType(fn: any, index: number, goType: string): boolean;
+    goCallSitesPassPrintedType(fn: any, index: number, goType: string): boolean;
+    goCallSitesPassProvenString(fn: any, index: number): boolean;
+    goCallSitesPassClientUrl(fn: any, index: number): boolean;
+    goIsWsClientUrl(arg: any): boolean;
+    goCallSitesPassOrderRequestString(fn: any, index: number): boolean;
+    goSiblingPassesUnifiedString(text: string, at: number | undefined, arg: string): boolean;
+    goBoundIdentifierArgType(arg: any): string | undefined;
     goEnclosingClass(fn: any): any;
     goEnclosingClassName(fn: any): string | undefined;
     goIsPrivateKeyField(arg: any): boolean;
     goPrintedArgType(arg: any): string | undefined;
+    goUnboundPrintedArgType(arg: any): string | undefined;
     gp15NilProvenStringPtrArg(arg: any): boolean;
     gp15SafeStringLiteralDefaultCall(call: any): boolean;
     gp15HasExitingNilGuard(ident: any): boolean;
