@@ -386,11 +386,6 @@ const CSHARP_BOOL_CALLEES_NATIVE: { [name: string]: boolean } = {
     'Precise.stringEquals': true,
 };
 
-// TS base methods the C# port hand-writes with its own signature: the TS annotation is `boolean`
-// but the C# method bound by `this.<name>(...)` returns something else (`object isDictionary`),
-// so the isTrue wrapper must stay regardless of the annotation.
-const CSHARP_HANDWRITTEN_CALLEES_NATIVE = [ 'isDictionary' ];
-
 // Declared C# types whose `Count` counts exactly what getArrayLength's IList / ICollection
 // branches count. A prefix test: these are named with element types (`List<Order>`,
 // `Dictionary<string, object>`, ...) and every member of the family carries `Count`.
@@ -3181,6 +3176,41 @@ export class CSharpTranspiler extends BaseTranspiler {
 
     csharpBaseFieldKeyNames = new WeakMap<object, number>();
 
+    // `key in recv.rejections` / `key in recv.subscriptions` on a ws client: both are string-keyed
+    // `IDictionary<string, object>` members of the hand-written class (csharpDeclaredDictMember proves a
+    // parameter declared by the TS `Client`; a local is proven by its printed declaration naming
+    // WebSocketClient). inOp's dictionary branch is ContainsKey behind the receiver and key tests, a
+    // non-string key answering false. `subscriptions` keeps its existing string-key emission: only an
+    // untyped key is new there.
+    csharpStringTableInExpression(key, obj): string | undefined {
+        if (!isPropertyAccessExpression(obj) || !isIdentifier(obj.expression)) {
+            return undefined;
+        }
+        const member = obj.name?.text as string;
+        if ((member !== 'rejections') && (member !== 'subscriptions')) {
+            return undefined;
+        }
+        const proven = this.csharpDeclaredDictMemberReceiverIsParameter(obj)
+            ? (this.csharpDeclaredDictMember(obj) !== undefined)
+            : (this.csharpHx4DeclaredKeyType(obj.expression) === 'WebSocketClient');
+        const printedKey = proven ? this.csharpBaseFieldKey(key, true) : undefined;
+        if ((printedKey === undefined) || ((member === 'subscriptions') && (printedKey.kind !== 'object'))) {
+            return undefined;
+        }
+        const table = this.printNode(obj, 0);
+        if (printedKey.kind === 'literal') {
+            return `(${table} != null && ${table}.ContainsKey(${printedKey.text}))`;
+        }
+        if (printedKey.kind !== 'object') {
+            return `(${table} != null && ${printedKey.text} != null && ${table}.ContainsKey(${printedKey.text}))`;
+        }
+        const source: any = key.getSourceFile?.();
+        const used = this.csharpBaseFieldKeyNames.get(source) ?? 0;
+        this.csharpBaseFieldKeyNames.set(source, used + 1);
+        const bound = `hx10w3Key${used}`;
+        return `(${table} != null && ${printedKey.text} is string ${bound} && ${table}.ContainsKey(${bound}))`;
+    }
+
     // `isEqual (a % b, N)` -> `((a % b) == N)` when both operands are Int64 / Int64? locals: the helper takes the double remainder and converts it back, which is the
     // integer remainder for every value the type holds in practice, and the lifted `%` / `==` answer false for a
     // null operand exactly where isEqual does against a non-null integer literal.
@@ -3202,10 +3232,17 @@ export class CSharpTranspiler extends BaseTranspiler {
         const int64 = (n) => [ 'Int64', 'Int64?', 'long', 'long?' ].indexOf(this.csharpArithmeticOperandType(n) as string) >= 0;
         const operand = (n) => isIdentifier(n) && int64(n);
         const divisor = mod.right;
-        if (!operand(mod.left) || !operand(divisor)) {
-            return undefined; // a literal divisor keeps mod(): the build layer's own mod rules print that one
+        // a positive integer literal divisor is never zero, where the helper's double remainder would answer NaN
+        const literalDivisor = (divisor?.kind === SyntaxKind.NumericLiteral) && (this.csharpIntegerLiteralKind(divisor) !== undefined) && (Number((divisor as any).text) > 0);
+        if (!operand(mod.left) || !(operand(divisor) || literalDivisor)) {
+            return undefined;
         }
-        const arithmetic = `(${this.printNode(mod.left, 0)} % ${this.printNode(divisor, 0)})`;
+        // a literal divisor keeps the helper's double remainder, cast back to the operand's integer type
+        const leftType = this.csharpArithmeticOperandType(mod.left) as string;
+        const nullable = leftType.endsWith('?');
+        const arithmetic = literalDivisor
+            ? `((${nullable ? 'Int64?' : 'Int64'})((${nullable ? 'double?' : 'double'})${this.printNode(mod.left, 0)} % ${this.printNode(divisor, 0)}))`
+            : `(${this.printNode(mod.left, 0)} % ${this.printNode(divisor, 0)})`;
         const literalText = this.printNode(literal, 0);
         return isEquality ? `(${arithmetic} == ${literalText})` : `(${arithmetic} != ${literalText})`;
     }
@@ -3600,7 +3637,7 @@ export class CSharpTranspiler extends BaseTranspiler {
         }
         const printedKey = this.csharpNativeStringKey(key);
         if (printedKey === undefined) {
-            return this.csharpDeclaredDictInExpression(key, obj);
+            return this.csharpDeclaredDictInExpression(key, obj) ?? this.csharpStringTableInExpression(key, obj);
         }
         const receiver = this.csharpNativeDictionaryReceiver(obj);
         if (receiver !== undefined) {
@@ -3609,7 +3646,7 @@ export class CSharpTranspiler extends BaseTranspiler {
         }
         // a receiver the embedding build layer retypes AFTER printing: the checker may see
         // `any` on it, so no table above names it (see csharpDeclaredDictInExpression)
-        return this.csharpDeclaredDictInExpression(key, obj);
+        return this.csharpDeclaredDictInExpression(key, obj) ?? this.csharpStringTableInExpression(key, obj);
     }
 
     // `key in obj` on a local whose EMITTED declaration is a dictionary the printer cannot name itself
@@ -7288,7 +7325,7 @@ export class CSharpTranspiler extends BaseTranspiler {
 
     // cs-14: `isTrue(<call>)` goes bare when the call's own C# signature is non-nullable `bool`: (a)
     // hand-written cs/ccxt/base callees (CSHARP_BOOL_CALLEES_NATIVE), (b) `this.<name>(...)` printed by
-    // the same csharpBooleanReturnType. Hand-written overrides and `callDynamically` keep the wrapper.
+    // the same csharpBooleanReturnType (isDictionary included). `callDynamically` keeps the wrapper.
     csharpBoolCall_Native(node): boolean {
         const callee = this.csharpCalleeName_Native(node);
         if (callee !== undefined && CSHARP_BOOL_CALLEES_NATIVE[callee] === true) {
@@ -7300,9 +7337,6 @@ export class CSharpTranspiler extends BaseTranspiler {
     // csharpBooleanReturnType of a generator-printed `this.<name>(...)` callee, else undefined
     csharpGeneratedThisCallBoolType_Native(node, callee: string | undefined): string | undefined {
         if (callee === undefined || callee.indexOf('this.') !== 0) {
-            return undefined;
-        }
-        if (CSHARP_HANDWRITTEN_CALLEES_NATIVE.indexOf(callee.substring('this.'.length)) > -1) {
             return undefined;
         }
         if (!this.csharpCalleeResolves(node)) {
