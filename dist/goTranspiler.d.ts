@@ -465,6 +465,22 @@ export declare class GoTranspiler extends BaseTranspiler {
     goInOpSubstitutedText(node: any): string | undefined;
     goInOpIfInitClause(node: any): string | undefined;
     goInOpGuardedNestedIf(node: any, identation: any): string | undefined;
+    GO_A9F_L2_BASE_MAP_FIELDS: string[];
+    goA9fL2Operands(expr: any, operator: any): any[];
+    goA9fL2NonNilIdentifier(node: any): any;
+    goA9fL2IsReceiverNilTest(test: any, dict: any): boolean;
+    goA9fL2BaseFieldMapType(dict: any): string | undefined;
+    goA9fL2LiteralDefaultDictLocal(ident: any): boolean;
+    goA9fL2MapType(dict: any, dictText: string): string | undefined;
+    goA9fL2InRead(node: any): any;
+    goA9fL2NestedGuardIf(node: any, identation: any): string | undefined;
+    goA9fL2StringKeyInitClause(node: any): string | undefined;
+    goA9fL2OrFlags(node: any): {
+        names: string[];
+        lines: string[];
+    } | undefined;
+    goA9fL2OrFlagCondition: Map<any, string>;
+    goA9fL2OrFlagIf(node: any, identation: any): string | undefined;
     goIfInOpRead(condition: any, statement?: any): any;
     GO_NATIVE_MAP_FIELDS: {
         [name: string]: string;

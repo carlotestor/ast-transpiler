@@ -9586,6 +9586,13 @@ var GoTranspiler = class extends BaseTranspiler {
     this.goInOpSubstitution = void 0;
     // Map<in-expression, sentinel>, set while an if-init print runs
     this.GO_IN_OP_SENTINEL = "goInOpBoundOk";
+    // ---- FM-A9F L2: nil-guarded lookups into the base market/currency maps and plain map locals ----
+    // `(k !== undefined) && (M !== undefined) && (k in M)` with k a `*string` the guards prove non-nil and M a
+    // map the Go side reads natively (a nil map reads as absent, so the receiver nil test is redundant):
+    // the nil guards stay outside, the lookup is one comma-ok inside. Everything is keyed on checker
+    // declarations: k's declared Go type, M's declaring class (BaseExchange) or its printed local type.
+    this.GO_A9F_L2_BASE_MAP_FIELDS = ["markets", "markets_by_id", "currencies", "currencies_by_id", "ohlcvs"];
+    this.goA9fL2OrFlagCondition = /* @__PURE__ */ new Map();
     // hand-written BaseExchange fields (go/v4/exchange.go) declared as a Go map: a `key in this.X`
     // read over one is the same two-value map read InOp runs under its lock. Any other field type
     // (Balance/Positions/interfaces) keeps the helper, whose nil and non-string-key branches differ.
@@ -15513,6 +15520,251 @@ ${this.getIden(level)}}()`;
 ${inner}${body}
 ${indent}}`);
   }
+  // the operands of a `&&` (or `||`) chain, parentheses removed, evaluation order kept
+  goA9fL2Operands(expr, operator) {
+    const inner = this.goUnwrapParenthesizedNode(expr);
+    if (inner?.kind === SyntaxKind5.BinaryExpression && inner.operatorToken?.kind === operator) {
+      return [...this.goA9fL2Operands(inner.left, operator), ...this.goA9fL2Operands(inner.right, operator)];
+    }
+    return [inner];
+  }
+  // `x !== undefined` / `x != null` on an identifier: that identifier
+  goA9fL2NonNilIdentifier(node) {
+    if (node?.kind !== SyntaxKind5.BinaryExpression || node.operatorToken?.kind !== SyntaxKind5.ExclamationEqualsToken && node.operatorToken?.kind !== SyntaxKind5.ExclamationEqualsEqualsToken) {
+      return void 0;
+    }
+    if (node.left?.kind === SyntaxKind5.Identifier && this.goIsNilLiteral(node.right)) {
+      return node.left;
+    }
+    return node.right?.kind === SyntaxKind5.Identifier && this.goIsNilLiteral(node.left) ? node.right : void 0;
+  }
+  // `M !== undefined` where M is the very receiver of the lookup
+  goA9fL2IsReceiverNilTest(test, dict) {
+    if (test?.kind !== SyntaxKind5.BinaryExpression || test.operatorToken?.kind !== SyntaxKind5.ExclamationEqualsToken && test.operatorToken?.kind !== SyntaxKind5.ExclamationEqualsEqualsToken || !this.goIsNilLiteral(test.right)) {
+      return false;
+    }
+    const left = test.left;
+    if (dict?.kind === SyntaxKind5.Identifier && left?.kind === SyntaxKind5.Identifier) {
+      return this.goIsSameSymbol(left, dict);
+    }
+    return dict?.kind === SyntaxKind5.PropertyAccessExpression && left?.kind === SyntaxKind5.PropertyAccessExpression && left.expression?.kind === SyntaxKind5.ThisKeyword && dict.expression?.kind === SyntaxKind5.ThisKeyword && left.name?.text === dict.name?.text;
+  }
+  // `this.markets` & co: a field BaseExchange declares, which the Go side holds as a plain map[string]any
+  goA9fL2BaseFieldMapType(dict) {
+    if (dict?.kind !== SyntaxKind5.PropertyAccessExpression || dict.expression?.kind !== SyntaxKind5.ThisKeyword || this.GO_A9F_L2_BASE_MAP_FIELDS.indexOf(dict.name?.text) < 0) {
+      return void 0;
+    }
+    let owner;
+    try {
+      owner = this.checkerOrUndefined()?.getSymbolAtLocation(dict.name)?.valueDeclaration?.resolve()?.parent;
+    } catch (e) {
+      owner = void 0;
+    }
+    return owner?.name?.text === "BaseExchange" ? "map[string]any" : void 0;
+  }
+  // `const m = this.safeDict (this.options, k, {})`: the decoded map or the never-nil literal default, written once,
+  // and read only as the right operand of `in`, the target of a `delete`, or the first argument of a `this.safe*`
+  // read. The ccxt typed-dict-local rule types exactly those locals `map[string]any` after printing, so the lookup
+  // can index it; any other use (an assertion, an alias handed out, a rebind) keeps the helper
+  goA9fL2LiteralDefaultDictLocal(ident) {
+    const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(ident)?.valueDeclaration?.resolve();
+    if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.parent?.parent?.kind !== SyntaxKind5.FirstStatement || declaration.name?.kind !== SyntaxKind5.Identifier) {
+      return false;
+    }
+    const init = declaration.initializer;
+    const callee = init?.expression;
+    if (init?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || callee.name?.text !== "safeDict" || init.arguments?.length !== 3) {
+      return false;
+    }
+    const container = init.arguments[0];
+    const fallback = init.arguments[2];
+    if (fallback?.kind !== SyntaxKind5.ObjectLiteralExpression || fallback.properties.length !== 0 || container?.kind !== SyntaxKind5.PropertyAccessExpression || container.expression?.kind !== SyntaxKind5.ThisKeyword || container.name?.text !== "options") {
+      return false;
+    }
+    const fileName = String(declaration.getSourceFile()?.fileName ?? "").replace(/\\/g, "/");
+    if (/(^|\/)ts\/src\/(base|prediction)\//.test(fileName)) {
+      return false;
+    }
+    const scope = this.goEnclosingFunction(declaration);
+    if (scope === void 0 || this.goLocalIsRebound(scope, declaration.name)) {
+      return false;
+    }
+    return !this.hasNodeWhere(scope, (n) => {
+      if ((n.kind === SyntaxKind5.VariableDeclaration || n.kind === SyntaxKind5.Parameter) && n !== declaration && n.name?.kind === SyntaxKind5.Identifier && n.name.text === declaration.name.text) {
+        return true;
+      }
+      if (n.kind !== SyntaxKind5.Identifier || n.text !== declaration.name.text || n === declaration.name) {
+        return false;
+      }
+      const parent = n.parent;
+      if (parent?.kind === SyntaxKind5.BinaryExpression && parent.operatorToken?.kind === SyntaxKind5.InKeyword && parent.right === n) {
+        return false;
+      }
+      if (parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === n && parent.parent?.kind === SyntaxKind5.DeleteExpression) {
+        return false;
+      }
+      const callee2 = parent?.expression;
+      return !(parent?.kind === SyntaxKind5.CallExpression && parent.arguments?.[0] === n && callee2?.kind === SyntaxKind5.PropertyAccessExpression && callee2.expression?.kind === SyntaxKind5.ThisKeyword && /^safe[A-Z]/.test(callee2.name?.text ?? ""));
+    });
+  }
+  // the Go map type of a lookup receiver: a map-typed local/parameter, or a BaseExchange field of the set above
+  goA9fL2MapType(dict, dictText) {
+    if (dict?.kind === SyntaxKind5.Identifier) {
+      return this.goPrintedTypeOfExpression(dict, dictText) ?? this.goInOpDictMapType(dict, dictText) ?? (this.goA9fL2LiteralDefaultDictLocal(dict) ? "map[string]any" : void 0);
+    }
+    if (this.goA9fL2BaseFieldMapType(dict) === void 0) {
+      return void 0;
+    }
+    return this.goInOpDictMapType(dict, dictText) ?? "map[string]any";
+  }
+  // `k in M` as an operand: its parts, or undefined
+  goA9fL2InRead(node) {
+    if (node?.kind !== SyntaxKind5.BinaryExpression || node.operatorToken?.kind !== SyntaxKind5.InKeyword) {
+      return void 0;
+    }
+    const dict = this.goUnwrapParenthesizedNode(node.right);
+    const key = this.goUnwrapParenthesizedNode(node.left);
+    return key?.kind === SyntaxKind5.Identifier ? { dict, key } : void 0;
+  }
+  // `if (k != nil) && (j != nil) && (M != nil) && (k in M) [&& (j in M[k])] { ... }` (no else):
+  // the nil guards open the statement, the lookups are one comma-ok read behind them
+  goA9fL2NestedGuardIf(node, identation) {
+    if (node?.kind !== SyntaxKind5.IfStatement || node.elseStatement !== void 0 || node.parent?.kind === SyntaxKind5.IfStatement || node.thenStatement?.kind !== SyntaxKind5.Block) {
+      return void 0;
+    }
+    const operands = this.goA9fL2Operands(node.expression, SyntaxKind5.AmpersandAmpersandToken);
+    let at = operands.length;
+    while (at > 0 && this.goA9fL2InRead(operands[at - 1]) !== void 0) {
+      at--;
+    }
+    const reads = operands.slice(at).map((o) => this.goA9fL2InRead(o));
+    if (reads.length < 1 || reads.length > 2 || at < 1) {
+      return void 0;
+    }
+    const first = reads[0];
+    const dictText = this.printNode(first.dict, 0);
+    const mapType = this.goA9fL2MapType(first.dict, dictText);
+    if (mapType !== "map[string]any" && mapType !== "map[string]map[string]any") {
+      return void 0;
+    }
+    const guards = [];
+    for (const operand of operands.slice(0, at)) {
+      const ident = this.goA9fL2NonNilIdentifier(operand);
+      if (ident !== void 0 && this.goDeclaredTypeOfIdentifier(ident) === "*string") {
+        guards.push(operand);
+      } else if (!this.goA9fL2IsReceiverNilTest(operand, first.dict)) {
+        return void 0;
+      }
+    }
+    const proven = (key) => this.goDeclaredTypeOfIdentifier(key) === "*string" && guards.some((g) => this.goIsSameSymbol(this.goA9fL2NonNilIdentifier(g), key)) && !this.goInOpPointerKeyProvenNonNil(node, key) && !this.goLocalIsRebound(this.goEnclosingFunction(key), key);
+    if (!proven(first.key) || guards.length < 1) {
+      return void 0;
+    }
+    let read = `${dictText}[*${this.printNode(first.key, 0)}]`;
+    let outerOnly = false;
+    if (reads.length === 2) {
+      const second = reads[1];
+      const inner2 = this.goUnwrapParenthesizedNode(second.dict);
+      if (mapType !== "map[string]map[string]any" || inner2?.kind !== SyntaxKind5.ElementAccessExpression || this.printNode(inner2.expression, 0) !== dictText || !this.goIsSameSymbol(this.goUnwrapParenthesizedNode(inner2.argumentExpression), first.key) || !proven(second.key)) {
+        return void 0;
+      }
+      read += `[*${this.printNode(second.key, 0)}]`;
+    } else if (mapType === "map[string]map[string]any") {
+      const statements = node.thenStatement.statements;
+      const only = statements?.length === 1 ? statements[0] : void 0;
+      const innerRead = only?.kind === SyntaxKind5.IfStatement && only.elseStatement === void 0 ? this.goA9fL2InRead(this.goUnwrapParenthesizedNode(only.expression)) : void 0;
+      const innerDict = this.goUnwrapParenthesizedNode(innerRead?.dict);
+      outerOnly = innerRead !== void 0 && innerDict?.kind === SyntaxKind5.ElementAccessExpression && this.printNode(innerDict.expression, 0) === dictText && this.goIsSameSymbol(this.goUnwrapParenthesizedNode(innerDict.argumentExpression), first.key) && guards.some((g) => this.goIsSameSymbol(this.goA9fL2NonNilIdentifier(g), innerRead.key));
+    }
+    const guardText = guards.map((g) => this.goUnwrapPrintedParens(this.printNode(g, 0)).trim()).join(" && ");
+    if (guardText.includes("\n") || dictText.includes("\n")) {
+      return void 0;
+    }
+    const indent = this.getIden(identation);
+    if (outerOnly) {
+      const kept = this.printBlock(node.thenStatement, identation, false);
+      return this.printNodeCommentsIfAny(node, identation, `${indent}if ${guardText}${kept}`);
+    }
+    const name = this.goIfInOpBindingName(node);
+    if (name === void 0) {
+      return void 0;
+    }
+    const inner = `${this.getIden(identation + 1)}if _, ${name} := ${read}; ${name}`;
+    const body = this.printBlock(node.thenStatement, identation + 1, false);
+    return this.printNodeCommentsIfAny(node, identation, `${indent}if ${guardText} {
+${inner}${body}
+${indent}}`);
+  }
+  // `else if (M !== undefined) && (k in M)` with a Go-string key k: the lookup is the arm's init clause (a plain
+  // `if` keeps the existing path, whose init clause stays behind the receiver test)
+  goA9fL2StringKeyInitClause(node) {
+    const parent = node?.parent;
+    if (parent?.kind !== SyntaxKind5.IfStatement || parent.expression !== node || parent.parent?.kind !== SyntaxKind5.IfStatement || parent.parent.elseStatement !== parent) {
+      return void 0;
+    }
+    const operands = this.goA9fL2Operands(node, SyntaxKind5.AmpersandAmpersandToken);
+    const read = operands.length === 2 ? this.goA9fL2InRead(operands[1]) : void 0;
+    if (read === void 0 || !this.goA9fL2IsReceiverNilTest(operands[0], read.dict)) {
+      return void 0;
+    }
+    const dictText = this.printNode(read.dict, 0);
+    const keyText = this.printNode(read.key, 0);
+    if (this.goA9fL2MapType(read.dict, dictText) !== "map[string]any" || this.goPrintedTypeOfExpression(read.key, keyText) !== "string" || dictText.includes("\n")) {
+      return void 0;
+    }
+    const name = this.goIfInOpBindingName(parent);
+    return name === void 0 ? void 0 : `_, ${name} := ${dictText}[${keyText}]; ${name}`;
+  }
+  // `if ((M !== undefined) && (k in M)) || ((N !== undefined) && (k in N)) {`: pure lookups with one Go-string
+  // key, so each is hoisted into a comma-ok flag and the condition is the flags' disjunction
+  goA9fL2OrFlags(node) {
+    if (node?.kind !== SyntaxKind5.IfStatement || node.parent?.kind === SyntaxKind5.IfStatement) {
+      return void 0;
+    }
+    const operands = this.goA9fL2Operands(node.expression, SyntaxKind5.BarBarToken);
+    if (operands.length < 2) {
+      return void 0;
+    }
+    const lookups = [];
+    for (const operand of operands) {
+      const pair = this.goA9fL2Operands(operand, SyntaxKind5.AmpersandAmpersandToken);
+      const read = pair.length === 2 ? this.goA9fL2InRead(pair[1]) : void 0;
+      if (read === void 0 || !this.goA9fL2IsReceiverNilTest(pair[0], read.dict)) {
+        return void 0;
+      }
+      const dictText = this.printNode(read.dict, 0);
+      const keyText = this.printNode(read.key, 0);
+      if (this.goA9fL2MapType(read.dict, dictText) !== "map[string]any" || this.goPrintedTypeOfExpression(read.key, keyText) !== "string" || dictText.includes("\n") || !/^this\.\w+$/.test(dictText)) {
+        return void 0;
+      }
+      lookups.push({ dictText, keyText });
+    }
+    const names = lookups.map((l, n) => "in" + l.dictText.replace(/^this\./, "").replace(/_(\w)/g, (_, c) => c.toUpperCase()).replace(/^\w/, (c) => c.toUpperCase()) + (lookups.findIndex((m) => m.dictText === l.dictText) < n ? String(n) : ""));
+    const scope = this.goEnclosingFunction(node);
+    if (new Set(names).size !== names.length || scope === void 0 || this.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.Identifier && names.indexOf(n.text) >= 0)) {
+      return void 0;
+    }
+    return { names, lines: lookups.map((l, n) => `_, ${names[n]} := ${l.dictText}[${l.keyText}]`) };
+  }
+  goA9fL2OrFlagIf(node, identation) {
+    const flags = this.goA9fL2OrFlags(node);
+    if (flags === void 0) {
+      return void 0;
+    }
+    this.goA9fL2OrFlagCondition.set(node.expression, flags.names.join(" || "));
+    let printed;
+    try {
+      printed = super.printIfStatement(node, identation);
+    } finally {
+      this.goA9fL2OrFlagCondition.delete(node.expression);
+    }
+    const indent = this.getIden(identation);
+    if (!printed.startsWith(indent + "if ")) {
+      return void 0;
+    }
+    return flags.lines.map((l) => indent + l).join("\n") + "\n" + printed;
+  }
+  // ---- end FM-A9F L2 ----
   // the single `key in dict` read the condition can bind: a map-typed identifier
   // receiver, a hand-written base map field or a pure book accessor, and a Go-string key.
   // The hoisted operands are identifiers/literals or side-effect-free getters, so moving the
@@ -15952,9 +16204,13 @@ ${indent}}`);
     return this.OBJECT_OPENING + formattedObjectBody + this.OBJECT_CLOSING;
   }
   printIfStatement(node, identation) {
-    const nested = this.goInOpGuardedNestedIf(node, identation);
+    const nested = this.goInOpGuardedNestedIf(node, identation) ?? this.goA9fL2NestedGuardIf(node, identation);
     if (nested !== void 0) {
       return nested;
+    }
+    const flags = this.goA9fL2OrFlagIf(node, identation);
+    if (flags !== void 0) {
+      return flags;
     }
     return super.printIfStatement(node, identation);
   }
@@ -15963,9 +16219,13 @@ ${indent}}`);
     if (substituted !== void 0) {
       return `${this.getIden(identation)}${substituted}`;
     }
-    const initClause = this.goInOpIfInitClause(node);
+    const initClause = this.goInOpIfInitClause(node) ?? this.goA9fL2StringKeyInitClause(node);
     if (initClause !== void 0) {
       return `${this.getIden(identation)}${initClause}`;
+    }
+    const flagged = this.goA9fL2OrFlagCondition.get(node);
+    if (flagged !== void 0) {
+      return `${this.getIden(identation)}${flagged}`;
     }
     const native = this.goNativeCondition(node);
     if (native !== void 0) {
@@ -18188,7 +18448,7 @@ ${this.getIden(level)}}()`;
   }
   goDeleteReceiverText(node) {
     if (node?.kind === SyntaxKind5.Identifier) {
-      return this.goDeclaredTypeOfIdentifier(node) === "map[string]any" ? this.printNode(node, 0) : void 0;
+      return this.goDeclaredTypeOfIdentifier(node) === "map[string]any" || this.goA9fL2LiteralDefaultDictLocal(node) ? this.printNode(node, 0) : void 0;
     }
     const book = node;
     if (book?.kind !== SyntaxKind5.ElementAccessExpression || book.expression?.kind !== SyntaxKind5.PropertyAccessExpression || book.expression.expression?.kind !== SyntaxKind5.ThisKeyword || book.expression.name?.text !== "ohlcvs") {

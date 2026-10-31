@@ -7787,3 +7787,53 @@ describe('hx10 G10: `x := y` aliases carry the source local printed type', () =>
         expect(out).toContain('GetValue(GetValue(a, \"x\"), \"y\")');
     });
 });
+
+describe('FM-A9F L2: nil-guarded lookups into the base maps and plain map locals', () => {
+    const go = (body: string) => new Transpiler({ verbose: false }).transpileGo(
+        'class BaseExchange {\n    options: any;\n    markets: any;\n    markets_by_id: any;\n    currencies_by_id: any;\n    ohlcvs: any;\n'
+        + '    safeString (a, b, c = undefined) { return a; }\n    safeDict (a, b, c = undefined) { return a; }\n    market (s) { return s; }\n'
+        + '    f (first: any, m: any) {\n        const symbol = this.safeString (first, \'s\');\n        const timeframe = this.safeString (first, \'t\');\n'
+        + '        const k = \'abc\';\n' + body + '        return 0;\n    }\n}\n').content;
+    test('a guarded *string key into a base map is one nil check around a comma-ok read', () => {
+        const output = go('        if ((symbol !== undefined) && (this.markets !== undefined) && (symbol in this.markets)) {\n            this.market (symbol);\n        }\n');
+        expect(output).toContain('\tif symbol != nil {\n\t\tif _, ok := this.Markets[*symbol]; ok {\n\t\t\tthis.Market(symbol)');
+        expect(output).not.toContain('InOp(');
+    });
+    test('the lookup keeps the helper when the key is not the guarded one, a rebound key, or an else arm follows', () => {
+        const other = go('        if ((symbol !== undefined) && (this.markets !== undefined) && (timeframe in this.markets)) {\n            this.market (symbol);\n        }\n');
+        expect(other).toContain('InOp(this.Markets, timeframe)');
+        const orElse = go('        if ((symbol !== undefined) && (this.markets !== undefined) && (symbol in this.markets)) {\n            this.market (symbol);\n        } else {\n            this.market (k);\n        }\n');
+        expect(orElse).toContain('InOp(this.Markets, symbol)');
+        const rebound = go('        if ((symbol !== undefined) && (this.markets !== undefined) && (symbol in this.markets)) {\n            this.market (symbol);\n        }\n        let z = this.safeString (first, \'z\');\n        z = this.safeString (first, \'y\');\n');
+        expect(rebound).toContain('if symbol != nil {');
+    });
+    test('a guarded pair on the ohlcv book nests one comma-ok read of the timeframe', () => {
+        const output = go('        if ((symbol !== undefined) && (timeframe !== undefined) && (symbol in this.ohlcvs) && (timeframe in this.ohlcvs[symbol])) {\n            this.market (symbol);\n        }\n');
+        expect(output).toContain('\tif symbol != nil && timeframe != nil {\n\t\tif _, ok := this.Ohlcvs[*symbol][*timeframe]; ok {');
+        expect(output).not.toContain('InOp(');
+    });
+    test('an else-if arm with a Go-string key binds its comma-ok in the arm', () => {
+        const output = go('        if (k === \'x\') {\n            return 1;\n        } else if ((this.markets !== undefined) && (k in this.markets)) {\n            return 2;\n        }\n');
+        expect(output).toContain('} else if _, ok := this.Markets[k]; ok {');
+    });
+    test('an || of two receiver-guarded lookups hoists one flag per lookup', () => {
+        const output = go('        if (((this.markets !== undefined) && (k in this.markets)) || ((this.markets_by_id !== undefined) && (k in this.markets_by_id))) {\n            this.market (k);\n        }\n');
+        expect(output).toContain('\t_, inMarkets := this.Markets[k]\n\t_, inMarketsById := this.Markets_by_id[k]\n\tif inMarkets || inMarketsById {');
+    });
+    test('a flag name already used in the function keeps the helper', () => {
+        const output = go('        const inMarkets = 1;\n        if (((this.markets !== undefined) && (k in this.markets)) || ((this.markets_by_id !== undefined) && (k in this.markets_by_id))) {\n            this.market (k);\n        }\n');
+        expect(output).toContain('InOp(this.Markets, k)');
+    });
+    test('a literal-default safeDict local on this.options is indexed natively behind its key guard', () => {
+        const output = go('        const byId = this.safeDict (this.options, \'byId\', {});\n        const id = this.safeString (first, \'id\');\n        if ((id !== undefined) && (id in byId)) {\n            delete byId[id];\n        }\n');
+        expect(output).toContain('\tif id != nil {\n\t\tif _, ok := byId[*id]; ok {');
+    });
+    test('a safeDict local that escapes keeps the helper', () => {
+        const output = go('        const byId = this.safeDict (this.options, \'byId\', {});\n        const id = this.safeString (first, \'id\');\n        if ((id !== undefined) && (id in byId)) {\n            this.market (byId);\n        }\n');
+        expect(output).toContain('InOp(byId, id)');
+    });
+    test('an `ok` used inside the guarded statement moves the binding to ok2', () => {
+        const output = go('        const ok = 1;\n        if ((symbol !== undefined) && (this.markets !== undefined) && (symbol in this.markets)) {\n            this.market (ok);\n        }\n');
+        expect(output).toContain('if _, ok2 := this.Markets[*symbol]; ok2 {');
+    });
+});
