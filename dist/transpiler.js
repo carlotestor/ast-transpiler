@@ -16459,7 +16459,7 @@ ${iden}}`;
       return this.goIsCacheStoreSource(value);
     }
     const decl = value?.kind === SyntaxKind5.Identifier ? this.checkerOrUndefined()?.getSymbolAtLocation(value)?.valueDeclaration?.resolve() : void 0;
-    if (decl?.kind !== SyntaxKind5.VariableDeclaration || decl.name?.kind !== SyntaxKind5.Identifier || decl.initializer?.kind === SyntaxKind5.NewExpression || !this.goIsCacheStoreSource(decl.initializer)) {
+    if (decl?.kind !== SyntaxKind5.VariableDeclaration || decl.name?.kind !== SyntaxKind5.Identifier || !this.goIsCacheStoreSource(decl.initializer)) {
       return false;
     }
     const scope = this.goEnclosingFunction(decl);
@@ -16485,9 +16485,29 @@ ${iden}}`;
     visit(scope);
     return proven && bindings === 1;
   }
+  // the nearest enclosing `if` reads `k in dict` natively through `dict[*k]`: its block runs on a key
+  // that read already dereferenced
+  goEnclosingInOpHeaderDerefs(statement, keyNode) {
+    for (let child = statement, parent = statement.parent; parent !== void 0; child = parent, parent = parent.parent) {
+      if (parent.kind === SyntaxKind5.IfStatement) {
+        if (child !== parent.thenStatement) {
+          return false;
+        }
+        const read = this.goIfInOpRead(parent.expression, parent);
+        return read !== void 0 && read.keyText === `*${this.printNode(keyNode, 0)}`;
+      }
+      if (parent.kind !== SyntaxKind5.Block) {
+        return false;
+      }
+    }
+    return false;
+  }
   // `this.Trades[k] = cache`: native for a string key, and for a *string key either bare (a guard or an
   // earlier exit proves it non-nil) or under `if k != nil {`, the helper's skip of a nil key
   printNativeCacheFieldStore(containerNode, containerStr, keyNode, keyStr, valueStr, valueNode, identation = 0) {
+    while (keyNode?.kind === SyntaxKind5.AsExpression || keyNode?.kind === SyntaxKind5.NonNullExpression || keyNode?.kind === SyntaxKind5.ParenthesizedExpression) {
+      keyNode = keyNode.expression;
+    }
     if (!this.goIsCacheStoreField(containerNode) || valueStr.includes("\n") || keyNode?.kind !== SyntaxKind5.Identifier || !this.goCacheStoreValueProven(valueNode)) {
       return void 0;
     }
@@ -16503,7 +16523,7 @@ ${iden}}`;
     while (statement !== void 0 && statement.kind !== SyntaxKind5.ExpressionStatement) {
       statement = statement.parent;
     }
-    if (statement !== void 0 && (this.goHasEnclosingNilGuard(keyNode) || this.goInOpPointerKeyProvenNonNil(statement, keyNode))) {
+    if (statement !== void 0 && (this.goHasEnclosingNilGuard(keyNode) || this.goInOpPointerKeyProvenNonNil(statement, keyNode) || this.goEnclosingInOpHeaderDerefs(statement, keyNode))) {
       return `${containerStr}[*${keyStr}] = ${valueStr}`;
     }
     const iden = this.getIden(identation);

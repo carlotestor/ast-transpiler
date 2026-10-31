@@ -7887,9 +7887,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         }
         const decl: any = (value?.kind === SyntaxKind.Identifier)
             ? this.checkerOrUndefined()?.getSymbolAtLocation(value)?.valueDeclaration?.resolve() : undefined;
-        // a `const x = new ArrayCache` local is typed by its constructor and later stages type its store
-        if ((decl?.kind !== SyntaxKind.VariableDeclaration) || (decl.name?.kind !== SyntaxKind.Identifier)
-            || (decl.initializer?.kind === SyntaxKind.NewExpression) || !this.goIsCacheStoreSource(decl.initializer)) {
+        if ((decl?.kind !== SyntaxKind.VariableDeclaration) || (decl.name?.kind !== SyntaxKind.Identifier) || !this.goIsCacheStoreSource(decl.initializer)) {
             return false;
         }
         const scope = this.goEnclosingFunction(decl);
@@ -7917,9 +7915,31 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return proven && (bindings === 1);
     }
 
+    // the nearest enclosing `if` reads `k in dict` natively through `dict[*k]`: its block runs on a key
+    // that read already dereferenced
+    goEnclosingInOpHeaderDerefs(statement, keyNode): boolean {
+        for (let child: any = statement, parent: any = statement.parent; parent !== undefined; child = parent, parent = parent.parent) {
+            if (parent.kind === SyntaxKind.IfStatement) {
+                if (child !== parent.thenStatement) {
+                    return false;
+                }
+                const read = this.goIfInOpRead(parent.expression, parent);
+                return (read !== undefined) && (read.keyText === `*${this.printNode(keyNode, 0)}`);
+            }
+            if (parent.kind !== SyntaxKind.Block) {
+                return false;
+            }
+        }
+        return false;
+    }
+
     // `this.Trades[k] = cache`: native for a string key, and for a *string key either bare (a guard or an
     // earlier exit proves it non-nil) or under `if k != nil {`, the helper's skip of a nil key
     printNativeCacheFieldStore(containerNode, containerStr: string, keyNode, keyStr: string, valueStr: string, valueNode?, identation = 0): string | undefined {
+        // `symbol as string` / `symbol!` print as the operand
+        while ((keyNode?.kind === SyntaxKind.AsExpression) || (keyNode?.kind === SyntaxKind.NonNullExpression) || (keyNode?.kind === SyntaxKind.ParenthesizedExpression)) {
+            keyNode = keyNode.expression;
+        }
         if (!this.goIsCacheStoreField(containerNode) || valueStr.includes('\n') || (keyNode?.kind !== SyntaxKind.Identifier)
             || !this.goCacheStoreValueProven(valueNode)) {
             return undefined;
@@ -7936,7 +7956,8 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         while ((statement !== undefined) && (statement.kind !== SyntaxKind.ExpressionStatement)) {
             statement = statement.parent;
         }
-        if ((statement !== undefined) && (this.goHasEnclosingNilGuard(keyNode) || this.goInOpPointerKeyProvenNonNil(statement, keyNode))) {
+        if ((statement !== undefined) && (this.goHasEnclosingNilGuard(keyNode) || this.goInOpPointerKeyProvenNonNil(statement, keyNode)
+            || this.goEnclosingInOpHeaderDerefs(statement, keyNode))) {
             return `${containerStr}[*${keyStr}] = ${valueStr}`;
         }
         const iden = this.getIden(identation);

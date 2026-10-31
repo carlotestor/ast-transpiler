@@ -48,6 +48,19 @@ describe('GP28 cache stores into BaseExchange.Trades', () => {
         expect(out).toContain('this.Trades[*symbol] = stored');
         expect(out.split('if symbol != nil').length).toBe(2); // the source guard only
     });
+    test('an as-asserted key keeps the nil skip', () => {
+        const out = go(handler('    this.trades[symbol as string] = stored;\n'));
+        expect(out).toContain('if symbol != nil {\n\t\tthis.Trades[*symbol] = stored\n\t}');
+    });
+    test('a store inside the in-op block that already derefs the key stores bare', () => {
+        const out = go("handle (m: any) {\n    const symbol = this.safeString (m, 's');\n    if (symbol === undefined) { return; }\n    if (!(symbol in this.trades)) {\n        this.trades[symbol] = new ArrayCache (10);\n    }\n}");
+        expect(out).toContain('this.Trades[*symbol] = NewArrayCache(10)');
+        expect(out).not.toContain('AddElementToObject(this.Trades');
+    });
+    test('an in-op block over a nilable key keeps the nil skip', () => {
+        const out = go("handle (m: any) {\n    const symbol = this.safeString (m, 's');\n    if (!(symbol in this.trades)) {\n        this.trades[symbol] = new ArrayCache (10);\n    }\n}");
+        expect(out).toContain('if symbol != nil {\n\t\t\tthis.Trades[*symbol] = NewArrayCache(10)');
+    });
     test('negative: a value of another shape keeps the helper', () => {
         const out = go('handle (symbol: any, v: any) {\n    this.trades[symbol] = v;\n}');
         expect(out).toContain('AddElementToObject(this.Trades');

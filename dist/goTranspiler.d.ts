@@ -520,6 +520,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goIsCacheStoreField(node: any): boolean;
     goIsCacheStoreSource(expr: any, includeRead?: boolean): boolean;
     goCacheStoreValueProven(valueNode: any): boolean;
+    goEnclosingInOpHeaderDerefs(statement: any, keyNode: any): boolean;
     printNativeCacheFieldStore(containerNode: any, containerStr: string, keyNode: any, keyStr: string, valueStr: string, valueNode?: any, identation?: number): string | undefined;
     goMapWriteValueIsNotPointer(valueNode: any): boolean;
     nativeStoreFields: {
