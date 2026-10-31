@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -25432,6 +25432,187 @@ ${this.getIden(identation)}}}`;
     }
     return expression.expression.kind === SyntaxKind6.ThisKeyword && this.javaOwnerStoreFields.has(expression.name.text);
   }
+  // `x[k]` where x is `this.ohlcvs[s]`: see javaOhlcvsSymbolMapRead
+  javaOhlcvsElementRead(node) {
+    if (node.parent?.kind === SyntaxKind6.ExpressionStatement || node.parent?.kind === SyntaxKind6.DeleteExpression || this.printElementAccessExpressionExceptionIfAny(node) !== void 0 || this.isLeftSideOfAssignment(node)) {
+      return void 0;
+    }
+    const receiver = this.unwrapPrintTransparentExpression(node.expression);
+    return receiver !== void 0 && isElementAccessExpression3(receiver) ? this.javaOhlcvsSymbolMapRead(node, receiver) : void 0;
+  }
+  // `(x as string[])[i]` over a for-counter, x a side-effect-free reference the checker types
+  // `string[]` (| undefined): the printed receiver is the cast `(java.util.List<String>)(x)` either way,
+  // so the helper's null / range answers become the explicit guard on that same cast
+  javaStringArrayAssertedCounterRead(node) {
+    if (node.parent?.kind === SyntaxKind6.ExpressionStatement || this.isLeftSideOfAssignment(node) || this.printElementAccessExpressionExceptionIfAny(node) !== void 0) {
+      return void 0;
+    }
+    const asserted = this.unwrapParenthesized(node.expression);
+    if (asserted === void 0 || !isAsExpression2(asserted) || !isArrayTypeNode(asserted.type) || asserted.type.elementType.kind !== SyntaxKind6.StringKeyword) {
+      return void 0;
+    }
+    const operand = this.unwrapParenthesized(asserted.expression);
+    if (operand === void 0 || !isIdentifier2(operand) || this.isVarargsArrayReference(operand) || this.javaStringElementsReceiver(operand) || this.printNode(operand, 0).trim() !== operand.text) {
+      return void 0;
+    }
+    const checker = this.checkerOrUndefined();
+    let operandType;
+    try {
+      operandType = checker?.getTypeAtLocation(operand);
+    } catch (e) {
+      return void 0;
+    }
+    if (operandType === void 0 || !this.javaIsStringArrayType(checker, operandType)) {
+      return void 0;
+    }
+    const list = `((java.util.List<String>)(${operand.text}))`;
+    const index = this.printNode(node.argumentExpression, 0);
+    return `(${list} == null || ${index} < 0 || ${index} >= ${list}.size() ? null : ${list}.get(${index}))`;
+  }
+  unwrapParenthesized(node) {
+    let current = node;
+    while (current !== void 0 && isParenthesizedExpression2(current)) {
+      current = current.expression;
+    }
+    return current;
+  }
+  // `this.ohlcvs[s][k]` (base field `Dictionary<Dictionary<ArrayCacheByTimestamp>>`): once the member
+  // has put a fresh map under s the per-symbol value is a non-null Map, so the helper's read is the
+  // plain get. Both names must be plain strings and nothing may disturb the entry in between.
+  javaOhlcvsSymbolMapRead(node, inner) {
+    if (!this.javaIsOhlcvsField(inner.expression)) {
+      return void 0;
+    }
+    const symbolNode = inner.argumentExpression;
+    const key = this.unwrapPrintTransparentExpression(node.argumentExpression);
+    const isString = (n) => this.javaScalarFamily(n) === "string" || this.javaDeclaredStringType(n);
+    if (!isIdentifier2(symbolNode) || key === void 0 || !isIdentifier2(key) || !isString(symbolNode) || !isString(key)) {
+      return void 0;
+    }
+    const symbolText = this.printNode(symbolNode, 0).trim();
+    if (symbolText !== symbolNode.text || this.printNode(key, 0).trim() !== key.text) {
+      return void 0;
+    }
+    const keyText = key.text;
+    if (!this.isJavaMapStructureType(this.getChecker().getTypeAtLocation(inner))) {
+      return void 0;
+    }
+    if (!this.javaOhlcvsEntryIsFresh(node, symbolNode)) {
+      return void 0;
+    }
+    return `((java.util.Map<?, ?>)this.ohlcvs.get(${symbolText})).get(${keyText})`;
+  }
+  javaIsOhlcvsField(node) {
+    const field = this.unwrapPrintTransparentExpression(node);
+    return field !== void 0 && isPropertyAccessExpression2(field) && field.expression.kind === SyntaxKind6.ThisKeyword && field.name.text === "ohlcvs";
+  }
+  // an earlier statement of an enclosing block of the read puts a fresh map under s
+  // (`this.ohlcvs[s] = {}`, `= this.safeDict(this.ohlcvs, s, {})`, or the same under
+  // `if (!(s in this.ohlcvs))`), and the statements from there to the read neither write the
+  // entry, s or the field, nor suspend
+  javaOhlcvsEntryIsFresh(site, symbolNode) {
+    const checker = this.getChecker();
+    const symbol = checker.getSymbolAtLocation(symbolNode);
+    if (symbol === void 0) {
+      return false;
+    }
+    let child = site;
+    while (child?.parent !== void 0) {
+      const parent = child.parent;
+      if (isFunctionLike(parent)) {
+        return false;
+      }
+      if (isBlock3(parent) || isSourceFile4(parent)) {
+        const statements = Array.from(parent.statements);
+        const at = statements.indexOf(child);
+        for (let j = at - 1; j >= 0; j--) {
+          if (this.javaOhlcvsFreshAnchor(statements[j], symbol)) {
+            for (let m = j + 1; m <= at; m++) {
+              if (this.javaOhlcvsDisturbed(statements[m], symbol)) {
+                return false;
+              }
+            }
+            return true;
+          }
+        }
+      }
+      child = parent;
+    }
+    return false;
+  }
+  javaOhlcvsFreshAnchor(statement, symbol) {
+    const checker = this.getChecker();
+    const isSymbol = (n) => isIdentifier2(n) && checker.getSymbolAtLocation(n) === symbol;
+    const emptyLiteral = (n) => n !== void 0 && isObjectLiteralExpression3(n) && n.properties.length === 0;
+    const freshPut = (candidate) => {
+      if (candidate === void 0 || !isExpressionStatement3(candidate)) {
+        return false;
+      }
+      const put = candidate.expression;
+      if (!isBinaryExpression4(put) || put.operatorToken.kind !== SyntaxKind6.EqualsToken || !isElementAccessExpression3(put.left) || !this.javaIsOhlcvsField(put.left.expression) || !isSymbol(put.left.argumentExpression)) {
+        return false;
+      }
+      if (emptyLiteral(put.right)) {
+        return true;
+      }
+      const call = put.right;
+      return isCallExpression5(call) && isPropertyAccessExpression2(call.expression) && call.expression.expression.kind === SyntaxKind6.ThisKeyword && call.expression.name.text === "safeDict" && call.arguments.length === 3 && this.javaIsOhlcvsField(call.arguments[0]) && isSymbol(call.arguments[1]) && emptyLiteral(call.arguments[2]) && this.javaCalleeResolves(call) && JAVA_THIS_RETURN_TYPES_BASE_FILE.test(checker.getResolvedSignature(call)?.declaration?.resolve()?.getSourceFile?.()?.fileName ?? "");
+    };
+    if (freshPut(statement)) {
+      return true;
+    }
+    if (!isIfStatement3(statement) || statement.elseStatement !== void 0) {
+      return false;
+    }
+    const condition = this.unwrapParenthesized(statement.expression);
+    if (condition === void 0 || !isPrefixUnaryExpression2(condition) || condition.operator !== SyntaxKind6.ExclamationToken) {
+      return false;
+    }
+    const test = this.unwrapParenthesized(condition.operand);
+    if (test === void 0 || !isBinaryExpression4(test) || test.operatorToken.kind !== SyntaxKind6.InKeyword || !isSymbol(test.left) || !this.javaIsOhlcvsField(test.right)) {
+      return false;
+    }
+    const then = statement.thenStatement;
+    return isBlock3(then) ? then.statements.length === 1 && freshPut(then.statements[0]) : freshPut(then);
+  }
+  javaOhlcvsDisturbed(statement, symbol) {
+    const checker = this.getChecker();
+    let disturbed = false;
+    const writesSymbol = (n) => {
+      const target = this.unwrapPrintTransparentExpression(n);
+      return target !== void 0 && isIdentifier2(target) && checker.getSymbolAtLocation(target) === symbol;
+    };
+    const walk = (n) => {
+      if (disturbed || n === void 0) {
+        return;
+      }
+      if (n.kind === SyntaxKind6.AwaitExpression) {
+        disturbed = true;
+        return;
+      }
+      if (isBinaryExpression4(n) && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(n.operatorToken.kind)) {
+        const left = this.unwrapPrintTransparentExpression(n.left);
+        if (writesSymbol(left) || this.javaIsOhlcvsField(left) || isElementAccessExpression3(left) && this.javaIsOhlcvsField(left.expression)) {
+          disturbed = true;
+          return;
+        }
+      }
+      if (n.kind === SyntaxKind6.DeleteExpression) {
+        const target = this.unwrapPrintTransparentExpression(n.expression);
+        if (target !== void 0 && isElementAccessExpression3(target) && this.javaIsOhlcvsField(target.expression)) {
+          disturbed = true;
+          return;
+        }
+      }
+      if ((isPrefixUnaryExpression2(n) || isPostfixUnaryExpression2(n)) && writesSymbol(n.operand)) {
+        disturbed = true;
+        return;
+      }
+      n.forEachChild(walk);
+    };
+    walk(statement);
+    return disturbed;
+  }
   // `<client>.<futures|subscriptions|rejections>` where the property is declared by the ws Client
   // class (ts/src/base/ws/Client.ts, the twin of the hand-written WsClient.java)
   javaWsClientMapField(expression) {
@@ -25742,6 +25923,10 @@ ${this.getIden(identation)}}}`;
       if (field !== void 0) {
         return field;
       }
+      const ohlcvsRead = this.javaOhlcvsElementRead(node);
+      if (ohlcvsRead !== void 0) {
+        return ohlcvsRead;
+      }
       const listIndexRead = this.javaDeclaredListIndexRead(node);
       if (listIndexRead !== void 0) {
         return listIndexRead;
@@ -25773,7 +25958,7 @@ ${this.getIden(identation)}}}`;
       return `((java.util.Map<String, Object>)${target2}).get(${this.printNode(key, 0)})`;
     }
     if (isCounterKey) {
-      return this.javaDeclaredListElementRead(node, true);
+      return this.javaDeclaredListElementRead(node, true) ?? this.javaStringArrayAssertedCounterRead(node);
     }
     const index = Number(key.text);
     if (!Number.isInteger(index) || index < 0) {
