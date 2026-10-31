@@ -7424,6 +7424,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         const field = /^this\.([A-Za-z_]\w*)$/.exec(text);
         if ((field !== null) && (dictNode?.kind === SyntaxKind.PropertyAccessExpression) && (dictNode.expression?.kind === SyntaxKind.ThisKeyword)) {
             const name = field[1];
+            if (this.GO_NATIVE_MAP_ACCESSORS.indexOf(name) >= 0) {
+                return 'map[string]any'; // printed as the field, the build layer turns it into the accessor call
+            }
             return Object.prototype.hasOwnProperty.call(this.GO_NATIVE_MAP_FIELDS, name) ? this.GO_NATIVE_MAP_FIELDS[name] : undefined;
         }
         const accessor = /^this\.([A-Za-z_]\w*)\(\)$/.exec(text);
