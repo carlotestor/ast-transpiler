@@ -9609,10 +9609,16 @@ var GoTranspiler = class extends BaseTranspiler {
     // level of the statement being printed: a multi-line composite literal is laid out
     // relative to it (go/printer), whatever level the expression printers hand down
     this.goStatementLevel = 0;
+    // the innermost statement being printed (undefined outside any statement)
+    this.goStatement = void 0;
     // stdlib packages this file's native emissions call; printSourceFileStatements turns them
     // into the import declarations the emitted Go needs (an occurrence outside a file print,
     // e.g. the intellisense body, only marks a set that the next file print replaces)
     this.goFileStdlibImports = /* @__PURE__ */ new Set();
+    // the packages of the source file printed last, sorted (what printSourceFileStatements put in
+    // its leading import clause): a consumer that splices the printed body into a file it assembles
+    // itself declares exactly these instead of scanning the text for `pkg.Name(`
+    this.goPrintedFileStdlibImports = [];
     // [guarded child, guarding condition] fields of the constructs a nil guard dominates
     this.goNilGuardFields = {
       [SyntaxKind5.IfStatement]: ["thenStatement", "expression"],
@@ -9666,6 +9672,12 @@ var GoTranspiler = class extends BaseTranspiler {
     // #transpilePredictionBaseMethods; those two declare each referenced package themselves (the
     // build sets the source paths here), so only those files may emit a stdlib call.
     this.goBaseFileStdlibImportSeamPaths = void 0;
+    // A consumer writer may cut every `START ... END` comment-marker span out of the printed Go
+    // (config excisedSpanMarkers; the END comment is printed as the leading comment of the next statement; one that ends its
+    // block is not printed, and then nothing is cut). A native stdlib call printed inside a cut
+    // span would leave an import nothing uses, so a statement in the span keeps the helper call.
+    this.goExcisedSpanMarkers = void 0;
+    this.goExcisedSpans = /* @__PURE__ */ new WeakMap();
     // -----------------------------------------------------------------------
     // gofmt-compatible spacing of the binary expressions this printer emits
     // -----------------------------------------------------------------------
@@ -9713,6 +9725,8 @@ var GoTranspiler = class extends BaseTranspiler {
     this.uncalledStringParams = config["uncalledStringParams"] ?? {};
     this.stringPointerTupleCalls = config["stringPointerTupleCalls"] ?? [];
     this.siblingStringPassthroughPattern = typeof config["siblingStringPassthroughPattern"] === "string" ? new RegExp(config["siblingStringPassthroughPattern"]) : void 0;
+    this.goBaseFileStdlibImportSeamPaths = config["baseFileStdlibImportSeamPaths"] !== void 0 ? new RegExp(config["baseFileStdlibImportSeamPaths"]) : void 0;
+    this.goExcisedSpanMarkers = config["excisedSpanMarkers"];
   }
   goDescendantsOf(scope) {
     let list = this.goScopeDescendants.get(scope);
@@ -15889,6 +15903,7 @@ ${indent}}`);
     } finally {
       this.goFileStdlibImports = outerImports;
     }
+    this.goPrintedFileStdlibImports = [...fileImports].sort();
     if (fileImports.size === 0) {
       return body;
     }
@@ -15933,14 +15948,17 @@ ${indent}}`);
     }
     const isStatement4 = node !== void 0 && isStatementNode(node) && node.kind !== SyntaxKind5.Block;
     const previousLevel = this.goStatementLevel;
+    const previousStatement = this.goStatement;
     if (isStatement4) {
       this.goStatementLevel = identation;
+      this.goStatement = node;
     }
     try {
       const printed = super.printNode(node, identation);
       return this.goControlClauseParens(node, printed);
     } finally {
       this.goStatementLevel = previousLevel;
+      this.goStatement = previousStatement;
     }
   }
   // composite literal body one level deeper than the statement, closing brace at the
@@ -17762,7 +17780,7 @@ ${this.getIden(identation)}`;
     if (name.includes("\n") || parsedArg.includes("\n")) {
       return void 0;
     }
-    if (!this.goFileKeepsFileLevelImports()) {
+    if (!this.goFileKeepsFileLevelImports() || this.goInsideExcisedSpan()) {
       return void 0;
     }
     const receiver = this.goUnwrapPrintedAssertions(node?.expression?.expression);
@@ -17840,7 +17858,36 @@ ${this.getIden(level)}}()`;
     }
     return helperCall;
   }
+  goInsideExcisedSpan() {
+    const markers = this.goExcisedSpanMarkers;
+    const src = this.getSrc();
+    if (markers === void 0 || src === void 0 || this.goStatement === void 0) {
+      return false;
+    }
+    let spans = this.goExcisedSpans.get(src);
+    if (spans === void 0) {
+      spans = [];
+      const text = src.getFullText();
+      for (let from = text.indexOf(markers[0]); from >= 0; ) {
+        const to = text.indexOf(markers[1], from);
+        if (to < 0) {
+          break;
+        }
+        const next = text.slice(text.indexOf("\n", to) + 1).trimStart()[0];
+        if (next !== void 0 && next !== "}") {
+          spans.push([from, to]);
+        }
+        from = text.indexOf(markers[0], to);
+      }
+      this.goExcisedSpans.set(src, spans);
+    }
+    const start = this.goStatement.getStart();
+    return spans.some(([from, to]) => start >= from && start < to);
+  }
   goStdlibImportIsPlaceable() {
+    if (this.goInsideExcisedSpan()) {
+      return false;
+    }
     if (this.goFileKeepsFileLevelImports()) {
       return true;
     }
@@ -56768,6 +56815,7 @@ var Transpiler = class _Transpiler {
       prefetchChecker(this.context.checker, src);
     }
     let transpiledContent = void 0;
+    let stdlibImports = void 0;
     switch (lang) {
       case 0 /* Python */:
         this.pythonTranspiler.asyncTranspiling = !sync;
@@ -56784,6 +56832,7 @@ var Transpiler = class _Transpiler {
         break;
       case 3 /* Go */:
         transpiledContent = alignGoTrailingComments(this.goTranspiler.printNode(src, -1));
+        stdlibImports = this.goTranspiler.goPrintedFileStdlibImports;
         break;
       case 4 /* Java */:
         transpiledContent = this.javaTranspiler.printNode(src, -1);
@@ -56810,7 +56859,8 @@ var Transpiler = class _Transpiler {
       content: transpiledContent,
       imports,
       exports,
-      methodsTypes
+      methodsTypes,
+      stdlibImports
     };
   }
   transpileDifferentLanguagesGeneric(mode, input, content) {
