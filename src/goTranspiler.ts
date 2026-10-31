@@ -387,12 +387,17 @@ const GO_WRITE_OPERATOR_KINDS = [
 // thread-safe ones, which is exactly what AddElementToObject does for a *sync.Map.
 const GO_FIELD_CONTAINER_TYPES_NATIVE: { [name: string]: string } = Object.fromEntries([
     ...[
-        'Has', 'Api', 'TransformedApi', 'RequiredCredentials', 'HttpExceptions', 'Timeframes', 'Features',
+        'Options', 'Has', 'Api', 'TransformedApi', 'RequiredCredentials', 'HttpExceptions', 'Timeframes', 'Features',
         'Exceptions', 'Precision', 'UserAgents', 'TokenBucket', 'CommonCurrencies', 'ProxyDictionaries',
         'WsClients', 'Clients', 'Limits', 'Fees', 'Status', 'Countries',
     ].map((name) => [ name, 'map[string]any' ]),
-    ...GO_SYNC_MAP_FIELDS.map((name) => [ name, '*sync.Map' ]),
+    ...GO_SYNC_MAP_FIELDS.filter((name) => name !== 'Options').map((name) => [ name, '*sync.Map' ]),
 ]);
+
+// RF-go-3 (hx10w2 G09): `Options` is declared `map[string]any` in go/v4/exchange.go: one owner, no sync.Map. Every store
+// into it derefs a typed pointer, so the field only ever holds plain values and a native index reads exactly what
+// GetValue answered. Other map fields mix writers and keep the helper read.
+const GO_PLAIN_VALUED_MAP_FIELDS = [ 'Options' ];
 
 // operator kinds the arithmetic helpers are emitted for
 const GO_ARITHMETIC_KINDS = [
@@ -5399,7 +5404,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             if (sliceType !== undefined) {
                 return sliceType;
             }
-            return this.g11NativeParameterType(fn, param, index);
+            return this.g11NativeParameterType(fn, param, index) ?? this.goAsyncBooleanParameterType(fn, param, index);
         }
         if (this.isAsyncFunction(fn)) {
             return undefined;
@@ -6272,6 +6277,71 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         return true;
     }
 
+    // RF-go-3: a required `boolean` parameter of an exchange-local async method is a Go `bool` when every
+    // call site provably passes one (same-file sites by syntax: a true/false literal or an unwritten
+    // defaulted boolean parameter; sibling files only as a true/false literal) and the body neither
+    // writes another type nor nil-tests it. No printer re-entry, so no parameter-type cache is touched.
+    goAsyncBooleanParameterType(fn, param, index: number): string | undefined {
+        if ((param.type?.kind !== SyntaxKind.BooleanKeyword) || !this.isAsyncFunction(fn) || fn.name.text.startsWith('parse')
+            || this.goIsProHandlerMethod(fn) || !this.goHasTreeCallSite(fn)) {
+            return undefined;
+        }
+        return (this.goCallSitesPassBooleanLiteral(fn, index) && this.goLocalIsSafeToType(fn.body, param, param.name.text, 'bool')
+            && this.goParameterKeepsNilCompareNative(fn.body, param, 'bool')) ? 'bool' : undefined;
+    }
+
+    goCallSitesPassBooleanLiteral(fn, index: number): boolean {
+        const checker: any = this.checkerOrUndefined();
+        const name = fn.name.text;
+        for (const call of this.goSameFileCallsOf(fn, name)) {
+            const arg = call.arguments?.[index];
+            if ((arg === undefined) || !this.goArgumentIsSyntacticBool(arg, checker)) {
+                return false;
+            }
+        }
+        const tree = this.goTsSrcTree(fn.getSourceFile());
+        if (tree === undefined) {
+            return true;
+        }
+        const myClass = this.goEnclosingClassName(fn);
+        const myFile = tree.relativeOf.get(path.resolve(fn.getSourceFile().fileName));
+        for (const site of (tree.callIndex.get(name) ?? [])) {
+            if ((site.file === myFile) || !this.goTsSrcFileDerivesFrom(tree, site.file, myClass)) {
+                continue;
+            }
+            if (!/^\(*\s*(?:true|false)\s*\)*$/.test(site.args[index] ?? '')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // a Go bool by syntax alone: a true/false literal, or a defaulted boolean parameter that is never reassigned
+    goArgumentIsSyntacticBool(arg, checker): boolean {
+        if ((arg.kind === SyntaxKind.TrueKeyword) || (arg.kind === SyntaxKind.FalseKeyword)) {
+            return true;
+        }
+        if (arg.kind !== SyntaxKind.Identifier) {
+            return false;
+        }
+        const decl: any = checker?.getSymbolAtLocation(arg)?.valueDeclaration?.resolve();
+        if ((decl?.kind !== SyntaxKind.Parameter) || (decl.type?.kind !== SyntaxKind.BooleanKeyword)
+            || ((decl.initializer?.kind !== SyntaxKind.TrueKeyword) && (decl.initializer?.kind !== SyntaxKind.FalseKeyword))) {
+            return false;
+        }
+        let written = false;
+        const visit = (n: any) => {
+            const p: any = n.parent;
+            if ((n.kind === SyntaxKind.Identifier) && (n.text === decl.name.text) && (p?.kind === SyntaxKind.BinaryExpression) && (p.left === n)
+                && (p.operatorToken.kind >= SyntaxKind.FirstAssignment) && (p.operatorToken.kind <= SyntaxKind.LastAssignment)) {
+                written = true;
+            }
+            n.forEachChild(visit);
+        };
+        decl.parent.body?.forEachChild(visit);
+        return !written;
+    }
+
     goEnclosingClass(fn) {
         let cls = fn.parent;
         while ((cls !== undefined) && (cls.kind !== SyntaxKind.ClassDeclaration) && (cls.kind !== SyntaxKind.ClassExpression)) {
@@ -6817,6 +6887,21 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     // the printed key is a Go string when the printer knows it: a string literal, or
     // an identifier declared `string`. Params, GetValue(...) and string concatenation
     // all print as `any`, which Go refuses as a map key.
+    // the stored value can be a typed pointer: a pointer-printing expression, or an `any` local that can hold one
+    goValueMayHoldPointer(valueNode): boolean {
+        const inner = this.goUnwrapParenthesizedNode(valueNode);
+        if (this.goWritePrintsPointerBox(inner)) {
+            return true;
+        }
+        return (inner?.kind === SyntaxKind.Identifier) && (this.goDeclaredTypeOfIdentifier(inner) === 'any')
+            && this.goAnyLocalHoldsPointer(this.goDeclarationOfIdentifier(inner));
+    }
+
+    goIsPlainValuedMapField(node): boolean {
+        return (this.goFieldContainerTypeNative(node) === 'map[string]any')
+            && GO_PLAIN_VALUED_MAP_FIELDS.includes(this.transformPropertyAccessExpressionName(node.name.text, node.name));
+    }
+
     goIsStringKeyExpression(node): boolean {
         if ((node.kind === SyntaxKind.StringLiteral) || (node.kind === SyntaxKind.NoSubstitutionTemplateLiteral)) {
             return true;
@@ -6904,6 +6989,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
                 // a `+=` reads the element back through `container[key]`, which a
                 // sync.Map has no operator for: that shape keeps the runtime helper
                 return compound ? undefined : `${containerStr}.Store(${keyStr}, ${valueStr})`;
+            }
+            if (this.goIsPlainValuedMapField(containerNode) && !compound && (valueNode !== undefined) && this.goValueMayHoldPointer(valueNode)) {
+                return `${containerStr}[${keyStr}] = DerefScalar(${valueStr})`;
             }
             return `${containerStr}[${keyStr}] = ${valueStr}`;
         }
@@ -11097,6 +11185,8 @@ ${tryBodyBlock}
             return this.goTypeOfInitializer(node, printed);
         case SyntaxKind.Identifier:
             return this.goDeclaredTypeOfIdentifier(node) ?? this.g01MapParamType(node);
+        case SyntaxKind.PropertyAccessExpression:
+            return this.goIsPlainValuedMapField(node) ? 'map[string]any' : undefined;
         }
         return undefined;
     }
