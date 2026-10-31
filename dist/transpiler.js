@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -14319,7 +14319,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
     const node = this.goUnwrapPrintedAssertions(arg);
     if (node?.kind === SyntaxKind5.Identifier) {
-      return this.goHasEnclosingNilGuard(node) || this.gp15HasExitingNilGuard(node);
+      return this.goHasEnclosingNilGuard(node) || this.gp15HasExitingNilGuard(node) || this.goNilProvenStringDeref(node);
     }
     if (node?.kind === SyntaxKind5.CallExpression) {
       return this.gp15SafeStringLiteralDefaultCall(node);
