@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-FU7DZIKQ.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -12575,6 +12575,10 @@ ${this.getIden(identation)}var ${parsedName} ${awaitUnbox.goType} = ${awaitUnbox
 ${this.getIden(identation)}${parsedName} := ${parsedInitializer}
 ${this.getIden(identation)}PanicOnError(${parsedName})`;
     }
+    const mapRange = this.goMapRangeLocalDeclaration(node, declaration, identation);
+    if (mapRange !== void 0) {
+      return mapRange;
+    }
     const isNew = declaration.initializer && declaration.initializer.kind === SyntaxKind5.NewExpression;
     const containerType = this.goContainerLocalType(declaration);
     const stringListLiteral = containerType === GO_STRING_LIST_LOCAL_TYPE && declaration.initializer?.kind === SyntaxKind5.ArrayLiteralExpression ? declaration.initializer : void 0;
@@ -17684,6 +17688,90 @@ ${this.getIden(level)}}()`;
   }
   printObjectValuesCall(node, identation, parsedArg = void 0) {
     return `ObjectValues(${parsedArg})`;
+  }
+  // ---- FM-GO4-3: `Object.keys(m)` / `Object.values(m)` on a declared map[string]any ------------------
+  // The runtime helpers derefScalar their argument and type-switch it; a receiver the printer
+  // already declares `map[string]any` needs neither, so the local is collected by a range over the
+  // map: nil for a nil map, a fresh non-nil slice otherwise (the helper's answers). Everything else
+  // (an `any` box, a *sync.Map, a parameter the call-site proof left boxed) keeps the helper call.
+  // the Go slice type of the local an `Object.keys/values(m)` declaration collects into, with the
+  // receiver and the loop variable name; undefined when the declaration is any other shape
+  goMapRangeLocalDeclaration(statement, declaration, identation) {
+    if (statement?.parent?.kind !== SyntaxKind5.FirstStatement || declaration?.name?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    const call = declaration.initializer;
+    const callee = call?.expression;
+    if (call?.kind !== SyntaxKind5.CallExpression || call.arguments?.length !== 1 || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.Identifier || callee.expression.text !== "Object") {
+      return void 0;
+    }
+    const method = callee.name?.text;
+    if (method !== "keys" && method !== "values") {
+      return void 0;
+    }
+    const receiver = call.arguments[0];
+    if (receiver?.kind !== SyntaxKind5.Identifier || !this.goIsRebindFreeMapReceiver(receiver)) {
+      return void 0;
+    }
+    const scope = this.goEnclosingFunction(declaration);
+    const isKeys = method === "keys";
+    const goType = isKeys ? GO_STRING_LIST_LOCAL_TYPE : GO_SAFE_LIST_LOCAL_TYPE;
+    const loopVariable = isKeys ? "objectKey" : "objectValue";
+    if (scope === void 0 || this.goTypeNameIsShadowed(scope, goType) || this.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.Identifier && n.text === loopVariable)) {
+      return void 0;
+    }
+    const receiverText = this.printNode(receiver, 0);
+    const nameText = this.printNode(declaration.name, 0);
+    if (receiverText.includes("\n") || nameText === receiverText) {
+      return void 0;
+    }
+    const named = isKeys ? this.getGoLocalType(declaration, `ObjectKeys(${receiverText})`) === goType : this.goObjectValuesLocalIsList(declaration, scope);
+    if (!named) {
+      return void 0;
+    }
+    const indent = this.getIden(identation);
+    const inner = this.getIden(identation + 1);
+    const body = this.getIden(identation + 2);
+    const header = isKeys ? `for ${loopVariable} := range ${receiverText} {` : `for _, ${loopVariable} := range ${receiverText} {`;
+    return [
+      `${indent}var ${nameText} ${goType} = nil`,
+      `${indent}if ${receiverText} != nil {`,
+      `${inner}${nameText} = make(${goType}, 0, len(${receiverText}))`,
+      `${inner}${header}`,
+      `${body}${nameText} = append(${nameText}, ${loopVariable})`,
+      `${inner}}`,
+      `${indent}}`
+    ].join("\n");
+  }
+  // the receiver's declared Go type is map[string]any and nothing rebinds it, so a nil map is the
+  // only value besides a real map (the helper's nil and non-map answers coincide for it)
+  goIsRebindFreeMapReceiver(receiver) {
+    let declaration;
+    try {
+      declaration = this.checkerOrUndefined()?.getSymbolAtLocation(receiver)?.valueDeclaration?.resolve();
+    } catch (e) {
+      return false;
+    }
+    if (declaration === void 0 || declaration.name?.kind !== SyntaxKind5.Identifier) {
+      return false;
+    }
+    const declared = declaration.kind === SyntaxKind5.Parameter ? this.goGetArgParameterType(declaration) : this.goDeclaredTypeOfIdentifier(receiver);
+    if (declared !== "map[string]any") {
+      return false;
+    }
+    return !this.goLocalIsRebound(this.goEnclosingFunction(declaration), declaration.name);
+  }
+  // `const xs = Object.values(m)` keeps the helper's []any in an `any` box today. Naming that
+  // slice on the declaration is identity for every read except one that observes the box itself:
+  // a nil test (a box holding a nil slice is not nil), or a write/push/spread/destructuring shape
+  // goLocalIsSafeToType refuses. Each remaining use reads the same slice value.
+  goObjectValuesLocalIsList(declaration, scope) {
+    const name = declaration.name.text;
+    if (this.goLocalIsRebound(scope, declaration.name)) {
+      return false;
+    }
+    const observed = this.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.Identifier && n.text === name && n !== declaration.name && n.parent !== void 0 && this.goIsNilComparisonOperand(n, n.parent));
+    return !observed && this.goLocalIsSafeToType(scope, declaration, name, GO_SAFE_LIST_LOCAL_TYPE);
   }
   printJsonParseCall(node, identation, parsedArg = void 0) {
     return `JsonParse(${parsedArg})`;
