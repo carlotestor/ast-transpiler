@@ -43827,6 +43827,9 @@ function ccxtGoTupleStringReadIsSafe(goTranspiler, node) {
     const printed = (goTranspiler.printNode(parent.parent?.kind === ts.SyntaxKind.BinaryExpression && parent.parent.left === parent ? parent.parent : parent, 0) ?? "").trim();
     return printed.startsWith("GetValue(") || printed.startsWith("AddElementToObject(");
   }
+  if (parent.kind === ts.SyntaxKind.PropertyAccessExpression && parent.expression === current && ["toUpperCase", "toLowerCase"].includes(parent.name?.text) && parent.parent?.kind === ts.SyntaxKind.CallExpression && parent.parent.expression === parent) {
+    return true;
+  }
   if (parent.kind === ts.SyntaxKind.CallExpression && parent.expression !== current) {
     const callee = printedCalleeOfCall(goTranspiler, parent);
     const slots = CCXT_GO_TUPLE_STRING_SAFE_ARGS[(callee ?? "").replace(/^ccxt\./, "")];
@@ -47926,6 +47929,131 @@ function installRfGo5OwnedTables(goTranspiler) {
   };
 }
 
+// src/go/hx11fmgo5-GP08.ts
+init_esm_shims();
+var SLOT_TYPE = { "SafeStringPtr": "*string", "MapTyped": "map[string]any", "GetValueBool": "bool", "Int64Value": "int64" };
+var POINTER_TWIN = { "bool": "*bool", "int64": "*int64" };
+var OWNER_CLASS2 = "BaseExchange";
+function baseTupleCall(go, node) {
+  if (!ccxtGoTupleResultCall(node)) {
+    return void 0;
+  }
+  try {
+    const declaration = go.checkerOrUndefined()?.getResolvedSignature(node)?.declaration?.resolve();
+    return declaration?.parent?.name?.text === OWNER_CLASS2 ? node : void 0;
+  } catch (e) {
+    return void 0;
+  }
+}
+function isFirstElement(node) {
+  return node?.kind === ts.SyntaxKind.ElementAccessExpression && node.argumentExpression?.kind === ts.SyntaxKind.NumericLiteral && node.argumentExpression.text === "0";
+}
+function firstResultSource(go, declaration) {
+  if (declaration?.kind !== ts.SyntaxKind.VariableDeclaration || declaration.name?.kind !== ts.SyntaxKind.Identifier || !isFirstElement(declaration.initializer)) {
+    return void 0;
+  }
+  const base = declaration.initializer.expression;
+  const direct = baseTupleCall(go, base);
+  if (direct !== void 0) {
+    return { "call": direct, "held": false };
+  }
+  const holder = heldHolder(go, base);
+  return holder === void 0 ? void 0 : { "call": baseTupleCall(go, holder.initializer), "held": true, "holder": holder };
+}
+function heldHolder(go, identifier) {
+  if (identifier?.kind !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  let holder;
+  try {
+    holder = go.checkerOrUndefined()?.getSymbolAtLocation(identifier)?.valueDeclaration?.resolve();
+  } catch (e) {
+    return void 0;
+  }
+  const list = holder?.parent;
+  const statement = list?.parent;
+  if (holder?.kind !== ts.SyntaxKind.VariableDeclaration || holder.name?.kind !== ts.SyntaxKind.Identifier || (list.flags & ts.NodeFlags.Const) === 0 || list.declarations.length !== 1 || statement?.kind !== ts.SyntaxKind.FirstStatement || baseTupleCall(go, holder.initializer) === void 0) {
+    return void 0;
+  }
+  const siblings = statement.parent?.statements;
+  const reader = siblings?.[siblings.indexOf(statement) + 1];
+  if (siblings === void 0 || reader?.kind !== ts.SyntaxKind.FirstStatement || reader.declarationList.declarations.length !== 1 || reader.declarationList.declarations[0].initializer?.expression?.text !== holder.name.text) {
+    return void 0;
+  }
+  const scope = go.goEnclosingFunction(holder);
+  let reads = 0;
+  go.hasNodeWhere(scope, (n) => {
+    if (n.kind === ts.SyntaxKind.Identifier && n.text === holder.name.text && n !== holder.name) {
+      reads++;
+    }
+    return false;
+  });
+  return reads === 1 ? holder : void 0;
+}
+var ABSORBED = "FMGO5GP08";
+function readerOf(go, holderDeclaration) {
+  const siblings = holderDeclaration.parent?.parent?.parent?.statements;
+  return siblings?.[siblings.indexOf(holderDeclaration.parent.parent) + 1]?.declarationList?.declarations?.[0];
+}
+function installFmGo5GP08(goTranspiler) {
+  const flag = "fmGo5GP08Installed";
+  if (goTranspiler[flag] === true || typeof goTranspiler.printVariableDeclarationList !== "function") {
+    return;
+  }
+  goTranspiler[flag] = true;
+  const upstream = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const printed = upstream.call(this, node, identation);
+    const declaration = node?.declarations?.[0];
+    if (typeof printed !== "string" || node.declarations.length !== 1 || node.parent?.kind !== ts.SyntaxKind.FirstStatement) {
+      return printed;
+    }
+    if (declaration.name?.kind === ts.SyntaxKind.Identifier && baseTupleCall(this, declaration.initializer) !== void 0) {
+      const reader = readerOf(this, declaration);
+      const source2 = reader === void 0 ? void 0 : firstResultSource(this, reader);
+      const folded2 = source2 === void 0 || source2.holder !== declaration ? void 0 : this.fmGo5GP08Shape(reader, source2, identation);
+      return folded2 === void 0 ? printed : folded2;
+    }
+    const source = firstResultSource(this, declaration);
+    if (source === void 0) {
+      return printed;
+    }
+    const folded = this.fmGo5GP08Shape(declaration, source, identation);
+    if (folded === void 0) {
+      return printed;
+    }
+    return source.held ? ABSORBED : folded;
+  };
+  const printFile = goTranspiler.printSourceFileStatements;
+  goTranspiler.printSourceFileStatements = function(node, identation) {
+    const out = printFile.call(this, node, identation);
+    return typeof out === "string" && out.includes(ABSORBED) ? out.split(ABSORBED + "\n").join("").split(ABSORBED).join("") : out;
+  };
+  goTranspiler.fmGo5GP08Shape = function(declaration, source, identation) {
+    const slot = SLOT_TYPE[ccxtGoTupleResultFirst(source.call)];
+    const bound = ccxtGoTupleResultUnwrap(this.printNode(source.call, 0));
+    if (slot === void 0 || bound === void 0 || bound.includes("\n")) {
+      return void 0;
+    }
+    const type = this.getGoLocalType(declaration, this.printNode(declaration.initializer, 0));
+    const name = this.printNode(declaration.name, 0);
+    const iden = this.getIden(identation);
+    if (type === slot || slot === "map[string]any" && type === "any" && !source.held) {
+      return source.held && type.charAt(0) === "*" ? iden + "var " + name + " " + type + " = nil\n" + iden + name + ", _ = " + bound : iden + name + ", _ := " + bound;
+    }
+    if (POINTER_TWIN[slot] === type) {
+      const temporary = name + "Value";
+      let clashes = false;
+      this.hasNodeWhere(this.goEnclosingFunction(declaration), (n) => {
+        clashes = clashes || n.kind === ts.SyntaxKind.Identifier && n.text === temporary;
+        return false;
+      });
+      return clashes ? void 0 : iden + temporary + ", _ := " + bound + "\n" + iden + name + " := &" + temporary;
+    }
+    return void 0;
+  };
+}
+
 // src/go/index.ts
 function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoLocalTypes(goTranspiler, unifiedInt64Params);
@@ -47937,6 +48065,7 @@ function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoSignTyping(goTranspiler);
   installHx11w8NumParams(goTranspiler);
   installRfGo5OwnedTables(goTranspiler);
+  installFmGo5GP08(goTranspiler);
 }
 
 // src/rustPasses/index.ts
@@ -57115,6 +57244,7 @@ export {
   installCcxtGoLocalTypes,
   installCcxtGoParamTypes,
   installCcxtGoSignTyping,
+  installFmGo5GP08,
   installHx11w8NumParams,
   installRfGo5OwnedTables,
   narrowStrNullLocals,
