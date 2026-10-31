@@ -9231,6 +9231,7 @@ var GO_WRITE_OPERATOR_KINDS = [
 ];
 var GO_FIELD_CONTAINER_TYPES_NATIVE = Object.fromEntries([
   ...[
+    "Options",
     "Has",
     "Api",
     "TransformedApi",
@@ -9251,8 +9252,9 @@ var GO_FIELD_CONTAINER_TYPES_NATIVE = Object.fromEntries([
     "Status",
     "Countries"
   ].map((name) => [name, "map[string]any"]),
-  ...GO_SYNC_MAP_FIELDS.map((name) => [name, "*sync.Map"])
+  ...GO_SYNC_MAP_FIELDS.filter((name) => name !== "Options").map((name) => [name, "*sync.Map"])
 ]);
+var GO_PLAIN_VALUED_MAP_FIELDS = ["Options"];
 var GO_ARITHMETIC_KINDS = [
   SyntaxKind5.PlusToken,
   SyntaxKind5.MinusToken,
@@ -13739,7 +13741,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       if (sliceType2 !== void 0) {
         return sliceType2;
       }
-      return this.g11NativeParameterType(fn, param, index);
+      return this.g11NativeParameterType(fn, param, index) ?? this.goAsyncBooleanParameterType(fn, param, index);
     }
     if (this.isAsyncFunction(fn)) {
       return void 0;
@@ -14515,6 +14517,64 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
     return true;
   }
+  // RF-go-3: a required `boolean` parameter of an exchange-local async method is a Go `bool` when every
+  // call site provably passes one (same-file sites by syntax: a true/false literal or an unwritten
+  // defaulted boolean parameter; sibling files only as a true/false literal) and the body neither
+  // writes another type nor nil-tests it. No printer re-entry, so no parameter-type cache is touched.
+  goAsyncBooleanParameterType(fn, param, index) {
+    if (param.type?.kind !== SyntaxKind5.BooleanKeyword || !this.isAsyncFunction(fn) || fn.name.text.startsWith("parse") || this.goIsProHandlerMethod(fn) || !this.goHasTreeCallSite(fn)) {
+      return void 0;
+    }
+    return this.goCallSitesPassBooleanLiteral(fn, index) && this.goLocalIsSafeToType(fn.body, param, param.name.text, "bool") && this.goParameterKeepsNilCompareNative(fn.body, param, "bool") ? "bool" : void 0;
+  }
+  goCallSitesPassBooleanLiteral(fn, index) {
+    const checker = this.checkerOrUndefined();
+    const name = fn.name.text;
+    for (const call of this.goSameFileCallsOf(fn, name)) {
+      const arg = call.arguments?.[index];
+      if (arg === void 0 || !this.goArgumentIsSyntacticBool(arg, checker)) {
+        return false;
+      }
+    }
+    const tree = this.goTsSrcTree(fn.getSourceFile());
+    if (tree === void 0) {
+      return true;
+    }
+    const myClass = this.goEnclosingClassName(fn);
+    const myFile = tree.relativeOf.get(path.resolve(fn.getSourceFile().fileName));
+    for (const site of tree.callIndex.get(name) ?? []) {
+      if (site.file === myFile || !this.goTsSrcFileDerivesFrom(tree, site.file, myClass)) {
+        continue;
+      }
+      if (!/^\(*\s*(?:true|false)\s*\)*$/.test(site.args[index] ?? "")) {
+        return false;
+      }
+    }
+    return true;
+  }
+  // a Go bool by syntax alone: a true/false literal, or a defaulted boolean parameter that is never reassigned
+  goArgumentIsSyntacticBool(arg, checker) {
+    if (arg.kind === SyntaxKind5.TrueKeyword || arg.kind === SyntaxKind5.FalseKeyword) {
+      return true;
+    }
+    if (arg.kind !== SyntaxKind5.Identifier) {
+      return false;
+    }
+    const decl = checker?.getSymbolAtLocation(arg)?.valueDeclaration?.resolve();
+    if (decl?.kind !== SyntaxKind5.Parameter || decl.type?.kind !== SyntaxKind5.BooleanKeyword || decl.initializer?.kind !== SyntaxKind5.TrueKeyword && decl.initializer?.kind !== SyntaxKind5.FalseKeyword) {
+      return false;
+    }
+    let written = false;
+    const visit = (n) => {
+      const p = n.parent;
+      if (n.kind === SyntaxKind5.Identifier && n.text === decl.name.text && p?.kind === SyntaxKind5.BinaryExpression && p.left === n && p.operatorToken.kind >= SyntaxKind5.FirstAssignment && p.operatorToken.kind <= SyntaxKind5.LastAssignment) {
+        written = true;
+      }
+      n.forEachChild(visit);
+    };
+    decl.parent.body?.forEachChild(visit);
+    return !written;
+  }
   goEnclosingClass(fn) {
     let cls = fn.parent;
     while (cls !== void 0 && cls.kind !== SyntaxKind5.ClassDeclaration && cls.kind !== SyntaxKind5.ClassExpression) {
@@ -15014,6 +15074,17 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   // the printed key is a Go string when the printer knows it: a string literal, or
   // an identifier declared `string`. Params, GetValue(...) and string concatenation
   // all print as `any`, which Go refuses as a map key.
+  // the stored value can be a typed pointer: a pointer-printing expression, or an `any` local that can hold one
+  goValueMayHoldPointer(valueNode) {
+    const inner = this.goUnwrapParenthesizedNode(valueNode);
+    if (this.goWritePrintsPointerBox(inner)) {
+      return true;
+    }
+    return inner?.kind === SyntaxKind5.Identifier && this.goDeclaredTypeOfIdentifier(inner) === "any" && this.goAnyLocalHoldsPointer(this.goDeclarationOfIdentifier(inner));
+  }
+  goIsPlainValuedMapField(node) {
+    return this.goFieldContainerTypeNative(node) === "map[string]any" && GO_PLAIN_VALUED_MAP_FIELDS.includes(this.transformPropertyAccessExpressionName(node.name.text, node.name));
+  }
   goIsStringKeyExpression(node) {
     if (node.kind === SyntaxKind5.StringLiteral || node.kind === SyntaxKind5.NoSubstitutionTemplateLiteral) {
       return true;
@@ -15095,6 +15166,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       }
       if (fieldType === "*sync.Map") {
         return compound ? void 0 : `${containerStr}.Store(${keyStr}, ${valueStr})`;
+      }
+      if (this.goIsPlainValuedMapField(containerNode) && !compound && valueNode !== void 0 && this.goValueMayHoldPointer(valueNode)) {
+        return `${containerStr}[${keyStr}] = DerefScalar(${valueStr})`;
       }
       return `${containerStr}[${keyStr}] = ${valueStr}`;
     }
@@ -18679,6 +18753,8 @@ ${tryBodyBlock}
         return this.goTypeOfInitializer(node, printed);
       case SyntaxKind5.Identifier:
         return this.goDeclaredTypeOfIdentifier(node) ?? this.g01MapParamType(node);
+      case SyntaxKind5.PropertyAccessExpression:
+        return this.goIsPlainValuedMapField(node) ? "map[string]any" : void 0;
     }
     return void 0;
   }
@@ -21090,6 +21166,10 @@ ${this.getIden(identation)}}}`;
         const nativeParse = this.printNativeScalarParse(node, callee);
         if (nativeParse !== void 0) {
           return nativeParse;
+        }
+        const typedParse = this.printStringTypedParse(node, callee);
+        if (typedParse !== void 0) {
+          return typedParse;
         }
       }
     }
@@ -24761,6 +24841,26 @@ ${this.getIden(identation)}}}`;
       return value >= BigInt("-9223372036854775808") && value <= BigInt("9223372036854775807");
     }
     return /^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?$/.test(text) || /^[+-]?Infinity$/.test(text) || text === "NaN";
+  }
+  // RF-java-3: `parseInt(x)` / `parseFloat(x)` whose single operand prints as a java.lang.String
+  // (a String-declared name, a `x as string` cast, or any form the embedding layer proves String)
+  // calls the String-typed twin of the helper (same bodies, String parameter).
+  printStringTypedParse(node, callee) {
+    const args = node?.arguments;
+    if (args === void 0 || args.length !== 1) {
+      return void 0;
+    }
+    let operand = args[0];
+    while (isParenthesizedExpression2(operand)) {
+      operand = operand.expression;
+    }
+    const castToString = isAsExpression2(operand) && operand.type?.kind === SyntaxKind6.StringKeyword;
+    const printed = this.printNode(args[0], 0);
+    const nativeReplace = isCallExpression5(operand) && isPropertyAccessExpression2(operand.expression) && (operand.expression.name.text === "replace" || operand.expression.name.text === "replaceAll") && this.javaScalarFamily(operand.expression.expression) === "string" && /\.replace(First|All)?\(/.test(printed);
+    if (!castToString && !nativeReplace && !this.javaDeclaredStringType(operand) && !this.javaResolvedString(operand)) {
+      return void 0;
+    }
+    return `io.github.ccxt.base.JsParse.${callee}(${printed})`;
   }
   // `parseInt(x)` / `parseFloat(x)` -> the native parse, or undefined to keep the helper
   printNativeScalarParse(node, callee) {

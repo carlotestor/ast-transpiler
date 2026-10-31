@@ -270,6 +270,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printNativeMathMinMax(node: any, left: any, right: any, leftText: any, rightText: any, name: any): string;
     javaStringBoxText(node: any, text: any): string;
     javaScalarParseAccepts(callee: any, text: any): boolean;
+    printStringTypedParse(node: any, callee: any): string;
     printNativeScalarParse(node: any, callee: any): string;
     javaPadStartReceiverText(receiver: any, name: any): any;
     printNativePadStart(node: any, name: any): string;
