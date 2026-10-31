@@ -2827,6 +2827,7 @@ var CSHARP_NATIVE_FIELDS = {
   "codes": "List<object>",
   "ids": "List<object>"
 };
+var CSHARP_WS_CACHE_DICT_FIELDS = ["ohlcvs", "trades", "tickers", "bidsasks"];
 var CSHARP_OBJECT_DICT_FIELDS = ["urls", "tickers", "bidsasks", "orderbooks", "ohlcvs", "trades", "markets", "currencies", "currencies_by_id", "exceptions"];
 var CSHARP_REFERENCE_FIELDS_NATIVE = [
   "id",
@@ -8814,16 +8815,19 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const fieldTypes = { "has": "Dictionary<string, object>", "features": "Dictionary<string, object>", "timeframes": "Dictionary<string, object>", "options": "ConcurrentDictionary<string, object>", "markets": "IDictionary<string, object>", "urls": "object", "currencies": "object" };
     let receiver;
     let csharpType;
-    if (isPropertyAccessExpression(expression) && expression.expression.kind === SyntaxKind4.ThisKeyword && isIdentifier(expression.name) && Object.prototype.hasOwnProperty.call(fieldTypes, expression.name.text)) {
+    const memberName = isPropertyAccessExpression(expression) && expression.expression.kind === SyntaxKind4.ThisKeyword && isIdentifier(expression.name) ? expression.name.text : void 0;
+    const wsCache = memberName !== void 0 && CSHARP_WS_CACHE_DICT_FIELDS.indexOf(memberName) >= 0;
+    if (memberName !== void 0 && (wsCache || Object.prototype.hasOwnProperty.call(fieldTypes, memberName))) {
       const field = this.printNode(expression, 0);
-      csharpType = fieldTypes[expression.name.text];
+      csharpType = wsCache ? "IDictionary<string, object>" : fieldTypes[memberName];
       receiver = csharpType === "object" ? `((IDictionary<string, object>)${field})` : field;
       const key = this.csharpHx4DeclaredKeyType(argumentExpression);
       if (key !== "string" && key !== "string?") {
         return void 0;
       }
       const printedKey2 = this.printNode(argumentExpression, 0);
-      return `(${field} != null && ${printedKey2} != null && ${receiver}.ContainsKey(${printedKey2}) ? ${receiver}[${printedKey2}] : null)`;
+      const keyTest = wsCache && key === "string" ? "" : ` && ${printedKey2} != null`;
+      return `(${field} != null${keyTest} && ${receiver}.ContainsKey(${printedKey2}) ? ${receiver}[${printedKey2}] : null)`;
     }
     if (!isIdentifier(expression) || CSHARP_MARKET_RECEIVER_NAMES.indexOf(expression.text) >= 0) {
       return void 0;
@@ -8840,15 +8844,23 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const printedKey = this.printNode(argumentExpression, 0);
     const keyType = this.csharpHx4DeclaredKeyType(argumentExpression);
     if (csharpType.indexOf("Dictionary<") >= 0) {
-      if (keyType !== "string" && keyType !== "string?") {
+      const boxedKey = keyType === "object";
+      if (keyType !== "string" && keyType !== "string?" && !(boxedKey && this.csharpIsExchangeSourceFile(expression))) {
         return void 0;
       }
-      return `(${receiver} != null && ${printedKey} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
+      const stringKey = boxedKey ? `(string)${printedKey}` : printedKey;
+      return `(${receiver} != null && ${printedKey} != null && ${receiver}.ContainsKey(${stringKey}) ? ${receiver}[${stringKey}] : null)`;
     }
     if (keyType !== "int") {
       return void 0;
     }
     return `(${receiver} != null && ${printedKey} < ${receiver}.Count ? ${receiver}[${printedKey}] : null)`;
+  }
+  // an exchange source (ts/src/, never the test or example tiers, whose element reads print
+  // against the bridge helpers); a host may override the per-file answer with csharpElementRowLocalSource
+  csharpIsExchangeSourceFile(node) {
+    const fileName = String(node?.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    return typeof this.csharpElementRowLocalSource === "function" ? this.csharpElementRowLocalSource(fileName) : fileName.includes("ts/src/") && !fileName.includes("ts/src/test/") && !fileName.includes("examples/");
   }
   // a read that is no write target: not the left of any assignment, not ++/--, not delete
   csharpHx4IsPlainRead(node) {
