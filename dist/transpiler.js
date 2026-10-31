@@ -13554,6 +13554,11 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     while (cond?.kind === SyntaxKind5.ParenthesizedExpression) {
       cond = cond.expression;
     }
+    if (cond?.kind === SyntaxKind5.BinaryExpression && [SyntaxKind5.EqualsEqualsEqualsToken, SyntaxKind5.EqualsEqualsToken].includes(cond.operatorToken?.kind)) {
+      const absent = cond.right?.kind === SyntaxKind5.NullKeyword || cond.right?.kind === SyntaxKind5.Identifier && cond.right.text === "undefined";
+      const cached = absent ? this.goOrderBookCacheRead(cond.left) : void 0;
+      return cached !== void 0 && this.goSameExpressionText(cached.obj, read.obj) && this.goSameExpressionText(cached.key, read.key);
+    }
     return cond?.kind === SyntaxKind5.PrefixUnaryExpression && cond.operator === SyntaxKind5.ExclamationToken && this.goConditionHasPresence(cond.operand, read);
   }
   goBlockStatements(node) {
@@ -13676,7 +13681,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
   goOrderBookLocalUnboxUncached(declaration) {
     const cfg = this.goOrderBook;
     const name = declaration.name.text;
-    if (cfg === void 0 || declaration.initializer === void 0 || declaration.type?.kind === SyntaxKind5.AnyKeyword || !/(^|[\\/])ts[\\/]src[\\/]pro[\\/]/.test(String(declaration.getSourceFile().fileName ?? ""))) {
+    if (cfg === void 0 || declaration.initializer === void 0 || declaration.type?.kind === SyntaxKind5.AnyKeyword || !/(^|[\\/])ts[\\/]src[\\/](pro|prediction)[\\/]/.test(String(declaration.getSourceFile().fileName ?? ""))) {
       return void 0;
     }
     const scope = this.goEnclosingFunction(declaration);

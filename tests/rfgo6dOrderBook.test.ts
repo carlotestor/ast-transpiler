@@ -74,6 +74,17 @@ describe('RF-go-6-D order book side reads', () => {
         expect (repaired).toContain ('OrderBookTyped(');
         expect (repaired).toContain ('orderbook.GetAsks()');
     });
+    test('an early exit on `safeValue (cache, key) === undefined` proves the entry (fails on the base printer)', () => {
+        const body = '    handle (keys: string[]) {\n'
+            + '        for (let i = 0; i < keys.length; i++) {\n'
+            + '            const symbol = keys[i];\n'
+            + '            if (this.safeValue (this.orderbooks, symbol) === undefined) {\n                continue;\n            }\n'
+            + '            const orderbook = this.orderbooks[symbol];\n'
+            + '            this.handleDeltas (orderbook[\'asks\'], []);\n'
+            + '        }\n    }\n';
+        expect (print (body)).toContain ('orderbook.GetAsks()');
+        expect (print (body, null)).not.toContain ('GetAsks()');
+    });
     test('a constructor local needs no guard', () => {
         const out = print ('    handle () {\n        const orderbook = this.orderBook ();\n        this.handleDeltas (orderbook[\'asks\'], []);\n    }\n');
         expect (out).toContain ('orderbook.GetAsks()');

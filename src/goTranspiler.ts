@@ -5403,6 +5403,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         while (cond?.kind === SyntaxKind.ParenthesizedExpression) {
             cond = cond.expression;
         }
+        // `this.safeValue (obj, key) === undefined`: the same absent test through the cache reader
+        if ((cond?.kind === SyntaxKind.BinaryExpression) && [ SyntaxKind.EqualsEqualsEqualsToken, SyntaxKind.EqualsEqualsToken ].includes(cond.operatorToken?.kind)) {
+            const absent = (cond.right?.kind === SyntaxKind.NullKeyword) || ((cond.right?.kind === SyntaxKind.Identifier) && (cond.right.text === 'undefined'));
+            const cached = absent ? this.goOrderBookCacheRead(cond.left) : undefined;
+            return (cached !== undefined) && this.goSameExpressionText(cached.obj, read.obj) && this.goSameExpressionText(cached.key, read.key);
+        }
         return (cond?.kind === SyntaxKind.PrefixUnaryExpression) && (cond.operator === SyntaxKind.ExclamationToken)
             && this.goConditionHasPresence(cond.operand, read);
     }
@@ -5549,7 +5555,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         const cfg = this.goOrderBook;
         const name: string = declaration.name.text;
         if ((cfg === undefined) || (declaration.initializer === undefined) || (declaration.type?.kind === SyntaxKind.AnyKeyword)
-            || !/(^|[\\/])ts[\\/]src[\\/]pro[\\/]/.test(String(declaration.getSourceFile().fileName ?? ''))) {
+            || !/(^|[\\/])ts[\\/]src[\\/](pro|prediction)[\\/]/.test(String(declaration.getSourceFile().fileName ?? ''))) {
             return undefined;
         }
         const scope: any = this.goEnclosingFunction(declaration);
