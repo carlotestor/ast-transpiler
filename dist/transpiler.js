@@ -2911,6 +2911,11 @@ function csharpStripOuterParens(text) {
   return stripped;
 }
 var CSHARP_MISSING_KEY_FIELDS_NATIVE = ["has", "options", "urls", "markets", "exceptions"];
+var CSHARP_NULLABLE_STATE_FIELDS = {
+  "fees": "IDictionary<string, object>",
+  "requiredCredentials": "IDictionary<string, object>",
+  "accounts": "List<object>"
+};
 var CSHARP_NATIVE_COLLECTION_TYPES = ["List<object>", "IList<object>", "Dictionary<string, object>", "IDictionary<string, object>"];
 var CSHARP_SCALAR_ELEMENT_BOOL = 1;
 var CSHARP_SCALAR_ELEMENT_STRING = 2;
@@ -3467,6 +3472,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // test plus the indexer print what the helper computes, so a missing key still reads null
   // (a bare indexer would throw). Any other receiver or a numeric key keeps the helper
   csharpMissingKeyFieldRead(expression, argumentExpression, isStringKey) {
+    const state = this.csharpNullableStateField(expression);
+    if (state !== void 0) {
+      return this.csharpNullableStateRead(state, argumentExpression, isStringKey, isNumericLiteral2(argumentExpression));
+    }
     if (!isStringKey) {
       return void 0;
     }
@@ -3484,6 +3493,44 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return `(${field} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
     }
     return `(${field}.ContainsKey(${printedKey}) ? ${field}[${printedKey}] : null)`;
+  }
+  // `this.<field>` for a hand-written collection field that may still be null (CSHARP_NULLABLE_STATE_FIELDS)
+  csharpNullableStateField(node) {
+    if (!isPropertyAccessExpression(node) || node.expression?.kind !== SyntaxKind4.ThisKeyword) {
+      return void 0;
+    }
+    const name = node.name?.text;
+    if (!Object.prototype.hasOwnProperty.call(CSHARP_NULLABLE_STATE_FIELDS, name)) {
+      return void 0;
+    }
+    return { text: this.printNode(node, 0), type: CSHARP_NULLABLE_STATE_FIELDS[name] };
+  }
+  // GetValue's tests on a nullable state field: null receiver, missing key (dictionary) or
+  // index past the end (list) all read null. `keyKind` is the printed key's C# type for an
+  // identifier ('string' / 'string?' keys a dictionary, 'int' a list); a literal key is its own proof
+  csharpNullableStateRead(state, argumentExpression, isStringKey, isNumberKey) {
+    const receiver = state.text;
+    const isDictionary = state.type.indexOf("Dictionary<") >= 0;
+    if (isStringKey || isNumberKey) {
+      const key2 = this.printNode(argumentExpression, 0);
+      if (isDictionary) {
+        return isStringKey ? `(${receiver} != null && ${receiver}.ContainsKey(${key2}) ? ${receiver}[${key2}] : null)` : void 0;
+      }
+      const index = Number(argumentExpression.text);
+      if (!isNumberKey || !Number.isInteger(index) || index < 0) {
+        return void 0;
+      }
+      return `(${receiver} != null && ${index} < ${receiver}.Count ? ${receiver}[${index}] : null)`;
+    }
+    if (!isIdentifier(argumentExpression)) {
+      return void 0;
+    }
+    const keyType = this.csharpHx4DeclaredKeyType(argumentExpression);
+    const key = this.printNode(argumentExpression, 0);
+    if (isDictionary) {
+      return keyType === "string" || keyType === "string?" ? `(${receiver} != null && ${key} != null && ${receiver}.ContainsKey(${key}) ? ${receiver}[${key}] : null)` : void 0;
+    }
+    return keyType === "int" ? `(${receiver} != null && ${key} < ${receiver}.Count ? ${receiver}[${key}] : null)` : void 0;
   }
   // A literal-key read on a local whose C# declaration is already a collection: no cast needed, but
   // the indexer throws where GetValue answers null, so the native form carries the helper's key/index
@@ -5298,6 +5345,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // build layer's declared-type table, then an `object` parameter proven a dictionary by TS or an
   // emitted `??= new Dictionary<string, object>()`. That case applies the helper's cast + null test.
   csharpNativeDictionaryReceiver(obj) {
+    const state = this.csharpNullableStateField(obj);
+    if (state !== void 0) {
+      return state.type.indexOf("Dictionary<") >= 0 ? { text: state.text, nullTest: state.text } : void 0;
+    }
     const checker = this.getChecker();
     const type = checker.getTypeAtLocation(obj);
     const nullable = this.csharpNullableDictionaryType(type);
@@ -5351,6 +5402,12 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // (build/csharp-local-types.js retypes it, answers csharpDeclaredDictReceiverType): inOp's dict
   // branch is exactly `obj?.ContainsKey(key) == true` for a key that is already a C# string.
   csharpDeclaredDictInExpression(key, obj) {
+    const state = this.csharpNullableStateField(obj);
+    if (state !== void 0 && isIdentifier(key) && state.type.indexOf("Dictionary<") >= 0) {
+      const keyType = this.csharpHx4DeclaredKeyType(key);
+      const printed = this.printNode(key, 0);
+      return keyType === "string" || keyType === "string?" ? `(${state.text} != null && ${printed} != null && ${state.text}.ContainsKey(${printed}))` : void 0;
+    }
     if (obj?.kind !== SyntaxKind4.Identifier) {
       return void 0;
     }
@@ -5383,6 +5440,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // `x.length` -> `x.Count`, same proof for the checker's array operands; strings keep
   // the `((string)x).Length` branch and every unproven operand keeps getArrayLength
   csharpNativeLengthExpression(expression) {
+    const state = this.csharpNullableStateField(expression);
+    if (state !== void 0) {
+      return state.type.indexOf("List<") === 0 ? `(${state.text}?.Count ?? 0)` : void 0;
+    }
     if (csharpListParamDeclaration(this, expression)) {
       const declared = this.csharpDeclaredLengthExpression(expression);
       if (declared !== void 0) {
@@ -8593,6 +8654,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const fieldTypes = { "has": "Dictionary<string, object>", "features": "Dictionary<string, object>", "timeframes": "Dictionary<string, object>", "options": "ConcurrentDictionary<string, object>", "markets": "IDictionary<string, object>", "urls": "object", "currencies": "object" };
     let receiver;
     let csharpType;
+    const state = this.csharpNullableStateField(expression);
+    if (state !== void 0) {
+      return this.csharpNullableStateRead(state, argumentExpression, false, false);
+    }
     if (isPropertyAccessExpression(expression) && expression.expression.kind === SyntaxKind4.ThisKeyword && isIdentifier(expression.name) && Object.prototype.hasOwnProperty.call(fieldTypes, expression.name.text)) {
       const field = this.printNode(expression, 0);
       csharpType = fieldTypes[expression.name.text];
