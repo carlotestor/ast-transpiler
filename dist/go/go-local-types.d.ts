@@ -42,6 +42,7 @@ export declare const CCXT_GO_HELPER_RETURN_TYPES: {
     'this.ParseDepositMethodIds': string;
     'this.ParsePortfolioDetails': string;
     'this.StringToCharsArray': string;
+    'this.EthEncodeStructuredData': string;
     'this.MarketSymbols': string;
     'exchange.MarketSymbols': string;
     'this.Capitalize': string;
