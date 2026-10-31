@@ -18961,6 +18961,16 @@ ${this.getIden(level)}}()`;
     scope?.forEachChild(visit);
     return sites;
   }
+  // true when an iteration statement encloses `loop` without enclosing `declaration`: a write after
+  // the loop could then run before the loop is entered again
+  goEnclosingLoopExcluding(loop, declaration) {
+    for (let up = loop.parent; up !== void 0 && !isFunctionLike(up); up = up.parent) {
+      if (GO_ITERATION_STATEMENT_KINDS.has(up.kind) && !(declaration.pos >= up.pos && declaration.end <= up.end)) {
+        return true;
+      }
+    }
+    return false;
+  }
   // `x[i]` in the body of a counting loop bounded by x's own length, with `i` and `x` unwritten
   goBoundedLoopListRead(node) {
     const list = node?.expression;
@@ -19009,7 +19019,7 @@ ${this.getIden(level)}}()`;
     if (bound?.kind === SyntaxKind5.Identifier) {
       const boundDeclaration = checker.getSymbolAtLocation(bound)?.valueDeclaration?.resolve?.();
       const init = boundDeclaration?.initializer;
-      if (boundDeclaration?.kind !== SyntaxKind5.VariableDeclaration || this.goEnclosingFunction(boundDeclaration) !== scope || boundDeclaration.end > loop.pos || init?.kind !== SyntaxKind5.PropertyAccessExpression || init.name?.text !== "length" || init.expression?.kind !== SyntaxKind5.Identifier || init.expression.text !== list.text || this.goNameWriteSites(scope, bound.text, boundDeclaration).length > 0) {
+      if (boundDeclaration?.kind !== SyntaxKind5.VariableDeclaration || this.goEnclosingFunction(boundDeclaration) !== scope || boundDeclaration.end > loop.pos || init?.kind !== SyntaxKind5.PropertyAccessExpression || init.name?.text !== "length" || init.expression?.kind !== SyntaxKind5.Identifier || init.expression.text !== list.text || this.goNameWriteSites(scope, bound.text, boundDeclaration).some((site) => site.pos < loop.end || this.goEnclosingLoopExcluding(loop, boundDeclaration))) {
         return false;
       }
       from = boundDeclaration.end;
@@ -19029,7 +19039,7 @@ ${this.getIden(level)}}()`;
   // every element the list can hold is a map/slice/JSON value, never a scalar pointer, so
   // DerefScalar(x[i]) is x[i]: the checker proves an object element type, the local is a
   // SafeList unbox, or every write into it (initializer, assignment, push) is such a value
-  goListElementsArePointerFree(list) {
+  goListElementsArePointerFree(list, depth = 0) {
     const checker = this.checkerOrUndefined();
     if (checker === void 0) {
       return false;
@@ -19064,6 +19074,9 @@ ${this.getIden(level)}}()`;
       if (value?.kind === SyntaxKind5.ObjectLiteralExpression) {
         return true;
       }
+      if (value?.kind === SyntaxKind5.ElementAccessExpression && value.expression?.kind === SyntaxKind5.Identifier && depth < 3 && this.goListElementsArePointerFree(value.expression, depth + 1)) {
+        return true;
+      }
       if (thisCall(value, (name) => /^(parse[A-Z]\w*|safeDict2?)$/.test(name))) {
         return true;
       }
@@ -19073,13 +19086,32 @@ ${this.getIden(level)}}()`;
         return false;
       }
     };
-    const listValue = (e) => {
+    const ENDPOINT_METHOD = /^\w*(?:public|private|Public|Private)\w*(?:Get|Post|Put|Delete|Patch)[A-Z0-9]\w*$/;
+    const listValue = (e, hops = 0, self) => {
       const value = unwrap(e);
       if (value?.kind === SyntaxKind5.ArrayLiteralExpression) {
         return value.elements.every((el) => dictElement(el));
       }
+      if (value?.kind === SyntaxKind5.AwaitExpression) {
+        return thisCall(unwrap(value.expression), (name) => ENDPOINT_METHOD.test(name));
+      }
       if (thisCall(value, (name) => /^safeList2?$/.test(name))) {
         return true;
+      }
+      if (thisCall(value, (name) => name === "arrayConcat")) {
+        return value.arguments.length === 2 && value.arguments.every((a) => listValue(a, hops + 1, self));
+      }
+      if (value?.kind === SyntaxKind5.CallExpression && value.expression?.kind === SyntaxKind5.PropertyAccessExpression && value.expression.expression?.kind === SyntaxKind5.Identifier && value.expression.expression.text === "Object" && value.expression.name?.text === "values") {
+        return true;
+      }
+      if (value?.kind === SyntaxKind5.Identifier && self !== void 0 && value.text === self) {
+        return true;
+      }
+      if (value?.kind === SyntaxKind5.Identifier && hops < 3) {
+        const hop = checker.getSymbolAtLocation(value)?.valueDeclaration?.resolve?.();
+        if (hop?.kind === SyntaxKind5.VariableDeclaration && hop.initializer !== void 0 && this.goEnclosingFunction(hop) === this.goEnclosingFunction(value) && this.goNameWriteSites(this.goEnclosingFunction(hop), value.text, hop).length === 0) {
+          return listValue(hop.initializer, hops + 1);
+        }
       }
       try {
         return listObjects(checker.getTypeAtLocation(value));
@@ -19100,14 +19132,14 @@ ${this.getIden(level)}}()`;
       }
     } catch (e) {
     }
-    if (declaration.kind !== SyntaxKind5.VariableDeclaration || declaration.initializer === void 0 || !listValue(declaration.initializer)) {
+    if (declaration.kind !== SyntaxKind5.VariableDeclaration || declaration.initializer === void 0 || !listValue(declaration.initializer, 0, list.text)) {
       return false;
     }
     const scope = this.goEnclosingFunction(declaration);
     return this.goNameWriteSites(scope, list.text, declaration).every((site) => {
       const parent = site.parent;
       if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === site && parent.operatorToken.kind === SyntaxKind5.EqualsToken) {
-        return listValue(parent.right);
+        return listValue(parent.right, 0, list.text);
       }
       if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === site) {
         const call = parent.parent;
