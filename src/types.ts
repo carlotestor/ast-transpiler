@@ -57,6 +57,8 @@ interface ITranspiledFile {
     imports: IFileImport[];
     exports: IFileExport[];
     methodsTypes?: IMethodType[];
+    // Go only: the stdlib packages the printed file needed (RF-go-6-E)
+    goStdlibImports?: string[];
 }
 
 enum Languages {
