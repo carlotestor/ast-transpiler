@@ -33,6 +33,17 @@ export declare class GoTranspiler extends BaseTranspiler {
         remove: string;
         ownerSide: RegExp[];
     } | undefined;
+    goOwnedBalance: {
+        field: string;
+        declaredIn: string;
+        entryRead: string;
+        entryWrite: string;
+        replace: string;
+        asyncUserPath: RegExp;
+        userPath: RegExp;
+        boxedKeys: string[];
+        plainResultCalls: RegExp;
+    } | undefined;
     goSliceLiteralTypes: Map<any, string>;
     CCXT_GO_GETARG_DECLARED_TYPES: any;
     CCXT_GO_GETARG_SAFE_CONSUMERS: any;
@@ -740,6 +751,15 @@ export declare class GoTranspiler extends BaseTranspiler {
     goOwnedFieldAccess(node: any): boolean;
     goOwnedFieldUserPath(node: any): boolean;
     goOwnedFieldIsWrite(node: any): boolean;
+    goOwnedBalanceField(node: any): boolean;
+    goOwnedBalanceOwnerSide(node: any): boolean;
+    goOwnedBalanceKey(node: any, boxedOk?: boolean): string | undefined;
+    goOwnedBalancePlainValue(valueNode: any, topLevel: boolean): boolean;
+    goOwnedBalanceReplace(node: any, identation: any): string | undefined;
+    goOwnedBalanceRead(node: any, baseExpr: any, keys: any[], keyStrs: string[]): string | undefined;
+    goOwnedBalanceWrite(node: any, baseExpr: any, keys: any[], rhs: string, valueNode: any): string | undefined;
+    goOwnedBalanceDelete(node: any): string | undefined;
+    goOwnedBalanceWriteContainer(baseExpr: any, containerStr: string, keyNodes: any): string | undefined;
     printPropertyAccessExpression(node: any, identation: any): any;
     goOwnedFieldRemove(node: any): string | undefined;
     printDeleteExpression(node: any, identation: any): string;

@@ -10435,6 +10435,18 @@ var GoTranspiler = class extends BaseTranspiler {
       ownerSide: (owned["ownerSideMethods"] ?? []).map((p) => new RegExp(p))
     };
     this.generatedListCallees = new Set(config["generatedListCallees"] ?? []);
+    const balance = config["ownedBalance"];
+    this.goOwnedBalance = balance === void 0 ? void 0 : {
+      field: balance["field"],
+      declaredIn: balance["declaredIn"],
+      entryRead: balance["entryRead"],
+      entryWrite: balance["entryWrite"],
+      replace: balance["replace"],
+      asyncUserPath: new RegExp(balance["asyncUserPath"]),
+      userPath: new RegExp(balance["userPath"]),
+      boxedKeys: balance["boxedKeys"],
+      plainResultCalls: new RegExp(balance["plainResultCalls"])
+    };
   }
   goDescendantsOf(scope) {
     let list = this.goScopeDescendants.get(scope);
@@ -14080,7 +14092,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       }
       const rhs = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trimStart();
       const nativeRhs = right.kind === SyntaxKind5.BinaryExpression ? this.goWithExprDepth(this.goExprDepth, () => this.printNode(right, identation)).trimStart() : rhs;
-      const native = keyStrs.length === 1 ? this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, nativeRhs, false, right) ?? this.printNativeMapWriteOnProvenLocal(baseExpr, containerStr, keys[0], lastKey, nativeRhs, right, identation) : void 0;
+      const native = (keyStrs.length === 1 ? this.printNativeElementAssignment(baseExpr, containerStr, keys[0], lastKey, nativeRhs, false, right) ?? this.printNativeMapWriteOnProvenLocal(baseExpr, containerStr, keys[0], lastKey, nativeRhs, right, identation) : void 0) ?? this.goOwnedBalanceWrite(node, baseExpr, keys, nativeRhs, right);
       return native !== void 0 ? native : `AddElementToObject(${acc}, ${lastKey}, ${rhs})`;
     }
     if (left.kind === SyntaxKind5.TypeOfExpression) {
@@ -19727,6 +19739,141 @@ ${this.getIden(level)}}()`;
     }
     return parent?.kind === SyntaxKind5.ElementAccessExpression && parent.expression === node && (isAssignment(parent.parent, parent) || parent.parent?.kind === SyntaxKind5.DeleteExpression);
   }
+  // ===== FOLD-1F hx10w6-G01 =====
+  // BaseExchange.balance is the Go map[string]any field BaseExchange.Balance, owned by the ws dispatch
+  // loop. Code on that loop (every method but the tabled user-path ones) reads and writes it as a plain
+  // map and reaches an account entry through the owner's views; user-path code keeps the helper calls.
+  // A Go value is stored natively only when it is a dictionary or list (the helper would not unbox it).
+  goOwnedBalanceField(node) {
+    const owned = this.goOwnedBalance;
+    if (owned === void 0 || node?.kind !== SyntaxKind5.PropertyAccessExpression || node.expression?.kind !== SyntaxKind5.ThisKeyword || node.name?.text !== owned.field) {
+      return false;
+    }
+    const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+    return declaration?.kind === SyntaxKind5.PropertyDeclaration && declaration.parent?.name?.text === owned.declaredIn;
+  }
+  goOwnedBalanceOwnerSide(node) {
+    for (let current = node?.parent; current; current = current.parent) {
+      if (current.kind === SyntaxKind5.MethodDeclaration) {
+        const name = `${current.name?.text ?? ""}`;
+        return !this.goOwnedBalance.userPath.test(name) && !(this.isAsyncFunction(current) && this.goOwnedBalance.asyncUserPath.test(name));
+      }
+      if (current.kind === SyntaxKind5.FunctionDeclaration) {
+        return false;
+      }
+    }
+    return false;
+  }
+  // the printed key of an access: a string literal (bookkeeping slots only when `boxedOk`), a `string`
+  // local, or a `*string` local a nil guard or the checker proves non-nil (printed dereferenced)
+  goOwnedBalanceKey(node, boxedOk = false) {
+    node = this.goUnwrapPrintedAssertions(node);
+    if (node?.kind === SyntaxKind5.StringLiteral || node?.kind === SyntaxKind5.NoSubstitutionTemplateLiteral) {
+      return boxedOk || !this.goOwnedBalance.boxedKeys.includes(node.text) ? this.printNode(node, 0) : void 0;
+    }
+    if (node?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    const declared = this.goDeclaredTypeOfIdentifier(node);
+    if (declared === "string") {
+      return this.printNode(node, 0);
+    }
+    return declared === "*string" && (this.goHasEnclosingNilGuard(node) || this.goDerefableStringOperand(node)) ? "*" + this.printNode(node, 0) : void 0;
+  }
+  // the stored value is never a boxed scalar pointer, so the helper's derefScalar leaves it alone and the
+  // native store keeps the same value: an object type (Dict, list, struct), or, for a top-level slot,
+  // the result of a `this.` method the embedder tables as returning a plain Go value
+  goOwnedBalancePlainValue(valueNode, topLevel) {
+    const checker = this.checkerOrUndefined();
+    const value = this.goUnwrapPrintedAssertions(valueNode);
+    if (checker === void 0 || value === void 0) {
+      return false;
+    }
+    if (value.kind === SyntaxKind5.ObjectLiteralExpression || value.kind === SyntaxKind5.ArrayLiteralExpression) {
+      return true;
+    }
+    if (topLevel && this.goOwnedBalance.plainResultCalls.test(this.rfGo6bThisCallName(value) ?? "(?!)")) {
+      return true;
+    }
+    const type = checker.getTypeAtLocation(value);
+    const parts = typeof type.isUnionType === "function" && type.isUnionType() ? type.getTypes() : [type];
+    const present = parts.filter((t) => (t.flags & (TypeFlags4.Undefined | TypeFlags4.Null)) === 0);
+    return present.length > 0 && present.every((t) => (t.flags & TypeFlags4.Object) !== 0);
+  }
+  // `this.balance = v` on the loop moves v's entries into the one map handlers hold
+  goOwnedBalanceReplace(node, identation) {
+    if (this.goOwnedBalance === void 0 || node.parent?.kind !== SyntaxKind5.ExpressionStatement || !this.goOwnedBalanceField(node.left) || !this.goOwnedBalanceOwnerSide(node) || this.goUnwrapParenthesizedNode(node.right)?.kind === SyntaxKind5.ObjectLiteralExpression) {
+      return void 0;
+    }
+    const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(node.right, identation)).trim();
+    return value.includes("\n") || value.startsWith("map[string]any{") ? void 0 : `this.${this.goOwnedBalance.replace}(${value})`;
+  }
+  // `this.balance[k]` is the map's own index, `this.balance[k1][k2]` the owner view's entry index
+  goOwnedBalanceRead(node, baseExpr, keys, keyStrs) {
+    if (this.goOwnedBalance === void 0 || !this.goOwnedBalanceField(baseExpr) || !this.goOwnedBalanceOwnerSide(node) || this.isGoElementAccessAssignmentTarget(node) || node.parent?.kind === SyntaxKind5.DeleteExpression) {
+      return void 0;
+    }
+    const first = this.goOwnedBalanceKey(keys[0]);
+    if (first === void 0) {
+      return void 0;
+    }
+    const second = keys.length > 1 ? this.goOwnedBalanceKey(keys[1]) : void 0;
+    if (second !== void 0) {
+      return this.goElementAccessChain(`this.${this.goOwnedBalance.entryRead}(${first})[${second}]`, keyStrs.slice(1));
+    }
+    return this.goElementAccessChain(`${this.printNode(baseExpr, 0)}[${first}]`, keyStrs);
+  }
+  // `this.balance[k] = v` and `this.balance[k1][k2] = v` as a statement on the loop
+  goOwnedBalanceWrite(node, baseExpr, keys, rhs, valueNode) {
+    if (this.goOwnedBalance === void 0 || keys.length > 2 || node.parent?.kind !== SyntaxKind5.ExpressionStatement || rhs.includes("\n") || !this.goOwnedBalanceField(baseExpr) || !this.goOwnedBalanceOwnerSide(node)) {
+      return void 0;
+    }
+    const owned = this.goOwnedBalance;
+    const first = this.goOwnedBalanceKey(keys[0]);
+    if (first === void 0) {
+      return void 0;
+    }
+    if (keys.length === 1) {
+      return this.goOwnedBalancePlainValue(valueNode, true) ? `${this.printNode(baseExpr, 0)}[${first}] = ${rhs}` : void 0;
+    }
+    const second = this.goOwnedBalanceKey(keys[1], true);
+    return second !== void 0 && this.goOwnedBalancePlainValue(valueNode, false) ? `this.${owned.entryWrite}(${first})[${second}] = ${rhs}` : void 0;
+  }
+  // `delete this.balance[k]` and `delete this.balance[k1][k2]` as a statement on the loop
+  goOwnedBalanceDelete(node) {
+    const access = node.expression;
+    if (this.goOwnedBalance === void 0 || node.parent?.kind !== SyntaxKind5.ExpressionStatement || access?.kind !== SyntaxKind5.ElementAccessExpression || !this.goOwnedBalanceOwnerSide(node)) {
+      return void 0;
+    }
+    if (this.goOwnedBalanceField(access.expression)) {
+      const key = this.goOwnedBalanceKey(access.argumentExpression);
+      return key === void 0 ? void 0 : `delete(${this.printNode(access.expression, 0)}, ${key})`;
+    }
+    const entry = access.expression;
+    if (entry?.kind !== SyntaxKind5.ElementAccessExpression || !this.goOwnedBalanceField(entry.expression)) {
+      return void 0;
+    }
+    const first = this.goOwnedBalanceKey(entry.argumentExpression);
+    const second = this.goOwnedBalanceKey(access.argumentExpression, true);
+    return first === void 0 || second === void 0 ? void 0 : `delete(this.${this.goOwnedBalance.entryRead}(${first}), ${second})`;
+  }
+  // the container of a nested `this.balance[k1][k2] = v` / `this.balance[k1][k2][k3] = v` write: the map's
+  // own index, or the owner view's entry index, for keys the printer proves
+  goOwnedBalanceWriteContainer(baseExpr, containerStr, keyNodes) {
+    if (this.goOwnedBalance === void 0 || keyNodes.length < 2 || keyNodes.length > 3 || !this.goOwnedBalanceField(baseExpr) || !this.goOwnedBalanceOwnerSide(baseExpr)) {
+      return void 0;
+    }
+    const first = this.goOwnedBalanceKey(keyNodes[0]);
+    if (first === void 0) {
+      return void 0;
+    }
+    if (keyNodes.length === 2) {
+      return `${containerStr}[${first}]`;
+    }
+    const second = this.goOwnedBalanceKey(keyNodes[1]);
+    return second === void 0 ? void 0 : `this.${this.goOwnedBalance.entryRead}(${first})[${second}]`;
+  }
+  // ===== end FOLD-1F hx10w6-G01 =====
   printPropertyAccessExpression(node, identation) {
     if (this.goOwnedFieldAccess(node) && !this.goOwnedFieldIsWrite(node) && this.goOwnedFieldUserPath(node)) {
       return `${this.printNode(node.expression, 0)}.${this.goOwnedField.snapshot}()`;
@@ -19745,6 +19892,10 @@ ${this.getIden(level)}}()`;
     const owned = this.goOwnedFieldRemove(node);
     if (owned !== void 0) {
       return owned;
+    }
+    const ownedBalance = this.goOwnedBalanceDelete(node);
+    if (ownedBalance !== void 0) {
+      return ownedBalance;
     }
     const native = this.goNativeDelete(node);
     if (native !== void 0) {
@@ -19939,6 +20090,10 @@ ${this.getIden(identation)}return nil`;
       const pointerWrite = this.goPointerWriteText(node, identation);
       if (pointerWrite !== void 0) {
         return pointerWrite;
+      }
+      const balanceReplace = this.goOwnedBalanceReplace(node, identation);
+      if (balanceReplace !== void 0) {
+        return balanceReplace;
       }
       const elementAccess = left;
       const rightSide = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, 0));
@@ -20180,6 +20335,10 @@ ${tryBodyBlock}
   // plain read, so a receiver typed as a map indexes natively and only `any` steps keep the helper.
   // A missing key or nil map reads nil in both forms; a non-map container is a no-op either way.
   goElementWriteChain(baseExpr, containerStr, keyNodes, keyStrs) {
+    const balanceContainer = this.goOwnedBalanceWriteContainer(baseExpr, containerStr, keyNodes);
+    if (balanceContainer !== void 0) {
+      return balanceContainer;
+    }
     let acc = containerStr;
     let first = 0;
     if (keyStrs.length > 1 && this.goIndexableTypeOf(baseExpr, containerStr) === "map[string]any" && this.goKeyIsString(keyNodes[0], keyStrs[0])) {
@@ -20480,6 +20639,10 @@ ${this.getIden(level)}}()`;
       if (this.goIsDerefStringKeyExpression(keys[0]) && !containerStr.includes("\n") && !this.isGoElementAccessAssignmentTarget(node)) {
         return this.goElementAccessChain(this.printNilGuardedMapIndex(containerStr, keyStrs[0]), keyStrs);
       }
+    }
+    const ownedBalance = this.goOwnedBalanceRead(node, baseExpr, keys, keyStrs);
+    if (ownedBalance !== void 0) {
+      return ownedBalance;
     }
     let acc = containerStr;
     keyStrs.forEach((k) => {
