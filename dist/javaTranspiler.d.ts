@@ -50,7 +50,6 @@ export declare class JavaTranspiler extends BaseTranspiler {
     }>;
     asyncExecutor: string;
     asyncSupplier: string;
-    javaThrownConstructions: WeakMap<object, string>;
     constructor(config?: {});
     initConfig(): void;
     getBlockOpen(identation: any): string;
@@ -414,6 +413,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printCondition(node: any, identation: any): any;
     printConditionalExpression(node: any, _identation: any): string;
     printDeleteExpression(node: any, _identation: any): string;
+    javaThrownConstruction(statement: any, printed: string): string | undefined;
     printThrowStatement(node: any, identation: any): string;
     csModifiers: {};
     printPropertyAccessModifiers(node: any): string;

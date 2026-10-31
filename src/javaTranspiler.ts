@@ -1239,9 +1239,6 @@ export class JavaTranspiler extends BaseTranspiler {
     // Static method emitted in place of java.util.concurrent.CompletableFuture.supplyAsync
     // for async methods. The callee owns the executor choice, so no second argument is emitted.
     asyncSupplier = '';
-    // `new X(args)` spelling of every plain `throw new X(args)` printed so far, keyed by the throw statement:
-    // an async body that is only that throw completes its future exceptionally (printFunctionBody).
-    javaThrownConstructions: WeakMap<object, string> = new WeakMap();
 
     constructor(config = {}) {
         config["parser"] = Object.assign({}, parserConfig, config["parser"] ?? {});
@@ -7210,8 +7207,8 @@ export class JavaTranspiler extends BaseTranspiler {
             const executorArg = (!this.asyncSupplier && this.asyncExecutor) ? `, ${this.asyncExecutor}` : "";
             // An async body that is exactly one `throw new X(args)` can only complete its future exceptionally:
             // the native completion API replaces the supplier lambda (no executor, no wrappers, no parameter unpack).
-            const onlyThrow = bodyStatements.length === 1 && isThrowStatement(bodyStatements[0])
-                ? this.javaThrownConstructions.get(bodyStatements[0]) : undefined;
+            // The construction is the statement's own printed `new X(args)` (after every printThrowStatement hook).
+            const onlyThrow = bodyStatements.length === 1 ? this.javaThrownConstruction(bodyStatements[0], processedParts[0]) : undefined;
             if (onlyThrow !== undefined && executorArg === "" && initParams.length === 0
                 && (finalWrapperVars + insideWrappers).trim() === "") {
                 return blockOpen + finalWrapperVars + this.getIden(identation + 1)
@@ -8731,6 +8728,22 @@ export class JavaTranspiler extends BaseTranspiler {
         return `((java.util.Map<String,Object>)${object}).remove((String)${key})`;
     }
 
+    // `new X(args)` of a `throw new X(args)` statement that printed as a plain throw of a construction, else undefined
+    // (a bare rethrow, `Helpers.throwDynamicException`, or any other statement).
+    javaThrownConstruction(statement, printed: string): string | undefined {
+        if (!isThrowStatement(statement) || statement.expression.kind !== SyntaxKind.NewExpression
+            || statement.expression.expression.kind !== SyntaxKind.Identifier) {
+            return undefined;
+        }
+        const head = `${this.THROW_TOKEN} ${this.NEW_TOKEN} `;
+        let text = printed.trim();
+        if (!text.startsWith(head) || !text.endsWith(this.LINE_TERMINATOR)) {
+            return undefined;
+        }
+        text = text.slice(this.THROW_TOKEN.length).slice(0, text.length - this.THROW_TOKEN.length - this.LINE_TERMINATOR.length).trim();
+        return text.endsWith(")") ? text : undefined;
+    }
+
     printThrowStatement(node, identation) {
         if (node.expression.kind === SyntaxKind.Identifier) {
             // a bare rethrow (`throw e`) of a caught java.lang.Exception is a checked
@@ -8764,11 +8777,9 @@ export class JavaTranspiler extends BaseTranspiler {
                             l.kind === SyntaxKind.ClassDeclaration
                     );
                     if (isClassDeclaration) {
-                        const thrown = `${this.NEW_TOKEN} ${exceptionName}((String)${parsedArg})`;
-                        this.javaThrownConstructions.set(node, thrown);
                         return (
                             this.getIden(identation) +
-                            `${this.THROW_TOKEN} ${thrown} ${this.LINE_TERMINATOR}`
+                            `${this.THROW_TOKEN} ${this.NEW_TOKEN} ${exceptionName}((String)${parsedArg}) ${this.LINE_TERMINATOR}`
                         );
                     } else {
                         return (
@@ -8777,11 +8788,9 @@ export class JavaTranspiler extends BaseTranspiler {
                         );
                     }
                 }
-                const thrown = `${this.NEW_TOKEN} ${exceptionName}(${parsedArg})`;
-                this.javaThrownConstructions.set(node, thrown);
                 return (
                     this.getIden(identation) +
-                    `${this.THROW_TOKEN} ${thrown} ${this.LINE_TERMINATOR}`
+                    `${this.THROW_TOKEN} ${this.NEW_TOKEN} ${exceptionName}(${parsedArg}) ${this.LINE_TERMINATOR}`
                 );
             } else if (expression.expression.kind === SyntaxKind.ElementAccessExpression) {
                 return this.getIden(identation) + `Helpers.throwDynamicException(${newExpression}, ${parsedArg});`;
