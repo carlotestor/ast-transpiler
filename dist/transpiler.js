@@ -12784,18 +12784,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
           return this.goDefaultedStringSafeStringCall(parent, name);
         }
         const index = (parent.arguments ?? []).indexOf(current);
-        const callee = parent.expression;
-        if (index < 0) {
-          return false;
-        }
-        if (GO_NIL_INIT_ANY_ARG_CALLEES.has(this.printNode(callee, 0).trim())) {
-          return true;
-        }
-        if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || this.goIsUnifiedStringParameter(String(callee.name?.text), index)) {
-          return false;
-        }
-        const param = this.gp15CallParamAt(parent, index);
-        return param !== void 0 && this.goNativeParameterType(param) === "string";
+        return index >= 0 && GO_NIL_INIT_ANY_ARG_CALLEES.has(this.printNode(parent.expression, 0).trim());
       }
     }
     return false;

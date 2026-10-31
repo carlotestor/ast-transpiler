@@ -4190,22 +4190,11 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             if (current === parent.arguments?.[2]) {
                 return this.goDefaultedStringSafeStringCall(parent, name);
             }
-            // a plain argument of a parameter the printer already signs as Go `string` (the pointer read printed its deref there)
+            // the runtime accessors take `any` and deref a pointer, so the string reads the same. A parameter the
+            // printer signs as Go `string` is not accepted: that proof prints this very call site, which asks for
+            // this local's type again, so the answer would depend on evaluation order
             const index = (parent.arguments ?? []).indexOf(current);
-            const callee: any = parent.expression;
-            if (index < 0) {
-                return false;
-            }
-            // the runtime accessors take `any` and deref a pointer, so the string reads the same
-            if (GO_NIL_INIT_ANY_ARG_CALLEES.has(this.printNode(callee, 0).trim())) {
-                return true;
-            }
-            if ((callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)
-                || this.goIsUnifiedStringParameter(String(callee.name?.text), index)) {
-                return false;
-            }
-            const param = this.gp15CallParamAt(parent, index);
-            return (param !== undefined) && (this.goNativeParameterType(param) === 'string');
+            return (index >= 0) && GO_NIL_INIT_ANY_ARG_CALLEES.has(this.printNode(parent.expression, 0).trim());
         }
         }
         return false;
