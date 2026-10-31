@@ -676,6 +676,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     printArrayIsArrayCall(node: any, identation: any, parsedArg?: any): string;
     printObjectKeysCall(node: any, identation: any, parsedArg?: any): string;
     printObjectValuesCall(node: any, identation: any, parsedArg?: any): string;
+    goMapRangeLocalDeclaration(statement: any, declaration: any, identation: number): string | undefined;
+    goIsRebindFreeMapReceiver(receiver: any): boolean;
+    goObjectValuesLocalIsList(declaration: any, scope: any): boolean;
     printJsonParseCall(node: any, identation: any, parsedArg?: any): string;
     printJsonStringifyCall(node: any, identation: any, parsedArg?: any): string;
     printPromiseAllCall(node: any, identation: any, parsedArg?: any): string;
