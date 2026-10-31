@@ -233,6 +233,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNumericOperandKind(node: any): string | undefined;
     orderedComparisonOperand(node: any): any;
     printNativeOrderedComparison(node: any, op: any, left: any, right: any): string | undefined;
+    printNativeIndexOfLiteralTest(node: any, op: any, left: any, right: any): string | undefined;
+    nativeIndexOfLiteralTestText(op: any, left: any, right: any): string | undefined;
     rustTypeFlagsAll(type: any, flags: Set<number>): boolean;
     isNumberLikeType(type: any): boolean;
     isStringLikeType(type: any): boolean;
@@ -1016,6 +1018,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Escaped text of a string-literal argument, else undefined. */
     rustNativeStringLiteralArg(node: any): string | undefined;
     printNativeStringCase(node: any, receiverText: string, method: string): string | undefined;
+    rustStrCaseConvert(receiver: string, method: string): string;
     printNativeStringAffixTest(node: any, receiverText: string, method: string): string | undefined;
     printNativeStringSplit(node: any, receiverText: string): string | undefined;
     printNativeStringReplace(node: any, receiverText: string): string | undefined;
@@ -1204,6 +1207,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly R26_PARAMS_SLOT_ARG;
     r26ParamsSlot(rhs: Node, selfName: string | undefined, depth: number): boolean;
     r30LooseI64(expr: string): string;
+    r30LooseI64OrZero(expr: string): string;
     r30SliceArm(variant: string, len: string, take: string, empty: string): string;
     r30Slice(name: string, start: string, end: string): string;
     r30IndexOf(name: string, needle: string): string;
