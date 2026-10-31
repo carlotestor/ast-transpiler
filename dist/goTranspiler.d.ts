@@ -25,6 +25,7 @@ export declare class GoTranspiler extends BaseTranspiler {
         [method: string]: number[];
     };
     stringPointerTupleCalls: string[];
+    siblingStringPassthroughPattern: RegExp | undefined;
     goSliceLiteralTypes: Map<any, string>;
     CCXT_GO_GETARG_DECLARED_TYPES: any;
     CCXT_GO_GETARG_SAFE_CONSUMERS: any;

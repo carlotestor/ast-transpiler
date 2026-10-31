@@ -1,3 +1,5 @@
+import * as nodefs from 'fs';
+import * as nodepath from 'path';
 import { Transpiler } from '../src/transpiler';
 
 // hx11 RF-go-7: createOrders `[]any` slot, Client.url / bound-parameter call-site proofs, uncalled-method table.
@@ -43,6 +45,20 @@ describe('hx11 RF-go-7 general parameter rules', () => {
         const out = go(ts);
         expect(out).toContain('GetType(url string)');
     });
+    test('a sibling passthrough of a unified-string parameter proves a builder parameter only when the pattern names it', () => {
+        const dir = nodepath.join(__dirname, 'files', 'tmp-rf-go-7', 'ts', 'src');
+        nodefs.mkdirSync(nodepath.join(dir, 'pro'), { recursive: true });
+        nodefs.writeFileSync(nodepath.join(dir, 'ex.ts'),
+            'class Exchange {}\nexport class ex extends Exchange {\n    buildRequest (symbol: string): string {\n        return symbol.toUpperCase ();\n    }\n    plain (symbol: string): string {\n        return symbol.toUpperCase ();\n    }\n}\n');
+        nodefs.writeFileSync(nodepath.join(dir, 'pro', 'ex.ts'),
+            "import ex from '../ex.js';\nexport default class exs extends ex {\n    async createOrderWs (symbol: string, type: string) {\n        const a = this.buildRequest (symbol);\n        const b = this.plain (symbol);\n        return [ a, b ];\n    }\n}\n");
+        const run = (extra: any) => new Transpiler(config(Object.assign({ 'unifiedStringParams': { 'createOrderWs': [ 0, 1 ] } }, extra))).transpileGoByPath(nodepath.join(dir, 'ex.ts')).content;
+        const on = run({ 'siblingStringPassthroughPattern': '^build\\w*Request$' });
+        expect(on).toContain('BuildRequest(symbol string)');
+        expect(on).toContain('Plain(symbol any)');
+        expect(run({})).toContain('BuildRequest(symbol any)');
+    });
+    afterAll(() => nodefs.rmSync(nodepath.join(__dirname, 'files', 'tmp-rf-go-7'), { recursive: true, force: true }));
     test('an uncalled table method types its required string params; a stranger stays boxed', () => {
         const ts = 'class Exchange {}\n' +
             'class ex extends Exchange {\n' +

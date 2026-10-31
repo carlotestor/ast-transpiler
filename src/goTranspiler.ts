@@ -812,6 +812,9 @@ export class GoTranspiler extends BaseTranspiler {
     uncalledStringParams: { [method: string]: number[] } = {};
     // hx11 RF-go-7: base methods whose tuple result slot 0 is the Go `*string` (TS declares `string`)
     stringPointerTupleCalls: string[] = [];
+    // hx11 RF-go-7: exchange-local methods (by name pattern) whose sibling-file call sites may pass a unified-string
+    // parameter of their enclosing method straight through
+    siblingStringPassthroughPattern: RegExp | undefined = undefined;
     // array literals the current print opens as a Go slice (set by the call-argument rule)
     goSliceLiteralTypes: Map<any, string> = new Map<any, string>();
     // installed by the ccxt build: GetArg alias -> Go types, and the audited consumer table
@@ -872,6 +875,7 @@ export class GoTranspiler extends BaseTranspiler {
         this.unifiedBoolParams = config['unifiedBoolParams'] ?? {};
         this.uncalledStringParams = config['uncalledStringParams'] ?? {};
         this.stringPointerTupleCalls = config['stringPointerTupleCalls'] ?? [];
+        this.siblingStringPassthroughPattern = (typeof config['siblingStringPassthroughPattern'] === 'string') ? new RegExp(config['siblingStringPassthroughPattern']) : undefined;
     }
 
     initConfig() {
@@ -6257,7 +6261,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
                         arg = callArgs[index];
                     }
                 }
-                if ((arg === undefined) || !this.goTextArgMatchesType(arg, goType, site.file, tree, site.at)) {
+                // hx11 RF-go-7: a callee the build names takes a sibling-file passthrough of a unified-string parameter
+                const passthrough = (goType === 'string') && (this.siblingStringPassthroughPattern !== undefined) && this.siblingStringPassthroughPattern.test(name)
+                    && (arg !== undefined) && this.goSiblingPassesUnifiedString(arg, tree.fileText.get(site.file) ?? '', site.at);
+                if ((arg === undefined) || !(this.goTextArgMatchesType(arg, goType, site.file, tree, site.at) || passthrough)) {
                     return false;
                 }
             }
@@ -6639,8 +6646,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             return (match !== null) && accept(match[1].trim());
         };
         if (goType === 'string') {
-            return /^(?:'[^'\\]*'|"[^"\\]*"|this\.privateKey)$/.test(text) // a sibling file proves a plain literal or the string field
-                || this.goSiblingPassesUnifiedString(text, tree.fileText.get(file) ?? '', at);
+            return /^(?:'[^'\\]*'|"[^"\\]*"|this\.privateKey)$/.test(text); // a sibling file proves a plain literal or the string field
         }
         if (goType === '*string') {
             if (isStringProducer(text)) {

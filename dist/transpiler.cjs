@@ -9434,6 +9434,9 @@ var GoTranspiler = class extends BaseTranspiler {
     this.uncalledStringParams = {};
     // hx11 RF-go-7: base methods whose tuple result slot 0 is the Go `*string` (TS declares `string`)
     this.stringPointerTupleCalls = [];
+    // hx11 RF-go-7: exchange-local methods (by name pattern) whose sibling-file call sites may pass a unified-string
+    // parameter of their enclosing method straight through
+    this.siblingStringPassthroughPattern = void 0;
     // array literals the current print opens as a Go slice (set by the call-argument rule)
     this.goSliceLiteralTypes = /* @__PURE__ */ new Map();
     // declarations whose Go local type is being resolved right now (see goLocalStaticType)
@@ -9696,6 +9699,7 @@ var GoTranspiler = class extends BaseTranspiler {
     this.unifiedBoolParams = _nullishCoalesce(config["unifiedBoolParams"], () => ( {}));
     this.uncalledStringParams = _nullishCoalesce(config["uncalledStringParams"], () => ( {}));
     this.stringPointerTupleCalls = _nullishCoalesce(config["stringPointerTupleCalls"], () => ( []));
+    this.siblingStringPassthroughPattern = typeof config["siblingStringPassthroughPattern"] === "string" ? new RegExp(config["siblingStringPassthroughPattern"]) : void 0;
   }
   goDescendantsOf(scope) {
     let list = this.goScopeDescendants.get(scope);
@@ -14317,7 +14321,8 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             arg = callArgs3[index];
           }
         }
-        if (arg === void 0 || !this.goTextArgMatchesType(arg, goType, site.file, tree, site.at)) {
+        const passthrough = goType === "string" && this.siblingStringPassthroughPattern !== void 0 && this.siblingStringPassthroughPattern.test(name) && arg !== void 0 && this.goSiblingPassesUnifiedString(arg, _nullishCoalesce(tree.fileText.get(site.file), () => ( "")), site.at);
+        if (arg === void 0 || !(this.goTextArgMatchesType(arg, goType, site.file, tree, site.at) || passthrough)) {
           return false;
         }
       }
@@ -14684,7 +14689,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       return match !== null && accept(match[1].trim());
     };
     if (goType === "string") {
-      return /^(?:'[^'\\]*'|"[^"\\]*"|this\.privateKey)$/.test(text) || this.goSiblingPassesUnifiedString(text, _nullishCoalesce(tree.fileText.get(file), () => ( "")), at);
+      return /^(?:'[^'\\]*'|"[^"\\]*"|this\.privateKey)$/.test(text);
     }
     if (goType === "*string") {
       if (isStringProducer(text)) {
