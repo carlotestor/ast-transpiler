@@ -51803,6 +51803,8 @@ function r06w3Push(content) {
       return true;
     if (/^[A-Za-z_][A-Za-z0-9_]*\.as_str\(\)\.map\(/.test(t))
       return true;
+    if (/^\(if let Some\(__s\) = [A-Za-z_][A-Za-z0-9_.]*\.(?:as_str|as_deref)\(\) \{ Value::Str\(.*\) \} else \{ Value::Null \}\)$/.test(t))
+      return true;
     if (isPlainField(t))
       return true;
     const safeValue = /^self\.safe_value(?:_k)?\(self\.([A-Za-z_][A-Za-z0-9_]*)/.exec(t);

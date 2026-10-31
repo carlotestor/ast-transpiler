@@ -136,6 +136,8 @@ export function r06w3Push (content: string): string {
         if (t.startsWith ('self.safe_list')) return true;
         // `x.as_str().map(..)`: a string or `Value::Null`
         if (/^[A-Za-z_][A-Za-z0-9_]*\.as_str\(\)\.map\(/.test (t)) return true;
+        // the closure-free printer form of the same: `(if let Some(__s) = x.as_str() { Value::Str(..) } else { Value::Null })`
+        if (/^\(if let Some\(__s\) = [A-Za-z_][A-Za-z0-9_.]*\.(?:as_str|as_deref)\(\) \{ Value::Str\(.*\) \} else \{ Value::Null \}\)$/.test (t)) return true;
         // a plain data field, or a read rooted at one
         if (isPlainField (t)) return true;
         const safeValue = /^self\.safe_value(?:_k)?\(self\.([A-Za-z_][A-Za-z0-9_]*)/.exec (t);
