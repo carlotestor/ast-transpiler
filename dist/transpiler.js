@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -27419,6 +27419,10 @@ ${this.getIden(identation)}}}`;
       const finalWrapperVars = isMethodDeclaration4(node) ? "\n" : this.printFinalOutsideMethodVariableWrappersIfAny(node, identation) + "\n";
       const insideWrappers = isMethodDeclaration4(node) ? "\n" : this.printInsideMethodVariableWrappersIfAny(node, identation + 1) + "\n";
       const body = (firstStatement + remainingString).split("\n").map((line) => this.getIden(identation) + line).join("\n");
+      const failedFuture = bodyStatements.length === 1 && insideWrappers.trim() === "" ? this.javaFailedFutureOfThrow(bodyStatements[0], identation + 1) : void 0;
+      if (failedFuture !== void 0) {
+        return blockOpen + finalWrapperVars + failedFuture + blockClose;
+      }
       const lastStatement = bodyStatements.length > 1 ? bodyStatements[bodyStatements.length - 1] : bodyStatements.length > 0 ? bodyStatements[0] : void 0;
       const lastStmtIsReturn = lastStatement && (isReturnStatement3(lastStatement) || this.allBranchesTerminate(lastStatement));
       const returnNull = lastStmtIsReturn ? "" : this.getIden(identation + 2) + "return null;\n";
@@ -27430,6 +27434,25 @@ ${this.getIden(identation)}}}`;
       return blockOpen + finalWrapperVars + asyncBody + blockClose;
     }
     return blockOpen + firstStatement + remainingString + blockClose;
+  }
+  // An async body that is only `throw new X(..)` can complete its future exceptionally and
+  // nothing else, so the native completion API stands in for the supplier lambda.
+  javaFailedFutureOfThrow(statement, identation) {
+    if (!isThrowStatement3(statement) || statement.expression.kind !== SyntaxKind6.NewExpression) {
+      return void 0;
+    }
+    const thrown = statement.expression.expression;
+    if (thrown === void 0 || !isIdentifier2(thrown)) {
+      return void 0;
+    }
+    const printed = this.printNode(statement, 0).trim();
+    const head = `${this.THROW_TOKEN} ${this.NEW_TOKEN} `;
+    if (!printed.startsWith(head)) {
+      return void 0;
+    }
+    const value = printed.slice(this.THROW_TOKEN.length + 1).replace(/;\s*$/, "").trim();
+    return this.getIden(identation) + `return java.util.concurrent.CompletableFuture.failedFuture(${value});
+`;
   }
   printBlock(node, identation, chainBlock = false) {
     const managed = this.finalVarScopeStack.length > 0;

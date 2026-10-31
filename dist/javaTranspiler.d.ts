@@ -324,6 +324,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaIsLiteralDefault(initializer: any): boolean;
     javaDefaultedLocalName(node: any): string | undefined;
     printFunctionBody(node: any, identation: any): string;
+    javaFailedFutureOfThrow(statement: Node, identation: number): string | undefined;
     printBlock(node: any, identation: any, chainBlock?: boolean): string;
     printInstanceOfExpression(node: any, identation: any): string;
     printAwaitExpression(node: any, identation: any): string;
