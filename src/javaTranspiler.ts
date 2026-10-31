@@ -3347,6 +3347,10 @@ export class JavaTranspiler extends BaseTranspiler {
         if (baseField !== undefined) {
             return baseField;
         }
+        const awaitedDict = this.javaAwaitedDictLocalType(declaration);
+        if (awaitedDict !== undefined) {
+            return awaitedDict;
+        }
         if (isParameterDeclaration(declaration)) {
             const fixed = this.javaNativeParameterType(declaration);
             if (fixed !== undefined) {
@@ -5059,6 +5063,220 @@ export class JavaTranspiler extends BaseTranspiler {
         return `(${target} == null || ${keyText} == null ? null : ${target}.get(${keyText}))`;
     }
 
+    // every `public Map<String, Object> f` field of the hand-written BaseExchange.java header, named by
+    // the build layer; empty = every nested describe () read keeps the helper.
+    javaHeaderMapFields: ReadonlySet<string> = new Set<string>();
+
+    // describe () literal of the class: root field -> nested object literals (a non-object value is a leaf)
+    javaDescribeTreeCache: WeakMap<object, any> = new WeakMap<object, any>();
+
+    javaLiteralTree(literal): any {
+        const tree: any = {};
+        for (const property of literal.properties) {
+            if (!isPropertyAssignment(property) || (!isIdentifier(property.name) && !isStringLiteralLikeNode(property.name))) {
+                return undefined; // a spread or computed name: the literal's keys are not all known
+            }
+            const value = property.initializer;
+            const nested = isObjectLiteralExpression(value) ? this.javaLiteralTree(value) : undefined;
+            tree[property.name.text] = nested === undefined ? 'leaf' : nested;
+        }
+        return tree;
+    }
+
+    javaDescribeTree(node): any {
+        let cls: any = node.parent;
+        while (cls !== undefined && !isClassDeclaration(cls)) {
+            cls = cls.parent;
+        }
+        if (cls === undefined) {
+            return undefined;
+        }
+        if (this.javaDescribeTreeCache.has(cls)) {
+            return this.javaDescribeTreeCache.get(cls);
+        }
+        let tree: any;
+        const method = (name) => (cls.members ?? []).find((m) => isMethodDeclaration(m) && (m.name as any)?.text === name);
+        const returnedLiterals = (body, depth) => {
+            const found: any[] = [];
+            for (const statement of body?.statements ?? []) {
+                if (!isReturnStatement(statement) || statement.expression === undefined) {
+                    continue;
+                }
+                const returned = this.unwrapPrintTransparentExpression(statement.expression);
+                const candidates = isCallExpression(returned) ? [ returned, ...returned.arguments ] : [ returned ];
+                for (const candidate of candidates.map((c) => this.unwrapPrintTransparentExpression(c))) {
+                    if (isObjectLiteralExpression(candidate)) {
+                        found.push(candidate);
+                    } else if (depth < 2 && isCallExpression(candidate) && isPropertyAccessExpression(candidate.expression)
+                        && candidate.expression.expression.kind === SyntaxKind.ThisKeyword) {
+                        found.push(...returnedLiterals(method(candidate.expression.name.text)?.body, depth + 1));
+                    }
+                }
+            }
+            return found;
+        };
+        for (const literal of returnedLiterals(method('describe')?.body, 0)) {
+            const candidate = this.javaLiteralTree(literal);
+            if (candidate !== undefined && typeof candidate['urls'] === 'object') {
+                tree = candidate;
+                break;
+            }
+        }
+        this.javaDescribeTreeCache.set(cls, tree);
+        return tree;
+    }
+
+    // `this.<header Map field>[a]..[z][k]` where the class's own describe () literal holds every step
+    // as an object: the receiver is the plain Map the constructor built, so the helper's Map branch is
+    // the native get (a null identifier key answers null like the helper)
+    javaDescribedDictChainRead(node): string | undefined {
+        if (this.javaHeaderMapFields.size === 0 || node.parent?.kind === SyntaxKind.ExpressionStatement
+            || this.printElementAccessExpressionExceptionIfAny(node) !== undefined || this.isLeftSideOfAssignment(node)) {
+            return undefined;
+        }
+        const key = node.argumentExpression;
+        const literalKey = isStringLiteralLikeNode(key);
+        if (!literalKey && !isIdentifier(key)) {
+            return undefined;
+        }
+        const steps: string[] = [];
+        let current = node.expression;
+        while (current !== undefined) {
+            current = this.unwrapPrintTransparentExpression(current);
+            if (!isElementAccessExpression(current) || !isStringLiteralLikeNode(current.argumentExpression)) {
+                break;
+            }
+            steps.unshift(current.argumentExpression.text);
+            current = current.expression;
+        }
+        if (steps.length === 0 || current === undefined || !isPropertyAccessExpression(current)
+            || current.expression.kind !== SyntaxKind.ThisKeyword || !this.javaHeaderMapFields.has(current.name.text)
+            || this.javaOwnerStoreFields.has(current.name.text)) {
+            return undefined;
+        }
+        let value: any = this.javaDescribeTree(node)?.[current.name.text];
+        for (const step of steps) {
+            value = typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, step) ? value[step] : undefined;
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        const target = this.printNode(node.expression, 0);
+        const keyText = this.printNode(key, 0).trim();
+        if (literalKey) {
+            return `((java.util.Map<String, Object>)${target}).get(${keyText})`;
+        }
+        const declared = this.javaDeclaredTypeOf(key);
+        if (!/^[A-Za-z_]\w*$/.test(keyText) || (declared !== undefined && JAVA_PRIMITIVE_DECLARED_TYPES.has(declared.trim()))
+            || (declared === undefined && this.javaOperandPrintsPrimitiveNumber(key))) {
+            return undefined;
+        }
+        return `(${keyText} == null ? null : ((java.util.Map<String, Object>)${target}).get(${keyText}))`;
+    }
+
+    // `const x = await this.m (...)` whose awaited TS type is a json object box (string index, no number
+    // index) and whose every use is an element read, a return, a copy or a plain assignment source
+    javaAwaitedDictLocalCache: WeakMap<object, string | null> = new WeakMap<object, string | null>();
+
+    javaAwaitedDictLocalType(declaration): string | undefined {
+        if (!isVariableDeclaration(declaration) || !isIdentifier(declaration.name)
+            || declaration.initializer?.kind !== SyntaxKind.AwaitExpression) {
+            return undefined;
+        }
+        const cached = this.javaAwaitedDictLocalCache.get(declaration);
+        if (cached !== undefined) {
+            return cached === null ? undefined : cached;
+        }
+        const type = this.javaAwaitedDictLocalTypeUncached(declaration);
+        this.javaAwaitedDictLocalCache.set(declaration, type === undefined ? null : type);
+        return type;
+    }
+
+    javaAwaitedDictLocalTypeUncached(declaration): string | undefined {
+        let call = declaration.initializer.expression;
+        while (isParenthesizedExpression(call)) {
+            call = call.expression;
+        }
+        if (!isCallExpression(call) || !isPropertyAccessExpression(call.expression)
+            || (call.expression.expression.kind !== SyntaxKind.ThisKeyword && call.expression.expression.kind !== SyntaxKind.SuperKeyword)) {
+            return undefined;
+        }
+        const checker: any = this.checkerOrUndefined();
+        const scope = this.javaEnclosingFunction(declaration);
+        if (checker === undefined || scope === undefined) {
+            return undefined;
+        }
+        try {
+            const type = checker.getTypeAtLocation(declaration.initializer);
+            const typeName = (type as any)?.getAliasSymbol?.()?.name ?? (type as any)?.getSymbol?.()?.name;
+            if (type === undefined || (typeName !== 'Dictionary' && typeName !== 'Dict') || (type.flags & TypeFlags.Object) === 0
+                || checker.isArrayType(type) || checker.isTupleType(type)
+                || checker.getIndexTypeOfType(type, IndexKind.String) === undefined
+                || checker.getIndexTypeOfType(type, IndexKind.Number) !== undefined) {
+                return undefined;
+            }
+        } catch (e) {
+            return undefined;
+        }
+        return this.javaLocalUsesAreDictReads(declaration.name, scope) ? JAVA_ELEMENT_WRITE_MAP_TYPE : undefined;
+    }
+
+    // at least one `x[k]` (string literal or name key) and no other kind of use of the local
+    javaLocalUsesAreDictReads(name, scope): boolean {
+        const checker: any = this.checkerOrUndefined();
+        const symbol = checker.getSymbolAtLocation(name);
+        if (symbol === undefined) {
+            return false;
+        }
+        let elements = 0;
+        let ok = true;
+        const walk = (current) => {
+            if (!ok || current === undefined) {
+                return;
+            }
+            if (isIdentifier(current) && current !== name && current.text === name.text) {
+                const other = checker.getSymbolAtLocation(current);
+                if (other === symbol || (other !== undefined && other.valueDeclaration?.resolve() === symbol.valueDeclaration?.resolve())) {
+                    const verdict = this.javaDictLocalUse(current);
+                    if (verdict === 'element') {
+                        elements++;
+                    } else if (verdict === 'other') {
+                        ok = false;
+                    }
+                }
+            }
+            current.forEachChild(walk);
+        };
+        walk(scope);
+        return ok && elements > 0;
+    }
+
+    javaDictLocalUse(id): 'element' | 'neutral' | 'value' | 'other' {
+        const parent = id.parent;
+        if (parent === undefined) {
+            return 'other';
+        }
+        if (isPropertyAccessExpression(parent) && parent.name === id) {
+            return 'neutral';
+        }
+        if ((parent.kind === SyntaxKind.ReturnStatement && parent.expression === id)
+            || (parent.kind === SyntaxKind.VariableDeclaration && parent.initializer === id)
+            || (parent.kind === SyntaxKind.BinaryExpression && parent.right === id && parent.operatorToken?.kind === SyntaxKind.EqualsToken)) {
+            return 'value';
+        }
+        if (isElementAccessExpression(parent) && parent.expression === id) {
+            const grand = parent.parent;
+            if (grand?.kind === SyntaxKind.DeleteExpression || grand?.kind === SyntaxKind.SpreadElement
+                || grand?.kind === SyntaxKind.SpreadAssignment || (isCallExpression(grand) && grand.expression === parent)) {
+                return 'other';
+            }
+            const key = parent.argumentExpression;
+            const literal = key?.kind === SyntaxKind.StringLiteral || key?.kind === SyntaxKind.NoSubstitutionTemplateLiteral;
+            return literal || isIdentifier(key) ? 'element' : 'other';
+        }
+        return 'other';
+    }
+
     // `this.<field>` for a BaseExchange.java field declared over a single-owner store
     javaOwnerStoreFieldReceiver(expression): boolean {
         if (expression === undefined || !isPropertyAccessExpression(expression)) {
@@ -5639,7 +5857,7 @@ export class JavaTranspiler extends BaseTranspiler {
             }
             // a declared map (a local the build layer typed, or a param the printer retypes)
             // is the other proof a non-literal key binds natively
-            return this.javaDeclaredMapElementRead(node);
+            return this.javaDeclaredMapElementRead(node) ?? this.javaDescribedDictChainRead(node);
         }
         if (this.printElementAccessExpressionExceptionIfAny(node) !== undefined) {
             return undefined; // an exchange-specific override wins, the base prints it
@@ -5662,7 +5880,7 @@ export class JavaTranspiler extends BaseTranspiler {
                 if (!this.javaDeclaredMapReceiver(node.expression)) {
                     // a literal key on a table field the checker does not type (balance is
                     // `any`) still has the field table's Java proof
-                    return this.javaFieldMapReadIfAllowed(node);
+                    return this.javaFieldMapReadIfAllowed(node) ?? this.javaDescribedDictChainRead(node);
                 }
                 // the declared local is already a map: the accessor binds with no cast
                 return `${this.printNode(node.expression, 0)}.get(${this.printNode(key, 0)})`;
@@ -7456,6 +7674,7 @@ export class JavaTranspiler extends BaseTranspiler {
             declaration?.initializer &&
             declaration.initializer.kind === SyntaxKind.NewExpression;
         let varToken = isNew ? "var " : this.VAR_TOKEN + " ";
+        let awaitedDictCast = false;
         if (!isNew) {
             // a native-arithmetic initializer prints a String/Long/Double value: the
             // declaration can name that type instead of Object (D3, scanned by java-31)
@@ -7485,6 +7704,11 @@ export class JavaTranspiler extends BaseTranspiler {
             if (wsClientType !== undefined) {
                 varToken = wsClientType + " ";
             }
+            // an awaited json box read only by element access takes the Map its TS type proves
+            if (varToken === this.VAR_TOKEN + " " && this.javaAwaitedDictLocalType(declaration) !== undefined) {
+                awaitedDictCast = true;
+                varToken = JAVA_ELEMENT_WRITE_MAP_TYPE + " ";
+            }
             // the ws handler table and the local bound to one of its reads name their type,
             // so the dispatch is a plain virtual call
             const handlerType = this.javaHandlerDeclarationType(declaration);
@@ -7504,7 +7728,14 @@ export class JavaTranspiler extends BaseTranspiler {
             );
         }
 
-        const parsedValue = this.printNode(declaration.initializer, identation).trimStart();
+        let parsedValue = this.printNode(declaration.initializer, identation).trimStart();
+        if (awaitedDictCast) {
+            if (parsedValue.endsWith(".join()")) {
+                parsedValue = `(${JAVA_ELEMENT_WRITE_MAP_TYPE}) ${parsedValue}`;
+            } else {
+                varToken = this.VAR_TOKEN + " ";
+            }
+        }
         if (parsedValue === this.UNDEFINED_TOKEN) {
             let specificVarToken = "Object";
             if (this.INFER_VAR_TYPE) {
