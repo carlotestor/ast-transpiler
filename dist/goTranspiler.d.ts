@@ -658,12 +658,19 @@ export declare class GoTranspiler extends BaseTranspiler {
     goTupleBindingProducerName(declaration: any): string | undefined;
     goTupleBindingIsSliceHolder(declaration: any): boolean;
     goTuplePointerSlotCallType(call: any): string | undefined;
-    goTuplePointerSlotReadAdmissible(ident: any, allowStore: boolean): boolean;
+    goTuplePointerSlotCallEntry(call: any): {
+        goType: string;
+        safe?: string;
+    } | undefined;
+    goTuplePointerSlotReadAdmissible(ident: any, allowStore: boolean, goType?: string): boolean;
+    goTuplePointerSlotNilProven(ident: any): boolean;
     goTuplePointerSlotScan(declaration: any, name: string, scope: any, allowStore: boolean, writeType?: {
         goType: string | undefined;
-    }): boolean;
+    }, bindingType?: string): boolean;
     goTupleWriteRepeats(write: any, declaration: any): boolean;
     goTuplePointerSlotCache: WeakMap<object, string>;
+    goTuplePointerSlotProbing: boolean;
+    goTuplePointerSlotHookTypes(nameNode: any): boolean;
     goTuplePointerSlotWriteType(element: any): string | undefined;
     goTuplePointerSlotOfBinding(element: any): string | undefined;
     goTuplePointerSlotNilInitType(declaration: any): string | undefined;

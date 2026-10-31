@@ -23,8 +23,7 @@ const TAG = "        const [ tag, paramsTag ] = this.handleParamString (params, 
 describe('hx11 fold 1F G07: tuple slot 0 of the pointer helpers is the typed pointer', () => {
     test('nil test, guarded map store, literal compare and a deref-ing callee keep the pointer', () => {
         const out = fn(TAG, "        this.checkAddress (address, 'c', tag);\n        if (tag !== undefined) {\n            request['memo'] = tag;\n        }\n        if (tag === 'x') {\n            request['y'] = 1;\n        }\n");
-        expect(out).toContain('var tag *string = nil');
-        expect(out).toContain('if p, ok := tagparamsTagVariable[0].(*string); ok { tag = p }');
+        expect(out).toContain('var tag *string = SafeStringPtr(tagparamsTagVariable[0])');
         expect(out).toContain('request["memo"] = *tag');
         expect(out).toContain('tag != nil && *tag == "x"');
         expect(out).not.toContain('tag := GetValue(');
@@ -44,7 +43,7 @@ describe('hx11 fold 1F G07: tuple slot 0 of the pointer helpers is the typed poi
         const out = fn("        let hedged: Bool = undefined;\n        [ hedged, params ] = this.handleParamBool (params, 'hedged', false);\n",
             "        if ((hedged === true) || request['a']) {\n            request['h'] = 1;\n        }\n");
         expect(out).toContain('var hedged *bool = nil');
-        expect(out).toContain('.(*bool); ok { hedged = p }');
+        expect(out).toContain('hedged = SafeBoolPtr(hedgedparamsVariable[0])');
         expect(out).toContain('hedged != nil && *hedged == true');
         expect(out).not.toContain('hedged = GetValue(');
     });
@@ -52,7 +51,13 @@ describe('hx11 fold 1F G07: tuple slot 0 of the pointer helpers is the typed poi
         const out = fn("        let hedged: Bool = false;\n        [ hedged, params ] = this.handleParamBool (params, 'hedged', false);\n",
             "        if (hedged === true) {\n            request['h'] = 1;\n        }\n");
         expect(out).not.toContain('var hedged *bool');
-        expect(out).not.toContain('.(*bool); ok { hedged = p }');
+        expect(out).not.toContain('SafeBoolPtr(hedgedparamsVariable[0])');
+    });
+    test('a nil-initialised local stores through its nil guard', () => {
+        const out = fn("        let flag: Bool = undefined;\n        [ flag, params ] = this.handleParamBool (params, 'flag');\n",
+            "        if (flag !== undefined) {\n            request['f'] = flag;\n        }\n");
+        expect(out).toContain('var flag *bool = nil');
+        expect(out).toContain('request["f"] = *flag');
     });
     test('a store without a nil proof keeps the box', () => {
         const out = fn(TAG, "        request['memo'] = tag;\n");
