@@ -5456,7 +5456,17 @@ export class CSharpTranspiler extends BaseTranspiler {
         return `new List<object>(((IDictionary<string,object>)${parsedArg}).Values)`;
     }
 
+    // `JSON.parse (x)`: parseJson is an identity wrapper over JsonHelper.Deserialize((string)x), so a
+    // read whose emitted declaration is a C# string (or string?) calls the deserializer directly;
+    // every other operand keeps the helper
     printJsonParseCall(node, identation, parsedArg = undefined) {
+        const arg = node?.arguments?.[0];
+        if ((node?.arguments?.length === 1) && isIdentifier(arg)) {
+            const declared = this.csharpArithmeticOperandType(arg);
+            if ((declared === 'string') || (declared === 'string?')) {
+                return `JsonHelper.Deserialize(${parsedArg})`;
+            }
+        }
         return `parseJson(${parsedArg})`;
     }
 
