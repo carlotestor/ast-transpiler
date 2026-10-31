@@ -202,6 +202,17 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaStringCallReturn(node: any): boolean;
     javaParameterAliasSymbol(node: any, type: any, checker: any): any;
     javaNativeParameterTypeOf(node: any): string | undefined;
+    javaRepoMethodUses: ((name: string, ownFile: string) => {
+        declared: number;
+        mentions: number;
+        handWritten: boolean;
+        calls: Node[][];
+    } | undefined) | undefined;
+    javaBaseListParameterTypeOf(node: any, method: any, type: any, checker: any): string | undefined;
+    private javaThisCallIndex;
+    javaThisCallsInFile(file: any, name: string): any[];
+    javaSyntacticListArgument(arg: any, producerDeclared: (name: string) => boolean): boolean;
+    javaPrintsListArgument(arg: any): boolean;
     javaNativeParameterClassType(name: string, symbol: any): string | undefined;
     javaTestTierWrapperType(param: any): string | undefined;
     javaPlainParameterTypeOf(node: any, type: any, checker: any): string | undefined;

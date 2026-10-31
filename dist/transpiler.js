@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -22965,6 +22965,9 @@ function javaVenueCalleeNativeType(printed) {
 }
 var JAVA_LIST_RETURN_BASE_METHODS = /* @__PURE__ */ new Set(["toArray"]);
 var JAVA_OBJECT_LIST_CALL_NAMES = /* @__PURE__ */ new Set(["keys", "values"]);
+var JAVA_LIST_ARGUMENT_BASE_METHODS = /* @__PURE__ */ new Set(["toArray", "aggregate", "sortBy", "sortBy2", "filterBy"]);
+var JAVA_BASE_LIST_PARAMETER_FILES = /(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange(\.nooverloads[^/]*)?\.ts$/;
+var JAVA_LIST_ARGUMENT_BASE_FILES = /(^|[\\/])ts[\\/]src[\\/]base[\\/](?:functions[\\/]generic\.ts|Exchange(\.nooverloads[^/]*)?\.ts)$/;
 var JAVA_STRING_RETURN_BASE_METHODS = /* @__PURE__ */ new Set([
   "safeString",
   "safeString2",
@@ -23167,6 +23170,8 @@ var JavaTranspiler = class extends BaseTranspiler {
     // the build layer answers a printed local's type from what THIS worker has printed so far, so
     // an unproven answer may only be provisional: caching it freezes the first worker's view
     this.javaReturnTypeUsedDeclaredLocals = false;
+    // every `this.<name> (..)` call expression of a source file, collected once per file
+    this.javaThisCallIndex = /* @__PURE__ */ new WeakMap();
     // hand-written BaseExchange.java fields declared `Map<String, Object>` over a single-owner store
     // (`options = new SynchronizedOptions ()`): the map lives on the state-owner thread and its
     // `put(key, null)` removes the key, which is exactly the contract of the helper's element write.
@@ -23695,6 +23700,9 @@ var JavaTranspiler = class extends BaseTranspiler {
       if (declaration !== void 0 && isParameterDeclaration2(declaration) && this.javaNativeParameterType(declaration) === type) {
         return true;
       }
+    }
+    if (type === JAVA_NATIVE_RETURN_LIST_TYPE && this.javaPrintsListArgument(arg)) {
+      return true;
     }
     if (type !== "String") {
       return false;
@@ -26524,6 +26532,10 @@ ${this.getIden(identation)}}}`;
     if (excluded !== void 0 && excluded.includes(method.parameters.indexOf(node))) {
       return void 0;
     }
+    const baseList = testTier ? void 0 : this.javaBaseListParameterTypeOf(node, method, type, checker);
+    if (baseList !== void 0) {
+      return baseList;
+    }
     const symbol = this.javaParameterAliasSymbol(node, type, checker);
     const name = symbol?.name;
     if (testTier && (name === "Strings" || this.javaIsStringArrayType(checker, type))) {
@@ -26543,6 +26555,101 @@ ${this.getIden(identation)}}}`;
     const declaration = symbol?.declarations?.[0]?.resolve();
     const fileName = declaration?.getSourceFile?.()?.fileName;
     return JAVA_NATIVE_PARAMETER_SOURCE_FILES.test(fileName ?? "") ? aliasType : this.javaPlainParameterTypeOf(node, type, checker);
+  }
+  // A fixed `any[]` / `number[]` parameter of a method the printer emits from the base tier prints
+  // `java.util.List<Object>` when (a) the checker types it a plain array (not a tuple, not `string[]`),
+  // (b) the body never writes it and no ancestor declares the method, (c) the name is declared once in the
+  // repo, never referenced other than as `this.name (..)` and never mentioned by hand-written Java, and
+  // (d) there is a caller and every caller hands a value that prints as a bare List (array literal, base list
+  // producer, a local the build layer declared `List<Object>`), so no call gains a checkcast and none can throw.
+  // A caller whose local is not published yet answers undefined; the embedding layer's re-print asks again.
+  javaBaseListParameterTypeOf(node, method, type, checker) {
+    if (typeof this.javaRepoMethodUses !== "function" || !JAVA_BASE_LIST_PARAMETER_FILES.test(node.getSourceFile().fileName) || !isIdentifier2(method.name) || !this.javaIsPrintedMethod(method) || !checker.isArrayType(type) || checker.isTupleType(type)) {
+      return void 0;
+    }
+    const element = checker.getTypeArguments(type)?.[0];
+    if (element === void 0 || (element.flags & (TypeFlags5.Any | TypeFlags5.Number)) === 0) {
+      return void 0;
+    }
+    if (this.getMethodOverride(method) !== void 0 || this.javaParameterIsWritten(node)) {
+      return void 0;
+    }
+    const position = method.parameters.indexOf(node);
+    const name = String(method.name.text);
+    const ownFile = node.getSourceFile().fileName;
+    const uses = this.javaRepoMethodUses(name, ownFile);
+    if (uses === void 0 || uses.declared !== 1 || uses.mentions > 0 || uses.handWritten) {
+      return void 0;
+    }
+    const internal = this.javaThisCallsInFile(node.getSourceFile(), name);
+    if (internal.length + uses.calls.length === 0) {
+      return void 0;
+    }
+    const producerDeclared = (producer) => this.javaRepoMethodUses?.(producer, ownFile)?.declared === 1;
+    const listOutside = uses.calls.every((args) => args.length > position && !isSpreadElement2(args[position]) && this.javaSyntacticListArgument(args[position], producerDeclared));
+    const listInside = internal.every((call) => {
+      const arg = call.arguments?.[position];
+      return arg !== void 0 && !isSpreadElement2(arg) && this.javaPrintsListArgument(arg);
+    });
+    return listOutside && listInside ? JAVA_NATIVE_RETURN_LIST_TYPE : void 0;
+  }
+  javaThisCallsInFile(file, name) {
+    let index = this.javaThisCallIndex.get(file);
+    if (index === void 0) {
+      index = /* @__PURE__ */ new Map();
+      const collect = (n) => {
+        if (isCallExpression5(n) && isPropertyAccessExpression2(n.expression) && n.expression.expression.kind === SyntaxKind6.ThisKeyword) {
+          const key = String(n.expression.name.text);
+          index.set(key, (index.get(key) ?? []).concat([n]));
+        }
+        n.forEachChild(collect);
+      };
+      collect(file);
+      this.javaThisCallIndex.set(file, index);
+    }
+    return index.get(name) ?? [];
+  }
+  // an argument node that needs no program to show it prints a bare List: an array literal without spread
+  // or hole, or a `this.<producer> (..)` call of a hand-written list producer the repo declares once
+  javaSyntacticListArgument(arg, producerDeclared) {
+    let node = arg;
+    while (node !== void 0 && isParenthesizedExpression2(node)) {
+      node = node.expression;
+    }
+    if (isArrayLiteralExpression3(node)) {
+      return !node.elements.some((e) => isSpreadElement2(e) || e.kind === SyntaxKind6.OmittedExpression);
+    }
+    return isCallExpression5(node) && isPropertyAccessExpression2(node.expression) && node.expression.expression.kind === SyntaxKind6.ThisKeyword && JAVA_LIST_ARGUMENT_BASE_METHODS.has(String(node.expression.name.text)) && producerDeclared(String(node.expression.name.text));
+  }
+  // an argument whose printed Java is already a `java.util.List<Object>`-compatible value: an array literal
+  // without spread (always `new ArrayList<Object>(Arrays.asList(..))`), a base `this.toArray/aggregate/sortBy/
+  // sortBy2/filterBy (..)` call (hand-written, resolved by signature), or a local the build layer declared
+  // `List<Object>`. Such an argument needs no checkcast into a List slot.
+  javaPrintsListArgument(arg) {
+    let node = arg;
+    while (node !== void 0 && isParenthesizedExpression2(node)) {
+      node = node.expression;
+    }
+    if (isArrayLiteralExpression3(node)) {
+      return !node.elements.some((e) => isSpreadElement2(e) || e.kind === SyntaxKind6.OmittedExpression);
+    }
+    if (isCallExpression5(node)) {
+      const callee = node.expression;
+      if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword || !JAVA_LIST_ARGUMENT_BASE_METHODS.has(String(callee.name.text))) {
+        return false;
+      }
+      try {
+        const fileName = this.getChecker().getResolvedSignature(node)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
+        return fileName !== void 0 && JAVA_LIST_ARGUMENT_BASE_FILES.test(fileName.replace(/\\/g, "/"));
+      } catch (e) {
+        return false;
+      }
+    }
+    if (isIdentifier2(node) && this.printNode(node, 0) === node.text) {
+      const declared = this.javaDeclaredTypeOf(node);
+      return declared !== void 0 && declared.replace(/^final\s+/, "").replace(/\s+/g, "").replace(/^java\.util\./, "") === "List<Object>";
+    }
+    return false;
   }
   // the Java class a class-typed annotation names: only a name in
   // JAVA_NATIVE_PARAMETER_CLASS_TYPES whose symbol resolves to a CLASS declaration in the
