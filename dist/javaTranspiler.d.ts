@@ -224,6 +224,17 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printCheckerTypedElementAccessRead(node: any): string;
     printElementAccessExpression(node: any, identation: any): any;
     javaClassTypedElementRead(node: any): string;
+    javaTypedReceiverElementRead(node: any): string | undefined;
+    javaWsClientMapReadText(receiver: any, key: any): string | undefined;
+    javaWsFutureLocalType(declaration: any): string | undefined;
+    javaIsWsClientType(node: any): boolean;
+    javaStringArrayAssertedCounterRead(node: any): string | undefined;
+    unwrapParenthesized(node: any): any;
+    javaOhlcvsSymbolMapRead(node: any, inner: any): string | undefined;
+    javaIsOhlcvsField(node: any): boolean;
+    javaOhlcvsEntryIsFresh(site: any, symbolNode: any): boolean;
+    javaOhlcvsFreshAnchor(statement: any, symbol: any): boolean;
+    javaOhlcvsDisturbed(statement: any, symbol: any): boolean;
     javaScalarFamily(node: any): string | undefined;
     javaProvableString(node: any): boolean;
     javaResolvedString(node: any): boolean;

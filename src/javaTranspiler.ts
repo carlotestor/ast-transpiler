@@ -360,6 +360,15 @@ const JAVA_WS_ORDERBOOK_READ_KEYS: Set<string> = new Set([
     'asks', 'bids', 'timestamp', 'datetime', 'nonce', 'cache',
 ]);
 
+// the owner-thread maps of the hand-written ws client (ws/WsClient.java: LinkedHashMaps behind OwnerMap
+// views). The TS class declares them `Dictionary<any>`, so the Java field names live only here; the
+// class-declaration file is what makes the receiver that client (cookies is declared too, and the
+// Java class has no such field). The generated handlers' `client` parameter is retyped `Client` by the
+// ws post-pass, by that exact name.
+const JAVA_WS_CLIENT_MAP_FIELDS: Set<string> = new Set(['futures', 'subscriptions', 'rejections']);
+const JAVA_WS_FUTURE_TYPE = 'io.github.ccxt.ws.Future';
+const JAVA_WS_CLIENT_CLASS_FILES = /(^|\/)ts\/src\/base\/ws\/(Ws)?Client\.ts$/;
+
 // `Strings` (and a `string[]` spelling of the same slot) is typed only on parameters named `symbols`
 const JAVA_STRINGS_OPTIONAL_PARAMETER_NAMES = new Set<string>(['symbols']);
 const JAVA_STRING_LIST_TYPE = 'java.util.List<String>';
@@ -4545,7 +4554,7 @@ export class JavaTranspiler extends BaseTranspiler {
             } else if (keyStrs.length > 1) {
                 // `this.<field>[k1][k2] = v`: the bottom step reads the hand-written base map
                 // field natively (JAVA_FIELD_TYPES), every step above it keeps the helper
-                const fieldRead = this.javaFieldMapReadText(baseExpr, keys[0]);
+                const fieldRead = this.javaFieldMapReadText(baseExpr, keys[0]) ?? this.javaWsClientMapReadText(baseExpr, keys[0]);
                 if (fieldRead !== undefined) {
                     acc = fieldRead;
                     firstKey = 1;
@@ -5091,6 +5100,11 @@ export class JavaTranspiler extends BaseTranspiler {
             if (field !== undefined) {
                 return field;
             }
+            // a receiver whose checker type is a hand-written ws class / base map the TS declares loosely
+            const typedReceiverRead = this.javaTypedReceiverElementRead(node);
+            if (typedReceiverRead !== undefined) {
+                return typedReceiverRead;
+            }
             // a declared List with an integer expression index reads natively with the
             // helper's own bounds test
             const listIndexRead = this.javaDeclaredListIndexRead(node);
@@ -5132,7 +5146,7 @@ export class JavaTranspiler extends BaseTranspiler {
         }
         if (isCounterKey) {
             // a `var` int loop index on a declared List: the only proof that prints an int
-            return this.javaDeclaredListElementRead(node, true);
+            return this.javaDeclaredListElementRead(node, true) ?? this.javaStringArrayAssertedCounterRead(node);
         }
         const index = Number(key.text);
         if (!Number.isInteger(index) || index < 0) {
@@ -5179,6 +5193,291 @@ export class JavaTranspiler extends BaseTranspiler {
         }
         const target = this.printNode(node.expression, 0);
         return `(${target} == null ? null : ${target}.get(${this.printNode(key, 0)}))`;
+    }
+
+    // reads keyed on the checker type of the receiver, for the hand-written Java classes whose fields
+    // the TS declares loosely: the ws client's owner-thread maps and the base ohlcvs per-symbol map
+    javaTypedReceiverElementRead(node): string | undefined {
+        if (node.parent?.kind === SyntaxKind.ExpressionStatement || node.parent?.kind === SyntaxKind.DeleteExpression) {
+            return undefined; // a bare conditional expression is not a Java statement
+        }
+        if (this.printElementAccessExpressionExceptionIfAny(node) !== undefined || this.isLeftSideOfAssignment(node)) {
+            return undefined;
+        }
+        const receiver = this.unwrapPrintTransparentExpression(node.expression);
+        if (receiver === undefined) {
+            return undefined;
+        }
+        if (isPropertyAccessExpression(receiver)) {
+            return this.javaWsClientMapReadText(receiver, node.argumentExpression);
+        }
+        if (isElementAccessExpression(receiver)) {
+            return this.javaOhlcvsSymbolMapRead(node, receiver);
+        }
+        return undefined;
+    }
+
+    // `client.<futures|subscriptions|rejections>[k]`: the helper's Map branch is the owner-thread map's
+    // own get, and a null receiver or key answers null in both spellings. A literal or a bare
+    // identifier key only; anything else keeps the helper.
+    javaWsClientMapReadText(receiver, key): string | undefined {
+        if (receiver === undefined || !isPropertyAccessExpression(receiver) || !JAVA_WS_CLIENT_MAP_FIELDS.has(receiver.name.text)) {
+            return undefined;
+        }
+        const owner = receiver.expression;
+        if (!isIdentifier(owner) || owner.text !== 'client' || this.printNode(owner, 0).trim() !== 'client'
+            || !this.javaIsWsClientType(owner)) {
+            return undefined;
+        }
+        const target = `client.${receiver.name.text}`;
+        if (isStringLiteralLikeNode(key)) {
+            return `(${target} == null ? null : ${target}.get(${this.printNode(key, 0)}))`;
+        }
+        if (!isIdentifier(key) || this.javaPrimitiveCounterIndex(key)) {
+            return undefined;
+        }
+        const keyText = this.printNode(key, 0).trim();
+        if (!/^[A-Za-z_]\w*$/.test(keyText) || this.javaOperandPrintsPrimitiveNumber(key)) {
+            return undefined;
+        }
+        const declared = this.javaDeclaredTypeOf(key);
+        if (declared !== undefined && JAVA_PRIMITIVE_DECLARED_TYPES.has(declared.trim())) {
+            return undefined;
+        }
+        return `(${target} == null || ${keyText} == null ? null : ${target}.get(${keyText}))`;
+    }
+
+    // `const f = client.futures[k]` printing the guarded native read: WsClient.futures is a
+    // Map<String, Future>, so the local is a Future (or null). Only a local nothing writes again.
+    javaWsFutureLocalType(declaration): string | undefined {
+        if (!isVariableDeclaration(declaration) || !isIdentifier(declaration.name) || declaration.initializer === undefined) {
+            return undefined;
+        }
+        const initializer = declaration.initializer;
+        if (!isElementAccessExpression(initializer) || !isIdentifier(initializer.argumentExpression)
+            || this.javaTypedReceiverElementRead(initializer) === undefined) {
+            return undefined; // a literal key prints through the field-read arm, not this one
+        }
+        const receiver = this.unwrapPrintTransparentExpression(initializer.expression);
+        if (receiver === undefined || !isPropertyAccessExpression(receiver) || receiver.name.text !== 'futures'
+            || this.javaLocalHasWriteAtAll(declaration.name)) {
+            return undefined;
+        }
+        return JAVA_WS_FUTURE_TYPE;
+    }
+
+    // the checker type of the node is the ws Client class (its declaration file is the proof)
+    javaIsWsClientType(node): boolean {
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined) {
+            return false;
+        }
+        let symbol;
+        try {
+            symbol = checker.getTypeAtLocation(node)?.getSymbol?.();
+        } catch (e) {
+            return false;
+        }
+        for (const declaration of symbol?.declarations ?? []) {
+            const resolved = declaration?.resolve?.() ?? declaration;
+            const fileName = (resolved?.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
+            if (resolved?.kind === SyntaxKind.ClassDeclaration && JAVA_WS_CLIENT_CLASS_FILES.test(fileName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // `(x as string[])[i]` over a for-counter, x a side-effect-free reference the checker types
+    // `string[]` (| undefined): the printed receiver is the cast `(java.util.List<String>)(x)` either way,
+    // so the helper's null / range answers become the explicit guard on that same cast
+    javaStringArrayAssertedCounterRead(node): string | undefined {
+        if (node.parent?.kind === SyntaxKind.ExpressionStatement || this.isLeftSideOfAssignment(node)
+            || this.printElementAccessExpressionExceptionIfAny(node) !== undefined) {
+            return undefined;
+        }
+        const asserted = this.unwrapParenthesized(node.expression);
+        if (asserted === undefined || !isAsExpression(asserted) || !isArrayTypeNode(asserted.type)
+            || asserted.type.elementType.kind !== SyntaxKind.StringKeyword) {
+            return undefined;
+        }
+        const operand = this.unwrapParenthesized(asserted.expression);
+        if (operand === undefined || !isIdentifier(operand) || this.isVarargsArrayReference(operand)
+            || this.javaStringElementsReceiver(operand) || this.printNode(operand, 0).trim() !== operand.text) {
+            return undefined;
+        }
+        const checker: any = this.checkerOrUndefined();
+        let operandType;
+        try {
+            operandType = checker?.getTypeAtLocation(operand);
+        } catch (e) {
+            return undefined;
+        }
+        if (operandType === undefined || !this.javaIsStringArrayType(checker, operandType)) {
+            return undefined;
+        }
+        const list = `((java.util.List<String>)(${operand.text}))`;
+        const index = this.printNode(node.argumentExpression, 0);
+        return `(${list} == null || ${index} < 0 || ${index} >= ${list}.size() ? null : ${list}.get(${index}))`;
+    }
+
+    unwrapParenthesized(node): any {
+        let current = node;
+        while (current !== undefined && isParenthesizedExpression(current)) {
+            current = current.expression;
+        }
+        return current;
+    }
+
+    // `this.ohlcvs[s][k]` (base field `Dictionary<Dictionary<ArrayCacheByTimestamp>>`): once the member
+    // has put a fresh map under s the per-symbol value is a non-null Map, so the helper's read is the
+    // plain get. Both names must be plain strings and nothing may disturb the entry in between.
+    javaOhlcvsSymbolMapRead(node, inner): string | undefined {
+        if (!this.javaIsOhlcvsField(inner.expression)) {
+            return undefined;
+        }
+        const symbolNode = inner.argumentExpression;
+        const key = this.unwrapPrintTransparentExpression(node.argumentExpression);
+        const isString = (n) => this.javaScalarFamily(n) === 'string' || this.javaDeclaredStringType(n);
+        if (!isIdentifier(symbolNode) || key === undefined || !isIdentifier(key) || !isString(symbolNode) || !isString(key)) {
+            return undefined;
+        }
+        const symbolText = this.printNode(symbolNode, 0).trim();
+        if (symbolText !== symbolNode.text || this.printNode(key, 0).trim() !== key.text) {
+            return undefined; // a capture rename prints a box
+        }
+        const keyText = key.text;
+        if (!this.isJavaMapStructureType(this.getChecker().getTypeAtLocation(inner))) {
+            return undefined;
+        }
+        if (!this.javaOhlcvsEntryIsFresh(node, symbolNode)) {
+            return undefined;
+        }
+        return `((java.util.Map<String, Object>) this.ohlcvs.get(${symbolText})).get(${keyText})`;
+    }
+
+    javaIsOhlcvsField(node): boolean {
+        const field = this.unwrapPrintTransparentExpression(node);
+        return field !== undefined && isPropertyAccessExpression(field)
+            && field.expression.kind === SyntaxKind.ThisKeyword && field.name.text === 'ohlcvs';
+    }
+
+    // an earlier statement of an enclosing block of the read puts a fresh map under s
+    // (`this.ohlcvs[s] = {}`, `= this.safeDict(this.ohlcvs, s, {})`, or the same under
+    // `if (!(s in this.ohlcvs))`), and the statements from there to the read neither write the
+    // entry, s or the field, nor suspend
+    javaOhlcvsEntryIsFresh(site, symbolNode): boolean {
+        const checker: any = this.getChecker();
+        const symbol = checker.getSymbolAtLocation(symbolNode);
+        if (symbol === undefined) {
+            return false;
+        }
+        let child = site;
+        while (child?.parent !== undefined) {
+            const parent = child.parent;
+            if (isFunctionLike(parent)) {
+                return false;
+            }
+            if (isBlock(parent) || isSourceFile(parent)) {
+                const statements: any[] = Array.from(parent.statements);
+                const at = statements.indexOf(child);
+                for (let j = at - 1; j >= 0; j--) {
+                    if (this.javaOhlcvsFreshAnchor(statements[j], symbol)) {
+                        for (let m = j + 1; m <= at; m++) {
+                            if (this.javaOhlcvsDisturbed(statements[m], symbol)) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+                }
+            }
+            child = parent;
+        }
+        return false;
+    }
+
+    javaOhlcvsFreshAnchor(statement, symbol): boolean {
+        const checker: any = this.getChecker();
+        const isSymbol = (n) => isIdentifier(n) && checker.getSymbolAtLocation(n) === symbol;
+        const emptyLiteral = (n) => n !== undefined && isObjectLiteralExpression(n) && n.properties.length === 0;
+        const freshPut = (candidate): boolean => {
+            if (candidate === undefined || !isExpressionStatement(candidate)) {
+                return false;
+            }
+            const put = candidate.expression;
+            if (!isBinaryExpression(put) || put.operatorToken.kind !== SyntaxKind.EqualsToken
+                || !isElementAccessExpression(put.left) || !this.javaIsOhlcvsField(put.left.expression)
+                || !isSymbol(put.left.argumentExpression)) {
+                return false;
+            }
+            if (emptyLiteral(put.right)) {
+                return true;
+            }
+            const call = put.right;
+            return isCallExpression(call) && isPropertyAccessExpression(call.expression)
+                && call.expression.expression.kind === SyntaxKind.ThisKeyword && call.expression.name.text === 'safeDict'
+                && call.arguments.length === 3 && this.javaIsOhlcvsField(call.arguments[0]) && isSymbol(call.arguments[1])
+                && emptyLiteral(call.arguments[2]) && this.javaCalleeResolves(call)
+                && JAVA_THIS_RETURN_TYPES_BASE_FILE.test(checker.getResolvedSignature(call)?.declaration?.resolve()?.getSourceFile?.()?.fileName ?? '');
+        };
+        if (freshPut(statement)) {
+            return true;
+        }
+        if (!isIfStatement(statement) || statement.elseStatement !== undefined) {
+            return false;
+        }
+        const condition = this.unwrapParenthesized(statement.expression);
+        if (condition === undefined || !isPrefixUnaryExpression(condition) || condition.operator !== SyntaxKind.ExclamationToken) {
+            return false;
+        }
+        const test = this.unwrapParenthesized(condition.operand);
+        if (test === undefined || !isBinaryExpression(test) || test.operatorToken.kind !== SyntaxKind.InKeyword
+            || !isSymbol(test.left) || !this.javaIsOhlcvsField(test.right)) {
+            return false;
+        }
+        const then = statement.thenStatement;
+        return isBlock(then) ? then.statements.length === 1 && freshPut(then.statements[0]) : freshPut(then);
+    }
+
+    javaOhlcvsDisturbed(statement, symbol): boolean {
+        const checker: any = this.getChecker();
+        let disturbed = false;
+        const writesSymbol = (n) => {
+            const target = this.unwrapPrintTransparentExpression(n);
+            return target !== undefined && isIdentifier(target) && checker.getSymbolAtLocation(target) === symbol;
+        };
+        const walk = (n) => {
+            if (disturbed || n === undefined) {
+                return;
+            }
+            if (n.kind === SyntaxKind.AwaitExpression) {
+                disturbed = true;
+                return;
+            }
+            if (isBinaryExpression(n) && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(n.operatorToken.kind)) {
+                const left = this.unwrapPrintTransparentExpression(n.left);
+                if (writesSymbol(left) || this.javaIsOhlcvsField(left)
+                    || (isElementAccessExpression(left) && this.javaIsOhlcvsField(left.expression))) {
+                    disturbed = true;
+                    return;
+                }
+            }
+            if (n.kind === SyntaxKind.DeleteExpression) {
+                const target = this.unwrapPrintTransparentExpression(n.expression);
+                if (target !== undefined && isElementAccessExpression(target) && this.javaIsOhlcvsField(target.expression)) {
+                    disturbed = true;
+                    return;
+                }
+            }
+            if ((isPrefixUnaryExpression(n) || isPostfixUnaryExpression(n)) && writesSymbol(n.operand)) {
+                disturbed = true;
+                return;
+            }
+            n.forEachChild(walk);
+        };
+        walk(statement);
+        return disturbed;
     }
 
 
@@ -6913,6 +7212,11 @@ export class JavaTranspiler extends BaseTranspiler {
             const handlerType = this.javaHandlerDeclarationType(declaration);
             if (handlerType !== undefined) {
                 varToken = handlerType + " ";
+            }
+            // a local bound once to a native read of the ws client's futures map holds that map's value type
+            const futureType = this.javaWsFutureLocalType(declaration);
+            if (futureType !== undefined) {
+                varToken = futureType + " ";
             }
         }
 
