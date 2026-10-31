@@ -42,7 +42,6 @@ export declare class GoTranspiler extends BaseTranspiler {
         asyncUserPath: RegExp;
         userPath: RegExp;
         boxedKeys: string[];
-        plainResultCalls: RegExp;
     } | undefined;
     goSliceLiteralTypes: Map<any, string>;
     CCXT_GO_GETARG_DECLARED_TYPES: any;
@@ -754,7 +753,8 @@ export declare class GoTranspiler extends BaseTranspiler {
     goOwnedBalanceField(node: any): boolean;
     goOwnedBalanceOwnerSide(node: any): boolean;
     goOwnedBalanceKey(node: any, boxedOk?: boolean): string | undefined;
-    goOwnedBalancePlainValue(valueNode: any, topLevel: boolean): boolean;
+    goInitializedByAssertion(node: any): boolean;
+    goOwnedBalancePlainValue(valueNode: any): boolean;
     goOwnedBalanceReplace(node: any, identation: any): string | undefined;
     goOwnedBalanceRead(node: any, baseExpr: any, keys: any[], keyStrs: string[]): string | undefined;
     goOwnedBalanceWrite(node: any, baseExpr: any, keys: any[], rhs: string, valueNode: any): string | undefined;

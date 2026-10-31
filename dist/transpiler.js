@@ -10444,8 +10444,7 @@ var GoTranspiler = class extends BaseTranspiler {
       replace: balance["replace"],
       asyncUserPath: new RegExp(balance["asyncUserPath"]),
       userPath: new RegExp(balance["userPath"]),
-      boxedKeys: balance["boxedKeys"],
-      plainResultCalls: new RegExp(balance["plainResultCalls"])
+      boxedKeys: balance["boxedKeys"]
     };
   }
   goDescendantsOf(scope) {
@@ -19778,12 +19777,19 @@ ${this.getIden(level)}}()`;
     if (declared === "string") {
       return this.printNode(node, 0);
     }
-    return declared === "*string" && (this.goHasEnclosingNilGuard(node) || this.goDerefableStringOperand(node)) ? "*" + this.printNode(node, 0) : void 0;
+    return declared === "*string" && (this.goHasEnclosingNilGuard(node) || this.goDerefableStringOperand(node) && !this.goInitializedByAssertion(node)) ? "*" + this.printNode(node, 0) : void 0;
+  }
+  // a local whose initializer is a `x as T` / `x!` assertion: the cast says nothing about the Go nil
+  goInitializedByAssertion(node) {
+    const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+    const initializer = this.goUnwrapParenthesizedNode(declaration?.initializer);
+    return initializer?.kind === SyntaxKind5.AsExpression || initializer?.kind === SyntaxKind5.NonNullExpression;
   }
   // the stored value is never a boxed scalar pointer, so the helper's derefScalar leaves it alone and the
-  // native store keeps the same value: an object type (Dict, list, struct), or, for a top-level slot,
-  // the result of a `this.` method the embedder tables as returning a plain Go value
-  goOwnedBalancePlainValue(valueNode, topLevel) {
+  // native store keeps the same value: a literal, or a local or call the checker types as an object
+  // (Dict, Balances). An element read is excluded: its declared type is the index signature, which can
+  // hold a boxed scalar at run time.
+  goOwnedBalancePlainValue(valueNode) {
     const checker = this.checkerOrUndefined();
     const value = this.goUnwrapPrintedAssertions(valueNode);
     if (checker === void 0 || value === void 0) {
@@ -19792,8 +19798,8 @@ ${this.getIden(level)}}()`;
     if (value.kind === SyntaxKind5.ObjectLiteralExpression || value.kind === SyntaxKind5.ArrayLiteralExpression) {
       return true;
     }
-    if (topLevel && this.goOwnedBalance.plainResultCalls.test(this.rfGo6bThisCallName(value) ?? "(?!)")) {
-      return true;
+    if (value.kind !== SyntaxKind5.Identifier && value.kind !== SyntaxKind5.CallExpression) {
+      return false;
     }
     const type = checker.getTypeAtLocation(value);
     const parts = typeof type.isUnionType === "function" && type.isUnionType() ? type.getTypes() : [type];
@@ -19834,10 +19840,10 @@ ${this.getIden(level)}}()`;
       return void 0;
     }
     if (keys.length === 1) {
-      return this.goOwnedBalancePlainValue(valueNode, true) ? `${this.printNode(baseExpr, 0)}[${first}] = ${rhs}` : void 0;
+      return this.goOwnedBalancePlainValue(valueNode) ? `${this.printNode(baseExpr, 0)}[${first}] = ${rhs}` : void 0;
     }
     const second = this.goOwnedBalanceKey(keys[1], true);
-    return second !== void 0 && this.goOwnedBalancePlainValue(valueNode, false) ? `this.${owned.entryWrite}(${first})[${second}] = ${rhs}` : void 0;
+    return second !== void 0 && this.goOwnedBalancePlainValue(valueNode) ? `this.${owned.entryWrite}(${first})[${second}] = ${rhs}` : void 0;
   }
   // `delete this.balance[k]` and `delete this.balance[k1][k2]` as a statement on the loop
   goOwnedBalanceDelete(node) {

@@ -10,7 +10,6 @@ const OWNED = {
     'userPath': '^(?:setBalanceCache|cleanWsData)$',
     'asyncUserPath': '^(?:(?:watch|fetch|seed)\\w*|loadBalanceSnapshot)$',
     'boxedKeys': [ 'info', 'timestamp', 'datetime', 'free', 'used', 'total' ],
-    'plainResultCalls': '^iso\\w+$',
 };
 const HEAD = 'type Dict = { [key: string]: any };\n'
     + 'class BaseExchange {\n'

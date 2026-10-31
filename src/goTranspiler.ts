@@ -836,7 +836,7 @@ export class GoTranspiler extends BaseTranspiler {
     // Absent config = no rewrite. JSON-serializable: the config crosses the worker boundary.
     goOwnedField: { field: string; declaredIn: string; snapshot: string; remove: string; ownerSide: RegExp[] } | undefined;
     // FOLD-1F hx10w6-G01: the owner-goroutine map field BaseExchange.balance (see goOwnedBalanceField)
-    goOwnedBalance: { field: string; declaredIn: string; entryRead: string; entryWrite: string; replace: string; asyncUserPath: RegExp; userPath: RegExp; boxedKeys: string[]; plainResultCalls: RegExp } | undefined;
+    goOwnedBalance: { field: string; declaredIn: string; entryRead: string; entryWrite: string; replace: string; asyncUserPath: RegExp; userPath: RegExp; boxedKeys: string[] } | undefined;
     // array literals the current print opens as a Go slice (set by the call-argument rule)
     goSliceLiteralTypes: Map<any, string> = new Map<any, string>();
     // installed by the ccxt build: GetArg alias -> Go types, and the audited consumer table
@@ -914,7 +914,7 @@ export class GoTranspiler extends BaseTranspiler {
         this.goOwnedBalance = (balance === undefined) ? undefined : {
             field: balance['field'], declaredIn: balance['declaredIn'], entryRead: balance['entryRead'],
             entryWrite: balance['entryWrite'], replace: balance['replace'], asyncUserPath: new RegExp(balance['asyncUserPath']),
-            userPath: new RegExp(balance['userPath']), boxedKeys: balance['boxedKeys'], plainResultCalls: new RegExp(balance['plainResultCalls']),
+            userPath: new RegExp(balance['userPath']), boxedKeys: balance['boxedKeys'],
         };
     }
 
@@ -11742,13 +11742,21 @@ ${this.getIden(identation)}${returnStatement}`;
         if (declared === 'string') {
             return this.printNode(node, 0);
         }
-        return ((declared === '*string') && (this.goHasEnclosingNilGuard(node) || this.goDerefableStringOperand(node))) ? ('*' + this.printNode(node, 0)) : undefined;
+        return ((declared === '*string') && (this.goHasEnclosingNilGuard(node) || (this.goDerefableStringOperand(node) && !this.goInitializedByAssertion(node)))) ? ('*' + this.printNode(node, 0)) : undefined;
+    }
+
+    // a local whose initializer is a `x as T` / `x!` assertion: the cast says nothing about the Go nil
+    goInitializedByAssertion(node): boolean {
+        const declaration: any = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+        const initializer: any = this.goUnwrapParenthesizedNode(declaration?.initializer);
+        return (initializer?.kind === SyntaxKind.AsExpression) || (initializer?.kind === SyntaxKind.NonNullExpression);
     }
 
     // the stored value is never a boxed scalar pointer, so the helper's derefScalar leaves it alone and the
-    // native store keeps the same value: an object type (Dict, list, struct), or, for a top-level slot,
-    // the result of a `this.` method the embedder tables as returning a plain Go value
-    goOwnedBalancePlainValue(valueNode, topLevel: boolean): boolean {
+    // native store keeps the same value: a literal, or a local or call the checker types as an object
+    // (Dict, Balances). An element read is excluded: its declared type is the index signature, which can
+    // hold a boxed scalar at run time.
+    goOwnedBalancePlainValue(valueNode): boolean {
         const checker: any = this.checkerOrUndefined();
         const value: any = this.goUnwrapPrintedAssertions(valueNode);
         if ((checker === undefined) || (value === undefined)) {
@@ -11757,8 +11765,8 @@ ${this.getIden(identation)}${returnStatement}`;
         if ((value.kind === SyntaxKind.ObjectLiteralExpression) || (value.kind === SyntaxKind.ArrayLiteralExpression)) {
             return true;
         }
-        if (topLevel && this.goOwnedBalance.plainResultCalls.test(this.rfGo6bThisCallName(value) ?? '(?!)')) {
-            return true;
+        if ((value.kind !== SyntaxKind.Identifier) && (value.kind !== SyntaxKind.CallExpression)) {
+            return false;
         }
         const type: any = checker.getTypeAtLocation(value);
         const parts = ((typeof type.isUnionType === 'function') && type.isUnionType()) ? type.getTypes() : [type];
@@ -11806,10 +11814,10 @@ ${this.getIden(identation)}${returnStatement}`;
             return undefined;
         }
         if (keys.length === 1) {
-            return this.goOwnedBalancePlainValue(valueNode, true) ? `${this.printNode(baseExpr, 0)}[${first}] = ${rhs}` : undefined;
+            return this.goOwnedBalancePlainValue(valueNode) ? `${this.printNode(baseExpr, 0)}[${first}] = ${rhs}` : undefined;
         }
         const second = this.goOwnedBalanceKey(keys[1], true);
-        return ((second !== undefined) && this.goOwnedBalancePlainValue(valueNode, false)) ? `this.${owned.entryWrite}(${first})[${second}] = ${rhs}` : undefined;
+        return ((second !== undefined) && this.goOwnedBalancePlainValue(valueNode)) ? `this.${owned.entryWrite}(${first})[${second}] = ${rhs}` : undefined;
     }
 
     // `delete this.balance[k]` and `delete this.balance[k1][k2]` as a statement on the loop
