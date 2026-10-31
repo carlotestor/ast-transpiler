@@ -13,7 +13,9 @@ export default class venue extends Exchange {
         const merged = this.extend ({ 'a': 1 }, {});
         const viaLit = merged['core'];
         const viaCode = merged[code];
-        return [ viaLit, viaCode ];
+        const hasCode = code in merged;
+        const hasLit = 'core' in merged;
+        return [ viaLit, viaCode, hasCode, hasLit ];
     }
     optionsField (code) {
         const viaCode = this.options[code];

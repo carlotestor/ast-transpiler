@@ -37008,7 +37008,8 @@ ${ind}let ${view}: &${map} = &${arc};
     if (this.rustDictField(recv) === void 0) {
       const nested = _is.isElementAccessExpression.call(void 0, recv) && recv.argumentExpression !== void 0 && _RustTranspiler.RUST_DICT_VALUE_FIELDS.has(String(this.rustDictField(recv.expression))) && !_is.isStringLiteralLikeNode.call(void 0, recv.argumentExpression);
       if (!nested) {
-        if (this.rustDictLocalProof(recv) === void 0)
+        const proof = this.rustDictLocalProof(recv);
+        if (proof === void 0 || proof !== "plain" && !_is.isStringLiteral.call(void 0, key))
           return void 0;
         guarded = true;
       } else if (this.r05IsTest(obj)) {

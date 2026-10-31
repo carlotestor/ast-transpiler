@@ -4996,7 +4996,9 @@ export class RustTranspiler extends BaseTranspiler {
                 && RustTranspiler.RUST_DICT_VALUE_FIELDS.has(String(this.rustDictField(recv.expression)))
                 && !isStringLiteralLikeNode(recv.argumentExpression);
             if (!nested) {
-                if (this.rustDictLocalProof(recv) === undefined) return undefined;
+                const proof = this.rustDictLocalProof(recv);
+                // a dict-callee local keeps `in_op` for a computed key (content unproven); literal keys only
+                if (proof === undefined || (proof !== 'plain' && !isStringLiteral(key))) return undefined;
                 guarded = true;
             } else if (this.r05IsTest(obj)) {
                 return undefined;

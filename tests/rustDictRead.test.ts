@@ -30,6 +30,11 @@ describe('rust closure-free dict reads (FM-RS1 L1)', () => {
         expect(output).toContain(`let mut viaCode: Value = ${free('merged', 'code')};`);
     });
 
+    test('membership: a computed key on a dict-callee local keeps in_op (content unproven)', () => {
+        expect(output).toContain('Value::Bool(in_op(&merged, &code))');
+        expect(output).not.toContain('merged.as_map().is_some_and');
+    });
+
     test('a base runtime-state field reads and tests membership natively', () => {
         expect(output).toContain(`let mut viaCode: Value = ${free('self.options', 'code')};`);
     });
