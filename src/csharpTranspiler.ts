@@ -280,6 +280,10 @@ const CSHARP_NATIVE_FIELDS: { [name: string]: string } = {
 // hand-written BaseExchange fields declared `object` that always box a dictionary
 // (dict / CustomConcurrentDictionary<string, object>): the member needs the same
 // `(IDictionary<string, object>)` cast the transpiled helper body itself applies
+// RFM-C2-A: the ws caches the hand-written base declares as `IDictionary<string, object>` properties
+// (cs/ccxt/base/Exchange.Options.cs: tickers / bidsasks / trades / ohlcvs, backed by the wrapWsCache setters)
+const CSHARP_WS_CACHE_DICT_FIELDS = [ 'ohlcvs', 'trades', 'tickers', 'bidsasks' ];
+
 const CSHARP_OBJECT_DICT_FIELDS = [ 'urls', 'tickers', 'bidsasks', 'orderbooks', 'ohlcvs', 'trades', 'markets', 'currencies', 'currencies_by_id', 'exceptions' ];
 
 // Hand-written BaseExchange / PredictionExchange fields declared as C# reference types: the field
@@ -7188,17 +7192,22 @@ export class CSharpTranspiler extends BaseTranspiler {
         const fieldTypes = { 'has': 'Dictionary<string, object>', 'features': 'Dictionary<string, object>', 'timeframes': 'Dictionary<string, object>', 'options': 'ConcurrentDictionary<string, object>', 'markets': 'IDictionary<string, object>', 'urls': 'object', 'currencies': 'object' };
         let receiver: string | undefined;
         let csharpType: string | undefined;
-        if (isPropertyAccessExpression(expression) && expression.expression.kind === SyntaxKind.ThisKeyword && isIdentifier(expression.name)
-            && Object.prototype.hasOwnProperty.call(fieldTypes, expression.name.text as string)) {
+        // RFM-C2-A: the ws caches Exchange.Options.cs declares IDictionary<string, object> properties (CSHARP_OBJECT_DICT_FIELDS
+        // still lists them `object`): their reads need no cast, and a key whose printed declaration is a non-nullable `string`
+        // is its own null proof (the declared-member arm of csharpBaseFieldElementRead says the same)
+        const memberName = (isPropertyAccessExpression(expression) && expression.expression.kind === SyntaxKind.ThisKeyword && isIdentifier(expression.name)) ? expression.name.text as string : undefined;
+        const wsCache = (memberName !== undefined) && (CSHARP_WS_CACHE_DICT_FIELDS.indexOf(memberName) >= 0);
+        if (memberName !== undefined && (wsCache || Object.prototype.hasOwnProperty.call(fieldTypes, memberName))) {
             const field = this.printNode(expression, 0);
-            csharpType = fieldTypes[expression.name.text as string];
+            csharpType = wsCache ? 'IDictionary<string, object>' : fieldTypes[memberName];
             receiver = (csharpType === 'object') ? `((IDictionary<string, object>)${field})` : field;
             const key = this.csharpHx4DeclaredKeyType(argumentExpression);
             if (key !== 'string' && key !== 'string?') {
                 return undefined;
             }
             const printedKey = this.printNode(argumentExpression, 0);
-            return `(${field} != null && ${printedKey} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
+            const keyTest = (wsCache && key === 'string') ? '' : ` && ${printedKey} != null`;
+            return `(${field} != null${keyTest} && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
         }
         if (!isIdentifier(expression) || CSHARP_MARKET_RECEIVER_NAMES.indexOf(expression.text as string) >= 0) {
             return undefined;
