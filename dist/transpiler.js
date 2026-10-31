@@ -14319,7 +14319,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
     const node = this.goUnwrapPrintedAssertions(arg);
     if (node?.kind === SyntaxKind5.Identifier) {
-      return this.goHasEnclosingNilGuard(node) || this.gp15HasExitingNilGuard(node);
+      return this.goHasEnclosingNilGuard(node) || this.gp15HasExitingNilGuard(node) || this.goNilProvenStringDeref(node);
     }
     if (node?.kind === SyntaxKind5.CallExpression) {
       return this.gp15SafeStringLiteralDefaultCall(node);
@@ -15348,6 +15348,9 @@ ${indent}}`);
     const field = /^this\.([A-Za-z_]\w*)$/.exec(text);
     if (field !== null && dictNode?.kind === SyntaxKind5.PropertyAccessExpression && dictNode.expression?.kind === SyntaxKind5.ThisKeyword) {
       const name = field[1];
+      if (this.GO_NATIVE_MAP_ACCESSORS.indexOf(name) >= 0) {
+        return "map[string]any";
+      }
       return Object.prototype.hasOwnProperty.call(this.GO_NATIVE_MAP_FIELDS, name) ? this.GO_NATIVE_MAP_FIELDS[name] : void 0;
     }
     const accessor = /^this\.([A-Za-z_]\w*)\(\)$/.exec(text);

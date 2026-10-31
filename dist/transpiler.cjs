@@ -14318,7 +14318,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
     const node = this.goUnwrapPrintedAssertions(arg);
     if (_optionalChain([node, 'optionalAccess', _1352 => _1352.kind]) === _ast.SyntaxKind.Identifier) {
-      return this.goHasEnclosingNilGuard(node) || this.gp15HasExitingNilGuard(node);
+      return this.goHasEnclosingNilGuard(node) || this.gp15HasExitingNilGuard(node) || this.goNilProvenStringDeref(node);
     }
     if (_optionalChain([node, 'optionalAccess', _1353 => _1353.kind]) === _ast.SyntaxKind.CallExpression) {
       return this.gp15SafeStringLiteralDefaultCall(node);
@@ -15347,6 +15347,9 @@ ${indent}}`);
     const field = /^this\.([A-Za-z_]\w*)$/.exec(text);
     if (field !== null && _optionalChain([dictNode, 'optionalAccess', _1512 => _1512.kind]) === _ast.SyntaxKind.PropertyAccessExpression && _optionalChain([dictNode, 'access', _1513 => _1513.expression, 'optionalAccess', _1514 => _1514.kind]) === _ast.SyntaxKind.ThisKeyword) {
       const name = field[1];
+      if (this.GO_NATIVE_MAP_ACCESSORS.indexOf(name) >= 0) {
+        return "map[string]any";
+      }
       return Object.prototype.hasOwnProperty.call(this.GO_NATIVE_MAP_FIELDS, name) ? this.GO_NATIVE_MAP_FIELDS[name] : void 0;
     }
     const accessor = /^this\.([A-Za-z_]\w*)\(\)$/.exec(text);
