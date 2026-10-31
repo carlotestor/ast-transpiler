@@ -781,4 +781,4 @@ export declare function ccxtGoTernaryLiftJoin(goTranspiler: any, declaration: an
     whenFalse: any;
 };
 export declare function installCcxtGoLimitLocals(goTranspiler: any): void;
-declare function ccxtGoTupleResultJoin(printed: any, count: any, declare: any, untypedOk?: boolean, first?: string): string;
+declare function ccxtGoTupleResultJoin(printed: any, count: any, declare: any, untypedOk?: boolean, first?: string, bareFirst?: boolean): string;

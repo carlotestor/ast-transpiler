@@ -10126,7 +10126,7 @@ function ccxtGoTupleResultUnwrap (text) {
 }
 
 // holder block -> multi-assign, or undefined (the block stays as printed)
-function ccxtGoTupleResultJoin (printed, count, declare, untypedOk = false, first = 'SafeStringPtr') {
+function ccxtGoTupleResultJoin (printed, count, declare, untypedOk = false, first = 'SafeStringPtr', bareFirst = false) {
     const lines = printed.split ('\n').filter ((l) => l.trim () !== '');
     const head = /^(\s*)(?:var (\w+Variable) \[\]any = |(\w+Variable) := )(.*)$/.exec (lines[0] ?? '');
     if ((head === null) || (lines.length !== count + 1)) {
@@ -10152,7 +10152,7 @@ function ccxtGoTupleResultJoin (printed, count, declare, untypedOk = false, firs
         // element 0 must already be the typed unwrap; element 1 is the map itself. A bare write of
         // element 0 into an existing local is exact for bool (GetValue derefs the *bool box to bool)
         const ok = (h === holder) && (index === i - 1)
-            && ((wrap === '') ? ((index === 1) || (declare && (first !== 'GetValueBool')) || (first === 'MapTyped')
+            && ((wrap === '') ? ((index === 1) || (declare && (first !== 'GetValueBool')) || (first === 'MapTyped') || (bareFirst && !declare)
                 || (!declare && ((first === 'GetValueBool') || (first === 'Int64Value'))))
                 : (wrap === ((index === 0) ? first : 'MapTyped')));
         if (!ok) {
@@ -10193,7 +10193,7 @@ function ccxtGoTupleResultUntypedElementsAreSafe (goTranspiler, declaration) {
 // boxing it in TupleSlice and unwrapping with GetValue. Only the scalar locals the checker types
 // string / boolean are bound, and only when the Go twin is the base runtime's (go/v4/
 // exchange_market_type.go): a call that resolves to an override prints that class's own method.
-const CCXT_GO_TUPLE_PAIR_SLOT = { 'SafeStringPtr': '*string', 'GetValueBool': 'bool' };
+const CCXT_GO_TUPLE_PAIR_SLOT = { 'SafeStringPtr': '*string', 'GetValueBool': 'bool', 'MapTyped': 'map[string]any' };
 
 function ccxtGoTuplePairCall (goTranspiler, call) {
     if (!ccxtGoTupleResultCall (call) || (call.expression.expression?.kind !== ts.SyntaxKind.ThisKeyword)) {
@@ -10248,6 +10248,12 @@ function ccxtGoTuplePairBinding (goTranspiler, declaration) {
         call = holder.initializer;
     }
     const slot = (call === undefined) ? undefined : ccxtGoTuplePairCall (goTranspiler, call);
+    if (slot === 'map[string]any') {
+        // the Dict the helper hands back is the map itself: a const local binds it as that map
+        const type = (holder === undefined) && ((declaration.parent.flags & ts.NodeFlags.Const) !== 0) && (declaration.type === undefined)
+            ? goTranspiler.getChecker ().getTypeAtLocation (declaration.name) : undefined;
+        return ((type !== undefined) && goTranspiler.goParameterTypeIsDict (type)) ? { call, holder } : undefined;
+    }
     const goType = (slot === undefined) ? undefined : ccxtGoScalarElementReadType (goTranspiler, read);
     return ((goType !== undefined) && (goType === ((slot === 'bool') ? '*bool' : slot))) ? { call, holder } : undefined;
 }
@@ -10270,7 +10276,8 @@ function ccxtGoTuplePairLines (goTranspiler, node, identation) {
     const iden = goTranspiler.getIden (identation);
     const name = goTranspiler.printNode (reader.name, 0);
     const call = ccxtGoTupleResultUnwrap (goTranspiler.printNode (binding.call, identation));
-    const pointer = (ccxtGoScalarElementReadType (goTranspiler, reader.initializer) === '*bool');
+    const pointer = (binding.holder !== undefined || ccxtGoTuplePairCall (goTranspiler, binding.call) !== 'map[string]any')
+        && (ccxtGoScalarElementReadType (goTranspiler, reader.initializer) === '*bool');
     const temporary = name + 'Value';
     if (call === undefined) {
         return undefined;
@@ -10295,6 +10302,44 @@ function ccxtGoTuplePairLines (goTranspiler, node, identation) {
     return (reader === declaration) ? iden + name + ', _ = ' + call : iden + 'var ' + name + ' *string = nil';
 }
 
+// `let x: Str = undefined; [ x, params ] = this.handle<…>AndParams (…)`: the only write of x is element 0
+// of a pair helper whose first Go result is the *string, and every other mention reads it as a pointer
+// would (nil test, or the case helpers `.toUpperCase ()` / `.toLowerCase ()` which deref), so x is that
+// pointer and the join prints `x, params = call`
+function ccxtGoTuplePairNilInitType (goTranspiler, declaration) {
+    if ((declaration?.kind !== ts.SyntaxKind.VariableDeclaration) || (declaration.name?.kind !== ts.SyntaxKind.Identifier)
+        || !goTranspiler.goNilInitInitializer (declaration.initializer) || (declaration.type === undefined)) {
+        return undefined;
+    }
+    const scope = goTranspiler.goEnclosingFunction (declaration);
+    const name = declaration.name.text;
+    if (scope === undefined) {
+        return undefined;
+    }
+    let writes = 0;
+    let unsafe = false;
+    goTranspiler.hasNodeWhere (scope, (n) => {
+        if ((n.kind !== ts.SyntaxKind.Identifier) || (n.text !== name) || (n === declaration.name)) {
+            return false;
+        }
+        const parent = n.parent;
+        const pattern = (parent?.kind === ts.SyntaxKind.ArrayLiteralExpression) ? parent : undefined;
+        const assignment = pattern?.parent;
+        if ((pattern !== undefined) && (pattern.elements.indexOf (n) === 0) && (assignment?.kind === ts.SyntaxKind.BinaryExpression)
+            && (assignment.left === pattern) && (assignment.operatorToken.kind === ts.SyntaxKind.EqualsToken)
+            && (ccxtGoTuplePairCall (goTranspiler, assignment.right) === '*string')) {
+            writes++;
+            return false;
+        }
+        const casing = (parent?.kind === ts.SyntaxKind.PropertyAccessExpression) && (parent.expression === n)
+            && [ 'toUpperCase', 'toLowerCase' ].includes (parent.name?.text) && (parent.parent?.kind === ts.SyntaxKind.CallExpression)
+            && (parent.parent.expression === parent);
+        unsafe = unsafe || !(casing || goTranspiler.goNilInitReadIsPointerSafe (n));
+        return false;
+    });
+    return (unsafe || (writes !== 1)) ? undefined : '*string';
+}
+
 function installCcxtGoTupleResults (goTranspiler) {
     if ((goTranspiler === undefined) || goTranspiler.__ccxtGoTupleResultsInstalled) {
         return;
@@ -10311,6 +10356,10 @@ function installCcxtGoTupleResults (goTranspiler) {
         }
         const lead = /^\s*/.exec (printed)[0];
         return lead + 'TupleSlice(' + printed.slice (lead.length) + ')';
+    };
+    const nilInitType = goTranspiler.goNilInitLocalType;
+    goTranspiler.goNilInitLocalType = function (declaration) {
+        return nilInitType.call (this, declaration) ?? ccxtGoTuplePairNilInitType (this, declaration);
     };
     const printDeclaration = goTranspiler.printVariableDeclarationList;
     goTranspiler.printVariableDeclarationList = function (node, identation) {
@@ -10336,7 +10385,10 @@ function installCcxtGoTupleResults (goTranspiler) {
             || (node.operatorToken?.kind !== ts.SyntaxKind.EqualsToken) || !ccxtGoTupleResultCall (node.right)) {
             return printed;
         }
-        return ccxtGoTupleResultJoin (printed, node.left.elements.length, false, false, ccxtGoTupleResultFirst (node.right)) ?? printed;
+        // the local the pair's first result is written to is that *string (nil-init local, single write)
+        const target = (node.left.elements[0]?.kind === ts.SyntaxKind.Identifier) ? ccxtGoParamDeclarationOf (this, node.left.elements[0]) : undefined;
+        const bareFirst = (ccxtGoTuplePairNilInitType (this, target) === '*string') && (this.goNilInitLocalType (target) === '*string');
+        return ccxtGoTupleResultJoin (printed, node.left.elements.length, false, false, ccxtGoTupleResultFirst (node.right), bareFirst) ?? printed;
     };
     // an override of a tuple-result method returns the pair: a forwarded call as is, `[ a, b ]` as two unwrapped results
     const printReturn = goTranspiler.printReturnStatement;

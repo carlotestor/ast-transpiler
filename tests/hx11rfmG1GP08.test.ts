@@ -7,10 +7,12 @@ import * as nodepath from 'path';
 const HEAD = 'type Dict = { [key: string]: any };\ntype Bool = boolean | undefined;\ntype Str = string | undefined;\n'
     + 'export class Exchange {\n'
     + '    handleOptionBoolAndParams (params: Dict, methodName: string, optionName: string, defaultValue: boolean = undefined): [boolean, Dict] { return [ true, params ]; }\n'
+    + '    handleOptionStringAndParams (params: Dict, methodName: string, optionName: string, defaultValue: Str = undefined): [Str, Dict] { return [ undefined, params ]; }\n'
+    + '    handleUntilOption (key: string, request: Dict, params: Dict, multiplier = 1): [Dict, Dict] { return [ request, params ]; }\n'
     + '    handleSubTypeAndParams (methodName: string, market: any = undefined, params = {}, defaultValue: Str = undefined): [Str, Dict] { return [ undefined, params ]; }\n'
     + '}\n';
 const dir = nodepath.join(__dirname, 'files', 'tmp-rfm-g1-gp08', 'ts', 'src');
-const venue = (body: string, extra = ''): string => "import { Exchange } from './base/Exchange';\n" + 'type Dict = { [key: string]: any };\ntype Bool = boolean | undefined;\n'
+const venue = (body: string, extra = ''): string => "import { Exchange } from './base/Exchange';\n" + 'type Dict = { [key: string]: any };\ntype Bool = boolean | undefined;\ntype Str = string | undefined;\n'
     + 'export class ex extends Exchange {\n' + extra + '    f (params = {}) {\n' + body + '\n        return 1;\n    }\n}\n';
 const printed = (body: string, extra = '', hooks = true): string => {
     nodefs.mkdirSync (nodepath.join (dir, 'base'), { recursive: true });
@@ -55,5 +57,26 @@ describe('hx11 RFM-G1 GP08: the first result of a pair helper', () => {
         const out = run ("        const subType = this.handleSubTypeAndParams ('fetchTime', undefined, params)[0];\n        return subType;",
             "    handleSubTypeAndParams (methodName: string, market: any = undefined, params = {}, defaultValue: Str = undefined): [Str, Dict] { return [ undefined, params ]; }\n");
         expect (out).not.toContain ('subType, _ :=');
+    });
+});
+
+describe('hx11 RFM-G1 GP08: map first result and a nil-init local written by the pair', () => {
+    test('handleUntilOption()[0] binds the Dict the helper hands back', () => {
+        const out = run ("        const until = this.handleUntilOption ('end', {}, params)[0];\n        return until;");
+        expect (out).toContain ('until, _ := this.HandleUntilOption("end", map[string]any{}, params)');
+        expect (out).not.toContain ('TupleSlice');
+    });
+    test('a nil-init local whose only write is the pair is the *string and keeps its case reads native', () => {
+        const out = run ("        let mode: Str = undefined;\n        [ mode, params ] = this.handleOptionStringAndParams (params, 'm', 'o');\n"
+            + "        if (mode !== undefined) {\n            return mode.toUpperCase ();\n        }");
+        expect (out).toContain ('var mode *string = nil');
+        expect (out).toContain ('mode, params = this.HandleOptionStringAndParams(params, "m", "o")');
+        expect (out).toContain ('strings.ToUpper(*mode)');
+        expect (out).not.toContain ('TupleSlice');
+        expect (base ("        let mode: Str = undefined;\n        [ mode, params ] = this.handleOptionStringAndParams (params, 'm', 'o');\n        return mode;")).toContain ('var mode any = nil');
+    });
+    test('a nil-init local that is written a second time keeps the box', () => {
+        const out = run ("        let mode: Str = undefined;\n        [ mode, params ] = this.handleOptionStringAndParams (params, 'm', 'o');\n        mode = 'x';\n        return mode;");
+        expect (out).toContain ('TupleSlice');
     });
 });
