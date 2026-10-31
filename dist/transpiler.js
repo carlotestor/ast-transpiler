@@ -47904,7 +47904,15 @@ function ownedTable(go, node) {
   if (decl?.kind !== SK.PropertyDeclaration || decl.parent?.name?.text !== OWNER_CLASS) {
     return void 0;
   }
-  return OWNED_TABLES[node.name.text];
+  const table = OWNED_TABLES[node.name.text];
+  if (table.plainMap === true && node.expression?.kind === SK.Identifier && resolvedDeclaration(go, node.expression)?.kind === SK.Parameter) {
+    return void 0;
+  }
+  return table;
+}
+function ownBook(go, node) {
+  const table = ownedTable(go, unwrap(node));
+  return table?.plainMap === true && unwrap(node).expression?.kind === ts.SyntaxKind.ThisKeyword ? table : void 0;
 }
 function blindOwnedTable(go, node) {
   const SK = ts.SyntaxKind;
@@ -47929,8 +47937,97 @@ function ownedKeysCall(go, call) {
     return void 0;
   }
   const arg = unwrap(c.arguments[0]);
-  const table = ownedTable(go, arg);
-  return table?.plainMap === true ? { table, arg } : void 0;
+  const table = ownBook(go, arg);
+  return table !== void 0 ? { table, arg } : void 0;
+}
+function boundedKeyElement(go, node) {
+  const SK = ts.SyntaxKind;
+  const access = unwrap(node);
+  if (access?.kind !== SK.ElementAccessExpression || access.expression?.kind !== SK.Identifier || access.argumentExpression?.kind !== SK.Identifier) {
+    return void 0;
+  }
+  const list = access.expression;
+  const counter = access.argumentExpression;
+  if (go.goDeclaredTypeOfIdentifier(list) !== "[]string") {
+    return void 0;
+  }
+  let loop;
+  for (let cur = access.parent; cur !== void 0; cur = cur.parent) {
+    if (cur.kind === SK.ArrowFunction || cur.kind === SK.FunctionExpression || cur.kind === SK.MethodDeclaration) {
+      return void 0;
+    }
+    if (cur.kind === SK.ForStatement) {
+      loop = cur;
+      break;
+    }
+  }
+  const init = loop?.initializer?.declarations?.[0];
+  const cond = loop?.condition;
+  const inc = loop?.incrementor;
+  const bound = unwrap(cond?.right);
+  if (init?.name?.text !== counter.text || init.initializer?.kind !== SK.NumericLiteral || init.initializer.text !== "0" || cond?.kind !== SK.BinaryExpression || cond.operatorToken?.kind !== SK.LessThanToken || cond.left?.text !== counter.text || bound?.kind !== SK.PropertyAccessExpression || bound.name?.text !== "length" || bound.expression?.text !== list.text || inc?.kind !== SK.PostfixUnaryExpression || inc.operator !== SK.PlusPlusToken || inc.operand?.text !== counter.text) {
+    return void 0;
+  }
+  const fn = go.goEnclosingFunction(access);
+  const decl = resolvedDeclaration(go, list);
+  let touched = false;
+  const visit = (n) => {
+    if (touched) {
+      return;
+    }
+    if (n.kind === SK.Identifier && n.text === counter.text && n.parent !== loop.incrementor && go.goRebindingTargetOf(n) !== void 0 && n !== init.name) {
+      touched = true;
+    }
+    if (n.kind === SK.CallExpression && n.expression?.kind === SK.PropertyAccessExpression && n.expression.expression?.text === list.text && ["push", "pop", "shift", "unshift", "splice", "sort", "reverse", "fill"].includes(n.expression.name?.text)) {
+      touched = true;
+    }
+    n.forEachChild(visit);
+  };
+  if (fn === void 0 || decl?.kind !== SK.VariableDeclaration || go.goLocalIsRebound(fn, decl.name)) {
+    return void 0;
+  }
+  visit(loop.statement);
+  return touched ? void 0 : { list, counter };
+}
+function guardedMembership(go, operand) {
+  const SK = ts.SyntaxKind;
+  const both = unwrap(operand);
+  if (both?.kind !== SK.BinaryExpression || both.operatorToken?.kind !== SK.AmpersandAmpersandToken) {
+    return void 0;
+  }
+  const guard = unwrap(both.left);
+  const read = unwrap(both.right);
+  if (guard?.kind !== SK.BinaryExpression || ![SK.ExclamationEqualsEqualsToken, SK.ExclamationEqualsToken].includes(guard.operatorToken?.kind) || read?.kind !== SK.BinaryExpression || read.operatorToken?.kind !== SK.InKeyword) {
+    return void 0;
+  }
+  const nilSide = unwrap(guard.right);
+  const table = ownBook(go, guard.left);
+  const dict = unwrap(read.right);
+  const key = unwrap(read.left);
+  const isNil = nilSide?.kind === SK.NullKeyword || nilSide?.kind === SK.Identifier && nilSide.text === "undefined";
+  if (!isNil || table === void 0 || dict?.kind !== SK.PropertyAccessExpression || dict.name?.text !== unwrap(guard.left).name?.text || key?.kind !== SK.Identifier || go.goDeclaredTypeOfIdentifier(key) !== "string") {
+    return void 0;
+  }
+  return { table, dict, key };
+}
+function membershipChain(go, condition) {
+  const SK = ts.SyntaxKind;
+  const operands = [];
+  const split = (n) => {
+    const inner = unwrap(n);
+    if (inner?.kind === SK.BinaryExpression && inner.operatorToken?.kind === SK.BarBarToken) {
+      split(inner.left);
+      split(inner.right);
+    } else {
+      operands.push(inner);
+    }
+  };
+  split(condition);
+  if (operands.length < 2) {
+    return void 0;
+  }
+  const found = operands.map((o) => guardedMembership(go, o));
+  return found.some((f) => f === void 0) ? void 0 : found;
 }
 function writtenThrough(fn, decl) {
   const SK = ts.SyntaxKind;
@@ -47994,8 +48091,8 @@ function aliasOf(go, identifier) {
   if (init?.kind !== SK.PropertyAccessExpression || init.expression?.kind !== SK.ThisKeyword) {
     return void 0;
   }
-  const table = ownedTable(go, init);
-  if (table?.add === void 0 || table.plainMap !== true) {
+  const table = ownBook(go, init);
+  if (table?.add === void 0) {
     return void 0;
   }
   const scope = go.goEnclosingFunction(decl);
@@ -48104,8 +48201,8 @@ ${iden}}`;
         const base = unwrap(left.expression);
         let target;
         if (base?.kind === SK.PropertyAccessExpression) {
-          const owned = ownedTable(this, base);
-          target = owned?.add !== void 0 && owned.plainMap === true ? { "table": owned, "receiver": base.expression } : void 0;
+          const owned = ownBook(this, base);
+          target = owned?.add !== void 0 ? { "table": owned, "receiver": base.expression } : void 0;
         } else if (base?.kind === SK.Identifier) {
           const alias = aliasOf(this, base);
           target = alias !== void 0 ? { "table": alias.table, "receiver": alias.init.expression } : void 0;
@@ -48139,17 +48236,71 @@ ${iden}}`;
     }
     return printBinary.call(this, node, identation);
   };
+  const printIf = goTranspiler.printIfStatement;
+  goTranspiler.printIfStatement = function(node, identation) {
+    const found = node.parent?.kind === SK.IfStatement ? void 0 : membershipChain(this, node.expression);
+    if (found === void 0) {
+      return printIf.call(this, node, identation);
+    }
+    const camel = (read) => "in" + read.replace(/_(\w)/g, (_m, c) => c.toUpperCase()).replace(/^\w/, (c) => c.toUpperCase());
+    const names = found.map((f, n) => camel(f.table.read) + (found.findIndex((g) => g.table.read === f.table.read) < n ? String(n) : ""));
+    let taken = new Set(names).size !== names.length;
+    const visit = (n) => {
+      if (n.kind === SK.Identifier && names.includes(n.text)) {
+        taken = true;
+      }
+      n.forEachChild(visit);
+    };
+    const scope = this.goEnclosingFunction(node);
+    if (scope === void 0) {
+      return printIf.call(this, node, identation);
+    }
+    visit(scope);
+    if (taken) {
+      return printIf.call(this, node, identation);
+    }
+    const iden = this.getIden(identation);
+    const hoisted = found.map((f, n) => `${iden}_, ${names[n]} := ${this.printNode(f.dict, 0)}[${this.printNode(f.key, 0)}]`);
+    const saved = this.goInOpSubstitution;
+    this.goInOpSubstitution = /* @__PURE__ */ new Map([[unwrap(node.expression), names.join(" || ")]]);
+    let printed;
+    try {
+      printed = printIf.call(this, node, identation);
+    } finally {
+      this.goInOpSubstitution = saved;
+    }
+    const lines = printed.split("\n");
+    const at = lines.findIndex((l) => l.startsWith(iden + "if "));
+    if (at < 0) {
+      return printIf.call(this, node, identation);
+    }
+    lines.splice(at, 0, ...hoisted);
+    return lines.join("\n");
+  };
+  const printElement = goTranspiler.printElementAccessExpression;
+  goTranspiler.printElementAccessExpression = function(node, identation) {
+    const base = unwrap(node.expression);
+    const keyed = base?.kind === SK.PropertyAccessExpression && ownBook(this, base) !== void 0 ? boundedKeyElement(this, node.argumentExpression) : void 0;
+    if (keyed !== void 0 && !this.isGoElementAccessAssignmentTarget(node)) {
+      return `${this.printNode(base, 0)}[${keyed.list.text}[${keyed.counter.text}]]`;
+    }
+    return printElement.call(this, node, identation);
+  };
   const containerOperand = goTranspiler.goDeclaredContainerOperand;
   goTranspiler.goDeclaredContainerOperand = function(node) {
-    return ownedTable(this, unwrap(node))?.plainMap === true ? "map[string]any" : containerOperand.call(this, node);
+    return ownBook(this, node) !== void 0 ? "map[string]any" : containerOperand.call(this, node);
   };
   const indexableType = goTranspiler.goIndexableTypeOf;
   goTranspiler.goIndexableTypeOf = function(node, printed) {
-    return ownedTable(this, unwrap(node))?.plainMap === true ? "map[string]any" : indexableType.call(this, node, printed);
+    return ownBook(this, node) !== void 0 ? "map[string]any" : indexableType.call(this, node, printed);
   };
   const inOpMapType = goTranspiler.goInOpDictMapType;
   goTranspiler.goInOpDictMapType = function(dictNode, dictText) {
-    return ownedTable(this, unwrap(dictNode))?.plainMap === true ? "map[string]any" : inOpMapType.call(this, dictNode, dictText);
+    return ownBook(this, dictNode) !== void 0 ? "map[string]any" : inOpMapType.call(this, dictNode, dictText);
+  };
+  const inlineInOp = goTranspiler.printInlineInOp;
+  goTranspiler.printInlineInOp = function(dictNode, keyNode, dictText, keyText) {
+    return ownBook(this, dictNode) !== void 0 ? void 0 : inlineInOp.call(this, dictNode, keyNode, dictText, keyText);
   };
 }
 

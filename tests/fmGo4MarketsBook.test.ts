@@ -92,6 +92,46 @@ describe ('FM-GO4 market/currency book tables', () => {
         expect (out).toContain ('AddElementToObject(other, symbol, market)');
         expect (out).not.toContain ('AddFeaturesEntry');
     });
+    test ('a bounded keys loop reads the book with the in-range element', () => {
+        const body = [
+            '    walk () {',
+            '        if (this.markets === undefined) {',
+            '            return;',
+            '        }',
+            '        const marketKeys = Object.keys (this.markets);',
+            '        for (let i = 0; i < marketKeys.length; i++) {',
+            '            this.one (this.markets[marketKeys[i]]);',
+            '        }',
+            '    }',
+            '    one (m: any) {',
+            '        return m;',
+            '    }',
+        ].join ('\n');
+        const out = go (body);
+        expect (out).toContain ('this.One(this.Markets()[marketKeys[i]])');
+        expect (go (body, false)).not.toContain ('this.Markets()');
+    });
+    test ('a || chain of nil-guarded memberships hoists one flag per table', () => {
+        const body = [
+            '    known () {',
+            '        const symbol = \'x\';',
+            '        if (((this.markets !== undefined) && (symbol in this.markets)) || ((this.markets_by_id !== undefined) && (symbol in this.markets_by_id))) {',
+            '            return 1;',
+            '        }',
+            '        return 0;',
+            '    }',
+        ].join ('\n');
+        const out = go (body);
+        expect (out).toContain ('_, inMarkets := this.Markets()[symbol]');
+        expect (out).toContain ('_, inMarketsById := this.Markets_by_id()[symbol]');
+        expect (out).toContain ('if inMarkets || inMarketsById {');
+        expect (out).not.toContain ('InOp(');
+        expect (go (body, false)).not.toContain ('inMarkets');
+    });
+    test ('a receiver that is a parameter keeps the plain-map rules off (ICoreExchange has no accessor)', () => {
+        const out = go ('    p (exchange: BaseExchange) {\n        if (exchange.markets !== undefined) {\n            return Object.keys (exchange.markets);\n        }\n    }');
+        expect (out).not.toContain ('exchange.Markets()');
+    });
     test ('another instance passed as any shares its accessor', () => {
         const out = go ('');
         expect (out).toContain ('this.PublishMarkets(sourceExchange.Markets())');

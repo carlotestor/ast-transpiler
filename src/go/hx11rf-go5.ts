@@ -53,7 +53,19 @@ function ownedTable (go: any, node: any) {
     if ((decl?.kind !== SK.PropertyDeclaration) || (decl.parent?.name?.text !== OWNER_CLASS)) {
         return undefined;
     }
-    return OWNED_TABLES[node.name.text];
+    const table = OWNED_TABLES[node.name.text];
+    if ((table.plainMap === true) && (node.expression?.kind === SK.Identifier) && (resolvedDeclaration (go, node.expression)?.kind === SK.Parameter)) {
+        // a parameter typed Exchange is the Go ICoreExchange interface: it has no such accessor, only GetX()
+        return undefined;
+    }
+    return table;
+}
+
+// the plain-map rules (nil test, index, in, keys loop, entry write) apply to the receiver the owner goroutine
+// serves in place, `this`; any other receiver only prints the accessor
+function ownBook (go: any, node: any) {
+    const table = ownedTable (go, unwrap (node));
+    return ((table?.plainMap === true) && (unwrap (node).expression?.kind === ts.SyntaxKind.ThisKeyword)) ? table : undefined;
 }
 
 // `sourceExchange.markets` where `sourceExchange: any` is a parameter of a BaseExchange method: the checker
@@ -89,8 +101,113 @@ function ownedKeysCall (go: any, call: any) {
         return undefined;
     }
     const arg = unwrap (c.arguments[0]);
-    const table = ownedTable (go, arg);
-    return (table?.plainMap === true) ? { table, arg } : undefined;
+    const table = ownBook (go, arg);
+    return (table !== undefined) ? { table, arg } : undefined;
+}
+
+
+// `keys[i]` where keys is a `string[]` local never mutated and i the counter of the enclosing
+// `for (let i = 0; i < keys.length; i++)`: the element read is in range, a Go string
+function boundedKeyElement (go: any, node: any) {
+    const SK = ts.SyntaxKind;
+    const access = unwrap (node);
+    if ((access?.kind !== SK.ElementAccessExpression) || (access.expression?.kind !== SK.Identifier) || (access.argumentExpression?.kind !== SK.Identifier)) {
+        return undefined;
+    }
+    const list = access.expression;
+    const counter = access.argumentExpression;
+    if (go.goDeclaredTypeOfIdentifier (list) !== '[]string') {
+        return undefined;
+    }
+    let loop: any;
+    for (let cur = access.parent; cur !== undefined; cur = cur.parent) {
+        if ((cur.kind === SK.ArrowFunction) || (cur.kind === SK.FunctionExpression) || (cur.kind === SK.MethodDeclaration)) {
+            return undefined;
+        }
+        if (cur.kind === SK.ForStatement) {
+            loop = cur;
+            break;
+        }
+    }
+    const init = loop?.initializer?.declarations?.[0];
+    const cond = loop?.condition;
+    const inc = loop?.incrementor;
+    const bound = unwrap (cond?.right);
+    if ((init?.name?.text !== counter.text) || (init.initializer?.kind !== SK.NumericLiteral) || (init.initializer.text !== '0')
+        || (cond?.kind !== SK.BinaryExpression) || (cond.operatorToken?.kind !== SK.LessThanToken) || (cond.left?.text !== counter.text)
+        || (bound?.kind !== SK.PropertyAccessExpression) || (bound.name?.text !== 'length') || (bound.expression?.text !== list.text)
+        || (inc?.kind !== SK.PostfixUnaryExpression) || (inc.operator !== SK.PlusPlusToken) || (inc.operand?.text !== counter.text)) {
+        return undefined;
+    }
+    const fn = go.goEnclosingFunction (access);
+    const decl = resolvedDeclaration (go, list);
+    let touched = false;
+    const visit = (n: any) => {
+        if (touched) {
+            return;
+        }
+        if ((n.kind === SK.Identifier) && (n.text === counter.text) && (n.parent !== loop.incrementor) && (go.goRebindingTargetOf (n) !== undefined) && (n !== init.name)) {
+            touched = true;
+        }
+        if ((n.kind === SK.CallExpression) && (n.expression?.kind === SK.PropertyAccessExpression) && (n.expression.expression?.text === list.text)
+            && ['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'fill'].includes (n.expression.name?.text)) {
+            touched = true;
+        }
+        n.forEachChild (visit);
+    };
+    if ((fn === undefined) || (decl?.kind !== SK.VariableDeclaration) || go.goLocalIsRebound (fn, decl.name)) {
+        return undefined;
+    }
+    visit (loop.statement);
+    return touched ? undefined : { list, counter };
+}
+
+
+// `(T !== undefined) && (key in T)` over one owned book table T read on `this`, key a Go `string` local
+function guardedMembership (go: any, operand: any) {
+    const SK = ts.SyntaxKind;
+    const both = unwrap (operand);
+    if ((both?.kind !== SK.BinaryExpression) || (both.operatorToken?.kind !== SK.AmpersandAmpersandToken)) {
+        return undefined;
+    }
+    const guard = unwrap (both.left);
+    const read = unwrap (both.right);
+    if ((guard?.kind !== SK.BinaryExpression) || ![SK.ExclamationEqualsEqualsToken, SK.ExclamationEqualsToken].includes (guard.operatorToken?.kind)
+        || (read?.kind !== SK.BinaryExpression) || (read.operatorToken?.kind !== SK.InKeyword)) {
+        return undefined;
+    }
+    const nilSide = unwrap (guard.right);
+    const table = ownBook (go, guard.left);
+    const dict = unwrap (read.right);
+    const key = unwrap (read.left);
+    const isNil = (nilSide?.kind === SK.NullKeyword) || ((nilSide?.kind === SK.Identifier) && (nilSide.text === 'undefined'));
+    if (!isNil || (table === undefined) || (dict?.kind !== SK.PropertyAccessExpression) || (dict.name?.text !== unwrap (guard.left).name?.text)
+        || (key?.kind !== SK.Identifier) || (go.goDeclaredTypeOfIdentifier (key) !== 'string')) {
+        return undefined;
+    }
+    return { table, dict, key };
+}
+
+// several `||` operands, each a nil-guarded membership of a Go string key in an owned book table: the guards are
+// redundant (a nil map reads absent), every lookup is a pure two-value read, so each is hoisted into its own flag
+function membershipChain (go: any, condition: any) {
+    const SK = ts.SyntaxKind;
+    const operands: any[] = [];
+    const split = (n: any) => {
+        const inner = unwrap (n);
+        if ((inner?.kind === SK.BinaryExpression) && (inner.operatorToken?.kind === SK.BarBarToken)) {
+            split (inner.left);
+            split (inner.right);
+        } else {
+            operands.push (inner);
+        }
+    };
+    split (condition);
+    if (operands.length < 2) {
+        return undefined;
+    }
+    const found = operands.map ((o: any) => guardedMembership (go, o));
+    return found.some ((f: any) => f === undefined) ? undefined : found;
 }
 
 // `const x = this.T` whose element is later written through x: x is the published snapshot itself, so the
@@ -163,8 +280,8 @@ function aliasOf (go: any, identifier: any) {
     if ((init?.kind !== SK.PropertyAccessExpression) || (init.expression?.kind !== SK.ThisKeyword)) {
         return undefined;
     }
-    const table = ownedTable (go, init);
-    if ((table?.add === undefined) || (table.plainMap !== true)) {
+    const table = ownBook (go, init);
+    if (table?.add === undefined) {
         return undefined;
     }
     const scope = go.goEnclosingFunction (decl);
@@ -274,8 +391,8 @@ export function installRfGo5OwnedTables (goTranspiler: any) {
                 const base = unwrap (left.expression);
                 let target: any;
                 if (base?.kind === SK.PropertyAccessExpression) {
-                    const owned = ownedTable (this, base);
-                    target = ((owned?.add !== undefined) && (owned.plainMap === true)) ? { 'table': owned, 'receiver': base.expression } : undefined;
+                    const owned = ownBook (this, base);
+                    target = (owned?.add !== undefined) ? { 'table': owned, 'receiver': base.expression } : undefined;
                 } else if (base?.kind === SK.Identifier) {
                     const alias = aliasOf (this, base);
                     target = (alias !== undefined) ? { 'table': alias.table, 'receiver': alias.init.expression } : undefined;
@@ -310,18 +427,77 @@ export function installRfGo5OwnedTables (goTranspiler: any) {
         }
         return printBinary.call (this, node, identation);
     };
-    // `T === undefined` on a plain-map table is the native nil test of the map
+    // the hoisted membership flags of a `||` chain (`_, inMarkets := this.Markets()[k]` ... `if inMarkets || inMarketsById {`)
+    const printIf = goTranspiler.printIfStatement;
+    goTranspiler.printIfStatement = function (this: any, node: any, identation: number) {
+        const found = (node.parent?.kind === SK.IfStatement) ? undefined : membershipChain (this, node.expression);
+        if (found === undefined) {
+            return printIf.call (this, node, identation);
+        }
+        const camel = (read: string) => 'in' + read.replace (/_(\w)/g, (_m: string, c: string) => c.toUpperCase ()).replace (/^\w/, (c: string) => c.toUpperCase ());
+        const names = found.map ((f: any, n: number) => camel (f.table.read) + ((found.findIndex ((g: any) => g.table.read === f.table.read) < n) ? String (n) : ''));
+        let taken = (new Set (names).size !== names.length);
+        const visit = (n: any) => {
+            if ((n.kind === SK.Identifier) && names.includes (n.text)) {
+                taken = true;
+            }
+            n.forEachChild (visit);
+        };
+        const scope = this.goEnclosingFunction (node);
+        if (scope === undefined) {
+            return printIf.call (this, node, identation);
+        }
+        visit (scope);
+        if (taken) {
+            return printIf.call (this, node, identation);
+        }
+        const iden = this.getIden (identation);
+        const hoisted = found.map ((f: any, n: number) => `${iden}_, ${names[n]} := ${this.printNode (f.dict, 0)}[${this.printNode (f.key, 0)}]`);
+        const saved = this.goInOpSubstitution;
+        this.goInOpSubstitution = new Map ([[unwrap (node.expression), names.join (' || ')]]);
+        let printed: string;
+        try {
+            printed = printIf.call (this, node, identation);
+        } finally {
+            this.goInOpSubstitution = saved;
+        }
+        const lines = printed.split ('\n');
+        const at = lines.findIndex ((l: string) => l.startsWith (iden + 'if '));
+        if (at < 0) {
+            return printIf.call (this, node, identation);
+        }
+        lines.splice (at, 0, ...hoisted);
+        return lines.join ('\n');
+    };
+    // `T[keys[i]]` over the owned book reads the map with the in-range element of the bounded keys list
+    const printElement = goTranspiler.printElementAccessExpression;
+    goTranspiler.printElementAccessExpression = function (this: any, node: any, identation: number) {
+        const base = unwrap (node.expression);
+        const keyed = ((base?.kind === SK.PropertyAccessExpression) && (ownBook (this, base) !== undefined)) ? boundedKeyElement (this, node.argumentExpression) : undefined;
+        if ((keyed !== undefined) && !this.isGoElementAccessAssignmentTarget (node)) {
+            return `${this.printNode (base, 0)}[${keyed.list.text}[${keyed.counter.text}]]`;
+        }
+        return printElement.call (this, node, identation);
+    };
+    // `T === undefined` on the owned book is the native nil test of the map
     const containerOperand = goTranspiler.goDeclaredContainerOperand;
     goTranspiler.goDeclaredContainerOperand = function (this: any, node: any) {
-        return (ownedTable (this, unwrap (node))?.plainMap === true) ? 'map[string]any' : containerOperand.call (this, node);
+        return (ownBook (this, node) !== undefined) ? 'map[string]any' : containerOperand.call (this, node);
     };
-    // `T[key]` with a Go string key indexes the map; `key in T` reads it with the two-value form
+    // `T[key]` with a Go string key indexes the map
     const indexableType = goTranspiler.goIndexableTypeOf;
     goTranspiler.goIndexableTypeOf = function (this: any, node: any, printed: string) {
-        return (ownedTable (this, unwrap (node))?.plainMap === true) ? 'map[string]any' : indexableType.call (this, node, printed);
+        return (ownBook (this, node) !== undefined) ? 'map[string]any' : indexableType.call (this, node, printed);
     };
+    // `key in T` over the owned book reads the two-value map form in an `if` init clause
     const inOpMapType = goTranspiler.goInOpDictMapType;
     goTranspiler.goInOpDictMapType = function (this: any, dictNode: any, dictText?: string) {
-        return (ownedTable (this, unwrap (dictNode))?.plainMap === true) ? 'map[string]any' : inOpMapType.call (this, dictNode, dictText);
+        return (ownBook (this, dictNode) !== undefined) ? 'map[string]any' : inOpMapType.call (this, dictNode, dictText);
+    };
+    // a membership test over the book is native only as the `if` init clause (goIfInOpRead); the closure form is an
+    // inlined blob the helper call never was
+    const inlineInOp = goTranspiler.printInlineInOp;
+    goTranspiler.printInlineInOp = function (this: any, dictNode: any, keyNode: any, dictText: string, keyText: string) {
+        return (ownBook (this, dictNode) !== undefined) ? undefined : inlineInOp.call (this, dictNode, keyNode, dictText, keyText);
     };
 }
