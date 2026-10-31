@@ -807,6 +807,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     goOtherBindingOfLoopBoundedElement(n: any, declaration: any): boolean;
     goBoundIsLengthOf(bound: any, baseExpr: any, loop: any): boolean;
     goLoopBoundedStringElementType(node: any, printedValue: string): string | undefined;
+    goGb08PredictionFile(): boolean;
+    goGb08IsDictExpression(expr: any): boolean;
+    goGb08BoundedListRead(node: any, keyNode: any): 'native' | 'deref' | undefined;
     printElementAccessExpression(node: any, identation: any): string;
     isInsideVoidFunction(node: Node): boolean;
     /**
