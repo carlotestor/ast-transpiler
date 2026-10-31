@@ -865,6 +865,17 @@ export declare class GoTranspiler extends BaseTranspiler {
     goGb08PredictionFile(): boolean;
     goGb08IsDictExpression(expr: any): boolean;
     goGb08BoundedListRead(node: any, keyNode: any): 'native' | 'deref' | undefined;
+    goJsonOriginCache: Map<any, boolean>;
+    goLocalReferences(declaration: any): any[] | undefined;
+    goElementAccessIsWritten(node: any): boolean;
+    goDeclaredListDeclaration(declaration: any): boolean;
+    goJsonOriginListIdentifier(node: any): boolean;
+    goJsonOriginListLocal(declaration: any): boolean;
+    goJsonOriginBody(identifier: any, depth: number): boolean;
+    goAwaitedCallIsEndpointBody(expression: any): boolean;
+    goAwaitedMethodReturnsEndpointBodies(declarations: any[], depth: number): boolean;
+    goJsonOriginLiteralOfBodies(literal: any): boolean;
+    goJsonOriginBodyUseIsPlain(ref: any): boolean;
     printElementAccessExpression(node: any, identation: any): string;
     isInsideVoidFunction(node: Node): boolean;
     /**

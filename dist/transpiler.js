@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -10880,6 +10880,13 @@ var GoTranspiler = class extends BaseTranspiler {
     //     between loop and read, is the slice index `xs[i]`: i < len(xs) holds at every statement of
     //     the body, a string element cannot box a pointer, so it is the very value GetValue returns.
     this.generatedListCallees = /* @__PURE__ */ new Set();
+    // ===== JSON-origin list locals =====
+    // `const L = this.safeList (R, k)` unboxed to a `[]any`, where R is the decoded body of an implicit
+    // endpoint (or a `this.safeDict (R2, 'lit')` of one). Decoded JSON holds no *string/*int64/*float64/*bool,
+    // so derefScalar answers every element unchanged. Sound only while nothing can put a pointer in: L is
+    // bound once and only has its length and elements read; R is bound once and only feeds the typed
+    // safeList/safeDict locals or a nil test. Anything else keeps the helper.
+    this.goJsonOriginCache = /* @__PURE__ */ new Map();
     // hx4 G09
     // hand-written BaseExchange value fields (go/v4/exchange.go) read as `this.<Field>`
     this.GO_G09_NUMERIC_FIELDS = {
@@ -21685,15 +21692,17 @@ ${this.getIden(level)}}()`;
     if (readBase?.kind === SyntaxKind5.Identifier && this.goIsUnifiedAnySliceParameterNode(this.checkerOrUndefined()?.getSymbolAtLocation(readBase)?.valueDeclaration?.resolve?.())) {
       return void 0;
     }
+    const jsonOrigin = readBase?.kind === SyntaxKind5.Identifier && this.goJsonOriginListIdentifier(readBase);
     const bounded = this.goGb08BoundedListRead(node, keyNode);
     if (bounded !== void 0) {
-      return bounded === "native" ? `${containerStr}[${keyStr}]` : `DerefScalar(${containerStr}[${keyStr}])`;
+      return bounded === "native" || jsonOrigin ? `${containerStr}[${keyStr}]` : `DerefScalar(${containerStr}[${keyStr}])`;
     }
     const level = this.goStatementLevel;
     const body = this.getIden(level + 1);
+    const element = jsonOrigin ? `${containerStr}[${keyStr}]` : `DerefScalar(${containerStr}[${keyStr}])`;
     return `func() any {
 ${body}if ${keyStr} >= 0 && ${keyStr} < len(${containerStr}) {
-${this.getIden(level + 2)}return DerefScalar(${containerStr}[${keyStr}])
+${this.getIden(level + 2)}return ${element}
 ${body}}
 ${body}return nil
 ${this.getIden(level)}}()`;
@@ -21953,6 +21962,175 @@ ${this.getIden(level)}}()`;
     const fromJson = listDecl.kind === SyntaxKind5.VariableDeclaration && (this.goSafeListUnboxIdentifier(base) || init?.kind === SyntaxKind5.ArrayLiteralExpression && init.elements.length === 0);
     return fromJson && dictOnly ? "native" : "deref";
   }
+  // every reference to the local `declaration`, or undefined when its name is bound twice in the function
+  goLocalReferences(declaration) {
+    const scope = this.goEnclosingFunction(declaration);
+    const name = declaration?.name?.text;
+    if (scope === void 0 || typeof name !== "string") {
+      return void 0;
+    }
+    const all = this.goDescendantsOf(scope);
+    const bindings = all.filter((n) => (n.kind === SyntaxKind5.VariableDeclaration || n.kind === SyntaxKind5.Parameter) && n.name?.kind === SyntaxKind5.Identifier && n.name.text === name);
+    if (bindings.length !== 1 || bindings[0] !== declaration) {
+      return void 0;
+    }
+    return all.filter((n) => n.kind === SyntaxKind5.Identifier && n.text === name && n !== declaration.name && this.goIdentifierRefersToDeclaration(n, declaration));
+  }
+  // `x[k]` is written, incremented or deleted
+  goElementAccessIsWritten(node) {
+    const parent = node.parent;
+    if (parent?.kind === SyntaxKind5.BinaryExpression && parent.left === node) {
+      return parent.operatorToken.kind >= SyntaxKind5.FirstAssignment && parent.operatorToken.kind <= SyntaxKind5.LastAssignment;
+    }
+    if (parent?.kind === SyntaxKind5.PrefixUnaryExpression || parent?.kind === SyntaxKind5.PostfixUnaryExpression) {
+      return parent.operator === SyntaxKind5.PlusPlusToken || parent.operator === SyntaxKind5.MinusMinusToken;
+    }
+    return parent?.kind === SyntaxKind5.DeleteExpression;
+  }
+  // the printer declares this local a `[]any`: the SafeList unbox family or the declared-type table
+  goDeclaredListDeclaration(declaration) {
+    return declaration?.name?.kind === SyntaxKind5.Identifier && this.goDeclaredListIdentifier(declaration.name);
+  }
+  goJsonOriginListIdentifier(node) {
+    const declaration = this.goAnyBoxLocalDeclaration(node);
+    if (declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier || !this.goDeclaredListIdentifier(node)) {
+      return false;
+    }
+    if (!this.goJsonOriginCache.has(declaration)) {
+      this.goJsonOriginCache.set(declaration, false);
+      this.goJsonOriginCache.set(declaration, this.goJsonOriginListLocal(declaration));
+    }
+    return this.goJsonOriginCache.get(declaration) === true;
+  }
+  goJsonOriginListLocal(declaration) {
+    let init = this.goUnwrapParenthesizedNode(declaration.initializer);
+    while (init?.kind === SyntaxKind5.AsExpression) {
+      init = this.goUnwrapParenthesizedNode(init.expression);
+    }
+    const source = this.goUnwrapParenthesizedNode(this.goSafeListLocalArgs(init)?.container);
+    const references = this.goLocalReferences(declaration);
+    if (source?.kind !== SyntaxKind5.Identifier || references === void 0) {
+      return false;
+    }
+    const readOnly = references.every((ref) => {
+      const parent = ref.parent;
+      if (parent?.expression !== ref) {
+        return false;
+      }
+      if (parent.kind === SyntaxKind5.PropertyAccessExpression) {
+        return parent.name?.text === "length";
+      }
+      return parent.kind === SyntaxKind5.ElementAccessExpression && !this.goElementAccessIsWritten(parent);
+    });
+    return readOnly && this.goJsonOriginBody(source, 0);
+  }
+  // R: the awaited body of an implicit endpoint, or `this.safeDict (R2, 'lit')` of such a body
+  goJsonOriginBody(identifier, depth) {
+    const declaration = this.goAnyBoxLocalDeclaration(identifier);
+    if (depth > 5 || declaration?.kind !== SyntaxKind5.VariableDeclaration || declaration.name?.kind !== SyntaxKind5.Identifier) {
+      return false;
+    }
+    const references = this.goLocalReferences(declaration);
+    if (references === void 0) {
+      return false;
+    }
+    const init = this.goUnwrapParenthesizedNode(declaration.initializer);
+    let origin = init?.kind === SyntaxKind5.AwaitExpression && this.goAwaitedCallIsEndpointBody(init.expression);
+    if (!origin && init !== void 0) {
+      const args = this.goSafeDictLocalArgs(init);
+      const outer = this.goUnwrapParenthesizedNode(args?.container);
+      origin = args !== void 0 && this.goSafeDictLocalUnbox(declaration) === GO_SAFE_DICT_LOCAL_TYPE && args.key?.kind === SyntaxKind5.StringLiteral && outer?.kind === SyntaxKind5.Identifier && this.goJsonOriginBody(outer, depth + 1);
+    }
+    return origin && references.every((ref) => this.goJsonOriginBodyUseIsPlain(ref));
+  }
+  // the awaited call is an implicit endpoint: a bodyless interface signature, or a method of a file whose
+  // async bodies the target generates itself (config asyncSuffixExemptPaths: ccxt's ts/src/abstract/<id>.ts)
+  // that is exactly `return this.request (..)`
+  goAwaitedCallIsEndpointBody(expression) {
+    if (this.goAwaitedCallIsImplicitEndpoint(expression)) {
+      return true;
+    }
+    const call = this.goUnwrapParenthesizedNode(expression);
+    const callee = call?.expression;
+    if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return false;
+    }
+    const declarations = this.checkerOrUndefined()?.getSymbolAtLocation(callee.name)?.declarations?.map((d) => d.resolve()) ?? [];
+    return declarations.length > 0 && declarations.every((d) => {
+      const only = d.body?.statements?.length === 1 ? d.body.statements[0] : void 0;
+      const sent = only?.kind === SyntaxKind5.ReturnStatement ? only.expression : void 0;
+      return d.kind === SyntaxKind5.MethodDeclaration && this.isAsyncSuffixExempt(d) && sent?.kind === SyntaxKind5.CallExpression && sent.expression?.kind === SyntaxKind5.PropertyAccessExpression && sent.expression.expression?.kind === SyntaxKind5.ThisKeyword && sent.expression.name?.text === "request";
+    }) || this.goAwaitedMethodReturnsEndpointBodies(declarations, 0);
+  }
+  // a venue method whose every `return` hands back an awaited endpoint call (or another such method): its
+  // result is the decoded body, so a `const response = await this.helper (..)` is a JSON origin too
+  goAwaitedMethodReturnsEndpointBodies(declarations, depth) {
+    if (depth > 3 || declarations.length === 0) {
+      return false;
+    }
+    return declarations.every((d) => {
+      if (d.kind !== SyntaxKind5.MethodDeclaration || d.body === void 0 || !this.isAsyncFunction(d) || this.isAsyncSuffixExempt(d)) {
+        return false;
+      }
+      const returns = this.goDescendantsOf(d.body).filter((n) => n.kind === SyntaxKind5.ReturnStatement);
+      const nested = this.goDescendantsOf(d.body).some((n) => isFunctionLike(n));
+      return !nested && returns.length > 0 && returns.every((r) => {
+        const value = this.goUnwrapParenthesizedNode(r.expression);
+        if (value === void 0 || value.kind === SyntaxKind5.NullKeyword || value.kind === SyntaxKind5.Identifier && value.text === "undefined") {
+          return true;
+        }
+        if (value.kind === SyntaxKind5.ObjectLiteralExpression) {
+          return this.goJsonOriginLiteralOfBodies(value);
+        }
+        if (value.kind !== SyntaxKind5.AwaitExpression) {
+          return false;
+        }
+        const call = this.goUnwrapParenthesizedNode(value.expression);
+        const callee = call?.expression;
+        if (this.goAwaitedCallIsImplicitEndpoint(call)) {
+          return true;
+        }
+        if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+          return false;
+        }
+        const targets = this.checkerOrUndefined()?.getSymbolAtLocation(callee.name)?.declarations?.map((x) => x.resolve()) ?? [];
+        return this.goAwaitedCallIsEndpointBody(call) || this.goAwaitedMethodReturnsEndpointBodies(targets, depth + 1);
+      });
+    });
+  }
+  // `{ 'k': this.safeList (R, 'x'), .. }` where every value is a safeList/safeDict of a local bound to an endpoint body
+  goJsonOriginLiteralOfBodies(literal) {
+    const properties = Array.from(literal.properties);
+    return properties.length > 0 && properties.every((p) => {
+      const value = this.goUnwrapParenthesizedNode(p.kind === SyntaxKind5.PropertyAssignment ? p.initializer : void 0);
+      const args = this.goSafeListLocalArgs(value) ?? this.goSafeDictLocalArgs(value);
+      const container = this.goUnwrapParenthesizedNode(args?.container);
+      return container?.kind === SyntaxKind5.Identifier && this.goJsonOriginBody(container, 0);
+    });
+  }
+  // a use of R that cannot write into it or hand it out: the container of a typed safeList/safeDict local, or a nil test
+  goJsonOriginBodyUseIsPlain(ref) {
+    const parent = ref.parent;
+    if (parent?.kind === SyntaxKind5.BinaryExpression && this.goIsNilComparisonOperand(ref, parent)) {
+      return true;
+    }
+    if (parent?.kind !== SyntaxKind5.CallExpression || parent.arguments?.[0] !== ref) {
+      return false;
+    }
+    let top = parent;
+    while (top.parent?.kind === SyntaxKind5.AsExpression || top.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      top = top.parent;
+    }
+    const holder = top.parent;
+    if (holder?.kind === SyntaxKind5.PropertyAssignment && holder.initializer === top && holder.parent?.kind === SyntaxKind5.ObjectLiteralExpression && holder.parent.parent?.kind === SyntaxKind5.ReturnStatement) {
+      return this.goSafeListLocalArgs(parent) !== void 0 || this.goSafeDictLocalArgs(parent) !== void 0;
+    }
+    if (holder?.kind !== SyntaxKind5.VariableDeclaration || holder.initializer !== top) {
+      return false;
+    }
+    return this.goSafeListLocalArgs(parent) !== void 0 && this.goDeclaredListDeclaration(holder) || this.goSafeDictLocalArgs(parent) !== void 0 && this.goSafeDictLocalUnbox(holder) === GO_SAFE_DICT_LOCAL_TYPE;
+  }
+  // ===== JSON-origin list locals (end) =====
   printElementAccessExpression(node, identation) {
     const bookSide = this.goOrderBookSideRead(node);
     if (bookSide !== void 0) {
