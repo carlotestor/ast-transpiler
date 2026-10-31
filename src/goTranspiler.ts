@@ -14658,6 +14658,289 @@ ${tryBodyBlock}
             || this.goSafeListUnboxIdentifier(node);
     }
 
+    // ---- hx11 FM-GO1-B (GP19): a list element read inside a counting loop over the list's own length ----
+    // The `i >= 0 && i < len(x)` guard of goNativeListElementRead is dead when the read sits in the
+    // body of `for (let i = 0; i < x.length; i++)` (or `i < n` with `const n = x.length` before the
+    // loop) and neither `i` nor `x` is written there: the condition holds at every statement of the
+    // body, so the read is the plain slice index. DerefScalar stays unless every element the list can
+    // hold is provably not a scalar pointer (goListElementsArePointerFree).
+
+    // the identifier occurrences of `name` under `scope` that write it (or bind it again)
+    goNameWriteSites(scope, name: string, declaration?: any): any[] {
+        const sites: any[] = [];
+        const checker: any = this.checkerOrUndefined();
+        // with a declaration, only the identifiers that resolve to THAT variable count: a second
+        // `const data` in another block of the method is another Go variable
+        const sameVariable = (n: any): boolean => {
+            if ((declaration === undefined) || (checker === undefined)) {
+                return true;
+            }
+            try {
+                const symbol: any = checker.getSymbolAtLocation(n);
+                if (symbol === undefined) {
+                    return true;
+                }
+                const found: any = symbol.valueDeclaration?.resolve?.() ?? symbol.valueDeclaration;
+                return (found === undefined) || (found === declaration) || (found.pos === declaration.pos && found.end === declaration.end);
+            } catch (e) {
+                return true;
+            }
+        };
+        const visit = (n: any) => {
+            if ((n.kind === SyntaxKind.Identifier) && (n.text === name) && (n !== declaration?.name) && sameVariable(n)) {
+                let up: any = n;
+                let parent: any = n.parent;
+                // a destructuring assignment target: `[x, y] = ...`
+                while ((parent !== undefined) && ((parent.kind === SyntaxKind.ArrayLiteralExpression) || (parent.kind === SyntaxKind.ObjectLiteralExpression)
+                    || (parent.kind === SyntaxKind.SpreadElement) || (parent.kind === SyntaxKind.ShorthandPropertyAssignment)
+                    || (parent.kind === SyntaxKind.PropertyAssignment) || (parent.kind === SyntaxKind.ParenthesizedExpression))) {
+                    up = parent;
+                    parent = parent.parent;
+                }
+                const kind = parent?.kind;
+                const assignment = (kind === SyntaxKind.BinaryExpression) && (parent.left === up)
+                    && (parent.operatorToken.kind >= SyntaxKind.FirstAssignment) && (parent.operatorToken.kind <= SyntaxKind.LastAssignment);
+                const stepped = ((kind === SyntaxKind.PrefixUnaryExpression) || (kind === SyntaxKind.PostfixUnaryExpression))
+                    && (parent.operand === n) && ((parent.operator === SyntaxKind.PlusPlusToken) || (parent.operator === SyntaxKind.MinusMinusToken));
+                const iterated = ((kind === SyntaxKind.ForInStatement) || (kind === SyntaxKind.ForOfStatement)) && (parent.initializer === up);
+                const bound = ((kind === SyntaxKind.VariableDeclaration) || (kind === SyntaxKind.Parameter) || (kind === SyntaxKind.BindingElement))
+                    && (parent.name === n);
+                // `x.push(..)`, `x.length = 0`: any member of the list other than a `.length` read
+                const member = (n.parent?.kind === SyntaxKind.PropertyAccessExpression) && (n.parent.expression === n)
+                    && ((n.parent.name?.text !== 'length')
+                        || ((n.parent.parent?.kind === SyntaxKind.BinaryExpression) && (n.parent.parent.left === n.parent)
+                            && (n.parent.parent.operatorToken.kind >= SyntaxKind.FirstAssignment) && (n.parent.parent.operatorToken.kind <= SyntaxKind.LastAssignment)));
+                if (assignment || stepped || iterated || bound || member || (kind === SyntaxKind.DeleteExpression)) {
+                    sites.push(n);
+                }
+            }
+            n.forEachChild(visit);
+        };
+        scope?.forEachChild(visit);
+        return sites;
+    }
+
+    // true when an iteration statement encloses `loop` without enclosing `declaration`: a write after
+    // the loop could then run before the loop is entered again
+    goEnclosingLoopExcluding(loop, declaration): boolean {
+        for (let up: any = loop.parent; (up !== undefined) && !isFunctionLike(up); up = up.parent) {
+            if (GO_ITERATION_STATEMENT_KINDS.has(up.kind) && !((declaration.pos >= up.pos) && (declaration.end <= up.end))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // `x[i]` in the body of a counting loop bounded by x's own length, with `i` and `x` unwritten
+    goBoundedLoopListRead(node): boolean {
+        const list: any = node?.expression;
+        const key: any = node?.argumentExpression;
+        if ((list?.kind !== SyntaxKind.Identifier) || (key?.kind !== SyntaxKind.Identifier) || (list.text === key.text)) {
+            return false;
+        }
+        const fileName = String(node.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
+        if (/(^|\/)ts\/src\/(prediction|test)\//.test(fileName)) {
+            return false; // the prediction tier keeps its own proof; the test tree is out of this rule
+        }
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined) {
+            return false;
+        }
+        const keyDeclaration: any = checker.getSymbolAtLocation(key)?.valueDeclaration?.resolve?.();
+        const keyList: any = keyDeclaration?.parent;
+        const loop: any = keyList?.parent;
+        if ((keyDeclaration?.kind !== SyntaxKind.VariableDeclaration) || (keyList?.kind !== SyntaxKind.VariableDeclarationList)
+            || (keyList.declarations?.length !== 1) || (loop?.kind !== SyntaxKind.ForStatement) || (loop.initializer !== keyList)
+            || (keyDeclaration.initializer?.kind !== SyntaxKind.NumericLiteral) || (`${keyDeclaration.initializer.text}` !== '0')) {
+            return false;
+        }
+        const step: any = loop.incrementor;
+        if (!(((step?.kind === SyntaxKind.PostfixUnaryExpression) || (step?.kind === SyntaxKind.PrefixUnaryExpression))
+            && (step.operator === SyntaxKind.PlusPlusToken) && (step.operand?.kind === SyntaxKind.Identifier) && (step.operand.text === key.text))) {
+            return false;
+        }
+        // the read sits in the loop body, in the same function (a closure may run after the loop)
+        let inBody = false;
+        for (let up: any = node.parent; up !== undefined; up = up.parent) {
+            if (up === loop.statement) {
+                inBody = true;
+                break;
+            }
+            if (isFunctionLike(up) || (up === loop)) {
+                break;
+            }
+        }
+        if (!inBody) {
+            return false;
+        }
+        const condition: any = loop.condition;
+        if ((condition?.kind !== SyntaxKind.BinaryExpression) || (condition.operatorToken.kind !== SyntaxKind.LessThanToken)
+            || (condition.left?.kind !== SyntaxKind.Identifier) || (condition.left.text !== key.text)) {
+            return false;
+        }
+        const scope: any = this.goEnclosingFunction(node);
+        const bound: any = condition.right;
+        let from: number = loop.pos; // the list is unwritten from here to the end of the loop
+        if (bound?.kind === SyntaxKind.Identifier) {
+            // `const n = x.length` ahead of the loop, n never written
+            const boundDeclaration: any = checker.getSymbolAtLocation(bound)?.valueDeclaration?.resolve?.();
+            const init: any = boundDeclaration?.initializer;
+            if ((boundDeclaration?.kind !== SyntaxKind.VariableDeclaration) || (this.goEnclosingFunction(boundDeclaration) !== scope)
+                || (boundDeclaration.end > loop.pos) || (init?.kind !== SyntaxKind.PropertyAccessExpression)
+                || (init.name?.text !== 'length') || (init.expression?.kind !== SyntaxKind.Identifier) || (init.expression.text !== list.text)
+                || this.goNameWriteSites(scope, bound.text, boundDeclaration).some((site: any) => (site.pos < loop.end)
+                    || this.goEnclosingLoopExcluding(loop, boundDeclaration))) {
+                return false;
+            }
+            from = boundDeclaration.end;
+        } else if (!((bound?.kind === SyntaxKind.PropertyAccessExpression) && (bound.name?.text === 'length')
+            && (bound.expression?.kind === SyntaxKind.Identifier) && (bound.expression.text === list.text))) {
+            return false;
+        }
+        const keyWrites = this.goNameWriteSites(loop.statement, key.text);
+        if (keyWrites.length > 0) {
+            return false;
+        }
+        const listDeclaration: any = checker.getSymbolAtLocation(list)?.valueDeclaration?.resolve?.();
+        if (this.goEnclosingFunction(listDeclaration) !== scope) {
+            return false;
+        }
+        return !this.goNameWriteSites(scope, list.text, listDeclaration).some((site: any) => (site.pos >= from) && (site.pos < loop.end));
+    }
+
+    // every element the list can hold is a map/slice/JSON value, never a scalar pointer, so
+    // DerefScalar(x[i]) is x[i]: the checker proves an object element type, the local is a
+    // SafeList unbox, or every write into it (initializer, assignment, push) is such a value
+    goListElementsArePointerFree(list, depth = 0): boolean {
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined) {
+            return false;
+        }
+        const objectType = (type: any): boolean => {
+            if (type === undefined) {
+                return false;
+            }
+            const parts: any[] = ((typeof type.isUnionType === 'function') && type.isUnionType()) ? type.getTypes().slice() : [type];
+            return (parts.length > 0) && parts.every((p: any) => (p.flags & TypeFlags.Object) !== 0);
+        };
+        const listObjects = (type: any): boolean => {
+            try {
+                if ((type === undefined) || (typeof checker.isArrayType !== 'function') || !checker.isArrayType(type)) {
+                    return false;
+                }
+                return objectType(checker.getIndexTypeOfType(type, IndexKind.Number));
+            } catch (e) {
+                return false;
+            }
+        };
+        const unwrap = (e: any): any => {
+            let current = e;
+            while ((current?.kind === SyntaxKind.ParenthesizedExpression) || (current?.kind === SyntaxKind.AsExpression) || (current?.kind === SyntaxKind.NonNullExpression)) {
+                current = current.expression;
+            }
+            return current;
+        };
+        const thisCall = (e: any, test: (name: string) => boolean): boolean => (e?.kind === SyntaxKind.CallExpression)
+            && (e.expression?.kind === SyntaxKind.PropertyAccessExpression) && (e.expression.expression?.kind === SyntaxKind.ThisKeyword)
+            && test(`${e.expression.name?.text ?? ''}`);
+        const dictElement = (e: any): boolean => {
+            const value = unwrap(e);
+            if (value?.kind === SyntaxKind.ObjectLiteralExpression) {
+                return true;
+            }
+            // an element of another list this rule already proves pointer-free
+            if ((value?.kind === SyntaxKind.ElementAccessExpression) && (value.expression?.kind === SyntaxKind.Identifier)
+                && (depth < 3) && this.goListElementsArePointerFree(value.expression, depth + 1)) {
+                return true;
+            }
+            if (thisCall(value, (name) => /^(parse[A-Z]\w*|safeDict2?)$/.test(name))) {
+                return true;
+            }
+            try {
+                return objectType(checker.getTypeAtLocation(value));
+            } catch (err) {
+                return false;
+            }
+        };
+        // an endpoint call decodes JSON: its list holds maps, strings and numbers, never a Go pointer
+        const ENDPOINT_METHOD = /^\w*(?:public|private|Public|Private)\w*(?:Get|Post|Put|Delete|Patch)[A-Z0-9]\w*$/;
+        const listValue = (e: any, hops = 0, self?: string): boolean => {
+            const value = unwrap(e);
+            if (value?.kind === SyntaxKind.ArrayLiteralExpression) {
+                return value.elements.every((el: any) => dictElement(el));
+            }
+            if (value?.kind === SyntaxKind.AwaitExpression) {
+                return thisCall(unwrap(value.expression), (name) => ENDPOINT_METHOD.test(name));
+            }
+            if (thisCall(value, (name) => /^safeList2?$/.test(name))) {
+                return true;
+            }
+            if (thisCall(value, (name) => name === 'arrayConcat')) {
+                return (value.arguments.length === 2) && value.arguments.every((a: any) => listValue(a, hops + 1, self));
+            }
+            // Object.values (dict): the Go dictionary stores plain values (element writes deref), so
+            // its values are not scalar pointers
+            if ((value?.kind === SyntaxKind.CallExpression) && (value.expression?.kind === SyntaxKind.PropertyAccessExpression)
+                && (value.expression.expression?.kind === SyntaxKind.Identifier) && (value.expression.expression.text === 'Object')
+                && (value.expression.name?.text === 'values')) {
+                return true;
+            }
+            if ((value?.kind === SyntaxKind.Identifier) && (self !== undefined) && (value.text === self)) {
+                return true; // the list being defined: its own earlier value is covered by the other writes
+            }
+            if ((value?.kind === SyntaxKind.Identifier) && (hops < 3)) {
+                // one single-declaration hop: `const rows = await this.privateGet…()`; `rows` itself unwritten
+                const hop: any = checker.getSymbolAtLocation(value)?.valueDeclaration?.resolve?.();
+                if ((hop?.kind === SyntaxKind.VariableDeclaration) && (hop.initializer !== undefined)
+                    && (this.goEnclosingFunction(hop) === this.goEnclosingFunction(value))
+                    && (this.goNameWriteSites(this.goEnclosingFunction(hop), value.text, hop).length === 0)) {
+                    return listValue(hop.initializer, hops + 1);
+                }
+            }
+            try {
+                return listObjects(checker.getTypeAtLocation(value));
+            } catch (err) {
+                return false;
+            }
+        };
+        const declaration: any = checker.getSymbolAtLocation(list)?.valueDeclaration?.resolve?.();
+        if (declaration === undefined) {
+            return false;
+        }
+        if ((declaration.kind === SyntaxKind.VariableDeclaration) && (this.goSafeListLocalUnbox(declaration) === GO_SAFE_LIST_LOCAL_TYPE)) {
+            return true;
+        }
+        try {
+            if (listObjects(checker.getTypeAtLocation(list))) {
+                return true;
+            }
+        } catch (e) {
+            // fall through to the write proof
+        }
+        if ((declaration.kind !== SyntaxKind.VariableDeclaration) || (declaration.initializer === undefined) || !listValue(declaration.initializer, 0, list.text)) {
+            return false;
+        }
+        const scope: any = this.goEnclosingFunction(declaration);
+        return this.goNameWriteSites(scope, list.text, declaration).every((site: any) => {
+            const parent: any = site.parent;
+            if ((parent?.kind === SyntaxKind.BinaryExpression) && (parent.left === site) && (parent.operatorToken.kind === SyntaxKind.EqualsToken)) {
+                return listValue(parent.right, 0, list.text);
+            }
+            if ((parent?.kind === SyntaxKind.PropertyAccessExpression) && (parent.expression === site)) {
+                const call: any = parent.parent;
+                const method = `${parent.name?.text ?? ''}`;
+                if ((call?.kind !== SyntaxKind.CallExpression) || (call.expression !== parent)) {
+                    return false;
+                }
+                if (method === 'push') {
+                    return call.arguments.every((a: any) => dictElement(a));
+                }
+                return (method === 'pop') || (method === 'shift');
+            }
+            return false;
+        });
+    }
+
     // `x[k]` on a local the printer declared []any is a slice index: GetValue answered nil for an
     // absent index (negative or out of range) and derefs a pointer element, so the native read is
     // the same index behind that guard. Only a key printed as an `int` carries it; every other
@@ -14676,6 +14959,10 @@ ${tryBodyBlock}
         const bounded = this.goGb08BoundedListRead(node, keyNode); // RFM-G4 GB08
         if (bounded !== undefined) {
             return (bounded === 'native') ? `${containerStr}[${keyStr}]` : `DerefScalar(${containerStr}[${keyStr}])`;
+        }
+        if (this.goBoundedLoopListRead(node)) {
+            // the enclosing loop bounds the read: no guard, and no DerefScalar on a pointer-free element
+            return this.goListElementsArePointerFree(readBase) ? `${containerStr}[${keyStr}]` : `DerefScalar(${containerStr}[${keyStr}])`;
         }
         const level = this.goStatementLevel;
         const body = this.getIden(level + 1);

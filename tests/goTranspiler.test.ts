@@ -1,5 +1,5 @@
 import { assert } from 'console';
-import { Transpiler, alignGoTrailingComments } from '../src/transpiler';
+import { Transpiler, alignGoTrailingComments, installCcxtGoHooks } from '../src/transpiler';
 
 import { SyntaxKind } from 'typescript/unstable/ast';
 import { readFileSync } from 'fs';
@@ -807,7 +807,9 @@ describe('go pointer-typed Safe* body locals', () => {
         const output = squash(transpiler.transpileGo(input).content);
         expect(output).toContain("var data []any = SafeListTyped(item, \"data\")");
         expect(output).toContain("i < len(data)");
-        expect(output).toContain("DerefScalar(data[i])");
+        // the loop bounds the read (hx11 FM-GO1-B): the plain index of a SafeList element
+        expect(output).toContain("this.SafeValue(data[i], \"id\")");
+        expect(output).not.toContain("DerefScalar(data[i])");
         expect(output).toContain("DerefScalar(data[0])");
         expect(output).not.toContain("GetArrayLength(data)");
     });
@@ -6769,6 +6771,91 @@ describe('native parameter types, Dict/List across the ts/src tree (D-01)', () =
 // (a slice literal, a `[]any`-returning accessor, the SafeList unbox) prints the guarded
 // native index instead of GetValue(x, key) — the guard reproduces the helper's answer for
 // an absent index (nil) while the native index cannot panic.
+describe('hx11 FM-GO1-B GP19: a list read bounded by its own counting loop is the plain index', () => {
+    const squash = (output: string) => output.replace(/[\t\n ]+/g, ' ');
+    const transpile = (ts: string) => squash(transpiler.transpileGo(ts).content);
+    const fixture = (loop: string, body: string, decl = "const list = this.safeList (a, 'rows', []);\n        ") =>
+        "class Test {\n" +
+        "    safeList (a, b, c?) { return undefined; }\n" +
+        "    f (a: any) {\n" +
+        "        " + decl +
+        "        " + loop + " {\n" +
+        "            " + body + "\n" +
+        "        }\n" +
+        "        return a;\n" +
+        "    }\n" +
+        "}\n";
+
+    test('x[i] under i < x.length with i and x unwritten drops the guard; a SafeList element drops DerefScalar too', () => {
+        const output = transpile(fixture("for (let i = 0; i < list.length; i++)", "const v = list[i]; a += v;"));
+        expect(output).toContain('var v any = list[i]');
+        expect(output).not.toContain('func() any');
+    });
+
+    test('a hoisted length bound that reads this list counts', () => {
+        const output = transpile(fixture("for (let i = 0; i < n; i++)", "const v = list[i]; a += v;", "const list = this.safeList (a, 'rows', []);\n        const n = list.length;\n        "));
+        expect(output).toContain('var v any = list[i]');
+        expect(output).not.toContain('func() any');
+    });
+
+    test('an element of an unproven list keeps DerefScalar but loses the dead guard', () => {
+        const output = transpile(fixture("for (let i = 0; i < list.length; i++)", "const v = list[i]; a += v;", "const list = [ a ];\n        "));
+        expect(output).toContain('var v any = DerefScalar(list[i])');
+        expect(output).not.toContain('func() any');
+    });
+
+    test('a list proven pointer-free through an endpoint response, arrayConcat of lists, Object.values and a pointer-free list element drops DerefScalar', () => {
+        const hooked = new Transpiler({ verbose: false, go: {} });
+        installCcxtGoHooks(hooked.goTranspiler);
+        const transpile = (ts: string) => squash(hooked.transpileGo(ts).content);
+        const cls = (body: string) =>
+            "class Test {\n    safeList (a, b, c?) { return undefined; }\n    arrayConcat (a, b) { return a; }\n    publicGetRows (p) { return undefined; }\n    async f (a: any) {\n" + body + "        return a;\n    }\n}\n";
+        const endpoint = transpile(cls(
+            "        const response = await this.publicGetRows (a);\n        let rows = [];\n        if (Array.isArray (response)) {\n            rows = response;\n        }\n" +
+            "        for (let i = 0; i < rows.length; i++) {\n            const v = rows[i];\n            a += v;\n        }\n"));
+        expect(endpoint).toContain('var v any = rows[i]');
+        expect(endpoint).not.toContain('DerefScalar(rows[i])');
+        const concat = transpile(cls(
+            "        let rows = [];\n        const data = this.safeList (a, 'd', []);\n        rows = this.arrayConcat (rows, data);\n" +
+            "        for (let i = 0; i < rows.length; i++) {\n            const v = rows[i];\n            a += v;\n        }\n"));
+        expect(concat).toContain('var v any = rows[i]');
+        const values = transpile(cls(
+            "        const rows = Object.values (a);\n        for (let i = 0; i < rows.length; i++) {\n            const v = rows[i];\n            a += v;\n        }\n"));
+        expect(values).toContain('var v any = rows[i]');
+        const element = transpile(cls(
+            "        const all = this.safeList (a, 'd', []);\n        const ids = [];\n        for (let i = 0; i < all.length; i++) {\n            ids.push (all[i]);\n        }\n" +
+            "        for (let j = 0; j < ids.length; j++) {\n            const v = ids[j];\n            a += v;\n        }\n"));
+        expect(element).toContain('var v any = ids[j]');
+        // negative: a list also fed a scalar from a Safe* accessor keeps DerefScalar
+        const mixed = transpile(cls(
+            "        const ids = [];\n        ids.push (this.safeList (a, 'd', []));\n        ids.push (this.safeString (a, 'x'));\n" +
+            "        for (let j = 0; j < ids.length; j++) {\n            const v = ids[j];\n            a += v;\n        }\n").replace('safeList (a, b, c?)', 'safeString (a, b) { return undefined; }\n    safeList (a, b, c?)'));
+        expect(mixed).not.toContain('var v any = ids[j]');
+    });
+
+    test('negative controls keep the guard closure', () => {
+        // a counter that moves in the body
+        expect(transpile(fixture("for (let i = 0; i < list.length; i++)", "i = i + 1; const v = list[i]; a += v;"))).toContain('if i >= 0 && i < len(list)');
+        // a list pushed to in the body
+        expect(transpile(fixture("for (let i = 0; i < list.length; i++)", "list.push (a); const v = list[i]; a += v;"))).toContain('if i >= 0 && i < len(list)');
+        // a list reassigned in the body stays boxed: no native index at all
+        const reassigned = transpile(fixture("for (let i = 0; i < list.length; i++)", "list = []; const v = list[i]; a += v;"));
+        expect(reassigned).toContain('GetValue(list, i)');
+        expect(reassigned).not.toContain('list[i]');
+        // a loop not bounded by the list
+        expect(transpile(fixture("for (let i = 0; i < 3; i++)", "const v = list[i]; a += v;"))).toContain('if i >= 0 && i < len(list)');
+        // a read after the loop closed
+        const after =
+            "class Test {\n    safeList (a, b, c?) { return undefined; }\n    f (a: any) {\n" +
+            "        const list = this.safeList (a, 'rows', []);\n        let i = 0;\n" +
+            "        for (i = 0; i < list.length; i++) {\n            a += 1;\n        }\n" +
+            "        const v = list[i];\n        return v;\n    }\n}\n";
+        expect(transpile(after)).not.toContain('list[i]');
+        // a read inside a closure may run after the loop
+        expect(transpile(fixture("for (let i = 0; i < list.length; i++)", "const g = () => list[i]; a += g ();"))).not.toContain('var g any = list[i]');
+    });
+});
+
 describe('go GetValue(x, key) -> guarded native index on a declared []any', () => {
     const squash = (output: string) => output.replace(/[\t\n ]+/g, ' ');
     const transpile = (ts: string) => squash(transpiler.transpileGo(ts).content);
@@ -6788,7 +6875,9 @@ describe('go GetValue(x, key) -> guarded native index on a declared []any', () =
         const output = transpile(ts);
         expect(output).toContain('var list []any = []any{}');
         expect(output).toContain('for i := 0; i < len(list); i++');
-        expect(output).toContain('if i >= 0 && i < len(list) { return DerefScalar(list[i]) } return nil }()');
+        // hx11 FM-GO1-B: the loop bounds the read, so the guard closure is gone
+        expect(output).toContain('var v any = list[i]');
+        expect(output).not.toContain('func() any');
         expect(output).not.toContain('GetValue(list');
     });
 
