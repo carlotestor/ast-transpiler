@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -37431,6 +37431,8 @@ var CCXT_GO_HELPER_RETURN_TYPES = {
   // W23
   // exchange.go / exchange_string.go
   "this.StringToCharsArray": "[]string",
+  // RF-go-5: exchange_eth.go returns []uint8 on every path (hand-written, never nil-typed)
+  "this.EthEncodeStructuredData": "[]uint8",
   // exchange_market_type.go (hand-written)
   "this.MarketSymbols": "[]string",
   "exchange.MarketSymbols": "[]string",
@@ -47561,6 +47563,66 @@ function installHx11w8NumParams(goTranspiler) {
   };
 }
 
+// src/go/hx11rf-go5.ts
+init_esm_shims();
+var OWNED_TABLES = {
+  "baseCurrencies": { "publish": "PublishBaseCurrencies", "read": "BaseCurrenciesTable" },
+  "quoteCurrencies": { "publish": "PublishQuoteCurrencies", "read": "QuoteCurrenciesTable" },
+  "transactions": { "publish": "PublishTransactions", "read": "TransactionsTable" }
+};
+var OWNER_CLASS = "BaseExchange";
+function ownedTable(go, node) {
+  const SK = ts.SyntaxKind;
+  if (node?.kind !== SK.PropertyAccessExpression || !Object.prototype.hasOwnProperty.call(OWNED_TABLES, node.name?.text)) {
+    return void 0;
+  }
+  const checker = go.checkerOrUndefined();
+  const decl = checker?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+  if (decl?.kind !== SK.PropertyDeclaration || decl.parent?.name?.text !== OWNER_CLASS) {
+    return void 0;
+  }
+  return OWNED_TABLES[node.name.text];
+}
+function isWrapperCall(node, name, args) {
+  const SK = ts.SyntaxKind;
+  return node?.kind === SK.CallExpression && node.expression?.kind === SK.PropertyAccessExpression && node.expression.expression?.kind === SK.ThisKeyword && node.expression.name?.text === name && (node.arguments?.length ?? 0) <= args;
+}
+function installRfGo5OwnedTables(goTranspiler) {
+  const flag = "rfGo5OwnedTablesInstalled";
+  if (goTranspiler[flag] === true) {
+    return;
+  }
+  goTranspiler[flag] = true;
+  const printAccess = goTranspiler.printPropertyAccessExpression;
+  goTranspiler.printPropertyAccessExpression = function(node, identation) {
+    const table = ownedTable(this, node);
+    if (table !== void 0) {
+      return this.printNode(node.expression, 0) + "." + table.read + "()";
+    }
+    return printAccess.call(this, node, identation);
+  };
+  const printBinary = goTranspiler.printBinaryExpression;
+  goTranspiler.printBinaryExpression = function(node, identation) {
+    const SK = ts.SyntaxKind;
+    const table = node.operatorToken?.kind === SK.EqualsToken ? ownedTable(this, node.left) : void 0;
+    if (table !== void 0 && node.parent?.kind === SK.ExpressionStatement) {
+      const right = node.right;
+      let value;
+      if (isWrapperCall(right, "createSafeDictionary", 1)) {
+        value = "map[string]any{}";
+      } else if (isWrapperCall(right, "mapToSafeMap", 1) && right.arguments.length === 1) {
+        value = this.printNode(right.arguments[0], 0);
+      } else if (right?.kind === SK.PropertyAccessExpression && right.name?.text === node.left.name.text) {
+        value = this.printNode(right.expression, 0) + "." + table.read + "()";
+      } else {
+        value = this.printNode(right, 0);
+      }
+      return this.printNode(node.left.expression, 0) + "." + table.publish + "(" + value.trim() + ")";
+    }
+    return printBinary.call(this, node, identation);
+  };
+}
+
 // src/go/index.ts
 function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoLocalTypes(goTranspiler, unifiedInt64Params);
@@ -47571,6 +47633,7 @@ function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoGb11HandleErrorsCode(goTranspiler);
   installCcxtGoSignTyping(goTranspiler);
   installHx11w8NumParams(goTranspiler);
+  installRfGo5OwnedTables(goTranspiler);
 }
 
 // src/rustPasses/index.ts
@@ -56748,6 +56811,7 @@ export {
   installCcxtGoParamTypes,
   installCcxtGoSignTyping,
   installHx11w8NumParams,
+  installRfGo5OwnedTables,
   narrowStrNullLocals,
   narrowStrSinkLocals,
   nativeGetValue,
