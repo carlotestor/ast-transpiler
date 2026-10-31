@@ -7785,7 +7785,9 @@ function installCcxtGoTupleStringJoin (goTranspiler) {
         if ((node?.operatorToken?.kind === ts.SyntaxKind.EqualsToken) && ts.isIdentifier (node.left)
             && ccxtGoTupleStringWriteNeedsLift (this, right)
             && (ccxtGoTupleStringDeclarationOf (this, node.left) !== undefined)) {
-            return this.printNode (node.left, 0) + ' = SafeStringPtr(' + this.printNode (right, 0) + ')';
+            // RF-go-6-F: a Go-string base method binds a temp and stores its address
+            const addressed = (typeof this.goRf6fStringWriteText === 'function') ? this.goRf6fStringWriteText (node, this.printNode (node.left, 0), identation) : undefined;
+            return addressed ?? (this.printNode (node.left, 0) + ' = SafeStringPtr(' + this.printNode (right, 0) + ')');
         }
         return shippedBinary.call (this, node, identation);
     };
@@ -9713,8 +9715,13 @@ function installCcxtGoTernaryLiftJoin (goTranspiler) {
         const lines = printed.split ('\n');
         const body = literal.indent + '\t';
         lines[0] = literal.indent + 'var ' + literal.name + ' ' + join.joinType + ' = func() ' + join.joinType + ' {';
-        lines[2] = body + '\treturn ' + join.whenTrue;
-        lines[4] = body + 'return ' + join.whenFalse;
+        // RF-go-6-F: a Go-string method arm binds a temp and returns its address instead of boxing
+        const armReturn = (armNode, text, pad, wrapped) => {
+            const temp = (typeof goTranspiler.goRf6fStringTempName === 'function') ? goTranspiler.goRf6fStringTempName (armNode) : undefined;
+            return (temp === undefined) ? pad + wrapped : pad + temp + ' := ' + text + '\n' + pad + 'return &' + temp;
+        };
+        lines[2] = armReturn (declaration.initializer.whenTrue, literal.whenTrue, body + '\t', 'return ' + join.whenTrue);
+        lines[4] = armReturn (declaration.initializer.whenFalse, literal.whenFalse, body, 'return ' + join.whenFalse);
         return lines.join ('\n');
     };
     goTranspiler.__ccxtGoTernaryLiftJoinInstalled = true;

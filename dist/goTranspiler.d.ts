@@ -21,6 +21,13 @@ export declare class GoTranspiler extends BaseTranspiler {
     unifiedBoolParams: {
         [method: string]: number[];
     };
+    goStringReturnMethods: string[];
+    goTupleSlotTypes: {
+        [producer: string]: string[];
+    };
+    goTupleValueDefaultArg: {
+        [producer: string]: number;
+    };
     goSliceLiteralTypes: Map<any, string>;
     CCXT_GO_GETARG_DECLARED_TYPES: any;
     CCXT_GO_GETARG_SAFE_CONSUMERS: any;
@@ -536,6 +543,15 @@ export declare class GoTranspiler extends BaseTranspiler {
         goType: string;
         conv: string;
     } | undefined;
+    goRf6fStringMethodCall(node: any): string | undefined;
+    goRf6fStringSite(call: any): boolean;
+    goRf6fStringTempName(call: any): string | undefined;
+    goRf6fStringWriteText(node: any, leftText: string, identation: any): string | undefined;
+    goRf6fTupleSlotCache: Map<any, string>;
+    goRf6fTupleSlotPointerType(element: any): string | undefined;
+    goRf6fTupleSlotPointerTypeOf(element: any): string | undefined;
+    goRf6fSlotStoreText(valueNode: any, valueStr: string): string;
+    goRf6fTupleSlotPointerLines(name: string, holder: string, index: number, iden: string): string;
     goTupleSlotNameIsSafe(nameNode: any, declaration: any): boolean;
     goTupleBindingProducerName(declaration: any): string | undefined;
     goTupleBindingIsSliceHolder(declaration: any): boolean;
