@@ -6595,6 +6595,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             // B-02: a parameter the call-site proof typed prints its native Go type
             return this.goNativeParameterType(decl);
         }
+        if (decl.kind === SyntaxKind.BindingElement) {
+            return this.goDestructuredSlotDeclaredType(decl);
+        }
         if (decl.kind !== SyntaxKind.VariableDeclaration || decl.name?.kind !== SyntaxKind.Identifier) {
             return undefined;
         }
@@ -9292,12 +9295,32 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         const sliceHolder = !nativeBinding && this.goTupleBindingIsSliceHolder(declaration);
         return elements.map((element: any, index: number) => {
             const name = this.printNode(element.name, 0);
-            const unbox = (element.name?.kind === SyntaxKind.Identifier) ? this.goTupleSlotUnbox(element) : undefined;
-            if (!sliceHolder || (unbox === undefined) || !this.goTupleSlotNameIsSafe(element.name, declaration)) {
+            const unbox = sliceHolder ? this.goTupleSlotLocalUnbox(element, declaration) : undefined;
+            if (unbox === undefined) {
                 return iden + name + ' := GetValue(' + holder + ', ' + index + ')';
             }
             return iden + 'var ' + name + ' ' + unbox.goType + ' = ' + unbox.conv + '(' + holder + '[' + index + '])';
         }).join('\n');
+    }
+
+    // the typed local one destructured slot prints as, or undefined when it keeps the boxed read;
+    // goDeclaredTypeOfIdentifier answers the same decision for the slot's consumers
+    goTupleSlotLocalUnbox(element: any, declaration: any): { goType: string, conv: string } | undefined {
+        const unbox = (element?.name?.kind === SyntaxKind.Identifier) ? this.goTupleSlotUnbox(element) : undefined;
+        return ((unbox !== undefined) && this.goTupleSlotNameIsSafe(element.name, declaration)) ? unbox : undefined;
+    }
+
+    goDestructuredSlotDeclaredType(element: any): string | undefined {
+        const declaration: any = element.parent?.parent;
+        if ((element.parent?.kind !== SyntaxKind.ArrayBindingPattern) || (declaration?.kind !== SyntaxKind.VariableDeclaration)
+            || (declaration.name !== element.parent)) {
+            return undefined;
+        }
+        const producer = this.goTupleBindingProducerName(declaration);
+        if ((producer === undefined) || GO_TUPLE_NATIVE_BINDING_PRODUCERS.includes(producer) || !this.goTupleBindingIsSliceHolder(declaration)) {
+            return undefined;
+        }
+        return this.goTupleSlotLocalUnbox(element, declaration)?.goType;
     }
 
     // `this.handleXxx(…, params, …)` of a base helper typed `any[]` whose element holds the params

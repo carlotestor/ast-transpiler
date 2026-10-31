@@ -540,6 +540,11 @@ export declare class GoTranspiler extends BaseTranspiler {
     goTupleBindingProducerName(declaration: any): string | undefined;
     goTupleBindingIsSliceHolder(declaration: any): boolean;
     goTupleSlotBindingLines(elements: any[], holder: string, identation: number, declaration: any): string;
+    goTupleSlotLocalUnbox(element: any, declaration: any): {
+        goType: string;
+        conv: string;
+    } | undefined;
+    goDestructuredSlotDeclaredType(element: any): string | undefined;
     goParamsTupleHelperIndex(call: any): number;
     goGetArgTupleWriteIsDict(declaration: any, right: any, index: number): boolean;
     goGetArgBindsDictElement(leftElement: any, right: any, index: number): boolean;
