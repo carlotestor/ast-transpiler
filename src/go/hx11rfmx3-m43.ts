@@ -272,6 +272,11 @@ function classifyUse (go: any, n: any, name: string, decl: any, accessor: string
             }
             return [ true, p ];
         }
+        if ((op === SK.InKeyword) && (p.right === cur)) {
+            // `key in d` with a nullable `*string` key prints a multi-line comma-ok closure on a typed map; the box keeps the InOp helper
+            const key = unwrap (p.left);
+            return ((key?.kind === SK.Identifier) && (go.goDeclaredTypeOfIdentifier (key) === '*string')) ? [ false ] : [ true, undefined, 'arg' ];
+        }
         if ((op === SK.EqualsEqualsToken) || (op === SK.EqualsEqualsEqualsToken) || (op === SK.ExclamationEqualsToken)
             || (op === SK.ExclamationEqualsEqualsToken)) {
             return isNilLiteral ((p.left === cur) ? p.right : p.left) ? [ true, undefined, 'nil' ] : [ false ];

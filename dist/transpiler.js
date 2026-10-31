@@ -48389,6 +48389,10 @@ function classifyUse(go, n, name, decl, accessor, ws, defaulted) {
         }
         return [true, p];
       }
+      if (op === SK.InKeyword && p.right === cur) {
+        const key = unwrap(p.left);
+        return key?.kind === SK.Identifier && go.goDeclaredTypeOfIdentifier(key) === "*string" ? [false] : [true, void 0, "arg"];
+      }
       if (op === SK.EqualsEqualsToken || op === SK.EqualsEqualsEqualsToken || op === SK.ExclamationEqualsToken || op === SK.ExclamationEqualsEqualsToken) {
         return isNilLiteral(p.left === cur ? p.right : p.left) ? [true, void 0, "nil"] : [false];
       }

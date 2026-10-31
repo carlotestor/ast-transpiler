@@ -67,4 +67,10 @@ describe('RFM-X3 M43 SafeDict-seeded locals', () => {
         expect (out).toContain ('d["o"] = this.SafeInteger(r, "o")');
         expect (go ('    f (r: any) {\n        const d = this.safeDict (r, \'k\', {});\n        return (d as any).length;\n    }\n')).toContain ('SafeDictMap');
     });
+    test('an `in` test with a nullable string key keeps the box; a string key types the local', () => {
+        const nullable = '    f (r: any, s: any) {\n        const d = this.safeDict (r, \'k\', {});\n        const key = this.safeString (s, \'x\');\n        return key in d;\n    }\n';
+        expect (go (nullable)).not.toContain ('SafeDictMap');
+        const plain = '    f (r: any) {\n        const d = this.safeDict (r, \'k\', {});\n        return \'x\' in d;\n    }\n';
+        expect (go (plain)).toContain ('var d map[string]any = ');
+    });
 });
