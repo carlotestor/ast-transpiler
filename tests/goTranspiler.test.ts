@@ -7787,3 +7787,84 @@ describe('hx10 G10: `x := y` aliases carry the source local printed type', () =>
         expect(out).toContain('GetValue(GetValue(a, \"x\"), \"y\")');
     });
 });
+
+describe('hx11 rfm-X6-C: the ws order book parameter of handleBookDelta(s) prints OrderBookInterface', () => {
+    const BASE =
+        "import { WsOrderBook } from './ws/OrderBook';\n" +
+        "export class Exchange {\n" +
+        "    handleBookDeltas (orderbook: WsOrderBook, deltas: any[]) {\n" +
+        "        for (let i = 0; i < deltas.length; i++) {\n" +
+        "            this.handleBookDelta (orderbook, deltas[i]);\n" +
+        "        }\n" +
+        "    }\n" +
+        "    handleBookDelta (orderbook: WsOrderBook, delta: any) {\n" +
+        "        const bids = orderbook['bids'];\n" +
+        "        return bids;\n" +
+        "    }\n" +
+        "}\n";
+    const BOOK =
+        "export class OrderBook { asks: any; bids: any; }\n" +
+        "export { OrderBook as WsOrderBook };\n";
+    const PRO =
+        "import { Exchange } from '../base/Exchange';\n" +
+        "import { WsOrderBook } from '../base/ws/OrderBook';\n" +
+        "export class ex extends Exchange {\n" +
+        "    override handleBookDelta (orderbook: WsOrderBook, delta: any) {\n" +
+        "        const asks = orderbook['asks'];\n" +
+        "        const bids = orderbook['bids'];\n" +
+        "        const other = orderbook['nonce'];\n" +
+        "        orderbook['asks'] = delta;\n" +
+        "        return [ asks, bids, other ];\n" +
+        "    }\n" +
+        "    handleFrame (client: any, message: Record<string, any>) {\n" +
+        "        const asks = message['asks'];\n" +
+        "        return asks;\n" +
+        "    }\n" +
+        "}\n";
+    const treeFor = (name: string) => {
+        const src = nodepath.join(__dirname, 'files', name, 'ts', 'src');
+        nodefs.mkdirSync(nodepath.join(src, 'base', 'ws'), { recursive: true });
+        nodefs.mkdirSync(nodepath.join(src, 'pro'), { recursive: true });
+        nodefs.writeFileSync(nodepath.join(src, 'base', 'ws', 'OrderBook.ts'), BOOK);
+        nodefs.writeFileSync(nodepath.join(src, 'base', 'Exchange.ts'), BASE);
+        nodefs.writeFileSync(nodepath.join(src, 'pro', 'ex.ts'), PRO);
+        return src;
+    };
+    const print = (file: string) => new Transpiler({ verbose: false, go: {} }).transpileGoByPath(file).content;
+
+    afterAll(() => {
+        for (const entry of nodefs.readdirSync(nodepath.join(__dirname, 'files'))) {
+            if (entry.startsWith('tmp-x6c-')) {
+                nodefs.rmSync(nodepath.join(__dirname, 'files', entry), { recursive: true, force: true });
+            }
+        }
+    });
+
+    test('an override takes the book interface and reads the sides through its accessors', () => {
+        const src = treeFor('tmp-x6c-pro');
+        const out = print(nodepath.join(src, 'pro', 'ex.ts'));
+        expect(out).toContain('func (this *ex) HandleBookDelta(orderbook OrderBookInterface, delta any)');
+        expect(out).toContain('var asks any = orderbook.GetAsks()');
+        expect(out).toContain('var bids any = orderbook.GetBids()');
+        // other keys and writes keep the helper
+        expect(out).toContain('GetValue(orderbook, "nonce")');
+        expect(out).not.toContain('orderbook.GetNonce()');
+        expect(out).toContain('AddElementToObject(orderbook, "asks", delta)');
+    });
+
+    test('the base declarations print the same interface (no ABI split with IDerivedExchange)', () => {
+        const src = treeFor('tmp-x6c-base');
+        const out = print(nodepath.join(src, 'base', 'Exchange.ts'));
+        expect(out).toContain('HandleBookDeltas(orderbook OrderBookInterface, deltas any)');
+        expect(out).toContain('HandleBookDelta(orderbook OrderBookInterface, delta any)');
+        expect(out).toContain('var bids any = orderbook.GetBids()');
+        expect(out).not.toContain('GetValue(orderbook, "bids")');
+    });
+
+    test('a non-book parameter named like the sides keeps the helper and the box', () => {
+        const src = treeFor('tmp-x6c-dict');
+        const out = print(nodepath.join(src, 'pro', 'ex.ts'));
+        expect(out).toContain('var asks any = message["asks"]');
+        expect(out).not.toContain('message.GetAsks()');
+    });
+});

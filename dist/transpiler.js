@@ -8978,6 +8978,8 @@ var GO_SAFE_DICT_LOCAL_TYPE = "map[string]any";
 var GO_SAFE_DICT_READ_HELPERS = ["GetValue", "InOp", "ObjectKeys", "IsDictionary"];
 var GO_MARKET_LOCAL_TYPE = "map[string]any";
 var GO_MARKET_PRODUCER_METHODS = ["parseMarket", "getMarketFromSymbols", "getMarketFromClientAndMessage"];
+var GO_ORDER_BOOK_TYPE = "OrderBookInterface";
+var GO_ORDER_BOOK_SIDE_ACCESSORS = { "asks": "GetAsks", "bids": "GetBids" };
 var GO_ANY_FRAMED_VENUES = /* @__PURE__ */ new Set(["bitfinex", "toobit", "coincheck", "phemex", "sxbet", "gemini"]);
 var GO_MARKET_MAP_CALLS = ["Market", "SafeMarket", "SafeMarketStructure", "Extend", "DeepExtend", "MapTyped", "MarketTyped"];
 var GO_MARKET_MAP_BASE_CALLS = ["getMarketFromSymbols"];
@@ -13525,6 +13527,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     if (frameType !== void 0) {
       return frameType;
     }
+    if (this.goParameterIsWsOrderBook(fn, param)) {
+      return GO_ORDER_BOOK_TYPE;
+    }
     if (this.goIsUnifiedSliceParameter(fn.name.text, fn.parameters.indexOf(param))) {
       return this.goUnifiedSliceParameterType(fn, param);
     }
@@ -14059,6 +14064,30 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     };
     body.forEachChild(visit);
     return keeps;
+  }
+  // hx11 rfm-X6-C: a parameter the checker types as the ws order book class (`WsOrderBook`) of a method
+  // whose signature the base pins (an override, or the base declaration itself). The generated base and
+  // IDerivedExchange declare that parameter `OrderBookInterface`, so overrides print the same type.
+  goParameterIsWsOrderBook(fn, param) {
+    if (param.name?.kind !== SyntaxKind5.Identifier || !this.goMethodKeepsBaseSignature(fn)) {
+      return false;
+    }
+    const type = this.checkerOrUndefined()?.getTypeAtLocation(param);
+    const symbol = type?.getSymbol?.();
+    if (symbol?.name !== "OrderBook") {
+      return false;
+    }
+    const declarations = (symbol.declarations ?? []).map((d) => d.resolve());
+    return declarations.some((d) => /(^|[\\/])ts[\\/]src[\\/]base[\\/]ws[\\/]OrderBook\.ts$/.test(String(d.getSourceFile().fileName)));
+  }
+  // hx11 rfm-X6-C: `book['asks']` / `book['bids']` of a receiver printed OrderBookInterface is the
+  // book's own accessor. Writes, other keys and non-literal keys keep the helper.
+  goOrderBookSideRead(node, baseExpr, keys, containerStr) {
+    const key = keys[0];
+    if (baseExpr?.kind !== SyntaxKind5.Identifier || key?.kind !== SyntaxKind5.StringLiteral || !Object.prototype.hasOwnProperty.call(GO_ORDER_BOOK_SIDE_ACCESSORS, key.text) || this.isGoElementAccessAssignmentTarget(node)) {
+      return void 0;
+    }
+    return this.goDeclaredTypeOfIdentifier(baseExpr) === GO_ORDER_BOOK_TYPE ? `${containerStr}.${GO_ORDER_BOOK_SIDE_ACCESSORS[key.text]}()` : void 0;
   }
   // hx10 GP12: the ws frame parameter of `override handleMessage (client, message: Dict)`. The
   // printer types it `map[string]any` under the D-03 body proofs; the Go ws dispatch asserts the
@@ -18555,6 +18584,10 @@ ${this.getIden(level)}}()`;
       if (this.goIsDerefStringKeyExpression(keys[0]) && !containerStr.includes("\n") && !this.isGoElementAccessAssignmentTarget(node)) {
         return this.goElementAccessChain(this.printNilGuardedMapIndex(containerStr, keyStrs[0]), keyStrs);
       }
+    }
+    const sideRead = this.goOrderBookSideRead(node, baseExpr, keys, containerStr);
+    if (sideRead !== void 0) {
+      return this.goElementAccessChain(sideRead, keyStrs);
     }
     let acc = containerStr;
     keyStrs.forEach((k) => {

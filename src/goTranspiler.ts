@@ -300,6 +300,9 @@ const GO_MARKET_PRODUCER_METHODS = [ 'parseMarket', 'getMarketFromSymbols', 'get
 
 // venues whose ws frames decode to a JSON array or to bare text: their handleMessage frame keeps
 // the `any` box even when the annotation says Dict, so the Go dispatch only types object frames
+// hx11 rfm-X6-C: the Go interface of the ws order book class, and its side accessors
+const GO_ORDER_BOOK_TYPE = 'OrderBookInterface';
+const GO_ORDER_BOOK_SIDE_ACCESSORS: { [key: string]: string } = { 'asks': 'GetAsks', 'bids': 'GetBids' };
 const GO_ANY_FRAMED_VENUES = new Set([ 'bitfinex', 'toobit', 'coincheck', 'phemex', 'sxbet', 'gemini' ]);
 
 // base accessors/builders whose generated Go result is already the market dictionary
@@ -5363,6 +5366,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         if (frameType !== undefined) {
             return frameType;
         }
+        // hx11 rfm-X6-C: the book parameter of the base's handleBookDelta(s). Its TS type is the ws
+        // order book class, the base and IDerivedExchange declare the Go interface, so every override
+        // prints it too and reads the sides through its accessors (goOrderBookSideRead)
+        if (this.goParameterIsWsOrderBook(fn, param)) {
+            return GO_ORDER_BOOK_TYPE;
+        }
         if (this.goIsUnifiedSliceParameter(fn.name.text, fn.parameters.indexOf(param))) {
             // hx10w9 GP13: the slice table types the base and every override together, exactly like
             // the string table above. A method whose declarations or call sites disagree prints `any`
@@ -5953,6 +5962,34 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         };
         body.forEachChild(visit);
         return keeps;
+    }
+
+    // hx11 rfm-X6-C: a parameter the checker types as the ws order book class (`WsOrderBook`) of a method
+    // whose signature the base pins (an override, or the base declaration itself). The generated base and
+    // IDerivedExchange declare that parameter `OrderBookInterface`, so overrides print the same type.
+    goParameterIsWsOrderBook(fn, param): boolean {
+        if ((param.name?.kind !== SyntaxKind.Identifier) || !this.goMethodKeepsBaseSignature(fn)) {
+            return false;
+        }
+        const type: any = this.checkerOrUndefined()?.getTypeAtLocation(param);
+        const symbol: any = type?.getSymbol?.();
+        if (symbol?.name !== 'OrderBook') {
+            return false;
+        }
+        const declarations: any[] = (symbol.declarations ?? []).map((d: any) => d.resolve());
+        return declarations.some((d) => /(^|[\\/])ts[\\/]src[\\/]base[\\/]ws[\\/]OrderBook\.ts$/.test(String(d.getSourceFile().fileName)));
+    }
+
+    // hx11 rfm-X6-C: `book['asks']` / `book['bids']` of a receiver printed OrderBookInterface is the
+    // book's own accessor. Writes, other keys and non-literal keys keep the helper.
+    goOrderBookSideRead(node, baseExpr, keys: any[], containerStr: string): string | undefined {
+        const key: any = keys[0];
+        if ((baseExpr?.kind !== SyntaxKind.Identifier) || (key?.kind !== SyntaxKind.StringLiteral)
+            || !Object.prototype.hasOwnProperty.call(GO_ORDER_BOOK_SIDE_ACCESSORS, key.text) || this.isGoElementAccessAssignmentTarget(node)) {
+            return undefined;
+        }
+        return (this.goDeclaredTypeOfIdentifier(baseExpr) === GO_ORDER_BOOK_TYPE)
+            ? `${containerStr}.${GO_ORDER_BOOK_SIDE_ACCESSORS[key.text]}()` : undefined;
     }
 
     // hx10 GP12: the ws frame parameter of `override handleMessage (client, message: Dict)`. The
@@ -11186,6 +11223,11 @@ ${tryBodyBlock}
                 && !this.isGoElementAccessAssignmentTarget(node)) {
                 return this.goElementAccessChain(this.printNilGuardedMapIndex(containerStr, keyStrs[0]), keyStrs);
             }
+        }
+
+        const sideRead = this.goOrderBookSideRead(node, baseExpr, keys, containerStr);
+        if (sideRead !== undefined) {
+            return this.goElementAccessChain(sideRead, keyStrs);
         }
 
         // Now build nested helpers.

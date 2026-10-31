@@ -377,6 +377,8 @@ export declare class GoTranspiler extends BaseTranspiler {
     goUnifiedStringCallArgs(node: any, identation: any, flat?: boolean): string | undefined;
     goRequiredStringParameterType(param: any): string | undefined;
     goParameterKeepsNilCompareNative(body: any, param: any, goType: string): boolean;
+    goParameterIsWsOrderBook(fn: any, param: any): boolean;
+    goOrderBookSideRead(node: any, baseExpr: any, keys: any[], containerStr: string): string | undefined;
     goWsFrameParameterType(fn: any, param: any): string | undefined;
     goWsFrameReadsStayNative(body: any, param: any): boolean;
     goWsFrameInOpHasInitClause(inNode: any, param: any): boolean;
