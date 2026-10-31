@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -2827,6 +2827,7 @@ var CSHARP_NATIVE_FIELDS = {
   "codes": "List<object>",
   "ids": "List<object>"
 };
+var CSHARP_WS_CACHE_FIELDS = ["ohlcvs", "trades", "tickers", "bidsasks", "fundingRates"];
 var CSHARP_OBJECT_DICT_FIELDS = ["urls", "tickers", "bidsasks", "orderbooks", "ohlcvs", "trades", "markets", "currencies", "currencies_by_id", "exceptions"];
 var CSHARP_REFERENCE_FIELDS_NATIVE = [
   "id",
@@ -9233,7 +9234,16 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (!isIdentifier(argumentExpression) || !this.csharpHx4IsPlainRead(argumentExpression.parent)) {
       return void 0;
     }
-    const fieldTypes = { "has": "Dictionary<string, object>", "features": "Dictionary<string, object>", "timeframes": "Dictionary<string, object>", "options": "ConcurrentDictionary<string, object>", "markets": "IDictionary<string, object>", "urls": "object", "currencies": "object" };
+    const fieldTypes = {
+      "has": "Dictionary<string, object>",
+      "features": "Dictionary<string, object>",
+      "timeframes": "Dictionary<string, object>",
+      "options": "ConcurrentDictionary<string, object>",
+      "markets": "IDictionary<string, object>",
+      "urls": "object",
+      "currencies": "object",
+      ...Object.fromEntries(CSHARP_WS_CACHE_FIELDS.map((name) => [name, "IDictionary<string, object>"]))
+    };
     let receiver;
     let csharpType;
     const state = this.csharpNullableStateField(expression);
@@ -9249,7 +9259,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
         return void 0;
       }
       const printedKey2 = this.printNode(argumentExpression, 0);
-      return `(${field} != null && ${printedKey2} != null && ${receiver}.ContainsKey(${printedKey2}) ? ${receiver}[${printedKey2}] : null)`;
+      const keyTest = key === "string" && CSHARP_WS_CACHE_FIELDS.indexOf(expression.name.text) >= 0 ? "" : ` && ${printedKey2} != null`;
+      return `(${field} != null${keyTest} && ${receiver}.ContainsKey(${printedKey2}) ? ${receiver}[${printedKey2}] : null)`;
     }
     if (!isIdentifier(expression) || CSHARP_MARKET_RECEIVER_NAMES.indexOf(expression.text) >= 0) {
       return void 0;
@@ -9266,6 +9277,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const printedKey = this.printNode(argumentExpression, 0);
     const keyType = this.csharpHx4DeclaredKeyType(argumentExpression);
     if (csharpType.indexOf("Dictionary<") >= 0) {
+      if (keyType === "object" && this.csharpObjectKeyCastable(argumentExpression)) {
+        return `(${receiver} != null && ${printedKey} != null && ${receiver}.ContainsKey((string)${printedKey}) ? ${receiver}[(string)${printedKey}] : null)`;
+      }
       if (keyType !== "string" && keyType !== "string?") {
         return void 0;
       }
@@ -9275,6 +9289,12 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return void 0;
     }
     return `(${receiver} != null && ${printedKey} < ${receiver}.Count ? ${receiver}[${printedKey}] : null)`;
+  }
+  // an `object` key identifier whose `(string)` cast cannot hide a later retype: a parameter the body
+  // writes (or defaults) gets a shadow local the embedding build layer retypes after printing
+  csharpObjectKeyCastable(key) {
+    const binding = this.csharpReceiverBinding(key);
+    return !(binding?.kind === SyntaxKind4.Parameter && (binding.initializer !== void 0 || this.csharpParameterWrittenAnywhere(key)));
   }
   // a read that is no write target: not the left of any assignment, not ++/--, not delete
   csharpHx4IsPlainRead(node) {

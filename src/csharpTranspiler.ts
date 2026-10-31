@@ -277,6 +277,10 @@ const CSHARP_NATIVE_FIELDS: { [name: string]: string } = {
     'ids': 'List<object>',
 };
 
+// ws cache properties declared `IDictionary<string, object>` in cs/ccxt/base/Exchange.Options.cs
+// (orderbooks is left out: the ws transpile maps its reads to getOrderBook)
+const CSHARP_WS_CACHE_FIELDS = [ 'ohlcvs', 'trades', 'tickers', 'bidsasks', 'fundingRates' ];
+
 // hand-written BaseExchange fields declared `object` that always box a dictionary
 // (dict / CustomConcurrentDictionary<string, object>): the member needs the same
 // `(IDictionary<string, object>)` cast the transpiled helper body itself applies
@@ -7661,7 +7665,10 @@ export class CSharpTranspiler extends BaseTranspiler {
         if (!isIdentifier(argumentExpression) || !this.csharpHx4IsPlainRead(argumentExpression.parent)) {
             return undefined;
         }
-        const fieldTypes = { 'has': 'Dictionary<string, object>', 'features': 'Dictionary<string, object>', 'timeframes': 'Dictionary<string, object>', 'options': 'ConcurrentDictionary<string, object>', 'markets': 'IDictionary<string, object>', 'urls': 'object', 'currencies': 'object' };
+        // the ws cache properties (not orderbooks: the ws transpile maps its reads to getOrderBook) are declared
+        // `IDictionary<string, object>` in Exchange.Options.cs, so a non-nullable string key needs no null test
+        const fieldTypes = { 'has': 'Dictionary<string, object>', 'features': 'Dictionary<string, object>', 'timeframes': 'Dictionary<string, object>', 'options': 'ConcurrentDictionary<string, object>', 'markets': 'IDictionary<string, object>', 'urls': 'object', 'currencies': 'object',
+            ...Object.fromEntries(CSHARP_WS_CACHE_FIELDS.map((name) => [ name, 'IDictionary<string, object>' ])) };
         let receiver: string | undefined;
         let csharpType: string | undefined;
         const state = this.csharpNullableStateField(expression);
@@ -7678,7 +7685,8 @@ export class CSharpTranspiler extends BaseTranspiler {
                 return undefined;
             }
             const printedKey = this.printNode(argumentExpression, 0);
-            return `(${field} != null && ${printedKey} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
+            const keyTest = (key === 'string' && CSHARP_WS_CACHE_FIELDS.indexOf(expression.name.text as string) >= 0) ? '' : ` && ${printedKey} != null`;
+            return `(${field} != null${keyTest} && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
         }
         if (!isIdentifier(expression) || CSHARP_MARKET_RECEIVER_NAMES.indexOf(expression.text as string) >= 0) {
             return undefined;
@@ -7695,6 +7703,10 @@ export class CSharpTranspiler extends BaseTranspiler {
         const printedKey = this.printNode(argumentExpression, 0);
         const keyType = this.csharpHx4DeclaredKeyType(argumentExpression);
         if (csharpType.indexOf('Dictionary<') >= 0) {
+            if (keyType === 'object' && this.csharpObjectKeyCastable(argumentExpression)) {
+                // an `object` key takes the helper's own `(string)key` cast
+                return `(${receiver} != null && ${printedKey} != null && ${receiver}.ContainsKey((string)${printedKey}) ? ${receiver}[(string)${printedKey}] : null)`;
+            }
             if (keyType !== 'string' && keyType !== 'string?') {
                 return undefined;
             }
@@ -7704,6 +7716,13 @@ export class CSharpTranspiler extends BaseTranspiler {
             return undefined; // Int64/object indices do not bind the List indexer
         }
         return `(${receiver} != null && ${printedKey} < ${receiver}.Count ? ${receiver}[${printedKey}] : null)`;
+    }
+
+    // an `object` key identifier whose `(string)` cast cannot hide a later retype: a parameter the body
+    // writes (or defaults) gets a shadow local the embedding build layer retypes after printing
+    csharpObjectKeyCastable(key): boolean {
+        const binding: any = this.csharpReceiverBinding(key);
+        return !((binding?.kind === SyntaxKind.Parameter) && ((binding.initializer !== undefined) || this.csharpParameterWrittenAnywhere(key)));
     }
 
     // a read that is no write target: not the left of any assignment, not ++/--, not delete
