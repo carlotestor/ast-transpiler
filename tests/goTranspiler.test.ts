@@ -1,5 +1,5 @@
 import { assert } from 'console';
-import { Transpiler, alignGoTrailingComments } from '../src/transpiler';
+import { installFmGo5G04, Transpiler, alignGoTrailingComments } from '../src/transpiler';
 
 import { SyntaxKind } from 'typescript/unstable/ast';
 import { readFileSync } from 'fs';
@@ -2303,10 +2303,10 @@ describe('go inline equality', () => {
         const input =
         "class T {\n" +
         "    f () {\n" +
-        "        if (this.markets === undefined) { return 1; }\n" +
-        "        if (this.markets !== undefined) { return 2; }\n" +
-        "        const a = this.markets_by_id === undefined;\n" +
-        "        const b = this.currencies_by_id !== undefined;\n" +
+        "        if (this.orderbooks === undefined) { return 1; }\n" +
+        "        if (this.orderbooks !== undefined) { return 2; }\n" +
+        "        const a = this.transactions === undefined;\n" +
+        "        const b = this.baseCurrencies !== undefined;\n" +
         "        const c = this.tickers === undefined;\n" +
         "        return [ a, b, c ];\n" +
         "    }\n" +
@@ -2314,12 +2314,12 @@ describe('go inline equality', () => {
         const output = transpiler.transpileGo(input).content;
         // go/v4/exchange.go declares these BaseExchange fields as *sync.Map: the Go nil
         // test answers exactly what the IsEqual helper answers for a nil pointer
-        expect(output).toContain("if this.Markets == nil {");
-        expect(output).toContain("if this.Markets != nil {");
-        expect(output).toContain("var a bool = (this.Markets_by_id == nil)");
-        expect(output).toContain("var b bool = (this.Currencies_by_id != nil)");
+        expect(output).toContain("if this.Orderbooks == nil {");
+        expect(output).toContain("if this.Orderbooks != nil {");
+        expect(output).toContain("var a bool = (this.Transactions == nil)");
+        expect(output).toContain("var b bool = (this.BaseCurrencies != nil)");
         expect(output).toContain("var c bool = (this.Tickers == nil)");
-        expect(output).not.toContain("IsEqual(this.Markets");
+        expect(output).not.toContain("IsEqual(this.Orderbooks");
     });
     test('fields whose Go nil test the helpers do not reproduce keep IsEqual', () => {
         // Orders is an `any` field, Hostname a plain string, Clients a map, Ids a slice,
@@ -5334,12 +5334,12 @@ describe('go native element assignment on a hand-written container field', () =>
         const input =
         "class Exchange {\n" +
         "    main() {\n" +
-        "        this.markets['a'] = 1;\n" +
+        "        this.tickers['a'] = 1;\n" +
         "        return this.options;\n" +
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("this.Markets.Store(\"a\", 1)");
+        expect(output).toContain("this.Tickers.Store(\"a\", 1)");
         expect(output).not.toContain("AddElementToObject");
     });
     test('a sync.Map field with a string-typed local key assigns through Store', () => {
@@ -5384,12 +5384,12 @@ describe('go native element assignment on a hand-written container field', () =>
         const input =
         "class Exchange {\n" +
         "    main() {\n" +
-        "        this.markets['a'] += 1;\n" +
+        "        this.tickers['a'] += 1;\n" +
         "        return this.options;\n" +
         "    }\n" +
         "}\n";
         const output = squash(transpiler.transpileGo(input).content);
-        expect(output).toContain("AddElementToObject(this.Markets, \"a\", Add(GetValue(this.Markets, \"a\"), 1))");
+        expect(output).toContain("AddElementToObject(this.Tickers, \"a\", Add(GetValue(this.Tickers, \"a\"), 1))");
     });
     test('the field table never types a local of the same name', () => {
         const input =
@@ -8108,8 +8108,14 @@ describe('go literal-defaulted safeString locals are strings', () => {
 describe('FM-A9F L3: negated lookups hoisted out of an || chain, indexed ws book receivers', () => {
     const head = 'type Str = string | undefined;\nclass T {\n    markets_by_id = {};\n    ohlcvs = {};\n    clients = {};\n    safeString (o, k, d = undefined): Str { return o[k]; }\n    safeDict (o, k, d = undefined) { return o[k]; }\n';
     const go = (body: string) => new Transpiler({ verbose: false }).transpileGo(head + body + '}\n').content;
+    // the market tables are BaseExchange fields: their nil test is keyed on that declaration
+    const goBase = (body: string) => {
+        const t = new Transpiler({ verbose: false });
+        installFmGo5G04(t.goTranspiler);
+        return t.transpileGo(head.replace('class T {', 'class BaseExchange {') + body + '}\n').content;
+    };
     test('a negated base-map lookup under || hoists the comma-ok behind the key nil test', () => {
-        const output = go("    f (rows: any) {\n        for (let i = 0; i < rows.length; i++) {\n            const entryId = this.safeString (rows[i], 'symbol');\n            if ((entryId === undefined) || (this.markets_by_id === undefined) || !(entryId in this.markets_by_id)) {\n                continue;\n            }\n        }\n    }\n");
+        const output = goBase("    f (rows: any) {\n        for (let i = 0; i < rows.length; i++) {\n            const entryId = this.safeString (rows[i], 'symbol');\n            if ((entryId === undefined) || (this.markets_by_id === undefined) || !(entryId in this.markets_by_id)) {\n                continue;\n            }\n        }\n    }\n");
         expect(output).toContain('\t\tvar entryIdKnown bool\n\t\tif entryId != nil {\n\t\t\t_, entryIdKnown = this.Markets_by_id[*entryId]\n\t\t}\n\t\tif (entryId == nil) || (this.Markets_by_id == nil) || !entryIdKnown {');
         expect(output).not.toContain('InOp(');
     });
