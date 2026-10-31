@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -11142,6 +11142,9 @@ var GoTranspiler = class extends BaseTranspiler {
     //     between loop and read, is the slice index `xs[i]`: i < len(xs) holds at every statement of
     //     the body, a string element cannot box a pointer, so it is the very value GetValue returns.
     this.generatedListCallees = /* @__PURE__ */ new Set();
+    // Go-cased methods whose channel carries a `[]map[string]any` (the host's async table): the awaited
+    // list is a MapSliceToList carrier, every row a map, never a scalar box.
+    this.asyncMapRowListCallees = /* @__PURE__ */ new Set();
     // hx4 G09
     // hand-written BaseExchange value fields (go/v4/exchange.go) read as `this.<Field>`
     this.GO_G09_NUMERIC_FIELDS = {
@@ -11185,6 +11188,7 @@ var GoTranspiler = class extends BaseTranspiler {
       ownerSide: (owned["ownerSideMethods"] ?? []).map((p) => new RegExp(p))
     };
     this.generatedListCallees = new Set(config["generatedListCallees"] ?? []);
+    this.asyncMapRowListCallees = new Set(config["asyncMapRowListCallees"] ?? []);
     this.goTupleSlotTypes = config["goTupleSlotTypes"] ?? {};
     this.goTupleValueDefaultArg = config["goTupleValueDefaultArg"] ?? {};
     const caches = config["ownedCaches"];
@@ -23066,8 +23070,11 @@ ${this.getIden(level)}}()`;
     if (this.isGoElementAccessAssignmentTarget(node) || containerStr.includes("\n") || keyStr.includes("\n")) {
       return void 0;
     }
-    const listType = this.goResolvedLocalGoType(baseExpr);
-    if (listType !== GO_STRING_LIST_LOCAL_TYPE && !(listType === GO_SAFE_LIST_LOCAL_TYPE && this.goListElementsAreObjects(baseExpr))) {
+    let listType = this.goResolvedLocalGoType(baseExpr);
+    if ((listType === void 0 || listType === "any") && this.goAwaitedListLocal(baseExpr)) {
+      listType = GO_SAFE_LIST_LOCAL_TYPE;
+    }
+    if (listType !== GO_STRING_LIST_LOCAL_TYPE && !(listType === GO_SAFE_LIST_LOCAL_TYPE && (this.goListElementsAreObjects(baseExpr) || this.goAwaitedMapRowList(baseExpr)))) {
       return void 0;
     }
     const mutators = ["push", "pop", "shift", "unshift", "splice", "sort", "reverse", "fill", "copyWithin"];
@@ -23088,6 +23095,32 @@ ${this.getIden(level)}}()`;
       return disturbed ? void 0 : `${containerStr}[${keyStr}]`;
     }
     return void 0;
+  }
+  // `const xs = await this.m (..)` whose receive the printer declares `[]any` (goAwaitReceiveUnbox): the
+  // declaration prints `var xs []any = ..`, but the identifier's cached type is `any` (the receive is a
+  // `<-` expression), so loop-bounded reads ask the declaration itself.
+  goAwaitedListLocal(base) {
+    const decl = this.checkerOrUndefined()?.getSymbolAtLocation(base)?.valueDeclaration?.resolve?.();
+    const awaited = decl?.initializer;
+    if (decl?.kind !== SyntaxKind5.VariableDeclaration || decl.name?.kind !== SyntaxKind5.Identifier || awaited?.kind !== SyntaxKind5.AwaitExpression || this.goDeclaredTypeInProgress.has(decl)) {
+      return false;
+    }
+    this.goDeclaredTypeInProgress.add(decl);
+    try {
+      return this.goAwaitReceiveUnbox(awaited, this.printNode(awaited, 0))?.goType === GO_SAFE_LIST_LOCAL_TYPE;
+    } finally {
+      this.goDeclaredTypeInProgress.delete(decl);
+    }
+  }
+  goAwaitedMapRowList(base) {
+    const decl = this.checkerOrUndefined()?.getSymbolAtLocation(base)?.valueDeclaration?.resolve?.();
+    const call = decl?.kind === SyntaxKind5.VariableDeclaration ? decl.initializer?.expression : void 0;
+    const callee = call?.expression;
+    if (decl.initializer?.kind !== SyntaxKind5.AwaitExpression || call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return false;
+    }
+    const name = String(callee.name?.text ?? "");
+    return this.asyncMapRowListCallees.has(name.charAt(0).toUpperCase() + name.slice(1));
   }
   // RF-go-6-C (DerefScalar follow-up): the checker types every element of this list as an object type
   // (a Trade / Order / Position interface, a Dict, a nested array), never a scalar, `any` or a union with
@@ -49159,6 +49192,8 @@ var CCXT_GO_ASYNC_ELEM_TYPES = {
   // R2 TS annotations ['Promise<any[]>'] -> []any
   "FetchRawMarketsBySearchAsync": "[]any",
   // R2 TS annotations ['Promise<any[]>'] -> []any
+  "FetchRawMarketsPagedAsync": "[]any",
+  // R2 TS annotations ['Promise<any[]>'] -> []any
   "FetchRawMarketsByTagsAsync": "[]any",
   // R2 TS annotations ['Promise<any[]>'] -> []any
   "FetchRawMarketsListAsync": "[]any",
@@ -49607,6 +49642,10 @@ function ccxtGoAsyncReceiveReadsTheValue(goTranspiler, node, goType) {
       return false;
   }
 }
+function ccxtGoIsNotAReference(goTranspiler, n, declaration) {
+  const parent = n.parent;
+  return parent?.kind === ts.SyntaxKind.PropertyAccessExpression && parent.name === n || parent?.kind === ts.SyntaxKind.PropertyAssignment && parent.name === n || typeof goTranspiler.goIdentifierRefersToDeclaration === "function" && !goTranspiler.goIdentifierRefersToDeclaration(n, declaration);
+}
 function ccxtGoAsyncReceiveDeclaration(awaitNode) {
   let node = awaitNode;
   while (node !== void 0) {
@@ -50009,7 +50048,8 @@ function ccxtGoAwaitReceiveUnbox(goTranspiler, awaitNode, printedInitializer) {
     const safe = goTranspiler.goDeclaredLocalTypeIfSafe(
       declaration,
       goType,
-      (n) => ccxtGoAsyncReceiveReadsTheValue(goTranspiler, n, goType) || endpoint !== void 0 && ccxtGoEndpointLocalParserRead(n)
+      (n) => ccxtGoAsyncReceiveReadsTheValue(goTranspiler, n, goType) || endpoint !== void 0 && ccxtGoEndpointLocalParserRead(n),
+      (n) => ccxtGoIsNotAReference(goTranspiler, n, declaration)
     );
     if (safe === void 0) {
       return void 0;

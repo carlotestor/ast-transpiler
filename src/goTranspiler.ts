@@ -951,6 +951,7 @@ export class GoTranspiler extends BaseTranspiler {
             ownerSide: (owned['ownerSideMethods'] ?? []).map((p: string) => new RegExp(p)),
         };
         this.generatedListCallees = new Set<string>(config['generatedListCallees'] ?? []); // RF-go-6-C
+        this.asyncMapRowListCallees = new Set<string>(config['asyncMapRowListCallees'] ?? []);
         this.goTupleSlotTypes = config['goTupleSlotTypes'] ?? {};
         this.goTupleValueDefaultArg = config['goTupleValueDefaultArg'] ?? {};
         const caches = config['ownedCaches'];
@@ -14745,8 +14746,12 @@ ${tryBodyBlock}
         if (this.isGoElementAccessAssignmentTarget(node) || containerStr.includes('\n') || keyStr.includes('\n')) {
             return undefined;
         }
-        const listType = this.goResolvedLocalGoType(baseExpr);
-        if ((listType !== GO_STRING_LIST_LOCAL_TYPE) && !((listType === GO_SAFE_LIST_LOCAL_TYPE) && this.goListElementsAreObjects(baseExpr))) {
+        let listType = this.goResolvedLocalGoType(baseExpr);
+        if (((listType === undefined) || (listType === 'any')) && this.goAwaitedListLocal(baseExpr)) {
+            listType = GO_SAFE_LIST_LOCAL_TYPE;
+        }
+        if ((listType !== GO_STRING_LIST_LOCAL_TYPE)
+            && !((listType === GO_SAFE_LIST_LOCAL_TYPE) && (this.goListElementsAreObjects(baseExpr) || this.goAwaitedMapRowList(baseExpr)))) {
             return undefined;
         }
         const mutators = [ 'push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'fill', 'copyWithin' ];
@@ -14775,6 +14780,40 @@ ${tryBodyBlock}
         }
         return undefined;
     }
+    // `const xs = await this.m (..)` whose receive the printer declares `[]any` (goAwaitReceiveUnbox): the
+    // declaration prints `var xs []any = ..`, but the identifier's cached type is `any` (the receive is a
+    // `<-` expression), so loop-bounded reads ask the declaration itself.
+    goAwaitedListLocal(base): boolean {
+        const decl: any = this.checkerOrUndefined()?.getSymbolAtLocation(base)?.valueDeclaration?.resolve?.();
+        const awaited: any = decl?.initializer;
+        if ((decl?.kind !== SyntaxKind.VariableDeclaration) || (decl.name?.kind !== SyntaxKind.Identifier)
+            || (awaited?.kind !== SyntaxKind.AwaitExpression) || this.goDeclaredTypeInProgress.has(decl)) {
+            return false;
+        }
+        this.goDeclaredTypeInProgress.add(decl);
+        try {
+            return this.goAwaitReceiveUnbox(awaited, this.printNode(awaited, 0))?.goType === GO_SAFE_LIST_LOCAL_TYPE;
+        } finally {
+            this.goDeclaredTypeInProgress.delete(decl);
+        }
+    }
+
+    // Go-cased methods whose channel carries a `[]map[string]any` (the host's async table): the awaited
+    // list is a MapSliceToList carrier, every row a map, never a scalar box.
+    asyncMapRowListCallees: Set<string> = new Set<string>();
+
+    goAwaitedMapRowList(base): boolean {
+        const decl: any = this.checkerOrUndefined()?.getSymbolAtLocation(base)?.valueDeclaration?.resolve?.();
+        const call: any = (decl?.kind === SyntaxKind.VariableDeclaration) ? decl.initializer?.expression : undefined;
+        const callee: any = call?.expression;
+        if ((decl.initializer?.kind !== SyntaxKind.AwaitExpression) || (call?.kind !== SyntaxKind.CallExpression)
+            || (callee?.kind !== SyntaxKind.PropertyAccessExpression) || (callee.expression?.kind !== SyntaxKind.ThisKeyword)) {
+            return false;
+        }
+        const name = String(callee.name?.text ?? '');
+        return this.asyncMapRowListCallees.has(name.charAt(0).toUpperCase() + name.slice(1));
+    }
+
     // RF-go-6-C (DerefScalar follow-up): the checker types every element of this list as an object type
     // (a Trade / Order / Position interface, a Dict, a nested array), never a scalar, `any` or a union with
     // one. A Go `[]any` holding such elements holds maps or slices, never a *string/*int64/*float64/*bool, so
