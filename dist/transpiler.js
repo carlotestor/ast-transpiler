@@ -8378,6 +8378,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return void 0;
     }
     const fn = this.csharpEnclosingFunction(statement);
+    const typedElements = elements.map((element) => this.csharpPromiseAllTypedElement(fn, element));
+    if (typedElements.every((typed) => typed !== void 0) && new Set(typedElements.map((typed) => typed.type)).size === 1) {
+      return void 0;
+    }
     const slots = [];
     const locals = [];
     for (let i = 0; i < elements.length; i++) {
