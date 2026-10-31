@@ -10,6 +10,7 @@ import { installCcxtGoSignTyping } from './hx11-sign-typing.js';
 import { installHx11w8NumParams } from './hx11w8-num-param.js';
 import { installRfGo5OwnedTables } from './hx11rf-go5.js';
 import { installFmGo5OG02 } from './hx11fmgo5-OG02.js';
+import { installRfmX3SafeDictLocals } from './hx11rfmx3-m43.js';
 
 export function installCcxtGoHooks (goTranspiler: any, unifiedInt64Params?: any): void {
     installCcxtGoLocalTypes (goTranspiler, unifiedInt64Params);
@@ -22,11 +23,12 @@ export function installCcxtGoHooks (goTranspiler: any, unifiedInt64Params?: any)
     installHx11w8NumParams (goTranspiler);
     installRfGo5OwnedTables (goTranspiler);
     installFmGo5OG02 (goTranspiler);
+    installRfmX3SafeDictLocals (goTranspiler);
 }
 
 export {
     installCcxtGoLocalTypes, installCcxtGoIndexableTypes, installCcxtGoParamTypes, installCcxtGoDictParams,
-    installCcxtGoGb05ParamTypes, installCcxtGoGb11HandleErrorsCode, installCcxtGoSignTyping, installHx11w8NumParams, installRfGo5OwnedTables, installFmGo5OG02,
+    installCcxtGoGb05ParamTypes, installCcxtGoGb11HandleErrorsCode, installCcxtGoSignTyping, installHx11w8NumParams, installRfGo5OwnedTables, installFmGo5OG02, installRfmX3SafeDictLocals,
 };
 export { CCXT_GO_HELPER_RETURN_TYPES, CCXT_GO_BOOL_METHOD_NAMES, CCXT_GO_STRING_PTR_METHOD_NAMES } from './go-local-types.js';
 export { hx10G06Check } from './hx10w3-G06.js';

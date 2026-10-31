@@ -3343,9 +3343,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (dictWrite !== void 0) {
       return dictWrite;
     }
-    const typedRead = this.printTypedDictElementAccessIfAny(node);
-    if (typedRead !== void 0) {
-      return typedRead;
+    const typedRead2 = this.printTypedDictElementAccessIfAny(node);
+    if (typedRead2 !== void 0) {
+      return typedRead2;
     }
     if (this.csharpElementAccessReceiverIsList(node)) {
       const type = this.getChecker().getTypeAtLocation(node.argumentExpression);
@@ -22197,9 +22197,9 @@ ${this.getIden(identation)}}}`;
     if (own !== void 0) {
       return own;
     }
-    const baseField = this.javaBaseMapFieldLocalType(declaration);
-    if (baseField !== void 0) {
-      return baseField;
+    const baseField2 = this.javaBaseMapFieldLocalType(declaration);
+    if (baseField2 !== void 0) {
+      return baseField2;
     }
     if (isParameterDeclaration2(declaration)) {
       const fixed = this.javaNativeParameterType(declaration);
@@ -28846,8 +28846,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // non-numbers; with both operands checker-typed numbers the same f64
   // comparison runs natively on `Value::as_f64()` unwraps.
   printNativeNumericComparison(node, operator, leftText, rightText) {
-    const unwrap = (text) => `${text}.as_f64().unwrap_or(f64::NAN)`;
-    const comparison = `${unwrap(leftText)} ${operator} ${unwrap(rightText)}`;
+    const unwrap2 = (text) => `${text}.as_f64().unwrap_or(f64::NAN)`;
+    const comparison = `${unwrap2(leftText)} ${operator} ${unwrap2(rightText)}`;
     return this.isBooleanPosition(node) ? comparison : `Value::Bool(${comparison})`;
   }
   // How numeric an ordered-comparison operand is: 'definite' (numeric
@@ -48180,6 +48180,377 @@ function installFmGo5OG02(goTranspiler) {
   };
 }
 
+// src/go/hx11rfmx3-m43.ts
+init_esm_shims();
+var GO_DICT_TYPE = "map[string]any";
+var DICT_ACCESSORS = { "safeDict": 3, "safeDict2": 4 };
+var OWNER_CLASS3 = "BaseExchange";
+var DEFAULTED_FIELDS = ["options", "balance", "fees"];
+var NODEFAULT_FIELDS = ["options", "balance"];
+function unwrap(node) {
+  while (node?.kind === ts.SyntaxKind.ParenthesizedExpression || node?.kind === ts.SyntaxKind.AsExpression || node?.kind === ts.SyntaxKind.NonNullExpression) {
+    node = node.expression;
+  }
+  return node;
+}
+function isNilLiteral(node) {
+  node = unwrap(node);
+  return node?.kind === ts.SyntaxKind.NullKeyword || node?.kind === ts.SyntaxKind.Identifier && node.text === "undefined";
+}
+function dictCall(node) {
+  node = unwrap(node);
+  if (node?.kind !== ts.SyntaxKind.CallExpression || node.expression?.kind !== ts.SyntaxKind.PropertyAccessExpression || node.expression.expression?.kind !== ts.SyntaxKind.ThisKeyword) {
+    return void 0;
+  }
+  const name = node.expression.name?.text;
+  const wanted = DICT_ACCESSORS[name];
+  return wanted === void 0 ? void 0 : [node, name, wanted];
+}
+function baseField(go, node, fields) {
+  node = unwrap(node);
+  if (node?.kind !== ts.SyntaxKind.PropertyAccessExpression || node.expression?.kind !== ts.SyntaxKind.ThisKeyword || fields.indexOf(node.name?.text) < 0) {
+    return false;
+  }
+  const decl = go.checkerOrUndefined()?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+  return decl?.kind === ts.SyntaxKind.PropertyDeclaration && decl.parent?.name?.text === OWNER_CLASS3;
+}
+function mentionsThis(node) {
+  if (node.kind === ts.SyntaxKind.ThisKeyword) {
+    return true;
+  }
+  let found = false;
+  node.forEachChild((child) => {
+    found = found || mentionsThis(child);
+  });
+  return found;
+}
+function isObjectType(go, node) {
+  const checker = go.checkerOrUndefined();
+  const type = checker?.getTypeAtLocation(node);
+  if (type === void 0) {
+    return false;
+  }
+  const parts = type.isUnionType?.() ? ts.typeParts(type) : [type];
+  return parts.some((t) => t?.getSymbol() !== void 0 && ((t.getSymbol().flags & ts.SymbolFlags.Class) !== 0 || /OrderBook|ArrayCache|Client|Future/.test(checker.typeToString(t))));
+}
+function plainReceiver(go, node, ws, defaulted) {
+  node = unwrap(node);
+  if (node === void 0) {
+    return false;
+  }
+  if (mentionsThis(node)) {
+    return baseField(go, node, defaulted ? DEFAULTED_FIELDS : NODEFAULT_FIELDS);
+  }
+  if (!ws) {
+    return true;
+  }
+  for (let cur = node; cur !== void 0; cur = unwrap(cur.expression)) {
+    if (isObjectType(go, cur)) {
+      return cur === node ? false : node.kind === ts.SyntaxKind.PropertyAccessExpression && node.name?.text === "hashmap" && node.expression === cur;
+    }
+    if (cur.kind !== ts.SyntaxKind.PropertyAccessExpression && cur.kind !== ts.SyntaxKind.ElementAccessExpression && cur.kind !== ts.SyntaxKind.CallExpression) {
+      break;
+    }
+    if (cur.kind === ts.SyntaxKind.CallExpression) {
+      break;
+    }
+  }
+  return true;
+}
+function literalDefaultCall(go, call, name, wanted, ws) {
+  const args = call.arguments;
+  return args.length === wanted && plainReceiver(go, args[0], ws, true) && literalDefault(go, args[wanted - 1], ws);
+}
+function literalDefault(go, node, ws) {
+  node = unwrap(node);
+  if (node?.kind === ts.SyntaxKind.ObjectLiteralExpression && node.properties.length === 0) {
+    return true;
+  }
+  const inner = dictCall(node);
+  return inner !== void 0 && literalDefaultCall(go, inner[0], inner[1], inner[2], ws);
+}
+function topFunction(node) {
+  let top;
+  for (let cur = node?.parent; cur !== void 0; cur = cur.parent) {
+    switch (cur.kind) {
+      case ts.SyntaxKind.MethodDeclaration:
+      case ts.SyntaxKind.FunctionDeclaration:
+      case ts.SyntaxKind.Constructor:
+      case ts.SyntaxKind.GetAccessor:
+      case ts.SyntaxKind.SetAccessor:
+        top = cur;
+        break;
+    }
+  }
+  return top;
+}
+function bindingNamesCount(scope, name) {
+  let count = 0;
+  const visit = (n) => {
+    if ((n.kind === ts.SyntaxKind.VariableDeclaration || n.kind === ts.SyntaxKind.Parameter) && n.name !== void 0) {
+      count += namesIn(n.name, name);
+    }
+    n.forEachChild(visit);
+  };
+  visit(scope);
+  return count;
+}
+function namesIn(pattern, name) {
+  if (pattern.kind === ts.SyntaxKind.Identifier) {
+    return pattern.text === name ? 1 : 0;
+  }
+  let count = 0;
+  pattern.forEachChild((child) => {
+    if (child.kind === ts.SyntaxKind.BindingElement) {
+      count += namesIn(child.name, name);
+    }
+  });
+  return count;
+}
+function containsOr(node) {
+  if (node.kind === ts.SyntaxKind.BinaryExpression && node.operatorToken?.kind === ts.SyntaxKind.BarBarToken) {
+    return true;
+  }
+  let found = false;
+  node.forEachChild((child) => {
+    found = found || containsOr(child);
+  });
+  return found;
+}
+function hasNotNilTest(cond, name) {
+  let found = false;
+  const visit = (n) => {
+    if (n.kind === ts.SyntaxKind.BinaryExpression && (n.operatorToken?.kind === ts.SyntaxKind.ExclamationEqualsToken || n.operatorToken?.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken)) {
+      const l = unwrap(n.left);
+      const r = unwrap(n.right);
+      found = found || (l?.kind === ts.SyntaxKind.Identifier && l.text === name && isNilLiteral(r) || r?.kind === ts.SyntaxKind.Identifier && r.text === name && isNilLiteral(l));
+    }
+    n.forEachChild(visit);
+  };
+  visit(cond);
+  return found;
+}
+function guardedByNotNil(n, name) {
+  for (let cur = n; cur.parent !== void 0; cur = cur.parent) {
+    const p = cur.parent;
+    if (p.kind === ts.SyntaxKind.IfStatement && p.thenStatement === cur && !containsOr(p.expression) && hasNotNilTest(p.expression, name)) {
+      return true;
+    }
+    if (p.kind === ts.SyntaxKind.ConditionalExpression && p.whenTrue === cur && !containsOr(p.condition) && hasNotNilTest(p.condition, name)) {
+      return true;
+    }
+  }
+  return false;
+}
+var FUNCTION_KINDS = [ts.SyntaxKind.FunctionExpression, ts.SyntaxKind.ArrowFunction];
+function classifyUse(go, n, name, decl, accessor, ws, defaulted) {
+  const SK = ts.SyntaxKind;
+  let cur = n;
+  while (cur.parent !== void 0 && (cur.parent.kind === SK.ParenthesizedExpression || cur.parent.kind === SK.AsExpression || cur.parent.kind === SK.NonNullExpression) && cur.parent.expression === cur) {
+    cur = cur.parent;
+  }
+  const p = cur.parent;
+  switch (p?.kind) {
+    case SK.PropertyAccessExpression:
+      return p.expression === cur ? p.name?.text === "length" ? [true, void 0, "arg"] : [false] : [true];
+    case SK.ElementAccessExpression: {
+      if (p.expression !== cur) {
+        return [true];
+      }
+      const above = p.parent;
+      const isWrite = above?.kind === SK.BinaryExpression && above.left === p && above.operatorToken.kind >= SK.FirstAssignment && above.operatorToken.kind <= SK.LastAssignment;
+      return [true, void 0, !isWrite ? "read" : "write"];
+    }
+    case SK.CallExpression: {
+      if (p.expression === cur) {
+        return [false];
+      }
+      const callee = p.expression;
+      if (callee?.kind === SK.PropertyAccessExpression && callee.expression?.kind === SK.Identifier && callee.expression.text === "Array" && callee.name?.text === "isArray") {
+        return [false];
+      }
+      const onThis = callee?.kind === SK.PropertyAccessExpression && callee.expression?.kind === SK.ThisKeyword;
+      const safeRead = onThis && /^safe[A-Z]/.test(callee.name?.text ?? "") && p.arguments[0] === cur;
+      return [true, void 0, safeRead ? "safe" : "arg"];
+    }
+    case SK.BinaryExpression: {
+      const op = p.operatorToken.kind;
+      if (op >= SK.FirstAssignment && op <= SK.LastAssignment) {
+        if (p.left !== cur) {
+          return [true];
+        }
+        if (!defaulted || op !== SK.EqualsToken) {
+          return [false];
+        }
+        const again = dictCall(p.right);
+        const inner = again !== void 0 ? again[0] : void 0;
+        if (again === void 0 || again[1] !== accessor || p.parent?.kind !== SK.ExpressionStatement || p.right !== again[0] && unwrap(p.right) !== again[0] || !literalDefaultCall(go, inner, again[1], again[2], ws) || mentionsName(inner, name)) {
+          return [false];
+        }
+        return [true, p];
+      }
+      if (op === SK.EqualsEqualsToken || op === SK.EqualsEqualsEqualsToken || op === SK.ExclamationEqualsToken || op === SK.ExclamationEqualsEqualsToken) {
+        return isNilLiteral(p.left === cur ? p.right : p.left) ? [true, void 0, "nil"] : [false];
+      }
+      return [true, void 0, "arg"];
+    }
+    case SK.TypeOfExpression:
+    case SK.DeleteExpression:
+    case SK.SpreadElement:
+    case SK.SwitchStatement:
+    case SK.CaseClause:
+    case SK.ArrayBindingPattern:
+    case SK.ObjectBindingPattern:
+      return [false];
+    case SK.VariableDeclaration:
+      return p.name?.kind === SK.Identifier ? [true, void 0, "arg"] : [false];
+    default:
+      return [true, void 0, "arg"];
+  }
+}
+function mentionsName(node, name) {
+  if (node.kind === ts.SyntaxKind.Identifier && node.text === name && !(node.parent?.kind === ts.SyntaxKind.PropertyAccessExpression && node.parent.name === node)) {
+    return true;
+  }
+  let found = false;
+  node.forEachChild((child) => {
+    found = found || mentionsName(child, name);
+  });
+  return found;
+}
+function isFileInScope(declaration) {
+  const fileName = declaration.getSourceFile?.()?.fileName;
+  const name = typeof fileName === "string" ? fileName : "";
+  if (/(^|[\\/])ts[\\/]src[\\/](base|prediction|test)[\\/]/.test(name) || /[\\/]prediction[\\/]/.test(name)) {
+    return void 0;
+  }
+  return { "ws": /[\\/]pro[\\/]/.test(name) };
+}
+function unboxVerdict(go, declaration) {
+  const SK = ts.SyntaxKind;
+  if (declaration?.kind !== SK.VariableDeclaration || declaration.name?.kind !== SK.Identifier || declaration.parent?.parent?.kind !== SK.VariableStatement || declaration.initializer === void 0) {
+    return void 0;
+  }
+  const found = dictCall(declaration.initializer);
+  const file = isFileInScope(declaration);
+  if (found === void 0 || file === void 0 || unwrap(declaration.initializer) !== found[0]) {
+    return void 0;
+  }
+  const [call, accessor, wanted] = found;
+  const statement = declaration.parent.parent;
+  if (statement.getText().indexOf("//") >= 0 || go.printTraillingComment(statement, 0) !== "") {
+    return void 0;
+  }
+  const args = call.arguments;
+  const defaulted = args.length === wanted;
+  if (!defaulted && args.length !== wanted - 1) {
+    return void 0;
+  }
+  if (!plainReceiver(go, args[0], file.ws, defaulted) || defaulted && !literalDefault(go, args[wanted - 1], file.ws)) {
+    return void 0;
+  }
+  const scope = topFunction(declaration);
+  const name = declaration.name.text;
+  if (scope === void 0 || bindingNamesCount(scope, name) !== 1 || go.goTypeNameIsShadowed(scope, GO_DICT_TYPE)) {
+    return void 0;
+  }
+  const rebinds = [];
+  let keeps = true;
+  const reads = (n) => {
+    if (!keeps) {
+      return;
+    }
+    if (n.kind === SK.Identifier && n.text === name && n !== declaration.name && !(n.parent?.kind === SK.PropertyAccessExpression && n.parent.name === n) && !(n.parent?.kind === SK.PropertyAssignment && n.parent.name === n)) {
+      const [ok, rebind, role] = classifyUse(go, n, name, declaration, accessor, file.ws, defaulted);
+      if (!ok) {
+        keeps = false;
+        return;
+      }
+      if (rebind !== void 0) {
+        rebinds.push(rebind);
+      } else if (!defaulted) {
+        const allowed = guardedByNotNil(n, name) || role === "nil" || role === "safe" || file.ws && role === "read";
+        if (!allowed) {
+          keeps = false;
+        }
+      }
+      return;
+    }
+    n.forEachChild(reads);
+  };
+  scope.forEachChild(reads);
+  return keeps ? { rebinds } : void 0;
+}
+function typedRead(go, found, identation) {
+  const [call, accessor] = found;
+  const twin = "this." + accessor.charAt(0).toUpperCase() + accessor.slice(1) + "Map";
+  return twin + "(" + call.arguments.map((arg, index) => go.printNode(arg, index === 0 ? identation : 0)).join(", ") + ")";
+}
+function installRfmX3SafeDictLocals(goTranspiler) {
+  if (goTranspiler === void 0 || goTranspiler.__rfmX3SafeDictInstalled) {
+    return;
+  }
+  if (typeof goTranspiler.goSafeDictLocalUnbox !== "function" || typeof goTranspiler.goSafeDictUnboxValue !== "function" || typeof goTranspiler.goTypeNameIsShadowed !== "function") {
+    return;
+  }
+  goTranspiler.__rfmX3SafeDictInstalled = true;
+  const verdicts = /* @__PURE__ */ new Map();
+  const verdictOf = (go, declaration) => {
+    if (declaration?.kind !== ts.SyntaxKind.VariableDeclaration) {
+      return void 0;
+    }
+    if (!verdicts.has(declaration)) {
+      verdicts.set(declaration, void 0);
+      let verdict;
+      try {
+        verdict = unboxVerdict(go, declaration);
+      } finally {
+        verdicts.set(declaration, verdict);
+      }
+    }
+    return verdicts.get(declaration);
+  };
+  const typeOf = goTranspiler.goSafeDictLocalUnbox;
+  const valueOf = goTranspiler.goSafeDictUnboxValue;
+  goTranspiler.goSafeDictLocalUnbox = function(declaration) {
+    const known = typeOf.call(this, declaration);
+    if (known !== void 0) {
+      return known;
+    }
+    return verdictOf(this, declaration) !== void 0 ? GO_DICT_TYPE : void 0;
+  };
+  goTranspiler.goSafeDictUnboxValue = function(declaration, identation) {
+    if (typeOf.call(this, declaration) === void 0 && verdictOf(this, declaration) !== void 0) {
+      return typedRead(this, dictCall(declaration.initializer), identation);
+    }
+    return valueOf.call(this, declaration, identation);
+  };
+  const nativeWrite = goTranspiler.printNativeElementAssignment;
+  goTranspiler.printNativeElementAssignment = function(containerNode, containerStr, keyNode, keyStr, valueStr, compound = false, valueNode) {
+    const container = unwrap(containerNode);
+    const value = unwrap(valueNode);
+    if (container?.kind === ts.SyntaxKind.Identifier && value?.kind === ts.SyntaxKind.Identifier) {
+      const decl = this.checkerOrUndefined()?.getSymbolAtLocation(container)?.valueDeclaration?.resolve();
+      const valueType = this.goDeclaredTypeOfIdentifier(value);
+      if (decl !== void 0 && verdictOf(this, decl) !== void 0 && typeof valueType === "string" && valueType.startsWith("*")) {
+        return void 0;
+      }
+    }
+    return nativeWrite.call(this, containerNode, containerStr, keyNode, keyStr, valueStr, compound, valueNode);
+  };
+  const printBinary = goTranspiler.printBinaryExpression;
+  goTranspiler.printBinaryExpression = function(node, identation) {
+    if (node?.operatorToken?.kind === ts.SyntaxKind.EqualsToken && node.left?.kind === ts.SyntaxKind.Identifier) {
+      const decl = this.checkerOrUndefined()?.getSymbolAtLocation(node.left)?.valueDeclaration?.resolve();
+      const verdict = decl !== void 0 ? verdictOf(this, decl) : void 0;
+      if (verdict !== void 0 && verdict.rebinds.indexOf(node) >= 0) {
+        return this.printNode(node.left, 0) + " = " + typedRead(this, dictCall(node.right), identation);
+      }
+    }
+    return printBinary.call(this, node, identation);
+  };
+}
+
 // src/go/index.ts
 function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installCcxtGoLocalTypes(goTranspiler, unifiedInt64Params);
@@ -48192,6 +48563,7 @@ function installCcxtGoHooks(goTranspiler, unifiedInt64Params) {
   installHx11w8NumParams(goTranspiler);
   installRfGo5OwnedTables(goTranspiler);
   installFmGo5OG02(goTranspiler);
+  installRfmX3SafeDictLocals(goTranspiler);
 }
 
 // src/rustPasses/index.ts
@@ -57373,6 +57745,7 @@ export {
   installFmGo5OG02,
   installHx11w8NumParams,
   installRfGo5OwnedTables,
+  installRfmX3SafeDictLocals,
   narrowStrNullLocals,
   narrowStrSinkLocals,
   nativeGetValue,
