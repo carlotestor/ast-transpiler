@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-FU7DZIKQ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -3071,6 +3071,20 @@ var CSharpTranspiler = class extends BaseTranspiler {
     this.csharpMethodOverrides = /* @__PURE__ */ new WeakMap();
     // class declaration -> member name -> its LAST method of that name (base scan order)
     this.csharpClassMethodsByName = /* @__PURE__ */ new WeakMap();
+    // ===== RFM-C2-B: declared dictionary base fields, and `mod` equality against a literal =====
+    // A hand-written BaseExchange field the printer's tables above do not name is declared in the
+    // embedding build layer's derived table (config.csharp.declaredBaseFieldTypes: the field's C# type in
+    // cs/ccxt/base/Exchange.Options.cs, read through csharpDeclaredBaseFieldType). Two declared shapes read natively:
+    //   - `IDictionary<string, object>` / `Dictionary<string, object>` (ccxt: urls, headers): the member IS a
+    //     dictionary, so its indexer and ContainsKey replace getValue / inOp; the helper's null receiver,
+    //     null key and missing key branches are spelled back as tests;
+    //   - `object` (ccxt: positions, currencies): the box is a dictionary whenever every write of the member in the
+    //     source file stores one (`{}` literal, a dictionary-typed value, null, undefined) and at least one
+    //     write exists, so the same reads go through the helper's own `(IDictionary<string,object>)` cast.
+    // The key is a string literal, an identifier whose printed C# type is string / string?, or an identifier
+    // whose TypeScript type is a string (printed `object` or string: `(string)key` is the helper's own cast).
+    // Every other key, a write, a delete and a name no hook declares keep the helper.
+    this.csharpDeclaredBaseFields = {};
     this.csharpBaseFieldKeyNames = /* @__PURE__ */ new WeakMap();
     // method node -> the parameter indexes this printer emits as `bool?`; keyed by the ts.Program
     // the census walked, so a sticky batch program and an in-memory snippet never answer for
@@ -3085,6 +3099,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     this.id = "C#";
     this.initConfig();
     this.applyUserOverrides(config);
+    this.csharpDeclaredBaseFields = Object.assign({}, config["declaredBaseFieldTypes"] ?? {});
   }
   initConfig() {
     this.LeftPropertyAccessReplacements = {
@@ -3485,7 +3500,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const field = this.printNode(expression, 0);
     const printedKey = this.printNode(argumentExpression, 0);
     if (CSHARP_OBJECT_DICT_FIELDS.indexOf(name) >= 0) {
-      const receiver = this.csharpBaseFieldDeclaredDictionary(name) ? field : `((IDictionary<string, object>)${field})`;
+      const receiver = `((IDictionary<string, object>)${field})`;
       return `(${field} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
     }
     return `(${field}.ContainsKey(${printedKey}) ? ${field}[${printedKey}] : null)`;
@@ -5016,26 +5031,17 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     return parent.kind !== SyntaxKind4.AsExpression && parent.kind !== SyntaxKind4.TypeAssertionExpression && parent.kind !== SyntaxKind4.NonNullExpression;
   }
-  // ===== RFM-C2-B: declared dictionary base fields, and `mod` equality against a literal =====
-  // A hand-written BaseExchange field the printer's tables above do not name is declared in the
-  // embedding build layer's derived table (csharpDeclaredBaseFieldType: the field's C# type in
-  // cs/ccxt/base/Exchange.Options.cs). Two declared shapes read natively:
-  //   - `IDictionary<string, object>` / `Dictionary<string, object>` (ccxt: urls, headers): the member IS a
-  //     dictionary, so its indexer and ContainsKey replace getValue / inOp; the helper's null receiver,
-  //     null key and missing key branches are spelled back as tests;
-  //   - `object` (ccxt: positions, currencies): the box is a dictionary whenever every write of the member in the
-  //     source file stores one (`{}` literal, a dictionary-typed value, null, undefined) and at least one
-  //     write exists, so the same reads go through the helper's own `(IDictionary<string,object>)` cast.
-  // The key is a string literal, an identifier whose printed C# type is string / string?, or an identifier
-  // whose TypeScript type is a string (printed `object` or string: `(string)key` is the helper's own cast).
-  // Every other key, a write, a delete and a name no hook declares keep the helper.
   csharpDeclaredBaseFieldType(name) {
-    return void 0;
+    return Object.prototype.hasOwnProperty.call(this.csharpDeclaredBaseFields, name) ? this.csharpDeclaredBaseFields[name] : void 0;
   }
   // the member is declared a dictionary type in the hand-written base (so `(IDictionary<string, object>)this.<name>` is an identity cast)
   csharpBaseFieldDeclaredDictionary(name) {
     const declared = typeof this.csharpDeclaredBaseFieldType === "function" ? this.csharpDeclaredBaseFieldType(name) : void 0;
     return declared !== void 0 && declared.indexOf("Dictionary<") >= 0;
+  }
+  // `this.<member>` whose hand-written declaration is a dictionary type (any table: the declaration is the proof)
+  csharpBaseFieldIsDeclaredDictionary(node) {
+    return isPropertyAccessExpression(node) && node.expression?.kind === SyntaxKind4.ThisKeyword && this.csharpBaseFieldDeclaredDictionary(node.name?.text);
   }
   // `this.<field>` that the table above declares and no printer table names, or undefined
   csharpBaseFieldName(node) {
@@ -5185,7 +5191,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const source = key.getSourceFile?.();
     const used = this.csharpBaseFieldKeyNames.get(source) ?? 0;
     this.csharpBaseFieldKeyNames.set(source, used + 1);
-    const bound = `baseFieldKey${used}`;
+    const bound = `hx10w3Key${used}`;
     return `(${receiver.field} != null && ${printedKey.text} is string ${bound} && ${receiver.text}.ContainsKey(${bound}))`;
   }
   // `isEqual (a % b, N)` -> `((a % b) == N)` when both operands are Int64 / Int64? locals: the helper takes the double remainder and converts it back, which is the
@@ -5866,6 +5872,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (target?.kind === SyntaxKind4.ThisKeyword) {
       if (!this.csharpCalleeResolves(initializer)) {
         return void 0;
+      }
+      if (methodName === "omit" && initializer.arguments?.length === 2 && this.csharpBaseFieldIsDeclaredDictionary(initializer.arguments[0])) {
+        return "Dictionary<string, object>";
       }
       return CSHARP_THIS_RETURN_TYPES[methodName];
     }

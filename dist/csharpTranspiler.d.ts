@@ -142,8 +142,12 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpNativeNumericComparison(node: any, identation: any): string | undefined;
     csharpNativeMathMinMax(node: any, name: string, parsedArg1: string, parsedArg2: string): string | undefined;
     csharpMinMaxResultIsPlainValue(node: any): boolean;
+    csharpDeclaredBaseFields: {
+        [name: string]: string;
+    };
     csharpDeclaredBaseFieldType(name: string): string | undefined;
     csharpBaseFieldDeclaredDictionary(name: string): boolean;
+    csharpBaseFieldIsDeclaredDictionary(node: any): boolean;
     csharpBaseFieldName(node: any): string | undefined;
     csharpBaseFieldWritesAreDictionaries(node: any, name: string): boolean;
     csharpBaseFieldDictionary(node: any): {
