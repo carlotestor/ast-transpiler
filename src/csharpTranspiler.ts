@@ -7215,15 +7215,29 @@ export class CSharpTranspiler extends BaseTranspiler {
         const printedKey = this.printNode(argumentExpression, 0);
         const keyType = this.csharpHx4DeclaredKeyType(argumentExpression);
         if (csharpType.indexOf('Dictionary<') >= 0) {
-            if (keyType !== 'string' && keyType !== 'string?') {
+            // RFM-C2-A: an `object` key is read like GetValue(object, object) does -- a null key
+            // answers null, any other key goes through the `(string)` cast (a non-string box throws
+            // in the helper and here alike)
+            const boxedKey = keyType === 'object';
+            if (keyType !== 'string' && keyType !== 'string?' && !(boxedKey && this.csharpIsExchangeSourceFile(expression))) {
                 return undefined;
             }
-            return `(${receiver} != null && ${printedKey} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
+            const stringKey = boxedKey ? `(string)${printedKey}` : printedKey;
+            return `(${receiver} != null && ${printedKey} != null && ${receiver}.ContainsKey(${stringKey}) ? ${receiver}[${stringKey}] : null)`;
         }
         if (keyType !== 'int') {
             return undefined; // Int64/object indices do not bind the List indexer
         }
         return `(${receiver} != null && ${printedKey} < ${receiver}.Count ? ${receiver}[${printedKey}] : null)`;
+    }
+
+    // an exchange source (ts/src/, never the test or example tiers, whose element reads print
+    // against the bridge helpers); a host may override the per-file answer with csharpElementRowLocalSource
+    csharpIsExchangeSourceFile(node): boolean {
+        const fileName = String(node?.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
+        return (typeof this.csharpElementRowLocalSource === 'function')
+            ? this.csharpElementRowLocalSource(fileName)
+            : (fileName.includes('ts/src/') && !fileName.includes('ts/src/test/') && !fileName.includes('examples/'));
     }
 
     // a read that is no write target: not the left of any assignment, not ++/--, not delete
