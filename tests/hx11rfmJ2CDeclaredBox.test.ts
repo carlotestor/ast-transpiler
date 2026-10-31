@@ -53,9 +53,9 @@ describe('java declared-box operands: native arithmetic and boolean parameter co
         expect(out).toContain('(((long) i) + 1L)');
     });
 
-    test('divide is double division', () => {
+    test('divide keeps the helper (the old text pass had no residual site the later passes did not own)', () => {
         const out = numeric('        return a / b;\n');
-        expect(out).toContain('((a == null || b == null) ? null : (((double) a) / ((double) b)))');
+        expect(out).toContain('Helpers.divide(a, b)');
     });
 
     test('primitive double operands are native; Double boxes and Double multiply keep the helper', () => {
@@ -63,7 +63,7 @@ describe('java declared-box operands: native arithmetic and boolean parameter co
         // would diverge: a boxed operand of a double + / - keeps the helper, as does multiply (re-boxes Long)
         const out = numeric('        return [ f - g, f / g, d - e, d * e, d + e, a + f, f * g ];\n');
         expect(out).toContain('(f - g)');
-        expect(out).toContain('(f / g)');
+        expect(out).toContain('Helpers.divide(f, g)');
         expect(out).toContain('Helpers.subtract(d, e)');
         expect(out).toContain('Helpers.multiply(d, e)');
         expect(out).toContain('Helpers.add(d, e)');

@@ -6030,10 +6030,8 @@ export class JavaTranspiler extends BaseTranspiler {
                 declared = 'Long'; // an unwritten default-valued `Int` parameter printed as the core's Long
             }
         } else if (typeof this.javaBindingElementTypeResolver === 'function') {
-            // `const [ a, p ] = this.handle*(..)`: a destructured element the embedding layer typed
-            const symbol = this.getChecker().getSymbolAtLocation(inner);
-            const element: any = symbol?.valueDeclaration?.resolve();
-            if (element?.kind === SyntaxKind.BindingElement && element.name?.text === inner.text) {
+            const element: any = this.getChecker().getSymbolAtLocation(inner)?.valueDeclaration?.resolve();
+            if (element?.kind === SyntaxKind.BindingElement && (element.name as any)?.text === inner.text) {
                 try {
                     declared = this.javaBindingElementTypeResolver(element);
                 } catch (e) {
@@ -6044,7 +6042,44 @@ export class JavaTranspiler extends BaseTranspiler {
         const kinds: { [type: string]: string } = {
             Long: 'longbox', long: 'longprim', Integer: 'intbox', int: 'intprim', Double: 'doublebox', double: 'doubleprim'
         };
-        return declared === undefined ? undefined : kinds[declared.replace(/^final\s+/, '').trim()];
+        const kind = declared === undefined ? undefined : kinds[declared.replace(/^final\s+/, '').trim()];
+        // a read behind a dominating null test, and a `.length`-derived local (never null), are the
+        // operands the null-guard / length text passes after the printer turn native WITHOUT a null arm:
+        // leave them to those passes
+        if (kind !== undefined && kind.endsWith('box') && declaration !== undefined
+            && (this.javaNullGuardAdmitsRead(inner) || this.javaLocalIsLengthDerived(declaration))) {
+            return undefined;
+        }
+        // the checker type must itself be a number (plain or `Int` / `Num` = number | undefined): an `any`
+        // operand (`x.length` of an `any`, a `.length` switch local) is the shape of the passes that follow
+        return kind !== undefined && this.javaNumberOrNullishType(inner) ? kind : undefined;
+    }
+
+    // `const n = x.length` (a Java int read, never null)
+    javaLocalIsLengthDerived(declaration): boolean {
+        const init = declaration?.kind === SyntaxKind.VariableDeclaration
+            ? this.unwrapPrintTransparentExpression(declaration.initializer) : undefined;
+        return init !== undefined && isPropertyAccessExpression(init) && init.name.text === 'length';
+    }
+
+    // number, number-literal, or a union of those with undefined / null / void
+    javaNumberOrNullishType(node): boolean {
+        let type: any;
+        try {
+            type = this.checkerOrUndefined()?.getTypeAtLocation(node);
+        } catch (e) {
+            return false;
+        }
+        if (type === undefined) {
+            return false;
+        }
+        const isNumber = (t: any) => ((t?.flags ?? 0) & (TypeFlags.Number | TypeFlags.NumberLiteral)) !== 0;
+        if (isNumber(type)) {
+            return true;
+        }
+        const members: any[] = (((type.flags ?? 0) & TypeFlags.Union) !== 0 ? type.getTypes?.() : undefined) ?? [];
+        return members.some(isNumber) && members.every((m) => isNumber(m)
+            || ((m?.flags ?? 0) & (TypeFlags.Undefined | TypeFlags.Null | TypeFlags.Void)) !== 0);
     }
 
     javaStripPrintedParens(text: string): string {
@@ -6090,8 +6125,10 @@ export class JavaTranspiler extends BaseTranspiler {
     }
 
     printDeclaredBoxArithmetic(node, left, right, leftText: string, rightText: string, op): string | undefined {
+        // `/` is not here: Helpers.divide is null-first like multiply, but the old text pass never fired on it
+        // that the null-guard / `.length` passes after the printer did not already own (0 residual sites)
         const operator = op === SyntaxKind.PlusToken ? '+' : op === SyntaxKind.MinusToken ? '-'
-            : op === SyntaxKind.AsteriskToken ? '*' : op === SyntaxKind.SlashToken ? '/' : undefined;
+            : op === SyntaxKind.AsteriskToken ? '*' : undefined;
         if (operator === undefined || this.javaArithmeticResultIsBoxSensitive(node)) {
             return undefined;
         }
@@ -6124,7 +6161,7 @@ export class JavaTranspiler extends BaseTranspiler {
             return kinds[i] === 'intlit' ? `${texts[i]}L` : `((long) ${texts[i]})`;
         };
         const asDouble = (i: number) => (isDouble(kinds[i]) ? texts[i] : `((double) ${texts[i]})`);
-        const wide = (i: number) => (operator === '/' || hasDouble ? asDouble(i) : asLong(i));
+        const wide = (i: number) => (hasDouble ? asDouble(i) : asLong(i));
         const expression = `(${wide(0)} ${operator} ${wide(1)})`;
         const boxes = kinds.map((kind, i) => (kind.endsWith('box') ? texts[i] : undefined))
             .filter((text, i, all) => text !== undefined && all.indexOf(text) === i);

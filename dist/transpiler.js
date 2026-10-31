@@ -24330,8 +24330,8 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     if (isNumericLiteral3(inner)) {
-      const kind = this.javaIntegerLiteralKind(inner);
-      return kind === void 0 ? void 0 : kind === "long" ? "longlit" : "intlit";
+      const kind2 = this.javaIntegerLiteralKind(inner);
+      return kind2 === void 0 ? void 0 : kind2 === "long" ? "longlit" : "intlit";
     }
     if (!isIdentifier2(inner) || this.javaStripPrintedParens(text) !== String(inner.text) || !this.javaIdentifierPrintsDeclaredName(inner)) {
       return void 0;
@@ -24351,8 +24351,7 @@ ${this.getIden(identation)}}}`;
         declared = "Long";
       }
     } else if (typeof this.javaBindingElementTypeResolver === "function") {
-      const symbol = this.getChecker().getSymbolAtLocation(inner);
-      const element = symbol?.valueDeclaration?.resolve();
+      const element = this.getChecker().getSymbolAtLocation(inner)?.valueDeclaration?.resolve();
       if (element?.kind === SyntaxKind6.BindingElement && element.name?.text === inner.text) {
         try {
           declared = this.javaBindingElementTypeResolver(element);
@@ -24369,7 +24368,34 @@ ${this.getIden(identation)}}}`;
       Double: "doublebox",
       double: "doubleprim"
     };
-    return declared === void 0 ? void 0 : kinds[declared.replace(/^final\s+/, "").trim()];
+    const kind = declared === void 0 ? void 0 : kinds[declared.replace(/^final\s+/, "").trim()];
+    if (kind !== void 0 && kind.endsWith("box") && declaration !== void 0 && (this.javaNullGuardAdmitsRead(inner) || this.javaLocalIsLengthDerived(declaration))) {
+      return void 0;
+    }
+    return kind !== void 0 && this.javaNumberOrNullishType(inner) ? kind : void 0;
+  }
+  // `const n = x.length` (a Java int read, never null)
+  javaLocalIsLengthDerived(declaration) {
+    const init = declaration?.kind === SyntaxKind6.VariableDeclaration ? this.unwrapPrintTransparentExpression(declaration.initializer) : void 0;
+    return init !== void 0 && isPropertyAccessExpression2(init) && init.name.text === "length";
+  }
+  // number, number-literal, or a union of those with undefined / null / void
+  javaNumberOrNullishType(node) {
+    let type;
+    try {
+      type = this.checkerOrUndefined()?.getTypeAtLocation(node);
+    } catch (e) {
+      return false;
+    }
+    if (type === void 0) {
+      return false;
+    }
+    const isNumber = (t) => ((t?.flags ?? 0) & (TypeFlags5.Number | TypeFlags5.NumberLiteral)) !== 0;
+    if (isNumber(type)) {
+      return true;
+    }
+    const members = (((type.flags ?? 0) & TypeFlags5.Union) !== 0 ? type.getTypes?.() : void 0) ?? [];
+    return members.some(isNumber) && members.every((m) => isNumber(m) || ((m?.flags ?? 0) & (TypeFlags5.Undefined | TypeFlags5.Null | TypeFlags5.Void)) !== 0);
   }
   javaStripPrintedParens(text) {
     let value = text.trim();
@@ -24412,7 +24438,7 @@ ${this.getIden(identation)}}}`;
     return (isPropertyAccessExpression2(parent) || isElementAccessExpression3(parent)) && parent.expression === child;
   }
   printDeclaredBoxArithmetic(node, left, right, leftText, rightText, op) {
-    const operator = op === SyntaxKind6.PlusToken ? "+" : op === SyntaxKind6.MinusToken ? "-" : op === SyntaxKind6.AsteriskToken ? "*" : op === SyntaxKind6.SlashToken ? "/" : void 0;
+    const operator = op === SyntaxKind6.PlusToken ? "+" : op === SyntaxKind6.MinusToken ? "-" : op === SyntaxKind6.AsteriskToken ? "*" : void 0;
     if (operator === void 0 || this.javaArithmeticResultIsBoxSensitive(node)) {
       return void 0;
     }
@@ -24442,7 +24468,7 @@ ${this.getIden(identation)}}}`;
       return kinds[i] === "intlit" ? `${texts[i]}L` : `((long) ${texts[i]})`;
     };
     const asDouble = (i) => isDouble(kinds[i]) ? texts[i] : `((double) ${texts[i]})`;
-    const wide = (i) => operator === "/" || hasDouble ? asDouble(i) : asLong(i);
+    const wide = (i) => hasDouble ? asDouble(i) : asLong(i);
     const expression = `(${wide(0)} ${operator} ${wide(1)})`;
     const boxes = kinds.map((kind, i) => kind.endsWith("box") ? texts[i] : void 0).filter((text, i, all) => text !== void 0 && all.indexOf(text) === i);
     return boxes.length === 0 ? expression : `((${boxes.map((box) => `${box} == null`).join(" || ")}) ? null : ${expression})`;

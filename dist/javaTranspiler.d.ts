@@ -265,6 +265,8 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaPrintOperandAsLong(node: any, text: any): any;
     javaProvableCounterInt(node: any): boolean;
     javaDeclaredBoxOperandKind(node: any, text: string): string | undefined;
+    javaLocalIsLengthDerived(declaration: any): boolean;
+    javaNumberOrNullishType(node: any): boolean;
     javaStripPrintedParens(text: string): string;
     javaArithmeticResultIsBoxSensitive(node: any): boolean;
     printDeclaredBoxArithmetic(node: any, left: any, right: any, leftText: string, rightText: string, op: any): string | undefined;
