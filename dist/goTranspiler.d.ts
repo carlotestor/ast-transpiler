@@ -516,6 +516,11 @@ export declare class GoTranspiler extends BaseTranspiler {
     printNativeGuardedPointerKeyAssignment(containerNode: any, containerStr: string, containerType: any, fieldType: any, keyNode: any, keyStr: string, valueStr: string, compound: boolean, valueNode: any): string | undefined;
     goGetArgMapParameterIsMapLocal(node: any): boolean;
     printNativeMapWriteOnProvenLocal(containerNode: any, containerStr: string, keyNode: any, keyStr: string, valueStr: string, valueNode?: any, identation?: number): string | undefined;
+    GO_CACHE_STORE_MAP_FIELDS: string[];
+    goIsCacheStoreField(node: any): boolean;
+    goIsCacheStoreSource(expr: any, includeRead?: boolean): boolean;
+    goCacheStoreValueProven(valueNode: any): boolean;
+    printNativeCacheFieldStore(containerNode: any, containerStr: string, keyNode: any, keyStr: string, valueStr: string, valueNode?: any, identation?: number): string | undefined;
     goMapWriteValueIsNotPointer(valueNode: any): boolean;
     nativeStoreFields: {
         [tsName: string]: any;
