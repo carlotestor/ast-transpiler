@@ -183,6 +183,29 @@ const JAVA_WS_CLIENT_MAP_FIELDS: { [field: string]: string } = {
 };
 const JAVA_WS_CLIENT_FILE = /(^|[\\/])ts[\\/]src[\\/]base[\\/]ws[\\/]Client\.ts$/;
 
+// hand-written BaseExchange.java fields declared `Map<String, Object>` over a fresh plain HashMap that
+// nothing in the port ever sets to null or to a concurrent map: a put on one (null value included) is
+// the helper's Map branch verbatim. The ws handlers that write them run on the exchange's owner executor.
+const JAVA_PLAIN_MAP_FIELDS: Set<string> = new Set([
+    'balance',
+    'bidsasks',
+    'fundingRates',
+    'headers',
+    'ohlcvs',
+    'orderbooks',
+    'tickers',
+    'timeframes',
+    'trades',
+    'transformedApi',
+]);
+
+// printed operand text holding a Java box cast such as `(String) x` or `(Map<String, Object>) x`
+const JAVA_BOX_CAST = /\((?:final\s+)?(?:[A-Z][\w.]*|(?:java|io|com)\.[\w.]+)(?:<[^()]*>)?\)/;
+
+// class members that run on the owner executor (ws handlers); watch*/load*/setSandboxMode can write
+// the same map from another thread, so a site inside them keeps the helper's monitor
+const JAVA_OWNER_MEMBER_NAME = /^(?:handle[A-Z]\w*|parseWSBalances)$/;
+
 // hand-written base fields (BaseExchange.java) whose Java declaration is exactly
 // `Map<String, Object>`: a local bound to one prints that type, so its element reads bind the
 // accessor with no cast. Fields the base declares `Object` (currencies, fees, timeframes) are
@@ -4735,6 +4758,14 @@ export class JavaTranspiler extends BaseTranspiler {
                 && isStringLiteralLikeNode(keys[0]) && !this.isNullishLiteral(this.unwrapPrintTransparentExpression(right))) {
                 return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
             }
+            // a statement-level write of a plain map field from an owner-executor member, String key and
+            // no box cast in either operand: the field is never null, so put takes any value
+            if (keys.length === 1 && node.parent?.kind === SyntaxKind.ExpressionStatement
+                && this.javaPlainMapFieldReceiver(baseExpr)
+                && (isStringLiteralLikeNode(keys[0]) || this.javaDeclaredStringType(keys[0]))
+                && this.javaInOwnerMember(node) && !JAVA_BOX_CAST.test(lastKey) && !JAVA_BOX_CAST.test(rhs)) {
+                return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
+            }
             if (this.javaHx4MapPutIsNative(baseExpr, keys)) {
                 return `${prefixes}${acc}.put(${keyArg}, ${rhs})`;
             }
@@ -5000,6 +5031,24 @@ export class JavaTranspiler extends BaseTranspiler {
     // of a store entry (loadMarketsHelper sets it, the same chain clears it). Value = [accessor with a
     // null default, accessor with an empty-map default]; filled by the build layer from the header.
     javaOwnerStoreHandoffs: { [key: string]: [string, string] } = {};
+
+    // `this.<field>` for a BaseExchange.java field in JAVA_PLAIN_MAP_FIELDS
+    javaPlainMapFieldReceiver(expression): boolean {
+        return expression !== undefined && isPropertyAccessExpression(expression)
+            && expression.expression.kind === SyntaxKind.ThisKeyword
+            && JAVA_PLAIN_MAP_FIELDS.has(expression.name.text);
+    }
+
+    // the node sits in a class member whose name marks it as running on the owner executor
+    javaInOwnerMember(node): boolean {
+        for (let current = node?.parent; current; current = current.parent) {
+            if (isMethodDeclaration(current) && current.parent !== undefined && isClassDeclaration(current.parent)) {
+                const name = (current.name as any)?.text;
+                return typeof name === 'string' && JAVA_OWNER_MEMBER_NAME.test(name);
+            }
+        }
+        return false;
+    }
 
     // `this.<field>` for a BaseExchange.java field declared over a single-owner store
     javaOwnerStoreFieldReceiver(expression): boolean {

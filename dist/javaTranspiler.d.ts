@@ -223,6 +223,8 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaOwnerStoreHandoffs: {
         [key: string]: [string, string];
     };
+    javaPlainMapFieldReceiver(expression: any): boolean;
+    javaInOwnerMember(node: any): boolean;
     javaOwnerStoreFieldReceiver(expression: any): boolean;
     javaOhlcvsElementRead(node: any): string | undefined;
     javaStringArrayAssertedCounterRead(node: any): string | undefined;
