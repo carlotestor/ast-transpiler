@@ -244,6 +244,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goBaseMapResultCall(call: any): boolean;
     goBaseMapUseKeepsMap(node: any): boolean;
     goMarketLocalUnboxUncached(declaration: any): string | undefined;
+    goMarketLocalUnboxShipped(declaration: any): string | undefined;
     goMarketUnboxValue(declaration: any, parsedValue: string): string | undefined;
     goDeclarationOfIdentifier(node: any): any;
     goMarketComparisonElementRead(node: any): boolean;

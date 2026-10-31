@@ -3106,7 +3106,8 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return parent.expression === node;
         }
         if (parent?.kind === SyntaxKind.BinaryExpression) {
-            return this.goIsNilComparisonOperand(node, parent);
+            return this.goIsNilComparisonOperand(node, parent)
+                || ((parent.operatorToken?.kind === SyntaxKind.EqualsToken) && (parent.right === node));
         }
         if (parent?.kind === SyntaxKind.CallExpression) {
             return (parent.expression !== node) && (parent.arguments.indexOf(node) >= 0);
@@ -3115,12 +3116,17 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
     }
 
     goMarketLocalUnboxUncached(declaration): string | undefined {
-        if (this.goBaseMapResultCall(declaration.initializer)) {
-            return this.goDeclaredLocalTypeIfSafe(declaration, GO_MARKET_LOCAL_TYPE,
-                (n) => this.goSafeDictUseReadsTheMap(n) || this.goBaseMapUseKeepsMap(n),
-                (n) => ((n.parent?.kind === SyntaxKind.PropertyAccessExpression) && (n.parent.name === n))
-                    || !this.goIdentifierRefersToDeclaration(n, declaration));
+        const shipped = this.goMarketLocalUnboxShipped(declaration);
+        if ((shipped !== undefined) || !this.goBaseMapResultCall(declaration.initializer)) {
+            return shipped;
         }
+        return this.goDeclaredLocalTypeIfSafe(declaration, GO_MARKET_LOCAL_TYPE,
+            (n) => this.goSafeDictUseReadsTheMap(n) || this.goBaseMapUseKeepsMap(n),
+            (n) => ((n.parent?.kind === SyntaxKind.PropertyAccessExpression) && (n.parent.name === n))
+                || !this.goIdentifierRefersToDeclaration(n, declaration));
+    }
+
+    goMarketLocalUnboxShipped(declaration): string | undefined {
         if (!this.goMarketCallReturnsDict(declaration.initializer)) {
             return undefined;
         }

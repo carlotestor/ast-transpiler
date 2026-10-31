@@ -891,7 +891,9 @@ describe('go pointer-typed Safe* body locals', () => {
         nodefs.mkdirSync(nodepath.join(src, 'base'), { recursive: true });
         nodefs.writeFileSync(nodepath.join(src, 'base', 'Exchange.ts'),
             "export class Exchange {\n" +
+            "    balance = {};\n" +
             "    parseMarket (a) { return a; }\n" +
+            "    parseBalance (a) { return a; }\n" +
             "}\n");
         nodefs.writeFileSync(nodepath.join(src, 'ex.ts'),
             "import { Exchange } from './base/Exchange';\n" +
@@ -902,6 +904,10 @@ describe('go pointer-typed Safe* body locals', () => {
             "            result.push (parsed);\n" +
             "        }\n" +
             "        return parsed;\n" +
+            "    }\n" +
+            "    store (item) {\n" +
+            "        const balance = this.parseBalance (item);\n" +
+            "        this.balance['USDT'] = balance;\n" +
             "    }\n" +
             "    keep (item) {\n" +
             "        let market = this.parseMarket (item);\n" +
@@ -919,6 +925,7 @@ describe('go pointer-typed Safe* body locals', () => {
             nodefs.rmSync(nodepath.join(__dirname, 'files', name), { recursive: true, force: true });
         }
         expect(output).toContain("var parsed map[string]any = this.ParseMarket(item)");
+        expect(output).toContain("var balance map[string]any = this.ParseBalance(item)");
         expect(output).not.toContain("var market map[string]any");
     });
     test('a SafeDict local with an empty-map default drops it: SafeMapTyped carries no default', () => {
