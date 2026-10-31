@@ -263,24 +263,24 @@ const CSHARP_ASSIGNMENT_OPERATOR_KINDS = [
     SyntaxKind.QuestionQuestionEqualsToken,
 ];
 
-// hand-written BaseExchange fields whose C# declaration already is a concrete
-// dictionary/list (cs/ccxt/base/Exchange.Options.cs): a read of the field carries
-// that static type, so its own members (`Count`, `ContainsKey`) replace the helper
-const CSHARP_NATIVE_FIELDS: { [name: string]: string } = {
-    'options': 'ConcurrentDictionary<string, object>',
-    'has': 'Dictionary<string, object>',
-    'features': 'Dictionary<string, object>',
-    'httpExceptions': 'Dictionary<string, object>',
-    'markets_by_id': 'IDictionary<string, object>',
-    'symbols': 'List<object>',
-    'codes': 'List<object>',
-    'ids': 'List<object>',
-};
+// hx11 RF-cs-2: a member of the hand-written runtime as the embedding build layer reads it from the
+// C# declaration. `type` is the declared type text and `initializer` its initializer; `routed` marks a
+// property whose accessors hand the value to an owner (the ws caches); `refresh` names the hand-written
+// method that re-derives the typed views below after any write of the member; `views` maps a literal
+// key of the member to the hand-written typed property reading that entry (`urls['api']` ->
+// `urlsApi`) and, when declared, the property typing its sections (`urlsApiSections`).
+export interface CsharpDeclaredMember {
+    type: string;
+    initializer?: string;
+    routed?: boolean;
+    refresh?: string;
+    views?: { [key: string]: { view: string, sections?: string } };
+}
 
-// hand-written BaseExchange fields declared `object` that always box a dictionary
-// (dict / CustomConcurrentDictionary<string, object>): the member needs the same
-// `(IDictionary<string, object>)` cast the transpiled helper body itself applies
-const CSHARP_OBJECT_DICT_FIELDS = [ 'urls', 'tickers', 'bidsasks', 'orderbooks', 'ohlcvs', 'trades', 'markets', 'currencies', 'currencies_by_id', 'exceptions' ];
+// the collection kind of a declared C# type: the string-keyed dictionaries and the object lists the
+// helpers (getValue / inOp / getArrayLength) have native member twins for
+const CSHARP_DICT_DECLARATION = /^(?:ccxt\.pro\.)?(?:(?:I|Concurrent)?Dictionary<string,\s*object>|OwnedTable<object>|dict)$/;
+const CSHARP_LIST_DECLARATION = /^I?List<object>$/;
 
 // Hand-written BaseExchange / PredictionExchange fields declared as C# reference types: the field
 // holds a reference box, so a null comparison is exactly the isEqual(field, null) branch. A
@@ -340,21 +340,6 @@ function csharpStripOuterParens(text: string): string {
     return stripped;
 }
 
-// Hand-written BaseExchange fields whose reads print natively although the key may be absent:
-// `has`/`options` are concrete dictionaries; `urls`, `markets`, `exceptions` are `object` boxes
-// that always hold one. The native read tests the key, so a missing key still reads null.
-const CSHARP_MISSING_KEY_FIELDS_NATIVE = [ 'has', 'options', 'urls', 'markets', 'exceptions' ];
-
-// Hand-written BaseExchange collection fields that stay null until initializeProperties stores
-// the describe() row (`this.fees = SafeValue(extendedProperties, "fees") as dict;`, the same for
-// requiredCredentials / accounts in cs/ccxt/base/Exchange.Options.cs: `IDictionary<string, object>`
-// and `List<object>`). A native member read of one carries the helper's own null-receiver test.
-const CSHARP_NULLABLE_STATE_FIELDS: { [name: string]: string } = {
-    'fees': 'IDictionary<string, object>',
-    'requiredCredentials': 'IDictionary<string, object>',
-    'accounts': 'List<object>',
-};
-
 // C# collection types this printer can name whose members replace the helpers
 const CSHARP_NATIVE_COLLECTION_TYPES = [ 'List<object>', 'IList<object>', 'Dictionary<string, object>', 'IDictionary<string, object>' ];
 
@@ -385,11 +370,6 @@ const CSHARP_BOOL_CALLEES_NATIVE: { [name: string]: boolean } = {
     'Precise.stringEq': true,
     'Precise.stringEquals': true,
 };
-
-// TS base methods the C# port hand-writes with its own signature: the TS annotation is `boolean`
-// but the C# method bound by `this.<name>(...)` returns something else (`object isDictionary`),
-// so the isTrue wrapper must stay regardless of the annotation.
-const CSHARP_HANDWRITTEN_CALLEES_NATIVE = [ 'isDictionary' ];
 
 // Declared C# types whose `Count` counts exactly what getArrayLength's IList / ICollection
 // branches count. A prefix test: these are named with element types (`List<Order>`,
@@ -562,6 +542,12 @@ export class CSharpTranspiler extends BaseTranspiler {
     // embedding build layer for declarations it retyped itself; the member-access rules read it
     // only after this printer's own declared-local table declined
     csharpDeclaredLocalTypeResolver?: (declaration) => string | undefined;
+    // hx11 RF-cs-2: the declared C# type of a member of the hand-written runtime (cs/ccxt/base/
+    // Exchange.Options.cs for `this.<name>`, cs/ccxt/ws/Client.cs for `client.<name>`), installed by
+    // the embedding build layer from those files; undefined keeps every member read on the helpers
+    csharpDeclaredMemberType?: (owner: 'this' | 'client', name: string) => CsharpDeclaredMember | undefined;
+    // the return type the hand-written runtime declares for `this.<name>(...)` (cs/ccxt/base/Exchange.Generic.cs)
+    csharpDeclaredMethodReturnType?: (name: string) => string | undefined;
     // optional exclusion of the array-parameter rule below, installed by the embedding build
     // layer for the (method, position) pairs its own post-print pass retypes: those keep the
     // `object` box this printer would otherwise replace, so that pass still owns the signature
@@ -580,6 +566,10 @@ export class CSharpTranspiler extends BaseTranspiler {
     // parameter declarations this printer typed as `IList<object>` (csharpArrayListParamType), so
     // their reads keep the helper's null branches (`(x?.Count ?? 0)`, the guarded indexer)
     csharpListParamDeclarations = new WeakSet<Node>();
+    // source file -> member name -> whether every `this.<name> = ...` there stores a dictionary (csharpMemberWritesOnlyDictionaries)
+    csharpMemberWriteCache = new WeakMap<object, Map<string, boolean>>();
+    // source file -> next pattern variable number of csharpMemberKeyVariable
+    csharpMemberKeyCounters = new WeakMap<object, number>();
     // hx10w6 AU03: variable statements whose `await Promise.all ([...])` prints as typed task
     // locals + `Task.WhenAll`, and the promise-holding declarations that plan prints as `var`
     csharpPromiseAllSites = new WeakMap<Node, any>();
@@ -882,6 +872,10 @@ export class CSharpTranspiler extends BaseTranspiler {
     // the `((IDictionary<string,object>)x)` cast around element access is an identity conversion.
     // Gated entirely on the consumer's hook, so an object receiver and untyped runs keep the cast.
     csharpReceiverIsDeclaredDictionary(expression): boolean {
+        const member = this.csharpMemberReceiver(expression);
+        if (member !== undefined && member.kind === 'dict' && member.declared) {
+            return true; // the member's own C# declaration is the dictionary: the interface cast is an identity
+        }
         const declared = this.csharpDeclaredReceiverType(expression);
         return (declared === 'Dictionary<string, object>') || (declared === 'IDictionary<string, object>');
     }
@@ -993,6 +987,10 @@ export class CSharpTranspiler extends BaseTranspiler {
         if (isWrite) {
             return undefined; // writes are native already, they are printed with the cast
         }
+        const sectionRead = this.csharpMemberSectionRead(expression, argumentExpression);
+        if (sectionRead !== undefined) {
+            return sectionRead;
+        }
         const isStringKey = isStringLiteralLikeNode(argumentExpression);
         const isNumberKey = isNumericLiteral(argumentExpression);
         if (!isStringKey && !isNumberKey) {
@@ -1090,74 +1088,29 @@ export class CSharpTranspiler extends BaseTranspiler {
         return `(${receiver} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
     }
 
-    // a read of a hand-written BaseExchange dictionary field whose key may be absent: the key
+    // a read of a hand-written BaseExchange dictionary member whose key may be absent: the key
     // test plus the indexer print what the helper computes, so a missing key still reads null
-    // (a bare indexer would throw). Any other receiver or a numeric key keeps the helper
+    // (a bare indexer would throw). The member's declared C# type (csharpDeclaredMemberType) names
+    // the dictionary; any other receiver or a numeric key keeps the helper
     csharpMissingKeyFieldRead(expression, argumentExpression, isStringKey): string | undefined {
-        const state = this.csharpNullableStateField(expression);
-        if (state !== undefined) {
-            return this.csharpNullableStateRead(state, argumentExpression, isStringKey, isNumericLiteral(argumentExpression));
+        const member = this.csharpMemberReceiver(expression);
+        if (member === undefined || member.routed === true) {
+            return undefined;
+        }
+        if (member.kind === 'list') {
+            // a literal index into a declared list member: the helper's null and past-the-end branches
+            const index = isNumericLiteral(argumentExpression) ? Number((argumentExpression as any).text) : NaN;
+            if (!Number.isInteger(index) || (index < 0)) {
+                return undefined;
+            }
+            return `(${member.text} != null && ${index} < ${member.text}.Count ? ${member.text}[${index}] : null)`;
         }
         if (!isStringKey) {
             return undefined;
         }
-        if (!isPropertyAccessExpression(expression) || expression.expression.kind !== SyntaxKind.ThisKeyword) {
-            return undefined;
-        }
-        const name = expression.name?.text as string;
-        if (CSHARP_MISSING_KEY_FIELDS_NATIVE.indexOf(name) < 0) {
-            return undefined;
-        }
-        const field = this.printNode(expression, 0);
         const printedKey = this.printNode(argumentExpression, 0);
-        // `urls`/`markets`/`exceptions` are declared `object`: same cast and null-receiver branch as the
-        // transpiled helper body (initializeProperties may leave the box null when describe() has no such
-        // row). `has`/`options` are concrete dictionaries, never null, so they need no test.
-        if (CSHARP_OBJECT_DICT_FIELDS.indexOf(name) >= 0) {
-            const receiver = `((IDictionary<string, object>)${field})`;
-            return `(${field} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
-        }
-        return `(${field}.ContainsKey(${printedKey}) ? ${field}[${printedKey}] : null)`;
-    }
-
-    // `this.<field>` for a hand-written collection field that may still be null (CSHARP_NULLABLE_STATE_FIELDS)
-    csharpNullableStateField(node): { text: string, type: string } | undefined {
-        if (!isPropertyAccessExpression(node) || node.expression?.kind !== SyntaxKind.ThisKeyword) {
-            return undefined;
-        }
-        const name = node.name?.text as string;
-        if (!Object.prototype.hasOwnProperty.call(CSHARP_NULLABLE_STATE_FIELDS, name)) {
-            return undefined;
-        }
-        return { text: this.printNode(node, 0), type: CSHARP_NULLABLE_STATE_FIELDS[name] };
-    }
-
-    // GetValue's tests on a nullable state field: null receiver, missing key (dictionary) or
-    // index past the end (list) all read null. `keyKind` is the printed key's C# type for an
-    // identifier ('string' / 'string?' keys a dictionary, 'int' a list); a literal key is its own proof
-    csharpNullableStateRead(state: { text: string, type: string }, argumentExpression, isStringKey: boolean, isNumberKey: boolean): string | undefined {
-        const receiver = state.text;
-        const isDictionary = state.type.indexOf('Dictionary<') >= 0;
-        if (isStringKey || isNumberKey) {
-            const key = this.printNode(argumentExpression, 0);
-            if (isDictionary) {
-                return isStringKey ? `(${receiver} != null && ${receiver}.ContainsKey(${key}) ? ${receiver}[${key}] : null)` : undefined;
-            }
-            const index = Number((argumentExpression as any).text);
-            if (!isNumberKey || !Number.isInteger(index) || (index < 0)) {
-                return undefined; // a string key on a list, or a negative index the helper throws on
-            }
-            return `(${receiver} != null && ${index} < ${receiver}.Count ? ${receiver}[${index}] : null)`;
-        }
-        if (!isIdentifier(argumentExpression)) {
-            return undefined;
-        }
-        const keyType = this.csharpHx4DeclaredKeyType(argumentExpression);
-        const key = this.printNode(argumentExpression, 0);
-        if (isDictionary) {
-            return (keyType === 'string' || keyType === 'string?') ? `(${receiver} != null && ${key} != null && ${receiver}.ContainsKey(${key}) ? ${receiver}[${key}] : null)` : undefined;
-        }
-        return (keyType === 'int') ? `(${receiver} != null && ${key} < ${receiver}.Count ? ${receiver}[${key}] : null)` : undefined;
+        const test = (member.nullTest === undefined) ? '' : `${member.nullTest} != null && `;
+        return `(${test}${member.text}.ContainsKey(${printedKey}) ? ${member.text}[${printedKey}] : null)`;
     }
 
     // A literal-key read on a local whose C# declaration is already a collection: no cast needed, but
@@ -2638,6 +2591,10 @@ export class CSharpTranspiler extends BaseTranspiler {
     // isEqual's ToInt64 / Convert.ToDouble branches do. Two such expressions of one kind compare by
     // value in both; every other pair keeps the helper.
     csharpNativeArithmeticEquality(left, right, leftText: string, rightText: string, isEquality: boolean): string | undefined {
+        const modEquality = this.csharpNativeModEquality(left, right, isEquality);
+        if (modEquality !== undefined) {
+            return modEquality;
+        }
         const leftKind = this.csharpPrintedArithmeticKind(left, leftText);
         const rightKind = this.csharpPrintedArithmeticKind(right, rightText);
         if ((leftKind !== undefined) && (rightKind !== undefined)) {
@@ -2666,6 +2623,32 @@ export class CSharpTranspiler extends BaseTranspiler {
             return undefined;
         }
         return isEquality ? `(${arithmeticText} == ${literalText})` : `(${arithmeticText} != ${literalText})`;
+    }
+
+    // `isEqual (x % N, M)` for an Int64 / Int64? identifier `x`, a positive integer literal divisor of at most
+    // nine digits and an integer literal `M`: mod's double remainder converted back to Int64 is exact there
+    // (below 2^53), and the lifted `==` answers false for a null `x` exactly like isEqual. The printed
+    // remainder is the form mod(Int64, literal) prints once the host's numeric pass has typed `x`
+    csharpNativeModEquality(left, right, isEquality: boolean): string | undefined {
+        const [ modSide, literal ] = (this.csharpUnparenthesized(left)?.kind === SyntaxKind.BinaryExpression) ? [ left, right ] : [ right, left ];
+        const mod = this.csharpUnparenthesized(modSide);
+        if (mod?.kind !== SyntaxKind.BinaryExpression || mod.operatorToken.kind !== SyntaxKind.PercentToken || !isIdentifier(mod.left)) {
+            return undefined;
+        }
+        const divisor = csharpLiteralNumericValue(mod.right);
+        const expected = this.csharpIntegerLiteralKind(literal);
+        if ((divisor === undefined) || !Number.isInteger(divisor) || (divisor <= 0) || (divisor > 999999999) || (expected === undefined)) {
+            return undefined;
+        }
+        const type = this.csharpArithmeticOperandType(mod.left);
+        const text = this.printNode(mod.left, 0);
+        const remainder = ((type === 'Int64') || (type === 'long')) ? `((Int64)((double)${text} % ${divisor}))`
+            : (((type === 'Int64?') || (type === 'long?')) ? `((Int64?)((double?)${text} % ${divisor}))` : undefined);
+        if (remainder === undefined || !this.csharpNumericKindHoldsLiteral('Int64', expected)) {
+            return undefined;
+        }
+        const printedLiteral = this.printNode(literal, 0);
+        return isEquality ? `(${remainder} == ${printedLiteral})` : `(${remainder} != ${printedLiteral})`;
     }
 
     // the C# value kind of a `this.<field>` read of a hand-written numeric field
@@ -3032,11 +3015,11 @@ export class CSharpTranspiler extends BaseTranspiler {
         if (left?.kind !== SyntaxKind.Identifier) {
             return undefined;
         }
-        if (this.csharpExpressionTypeOf(left) !== 'int') {
-            return undefined;
-        }
         const divisor = csharpLiteralNumericValue(right);
         if ((divisor === undefined) || !Number.isSafeInteger(divisor) || (divisor === 0)) {
+            return undefined;
+        }
+        if (this.csharpExpressionTypeOf(left) !== 'int') {
             return undefined;
         }
         return `((Int64)${leftText} % ${divisor}L)`;
@@ -3055,6 +3038,183 @@ export class CSharpTranspiler extends BaseTranspiler {
         return `(${leftSide} = -${leftSide})`;
     }
 
+    // hx11 RF-cs-2: `this.<member>['k1']['k2']['k3']` over a member whose hand-written class declares a
+    // typed view of `['k1']` entries that are themselves dictionaries (urls['api'] -> urlsApiSections):
+    // the section read becomes the view's two indexers, carrying the helper's missing-key tests. The
+    // view is re-derived by the refresh method after every write of the member (csharpMemberRefresh)
+    csharpMemberSectionRead(expression, argumentExpression): string | undefined {
+        if (!isStringLiteralLikeNode(argumentExpression)) {
+            return undefined;
+        }
+        const section = this.csharpUnwrapAssertion(expression);
+        if (section?.kind !== SyntaxKind.ElementAccessExpression || !isStringLiteralLikeNode(section.argumentExpression)) {
+            return undefined;
+        }
+        const entry = this.csharpUnwrapAssertion(section.expression);
+        if (entry?.kind !== SyntaxKind.ElementAccessExpression || !isStringLiteralLikeNode(entry.argumentExpression)
+            || !isPropertyAccessExpression(entry.expression) || entry.expression.expression?.kind !== SyntaxKind.ThisKeyword) {
+            return undefined;
+        }
+        const root = entry.expression;
+        if (!this.csharpMemberDeclaredIn(root, 'this') || (typeof this.csharpDeclaredMemberType !== 'function')) {
+            return undefined;
+        }
+        const view = this.csharpDeclaredMemberType('this', root.name?.text as string)?.views?.[(entry.argumentExpression as any).text];
+        if (view?.sections === undefined) {
+            return undefined;
+        }
+        const sections = `this.${view.sections}`;
+        const first = this.printNode(section.argumentExpression, 0);
+        const second = this.printNode(argumentExpression, 0);
+        return `(${sections}.ContainsKey(${first}) && ${sections}[${first}].ContainsKey(${second}) ? ${sections}[${first}][${second}] : null)`;
+    }
+
+    // `(x as T)` / `(x)` -> x: the assertion prints no cast on a dictionary read here, so the read
+    // underneath is the same box
+    csharpUnwrapAssertion(node) {
+        let current = node;
+        while (current?.kind === SyntaxKind.ParenthesizedExpression || current?.kind === SyntaxKind.AsExpression) {
+            current = current.expression;
+        }
+        return current;
+    }
+
+    // the refresh call a statement writing `this.<member>` (or an element of it) owes the typed views
+    // the hand-written class derives from the member
+    csharpMemberRefreshStatement(node, identation): string | undefined {
+        const expression = node?.expression;
+        if (expression?.kind !== SyntaxKind.BinaryExpression || expression.operatorToken.kind !== SyntaxKind.EqualsToken
+            || (typeof this.csharpDeclaredMemberType !== 'function')) {
+            return undefined;
+        }
+        const parentKind = node.parent?.kind;
+        if (parentKind !== SyntaxKind.Block && parentKind !== SyntaxKind.CaseClause && parentKind !== SyntaxKind.DefaultClause) {
+            return undefined; // a refresh line after an unbraced body would leave the write's own statement
+        }
+        // the member itself or one entry of it: a deeper write mutates a section the view already shares
+        let target = expression.left;
+        if (target?.kind === SyntaxKind.ElementAccessExpression) {
+            target = target.expression;
+        }
+        if (!isPropertyAccessExpression(target) || target.expression?.kind !== SyntaxKind.ThisKeyword || !this.csharpMemberDeclaredIn(target, 'this')) {
+            return undefined;
+        }
+        const refresh = this.csharpDeclaredMemberType('this', target.name?.text as string)?.refresh;
+        return (refresh === undefined) ? undefined : this.getIden(identation) + `this.${refresh}();`;
+    }
+
+    printExpressionStatement(node, identation) {
+        const printed = super.printExpressionStatement(node, identation);
+        if (printed === '') {
+            return printed;
+        }
+        const refresh = this.csharpMemberRefreshStatement(node, identation);
+        return (refresh === undefined) ? printed : printed + '\n' + refresh;
+    }
+
+    // hx11 RF-cs-2: the receiver `this.<member>` / `<client>.<member>` of a hand-written runtime member
+    // whose DECLARED C# type (csharpDeclaredMemberType: Exchange.Options.cs, ws/Client.cs) is a
+    // string-keyed object dictionary or an object list, so its own members replace the helpers.
+    // `text` is the receiver as written (an `object` member proven dictionary-only carries the
+    // interface cast), `type` the collection type, `nullTest` set when the declaration may hold null
+    csharpMemberReceiver(node): { text: string, type: string, kind: 'dict' | 'list', declared: boolean, routed?: boolean, nullTest?: string } | undefined {
+        if (!isPropertyAccessExpression(node) || (typeof this.csharpDeclaredMemberType !== 'function')) {
+            return undefined;
+        }
+        const name = node.name?.text as string;
+        let owner: 'this' | 'client' | undefined;
+        if (node.expression?.kind === SyntaxKind.ThisKeyword) {
+            owner = 'this';
+        } else if (isIdentifier(node.expression)) {
+            owner = 'client';
+        }
+        // the checker's own proof that the member IS the hand-written runtime's: its TS declaration
+        // lives in the base Exchange class (`this`) or the ws Client class (`client`)
+        const declared = (owner === undefined || !this.csharpMemberDeclaredIn(node, owner)) ? undefined : this.csharpDeclaredMemberType(owner, name);
+        if (declared === undefined) {
+            return undefined;
+        }
+        const printed = this.printNode(node, 0);
+        const type = declared.type.replace(/\s+/g, ' ');
+        if (declared.routed === true) {
+            // an owner-routed ws cache (the accessors hand the value to the ws owner): membership and size go
+            // through the interface the property declares; its element reads stay with the ws cache layer
+            return /^IDictionary<string, object>$/.test(type)
+                ? { text: printed, type, kind: 'dict', declared: false, routed: true, nullTest: printed }
+                : undefined;
+        }
+        if (CSHARP_LIST_DECLARATION.test(type)) {
+            // a settable list property may be assigned null: every read keeps the helper's null branch
+            return { text: printed, type: type.replace(/^List/, 'List'), kind: 'list', declared: true, nullTest: printed };
+        }
+        if (CSHARP_DICT_DECLARATION.test(type)) {
+            const concurrent = /^(?:ccxt\.pro\.)?(?:OwnedTable<object>|ConcurrentDictionary<string, object>)$/.test(type);
+            const canonical = concurrent ? 'ConcurrentDictionary<string, object>' : (type.startsWith('I') ? 'IDictionary<string, object>' : 'Dictionary<string, object>');
+            // an interface-typed or initializer-less member may hold null; a concrete class-typed one
+            // is created with its declaration and keeps no null test
+            const mayBeNull = type.startsWith('I') || (declared.initializer === undefined) || (declared.initializer === 'null');
+            const identity = (type === 'Dictionary<string, object>') || (type === 'IDictionary<string, object>');
+            return { text: printed, type: canonical, kind: 'dict', declared: identity, nullTest: mayBeNull ? printed : undefined };
+        }
+        if (type === 'object' && owner === 'this' && this.csharpMemberWritesOnlyDictionaries(node, name)) {
+            // an `object` box that only ever holds a dictionary: every write in this file stores a
+            // dictionary (literal or any-valued dictionary type) or null
+            const cast = `((IDictionary<string,object>)${printed})`;
+            return { text: cast, type: 'IDictionary<string, object>', kind: 'dict', declared: false, nullTest: cast };
+        }
+        return undefined;
+    }
+
+    // the member's TS declaration is a property of the base class the hand-written C# class mirrors:
+    // `Exchange` / `BaseExchange` (owner `this`, cs/ccxt/base/Exchange.Options.cs) or the ws `Client` (owner `client`,
+    // cs/ccxt/ws/Client.cs). A subclass redeclaring the property is a different declaration
+    csharpMemberDeclaredIn(node, owner: 'this' | 'client'): boolean {
+        try {
+            const declaration: any = this.getChecker().getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+            const parent: any = declaration?.parent;
+            const names = (owner === 'this') ? [ 'Exchange', 'BaseExchange' ] : [ 'Client' ];
+            return isClassLikeDeclaration(parent) && (names.indexOf(parent.name?.text) >= 0);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // every write of `this.<name>` in the source file stores a dictionary literal, `undefined` or
+    // `null` (and there is at least one): the `object` box then always holds a dictionary or null
+    csharpMemberWritesOnlyDictionaries(node, name: string): boolean {
+        const file: any = node.getSourceFile?.();
+        if (file === undefined) {
+            return false;
+        }
+        const cached = this.csharpMemberWriteCache.get(file) ?? new Map<string, boolean>();
+        this.csharpMemberWriteCache.set(file, cached);
+        if (cached.has(name)) {
+            return cached.get(name) as boolean;
+        }
+        let writes = 0;
+        let dictionaryOnly = true;
+        const visit = (n) => {
+            if (!dictionaryOnly) {
+                return;
+            }
+            if (n.kind === SyntaxKind.BinaryExpression && n.operatorToken.kind === SyntaxKind.EqualsToken
+                && isPropertyAccessExpression(n.left) && n.left.expression?.kind === SyntaxKind.ThisKeyword && n.left.name?.text === name) {
+                writes++;
+                const right = n.right;
+                const nullish = (right.kind === SyntaxKind.NullKeyword) || (isIdentifier(right) && right.text === 'undefined');
+                if (!nullish && right.kind !== SyntaxKind.ObjectLiteralExpression
+                    && !this.csharpIsAnyValuedDictionaryType(this.getChecker().getTypeAtLocation(right))) {
+                    dictionaryOnly = false;
+                }
+            }
+            n.forEachChild(visit);
+        };
+        file.forEachChild(visit);
+        const result = dictionaryOnly && writes > 0;
+        cached.set(name, result);
+        return result;
+    }
+
     // The printed receiver whose C# static type is a known collection: a local this printer declared
     // with a concrete type (csharpTypedLocals), or a hand-written BaseExchange field. undefined keeps
     // the runtime helper, since the printer cannot name the operand's type.
@@ -3067,13 +3227,9 @@ export class CSharpTranspiler extends BaseTranspiler {
             const named = this.csharpTypedLocalType(node);
             return (named === undefined || CSHARP_NATIVE_COLLECTION_TYPES.indexOf(named) < 0) ? undefined : { text: this.printNode(node, 0), type: named };
         }
-        if (isPropertyAccessExpression(node) && node.expression?.kind === SyntaxKind.ThisKeyword) {
-            const name = node.name?.text as string;
-            if (CSHARP_OBJECT_DICT_FIELDS.indexOf(name) >= 0) {
-                // the field is declared `object`; its box is always a dictionary
-                return { text: `((IDictionary<string, object>)${this.printNode(node, 0)})`, type: 'IDictionary<string, object>' };
-            }
-            return CSHARP_NATIVE_FIELDS[name] === undefined ? undefined : { text: this.printNode(node, 0), type: CSHARP_NATIVE_FIELDS[name] };
+        if (isPropertyAccessExpression(node)) {
+            const member = this.csharpMemberReceiver(node);
+            return member === undefined ? undefined : { text: member.text, type: member.type };
         }
         // a call whose printed C# type this printer already names (Object.keys, this.indexBy,
         // x.split, ...) is a collection too
@@ -3267,10 +3423,6 @@ export class CSharpTranspiler extends BaseTranspiler {
     // build layer's declared-type table, then an `object` parameter proven a dictionary by TS or an
     // emitted `??= new Dictionary<string, object>()`. That case applies the helper's cast + null test.
     csharpNativeDictionaryReceiver(obj): { text: string, nullTest?: string } | undefined {
-        const state = this.csharpNullableStateField(obj);
-        if (state !== undefined) {
-            return (state.type.indexOf('Dictionary<') >= 0) ? { text: state.text, nullTest: state.text } : undefined;
-        }
         const checker = this.getChecker();
         const type = checker.getTypeAtLocation(obj);
         const nullable = this.csharpNullableDictionaryType(type);
@@ -3279,6 +3431,10 @@ export class CSharpTranspiler extends BaseTranspiler {
             // only a dictionary C# type carries ContainsKey (IList<object> keeps the helper)
             if (receiver.type.indexOf('Dictionary<') < 0) {
                 return undefined;
+            }
+            const member = this.csharpMemberReceiver(obj);
+            if (member !== undefined && member.nullTest !== undefined) {
+                return { text: receiver.text, nullTest: member.nullTest };
             }
             return nullable ? { text: receiver.text, nullTest: receiver.text } : { text: receiver.text };
         }
@@ -3321,7 +3477,7 @@ export class CSharpTranspiler extends BaseTranspiler {
     csharpNativeInExpression(key, obj): string | undefined {
         const printedKey = this.csharpNativeStringKey(key);
         if (printedKey === undefined) {
-            return this.csharpDeclaredDictInExpression(key, obj);
+            return this.csharpDeclaredDictInExpression(key, obj) ?? this.csharpMemberInExpression(key, obj);
         }
         const receiver = this.csharpNativeDictionaryReceiver(obj);
         if (receiver !== undefined) {
@@ -3333,17 +3489,80 @@ export class CSharpTranspiler extends BaseTranspiler {
         return this.csharpDeclaredDictInExpression(key, obj);
     }
 
+    // `key in this.<member>` / `key in client.<member>` where the member's declared C# type is a string-keyed
+    // dictionary that may hold null (an interface-typed or initializer-less declaration): the helper's null
+    // receiver branch is the `!= null` test, and its non-string key branch (false) is the type test. The key
+    // is an identifier whose printed declaration is a C# string (nullable: tested) or `object` (type-tested),
+    // or a string literal; every other key shape keeps the helper
+    csharpMemberInExpression(key, obj): string | undefined {
+        const member = this.csharpMemberReceiver(obj);
+        if (member === undefined || member.kind !== 'dict' || member.nullTest === undefined) {
+            return undefined;
+        }
+        if (!isIdentifier(key)) {
+            return undefined;
+        }
+        const keyKind = this.csharpMemberKeyKind(key);
+        const printedKey = this.printNode(key, 0);
+        if (keyKind === 'string') {
+            return `(${member.nullTest} != null && ${printedKey} != null && ${member.text}.ContainsKey(${printedKey}))`;
+        }
+        if (keyKind === 'object' || keyKind === 'param') {
+            const bound = this.csharpMemberKeyVariable(key);
+            return `(${member.nullTest} != null && ${printedKey} is string ${bound} && ${member.text}.ContainsKey(${bound}))`;
+        }
+        return undefined;
+    }
+
+    // how an identifier key reaches a dictionary member: 'string' when its printed C# declaration is a
+    // string; 'object' when the declaration is `object` (inOp answers false for a non-string box, GetValue
+    // casts the key to string); 'param' for a default-less parameter the checker proves a string (its C#
+    // type is the signature's `object` or `string`, and both a `key is string k` test and a `(string)key`
+    // cast are valid for both). A local not declared yet keeps the helper: the build layer retypes it
+    // after printing, and a hard cast here would block that retype
+    csharpMemberKeyKind(key): 'string' | 'object' | 'param' | undefined {
+        const keyType = this.csharpHx4DeclaredKeyType(key) ?? this.csharpDeclaredLocalResolverType(key);
+        if (keyType === 'string' || keyType === 'string?') {
+            return 'string';
+        }
+        if (keyType === 'object') {
+            return 'object';
+        }
+        if (keyType !== undefined) {
+            return undefined;
+        }
+        const binding: any = this.csharpReceiverBinding(key);
+        if (binding?.kind !== SyntaxKind.Parameter || binding.initializer !== undefined) {
+            return undefined;
+        }
+        const type = this.getChecker().getTypeAtLocation(key);
+        const members = ((type.flags & TypeFlags.Union) !== 0) ? ((type as UnionType).getTypes() ?? []) : [ type ];
+        let strings = 0;
+        for (const member of members) {
+            if ((member.flags & (TypeFlags.Undefined | TypeFlags.Null)) !== 0) {
+                continue;
+            }
+            if (!this.isStringType(member.flags)) {
+                return undefined;
+            }
+            strings++;
+        }
+        return strings > 0 ? 'param' : undefined;
+    }
+
+    // the pattern variable that binds an `object` key proven a string by its type test: the file's next
+    // `inOpKey<N>` (the numbering the host's own membership rules continue from)
+    csharpMemberKeyVariable(key): string {
+        const file: any = key.getSourceFile?.();
+        const next = (this.csharpMemberKeyCounters.get(file) ?? 0);
+        this.csharpMemberKeyCounters.set(file, next + 1);
+        return `inOpKey${next}`;
+    }
+
     // `key in obj` on a local whose EMITTED declaration is a dictionary the printer cannot name itself
     // (build/csharp-local-types.js retypes it, answers csharpDeclaredDictReceiverType): inOp's dict
     // branch is exactly `obj?.ContainsKey(key) == true` for a key that is already a C# string.
     csharpDeclaredDictInExpression(key, obj): string | undefined {
-        const state = this.csharpNullableStateField(obj);
-        if (state !== undefined && isIdentifier(key) && state.type.indexOf('Dictionary<') >= 0) {
-            // an identifier key declared `string` / `string?` may hold null: the helper's key test stays
-            const keyType = this.csharpHx4DeclaredKeyType(key);
-            const printed = this.printNode(key, 0);
-            return (keyType === 'string' || keyType === 'string?') ? `(${state.text} != null && ${printed} != null && ${state.text}.ContainsKey(${printed}))` : undefined;
-        }
         if (obj?.kind !== SyntaxKind.Identifier) {
             return undefined;
         }
@@ -3381,11 +3600,6 @@ export class CSharpTranspiler extends BaseTranspiler {
     // `x.length` -> `x.Count`, same proof for the checker's array operands; strings keep
     // the `((string)x).Length` branch and every unproven operand keeps getArrayLength
     csharpNativeLengthExpression(expression): string | undefined {
-        const state = this.csharpNullableStateField(expression);
-        if (state !== undefined) {
-            // a nullable list field: getArrayLength's null -> 0 branch is the null-conditional
-            return (state.type.indexOf('List<') === 0) ? `(${state.text}?.Count ?? 0)` : undefined;
-        }
         if (csharpListParamDeclaration(this, expression)) {
             // a parameter this printer typed as a list: keep getArrayLength's null -> 0 branch
             const declared = this.csharpDeclaredLengthExpression(expression);
@@ -3394,6 +3608,11 @@ export class CSharpTranspiler extends BaseTranspiler {
             }
         }
         if (this.csharpIsArrayType(this.getChecker().getTypeAtLocation(expression))) {
+            // a declared list member keeps getArrayLength's `null -> 0` branch
+            const member = this.csharpMemberReceiver(expression);
+            if (member !== undefined && member.kind === 'list') {
+                return `(${member.text}?.Count ?? 0)`;
+            }
             const receiver = this.csharpNativeReceiver(expression);
             if (receiver !== undefined) {
                 return `${receiver.text}.Count`;
@@ -6743,7 +6962,10 @@ export class CSharpTranspiler extends BaseTranspiler {
         if (callee === undefined || callee.indexOf('this.') !== 0) {
             return undefined;
         }
-        if (CSHARP_HANDWRITTEN_CALLEES_NATIVE.indexOf(callee.substring('this.'.length)) > -1) {
+        // a callee the hand-written C# base declares itself (Exchange.Generic.cs `bool isDictionary`) is
+        // bound by that declaration, not by the TS annotation: only a declared `bool` loses the wrapper
+        const handWritten = (typeof this.csharpDeclaredMethodReturnType === 'function') ? this.csharpDeclaredMethodReturnType(callee.substring('this.'.length)) : undefined;
+        if (handWritten !== undefined && handWritten !== 'bool') {
             return undefined;
         }
         if (!this.csharpCalleeResolves(node)) {
@@ -7102,24 +7324,28 @@ export class CSharpTranspiler extends BaseTranspiler {
         if (!isIdentifier(argumentExpression) || !this.csharpHx4IsPlainRead(argumentExpression.parent)) {
             return undefined;
         }
-        const fieldTypes = { 'has': 'Dictionary<string, object>', 'features': 'Dictionary<string, object>', 'timeframes': 'Dictionary<string, object>', 'options': 'ConcurrentDictionary<string, object>', 'markets': 'IDictionary<string, object>', 'urls': 'object', 'currencies': 'object' };
         let receiver: string | undefined;
         let csharpType: string | undefined;
-        const state = this.csharpNullableStateField(expression);
-        if (state !== undefined) {
-            return this.csharpNullableStateRead(state, argumentExpression, false, false);
-        }
-        if (isPropertyAccessExpression(expression) && expression.expression.kind === SyntaxKind.ThisKeyword && isIdentifier(expression.name)
-            && Object.prototype.hasOwnProperty.call(fieldTypes, expression.name.text as string)) {
-            const field = this.printNode(expression, 0);
-            csharpType = fieldTypes[expression.name.text as string];
-            receiver = (csharpType === 'object') ? `((IDictionary<string, object>)${field})` : field;
-            const key = this.csharpHx4DeclaredKeyType(argumentExpression);
-            if (key !== 'string' && key !== 'string?') {
-                return undefined;
-            }
+        const member = this.csharpMemberReceiver(expression);
+        if (member !== undefined && member.routed !== true) {
+            const keyType = this.csharpHx4DeclaredKeyType(argumentExpression);
+            const keyKind = (member.kind === 'dict') ? this.csharpMemberKeyKind(argumentExpression) : undefined;
             const printedKey = this.printNode(argumentExpression, 0);
-            return `(${field} != null && ${printedKey} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
+            const test = `${member.nullTest ?? member.text} != null && `;
+            if (member.kind === 'list') {
+                if (keyType !== 'int') {
+                    return undefined; // Int64/object indices do not bind the List indexer
+                }
+                return `(${test}${printedKey} < ${member.text}.Count ? ${member.text}[${printedKey}] : null)`;
+            }
+            if (keyKind === 'string') {
+                return `(${test}${printedKey} != null && ${member.text}.ContainsKey(${printedKey}) ? ${member.text}[${printedKey}] : null)`;
+            }
+            // GetValue casts the key to string: a non-string box throws there too
+            if (keyKind === 'object' || keyKind === 'param') {
+                return `(${test}${printedKey} != null && ${member.text}.ContainsKey((string)${printedKey}) ? ${member.text}[(string)${printedKey}] : null)`;
+            }
+            return undefined;
         }
         if (!isIdentifier(expression) || CSHARP_MARKET_RECEIVER_NAMES.indexOf(expression.text as string) >= 0) {
             return undefined;
