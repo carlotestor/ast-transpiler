@@ -1511,6 +1511,10 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         case SyntaxKind.ParenthesizedExpression:
             return this.goTypeOfInitializer(initializer.expression, printedValue);
         case SyntaxKind.AsExpression: { // RF-go-6-C: `x as T[]` prints as its operand, so a slice operand keeps its slice type
+            // FM-CACHE: `this.orders as Dict` prints as the field, which is still the cache value
+            if (this.goWsCacheTypeOfNode(this.goUnwrapParenthesizedNode(initializer.expression)) !== undefined) {
+                return GO_WS_CACHE_TYPE;
+            }
             const inner = this.goTypeOfInitializer(initializer.expression, printedValue);
             if ((typeof inner === 'string') && inner.startsWith('[]')) {
                 return inner;
@@ -5042,7 +5046,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         if (inner?.kind === SyntaxKind.Identifier) {
             return this.goDeclaredTypeOfIdentifier(inner) === GO_WS_CACHE_TYPE;
         }
-        return this.goWsTradesField(inner) || this.goWsTradesRead(inner);
+        return this.goWsCacheField(inner) || this.goWsTradesField(inner) || this.goWsTradesRead(inner);
     }
 
     // `this.trades`: the BaseExchange field declared `Dictionary<ArrayCache>`, the Go TradesCache map of WsArrayCache

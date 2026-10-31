@@ -199,6 +199,21 @@ const NIL_ARM_TERNARY = [
     "}",
 ].join("\n");
 
+const CAST_AND_FIELD_NIL = [
+    "export class ex extends Exchange {",
+    "    handleU (messageHash: string, isSnapshot: boolean) {",
+    "        const cache = this.orders as Dict;",
+    "        if (this.orders !== undefined) {",
+    "            const keys = Object.keys (cache);",
+    "            delete cache[keys[0]];",
+    "        }",
+    "        if (isSnapshot || (this.myLiquidations === undefined)) {",
+    "            this.myLiquidations = new ArrayCache (5);",
+    "        }",
+    "    }",
+    "}",
+].join ("\n");
+
 describe ('go ws list caches (FM-CACHE)', () => {
     const out = print ('tmp-fmcache-a', TRADES_AND_ORDERS);
     const pruned = print ('tmp-fmcache-b', PRUNE_AND_NILS);
@@ -250,5 +265,11 @@ describe ('go ws list caches (FM-CACHE)', () => {
         expect (nil).toContain ('var tradesArray WsArrayCache = func() WsArrayCache {');
         expect (nil).toContain ('\ttradesArray.Append(message)');
         expect (nil).toContain ('this.Trades.Store(symbol, tradesArray)');
+    });
+    test ('a cast of a cache field keeps the cache type and a field nil test is plain', () => {
+        const cast = print ('tmp-fmcache-d', CAST_AND_FIELD_NIL);
+        expect (cast).toContain ('var cache WsArrayCache = this.Orders');
+        expect (cast).toContain ('(this.MyLiquidations == nil)');
+        expect (cast).not.toContain ('IsEqual(this.MyLiquidations, nil)');
     });
 });

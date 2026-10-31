@@ -11434,6 +11434,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
       case _ast.SyntaxKind.ParenthesizedExpression:
         return this.goTypeOfInitializer(initializer.expression, printedValue);
       case _ast.SyntaxKind.AsExpression: {
+        if (this.goWsCacheTypeOfNode(this.goUnwrapParenthesizedNode(initializer.expression)) !== void 0) {
+          return GO_WS_CACHE_TYPE;
+        }
         const inner = this.goTypeOfInitializer(initializer.expression, printedValue);
         if (typeof inner === "string" && inner.startsWith("[]")) {
           return inner;
@@ -14493,7 +14496,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     if (_optionalChain([inner, 'optionalAccess', _1514 => _1514.kind]) === _ast.SyntaxKind.Identifier) {
       return this.goDeclaredTypeOfIdentifier(inner) === GO_WS_CACHE_TYPE;
     }
-    return this.goWsTradesField(inner) || this.goWsTradesRead(inner);
+    return this.goWsCacheField(inner) || this.goWsTradesField(inner) || this.goWsTradesRead(inner);
   }
   // `this.trades`: the BaseExchange field declared `Dictionary<ArrayCache>`, the Go TradesCache map of WsArrayCache
   goWsTradesField(node) {
