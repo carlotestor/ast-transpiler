@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -9469,6 +9469,20 @@ var GoTranspiler = class extends BaseTranspiler {
     // gofmt indents every nesting level with exactly one tab; the printer emits the
     // same bytes so the generated tree needs no `gofmt` pass (campaign go-gofmt F01)
     this.DEFAULT_IDENTATION = "	";
+    // ===== RF-go-6-E =====
+    // (1) Owned base fields. A base-class field the consumer declares as owned by a dispatch loop
+    // (config `ownedFields`: field -> declaring class, snapshot accessor, remove op, plus a pattern
+    // for the methods that run ON the loop) is read through the accessor everywhere except on the
+    // loop itself and in whole-field/element writes; `delete this.<field>[k]` becomes the remove op.
+    // (2) Stdlib imports the file print needed are reported with the transpiled file
+    // (`goStdlibImports`), and code in a region the target skips (config `skipRegionMarkers`) never
+    // asks for one, so the consumer places imports from the report instead of scanning text.
+    this.goOwnedFields = {};
+    this.goOwnerLoopMethods = void 0;
+    this.goSkipRegionMarkers = [];
+    this.goInSkippedRegion = false;
+    this.goSkippedRegionCache = /* @__PURE__ */ new WeakMap();
+    this.goLastFileStdlibImports = [];
     // `var x any = this.SafeDict(container, key)` -> `var x map[string]any = SafeMapTyped(...)`:
     // same member read, and every later use reads the local; with the absent case a nil map,
     // GetValue/InOp/ObjectKeys/IsDictionary and Safe* normalise a nil receiver. Else keep the box.
@@ -9713,6 +9727,7 @@ var GoTranspiler = class extends BaseTranspiler {
     this.uncalledStringParams = config["uncalledStringParams"] ?? {};
     this.stringPointerTupleCalls = config["stringPointerTupleCalls"] ?? [];
     this.siblingStringPassthroughPattern = typeof config["siblingStringPassthroughPattern"] === "string" ? new RegExp(config["siblingStringPassthroughPattern"]) : void 0;
+    this.goConfigureRf6E(config);
   }
   goDescendantsOf(scope) {
     let list = this.goScopeDescendants.get(scope);
@@ -9734,6 +9749,79 @@ var GoTranspiler = class extends BaseTranspiler {
     }
     return this.goDescendantsOf(scope).some(predicate);
   }
+  goConfigureRf6E(config) {
+    const owned = config["ownedFields"];
+    this.goOwnedFields = owned?.fields ?? {};
+    this.goOwnerLoopMethods = owned?.loopMethods !== void 0 ? new RegExp(owned.loopMethods) : void 0;
+    this.goSkipRegionMarkers = config["skipRegionMarkers"] ?? [];
+  }
+  // `this.<field>` naming a configured owned field, resolved to the declaring class by the checker
+  goOwnedFieldOf(node) {
+    if (node?.kind !== SyntaxKind5.PropertyAccessExpression || node.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return void 0;
+    }
+    const entry = Object.prototype.hasOwnProperty.call(this.goOwnedFields, node.name?.text) ? this.goOwnedFields[node.name.text] : void 0;
+    if (entry === void 0) {
+      return void 0;
+    }
+    const declaration = this.getChecker().getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+    return declaration?.kind === SyntaxKind5.PropertyDeclaration && declaration.parent?.name?.text === entry.owner ? entry : void 0;
+  }
+  // the method whose body holds the node, closures looked through: code there runs where that method runs
+  goEnclosingMethodName(node) {
+    let current = node?.parent;
+    while (current !== void 0 && current.kind !== SyntaxKind5.MethodDeclaration) {
+      current = current.parent;
+    }
+    return current?.name?.text;
+  }
+  goRunsOnOwnerLoop(node) {
+    const name = this.goEnclosingMethodName(node);
+    return name !== void 0 && this.goOwnerLoopMethods?.test(name) === true;
+  }
+  // the field itself is the target of a write: `this.f = v`, `this.f[k] = v`, `this.f[k] += v`
+  goOwnedFieldIsWritten(node) {
+    const target = node.parent?.kind === SyntaxKind5.ElementAccessExpression && node.parent.expression === node ? node.parent : node;
+    const parent = target.parent;
+    return parent?.kind === SyntaxKind5.BinaryExpression && parent.left === target && GO_WRITE_OPERATOR_KINDS.indexOf(parent.operatorToken.kind) >= 0;
+  }
+  printPropertyAccessExpression(node, identation) {
+    const entry = this.goOwnedFieldOf(node);
+    if (entry !== void 0 && !this.goOwnedFieldIsWritten(node) && !this.goRunsOnOwnerLoop(node)) {
+      return `${this.printNode(node.expression, 0)}.${entry.snapshot}()`;
+    }
+    return super.printPropertyAccessExpression(node, identation);
+  }
+  // `delete this.<field>[k]` off the loop is the owner's remove op; on the loop it stays the direct delete
+  goOwnedFieldRemove(node) {
+    const access = node.expression;
+    const entry = access?.kind === SyntaxKind5.ElementAccessExpression ? this.goOwnedFieldOf(access.expression) : void 0;
+    if (entry === void 0 || this.goRunsOnOwnerLoop(node)) {
+      return void 0;
+    }
+    return `${this.printNode(access.expression.expression, 0)}.${entry.remove}(${this.printNode(access.argumentExpression, 0)})`;
+  }
+  goStatementIsInSkippedRegion(node) {
+    if (this.goSkipRegionMarkers.length !== 2) {
+      return false;
+    }
+    const file = this.getSrc();
+    let regions = this.goSkippedRegionCache.get(file);
+    if (regions === void 0) {
+      const text = String(file.getFullText());
+      regions = [];
+      for (let from = text.indexOf(this.goSkipRegionMarkers[0]); from >= 0; ) {
+        const found = text.indexOf(this.goSkipRegionMarkers[1], from);
+        const end = found < 0 ? text.length : found;
+        regions.push([from, end]);
+        from = text.indexOf(this.goSkipRegionMarkers[0], end);
+      }
+      this.goSkippedRegionCache.set(file, regions);
+    }
+    const start = node.getStart();
+    return regions.some((region) => start > region[0] && start < region[1]);
+  }
+  // ===== end RF-go-6-E =====
   initConfig() {
     this.LeftPropertyAccessReplacements = {
       // 'this': '$this',
@@ -15889,6 +15977,7 @@ ${indent}}`);
     } finally {
       this.goFileStdlibImports = outerImports;
     }
+    this.goLastFileStdlibImports = [...fileImports].sort();
     if (fileImports.size === 0) {
       return body;
     }
@@ -15933,14 +16022,17 @@ ${indent}}`);
     }
     const isStatement4 = node !== void 0 && isStatementNode(node) && node.kind !== SyntaxKind5.Block;
     const previousLevel = this.goStatementLevel;
+    const previousSkipped = this.goInSkippedRegion;
     if (isStatement4) {
       this.goStatementLevel = identation;
+      this.goInSkippedRegion = previousSkipped || this.goStatementIsInSkippedRegion(node);
     }
     try {
       const printed = super.printNode(node, identation);
       return this.goControlClauseParens(node, printed);
     } finally {
       this.goStatementLevel = previousLevel;
+      this.goInSkippedRegion = previousSkipped;
     }
   }
   // composite literal body one level deeper than the statement, closing brace at the
@@ -17750,7 +17842,7 @@ ${this.getIden(identation)}`;
   // the leading file-level import; they keep the helper until their writer adds the import itself.
   goFileKeepsFileLevelImports() {
     const fileName = this.getSrc()?.fileName ?? "";
-    return !/(?:base\/Exchange(?:\.nooverloads\.\d+)?|base\/PredictionExchange|base\/test\.orderBook|base\/test\.cache)\.ts$/.test(fileName);
+    return !this.goInSkippedRegion && !/(?:base\/Exchange(?:\.nooverloads\.\d+)?|base\/PredictionExchange|base\/test\.orderBook|base\/test\.cache)\.ts$/.test(fileName);
   }
   // `GetIndexOf(s, t)` is `strings.Index(s, t)` for a receiver declared `string` once `t` is a
   // string too (`target.(string)` succeeds; -1 is both not-found answers); a `*string` receiver
@@ -18162,6 +18254,10 @@ ${this.getIden(level)}}()`;
     return `Ternary(${condition}, ${whenTrue}, ${whenFalse})`;
   }
   printDeleteExpression(node, identation) {
+    const owned = this.goOwnedFieldRemove(node);
+    if (owned !== void 0) {
+      return owned;
+    }
     const native = this.goNativeDelete(node);
     if (native !== void 0) {
       return native;
@@ -56810,12 +56906,16 @@ var Transpiler = class _Transpiler {
       this.goTranspiler.goAnnotateMethodTypes(methodsTypes, src);
     }
     Logger.success("transpilation finished successfully");
-    return {
+    const transpiled = {
       content: transpiledContent,
       imports,
       exports,
       methodsTypes
     };
+    if (lang === 3 /* Go */) {
+      transpiled.goStdlibImports = [...this.goTranspiler.goLastFileStdlibImports];
+    }
+    return transpiled;
   }
   transpileDifferentLanguagesGeneric(mode, input, content) {
     let context;
