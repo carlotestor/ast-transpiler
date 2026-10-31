@@ -502,6 +502,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     goFieldContainerTypeNative(node: any): string | undefined;
     goValueMayHoldPointer(valueNode: any): boolean;
     goIsPlainValuedMapField(node: any): boolean;
+    goPredictionCacheField(node: any): string | undefined;
+    goPredictionCacheInitialized(fieldNode: any, site: any): boolean;
+    printNativePredictionCacheWrite(containerNode: any, containerStr: string, keyNode: any, keyStr: string, valueStr: string, valueNode?: any): string | undefined;
     goIsStringKeyExpression(node: any): boolean;
     goSliceIndexProvablyInRange(node: any, indexNode: any): boolean;
     goLocalIsRebound(scope: any, nameNode: any): boolean;
@@ -588,6 +591,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goIsReadOnlyCallArgument(node: any): boolean;
     goIsBareStringOperand(node: any): boolean;
     goDeclaredContainerOperand(node: any): string | undefined;
+    goPredictionCacheNilTest(operand: any, text: string, isEq: boolean): string;
     printInlineEquality(left: any, right: any, leftText: string, rightText: string, isEq: boolean): string | undefined;
     goNativeNumericEqualityKind(left: any, leftText: string, right: any, rightText: string): string | undefined;
     goOperandNumericKind(node: any, printedText: string): string | undefined;
