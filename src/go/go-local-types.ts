@@ -10186,6 +10186,115 @@ function ccxtGoTupleResultUntypedElementsAreSafe (goTranspiler, declaration) {
     return !unsafe;
 }
 
+// hx11 RFM-G1 GP08 (folded from ccxt build/hx10w8-GP08.ts): the first result of a pair helper.
+// A local read from element 0 of `this.handle<…>AndParams (…)`, directly (`const x = call[0]`) or
+// through a holder that is read nowhere else (`const h = call; const x: T = h[0]`), is that
+// helper's first Go result, so the call binds the pair natively (`x, _ := call`) instead of
+// boxing it in TupleSlice and unwrapping with GetValue. Only the scalar locals the checker types
+// string / boolean are bound, and only when the Go twin is the base runtime's (go/v4/
+// exchange_market_type.go): a call that resolves to an override prints that class's own method.
+const CCXT_GO_TUPLE_PAIR_SLOT = { 'SafeStringPtr': '*string', 'GetValueBool': 'bool' };
+
+function ccxtGoTuplePairCall (goTranspiler, call) {
+    if (!ccxtGoTupleResultCall (call) || (call.expression.expression?.kind !== ts.SyntaxKind.ThisKeyword)) {
+        return undefined;
+    }
+    let declared;
+    try {
+        declared = goTranspiler.getChecker ().getResolvedSignature (call)?.declaration?.resolve ();
+    } catch (e) {
+        declared = undefined;
+    }
+    return CCXT_GO_ELEMENT_1_BASE_FILE.test (declared?.getSourceFile?.()?.fileName ?? '')
+        ? CCXT_GO_TUPLE_PAIR_SLOT[ccxtGoTupleResultFirst (call)] : undefined;
+}
+
+function ccxtGoTuplePairStatementOf (declaration) {
+    const list = declaration?.parent;
+    const statement = list?.parent;
+    return ((declaration?.kind === ts.SyntaxKind.VariableDeclaration) && (declaration.name?.kind === ts.SyntaxKind.Identifier)
+        && (statement?.kind === ts.SyntaxKind.VariableStatement) && (list.declarations.length === 1)) ? statement : undefined;
+}
+
+// the reader `const x: T = <pair call>[0]` / `= h[0]`: { call, holder } when its first result binds natively
+function ccxtGoTuplePairBinding (goTranspiler, declaration) {
+    const read = declaration?.initializer;
+    if ((ccxtGoTuplePairStatementOf (declaration) === undefined) || (read?.kind !== ts.SyntaxKind.ElementAccessExpression)
+        || (read.questionDotToken !== undefined) || (read.argumentExpression?.kind !== ts.SyntaxKind.NumericLiteral)
+        || (read.argumentExpression.text !== '0')) {
+        return undefined;
+    }
+    let call = read.expression;
+    let holder;
+    if (call.kind === ts.SyntaxKind.Identifier) {
+        holder = ccxtGoParamDeclarationOf (goTranspiler, call);
+        const statement = ccxtGoTuplePairStatementOf (holder);
+        const siblings = statement?.parent?.statements;
+        const scope = goTranspiler.goEnclosingFunction (holder);
+        if ((statement === undefined) || (siblings === undefined) || (scope === undefined)
+            || ((holder.parent.flags & ts.NodeFlags.Const) === 0) || (holder.type !== undefined)
+            || (siblings[siblings.indexOf (statement) + 1] !== declaration.parent.parent)) {
+            return undefined;
+        }
+        // the holder is read once, by this element: every other mention would need the box
+        let mentions = 0;
+        goTranspiler.hasNodeWhere (scope, (n) => {
+            mentions += ((n.kind === ts.SyntaxKind.Identifier) && (n.text === holder.name.text)) ? 1 : 0;
+            return false;
+        });
+        if (mentions !== 2) {
+            return undefined;
+        }
+        call = holder.initializer;
+    }
+    const slot = (call === undefined) ? undefined : ccxtGoTuplePairCall (goTranspiler, call);
+    const goType = (slot === undefined) ? undefined : ccxtGoScalarElementReadType (goTranspiler, read);
+    return ((goType !== undefined) && (goType === ((slot === 'bool') ? '*bool' : slot))) ? { call, holder } : undefined;
+}
+
+// the lines this declaration prints when it is a pair reader, or the holder in front of one
+function ccxtGoTuplePairLines (goTranspiler, node, identation) {
+    const declaration = node?.declarations?.[0];
+    const statement = ccxtGoTuplePairStatementOf (declaration);
+    if (statement === undefined) {
+        return undefined;
+    }
+    const siblings = statement.parent?.statements ?? [];
+    const nextDeclaration = siblings[siblings.indexOf (statement) + 1]?.declarationList?.declarations?.[0];
+    const asHolder = (nextDeclaration === undefined) ? undefined : ccxtGoTuplePairBinding (goTranspiler, nextDeclaration);
+    const reader = (asHolder?.holder === declaration) ? nextDeclaration : declaration;
+    const binding = (reader === declaration) ? ccxtGoTuplePairBinding (goTranspiler, declaration) : asHolder;
+    if (binding === undefined) {
+        return undefined;
+    }
+    const iden = goTranspiler.getIden (identation);
+    const name = goTranspiler.printNode (reader.name, 0);
+    const call = ccxtGoTupleResultUnwrap (goTranspiler.printNode (binding.call, identation));
+    const pointer = (ccxtGoScalarElementReadType (goTranspiler, reader.initializer) === '*bool');
+    const temporary = name + 'Value';
+    if (call === undefined) {
+        return undefined;
+    }
+    if (pointer) {
+        // the bool the helper returns, and the address of that value
+        let clashes = false;
+        goTranspiler.hasNodeWhere (goTranspiler.goEnclosingFunction (reader), (n) => {
+            clashes = clashes || ((n.kind === ts.SyntaxKind.Identifier) && (n.text === temporary));
+            return false;
+        });
+        if (clashes) {
+            return undefined;
+        }
+        const first = iden + temporary + ', _ := ' + call;
+        const second = iden + name + ' := &' + temporary;
+        return (binding.holder === undefined) ? first + '\n' + second : ((reader === declaration) ? second : first);
+    }
+    if (binding.holder === undefined) {
+        return iden + name + ', _ := ' + call;
+    }
+    return (reader === declaration) ? iden + name + ', _ = ' + call : iden + 'var ' + name + ' *string = nil';
+}
+
 function installCcxtGoTupleResults (goTranspiler) {
     if ((goTranspiler === undefined) || goTranspiler.__ccxtGoTupleResultsInstalled) {
         return;
@@ -10207,6 +10316,12 @@ function installCcxtGoTupleResults (goTranspiler) {
     goTranspiler.printVariableDeclarationList = function (node, identation) {
         const printed = printDeclaration.call (this, node, identation);
         const declaration = node?.declarations?.[0];
+        if (typeof printed === 'string') {
+            const pair = ccxtGoTuplePairLines (this, node, identation);
+            if (pair !== undefined) {
+                return pair;
+            }
+        }
         if ((typeof printed !== 'string') || (declaration?.name?.kind !== ts.SyntaxKind.ArrayBindingPattern)
             || !ccxtGoTupleResultCall (declaration.initializer)) {
             return printed;

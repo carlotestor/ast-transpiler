@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-FU7DZIKQ.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -46085,6 +46085,93 @@ function ccxtGoTupleResultUntypedElementsAreSafe(goTranspiler, declaration) {
   visit(scope);
   return !unsafe;
 }
+var CCXT_GO_TUPLE_PAIR_SLOT = { "SafeStringPtr": "*string", "GetValueBool": "bool" };
+function ccxtGoTuplePairCall(goTranspiler, call) {
+  if (!ccxtGoTupleResultCall(call) || call.expression.expression?.kind !== ts.SyntaxKind.ThisKeyword) {
+    return void 0;
+  }
+  let declared;
+  try {
+    declared = goTranspiler.getChecker().getResolvedSignature(call)?.declaration?.resolve();
+  } catch (e) {
+    declared = void 0;
+  }
+  return CCXT_GO_ELEMENT_1_BASE_FILE.test(declared?.getSourceFile?.()?.fileName ?? "") ? CCXT_GO_TUPLE_PAIR_SLOT[ccxtGoTupleResultFirst(call)] : void 0;
+}
+function ccxtGoTuplePairStatementOf(declaration) {
+  const list = declaration?.parent;
+  const statement = list?.parent;
+  return declaration?.kind === ts.SyntaxKind.VariableDeclaration && declaration.name?.kind === ts.SyntaxKind.Identifier && statement?.kind === ts.SyntaxKind.VariableStatement && list.declarations.length === 1 ? statement : void 0;
+}
+function ccxtGoTuplePairBinding(goTranspiler, declaration) {
+  const read = declaration?.initializer;
+  if (ccxtGoTuplePairStatementOf(declaration) === void 0 || read?.kind !== ts.SyntaxKind.ElementAccessExpression || read.questionDotToken !== void 0 || read.argumentExpression?.kind !== ts.SyntaxKind.NumericLiteral || read.argumentExpression.text !== "0") {
+    return void 0;
+  }
+  let call = read.expression;
+  let holder;
+  if (call.kind === ts.SyntaxKind.Identifier) {
+    holder = ccxtGoParamDeclarationOf(goTranspiler, call);
+    const statement = ccxtGoTuplePairStatementOf(holder);
+    const siblings = statement?.parent?.statements;
+    const scope = goTranspiler.goEnclosingFunction(holder);
+    if (statement === void 0 || siblings === void 0 || scope === void 0 || (holder.parent.flags & ts.NodeFlags.Const) === 0 || holder.type !== void 0 || siblings[siblings.indexOf(statement) + 1] !== declaration.parent.parent) {
+      return void 0;
+    }
+    let mentions = 0;
+    goTranspiler.hasNodeWhere(scope, (n) => {
+      mentions += n.kind === ts.SyntaxKind.Identifier && n.text === holder.name.text ? 1 : 0;
+      return false;
+    });
+    if (mentions !== 2) {
+      return void 0;
+    }
+    call = holder.initializer;
+  }
+  const slot = call === void 0 ? void 0 : ccxtGoTuplePairCall(goTranspiler, call);
+  const goType = slot === void 0 ? void 0 : ccxtGoScalarElementReadType(goTranspiler, read);
+  return goType !== void 0 && goType === (slot === "bool" ? "*bool" : slot) ? { call, holder } : void 0;
+}
+function ccxtGoTuplePairLines(goTranspiler, node, identation) {
+  const declaration = node?.declarations?.[0];
+  const statement = ccxtGoTuplePairStatementOf(declaration);
+  if (statement === void 0) {
+    return void 0;
+  }
+  const siblings = statement.parent?.statements ?? [];
+  const nextDeclaration = siblings[siblings.indexOf(statement) + 1]?.declarationList?.declarations?.[0];
+  const asHolder = nextDeclaration === void 0 ? void 0 : ccxtGoTuplePairBinding(goTranspiler, nextDeclaration);
+  const reader = asHolder?.holder === declaration ? nextDeclaration : declaration;
+  const binding = reader === declaration ? ccxtGoTuplePairBinding(goTranspiler, declaration) : asHolder;
+  if (binding === void 0) {
+    return void 0;
+  }
+  const iden = goTranspiler.getIden(identation);
+  const name = goTranspiler.printNode(reader.name, 0);
+  const call = ccxtGoTupleResultUnwrap(goTranspiler.printNode(binding.call, identation));
+  const pointer = ccxtGoScalarElementReadType(goTranspiler, reader.initializer) === "*bool";
+  const temporary = name + "Value";
+  if (call === void 0) {
+    return void 0;
+  }
+  if (pointer) {
+    let clashes = false;
+    goTranspiler.hasNodeWhere(goTranspiler.goEnclosingFunction(reader), (n) => {
+      clashes = clashes || n.kind === ts.SyntaxKind.Identifier && n.text === temporary;
+      return false;
+    });
+    if (clashes) {
+      return void 0;
+    }
+    const first = iden + temporary + ", _ := " + call;
+    const second = iden + name + " := &" + temporary;
+    return binding.holder === void 0 ? first + "\n" + second : reader === declaration ? second : first;
+  }
+  if (binding.holder === void 0) {
+    return iden + name + ", _ := " + call;
+  }
+  return reader === declaration ? iden + name + ", _ = " + call : iden + "var " + name + " *string = nil";
+}
 function installCcxtGoTupleResults(goTranspiler) {
   if (goTranspiler === void 0 || goTranspiler.__ccxtGoTupleResultsInstalled) {
     return;
@@ -46105,6 +46192,12 @@ function installCcxtGoTupleResults(goTranspiler) {
   goTranspiler.printVariableDeclarationList = function(node, identation) {
     const printed = printDeclaration.call(this, node, identation);
     const declaration = node?.declarations?.[0];
+    if (typeof printed === "string") {
+      const pair = ccxtGoTuplePairLines(this, node, identation);
+      if (pair !== void 0) {
+        return pair;
+      }
+    }
     if (typeof printed !== "string" || declaration?.name?.kind !== ts.SyntaxKind.ArrayBindingPattern || !ccxtGoTupleResultCall(declaration.initializer)) {
       return printed;
     }
