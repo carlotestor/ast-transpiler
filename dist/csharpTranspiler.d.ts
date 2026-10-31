@@ -447,6 +447,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     printPropertyAccessModifiers(node: any): string;
     csharpHx4DeclaredReceiverReadable(node: any, expression: any): boolean;
     csharpHx4IdentifierKeyRead(expression: any, argumentExpression: any): string | undefined;
+    csharpObjectKeyCastable(key: any): boolean;
     csharpHx4IsPlainRead(node: any): boolean;
     csharpHx4DeclaredKeyType(key: any): string | undefined;
     csharpHx4GuardedNullableNegation(node: any, csharpType: string): boolean;

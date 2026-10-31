@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -9233,7 +9233,21 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (!isIdentifier(argumentExpression) || !this.csharpHx4IsPlainRead(argumentExpression.parent)) {
       return void 0;
     }
-    const fieldTypes = { "has": "Dictionary<string, object>", "features": "Dictionary<string, object>", "timeframes": "Dictionary<string, object>", "options": "ConcurrentDictionary<string, object>", "markets": "IDictionary<string, object>", "urls": "object", "currencies": "object" };
+    const fieldTypes = {
+      "has": "Dictionary<string, object>",
+      "features": "Dictionary<string, object>",
+      "timeframes": "Dictionary<string, object>",
+      "options": "ConcurrentDictionary<string, object>",
+      "markets": "IDictionary<string, object>",
+      "urls": "object",
+      "currencies": "object",
+      "ohlcvs": "IDictionary<string, object>",
+      "trades": "IDictionary<string, object>",
+      "tickers": "IDictionary<string, object>",
+      "orderbooks": "IDictionary<string, object>",
+      "bidsasks": "IDictionary<string, object>",
+      "fundingRates": "IDictionary<string, object>"
+    };
     let receiver;
     let csharpType;
     const state = this.csharpNullableStateField(expression);
@@ -9266,6 +9280,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const printedKey = this.printNode(argumentExpression, 0);
     const keyType = this.csharpHx4DeclaredKeyType(argumentExpression);
     if (csharpType.indexOf("Dictionary<") >= 0) {
+      if (keyType === "object" && this.csharpObjectKeyCastable(argumentExpression)) {
+        return `(${receiver} != null && ${printedKey} != null && ${receiver}.ContainsKey((string)${printedKey}) ? ${receiver}[(string)${printedKey}] : null)`;
+      }
       if (keyType !== "string" && keyType !== "string?") {
         return void 0;
       }
@@ -9275,6 +9292,12 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return void 0;
     }
     return `(${receiver} != null && ${printedKey} < ${receiver}.Count ? ${receiver}[${printedKey}] : null)`;
+  }
+  // an `object` key identifier whose `(string)` cast cannot hide a later retype: a parameter the body
+  // writes (or defaults) gets a shadow local the embedding build layer retypes after printing
+  csharpObjectKeyCastable(key) {
+    const binding = this.csharpReceiverBinding(key);
+    return !(binding?.kind === SyntaxKind4.Parameter && (binding.initializer !== void 0 || this.csharpParameterWrittenAnywhere(key)));
   }
   // a read that is no write target: not the left of any assignment, not ++/--, not delete
   csharpHx4IsPlainRead(node) {

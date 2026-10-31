@@ -7661,7 +7661,9 @@ export class CSharpTranspiler extends BaseTranspiler {
         if (!isIdentifier(argumentExpression) || !this.csharpHx4IsPlainRead(argumentExpression.parent)) {
             return undefined;
         }
-        const fieldTypes = { 'has': 'Dictionary<string, object>', 'features': 'Dictionary<string, object>', 'timeframes': 'Dictionary<string, object>', 'options': 'ConcurrentDictionary<string, object>', 'markets': 'IDictionary<string, object>', 'urls': 'object', 'currencies': 'object' };
+        // the ws cache properties are declared `IDictionary<string, object>` in Exchange.Options.cs
+        const fieldTypes = { 'has': 'Dictionary<string, object>', 'features': 'Dictionary<string, object>', 'timeframes': 'Dictionary<string, object>', 'options': 'ConcurrentDictionary<string, object>', 'markets': 'IDictionary<string, object>', 'urls': 'object', 'currencies': 'object',
+            'ohlcvs': 'IDictionary<string, object>', 'trades': 'IDictionary<string, object>', 'tickers': 'IDictionary<string, object>', 'orderbooks': 'IDictionary<string, object>', 'bidsasks': 'IDictionary<string, object>', 'fundingRates': 'IDictionary<string, object>' };
         let receiver: string | undefined;
         let csharpType: string | undefined;
         const state = this.csharpNullableStateField(expression);
@@ -7695,6 +7697,10 @@ export class CSharpTranspiler extends BaseTranspiler {
         const printedKey = this.printNode(argumentExpression, 0);
         const keyType = this.csharpHx4DeclaredKeyType(argumentExpression);
         if (csharpType.indexOf('Dictionary<') >= 0) {
+            if (keyType === 'object' && this.csharpObjectKeyCastable(argumentExpression)) {
+                // an `object` key takes the helper's own `(string)key` cast
+                return `(${receiver} != null && ${printedKey} != null && ${receiver}.ContainsKey((string)${printedKey}) ? ${receiver}[(string)${printedKey}] : null)`;
+            }
             if (keyType !== 'string' && keyType !== 'string?') {
                 return undefined;
             }
@@ -7704,6 +7710,13 @@ export class CSharpTranspiler extends BaseTranspiler {
             return undefined; // Int64/object indices do not bind the List indexer
         }
         return `(${receiver} != null && ${printedKey} < ${receiver}.Count ? ${receiver}[${printedKey}] : null)`;
+    }
+
+    // an `object` key identifier whose `(string)` cast cannot hide a later retype: a parameter the body
+    // writes (or defaults) gets a shadow local the embedding build layer retypes after printing
+    csharpObjectKeyCastable(key): boolean {
+        const binding: any = this.csharpReceiverBinding(key);
+        return !((binding?.kind === SyntaxKind.Parameter) && ((binding.initializer !== undefined) || this.csharpParameterWrittenAnywhere(key)));
     }
 
     // a read that is no write target: not the left of any assignment, not ++/--, not delete
