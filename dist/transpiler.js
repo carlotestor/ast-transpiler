@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -25698,6 +25698,10 @@ ${this.getIden(identation)}}}`;
     if (!Number.isInteger(index) || index < 0) {
       return void 0;
     }
+    const splitRead = this.javaNativeSplitIndexRead(node, index);
+    if (splitRead !== void 0) {
+      return splitRead;
+    }
     if (this.isJavaListStructureType(type)) {
       if (index >= this.tupleRequiredElementCount(type)) {
         return void 0;
@@ -26392,7 +26396,32 @@ ${this.getIden(identation)}}}`;
     if (this.javaScalarFamily(receiver) !== "string" || this.javaScalarFamily(separator) !== "string") {
       return void 0;
     }
-    return `${this.ARRAY_OPENING_TOKEN}((String)${name}).split(java.util.regex.Pattern.quote(${parsedArg}))${this.ARRAY_CLOSING_TOKEN}`;
+    return `${this.ARRAY_OPENING_TOKEN}${this.javaNativeSplitText(name, parsedArg)}${this.ARRAY_CLOSING_TOKEN}`;
+  }
+  javaNativeSplitText(name, parsedArg) {
+    return `((String)${name}).split(java.util.regex.Pattern.quote(${parsedArg}))`;
+  }
+  // `s.split (<literal>)[<int literal>]` on the native split: the helper's List branch answers
+  // null off range (e.g. "/".split("/") is empty), which findFirst().orElse(null) keeps, with
+  // no local to hoist and the receiver evaluated once.
+  javaNativeSplitIndexRead(node, index) {
+    const call = node.expression;
+    if (node.questionDotToken !== void 0 || !isCallExpression5(call) || call.questionDotToken !== void 0 || !isPropertyAccessExpression2(call.expression) || call.expression.questionDotToken !== void 0) {
+      return void 0;
+    }
+    const receiver = call.expression.expression;
+    const separator = call.arguments?.[0];
+    if (separator === void 0) {
+      return void 0;
+    }
+    const name = this.printNode(receiver, 0);
+    const parsedArg = this.printNode(separator, 0).trimStart();
+    if (this.javaNativeSplitCall(call, name, parsedArg) === void 0) {
+      return void 0;
+    }
+    const array = this.javaNativeSplitText(name, parsedArg);
+    const skip = index > 0 ? `.skip(${index})` : "";
+    return `java.util.Arrays.stream(${array})${skip}.findFirst().orElse(null)`;
   }
   // integer literals print as Java `int`; the helpers normalize Integer to Long before
   // the arithmetic, so native integer arithmetic is emitted in long to keep the boxed

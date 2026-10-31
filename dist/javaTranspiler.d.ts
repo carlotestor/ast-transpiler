@@ -277,6 +277,8 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaPrintWidenedOperand(kind: any, resultKind: any, node: any, text: any): any;
     javaSplitTernaryReceiver(node: any): boolean;
     javaNativeSplitCall(node: any, name: any, parsedArg: any): string | undefined;
+    javaNativeSplitText(name: any, parsedArg: any): string;
+    javaNativeSplitIndexRead(node: any, index: number): string | undefined;
     javaPrintOperandAsLong(node: any, text: any): any;
     javaProvableCounterInt(node: any): boolean;
     printInlineHelperArithmetic(left: any, right: any, leftText: any, rightText: any, op: any): string;
