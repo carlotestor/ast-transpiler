@@ -49351,7 +49351,8 @@ var TupleSlots = class {
       }
       const text = this.printed(n);
       any = true;
-      ok = text !== void 0 && /^return \[\]any\{.*\}$/.test(text.replace(/\s+\/\/.*$/, "").trim()) && !text.includes("\n");
+      const code = (text ?? "").split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
+      ok = text !== void 0 && /^return \[\]any\{.*\}$/.test(code.replace(/\s+\/\/.*$/, "").trim());
       return false;
     });
     return ok && any;
@@ -49436,12 +49437,6 @@ var TupleSlots = class {
         }
       }
       return call;
-    }
-    const omit = /^(?:ccxt\.)?MapTyped\(this\.Omit\((\w+),/.exec(m);
-    if (omit !== null) {
-      const arg = g08Unwrap(node)?.arguments?.[0]?.arguments?.[0];
-      const argClass = arg?.kind === SK.Identifier ? this.classOfIdent(fn, arg, depth + 1) : "no";
-      return argClass === "typedmap" || argClass === "plain:map" ? "plain:map" : "no";
     }
     if (/^func\s*\(/.test(m)) {
       return "no";
@@ -49573,6 +49568,16 @@ var TupleSlots = class {
     }
     return void 0;
   }
+  // `this.omit (m, ..)` of a map-typed identifier is a fresh map[string]any (the Go OmitDict twin)
+  omitClass(fn, init, depth) {
+    const call = g08Unwrap(init);
+    const callee = call?.expression;
+    if (call?.kind !== SK.CallExpression || callee?.kind !== SK.PropertyAccessExpression || callee.expression?.kind !== SK.ThisKeyword || callee.name?.text !== "omit" || call.arguments?.length < 2 || call.arguments[0]?.kind !== SK.Identifier) {
+      return "no";
+    }
+    const arg = this.classOfIdent(fn, call.arguments[0], depth + 1);
+    return arg === "typedmap" || arg === "plain:map" ? "plain:map" : "no";
+  }
   classOfIdent(fn, node, depth) {
     if (depth > 4) {
       return "no";
@@ -49587,7 +49592,11 @@ var TupleSlots = class {
       return info?.slots?.[decl.index] ?? "no";
     }
     const writes = this.writesOf(fn, name) + (decl.param === true ? 1 : 0);
-    const initClass = (init) => this.classOfText(fn, void 0, g08Mask(init).trim(), init.trim(), depth + 1);
+    const tsInit = this.resolve(node)?.initializer;
+    const initClass = (init) => {
+      const c = this.classOfText(fn, void 0, g08Mask(init).trim(), init.trim(), depth + 1);
+      return c === "no" ? this.omitClass(fn, tsInit, depth) : c;
+    };
     if (decl.kind === "short") {
       if (writes > 1) {
         return "no";

@@ -49350,7 +49350,8 @@ var TupleSlots = class {
       }
       const text = this.printed(n);
       any = true;
-      ok = text !== void 0 && /^return \[\]any\{.*\}$/.test(text.replace(/\s+\/\/.*$/, "").trim()) && !text.includes("\n");
+      const code = (_nullishCoalesce(text, () => ( ""))).split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
+      ok = text !== void 0 && /^return \[\]any\{.*\}$/.test(code.replace(/\s+\/\/.*$/, "").trim());
       return false;
     });
     return ok && any;
@@ -49436,16 +49437,10 @@ var TupleSlots = class {
       }
       return call;
     }
-    const omit = /^(?:ccxt\.)?MapTyped\(this\.Omit\((\w+),/.exec(m);
-    if (omit !== null) {
-      const arg = _optionalChain([g08Unwrap, 'call', _5942 => _5942(node), 'optionalAccess', _5943 => _5943.arguments, 'optionalAccess', _5944 => _5944[0], 'optionalAccess', _5945 => _5945.arguments, 'optionalAccess', _5946 => _5946[0]]);
-      const argClass = _optionalChain([arg, 'optionalAccess', _5947 => _5947.kind]) === SK.Identifier ? this.classOfIdent(fn, arg, depth + 1) : "no";
-      return argClass === "typedmap" || argClass === "plain:map" ? "plain:map" : "no";
-    }
     if (/^func\s*\(/.test(m)) {
       return "no";
     }
-    if (_optionalChain([node, 'optionalAccess', _5948 => _5948.kind]) === SK.Identifier && /^[A-Za-z_]\w*$/.test(m)) {
+    if (_optionalChain([node, 'optionalAccess', _5942 => _5942.kind]) === SK.Identifier && /^[A-Za-z_]\w*$/.test(m)) {
       return this.classOfIdent(fn, node, depth);
     }
     return "no";
@@ -49459,18 +49454,18 @@ var TupleSlots = class {
       const bump = (id) => counts.set(id, (_nullishCoalesce(counts.get(id), () => ( 0))) + 1);
       const targets = (t) => {
         const u = g08Unwrap(t);
-        if (_optionalChain([u, 'optionalAccess', _5949 => _5949.kind]) === SK.Identifier) {
+        if (_optionalChain([u, 'optionalAccess', _5943 => _5943.kind]) === SK.Identifier) {
           bump(u.text);
         }
-        if (_optionalChain([u, 'optionalAccess', _5950 => _5950.kind]) === SK.ArrayLiteralExpression) {
+        if (_optionalChain([u, 'optionalAccess', _5944 => _5944.kind]) === SK.ArrayLiteralExpression) {
           u.elements.forEach(targets);
         }
       };
       g08Walk(fn.body, (n) => {
-        if ((n.kind === SK.VariableDeclaration || n.kind === SK.BindingElement) && _optionalChain([n, 'access', _5951 => _5951.name, 'optionalAccess', _5952 => _5952.kind]) === SK.Identifier) {
+        if ((n.kind === SK.VariableDeclaration || n.kind === SK.BindingElement) && _optionalChain([n, 'access', _5945 => _5945.name, 'optionalAccess', _5946 => _5946.kind]) === SK.Identifier) {
           bump(n.name.text);
         } else if (n.kind === SK.BinaryExpression) {
-          const op = _optionalChain([n, 'access', _5953 => _5953.operatorToken, 'optionalAccess', _5954 => _5954.kind]);
+          const op = _optionalChain([n, 'access', _5947 => _5947.operatorToken, 'optionalAccess', _5948 => _5948.kind]);
           if (op >= SK.FirstAssignment && op <= SK.LastAssignment) {
             targets(n.left);
           }
@@ -49495,29 +49490,29 @@ var TupleSlots = class {
     let result;
     if (decl.kind === SK.Parameter) {
       const bound = decl.initializer !== void 0 || decl.questionToken !== void 0;
-      if (bound && decl.dotDotDotToken === void 0 && _optionalChain([decl, 'access', _5955 => _5955.parent, 'optionalAccess', _5956 => _5956.body]) !== void 0) {
+      if (bound && decl.dotDotDotToken === void 0 && _optionalChain([decl, 'access', _5949 => _5949.parent, 'optionalAccess', _5950 => _5950.body]) !== void 0) {
         const type = this.go.goGetArgParameterType(decl);
-        const emptyMap = _optionalChain([decl, 'access', _5957 => _5957.initializer, 'optionalAccess', _5958 => _5958.kind]) === SK.ObjectLiteralExpression && decl.initializer.properties.length === 0;
+        const emptyMap = _optionalChain([decl, 'access', _5951 => _5951.initializer, 'optionalAccess', _5952 => _5952.kind]) === SK.ObjectLiteralExpression && decl.initializer.properties.length === 0;
         result = type !== void 0 ? { "kind": "var", "type": type, "init": type === "map[string]any" && emptyMap ? "GetArgMap(optionalArgs, 0, map[string]any{})" : "GetArgX(optionalArgs, 0, nil)", "fn": decl.parent, "param": true } : { "kind": "short", "type": void 0, "init": "GetArg(optionalArgs, 0, nil)", "fn": decl.parent, "param": true };
       }
-    } else if (decl.kind === SK.VariableDeclaration && _optionalChain([decl, 'access', _5959 => _5959.name, 'optionalAccess', _5960 => _5960.kind]) === SK.Identifier) {
+    } else if (decl.kind === SK.VariableDeclaration && _optionalChain([decl, 'access', _5953 => _5953.name, 'optionalAccess', _5954 => _5954.kind]) === SK.Identifier) {
       result = this.printedDeclaration(decl);
-    } else if (decl.kind === SK.BindingElement && _optionalChain([decl, 'access', _5961 => _5961.name, 'optionalAccess', _5962 => _5962.kind]) === SK.Identifier) {
+    } else if (decl.kind === SK.BindingElement && _optionalChain([decl, 'access', _5955 => _5955.name, 'optionalAccess', _5956 => _5956.kind]) === SK.Identifier) {
       result = this.printedBinding(decl);
     }
     this.declLines.set(decl, result);
     return result;
   }
   enclosingFunction(node) {
-    let current = _optionalChain([node, 'optionalAccess', _5963 => _5963.parent]);
+    let current = _optionalChain([node, 'optionalAccess', _5957 => _5957.parent]);
     while (current !== void 0 && current.kind !== SK.MethodDeclaration && current.kind !== SK.FunctionDeclaration) {
       current = current.parent;
     }
     return current;
   }
   printedDeclaration(decl) {
-    const statement = _optionalChain([decl, 'access', _5964 => _5964.parent, 'optionalAccess', _5965 => _5965.parent]);
-    if (_optionalChain([statement, 'optionalAccess', _5966 => _5966.kind]) !== SK.VariableStatement || decl.parent.declarations.length !== 1) {
+    const statement = _optionalChain([decl, 'access', _5958 => _5958.parent, 'optionalAccess', _5959 => _5959.parent]);
+    if (_optionalChain([statement, 'optionalAccess', _5960 => _5960.kind]) !== SK.VariableStatement || decl.parent.declarations.length !== 1) {
       return void 0;
     }
     const text = this.printed(statement);
@@ -49545,9 +49540,9 @@ var TupleSlots = class {
   // a destructured element: the typed pair `a, b := this.m (..)`, or the holder read it printed
   printedBinding(element) {
     const pattern = element.parent;
-    const declaration = _optionalChain([pattern, 'optionalAccess', _5967 => _5967.parent]);
-    const statement = _optionalChain([declaration, 'optionalAccess', _5968 => _5968.parent, 'optionalAccess', _5969 => _5969.parent]);
-    if (_optionalChain([pattern, 'optionalAccess', _5970 => _5970.kind]) !== SK.ArrayBindingPattern || _optionalChain([statement, 'optionalAccess', _5971 => _5971.kind]) !== SK.VariableStatement) {
+    const declaration = _optionalChain([pattern, 'optionalAccess', _5961 => _5961.parent]);
+    const statement = _optionalChain([declaration, 'optionalAccess', _5962 => _5962.parent, 'optionalAccess', _5963 => _5963.parent]);
+    if (_optionalChain([pattern, 'optionalAccess', _5964 => _5964.kind]) !== SK.ArrayBindingPattern || _optionalChain([statement, 'optionalAccess', _5965 => _5965.kind]) !== SK.VariableStatement) {
       return void 0;
     }
     const text = this.printed(statement);
@@ -49572,6 +49567,16 @@ var TupleSlots = class {
     }
     return void 0;
   }
+  // `this.omit (m, ..)` of a map-typed identifier is a fresh map[string]any (the Go OmitDict twin)
+  omitClass(fn, init, depth) {
+    const call = g08Unwrap(init);
+    const callee = _optionalChain([call, 'optionalAccess', _5966 => _5966.expression]);
+    if (_optionalChain([call, 'optionalAccess', _5967 => _5967.kind]) !== SK.CallExpression || _optionalChain([callee, 'optionalAccess', _5968 => _5968.kind]) !== SK.PropertyAccessExpression || _optionalChain([callee, 'access', _5969 => _5969.expression, 'optionalAccess', _5970 => _5970.kind]) !== SK.ThisKeyword || _optionalChain([callee, 'access', _5971 => _5971.name, 'optionalAccess', _5972 => _5972.text]) !== "omit" || _optionalChain([call, 'access', _5973 => _5973.arguments, 'optionalAccess', _5974 => _5974.length]) < 2 || _optionalChain([call, 'access', _5975 => _5975.arguments, 'access', _5976 => _5976[0], 'optionalAccess', _5977 => _5977.kind]) !== SK.Identifier) {
+      return "no";
+    }
+    const arg = this.classOfIdent(fn, call.arguments[0], depth + 1);
+    return arg === "typedmap" || arg === "plain:map" ? "plain:map" : "no";
+  }
   classOfIdent(fn, node, depth) {
     if (depth > 4) {
       return "no";
@@ -49583,10 +49588,14 @@ var TupleSlots = class {
     const name = node.text;
     if (decl.kind === "multi") {
       const info = decl.call === void 0 ? void 0 : this.producerInfo(decl.call);
-      return _nullishCoalesce(_optionalChain([info, 'optionalAccess', _5972 => _5972.slots, 'optionalAccess', _5973 => _5973[decl.index]]), () => ( "no"));
+      return _nullishCoalesce(_optionalChain([info, 'optionalAccess', _5978 => _5978.slots, 'optionalAccess', _5979 => _5979[decl.index]]), () => ( "no"));
     }
     const writes = this.writesOf(fn, name) + (decl.param === true ? 1 : 0);
-    const initClass = (init) => this.classOfText(fn, void 0, g08Mask(init).trim(), init.trim(), depth + 1);
+    const tsInit = _optionalChain([this, 'access', _5980 => _5980.resolve, 'call', _5981 => _5981(node), 'optionalAccess', _5982 => _5982.initializer]);
+    const initClass = (init) => {
+      const c = this.classOfText(fn, void 0, g08Mask(init).trim(), init.trim(), depth + 1);
+      return c === "no" ? this.omitClass(fn, tsInit, depth) : c;
+    };
     if (decl.kind === "short") {
       if (writes > 1) {
         return "no";
@@ -49638,11 +49647,11 @@ var TupleSlots = class {
     let count = 0;
     const join3 = (elements, pattern) => elements.map((e) => this.printed(pattern ? e.name : e)).join("") + "Variable";
     g08Walk(fn.body, (n) => {
-      if (n.kind === SK.VariableDeclaration && _optionalChain([n, 'access', _5974 => _5974.name, 'optionalAccess', _5975 => _5975.kind]) === SK.ArrayBindingPattern) {
+      if (n.kind === SK.VariableDeclaration && _optionalChain([n, 'access', _5983 => _5983.name, 'optionalAccess', _5984 => _5984.kind]) === SK.ArrayBindingPattern) {
         if (join3(n.name.elements, true) === holder) {
           count += 1;
         }
-      } else if (n.kind === SK.BinaryExpression && _optionalChain([n, 'access', _5976 => _5976.operatorToken, 'optionalAccess', _5977 => _5977.kind]) === SK.EqualsToken && _optionalChain([n, 'access', _5978 => _5978.left, 'optionalAccess', _5979 => _5979.kind]) === SK.ArrayLiteralExpression) {
+      } else if (n.kind === SK.BinaryExpression && _optionalChain([n, 'access', _5985 => _5985.operatorToken, 'optionalAccess', _5986 => _5986.kind]) === SK.EqualsToken && _optionalChain([n, 'access', _5987 => _5987.left, 'optionalAccess', _5988 => _5988.kind]) === SK.ArrayLiteralExpression) {
         if (join3(n.left.elements, false) === holder) {
           count += 1;
         }
@@ -49653,7 +49662,7 @@ var TupleSlots = class {
   }
   // rewrite the slot reads of one printed destructuring statement
   rewrite(printed, holder, call, statement) {
-    if (!/GetValue/.test(printed) || _optionalChain([call, 'optionalAccess', _5980 => _5980.kind]) !== SK.CallExpression) {
+    if (!/GetValue/.test(printed) || _optionalChain([call, 'optionalAccess', _5989 => _5989.kind]) !== SK.CallExpression) {
       return printed;
     }
     const info = this.producerInfo(call);
@@ -49692,7 +49701,7 @@ var TupleSlots = class {
       }
       m = new RegExp("^(\\s*\\w+ :?= )(?:ccxt\\.)?GetValue\\(" + h + ", (\\d+)\\)$").exec(line);
       if (m !== null) {
-        if (_optionalChain([slotClass, 'call', _5981 => _5981(m[2]), 'optionalAccess', _5982 => _5982.startsWith, 'call', _5983 => _5983("plain")])) {
+        if (_optionalChain([slotClass, 'call', _5990 => _5990(m[2]), 'optionalAccess', _5991 => _5991.startsWith, 'call', _5992 => _5992("plain")])) {
           changed = true;
           return m[1] + holder + "[" + m[2] + "]";
         }
@@ -49710,8 +49719,8 @@ function installCcxtGoTupleSlotReads(goTranspiler) {
   const printDeclaration = goTranspiler.printVariableDeclarationList;
   goTranspiler.printVariableDeclarationList = function(node, identation) {
     const printed = printDeclaration.call(this, node, identation);
-    const declaration = _optionalChain([node, 'optionalAccess', _5984 => _5984.declarations, 'optionalAccess', _5985 => _5985[0]]);
-    if (typeof printed !== "string" || _optionalChain([declaration, 'optionalAccess', _5986 => _5986.name, 'optionalAccess', _5987 => _5987.kind]) !== SK.ArrayBindingPattern || _optionalChain([declaration, 'access', _5988 => _5988.initializer, 'optionalAccess', _5989 => _5989.kind]) !== SK.CallExpression || !printed.includes("GetValue")) {
+    const declaration = _optionalChain([node, 'optionalAccess', _5993 => _5993.declarations, 'optionalAccess', _5994 => _5994[0]]);
+    if (typeof printed !== "string" || _optionalChain([declaration, 'optionalAccess', _5995 => _5995.name, 'optionalAccess', _5996 => _5996.kind]) !== SK.ArrayBindingPattern || _optionalChain([declaration, 'access', _5997 => _5997.initializer, 'optionalAccess', _5998 => _5998.kind]) !== SK.CallExpression || !printed.includes("GetValue")) {
       return printed;
     }
     const holder = declaration.name.elements.map((e) => this.printNode(e.name, 0)).join("") + "Variable";
@@ -49724,7 +49733,7 @@ function installCcxtGoTupleSlotReads(goTranspiler) {
   if (typeof printBinary === "function") {
     goTranspiler.printCustomBinaryExpressionIfAny = function(node, identation) {
       const printed = printBinary.call(this, node, identation);
-      if (typeof printed !== "string" || _optionalChain([node, 'optionalAccess', _5990 => _5990.operatorToken, 'optionalAccess', _5991 => _5991.kind]) !== SK.EqualsToken || _optionalChain([node, 'access', _5992 => _5992.left, 'optionalAccess', _5993 => _5993.kind]) !== SK.ArrayLiteralExpression || _optionalChain([node, 'access', _5994 => _5994.right, 'optionalAccess', _5995 => _5995.kind]) !== SK.CallExpression || !printed.includes("GetValue")) {
+      if (typeof printed !== "string" || _optionalChain([node, 'optionalAccess', _5999 => _5999.operatorToken, 'optionalAccess', _6000 => _6000.kind]) !== SK.EqualsToken || _optionalChain([node, 'access', _6001 => _6001.left, 'optionalAccess', _6002 => _6002.kind]) !== SK.ArrayLiteralExpression || _optionalChain([node, 'access', _6003 => _6003.right, 'optionalAccess', _6004 => _6004.kind]) !== SK.CallExpression || !printed.includes("GetValue")) {
         return printed;
       }
       const holder = node.left.elements.map((e) => this.printNode(e, 0)).join("") + "Variable";
@@ -49768,9 +49777,9 @@ function gb01UsesNullish(go, body, param) {
     if (found || n === void 0) {
       return;
     }
-    if (n.kind === SK2.BinaryExpression && (_optionalChain([n, 'access', _5996 => _5996.operatorToken, 'optionalAccess', _5997 => _5997.kind]) === SK2.QuestionQuestionToken || _optionalChain([n, 'access', _5998 => _5998.operatorToken, 'optionalAccess', _5999 => _5999.kind]) === SK2.QuestionQuestionEqualsToken)) {
+    if (n.kind === SK2.BinaryExpression && (_optionalChain([n, 'access', _6005 => _6005.operatorToken, 'optionalAccess', _6006 => _6006.kind]) === SK2.QuestionQuestionToken || _optionalChain([n, 'access', _6007 => _6007.operatorToken, 'optionalAccess', _6008 => _6008.kind]) === SK2.QuestionQuestionEqualsToken)) {
       const left = n.left;
-      if (_optionalChain([left, 'optionalAccess', _6000 => _6000.kind]) === SK2.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
+      if (_optionalChain([left, 'optionalAccess', _6009 => _6009.kind]) === SK2.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
         found = true;
         return;
       }
@@ -49802,7 +49811,7 @@ function gb01IsDictMethodCall(tree, text) {
 function gb01CallSitesPassMap(go, fn, index) {
   const name = fn.name.text;
   for (const call of go.goSameFileCallsOf(fn, name)) {
-    const arg = _optionalChain([call, 'access', _6001 => _6001.arguments, 'optionalAccess', _6002 => _6002[index]]);
+    const arg = _optionalChain([call, 'access', _6010 => _6010.arguments, 'optionalAccess', _6011 => _6011[index]]);
     if (arg === void 0 || arg.kind === ts.SyntaxKind.SpreadElement) {
       return false;
     }
@@ -49827,7 +49836,7 @@ function gb01CallSitesPassMap(go, fn, index) {
     if (!go.goTsSrcFileDerivesFrom(tree, site.file, myClass)) {
       continue;
     }
-    const arg = String(_nullishCoalesce(_optionalChain([site, 'access', _6003 => _6003.args, 'optionalAccess', _6004 => _6004[index]]), () => ( ""))).trim();
+    const arg = String(_nullishCoalesce(_optionalChain([site, 'access', _6012 => _6012.args, 'optionalAccess', _6013 => _6013[index]]), () => ( ""))).trim();
     if (arg.startsWith("{")) {
       continue;
     }
@@ -49867,16 +49876,16 @@ function gb01CallSitesPassMap(go, fn, index) {
 }
 function gb01Rejection(go, fn, param) {
   const SK2 = ts.SyntaxKind;
-  if (_optionalChain([param, 'optionalAccess', _6005 => _6005.kind]) !== SK2.Parameter) {
+  if (_optionalChain([param, 'optionalAccess', _6014 => _6014.kind]) !== SK2.Parameter) {
     return "not a parameter";
   }
   if (param.dotDotDotToken !== void 0 || param.initializer !== void 0) {
     return "optional/variadic parameter";
   }
-  if (_optionalChain([param, 'access', _6006 => _6006.name, 'optionalAccess', _6007 => _6007.kind]) !== SK2.Identifier) {
+  if (_optionalChain([param, 'access', _6015 => _6015.name, 'optionalAccess', _6016 => _6016.kind]) !== SK2.Identifier) {
     return "destructured parameter";
   }
-  if (_optionalChain([fn, 'optionalAccess', _6008 => _6008.kind]) !== SK2.MethodDeclaration || fn.body === void 0 || _optionalChain([fn, 'access', _6009 => _6009.name, 'optionalAccess', _6010 => _6010.kind]) !== SK2.Identifier) {
+  if (_optionalChain([fn, 'optionalAccess', _6017 => _6017.kind]) !== SK2.MethodDeclaration || fn.body === void 0 || _optionalChain([fn, 'access', _6018 => _6018.name, 'optionalAccess', _6019 => _6019.kind]) !== SK2.Identifier) {
     return "not a method with a body";
   }
   if (go.isAsyncFunction(fn)) {
@@ -49884,7 +49893,7 @@ function gb01Rejection(go, fn, param) {
   }
   if (go.goMethodKeepsBaseSignature(fn) && !gb01IsBaseFile(fn)) {
     const cls = go.goEnclosingClass(fn);
-    if ((_nullishCoalesce(_optionalChain([cls, 'optionalAccess', _6011 => _6011.heritageClauses]), () => ( []))).some((c) => c.token === SK2.ExtendsKeyword) === false) {
+    if ((_nullishCoalesce(_optionalChain([cls, 'optionalAccess', _6020 => _6020.heritageClauses]), () => ( []))).some((c) => c.token === SK2.ExtendsKeyword) === false) {
       return "root class member";
     }
   }
@@ -49905,11 +49914,11 @@ function gb01Rejection(go, fn, param) {
   return void 0;
 }
 function gb01Derived(go, param) {
-  if (_optionalChain([param, 'optionalAccess', _6012 => _6012.kind]) !== ts.SyntaxKind.Parameter) {
+  if (_optionalChain([param, 'optionalAccess', _6021 => _6021.kind]) !== ts.SyntaxKind.Parameter) {
     return void 0;
   }
   const fn = param.parent;
-  if (_optionalChain([fn, 'optionalAccess', _6013 => _6013.kind]) !== ts.SyntaxKind.MethodDeclaration || _optionalChain([fn, 'access', _6014 => _6014.name, 'optionalAccess', _6015 => _6015.kind]) !== ts.SyntaxKind.Identifier) {
+  if (_optionalChain([fn, 'optionalAccess', _6022 => _6022.kind]) !== ts.SyntaxKind.MethodDeclaration || _optionalChain([fn, 'access', _6023 => _6023.name, 'optionalAccess', _6024 => _6024.kind]) !== ts.SyntaxKind.Identifier) {
     return void 0;
   }
   const method = fn.name.text;
@@ -49920,7 +49929,7 @@ function gb01Derived(go, param) {
   const reason = gb01Rejection(go, fn, param);
   if (reason !== void 0) {
     const file = String(_nullishCoalesce(fn.getSourceFile().fileName, () => ( ""))).split(/[\\/]/).slice(-3).join("/");
-    const message = `${file}: ${method}(${_optionalChain([param, 'access', _6016 => _6016.name, 'optionalAccess', _6017 => _6017.text])}) keeps the box: ${reason}`;
+    const message = `${file}: ${method}(${_optionalChain([param, 'access', _6025 => _6025.name, 'optionalAccess', _6026 => _6026.text])}) keeps the box: ${reason}`;
     if (!GB01_LENIENT) {
       if (!gb01IsBaseFile(fn) || reason === "not a parameter") {
         throw new Error("hx10 GB01: " + message + " (the base prints map[string]any, an override must too)");
@@ -49937,7 +49946,7 @@ function gb01Derived(go, param) {
 function installCcxtGoDictParams(goTranspiler) {
   const flag = "hx10GB01w8Installed";
   const current = goTranspiler.goNativeParameterType;
-  if (_optionalChain([current, 'optionalAccess', _6018 => _6018[flag]]) === true) {
+  if (_optionalChain([current, 'optionalAccess', _6027 => _6027[flag]]) === true) {
     return current;
   }
   const original = goTranspiler.goNativeParameterType;
@@ -50016,9 +50025,9 @@ function gb05UsesNullish(go, body, param) {
     if (found || n === void 0) {
       return;
     }
-    if (n.kind === SK2.BinaryExpression && (_optionalChain([n, 'access', _6019 => _6019.operatorToken, 'optionalAccess', _6020 => _6020.kind]) === SK2.QuestionQuestionToken || _optionalChain([n, 'access', _6021 => _6021.operatorToken, 'optionalAccess', _6022 => _6022.kind]) === SK2.QuestionQuestionEqualsToken)) {
+    if (n.kind === SK2.BinaryExpression && (_optionalChain([n, 'access', _6028 => _6028.operatorToken, 'optionalAccess', _6029 => _6029.kind]) === SK2.QuestionQuestionToken || _optionalChain([n, 'access', _6030 => _6030.operatorToken, 'optionalAccess', _6031 => _6031.kind]) === SK2.QuestionQuestionEqualsToken)) {
       const left = n.left;
-      if (_optionalChain([left, 'optionalAccess', _6023 => _6023.kind]) === SK2.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
+      if (_optionalChain([left, 'optionalAccess', _6032 => _6032.kind]) === SK2.Identifier && left.text === name && go.goIdentifierRefersToDeclaration(left, param)) {
         found = true;
         return;
       }
@@ -50030,17 +50039,17 @@ function gb05UsesNullish(go, body, param) {
 }
 function gb05Derived(go, param) {
   const SK2 = ts.SyntaxKind;
-  if (_optionalChain([param, 'optionalAccess', _6024 => _6024.kind]) !== SK2.Parameter) {
+  if (_optionalChain([param, 'optionalAccess', _6033 => _6033.kind]) !== SK2.Parameter) {
     return void 0;
   }
   if (param.dotDotDotToken !== void 0 || param.initializer !== void 0) {
     return void 0;
   }
-  if (_optionalChain([param, 'access', _6025 => _6025.name, 'optionalAccess', _6026 => _6026.kind]) !== SK2.Identifier) {
+  if (_optionalChain([param, 'access', _6034 => _6034.name, 'optionalAccess', _6035 => _6035.kind]) !== SK2.Identifier) {
     return void 0;
   }
   const fn = param.parent;
-  if (_optionalChain([fn, 'optionalAccess', _6027 => _6027.kind]) !== SK2.MethodDeclaration || fn.body === void 0 || _optionalChain([fn, 'access', _6028 => _6028.name, 'optionalAccess', _6029 => _6029.kind]) !== SK2.Identifier) {
+  if (_optionalChain([fn, 'optionalAccess', _6036 => _6036.kind]) !== SK2.MethodDeclaration || fn.body === void 0 || _optionalChain([fn, 'access', _6037 => _6037.name, 'optionalAccess', _6038 => _6038.kind]) !== SK2.Identifier) {
     return void 0;
   }
   const name = param.name.text;
@@ -50092,7 +50101,7 @@ function gb05Derived(go, param) {
 function installCcxtGoGb05ParamTypes(goTranspiler) {
   const flag = "hx10Gb05w8Installed";
   const current = goTranspiler.goNativeParameterType;
-  if (_optionalChain([current, 'optionalAccess', _6030 => _6030[flag]]) === true) {
+  if (_optionalChain([current, 'optionalAccess', _6039 => _6039[flag]]) === true) {
     return current;
   }
   const original = goTranspiler.goNativeParameterType;
@@ -50225,7 +50234,7 @@ function gb11RefersToParam(go, node, param) {
   }
   try {
     const symbol = checker.getSymbolAtLocation(node);
-    return _optionalChain([symbol, 'optionalAccess', _6031 => _6031.valueDeclaration, 'optionalAccess', _6032 => _6032.resolve, 'call', _6033 => _6033()]) === param;
+    return _optionalChain([symbol, 'optionalAccess', _6040 => _6040.valueDeclaration, 'optionalAccess', _6041 => _6041.resolve, 'call', _6042 => _6042()]) === param;
   } catch (e) {
     return false;
   }
@@ -50241,20 +50250,20 @@ function gb11UsesAreIntOnly(go, body, param) {
     }
     if (n.kind === SK2.Identifier && n.text === name && gb11RefersToParam(go, n, param)) {
       const parent = n.parent;
-      if (_optionalChain([parent, 'optionalAccess', _6034 => _6034.kind]) === SK2.PropertyAccessExpression && parent.expression === n && _optionalChain([parent, 'access', _6035 => _6035.name, 'optionalAccess', _6036 => _6036.text]) === "toString") {
+      if (_optionalChain([parent, 'optionalAccess', _6043 => _6043.kind]) === SK2.PropertyAccessExpression && parent.expression === n && _optionalChain([parent, 'access', _6044 => _6044.name, 'optionalAccess', _6045 => _6045.text]) === "toString") {
         return;
       }
-      if (_optionalChain([parent, 'optionalAccess', _6037 => _6037.kind]) === SK2.BinaryExpression && comparisons[_optionalChain([parent, 'access', _6038 => _6038.operatorToken, 'optionalAccess', _6039 => _6039.kind])]) {
+      if (_optionalChain([parent, 'optionalAccess', _6046 => _6046.kind]) === SK2.BinaryExpression && comparisons[_optionalChain([parent, 'access', _6047 => _6047.operatorToken, 'optionalAccess', _6048 => _6048.kind])]) {
         const other = parent.left === n ? parent.right : parent.left;
-        const literal = _optionalChain([other, 'optionalAccess', _6040 => _6040.kind]) === SK2.NumericLiteral || _optionalChain([other, 'optionalAccess', _6041 => _6041.kind]) === SK2.PrefixUnaryExpression && other.operator === SK2.MinusToken && _optionalChain([other, 'access', _6042 => _6042.operand, 'optionalAccess', _6043 => _6043.kind]) === SK2.NumericLiteral;
+        const literal = _optionalChain([other, 'optionalAccess', _6049 => _6049.kind]) === SK2.NumericLiteral || _optionalChain([other, 'optionalAccess', _6050 => _6050.kind]) === SK2.PrefixUnaryExpression && other.operator === SK2.MinusToken && _optionalChain([other, 'access', _6051 => _6051.operand, 'optionalAccess', _6052 => _6052.kind]) === SK2.NumericLiteral;
         if (!literal) {
           ok = false;
         }
         return;
       }
-      if (_optionalChain([parent, 'optionalAccess', _6044 => _6044.kind]) === SK2.CallExpression && (_nullishCoalesce(parent.arguments, () => ( []))).includes(n)) {
+      if (_optionalChain([parent, 'optionalAccess', _6053 => _6053.kind]) === SK2.CallExpression && (_nullishCoalesce(parent.arguments, () => ( []))).includes(n)) {
         const callee = parent.expression;
-        if (_optionalChain([callee, 'optionalAccess', _6045 => _6045.kind]) === SK2.PropertyAccessExpression && _optionalChain([callee, 'access', _6046 => _6046.name, 'optionalAccess', _6047 => _6047.text]) === "parseToInt") {
+        if (_optionalChain([callee, 'optionalAccess', _6054 => _6054.kind]) === SK2.PropertyAccessExpression && _optionalChain([callee, 'access', _6055 => _6055.name, 'optionalAccess', _6056 => _6056.text]) === "parseToInt") {
           return;
         }
       }
@@ -50268,17 +50277,17 @@ function gb11UsesAreIntOnly(go, body, param) {
 }
 function gb11Derived(go, param) {
   const SK2 = ts.SyntaxKind;
-  if (_optionalChain([param, 'optionalAccess', _6048 => _6048.kind]) !== SK2.Parameter) {
+  if (_optionalChain([param, 'optionalAccess', _6057 => _6057.kind]) !== SK2.Parameter) {
     return void 0;
   }
   if (param.dotDotDotToken !== void 0 || param.initializer !== void 0) {
     return void 0;
   }
-  if (_optionalChain([param, 'access', _6049 => _6049.name, 'optionalAccess', _6050 => _6050.kind]) !== SK2.Identifier) {
+  if (_optionalChain([param, 'access', _6058 => _6058.name, 'optionalAccess', _6059 => _6059.kind]) !== SK2.Identifier) {
     return void 0;
   }
   const fn = param.parent;
-  if (_optionalChain([fn, 'optionalAccess', _6051 => _6051.kind]) !== SK2.MethodDeclaration || fn.body === void 0 || _optionalChain([fn, 'access', _6052 => _6052.name, 'optionalAccess', _6053 => _6053.kind]) !== SK2.Identifier) {
+  if (_optionalChain([fn, 'optionalAccess', _6060 => _6060.kind]) !== SK2.MethodDeclaration || fn.body === void 0 || _optionalChain([fn, 'access', _6061 => _6061.name, 'optionalAccess', _6062 => _6062.kind]) !== SK2.Identifier) {
     return void 0;
   }
   if (fn.name.text !== GB11_METHOD) {
@@ -50347,10 +50356,10 @@ function gb11SplitArgs(text) {
 }
 function gb11ArgIsInt64(go, arg) {
   const SK2 = ts.SyntaxKind;
-  if (_optionalChain([arg, 'optionalAccess', _6054 => _6054.kind]) === SK2.NumericLiteral) {
+  if (_optionalChain([arg, 'optionalAccess', _6063 => _6063.kind]) === SK2.NumericLiteral) {
     return true;
   }
-  if (_optionalChain([arg, 'optionalAccess', _6055 => _6055.kind]) === SK2.PrefixUnaryExpression && arg.operator === SK2.MinusToken && _optionalChain([arg, 'access', _6056 => _6056.operand, 'optionalAccess', _6057 => _6057.kind]) === SK2.NumericLiteral) {
+  if (_optionalChain([arg, 'optionalAccess', _6064 => _6064.kind]) === SK2.PrefixUnaryExpression && arg.operator === SK2.MinusToken && _optionalChain([arg, 'access', _6065 => _6065.operand, 'optionalAccess', _6066 => _6066.kind]) === SK2.NumericLiteral) {
     return true;
   }
   return go.goPrintedArgType(arg) === "int64";
@@ -50358,13 +50367,13 @@ function gb11ArgIsInt64(go, arg) {
 function gb11CodeArg(go, node, printed) {
   const SK2 = ts.SyntaxKind;
   const callee = node.expression;
-  if (_optionalChain([callee, 'optionalAccess', _6058 => _6058.kind]) !== SK2.PropertyAccessExpression) {
+  if (_optionalChain([callee, 'optionalAccess', _6067 => _6067.kind]) !== SK2.PropertyAccessExpression) {
     return void 0;
   }
-  if (_optionalChain([callee, 'access', _6059 => _6059.name, 'optionalAccess', _6060 => _6060.text]) !== GB11_METHOD) {
+  if (_optionalChain([callee, 'access', _6068 => _6068.name, 'optionalAccess', _6069 => _6069.text]) !== GB11_METHOD) {
     return void 0;
   }
-  if (_optionalChain([callee, 'access', _6061 => _6061.expression, 'optionalAccess', _6062 => _6062.kind]) !== SK2.ThisKeyword) {
+  if (_optionalChain([callee, 'access', _6070 => _6070.expression, 'optionalAccess', _6071 => _6071.kind]) !== SK2.ThisKeyword) {
     return void 0;
   }
   const args = _nullishCoalesce(node.arguments, () => ( []));
@@ -50384,7 +50393,7 @@ function gb11CodeArg(go, node, printed) {
 function installCcxtGoGb11HandleErrorsCode(goTranspiler) {
   const flag = "hx10Gb11w9Installed";
   const current = goTranspiler.goNativeParameterType;
-  if (_optionalChain([current, 'optionalAccess', _6063 => _6063[flag]]) === true) {
+  if (_optionalChain([current, 'optionalAccess', _6072 => _6072[flag]]) === true) {
     return current;
   }
   const originalArgs = goTranspiler.goUnifiedStringCallArgs;
@@ -50534,25 +50543,25 @@ _chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 var SIGN_API_METHODS = { "sign": 1, "fetch2": 1, "request": 1 };
 function signApiParameter(param) {
   const SK2 = ts.SyntaxKind;
-  const fn = _optionalChain([param, 'optionalAccess', _6064 => _6064.parent]);
-  if (_optionalChain([param, 'optionalAccess', _6065 => _6065.kind]) !== SK2.Parameter || _optionalChain([fn, 'optionalAccess', _6066 => _6066.kind]) !== SK2.MethodDeclaration || _optionalChain([fn, 'access', _6067 => _6067.name, 'optionalAccess', _6068 => _6068.kind]) !== SK2.Identifier) {
+  const fn = _optionalChain([param, 'optionalAccess', _6073 => _6073.parent]);
+  if (_optionalChain([param, 'optionalAccess', _6074 => _6074.kind]) !== SK2.Parameter || _optionalChain([fn, 'optionalAccess', _6075 => _6075.kind]) !== SK2.MethodDeclaration || _optionalChain([fn, 'access', _6076 => _6076.name, 'optionalAccess', _6077 => _6077.kind]) !== SK2.Identifier) {
     return false;
   }
   if (SIGN_API_METHODS[fn.name.text] !== fn.parameters.indexOf(param)) {
     return false;
   }
-  if (String(_nullishCoalesce(_optionalChain([param, 'access', _6069 => _6069.type, 'optionalAccess', _6070 => _6070.getText, 'optionalCall', _6071 => _6071()]), () => ( ""))).replace(/\s+/g, "") !== "string[]") {
+  if (String(_nullishCoalesce(_optionalChain([param, 'access', _6078 => _6078.type, 'optionalAccess', _6079 => _6079.getText, 'optionalCall', _6080 => _6080()]), () => ( ""))).replace(/\s+/g, "") !== "string[]") {
     return false;
   }
   const init = param.initializer;
-  return _optionalChain([init, 'optionalAccess', _6072 => _6072.kind]) === SK2.ArrayLiteralExpression && (_nullishCoalesce(init.elements, () => ( []))).every((e) => e.kind === SK2.StringLiteral);
+  return _optionalChain([init, 'optionalAccess', _6081 => _6081.kind]) === SK2.ArrayLiteralExpression && (_nullishCoalesce(init.elements, () => ( []))).every((e) => e.kind === SK2.StringLiteral);
 }
 function signApiElement(go, node) {
   const SK2 = ts.SyntaxKind;
-  if (_optionalChain([node, 'optionalAccess', _6073 => _6073.kind]) !== SK2.ElementAccessExpression || _optionalChain([node, 'access', _6074 => _6074.expression, 'optionalAccess', _6075 => _6075.kind]) !== SK2.Identifier || _optionalChain([node, 'access', _6076 => _6076.argumentExpression, 'optionalAccess', _6077 => _6077.kind]) !== SK2.NumericLiteral || !/^\d+$/.test(String(node.argumentExpression.text))) {
+  if (_optionalChain([node, 'optionalAccess', _6082 => _6082.kind]) !== SK2.ElementAccessExpression || _optionalChain([node, 'access', _6083 => _6083.expression, 'optionalAccess', _6084 => _6084.kind]) !== SK2.Identifier || _optionalChain([node, 'access', _6085 => _6085.argumentExpression, 'optionalAccess', _6086 => _6086.kind]) !== SK2.NumericLiteral || !/^\d+$/.test(String(node.argumentExpression.text))) {
     return false;
   }
-  const decl = _optionalChain([go, 'access', _6078 => _6078.checkerOrUndefined, 'call', _6079 => _6079(), 'optionalAccess', _6080 => _6080.getSymbolAtLocation, 'call', _6081 => _6081(node.expression), 'optionalAccess', _6082 => _6082.valueDeclaration, 'optionalAccess', _6083 => _6083.resolve, 'call', _6084 => _6084()]);
+  const decl = _optionalChain([go, 'access', _6087 => _6087.checkerOrUndefined, 'call', _6088 => _6088(), 'optionalAccess', _6089 => _6089.getSymbolAtLocation, 'call', _6090 => _6090(node.expression), 'optionalAccess', _6091 => _6091.valueDeclaration, 'optionalAccess', _6092 => _6092.resolve, 'call', _6093 => _6093()]);
   return signApiParameter(decl) && go.goGetArgParameterType(decl) === "[]string";
 }
 function installCcxtGoSignTyping(goTranspiler) {
@@ -50563,7 +50572,7 @@ function installCcxtGoSignTyping(goTranspiler) {
   goTranspiler[flag] = true;
   const printLiteral = goTranspiler.printArrayLiteralExpression;
   goTranspiler.printArrayLiteralExpression = function(node, ...rest) {
-    if (signApiParameter(_optionalChain([node, 'optionalAccess', _6085 => _6085.parent]))) {
+    if (signApiParameter(_optionalChain([node, 'optionalAccess', _6094 => _6094.parent]))) {
       this.goSliceLiteralTypes.set(node, "[]string");
     }
     return printLiteral.call(this, node, ...rest);
@@ -50600,7 +50609,7 @@ _chunkC7C726CWcjs.init_cjs_shims.call(void 0, );
 
 var NUM_SIGNATURE = /\n {4}(?:(?:override|async|public|private|protected) )*[A-Za-z_$][\w$]* \(([^\n]*)\)(?:: [^\n{]*)? \{/g;
 function hx11w8SiblingNumIdentifier(text, at, arg) {
-  const name = _optionalChain([/^([A-Za-z_$][\w$]*)$/, 'access', _6086 => _6086.exec, 'call', _6087 => _6087((_nullishCoalesce(arg, () => ( ""))).trim()), 'optionalAccess', _6088 => _6088[1]]);
+  const name = _optionalChain([/^([A-Za-z_$][\w$]*)$/, 'access', _6095 => _6095.exec, 'call', _6096 => _6096((_nullishCoalesce(arg, () => ( ""))).trim()), 'optionalAccess', _6097 => _6097[1]]);
   if (name === void 0 || at === void 0) {
     return false;
   }
@@ -50636,7 +50645,7 @@ function installHx11w8NumParams(goTranspiler) {
     }
     const name = fn.name.text;
     for (const call of this.goSameFileCallsOf(fn, name)) {
-      const arg = _optionalChain([call, 'access', _6089 => _6089.arguments, 'optionalAccess', _6090 => _6090[index]]);
+      const arg = _optionalChain([call, 'access', _6098 => _6098.arguments, 'optionalAccess', _6099 => _6099[index]]);
       if (arg === void 0 || arg.kind === ts.SyntaxKind.SpreadElement || this.goPrintedArgType(arg) !== "*float64") {
         return false;
       }
@@ -50669,19 +50678,19 @@ var OWNED_TABLES = {
 var OWNER_CLASS = "BaseExchange";
 function ownedTable(go, node) {
   const SK2 = ts.SyntaxKind;
-  if (_optionalChain([node, 'optionalAccess', _6091 => _6091.kind]) !== SK2.PropertyAccessExpression || !Object.prototype.hasOwnProperty.call(OWNED_TABLES, _optionalChain([node, 'access', _6092 => _6092.name, 'optionalAccess', _6093 => _6093.text]))) {
+  if (_optionalChain([node, 'optionalAccess', _6100 => _6100.kind]) !== SK2.PropertyAccessExpression || !Object.prototype.hasOwnProperty.call(OWNED_TABLES, _optionalChain([node, 'access', _6101 => _6101.name, 'optionalAccess', _6102 => _6102.text]))) {
     return void 0;
   }
   const checker = go.checkerOrUndefined();
-  const decl = _optionalChain([checker, 'optionalAccess', _6094 => _6094.getSymbolAtLocation, 'call', _6095 => _6095(node.name), 'optionalAccess', _6096 => _6096.valueDeclaration, 'optionalAccess', _6097 => _6097.resolve, 'call', _6098 => _6098()]);
-  if (_optionalChain([decl, 'optionalAccess', _6099 => _6099.kind]) !== SK2.PropertyDeclaration || _optionalChain([decl, 'access', _6100 => _6100.parent, 'optionalAccess', _6101 => _6101.name, 'optionalAccess', _6102 => _6102.text]) !== OWNER_CLASS) {
+  const decl = _optionalChain([checker, 'optionalAccess', _6103 => _6103.getSymbolAtLocation, 'call', _6104 => _6104(node.name), 'optionalAccess', _6105 => _6105.valueDeclaration, 'optionalAccess', _6106 => _6106.resolve, 'call', _6107 => _6107()]);
+  if (_optionalChain([decl, 'optionalAccess', _6108 => _6108.kind]) !== SK2.PropertyDeclaration || _optionalChain([decl, 'access', _6109 => _6109.parent, 'optionalAccess', _6110 => _6110.name, 'optionalAccess', _6111 => _6111.text]) !== OWNER_CLASS) {
     return void 0;
   }
   return OWNED_TABLES[node.name.text];
 }
 function isWrapperCall(node, name, args) {
   const SK2 = ts.SyntaxKind;
-  return _optionalChain([node, 'optionalAccess', _6103 => _6103.kind]) === SK2.CallExpression && _optionalChain([node, 'access', _6104 => _6104.expression, 'optionalAccess', _6105 => _6105.kind]) === SK2.PropertyAccessExpression && _optionalChain([node, 'access', _6106 => _6106.expression, 'access', _6107 => _6107.expression, 'optionalAccess', _6108 => _6108.kind]) === SK2.ThisKeyword && _optionalChain([node, 'access', _6109 => _6109.expression, 'access', _6110 => _6110.name, 'optionalAccess', _6111 => _6111.text]) === name && (_nullishCoalesce(_optionalChain([node, 'access', _6112 => _6112.arguments, 'optionalAccess', _6113 => _6113.length]), () => ( 0))) <= args;
+  return _optionalChain([node, 'optionalAccess', _6112 => _6112.kind]) === SK2.CallExpression && _optionalChain([node, 'access', _6113 => _6113.expression, 'optionalAccess', _6114 => _6114.kind]) === SK2.PropertyAccessExpression && _optionalChain([node, 'access', _6115 => _6115.expression, 'access', _6116 => _6116.expression, 'optionalAccess', _6117 => _6117.kind]) === SK2.ThisKeyword && _optionalChain([node, 'access', _6118 => _6118.expression, 'access', _6119 => _6119.name, 'optionalAccess', _6120 => _6120.text]) === name && (_nullishCoalesce(_optionalChain([node, 'access', _6121 => _6121.arguments, 'optionalAccess', _6122 => _6122.length]), () => ( 0))) <= args;
 }
 function installRfGo5OwnedTables(goTranspiler) {
   const flag = "rfGo5OwnedTablesInstalled";
@@ -50700,15 +50709,15 @@ function installRfGo5OwnedTables(goTranspiler) {
   const printBinary = goTranspiler.printBinaryExpression;
   goTranspiler.printBinaryExpression = function(node, identation) {
     const SK2 = ts.SyntaxKind;
-    const table = _optionalChain([node, 'access', _6114 => _6114.operatorToken, 'optionalAccess', _6115 => _6115.kind]) === SK2.EqualsToken ? ownedTable(this, node.left) : void 0;
-    if (table !== void 0 && _optionalChain([node, 'access', _6116 => _6116.parent, 'optionalAccess', _6117 => _6117.kind]) === SK2.ExpressionStatement) {
+    const table = _optionalChain([node, 'access', _6123 => _6123.operatorToken, 'optionalAccess', _6124 => _6124.kind]) === SK2.EqualsToken ? ownedTable(this, node.left) : void 0;
+    if (table !== void 0 && _optionalChain([node, 'access', _6125 => _6125.parent, 'optionalAccess', _6126 => _6126.kind]) === SK2.ExpressionStatement) {
       const right = node.right;
       let value;
       if (isWrapperCall(right, "createSafeDictionary", 1)) {
         value = "map[string]any{}";
       } else if (isWrapperCall(right, "mapToSafeMap", 1) && right.arguments.length === 1) {
         value = this.printNode(right.arguments[0], 0);
-      } else if (_optionalChain([right, 'optionalAccess', _6118 => _6118.kind]) === SK2.PropertyAccessExpression && _optionalChain([right, 'access', _6119 => _6119.name, 'optionalAccess', _6120 => _6120.text]) === node.left.name.text) {
+      } else if (_optionalChain([right, 'optionalAccess', _6127 => _6127.kind]) === SK2.PropertyAccessExpression && _optionalChain([right, 'access', _6128 => _6128.name, 'optionalAccess', _6129 => _6129.text]) === node.left.name.text) {
         value = this.printNode(right.expression, 0) + "." + table.read + "()";
       } else {
         value = this.printNode(right, 0);
@@ -51936,7 +51945,7 @@ var R03Prover = class {
       if (seen.has(alias[1]))
         return void 0;
       seen.add(alias[1]);
-      return _optionalChain([this, 'access', _6121 => _6121.facts, 'call', _6122 => _6122(alias[1], absPos), 'optionalAccess', _6123 => _6123.proof]);
+      return _optionalChain([this, 'access', _6130 => _6130.facts, 'call', _6131 => _6131(alias[1], absPos), 'optionalAccess', _6132 => _6132.proof]);
     }
     return void 0;
   }
@@ -51980,8 +51989,8 @@ function hx10w2R03(content) {
         if (facts === void 0)
           continue;
         expr = recv[1];
-        kind = _optionalChain([facts, 'access', _6124 => _6124.proof, 'optionalAccess', _6125 => _6125.kind]);
-        untagged = _optionalChain([facts, 'access', _6126 => _6126.proof, 'optionalAccess', _6127 => _6127.untagged]) === true;
+        kind = _optionalChain([facts, 'access', _6133 => _6133.proof, 'optionalAccess', _6134 => _6134.kind]);
+        untagged = _optionalChain([facts, 'access', _6135 => _6135.proof, 'optionalAccess', _6136 => _6136.untagged]) === true;
         lenSafe = facts.lenSafe;
       } else if (state !== null) {
         expr = (_nullishCoalesce(args[0], () => ( ""))).trim().slice(1);
@@ -55412,8 +55421,8 @@ function rewrite(name, args, locals) {
   const recv = /^&\s*([A-Za-z_]\w*)$/.exec(arg0);
   const x = recv === null ? void 0 : recv[1];
   const local = x === void 0 ? void 0 : locals.get(x);
-  const set = _optionalChain([local, 'optionalAccess', _6128 => _6128.set]);
-  const ty = _optionalChain([local, 'optionalAccess', _6129 => _6129.ty]);
+  const set = _optionalChain([local, 'optionalAccess', _6137 => _6137.set]);
+  const ty = _optionalChain([local, 'optionalAccess', _6138 => _6138.ty]);
   const provenScalar = set !== void 0 && set.size > 0 && [...set].every((v) => SCALAR.has(v));
   const strTyped = ty === "String";
   const strProven = strTyped || set !== void 0 && set.size === 1 && set.has("str");
@@ -55485,7 +55494,7 @@ function rewrite(name, args, locals) {
         return void 0;
       if (ty === "Vec<String>")
         return `Value::str(${x}.join(${s}))`;
-      if (_optionalChain([local, 'optionalAccess', _6130 => _6130.elems]) === "str" && set !== void 0 && set.size === 1 && set.has("arr")) {
+      if (_optionalChain([local, 'optionalAccess', _6139 => _6139.elems]) === "str" && set !== void 0 && set.size === 1 && set.has("arr")) {
         return `Value::str(${x}.as_array().cloned().unwrap_or_default().iter().filter_map(Value::as_str).collect::<Vec<_>>().join(${s}))`;
       }
       return void 0;
@@ -59259,7 +59268,7 @@ function memoizePairMethod(owner, name) {
     if (args.length !== 2 || a === null || typeof a !== "object" || b === null || typeof b !== "object") {
       return original.apply(owner, args);
     }
-    const cached = _optionalChain([cache, 'access', _6131 => _6131.get, 'call', _6132 => _6132(a), 'optionalAccess', _6133 => _6133.get, 'call', _6134 => _6134(b)]);
+    const cached = _optionalChain([cache, 'access', _6140 => _6140.get, 'call', _6141 => _6141(a), 'optionalAccess', _6142 => _6142.get, 'call', _6143 => _6143(b)]);
     if (cached !== void 0) {
       return cached === UNDEFINED_SENTINEL ? void 0 : cached;
     }
@@ -59299,7 +59308,7 @@ function memoizeUnaryMethod(owner, name) {
 }
 function memoizeBinaryKindMethod(owner, name) {
   const unary = owner[name];
-  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _6135 => _6135.original]), () => ( unary));
+  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _6144 => _6144.original]), () => ( unary));
   if (typeof original !== "function") {
     return;
   }
@@ -59349,17 +59358,17 @@ function prefetchChecker(checker, root, options = {}) {
   const typeNodes = [], symbolNodes = [], callNodes = [];
   const visit = (node) => {
     const kind = node.kind;
-    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _6136 => _6136.has, 'optionalCall', _6137 => _6137(node)]))
+    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _6145 => _6145.has, 'optionalCall', _6146 => _6146(node)]))
       typeNodes.push(node);
-    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _6138 => _6138.has, 'optionalCall', _6139 => _6139(node)]))
+    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _6147 => _6147.has, 'optionalCall', _6148 => _6148(node)]))
       symbolNodes.push(node);
-    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _6140 => _6140.has, 'optionalCall', _6141 => _6141(node)]))
+    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _6149 => _6149.has, 'optionalCall', _6150 => _6150(node)]))
       callNodes.push(node);
     node.forEachChild(visit);
   };
   visit(root);
   const run = (nodes, fn) => {
-    if (_optionalChain([fn, 'optionalAccess', _6142 => _6142.seed]) === void 0 || fn.original === void 0)
+    if (_optionalChain([fn, 'optionalAccess', _6151 => _6151.seed]) === void 0 || fn.original === void 0)
       return;
     for (let i = 0; i < nodes.length; i += PREFETCH_BATCH) {
       const chunk = nodes.slice(i, i + PREFETCH_BATCH);
@@ -59375,7 +59384,7 @@ function prefetchChecker(checker, root, options = {}) {
   run(typeNodes, getType);
   run(symbolNodes, getSymbol);
   const api = checker.__astTranspilerApi;
-  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _6143 => _6143.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _6144 => _6144.original, 'optionalAccess', _6145 => _6145.gen]) !== void 0) {
+  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _6152 => _6152.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _6153 => _6153.original, 'optionalAccess', _6154 => _6154.gen]) !== void 0) {
     for (let i = 0; i < callNodes.length; i += PREFETCH_BATCH) {
       const chunk = callNodes.slice(i, i + PREFETCH_BATCH);
       const gens = chunk.map((n) => {
@@ -59402,7 +59411,7 @@ function prefetchChecker(checker, root, options = {}) {
 function prefetchDeclarationSignatures(checker, api, root) {
   const getSigDecl = checker.getSignatureFromDeclaration;
   const getTypeOfSymbolAtLocation = checker.getTypeOfSymbolAtLocation;
-  if (_optionalChain([getSigDecl, 'optionalAccess', _6146 => _6146.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _6147 => _6147.original, 'optionalAccess', _6148 => _6148.gen]) === void 0)
+  if (_optionalChain([getSigDecl, 'optionalAccess', _6155 => _6155.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _6156 => _6156.original, 'optionalAccess', _6157 => _6157.gen]) === void 0)
     return;
   const decls = [];
   const visit = (node) => {
@@ -59428,9 +59437,9 @@ function prefetchDeclarationSignatures(checker, api, root) {
     }())));
     api.batch(...chunk.map((decl) => safe(function* () {
       const type = checker.getTypeAtLocation(decl);
-      const symbol = _optionalChain([type, 'optionalAccess', _6149 => _6149.getSymbol, 'optionalAccess', _6150 => _6150.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
-      const location = _optionalChain([symbol, 'optionalAccess', _6151 => _6151.valueDeclaration, 'optionalAccess', _6152 => _6152.resolve, 'call', _6153 => _6153()]);
-      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _6154 => _6154.seed2]) === void 0)
+      const symbol = _optionalChain([type, 'optionalAccess', _6158 => _6158.getSymbol, 'optionalAccess', _6159 => _6159.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
+      const location = _optionalChain([symbol, 'optionalAccess', _6160 => _6160.valueDeclaration, 'optionalAccess', _6161 => _6161.resolve, 'call', _6162 => _6162()]);
+      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _6163 => _6163.seed2]) === void 0)
         return;
       const symbolType = yield* getTypeOfSymbolAtLocation.original.gen(symbol, location);
       getTypeOfSymbolAtLocation.seed2(symbol, location, symbolType);
@@ -59522,7 +59531,7 @@ var Transpiler = class _Transpiler {
     const src = _nullishCoalesce(program.getSourceFile(fileName), () => ( program.getSourceFile(path8.resolve(fileName))));
     const previous = this.snapshot;
     this.snapshot = snapshot;
-    _optionalChain([previous, 'optionalAccess', _6155 => _6155.dispose, 'call', _6156 => _6156()]);
+    _optionalChain([previous, 'optionalAccess', _6164 => _6164.dispose, 'call', _6165 => _6165()]);
     return this.setContext({ src, checker, program });
   }
   createProgramInMemoryAndSetContext(content) {
@@ -59546,7 +59555,7 @@ var Transpiler = class _Transpiler {
   // long as the file's text on disk still equals the snapshot's. Replaces any
   // previous shared program; pass [] to drop it.
   setSharedProgram(paths) {
-    _optionalChain([this, 'access', _6157 => _6157.programCache, 'access', _6158 => _6158.shared, 'optionalAccess', _6159 => _6159.snapshot, 'access', _6160 => _6160.dispose, 'call', _6161 => _6161()]);
+    _optionalChain([this, 'access', _6166 => _6166.programCache, 'access', _6167 => _6167.shared, 'optionalAccess', _6168 => _6168.snapshot, 'access', _6169 => _6169.dispose, 'call', _6170 => _6170()]);
     this.programCache.shared = void 0;
     if (paths.length === 0) {
       return;

@@ -215,7 +215,8 @@ class TupleSlots {
             if (n.kind !== SK.ReturnStatement) { return true; }
             const text = this.printed (n);
             any = true;
-            ok = (text !== undefined) && /^return \[\]any\{.*\}$/.test (text.replace (/\s+\/\/.*$/, '').trim ()) && !text.includes ('\n');
+            const code = (text ?? '').split ('\n').filter ((l) => !/^\s*\/\//.test (l)).join ('\n');
+            ok = (text !== undefined) && /^return \[\]any\{.*\}$/.test (code.replace (/\s+\/\/.*$/, '').trim ());
             return false;
         });
         return ok && any;
@@ -277,13 +278,6 @@ class TupleSlots {
                 if ((close > 0) && (arg !== undefined) && (this.classOfNode (fn, arg, depth + 1) === 'plain:map')) { return 'plain:map'; }
             }
             return call;
-        }
-        // MapTyped(Omit(m, ..)) of a map-typed operand is a fresh map (the build layer's OmitDict)
-        const omit = /^(?:ccxt\.)?MapTyped\(this\.Omit\((\w+),/.exec (m);
-        if (omit !== null) {
-            const arg = g08Unwrap (node)?.arguments?.[0]?.arguments?.[0];
-            const argClass = (arg?.kind === SK.Identifier) ? this.classOfIdent (fn, arg, depth + 1) : 'no';
-            return ((argClass === 'typedmap') || (argClass === 'plain:map')) ? 'plain:map' : 'no';
         }
         if (/^func\s*\(/.test (m)) { return 'no'; }
         if ((node?.kind === SK.Identifier) && /^[A-Za-z_]\w*$/.test (m)) { return this.classOfIdent (fn, node, depth); }
@@ -390,6 +384,18 @@ class TupleSlots {
         return undefined;
     }
 
+    // `this.omit (m, ..)` of a map-typed identifier is a fresh map[string]any (the Go OmitDict twin)
+    omitClass (fn: any, init: any, depth: number): string {
+        const call = g08Unwrap (init);
+        const callee = call?.expression;
+        if ((call?.kind !== SK.CallExpression) || (callee?.kind !== SK.PropertyAccessExpression) || (callee.expression?.kind !== SK.ThisKeyword)
+            || (callee.name?.text !== 'omit') || (call.arguments?.length < 2) || (call.arguments[0]?.kind !== SK.Identifier)) {
+            return 'no';
+        }
+        const arg = this.classOfIdent (fn, call.arguments[0], depth + 1);
+        return ((arg === 'typedmap') || (arg === 'plain:map')) ? 'plain:map' : 'no';
+    }
+
     classOfIdent (fn: any, node: any, depth: number): string {
         if (depth > 4) { return 'no'; }
         const decl = this.declOf (node);
@@ -401,7 +407,11 @@ class TupleSlots {
         }
         // a parameter's own binding line counts as its one write
         const writes = this.writesOf (fn, name) + ((decl.param === true) ? 1 : 0);
-        const initClass = (init: string) => this.classOfText (fn, undefined, g08Mask (init).trim (), init.trim (), depth + 1);
+        const tsInit = this.resolve (node)?.initializer;
+        const initClass = (init: string) => {
+            const c = this.classOfText (fn, undefined, g08Mask (init).trim (), init.trim (), depth + 1);
+            return (c === 'no') ? this.omitClass (fn, tsInit, depth) : c;
+        };
         if (decl.kind === 'short') {
             if (writes > 1) { return 'no'; }
             if (/^(?:this\.|ccxt\.)\w+\(/.test (g08Mask (decl.init))) { return 'no'; }
