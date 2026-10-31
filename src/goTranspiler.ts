@@ -387,7 +387,7 @@ const GO_NON_NIL_DEFAULT_KINDS = [
 
 // the String methods the printer answers natively on a proven Go string (strings.* / len)
 const GO_STRING_METHOD_NAMES = [ 'split', 'replace', 'replaceAll', 'startsWith', 'endsWith', 'toUpperCase', 'toLowerCase',
-    'indexOf', 'length' ];
+    'indexOf', 'length', 'trim', 'padStart', 'padEnd', 'toString' ];
 
 // the operators that write their left operand: an assignment through any of them may
 // store a nil pointer where the deref proof expected the defaulted call's result
@@ -4569,6 +4569,9 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             if (operator === SyntaxKind.PlusToken) {
                 return true;
             }
+            if (operator === SyntaxKind.InKeyword) {
+                return parent.left === current;
+            }
             if ((operator === SyntaxKind.EqualsEqualsToken) || (operator === SyntaxKind.ExclamationEqualsToken)
                 || (operator === SyntaxKind.EqualsEqualsEqualsToken) || (operator === SyntaxKind.ExclamationEqualsEqualsToken)) {
                 const other: any = (parent.left === current) ? parent.right : parent.left;
@@ -4578,9 +4581,43 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
         }
         case SyntaxKind.PropertyAccessExpression:
             return (parent.expression === current) && (GO_STRING_METHOD_NAMES.indexOf(parent.name?.text) >= 0);
+        case SyntaxKind.ElementAccessExpression:
+            return parent.argumentExpression === current;
+        case SyntaxKind.CallExpression:
+            return this.goLiteralDefaultStringCallArgument(parent, current);
         }
         return false;
     }
+
+    // an argument the callee takes as a Go `string` (its printed parameter), or a runtime accessor that
+    // derefs its `any` arguments: the string passes where the pointer did
+    goLiteralDefaultStringCallArgument(call, argument): boolean {
+        const index = call.arguments?.indexOf(argument) ?? -1;
+        if (index < 0) {
+            return false;
+        }
+        const name = this.goAstCalleeName(call);
+        if ((name !== undefined) && GO_NIL_INIT_ANY_ARG_CALLEES.has(name) && !(name.startsWith('this.Safe') && (index === call.arguments.length - 1) && (call.arguments.length > 2))) {
+            return true;
+        }
+        if (this.goLiteralDefaultStringParamInProgress) {
+            return false;
+        }
+        this.goLiteralDefaultStringParamInProgress = true;
+        try {
+            const declaration: any = this.getChecker().getResolvedSignature(call)?.declaration?.resolve();
+            const parameter: any = declaration?.parameters?.[index];
+            if ((parameter?.kind !== SyntaxKind.Parameter) || (parameter.dotDotDotToken !== undefined)) {
+                return false;
+            }
+            return this.goDeclaredParamStaticType(parameter.name) === 'string';
+        } catch (e) {
+            return false;
+        } finally {
+            this.goLiteralDefaultStringParamInProgress = false;
+        }
+    }
+    goLiteralDefaultStringParamInProgress = false;
 
     // `x = this.safeString (o, k, x)` on a local the rule above typed `string`: the call's deref
     goLiteralDefaultStringWrite(left, right): boolean {

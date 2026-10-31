@@ -6025,12 +6025,12 @@ describe('go native string operations (strings.*)', () => {
         // `a` can be nil (the helper answers nil / "" / false there): helper kept
         expect(output).toContain('var p1 []string = Split(a, "-")');
         expect(output).toContain('EndsWith(a, "y")');
-        // a literal default makes SafeString's nil return unreachable
-        expect(output).toContain('var p2 []string = strings.Split(*b, "-")');
-        expect(output).toContain('var u string = strings.ToUpper(*b)');
-        expect(output).toContain('var s string = *b');
-        expect(output).toContain('var r string = strings.Replace(*b, "a", "b", 1)');
-        expect(output).toContain('strings.HasPrefix(*b, "x")');
+        // a literal default makes SafeString's nil return unreachable: `b` is a plain string
+        expect(output).toContain('var p2 []string = strings.Split(b, "-")');
+        expect(output).toContain('var u string = strings.ToUpper(b)');
+        expect(output).toContain('var s string = b');
+        expect(output).toContain('var r string = strings.Replace(b, "a", "b", 1)');
+        expect(output).toContain('strings.HasPrefix(b, "x")');
         // the checker narrowed `a` inside the guard
         expect(output).toContain('var l string = strings.ToLower(*a)');
     });
@@ -7876,6 +7876,29 @@ describe('go literal-defaulted safeString locals are strings', () => {
             const output = body("        let m = this.safeString (p, 'k', 'd');\n        " + use + "\n");
             expect(output).toContain('var m *string = this.SafeString(p, "k", "d")');
         }
+    });
+    test('an `in` key and padStart/trim reads keep the string; an any-parameter argument keeps the pointer', () => {
+        const output = squash(transpiler.transpileGo(
+            "class Exchange {\n" +
+            "    safeString (a: any, b: string, c: any): string | undefined { return a; }\n" +
+            "    main (p: any, q: any) {\n" +
+            "        const m = this.safeString (p, 'k', 'd');\n" +
+            "        return [ m.padStart (64, '0'), (m in this.markets) ];\n" +
+            "    }\n" +
+            "}\n").content);
+        expect(output).toContain('var m string = *this.SafeString(p, "k", "d")');
+        expect(output).toContain('InOp(this.Markets, m)');
+        expect(output).not.toContain('*m');
+        const boxed = squash(transpiler.transpileGo(
+            "class Exchange {\n" +
+            "    safeString (a: any, b: string, c: any): string | undefined { return a; }\n" +
+            "    h (x: any, y: any): any { return y; }\n" +
+            "    main (p: any, q: any) {\n" +
+            "        const m = this.safeString (p, 'k', 'd');\n" +
+            "        return this.h (q, m);\n" +
+            "    }\n" +
+            "}\n").content);
+        expect(boxed).toContain('var m *string = this.SafeString(p, "k", "d")');
     });
     test('a default that is not a literal keeps the pointer', () => {
         const output = body("        const m = this.safeString (p, 'k', q);\n        return m + 'x';\n");

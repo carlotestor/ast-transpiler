@@ -327,6 +327,8 @@ export declare class GoTranspiler extends BaseTranspiler {
     goLiteralDefaultStringCall(node: any, name: string | undefined): boolean;
     goLiteralDefaultStringLocalUsesAreSafe(scope: any, declaration: any, name: string): boolean;
     goLiteralDefaultStringLocalReadIsSafe(node: any): boolean;
+    goLiteralDefaultStringCallArgument(call: any, argument: any): boolean;
+    goLiteralDefaultStringParamInProgress: boolean;
     goLiteralDefaultStringWrite(left: any, right: any): boolean;
     goAnnotatedStringLocalHasNilShapedRead(scope: any, declaration: any, name: string): boolean;
     goDefaultedSafeStringCallOrTypedDefault(call: any): boolean;
