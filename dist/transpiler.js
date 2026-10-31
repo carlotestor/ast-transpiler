@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-FU7DZIKQ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -3071,6 +3071,20 @@ var CSharpTranspiler = class extends BaseTranspiler {
     this.csharpMethodOverrides = /* @__PURE__ */ new WeakMap();
     // class declaration -> member name -> its LAST method of that name (base scan order)
     this.csharpClassMethodsByName = /* @__PURE__ */ new WeakMap();
+    // RF-cs-1 c03: reads of a hand-written class's string-keyed dictionary member.
+    // The C# class that backs a TS class (ccxt: WebSocketClient for ws `Client`) declares members
+    // such as `futures` / `subscriptions` as `IDictionary<string, V>` and may carry a typed accessor
+    // (`getFuture(string)`). The consumer names such a member through csharpDeclaredDictMember (a
+    // table keyed on the checker's receiver class and member, stub undefined here, so an unpatched printer
+    // keeps the helper call). `recv.member[key]` and `this.safeValue (recv.member, key)` then print:
+    //   - the accessor call `recv.getX(key)` when the table names one (safeValue only: the accessor
+    //     answers null for a missing key exactly like the helper), or
+    //   - the helper's own key test: `(recv.member != null && key != null && recv.member.ContainsKey(key)
+    //     ? recv.member[key] : null)` (literal keys skip the key null test).
+    // The key must be a string literal or an identifier whose printed C# type is string / string?
+    // (csharpNativeStringKey, then the build layer's declared record); every other key, a write, a
+    // delete and a safeValue default keep the helper.
+    this.csharpDeclaredDictMemberReads = /* @__PURE__ */ new WeakSet();
     // method node -> the parameter indexes this printer emits as `bool?`; keyed by the ts.Program
     // the census walked, so a sticky batch program and an in-memory snippet never answer for
     // each other
@@ -3335,6 +3349,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // see the note above). Every other read keeps the helper; a site no gate names keeps the
   // base printing.
   printElementAccessExpression(node, identation) {
+    const declaredMember = this.csharpDeclaredDictMemberElementRead(node);
+    if (declaredMember !== void 0) {
+      return declaredMember;
+    }
     const native = this.csharpNativeElementAccess(node);
     if (native !== void 0) {
       return native;
@@ -5011,9 +5029,80 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     return parent.kind !== SyntaxKind4.AsExpression && parent.kind !== SyntaxKind4.TypeAssertionExpression && parent.kind !== SyntaxKind4.NonNullExpression;
   }
+  csharpDeclaredDictMember(node) {
+    return void 0;
+  }
+  // true when the printer printed this read as a typed member read (the build layer then drops the
+  // `(ValueType)` box cast it would add around a helper read)
+  csharpIsDeclaredDictMemberRead(node) {
+    return this.csharpDeclaredDictMemberReads.has(node);
+  }
+  // the receiver of the member is a parameter of the enclosing function: its printed type is the
+  // hand-written class (ccxt's `object client` -> `WebSocketClient client`), whereas a local bound
+  // from a call prints `var` and keeps the helper
+  csharpDeclaredDictMemberReceiverIsParameter(member) {
+    return this.csharpReceiverBinding(member.expression)?.kind === SyntaxKind4.Parameter;
+  }
+  csharpDeclaredDictMemberKey(key) {
+    if (isStringLiteralLikeNode2(key)) {
+      return this.printNode(key, 0);
+    }
+    if (!isIdentifier(key)) {
+      return void 0;
+    }
+    const printedParam = this.csharpPrintedParamType(key);
+    if (printedParam === "string" || printedParam === "string?") {
+      return this.printNode(key, 0);
+    }
+    return this.csharpNativeStringKey(key) ?? this.csharpDeclaredStringKey(key);
+  }
+  csharpDeclaredDictMemberElementRead(node) {
+    if (node?.kind !== SyntaxKind4.ElementAccessExpression || !isPropertyAccessExpression(node.expression)) {
+      return void 0;
+    }
+    const parent = node.parent;
+    const isWrite = parent?.kind === SyntaxKind4.BinaryExpression && parent.left === node && parent.operatorToken.kind >= SyntaxKind4.FirstAssignment && parent.operatorToken.kind <= SyntaxKind4.LastAssignment || parent?.kind === SyntaxKind4.DeleteExpression || (parent?.kind === SyntaxKind4.PrefixUnaryExpression || parent?.kind === SyntaxKind4.PostfixUnaryExpression) && (parent.operator === SyntaxKind4.PlusPlusToken || parent.operator === SyntaxKind4.MinusMinusToken);
+    const exception = this.printElementAccessExpressionExceptionIfAny(node);
+    if (isWrite || exception || !this.ELEMENT_ACCESS_WRAPPER_OPEN || !this.ELEMENT_ACCESS_WRAPPER_CLOSE) {
+      return void 0;
+    }
+    const member = this.csharpDeclaredDictMemberReceiverIsParameter(node.expression) ? this.csharpDeclaredDictMember(node.expression) : void 0;
+    const key = this.csharpDeclaredDictMemberKey(node.argumentExpression);
+    if (member === void 0 || key === void 0) {
+      return void 0;
+    }
+    const receiver = this.printNode(node.expression, 0);
+    this.csharpDeclaredDictMemberReads.add(node);
+    const keyTest = isStringLiteralLikeNode2(node.argumentExpression) ? "" : ` && ${key} != null`;
+    return `(${receiver} != null${keyTest} && ${receiver}.ContainsKey(${key}) ? ${receiver}[${key}] : null)`;
+  }
+  csharpDeclaredDictMemberCall(node) {
+    if (node?.kind !== SyntaxKind4.CallExpression || node.arguments?.length !== 2) {
+      return void 0;
+    }
+    const callee = node.expression;
+    if (!isPropertyAccessExpression(callee) || callee.expression?.kind !== SyntaxKind4.ThisKeyword || callee.name?.text !== "safeValue") {
+      return void 0;
+    }
+    const target = node.arguments[0];
+    if (!isPropertyAccessExpression(target)) {
+      return void 0;
+    }
+    const member = this.csharpDeclaredDictMemberReceiverIsParameter(target) ? this.csharpDeclaredDictMember(target) : void 0;
+    const key = this.csharpDeclaredDictMemberKey(node.arguments[1]);
+    if (member?.getter === void 0 || key === void 0) {
+      return void 0;
+    }
+    this.csharpDeclaredDictMemberReads.add(node);
+    return `${this.printNode(target.expression, 0)}.${member.getter}(${key})`;
+  }
   // `parseInt(...)` / `parseFloat(...)` print the runtime helper call; the folds below replace
   // it with the exact box the helper returns, everything else falls through to the printer
   printCallExpression(node, identation) {
+    const declaredMember = this.csharpDeclaredDictMemberCall(node);
+    if (declaredMember !== void 0) {
+      return declaredMember;
+    }
     const nativeParse = this.csharpNativeParseCall(node);
     if (nativeParse !== void 0) {
       return nativeParse;
@@ -21468,6 +21557,20 @@ ${this.getIden(identation)}}}`;
     }
     return JAVA_ELEMENT_WRITE_MAP_TYPE;
   }
+  // RF-java-2: `const x = Object.values(..)` with no other write prints the helper's exact return type
+  javaObjectValuesLocalType(declaration) {
+    if (!isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || !declaration.initializer) {
+      return void 0;
+    }
+    const init = this.unwrapPrintTransparentExpression(declaration.initializer);
+    if (init === void 0 || !isCallExpression5(init) || !isPropertyAccessExpression2(init.expression) || !isIdentifier2(init.expression.expression) || init.expression.expression.text !== "Object" || init.expression.name.text !== "values" || init.arguments.length !== 1) {
+      return void 0;
+    }
+    if (this.javaLocalHasWriteAtAll(declaration.name)) {
+      return void 0;
+    }
+    return "List<Object>";
+  }
   // every other mention of the local must be a read a `Map<String, Object>` declaration leaves
   // unchanged: an element-access receiver, a call argument, a return value, an assignment's
   // right-hand side, a comparison or a container element. A cast, a method call, a spread or a
@@ -25256,6 +25359,10 @@ ${this.getIden(identation)}}}`;
         if (baseFieldType !== void 0) {
           varToken = baseFieldType + " ";
         }
+      }
+      const valuesType = this.javaObjectValuesLocalType(declaration);
+      if (valuesType !== void 0) {
+        varToken = valuesType + " ";
       }
       const handlerType = this.javaHandlerDeclarationType(declaration);
       if (handlerType !== void 0) {
