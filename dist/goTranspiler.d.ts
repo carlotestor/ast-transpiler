@@ -394,6 +394,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     goMethodKeepsBaseSignature(fn: any): boolean;
     goHasTreeCallSite(fn: any): boolean;
     goParameterCallSitesPassType(fn: any, index: number, goType: string): boolean;
+    goAsyncBooleanParameterType(fn: any, param: any, index: number): string | undefined;
+    goCallSitesPassBooleanLiteral(fn: any, index: number): boolean;
+    goArgumentIsSyntacticBool(arg: any, checker: any): boolean;
     goEnclosingClass(fn: any): any;
     goEnclosingClassName(fn: any): string | undefined;
     goIsPrivateKeyField(arg: any): boolean;
@@ -425,6 +428,8 @@ export declare class GoTranspiler extends BaseTranspiler {
     goPointerTypeOfExpression(node: any, printedText: string): string | undefined;
     goElementAssignmentContainerType(node: any, printedText: string): string | undefined;
     goFieldContainerTypeNative(node: any): string | undefined;
+    goValueMayHoldPointer(valueNode: any): boolean;
+    goIsPlainValuedMapField(node: any): boolean;
     goIsStringKeyExpression(node: any): boolean;
     goSliceIndexProvablyInRange(node: any, indexNode: any): boolean;
     goLocalIsRebound(scope: any, nameNode: any): boolean;
