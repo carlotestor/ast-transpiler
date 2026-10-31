@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -9662,6 +9662,17 @@ var GoTranspiler = class extends BaseTranspiler {
     // operand of a binary expression, -1 inside parentheses (never below 1), and
     // back to 1 for composite literal elements.
     this.goExprDepth = 1;
+    // ===== RF-go-6-C =====
+    // Go native reads on proven list receivers.
+    // (1) A call `this.<name>(...)` to a method the host declares as returning a Go `[]any` (config
+    //     `generatedListCallees`: the venue-uniform list producers) whose TS result type is an array
+    //     type is a `[]any`: a local initialised by it is declared `[]any`, so `.length` prints
+    //     `len(x)` and element reads take the native-list path.
+    // (2) `xs[i]` on a local declared `[]string`, read inside `for (let i = 0; i < xs.length; i++)`
+    //     with neither `i` nor `xs` written (or rebound) in the loop body and no function boundary
+    //     between loop and read, is the slice index `xs[i]`: i < len(xs) holds at every statement of
+    //     the body, a string element cannot box a pointer, so it is the very value GetValue returns.
+    this.generatedListCallees = /* @__PURE__ */ new Set();
     // hx4 G09
     // hand-written BaseExchange value fields (go/v4/exchange.go) read as `this.<Field>`
     this.GO_G09_NUMERIC_FIELDS = {
@@ -9688,6 +9699,7 @@ var GoTranspiler = class extends BaseTranspiler {
     this.unifiedStringParams = config["unifiedStringParams"] ?? {};
     this.unifiedSliceParams = config["unifiedSliceParams"] ?? {};
     this.unifiedBoolParams = config["unifiedBoolParams"] ?? {};
+    this.generatedListCallees = new Set(config["generatedListCallees"] ?? []);
   }
   goDescendantsOf(scope) {
     let list = this.goScopeDescendants.get(scope);
@@ -10217,6 +10229,8 @@ func New${this.capitalize(this.className)}() *${this.className} {
         return initializer.operator === SyntaxKind5.ExclamationToken ? "bool" : void 0;
       case SyntaxKind5.ParenthesizedExpression:
         return this.goTypeOfInitializer(initializer.expression, printedValue);
+      case SyntaxKind5.ElementAccessExpression:
+        return this.goLoopBoundedStringElementType(initializer, printedValue);
       case SyntaxKind5.Identifier:
         return this.goDeclaredTypeOfIdentifier(initializer);
       case SyntaxKind5.BinaryExpression: {
@@ -10256,7 +10270,7 @@ func New${this.capitalize(this.className)}() *${this.className} {
     if (!/^[A-Za-z_][\w.]*$/.test(callee)) {
       return void 0;
     }
-    return GO_NATIVE_CALL_RETURN_TYPES[callee] ?? GO_HELPER_RETURN_TYPES[callee];
+    return GO_NATIVE_CALL_RETURN_TYPES[callee] ?? GO_HELPER_RETURN_TYPES[callee] ?? this.goHostListCalleeType(callee, initializer);
   }
   // strips the wrapping parentheses the source (or an operand) printed around a
   // whole expression, so the inner text can be classified
@@ -11065,6 +11079,9 @@ func New${this.capitalize(this.className)}() *${this.className} {
     }
     const safe = !this.hasNodeWhere(scope, (n) => {
       if (n.kind === SyntaxKind5.Identifier && n.text === varName && n !== declaration.name) {
+        if (this.goOtherBindingOfLoopBoundedElement(n, declaration)) {
+          return false;
+        }
         const parent = n.parent;
         if (parent?.kind === SyntaxKind5.PropertyAccessExpression && parent.expression === n && parent.name?.text === "push") {
           if (goType === GO_STRING_LIST_LOCAL_TYPE) {
@@ -18528,6 +18545,100 @@ ${body}}
 ${body}return nil
 ${this.getIden(level)}}()`;
   }
+  goHostListCalleeType(callee, initializer) {
+    if (!callee.startsWith("this.") || !this.generatedListCallees.has(callee.substring("this.".length))) {
+      return void 0;
+    }
+    let call = initializer;
+    while (call?.kind === SyntaxKind5.ParenthesizedExpression) {
+      call = call.expression;
+    }
+    const checker = this.checkerOrUndefined();
+    if (call?.kind !== SyntaxKind5.CallExpression || checker === void 0) {
+      return void 0;
+    }
+    const type = checker.getTypeAtLocation(call);
+    return type !== void 0 && checker.isArrayType(type) ? GO_SAFE_LIST_LOCAL_TYPE : void 0;
+  }
+  // a statement that writes, rebinds or shrinks `name` (assignment, ++/--, destructuring or
+  // for-in/of target, a second declaration, delete, a mutating array method)
+  goWritesOrRebindsName(n, name, mutators) {
+    if (n.kind !== SyntaxKind5.Identifier || n.text !== name) {
+      return false;
+    }
+    const parent = n.parent;
+    switch (parent?.kind) {
+      case SyntaxKind5.BinaryExpression:
+        return parent.left === n && parent.operatorToken.kind >= SyntaxKind5.FirstAssignment && parent.operatorToken.kind <= SyntaxKind5.LastAssignment;
+      case SyntaxKind5.PrefixUnaryExpression:
+      case SyntaxKind5.PostfixUnaryExpression:
+        return parent.operator === SyntaxKind5.PlusPlusToken || parent.operator === SyntaxKind5.MinusMinusToken;
+      case SyntaxKind5.ForInStatement:
+      case SyntaxKind5.ForOfStatement:
+        return parent.initializer === n;
+      case SyntaxKind5.VariableDeclaration:
+      case SyntaxKind5.Parameter:
+      case SyntaxKind5.BindingElement:
+        return parent.name === n;
+      case SyntaxKind5.DeleteExpression:
+        return true;
+      case SyntaxKind5.PropertyAccessExpression:
+        return parent.expression === n && mutators.includes(parent.name?.text);
+    }
+    return false;
+  }
+  goLoopBoundedSliceRead(node, baseExpr, keyNode, containerStr, keyStr) {
+    if (baseExpr?.kind !== SyntaxKind5.Identifier || keyNode?.kind !== SyntaxKind5.Identifier || baseExpr.text === keyNode.text) {
+      return void 0;
+    }
+    if (this.isGoElementAccessAssignmentTarget(node) || containerStr.includes("\n") || keyStr.includes("\n")) {
+      return void 0;
+    }
+    if (this.goResolvedLocalGoType(baseExpr) !== GO_STRING_LIST_LOCAL_TYPE) {
+      return void 0;
+    }
+    const mutators = ["push", "pop", "shift", "unshift", "splice", "sort", "reverse", "fill", "copyWithin"];
+    let child = node;
+    for (let current = node.parent; current !== void 0 && !isFunctionLike(current); child = current, current = current.parent) {
+      if (current.kind !== SyntaxKind5.ForStatement || current.statement !== child) {
+        continue;
+      }
+      const condition = current.condition;
+      const initializer = current.initializer;
+      const step = current.incrementor;
+      const declared = initializer?.kind === SyntaxKind5.VariableDeclarationList ? initializer.declarations : void 0;
+      const counts = condition?.kind === SyntaxKind5.BinaryExpression && condition.operatorToken.kind === SyntaxKind5.LessThanToken && condition.left?.kind === SyntaxKind5.Identifier && condition.left.text === keyNode.text && condition.right?.kind === SyntaxKind5.PropertyAccessExpression && condition.right.name?.text === "length" && condition.right.expression?.kind === SyntaxKind5.Identifier && condition.right.expression.text === baseExpr.text && declared?.length === 1 && declared[0].name?.text === keyNode.text && declared[0].initializer?.kind === SyntaxKind5.NumericLiteral && declared[0].initializer.text === "0" && step?.kind === SyntaxKind5.PostfixUnaryExpression && step.operator === SyntaxKind5.PlusPlusToken && step.operand?.kind === SyntaxKind5.Identifier && step.operand.text === keyNode.text;
+      if (!counts) {
+        continue;
+      }
+      const disturbed = this.hasNodeWhere(current.statement, (n) => this.goWritesOrRebindsName(n, keyNode.text, []) || this.goWritesOrRebindsName(n, baseExpr.text, mutators));
+      return disturbed ? void 0 : `${containerStr}[${keyStr}]`;
+    }
+    return void 0;
+  }
+  // a same-named identifier that the checker binds to ANOTHER declaration (a sibling block's
+  // `let quote`) is not a write of this loop-bounded element local
+  goOtherBindingOfLoopBoundedElement(n, declaration) {
+    const init = declaration.initializer;
+    if (init?.kind !== SyntaxKind5.ElementAccessExpression || this.goLoopBoundedStringElementType(init, this.printNode(init, 0)) === void 0) {
+      return false;
+    }
+    const checker = this.checkerOrUndefined();
+    const own = checker?.getSymbolAtLocation(declaration.name);
+    const other = checker?.getSymbolAtLocation(n);
+    return own !== void 0 && other !== void 0 && own !== other;
+  }
+  // the element of a loop-bounded `[]string` read prints as the slice index, a Go string
+  goLoopBoundedStringElementType(node, printedValue) {
+    const base = node.expression;
+    const key = node.argumentExpression;
+    if (base?.kind !== SyntaxKind5.Identifier || key?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    const index = `${base.text}[${key.text}]`;
+    return printedValue.trim() === index && this.goLoopBoundedSliceRead(node, base, key, base.text, key.text) === index ? "string" : void 0;
+  }
+  // ===== end RF-go-6-C =====
   printElementAccessExpression(node, identation) {
     const special = this.printElementAccessExpressionExceptionIfAny(node);
     if (special) {
@@ -18548,6 +18659,10 @@ ${this.getIden(level)}}()`;
     const indexDepth = this.goExprDepth + 1;
     const containerStr = this.goWithExprDepth(indexDepth, () => this.printNode(baseExpr, 0));
     const keyStrs = keys.map((k) => this.goWithExprDepth(indexDepth, () => this.printNode(k, 0)));
+    const boundedRead = keys.length === 1 ? this.goLoopBoundedSliceRead(node, baseExpr, keys[0], containerStr, keyStrs[0]) : void 0;
+    if (boundedRead !== void 0) {
+      return boundedRead;
+    }
     if (this.goIndexableTypeOf(baseExpr, containerStr) === "map[string]any") {
       if (this.goKeyIsString(keys[0], keyStrs[0]) && !this.isGoElementAccessAssignmentTarget(node) && !this.goMarketComparisonElementRead(node)) {
         return this.goElementAccessChain(`${containerStr}[${keyStrs[0]}]`, keyStrs);
