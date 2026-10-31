@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-FU7DZIKQ.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -28849,8 +28849,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // non-numbers; with both operands checker-typed numbers the same f64
   // comparison runs natively on `Value::as_f64()` unwraps.
   printNativeNumericComparison(node, operator, leftText, rightText) {
-    const unwrap = (text) => `${text}.as_f64().unwrap_or(f64::NAN)`;
-    const comparison = `${unwrap(leftText)} ${operator} ${unwrap(rightText)}`;
+    const unwrap2 = (text) => `${text}.as_f64().unwrap_or(f64::NAN)`;
+    const comparison = `${unwrap2(leftText)} ${operator} ${unwrap2(rightText)}`;
     return this.isBooleanPosition(node) ? comparison : `Value::Bool(${comparison})`;
   }
   // How numeric an ordered-comparison operand is: 'definite' (numeric
@@ -47874,17 +47874,46 @@ init_esm_shims();
 var OWNED_TABLES = {
   "baseCurrencies": { "publish": "PublishBaseCurrencies", "read": "BaseCurrenciesTable" },
   "quoteCurrencies": { "publish": "PublishQuoteCurrencies", "read": "QuoteCurrenciesTable" },
-  "transactions": { "publish": "PublishTransactions", "read": "TransactionsTable" }
+  "transactions": { "publish": "PublishTransactions", "read": "TransactionsTable" },
+  "markets": { "publish": "PublishMarkets", "read": "Markets", "add": "AddMarketsEntry", "plainMap": true },
+  "markets_by_id": { "publish": "PublishMarketsById", "read": "Markets_by_id", "add": "AddMarketsByIdEntry", "plainMap": true },
+  "currencies": { "publish": "PublishCurrencies", "read": "Currencies", "plainMap": true },
+  "currencies_by_id": { "publish": "PublishCurrenciesById", "read": "Currencies_by_id", "plainMap": true }
 };
 var OWNER_CLASS = "BaseExchange";
+function unwrap(node) {
+  const SK = ts.SyntaxKind;
+  while (node !== void 0 && (node.kind === SK.ParenthesizedExpression || node.kind === SK.AsExpression || node.kind === SK.NonNullExpression)) {
+    node = node.expression;
+  }
+  return node;
+}
+function resolvedDeclaration(go, node) {
+  try {
+    return go.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+  } catch (e) {
+    return void 0;
+  }
+}
 function ownedTable(go, node) {
   const SK = ts.SyntaxKind;
   if (node?.kind !== SK.PropertyAccessExpression || !Object.prototype.hasOwnProperty.call(OWNED_TABLES, node.name?.text)) {
     return void 0;
   }
-  const checker = go.checkerOrUndefined();
-  const decl = checker?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+  const decl = resolvedDeclaration(go, node.name);
   if (decl?.kind !== SK.PropertyDeclaration || decl.parent?.name?.text !== OWNER_CLASS) {
+    return void 0;
+  }
+  return OWNED_TABLES[node.name.text];
+}
+function blindOwnedTable(go, node) {
+  const SK = ts.SyntaxKind;
+  if (node?.kind !== SK.PropertyAccessExpression || !Object.prototype.hasOwnProperty.call(OWNED_TABLES, node.name?.text) || node.expression?.kind !== SK.Identifier || resolvedDeclaration(go, node.name) !== void 0) {
+    return void 0;
+  }
+  const decl = resolvedDeclaration(go, node.expression);
+  const method = decl?.parent;
+  if (decl?.kind !== SK.Parameter || decl.type?.kind !== SK.AnyKeyword || method?.kind !== SK.MethodDeclaration || method.parent?.name?.text !== OWNER_CLASS) {
     return void 0;
   }
   return OWNED_TABLES[node.name.text];
@@ -47893,31 +47922,175 @@ function isWrapperCall(node, name, args) {
   const SK = ts.SyntaxKind;
   return node?.kind === SK.CallExpression && node.expression?.kind === SK.PropertyAccessExpression && node.expression.expression?.kind === SK.ThisKeyword && node.expression.name?.text === name && (node.arguments?.length ?? 0) <= args;
 }
+function ownedKeysCall(go, call) {
+  const SK = ts.SyntaxKind;
+  const c = unwrap(call);
+  if (c?.kind !== SK.CallExpression || c.arguments?.length !== 1 || c.expression?.kind !== SK.PropertyAccessExpression || c.expression.name?.text !== "keys" || c.expression.expression?.kind !== SK.Identifier || c.expression.expression.text !== "Object") {
+    return void 0;
+  }
+  const arg = unwrap(c.arguments[0]);
+  const table = ownedTable(go, arg);
+  return table?.plainMap === true ? { table, arg } : void 0;
+}
+function writtenThrough(fn, decl) {
+  const SK = ts.SyntaxKind;
+  let written = false;
+  const refersToDecl = (target) => {
+    const base = unwrap(target);
+    return base?.kind === SK.Identifier && base.text === decl.name.text;
+  };
+  const visit = (n) => {
+    if (written) {
+      return;
+    }
+    if (n.kind === SK.BinaryExpression && n.operatorToken?.kind === SK.EqualsToken && n.left?.kind === SK.ElementAccessExpression && refersToDecl(n.left.expression)) {
+      written = true;
+      return;
+    }
+    if (n.kind === SK.DeleteExpression && n.expression?.kind === SK.ElementAccessExpression && refersToDecl(n.expression.expression)) {
+      written = true;
+      return;
+    }
+    n.forEachChild(visit);
+  };
+  visit(fn);
+  return written;
+}
+var aliasNameCache = /* @__PURE__ */ new Map();
+function aliasNames(node) {
+  const SK = ts.SyntaxKind;
+  const file = node.getSourceFile?.();
+  const key = file?.fileName;
+  if (file === void 0 || key === void 0) {
+    return /* @__PURE__ */ new Set();
+  }
+  let names = aliasNameCache.get(key);
+  if (names === void 0) {
+    names = /* @__PURE__ */ new Set();
+    const visit = (n) => {
+      if (n.kind === SK.VariableDeclaration && n.name?.kind === SK.Identifier) {
+        const init = unwrap(n.initializer);
+        if (init?.kind === SK.PropertyAccessExpression && init.expression?.kind === SK.ThisKeyword && Object.prototype.hasOwnProperty.call(OWNED_TABLES, init.name?.text)) {
+          names.add(n.name.text);
+        }
+      }
+      n.forEachChild(visit);
+    };
+    visit(file);
+    aliasNameCache.set(key, names);
+  }
+  return names;
+}
+function aliasOf(go, identifier) {
+  const SK = ts.SyntaxKind;
+  if (identifier?.kind !== SK.Identifier || !aliasNames(identifier).has(identifier.text)) {
+    return void 0;
+  }
+  const decl = resolvedDeclaration(go, identifier);
+  if (decl?.kind !== SK.VariableDeclaration || decl.name?.kind !== SK.Identifier) {
+    return void 0;
+  }
+  const init = unwrap(decl.initializer);
+  if (init?.kind !== SK.PropertyAccessExpression || init.expression?.kind !== SK.ThisKeyword) {
+    return void 0;
+  }
+  const table = ownedTable(go, init);
+  if (table?.add === void 0 || table.plainMap !== true) {
+    return void 0;
+  }
+  const scope = go.goEnclosingFunction(decl);
+  if (scope === void 0 || !writtenThrough(scope, decl) || go.goLocalIsRebound(scope, decl.name)) {
+    return void 0;
+  }
+  return { table, init };
+}
 function installRfGo5OwnedTables(goTranspiler) {
   const flag = "rfGo5OwnedTablesInstalled";
   if (goTranspiler[flag] === true) {
     return;
   }
   goTranspiler[flag] = true;
+  const SK = ts.SyntaxKind;
   const printAccess = goTranspiler.printPropertyAccessExpression;
   goTranspiler.printPropertyAccessExpression = function(node, identation) {
-    const table = ownedTable(this, node);
+    const table = ownedTable(this, node) ?? blindOwnedTable(this, node);
     if (table !== void 0) {
       return this.printNode(node.expression, 0) + "." + table.read + "()";
     }
     return printAccess.call(this, node, identation);
   };
+  const printIdent = goTranspiler.printIdentifier;
+  goTranspiler.printIdentifier = function(node) {
+    const alias = aliasOf(this, node);
+    if (alias !== void 0) {
+      return this.printNode(alias.init.expression, 0) + "." + alias.table.read + "()";
+    }
+    return printIdent.call(this, node);
+  };
+  const isAliasStatement = (go, statement) => {
+    const list = statement?.kind === SK.FirstStatement ? statement.declarationList : void 0;
+    const decl = list?.declarations?.[0];
+    return list?.declarations?.length === 1 && decl?.name?.kind === SK.Identifier && aliasOf(go, decl.name) !== void 0;
+  };
+  const withoutAliases = (go, statements) => {
+    const all = Array.from(statements ?? []);
+    const kept = all.filter((s) => !isAliasStatement(go, s));
+    return kept.length === all.length ? void 0 : kept;
+  };
+  const printBlock = goTranspiler.printBlock;
+  goTranspiler.printBlock = function(node, identation, chainBlock) {
+    const kept = node?.statements !== void 0 ? withoutAliases(this, node.statements) : void 0;
+    return printBlock.call(this, kept === void 0 ? node : { "statements": kept }, identation, chainBlock);
+  };
+  const printFunctionBody = goTranspiler.printFunctionBody;
+  goTranspiler.printFunctionBody = function(node, identation, wrapInChannel) {
+    const kept = node?.body?.statements !== void 0 ? withoutAliases(this, node.body.statements) : void 0;
+    if (kept === void 0) {
+      return printFunctionBody.call(this, node, identation, wrapInChannel);
+    }
+    const body = { "statements": kept };
+    const view = new Proxy(node, {
+      get(target, key) {
+        if (key === "body") {
+          return body;
+        }
+        const value = Reflect.get(target, key, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+    });
+    return printFunctionBody.call(this, view, identation, wrapInChannel);
+  };
+  const printDeclarations = goTranspiler.printVariableDeclarationList;
+  goTranspiler.printVariableDeclarationList = function(node, identation) {
+    const decl = node.declarations?.[0];
+    if (node.declarations?.length === 1 && decl?.name?.kind === SK.Identifier) {
+      const keys = ownedKeysCall(this, decl.initializer);
+      if (keys !== void 0 && node.parent?.kind === SK.FirstStatement && this.goDeclaredTypeOfIdentifier(decl.name) === "[]string") {
+        const name = this.printNode(decl.name, 0);
+        const loopVar = name === "k" ? "k1" : "k";
+        const iden = this.getIden(identation);
+        return `${iden}var ${name} []string = nil
+${iden}for ${loopVar} := range ${this.printNode(keys.arg, 0)} {
+${this.getIden(identation + 1)}${name} = append(${name}, ${loopVar})
+${iden}}`;
+      }
+    }
+    return printDeclarations.call(this, node, identation);
+  };
   const printBinary = goTranspiler.printBinaryExpression;
   goTranspiler.printBinaryExpression = function(node, identation) {
-    const SK = ts.SyntaxKind;
-    const table = node.operatorToken?.kind === SK.EqualsToken ? ownedTable(this, node.left) : void 0;
-    if (table !== void 0 && node.parent?.kind === SK.ExpressionStatement) {
+    const statement = node.parent?.kind === SK.ExpressionStatement;
+    const assign = node.operatorToken?.kind === SK.EqualsToken;
+    const table = assign ? ownedTable(this, node.left) : void 0;
+    if (table !== void 0 && statement) {
       const right = node.right;
       let value;
       if (isWrapperCall(right, "createSafeDictionary", 1)) {
         value = "map[string]any{}";
       } else if (isWrapperCall(right, "mapToSafeMap", 1) && right.arguments.length === 1) {
         value = this.printNode(right.arguments[0], 0);
+      } else if (isWrapperCall(right, "indexBySafe", 2) && right.arguments.length === 2 && table.plainMap === true) {
+        value = "this.IndexBy(" + right.arguments.map((a) => this.printNode(a, 0).trim()).join(", ") + ")";
       } else if (right?.kind === SK.PropertyAccessExpression && right.name?.text === node.left.name.text) {
         value = this.printNode(right.expression, 0) + "." + table.read + "()";
       } else {
@@ -47925,7 +48098,58 @@ function installRfGo5OwnedTables(goTranspiler) {
       }
       return this.printNode(node.left.expression, 0) + "." + table.publish + "(" + value.trim() + ")";
     }
+    if (assign && statement) {
+      const left = node.left;
+      if (left?.kind === SK.ElementAccessExpression) {
+        const base = unwrap(left.expression);
+        let target;
+        if (base?.kind === SK.PropertyAccessExpression) {
+          const owned = ownedTable(this, base);
+          target = owned?.add !== void 0 && owned.plainMap === true ? { "table": owned, "receiver": base.expression } : void 0;
+        } else if (base?.kind === SK.Identifier) {
+          const alias = aliasOf(this, base);
+          target = alias !== void 0 ? { "table": alias.table, "receiver": alias.init.expression } : void 0;
+        }
+        if (target !== void 0) {
+          const key = this.printNode(left.argumentExpression, 0);
+          const value = this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(node.right, identation)).trimStart();
+          return this.printNode(target.receiver, 0) + "." + target.table.add + "(" + key + ", " + value + ")";
+        }
+      }
+      const keys = ownedKeysCall(this, node.right);
+      if (keys !== void 0 && left?.kind === SK.Identifier) {
+        const name = this.printNode(left, 0);
+        if (name !== "k") {
+          const declared = this.goDeclaredTypeOfIdentifier(left);
+          const direct = declared === "[]string" || declared === "[]any";
+          const holder = direct ? name : "g04Keys";
+          const iden = this.getIden(identation);
+          const lines = [
+            direct ? `${holder} = nil` : `var ${holder} []string = nil`,
+            `${iden}for k := range ${this.printNode(keys.arg, 0)} {`,
+            `${this.getIden(identation + 1)}${holder} = append(${holder}, k)`,
+            `${iden}}`
+          ];
+          if (!direct) {
+            lines.push(`${iden}${name} = ${holder}`);
+          }
+          return lines.join("\n");
+        }
+      }
+    }
     return printBinary.call(this, node, identation);
+  };
+  const containerOperand = goTranspiler.goDeclaredContainerOperand;
+  goTranspiler.goDeclaredContainerOperand = function(node) {
+    return ownedTable(this, unwrap(node))?.plainMap === true ? "map[string]any" : containerOperand.call(this, node);
+  };
+  const indexableType = goTranspiler.goIndexableTypeOf;
+  goTranspiler.goIndexableTypeOf = function(node, printed) {
+    return ownedTable(this, unwrap(node))?.plainMap === true ? "map[string]any" : indexableType.call(this, node, printed);
+  };
+  const inOpMapType = goTranspiler.goInOpDictMapType;
+  goTranspiler.goInOpDictMapType = function(dictNode, dictText) {
+    return ownedTable(this, unwrap(dictNode))?.plainMap === true ? "map[string]any" : inOpMapType.call(this, dictNode, dictText);
   };
 }
 
