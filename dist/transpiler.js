@@ -20992,6 +20992,10 @@ ${this.getIden(identation)}}}`;
         if (nativeParse !== void 0) {
           return nativeParse;
         }
+        const typedParse = this.printStringTypedParse(node, callee);
+        if (typedParse !== void 0) {
+          return typedParse;
+        }
       }
     }
     if (node.expression.kind === SyntaxKind6.PropertyAccessExpression) {
@@ -24662,6 +24666,26 @@ ${this.getIden(identation)}}}`;
       return value >= BigInt("-9223372036854775808") && value <= BigInt("9223372036854775807");
     }
     return /^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?$/.test(text) || /^[+-]?Infinity$/.test(text) || text === "NaN";
+  }
+  // RF-java-3: `parseInt(x)` / `parseFloat(x)` whose single operand prints as a java.lang.String
+  // (a String-declared name, a `x as string` cast, or any form the embedding layer proves String)
+  // calls the String-typed twin of the helper (same bodies, String parameter).
+  printStringTypedParse(node, callee) {
+    const args = node?.arguments;
+    if (args === void 0 || args.length !== 1) {
+      return void 0;
+    }
+    let operand = args[0];
+    while (isParenthesizedExpression2(operand)) {
+      operand = operand.expression;
+    }
+    const castToString = isAsExpression2(operand) && operand.type?.kind === SyntaxKind6.StringKeyword;
+    const printed = this.printNode(args[0], 0);
+    const nativeReplace = isCallExpression5(operand) && isPropertyAccessExpression2(operand.expression) && (operand.expression.name.text === "replace" || operand.expression.name.text === "replaceAll") && this.javaScalarFamily(operand.expression.expression) === "string" && /\.replace(First|All)?\(/.test(printed);
+    if (!castToString && !nativeReplace && !this.javaDeclaredStringType(operand) && !this.javaResolvedString(operand)) {
+      return void 0;
+    }
+    return `io.github.ccxt.base.JsParse.${callee}(${printed})`;
   }
   // `parseInt(x)` / `parseFloat(x)` -> the native parse, or undefined to keep the helper
   printNativeScalarParse(node, callee) {

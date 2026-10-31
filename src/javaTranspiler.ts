@@ -1923,6 +1923,10 @@ export class JavaTranspiler extends BaseTranspiler {
                 if (nativeParse !== undefined) {
                     return nativeParse;
                 }
+                const typedParse = this.printStringTypedParse(node, callee);
+                if (typedParse !== undefined) {
+                    return typedParse;
+                }
             }
         }
         if (node.expression.kind === SyntaxKind.PropertyAccessExpression) {
@@ -6145,6 +6149,32 @@ export class JavaTranspiler extends BaseTranspiler {
         return /^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?$/.test(text)
             || /^[+-]?Infinity$/.test(text)
             || text === 'NaN';
+    }
+
+    // RF-java-3: `parseInt(x)` / `parseFloat(x)` whose single operand prints as a java.lang.String
+    // (a String-declared name, a `x as string` cast, or any form the embedding layer proves String)
+    // calls the String-typed twin of the helper (same bodies, String parameter).
+    printStringTypedParse(node, callee) {
+        const args = node?.arguments;
+        if (args === undefined || args.length !== 1) {
+            return undefined;
+        }
+        let operand = args[0];
+        while (isParenthesizedExpression(operand)) {
+            operand = operand.expression;
+        }
+        const castToString = isAsExpression(operand) && operand.type?.kind === SyntaxKind.StringKeyword;
+        const printed = this.printNode(args[0], 0);
+        // `s.replace(a, b)` on a TS string receiver that the printer spelled as the native
+        // String.replaceFirst / replace: the call answers a java.lang.String
+        const nativeReplace = isCallExpression(operand) && isPropertyAccessExpression(operand.expression)
+            && (operand.expression.name.text === 'replace' || operand.expression.name.text === 'replaceAll')
+            && this.javaScalarFamily(operand.expression.expression) === 'string'
+            && /\.replace(First|All)?\(/.test(printed);
+        if (!castToString && !nativeReplace && !this.javaDeclaredStringType(operand) && !this.javaResolvedString(operand)) {
+            return undefined;
+        }
+        return `io.github.ccxt.base.JsParse.${callee}(${printed})`;
     }
 
     // `parseInt(x)` / `parseFloat(x)` -> the native parse, or undefined to keep the helper
