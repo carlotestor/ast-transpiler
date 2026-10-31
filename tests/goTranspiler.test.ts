@@ -909,6 +909,14 @@ describe('go pointer-typed Safe* body locals', () => {
             "        const markets = this.markets;\n" +
             "        return (markets !== undefined) && (account in markets);\n" +
             "    }\n" +
+            "    stock (item, other) {\n" +
+            "        const row = this.parseMarket (item);\n" +
+            "        if (row !== undefined) {\n" +
+            "            row['stock'] = other['stock'];\n" +
+            "        }\n" +
+            "        const wrapped = this.parseBalance (item);\n" +
+            "        return { 'balances': wrapped };\n" +
+            "    }\n" +
             "    store (item) {\n" +
             "        const balance = this.parseBalance (item);\n" +
             "        this.balance['USDT'] = balance;\n" +
@@ -930,6 +938,8 @@ describe('go pointer-typed Safe* body locals', () => {
         }
         expect(output).toContain("var parsed map[string]any = this.ParseMarket(item)");
         expect(output).toContain("var balance map[string]any = this.ParseBalance(item)");
+        expect(output).toContain("var row map[string]any = this.ParseMarket(item)");
+        expect(output).toContain("var wrapped map[string]any = this.ParseBalance(item)");
         expect(output).toContain("var markets map[string]any = this.Markets");
         expect(output).not.toContain("MapTyped(this.Markets");
         expect(output).not.toContain("var market map[string]any");

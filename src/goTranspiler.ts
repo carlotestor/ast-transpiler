@@ -3107,18 +3107,36 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
     // observes nothing the named type changes. Indexing, selection, assertion, rebinding and
     // address-taking are rejected by the callers' scan (they are not in this list).
     goBaseMapUseKeepsMap(node): boolean {
-        const parent: any = node.parent;
-        if (parent?.kind === SyntaxKind.ReturnStatement) {
-            return parent.expression === node;
+        let operand: any = node;
+        let parent: any = node.parent;
+        while (parent?.kind === SyntaxKind.ParenthesizedExpression) {
+            operand = parent;
+            parent = parent.parent;
         }
-        if (parent?.kind === SyntaxKind.BinaryExpression) {
-            return this.goIsNilComparisonOperand(node, parent)
-                || ((parent.operatorToken?.kind === SyntaxKind.EqualsToken) && (parent.right === node));
+        switch (parent?.kind) {
+        case SyntaxKind.ReturnStatement:
+        case SyntaxKind.PropertyAssignment:
+        case SyntaxKind.ShorthandPropertyAssignment:
+        case SyntaxKind.ArrayLiteralExpression:
+            return parent.expression === operand || parent.initializer === operand || parent.name === operand || parent.elements?.indexOf(operand) >= 0;
+        case SyntaxKind.VariableDeclaration:
+            return parent.initializer === operand;
+        case SyntaxKind.ElementAccessExpression: {
+            // `x[k] = v` stays the AddElementToObject helper on a nil-guarded map, which stores into the same map
+            const assignment: any = parent.parent;
+            return (parent.expression === operand) && (assignment?.kind === SyntaxKind.BinaryExpression)
+                && (assignment.left === parent) && (assignment.operatorToken?.kind === SyntaxKind.EqualsToken);
         }
-        if (parent?.kind === SyntaxKind.CallExpression) {
-            return (parent.expression !== node) && (parent.arguments.indexOf(node) >= 0);
+        case SyntaxKind.ConditionalExpression:
+            return (parent.whenTrue === operand) || (parent.whenFalse === operand);
+        case SyntaxKind.BinaryExpression:
+            return this.goIsNilComparisonOperand(operand, parent)
+                || ((parent.operatorToken?.kind === SyntaxKind.EqualsToken) && (parent.right === operand));
+        case SyntaxKind.CallExpression:
+            return (parent.expression !== operand) && (parent.arguments.indexOf(operand) >= 0);
+        default:
+            return false;
         }
-        return false;
     }
 
     goMarketLocalUnboxUncached(declaration): string | undefined {

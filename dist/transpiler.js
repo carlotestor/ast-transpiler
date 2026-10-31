@@ -11685,17 +11685,33 @@ func New${this.capitalize(this.className)}() *${this.className} {
   // observes nothing the named type changes. Indexing, selection, assertion, rebinding and
   // address-taking are rejected by the callers' scan (they are not in this list).
   goBaseMapUseKeepsMap(node) {
-    const parent = node.parent;
-    if (parent?.kind === SyntaxKind5.ReturnStatement) {
-      return parent.expression === node;
+    let operand = node;
+    let parent = node.parent;
+    while (parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      operand = parent;
+      parent = parent.parent;
     }
-    if (parent?.kind === SyntaxKind5.BinaryExpression) {
-      return this.goIsNilComparisonOperand(node, parent) || parent.operatorToken?.kind === SyntaxKind5.EqualsToken && parent.right === node;
+    switch (parent?.kind) {
+      case SyntaxKind5.ReturnStatement:
+      case SyntaxKind5.PropertyAssignment:
+      case SyntaxKind5.ShorthandPropertyAssignment:
+      case SyntaxKind5.ArrayLiteralExpression:
+        return parent.expression === operand || parent.initializer === operand || parent.name === operand || parent.elements?.indexOf(operand) >= 0;
+      case SyntaxKind5.VariableDeclaration:
+        return parent.initializer === operand;
+      case SyntaxKind5.ElementAccessExpression: {
+        const assignment = parent.parent;
+        return parent.expression === operand && assignment?.kind === SyntaxKind5.BinaryExpression && assignment.left === parent && assignment.operatorToken?.kind === SyntaxKind5.EqualsToken;
+      }
+      case SyntaxKind5.ConditionalExpression:
+        return parent.whenTrue === operand || parent.whenFalse === operand;
+      case SyntaxKind5.BinaryExpression:
+        return this.goIsNilComparisonOperand(operand, parent) || parent.operatorToken?.kind === SyntaxKind5.EqualsToken && parent.right === operand;
+      case SyntaxKind5.CallExpression:
+        return parent.expression !== operand && parent.arguments.indexOf(operand) >= 0;
+      default:
+        return false;
     }
-    if (parent?.kind === SyntaxKind5.CallExpression) {
-      return parent.expression !== node && parent.arguments.indexOf(node) >= 0;
-    }
-    return false;
   }
   goMarketLocalUnboxUncached(declaration) {
     const shipped = this.goMarketLocalUnboxShipped(declaration);
