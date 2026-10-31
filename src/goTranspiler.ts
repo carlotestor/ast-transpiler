@@ -1454,10 +1454,19 @@ func New${this.capitalize(this.className)}() *${(this.className)} {
             return this.goTypeOfInitializer(initializer.expression, printedValue);
         case SyntaxKind.AsExpression: { // RF-go-6-C: `x as T[]` prints as its operand, so a slice operand keeps its slice type
             const inner = this.goTypeOfInitializer(initializer.expression, printedValue);
-            return ((typeof inner === 'string') && inner.startsWith('[]')) ? inner : undefined;
+            if ((typeof inner === 'string') && inner.startsWith('[]')) {
+                return inner;
+            }
+            break; // every other cast keeps the printed-call classification below
         }
         case SyntaxKind.ElementAccessExpression: // RF-go-6-C
-            return this.goLoopBoundedStringElementType(initializer, printedValue);
+        {
+            const element = this.goLoopBoundedStringElementType(initializer, printedValue);
+            if (element !== undefined) {
+                return element;
+            }
+            break;
+        }
         case SyntaxKind.Identifier:
             // `x := y` holds exactly what y holds, so it carries y's printed Go type: the
             // alias is declared with that type and reads through it natively [hx10w7 G10]

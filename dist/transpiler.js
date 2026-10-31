@@ -10231,10 +10231,18 @@ func New${this.capitalize(this.className)}() *${this.className} {
         return this.goTypeOfInitializer(initializer.expression, printedValue);
       case SyntaxKind5.AsExpression: {
         const inner = this.goTypeOfInitializer(initializer.expression, printedValue);
-        return typeof inner === "string" && inner.startsWith("[]") ? inner : void 0;
+        if (typeof inner === "string" && inner.startsWith("[]")) {
+          return inner;
+        }
+        break;
       }
-      case SyntaxKind5.ElementAccessExpression:
-        return this.goLoopBoundedStringElementType(initializer, printedValue);
+      case SyntaxKind5.ElementAccessExpression: {
+        const element = this.goLoopBoundedStringElementType(initializer, printedValue);
+        if (element !== void 0) {
+          return element;
+        }
+        break;
+      }
       case SyntaxKind5.Identifier:
         return this.goDeclaredTypeOfIdentifier(initializer);
       case SyntaxKind5.BinaryExpression: {
