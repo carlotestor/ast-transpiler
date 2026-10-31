@@ -276,6 +276,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goNilInitInitializer(initializer: any): boolean;
     goNilInitLocalType(declaration: any): string | undefined;
     goNilInitLocalTypeScan(declaration: any): string | undefined;
+    goNilInitListLocalType(declaration: any): string | undefined;
     goNilInitStringLocalType(declaration: any): string | undefined;
     goNilInitStringScanCache: WeakMap<object, string>;
     goNilInitStringScanInProgress: Set<any>;
