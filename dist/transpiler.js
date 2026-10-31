@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-FU7DZIKQ.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -17407,7 +17407,9 @@ ${indent}}`);
       node = node.expression;
     }
     if (node.expression.kind !== SyntaxKind5.AwaitExpression) {
-      return this.stripWhitespaceOnlyLines(super.printExpressionStatement(node, identation));
+      const printed = this.stripWhitespaceOnlyLines(super.printExpressionStatement(node, identation));
+      return printed.length > 0 && this.goIsUrlsWrite(node) ? `${printed}
+${this.getIden(identation)}this.RefreshUrlsViews()` : printed;
     }
     const exprStm = this.printNode(node.expression, identation);
     const returnRandName = "retRes" + this.getLineBasedSuffix(node);
@@ -18595,6 +18597,62 @@ ${tryBodyBlock}
     }
     return acc;
   }
+  // `this.urls` on the exchange base: the hand-written go/v4/exchange.go keeps `urls` as a
+  // map[string]any (the ccxt field table answers it) and derives two views of `urls["api"]` from it
+  goIsUrlsField(node) {
+    return this.isGoThisPropertyAccessExpression(node) && node.name?.text === "urls" && this.goFieldContainerTypeNative(node) === "map[string]any";
+  }
+  // `this.urls['api']` is declared a Dict in the TS base (`urls: { api: Dict; ... }`): a string
+  // index signature is the proof that every entry of it is the plain `any` a map index reads
+  goUrlsApiIsDict(apiAccess) {
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return false;
+    }
+    try {
+      const type = checker.getTypeAtLocation(apiAccess);
+      return type !== void 0 && this.goParameterTypeIsDict(type);
+    } catch (e) {
+      return false;
+    }
+  }
+  // `this.urls['api'][k]` reads the view BaseExchange.UrlsApi (urls["api"] as stored), and
+  // `this.urls['api'][k][j]` the view UrlsApiSections (its dictionary entries); RefreshUrlsViews
+  // re-derives both after every write of urls, so each read is the map's own index. A key the printer
+  // cannot prove a Go string keeps its helper step, as does every step below the second.
+  goUrlsViewRead(node, baseExpr, keys, keyStrs) {
+    if (keys.length < 2 || !this.goIsUrlsField(baseExpr) || this.isGoElementAccessAssignmentTarget(node)) {
+      return void 0;
+    }
+    if (keys[0]?.kind !== SyntaxKind5.StringLiteral || keys[0].text !== "api" || !this.goKeyIsString(keys[1], keyStrs[1])) {
+      return void 0;
+    }
+    let apiAccess = node;
+    for (let i = keys.length - 1; i > 0; i--) {
+      apiAccess = apiAccess.expression;
+    }
+    if (!this.goUrlsApiIsDict(apiAccess)) {
+      return void 0;
+    }
+    const section = keys.length > 2 && this.goKeyIsString(keys[2], keyStrs[2]);
+    const view = section ? `this.UrlsApiSections[${keyStrs[1]}][${keyStrs[2]}]` : `this.UrlsApi[${keyStrs[1]}]`;
+    return this.goElementAccessChain(view, keyStrs.slice(section ? 2 : 1));
+  }
+  // a statement assigning `this.urls` or one of its entries: the views have to be re-derived after it
+  goIsUrlsWrite(statement) {
+    const expression = statement?.expression;
+    if (expression?.kind !== SyntaxKind5.BinaryExpression || expression.operatorToken?.kind !== SyntaxKind5.EqualsToken) {
+      return false;
+    }
+    let target = expression.left;
+    while (target?.kind === SyntaxKind5.ElementAccessExpression || target?.kind === SyntaxKind5.PropertyAccessExpression) {
+      if (this.goIsUrlsField(target)) {
+        return true;
+      }
+      target = target.expression;
+    }
+    return false;
+  }
   // the container of a nested `m["a"]["b"] = v` write, for all but the last key: its first step is a
   // plain read, so a receiver typed as a map indexes natively and only `any` steps keep the helper.
   // A missing key or nil map reads nil in both forms; a non-map container is a no-op either way.
@@ -18771,6 +18829,10 @@ ${this.getIden(level)}}()`;
     const indexDepth = this.goExprDepth + 1;
     const containerStr = this.goWithExprDepth(indexDepth, () => this.printNode(baseExpr, 0));
     const keyStrs = keys.map((k) => this.goWithExprDepth(indexDepth, () => this.printNode(k, 0)));
+    const urlsView = this.goUrlsViewRead(node, baseExpr, keys, keyStrs);
+    if (urlsView !== void 0) {
+      return urlsView;
+    }
     if (this.goIndexableTypeOf(baseExpr, containerStr) === "map[string]any") {
       if (this.goKeyIsString(keys[0], keyStrs[0]) && !this.isGoElementAccessAssignmentTarget(node) && !this.goMarketComparisonElementRead(node)) {
         return this.goElementAccessChain(`${containerStr}[${keyStrs[0]}]`, keyStrs);
@@ -38474,7 +38536,7 @@ function ccxtGoUnboxCurrencyDeclaration(goTranspiler, printed) {
   return match[1] + tail.substring(0, close) + ".(" + CCXT_GO_CURRENCY_LOCAL_TYPE + ")" + rest;
 }
 function ccxtGoTypeOfUrlsInitializer(goTranspiler, initializer, printedValue) {
-  if (initializer?.parent?.kind !== ts.SyntaxKind.VariableDeclaration || initializer.parent.initializer !== initializer || initializer.parent.parent?.parent?.kind !== ts.SyntaxKind.VariableStatement || !/^GetValue\(/.test((printedValue ?? "").trim()) || !urlsDescribeStringProducer(initializer)) {
+  if (initializer?.parent?.kind !== ts.SyntaxKind.VariableDeclaration || initializer.parent.initializer !== initializer || initializer.parent.parent?.parent?.kind !== ts.SyntaxKind.VariableStatement || !/^(?:GetValue\(|this\.UrlsApi(?:Sections)?\[)/.test((printedValue ?? "").trim()) || !urlsDescribeStringProducer(initializer)) {
     return void 0;
   }
   const declaration = initializer.parent;
@@ -38610,7 +38672,7 @@ function ccxtGoWrapUrlsDeclaration(printed) {
   if (typeof printed !== "string") {
     return printed;
   }
-  const match = /^([\s\S]*?\bvar [A-Za-z0-9_]+ \*string = )(GetValue\((?:GetValue\()?[^\n]*this\.Urls[^\n]*\))(\s*)$/.exec(printed);
+  const match = /^([\s\S]*?\bvar [A-Za-z0-9_]+ \*string = )(GetValue\((?:GetValue\()?[^\n]*this\.Urls[^\n]*\)|this\.UrlsApi(?:Sections)?\[[^\n]*\])(\s*)$/.exec(printed);
   return match === null ? printed : match[1] + "SafeStringPtr(" + match[2] + ")" + match[3];
 }
 function installCcxtGoCurrencyUnbox(goTranspiler) {
