@@ -201,6 +201,8 @@ export const CCXT_GO_HELPER_RETURN_TYPES = {
     'this.ParseDepositMethodIds': '[]any', 'this.ParsePortfolioDetails': '[]any', // W23
     // exchange.go / exchange_string.go
     'this.StringToCharsArray': '[]string',
+    // RF-go-5: exchange_eth.go returns []uint8 on every path (hand-written, never nil-typed)
+    'this.EthEncodeStructuredData': '[]uint8',
     // exchange_market_type.go (hand-written)
     'this.MarketSymbols': '[]string',
     'exchange.MarketSymbols': '[]string',
