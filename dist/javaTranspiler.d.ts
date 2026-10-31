@@ -111,6 +111,13 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaElementWriteMapLocalType(declaration: any): string | undefined;
     javaBaseMapFieldLocalType(declaration: any): string | undefined;
     javaObjectValuesLocalType(declaration: any): string | undefined;
+    javaJsonBoxType(type: any): boolean;
+    javaBoxUseVerdict(node: any): 'element' | 'neutral' | 'value' | 'other';
+    javaBoxLocalUsedOnlyAsElements(nameNode: any): boolean;
+    javaCheckedBoxLocalType(declaration: any): string | undefined;
+    javaCheckedBoxLocalTypeCache: WeakMap<Node, string | typeof JAVA_MEMO_UNDEFINED>;
+    javaCheckedBoxLocalTypeCached(declaration: any): string | undefined;
+    unwrapParenthesesOnly(node: any): any;
     javaLocalUsesKeepContainerType(node: any): boolean;
     javaContainerNeutralIdentifierUse(node: any): boolean;
     javaLocalHasWriteAtAll(node: any): boolean;
@@ -370,7 +377,8 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaTypeFlagsOnly(type: any, mask: number, depth?: number): boolean;
     printObjectKeysCall(node: any, _identation: any, parsedArg?: any): string;
     printNativeObjectKeysCall(node: any): string;
-    printObjectValuesCall(_node: any, _identation: any, parsedArg?: any): string;
+    printObjectValuesCall(node: any, _identation: any, parsedArg?: any): string;
+    printNativeObjectValuesCall(node: any): string;
     printJsonParseCall(_node: any, _identation: any, parsedArg?: any): string;
     printJsonStringifyCall(_node: any, _identation: any, parsedArg?: any): string;
     printNativePromiseAllCall(node: any): string;
