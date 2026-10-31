@@ -373,6 +373,18 @@ export declare class JavaTranspiler extends BaseTranspiler {
     nativeSliceCallIfProvable(node: any, name: any): string;
     printReplaceCall(_node: any, _identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;
     printReplaceAllCall(node: any, identation: any, name?: any, parsedArg?: any, parsedArg2?: any): string;
+    javaIntegralDeclaredTypes: Set<string>;
+    javaTypedSliceMaxLength: number;
+    javaUnwrapParens(node: any): any;
+    javaIsAtomOperand(node: any): boolean;
+    javaIsRepeatableBound(node: any): boolean;
+    javaPrintsIntegralNumber(node: any): boolean;
+    javaSliceBoundOperand(node: any, printed: any): {
+        text: string;
+    } | undefined;
+    javaPrintsAsString(node: any): boolean;
+    javaTypedStringSliceCall(node: any, name: any, parsedArg: any, parsedArg2: any, identation: any): string | undefined;
+    javaTypedStringReplaceAllCall(node: any, name: any, parsedArg: any, parsedArg2: any): string | undefined;
     stringLiteralArgument(argument: any): string;
     sideEffectFreeReceiver(expression: any): any;
     printPadEndCall(_node: any, _identation: any, name: any, parsedArg: any, parsedArg2: any): string;
