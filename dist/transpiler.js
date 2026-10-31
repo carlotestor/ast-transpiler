@@ -9386,6 +9386,10 @@ var GO_TUPLE_NATIVE_BINDING_PRODUCERS = [
   "HandleParamBool",
   "HandleParamBool2"
 ];
+var GO_TUPLE_INT64_POINTER_PRODUCERS = {
+  "handleOptionIntegerAndParams": 3,
+  "handleOptionIntegerAndParams2": 4
+};
 var GO_GETARG_NIL_MAP_READERS = [
   "GetValue",
   "InOp",
@@ -9598,6 +9602,11 @@ var GoTranspiler = class extends BaseTranspiler {
       [SyntaxKind5.ForStatement]: ["statement", "condition"],
       [SyntaxKind5.ConditionalExpression]: ["whenTrue", "condition"]
     };
+    // slot 0 of `const [ x, p ] = this.handleOptionIntegerAndParams (…)` on the `...Nullable` overload: the
+    // base twin's holder is `[]any{ *int64, params }`, so the slot is that pointer (nil when the option is
+    // absent). The local takes `*int64` when every use reads it natively: a nil test, an ordered
+    // comparison, or the division a parseToInt consumer takes (anything else keeps the boxed slot).
+    this.goTupleSlotInt64Cache = /* @__PURE__ */ new Map();
     // check this out later
     // IsArray(v) answers true exactly for the slice types its runtime type switch lists
     // and false for every other box, a nil box included. On an operand whose Go type the
@@ -14618,6 +14627,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
       }
       return this.goNativeParameterType(decl);
     }
+    if (decl.kind === SyntaxKind5.BindingElement) {
+      return this.goTupleSlotInt64Local(decl);
+    }
     if (decl.kind !== SyntaxKind5.VariableDeclaration || decl.name?.kind !== SyntaxKind5.Identifier) {
       return void 0;
     }
@@ -15896,6 +15908,9 @@ ${indent}}`);
       if (!lRepeatable || !this.goDerefComparableWith(left, leftText, right)) {
         return void 0;
       }
+      if (this.goTupleSlotInt64Guarded(left)) {
+        return isEq ? `(*${leftText} == ${rightText})` : `(*${leftText} != ${rightText})`;
+      }
       return isEq ? `(${leftText} != nil && *${leftText} == ${rightText})` : `(${leftText} == nil || *${leftText} != ${rightText})`;
     }
     if (rPtr && lFam !== void 0 && lFam !== "nil") {
@@ -16903,7 +16918,7 @@ ${indent}}`);
   }
   // a typed slot local is only printed when every later use reads it as that type: a write, an
   // address, a switch/case subject or an element-access index all need the box
-  goTupleSlotNameIsSafe(nameNode, declaration) {
+  goTupleSlotNameIsSafe(nameNode, declaration, comparisonsRead = false) {
     const name = nameNode?.text;
     const scope = this.goEnclosingFunction(declaration);
     if (name === void 0 || scope === void 0) {
@@ -16931,7 +16946,8 @@ ${indent}}`);
         return true;
       }
       if (parent.kind === SyntaxKind5.BinaryExpression && unwrapped(parent.left) === node) {
-        return true;
+        const op = parent.operatorToken.kind;
+        return !comparisonsRead || op === SyntaxKind5.EqualsToken || op >= SyntaxKind5.FirstCompoundAssignment && op <= SyntaxKind5.LastCompoundAssignment;
       }
       if (parent.kind === SyntaxKind5.PrefixUnaryExpression || parent.kind === SyntaxKind5.PostfixUnaryExpression) {
         return true;
@@ -16984,6 +17000,107 @@ ${indent}}`);
     const calleeFile = String(declared.getSourceFile?.()?.fileName ?? "");
     return calleeFile !== "" && !/(^|[\/])base[\/]Exchange\.ts$/.test(calleeFile);
   }
+  goTupleSlotInt64Local(element) {
+    if (element?.kind !== SyntaxKind5.BindingElement || element.name?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    if (this.goTupleSlotInt64Cache.has(element)) {
+      return this.goTupleSlotInt64Cache.get(element);
+    }
+    this.goTupleSlotInt64Cache.set(element, void 0);
+    const result = this.goTupleSlotInt64LocalUncached(element);
+    this.goTupleSlotInt64Cache.set(element, result);
+    return result;
+  }
+  goTupleSlotInt64LocalUncached(element) {
+    const pattern = element.parent;
+    const holder = pattern?.parent;
+    const name = String(element.name.text);
+    if (pattern?.kind !== SyntaxKind5.ArrayBindingPattern || pattern.elements.indexOf(element) !== 0 || holder?.kind !== SyntaxKind5.VariableDeclaration || holder.name !== pattern || holder.parent?.parent?.kind !== SyntaxKind5.FirstStatement || holder.parent.declarations?.length !== 1 || element.dotDotDotToken !== void 0 || element.initializer !== void 0 || element.propertyName !== void 0 || name === "p" || name === "ok") {
+      return void 0;
+    }
+    const call = holder.initializer;
+    const callee = call?.expression;
+    if (call?.kind !== SyntaxKind5.CallExpression || callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword) {
+      return void 0;
+    }
+    const defaultSlot = GO_TUPLE_INT64_POINTER_PRODUCERS[String(callee.name?.text)];
+    const fallback = defaultSlot === void 0 ? void 0 : call.arguments?.[defaultSlot];
+    const literal = fallback?.kind === SyntaxKind5.PrefixUnaryExpression && fallback.operator === SyntaxKind5.MinusToken ? fallback.operand : fallback;
+    if (defaultSlot === void 0 || literal?.kind === SyntaxKind5.NumericLiteral && /^\d+$/.test(literal.text)) {
+      return void 0;
+    }
+    const calleeName = String(callee.name.text);
+    if (!this.printNode(call, 0).trimStart().startsWith("this." + calleeName.charAt(0).toUpperCase() + calleeName.slice(1) + "Nullable(")) {
+      return void 0;
+    }
+    const checker = this.checkerOrUndefined();
+    let calleeFile = "";
+    try {
+      calleeFile = String(checker?.getResolvedSignature(call)?.declaration?.resolve()?.getSourceFile?.()?.fileName ?? "");
+    } catch (e) {
+      return void 0;
+    }
+    if (!/(^|[\/])base[\/]Exchange(\.nooverloads\.\d+)?\.ts$/.test(calleeFile)) {
+      return void 0;
+    }
+    let type;
+    try {
+      type = checker.getTypeAtLocation(element.name);
+    } catch (e) {
+      return void 0;
+    }
+    const parts = typeof type?.isUnionType === "function" && type.isUnionType() ? type.getTypes().slice() : [type];
+    const numeric = parts.filter((part) => part !== void 0 && !(part.flags & (TypeFlags4.Undefined | TypeFlags4.Null)));
+    if (numeric.length === 0 || !numeric.every((part) => (part.flags & TypeFlags4.NumberLike) !== 0)) {
+      return void 0;
+    }
+    const scope = this.goEnclosingFunction(holder);
+    if (scope === void 0 || this.goTypeNameIsShadowed(scope, "*int64") || !this.goTupleSlotNameIsSafe(element.name, holder, true)) {
+      return void 0;
+    }
+    return this.hasNodeWhere(scope, (n) => n.kind === SyntaxKind5.Identifier && n.text === name && n !== element.name && !this.goTupleSlotInt64UseIsNativeRead(n)) ? void 0 : "*int64";
+  }
+  // `x` is the typed tuple slot local of goTupleSlotInt64Local and a `&&` guard or an enclosing `if (x !== undefined)`
+  // already proves it non-nil here
+  goTupleSlotInt64Guarded(node) {
+    if (node?.kind !== SyntaxKind5.Identifier) {
+      return false;
+    }
+    let decl;
+    try {
+      decl = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+    } catch (e) {
+      decl = void 0;
+    }
+    return decl?.kind === SyntaxKind5.BindingElement && this.goTupleSlotInt64Local(decl) !== void 0 && this.goHasEnclosingNilGuard(node);
+  }
+  // the use shapes a typed `*int64` slot local prints natively: `x == nil`, an ordered comparison
+  // (the pointer-aware comparison), `float64(*x) / n` under a parseToInt consumer. A map store keeps
+  // the box (the nil-guarded deref of that store is the build layer's).
+  goTupleSlotInt64UseIsNativeRead(node) {
+    const parentKind = node.parent?.kind;
+    if (parentKind === SyntaxKind5.BindingElement || parentKind === SyntaxKind5.PropertyAssignment && node.parent.name === node || parentKind === SyntaxKind5.PropertyAccessExpression && node.parent.name === node) {
+      return true;
+    }
+    let current = node;
+    while (current.parent?.kind === SyntaxKind5.ParenthesizedExpression) {
+      current = current.parent;
+    }
+    const parent = current.parent;
+    if (parent?.kind !== SyntaxKind5.BinaryExpression) {
+      return false;
+    }
+    const op = parent.operatorToken.kind;
+    const other = this.goUnwrapParenthesizedNode(parent.left === current ? parent.right : parent.left);
+    if (op === SyntaxKind5.EqualsEqualsToken || op === SyntaxKind5.EqualsEqualsEqualsToken || op === SyntaxKind5.ExclamationEqualsToken || op === SyntaxKind5.ExclamationEqualsEqualsToken) {
+      return other?.kind === SyntaxKind5.NullKeyword || other?.kind === SyntaxKind5.UndefinedKeyword || other?.kind === SyntaxKind5.Identifier && other.text === "undefined" || other?.kind === SyntaxKind5.NumericLiteral && this.goHasEnclosingNilGuard(node);
+    }
+    if (op === SyntaxKind5.LessThanToken || op === SyntaxKind5.LessThanEqualsToken || op === SyntaxKind5.GreaterThanToken || op === SyntaxKind5.GreaterThanEqualsToken) {
+      return true;
+    }
+    return op === SyntaxKind5.SlashToken && parent.left === current && this.goDivisionConsumerIgnoresBox(parent) && this.goPointerNumberIsNonNil(node);
+  }
   goTupleSlotBindingLines(elements, holder, identation, declaration) {
     const iden = this.getIden(identation);
     const producer = this.goTupleBindingProducerName(declaration);
@@ -16991,6 +17108,9 @@ ${indent}}`);
     const sliceHolder = !nativeBinding && this.goTupleBindingIsSliceHolder(declaration);
     return elements.map((element, index) => {
       const name = this.printNode(element.name, 0);
+      if (this.goTupleSlotInt64Local(element) !== void 0) {
+        return iden + "var " + name + " *int64 = nil\n" + iden + "if p, ok := " + holder + "[" + index + "].(*int64); ok {\n" + iden + "	" + name + " = p\n" + iden + "}";
+      }
       const unbox = element.name?.kind === SyntaxKind5.Identifier ? this.goTupleSlotUnbox(element) : void 0;
       if (!sliceHolder || unbox === void 0 || !this.goTupleSlotNameIsSafe(element.name, declaration)) {
         return iden + name + " := GetValue(" + holder + ", " + index + ")";

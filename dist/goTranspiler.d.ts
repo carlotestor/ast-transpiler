@@ -536,9 +536,14 @@ export declare class GoTranspiler extends BaseTranspiler {
         goType: string;
         conv: string;
     } | undefined;
-    goTupleSlotNameIsSafe(nameNode: any, declaration: any): boolean;
+    goTupleSlotNameIsSafe(nameNode: any, declaration: any, comparisonsRead?: boolean): boolean;
     goTupleBindingProducerName(declaration: any): string | undefined;
     goTupleBindingIsSliceHolder(declaration: any): boolean;
+    goTupleSlotInt64Cache: Map<any, string>;
+    goTupleSlotInt64Local(element: any): string | undefined;
+    goTupleSlotInt64LocalUncached(element: any): string | undefined;
+    goTupleSlotInt64Guarded(node: any): boolean;
+    goTupleSlotInt64UseIsNativeRead(node: any): boolean;
     goTupleSlotBindingLines(elements: any[], holder: string, identation: number, declaration: any): string;
     goParamsTupleHelperIndex(call: any): number;
     goGetArgTupleWriteIsDict(declaration: any, right: any, index: number): boolean;
