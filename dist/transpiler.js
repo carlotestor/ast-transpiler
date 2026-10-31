@@ -18951,7 +18951,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     if (compound || fieldType !== void 0 || containerType !== "map[string]any" || valueNode === void 0) {
       return void 0;
     }
-    if (this.goIsNilGuardedStringPointerKey(keyNode) && this.goIsFreshUnsharedMapLocal(containerNode, containerNode) && this.goIsNonPointerValue(valueNode)) {
+    if (this.goIsNilGuardedStringPointerKey(keyNode) && this.goIsFreshUnsharedMapLocal(containerNode, containerNode) && this.goMapWriteValueIsNotPointer(valueNode)) {
       return `${containerStr}[*${keyStr}] = ${valueStr}`;
     }
     return void 0;
@@ -18983,9 +18983,6 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     if (rfStore !== void 0) {
       return rfStore;
     }
-    if (valueStr.includes("\n")) {
-      return void 0;
-    }
     const getArgMap = this.goGetArgMapParameterIsMapLocal(containerNode);
     const provenMap = getArgMap || this.goElementAssignmentContainerType(containerNode, containerStr) === "map[string]any";
     if (!provenMap) {
@@ -18999,7 +18996,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
     const iden = this.getIden(identation);
     return `if ${keyStr} != nil {
-${iden}	${containerStr}[*${keyStr}] = ${valueStr}
+${iden}	${containerStr}[*${keyStr}] = ${valueStr.replace(/\n/g, "\n	")}
 ${iden}}`;
   }
   // `this.<option dict>[k] = v` with a string-typed or nil-guarded *string key: the helper's map store
@@ -19165,7 +19162,7 @@ ${iden}}`;
     }
     const iden = this.getIden(identation);
     return `if ${keyStr} != nil {
-${iden}	${containerStr}[*${keyStr}] = ${valueStr}
+${iden}	${containerStr}[*${keyStr}] = ${valueStr.replace(/\n/g, "\n	")}
 ${iden}}`;
   }
   // ===== end RF-go-6-B =====
@@ -19365,7 +19362,7 @@ ${iden}}`;
         return;
       }
       if (n.kind === SyntaxKind5.Identifier && n !== decl.name && n.text === decl.name.text && this.checkerOrUndefined()?.getSymbolAtLocation(n) === symbol) {
-        const receiver = n.parent?.kind === SyntaxKind5.ElementAccessExpression && n.parent.expression === n;
+        const receiver = n.parent?.kind === SyntaxKind5.ElementAccessExpression && n.parent.expression === n || n.parent?.kind === SyntaxKind5.BinaryExpression && n.parent.right === n && n.parent.operatorToken?.kind === SyntaxKind5.InKeyword;
         if (nested || !receiver && this.goUseMayPrecede(n, writeSite, scope)) {
           captured = true;
         }
