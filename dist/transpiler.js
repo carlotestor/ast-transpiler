@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -40747,6 +40747,10 @@ function ccxtGoWriteSiteAssignment(goTranspiler, node, identation) {
   const leftVar = goTranspiler.printNode(node.left, 0);
   const rightVar = goTranspiler.printNode(node.right, identation);
   if (node.right.kind === ts.SyntaxKind.AwaitExpression) {
+    const checked = ccxtGoEndpointCheckedRead(goTranspiler, node.right, goType, rightVar);
+    if (checked !== void 0) {
+      return "\n" + goTranspiler.getIden(identation) + leftVar + " = " + checked;
+    }
     return "\n" + goTranspiler.getIden(identation) + leftVar + " = " + conversion + "(PanicOnError(" + rightVar.trim() + "))";
   }
   const separator = typeof goTranspiler.goBinarySeparator === "function" ? goTranspiler.goBinarySeparator("=", rightVar.trim(), node.left, node.right) : " ";
@@ -42398,6 +42402,19 @@ function ccxtGoEndpointElement(goTranspiler, call) {
   }
   return element;
 }
+function ccxtGoEndpointCheckedRead(goTranspiler, awaitNode, goType, printed) {
+  const text = (printed ?? "").trim();
+  if (awaitNode?.kind !== ts.SyntaxKind.AwaitExpression || !text.startsWith("(<-") || !text.endsWith(").Raw")) {
+    return void 0;
+  }
+  if (goType === "[]any" && text.indexOf("\n") < 0) {
+    return void 0;
+  }
+  if (goType !== "map[string]any" && goType !== "[]any") {
+    return void 0;
+  }
+  return ccxtGoEndpointElement(goTranspiler, awaitNode.expression) === goType ? text.slice(0, -".Raw".length) + ".Checked()" : void 0;
+}
 var CCXT_GO_ENDPOINT_PARSER_READ = /^(?:parse[A-Z]\w*|safe[A-Z]\w*|addPaginationCursorToResult|indexBy|groupBy)$/;
 function ccxtGoEndpointLocalParserRead(node) {
   const parent = node.parent;
@@ -42697,7 +42714,10 @@ function ccxtGoAwaitReceiveUnbox(goTranspiler, awaitNode, printedInitializer) {
       return void 0;
     }
   }
-  return { goType, wrap: (recv) => conv + "(PanicOnError(" + recv.trim() + "))" };
+  return {
+    goType,
+    wrap: (recv) => ccxtGoEndpointCheckedRead(goTranspiler, awaitNode, goType, recv) ?? conv + "(PanicOnError(" + recv.trim() + "))"
+  };
 }
 var CCXT_GO_BOXED_FORWARD = /^\n([ \t]*)(retRes\d+) := (\(?<-[^\n]*)\n\1PanicOnError\(\2\)\n((?:[ \t]*\/\/[^\n]*\n)*)\1ch <- \2((?:[ \t]+\/\/[^\n]*)?)\n/;
 function ccxtGoElideBoxedForward(printed) {
