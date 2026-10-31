@@ -16522,7 +16522,7 @@ ${iden}}`;
     while (statement !== void 0 && statement.kind !== _ast.SyntaxKind.ExpressionStatement) {
       statement = statement.parent;
     }
-    if (statement !== void 0 && (this.goHasEnclosingNilGuard(keyNode) || this.goInOpPointerKeyProvenNonNil(statement, keyNode) || this.goEnclosingInOpHeaderDerefs(statement, keyNode))) {
+    if (statement !== void 0 && (this.goDefaultedSafeStringLocal(keyNode) || this.goHasEnclosingNilGuard(keyNode) || this.goInOpPointerKeyProvenNonNil(statement, keyNode) || this.goEnclosingInOpHeaderDerefs(statement, keyNode))) {
       return `${containerStr}[*${keyStr}] = ${valueStr}`;
     }
     const iden = this.getIden(identation);

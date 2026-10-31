@@ -7956,8 +7956,8 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         while ((statement !== undefined) && (statement.kind !== SyntaxKind.ExpressionStatement)) {
             statement = statement.parent;
         }
-        if ((statement !== undefined) && (this.goHasEnclosingNilGuard(keyNode) || this.goInOpPointerKeyProvenNonNil(statement, keyNode)
-            || this.goEnclosingInOpHeaderDerefs(statement, keyNode))) {
+        if ((statement !== undefined) && (this.goDefaultedSafeStringLocal(keyNode) || this.goHasEnclosingNilGuard(keyNode)
+            || this.goInOpPointerKeyProvenNonNil(statement, keyNode) || this.goEnclosingInOpHeaderDerefs(statement, keyNode))) {
             return `${containerStr}[*${keyStr}] = ${valueStr}`;
         }
         const iden = this.getIden(identation);

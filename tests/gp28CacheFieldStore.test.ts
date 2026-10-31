@@ -61,6 +61,11 @@ describe('GP28 cache stores into BaseExchange.Trades', () => {
         const out = go("handle (m: any) {\n    const symbol = this.safeString (m, 's');\n    if (!(symbol in this.trades)) {\n        this.trades[symbol] = new ArrayCache (10);\n    }\n}");
         expect(out).toContain('if symbol != nil {\n\t\t\tthis.Trades[*symbol] = NewArrayCache(10)');
     });
+    test('a literal-defaulted safeString key stores bare', () => {
+        const out = go("handle (m: any) {\n    const symbol = this.safeString (m, 's', '');\n    this.trades[symbol] = new ArrayCache (10);\n}");
+        expect(out).toContain('this.Trades[*symbol] = NewArrayCache(10)');
+        expect(out).not.toContain('if symbol != nil');
+    });
     test('negative: a value of another shape keeps the helper', () => {
         const out = go('handle (symbol: any, v: any) {\n    this.trades[symbol] = v;\n}');
         expect(out).toContain('AddElementToObject(this.Trades');
