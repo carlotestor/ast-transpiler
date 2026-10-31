@@ -14739,8 +14739,8 @@ ${tryBodyBlock}
             return false;
         }
         const fileName = String(node.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
-        if (/(^|\/)ts\/src\/(prediction|test)\//.test(fileName)) {
-            return false; // the prediction tier keeps its own proof; the test tree is out of this rule
+        if (/(^|\/)ts\/src\/test\//.test(fileName)) {
+            return false; // the test tree is out of this rule (the prediction tier is in: goGb08BoundedListRead answers first)
         }
         const checker: any = this.checkerOrUndefined();
         if (checker === undefined) {

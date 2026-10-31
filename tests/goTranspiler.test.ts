@@ -5,6 +5,7 @@ import { SyntaxKind } from 'typescript/unstable/ast';
 import { readFileSync } from 'fs';
 import * as nodefs from 'fs';
 import * as nodepath from 'path';
+import * as nodeos from 'os';
 
 jest.mock('module',()=>({
     __esModule: true,                 // this makes it work
@@ -6772,6 +6773,32 @@ describe('native parameter types, Dict/List across the ts/src tree (D-01)', () =
 // native index instead of GetValue(x, key) — the guard reproduces the helper's answer for
 // an absent index (nil) while the native index cannot panic.
 describe('hx11 FM-GO1-B GP19: a list read bounded by its own counting loop is the plain index', () => {
+    // hx11 FOLD1 (hx10w9-GP19): the prediction tier takes the same rule; the build pass it replaces ran on prediction/*.go
+    const predictionRead = (file: string): string => {
+        const dir = nodefs.mkdtempSync(nodepath.join(nodeos.tmpdir(), 'hx11-fold1-gp19-'));
+        try {
+            const target = nodepath.join(dir, file);
+            nodefs.mkdirSync(nodepath.dirname(target), { recursive: true });
+            nodefs.writeFileSync(target,
+                "export class Test {\n" +
+                "    safeList (a, b, c?) { return undefined; }\n" +
+                "    f (a: any) {\n" +
+                "        const rows = [ a ];\n" +
+                "        for (let i = 0; i < rows.length; i++) {\n            const v = rows[i];\n            a += v;\n        }\n" +
+                "        return a;\n    }\n}\n");
+            return new Transpiler({ verbose: false, go: {} }).transpileGoByPath(target).content.replace(/[\t\n ]+/g, ' ');
+        } finally {
+            nodefs.rmSync(dir, { recursive: true, force: true });
+        }
+    };
+
+    test('a bounded-loop read in ts/src/prediction loses the dead guard; the same read in ts/src/test keeps it', () => {
+        const prediction = predictionRead('ts/src/prediction/venue.ts');
+        expect(prediction).not.toContain('func() any');
+        expect(prediction).toContain('var v any = DerefScalar(rows[i])');
+        expect(predictionRead('ts/src/test/venue.ts')).toContain('func() any');
+    });
+
     const squash = (output: string) => output.replace(/[\t\n ]+/g, ' ');
     const transpile = (ts: string) => squash(transpiler.transpileGo(ts).content);
     const fixture = (loop: string, body: string, decl = "const list = this.safeList (a, 'rows', []);\n        ") =>

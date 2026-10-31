@@ -23056,7 +23056,7 @@ ${this.getIden(level)}}()`;
       return false;
     }
     const fileName = String(node.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
-    if (/(^|\/)ts\/src\/(prediction|test)\//.test(fileName)) {
+    if (/(^|\/)ts\/src\/test\//.test(fileName)) {
       return false;
     }
     const checker = this.checkerOrUndefined();

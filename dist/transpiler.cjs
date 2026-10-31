@@ -23055,7 +23055,7 @@ ${this.getIden(level)}}()`;
       return false;
     }
     const fileName = String(_nullishCoalesce(_optionalChain([node, 'access', _3313 => _3313.getSourceFile, 'optionalCall', _3314 => _3314(), 'optionalAccess', _3315 => _3315.fileName]), () => ( ""))).replace(/\\/g, "/");
-    if (/(^|\/)ts\/src\/(prediction|test)\//.test(fileName)) {
+    if (/(^|\/)ts\/src\/test\//.test(fileName)) {
       return false;
     }
     const checker = this.checkerOrUndefined();
