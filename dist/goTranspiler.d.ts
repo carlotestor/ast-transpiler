@@ -202,6 +202,14 @@ export declare class GoTranspiler extends BaseTranspiler {
     goSelfConcatIsString(node: any, varName: string): boolean;
     goPointerWriteConversion(right: any, goType: string): 'nil' | 'wrap' | undefined;
     goPointerWriteText(node: any, identation: any): string | undefined;
+    goStringPointerStore(node: any, value: string, identation: any): string | undefined;
+    goOutermostFunction(node: any): any;
+    goStringReturningThisCall(call: any): boolean;
+    goStringCallLocals: WeakMap<object, Map<string, {
+        clash: boolean;
+        names: Map<any, string>;
+    }>>;
+    goStringCallLocalName(call: any): string | undefined;
     goSafeDictLocalArgs(initializer: any): {
         container: any;
         key: any;
