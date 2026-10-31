@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -2828,6 +2828,9 @@ var CSHARP_NATIVE_FIELDS = {
   "ids": "List<object>"
 };
 var CSHARP_OBJECT_DICT_FIELDS = ["urls", "tickers", "bidsasks", "orderbooks", "ohlcvs", "trades", "markets", "currencies", "currencies_by_id", "exceptions"];
+var CSHARP_DECLARED_DICT_FIELDS = ["requiredCredentials"];
+var CSHARP_DICT_FIELD_VIEWS = { "currencies": "currenciesDict" };
+var CSHARP_DICT_ENTRY_VIEWS = { "urls": { "api": "urlsApi" } };
 var CSHARP_REFERENCE_FIELDS_NATIVE = [
   "id",
   "hostname",
@@ -3295,6 +3298,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // the `((IDictionary<string,object>)x)` cast around element access is an identity conversion.
   // Gated entirely on the consumer's hook, so an object receiver and untyped runs keep the cast.
   csharpReceiverIsDeclaredDictionary(expression) {
+    if (isPropertyAccessExpression(expression) && expression.expression.kind === SyntaxKind4.ThisKeyword && CSHARP_DECLARED_DICT_FIELDS.indexOf(expression.name?.text) >= 0) {
+      return true;
+    }
     const declared = this.csharpDeclaredReceiverType(expression);
     return declared === "Dictionary<string, object>" || declared === "IDictionary<string, object>";
   }
@@ -3363,6 +3369,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (keyRead !== void 0) {
       return keyRead;
     }
+    const viewRead = this.ELEMENT_ACCESS_WRAPPER_OPEN && keyRead === void 0 && this.printElementAccessExpressionExceptionIfAny(node) === void 0 ? this.csharpBaseDictionaryViewRead(node.expression, node.argumentExpression) : void 0;
+    if (viewRead !== void 0) {
+      return viewRead;
+    }
     return super.printElementAccessExpression(node, identation);
   }
   csharpNativeElementAccess(node) {
@@ -3388,7 +3398,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const builtFromLiteral = this.csharpLiteralDeclaresKey(node, expression, key, isNumberKey);
     const guarded = !builtFromLiteral && this.csharpKeyPresenceGuarded(node, expression, key);
     if (!builtFromLiteral && !guarded) {
-      return this.csharpNativeDeclaredDictionaryRead(expression, argumentExpression) ?? this.csharpDeclaredLocalResolverRowRead(expression, argumentExpression) ?? this.csharpDeclaredCollectionRead(node, expression, argumentExpression, isStringKey, isNumberKey) ?? this.csharpProvenDictionaryRead(node, expression, argumentExpression, isStringKey) ?? this.csharpMissingKeyFieldRead(expression, argumentExpression, isStringKey);
+      return this.csharpNativeDeclaredDictionaryRead(expression, argumentExpression) ?? this.csharpDeclaredLocalResolverRowRead(expression, argumentExpression) ?? this.csharpDeclaredCollectionRead(node, expression, argumentExpression, isStringKey, isNumberKey) ?? this.csharpProvenDictionaryRead(node, expression, argumentExpression, isStringKey) ?? this.csharpMissingKeyFieldRead(expression, argumentExpression, isStringKey) ?? this.csharpBaseDictionaryViewRead(expression, argumentExpression);
     }
     const receiver = this.printNode(expression, 0);
     const printedKey = this.printNode(argumentExpression, 0);
@@ -3484,6 +3494,77 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return `(${field} != null && ${receiver}.ContainsKey(${printedKey}) ? ${receiver}[${printedKey}] : null)`;
     }
     return `(${field}.ContainsKey(${printedKey}) ? ${field}[${printedKey}] : null)`;
+  }
+  // The typed C# dictionary a `this.<member>` / `this.<member>[<literal>]` read of the hand-written
+  // BaseExchange is: a declared IDictionary member is itself, `object` members with a typed view
+  // property (CSHARP_DICT_FIELD_VIEWS / CSHARP_DICT_ENTRY_VIEWS) are that view. Both may be null.
+  // Parentheses and `as` assertions print as their operand. Any other node has no view and keeps its cast / the helper.
+  csharpBaseDictionaryView(node) {
+    while (isParenthesizedExpression(node) || isAsExpression(node)) {
+      node = node.expression;
+    }
+    if (isPropertyAccessExpression(node) && node.expression.kind === SyntaxKind4.ThisKeyword) {
+      const name = node.name?.text;
+      if (Object.prototype.hasOwnProperty.call(CSHARP_DICT_FIELD_VIEWS, name)) {
+        return `this.${CSHARP_DICT_FIELD_VIEWS[name]}`;
+      }
+      return CSHARP_DECLARED_DICT_FIELDS.indexOf(name) >= 0 ? this.printNode(node, 0) : void 0;
+    }
+    if (isElementAccessExpression(node) && isStringLiteralLikeNode2(node.argumentExpression) && isPropertyAccessExpression(node.expression) && node.expression.expression.kind === SyntaxKind4.ThisKeyword) {
+      const views = CSHARP_DICT_ENTRY_VIEWS[node.expression.name?.text];
+      const key = node.argumentExpression.text;
+      return views !== void 0 && Object.prototype.hasOwnProperty.call(views, key) ? `this.${views[key]}` : void 0;
+    }
+    return void 0;
+  }
+  // How a key identifier is spelled for a typed-view ContainsKey: 'string' when its emitted declaration
+  // is a C# string (the printer's tables, then the build layer's declared-local record, which also
+  // answers the core-argument parameters it narrows), 'object' for a parameter nobody retypes
+  // (printed `object`: the helper's own `(string)` cast of the key), otherwise undefined
+  csharpBaseDictionaryViewKeyKind(key) {
+    if (!isIdentifier(key)) {
+      return void 0;
+    }
+    const declared = this.csharpHx4DeclaredKeyType(key) ?? this.csharpDeclaredLocalResolverType(key) ?? this.csharpParameterOperandType(key);
+    if (declared === "string" || declared === "string?") {
+      return "string";
+    }
+    if (declared !== "object" || this.csharpReceiverBinding(key)?.kind !== SyntaxKind4.Parameter) {
+      return void 0;
+    }
+    const flags = this.getChecker().getTypeAtLocation(key).flags;
+    return this.isStringType(flags) || flags === TypeFlags3.Any ? "object" : void 0;
+  }
+  // `<view-able>[<key>]` with a literal or string-declared key: the helper's null-receiver, null-key
+  // and missing-key tests spelled with the typed view instead of getValue (a bare indexer would throw)
+  csharpBaseDictionaryViewRead(expression, argumentExpression) {
+    const view = this.csharpBaseDictionaryView(expression);
+    if (view === void 0 || !this.csharpHx4IsPlainRead(argumentExpression.parent)) {
+      return void 0;
+    }
+    const printedKey = this.printNode(argumentExpression, 0);
+    if (isStringLiteralLikeNode2(argumentExpression)) {
+      return `(${view} != null && ${view}.ContainsKey(${printedKey}) ? ${view}[${printedKey}] : null)`;
+    }
+    const kind = this.csharpBaseDictionaryViewKeyKind(argumentExpression);
+    if (kind === void 0) {
+      return void 0;
+    }
+    const key = kind === "string" ? printedKey : `(string)${printedKey}`;
+    return `(${view} != null && ${printedKey} != null && ${view}.ContainsKey(${key}) ? ${view}[${key}] : null)`;
+  }
+  // `key in <view-able>` with a literal or string-declared key: InOp's dictionary branch on the typed view
+  // (a null receiver or key answers false, as the helper does)
+  csharpBaseDictionaryViewIn(key, obj) {
+    const view = this.csharpBaseDictionaryView(obj);
+    if (view === void 0) {
+      return void 0;
+    }
+    const printedKey = this.printNode(key, 0);
+    if (isStringLiteralLikeNode2(key)) {
+      return `(${view} != null && ${view}.ContainsKey(${printedKey}))`;
+    }
+    return this.csharpBaseDictionaryViewKeyKind(key) === "string" ? `(${view} != null && ${printedKey} != null && ${view}.ContainsKey(${printedKey}))` : void 0;
   }
   // A literal-key read on a local whose C# declaration is already a collection: no cast needed, but
   // the indexer throws where GetValue answers null, so the native form carries the helper's key/index
@@ -5336,6 +5417,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // `key in obj` -> `obj.ContainsKey(key)`, only when both the printed key and the printed
   // operand are already C# string / dictionary values. Every other shape keeps the inOp helper
   csharpNativeInExpression(key, obj) {
+    const viewIn = this.csharpBaseDictionaryViewIn(key, obj);
+    if (viewIn !== void 0) {
+      return viewIn;
+    }
     const printedKey = this.csharpNativeStringKey(key);
     if (printedKey === void 0) {
       return this.csharpDeclaredDictInExpression(key, obj);
@@ -7269,6 +7354,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
   printObjectKeysCall(node, identation, parsedArg = void 0) {
     if (node?.arguments?.length === 1 && this.csharpReceiverIsDeclaredDictionary(node.arguments[0])) {
       return `new List<object>(${parsedArg}.Keys)`;
+    }
+    const view = node?.arguments?.length === 1 ? this.csharpBaseDictionaryView(node.arguments[0]) : void 0;
+    if (view !== void 0) {
+      return `new List<object>(${view}.Keys)`;
     }
     return `new List<object>(((IDictionary<string,object>)${parsedArg}).Keys)`;
   }
