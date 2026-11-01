@@ -43932,6 +43932,9 @@ ${this.getIden(identation)}}}`;
       if (callee === "parseInt" && isAsExpression2(operand) && operand.type?.kind === SyntaxKind6.AnyKeyword && this.javaScalarFamily(operand.expression) === "number") {
         return `((Number)${this.printNode(operand.expression, 0)}).longValue()`;
       }
+      if (isAsExpression2(operand) && operand.type?.kind === SyntaxKind6.AnyKeyword && (this.javaDeclaredStringType(operand.expression) || this.javaResolvedString(operand.expression))) {
+        return `${nativeName}(${this.printNode(operand.expression, 0)})`;
+      }
       if (this.javaScalarFamily(operand) === "string") {
         return `${nativeName}(((String)${printed}))`;
       }
