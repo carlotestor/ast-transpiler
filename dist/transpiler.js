@@ -17107,7 +17107,7 @@ function ccxtGoAsyncListProducerIsProven(goTranspiler, producer, cls) {
 function ccxtGoAsyncListReceive(goTranspiler, awaitNode, wrapped) {
   const text = (wrapped ?? "").trim();
   const m = /^ListTyped\(PanicOnError\((\(<-this\.(\w+)Async\(.*\)\))\)\)$/.exec(text);
-  if (m === null || text.indexOf("\n") >= 0 || awaitNode?.kind !== ts.SyntaxKind.AwaitExpression || goSourceIsWsTree(awaitNode)) {
+  if (m === null || text.indexOf("\n") >= 0 || awaitNode?.kind !== ts.SyntaxKind.AwaitExpression || goSourceIsWsTree(awaitNode) || /(^|[\\/])ts[\\/]src[\\/]prediction[\\/]/.test(String(awaitNode.getSourceFile?.()?.fileName ?? ""))) {
     return void 0;
   }
   const recv = m[1];
