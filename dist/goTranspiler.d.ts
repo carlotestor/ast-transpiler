@@ -961,11 +961,18 @@ export declare class GoTranspiler extends BaseTranspiler {
     goIntOperandIdentifier(node: any): boolean;
     goSafeListUnboxIdentifier(node: any): boolean;
     goDeclaredListIdentifier(node: any): boolean;
+    goNameWriteSites(scope: any, name: string, declaration?: any): any[];
+    goEnclosingLoopExcluding(loop: any, declaration: any): boolean;
+    goBoundedLoopListRead(node: any): boolean;
+    goListElementsArePointerFree(list: any, depth?: number): boolean;
     goNativeListElementRead(node: any, containerStr: string, keyNode: any, keyStr: string): string | undefined;
     generatedListCallees: Set<string>;
     goHostListCalleeType(callee: string, initializer: any): string | undefined;
     goWritesOrRebindsName(n: any, name: string, mutators: string[]): boolean;
     goLoopBoundedSliceRead(node: any, baseExpr: any, keyNode: any, containerStr: string, keyStr: string): string | undefined;
+    goAwaitedListLocal(base: any): boolean;
+    asyncMapRowListCallees: Set<string>;
+    goAwaitedMapRowList(base: any): boolean;
     goListElementsAreObjects(baseExpr: any): boolean;
     goOtherBindingOfLoopBoundedElement(n: any, declaration: any): boolean;
     goBoundIsLengthOf(bound: any, baseExpr: any, loop: any): boolean;
