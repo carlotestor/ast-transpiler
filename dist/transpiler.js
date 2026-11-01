@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-AWK6QGCM.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -37633,8 +37633,8 @@ var JAVA_DECLARED_LIST_TYPES = /^(java\.util\.)?(List|ArrayList)\s*<[^;\n=]+>$/;
 var JAVA_PRIMITIVE_DECLARED_TYPES = /* @__PURE__ */ new Set(["boolean", "byte", "char", "short", "int", "long", "float", "double"]);
 var JAVA_DECLARED_NUMERIC_TYPES = /* @__PURE__ */ new Set(["Integer", "Long", "Double", "int", "long", "double"]);
 var JAVA_BOXED_NUMERIC_TYPES = /* @__PURE__ */ new Set(["Integer", "Long", "Double"]);
-var JAVA_HANDLER_INTERFACE = "io.github.ccxt.Handler";
-var JAVA_HANDLER_TABLE_TYPE = "java.util.Map<String, io.github.ccxt.Handler>";
+var JAVA_HANDLER_NAME_TYPE = "String";
+var JAVA_HANDLER_TABLE_TYPE = "java.util.Map<String, String>";
 var JAVA_SPLIT_RECEIVER_KINDS = /* @__PURE__ */ new Set([
   SyntaxKind6.Identifier,
   SyntaxKind6.PropertyAccessExpression,
@@ -38821,7 +38821,7 @@ var JavaTranspiler = class extends BaseTranspiler {
     const access = use.parent;
     if (isPropertyAccessExpression2(access) && access.expression === use && access.name?.text === "call" && isCallExpression5(access.parent) && access.parent.expression === access) {
       const callArguments = access.parent.arguments ?? [];
-      return callArguments.length === 3 && callArguments[0].kind === SyntaxKind6.ThisKeyword && isIdentifier2(callArguments[1]) && isIdentifier2(callArguments[2]) && this.javaHandlerArgumentType(callArguments[1], "client") !== void 0 && this.javaHandlerArgumentType(callArguments[2], "message") !== void 0;
+      return access.parent.parent?.kind === SyntaxKind6.ExpressionStatement && callArguments.length === 3 && callArguments[0].kind === SyntaxKind6.ThisKeyword && isIdentifier2(callArguments[1]) && isIdentifier2(callArguments[2]) && this.javaHandlerArgumentType(callArguments[1], "client") !== void 0 && this.javaHandlerArgumentType(callArguments[2], "message") !== void 0;
     }
     const comparison = use.parent;
     if (comparison === void 0 || comparison.kind !== SyntaxKind6.BinaryExpression || comparison.left !== use && comparison.right !== use) {
@@ -38920,12 +38920,11 @@ var JavaTranspiler = class extends BaseTranspiler {
     }
     const keys = Array.from(byKey.keys());
     const entryIndent = this.getIden(identation + 1);
-    const className = this.capitalize(this.currentClassName);
     const parts = [];
     for (const key of keys) {
-      parts.push(`${entryIndent}put(${JSON.stringify(key)}, ${className}.this::${byKey.get(key)});`);
+      parts.push(`${entryIndent}put(${JSON.stringify(key)}, ${JSON.stringify(byKey.get(key))});`);
     }
-    return `new java.util.HashMap<String, ${JAVA_HANDLER_INTERFACE}>() {{
+    return `new java.util.HashMap<String, ${JAVA_HANDLER_NAME_TYPE}>() {{
 ${parts.join("\n")}
 ${this.getIden(identation)}}}`;
   }
@@ -38949,7 +38948,7 @@ ${this.getIden(identation)}}}`;
       return JAVA_HANDLER_TABLE_TYPE;
     }
     if (this.javaHandlerReads.has(this.javaHandlerKey(initializer))) {
-      return JAVA_HANDLER_INTERFACE;
+      return JAVA_HANDLER_NAME_TYPE;
     }
     return void 0;
   }
@@ -38980,8 +38979,8 @@ ${this.getIden(identation)}}}`;
     }
     return this.printNode(node, 0).trim();
   }
-  printJavaHandlerDispatch(node) {
-    if (!isCallExpression5(node)) {
+  printJavaHandlerDispatch(node, identation) {
+    if (!isCallExpression5(node) || node.parent?.kind !== SyntaxKind6.ExpressionStatement) {
       return void 0;
     }
     const callee = node.expression;
@@ -39014,7 +39013,28 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     const receiverText = this.printNode(receiver, 0).trim();
-    return `${receiverText}.handle(${client}, ${message})`;
+    const names = [];
+    for (const entry of this.javaHandlerCalls.get(this.javaHandlerKey(declaration.name))) {
+      if (!names.includes(entry.name)) {
+        names.push(entry.name);
+      }
+    }
+    const iden = this.getIden(identation);
+    const caseIden = this.getIden(identation + 1);
+    const bodyIden = this.getIden(identation + 2);
+    const lines = [`${iden}switch (${receiverText}) {`];
+    for (const name of names) {
+      lines.push(`${caseIden}case ${JSON.stringify(name)}:`, `${bodyIden}this.${name}(${client}, ${message});`, `${bodyIden}break;`);
+    }
+    lines.push(`${caseIden}default:`, `${bodyIden}throw new RuntimeException("Method not found: " + ${receiverText});`, `${iden}}`);
+    return lines.join("\n");
+  }
+  printExpressionStatement(node, identation) {
+    const handlerDispatch = this.printJavaHandlerDispatch(node.expression, identation);
+    if (handlerDispatch !== void 0) {
+      return this.printNodeCommentsIfAny(node, identation, handlerDispatch);
+    }
+    return super.printExpressionStatement(node, identation);
   }
   printConstructorDeclaration(node, identation) {
     const classNode = node.parent;
@@ -39081,10 +39101,6 @@ ${this.getIden(identation)}}}`;
     const handlerRead = this.printJavaHandlerRead(node);
     if (handlerRead !== void 0) {
       return handlerRead;
-    }
-    const handlerDispatch = this.printJavaHandlerDispatch(node);
-    if (handlerDispatch !== void 0) {
-      return handlerDispatch;
     }
     if (node.expression.kind === SyntaxKind6.Identifier) {
       const callee = node.expression.text;

@@ -77,10 +77,11 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaScanHandlerTables(node: any): void;
     printJavaHandlerTable(node: any, identation: any): string;
     printJavaHandlerRead(node: any): string;
-    javaHandlerDeclarationType(declaration: any): "io.github.ccxt.Handler" | "java.util.Map<String, io.github.ccxt.Handler>";
+    javaHandlerDeclarationType(declaration: any): "String" | "java.util.Map<String, String>";
     javaHandlerArgumentType(node: any, position: any): "Client" | "Map<String, Object>";
     javaHandlerCallArgument(node: any, position: any): string;
-    printJavaHandlerDispatch(node: any): string;
+    printJavaHandlerDispatch(node: any, identation: any): string;
+    printExpressionStatement(node: any, identation: any): string;
     printConstructorDeclaration(node: any, identation: any): string;
     injectLeadingInBody(body: any, firstLine: any): any;
     printDynamicCall(node: any, identation: any): string;
