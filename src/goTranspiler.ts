@@ -9133,7 +9133,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         if (compound || (fieldType !== undefined) || (containerType !== 'map[string]any') || (valueNode === undefined)) {
             return undefined;
         }
-        if (this.goIsNilGuardedStringPointerKey(keyNode) && this.goIsFreshUnsharedMapLocal(containerNode, containerNode) && this.goIsNonPointerValue(valueNode)) {
+        if (this.goIsNilGuardedStringPointerKey(keyNode) && this.goIsFreshUnsharedMapLocal(containerNode, containerNode) && this.goMapWriteValueIsNotPointer(valueNode)) {
             return `${containerStr}[*${keyStr}] = ${valueStr}`;
         }
         return undefined;
@@ -9167,9 +9167,6 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         if (rfStore !== undefined) {
             return rfStore;
         }
-        if (valueStr.includes('\n')) {
-            return undefined;
-        }
         const getArgMap = this.goGetArgMapParameterIsMapLocal(containerNode);
         const provenMap = getArgMap || (this.goElementAssignmentContainerType(containerNode, containerStr) === 'map[string]any');
         if (!provenMap) {
@@ -9183,7 +9180,8 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             return undefined;
         }
         const iden = this.getIden(identation);
-        return `if ${keyStr} != nil {\n${iden}\t${containerStr}[*${keyStr}] = ${valueStr}\n${iden}}`;
+        // a multi-line value (map literal) sits one level deeper inside the guard
+        return `if ${keyStr} != nil {\n${iden}\t${containerStr}[*${keyStr}] = ${valueStr.replace(/\n/g, '\n\t')}\n${iden}}`;
     }
 
     // `this.<option dict>[k] = v` with a string-typed or nil-guarded *string key: the helper's map store
@@ -9379,7 +9377,8 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             return `${containerStr}[*${keyStr}] = ${valueStr}`;
         }
         const iden = this.getIden(identation);
-        return `if ${keyStr} != nil {\n${iden}\t${containerStr}[*${keyStr}] = ${valueStr}\n${iden}}`;
+        // a multi-line value (map literal) sits one level deeper inside the guard
+        return `if ${keyStr} != nil {\n${iden}\t${containerStr}[*${keyStr}] = ${valueStr.replace(/\n/g, '\n\t')}\n${iden}}`;
     }
     // ===== end RF-go-6-B =====
 
@@ -9594,7 +9593,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             }
             if ((n.kind === SyntaxKind.Identifier) && (n !== decl.name) && (n.text === decl.name.text)
                 && (this.checkerOrUndefined()?.getSymbolAtLocation(n) === symbol)) {
-                const receiver = (n.parent?.kind === SyntaxKind.ElementAccessExpression) && (n.parent.expression === n);
+                // `m[k]` and `k in m` read the map without handing it to another holder
+                const receiver = ((n.parent?.kind === SyntaxKind.ElementAccessExpression) && (n.parent.expression === n))
+                    || ((n.parent?.kind === SyntaxKind.BinaryExpression) && (n.parent.right === n)
+                        && (n.parent.operatorToken?.kind === SyntaxKind.InKeyword));
                 if (nested || (!receiver && this.goUseMayPrecede(n, writeSite, scope))) {
                     captured = true;
                 }
