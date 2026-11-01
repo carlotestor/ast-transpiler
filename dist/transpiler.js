@@ -43929,6 +43929,9 @@ ${this.getIden(identation)}}}`;
       if (kind !== void 0 && (callee === "parseFloat" || kind !== "double")) {
         return `${nativeName}(String.valueOf(${printed}))`;
       }
+      if (callee === "parseInt" && isAsExpression2(operand) && operand.type?.kind === SyntaxKind6.AnyKeyword && this.javaScalarFamily(operand.expression) === "number") {
+        return `((Number)${this.printNode(operand.expression, 0)}).longValue()`;
+      }
       if (this.javaScalarFamily(operand) === "string") {
         return `${nativeName}(((String)${printed}))`;
       }
