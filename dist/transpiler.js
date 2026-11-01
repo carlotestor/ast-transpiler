@@ -23240,7 +23240,9 @@ var NIL_TESTABLE_FIELDS = /* @__PURE__ */ new Set([
   "Markets",
   "Markets_by_id",
   "Currencies",
-  "Currencies_by_id"
+  "Currencies_by_id",
+  "Tickers",
+  "Bidsasks"
 ]);
 function isNilLiteral(node) {
   return node?.kind === ts.SyntaxKind.NullKeyword || node?.kind === ts.SyntaxKind.Identifier && node.text === "undefined";
@@ -23876,7 +23878,9 @@ var GO_NATIVE_CALL_RETURN_TYPES = {
   "strconv.Itoa": "string",
   "strconv.FormatInt": "string",
   "strconv.FormatBool": "string",
-  "strings.Join": "string"
+  "strings.Join": "string",
+  // printed only over maps.Keys of a string-keyed ws cache map (goWsCacheKeysText)
+  "slices.Collect": "[]string"
 };
 function goSafeAccessorTypes(names, goType) {
   return Object.fromEntries(names.flatMap((name) => ["", "2", "N"].map((suffix) => ["this." + name + suffix, goType])));
@@ -29542,6 +29546,85 @@ ${iden}}`;
     }
     return `${this.printNode(left, 0)}, _ = ${this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trim()}.(map[string]any)`;
   }
+  // `this.balance[k]` key of a native Balance store: a Go string, or a `*string` (`pointer` = the local still to nil-test)
+  goBalanceKey(keyNode) {
+    return this.goWsKey(keyNode);
+  }
+  // a Balance value the helper would store unchanged: no scalar pointer for its derefScalar to unwrap
+  goBalancePlainValue(valueNode) {
+    if (this.goWritePrintsPointerBox(valueNode)) {
+      return false;
+    }
+    if (this.goMapWriteValueIsNotPointer(valueNode)) {
+      return true;
+    }
+    const value = this.goUnwrapPrintedAssertions(valueNode);
+    if (value?.kind !== SyntaxKind5.Identifier && value?.kind !== SyntaxKind5.CallExpression) {
+      return false;
+    }
+    const field = this.nativeStoreFields?.["balance"];
+    if (field !== void 0 && this.rfGo6bValueIsPlain(valueNode, field)) {
+      return true;
+    }
+    const checker = this.checkerOrUndefined();
+    const type = checker?.getTypeAtLocation(value);
+    if (type === void 0) {
+      return false;
+    }
+    const parts = typeof type.isUnionType === "function" && type.isUnionType() ? type.getTypes() : [type];
+    const present = parts.filter((t) => (t.flags & (TypeFlags4.Undefined | TypeFlags4.Null)) === 0);
+    return present.length > 0 && present.every((t) => (t.flags & TypeFlags4.Object) !== 0);
+  }
+  // the base Balance map can be indexed: every write of the field in the file leaves a map
+  goBalanceIndexable(field) {
+    const table = this.nativeStoreFields?.["balance"];
+    return this.goA9fL1CacheField(field) === "Balance" && table !== void 0 && this.rfGo6bFieldNeverNil(field.getSourceFile(), field.name.text, table);
+  }
+  // `this.balance[k] = v` / `this.balance[k1][k2] = v` statements: the map store, the entry store through the entry's map
+  goBalanceStoreText(node, baseExpr, keys, valueNode, rhs, identation) {
+    if (node.parent?.kind !== SyntaxKind5.ExpressionStatement || keys.length > 2 || rhs.includes("\n") || !this.goBalanceIndexable(baseExpr) || !this.goBalancePlainValue(valueNode)) {
+      return void 0;
+    }
+    const parsed = keys.map((k) => this.goBalanceKey(k));
+    if (parsed.some((k) => k === void 0)) {
+      return void 0;
+    }
+    const iden = this.getIden(identation);
+    const field = this.printNode(baseExpr, 0);
+    const pointers = parsed.filter((k) => k.pointer !== void 0).map((k) => `${k.pointer} != nil`);
+    let store;
+    if (keys.length === 1) {
+      store = `${field}[${parsed[0].index}] = ${rhs}`;
+    } else {
+      const inner = pointers.length > 0 ? "	" : "";
+      store = `if entry, ok := ${field}[${parsed[0].index}].(map[string]any); ok && (entry != nil) {
+${iden}${inner}	entry[${parsed[1].index}] = ${rhs}
+${iden}${inner}}`;
+    }
+    if (pointers.length === 0) {
+      return store;
+    }
+    return `if ${pointers.join(" && ")} {
+${iden}	${store}
+${iden}}`;
+  }
+  // the container step `this.Balance[k]` of a nested Balance write whose key is a proven Go string
+  goBalanceChainStep(baseExpr, containerStr, keyNode) {
+    if (!this.goBalanceIndexable(baseExpr)) {
+      return void 0;
+    }
+    const key = this.goBalanceKey(keyNode);
+    return key === void 0 || key.pointer !== void 0 ? void 0 : `${containerStr}[${key.index}]`;
+  }
+  // `delete this.balance[k]` as a statement with a proven key: the map delete
+  goBalanceDeleteText(node) {
+    const access = node.expression;
+    if (node.parent?.kind !== SyntaxKind5.ExpressionStatement || access?.kind !== SyntaxKind5.ElementAccessExpression || !this.goBalanceIndexable(access.expression)) {
+      return void 0;
+    }
+    const key = this.goBalanceKey(access.argumentExpression);
+    return key === void 0 || key.pointer !== void 0 ? void 0 : `delete(${this.printNode(access.expression, 0)}, ${key.index})`;
+  }
   goWsCacheEmptyLiteral(node) {
     const type = this.goWsCacheMapType(node);
     if (type !== void 0) {
@@ -29870,6 +29953,10 @@ ${iden}}`;
       const cacheStore = keyStrs.length === 1 ? this.goWsCacheStoreText(baseExpr, keys[0], this.goWsCacheValue(baseExpr, right, rhs), node, identation) : void 0;
       if (cacheStore !== void 0) {
         return cacheStore;
+      }
+      const balanceStore = op === SyntaxKind5.EqualsToken ? this.goBalanceStoreText(node, baseExpr, keys, right, rhs, identation) : void 0;
+      if (balanceStore !== void 0) {
+        return balanceStore;
       }
       return native !== void 0 ? native : `AddElementToObject(${acc}, ${lastKey}, ${rhs})`;
     }
@@ -37200,7 +37287,7 @@ ${this.getIden(level)}}()`;
     if (wsDelete !== void 0) {
       return wsDelete;
     }
-    const native = this.goNativeDelete(node);
+    const native = this.goNativeDelete(node) ?? this.goBalanceDeleteText(node);
     if (native !== void 0) {
       return native;
     }
@@ -37739,8 +37826,12 @@ ${tryBodyBlock}
   goElementWriteChain(baseExpr, containerStr, keyNodes, keyStrs) {
     let acc = containerStr;
     let first = 0;
+    const balanceStep = keyStrs.length > 1 ? this.goBalanceChainStep(baseExpr, containerStr, keyNodes[0]) : void 0;
     if (keyStrs.length > 1 && this.goWsCacheMapType(baseExpr) !== void 0) {
       acc = `${containerStr}[${this.goWsCacheKey(keyNodes[0]).index}]`;
+      first = 1;
+    } else if (balanceStep !== void 0) {
+      acc = balanceStep;
       first = 1;
     } else if (keyStrs.length > 1 && this.goIndexableTypeOf(baseExpr, containerStr) === "map[string]any" && this.goKeyIsString(keyNodes[0], keyStrs[0])) {
       acc = `${containerStr}[${keyStrs[0]}]`;

@@ -1262,6 +1262,15 @@ export declare class GoTranspiler extends BaseTranspiler {
     goWsCacheValue(containerNode: any, valueNode: any, valueText: string): string;
     goWsCacheKeysText(argNode: any): string | undefined;
     goBalanceSafeBalanceWrite(node: any, identation: number): string | undefined;
+    goBalanceKey(keyNode: any): {
+        index: string;
+        pointer?: string;
+    } | undefined;
+    goBalancePlainValue(valueNode: any): boolean;
+    goBalanceIndexable(field: any): boolean;
+    goBalanceStoreText(node: any, baseExpr: any, keys: any[], valueNode: any, rhs: string, identation: number): string | undefined;
+    goBalanceChainStep(baseExpr: any, containerStr: string, keyNode: any): string | undefined;
+    goBalanceDeleteText(node: any): string | undefined;
     goWsCacheEmptyLiteral(node: any): string | undefined;
     goWsTradesField(node: any): boolean;
     goWsTradesRead(node: any): boolean;
