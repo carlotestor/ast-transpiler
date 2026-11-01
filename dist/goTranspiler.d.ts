@@ -756,6 +756,10 @@ export declare function ccxtGoEndpointElement(goTranspiler: any, call: any): any
 export declare function ccxtGoAwaitReceiveUnbox(goTranspiler: any, awaitNode: any, printedInitializer: any): {
     goType: any;
     wrap: (recv: any) => string;
+} | {
+    goType: any;
+    holder: boolean;
+    wrap: (recv: any) => string;
 };
 export { ccxtGoTupleResultJoin };
 export declare function installCcxtGoLocalTypes(goTranspiler: any, unifiedInt64Params?: any): void;
@@ -1231,6 +1235,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goAwaitReceiveUnbox(awaitNode: any, printedInitializer: string): {
         goType: string;
         wrap: (recv: string) => string;
+        holder?: boolean;
     } | undefined;
     printVariableDeclarationList(node: any, identation: any): string;
     printObjectLiteralBody(node: any, identation: any): any;

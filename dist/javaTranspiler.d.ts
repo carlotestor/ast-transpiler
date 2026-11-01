@@ -407,6 +407,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printMethodDefinition(node: any, identation: any, paramsPrinter?: any): string;
     printArrayIsArrayCall(node: any, _identation: any, parsedArg?: any): string;
     printNativeArrayIsArray(node: any, parsedArg: any): string;
+    javaUntypedNullishDefault(operand: any): boolean;
     javaPrimaryIsArrayOperand(node: any): boolean;
     javaOperandType(operand: any): import("typescript/unstable/sync").Type;
     javaArrayLiteralDropsNothing(node: any, depth?: number): boolean;
