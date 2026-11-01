@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-AWK6QGCM.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -43905,22 +43905,12 @@ ${this.getIden(identation)}}}`;
   javaStringBoxText(node, text) {
     return this.javaProvableNumericKind(node) !== void 0 ? `String.valueOf(${text})` : `Helpers.toString(${text})`;
   }
-  // The runtime uses Long.parseLong (parseInt) / Double.parseDouble (parseFloat) inside a catch; a
-  // literal the native parser ACCEPTS cannot reach the catch, so the native call cannot change the
-  // answer (parseInt additionally needs the value in long range, else the helper answers null).
-  javaScalarParseAccepts(callee, text) {
-    if (callee === "parseInt") {
-      if (!/^[+-]?[0-9]+$/.test(text)) {
-        return false;
-      }
-      const value = BigInt(text.replace(/^\+/, ""));
-      return value >= BigInt("-9223372036854775808") && value <= BigInt("9223372036854775807");
-    }
-    return /^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?$/.test(text) || /^[+-]?Infinity$/.test(text) || text === "NaN";
-  }
-  // RF-java-3: `parseInt(x)` / `parseFloat(x)` whose single operand prints as a java.lang.String
-  // (a String-declared name, a `x as string` cast, or any form the embedding layer proves String)
-  // calls the String-typed twin of the helper (same bodies, String parameter).
+  // `parseInt(x)` / `parseFloat(x)` whose single operand prints as a java.lang.String (a
+  // String-declared name, a `x as string` cast, or any form the embedding layer proves String)
+  // prints the JDK parse directly: Long.parseLong / Double.parseDouble. Unlike the helper they
+  // throw NumberFormatException (NullPointerException for parseDouble(null)) on input the helper
+  // answered null / 0.0 for; that divergence is accepted. An operand that prints a Java numeric
+  // primitive goes through String.valueOf so the parse still reads a String.
   printStringTypedParse(node, callee) {
     const args = node?.arguments;
     if (args === void 0 || args.length !== 1) {
@@ -43933,18 +43923,23 @@ ${this.getIden(identation)}}}`;
     const castToString = isAsExpression2(operand) && operand.type?.kind === SyntaxKind6.StringKeyword;
     const printed = this.printNode(args[0], 0);
     const nativeReplace = isCallExpression5(operand) && isPropertyAccessExpression2(operand.expression) && (operand.expression.name.text === "replace" || operand.expression.name.text === "replaceAll") && this.javaScalarFamily(operand.expression.expression) === "string" && /\.replace(First|All)?\(/.test(printed);
+    const nativeName = callee === "parseInt" ? "Long.parseLong" : "Double.parseDouble";
     if (!castToString && !nativeReplace && !this.javaDeclaredStringType(operand) && !this.javaResolvedString(operand)) {
+      const kind = this.javaProvableNumericKind(operand);
+      if (kind !== void 0 && (callee === "parseFloat" || kind !== "double")) {
+        return `${nativeName}(String.valueOf(${printed}))`;
+      }
+      if (this.javaScalarFamily(operand) === "string") {
+        return `${nativeName}(((String)${printed}))`;
+      }
       return void 0;
     }
-    return `io.github.ccxt.base.JsParse.${callee}(${printed})`;
+    return `${nativeName}(${printed})`;
   }
   // `parseInt(x)` / `parseFloat(x)` -> the native parse, or undefined to keep the helper
   printNativeScalarParse(node, callee) {
     const args = node?.arguments;
     if (args === void 0 || args.length !== 1 || !isStringLiteral2(args[0])) {
-      return void 0;
-    }
-    if (!this.javaScalarParseAccepts(callee, args[0].text)) {
       return void 0;
     }
     const nativeName = callee === "parseInt" ? "Long.parseLong" : "Double.parseDouble";

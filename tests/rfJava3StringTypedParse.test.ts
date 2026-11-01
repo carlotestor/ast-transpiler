@@ -13,6 +13,7 @@ describe('java string-typed parse', () => {
         "    a (p: any): any { return parseInt (p as string); }\n" +
         "    b (p: any): any { return parseFloat (p); }\n" +
         "    c (p: any): any { const s = 'x'; return parseFloat (s as string); }\n" +
+        "    d (): any { return parseFloat (3); }\n" +
         "}\n";
     let out: string;
     beforeAll(() => {
@@ -23,9 +24,13 @@ describe('java string-typed parse', () => {
     });
     afterAll(() => { fs.rmSync(TMP, { recursive: true, force: true }); });
 
-    test('a string-cast operand calls the typed twin', () => {
-        expect(out).toContain('io.github.ccxt.base.JsParse.parseInt(');
-        expect(out).toContain('io.github.ccxt.base.JsParse.parseFloat(');
+    test('a string-cast operand prints the JDK parse', () => {
+        expect(out).toContain('Long.parseLong(((String)p))');
+        expect(out).toContain('Double.parseDouble(((String)s))');
+        expect(out).not.toContain('JsParse');
+    });
+    test('a numeric literal operand is stringified', () => {
+        expect(out).toContain('Double.parseDouble(String.valueOf(3))');
     });
     test('an any operand keeps the helper', () => {
         expect(out).toContain('Helpers.parseFloat(p)');
