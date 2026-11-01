@@ -16529,7 +16529,18 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
     return void 0;
   }
+  // the member rules replace the ws regex pass, which only ever ran over the pro and prediction trees
+  goInWsBookTree(node) {
+    try {
+      return /(^|[\\/])ts[\\/]src[\\/](pro|prediction)[\\/]/.test(String(_nullishCoalesce(node.getSourceFile().fileName, () => ( ""))).replace(/\\/g, "/")) && !/[\\/]test[\\/]/.test(String(_nullishCoalesce(node.getSourceFile().fileName, () => ( ""))).replace(/\\/g, "/"));
+    } catch (e) {
+      return false;
+    }
+  }
   goReceiverIsOrderBook(node) {
+    if (!this.goInWsBookTree(node)) {
+      return false;
+    }
     if (this.goNodeIsOrderBook(node)) {
       return true;
     }

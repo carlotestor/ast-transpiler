@@ -434,6 +434,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goOrderBookCacheWrite(node: any): string | undefined;
     goOrderBookCacheAccessor(node: any): string | undefined;
     goBookDeclaredType(node: any): string | undefined;
+    goInWsBookTree(node: any): boolean;
     goReceiverIsOrderBook(node: any): boolean;
     goOrderBookSetterText(baseExpr: any, containerStr: string, keyNode: any, valueNode: any, valueStr: string): string | undefined;
     goOrderBookLocalNeverNil(id: any): boolean;
