@@ -3209,6 +3209,11 @@ var CSharpTranspiler = class extends BaseTranspiler {
     this.csharpPrintedReturnTypes = /* @__PURE__ */ new WeakMap();
     // method names declared once tree-wide (config.csharp.uniqueMethodNames); absent = the inferred collection return is off
     this.csharpUniqueMethods = void 0;
+    // the embedding layer renames every async `Promise<int>` / `Promise<Int>` declaration to its PascalCase
+    // `Task<Int64>` typed core (ccxt: pascalizeTypedCores); on, the awaited `this.<name>(...)` calls of those
+    // methods print that PascalCase name (csharpInt64TaskCallName). Off by default: a standalone print keeps
+    // the declaration camelCase, and the call has to match it
+    this.csharpPascalInt64TaskCalls = false;
     // method name -> parameter position -> the C# type the embedding build layer narrows that parameter to
     // (config.csharp.numericArgTypes); with the callee allowlist it lets the printer prove a literal-default
     // numeric parameter's shadow local is typed (csharpShadowedNumericParamType)
@@ -3322,6 +3327,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     this.applyUserOverrides(config);
     this.csharpDeclaredBaseFields = Object.assign({}, config["declaredBaseFieldTypes"] ?? {});
     this.csharpUniqueMethods = Array.isArray(config["uniqueMethodNames"]) ? new Set(config["uniqueMethodNames"]) : void 0;
+    this.csharpPascalInt64TaskCalls = config["pascalInt64TaskCalls"] === true;
     this.csharpNumericArgTypes = Object.assign({}, config["numericArgTypes"] ?? {});
     this.csharpShadowCallees = new Set(Array.isArray(config["coreArgShadowCallees"]) ? config["coreArgShadowCallees"] : []);
   }
@@ -5840,7 +5846,52 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (callee?.kind === SyntaxKind4.PropertyAccessExpression && callee.expression?.kind === SyntaxKind4.ThisKeyword && callee.name?.text === "parseJson" && node.arguments?.length === 1 && this.csharpCallReturnsString(node.arguments[0]) && this.csharpCalleeResolves(node)) {
       return `JsonHelper.Deserialize((string)${this.printNode(node.arguments[0], 0).trim()})`;
     }
-    return super.printCallExpression(node, identation);
+    const printed = super.printCallExpression(node, identation);
+    const pascal = this.csharpInt64TaskCallName(node);
+    if (pascal !== void 0) {
+      const camel = `this.${callee.name.text}(`;
+      const at = printed.indexOf(camel);
+      if (at !== -1 && printed.slice(0, at).trim() === "") {
+        return printed.slice(0, at) + `this.${pascal}(` + printed.slice(at + camel.length);
+      }
+    }
+    return printed;
+  }
+  // `this.<name> (...)` resolving to an async method whose checker return type is `Promise<int>` /
+  // `Promise<Int>`: its C# signature is the typed core `Task<Int64> <Name>(...)` (the declaration is
+  // renamed to the PascalCase public name), so the awaited value is a bare Int64 and the call binds the
+  // PascalCase method. Answers that PascalCase name, or undefined for every other call.
+  csharpInt64TaskCallName(node) {
+    const callee = node?.expression;
+    if (!this.csharpPascalInt64TaskCalls || callee?.kind !== SyntaxKind4.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind4.ThisKeyword || node.parent?.kind !== SyntaxKind4.AwaitExpression) {
+      return void 0;
+    }
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return void 0;
+    }
+    try {
+      const signature = checker.getResolvedSignature(node);
+      const declaration = signature?.declaration?.resolve();
+      if (!isMethodDeclaration2(declaration) || !this.isAsyncFunction(declaration) || declaration.name?.text !== callee.name.text) {
+        return void 0;
+      }
+      const returned = checker.getReturnTypeOfSignature(signature);
+      if (this.getTypeFromRawType(returned) !== this.PROMISE_TYPE_KEYWORD) {
+        return void 0;
+      }
+      const inner = checker.getTypeArguments(returned)?.[0];
+      const annotated = declaration.type?.typeArguments?.[0];
+      const alias = annotated?.kind === SyntaxKind4.TypeReference ? annotated.typeName?.text : inner?.getAliasSymbol?.()?.escapedName;
+      const numeric = inner !== void 0 && ((inner.flags & TypeFlags3.Number) !== 0 || (inner.flags & TypeFlags3.Union) !== 0 && inner.getTypes().some((t) => (t.flags & TypeFlags3.Number) !== 0));
+      if (!numeric || alias !== "Int" && alias !== "int") {
+        return void 0;
+      }
+    } catch (e) {
+      return void 0;
+    }
+    const name = callee.name.text;
+    return name.charAt(0).toUpperCase() + name.slice(1);
   }
   csharpNativeParseCall(node) {
     if (node?.kind !== SyntaxKind4.CallExpression || !isIdentifier(node.expression)) {
