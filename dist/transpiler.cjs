@@ -29539,7 +29539,7 @@ ${iden}}`;
     if (this.goA9fL1CacheField(left) !== "Balance" || _optionalChain([right, 'optionalAccess', _4478 => _4478.kind]) !== _ast.SyntaxKind.CallExpression || _optionalChain([right, 'access', _4479 => _4479.expression, 'optionalAccess', _4480 => _4480.kind]) !== _ast.SyntaxKind.PropertyAccessExpression || _optionalChain([right, 'access', _4481 => _4481.expression, 'access', _4482 => _4482.expression, 'optionalAccess', _4483 => _4483.kind]) !== _ast.SyntaxKind.ThisKeyword || _optionalChain([right, 'access', _4484 => _4484.expression, 'access', _4485 => _4485.name, 'optionalAccess', _4486 => _4486.text]) !== "safeBalance") {
       return void 0;
     }
-    return `${this.printNode(left, 0)} = MapTyped(${this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trim()})`;
+    return `${this.printNode(left, 0)}, _ = ${this.goWithExprDepth(this.goExprDepth + 1, () => this.printNode(right, identation)).trim()}.(map[string]any)`;
   }
   goWsCacheEmptyLiteral(node) {
     const type = this.goWsCacheMapType(node);
@@ -38745,7 +38745,7 @@ ${ind}}
     if (cacheRead !== void 0) {
       return cacheRead;
     }
-    if (this.goIndexableTypeOf(baseExpr, containerStr) === "map[string]any") {
+    if (this.goIndexableTypeOf(baseExpr, containerStr) === "map[string]any" || this.goA9fL1CacheField(baseExpr) === "Balance") {
       if (this.goKeyIsString(keys[0], keyStrs[0]) && !this.isGoElementAccessAssignmentTarget(node) && !this.goMarketComparisonElementRead(node)) {
         return this.goElementAccessChain(`${containerStr}[${keyStrs[0]}]`, keyStrs);
       }
