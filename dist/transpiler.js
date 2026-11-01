@@ -29550,30 +29550,24 @@ ${iden}}`;
   goBalanceKey(keyNode) {
     return this.goWsKey(keyNode);
   }
-  // a Balance value the helper would store unchanged: no scalar pointer for its derefScalar to unwrap
+  // a Balance value the helper would store unchanged: no scalar pointer or typed-nil list for its derefScalar to fold
   goBalancePlainValue(valueNode) {
-    if (this.goWritePrintsPointerBox(valueNode)) {
+    const field = this.nativeStoreFields?.["balance"];
+    if (field === void 0 || this.goWritePrintsPointerBox(valueNode)) {
       return false;
     }
-    if (this.goMapWriteValueIsNotPointer(valueNode)) {
+    if (this.rfGo6bValueIsPlain(valueNode, field)) {
       return true;
     }
     const value = this.goUnwrapPrintedAssertions(valueNode);
-    if (value?.kind !== SyntaxKind5.Identifier && value?.kind !== SyntaxKind5.CallExpression) {
-      return false;
-    }
-    const field = this.nativeStoreFields?.["balance"];
-    if (field !== void 0 && this.rfGo6bValueIsPlain(valueNode, field)) {
-      return true;
-    }
     const checker = this.checkerOrUndefined();
-    const type = checker?.getTypeAtLocation(value);
-    if (type === void 0) {
+    if (value?.kind !== SyntaxKind5.Identifier && value?.kind !== SyntaxKind5.CallExpression || checker === void 0) {
       return false;
     }
+    const type = checker.getTypeAtLocation(value);
     const parts = typeof type.isUnionType === "function" && type.isUnionType() ? type.getTypes() : [type];
     const present = parts.filter((t) => (t.flags & (TypeFlags4.Undefined | TypeFlags4.Null)) === 0);
-    return present.length > 0 && present.every((t) => (t.flags & TypeFlags4.Object) !== 0);
+    return present.length > 0 && present.every((t) => (t.flags & TypeFlags4.Object) !== 0 && !checker.isArrayType(t) && !checker.isTupleType(t));
   }
   // the base Balance map can be indexed: every write of the field in the file leaves a map
   goBalanceIndexable(field) {
