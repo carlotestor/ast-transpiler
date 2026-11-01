@@ -1267,6 +1267,7 @@ export declare class GoTranspiler extends BaseTranspiler {
         pointer?: string;
     } | undefined;
     goBalancePlainValue(valueNode: any): boolean;
+    goIsWholeGetValueText(rhs: string): boolean;
     goBalanceIndexable(field: any): boolean;
     goBalanceStoreText(node: any, baseExpr: any, keys: any[], valueNode: any, rhs: string, identation: number): string | undefined;
     goBalanceChainStep(baseExpr: any, containerStr: string, keyNode: any): string | undefined;
@@ -1776,6 +1777,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     printConditionalExpression(node: any, identation: any): string;
     printPropertyAccessExpression(node: any, identation: any): any;
     printDeleteExpression(node: any, identation: any): string;
+    goClientsDeleteText(node: any): string | undefined;
     goNativeDelete(node: any): string | undefined;
     goDeleteReceiverText(node: any): string | undefined;
     goDeleteKeyText(keyNode: any): string | undefined;

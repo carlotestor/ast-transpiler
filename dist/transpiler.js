@@ -29570,13 +29570,45 @@ ${iden}}`;
     return present.length > 0 && present.every((t) => (t.flags & TypeFlags4.Object) !== 0 && !checker.isArrayType(t) && !checker.isTupleType(t));
   }
   // the base Balance map can be indexed: every write of the field in the file leaves a map
+  // `GetValue(..)` as the whole printed value: the helper already answers derefScalar of the element,
+  // so AddElementToObject's own derefScalar (idempotent) stores the identical value
+  goIsWholeGetValueText(rhs) {
+    const text = (rhs ?? "").trim();
+    if (!/^(?:ccxt\.)?GetValue\(/.test(text) || !text.endsWith(")")) {
+      return false;
+    }
+    let depth = 0;
+    let quote;
+    for (let i = text.indexOf("("); i < text.length; i++) {
+      const c = text[i];
+      if (quote !== void 0) {
+        if (c === "\\") {
+          i++;
+        } else if (c === quote) {
+          quote = void 0;
+        }
+        continue;
+      }
+      if (c === '"' || c === "`") {
+        quote = c;
+      } else if (c === "(") {
+        depth++;
+      } else if (c === ")") {
+        depth--;
+        if (depth === 0 && i !== text.length - 1) {
+          return false;
+        }
+      }
+    }
+    return depth === 0;
+  }
   goBalanceIndexable(field) {
     const table = this.nativeStoreFields?.["balance"];
     return this.goA9fL1CacheField(field) === "Balance" && table !== void 0 && this.rfGo6bFieldNeverNil(field.getSourceFile(), field.name.text, table);
   }
   // `this.balance[k] = v` / `this.balance[k1][k2] = v` statements: the map store, the entry store through the entry's map
   goBalanceStoreText(node, baseExpr, keys, valueNode, rhs, identation) {
-    if (node.parent?.kind !== SyntaxKind5.ExpressionStatement || keys.length > 2 || rhs.includes("\n") || !this.goBalanceIndexable(baseExpr) || !this.goBalancePlainValue(valueNode)) {
+    if (node.parent?.kind !== SyntaxKind5.ExpressionStatement || keys.length > 2 || rhs.includes("\n") || !this.goBalanceIndexable(baseExpr) || !(this.goBalancePlainValue(valueNode) || this.goIsWholeGetValueText(rhs))) {
       return void 0;
     }
     const parsed = keys.map((k) => this.goBalanceKey(k));
@@ -31590,7 +31622,7 @@ ${iden}}`;
       }
       const tableSlot = (goType === "[]string" || goType === "[][]string") && this.goIsUnifiedSliceParameter(name, index);
       const argType = tableSlot ? this.goSliceArgumentType(arg) : this.goPrintedArgType(arg);
-      if (argType !== goType && !(goType === "string" && this.gp15NilProvenStringPtrArg(arg))) {
+      if (argType !== goType && !(goType === "string" && call.runner === void 0 && this.gp15NilProvenStringPtrArg(arg))) {
         return false;
       }
     }
@@ -31937,6 +31969,23 @@ ${iden}}`;
         result.push(call);
       }
     }
+    for (const [runner, at] of [["spawn", 0], ["delay", 1]]) {
+      for (const call of index.get(runner) ?? []) {
+        const ref = call.arguments?.[at];
+        if (call.expression?.expression?.kind !== SyntaxKind5.ThisKeyword || ref?.kind !== SyntaxKind5.PropertyAccessExpression || ref.expression?.kind !== SyntaxKind5.ThisKeyword || ref.name?.text !== name) {
+          continue;
+        }
+        let declaration;
+        try {
+          declaration = checker.getSymbolAtLocation(ref.name)?.valueDeclaration?.resolve();
+        } catch (e) {
+          declaration = void 0;
+        }
+        if (declaration === fn) {
+          result.push({ "arguments": call.arguments.slice(at + 1), "runner": call });
+        }
+      }
+    }
     return result;
   }
   // Lazily read the ts/src tree this file belongs to: the call sites of every
@@ -32000,6 +32049,13 @@ ${iden}}`;
           const list = callIndex.get(match[1]) ?? [];
           list.push({ file: relPath, args, at: callRe.lastIndex - 1 });
           callIndex.set(match[1], list);
+          const refAt = match[1] === "spawn" ? 0 : match[1] === "delay" ? 1 : -1;
+          const ref = refAt >= 0 ? /^this\s*\.\s*([A-Za-z_$][\w$]*)$/.exec((args[refAt] ?? "").trim()) : null;
+          if (ref !== null) {
+            const refList = callIndex.get(ref[1]) ?? [];
+            refList.push({ file: relPath, args: args.slice(refAt + 1), at: callRe.lastIndex - 1 });
+            callIndex.set(ref[1], refList);
+          }
         }
       }
     };
@@ -37281,13 +37337,31 @@ ${this.getIden(level)}}()`;
     if (wsDelete !== void 0) {
       return wsDelete;
     }
-    const native = this.goNativeDelete(node) ?? this.goBalanceDeleteText(node);
+    const native = this.goNativeDelete(node) ?? this.goBalanceDeleteText(node) ?? this.goClientsDeleteText(node);
     if (native !== void 0) {
       return native;
     }
     const object = this.printNode(node.expression.expression, 0);
     const key = this.printNode(node.expression.argumentExpression, 0);
     return `Remove(${object}, ${key})`;
+  }
+  // `delete this.clients[k]` with a Go-string key: Clients is the plain `map[string]any` ws client
+  // registry (go/v4/exchange.go), so Remove's string-key branch is exactly the builtin delete
+  goClientsDeleteText(node) {
+    const access = node.expression;
+    const field = access?.expression;
+    if (node.parent?.kind !== SyntaxKind5.ExpressionStatement || access?.kind !== SyntaxKind5.ElementAccessExpression || field?.kind !== SyntaxKind5.PropertyAccessExpression || field.expression?.kind !== SyntaxKind5.ThisKeyword || field.name?.text !== "clients") {
+      return void 0;
+    }
+    const keyNode = this.goUnwrapParenthesizedNode(access.argumentExpression);
+    let clientUrl = this.goIsClientUrl(keyNode);
+    if (!clientUrl && keyNode?.kind === SyntaxKind5.PropertyAccessExpression && keyNode.name?.text === "url" && keyNode.expression?.kind === SyntaxKind5.Identifier) {
+      const decl = this.checkerOrUndefined()?.getSymbolAtLocation(keyNode.expression)?.valueDeclaration?.resolve?.();
+      const init = this.goUnwrapParenthesizedNode(decl?.initializer);
+      clientUrl = decl?.kind === SyntaxKind5.VariableDeclaration && init?.kind === SyntaxKind5.CallExpression && this.rfGo6bThisCallName(init) === "client" && !this.goLocalIsRebound(this.goEnclosingFunction(decl), decl.name);
+    }
+    const key = clientUrl ? { "index": this.printNode(keyNode, 0) } : this.goWsKey(access.argumentExpression);
+    return key === void 0 || key.pointer !== void 0 ? void 0 : `delete(${this.printNode(field, 0)}, ${key.index})`;
   }
   // `delete m[k]` as a statement on a receiver Go types as map[string]any (a local the printer
   // declared so, or one book of the map[string]map[string]any `this.ohlcvs`) with a string key.
@@ -38834,6 +38908,10 @@ ${ind}}
     if (this.goIndexableTypeOf(baseExpr, containerStr) === "map[string]any" || this.goA9fL1CacheField(baseExpr) === "Balance") {
       if (this.goKeyIsString(keys[0], keyStrs[0]) && !this.isGoElementAccessAssignmentTarget(node) && !this.goMarketComparisonElementRead(node)) {
         return this.goElementAccessChain(`${containerStr}[${keyStrs[0]}]`, keyStrs);
+      }
+      const balanceKey = this.goA9fL1CacheField(baseExpr) === "Balance" && !this.isGoElementAccessAssignmentTarget(node) ? this.goBalanceKey(keys[0]) : void 0;
+      if (balanceKey !== void 0 && balanceKey.pointer === void 0) {
+        return this.goElementAccessChain(`${containerStr}[${balanceKey.index}]`, keyStrs);
       }
       if (this.goIsDerefStringKeyExpression(keys[0]) && !containerStr.includes("\n") && !this.isGoElementAccessAssignmentTarget(node)) {
         return this.goElementAccessChain(this.printNilGuardedMapIndex(containerStr, keyStrs[0]), keyStrs);
