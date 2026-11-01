@@ -753,6 +753,7 @@ export declare const CCXT_GO_ASYNC_ELEM_TYPES: {
 export declare const CCXT_GO_ASYNC_FORWARD_SAFE: any[];
 export declare const CCXT_GO_ASYNC_ELEM_EXCLUDED: string[];
 export declare function ccxtGoEndpointElement(goTranspiler: any, call: any): any;
+export declare function ccxtGoAsyncListHolderLines(goTranspiler: any, awaitNode: any, target: string, lead: string, wrapped: string): string;
 export declare function ccxtGoAwaitReceiveUnbox(goTranspiler: any, awaitNode: any, printedInitializer: any): {
     goType: any;
     wrap: (recv: any) => string;

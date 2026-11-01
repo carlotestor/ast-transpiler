@@ -13753,13 +13753,13 @@ var CCXT_GO_ARRAY_BINDING_HOLDERS = [
   "HandleTriggerDirectionAndParams"
 ];
 var ARRAY_BINDING_HOLDER_RE = /^([ \t]*)([A-Za-z_]\w*Variable) := ([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\(/;
-function retypeArrayBindingHolder(goTranspiler, node, printed) {
+function retypeArrayBindingHolder(goTranspiler, node, printed, identation = 0) {
   if (typeof printed !== "string") {
     return printed;
   }
   const match = ARRAY_BINDING_HOLDER_RE.exec(printed);
   if (match === null) {
-    return retypeAsyncArrayBindingHolder(goTranspiler, node, printed);
+    return retypeAsyncArrayBindingHolder(goTranspiler, node, printed, identation);
   }
   const indent = match[1];
   const name = match[2];
@@ -13782,7 +13782,7 @@ function retypeArrayBindingHolder(goTranspiler, node, printed) {
   return indent + "var " + name + " []any = " + printed.slice(prefix.length);
 }
 var ASYNC_ARRAY_BINDING_HOLDER_RE = /^([ \t]*)([A-Za-z_]\w*Variable) := (\(<-(?:this\.)?([A-Za-z_]\w*)\([^\n]*\)\))\n/;
-function retypeAsyncArrayBindingHolder(goTranspiler, node, printed) {
+function retypeAsyncArrayBindingHolder(goTranspiler, node, printed, identation = 0) {
   const match = ASYNC_ARRAY_BINDING_HOLDER_RE.exec(printed);
   if (match === null || CCXT_GO_ASYNC_ELEM_TYPES[match[4]] !== "[]any" || CCXT_GO_ASYNC_ELEM_EXCLUDED.indexOf(match[4]) >= 0) {
     return printed;
@@ -13803,7 +13803,13 @@ function retypeAsyncArrayBindingHolder(goTranspiler, node, printed) {
   if (typeof goTranspiler.goTypeNameIsShadowed === "function" && goTranspiler.goTypeNameIsShadowed(scope, "[]any")) {
     return printed;
   }
-  return match[1] + "var " + match[2] + " []any = ListTyped(PanicOnError(" + recv + "))\n" + printed.slice(match[0].length);
+  const awaitNode = node?.kind === ts.SyntaxKind.VariableDeclarationList ? node.declarations?.[0]?.initializer : node?.kind === ts.SyntaxKind.BinaryExpression ? node.right : void 0;
+  const wrapped = "ListTyped(PanicOnError(" + recv + "))";
+  const listHolder = ccxtGoAsyncListHolderLines(goTranspiler, awaitNode, match[2], "\n" + (match[1] === "" ? goTranspiler.getIden(identation) : match[1]), wrapped);
+  if (listHolder !== void 0) {
+    return match[1] + listHolder.slice(listHolder.indexOf(match[2] + "Recv")) + "\n" + printed.slice(match[0].length);
+  }
+  return match[1] + "var " + match[2] + " []any = " + wrapped + "\n" + printed.slice(match[0].length);
 }
 function installCcxtGoArrayBindingHolders(goTranspiler) {
   if (goTranspiler === void 0 || goTranspiler.__ccxtGoArrayBindingHoldersInstalled) {
@@ -13812,13 +13818,13 @@ function installCcxtGoArrayBindingHolders(goTranspiler) {
   if (typeof goTranspiler.printVariableDeclarationList === "function") {
     const upstreamDeclaration = goTranspiler.printVariableDeclarationList;
     goTranspiler.printVariableDeclarationList = function(node, identation) {
-      return retypeArrayBindingHolder(this, node, upstreamDeclaration.call(this, node, identation));
+      return retypeArrayBindingHolder(this, node, upstreamDeclaration.call(this, node, identation), identation);
     };
   }
   if (typeof goTranspiler.printCustomBinaryExpressionIfAny === "function") {
     const upstreamBinary = goTranspiler.printCustomBinaryExpressionIfAny;
     goTranspiler.printCustomBinaryExpressionIfAny = function(node, identation) {
-      return retypeArrayBindingHolder(this, node, upstreamBinary.call(this, node, identation));
+      return retypeArrayBindingHolder(this, node, upstreamBinary.call(this, node, identation), identation);
     };
   }
   goTranspiler.__ccxtGoArrayBindingHoldersInstalled = true;
@@ -17034,6 +17040,162 @@ function ccxtGoEndpointHolderName(goTranspiler, awaitNode, target) {
   }
   CCXT_GO_ENDPOINT_HOLDER_NAMES.set(awaitNode, name);
   return name;
+}
+var CCXT_GO_ASYNC_LIST_PRODUCER_PROOF = /* @__PURE__ */ new WeakMap();
+function ccxtGoAsyncListClassMember(cls, name) {
+  const members = (cls?.members ?? []).filter((m) => m.name?.kind === ts.SyntaxKind.Identifier && String(m.name.text) === name);
+  return members.length === 1 && members[0].kind === ts.SyntaxKind.MethodDeclaration && members[0].body !== void 0 ? members[0] : void 0;
+}
+function ccxtGoAsyncListReturnIsProven(goTranspiler, producer, cls, expression) {
+  let e = expression;
+  if (e === void 0) {
+    return true;
+  }
+  if (e.kind === ts.SyntaxKind.AsExpression) {
+    e = e.expression;
+  }
+  if (isAbsentExpression(e)) {
+    return true;
+  }
+  if (e.kind === ts.SyntaxKind.ArrayLiteralExpression) {
+    const printed = goTranspiler.printNode(e, 0).trim();
+    return printed.startsWith("[]any{") && printed.endsWith("}") && printed.indexOf("\n") < 0;
+  }
+  if (e.kind === ts.SyntaxKind.AwaitExpression) {
+    return goTranspiler.goAwaitReceiveUnbox(e, goTranspiler.printNode(e, 0))?.goType === "[]any";
+  }
+  if (e.kind === ts.SyntaxKind.Identifier) {
+    const declaration = goTranspiler.goDeclarationOfIdentifier?.(e);
+    if (declaration?.name?.kind !== ts.SyntaxKind.Identifier || goTranspiler.goEnclosingFunction(declaration) !== producer) {
+      return false;
+    }
+    const name = String(e.text);
+    const bindings = goTranspiler.goDescendantsOf(producer).filter((n) => (n.kind === ts.SyntaxKind.VariableDeclaration || n.kind === ts.SyntaxKind.Parameter || n.kind === ts.SyntaxKind.BindingElement) && n.name?.kind === ts.SyntaxKind.Identifier && String(n.name.text) === name);
+    if (bindings.length !== 1 || bindings[0] !== declaration) {
+      return false;
+    }
+    const printed = goTranspiler.printNode(declaration.parent, 0).split("\n").find((line) => line.trim().length > 0) ?? "";
+    return new RegExp("^\\s*var " + name + " \\[\\]any(?: =|$)").test(printed);
+  }
+  if (e.kind === ts.SyntaxKind.CallExpression && e.expression?.kind === ts.SyntaxKind.PropertyAccessExpression && e.expression.expression?.kind === ts.SyntaxKind.ThisKeyword) {
+    const name = String(e.expression.name?.text);
+    const callee = ccxtGoAsyncListClassMember(cls, name);
+    if (callee === void 0 || goTranspiler.isAsyncFunction(callee)) {
+      return false;
+    }
+    const printed = goTranspiler.printNode(e, 0).trim();
+    if (!printed.startsWith("this." + name.charAt(0).toUpperCase() + name.slice(1) + "(") || !printed.endsWith(")")) {
+      return false;
+    }
+    if (goTranspiler.generatedListCallees?.has?.(name.charAt(0).toUpperCase() + name.slice(1)) === true) {
+      return true;
+    }
+    const signature = goTranspiler.printMethodDefinition(callee, 0).split("\n").pop();
+    return /\) \[\]any\s*$/.test(signature);
+  }
+  return false;
+}
+function ccxtGoAsyncListProducerIsProven(goTranspiler, producer, cls) {
+  if (CCXT_GO_ASYNC_LIST_PRODUCER_PROOF.has(producer)) {
+    return CCXT_GO_ASYNC_LIST_PRODUCER_PROOF.get(producer);
+  }
+  CCXT_GO_ASYNC_LIST_PRODUCER_PROOF.set(producer, false);
+  const proven = collectReturnStatements(producer.body).every((r) => ccxtGoAsyncListReturnIsProven(goTranspiler, producer, cls, r.expression));
+  CCXT_GO_ASYNC_LIST_PRODUCER_PROOF.set(producer, proven);
+  return proven;
+}
+function ccxtGoAsyncListReceive(goTranspiler, awaitNode, wrapped) {
+  const text = (wrapped ?? "").trim();
+  const m = /^ListTyped\(PanicOnError\((\(<-this\.(\w+)Async\(.*\)\))\)\)$/.exec(text);
+  if (m === null || text.indexOf("\n") >= 0 || awaitNode?.kind !== ts.SyntaxKind.AwaitExpression || goSourceIsWsTree(awaitNode)) {
+    return void 0;
+  }
+  const recv = m[1];
+  let depth = 0;
+  for (let i = 0; i < recv.length; i++) {
+    const c = recv[i];
+    if (c === '"' || c === "'" || c === "`") {
+      i = c === "`" ? recv.indexOf("`", i + 1) : goSkipQuoted(recv, i) - 1;
+      if (i < 0) {
+        return void 0;
+      }
+      continue;
+    }
+    depth += c === "(" ? 1 : c === ")" ? -1 : 0;
+    if (depth === 0 && i < recv.length - 1) {
+      return void 0;
+    }
+  }
+  const call = awaitNode.expression;
+  if (depth !== 0 || call?.kind !== ts.SyntaxKind.CallExpression || call.expression?.kind !== ts.SyntaxKind.PropertyAccessExpression || call.expression.expression?.kind !== ts.SyntaxKind.ThisKeyword) {
+    return void 0;
+  }
+  const method = String(call.expression.name?.text);
+  if (m[2] !== method.charAt(0).toUpperCase() + method.slice(1)) {
+    return void 0;
+  }
+  const fn = goTranspiler.goEnclosingFunction(awaitNode);
+  const cls = fn === void 0 ? void 0 : goTranspiler.goEnclosingClass(fn);
+  const producer = ccxtGoAsyncListClassMember(cls, method);
+  if (producer === void 0 || !goTranspiler.isAsyncFunction(producer) || !ccxtGoAsyncListProducerIsProven(goTranspiler, producer, cls)) {
+    return void 0;
+  }
+  return recv;
+}
+function ccxtGoAsyncListTarget(goTranspiler, awaitNode) {
+  const parent = awaitNode?.parent;
+  if (parent?.kind === ts.SyntaxKind.VariableDeclaration && parent.initializer === awaitNode) {
+    if (parent.name?.kind === ts.SyntaxKind.Identifier) {
+      return goTranspiler.printNode(parent.name, 0);
+    }
+    if (parent.name?.kind === ts.SyntaxKind.ArrayBindingPattern) {
+      return parent.name.elements.map((e) => goTranspiler.printNode(e.name, 0)).join("") + "Variable";
+    }
+  }
+  if (parent?.kind === ts.SyntaxKind.BinaryExpression && parent.right === awaitNode && parent.left?.kind === ts.SyntaxKind.ArrayLiteralExpression) {
+    return parent.left.elements.map((e) => goTranspiler.printNode(e, 0)).join("") + "Variable";
+  }
+  return void 0;
+}
+var CCXT_GO_ASYNC_LIST_HOLDER_NAMES = /* @__PURE__ */ new WeakMap();
+function ccxtGoAsyncListHolderName(goTranspiler, awaitNode, target) {
+  const cached = CCXT_GO_ASYNC_LIST_HOLDER_NAMES.get(awaitNode);
+  if (cached !== void 0) {
+    return cached;
+  }
+  const scope = goTranspiler.goEnclosingFunction(awaitNode);
+  const taken = /* @__PURE__ */ new Set();
+  for (const n of scope === void 0 ? [] : goTranspiler.goDescendantsOf(scope)) {
+    if (n.kind === ts.SyntaxKind.Identifier) {
+      taken.add(String(n.text));
+      continue;
+    }
+    if (n.kind !== ts.SyntaxKind.AwaitExpression || n === awaitNode || n.pos >= awaitNode.pos || ccxtGoAsyncListTarget(goTranspiler, n) !== target) {
+      continue;
+    }
+    const block = ccxtGoEndpointHolderBlock(n);
+    let visible = false;
+    for (let current = awaitNode; current !== void 0 && !visible; current = current.parent) {
+      visible = current === block;
+    }
+    if (visible && ccxtGoAsyncListReceive(goTranspiler, n, "ListTyped(PanicOnError(" + goTranspiler.printNode(n, 0).trim() + "))") !== void 0) {
+      taken.add(ccxtGoAsyncListHolderName(goTranspiler, n, target));
+    }
+  }
+  let name = target + "Recv";
+  for (let k = 2; taken.has(name); k++) {
+    name = target + "Recv" + k;
+  }
+  CCXT_GO_ASYNC_LIST_HOLDER_NAMES.set(awaitNode, name);
+  return name;
+}
+function ccxtGoAsyncListHolderLines(goTranspiler, awaitNode, target, lead, wrapped) {
+  const recv = ccxtGoAsyncListReceive(goTranspiler, awaitNode, wrapped);
+  if (recv === void 0) {
+    return void 0;
+  }
+  const holder = ccxtGoAsyncListHolderName(goTranspiler, awaitNode, target);
+  return lead + holder + ", _ := PanicOnError(" + recv + ").([]any)" + lead + "var " + target + " []any = " + holder;
 }
 var CCXT_GO_ENDPOINT_PARSER_READ = /^(?:parse[A-Z]\w*|safe[A-Z]\w*|addPaginationCursorToResult|indexBy|groupBy)$/;
 function ccxtGoEndpointLocalParserRead(node) {
@@ -29116,8 +29278,13 @@ ${this.getIden(identation)}PanicOnError(${holderName}.Raw)
 ${this.getIden(identation)}var ${parsedName} ${awaitUnbox.goType} = ${holderName}.Value`;
       }
       if (awaitUnbox !== void 0) {
+        const wrapped = awaitUnbox.wrap(parsedInitializer);
+        const listHolder = awaitUnbox.goType === "[]any" ? ccxtGoAsyncListHolderLines(this, declaration.initializer, parsedName, "\n" + this.getIden(identation), wrapped) : void 0;
+        if (listHolder !== void 0) {
+          return listHolder;
+        }
         return `
-${this.getIden(identation)}var ${parsedName} ${awaitUnbox.goType} = ${awaitUnbox.wrap(parsedInitializer)}`;
+${this.getIden(identation)}var ${parsedName} ${awaitUnbox.goType} = ${wrapped}`;
       }
       return `
 ${this.getIden(identation)}${parsedName} := ${parsedInitializer}
@@ -36586,8 +36753,10 @@ ${this.getIden(identation)}PanicOnError(${exprStm.trim()})`;
       rightPart = rightPart ? rightPart + this.LINE_TERMINATOR : this.LINE_TERMINATOR;
       const retUnbox = this.goAwaitReceiveUnbox(node.expression, printedExpr);
       if (retUnbox !== void 0) {
-        return `
-${this.getIden(identation)}var ${returnRandName} ${retUnbox.goType} = ${retUnbox.wrap(printedExpr)}
+        const wrapped = retUnbox.wrap(printedExpr);
+        const listHolder = retUnbox.goType === "[]any" ? ccxtGoAsyncListHolderLines(this, node.expression, returnRandName, "\n" + this.getIden(identation), wrapped) : void 0;
+        return `${listHolder ?? `
+${this.getIden(identation)}var ${returnRandName} ${retUnbox.goType} = ${wrapped}`}
 ${leadingComment}${this.getIden(identation)}ch <- ${returnRandName}${trailingComment}
 ${this.getIden(identation)}${returnStatement}`;
       }
