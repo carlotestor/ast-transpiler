@@ -4228,6 +4228,33 @@ describe('java inOp -> containsKey: declared Map receivers and nullable dicts', 
     });
 });
 
+describe('java replaceAll on a lowered/trimmed receiver', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'java-replaceall-lowered-'));
+    const write = (relative: string, content: string): string => {
+        const file = path.join(root, relative);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, content);
+        return file;
+    };
+    const body = (expr: string) => `export default class V {\n    m (s: string) {\n        const y = ${expr};\n        return y;\n    }\n}\n`;
+
+    test('a toLowerCase receiver with literal arguments prints String.replace', () => {
+        const output = transpiler.transpileJavaByPath(write('ts/src/venue0.ts', body("s.toLowerCase ().replaceAll ('-', '_')"))).content;
+        expect(output).toContain('((String)s).toLowerCase().replace("-", "_")');
+        expect(output).not.toContain('Helpers.replaceAll');
+    });
+
+    test('a non-literal pattern keeps the helper', () => {
+        const output = transpiler.transpileJavaByPath(write('ts/src/venue1.ts', body("s.trim ().replaceAll (s, '_')"))).content;
+        expect(output).toContain('Helpers.replaceAll(');
+    });
+
+    test('a test-tier file keeps the helper', () => {
+        const output = transpiler.transpileJavaByPath(write('ts/src/test/venue2.ts', body("s.toUpperCase ().replaceAll ('-', '_')"))).content;
+        expect(output).toContain('Helpers.replaceAll(');
+    });
+});
+
 describe('java replaceAll native emission', () => {
     // Literal pattern and replacement on a side-effect-free receiver: the helper's null /
     // empty-pattern guards cannot fire, so the call is emitted as a native String.replace

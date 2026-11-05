@@ -290,6 +290,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaFieldMapReadIfAllowed(node: any): string | undefined;
     printCheckerTypedElementAccessRead(node: any): string;
     printElementAccessExpression(node: any, identation: any): any;
+    javaLibraryTierNode(node: any): boolean;
     javaClassTypedElementRead(node: any): string;
     javaScalarFamily(node: any): string | undefined;
     javaProvableString(node: any): boolean;

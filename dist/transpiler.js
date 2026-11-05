@@ -45407,6 +45407,11 @@ ${this.getIden(identation)}}}`;
   printElementAccessExpression(node, identation) {
     return this.printCheckerTypedElementAccessRead(node) ?? super.printElementAccessExpression(node, identation);
   }
+  // generated library tiers only (exchanges, pro, prediction, base); tests keep the helpers
+  javaLibraryTierNode(node) {
+    const file = node?.getSourceFile?.()?.fileName ?? "";
+    return file.includes("ts/src/") && !file.includes("ts/src/test/");
+  }
   // `Helpers.GetValue(book, "asks")` on a receiver declared the ws order book class: the class's
   // own `get` is the helper's map branch (containsKey holds every one of these keys), and GetValue
   // answers null for a null receiver, so the native read carries the same guard
@@ -47966,6 +47971,10 @@ ${this.getIden(identation)}}}`;
     const receiver = this.sideEffectFreeReceiver(node?.expression);
     if (pattern !== void 0 && replacement !== void 0 && receiver) {
       return `(${name} == null ? null : ((String)${name}).replace(${pattern}, ${replacement}))`;
+    }
+    const callee = node?.expression?.expression;
+    if (pattern !== void 0 && replacement !== void 0 && this.javaLibraryTierNode(node) && isCallExpression5(callee) && isPropertyAccessExpression2(callee.expression) && callee.arguments.length === 0 && ["toLowerCase", "toUpperCase", "trim"].includes(callee.expression.name.text) && /^(?:\(\(String\)[\w.]+\)|[\w.]+)\.(?:toLowerCase|toUpperCase|trim)\(\)$/.test(name)) {
+      return `${name}.replace(${pattern}, ${replacement})`;
     }
     const typed = this.javaTypedStringReplaceAllCall(node, name, parsedArg, parsedArg2);
     if (typed !== void 0) {

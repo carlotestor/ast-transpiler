@@ -6382,6 +6382,12 @@ export class JavaTranspiler extends BaseTranspiler {
         return this.printCheckerTypedElementAccessRead(node) ?? super.printElementAccessExpression(node, identation);
     }
 
+    // generated library tiers only (exchanges, pro, prediction, base); tests keep the helpers
+    javaLibraryTierNode(node): boolean {
+        const file = node?.getSourceFile?.()?.fileName ?? '';
+        return file.includes('ts/src/') && !file.includes('ts/src/test/');
+    }
+
     // `Helpers.GetValue(book, "asks")` on a receiver declared the ws order book class: the class's
     // own `get` is the helper's map branch (containsKey holds every one of these keys), and GetValue
     // answers null for a null receiver, so the native read carries the same guard
@@ -9474,6 +9480,14 @@ export class JavaTranspiler extends BaseTranspiler {
         const receiver = this.sideEffectFreeReceiver(node?.expression);
         if (pattern !== undefined && replacement !== undefined && receiver) {
             return `(${name} == null ? null : ((String)${name}).replace(${pattern}, ${replacement}))`;
+        }
+        // a toLowerCase/toUpperCase/trim receiver is a non-null String (or throws first, as the helper's argument would)
+        const callee = node?.expression?.expression;
+        if (pattern !== undefined && replacement !== undefined && this.javaLibraryTierNode(node)
+            && isCallExpression(callee) && isPropertyAccessExpression(callee.expression) && callee.arguments.length === 0
+            && ['toLowerCase', 'toUpperCase', 'trim'].includes(callee.expression.name.text)
+            && /^(?:\(\(String\)[\w.]+\)|[\w.]+)\.(?:toLowerCase|toUpperCase|trim)\(\)$/.test(name)) {
+            return `${name}.replace(${pattern}, ${replacement})`;
         }
         const typed = this.javaTypedStringReplaceAllCall(node, name, parsedArg, parsedArg2);
         if (typed !== undefined) {
