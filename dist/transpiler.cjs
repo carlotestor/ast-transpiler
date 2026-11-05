@@ -6834,17 +6834,6 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     return void 0;
   }
-  // castVariableAssignmentIfNeeded(left, right, identation) {
-  //     const leftType = this.getChecker().getTypeAtLocation(left);
-  //     const rightType = this.getChecker().getTypeAtLocation(right);
-  //     const leftText = this.printNode(left, 0);
-  //     const rightText = this.printNode(right, 0);
-  //     if (this.isAnyType(rightType.flags) && !this.isAnyType(leftType.flags)) {
-  //         const parsedType = this.getTypeFromRawType(leftType);
-  //         return `${this.getIden(identation)}${leftText} = (${parsedType})${rightText}`;
-  //     }
-  //     return undefined;
-  // }
   // the C# type of a whole-call / whole-property initializer, keyed on the AST so
   // the printer's cast wrappers (`((string)x).ToUpper()`) do not hide the callee
   csharpCallReturnType(initializer) {
@@ -8442,7 +8431,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     return type === "List<object>" || type === "IList<object>";
   }
   // A parameter of a method that participates in an override relation prints the spelling its
-  // base member and every sibling override agree on (CSHARP_OVERRIDE_PARAM_TYPES; D8): C# is
+  // base member and every sibling override agree on (CSHARP_OVERRIDE_PARAM_TYPES): C# is
   // invariant on override parameter types, so a half-retyped name is CS0115, while a name the
   printParameterType(node) {
     if (node === void 0 || node.kind !== _ast.SyntaxKind.Parameter) {
@@ -10895,27 +10884,6 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     return modifiers + " " + typeText + " ";
   }
-  // printLeadingComments(node, identation) {
-  //     const fullText = this.getSrc().getFullText();
-  //     const commentsRangeList = ts.getLeadingCommentRanges(fullText, node.pos);
-  //     const commentsRange = commentsRangeList ? commentsRangeList : undefined;
-  //     let res = "";
-  //     if (commentsRange) {
-  //         for (const commentRange of commentsRange) {
-  //             const commentText = fullText.slice(commentRange.pos, commentRange.end);
-  //             if (commentText !== undefined) {
-  //                 const formatted = commentText
-  //                     .split("\n")
-  //                     .map(line=>line.trim())
-  //                     .map(line => !(line.trim().startsWith("*")) ? this.getIden(identation) + line : this.getIden(identation) + " " + line) .join("\n");
-  //                 // res+= this.transformLeadingComment(formatted) + "\n";
-  //             }
-  //         }
-  //     }
-  //     return res;
-  // }
-  // a declared C# collection keeps its static type across every write, and the
-  // null/ContainsKey/Count test reads the live value, so only an enclosing function is needed
   csharpDeclaredReceiverReadable(node, expression) {
     return this.csharpEnclosingFunction(node) !== void 0 && _is.isIdentifier.call(void 0, expression);
   }
