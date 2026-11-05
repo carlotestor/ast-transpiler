@@ -53040,7 +53040,7 @@ ${classMethods}
     if (isIdentifier3(expr.expression) && this.rustCallsRuntimeHandle(node)) {
       return this.printRuntimeVariadicCall(node, this.printNode(expr.expression, 0), expr.name.text, identation, false, true);
     }
-    if (expr.expression.kind === SyntaxKind7.SuperKeyword && /ts[\/]src[\/]pro[\/]/.test(String(node.getSourceFile().fileName))) {
+    if (expr.expression.kind === SyntaxKind7.SuperKeyword && (/ts[\/]src[\/]pro[\/]/.test(String(node.getSourceFile().fileName)) || /^network(?:CodeToId|IdToCode)$/.test(expr.name.text))) {
       return this.printRuntimeVariadicCall(node, "super", expr.name.text, identation);
     }
     if (expr.expression.kind === SyntaxKind7.ThisKeyword) {
