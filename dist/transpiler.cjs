@@ -2612,7 +2612,7 @@ _chunkCNXC7LJYcjs.init_cjs_shims.call(void 0, );
 
 
 
-var _fs = require('fs'); var fs4 = _interopRequireWildcard(_fs); var fs2 = _interopRequireWildcard(_fs); var fs3 = _interopRequireWildcard(_fs);
+var _fs = require('fs'); var fs3 = _interopRequireWildcard(_fs); var fs2 = _interopRequireWildcard(_fs);
 var _path = require('path'); var path3 = _interopRequireWildcard(_path); var path2 = _interopRequireWildcard(_path);
 var parserConfig3 = {
   "ELSEIF_TOKEN": "else if",
@@ -2879,7 +2879,7 @@ function csharpReadDeclaredMembers(root, owner) {
   csharpDeclaredMemberTables.set(file, table);
   let content;
   try {
-    content = fs4.default.readFileSync(file, "utf8");
+    content = fs3.default.readFileSync(file, "utf8");
   } catch (e) {
     return table;
   }
@@ -2950,14 +2950,14 @@ function csharpReadDeclaredMethodReturns(root) {
   csharpDeclaredMethodTables.set(folder, table);
   let names = [];
   try {
-    names = fs4.default.readdirSync(folder).filter((file) => file.endsWith(".cs"));
+    names = fs3.default.readdirSync(folder).filter((file) => file.endsWith(".cs"));
   } catch (e) {
     return table;
   }
   for (const file of names) {
     let content;
     try {
-      content = fs4.default.readFileSync(path3.default.join(folder, file), "utf8");
+      content = fs3.default.readFileSync(path3.default.join(folder, file), "utf8");
     } catch (e) {
       continue;
     }
@@ -17635,9 +17635,9 @@ function installCcxtGoGetArgMapAlias(goTranspiler) {
     return;
   }
   const shipped = goTranspiler.goGetArgUsesAreSafe;
-  goTranspiler.goGetArgUsesAreSafe = function(body, param, name, goType, nilable, seen, boxed2 = false) {
-    const alias = boxed2 && nilable && goType === CCXT_GO_PRODUCER_DICT_TYPE && _optionalChain([param, 'optionalAccess', _2204 => _2204.kind]) === ts.SyntaxKind.VariableDeclaration && !this.goAnyLocalHoldsNonPointer(param);
-    return shipped.call(this, body, param, name, goType, nilable, seen, alias ? false : boxed2);
+  goTranspiler.goGetArgUsesAreSafe = function(body, param, name, goType, nilable, seen, boxed = false) {
+    const alias = boxed && nilable && goType === CCXT_GO_PRODUCER_DICT_TYPE && _optionalChain([param, 'optionalAccess', _2204 => _2204.kind]) === ts.SyntaxKind.VariableDeclaration && !this.goAnyLocalHoldsNonPointer(param);
+    return shipped.call(this, body, param, name, goType, nilable, seen, alias ? false : boxed);
   };
   goTranspiler.__ccxtGoGetArgMapAliasInstalled = true;
 }
@@ -18175,17 +18175,17 @@ function ccxtGoTupleParamsElementTypeUncached(goTranspiler, element) {
   }
   const name = element.name.text;
   const scope = goTranspiler.goEnclosingFunction(element);
-  let rebound2 = false;
+  let rebound = false;
   const visit = (n) => {
-    if (rebound2) {
+    if (rebound) {
       return;
     }
     if (n !== element && n.kind === ts.SyntaxKind.BindingElement && bindingMentionsName(n.name, name)) {
-      rebound2 = true;
+      rebound = true;
       return;
     }
     if (isIdentifierNamed(n, name) && n !== element.name && isDestructuringTarget(n)) {
-      rebound2 = true;
+      rebound = true;
       return;
     }
     _optionalChain([n, 'optionalAccess', _2335 => _2335.forEachChild, 'call', _2336 => _2336(visit)]);
@@ -18193,7 +18193,7 @@ function ccxtGoTupleParamsElementTypeUncached(goTranspiler, element) {
   if (scope !== void 0) {
     _optionalChain([scope, 'optionalAccess', _2337 => _2337.forEachChild, 'call', _2338 => _2338(visit)]);
   }
-  if (rebound2) {
+  if (rebound) {
     return void 0;
   }
   return goTranspiler.goDeclaredLocalTypeIfSafe(
@@ -18232,23 +18232,23 @@ function ccxtGoTupleNumberElementTypeUncached(goTranspiler, element) {
   if (scope === void 0 || goTranspiler.goTypeNameIsShadowed(scope, "Float64PtrTyped")) {
     return void 0;
   }
-  let rebound2 = false;
+  let rebound = false;
   const visit = (n) => {
-    if (rebound2) {
+    if (rebound) {
       return;
     }
     if (n !== scope && FUNCTION_LIKE_KINDS.indexOf(n.kind) >= 0 && scopeMentionsIdentifier(n, name)) {
-      rebound2 = true;
+      rebound = true;
       return;
     }
     if (n !== element && n.kind === ts.SyntaxKind.BindingElement && bindingMentionsName(n.name, name)) {
-      rebound2 = true;
+      rebound = true;
       return;
     }
     _optionalChain([n, 'optionalAccess', _2355 => _2355.forEachChild, 'call', _2356 => _2356(visit)]);
   };
   _optionalChain([scope, 'optionalAccess', _2357 => _2357.forEachChild, 'call', _2358 => _2358(visit)]);
-  return rebound2 ? void 0 : goTranspiler.goDeclaredLocalTypeIfSafe(element, "*float64", (n) => ccxtGoTupleNumberReadIsSafe(goTranspiler, n));
+  return rebound ? void 0 : goTranspiler.goDeclaredLocalTypeIfSafe(element, "*float64", (n) => ccxtGoTupleNumberReadIsSafe(goTranspiler, n));
 }
 function installCcxtGoTupleParamsElement(goTranspiler) {
   if (goTranspiler === void 0 || goTranspiler.__ccxtGoTupleParamsElementInstalled || typeof goTranspiler.printVariableDeclarationList !== "function") {
@@ -20443,17 +20443,17 @@ function ccxtGoTupleBoolElementTypeUncached(goTranspiler, element) {
     return void 0;
   }
   const name = element.name.text;
-  let rebound2 = false;
+  let rebound = false;
   const visit = (n) => {
-    if (!rebound2 && n !== element && n.kind === ts.SyntaxKind.BindingElement && bindingMentionsName(n.name, name)) {
-      rebound2 = true;
+    if (!rebound && n !== element && n.kind === ts.SyntaxKind.BindingElement && bindingMentionsName(n.name, name)) {
+      rebound = true;
     }
-    if (!rebound2) {
+    if (!rebound) {
       _optionalChain([n, 'optionalAccess', _2829 => _2829.forEachChild, 'call', _2830 => _2830(visit)]);
     }
   };
   _optionalChain([scope, 'optionalAccess', _2831 => _2831.forEachChild, 'call', _2832 => _2832(visit)]);
-  return rebound2 ? void 0 : goTranspiler.goDeclaredLocalTypeIfSafe(element, "bool", (n) => ccxtGoTupleBoolUseIsSafe(n));
+  return rebound ? void 0 : goTranspiler.goDeclaredLocalTypeIfSafe(element, "bool", (n) => ccxtGoTupleBoolUseIsSafe(n));
 }
 function installCcxtGoTupleBoolElement(goTranspiler) {
   if (goTranspiler === void 0 || goTranspiler.__ccxtGoTupleBoolElementInstalled || typeof goTranspiler.printVariableDeclarationList !== "function" || typeof goTranspiler.goDeclaredTypeOfIdentifier !== "function") {
@@ -20923,23 +20923,23 @@ function ccxtGoJoinedParamsLocal(goTranspiler, node) {
   }
   const name = element.name.text;
   const scope = goTranspiler.goEnclosingFunction(element);
-  let rebound2 = false;
+  let rebound = false;
   const visit = (n) => {
-    if (rebound2) {
+    if (rebound) {
       return;
     }
     if (n !== element && n.kind === ts.SyntaxKind.BindingElement && bindingMentionsName(n.name, name)) {
-      rebound2 = true;
+      rebound = true;
       return;
     }
     if (isIdentifierNamed(n, name) && n !== element.name && (isDestructuringTarget(n) || ccxtGoProducerUseRebinds(n))) {
-      rebound2 = true;
+      rebound = true;
       return;
     }
     _optionalChain([n, 'optionalAccess', _2972 => _2972.forEachChild, 'call', _2973 => _2973(visit)]);
   };
   _optionalChain([scope, 'optionalAccess', _2974 => _2974.forEachChild, 'call', _2975 => _2975(visit)]);
-  return !rebound2 && scope !== void 0;
+  return !rebound && scope !== void 0;
 }
 function installCcxtGoTupleResults(goTranspiler) {
   if (goTranspiler === void 0 || goTranspiler.__ccxtGoTupleResultsInstalled) {
@@ -31112,9 +31112,9 @@ ${iden}}`;
     }
     const scope = this.goEnclosingFunction(declaration);
     const name = declaration.name.text;
-    const rebound2 = this.goDescendantsOf(scope).some((n) => n.kind === _ast.SyntaxKind.Identifier && n.text === name && n !== declaration.name && this.goIdentifierRefersToDeclaration(n, declaration) && _optionalChain([n, 'access', _4913 => _4913.parent, 'optionalAccess', _4914 => _4914.kind]) === _ast.SyntaxKind.BinaryExpression && n.parent.left === n && n.parent.operatorToken.kind >= _ast.SyntaxKind.FirstAssignment && n.parent.operatorToken.kind <= _ast.SyntaxKind.LastAssignment);
+    const rebound = this.goDescendantsOf(scope).some((n) => n.kind === _ast.SyntaxKind.Identifier && n.text === name && n !== declaration.name && this.goIdentifierRefersToDeclaration(n, declaration) && _optionalChain([n, 'access', _4913 => _4913.parent, 'optionalAccess', _4914 => _4914.kind]) === _ast.SyntaxKind.BinaryExpression && n.parent.left === n && n.parent.operatorToken.kind >= _ast.SyntaxKind.FirstAssignment && n.parent.operatorToken.kind <= _ast.SyntaxKind.LastAssignment);
     const bindings = this.goDescendantsOf(scope).filter((n) => (n.kind === _ast.SyntaxKind.VariableDeclaration || n.kind === _ast.SyntaxKind.Parameter) && _optionalChain([n, 'access', _4915 => _4915.name, 'optionalAccess', _4916 => _4916.kind]) === _ast.SyntaxKind.Identifier && n.name.text === name);
-    return rebound2 || bindings.length !== 1 || this.goTypeNameIsShadowed(scope, cfg.sideType) ? void 0 : cfg.sideType;
+    return rebound || bindings.length !== 1 || this.goTypeNameIsShadowed(scope, cfg.sideType) ? void 0 : cfg.sideType;
   }
   // `x['asks']` on an identifier printed as the book interface is the interface's accessor
   goOrderBookSideRead(node) {
@@ -32005,9 +32005,9 @@ ${iden}}`;
         }
         let arg = site.args[index];
         if ((goType === "[]string" || goType === "[][]string") && site.at !== void 0) {
-          const callArgs2 = goBalancedSliceArgs(_nullishCoalesce(tree.fileText.get(site.file), () => ( "")), site.at);
-          if (callArgs2 !== void 0) {
-            arg = callArgs2[index];
+          const callArgs = goBalancedSliceArgs(_nullishCoalesce(tree.fileText.get(site.file), () => ( "")), site.at);
+          if (callArgs !== void 0) {
+            arg = callArgs[index];
           }
         }
         const passthrough = goType === "string" && this.siblingStringPassthroughPattern !== void 0 && this.siblingStringPassthroughPattern.test(name) && arg !== void 0 && this.goSiblingPassesUnifiedString(arg, _nullishCoalesce(tree.fileText.get(site.file), () => ( "")), site.at);
@@ -32926,21 +32926,21 @@ ${iden}}`;
       return true;
     }
     const name = nameNode.text;
-    let rebound2 = false;
+    let rebound = false;
     const visit = (n) => {
-      if (rebound2) {
+      if (rebound) {
         return;
       }
       if (n.kind === _ast.SyntaxKind.Identifier && n.text === name && n !== nameNode) {
         if (this.goRebindingTargetOf(n) !== void 0) {
-          rebound2 = true;
+          rebound = true;
           return;
         }
       }
       n.forEachChild(visit);
     };
     visit(scope);
-    return rebound2;
+    return rebound;
   }
   // walks up from the identifier to the assignment it targets: `x = …` / `x += …` /
   // `[x, y] = …` / `for (x of …)` rebind the local, `x[k] = v` does not
@@ -36047,7 +36047,7 @@ ${indent}}`);
     body.forEachChild(visit);
     return inBody && !valueWrite ? target : void 0;
   }
-  goGetArgUsesAreSafe(body, param, name, goType, nilable, seen, boxed2 = false) {
+  goGetArgUsesAreSafe(body, param, name, goType, nilable, seen, boxed = false) {
     seen.add(param);
     const table = _nullishCoalesce(this.CCXT_GO_GETARG_SAFE_CONSUMERS, () => ( {}));
     const pointer = goType.startsWith("*");
@@ -36123,7 +36123,7 @@ ${indent}}`);
             const other = parent.left === n ? parent.right : parent.left;
             const isNullTest = _optionalChain([other, 'optionalAccess', _5939 => _5939.kind]) === _ast.SyntaxKind.NullKeyword || _optionalChain([other, 'optionalAccess', _5940 => _5940.kind]) === _ast.SyntaxKind.Identifier && other.text === "undefined";
             if (isNullTest) {
-              safe = pointer || !boxed2;
+              safe = pointer || !boxed;
               return;
               safe = true;
               return;
@@ -46038,13 +46038,13 @@ ${this.getIden(identation)}}}`;
     if (this.javaBoxedLongResolver === void 0 || !_is.isIdentifier.call(void 0, left) || !_is.isNumericLiteral.call(void 0, right) || this.javaIntegerLiteralKind(right) === void 0 || !/^\d{1,15}$/.test(rightText) || leftText !== left.text) {
       return void 0;
     }
-    let boxed2 = false;
+    let boxed = false;
     try {
-      boxed2 = this.javaBoxedLongResolver(left) === true;
+      boxed = this.javaBoxedLongResolver(left) === true;
     } catch (e) {
-      boxed2 = false;
+      boxed = false;
     }
-    return boxed2 ? `(${leftText} == null ? null : (Object) (${leftText} + ${rightText}L))` : void 0;
+    return boxed ? `(${leftText} == null ? null : (Object) (${leftText} + ${rightText}L))` : void 0;
   }
   // an int operand is widened to long explicitly: `i + 1` would box an Integer where
   // Helpers.add hands back a Long, and an all-int sum wraps where the helper's long
@@ -47627,16 +47627,16 @@ ${this.getIden(identation)}}}`;
     return this.javaTypeFlagsOnly(type, JAVA_SCALAR_TYPE_FLAGS | JAVA_NULLISH_TYPE_FLAGS);
   }
   // the type, or every member of its (nested) union, carries one of the mask's flags
-  javaTypeFlagsOnly(type, mask2, depth = 0) {
+  javaTypeFlagsOnly(type, mask, depth = 0) {
     if (type === void 0 || type === null || depth > 3) {
       return false;
     }
     const flags = type.flags;
     if (flags & _sync.TypeFlags.Union) {
       const parts = _nullishCoalesce(_optionalChain([type, 'access', _7801 => _7801.getTypes, 'optionalCall', _7802 => _7802()]), () => ( []));
-      return parts.length > 0 && parts.every((part) => this.javaTypeFlagsOnly(part, mask2, depth + 1));
+      return parts.length > 0 && parts.every((part) => this.javaTypeFlagsOnly(part, mask, depth + 1));
     }
-    return (flags & mask2) !== 0;
+    return (flags & mask) !== 0;
   }
   // A checker-proven dict prints a Map on every path, so the key copy is native;
   // every other target keeps the helper — shared field maps need its synchronized
@@ -49829,7835 +49829,6 @@ _chunkCNXC7LJYcjs.init_cjs_shims.call(void 0, );
 
 
 
-
-var IDENT = "[A-Za-z_][A-Za-z0-9_]*";
-var MARKER_KEYS = ["__book_id", "__cache_id", "__cacheKind", "__sideKind", "__live_id"];
-var ROUTED_KEYS = ["cache", "hashmap", "subscriptions", "futures", "timestamp", "datetime", "nonce", "symbol", "checksum"];
-function maskText(src) {
-  let out = "";
-  let i = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === "/" && src[i + 1] === "/") {
-      while (i < src.length && src[i] !== "\n") {
-        out += " ";
-        i++;
-      }
-      continue;
-    }
-    if (c === '"') {
-      out += " ";
-      i++;
-      while (i < src.length && src[i] !== '"') {
-        if (src[i] === "\\") {
-          out += "  ";
-          i += 2;
-          continue;
-        }
-        out += src[i] === "\n" ? "\n" : " ";
-        i++;
-      }
-      if (i < src.length) {
-        out += " ";
-        i++;
-      }
-      continue;
-    }
-    out += c;
-    i++;
-  }
-  return out;
-}
-function closeBracket(src, open) {
-  let depth = 0;
-  for (let k = open; k < src.length; k++) {
-    const c = src[k];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth === 0)
-        return k + 1;
-    }
-  }
-  return -1;
-}
-function statementEnd(src, from) {
-  let depth = 0;
-  for (let k = from; k < src.length; k++) {
-    const c = src[k];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      if (depth === 0)
-        return -1;
-      depth--;
-    } else if (c === ";" && depth === 0)
-      return k + 1;
-    else if (c === "\n" && depth === 0)
-      return -1;
-  }
-  return -1;
-}
-var ARRAY_INIT = /^(?:Value::Array\(|Value::from\(\s*vec!\[|Value::from\(\s*std::sync::Arc::new\(\s*vec!\[|split\(|object_keys\(|object_values\(|self\.array_concat\(|self\.safe_list(?:_k|_n)?\()/;
-var DICT_INIT = /^(?:Value::Map\(|Value::Dict\()/;
-var SEQ_TYPE = /^(?:&)?(?:mut )?(?:Vec<(?:crate::)?Value>|\[(?:crate::)?Value\])$/;
-var INDEXED = ".cloned().unwrap_or(Value::Null)";
-function literalIndex(keyText) {
-  const key = keyText.trim().replace(/^&/, "").trim();
-  const int = /^Value::Int\(\s*(\d+)\s*\)$/.exec(key);
-  if (int !== null)
-    return Number(int[1]);
-  const str = /^Value::Str\(\s*"(\d+)"\s*(?:\.into\(\)|\.to_string\(\))?\s*\)$/.exec(key);
-  if (str !== null)
-    return Number(str[1]);
-  return -1;
-}
-function literalStrKey(keyText) {
-  const key = keyText.trim().replace(/^&/, "").trim();
-  const m = /^Value::Str\(\s*"([^"\\]*)"\s*(?:\.into\(\)|\.to_string\(\))?\s*\)$/.exec(key);
-  return m === null ? void 0 : m[1];
-}
-function identKey(keyText) {
-  const m = /^&?([A-Za-z_][A-Za-z0-9_]*)$/.exec(keyText.trim());
-  return m === null ? void 0 : m[1];
-}
-function callArgs(masked, callStart, recv) {
-  const head = "get_value(&" + recv;
-  if (masked.slice(callStart, callStart + head.length) !== head)
-    return void 0;
-  const afterRecv = callStart + head.length;
-  if (masked[afterRecv] !== ",")
-    return void 0;
-  const close = closeBracket(masked, masked.indexOf("(", callStart));
-  if (close < 0)
-    return void 0;
-  return [afterRecv, close];
-}
-function intPinned(region, name) {
-  const declRe = new RegExp("^[ \\t]*let (?:mut )?" + name + ":\\s*(?:crate::)?Value\\s*=\\s*Value::Int\\(\\s*\\d+\\s*\\);", "m");
-  const decl = declRe.exec(region);
-  if (decl === null)
-    return false;
-  const declEnd = decl.index + decl[0].length;
-  const useRe = new RegExp("(?<![A-Za-z0-9_.])" + name + "(?![A-Za-z0-9_])", "g");
-  let um;
-  while ((um = useRe.exec(region)) !== null) {
-    const at = um.index;
-    if (at >= decl.index && at < declEnd)
-      continue;
-    const before = region.slice(Math.max(0, at - 5), at);
-    const after = region.slice(at + name.length);
-    if (before === "&mut " && /^\s*\{\s*\*n \+= 1;\s*\}/.test(after))
-      continue;
-    if (before.endsWith("&"))
-      continue;
-    if (/^\.(?:as_(?:i64|f64)|clone)\(\)/.test(after))
-      continue;
-    return false;
-  }
-  return true;
-}
-function nativeGetValue(content, stats) {
-  const masked = maskText(content);
-  const edits = [];
-  const headers = [];
-  const headerRe = /^[ \t]*(?:pub )?(?:async )?fn /gm;
-  let hm;
-  while ((hm = headerRe.exec(masked)) !== null)
-    headers.push(hm.index);
-  headers.push(content.length);
-  for (let h = 0; h + 1 < headers.length; h++) {
-    const from = headers[h];
-    const to = h + 2 < headers.length ? headers[h + 1] : content.length;
-    const region = masked.slice(from, to);
-    const readText = (recv, seq, keyText) => {
-      if (seq) {
-        const idx = literalIndex(keyText);
-        if (idx >= 0)
-          return recv + ".get(" + idx + ")" + INDEXED;
-        const key = identKey(keyText);
-        if (key !== void 0 && intPinned(region, key)) {
-          return recv + ".get(" + key + ".as_i64().unwrap() as usize)" + INDEXED;
-        }
-        return void 0;
-      }
-      const str = literalStrKey(keyText);
-      if (str === void 0 || ROUTED_KEYS.indexOf(str) >= 0)
-        return void 0;
-      return recv + '.as_map().unwrap().get("' + str + '").cloned().unwrap_or(Value::Null)';
-    };
-    const rewriteRead = (recv, seq, callStart) => {
-      const args = callArgs(masked, callStart, recv);
-      if (args === void 0)
-        return void 0;
-      const text = readText(recv, seq, content.slice(args[0] + 1, args[1] - 1));
-      return text === void 0 ? void 0 : { start: callStart, end: args[1], text };
-    };
-    const declared = /* @__PURE__ */ new Map();
-    const declType = new RegExp("\\blet (?:mut )?(" + IDENT + ")\\s*:\\s*([^=;]+?)\\s*=", "g");
-    let dm;
-    while ((dm = declType.exec(region)) !== null)
-      declared.set(dm[1], dm[2].trim());
-    const headerEnd = region.indexOf("{");
-    const headerText = headerEnd < 0 ? region : region.slice(0, headerEnd);
-    const paramRe = new RegExp("\\b(?:mut )?(" + IDENT + ")\\s*:\\s*([&\\[A-Za-z_][A-Za-z0-9_:<>,\\s&\\[\\]]*)", "g");
-    while ((dm = paramRe.exec(headerText)) !== null) {
-      if (!declared.has(dm[1]))
-        declared.set(dm[1], dm[2].trim());
-    }
-    for (const [name, type] of declared) {
-      if (!SEQ_TYPE.test(type))
-        continue;
-      const useRe = new RegExp("get_value\\(&" + name + "(?![A-Za-z0-9_])", "g");
-      let um;
-      while ((um = useRe.exec(region)) !== null) {
-        const read = rewriteRead(name, true, from + um.index);
-        if (read === void 0)
-          continue;
-        edits.push(read);
-        if (stats)
-          stats.seqReads++;
-      }
-    }
-    const declRe = new RegExp("^([ \\t]*)let (mut )?(" + IDENT + "):\\s*(?:crate::)?Value\\s*=\\s*", "gm");
-    while ((dm = declRe.exec(region)) !== null) {
-      const name = dm[3];
-      const declAt = from + dm.index;
-      const initStart = declAt + dm[0].length;
-      const stmtEnd2 = statementEnd(masked, initStart);
-      if (stmtEnd2 < 0)
-        continue;
-      const initText = content.slice(initStart, stmtEnd2).trim();
-      const isSeq = ARRAY_INIT.test(initText);
-      const isDict = DICT_INIT.test(initText);
-      if (!isSeq && !isDict)
-        continue;
-      const declCount = (_nullishCoalesce(region.match(new RegExp("\\blet (?:mut )?" + name + "\\b", "g")), () => ( []))).length;
-      if (declCount !== 1)
-        continue;
-      if (new RegExp("(?<![A-Za-z0-9_.])" + name + "\\s*=[^=]").test(region))
-        continue;
-      const dictKeys = [];
-      if (isDict) {
-        const keys = insertedKeys(initText);
-        if (keys === void 0)
-          continue;
-        for (const k of keys)
-          dictKeys.push(k);
-      }
-      const useRe = new RegExp("(?<![A-Za-z0-9_.])" + name + "(?![A-Za-z0-9_])", "g");
-      const reads = [];
-      let ok = true;
-      let um;
-      while ((um = useRe.exec(region)) !== null) {
-        const at2 = um.index;
-        if (at2 >= dm.index && at2 < dm.index + dm[0].length)
-          continue;
-        const gv = region.lastIndexOf("get_value(", at2);
-        if (gv >= 0 && region.slice(gv, at2) === "get_value(&") {
-          const read = rewriteRead(name, isSeq, from + gv);
-          if (read === void 0) {
-            ok = false;
-            break;
-          }
-          reads.push(read);
-          continue;
-        }
-        if (isSeq && /^\.\s*(?:len|is_empty)\s*\(\s*\)/.test(region.slice(at2 + name.length)))
-          continue;
-        if (isSeq) {
-          ok = false;
-          break;
-        }
-        const before = region.slice(Math.max(0, at2 - 24), at2);
-        const writeHead = /(?:add_element_to_object|set_value)\(\s*&mut\s+$/.exec(before);
-        if (writeHead !== null) {
-          const keyStart = at2 + name.length;
-          const key = /^\s*,\s*&?\s*Value::Str\(\s*"([^"\\]*)"\s*(?:\.into\(\)|\.to_string\(\))?\s*\)\s*,/.exec(region.slice(keyStart));
-          if (key === null) {
-            ok = false;
-            break;
-          }
-          if (ROUTED_KEYS.indexOf(key[1]) >= 0 || MARKER_KEYS.indexOf(key[1]) >= 0) {
-            ok = false;
-            break;
-          }
-          dictKeys.push(key[1]);
-          continue;
-        }
-        if (/&mut\s+$/.test(before)) {
-          ok = false;
-          break;
-        }
-      }
-      if (!ok || reads.length === 0)
-        continue;
-      if (dictKeys.some((k) => MARKER_KEYS.indexOf(k) >= 0))
-        continue;
-      if (isSeq) {
-        const typeAt = declAt + dm[0].length - "Value = ".length;
-        edits.push({ start: typeAt, end: typeAt + "Value".length, text: "Vec<Value>" });
-        const initExpr = content.slice(initStart, stmtEnd2 - 1).replace(/\s+$/, "");
-        const inner = arrayPayload(initExpr);
-        edits.push({
-          start: initStart,
-          end: initStart + initExpr.length,
-          text: inner !== void 0 ? inner : initExpr + ".as_array().unwrap().clone()"
-        });
-        if (stats) {
-          stats.seqLocals++;
-          stats.seqReads += reads.length;
-        }
-      } else if (stats) {
-        stats.dictLocals++;
-        stats.dictReads += reads.length;
-      }
-      for (const r of reads)
-        edits.push(r);
-    }
-  }
-  if (edits.length === 0)
-    return content;
-  edits.sort((a, b) => a.start - b.start);
-  let out = "";
-  let at = 0;
-  for (const e of edits) {
-    if (e.start < at)
-      continue;
-    out += content.slice(at, e.start) + e.text;
-    at = e.end;
-  }
-  return out + content.slice(at);
-}
-function arrayPayload(initExpr) {
-  const strip = (text, prefix) => {
-    if (!text.startsWith(prefix) || !text.endsWith(")"))
-      return void 0;
-    return text.slice(prefix.length, -1).trim();
-  };
-  const direct = strip(initExpr, "Value::Array(");
-  if (direct !== void 0 && direct.length > 0)
-    return direct;
-  let inner = strip(initExpr, "Value::from(");
-  if (inner !== void 0)
-    inner = _nullishCoalesce(strip(inner, "std::sync::Arc::new("), () => ( inner));
-  if (inner === void 0 || !inner.startsWith("vec!["))
-    return void 0;
-  return inner;
-}
-function insertedKeys(initText) {
-  const keys = [];
-  const insertRe = /\.insert\(\s*(?:"([^"\\]*)"\s*(?:\.to_string\(\)|\.into\(\))|([^,]+?))\s*,/g;
-  let im;
-  while ((im = insertRe.exec(initText)) !== null) {
-    if (im[1] === void 0)
-      return void 0;
-    keys.push(im[1]);
-  }
-  return keys;
-}
-var CASES = [
-  {
-    name: "seq: Value::from(vec![..]) local retyped, literal int key",
-    src: [
-      "pub fn demo(&mut self) -> Value {",
-      "    let mut rows: Value = Value::from(vec![Value::Int(1), Value::Int(2)]);",
-      "    let mut first: Value = get_value(&rows, &Value::Int(1));",
-      "    return first;",
-      "}"
-    ].join("\n"),
-    want: ["let mut rows: Vec<Value> =", "rows.get(1).cloned().unwrap_or(Value::Null)"],
-    gone: ["get_value("]
-  },
-  {
-    name: "seq: safe_list_k local, numeric-string key",
-    src: [
-      "pub fn demo(&mut self) -> Value {",
-      '    let mut data: Value = self.safe_list_k(response.clone(), "data", &[Value::from(vec![])]);',
-      '    let mut head: Value = get_value(&data, &Value::Str("0".into()));',
-      "    return head;",
-      "}"
-    ].join("\n"),
-    want: ["let mut data: Vec<Value> =", "data.get(0).cloned().unwrap_or(Value::Null)"],
-    gone: ["get_value("]
-  },
-  {
-    name: "seq: split local read by a Value::Int-pinned counter",
-    src: [
-      "pub fn demo(&mut self) -> Value {",
-      '    let mut parts: Value = split(&raw, &Value::Str("_".into()));',
-      "    let mut i: Value = Value::Int(0);",
-      "    while i.as_f64().unwrap_or(f64::NAN) < 2.0 {",
-      "        let mut part: Value = get_value(&parts, &i);",
-      "        if let Value::Int(n) = &mut i { *n += 1; }",
-      "    }",
-      "    return Value::Null;",
-      "}"
-    ].join("\n"),
-    want: ["let mut parts: Vec<Value> =", "parts.get(i.as_i64().unwrap() as usize).cloned().unwrap_or(Value::Null)"],
-    gone: ["get_value("]
-  },
-  {
-    name: "seq: unpinned dynamic key stays a helper call",
-    src: [
-      "pub fn demo(&mut self, mut key: Value) -> Value {",
-      '    let mut parts: Value = split(&raw, &Value::Str("_".into()));',
-      "    return get_value(&parts, &key);",
-      "}"
-    ].join("\n"),
-    want: ["let mut parts: Value =", "get_value(&parts, &key)"],
-    gone: ["Vec<Value>"]
-  },
-  {
-    name: "seq: a Value sink keeps the box",
-    src: [
-      "pub fn demo(&mut self) -> Value {",
-      '    let mut data: Value = self.safe_list_k(response.clone(), "data", &[Value::from(vec![])]);',
-      "    let mut first: Value = get_value(&data, &Value::Int(0));",
-      "    return self.parse_trades(data, &[]);",
-      "}"
-    ].join("\n"),
-    want: ["let mut data: Value =", "get_value(&data, &Value::Int(0))"],
-    gone: []
-  },
-  {
-    name: "dict: fresh literal with a literal key",
-    src: [
-      "pub fn demo(&mut self) -> Value {",
-      "    let mut request: Value = Value::Map({",
-      "        let mut m = indexmap::IndexMap::new();",
-      '        m.insert("amount".to_string(), amount);',
-      "        m",
-      "    });",
-      '    let mut amount2: Value = get_value(&request, &Value::Str("amount".into()));',
-      "    return amount2;",
-      "}"
-    ].join("\n"),
-    want: ["let mut request: Value =", 'request.as_map().unwrap().get("amount").cloned().unwrap_or(Value::Null)'],
-    gone: ["get_value("]
-  },
-  {
-    name: "dict: a routed key stays a helper call",
-    src: [
-      "pub fn demo(&mut self) -> Value {",
-      "    let mut book: Value = Value::Map({",
-      "        let mut m = indexmap::IndexMap::new();",
-      '        m.insert("bids".to_string(), bids);',
-      "        m",
-      "    });",
-      '    return get_value(&book, &Value::Str("cache".into()));',
-      "}"
-    ].join("\n"),
-    want: ['get_value(&book, &Value::Str("cache".into()))'],
-    gone: []
-  },
-  {
-    name: "dict: a computed insert key makes the key set dynamic",
-    src: [
-      "pub fn demo(&mut self, mut key: Value) -> Value {",
-      "    let mut request: Value = Value::Map({",
-      "        let mut m = indexmap::IndexMap::new();",
-      "        m.insert(crate::runtime::stringify_param(&key), amount);",
-      "        m",
-      "    });",
-      '    return get_value(&request, &Value::Str("amount".into()));',
-      "}"
-    ].join("\n"),
-    want: ['get_value(&request, &Value::Str("amount".into()))'],
-    gone: []
-  },
-  {
-    name: "seq: a reassigned local keeps the box",
-    src: [
-      "pub fn demo(&mut self) -> Value {",
-      "    let mut rows: Value = Value::from(vec![Value::Int(1)]);",
-      "    rows = self.parse_rows();",
-      "    return get_value(&rows, &Value::Int(0));",
-      "}"
-    ].join("\n"),
-    want: ["let mut rows: Value =", "get_value(&rows, &Value::Int(0))"],
-    gone: []
-  },
-  {
-    name: "seq: an already typed receiver goes native as is",
-    src: [
-      "pub fn demo(&mut self, mut rows: &[Value]) -> Value {",
-      "    return get_value(&rows, &Value::Int(2));",
-      "}"
-    ].join("\n"),
-    want: ["rows.get(2).cloned().unwrap_or(Value::Null)"],
-    gone: ["get_value("]
-  }
-];
-var CALL = "add_element_to_object(";
-var TAGFREE_FIELDS = /* @__PURE__ */ new Set([
-  "balance",
-  "orderbooks",
-  "trades",
-  "tickers",
-  "bidsasks",
-  "ohlcvs",
-  "clients",
-  "transactions",
-  "headers",
-  "currencies",
-  "has",
-  "tokenBucket",
-  "options",
-  "markets",
-  "urls",
-  "positions",
-  "fees",
-  "exceptions",
-  "markets_by_id",
-  "currencies_by_id"
-]);
-var NEST_FIELDS = /* @__PURE__ */ new Set([
-  "options",
-  "urls",
-  "fees",
-  "exceptions",
-  "markets",
-  "currencies",
-  "headers",
-  "has",
-  "tokenBucket",
-  "markets_by_id",
-  "currencies_by_id"
-]);
-var TAG_ACCESS = [
-  "self.orderbooks",
-  "self.balance",
-  "self.ohlcvs",
-  "self.tickers",
-  "self.trades",
-  "self.bidsasks",
-  "self.positions",
-  "self.clients",
-  "self.transactions",
-  '"subscriptions"',
-  '"futures"',
-  '"cache"',
-  ".hashmap",
-  "self.order_book(",
-  "self.order_book_side("
-];
-var BUILDERS = /* @__PURE__ */ new Set(["account", "safe_ledger_entry", "deposit_withdraw_fee"]);
-var EXTENDERS = /* @__PURE__ */ new Set(["extend", "omit", "keysort"]);
-var PARSERS = /* @__PURE__ */ new Set([
-  "parse_order",
-  "parse_ws_order",
-  "parse_trade",
-  "parse_ws_trade",
-  "parse_ticker",
-  "parse_ws_ticker",
-  "parse_position",
-  "parse_ws_position",
-  "parse_balance",
-  "parse_market",
-  "parse_currency",
-  "parse_transaction",
-  "parse_ledger_entry",
-  "parse_deposit_withdraw_fee",
-  "parse_account",
-  "parse_funding_rate",
-  "parse_open_interest",
-  "parse_liquidation",
-  "parse_borrow_rate",
-  "parse_income"
-]);
-var LITERAL_KEY = /^&Value::Str\(("(?:[^"\\]|\\.)*")\.(?:into|to_string)\(\)\)$/;
-var PLACE_KEY = /^&([A-Za-z_][A-Za-z0-9_]*)$/;
-var INSERT_CHAIN_IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
-function isWordChar(c) {
-  return c >= "a" && c <= "z" || c >= "A" && c <= "Z" || c >= "0" && c <= "9" || c === "_";
-}
-function splitArgs(text) {
-  const out = [];
-  let depth = 0, inStr = false, esc = false, cur = 0;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inStr) {
-      if (esc)
-        esc = false;
-      else if (c === "\\")
-        esc = true;
-      else if (c === '"')
-        inStr = false;
-      continue;
-    }
-    if (c === '"') {
-      inStr = true;
-      continue;
-    }
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}")
-      depth--;
-    else if (c === "," && depth === 0) {
-      out.push(text.slice(cur, i));
-      cur = i + 1;
-    }
-  }
-  out.push(text.slice(cur));
-  return out.length > 0 ? out : void 0;
-}
-function closeParenAt(content, open) {
-  let depth = 0, inStr = false, esc = false;
-  for (let i = open; i < content.length; i++) {
-    const c = content[i];
-    if (inStr) {
-      if (esc)
-        esc = false;
-      else if (c === "\\")
-        esc = true;
-      else if (c === '"')
-        inStr = false;
-      continue;
-    }
-    if (c === '"') {
-      inStr = true;
-      continue;
-    }
-    if (c === "(")
-      depth++;
-    else if (c === ")") {
-      depth--;
-      if (depth === 0)
-        return i + 1;
-    }
-  }
-  return -1;
-}
-function fnRegions(content) {
-  const headers = [];
-  const rx = /^[ \t]*(?:pub )?(?:async )?fn [A-Za-z0-9_]+/gm;
-  let m;
-  while ((m = rx.exec(content)) !== null)
-    headers.push(m.index);
-  const out = [];
-  for (let i = 0; i < headers.length; i++) {
-    out.push({ start: headers[i], end: i + 1 < headers.length ? headers[i + 1] : content.length });
-  }
-  return out;
-}
-function regionAt(regions, pos) {
-  let lo = 0, hi = regions.length - 1, hit;
-  while (lo <= hi) {
-    const mid = lo + hi >> 1;
-    if (regions[mid].start <= pos) {
-      hit = regions[mid];
-      lo = mid + 1;
-    } else
-      hi = mid - 1;
-  }
-  return hit && pos < hit.end ? hit : void 0;
-}
-function firstArg(text) {
-  const open = text.indexOf("(");
-  if (open < 0)
-    return void 0;
-  let depth = 0, inStr = false, esc = false;
-  for (let i = open; i < text.length; i++) {
-    const c = text[i];
-    if (inStr) {
-      if (esc)
-        esc = false;
-      else if (c === "\\")
-        esc = true;
-      else if (c === '"')
-        inStr = false;
-      continue;
-    }
-    if (c === '"') {
-      inStr = true;
-      continue;
-    }
-    if (c === "(")
-      depth++;
-    else if (c === ")") {
-      depth--;
-      if (depth === 0)
-        return text.slice(open + 1, i);
-    } else if (c === "," && depth === 1)
-      return text.slice(open + 1, i);
-  }
-  return void 0;
-}
-var Proof = class {
-  constructor(content, regions) {
-    this.calls = /* @__PURE__ */ new Map();
-    this.locals = /* @__PURE__ */ new Map();
-    this.content = content;
-    this.regions = regions;
-  }
-  /** A local whose every binding is a fresh tag-free literal. */
-  localTagFree(name, body, region, depth = 0) {
-    if (depth > 2)
-      return false;
-    const key = region.start + ":" + name;
-    if (depth === 0) {
-      const cached = this.locals.get(key);
-      if (cached !== void 0)
-        return cached;
-    }
-    const verdict = this.localTagFreeUncached(name, body, region, depth);
-    if (depth === 0)
-      this.locals.set(key, verdict);
-    return verdict;
-  }
-  localTagFreeUncached(name, body, region, depth) {
-    if (body.includes('"__'))
-      return false;
-    const decl = new RegExp("^[ \\t]*let mut " + name + "[ \\t]*:[ \\t]*Value\\b(.*)$", "gm");
-    const bare = new RegExp("^[ \\t]*let mut " + name + "[ \\t]*=(.*)$", "gm");
-    const bound = new RegExp("(^|[^.\\w])" + name + "[ \\t]*=(?!=)(.*)$", "gm");
-    const sources = [];
-    let sawBind = false;
-    let m;
-    while ((m = bare.exec(body)) !== null) {
-      sawBind = true;
-      sources.push(m[1]);
-    }
-    while ((m = decl.exec(body)) !== null) {
-      sawBind = true;
-      const rest = m[1].trim();
-      if (rest.length > 0) {
-        if (rest[0] !== "=")
-          return false;
-        sources.push(rest.slice(1));
-      }
-    }
-    if (!sawBind)
-      return false;
-    while ((m = bound.exec(body)) !== null)
-      sources.push(m[2]);
-    for (const src of sources) {
-      if (!this.srcTagFree(src, body, region, depth))
-        return false;
-    }
-    return true;
-  }
-  /** A value expression that can only be a fresh plain dict. */
-  srcTagFree(src, body, region, depth = 0) {
-    const t = src.trim();
-    if (depth > 2)
-      return false;
-    if (t.startsWith("Value::Map("))
-      return true;
-    if (t.startsWith("Value::Null"))
-      return true;
-    const callee = t.match(/^self\.([A-Za-z_][A-Za-z0-9_]*)[ \t]*\(/);
-    if (callee === null)
-      return false;
-    const name = callee[1];
-    if (BUILDERS.has(name) || PARSERS.has(name))
-      return true;
-    if (EXTENDERS.has(name)) {
-      const arg = firstArg(t);
-      if (arg === void 0)
-        return false;
-      const head = arg.trim();
-      if (INSERT_CHAIN_IDENT.test(head))
-        return this.localTagFree(head, body, region, depth + 1);
-      return this.srcTagFree(head, body, region, depth + 1);
-    }
-    return this.calleePlain(name, region);
-  }
-  /** Same-file method whose only `return` is a proven tag-free local. */
-  calleePlain(name, caller) {
-    const key = caller.start;
-    const cache = this.calls.get(key * 1e5 + (name.charCodeAt(0) || 0));
-    if (cache !== void 0)
-      return cache;
-    let verdict = false;
-    for (const r of this.regions) {
-      const body = this.content.slice(r.start, r.end);
-      const header = body.slice(0, body.indexOf("\n") < 0 ? body.length : body.indexOf("\n"));
-      if (!new RegExp("fn " + name + "\\s*\\(").test(header))
-        continue;
-      if (body.includes('"__'))
-        continue;
-      const ret = body.match(/^[ \t]*return ([A-Za-z_][A-Za-z0-9_]*);/m);
-      if (ret !== null) {
-        if (this.localTagFree(ret[1], body, r)) {
-          verdict = true;
-          break;
-        }
-        continue;
-      }
-      if (new RegExp("\\b[A-Za-z0-9_]+Core::" + name + "\\(").test(body)) {
-        verdict = true;
-        break;
-      }
-    }
-    this.calls.set(key * 1e5 + (name.charCodeAt(0) || 0), verdict);
-    return verdict;
-  }
-};
-function insertChainCallArgs(text, name) {
-  if (!text.startsWith(name + "("))
-    return void 0;
-  const after = closeParenAt(text, name.length);
-  if (after !== text.length)
-    return void 0;
-  return splitArgs(text.slice(name.length + 1, after - 1));
-}
-function keyConv(arg, intermediate) {
-  const lit = arg.trim().match(LITERAL_KEY);
-  if (lit !== null)
-    return lit[1] + ".to_string()";
-  if (intermediate)
-    return void 0;
-  const place = arg.trim().match(PLACE_KEY);
-  if (place !== null)
-    return "crate::runtime::stringify_param(&" + place[1] + ")";
-  return void 0;
-}
-function nativeInserts(content) {
-  if (!content.includes(CALL))
-    return content;
-  const regions = fnRegions(content);
-  const proof = new Proof(content, regions);
-  const edits = [];
-  let i = 0;
-  while (true) {
-    const at = content.indexOf(CALL, i);
-    if (at < 0)
-      break;
-    i = at + 1;
-    if (at > 0 && isWordChar(content[at - 1]))
-      continue;
-    const open = at + CALL.length - 1;
-    const after = closeParenAt(content, open);
-    if (after < 0)
-      break;
-    const args = splitArgs(content.slice(open + 1, after - 1));
-    if (args === void 0 || args.length !== 3)
-      continue;
-    const region = regionAt(regions, at);
-    if (region === void 0)
-      continue;
-    const body = content.slice(region.start, region.end);
-    const chain = [];
-    let cur = args[0].trim();
-    let ok = true;
-    while (true) {
-      const outer = insertChainCallArgs(cur, "get_value_mut");
-      if (outer === void 0 || outer.length !== 2)
-        break;
-      const inner = outer[0].trim();
-      if (!inner.startsWith("&mut "))
-        break;
-      chain.push(outer[1].trim());
-      cur = inner.slice(5).trim();
-    }
-    let base;
-    let place;
-    if (cur.startsWith("&mut ")) {
-      base = cur.slice(5).trim();
-      place = "&mut " + base;
-    } else if (cur.startsWith("unsafe {")) {
-      const coerce = cur.match(/^unsafe \{ (crate::runtime::coerce_value_to_mut\(&self\.[A-Za-z_][A-Za-z0-9_]*\)) \}$/);
-      if (coerce === null)
-        continue;
-      place = cur;
-      base = coerce[1].replace("coerce_value_to_mut(&self.", "self.").replace(/\)$/, "");
-    } else if (/^(?:self\.)?[A-Za-z_][A-Za-z0-9_]*$/.test(cur)) {
-      base = cur;
-      place = "&mut " + cur;
-    } else
-      continue;
-    const field = base.match(/^self\.([A-Za-z_][A-Za-z0-9_]*)$/);
-    const local = base.match(/^([A-Za-z_][A-Za-z0-9_]*)$/);
-    if (field !== null) {
-      const name = field[1];
-      if (!TAGFREE_FIELDS.has(name))
-        continue;
-      if (chain.length > 0 && !NEST_FIELDS.has(name))
-        continue;
-    } else if (local !== null) {
-      if (!proof.localTagFree(local[1], body, region))
-        continue;
-      if (chain.length > 0 && TAG_ACCESS.some((t) => body.includes(t)))
-        continue;
-    } else
-      continue;
-    const keys = [];
-    for (const k of chain.reverse()) {
-      const conv = keyConv(k, true);
-      if (conv === void 0) {
-        ok = false;
-        break;
-      }
-      keys.push(conv);
-    }
-    if (!ok)
-      continue;
-    const last = keyConv(args[1], false);
-    if (last === void 0)
-      continue;
-    const value = args[2].trim();
-    const receiverName = field !== null ? field[1] : local !== null ? local[1] : "";
-    const readsReceiver = field !== null ? /\bself\b/.test(value) : new RegExp("\\b" + receiverName + "\\b").test(value);
-    if (keys.length > 9)
-      continue;
-    const tag = (i2) => "__rd" + "abcdefghij"[i2];
-    let insert = "std::sync::Arc::make_mut(" + tag(keys.length) + ").insert(" + last + ", " + value + ");";
-    for (let d = keys.length - 1; d >= 0; d--) {
-      insert = "if let Value::Dict(" + tag(d + 1) + ") = std::sync::Arc::make_mut(" + tag(d) + ").entry(" + keys[d] + ").or_insert(Value::Null) { " + insert + " }";
-    }
-    let native = "if let Value::Dict(" + tag(0) + ") = " + place + " { " + insert + " }";
-    if (readsReceiver)
-      native = "{ let __rdt = " + value + "; " + native.replace(", " + value + ");", ", __rdt);") + " }";
-    const lineStart = content.lastIndexOf("\n", at) + 1;
-    let lineEnd = content.indexOf("\n", after);
-    if (lineEnd < 0)
-      lineEnd = content.length;
-    const before = content.slice(lineStart, lineEnd);
-    let suffix = content.slice(after, lineEnd);
-    if (suffix.startsWith(";"))
-      suffix = suffix.slice(1);
-    const merged = content.slice(lineStart, at) + native + suffix;
-    if (before.length <= 400 && merged.length > 400)
-      continue;
-    edits.push({ start: at, end: after, text: native });
-  }
-  if (edits.length === 0)
-    return content;
-  let out = "";
-  let pos = 0;
-  for (const e of edits) {
-    out += content.slice(pos, e.start) + e.text;
-    let p = e.end;
-    while (p < content.length && (content[p] === " " || content[p] === "	"))
-      p++;
-    if (p < content.length && content[p] === ";")
-      p++;
-    pos = p;
-  }
-  out += content.slice(pos);
-  return out;
-}
-var CONTAINER_OP_SITE_RX = /(?<![A-Za-z0-9_:.])(in_op|object_keys|object_values|get_array_length)\(/g;
-var CONTAINER_OP_LITERAL_KEY = /^&Value::Str\(("(?:[^"\\]|\\.)*")\.(?:to_string|into)\(\)\)$/;
-var CONTAINER_OP_IDENT_ARG = /^&([a-z_][A-Za-z0-9_]*)$/;
-var CONTAINER_OP_CLIENT_STATE = /^&get_value\(&(client), &Value::Str\("(subscriptions|futures)"\.(?:to_string|into)\(\)\)\)$/;
-var CONTAINER_OP_SIDE_WORD = /asks|bids|[Ss]ide|[Bb]ook|entries|__sideKind/;
-var CONTAINER_OP_JSON_SOURCE = /^(?:crate::value::)?(?:get_value|get_value_k)\(|^self\.(?:safe_\w+|parse_\w+|fetch\w*|to_array|array_concat|extend|omit)\(|^get_arg\(|^split\(|^Value::(?:Map|List|Array|Str|from)\(/;
-var CONTAINER_OP_READS = /* @__PURE__ */ new Set([
-  "clone",
-  "len",
-  "is_empty",
-  "as_map",
-  "as_array",
-  "as_str",
-  "as_i64",
-  "as_f64",
-  "as_bool",
-  "is_truthy",
-  "is_null",
-  "is_str",
-  "is_map",
-  "is_array",
-  "to_string",
-  "to_json"
-]);
-var CONTAINER_OP_SHAPE_WRITES = /(?:(?<![A-Za-z0-9_:.])(?:add_element_to_object|set_value|append_to_array|remove)\(|(?:^|[^A-Za-z0-9_:.])if let (?:Value::(?:Dict|Arr)\(__[a-z]+\)|\(Value::(?:Dict|Arr)\(__[a-z]+\), ?(?:&mut )?[a-z_][A-Za-z0-9_]*\)) = )$/;
-function containerOpMask(content) {
-  const out = content.split("");
-  let i = 0;
-  while (i < content.length) {
-    const c = content[i];
-    if (c === "/" && content[i + 1] === "/") {
-      while (i < content.length && content[i] !== "\n")
-        out[i++] = " ";
-      continue;
-    }
-    if (c === '"') {
-      out[i++] = " ";
-      while (i < content.length && content[i] !== '"') {
-        if (content[i] === "\\")
-          out[i++] = " ";
-        out[i++] = " ";
-      }
-      if (i < content.length)
-        out[i++] = " ";
-      continue;
-    }
-    i++;
-  }
-  return out.join("");
-}
-function containerOpClose(content, open) {
-  const pairs = { "(": ")", "[": "]", "{": "}" };
-  const close = pairs[content[open]];
-  if (close === void 0)
-    return -1;
-  let depth = 0;
-  let i = open;
-  while (i < content.length) {
-    const c = content[i];
-    if (c === '"') {
-      i++;
-      while (i < content.length && content[i] !== '"') {
-        if (content[i] === "\\")
-          i++;
-        i++;
-      }
-      i++;
-      continue;
-    }
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth === 0)
-        return c === close ? i : -1;
-    }
-    i++;
-  }
-  return -1;
-}
-function containerOpSplit(inner) {
-  const parts = [];
-  let depth = 0;
-  let cur = "";
-  let i = 0;
-  while (i < inner.length) {
-    const c = inner[i];
-    if (c === '"') {
-      const start = i;
-      i++;
-      while (i < inner.length && inner[i] !== '"') {
-        if (inner[i] === "\\")
-          i++;
-        i++;
-      }
-      i++;
-      cur += inner.slice(start, i);
-      continue;
-    }
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}")
-      depth--;
-    if (c === "," && depth === 0) {
-      parts.push(cur);
-      cur = "";
-    } else {
-      cur += c;
-    }
-    i++;
-  }
-  parts.push(cur);
-  return parts;
-}
-function containerOpStmtEnd(content, i) {
-  let depth = 0;
-  while (i < content.length) {
-    const c = content[i];
-    if (c === '"') {
-      i++;
-      while (i < content.length && content[i] !== '"') {
-        if (content[i] === "\\")
-          i++;
-        i++;
-      }
-      i++;
-      continue;
-    }
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth < 0)
-        return -1;
-    } else if (c === ";" && depth === 0) {
-      return i;
-    }
-    i++;
-  }
-  return -1;
-}
-function containerOpParens(e) {
-  let t = e.trim();
-  while (t.startsWith("(") && containerOpClose(t, 0) === t.length - 1)
-    t = t.slice(1, -1).trim();
-  return t;
-}
-function containerOpIsCall(e, name) {
-  if (!e.startsWith(name + "("))
-    return false;
-  return containerOpClose(e, name.length) === e.length - 1;
-}
-var ContainerOpProver = class {
-  constructor(content) {
-    this.headers = [0];
-    this.memo = /* @__PURE__ */ new Map();
-    this.pending = /* @__PURE__ */ new Set();
-    this.content = content;
-    this.masked = containerOpMask(content);
-    for (const m of this.masked.matchAll(/\n[ \t]*(?:pub(?:\([a-z]+\))? )?(?:async )?fn /g)) {
-      this.headers.push(m.index + 1);
-    }
-    this.headers.push(content.length);
-  }
-  // Enclosing fn region containing `pos`.
-  region(pos) {
-    let lo = 0;
-    for (let h = 0; h + 1 < this.headers.length; h++)
-      if (this.headers[h] <= pos)
-        lo = h;
-    return lo;
-  }
-  facts(name, pos) {
-    if (!/^[a-z_][A-Za-z0-9_]*$/.test(name))
-      return void 0;
-    const lo = this.region(pos);
-    const key = `${lo}:${name}`;
-    if (this.memo.has(key))
-      return this.memo.get(key);
-    if (this.pending.has(key))
-      return void 0;
-    this.pending.add(key);
-    const result = this.prove(name, this.headers[lo], this.headers[lo + 1], /* @__PURE__ */ new Set());
-    this.pending.delete(key);
-    this.memo.set(key, result);
-    return result;
-  }
-  prove(name, from, to, seen) {
-    const region = this.masked.slice(from, to);
-    const real = this.content.slice(from, to);
-    const header = real.slice(0, Math.max(0, real.indexOf("{")));
-    const isParam = new RegExp(`[^A-Za-z0-9_]${name}\\s*:`).test(header);
-    const rebind = new RegExp(`(?<!\\|)\\|(?!\\|)[^|\\n]*\\b${name}\\b[^|\\n]*(?<!\\|)\\|(?!\\|)|\\bfor [^\\n]*\\b${name}\\b[^\\n]* in |\\blet \\([^)]*\\b${name}\\b|\\b${name}\\s*@|\\b${name}\\s*[-+*/%|&^]=`);
-    if (rebind.test(region) || new RegExp(`\\*\\s*${name}\\b\\s*=(?!=)`).test(region))
-      return void 0;
-    let writes = 0;
-    let proof;
-    let shapeUnknown = false;
-    let lenSafe = !CONTAINER_OP_SIDE_WORD.test(name);
-    const writesRe = new RegExp(`(?<![A-Za-z0-9_.*])(let (?:mut )?)?${name}\\b(\\s*:\\s*([A-Za-z_][A-Za-z0-9_<>,:& ]*?))?\\s*=(?!=)`, "g");
-    for (const m of region.matchAll(writesRe)) {
-      const typed = m[3] === void 0 ? "Value" : m[3].replace(/\s+/g, "");
-      if (typed !== "Value")
-        return void 0;
-      const rhsStart = m.index + m[0].length;
-      const end = containerOpStmtEnd(real, rhsStart);
-      if (end < 0)
-        return void 0;
-      const raw = containerOpParens(real.slice(rhsStart, end));
-      const write = this.source(raw, from + m.index, seen);
-      writes++;
-      if (write === void 0) {
-        lenSafe = lenSafe && CONTAINER_OP_JSON_SOURCE.test(raw) && !CONTAINER_OP_SIDE_WORD.test(raw);
-        shapeUnknown = true;
-        continue;
-      }
-      if (shapeUnknown) {
-        lenSafe = lenSafe && write.markerFree && !CONTAINER_OP_SIDE_WORD.test(raw);
-        continue;
-      }
-      if (proof === void 0)
-        proof = { ...write };
-      else if (proof.kind !== write.kind)
-        shapeUnknown = true;
-      else {
-        proof.markerFree = proof.markerFree && write.markerFree;
-        proof.untagged = proof.untagged && write.untagged;
-      }
-      lenSafe = lenSafe && write.markerFree && !CONTAINER_OP_SIDE_WORD.test(raw);
-    }
-    if (writes === 0)
-      return void 0;
-    for (const m of region.matchAll(new RegExp(`&mut ${name}\\b`, "g"))) {
-      const before = region.slice(Math.max(0, m.index - 96), m.index);
-      if (!CONTAINER_OP_SHAPE_WRITES.test(before))
-        return void 0;
-    }
-    for (const m of region.matchAll(new RegExp(`(?<![A-Za-z0-9_.])${name}\\.([A-Za-z_][A-Za-z0-9_]*)`, "g"))) {
-      if (!CONTAINER_OP_READS.has(m[1]))
-        return void 0;
-    }
-    if (isParam)
-      return lenSafe ? { lenSafe } : void 0;
-    return shapeUnknown ? { lenSafe } : { proof, lenSafe };
-  }
-  // Shape and marker safety of one right-hand side.
-  source(raw, absPos, seen) {
-    const e = containerOpParens(raw);
-    if (e === "")
-      return void 0;
-    const lit = (kind, untagged = true) => ({ kind, markerFree: true, untagged });
-    const tagged = e.includes("subscriptions") || e.includes("client");
-    if (containerOpIsCall(e, "Value::Map"))
-      return lit("map", !tagged && !e.includes("__ws_sub"));
-    if (containerOpIsCall(e, "Value::List") || containerOpIsCall(e, "Value::Array") || containerOpIsCall(e, "Value::from")) {
-      return e.includes("vec![") ? lit("arr") : void 0;
-    }
-    if (containerOpIsCall(e, "Value::Str"))
-      return lit("str");
-    const readers = [
-      [/^self\.safe_dict(?:_k|2|_k2)?\(/, "map"],
-      [/^self\.safe_list(?:_k|2|_k2)?\(/, "arr"],
-      [/^self\.(?:parse_ids|to_array|array_concat)\(/, "arr"],
-      [/^split\(/, "arr"]
-    ];
-    for (const [rx, kind] of readers) {
-      if (rx.test(e) && containerOpClose(e, e.indexOf("(")) === e.length - 1)
-        return lit(kind, !tagged);
-    }
-    const merge = /^self\.(?:extend|omit)\(/.exec(e);
-    if (merge !== null && containerOpClose(e, merge[0].length - 1) === e.length - 1) {
-      const args = containerOpSplit(e.slice(merge[0].length, -1));
-      const first = args.length > 0 ? this.source(args[0], absPos, seen) : void 0;
-      if (first === void 0)
-        return void 0;
-      return { kind: first.kind, markerFree: first.markerFree, untagged: first.untagged && !tagged };
-    }
-    const alias = /^([a-z_][A-Za-z0-9_]*)\.clone\(\)$/.exec(e);
-    if (alias !== null) {
-      if (seen.has(alias[1]))
-        return void 0;
-      seen.add(alias[1]);
-      return _optionalChain([this, 'access', _8184 => _8184.facts, 'call', _8185 => _8185(alias[1], absPos), 'optionalAccess', _8186 => _8186.proof]);
-    }
-    return void 0;
-  }
-};
-function containerOpKeyText(key) {
-  const lit = CONTAINER_OP_LITERAL_KEY.exec(key);
-  if (lit !== null)
-    return lit[1];
-  const ident = CONTAINER_OP_IDENT_ARG.exec(key);
-  if (ident !== null)
-    return ident[1];
-  return void 0;
-}
-function nativeContainerOps(content) {
-  if (!/\b(?:in_op|object_keys|object_values|get_array_length)\(&/.test(content))
-    return content;
-  const prover = new ContainerOpProver(content);
-  for (let round = 0; round < 6; round++) {
-    const masked = containerOpMask(content);
-    const rewrites = [];
-    for (const m of masked.matchAll(CONTAINER_OP_SITE_RX)) {
-      const start = m.index;
-      const name = m[1];
-      if (/\bfn\s+$/.test(masked.slice(Math.max(0, start - 8), start)))
-        continue;
-      if (rewrites.some((r) => start >= r.start && start < r.end))
-        continue;
-      const open = start + name.length;
-      const close = containerOpClose(content, open);
-      if (close < 0)
-        continue;
-      const args = containerOpSplit(content.slice(open + 1, close)).map((s) => s.trim());
-      let expr;
-      let kind;
-      let untagged = false;
-      let lenSafe = false;
-      const recv = CONTAINER_OP_IDENT_ARG.exec(_nullishCoalesce(args[0], () => ( "")));
-      const state = CONTAINER_OP_CLIENT_STATE.exec(_nullishCoalesce(args[0], () => ( "")));
-      if (recv !== null) {
-        const facts = prover.facts(recv[1], start);
-        if (facts === void 0)
-          continue;
-        expr = recv[1];
-        kind = _optionalChain([facts, 'access', _8187 => _8187.proof, 'optionalAccess', _8188 => _8188.kind]);
-        untagged = _optionalChain([facts, 'access', _8189 => _8189.proof, 'optionalAccess', _8190 => _8190.untagged]) === true;
-        lenSafe = facts.lenSafe;
-      } else if (state !== null) {
-        expr = (_nullishCoalesce(args[0], () => ( ""))).trim().slice(1);
-        kind = "map";
-        untagged = state[2] === "futures";
-        lenSafe = true;
-      } else {
-        continue;
-      }
-      let text;
-      if (name === "get_array_length" && args.length === 1) {
-        if (lenSafe)
-          text = `Value::Int(${expr}.len() as i64)`;
-      } else if (name === "in_op" && args.length === 2 && kind === "map") {
-        const key = containerOpKeyText(args[1]);
-        if (key !== void 0) {
-          text = key.startsWith('"') ? `matches!(&${expr}, Value::Dict(__d) if __d.contains_key(${key}))` : `matches!((&${expr}, &${key}), (Value::Dict(__d), Value::Str(__k)) if __d.contains_key(__k.as_ref()))`;
-        }
-      } else if ((name === "object_keys" || name === "object_values") && args.length === 1 && kind === "map" && untagged) {
-        const body = name === "object_keys" ? "__m.keys().map(|__k| Value::Str(__k.clone().into())).collect()" : "__m.values().cloned().collect()";
-        text = `Value::Array(${expr}.as_map().map(|__m| ${body}).unwrap_or_default())`;
-      }
-      if (text === void 0)
-        continue;
-      rewrites.push({ start, end: close + 1, text });
-    }
-    if (rewrites.length === 0)
-      break;
-    let out = "";
-    let at = 0;
-    for (const r of rewrites) {
-      if (r.start < at)
-        continue;
-      out += content.slice(at, r.start) + r.text;
-      at = r.end;
-    }
-    content = out + content.slice(at);
-  }
-  return content;
-}
-var BOOL_FNS = /* @__PURE__ */ new Set(["safe_bool", "safe_bool_k", "safe_bool_2", "get_arg_bool"]);
-var INT_FNS = /* @__PURE__ */ new Set(["safe_integer", "safe_integer_k", "safe_integer_2", "safe_int", "safe_timestamp"]);
-var STR_FNS = /* @__PURE__ */ new Set(["safe_string", "safe_string_k", "safe_string_2", "safe_string_lower", "safe_string_upper", "safe_string_lower_k", "safe_string_upper_k"]);
-var FLOAT_FNS = /* @__PURE__ */ new Set(["safe_float", "safe_float_k", "safe_number", "safe_number_k", "safe_number_2"]);
-function mask(content) {
-  const out = content.split("");
-  let i = 0;
-  while (i < out.length) {
-    if (out[i] === '"') {
-      let j = i + 1;
-      while (j < out.length && out[j] !== '"') {
-        if (out[j] === "\\")
-          j++;
-        j++;
-      }
-      for (let k = i + 1; k < j && k < out.length; k++)
-        out[k] = " ";
-      i = j + 1;
-      continue;
-    }
-    if (out[i] === "/" && out[i + 1] === "/") {
-      let j = i;
-      while (j < out.length && out[j] !== "\n") {
-        out[j] = " ";
-        j++;
-      }
-      i = j;
-      continue;
-    }
-    i++;
-  }
-  return out.join("");
-}
-function closeParen(masked, open) {
-  let depth = 0;
-  for (let i = open; i < masked.length; i++) {
-    const c = masked[i];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth === 0)
-        return i;
-    }
-  }
-  return -1;
-}
-function splitTopLevel(src, sep) {
-  const parts = [];
-  let depth = 0;
-  let cur = "";
-  let inStr = false;
-  for (let i = 0; i < src.length; i++) {
-    const c = src[i];
-    if (inStr) {
-      cur += c;
-      if (c === "\\") {
-        cur += _nullishCoalesce(src[i + 1], () => ( ""));
-        i++;
-        continue;
-      }
-      if (c === '"')
-        inStr = false;
-      continue;
-    }
-    if (c === '"') {
-      inStr = true;
-      cur += c;
-      continue;
-    }
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}")
-      depth--;
-    if (c === sep && depth === 0) {
-      parts.push(cur);
-      cur = "";
-      continue;
-    }
-    cur += c;
-  }
-  parts.push(cur);
-  return parts.map((p) => p.trim());
-}
-function stripOuter(src) {
-  let s = src.trim();
-  while (s.startsWith("(") && closeParen(s, 0) === s.length - 1)
-    s = s.slice(1, -1).trim();
-  return s;
-}
-function statementBefore(masked, pos) {
-  let depth = 0;
-  for (let i = pos; i > 0; i--) {
-    const c = masked[i - 1];
-    if (c === ")" || c === "]")
-      depth++;
-    else if (c === "(" || c === "[") {
-      if (depth > 0)
-        depth--;
-    } else if (depth === 0 && (c === ";" || c === "{" || c === "}" || c === "\n"))
-      return masked.slice(i, pos);
-  }
-  return masked.slice(0, pos);
-}
-function fnRegionOf(masked, pos) {
-  const heads = [0];
-  for (const m of masked.matchAll(/\n[ \t]*(?:pub )?(?:async )?fn /g))
-    heads.push(m.index + 1);
-  heads.push(masked.length);
-  let lo = 0;
-  for (let h = 0; h + 1 < heads.length; h++)
-    if (heads[h] <= pos)
-      lo = h;
-  const body = masked.slice(heads[lo], heads[lo + 1]);
-  const brace = body.indexOf("{");
-  return { start: heads[lo], end: heads[lo + 1], header: brace < 0 ? body : body.slice(0, brace) };
-}
-function rhsAfter(masked, from) {
-  let depth = 0;
-  for (let i = from; i < masked.length; i++) {
-    const c = masked[i];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}")
-      depth--;
-    else if (c === ";" && depth === 0)
-      return masked.slice(from, i).trim();
-  }
-  return "";
-}
-function stripTrailingOperand(s) {
-  let depth = 0;
-  for (let i = s.length - 1; i >= 0; i--) {
-    const c = s[i];
-    if (c === ")" || c === "]" || c === "}")
-      depth++;
-    else if (c === "(" || c === "[" || c === "{") {
-      if (depth === 0)
-        return s.slice(0, i);
-      depth--;
-      if (depth === 0 && !/[A-Za-z0-9_.)\]]/.test(_nullishCoalesce(s[i - 1], () => ( ""))))
-        return s.slice(0, i);
-    } else if (depth === 0) {
-      if (c === "&" && s[i - 1] === "&" || c === "|" && s[i - 1] === "|")
-        return s.slice(0, i - 1);
-      if (c === "," || c === ";" || c === "=")
-        return s.slice(0, i + 1);
-      if (/[A-Za-z0-9_.)]/.test(c)) {
-        let k = i;
-        while (k >= 0 && /[A-Za-z0-9_.]/.test(s[k]))
-          k--;
-        return k < 0 ? s : s.slice(0, k + 1);
-      }
-    }
-  }
-  return "";
-}
-function boolSlotAt(masked, start) {
-  let prefix = statementBefore(masked, start);
-  for (let hop = 0; hop < 60; hop++) {
-    prefix = prefix.replace(/[\s!]+$/, "");
-    if (/(?:^|[^\w])(?:if|while|for|assert|assert_eq)$/.test(prefix))
-      return true;
-    if (/Value::Bool\($/.test(prefix))
-      return true;
-    if (/(?:&&|\|\|)$/.test(prefix)) {
-      prefix = stripTrailingOperand(prefix.slice(0, -2));
-      continue;
-    }
-    if (/[^=!<>]=$/.test(prefix))
-      return /:\s*bool\s*=?$/.test(prefix.slice(0, -1));
-    if (/\($/.test(prefix)) {
-      prefix = prefix.slice(0, -1);
-      continue;
-    }
-    return false;
-  }
-  return false;
-}
-var UNION = ["bool", "null"];
-function variantOf(expr, masked, region, depth) {
-  const e = stripOuter(expr);
-  const lit = /^Value::(Bool|Int|Float|Str)\(/.exec(e);
-  if (lit !== null && closeParen(e, "Value::".length + lit[1].length) === e.length - 1) {
-    return /* @__PURE__ */ new Set([lit[1].toLowerCase()]);
-  }
-  if (e === "Value::Null" || e === "crate::Value::Null")
-    return /* @__PURE__ */ new Set(["null"]);
-  const call = /^self\.([a-z_][a-z0-9_]*)\(/.exec(e);
-  if (call !== null && closeParen(e, "self.".length + call[1].length) === e.length - 1) {
-    const name = call[1];
-    if (BOOL_FNS.has(name))
-      return safeBoolVariants(e, masked, region, depth);
-    if (INT_FNS.has(name))
-      return /* @__PURE__ */ new Set(["int", "null"]);
-    if (STR_FNS.has(name))
-      return /* @__PURE__ */ new Set(["str", "null"]);
-    if (FLOAT_FNS.has(name))
-      return /* @__PURE__ */ new Set(["float", "int", "null"]);
-    return void 0;
-  }
-  if (/^\(?if /.test(e) && e.includes("} else {")) {
-    const at = e.indexOf("} else {");
-    const a = variantOf(e.slice(e.indexOf("{") + 1, at), masked, region, depth);
-    const b = variantOf(e.slice(at + "} else {".length, e.lastIndexOf("}")), masked, region, depth);
-    if (a !== void 0 && b !== void 0)
-      return /* @__PURE__ */ new Set([...a, ...b]);
-  }
-  return void 0;
-}
-function safeBoolVariants(call, masked, region, depth) {
-  const open = call.indexOf("(");
-  const args = splitTopLevel(call.slice(open + 1, closeParen(call, open)), ",");
-  const list = /^&\[(.*)\]$/.exec(_nullishCoalesce(args[args.length - 1], () => ( "")));
-  if (list === null)
-    return void 0;
-  const items = list[1].trim();
-  if (items === "")
-    return new Set(UNION);
-  return boolDefault(items, masked, region, depth);
-}
-function boolDefault(expr, masked, region, depth) {
-  const e = stripOuter(expr);
-  if (/^Value::Bool\(/.test(e) || e === "Value::Null")
-    return new Set(UNION);
-  const name = /^([A-Za-z_][A-Za-z0-9_]*)(?:\.clone\(\))?$/.exec(e);
-  if (name === null)
-    return void 0;
-  const proof = proveLocal(masked, name[1], region, depth + 1);
-  if (proof.variants === void 0)
-    return void 0;
-  return [...proof.variants].every((v) => v === "bool" || v === "null") ? new Set(UNION) : void 0;
-}
-function proveLocal(masked, name, region, depth) {
-  if (depth > 3)
-    return { kind: "none" };
-  const body = masked.slice(region.start, region.end);
-  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const shadow = new RegExp(`(?<!\\|)\\|(?!\\|)[^|\\n]*\\b${esc}\\b[^|\\n]*(?<!\\|)\\|(?!\\|)|\\bfor [^\\n]*\\b${esc}\\b[^\\n]* in |\\blet \\([^)]*\\b${esc}\\b`);
-  if (shadow.test(body))
-    return { kind: "none" };
-  const types = /* @__PURE__ */ new Set();
-  const param = new RegExp(`\\b(?:mut )?${esc}\\s*:\\s*([A-Za-z_][A-Za-z0-9_<>]*)`).exec(region.header);
-  if (param !== null)
-    types.add(param[1]);
-  const writes = [];
-  const spans = [];
-  const letRe = new RegExp(`\\blet (?:mut )?${esc}\\b\\s*(?::\\s*([A-Za-z_][A-Za-z0-9_<>]*))?\\s*=`, "g");
-  for (const m of body.matchAll(letRe)) {
-    const at = m.index;
-    const rhs = rhsAfter(masked, region.start + at + m[0].length);
-    spans.push([at, at + m[0].length + rhs.length]);
-    if (m[1] !== void 0)
-      types.add(m[1]);
-    writes.push(rhs);
-  }
-  const assignRe = new RegExp(`(?<![A-Za-z0-9_.])${esc}\\s*=(?!=)`, "g");
-  for (const m of body.matchAll(assignRe)) {
-    const at = m.index;
-    if (spans.some(([s, e]) => at >= s && at < e))
-      continue;
-    writes.push(rhsAfter(masked, region.start + at + m[0].length));
-    types.add("?");
-  }
-  const only = [...types];
-  if (writes.length === 0 || only.some((t) => t !== "Value" && t !== "?"))
-    return { kind: "none" };
-  let acc = void 0;
-  for (const w of writes) {
-    const v = variantOf(w, masked, region, depth);
-    if (v === void 0)
-      return { kind: "none" };
-    acc = acc === void 0 ? v : new Set([...acc].filter((x) => v.has(x)));
-    if (acc.size === 0)
-      return { kind: "none" };
-  }
-  return acc === void 0 ? { kind: "none" } : { kind: "variant", variants: acc };
-}
-var isBoolOnly = (v) => [...v].every((x) => x === "bool" || x === "null");
-function pushEdit(edits, masked, start, close, text) {
-  let k = start - 1;
-  while (k >= 0 && (masked[k] === " " || masked[k] === "	"))
-    k--;
-  if (k >= 0 && masked[k] === "!" && masked[k - 1] !== "=") {
-    edits.push({ start: k, end: close + 1, text: text.replace(" == ", " != ") });
-    return;
-  }
-  edits.push({ start, end: close + 1, text });
-}
-function nativeBoolScalars(content) {
-  if (!content.includes("is_true(&") && !content.includes("is_equal(&"))
-    return content;
-  const masked = mask(content);
-  const edits = [];
-  for (const m of masked.matchAll(/(?<![A-Za-z0-9_:.])(is_true|is_equal)\(&/g)) {
-    const start = m.index;
-    const open = start + m[1].length;
-    const close = closeParen(masked, open);
-    if (close < 0)
-      continue;
-    if (!boolSlotAt(masked, start))
-      continue;
-    const args = splitTopLevel(content.slice(open + 1, close), ",");
-    const region = fnRegionOf(masked, start);
-    const proofOf = (e) => {
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(e))
-        return void 0;
-      return proveLocal(masked, e, region, 0).variants;
-    };
-    if (m[1] === "is_true") {
-      if (args.length !== 1)
-        continue;
-      const operand = stripOuter(args[0].replace(/^&/, ""));
-      const variants = proofOf(operand);
-      if (variants === void 0 || !isBoolOnly(variants))
-        continue;
-      pushEdit(edits, masked, start, close, `${operand}.as_bool() == Some(true)`);
-      continue;
-    }
-    if (args.length !== 2)
-      continue;
-    const a = stripOuter(args[0].replace(/^&/, ""));
-    const b = stripOuter(args[1].replace(/^&/, ""));
-    const lit = (e) => e === "Value::Null" || /^Value::Bool\((?:true|false)\)$/.test(e);
-    if (lit(a) && lit(b))
-      continue;
-    const va = lit(a) ? new Set(UNION) : proofOf(a);
-    const vb = lit(b) ? new Set(UNION) : proofOf(b);
-    if (va === void 0 || vb === void 0 || !isBoolOnly(va) || !isBoolOnly(vb))
-      continue;
-    const asOption = (e) => {
-      const box = /^Value::Bool\((true|false)\)$/.exec(e);
-      if (box !== null)
-        return `Some(${box[1]})`;
-      return e === "Value::Null" ? "None" : `${e}.as_bool()`;
-    };
-    pushEdit(edits, masked, start, close, `${asOption(a)} == ${asOption(b)}`);
-  }
-  if (edits.length === 0)
-    return content;
-  let out = "";
-  let at = 0;
-  for (const e of edits) {
-    if (e.start < at)
-      continue;
-    out += content.slice(at, e.start) + e.text;
-    at = e.end;
-  }
-  return out + content.slice(at);
-}
-var VEC_PUSH_HELPER = "append_to_array";
-var VEC_PUSH_MAX_LINE = 400;
-var VEC_PUSH_CALL_RX = new RegExp("(?<![\\w.:])" + VEC_PUSH_HELPER + "\\(", "g");
-var VEC_PUSH_ARR_INIT = [
-  /^Value::from\(vec!\[/,
-  /^Value::from\(Vec::new\(\)\)$/,
-  /^Value::Null$/,
-  /^\(match [\s\S]*Some\(__v\) if matches!\(__v, Value::Arr\(_\)\) => __v, _ => Value::from\(vec!\[/
-];
-function vecPushMaskText(src) {
-  const out = [];
-  let i = 0;
-  const n = src.length;
-  while (i < n) {
-    const c = src[i];
-    if (c === "/" && src[i + 1] === "/") {
-      while (i < n && src[i] !== "\n") {
-        out.push(" ");
-        i++;
-      }
-      continue;
-    }
-    if (c === "/" && src[i + 1] === "*") {
-      out.push("  ");
-      i += 2;
-      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) {
-        out.push(src[i] === "\n" ? "\n" : " ");
-        i++;
-      }
-      if (i < n) {
-        out.push("  ");
-        i += 2;
-      }
-      continue;
-    }
-    if (c === '"') {
-      out.push(" ");
-      i++;
-      while (i < n && src[i] !== '"') {
-        if (src[i] === "\\") {
-          out.push("  ");
-          i += 2;
-          continue;
-        }
-        out.push(src[i] === "\n" ? "\n" : " ");
-        i++;
-      }
-      if (i < n) {
-        out.push(" ");
-        i++;
-      }
-      continue;
-    }
-    out.push(c);
-    i++;
-  }
-  return out.join("");
-}
-function vecPushFnRegions(masked) {
-  const regions = [];
-  const head = /\bfn\s+[A-Za-z0-9_]*\s*[(<]/g;
-  let m;
-  while ((m = head.exec(masked)) !== null) {
-    let i = m.index + m[0].length - 1;
-    let depth = 0;
-    let open = -1;
-    while (i < masked.length) {
-      const c = masked[i];
-      if (c === "(" || c === "[" || c === "<")
-        depth++;
-      else if (c === ")" || c === "]" || c === ">")
-        depth--;
-      else if (c === "{") {
-        if (depth <= 0) {
-          open = i;
-          break;
-        }
-        depth++;
-      } else if (c === ";" && depth <= 0)
-        break;
-      i++;
-    }
-    if (open < 0)
-      continue;
-    let close = -1;
-    let d = 0;
-    for (let j = open; j < masked.length; j++) {
-      if (masked[j] === "{")
-        d++;
-      else if (masked[j] === "}") {
-        d--;
-        if (d === 0) {
-          close = j;
-          break;
-        }
-      }
-    }
-    if (close > open)
-      regions.push([open, close]);
-  }
-  return regions;
-}
-function vecPushCloseParen(src, open) {
-  let depth = 0;
-  for (let i = open; i < src.length; i++) {
-    const c = src[i];
-    if (c === "(")
-      depth++;
-    else if (c === ")") {
-      depth--;
-      if (depth === 0)
-        return i;
-    }
-  }
-  return -1;
-}
-function vecPushExprEnd(masked, from) {
-  let depth = 0;
-  for (let i = from; i < masked.length; i++) {
-    const c = masked[i];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}")
-      depth--;
-    else if (c === ";" && depth <= 0)
-      return i;
-  }
-  return -1;
-}
-function vecPushIsArrInit(init) {
-  const t = init.trim();
-  return VEC_PUSH_ARR_INIT.some((rx) => rx.test(t));
-}
-function vecPushBalanced(s) {
-  let d = 0;
-  for (const c of s) {
-    if (c === "(" || c === "[" || c === "{")
-      d++;
-    else if (c === ")" || c === "]" || c === "}") {
-      d--;
-      if (d < 0)
-        return false;
-    }
-  }
-  return d === 0;
-}
-function vecPushGuardClone(masked, rhs, stmtStart, rhsEnd) {
-  const m = /^([A-Za-z_][A-Za-z0-9_]*)\.clone\(\)$/.exec(rhs.trim());
-  if (m === null)
-    return false;
-  const open = masked.lastIndexOf("{", stmtStart);
-  if (open < 0 || masked.slice(open + 1, stmtStart).trim() !== "" || !/^\s*\}/.test(masked.slice(rhsEnd + 1)))
-    return false;
-  const ifStart = masked.lastIndexOf("if", open);
-  if (ifStart < 0 || /[\w.]/.test(_nullishCoalesce(masked[ifStart - 1], () => ( ""))))
-    return false;
-  let cond = masked.slice(ifStart + 2, open).trim();
-  while (cond.startsWith("(") && cond.endsWith(")") && vecPushBalanced(cond.slice(1, -1)))
-    cond = cond.slice(1, -1).trim();
-  const cm = /^matches!\(\s*&\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*Value::Arr\(_\)\s*\)$/.exec(cond);
-  return cm !== null && cm[1] === m[1];
-}
-function arrOnlyVecPush(content) {
-  if (!content.includes(VEC_PUSH_HELPER + "("))
-    return content;
-  const masked = vecPushMaskText(content);
-  const regions = vecPushFnRegions(masked);
-  const jobs = [];
-  const rx = new RegExp(VEC_PUSH_CALL_RX.source, "g");
-  let m;
-  while ((m = rx.exec(masked)) !== null) {
-    const start = m.index;
-    const lineStart = masked.lastIndexOf("\n", start) + 1;
-    if (/^\s*(?:pub\s+)?fn /.test(masked.slice(lineStart, start)))
-      continue;
-    const region = regions.find((r) => r[0] < start && start < r[1]);
-    if (region === void 0)
-      continue;
-    const argStart = start + VEC_PUSH_HELPER.length + 1;
-    const recv = /^&mut\s+([A-Za-z_][A-Za-z0-9_]*)\s*,/.exec(content.slice(argStart, argStart + 120));
-    if (recv === null)
-      continue;
-    const name = recv[1];
-    const nameRx = new RegExp("(?<![\\w.])" + name + "(?![\\w])");
-    const headerStart = masked.lastIndexOf("fn ", region[0]);
-    if (new RegExp("(?<![\\w])" + name + "\\s*:").test(masked.slice(headerStart, region[0])))
-      continue;
-    const declRx = new RegExp("let (?:mut )?" + name + "\\s*:\\s*([^=;]+?)\\s*=(?!=)", "g");
-    const decls = [];
-    let d;
-    const head = masked.slice(0, start);
-    while ((d = declRx.exec(head)) !== null) {
-      if (d.index <= region[0])
-        continue;
-      if (d[1].trim() !== "Value") {
-        decls.length = 0;
-        break;
-      }
-      const initStart = d.index + d[0].length;
-      const initEnd = vecPushExprEnd(masked, initStart);
-      if (initEnd < 0) {
-        decls.length = 0;
-        break;
-      }
-      decls.push({ start: d.index, initStart, initEnd });
-    }
-    if (decls.length === 0)
-      continue;
-    if (!decls.every((x) => vecPushIsArrInit(content.slice(x.initStart, x.initEnd))))
-      continue;
-    const useRx = new RegExp(nameRx.source, "g");
-    const body = masked.slice(region[0], region[1]);
-    let u;
-    let ok = true;
-    while ((u = useRx.exec(body)) !== null) {
-      const s = region[0] + u.index;
-      const e = s + name.length;
-      if (decls.some((x) => s >= x.start && s < x.initEnd))
-        continue;
-      const before = masked.slice(Math.max(0, s - 40), s);
-      const after = masked.slice(e, e + 80);
-      if (/&mut\s*$/.test(before)) {
-        if (!(new RegExp(VEC_PUSH_HELPER + "\\(\\s*&mut\\s*$").test(before) && /^\s*,/.test(after))) {
-          ok = false;
-          break;
-        }
-        continue;
-      }
-      const assign = /^\s*=(?!=)/.exec(after);
-      if (assign !== null) {
-        const rhsStart = e + assign[0].length;
-        const rhsEnd = vecPushExprEnd(masked, rhsStart);
-        if (rhsEnd < 0) {
-          ok = false;
-          break;
-        }
-        let aStart = masked.lastIndexOf(";", s);
-        aStart = Math.max(aStart, masked.lastIndexOf("{", s), masked.lastIndexOf("}", s)) + 1;
-        const init = content.slice(rhsStart, rhsEnd);
-        if (!vecPushIsArrInit(init) && !vecPushGuardClone(masked, init, aStart, rhsEnd)) {
-          ok = false;
-          break;
-        }
-      }
-    }
-    if (!ok)
-      continue;
-    const callEnd2 = vecPushCloseParen(masked, argStart - 1);
-    if (callEnd2 < 0)
-      continue;
-    const valueStart = argStart + recv[0].length;
-    const value = content.slice(valueStart, callEnd2);
-    if (nameRx.test(value))
-      continue;
-    let stmtStart = masked.lastIndexOf(";", start);
-    stmtStart = Math.max(stmtStart, masked.lastIndexOf("{", start), masked.lastIndexOf("}", start)) + 1;
-    if (masked.slice(stmtStart, start).trim() !== "")
-      continue;
-    if (!/^\)\s*;/.test(masked.slice(callEnd2, callEnd2 + 4)))
-      continue;
-    const text = `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${value.trim()}); }`;
-    const lStart = content.lastIndexOf("\n", start) + 1;
-    const lEnd = content.indexOf("\n", callEnd2) < 0 ? content.length : content.indexOf("\n", callEnd2);
-    const lenNow = lEnd - lStart;
-    if (lenNow <= VEC_PUSH_MAX_LINE && lenNow - (callEnd2 + 1 - start) + text.length > VEC_PUSH_MAX_LINE)
-      continue;
-    jobs.push({ start, end: callEnd2 + 1, text });
-  }
-  if (jobs.length === 0)
-    return content;
-  let out = content;
-  for (let i = jobs.length - 1; i >= 0; i--) {
-    const j = jobs[i];
-    out = out.slice(0, j.start) + j.text + out.slice(j.end);
-  }
-  return out;
-}
-var STR_LIT = String.raw`"(?:[^"\\]|\\.)*"`;
-function typedLocalsMaskText(src) {
-  let out = "";
-  let i = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === "/" && src[i + 1] === "/") {
-      while (i < src.length && src[i] !== "\n") {
-        out += " ";
-        i++;
-      }
-      continue;
-    }
-    if (c === '"') {
-      out += " ";
-      i++;
-      while (i < src.length && src[i] !== '"') {
-        if (src[i] === "\n") {
-          out += "\n";
-          i++;
-          continue;
-        }
-        if (src[i] === "\\") {
-          out += "  ";
-          i += 2;
-          continue;
-        }
-        out += " ";
-        i++;
-      }
-      if (i < src.length) {
-        out += " ";
-        i++;
-      }
-      continue;
-    }
-    out += c;
-    i++;
-  }
-  return out;
-}
-function typedLocalsCloseParen(masked, open) {
-  let depth = 0;
-  for (let k = open; k < masked.length; k++) {
-    const c = masked[k];
-    if (c === "(")
-      depth++;
-    else if (c === ")") {
-      depth--;
-      if (depth === 0)
-        return k + 1;
-    }
-  }
-  return -1;
-}
-function closeAt(src, open) {
-  const openCh = src[open];
-  const closeCh = openCh === "(" ? ")" : openCh === "[" ? "]" : "}";
-  let depth = 0;
-  for (let k = open; k < src.length; k++) {
-    const c = src[k];
-    if (c === openCh)
-      depth++;
-    else if (c === closeCh) {
-      depth--;
-      if (depth === 0)
-        return k + 1;
-    }
-  }
-  return -1;
-}
-function closeBrace(masked, open) {
-  let depth = 0;
-  for (let k = open; k < masked.length; k++) {
-    const c = masked[k];
-    if (c === "{")
-      depth++;
-    else if (c === "}") {
-      depth--;
-      if (depth === 0)
-        return k + 1;
-    }
-  }
-  return -1;
-}
-function stmtEnd(masked, from) {
-  let depth = 0;
-  for (let k = from; k < masked.length; k++) {
-    const c = masked[k];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth < 0)
-        return -1;
-    } else if (c === ";" && depth === 0)
-      return k;
-  }
-  return -1;
-}
-function typedLocalsSplitArgs(masked, from, to) {
-  const args = [];
-  let depth = 0;
-  let start = from;
-  for (let k = from; k < to; k++) {
-    const c = masked[k];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}")
-      depth--;
-    else if (c === "," && depth === 0) {
-      args.push(masked.slice(start, k));
-      start = k + 1;
-    }
-  }
-  args.push(masked.slice(start, to));
-  return args;
-}
-function openerMap(masked) {
-  const kind = new Uint8Array(masked.length);
-  const at = new Int32Array(masked.length).fill(-1);
-  const stack = [];
-  for (let i = 0; i < masked.length; i++) {
-    const c = masked[i];
-    if (c === "(")
-      stack.push({ kind: 1, at: i });
-    else if (c === "[")
-      stack.push({ kind: masked[i - 1] === "&" ? 3 : 2, at: i });
-    else if (c === "{")
-      stack.push({ kind: 4, at: i });
-    else if (c === ")" || c === "]" || c === "}") {
-      if (stack.length > 0)
-        stack.pop();
-    }
-    const top = stack[stack.length - 1];
-    kind[i] = top === void 0 ? 0 : top.kind;
-    at[i] = top === void 0 ? -1 : top.at;
-  }
-  return { kind, at };
-}
-var KEYWORDS = /* @__PURE__ */ new Set(["if", "while", "match", "return", "for", "in", "else", "loop", "not"]);
-function valueSlot(masked, content, s, name, open) {
-  const kind = open.kind[s];
-  if (kind !== 1 && kind !== 2 && kind !== 3)
-    return 0;
-  if (kind === 1) {
-    const head = masked.slice(Math.max(0, open.at[s] - 40), open.at[s]);
-    const word = /([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(head);
-    if (word === null || KEYWORDS.has(word[1]))
-      return 0;
-    const ctor = /Value::([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(head);
-    if (ctor !== null)
-      return 0;
-  }
-  let k = s - 1;
-  while (k >= 0 && /\s/.test(masked[k]))
-    k--;
-  if (masked[k] === "&" || masked[k] === "." || masked[k] === "!")
-    return 0;
-  if (/\bmut\s+$/.test(masked.slice(Math.max(0, s - 8), s)))
-    return 0;
-  const after = content.slice(s + name.length);
-  const m = /^(?:\.clone\(\))?\s*[,)\];]/.exec(after);
-  if (m === null)
-    return 0;
-  return after.startsWith(".clone()") ? 2 : 1;
-}
-var FN_HEADER = /(?:^|\n)[ \t]*(?:pub(?:\([a-z]+\))? )?(?:async )?fn /g;
-function typedLocalsFnRegions(masked) {
-  const heads = [0];
-  for (const m of masked.matchAll(FN_HEADER))
-    heads.push(m.index + 1);
-  return heads;
-}
-var RUST_TYPE = {
-  "String": "String",
-  "Int": "i64",
-  "Float": "f64",
-  "Bool": "bool",
-  "Vec": "Vec<Value>",
-  "Map": "indexmap::IndexMap<String, Value>"
-};
-function boxed(shape, expr) {
-  switch (shape) {
-    case "String":
-      return `Value::str(${expr})`;
-    case "Int":
-      return `Value::Int(${expr})`;
-    case "Float":
-      return `Value::Float(${expr})`;
-    case "Bool":
-      return `Value::Bool(${expr})`;
-    case "Vec":
-      return `Value::Array(${expr})`;
-    case "Map":
-      return `Value::Map(${expr})`;
-  }
-}
-function initShape(init) {
-  const pinned = (head, shape) => {
-    if (!init.startsWith(head))
-      return void 0;
-    const open = head.length - 1;
-    const close = closeAt(init, open);
-    if (close < 0)
-      return void 0;
-    const inner = init.slice(open + 1, close - 1);
-    if (inner.trim() === "" || inner.trim().startsWith("Value::"))
-      return void 0;
-    return { shape, inner, wrapperEnd: close };
-  };
-  for (const [head, shape] of [
-    ["Value::Str(", "String"],
-    ["Value::Int(", "Int"],
-    ["Value::Float(", "Float"],
-    ["Value::Bool(", "Bool"],
-    ["Value::Map(", "Map"]
-  ]) {
-    const hit = pinned(head, shape);
-    if (hit !== void 0)
-      return hit;
-  }
-  for (const head of ["Value::Array(", "Value::List(", "Value::from("]) {
-    if (!init.startsWith(head))
-      continue;
-    const close = closeAt(init, head.length - 1);
-    if (close < 0)
-      return void 0;
-    const inner = init.slice(head.length, close - 1);
-    if (!inner.startsWith("vec![") || closeAt(inner, 4) !== inner.length)
-      return void 0;
-    return { shape: "Vec", inner, wrapperEnd: close };
-  }
-  if (init.startsWith("vec![")) {
-    const close = closeAt(init, 4);
-    if (close !== init.length)
-      return void 0;
-    return { shape: "Vec", inner: init.slice(5, close - 1), wrapperEnd: close };
-  }
-  return void 0;
-}
-function rebound(region, name) {
-  const n = name;
-  const rx = new RegExp(
-    `\\blet\\s+(?:mut\\s+)?${n}\\b|\\bfor\\s+(?:mut\\s+)?${n}\\b|\\|\\s*(?:mut\\s+)?${n}\\s*[:|,]|\\blet\\s*\\([^)]*\\b${n}\\b|\\b${n}\\s*@|\\b${n}\\b[^;\\n]*=>`
-  );
-  return rx.test(region);
-}
-function classify(shape, ctx, masked, content, where) {
-  const { name, useStart: s, before, after } = ctx;
-  const open = where;
-  const nameEnd = s + name.length;
-  const boxStr = `&Value::Str\\(\\s*(${STR_LIT})\\s*(?:\\.into\\(\\)|\\.to_string\\(\\))?\\s*\\)`;
-  const boxInt = `&Value::Int\\(\\s*(-?\\d+)\\s*\\)`;
-  const boxFlt = `&Value::Float\\(\\s*(-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)\\s*\\)`;
-  const boxNum = shape === "Int" ? boxInt : boxFlt;
-  const numeric = shape === "Int" || shape === "Float";
-  const eqOp = (op, lit, len, prefix) => {
-    const start = s - prefix.length;
-    return [{ start, end: nameEnd + len, text: `(${name} ${op} ${lit})` }];
-  };
-  if (shape === "String" && before.endsWith("is_equal(&")) {
-    const m = new RegExp(`^,\\s*${boxStr}\\)`).exec(after);
-    if (m !== null)
-      return eqOp("==", m[1], m[0].length, "is_equal(&");
-  }
-  if (numeric && before.endsWith("is_equal(&")) {
-    const m = new RegExp(`^,\\s*${boxNum}\\)`).exec(after);
-    if (m !== null)
-      return eqOp("==", m[1], m[0].length, "is_equal(&");
-  }
-  if (numeric) {
-    const cmp = [
-      ["is_less_than(&", "<"],
-      ["is_greater_than(&", ">"],
-      ["is_less_than_or_equal(&", "<="],
-      ["is_greater_than_or_equal(&", ">="]
-    ];
-    for (const [prefix, op] of cmp) {
-      if (!before.endsWith(prefix))
-        continue;
-      const m = new RegExp(`^,\\s*${boxNum}\\)`).exec(after);
-      if (m !== null)
-        return eqOp(op, m[1], m[0].length, prefix);
-    }
-  }
-  if (shape === "String" && before.endsWith("to_string_val(&") && after.startsWith(")")) {
-    return [{ start: s - "to_string_val(&".length, end: nameEnd + 1, text: `${name}.clone()` }];
-  }
-  if (shape === "String") {
-    for (const [prefix, method] of [["ends_with(&", "ends_with"], ["starts_with(&", "starts_with"]]) {
-      if (!before.endsWith(prefix))
-        continue;
-      const m = new RegExp(`^,\\s*${boxStr}\\)`).exec(after);
-      if (m !== null) {
-        const start = s - prefix.length;
-        return [{ start, end: nameEnd + m[0].length, text: `${name}.${method}(${m[1]})` }];
-      }
-    }
-  }
-  if (shape === "Bool" && before.endsWith("is_true(&") && after.startsWith(")")) {
-    return [{ start: s - "is_true(&".length, end: nameEnd + 1, text: name }];
-  }
-  if (shape === "Bool") {
-    const m = /^\.as_bool\(\)\s*(==|!=)\s*Some\((true|false)\)/.exec(after);
-    if (m !== null) {
-      const eq = m[1] === "==";
-      const positive = m[2] === "true";
-      return [{ start: s, end: nameEnd + m[0].length, text: eq === positive ? name : `!${name}` }];
-    }
-  }
-  if (shape === "Vec" && before.endsWith("get_array_length(&") && after.startsWith(")")) {
-    return [{ start: s - "get_array_length(&".length, end: nameEnd + 1, text: `Value::Int(${name}.len() as i64)` }];
-  }
-  if (shape === "Vec" && before.endsWith("append_to_array(&mut ") && after.startsWith(",")) {
-    const open2 = s - "(&mut ".length;
-    const close = typedLocalsCloseParen(masked, open2);
-    if (close > 0) {
-      const args = typedLocalsSplitArgs(masked, open2 + 1, close - 1);
-      if (args !== void 0 && args.length === 2) {
-        const val = content.slice(open2 + 1 + args[0].length + 1, close - 1).trim();
-        return [{ start: open2 - "append_to_array".length, end: close, text: `${name}.push(${val})` }];
-      }
-    }
-  }
-  if (shape === "Vec" && before.endsWith("= &mut ")) {
-    const varM = /if let Value::Arr\((\w+)\) = &mut $/.exec(before);
-    if (varM !== null) {
-      const stmtStart = s - varM[0].length;
-      const brace = masked.indexOf("{", nameEnd);
-      const close = brace < 0 ? -1 : closeBrace(masked, brace);
-      const head = `std::sync::Arc::make_mut(${varM[1]}).push(`;
-      if (close > 0) {
-        const rel = masked.slice(brace + 1, close - 1).indexOf(head);
-        if (rel >= 0) {
-          const pushOpen = brace + 1 + rel + head.length - 1;
-          const pushClose = typedLocalsCloseParen(masked, pushOpen);
-          if (pushClose > 0) {
-            const val = content.slice(pushOpen + 1, pushClose - 1).trim();
-            return [{ start: stmtStart, end: close, text: `${name}.push(${val});` }];
-          }
-        }
-      }
-    }
-  }
-  if (shape === "Map" && before.endsWith("get_value(&")) {
-    const m = new RegExp(`^,\\s*${boxStr}\\)`).exec(after);
-    if (m !== null) {
-      const start = s - "get_value(&".length;
-      return [{ start, end: nameEnd + m[0].length, text: `${name}.get(${m[1]}).cloned().unwrap_or(Value::Null)` }];
-    }
-  }
-  if (shape === "Map" && before.endsWith("in_op(&")) {
-    const m = new RegExp(`^,\\s*${boxStr}\\)`).exec(after);
-    if (m !== null) {
-      const start = s - "in_op(&".length;
-      return [{ start, end: nameEnd + m[0].length, text: `${name}.contains_key(${m[1]})` }];
-    }
-  }
-  if (shape === "Map" && before.endsWith("add_element_to_object(&mut ")) {
-    const m = new RegExp(`^,\\s*${boxStr}\\s*,`).exec(after);
-    if (m !== null) {
-      const open2 = s - "(&mut ".length;
-      const close = typedLocalsCloseParen(masked, open2);
-      if (close > 0) {
-        const args = typedLocalsSplitArgs(masked, open2 + 1, close - 1);
-        if (args !== void 0 && args.length === 3) {
-          const val = content.slice(open2 + 1 + args[0].length + 1 + args[1].length + 1, close - 1).trim();
-          return [{ start: open2 - "add_element_to_object".length, end: close, text: `${name}.insert(${m[1]}.to_string(), ${val})` }];
-        }
-      }
-    }
-  }
-  if (shape === "Map" && before.endsWith("= &mut ")) {
-    const varM = /if let Value::Dict\((\w+)\) = &mut $/.exec(before);
-    if (varM !== null && /^\s*\{/.test(after)) {
-      const stmtStart = s - varM[0].length;
-      const brace = nameEnd + after.indexOf("{");
-      const close = closeBrace(masked, brace);
-      const head = `std::sync::Arc::make_mut(${varM[1]}).insert(`;
-      if (close > 0) {
-        const body = content.slice(brace + 1, close - 1).trim();
-        if (body.startsWith(head)) {
-          const pushOpen = brace + 1 + content.slice(brace + 1).indexOf(head) + head.length - 1;
-          const pushClose = typedLocalsCloseParen(masked, pushOpen);
-          if (pushClose > 0 && content.slice(pushClose, close - 1).trim() === ";") {
-            const val = content.slice(pushOpen + 1, pushClose - 1).trim();
-            return [{ start: stmtStart, end: close, text: `${name}.insert(${val});` }];
-          }
-        }
-      }
-    }
-  }
-  if (shape === "Bool" && open.kind[s] === 1 && /matches!$/.test(masked.slice(Math.max(0, open.at[s] - 12), open.at[s]))) {
-    const m = /^,\s*Value::Bool\(\s*(true|false)\s*\)\)/.exec(after);
-    const start = s - "matches!(&".length;
-    if (m !== null) {
-      const positive = m[1] === "true";
-      return [{ start, end: nameEnd + m[0].length, text: positive ? name : `!${name}` }];
-    }
-  }
-  if (shape === "String" && before.endsWith("Value::str(") && (after.startsWith(")") || after.startsWith(".clone())") || after.startsWith(".to_string())")))
-    return [];
-  if (shape === "String" && after.startsWith(".as_str()")) {
-    const m = /^\.as_str\(\)\s*(==|!=)\s*Some\(\s*("(?:[^"\\]|\\.)*")\s*\)/.exec(after);
-    if (m !== null)
-      return [{ start: s, end: nameEnd + m[0].length, text: `(${name} ${m[1]} ${m[2]})` }];
-    const rev = /^\.as_str\(\)\s*(==|!=)\s*Some\(\s*("(?:[^"\\]|\\.)*")\s*\.to_string\(\)\s*\)/.exec(after);
-    if (rev !== null)
-      return [{ start: s, end: nameEnd + rev[0].length, text: `(${name} ${rev[1]} ${rev[2]})` }];
-  }
-  if (numeric && after.startsWith(".as_f64()")) {
-    const plain = shape === "Float" ? name : `(${name} as f64)`;
-    const nan = /^\.as_f64\(\)\.unwrap_or\(f64::NAN\)/.exec(after);
-    if (nan !== null)
-      return [{ start: s, end: nameEnd + nan[0].length, text: plain }];
-    const some = /^\.as_f64\(\)\s*(==|!=)\s*Some\(\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*\)/.exec(after);
-    if (some !== null)
-      return [{ start: s, end: nameEnd + some[0].length, text: `(${plain} ${some[1]} ${some[2]})` }];
-  }
-  if ((shape === "String" || numeric || shape === "Bool") && open.kind[s] === 1) {
-    const macroOpen = open.at[s];
-    const macroHead = /([A-Za-z_][A-Za-z0-9_]*)!$/.exec(masked.slice(Math.max(0, macroOpen - 40), macroOpen));
-    const pre = masked.slice(Math.max(0, s - 12), s);
-    const tail = after.startsWith(".clone()") ? ".clone()" : after.startsWith(".to_string()") ? ".to_string()" : "";
-    const rest = after.slice(tail.length);
-    const closes = rest.startsWith(")") || rest.startsWith(",");
-    if (macroHead !== void 0 && /[(,]\s*$/.test(pre) && closes) {
-      const close = typedLocalsCloseParen(masked, macroOpen);
-      if (close > 0) {
-        const args = typedLocalsSplitArgs(masked, macroOpen + 1, close - 1);
-        const raw = content.slice(macroOpen + 1, close - 1);
-        const tpl = args === void 0 ? void 0 : /^\s*"((?:[^"\\]|\\.)*)"\s*$/.exec(raw.slice(0, args[0].length));
-        const holes = tpl === null || tpl === void 0 ? [] : _nullishCoalesce(tpl[1].match(/\{[^}]*\}/g), () => ( []));
-        if (args !== void 0 && args.length > 1 && holes.length === args.length - 1 && holes.every((h) => h === "{}"))
-          return [];
-      }
-    }
-  }
-  {
-    const tail = after.startsWith(".clone()") && after.slice(".clone()".length).startsWith(")") ? ".clone()" : after.startsWith(")") ? "" : null;
-    if (tail !== null) {
-      const wide = content.slice(Math.max(0, s - 160), s);
-      const lit = shape === "String" ? /is_equal\(&Value::Str\(\s*("(?:[^"\\]|\\.)*")\s*(?:\.into\(\)|\.to_string\(\))?\s*\)\s*,\s*&$/.exec(wide) : shape === "Bool" ? /is_equal\(&Value::Bool\(\s*(true|false)\s*\)\s*,\s*&$/.exec(wide) : numeric ? /(is_equal|is_less_than|is_greater_than|is_less_than_or_equal|is_greater_than_or_equal)\(&\s*Value::(?:Int|Float)\(\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*\)\s*,\s*&$/.exec(wide) : null;
-      if (lit !== null) {
-        const ops = {
-          "is_equal": "==",
-          "is_less_than": "<",
-          "is_greater_than": ">",
-          "is_less_than_or_equal": "<=",
-          "is_greater_than_or_equal": ">="
-        };
-        const op = shape === "String" || shape === "Bool" ? "==" : ops[lit[1]];
-        const value = shape === "String" || shape === "Bool" ? lit[1] : lit[2];
-        const start = s - lit[0].length;
-        return [{ start, end: nameEnd + tail.length + 1, text: `(${value} ${op} ${name}${tail})` }];
-      }
-    }
-  }
-  if ((shape === "Int" || shape === "Float" || shape === "Bool") && before.endsWith("to_string_val(&") && after.startsWith(")")) {
-    return [{ start: s - "to_string_val(&".length, end: nameEnd + 1, text: `Value::str(${name}.to_string())` }];
-  }
-  if (before.endsWith("Value::Str(") && shape === "String") {
-    if (after.startsWith(")") || after.startsWith(".clone())")) {
-      return [{ start: s - "Value::Str".length, end: s - 1, text: "Value::str" }];
-    }
-  }
-  const nativeMethod = /^\.(?:len|is_empty|push|insert|contains_key|get|keys|values|iter|first|last)\(/.exec(after);
-  if (nativeMethod !== null && (shape === "Vec" || shape === "Map"))
-    return [];
-  if (shape === "Int" && /^\.as_i64\(\)/.test(after))
-    return null;
-  if (before.endsWith("Value::Int(") && shape === "Int" && after.startsWith(")"))
-    return [];
-  if (before.endsWith("Value::Float(") && shape === "Float" && after.startsWith(")"))
-    return [];
-  if (before.endsWith("Value::Bool(") && shape === "Bool" && after.startsWith(")"))
-    return [];
-  if ((before.endsWith("Value::Array(") || before.endsWith("Value::List(")) && shape === "Vec" && after.startsWith(")"))
-    return [];
-  if (before.endsWith("Value::Map(") && shape === "Map" && after.startsWith(")"))
-    return [];
-  if (before.endsWith("Value::from(") && after.startsWith(")"))
-    return [];
-  return null;
-}
-function blockHeader(masked, from, open) {
-  let i = open - 1;
-  let depth = 0;
-  while (i >= from) {
-    const c = masked[i];
-    if (c === ")" || c === "]" || c === "}")
-      depth++;
-    else if (c === "(" || c === "[" || c === "{") {
-      if (depth === 0)
-        break;
-      depth--;
-    } else if (c === ";" && depth === 0)
-      break;
-    i--;
-  }
-  return masked.slice(i + 1, open);
-}
-function inRepeatedBlock(masked, from, pos, declAt = -1) {
-  const stack = [];
-  for (let k = from; k < pos; k++) {
-    const c = masked[k];
-    if (c === "{")
-      stack.push(k);
-    else if (c === "}" && stack.length > 0)
-      stack.pop();
-  }
-  for (const open of stack) {
-    if (open < declAt)
-      continue;
-    const head = blockHeader(masked, from, open);
-    if (/\b(for|while|loop)\b/.test(head))
-      return true;
-    if (/\|[^|]*\|/.test(head))
-      return true;
-    if (/\bmove\s*$/.test(head))
-      return true;
-  }
-  return false;
-}
-function assignRewrite(shape, name, s, after, content, masked) {
-  const m = /^\s*=\s*/.exec(after);
-  if (m === null)
-    return null;
-  const rhsStart = s + name.length + m[0].length;
-  const end = stmtEnd(masked, rhsStart);
-  if (end < 0)
-    return null;
-  const rhs = content.slice(rhsStart, end).trim();
-  if (shape === "Vec" && rhs.startsWith("self.array_concat(")) {
-    const prev = /[^\s]/.exec(content.slice(0, s).split("").reverse().join(""));
-    if (prev === null || ![";", "{", "}"].includes(prev[0]))
-      return null;
-    const open = "self.array_concat".length;
-    if (typedLocalsCloseParen(rhs, open) !== rhs.length)
-      return null;
-    const args = typedLocalsSplitArgs(rhs, open + 1, rhs.length - 1);
-    if (args === void 0 || args.length !== 2)
-      return null;
-    const first = args[0].trim();
-    const second = args[1].trim();
-    if (first !== name && first !== `${name}.clone()`)
-      return null;
-    if (new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`).test(second))
-      return null;
-    return [{ start: s, end, text: `match &${second} { Value::Arr(__b) => ${name}.extend(__b.iter().cloned()), _ => ${name}.clear() }` }];
-  }
-  const heads = {
-    "String": ["Value::Str("],
-    "Int": ["Value::Int("],
-    "Float": ["Value::Float("],
-    "Bool": ["Value::Bool("],
-    "Vec": ["Value::Array(vec![", "Value::List(vec![", "Value::from(vec![", "vec!["],
-    "Map": ["Value::Map("]
-  };
-  const head = heads[shape].find((h) => rhs.startsWith(h));
-  if (head === void 0)
-    return null;
-  const close = typedLocalsCloseParen(rhs, head.length - 1);
-  if (close < 0 || close !== rhs.length)
-    return null;
-  const inner = rhs.slice(head.length, close - 1);
-  if (inner.trim() === "" || inner.trim().startsWith("Value::"))
-    return null;
-  return [{ start: rhsStart, end, text: inner }];
-}
-var typedLocalRejects = [];
-function rustTypedLocals(content) {
-  typedLocalRejects = [];
-  if (!content.includes(": Value = "))
-    return content;
-  const masked = typedLocalsMaskText(content);
-  const openers = openerMap(masked);
-  const anyOpen = openers.kind;
-  const atOpen = openers;
-  const heads = typedLocalsFnRegions(masked);
-  const rewrites = [];
-  let group = 0;
-  const declRe = /^([ \t]*)let (?:mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = /gm;
-  let m;
-  while ((m = declRe.exec(content)) !== null) {
-    const name = m[2];
-    const declStart = m.index;
-    const initStart = declStart + m[0].length;
-    const end = stmtEnd(masked, initStart);
-    if (end < 0)
-      continue;
-    const rawInit = content.slice(initStart, end);
-    const lead = rawInit.length - rawInit.trimStart().length;
-    const init = rawInit.trim();
-    const parsed = initShape(init);
-    if (parsed === void 0) {
-      continue;
-    }
-    const { shape } = parsed;
-    if (parsed.wrapperEnd !== init.length) {
-      continue;
-    }
-    if (shape === "Float" && /^-?\d+$/.test(parsed.inner))
-      continue;
-    let lo = 0;
-    for (let h = 0; h < heads.length; h++)
-      if (heads[h] <= declStart)
-        lo = h;
-    const regionStart = heads[lo];
-    let regionEnd = lo + 1 < heads.length ? heads[lo + 1] : content.length;
-    if (shape === "Map") {
-      let depth = 0;
-      for (let k = end; k < regionEnd; k++) {
-        const c = masked[k];
-        if (c === "{")
-          depth++;
-        else if (c === "}") {
-          if (depth === 0) {
-            regionEnd = k;
-            break;
-          }
-          depth--;
-        }
-      }
-    }
-    const region = masked.slice(end, regionEnd);
-    if (rebound(region, name))
-      continue;
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, "g");
-    const uses = [];
-    const boxes = [];
-    let ok = true;
-    let gained = 0;
-    let lastUse = -1;
-    let skipUntil = -1;
-    let u;
-    while ((u = useRe.exec(region)) !== null) {
-      const s = end + u.index;
-      const before = content.slice(Math.max(regionStart, s - 60), s);
-      const after = content.slice(s + name.length, s + name.length + 90);
-      if (s < skipUntil)
-        continue;
-      lastUse = s;
-      const slot = valueSlot(masked, content, s, name, atOpen);
-      if (slot > 0) {
-        const dotClone = after.startsWith(".clone()") ? ".clone()".length : 0;
-        boxes.push({ pos: s, tail: dotClone, move: slot === 1 });
-        continue;
-      }
-      const ctx = { name, useStart: s, before, after };
-      const rw = classify(shape, ctx, masked, content, atOpen);
-      if (rw !== null && rw.length > 0)
-        gained++;
-      if (rw === null) {
-        const asg = assignRewrite(shape, name, s, after, content, masked);
-        if (asg === null) {
-          ok = false;
-          const ls = content.lastIndexOf("\n", s) + 1;
-          const le = content.indexOf("\n", s);
-          typedLocalRejects.push({ shape, name, line: content.slice(0, s).split("\n").length, text: content.slice(ls, le < 0 ? content.length : le).trim() });
-          break;
-        }
-        uses.push(...asg);
-        for (const a of asg)
-          skipUntil = Math.max(skipUntil, a.end);
-        continue;
-      }
-      uses.push(...rw);
-    }
-    if (!ok)
-      continue;
-    if (gained === 0)
-      continue;
-    for (const b of boxes) {
-      const canMove = b.pos === lastUse && !inRepeatedBlock(masked, regionStart, b.pos, shape === "Map" ? declStart : -1);
-      const collection = shape === "Vec" || shape === "Map";
-      if (!canMove && (b.tail === 0 || collection)) {
-        ok = false;
-        break;
-      }
-      const expr = canMove ? name : `${name}.clone()`;
-      uses.push({ start: b.pos, end: b.pos + name.length + b.tail, text: boxed(shape, expr) });
-    }
-    if (!ok)
-      continue;
-    for (const a of uses) {
-      for (const b of uses) {
-        if (a !== b && a.start <= b.start && b.end < a.end) {
-          ok = false;
-          break;
-        }
-      }
-      if (!ok)
-        break;
-    }
-    if (!ok)
-      continue;
-    const growth = /* @__PURE__ */ new Map();
-    const lineOf = (pos) => content.lastIndexOf("\n", pos) + 1;
-    for (const rw of uses) {
-      const lineStart = lineOf(rw.start);
-      if (lineOf(rw.end) !== lineStart)
-        continue;
-      const lineEnd = content.indexOf("\n", lineStart);
-      const len = (lineEnd < 0 ? content.length : lineEnd) - lineStart;
-      const next = (_nullishCoalesce(growth.get(lineStart), () => ( 0))) + rw.text.length - (rw.end - rw.start);
-      growth.set(lineStart, next);
-      if (len + next > 400 && len <= 400) {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok)
-      continue;
-    const typeAt = declStart + m[0].indexOf(": Value") + 2;
-    const exprAt = initStart + lead;
-    const g = group++;
-    rewrites.push({ start: typeAt, end: typeAt + 5, text: RUST_TYPE[shape], g });
-    rewrites.push({ start: exprAt, end: exprAt + parsed.wrapperEnd, text: parsed.inner, g });
-    for (const u2 of uses)
-      rewrites.push({ ...u2, g });
-  }
-  if (rewrites.length === 0)
-    return content;
-  const sorted = [...rewrites].sort((a, b) => a.start - b.start || a.end - b.end);
-  const dirty = /* @__PURE__ */ new Set();
-  const active = [];
-  for (const r of sorted) {
-    for (let i = active.length - 1; i >= 0; i--)
-      if (active[i].end <= r.start)
-        active.splice(i, 1);
-    for (const a of active) {
-      if (a.g !== r.g) {
-        dirty.add(a.g);
-        dirty.add(r.g);
-      }
-    }
-    active.push(r);
-  }
-  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (dirty.has(r.g))
-      continue;
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  out += content.slice(last);
-  return out;
-}
-var CALLEE_SHAPE_ROUTED = /* @__PURE__ */ new Set(["cache", "hashmap", "subscriptions", "futures", "timestamp", "datetime", "nonce", "symbol", "checksum"]);
-var CALLEE_SHAPE_MARKER = ["__book_id", "__cache_id", "__cacheKind", "__sideKind", "__live_id"];
-var CALLEE_SHAPE_BASE_FILE = "rust/ccxt-common/src/exchange_generated.rs";
-var baseCalleeShapes = void 0;
-function calleeShapeMask(src) {
-  let out = "";
-  let i = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === "/" && src[i + 1] === "/") {
-      while (i < src.length && src[i] !== "\n") {
-        out += " ";
-        i++;
-      }
-      continue;
-    }
-    if (c === '"') {
-      out += " ";
-      i++;
-      while (i < src.length && src[i] !== '"') {
-        if (src[i] === "\n") {
-          out += "\n";
-          i++;
-          continue;
-        }
-        if (src[i] === "\\") {
-          out += "  ";
-          i += 2;
-          continue;
-        }
-        out += " ";
-        i++;
-      }
-      if (i < src.length) {
-        out += " ";
-        i++;
-      }
-      continue;
-    }
-    out += c;
-    i++;
-  }
-  return out;
-}
-function calleeShapeClose(src, open) {
-  const openCh = src[open];
-  const closeCh = openCh === "(" ? ")" : openCh === "[" ? "]" : openCh === "{" ? "}" : "";
-  if (closeCh === "")
-    return -1;
-  let depth = 0;
-  for (let k = open; k < src.length; k++) {
-    const c = src[k];
-    if (c === openCh)
-      depth++;
-    else if (c === closeCh) {
-      depth--;
-      if (depth === 0)
-        return k;
-    }
-  }
-  return -1;
-}
-function calleeShapeArgs(masked, open, close) {
-  const spans = [];
-  let depth = 0;
-  let start = open + 1;
-  for (let k = open + 1; k < close; k++) {
-    const c = masked[k];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}")
-      depth--;
-    else if (c === "," && depth === 0) {
-      spans.push([start, k]);
-      start = k + 1;
-    }
-  }
-  if (masked.slice(start, close).trim() !== "")
-    spans.push([start, close]);
-  return spans;
-}
-function calleeShapeStmtEnd(masked, from) {
-  let depth = 0;
-  for (let k = from; k < masked.length; k++) {
-    const c = masked[k];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth < 0)
-        return -1;
-    } else if (c === ";" && depth === 0)
-      return k;
-  }
-  return -1;
-}
-function calleeShapeReturns(masked) {
-  const out = [];
-  const rx = /(?<![A-Za-z0-9_])return\b/g;
-  let m;
-  while ((m = rx.exec(masked)) !== null) {
-    const end = calleeShapeStmtEnd(masked, m.index + 6);
-    if (end < 0)
-      continue;
-    out.push(masked.slice(m.index + 6, end).trim());
-  }
-  return out;
-}
-function calleeShapeTail(body) {
-  const t = body.replace(/\s+$/, "");
-  if (t === "" || t.endsWith(";"))
-    return void 0;
-  const cut = t.lastIndexOf(";");
-  const tail = (cut < 0 ? t : t.slice(cut + 1)).trim();
-  if (tail === "" || /^(?:if|match|while|for|loop|\{)/.test(tail))
-    return void 0;
-  return tail;
-}
-function calleeShapeTailIsDead(body) {
-  const cut = body.replace(/\s+$/, "").lastIndexOf(";");
-  if (cut < 0)
-    return false;
-  let depth = 0;
-  let k = cut - 1;
-  for (; k >= 0; k--) {
-    const c = body[k];
-    if (c === ")" || c === "]" || c === "}")
-      depth++;
-    else if (c === "(" || c === "[" || c === "{") {
-      depth--;
-      if (depth < 0)
-        break;
-    } else if (c === ";" && depth === 0)
-      break;
-  }
-  return /^\s*return\b/.test(body.slice(k + 1, cut));
-}
-function freshCalleeShape(t) {
-  const s = t.replace(/^\(+/, "").trim();
-  if (/^Value::(?:Map|Dict)\(/.test(s)) {
-    const open = s.indexOf("(");
-    if (/^Value::(?:Map|Dict)\(\s*(?:\{|indexmap::IndexMap::new\(\)|HashMap::new\(\))/.test(s))
-      return "dict";
-    return void 0;
-  }
-  if (/^Value::(?:Array|List)\(\s*(?:vec!\[|std::sync::Arc::new\(\s*vec!\[)/.test(s))
-    return "arr";
-  if (/^Value::from\(\s*(?:std::sync::Arc::new\(\s*)?vec!\[/.test(s))
-    return "arr";
-  return void 0;
-}
-function calleeShapeDecl(region, name) {
-  const rx = new RegExp("\\blet (?:mut )?" + name + "\\s*(?::\\s*[^=;]+)?=\\s*", "g");
-  let hit = null;
-  let count = 0;
-  let m;
-  while ((m = rx.exec(region)) !== null) {
-    hit = m;
-    count++;
-  }
-  if (count !== 1 || hit === null)
-    return void 0;
-  return { init: region.slice(hit.index + hit[0].length, hit.index + hit[0].length + 400) };
-}
-function methodCalleeShapes(content, masked, loose = false) {
-  const shapes = /* @__PURE__ */ new Map();
-  const hdr = loose ? /\n {4}(?:pub )?fn (\w+)\s*\(/g : /\n {4}pub fn (\w+)\s*\(/g;
-  let hm;
-  while ((hm = hdr.exec(masked)) !== null) {
-    const lineEnd = masked.indexOf("\n", hm.index + 1);
-    const line = masked.slice(hm.index, lineEnd < 0 ? masked.length : lineEnd);
-    if (!/->\s*(?:crate::)?Value\b/.test(line))
-      continue;
-    const open = masked.indexOf("(", hm.index);
-    const close = calleeShapeClose(masked, open);
-    if (close < 0)
-      continue;
-    const braceOpen = masked.indexOf("{", close);
-    if (braceOpen < 0)
-      continue;
-    if (!/^(?:->\s*(?:crate::)?Value)?$/.test(masked.slice(close + 1, braceOpen).trim()))
-      continue;
-    const braceClose = calleeShapeClose(masked, braceOpen);
-    if (braceClose < 0)
-      continue;
-    const body = masked.slice(braceOpen + 1, braceClose);
-    const exprs = calleeShapeReturns(body);
-    if (exprs.length === 0)
-      continue;
-    const tail = calleeShapeTail(body);
-    if (tail !== void 0 && !calleeShapeTailIsDead(body)) {
-      exprs.push(tail);
-    }
-    const kinds = /* @__PURE__ */ new Set();
-    for (const e of exprs) {
-      if (loose && /^__\w+$/.test(e))
-        continue;
-      kinds.add(_nullishCoalesce(freshCalleeShape(e), () => ( "other")));
-    }
-    if (kinds.size !== 1)
-      continue;
-    const only = [...kinds][0];
-    if (only === "other")
-      continue;
-    shapes.set(hm[1], only);
-  }
-  return shapes;
-}
-function baseCalleeShapeTable() {
-  if (baseCalleeShapes !== void 0)
-    return baseCalleeShapes;
-  baseCalleeShapes = /* @__PURE__ */ new Map();
-  try {
-    const src = fs3.readFileSync(CALLEE_SHAPE_BASE_FILE, "utf8");
-    baseCalleeShapes = methodCalleeShapes(src, calleeShapeMask(src), true);
-  } catch (e) {
-    if (e === void 0 || e.code !== "ENOENT")
-      throw e;
-  }
-  return baseCalleeShapes;
-}
-var CALLEE_SHAPE_PASSTHROUGH = /* @__PURE__ */ new Set(["extend", "omit", "keysort", "clone_value"]);
-var CalleeShapeProver = class {
-  constructor(region, maskedRegion, own, base) {
-    this.visiting = /* @__PURE__ */ new Set();
-    this.region = region;
-    this.masked = maskedRegion;
-    this.own = own;
-    this.base = base;
-  }
-  /** Shape of the local `name` in this region, or undefined when unproven. */
-  shape(name) {
-    if (this.visiting.has(name))
-      return void 0;
-    this.visiting.add(name);
-    const out = this.prove(name);
-    this.visiting.delete(name);
-    return out;
-  }
-  prove(name) {
-    const decl = calleeShapeDecl(this.masked, name);
-    if (decl === void 0)
-      return void 0;
-    return this.shapeOfInit(decl.init);
-  }
-  shapeOfInit(init) {
-    const fresh = freshCalleeShape(init);
-    if (fresh !== void 0)
-      return fresh;
-    const call = /^self\.(\w+)\s*\(/.exec(init);
-    if (call === null)
-      return void 0;
-    const callee = call[1];
-    const own = this.own.get(callee);
-    if (own !== void 0)
-      return own;
-    const base = this.base.get(callee);
-    if (base !== void 0)
-      return base;
-    if (CALLEE_SHAPE_PASSTHROUGH.has(callee)) {
-      const open = init.indexOf("(");
-      const close = calleeShapeClose(init, open);
-      if (close < 0)
-        return void 0;
-      const args = calleeShapeArgs(init, open, close);
-      if (args === void 0 || args.length === 0)
-        return void 0;
-      const first = init.slice(args[0][0], args[0][1]).trim();
-      if (!/^[a-z_][A-Za-z0-9_]*$/.test(first))
-        return void 0;
-      return this.shape(first);
-    }
-    return void 0;
-  }
-};
-function calleeShapeLiteralKey(arg) {
-  if (arg === void 0)
-    return void 0;
-  const m = /^&\s*Value::Str\(\s*("(?:[^"\\]|\\.)*")\s*(?:\.into\(\)|\.to_string\(\))?\s*\)$/.exec(arg.trim());
-  return m === null ? void 0 : m[1].slice(1, -1);
-}
-function calleeShapePlainReceiver(region, name) {
-  const rx = new RegExp("&mut " + name + "(?![A-Za-z0-9_])", "g");
-  let m;
-  while ((m = rx.exec(region)) !== null) {
-    const before = region.slice(Math.max(0, m.index - 40), m.index);
-    if (/(?:add_element_to_object|get_value_mut|set_value)\($/.test(before))
-      continue;
-    if (/if let Value::(?:Dict|Arr|Map)\(\s*__\w+\s*\)\s*=\s*$/.test(before))
-      continue;
-    return false;
-  }
-  return true;
-}
-function calleeShapeSingleWrite(region, name) {
-  const rx = new RegExp("(?<![A-Za-z0-9_.])" + name + "\\s*=\\s*(?!=)", "g");
-  let m;
-  while ((m = rx.exec(region)) !== null) {
-    const before = region.slice(Math.max(0, m.index - 5), m.index);
-    if (/\blet $/.test(before) || /\blet mut $/.test(region.slice(Math.max(0, m.index - 8), m.index)))
-      continue;
-    return false;
-  }
-  return true;
-}
-function calleeShapeContainerOps(content, stats) {
-  if (content.indexOf("add_element_to_object(") < 0 && content.indexOf("get_value(&") < 0 && content.indexOf("in_op(") < 0 && content.indexOf("object_keys(") < 0 && content.indexOf("object_values(") < 0 && content.indexOf("get_array_length(") < 0)
-    return content;
-  const masked = calleeShapeMask(content);
-  const own = methodCalleeShapes(content, masked);
-  const base = baseCalleeShapeTable();
-  const heads = [];
-  const hdr = /^[ \t]*(?:pub(?:\([a-z]+\))? )?(?:async )?fn /gm;
-  let hm;
-  while ((hm = hdr.exec(masked)) !== null)
-    heads.push(hm.index);
-  heads.push(content.length);
-  const edits = [];
-  const FAM = /(?<![A-Za-z0-9_:.])(add_element_to_object|get_value|in_op|object_keys|object_values|get_array_length)\(/g;
-  for (let h = 0; h + 1 < heads.length; h++) {
-    const from = heads[h];
-    const to = heads[h + 1];
-    const maskedRegion = masked.slice(from, to);
-    const prover = new CalleeShapeProver(content.slice(from, to), maskedRegion, own, base);
-    FAM.lastIndex = 0;
-    let fm;
-    while ((fm = FAM.exec(maskedRegion)) !== null) {
-      const name = fm[1];
-      const open = fm.index + fm[0].length - 1;
-      const close = calleeShapeClose(maskedRegion, open);
-      if (close < 0)
-        continue;
-      const spans = calleeShapeArgs(maskedRegion, open, close);
-      if (spans === void 0)
-        continue;
-      let recv;
-      let keyArg;
-      let valueStart = -1;
-      if (name === "add_element_to_object") {
-        if (spans.length !== 3)
-          continue;
-        const first = maskedRegion.slice(spans[0][0], spans[0][1]).trim();
-        const head = /^&mut\s+([a-z_][A-Za-z0-9_]*)$/.exec(first);
-        if (head === null)
-          continue;
-        recv = head[1];
-        keyArg = content.slice(from + spans[1][0], from + spans[1][1]);
-        valueStart = spans[2][0];
-      } else if (name === "get_array_length" || name === "object_keys" || name === "object_values") {
-        if (spans.length !== 1)
-          continue;
-        const head = /^&\s*([a-z_][A-Za-z0-9_]*)$/.exec(maskedRegion.slice(spans[0][0], spans[0][1]).trim());
-        if (head === null)
-          continue;
-        recv = head[1];
-      } else {
-        if (spans.length !== 2)
-          continue;
-        const head = /^&\s*([a-z_][A-Za-z0-9_]*)$/.exec(maskedRegion.slice(spans[0][0], spans[0][1]).trim());
-        if (head === null)
-          continue;
-        recv = head[1];
-        keyArg = content.slice(from + spans[1][0], from + spans[1][1]);
-      }
-      const shape = prover.shape(recv);
-      if (shape === void 0)
-        continue;
-      if (name === "get_array_length") {
-        if (shape !== "arr")
-          continue;
-        if (!calleeShapeSingleWrite(maskedRegion, recv))
-          continue;
-        edits.push({ start: from + fm.index, end: from + close + 1, text: `Value::Int(${recv}.len() as i64)` });
-        continue;
-      }
-      if (shape !== "dict")
-        continue;
-      if (!calleeShapePlainReceiver(maskedRegion, recv) || !calleeShapeSingleWrite(maskedRegion, recv))
-        continue;
-      if (name === "add_element_to_object") {
-        const key2 = calleeShapeLiteralKey(keyArg);
-        if (key2 === void 0 || CALLEE_SHAPE_MARKER.indexOf(key2) >= 0)
-          continue;
-        const valueEnd = spans[2][1];
-        const value = content.slice(from + valueStart, from + valueEnd).trim();
-        const stmtEnd2 = maskedRegion[close + 1] === ";" ? close + 2 : close + 1;
-        edits.push({
-          start: from + fm.index,
-          end: from + stmtEnd2,
-          text: `if let Value::Dict(__r03d) = &mut ${recv} { std::sync::Arc::make_mut(__r03d).insert("${key2}".into(), ${value}); }`
-        });
-        continue;
-      }
-      const key = calleeShapeLiteralKey(keyArg);
-      if (key === void 0 || CALLEE_SHAPE_ROUTED.has(key) || CALLEE_SHAPE_MARKER.indexOf(key) >= 0)
-        continue;
-      if (name === "get_value") {
-        edits.push({
-          start: from + fm.index,
-          end: from + close + 1,
-          text: `${recv}.as_map().unwrap().get("${key}").cloned().unwrap_or(Value::Null)`
-        });
-      } else if (name === "in_op") {
-        if (!calleeShapeBoolPosition(maskedRegion, fm.index))
-          continue;
-        edits.push({
-          start: from + fm.index,
-          end: from + close + 1,
-          text: `matches!(&${recv}, Value::Dict(__r03k) if __r03k.contains_key("${key}"))`
-        });
-      } else {
-        const body = name === "object_keys" ? "__m.keys().map(|__k| Value::Str(__k.clone().into())).collect()" : "__m.values().cloned().collect()";
-        edits.push({
-          start: from + fm.index,
-          end: from + close + 1,
-          text: `Value::Array(${recv}.as_map().map(|__m| ${body}).unwrap_or_default())`
-        });
-      }
-    }
-  }
-  if (edits.length === 0)
-    return content;
-  edits.sort((a, b) => a.start - b.start || b.end - a.end);
-  let out = "";
-  let at = 0;
-  let count = 0;
-  for (const e of edits) {
-    if (e.start < at)
-      continue;
-    out += content.slice(at, e.start) + e.text;
-    at = e.end;
-    count++;
-  }
-  out += content.slice(at);
-  if (stats !== void 0)
-    stats.sites += count;
-  return out;
-}
-function calleeShapeBoolPosition(masked, pos) {
-  const lineStart = masked.lastIndexOf("\n", pos) + 1;
-  const pre = masked.slice(lineStart, pos).trim();
-  const headed = /^(?:\}\s*else\s+)?(?:if|while)$/.test(pre);
-  const wrapped = /is_true\(&$/.test(pre);
-  return headed || wrapped;
-}
-function boolCalleeMask(text) {
-  const out = text.split("");
-  const n = out.length;
-  let i = 0;
-  while (i < n) {
-    const c = out[i];
-    if (c === '"') {
-      let j = i + 1;
-      while (j < n && out[j] !== '"') {
-        if (out[j] === "\\")
-          j += 1;
-        j += 1;
-      }
-      for (let k = i + 1; k < j && k < n; k++)
-        out[k] = " ";
-      i = j + 1;
-      continue;
-    }
-    if (c === "/" && out[i + 1] === "/") {
-      let j = i;
-      while (j < n && out[j] !== "\n") {
-        out[j] = " ";
-        j += 1;
-      }
-      i = j;
-      continue;
-    }
-    i += 1;
-  }
-  return out.join("");
-}
-function boolCalleeClose(masked, open) {
-  let depth = 0;
-  for (let i = open; i < masked.length; i++) {
-    const c = masked[i];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth === 0)
-        return i;
-    }
-  }
-  return -1;
-}
-function boolCalleeStrip(src) {
-  let s = src.trim();
-  while (s.startsWith("(") && boolCalleeClose(s, 0) === s.length - 1)
-    s = s.slice(1, -1).trim();
-  return s;
-}
-var BOOL_CALLEE_FN = /\n[ \t]*(?:pub )?(?:async )?fn (\w+)/g;
-function boolCalleeRegions(masked) {
-  const heads = [0];
-  for (const m of masked.matchAll(BOOL_CALLEE_FN))
-    heads.push(m.index + 1);
-  heads.push(masked.length);
-  const out = [];
-  for (let h = 0; h + 1 < heads.length; h++) {
-    const seg = masked.slice(heads[h], heads[h + 1]);
-    const head = /^[ \t]*(?:pub )?(?:async )?fn (\w+)\s*(?:<[^>]*>)?\s*\(/.exec(seg);
-    if (head === null)
-      continue;
-    const open = seg.indexOf("(", head[0].length - 1);
-    const close = boolCalleeClose(seg, open);
-    if (close < 0)
-      continue;
-    const brace = seg.indexOf("{", close);
-    out.push({ start: heads[h], end: heads[h + 1], name: head[1], ret: brace < 0 ? "" : seg.slice(close + 1, brace), body: brace < 0 ? "" : seg.slice(brace) });
-  }
-  return out;
-}
-function boolCalleeRetExprs(region) {
-  if (!/^\s*->\s*(?:crate::)?Value\s*$/.test(region.ret.replace(/\s+/g, " ")))
-    return void 0;
-  const body = region.body;
-  const rets = [];
-  for (const m of body.matchAll(/\breturn\b/g)) {
-    const at = m.index + m[0].length;
-    let depth = 0;
-    let j = at;
-    for (; j < body.length; j++) {
-      const c = body[j];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}") {
-        if (depth === 0)
-          break;
-        depth--;
-      } else if (c === ";" && depth === 0)
-        break;
-    }
-    rets.push(body.slice(at, j));
-  }
-  const close = body.lastIndexOf("}");
-  const tailEnd = body.slice(0, close).replace(/\s+$/, "");
-  const semi = tailEnd.lastIndexOf(";");
-  const braceOpen = tailEnd.lastIndexOf("{");
-  if (semi > braceOpen || semi < 0 && braceOpen < 0) {
-    const tail = tailEnd.slice(semi + 1).trim();
-    if (tail !== "" && !tail.startsWith("}"))
-      rets.push(tail);
-  }
-  if (rets.length === 0)
-    return void 0;
-  return rets;
-}
-function boolCalleeSafeBoolDefault(call) {
-  const open = call.indexOf("(");
-  const close = boolCalleeClose(call, open);
-  if (close < 0)
-    return void 0;
-  const inner = call.slice(open + 1, close);
-  const listAt = inner.lastIndexOf("&[");
-  if (listAt < 0)
-    return void 0;
-  const list = boolCalleeStrip(inner.slice(listAt));
-  if (!list.startsWith("&[") || !list.endsWith("]"))
-    return void 0;
-  const items = list.slice(2, -1).trim();
-  if (items === "")
-    return true;
-  const one = boolCalleeStrip(items);
-  if (/^Value::Bool\((?:true|false)\)$/.test(one))
-    return true;
-  if (one === "Value::Null")
-    return true;
-  return void 0;
-}
-var BOOL_CALLEE_BASE = /^(?:in_array|is_json_encoded_object)$/;
-var BOOL_CALLEE_BOOLISH = (v) => [...v].every((x) => x === "bool" || x === "null");
-function boolCalleeVariant(expr, masked, byName, region, depth, visiting) {
-  if (depth > 6)
-    return void 0;
-  let e = boolCalleeStrip(expr);
-  while (e.endsWith(".clone()"))
-    e = boolCalleeStrip(e.slice(0, -".clone()".length));
-  while (e.endsWith(".await"))
-    e = e.slice(0, -".await".length).trim();
-  const lit = /^Value::(Bool|Int|Float|Str)\(/.exec(e);
-  if (lit !== null && boolCalleeClose(e, "Value::".length + lit[1].length) === e.length - 1) {
-    return /* @__PURE__ */ new Set([lit[1].toLowerCase()]);
-  }
-  if (e === "Value::Null" || e === "crate::Value::Null")
-    return /* @__PURE__ */ new Set(["null"]);
-  if (/^\(?if .+\)?$/.test(e) && e.includes("} else {")) {
-    const at = e.indexOf("} else {");
-    const a = boolCalleeVariant(e.slice(e.indexOf("{") + 1, at), masked, byName, region, depth, visiting);
-    const b = boolCalleeVariant(e.slice(at + "} else {".length, e.lastIndexOf("}")), masked, byName, region, depth, visiting);
-    if (a !== void 0 && b !== void 0)
-      return /* @__PURE__ */ new Set([...a, ...b]);
-    return void 0;
-  }
-  const precise = /^crate::precise::Precise::(\w+)\((?:(?!\()[^()]|\((?!\()(?:[^()]|\([^()]*\))*\))*\)$/.exec(e);
-  if (precise !== null && /^string(?:Eq|Gt|Ge|Lt|Le|Equals)$/.test(precise[1]))
-    return /* @__PURE__ */ new Set(["bool"]);
-  if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(e)) {
-    const writes = boolCalleeWrites(masked, e, region);
-    if (writes === void 0)
-      return void 0;
-    let acc = void 0;
-    for (const w of writes) {
-      const v = boolCalleeVariant(w, masked, byName, region, depth + 1, visiting);
-      if (v === void 0)
-        return void 0;
-      acc = acc === void 0 ? v : new Set([...acc].filter((x) => v.has(x)));
-    }
-    return acc;
-  }
-  const call = /^self\.([a-z_][a-z0-9_]*)\s*\(/.exec(e);
-  if (call !== null && boolCalleeClose(e, "self.".length + call[1].length) === e.length - 1) {
-    if (BOOL_CALLEE_BASE.test(call[1]))
-      return /* @__PURE__ */ new Set(["bool"]);
-    if (/^safe_bool(_2|_k)?$/.test(call[1])) {
-      return boolCalleeSafeBoolDefault(e) === true ? /* @__PURE__ */ new Set(["bool", "null"]) : void 0;
-    }
-    return boolCalleeReturnVariant(call[1], masked, byName, depth + 1, visiting);
-  }
-  return void 0;
-}
-function boolCalleeReturnVariant(name, masked, byName, depth, visiting) {
-  if (visiting.has(name) || depth > 6)
-    return void 0;
-  const decls = byName.get(name);
-  if (decls === void 0 || decls.length === 0)
-    return void 0;
-  const next = new Set(visiting);
-  next.add(name);
-  let acc = void 0;
-  for (const decl of decls) {
-    const rets = boolCalleeRetExprs(decl);
-    if (rets === void 0)
-      return void 0;
-    for (const r of rets) {
-      const v = boolCalleeVariant(r, masked, byName, decl, depth + 1, next);
-      if (v === void 0)
-        return void 0;
-      acc = acc === void 0 ? v : /* @__PURE__ */ new Set([...acc, ...v]);
-    }
-  }
-  return acc;
-}
-function boolCalleeWrites(masked, ident, region) {
-  const esc = ident.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const body = masked.slice(region.start, region.end);
-  const shadow = new RegExp(`\\|(?!\\|)[^|\\n]*\\b${esc}\\b[^|\\n]*\\|(?!\\|)|\\bfor [^\\n]*\\b${esc}\\b[^\\n]* in |\\blet \\([^)]*\\b${esc}\\b`);
-  if (shadow.test(body))
-    return void 0;
-  const writes = [];
-  const spans = [];
-  const letRe = new RegExp(`\\blet (?:mut )?${esc}\\b\\s*(?::\\s*([A-Za-z_][A-Za-z0-9_<>]*))?\\s*=`, "g");
-  for (const m of body.matchAll(letRe)) {
-    const at = m.index;
-    if (m[1] !== void 0 && m[1] !== "Value")
-      return void 0;
-    let depth = 0;
-    let j = at + m[0].length;
-    for (; j < body.length; j++) {
-      const c = body[j];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}") {
-        if (depth === 0)
-          break;
-        depth--;
-      } else if (c === ";" && depth === 0)
-        break;
-    }
-    writes.push(body.slice(at + m[0].length, j));
-    spans.push([at, j]);
-  }
-  const assignRe = new RegExp(`(?<![A-Za-z0-9_.])${esc}\\s*=(?!=)`, "g");
-  for (const m of body.matchAll(assignRe)) {
-    const at = m.index;
-    if (spans.some(([s, e]) => at >= s && at < e))
-      continue;
-    let depth = 0;
-    let j = at + m[0].length;
-    for (; j < body.length; j++) {
-      const c = body[j];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}") {
-        if (depth === 0)
-          break;
-        depth--;
-      } else if (c === ";" && depth === 0)
-        break;
-    }
-    writes.push(body.slice(at + m[0].length, j));
-  }
-  if (writes.length === 0)
-    return void 0;
-  return writes;
-}
-function boolCalleeStmtBefore(masked, pos) {
-  let depth = 0;
-  for (let i = pos; i > 0; i--) {
-    const c = masked[i - 1];
-    if (c === ")" || c === "]")
-      depth++;
-    else if (c === "(" || c === "[") {
-      if (depth > 0)
-        depth--;
-    } else if (depth === 0 && (c === ";" || c === "{" || c === "}" || c === "\n"))
-      return masked.slice(i, pos);
-  }
-  return masked.slice(0, pos);
-}
-function boolCalleeDropOperand(s) {
-  let depth = 0;
-  for (let i = s.length - 1; i >= 0; i--) {
-    const c = s[i];
-    if (c === ")" || c === "]" || c === "}")
-      depth++;
-    else if (c === "(" || c === "[" || c === "{") {
-      if (depth === 0)
-        return s.slice(0, i);
-      depth--;
-      if (depth === 0 && !/[A-Za-z0-9_.)\]]/.test(_nullishCoalesce(s[i - 1], () => ( ""))))
-        return s.slice(0, i);
-    } else if (depth === 0) {
-      if (c === "&" && s[i - 1] === "&" || c === "|" && s[i - 1] === "|")
-        return s.slice(0, i - 1);
-      if (c === "," || c === ";" || c === "=")
-        return s.slice(0, i + 1);
-      if (/[A-Za-z0-9_.)\]]/.test(c)) {
-        let k = i;
-        while (k >= 0 && /[A-Za-z0-9_.]/.test(s[k]))
-          k--;
-        return k < 0 ? s : s.slice(0, k + 1);
-      }
-    }
-  }
-  return "";
-}
-function boolCalleeBoolSlot(masked, start) {
-  let prefix = boolCalleeStmtBefore(masked, start);
-  for (let hop = 0; hop < 60; hop++) {
-    prefix = prefix.replace(/[\s!]+$/, "");
-    if (/(?:^|[^\w])(?:if|while|for|assert)$/.test(prefix))
-      return true;
-    if (/Value::Bool\($/.test(prefix))
-      return true;
-    if (/(?:&&|\|\|)$/.test(prefix)) {
-      prefix = boolCalleeDropOperand(prefix.slice(0, -2));
-      continue;
-    }
-    if (/[^=!<>]=$/.test(prefix))
-      return /:\s*bool\s*=?$/.test(prefix.slice(0, -1));
-    if (/\($/.test(prefix)) {
-      prefix = prefix.slice(0, -1);
-      continue;
-    }
-    return false;
-  }
-  return false;
-}
-function nativeBoolCallee(content) {
-  if (!content.includes("is_true(&"))
-    return content;
-  const masked = boolCalleeMask(content);
-  const regions = boolCalleeRegions(masked);
-  const byName = /* @__PURE__ */ new Map();
-  for (const r of regions) {
-    const list = byName.get(r.name);
-    if (list === void 0)
-      byName.set(r.name, [r]);
-    else
-      list.push(r);
-  }
-  const edits = [];
-  for (const m of masked.matchAll(/(?<![A-Za-z0-9_:.])is_true\(&/g)) {
-    const start = m.index;
-    const open = start + "is_true".length;
-    const close = boolCalleeClose(masked, open);
-    if (close < 0)
-      continue;
-    const arg = content.slice(open + 1, close);
-    if (arg.includes("\n"))
-      continue;
-    const expr = boolCalleeStrip(arg.replace(/^&/, ""));
-    if (expr === "")
-      continue;
-    const region = regions.find((r) => start >= r.start && start < r.end);
-    if (region === void 0)
-      continue;
-    if (!boolCalleeBoolSlot(masked, start))
-      continue;
-    const variants = boolCalleeVariant(expr, masked, byName, region, 0, /* @__PURE__ */ new Set());
-    if (variants === void 0 || !BOOL_CALLEE_BOOLISH(variants))
-      continue;
-    let k = start - 1;
-    while (k >= 0 && (masked[k] === " " || masked[k] === "	"))
-      k--;
-    const negated = k >= 0 && masked[k] === "!" && masked[k - 1] !== "=";
-    edits.push({ start: negated ? k : start, end: close + 1, text: `${expr}.as_bool() == Some(${negated ? "false" : "true"})` });
-  }
-  if (edits.length === 0)
-    return content;
-  let out = "";
-  let at = 0;
-  for (const e of edits) {
-    if (e.start < at)
-      continue;
-    out += content.slice(at, e.start) + e.text;
-    at = e.end;
-  }
-  return out + content.slice(at);
-}
-var FIELDS_ARR = ["balance", "ohlcvs", "options"];
-var RECV = "self\\.(?:(?:core|parent)\\.)*(" + FIELDS_ARR.join("|") + ")";
-var STR_KEY = '&Value::Str\\("((?:[^"\\\\]|\\\\.)*)"\\.(?:into|to_string)\\(\\)\\)';
-var MAX_LINE = 400;
-function maskSrc(src) {
-  const out = src.split("");
-  const blank = (from, to) => {
-    for (let i2 = from; i2 < to && i2 < out.length; i2++)
-      if (out[i2] !== "\n")
-        out[i2] = " ";
-  };
-  let i = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === "/" && src[i + 1] === "/") {
-      const end = src.indexOf("\n", i);
-      const stop = end < 0 ? src.length : end;
-      blank(i, stop);
-      i = stop;
-      continue;
-    }
-    if (c === "/" && src[i + 1] === "*") {
-      const end = src.indexOf("*/", i + 2);
-      const stop = end < 0 ? src.length : end + 2;
-      blank(i, stop);
-      i = stop;
-      continue;
-    }
-    if (c === "'") {
-      const m = /^'(?:\\.|[^\\'])'/.exec(src.slice(i, i + 4));
-      if (m !== null) {
-        i += m[0].length;
-        continue;
-      }
-    }
-    if (c === '"') {
-      let j = i + 1;
-      while (j < src.length) {
-        if (src[j] === "\\") {
-          j += 2;
-          continue;
-        }
-        if (src[j] === '"')
-          break;
-        j++;
-      }
-      blank(i, Math.min(j + 1, src.length));
-      i = j + 1;
-      continue;
-    }
-    i++;
-  }
-  return out.join("");
-}
-function argSpans(masked, open) {
-  let depth = 0;
-  const spans = [];
-  let start = open + 1;
-  for (let j = open; j < masked.length; j++) {
-    const c = masked[j];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth === 0) {
-        spans.push([start, j]);
-        return spans;
-      }
-    } else if (c === "," && depth === 1) {
-      spans.push([start, j]);
-      start = j + 1;
-    }
-  }
-  return void 0;
-}
-function callEnd(masked, open) {
-  let depth = 0;
-  for (let j = open; j < masked.length; j++) {
-    const c = masked[j];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth === 0)
-        return j + 1;
-    }
-  }
-  return -1;
-}
-function fieldChainIsStatement(masked, from, to) {
-  let k = to;
-  while (k < masked.length && (masked[k] === " " || masked[k] === "	"))
-    k++;
-  if (masked[k] !== ";")
-    return false;
-  let s = from - 1;
-  while (s >= 0 && (masked[s] === " " || masked[s] === "	" || masked[s] === "\n"))
-    s--;
-  return s < 0 || "{};".indexOf(masked[s]) >= 0;
-}
-function fieldChainFirstArg(expr) {
-  const open = expr.indexOf("(");
-  if (open < 0)
-    return "";
-  let depth = 0;
-  for (let j = open; j < expr.length; j++) {
-    const c = expr[j];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth === 0)
-        return expr.slice(open + 1, j).trim();
-    } else if (c === "," && depth === 1) {
-      return expr.slice(open + 1, j).trim();
-    }
-  }
-  return "";
-}
-function chainField(recv) {
-  const direct = new RegExp("^&mut\\s+" + RECV + "$").exec(recv);
-  if (direct !== null)
-    return direct[1];
-  let expr = recv;
-  for (let hop = 0; hop < 8; hop++) {
-    if (!expr.startsWith("get_value_mut("))
-      return "";
-    const a = fieldChainFirstArg(expr);
-    const mutRoot = new RegExp("^&mut\\s+" + RECV + "$").exec(a);
-    if (mutRoot !== null)
-      return mutRoot[1];
-    const coerced = new RegExp("^unsafe\\s*\\{\\s*crate::runtime::coerce_value_to_mut\\(&" + RECV + "\\)\\s*\\}$").exec(a);
-    if (coerced !== null)
-      return coerced[1];
-    if (!a.startsWith("get_value_mut("))
-      return "";
-    expr = a;
-  }
-  return "";
-}
-var FN_HEAD = /(?:^|\n)[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+[A-Za-z_][A-Za-z0-9_]*/g;
-function fnSpan(src, at) {
-  FN_HEAD.lastIndex = 0;
-  let start = 0;
-  let m;
-  while ((m = FN_HEAD.exec(src)) !== null) {
-    if (m.index > at)
-      return [start, m.index];
-    start = m.index;
-  }
-  return [start, src.length];
-}
-function identKeyArg(body, ident, header) {
-  const asStr = new RegExp("\\blet\\s+(?:mut\\s+)?" + ident + "\\s*:\\s*String\\s*=");
-  const asVal = new RegExp("\\blet\\s+(?:mut\\s+)?" + ident + "\\s*:\\s*Value\\s*=");
-  if (asStr.test(body))
-    return ident + ".clone()";
-  if (asVal.test(body))
-    return "crate::runtime::stringify_param(&" + ident + ")";
-  const paramVal = new RegExp("(?:^|[(,]\\s*)(?:mut\\s+)?" + ident + "\\s*:\\s*Value\\b");
-  const paramStr = new RegExp("(?:^|[(,]\\s*)(?:mut\\s+)?" + ident + "\\s*:\\s*String\\b");
-  if (paramStr.test(header))
-    return ident + ".clone()";
-  if (paramVal.test(header))
-    return "crate::runtime::stringify_param(&" + ident + ")";
-  return "";
-}
-function runPass(content) {
-  if (!content.includes("add_element_to_object("))
-    return content;
-  const masked = maskSrc(content);
-  const callRe = /(?<![A-Za-z0-9_:.])(add_element_to_object)\(/g;
-  const rws = [];
-  let m;
-  while ((m = callRe.exec(masked)) !== null) {
-    const open = m.index + m[1].length;
-    const spans = argSpans(masked, open);
-    if (spans === void 0 || spans.length !== 3)
-      continue;
-    const end = callEnd(masked, open);
-    if (end < 0)
-      continue;
-    if (!fieldChainIsStatement(masked, m.index, end))
-      continue;
-    const raw = spans.map((sp) => content.slice(sp[0], sp[1]).trim());
-    if (chainField(raw[0]) === "")
-      continue;
-    const value = raw[2];
-    if (/\bself\b/.test(value))
-      continue;
-    let keyArg = "";
-    const lit = new RegExp("^" + STR_KEY + "$").exec(raw[1]);
-    if (lit !== null) {
-      keyArg = '"' + lit[1] + '".to_string()';
-    } else {
-      const ident = /^&([A-Za-z_][A-Za-z0-9_]*)$/.exec(raw[1]);
-      if (ident === null)
-        continue;
-      const [fnStart, fnEnd] = fnSpan(masked, m.index);
-      const headerEnd = masked.indexOf("\n", fnStart + 1);
-      const header = masked.slice(fnStart, headerEnd < 0 ? fnEnd : headerEnd);
-      keyArg = identKeyArg(masked.slice(fnStart, m.index), ident[1], header);
-      if (keyArg === "")
-        continue;
-    }
-    const text = "if let Value::Dict(__r05d) = " + raw[0] + " { std::sync::Arc::make_mut(__r05d).insert(" + keyArg + ", " + value + "); }";
-    const lineStart = content.lastIndexOf("\n", m.index) + 1;
-    const lineEndIdx = content.indexOf("\n", end);
-    const lineLen = (lineEndIdx < 0 ? content.length : lineEndIdx) - lineStart;
-    if (lineLen > MAX_LINE || lineLen - (end - m.index) + text.length > MAX_LINE)
-      continue;
-    let stop = end;
-    while (stop < content.length && (content[stop] === " " || content[stop] === "	"))
-      stop++;
-    if (content[stop] !== ";")
-      continue;
-    rws.push({ start: m.index, end: stop + 1, text });
-  }
-  if (rws.length === 0)
-    return content;
-  rws.sort((a, b) => a.start - b.start);
-  let out = "";
-  let at = 0;
-  for (const r of rws) {
-    if (r.start < at)
-      continue;
-    out += content.slice(at, r.start) + r.text;
-    at = r.end;
-  }
-  return out + content.slice(at);
-}
-function fieldChainInserts(content) {
-  let out = content;
-  for (let i = 0; i < 4; i++) {
-    const next = runPass(out);
-    if (next === out)
-      break;
-    out = next;
-  }
-  return out;
-}
-var helperName = "append_to_array";
-var lineBudget = 400;
-var plainFields = /* @__PURE__ */ new Set([
-  "orders",
-  "positions",
-  "tickers",
-  "trades",
-  "ohlcvs",
-  "bidsasks",
-  "clients",
-  "balance",
-  "options",
-  "markets",
-  "markets_by_id",
-  "currencies",
-  "events",
-  "outcomes",
-  "outcomes_by_id",
-  "events_by_slug",
-  "symbols",
-  "free",
-  "used",
-  "total"
-]);
-var keeperCalls = ["add_element_to_object", "set_value", "remove"];
-var literalPrefixes = ["Value::Null", "Value::Int(", "Value::Float(", "Value::Bool(", "Value::Str(", "Value::Map({", "Value::Array("];
-function markerFreePushMaskText(src) {
-  const out = [];
-  let i = 0;
-  const n = src.length;
-  while (i < n) {
-    const c = src[i];
-    if (c === "/" && src[i + 1] === "/") {
-      while (i < n && src[i] !== "\n") {
-        out.push(" ");
-        i++;
-      }
-      continue;
-    }
-    if (c === "/" && src[i + 1] === "*") {
-      out.push("  ");
-      i += 2;
-      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) {
-        out.push(src[i] === "\n" ? "\n" : " ");
-        i++;
-      }
-      if (i < n) {
-        out.push("  ");
-        i += 2;
-      }
-      continue;
-    }
-    if (c === '"') {
-      out.push(" ");
-      i++;
-      while (i < n && src[i] !== '"') {
-        if (src[i] === "\\") {
-          out.push("  ");
-          i += 2;
-          continue;
-        }
-        out.push(src[i] === "\n" ? "\n" : " ");
-        i++;
-      }
-      if (i < n) {
-        out.push(" ");
-        i++;
-      }
-      continue;
-    }
-    out.push(c);
-    i++;
-  }
-  return out.join("");
-}
-function markerFreePushFnRegions(masked) {
-  const regions = [];
-  const head = /\bfn\s+[A-Za-z0-9_]*\s*[(<]/g;
-  let m;
-  while ((m = head.exec(masked)) !== null) {
-    let i = m.index + m[0].length - 1;
-    let depth = 0;
-    let open = -1;
-    while (i < masked.length) {
-      const c = masked[i];
-      if (c === "(" || c === "[" || c === "<")
-        depth++;
-      else if (c === ")" || c === "]" || c === ">")
-        depth--;
-      else if (c === "{") {
-        if (depth <= 0) {
-          open = i;
-          break;
-        }
-        depth++;
-      } else if (c === ";" && depth <= 0)
-        break;
-      i++;
-    }
-    if (open < 0)
-      continue;
-    let close = -1;
-    let d = 0;
-    for (let j = open; j < masked.length; j++) {
-      if (masked[j] === "{")
-        d++;
-      else if (masked[j] === "}") {
-        d--;
-        if (d === 0) {
-          close = j;
-          break;
-        }
-      }
-    }
-    if (close > open)
-      regions.push([open, close]);
-  }
-  return regions;
-}
-function markerFreePushCloseParen(src, open) {
-  let depth = 0;
-  for (let i = open; i < src.length; i++) {
-    const c = src[i];
-    if (c === "(")
-      depth++;
-    else if (c === ")") {
-      depth--;
-      if (depth === 0)
-        return i;
-    }
-  }
-  return -1;
-}
-function exprEnd(masked, from) {
-  let depth = 0;
-  for (let i = from; i < masked.length; i++) {
-    const c = masked[i];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}")
-      depth--;
-    else if (c === ";" && depth <= 0)
-      return i;
-  }
-  return -1;
-}
-function rustVecPushInline(content) {
-  if (!content.includes(helperName + "("))
-    return content;
-  const masked = markerFreePushMaskText(content);
-  const regions = markerFreePushFnRegions(masked);
-  const callRx = new RegExp("(?<![\\w.:])" + helperName + "\\(", "g");
-  const jobs = [];
-  const memo = /* @__PURE__ */ new Map();
-  const factsOf = (region) => {
-    const key = region[0] + ":" + region[1];
-    let hit = memo.get(key);
-    if (hit === void 0) {
-      hit = /* @__PURE__ */ new Map();
-      memo.set(key, hit);
-    }
-    return hit;
-  };
-  const isPlainField = (expr) => {
-    const f = /^self\.([A-Za-z_][A-Za-z0-9_]*)\b/.exec(expr.trim());
-    return f !== null && plainFields.has(f[1]);
-  };
-  const chainRoot = (expr) => {
-    const m2 = /^([A-Za-z_][A-Za-z0-9_]*)\.(?:as_map|as_array)\(\)/.exec(expr.trim());
-    return m2 === null ? null : m2[1];
-  };
-  const sourceFree = (expr, region, seen) => {
-    const t = expr.trim();
-    if (literalPrefixes.some((p) => t.startsWith(p)))
-      return true;
-    if (/^Value::from\(vec!\[/.test(t) || /^Value::from\(Vec::new\(\)\)$/.test(t))
-      return true;
-    if (t.startsWith("self.safe_list"))
-      return true;
-    if (/^[A-Za-z_][A-Za-z0-9_]*\.as_str\(\)\.map\(/.test(t))
-      return true;
-    if (/^\(if let Some\(__s\) = [A-Za-z_][A-Za-z0-9_.]*\.(?:as_str|as_deref)\(\) \{ Value::Str\(.*\) \} else \{ Value::Null \}\)$/.test(t))
-      return true;
-    if (isPlainField(t))
-      return true;
-    const safeValue = /^self\.safe_value(?:_k)?\(\(?(?:if let \(Some\(__m\), Some\(__k\)\) = \()?self\.([A-Za-z_][A-Za-z0-9_]*)/.exec(t);
-    if (safeValue !== null && plainFields.has(safeValue[1]))
-      return true;
-    const matchRead = /^match\s*&\s*([A-Za-z_][A-Za-z0-9_]*)\s*\{\s*Value::Dict\(__m\d+\)\s*=>\s*__m\d+\.get\("/.exec(t);
-    if (matchRead !== null)
-      return localFree(matchRead[1], region, seen);
-    const read = /^(?:crate::value::)?(?:get_value_k|get_value)\(/.exec(t);
-    if (read !== null) {
-      const open = read[0].length - 1;
-      const close = markerFreePushCloseParen(t, open);
-      if (close < 0)
-        return false;
-      const args = t.slice(open + 1, close);
-      const comma = args.indexOf(",");
-      if (comma < 0)
-        return false;
-      const recv = args.slice(0, comma).trim().replace(/^&\s*/, "");
-      if (isPlainField(recv))
-        return true;
-      const root2 = chainRoot(recv);
-      if (root2 !== null)
-        return localFree(root2, region, seen);
-      if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(recv))
-        return localFree(recv, region, seen);
-      return false;
-    }
-    const freeRead = /^\(if let \(Some\(__m\), Some\(__k\)\) = \(([A-Za-z_][A-Za-z0-9_.]*)\.as_map\(\), /.exec(t);
-    if (freeRead !== null) {
-      if (isPlainField(freeRead[1]))
-        return true;
-      return /^[A-Za-z_][A-Za-z0-9_]*$/.test(freeRead[1]) && localFree(freeRead[1], region, seen);
-    }
-    const clone = /^([A-Za-z_][A-Za-z0-9_]*)\.clone\(\)$/.exec(t);
-    if (clone !== null)
-      return localFree(clone[1], region, seen);
-    const root = chainRoot(t);
-    if (root !== null)
-      return localFree(root, region, seen);
-    return false;
-  };
-  const localFree = (name, region, seen) => {
-    const facts = factsOf(region);
-    const known = facts.get(name);
-    if (known !== void 0)
-      return known;
-    if (seen.has(name))
-      return false;
-    const body = masked.slice(region[0], region[1]);
-    const declRx = new RegExp("let (?:mut )?" + name + "\\s*:\\s*([^=;]+?)\\s*=(?!=)", "g");
-    const spans = [];
-    let d;
-    while ((d = declRx.exec(body)) !== null) {
-      if (d[1].trim() !== "Value") {
-        facts.set(name, false);
-        return false;
-      }
-      const rhsStart = region[0] + d.index + d[0].length;
-      const rhsEnd = exprEnd(masked, rhsStart);
-      if (rhsEnd < 0) {
-        facts.set(name, false);
-        return false;
-      }
-      spans.push([d.index, rhsEnd - region[0]]);
-    }
-    if (spans.length === 0) {
-      facts.set(name, false);
-      return false;
-    }
-    seen.add(name);
-    let ok = true;
-    for (const [d0, d1] of spans) {
-      const rhsStart = region[0] + d0 + body.slice(d0).indexOf("=") + 1;
-      if (!sourceFree(content.slice(rhsStart, region[0] + d1), region, seen)) {
-        ok = false;
-        break;
-      }
-    }
-    if (ok) {
-      const wrx = new RegExp("(?<![\\w.])" + name + "\\s*=(?!=)", "g");
-      let w;
-      while ((w = wrx.exec(body)) !== null) {
-        if (spans.some(([d0, d1]) => w.index >= d0 + body.slice(d0).indexOf("=") && w.index < d1))
-          continue;
-        const rhsStart = region[0] + w.index + w[0].length;
-        const rhsEnd = exprEnd(masked, rhsStart);
-        if (rhsEnd < 0 || !sourceFree(content.slice(rhsStart, rhsEnd), region, seen)) {
-          ok = false;
-          break;
-        }
-      }
-    }
-    seen.delete(name);
-    facts.set(name, ok);
-    return ok;
-  };
-  let m;
-  while ((m = callRx.exec(masked)) !== null) {
-    const start = m.index;
-    const lineStart = masked.lastIndexOf("\n", start) + 1;
-    if (/^\s*(?:pub\s+)?fn /.test(masked.slice(lineStart, start)))
-      continue;
-    const region = regions.find((r) => r[0] < start && start < r[1]);
-    if (region === void 0)
-      continue;
-    const argStart = start + helperName.length + 1;
-    const recv = /^&mut\s+([A-Za-z_][A-Za-z0-9_]*)\s*,/.exec(content.slice(argStart, argStart + 160));
-    if (recv === null)
-      continue;
-    const name = recv[1];
-    const nameRx = new RegExp("(?<![\\w.])" + name + "(?![\\w])");
-    const headerStart = masked.lastIndexOf("fn ", region[0]);
-    if (new RegExp("(?<![\\w])" + name + "\\s*:").test(masked.slice(headerStart, region[0])))
-      continue;
-    if (!localFree(name, region, /* @__PURE__ */ new Set()))
-      continue;
-    const body = masked.slice(region[0], region[1]);
-    const mutRx = new RegExp("&mut\\s+" + name + "(?![\\w])", "g");
-    let ok = true;
-    let mu;
-    while ((mu = mutRx.exec(body)) !== null) {
-      const at = region[0] + mu.index;
-      const before = masked.slice(Math.max(0, at - 60), at);
-      const after = masked.slice(at + mu[0].length, at + mu[0].length + 8);
-      const pushRecv = new RegExp(helperName + "\\(\\s*$").test(before) && /^\s*,/.test(after);
-      const keeper = keeperCalls.some((c) => new RegExp("(?<![\\w.])" + c + "\\(\\s*$").test(before)) && /^\s*,/.test(after);
-      if (!pushRecv && !keeper) {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok)
-      continue;
-    const callEnd2 = markerFreePushCloseParen(masked, argStart - 1);
-    if (callEnd2 < 0)
-      continue;
-    const valueStart = argStart + recv[0].length;
-    const value = content.slice(valueStart, callEnd2);
-    if (nameRx.test(value))
-      continue;
-    let stmtStart = masked.lastIndexOf(";", start);
-    stmtStart = Math.max(stmtStart, masked.lastIndexOf("{", start), masked.lastIndexOf("}", start)) + 1;
-    if (masked.slice(stmtStart, start).trim() !== "")
-      continue;
-    if (!/^\)\s*;/.test(masked.slice(callEnd2, callEnd2 + 4)))
-      continue;
-    const text = `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${value.trim()}); }`;
-    const lStart = content.lastIndexOf("\n", start) + 1;
-    const lEnd = content.indexOf("\n", callEnd2) < 0 ? content.length : content.indexOf("\n", callEnd2);
-    const lenNow = lEnd - lStart;
-    if (lenNow <= lineBudget && lenNow - (callEnd2 + 1 - start) + text.length > lineBudget)
-      continue;
-    jobs.push({ start, end: callEnd2 + 1, text });
-  }
-  if (jobs.length === 0)
-    return content;
-  let out = content;
-  for (let i = jobs.length - 1; i >= 0; i--) {
-    const j = jobs[i];
-    out = out.slice(0, j.start) + j.text + out.slice(j.end);
-  }
-  return out;
-}
-var SCALAR = /* @__PURE__ */ new Set(["str", "int", "float", "bool", "null"]);
-var NATIVE_TY = /* @__PURE__ */ new Set(["String", "Vec<String>", "i64", "f64", "bool", "usize", "u32", "isize"]);
-function stringNativesMaskText(src) {
-  const out = src.split("");
-  let i = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === "/" && src[i + 1] === "/") {
-      while (i < src.length && src[i] !== "\n")
-        out[i++] = " ";
-      continue;
-    }
-    if (c === "/" && src[i + 1] === "*") {
-      while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) {
-        if (src[i] !== "\n")
-          out[i] = " ";
-        i++;
-      }
-      if (i < src.length) {
-        out[i] = " ";
-        out[i + 1] = " ";
-        i += 2;
-      }
-      continue;
-    }
-    if (c === '"') {
-      out[i++] = " ";
-      while (i < src.length && src[i] !== '"') {
-        if (src[i] === "\\")
-          out[i++] = " ";
-        if (i < src.length) {
-          if (src[i] !== "\n")
-            out[i] = " ";
-          i++;
-        }
-      }
-      if (i < src.length)
-        out[i++] = " ";
-      continue;
-    }
-    i++;
-  }
-  return out.join("");
-}
-function stringNativesCloseParen(masked, open) {
-  const openCh = masked[open];
-  const closeCh = openCh === "(" ? ")" : openCh === "[" ? "]" : "}";
-  let depth = 0;
-  for (let k = open; k < masked.length; k++) {
-    const c = masked[k];
-    if (c === openCh)
-      depth++;
-    else if (c === closeCh) {
-      depth--;
-      if (depth === 0)
-        return k + 1;
-    }
-  }
-  return -1;
-}
-function stringNativesSplitArgs(masked, from, to) {
-  const args = [];
-  let depth = 0;
-  let start = from;
-  for (let k = from; k < to; k++) {
-    const c = masked[k];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}")
-      depth--;
-    else if (c === "," && depth === 0) {
-      args.push(masked.slice(start, k));
-      start = k + 1;
-    }
-  }
-  args.push(masked.slice(start, to));
-  return args;
-}
-function stringNativesStmtEnd(masked, from) {
-  let depth = 0;
-  for (let k = from; k < masked.length; k++) {
-    const c = masked[k];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth < 0)
-        return -1;
-    } else if (c === ";" && depth === 0)
-      return k;
-  }
-  return -1;
-}
-var STRING_NATIVES_FN_HEAD = /(?:^|\n)[ \t]*(?:pub(?:\([a-z]+\))? )?(?:async )?fn /g;
-function fnBounds(masked, pos) {
-  let start = 0;
-  for (const m of masked.matchAll(STRING_NATIVES_FN_HEAD)) {
-    const at = m.index;
-    if (at <= pos)
-      start = at + 1;
-    else
-      return [start, at + 1];
-  }
-  return [start, masked.length];
-}
-function strBox(arg) {
-  const m = /^&\s*Value::Str\(\s*("(?:[^"\\]|\\.)*")\s*(?:\.into\(\)|\.to_string\(\))?\s*\)$/.exec(arg.trim());
-  return m === null ? void 0 : m[1];
-}
-function intBox(arg) {
-  const m = /^&\s*Value::Int\(\s*(-?\d+)\s*\)$/.exec(arg.trim());
-  return m === null ? void 0 : m[1];
-}
-function elemKind(expr, locals, depth = 0) {
-  const e = expr.trim().replace(/;$/, "").trim();
-  const vec = _nullishCoalesce(/^(?:Value::(?:Array|List|from)|vec!)\(?(vec!)?\[/.exec(e), () => ( /^vec!\[/.exec(e)));
-  if (vec !== null) {
-    const open = e.indexOf("[");
-    const close = stringNativesCloseParen(e, open);
-    if (close < 0 || !/^\)*$/.test(e.slice(close)))
-      return void 0;
-    const items = stringNativesSplitArgs(e, open + 1, close - 1);
-    if (items === void 0)
-      return void 0;
-    for (const it of items) {
-      if (it.trim() === "")
-        continue;
-      if (!/^\s*Value::Str\(/.test(it))
-        return void 0;
-    }
-    return "str";
-  }
-  const arr = /^Value::(?:Array|List)\(/.exec(e);
-  if (arr !== null) {
-    const open = arr[0].length - 1;
-    const close = stringNativesCloseParen(e, open);
-    if (close !== e.length)
-      return void 0;
-    const inner = e.slice(open + 1, close - 1);
-    if (/\.map\(\|__p\| Value::Str\(|\.split\([^()]*\)\.map\(Value::from\)/.test(inner))
-      return "str";
-    return void 0;
-  }
-  if (/^(?:crate::runtime::)?split\(/.test(e))
-    return "str";
-  const slice = /^(?:self\.)?array_slice\(\s*&?([A-Za-z_]\w*)/.exec(e);
-  if (slice !== null && depth === 0) {
-    const src = locals.get(slice[1]);
-    return src === void 0 ? void 0 : src.elems;
-  }
-  return void 0;
-}
-function inferSet(expr, locals) {
-  const e = expr.trim().replace(/;$/, "").trim();
-  for (const [head, variant] of [["Value::Str(", "str"], ["Value::Int(", "int"], ["Value::Float(", "float"], ["Value::Bool(", "bool"]]) {
-    if (e.startsWith(head))
-      return /* @__PURE__ */ new Set([variant]);
-  }
-  if (e === "Value::Null")
-    return /* @__PURE__ */ new Set(["null"]);
-  const copy = /^([A-Za-z_]\w*)(?:\.clone\(\))?$/.exec(e);
-  if (copy !== null) {
-    const src = locals.get(copy[1]);
-    if (src === void 0)
-      return void 0;
-    if (src.ty === "Value")
-      return src.set === void 0 ? void 0 : new Set(src.set);
-    if (src.ty === "String")
-      return /* @__PURE__ */ new Set(["str"]);
-  }
-  const own = /^(?:crate::runtime::)?(to_string_val|replace_str|replace_all_str|join|pad_end|to_fixed)\(/.exec(e);
-  if (own !== null)
-    return own[1] === "pad_end" ? /* @__PURE__ */ new Set(["str", "null"]) : /* @__PURE__ */ new Set(["str"]);
-  if (/^(?:crate::runtime::)?split\(/.test(e))
-    return /* @__PURE__ */ new Set(["arr"]);
-  const call = /^(?:crate::value::)?(?:self\.)?(safe_string(?:_k|_2|_lower|_upper|_lower_k|_upper_k)?|safe_bool(?:_k|_2)?|safe_integer(?:_k|_2)?|safe_int|safe_timestamp|safe_float(?:_k)?|safe_number(?:_k|_2)?|parse_int|parse_float|parse_to_int|number_to_string|decimal_to_precision|sum)\(/.exec(e);
-  if (call !== null) {
-    const name = call[1];
-    const open = call[0].length - 1;
-    if (stringNativesCloseParen(e, open) !== e.length)
-      return void 0;
-    if (name === "decimal_to_precision")
-      return /* @__PURE__ */ new Set(["str"]);
-    if (name === "number_to_string")
-      return /* @__PURE__ */ new Set(["str", "null"]);
-    if (name === "sum")
-      return /* @__PURE__ */ new Set(["int", "float", "str", "null"]);
-    let own2 = "str";
-    if (name.startsWith("safe_bool"))
-      own2 = "bool";
-    else if (name.startsWith("safe_float") || name.startsWith("safe_number") || name === "parse_float")
-      own2 = "float";
-    else if (!name.startsWith("safe_string") && name !== "parse_to_int")
-      own2 = "int";
-    const out = /* @__PURE__ */ new Set([own2]);
-    if (name.startsWith("safe")) {
-      const args = stringNativesSplitArgs(e, open + 1, e.length - 1);
-      if (args === void 0)
-        return void 0;
-      const last = args[args.length - 1].trim();
-      if (last === "&[]")
-        out.add("null");
-      else {
-        const inner = /^&\[(.*)\]$/.exec(last);
-        if (inner === null)
-          return void 0;
-        const lit = strBox(`&${inner[1]}`);
-        const num = intBox(`&${inner[1]}`);
-        if (lit !== void 0)
-          out.add("str");
-        else if (num !== void 0)
-          out.add("int");
-        else
-          return void 0;
-      }
-    } else {
-      out.add("null");
-    }
-    return out;
-  }
-  if (/^(?:Value::(?:Array|List)\(|Value::from\(vec!\[|vec!\[)/.test(e))
-    return /* @__PURE__ */ new Set(["arr"]);
-  const slice = /^(?:crate::value::)?(?:self\.)?(?:array_slice|array_concat)\(\s*&?([A-Za-z_]\w*)/.exec(e);
-  if (slice !== null) {
-    const src = locals.get(slice[1]);
-    return src === void 0 || src.set === void 0 ? void 0 : new Set(src.set);
-  }
-  if (/^\(match &\w+ \{ Value::Str\(__parse_s\) => __parse_s\.trim\(\)\.parse::<f64>\(\)\.map\(Value::Float\)/.test(e))
-    return /* @__PURE__ */ new Set(["float", "null"]);
-  if (/^\(match &\w+ \{ Value::Str\(__parse_s\) => __parse_s\.trim\(\)\.parse::<i64>\(\)\.map\(Value::Int\)/.test(e))
-    return /* @__PURE__ */ new Set(["int", "null"]);
-  if (/^\(match \(&\(/.test(e))
-    return /* @__PURE__ */ new Set(["int", "float", "null"]);
-  return void 0;
-}
-function valueSets(region, maskedRegion, sig) {
-  const locals = /* @__PURE__ */ new Map();
-  const declRe = /let\s+(?:mut\s+)?([A-Za-z_]\w*)\s*:\s*([^=;]+?)\s*=/g;
-  const decls = [];
-  let m;
-  while ((m = declRe.exec(maskedRegion)) !== null) {
-    const rel = new RegExp(`\\b${m[1]}\\b`).exec(m[0]);
-    decls.push({ name: m[1], ty: m[2].replace(/\s+/g, ""), at: m.index + (rel === null ? 0 : rel.index), init: m.index + m[0].length });
-  }
-  const multi = /* @__PURE__ */ new Map();
-  for (const d of decls)
-    multi.set(d.name, (_nullishCoalesce(multi.get(d.name), () => ( 0))) + 1);
-  for (const p of sig.matchAll(/\(\s*(?:&?\s*(?:mut\s+)?([A-Za-z_]\w*)\s*:\s*([^,)]+)|&[A-Za-z_]\w*)|,\s*(?:mut\s+)?([A-Za-z_]\w*)\s*:\s*([^,)]+)/g)) {
-    const name = _nullishCoalesce(p[1], () => ( p[3]));
-    const ty = (_nullishCoalesce(_nullishCoalesce(p[2], () => ( p[4])), () => ( ""))).replace(/\s+/g, "");
-    if (name !== void 0 && NATIVE_TY.has(ty))
-      locals.set(name, { ty });
-  }
-  for (const d of decls) {
-    if (multi.get(d.name) !== 1)
-      continue;
-    locals.set(d.name, { ty: d.ty });
-    if (d.ty !== "Value")
-      continue;
-    const bind = new RegExp(`(?:[(,|]\\s*(?:mut\\s+)?${d.name}\\s*:|\\bfor\\s+(?:mut\\s+)?${d.name}\\b)`);
-    if (bind.test(sig))
-      continue;
-    const set = /* @__PURE__ */ new Set();
-    let ok = true;
-    let elems = "str";
-    const word = new RegExp(`(?<![A-Za-z0-9_.])${d.name}(?![A-Za-z0-9_])`, "g");
-    for (let k = 0; k < maskedRegion.length; k++) {
-      word.lastIndex = k;
-      const hit = word.exec(maskedRegion);
-      if (hit === null)
-        break;
-      const s = hit.index;
-      k = s;
-      if (/&\s*mut\s*$/.test(maskedRegion.slice(Math.max(0, s - 12), s))) {
-        ok = false;
-        break;
-      }
-      const tail = maskedRegion.slice(s + d.name.length);
-      const rhs = /^\s*=(?!=)/.exec(tail);
-      if (s === d.at) {
-        const end = stringNativesStmtEnd(maskedRegion, d.init);
-        const ex = end < 0 ? "" : region.slice(d.init, end);
-        const got = end < 0 ? void 0 : inferSet(ex, locals);
-        if (got === void 0) {
-          ok = false;
-          break;
-        }
-        got.forEach((v) => set.add(v));
-        if (elemKind(ex, locals) !== "str")
-          elems = void 0;
-        k = end < 0 ? s + d.name.length : end;
-        continue;
-      }
-      if (rhs !== null) {
-        const from = s + d.name.length + rhs[0].length;
-        const end = stringNativesStmtEnd(maskedRegion, from);
-        const ex = end < 0 ? "" : region.slice(from, end);
-        const got = end < 0 ? void 0 : inferSet(ex, locals);
-        if (got === void 0) {
-          ok = false;
-          break;
-        }
-        got.forEach((v) => set.add(v));
-        if (elemKind(ex, locals) !== "str")
-          elems = void 0;
-        k = end < 0 ? from : end;
-        continue;
-      }
-    }
-    if (ok && set.size > 0)
-      locals.set(d.name, { ty: d.ty, set, elems });
-  }
-  return locals;
-}
-function rewrite(name, args, locals) {
-  const arg0 = (_nullishCoalesce(args[0], () => ( ""))).trim();
-  const recv = /^&\s*([A-Za-z_]\w*)$/.exec(arg0);
-  const x = recv === null ? void 0 : recv[1];
-  const local = x === void 0 ? void 0 : locals.get(x);
-  const set = _optionalChain([local, 'optionalAccess', _8191 => _8191.set]);
-  const ty = _optionalChain([local, 'optionalAccess', _8192 => _8192.ty]);
-  const provenScalar = set !== void 0 && set.size > 0 && [...set].every((v) => SCALAR.has(v));
-  const strTyped = ty === "String";
-  const strProven = strTyped || set !== void 0 && set.size === 1 && set.has("str");
-  const scalarProven = strTyped || provenScalar;
-  const numProven = ty === "i64" || ty === "f64" || set !== void 0 && set.size > 0 && [...set].every((v) => v === "int" || v === "float" || v === "null");
-  if (x === void 0) {
-    if (name !== "to_string_val")
-      return void 0;
-    const held = arg0.replace(/^&/, "").replace(/;$/, "").trim();
-    const got = inferSet(held, locals);
-    if (got === void 0 || [...got].some((v) => !SCALAR.has(v)))
-      return void 0;
-    return `Value::str(${held}.to_string())`;
-  }
-  switch (name) {
-    case "to_string_val": {
-      if (args.length !== 1)
-        return void 0;
-      if (strProven)
-        return `Value::str(${x}.clone())`;
-      if (scalarProven)
-        return `Value::str(${x}.to_string())`;
-      return void 0;
-    }
-    case "replace_str":
-    case "replace_all_str": {
-      if (!strProven || args.length !== 3)
-        return void 0;
-      const a = strBox(args[1]);
-      const b = strBox(args[2]);
-      if (a === void 0 || b === void 0)
-        return void 0;
-      const holder = strTyped ? x : `${x}.as_str().unwrap_or_default()`;
-      return `Value::str(${holder}.replace(${a}, ${b}))`;
-    }
-    case "split": {
-      if (!strProven || args.length !== 2)
-        return void 0;
-      const d = strBox(args[1]);
-      if (d === void 0)
-        return void 0;
-      const holder = strTyped ? x : `${x}.as_str().unwrap_or_default()`;
-      return `Value::Array(${holder}.split(${d}).map(Value::str).collect())`;
-    }
-    case "starts_with":
-    case "ends_with": {
-      if (!strProven || args.length !== 2)
-        return void 0;
-      const s = strBox(args[1]);
-      if (s === void 0)
-        return void 0;
-      const holder = strTyped ? x : `${x}.as_str().unwrap_or_default()`;
-      return `${holder}.${name}(${s})`;
-    }
-    case "to_fixed": {
-      if (!numProven || args.length !== 2)
-        return void 0;
-      const d = intBox(args[1]);
-      if (d === void 0)
-        return void 0;
-      const n = ty === "f64" ? x : ty === "i64" ? `(${x} as f64)` : `${x}.as_f64().unwrap_or(0.0)`;
-      return `Value::str(format!("{:.*}", ${d}, ${n}))`;
-    }
-    case "join": {
-      if (args.length !== 2)
-        return void 0;
-      const s = strBox(args[1]);
-      if (s === void 0)
-        return void 0;
-      if (ty === "Vec<String>")
-        return `Value::str(${x}.join(${s}))`;
-      if (_optionalChain([local, 'optionalAccess', _8193 => _8193.elems]) === "str" && set !== void 0 && set.size === 1 && set.has("arr")) {
-        return `Value::str(${x}.as_array().cloned().unwrap_or_default().iter().filter_map(Value::as_str).collect::<Vec<_>>().join(${s}))`;
-      }
-      return void 0;
-    }
-    default:
-      return void 0;
-  }
-}
-function rustStringNatives(content) {
-  if (!/to_string_val\(|replace_str\(|replace_all_str\(|split\(|join\(|starts_with\(|ends_with\(|to_fixed\(/.test(content))
-    return content;
-  const masked = stringNativesMaskText(content);
-  const rx = /(?<![A-Za-z0-9_:.])(to_string_val|replace_str|replace_all_str|split|join|starts_with|ends_with|to_fixed)\(/g;
-  const hits = [];
-  for (const m of masked.matchAll(rx)) {
-    const start = m.index;
-    if (/\bfn\s+$/.test(masked.slice(Math.max(0, start - 8), start)))
-      continue;
-    const open = start + m[1].length;
-    const close = stringNativesCloseParen(masked, open);
-    if (close < 0)
-      continue;
-    hits.push({ start, end: close, name: m[1] });
-  }
-  if (hits.length === 0)
-    return content;
-  const rewrites = [];
-  const cache = /* @__PURE__ */ new Map();
-  for (const h of hits) {
-    const [lo, hi] = fnBounds(masked, h.start);
-    let locals = cache.get(lo);
-    if (locals === void 0) {
-      const region = content.slice(lo, hi);
-      const head = content.slice(lo, hi).indexOf("{");
-      const sig = head < 0 ? "" : region.slice(0, head);
-      locals = valueSets(region, masked.slice(lo, hi), sig);
-      cache.set(lo, locals);
-    }
-    const args = stringNativesSplitArgs(content, h.start + h.name.length + 1, h.end - 1);
-    if (args === void 0)
-      continue;
-    const text = rewrite(h.name, args, locals);
-    if (text === void 0)
-      continue;
-    const lineStart = content.lastIndexOf("\n", h.start) + 1;
-    const lineEnd = content.indexOf("\n", h.end);
-    const len = (lineEnd < 0 ? content.length : lineEnd) - lineStart;
-    if (len <= 400 && len - (h.end - h.start) + text.length > 400)
-      continue;
-    rewrites.push({ start: h.start, end: h.end, text });
-  }
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start);
-  let out = "";
-  let at = 0;
-  for (const r of rewrites) {
-    if (r.start < at)
-      continue;
-    out += content.slice(at, r.start) + r.text;
-    at = r.end;
-  }
-  return out + content.slice(at);
-}
-var FIELDS = ["options", "markets", "balance", "ohlcvs"];
-var PLAIN_DICT_RECV = "self\\.(?:(?:core|parent)\\.)*(" + FIELDS.join("|") + ")";
-var PLAIN_DICT_STR_KEY = /^&Value::Str\("((?:[^"\\]|\\.)*)"\.(?:into|to_string)\(\)\)$/;
-var ROOT = new RegExp("^&mut\\s+" + PLAIN_DICT_RECV + "$");
-var COERCED = new RegExp("^unsafe\\s*\\{\\s*crate::runtime::coerce_value_to_mut\\(&" + PLAIN_DICT_RECV + "\\)\\s*\\}$");
-var PLAIN_DICT_MAX_LINE = 400;
-function plainDictMaskSrc(src) {
-  const out = src.split("");
-  const blank = (from, to) => {
-    for (let i2 = from; i2 < to && i2 < out.length; i2++)
-      if (out[i2] !== "\n")
-        out[i2] = " ";
-  };
-  let i = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === "/" && src[i + 1] === "/") {
-      const end = src.indexOf("\n", i);
-      const stop = end < 0 ? src.length : end;
-      blank(i, stop);
-      i = stop;
-      continue;
-    }
-    if (c === "/" && src[i + 1] === "*") {
-      const end = src.indexOf("*/", i + 2);
-      const stop = end < 0 ? src.length : end + 2;
-      blank(i, stop);
-      i = stop;
-      continue;
-    }
-    if (c === "'") {
-      const m = /^'(?:\\.|[^\\'])'/.exec(src.slice(i, i + 4));
-      if (m !== null) {
-        i += m[0].length;
-        continue;
-      }
-    }
-    if (c === '"') {
-      let j = i + 1;
-      while (j < src.length) {
-        if (src[j] === "\\") {
-          j += 2;
-          continue;
-        }
-        if (src[j] === '"')
-          break;
-        j++;
-      }
-      blank(i, Math.min(j + 1, src.length));
-      i = j + 1;
-      continue;
-    }
-    i++;
-  }
-  return out.join("");
-}
-function plainDictArgSpans(masked, open) {
-  let depth = 0;
-  const spans = [];
-  let start = open + 1;
-  for (let j = open; j < masked.length; j++) {
-    const c = masked[j];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth === 0) {
-        spans.push([start, j]);
-        return spans;
-      }
-    } else if (c === "," && depth === 1) {
-      spans.push([start, j]);
-      start = j + 1;
-    }
-  }
-  return void 0;
-}
-function closeOf(masked, open) {
-  let depth = 0;
-  for (let j = open; j < masked.length; j++) {
-    const c = masked[j];
-    if (c === "(" || c === "[" || c === "{")
-      depth++;
-    else if (c === ")" || c === "]" || c === "}") {
-      depth--;
-      if (depth === 0)
-        return j;
-    }
-  }
-  return -1;
-}
-function hopAt(content, masked, at) {
-  if (!/^get_value_mut\(/.test(masked.slice(at, at + 14)))
-    return void 0;
-  const open = at + "get_value_mut".length;
-  const spans = plainDictArgSpans(masked, open);
-  if (spans === void 0 || spans.length !== 2)
-    return void 0;
-  const close = closeOf(masked, open);
-  if (close < 0)
-    return void 0;
-  const key = content.slice(spans[1][0], spans[1][1]).trim();
-  const lit = PLAIN_DICT_STR_KEY.exec(key);
-  return {
-    recv: content.slice(spans[0][0], spans[0][1]).trim(),
-    key,
-    literal: lit === null ? void 0 : lit[1],
-    close
-  };
-}
-function chainAt(content, masked, at) {
-  const hops = [];
-  let cur = at;
-  for (let n = 0; n < 8; n++) {
-    const h = hopAt(content, masked, cur);
-    if (h === void 0)
-      return void 0;
-    hops.push(h);
-    const lead = h.recv.length - h.recv.replace(/^\s+/, "").length;
-    if (!/^get_value_mut\(/.test(h.recv))
-      return { hops, root: h.recv };
-    cur = content.indexOf(h.recv, cur) + lead;
-  }
-  return void 0;
-}
-function valueIdentKey(masked, at, key) {
-  const id = /^&([A-Za-z_][A-Za-z0-9_]*)$/.exec(key);
-  if (id === null)
-    return "";
-  const fnHead = /(?:^|\n)[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+[A-Za-z_][A-Za-z0-9_]*/g;
-  let start = 0;
-  let m;
-  while ((m = fnHead.exec(masked)) !== null) {
-    if (m.index > at)
-      break;
-    start = m.index;
-  }
-  const nl = masked.indexOf("\n", start + 1);
-  const header = masked.slice(start, nl < 0 ? at : nl);
-  const ident = id[1];
-  const local = new RegExp("\\blet\\s+(?:mut\\s+)?" + ident + "\\s*:\\s*Value\\s*=");
-  const other = new RegExp("\\blet\\s+(?:mut\\s+)?" + ident + "\\b(?!\\s*:\\s*Value\\s*=)");
-  const param = new RegExp("(?:^|[(,]\\s*)(?:mut\\s+)?" + ident + "\\s*:\\s*Value\\b");
-  const body = masked.slice(start, at);
-  if (other.test(body))
-    return "";
-  if (local.test(body) || param.test(header))
-    return "crate::runtime::stringify_param(&" + ident + ")";
-  return "";
-}
-function plainDictRunPass(content) {
-  if (!content.includes("get_value_mut("))
-    return content;
-  const masked = plainDictMaskSrc(content);
-  const headRe = /if let Value::Dict\(\s*(\w+)\s*\)\s*=\s*get_value_mut\(/g;
-  const rws = [];
-  let m;
-  while ((m = headRe.exec(masked)) !== null) {
-    const bind = m[1];
-    const at2 = m.index + m[0].length - "get_value_mut(".length;
-    const chain = chainAt(content, masked, at2);
-    if (chain === void 0)
-      continue;
-    if (!ROOT.test(chain.root) && !COERCED.test(chain.root))
-      continue;
-    const outer = chain.hops[0];
-    const allLiteral = chain.hops.every((h) => h.literal !== void 0);
-    const identKey2 = !allLiteral && chain.hops.length === 1 ? valueIdentKey(masked, m.index, outer.key) : "";
-    if (!allLiteral && outer.literal === void 0 && identKey2 === "")
-      continue;
-    const end = chain.hops[0].close + 1;
-    const braceOpen = masked.indexOf("{", end);
-    if (braceOpen < 0)
-      continue;
-    if (masked.slice(end, braceOpen).trim() !== "")
-      continue;
-    let depth = 0;
-    let braceClose = -1;
-    for (let j = braceOpen; j < masked.length; j++) {
-      const c = masked[j];
-      if (c === "{")
-        depth++;
-      else if (c === "}") {
-        depth--;
-        if (depth === 0) {
-          braceClose = j;
-          break;
-        }
-      }
-    }
-    if (braceClose < 0)
-      continue;
-    const body = content.slice(braceOpen + 1, braceClose);
-    if (body.includes("__bf03"))
-      continue;
-    const lineStart = content.lastIndexOf("\n", m.index) + 1;
-    const pad = /^[ \t]*/.exec(content.slice(lineStart, m.index));
-    const level = (n) => pad[0] + "    ".repeat(n + 1);
-    const keys = identKey2 !== "" ? [identKey2] : allLiteral ? chain.hops.map((h) => '"' + h.literal + '".to_string()').reverse() : ['"' + outer.literal + '".to_string()'];
-    const head = allLiteral || identKey2 !== "" ? chain.root : outer.recv;
-    const lines = ["if let Value::Dict(__bf03d0) = " + head + " {"];
-    const parts = ["if let Value::Dict(__bf03d0) = " + head + " {"];
-    const bodyText = body.replace(/\s+$/, "");
-    let tooLong = false;
-    for (let i = 0; i < keys.length; i++) {
-      const last = i === keys.length - 1;
-      const entry = "let __bf03e" + (i + 1) + " = std::sync::Arc::make_mut(__bf03d" + i + ").entry(" + keys[i] + ").or_insert(Value::Null);";
-      const test = last ? "if let Value::Dict(" + bind + ") = __bf03e" + (i + 1) + " {" : "if let Value::Dict(__bf03d" + (i + 1) + ") = __bf03e" + (i + 1) + " {";
-      if (level(i).length + entry.length > PLAIN_DICT_MAX_LINE) {
-        tooLong = true;
-        break;
-      }
-      lines.push(level(i) + entry);
-      lines.push(level(i) + test);
-      parts.push(entry + " " + test);
-    }
-    if (tooLong)
-      continue;
-    const closers = [];
-    for (let k = keys.length; k >= 0; k--)
-      closers.push(pad[0] + "    ".repeat(k) + "}");
-    const inline = new Array(keys.length + 1).fill("}").join(" ");
-    const compact = parts.join(" ") + " " + bodyText.trim() + " " + inline;
-    const multi = lines.join("\n") + bodyText + "\n" + closers.join("\n");
-    const text = bodyText.indexOf("\n") < 0 && pad[0].length + compact.length <= PLAIN_DICT_MAX_LINE ? compact : multi;
-    rws.push({ start: m.index, end: braceClose + 1, text });
-    headRe.lastIndex = braceClose + 1;
-  }
-  if (rws.length === 0)
-    return content;
-  rws.sort((a, b) => a.start - b.start);
-  let out = "";
-  let at = 0;
-  for (const r of rws) {
-    if (r.start < at)
-      continue;
-    out += content.slice(at, r.start) + r.text;
-    at = r.end;
-  }
-  return out + content.slice(at);
-}
-function plainDictChains(content) {
-  return plainDictRunPass(content);
-}
-var CLIENT_HANDLE_KEYS = ["subscriptions", "futures", "rejections", "url"];
-var CLIENT_HANDLE_TYPE = "crate::pro::ws_client::ClientHandle";
-function clientHandleMask(src) {
-  let out = "";
-  let i = 0;
-  const n = src.length;
-  while (i < n) {
-    const c = src[i];
-    if (c === "/" && src[i + 1] === "/") {
-      while (i < n && src[i] !== "\n") {
-        out += " ";
-        i++;
-      }
-      continue;
-    }
-    if (c === "/" && src[i + 1] === "*") {
-      out += "  ";
-      i += 2;
-      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) {
-        out += src[i] === "\n" ? "\n" : " ";
-        i++;
-      }
-      if (i < n) {
-        out += "  ";
-        i += 2;
-      }
-      continue;
-    }
-    if (c === '"') {
-      out += '"';
-      i++;
-      while (i < n && src[i] !== '"') {
-        if (src[i] === "\\") {
-          out += "  ";
-          i += 2;
-          continue;
-        }
-        out += src[i] === "\n" ? "\n" : " ";
-        i++;
-      }
-      if (i < n) {
-        out += '"';
-        i++;
-      }
-      continue;
-    }
-    out += c;
-    i++;
-  }
-  return out;
-}
-function clientHandleViews(content) {
-  if (!content.includes("&client"))
-    return content;
-  const lines = content.split("\n");
-  const braces = clientHandleBraceDeltas(content).split("\n");
-  const out = [];
-  let depth = 0;
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    const startsMethod = depth === 1 && /^\s*pub\s+(?:async\s+)?fn\s+[A-Za-z_][A-Za-z0-9_]*\s*\(/.test(line);
-    if (!startsMethod) {
-      out.push(line);
-      depth += clientHandleDeltaAt(braces, i);
-      i++;
-      continue;
-    }
-    let j = i;
-    let level = depth;
-    while (j < lines.length) {
-      level += clientHandleDeltaAt(braces, j);
-      if (j > i && level <= depth)
-        break;
-      j++;
-    }
-    if (j >= lines.length) {
-      out.push(line);
-      depth += clientHandleDeltaAt(braces, i);
-      i++;
-      continue;
-    }
-    out.push(...clientHandleBlock(lines.slice(i, j + 1)));
-    for (let k = i; k <= j; k++)
-      depth += clientHandleDeltaAt(braces, k);
-    i = j + 1;
-  }
-  return clientHandleTypedReads(clientHandleSubsWrites(out.join("\n")));
-}
-var CLIENT_HANDLE_SUBS_WRITES = [
-  [/(?<![\w:.])remove\(&mut __ch\.subscriptions,\s*/g, "__ch.remove_subscription("],
-  [/(?<![\w:.])add_element_to_object\(&mut __ch\.subscriptions,\s*/g, "__ch.add_subscription("]
-];
-function clientHandleSubsWrites(content) {
-  if (!content.includes("&mut __ch.subscriptions"))
-    return content;
-  let text = content;
-  for (const [rx, repl] of CLIENT_HANDLE_SUBS_WRITES) {
-    const masked = clientHandleMask(text);
-    const hits = [];
-    rx.lastIndex = 0;
-    let m;
-    while ((m = rx.exec(masked)) !== null)
-      hits.push({ at: m.index, len: m[0].length });
-    for (let n = hits.length - 1; n >= 0; n--) {
-      text = text.slice(0, hits[n].at) + repl + text.slice(hits[n].at + hits[n].len);
-    }
-  }
-  return text;
-}
-var CLIENT_HANDLE_NAMES = { subscriptions: "subscription", futures: "future" };
-function clientHandleTypedReads(content) {
-  if (!content.includes("__ch."))
-    return content;
-  return content.replace(
-    /matches!\(\(&__ch\.(subscriptions|futures)\.clone\(\), (&[^\n]+?)\), \(Value::Dict\(__d\), Value::Str\(__k\)\) if __d\.contains_key\(__k\.as_ref\(\)\)\)/g,
-    (_m, k, key) => "__ch.has_" + CLIENT_HANDLE_NAMES[k] + "(" + key + ")"
-  ).replace(
-    /(?<![\w:.])get_value\(&__ch\.(subscriptions|futures)\.clone\(\), (&[A-Za-z_][A-Za-z0-9_]*)\)/g,
-    (_m, k, key) => "__ch.get_" + CLIENT_HANDLE_NAMES[k] + "(" + key + ")"
-  ).replace(
-    /(?<![\w:.])object_keys\(&__ch\.(subscriptions|futures)\.clone\(\)\)\.as_array\(\)\.cloned\(\)\.unwrap_or_default\(\)/g,
-    (_m, k) => "__ch." + CLIENT_HANDLE_NAMES[k] + "_keys()"
-  );
-}
-function clientHandleBraceDeltas(content) {
-  return clientHandleMask(content);
-}
-function clientHandleDeltaAt(maskedLines, idx) {
-  const line = _nullishCoalesce(maskedLines[idx], () => ( ""));
-  let d = 0;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === "{")
-      d++;
-    else if (c === "}")
-      d--;
-  }
-  return d;
-}
-var CLIENT_HANDLE_LET = /^ {8}let mut client: Value = /;
-var CLIENT_HANDLE_LET_NESTED = /^ {9,}let mut client: Value = /;
-var CLIENT_HANDLE_REASSIGN = /^\s*client\s*=[^=]/;
-var CLIENT_HANDLE_COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/;
-function clientHandleBlock(block) {
-  const header = block[0];
-  const fromParam = /\bclient\s*:\s*Value\b/.test(header);
-  let anchor;
-  let bodyStart;
-  if (fromParam) {
-    if (/\blet\s+(?:mut\s+)?client\b/.test(block.join("\n")))
-      return block;
-    anchor = 0;
-    bodyStart = 1;
-  } else {
-    const decls = [];
-    for (let k = 1; k < block.length; k++)
-      if (CLIENT_HANDLE_LET.test(block[k]))
-        decls.push(k);
-    if (decls.length === 0) {
-      for (let k = 1; k < block.length; k++)
-        if (CLIENT_HANDLE_LET_NESTED.test(block[k]))
-          decls.push(k);
-      const nestedAt = decls.length;
-      if (nestedAt === 1 && !block[decls[0]].trimEnd().endsWith(";"))
-        return block;
-    }
-    if (decls.length !== 1)
-      return block;
-    anchor = decls[0];
-    bodyStart = anchor + 1;
-  }
-  for (let k = bodyStart; k < block.length; k++)
-    if (CLIENT_HANDLE_REASSIGN.test(block[k]))
-      return block;
-  const rewritten = /* @__PURE__ */ new Map();
-  let needsMut = false;
-  let touched = false;
-  for (const key of CLIENT_HANDLE_KEYS) {
-    const rx = new RegExp('get_value\\(\\s*&client\\s*,\\s*&Value::Str\\("' + key + '"\\.(?:into|to_string)\\(\\)\\)\\s*\\)', "g");
-    const reads = [];
-    const writes = [];
-    for (let k = bodyStart; k < block.length; k++) {
-      const text = block[k];
-      if (CLIENT_HANDLE_COMMENT_LINE.test(text))
-        continue;
-      rx.lastIndex = 0;
-      let m;
-      while ((m = rx.exec(text)) !== null) {
-        const before = text.slice(Math.max(0, m.index - 8), m.index);
-        (/(?<![\w.])&mut\s*$/.test(before) ? writes : reads).push({ line: k, col: m.index, len: m[0].length });
-      }
-    }
-    if (reads.length === 0 && writes.length === 0)
-      continue;
-    const firstWriteLine = writes.length > 0 ? writes[0].line : Number.MAX_SAFE_INTEGER;
-    for (const r of reads) {
-      if (r.line >= firstWriteLine)
-        continue;
-      if (!rewritten.has(r.line))
-        rewritten.set(r.line, []);
-      rewritten.get(r.line).push(...clientHandleSpan(r.col, r.len, "__ch." + key + ".clone()"));
-      touched = true;
-    }
-    for (const w of writes) {
-      if (!rewritten.has(w.line))
-        rewritten.set(w.line, []);
-      rewritten.get(w.line).push(...clientHandleSpan(w.col, w.len, "__ch." + key));
-      needsMut = true;
-      touched = true;
-    }
-  }
-  if (!touched)
-    return block;
-  const bindIndent = fromParam ? "        " : block[anchor].match(/^ */)[0];
-  const binding = bindIndent + "let " + (needsMut ? "mut " : "") + "__ch = " + CLIENT_HANDLE_TYPE + "::from_value(client.clone());";
-  const result = [];
-  for (let k = 0; k < block.length; k++) {
-    const spans = rewritten.get(k);
-    result.push(spans === void 0 ? block[k] : clientHandleApply(block[k], spans));
-    if (k === anchor)
-      result.push(binding);
-  }
-  return result;
-}
-function clientHandleSpan(col, len, text) {
-  return [col + ":" + len + ":" + text];
-}
-function clientHandleApply(line, spans) {
-  const parsed = spans.map((s) => {
-    const first = s.indexOf(":");
-    const second = s.indexOf(":", first + 1);
-    return { col: Number(s.slice(0, first)), len: Number(s.slice(first + 1, second)), text: s.slice(second + 1) };
-  }).sort((a, b) => b.col - a.col);
-  let out = line;
-  for (const p of parsed)
-    out = out.slice(0, p.col) + p.text + out.slice(p.col + p.len);
-  return out;
-}
-var MAP_PARAM_RE = /:\s*&mut\s+indexmap::IndexMap<String, Value>/;
-function mapParamKind(printedParam) {
-  return MAP_PARAM_RE.test(printedParam) ? "map" : void 0;
-}
-function mapParamDispatchArg(index) {
-  return `&mut { let mut __m = args.get(${index}).cloned().unwrap_or_default().as_map().cloned().unwrap_or_default();
-                    __m }`;
-}
-function mapParamSplitArgs(argList) {
-  return mapParamSplitTopLevel(argList);
-}
-function mapParamSplitTopLevel(argList) {
-  const out = [];
-  let depth = 0;
-  let current = "";
-  for (const char of argList) {
-    if (char === "<" || char === "(" || char === "[") {
-      depth++;
-    } else if (char === ">" || char === ")" || char === "]") {
-      depth--;
-    }
-    if (char === "," && depth === 0) {
-      out.push(current);
-      current = "";
-      continue;
-    }
-    current += char;
-  }
-  out.push(current);
-  return out;
-}
-var REF_MAP_PARAM_RE = /([A-Za-z_][A-Za-z0-9_]*)\s*:\s*&mut\s+indexmap::IndexMap<String, Value>/g;
-function refMapParamNames(content) {
-  const names = /* @__PURE__ */ new Set();
-  REF_MAP_PARAM_RE.lastIndex = 0;
-  let m;
-  while ((m = REF_MAP_PARAM_RE.exec(content)) !== null) {
-    names.add(m[1]);
-  }
-  return names;
-}
-function narrowStrSinkLocals(content) {
-  const OPT = {
-    safe_string: "safe_string_opt",
-    safe_string_k: "safe_string_k_opt",
-    safe_string_lower_k: "safe_string_lower_k_opt",
-    safe_string_upper_k: "safe_string_upper_k_opt"
-  };
-  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_string[a-z_0-9]*)\(/gm;
-  const strKeyRe = /^"(?:[^"\\]|\\.)*"$/;
-  const maskText2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const closeParen2 = (src, open) => {
-    let depth = 0;
-    for (let k = open; k < src.length; k++) {
-      const c = src[k];
-      if (c === "(")
-        depth++;
-      else if (c === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const braceEnd = (src, from) => {
-    let depth = 0;
-    for (let k = from; k < src.length; k++) {
-      const c = src[k];
-      if (c === "{")
-        depth++;
-      else if (c === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return src.length;
-  };
-  const argSpans2 = (src) => {
-    const out2 = [];
-    let depth = 0;
-    let start = 0;
-    for (let i = 0; i < src.length; i++) {
-      const c = src[i];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      else if (c === "," && depth === 0) {
-        out2.push([start, i]);
-        start = i + 1;
-      }
-    }
-    out2.push([start, src.length]);
-    return out2;
-  };
-  const masked = maskText2(content);
-  const rewrites = [];
-  let m;
-  while ((m = declRe.exec(masked)) !== null) {
-    const fam = m[4];
-    const opt = OPT[fam];
-    if (opt === void 0)
-      continue;
-    const name = m[3];
-    const callOpen = m.index + m[0].length - 1;
-    const callClose = closeParen2(masked, callOpen);
-    if (callClose < 0)
-      continue;
-    const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
-    if (tail === null)
-      continue;
-    const stmtEnd2 = callClose + tail[0].length;
-    const base = callOpen + 1;
-    const spans = argSpans2(masked.slice(base, callClose - 1));
-    if (spans.length !== 3)
-      continue;
-    const obj = content.slice(base + spans[0][0], base + spans[0][1]).trim();
-    const keyRaw = content.slice(base + spans[1][0], base + spans[1][1]).trim();
-    const defRaw = content.slice(base + spans[2][0], base + spans[2][1]).trim();
-    if (obj.length === 0 || keyRaw.length === 0)
-      continue;
-    if (fam.endsWith("_k") && !strKeyRe.test(keyRaw))
-      continue;
-    if (defRaw !== "&[]" && !/^&\[\s*Value::Str\(/.test(defRaw))
-      continue;
-    const end = braceEnd(masked, stmtEnd2);
-    const body = masked.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
-      continue;
-    const fRe = /format!\(/g;
-    const fSpans = [];
-    let f;
-    while ((f = fRe.exec(body)) !== null) {
-      const close = closeParen2(body, f.index + f[0].length - 1);
-      if (close < 0)
-        continue;
-      const lit = /^"(?:[^"\\]|\\.)*"/.exec(body.slice(f.index + f[0].length, close));
-      fSpans.push([f.index, close, lit !== null && /:\?/.test(lit[0])]);
-    }
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, "g");
-    let ok = true;
-    let uses = 0;
-    let u;
-    while ((u = useRe.exec(body)) !== null) {
-      const at = u.index;
-      const cand = fSpans.filter(([s, e]) => at > s && at < e);
-      if (cand.length === 0) {
-        ok = false;
-        break;
-      }
-      const hit = cand.reduce((a, b) => b[0] > a[0] ? b : a);
-      if (hit[2]) {
-        ok = false;
-        break;
-      }
-      const inner = hit[0] + "format!(".length;
-      const slot = argSpans2(body.slice(inner, hit[1] - 1)).filter(([a, b]) => inner + a <= at && at + name.length <= inner + b);
-      if (slot.length === 0) {
-        ok = false;
-        break;
-      }
-      if (body.slice(inner + slot[0][0], inner + slot[0][1]).replace(/\s+/g, "") !== name) {
-        ok = false;
-        break;
-      }
-      uses++;
-    }
-    if (!ok || uses === 0)
-      continue;
-    const indent = m[1];
-    const text = `${indent}let ${name}: String = self.${opt}(${obj}, ${keyRaw}, ${defRaw}).unwrap_or_default();`;
-    if (indent.length + text.length > 400 && stmtEnd2 - m.index <= 400)
-      continue;
-    rewrites.push({ start: m.index, end: stmtEnd2, text });
-  }
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  out += content.slice(last);
-  return out;
-}
-function narrowStrNullLocals(content) {
-  const OPT = {
-    safe_string: "safe_string_opt",
-    safe_string_k: "safe_string_k_opt",
-    safe_string_lower_k: "safe_string_lower_k_opt",
-    safe_string_upper_k: "safe_string_upper_k_opt"
-  };
-  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_string[a-z_0-9]*)\(/gm;
-  const strKeyRe = /^"(?:[^"\\]|\\.)*"$/;
-  const maskText2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const closeParen2 = (src, open) => {
-    let depth = 0;
-    for (let k = open; k < src.length; k++) {
-      const c = src[k];
-      if (c === "(")
-        depth++;
-      else if (c === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const braceEnd = (src, from) => {
-    let depth = 0;
-    for (let k = from; k < src.length; k++) {
-      const c = src[k];
-      if (c === "{")
-        depth++;
-      else if (c === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return src.length;
-  };
-  const argSpans2 = (src) => {
-    const out2 = [];
-    let depth = 0;
-    let start = 0;
-    for (let i = 0; i < src.length; i++) {
-      const c = src[i];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      else if (c === "," && depth === 0) {
-        out2.push([start, i]);
-        start = i + 1;
-      }
-    }
-    out2.push([start, src.length]);
-    return out2;
-  };
-  const masked = maskText2(content);
-  const grown = /* @__PURE__ */ new Map();
-  const groups = [];
-  const rewrites = [];
-  const cands = [];
-  let m;
-  while ((m = declRe.exec(masked)) !== null) {
-    const opt = OPT[m[4]];
-    if (opt === void 0)
-      continue;
-    const callOpen = m.index + m[0].length - 1;
-    const callClose = closeParen2(masked, callOpen);
-    if (callClose < 0)
-      continue;
-    const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
-    if (tail === null)
-      continue;
-    const base = callOpen + 1;
-    const spans = argSpans2(masked.slice(base, callClose - 1));
-    if (spans.length !== 3)
-      continue;
-    const obj = content.slice(base + spans[0][0], base + spans[0][1]).trim();
-    const keyRaw = content.slice(base + spans[1][0], base + spans[1][1]).trim();
-    const defRaw = content.slice(base + spans[2][0], base + spans[2][1]).trim();
-    if (obj.length === 0 || keyRaw.length === 0)
-      continue;
-    if (m[4].endsWith("_k") && !strKeyRe.test(keyRaw))
-      continue;
-    if (defRaw !== "&[]")
-      continue;
-    cands.push({
-      index: m.index,
-      stmtEnd: callClose + tail[0].length,
-      name: m[3],
-      declText: `${m[1]}let ${_nullishCoalesce(m[2], () => ( ""))}${m[3]}: Option<String> = self.${opt}(${obj}, ${keyRaw}, ${defRaw});`
-    });
-  }
-  const inlineRe = new RegExp('^([ \\t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = \\(match __pro_message\\.get\\(("(?:[^"\\\\]|\\\\.)*")\\)\\.cloned\\(\\) \\{ Some\\(Value::Str\\(__s\\)\\) if !__s\\.is_empty\\(\\) => Value::Str\\(__s\\), Some\\(Value::Int\\(__n\\)\\) => Value::Str\\(__n\\.to_string\\(\\)\\.into\\(\\)\\), Some\\(Value::Float\\(__f\\)\\) => Value::Str\\(__f\\.to_string\\(\\)\\.into\\(\\)\\), _ => Value::Null \\}\\);', "gm");
-  while ((m = inlineRe.exec(content)) !== null) {
-    cands.push({
-      index: m.index,
-      stmtEnd: m.index + m[0].length,
-      name: m[3],
-      declText: `${m[1]}let ${_nullishCoalesce(m[2], () => ( ""))}${m[3]}: Option<String> = match __pro_message.get(${m[4]}).cloned() { Some(Value::Str(__s)) if !__s.is_empty() => Some(__s.to_string()), Some(Value::Int(__n)) => Some(__n.to_string()), Some(Value::Float(__f)) => Some(__f.to_string()), _ => None };`
-    });
-  }
-  const intRe = new RegExp('^([ \\t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = \\(match __pro_message\\.get\\(("(?:[^"\\\\]|\\\\.)*")\\)\\.cloned\\(\\) \\{ Some\\(Value::Int\\(__n\\)\\) => Value::Int\\(__n\\), Some\\(Value::Float\\(__f\\)\\) => Value::Int\\(__f as i64\\), Some\\(Value::Str\\(__s\\)\\) if !__s\\.is_empty\\(\\) => match __s\\.parse::<i64>\\(\\) \\{ Ok\\(__n\\) => Value::Int\\(__n\\), Err\\(_\\) => match __s\\.parse::<f64>\\(\\) \\{ Ok\\(__f\\) if __f\\.is_finite\\(\\) => Value::Int\\(__f as i64\\), _ => Value::Null \\} \\}, _ => Value::Null \\}\\);', "gm");
-  while ((m = intRe.exec(content)) !== null) {
-    cands.push({
-      index: m.index,
-      stmtEnd: m.index + m[0].length,
-      name: m[3],
-      intOnly: true,
-      declText: `${m[1]}let ${_nullishCoalesce(m[2], () => ( ""))}${m[3]}: Option<i64> = match __pro_message.get(${m[4]}).cloned() { Some(Value::Int(__n)) => Some(__n), Some(Value::Float(__f)) => Some(__f as i64), Some(Value::Str(__s)) if !__s.is_empty() => match __s.parse::<i64>() { Ok(__n) => Some(__n), Err(_) => match __s.parse::<f64>() { Ok(__f) if __f.is_finite() => Some(__f as i64), _ => None } }, _ => None };`
-    });
-  }
-  cands.sort((a, b) => a.index - b.index);
-  for (const cand of cands) {
-    const name = cand.name;
-    const stmtEnd2 = cand.stmtEnd;
-    const end = braceEnd(masked, stmtEnd2);
-    const body = masked.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
-      continue;
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
-    const edits = [];
-    let ok = true;
-    let u;
-    while ((u = useRe.exec(body)) !== null) {
-      const at = u.index;
-      const abs = stmtEnd2 + at;
-      const after = body.slice(at + name.length);
-      const before = body.slice(0, at);
-      let g;
-      if (cand.intOnly === true && !/^\s*(==|!=)\s*Value::Null\b/.test(after)) {
-        ok = false;
-        break;
-      }
-      if ((g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === "==" ? "is_none" : "is_some"}()` });
-      } else if ((g = /^\.as_str\(\)/.exec(after)) !== null) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.as_deref()` });
-      } else if (/get_value\(&$/.test(before) && (g = /^, &Value::Int\(0\)\)\.as_str\(\) (==|!=) Some\("/.exec(after)) !== null) {
-        const chPos = abs + name.length + g[0].length;
-        const ch = /^([^"\\])"\)/.exec(content.slice(chPos, chPos + 3));
-        if (ch === null) {
-          ok = false;
-          break;
-        }
-        const probe = `${name}.as_deref().unwrap_or("").starts_with("${ch[1]}")`;
-        edits.push({ start: abs - "get_value(&".length, end: chPos + ch[0].length, text: g[1] === "==" ? probe : `!${probe}` });
-      } else if (/crate::runtime::stringify_param\(&$/.test(before) && /^\)/.test(after)) {
-        const from = abs - "crate::runtime::stringify_param(&".length;
-        edits.push({ start: from, end: abs + name.length + 1, text: `${name}.as_deref().unwrap_or("null").to_string()` });
-      } else if (/(?:[(,\[]\s*&?|(?<![=!<>])=\s)$/.test(before) && !/&\s*mut\s*$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[,)\];])/.exec(after)) !== null && !/==\s*$/.test(before)) {
-        const lastUse = !new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`).test(after.slice(g[0].length));
-        const inLoop = /\b(?:loop|while|for)\b/.test(body);
-        const move = lastUse && !inLoop && !/&\s*$/.test(before);
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}${move ? "" : ".clone()"}.map(Value::from).unwrap_or(Value::Null)` });
-      } else {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok || edits.length === 0)
-      continue;
-    const declText = cand.declText;
-    const all = [{ start: cand.index, end: stmtEnd2, text: declText }, ...edits];
-    const lineGrow = /* @__PURE__ */ new Map();
-    for (const e of all) {
-      const ls = content.lastIndexOf("\n", e.start) + 1;
-      lineGrow.set(ls, (_nullishCoalesce(lineGrow.get(ls), () => ( 0))) + e.text.length - (e.end - e.start));
-    }
-    let longer = false;
-    for (const [ls, grow] of lineGrow) {
-      let le = content.indexOf("\n", ls);
-      if (le < 0)
-        le = content.length;
-      const cur = le - ls + (_nullishCoalesce(grown.get(ls), () => ( 0)));
-      if (cur <= 400 && cur + grow > 400)
-        longer = true;
-    }
-    if (longer)
-      continue;
-    for (const [ls, grow] of lineGrow)
-      grown.set(ls, (_nullishCoalesce(grown.get(ls), () => ( 0))) + grow);
-    groups.push({ decl: { start: cand.index, end: stmtEnd2, text: declText }, edits });
-  }
-  for (let again = true; again; ) {
-    again = false;
-    for (let a = 0; a < groups.length; a++) {
-      const hit = groups.some((b, bi) => bi !== a && groups[a].edits.some((e) => e.start >= b.decl.start && e.start < b.decl.end));
-      if (hit) {
-        groups.splice(a, 1);
-        again = true;
-        break;
-      }
-    }
-  }
-  for (const gr of groups) {
-    rewrites.push(gr.decl);
-    for (const e of gr.edits)
-      rewrites.push(e);
-  }
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  out += content.slice(last);
-  return out;
-}
-function rustSignApiStr(content) {
-  content = content.replace(/\b(api|section)\.as_array\(\)\.and_then\(\|__arr\| __arr\.get\((\d+)\)\)/g, "$1.as_array().into_iter().flatten().nth($2)");
-  if (content.indexOf(".get(") < 0) {
-    return content;
-  }
-  const lines = content.split("\n");
-  const decl = /^(\s*)let mut (\w+): Value = (?:api|section)\.get\((\d+)\)\.cloned\(\)\.unwrap_or\(Value::Null\);$/;
-  const fnHead = /^ {4}(?:pub )?(?:async )?fn /;
-  for (let i = 0; i < lines.length; i++) {
-    const m = decl.exec(lines[i]);
-    if (m === null) {
-      continue;
-    }
-    let end = i + 1;
-    while (end < lines.length && !fnHead.test(lines[end])) {
-      end++;
-    }
-    const name = new RegExp("(?<![\\w.])" + m[2] + "(?![\\w])", "g");
-    const use = new RegExp("(?<![\\w.])" + m[2] + '\\.as_str\\(\\) (==|!=) Some\\("', "g");
-    let uses = 0;
-    let others = 0;
-    for (let j = i + 1; j < end; j++) {
-      const masked = lines[j].replace(/"(?:[^"\\]|\\.)*"/g, '""');
-      uses += (_nullishCoalesce(lines[j].match(use), () => ( []))).length;
-      others += (_nullishCoalesce(masked.match(name), () => ( []))).length;
-    }
-    if (uses === 0 || uses !== others) {
-      continue;
-    }
-    lines[i] = m[1] + "let mut " + m[2] + ": Option<String> = " + (m[0].indexOf("section") >= 0 ? "section" : "api") + ".get(" + m[3] + ").and_then(Value::as_str).map(str::to_owned);";
-    for (let j = i + 1; j < end; j++) {
-      lines[j] = lines[j].replace(use, (all, op) => m[2] + ".as_deref() " + op + ' Some("');
-    }
-  }
-  return lines.join("\n");
-}
-function rustBoolKLocalOptionBool(content) {
-  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_bool_k|safe_bool)\(/gm;
-  const strKeyRe = /^"(?:[^"\\]|\\.)*"$/;
-  const maskText2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const closeParen2 = (src, open) => {
-    let depth = 0;
-    for (let k = open; k < src.length; k++) {
-      const c = src[k];
-      if (c === "(")
-        depth++;
-      else if (c === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const braceEnd = (src, from) => {
-    let depth = 0;
-    for (let k = from; k < src.length; k++) {
-      const c = src[k];
-      if (c === "{")
-        depth++;
-      else if (c === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return src.length;
-  };
-  const argSpans2 = (src) => {
-    const out2 = [];
-    let depth = 0;
-    let start = 0;
-    for (let i = 0; i < src.length; i++) {
-      const c = src[i];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      else if (c === "," && depth === 0) {
-        out2.push([start, i]);
-        start = i + 1;
-      }
-    }
-    out2.push([start, src.length]);
-    return out2;
-  };
-  const masked = maskText2(content);
-  const grown = /* @__PURE__ */ new Map();
-  const rewrites = [];
-  let m;
-  while ((m = declRe.exec(masked)) !== null) {
-    const callee = m[4];
-    const name = m[3];
-    const callOpen = m.index + m[0].length - 1;
-    const callClose = closeParen2(masked, callOpen);
-    if (callClose < 0)
-      continue;
-    const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
-    if (tail === null)
-      continue;
-    const stmtEnd2 = callClose + tail[0].length;
-    const base = callOpen + 1;
-    const spans = argSpans2(masked.slice(base, callClose - 1));
-    if (spans.length !== 3)
-      continue;
-    const obj = content.slice(base + spans[0][0], base + spans[0][1]).trim();
-    const keyRaw = content.slice(base + spans[1][0], base + spans[1][1]).trim();
-    const defRaw = content.slice(base + spans[2][0], base + spans[2][1]).trim();
-    if (obj.length === 0 || keyRaw.length === 0)
-      continue;
-    if (callee === "safe_bool_k" && !strKeyRe.test(keyRaw))
-      continue;
-    let dflt;
-    const dm = /^&\[Value::Bool\((true|false)\)\]$/.exec(defRaw);
-    if (defRaw === "&[]")
-      dflt = null;
-    else if (dm !== null)
-      dflt = dm[1] === "true";
-    else
-      continue;
-    const isOpt = dflt === null;
-    const end = braceEnd(masked, stmtEnd2);
-    const body = masked.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
-      continue;
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
-    const edits = [];
-    const cmp = (eq, b) => {
-      if (isOpt)
-        return `${name} ${eq ? "==" : "!="} Some(${b})`;
-      return eq === b ? name : `!${name}`;
-    };
-    let ok = true;
-    let u;
-    while ((u = useRe.exec(body)) !== null) {
-      const at = u.index;
-      const abs = stmtEnd2 + at;
-      const after = body.slice(at + name.length);
-      const before = body.slice(0, at);
-      let g;
-      if ((g = /^\.as_bool\(\) (==|!=) Some\((true|false)\)/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: cmp(g[1] === "==", g[2] === "true") });
-      } else if ((g = /^\.is_truthy\(\)/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: isOpt ? `${name} == Some(true)` : name });
-      } else if ((g = /^\s*(==|!=)\s*Value::Bool\((true|false)\)/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: cmp(g[1] === "==", g[2] === "true") });
-      } else if (isOpt && (g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === "==" ? "is_none" : "is_some"}()` });
-      } else if ((g = /^\s*=\s*Value::Bool\((true|false)\);/.exec(after)) !== null && /(?:^|[;{}\s])\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name} = ${isOpt ? `Some(${g[1]})` : g[1]};` });
-      } else if (!isOpt && /is_true\(&$/.test(before) && /^\)/.test(after)) {
-        continue;
-      } else if (/\.insert\(\s*"[^"]*"(?:\.to_string\(\)|\.into\(\))?,\s*$/.test(before.slice(-80).replace(/\n/g, " ")) && (g = /^(\.clone\(\))?\)/.exec(after)) !== null) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length - 1, text: isOpt ? `${name}.map(Value::Bool).unwrap_or(Value::Null)` : `Value::Bool(${name})` });
-      } else {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok || edits.length === 0)
-      continue;
-    const optName = callee === "safe_bool_k" ? "safe_bool_k_opt" : "safe_bool_opt";
-    const typeStart = m.index + m[1].length + "let ".length + (_nullishCoalesce(m[2], () => ( ""))).length + name.length;
-    const declEdits = [
-      { start: typeStart, end: callOpen, text: `: ${isOpt ? "Option<bool>" : "bool"} = self.${optName}` }
-    ];
-    if (!isOpt)
-      declEdits.push({ start: callClose, end: callClose, text: `.unwrap_or(${dflt})` });
-    const all = [...declEdits, ...edits];
-    const lineGrow = /* @__PURE__ */ new Map();
-    for (const e of all) {
-      const ls = content.lastIndexOf("\n", e.start) + 1;
-      lineGrow.set(ls, (_nullishCoalesce(lineGrow.get(ls), () => ( 0))) + e.text.length - (e.end - e.start));
-    }
-    let longer = false;
-    for (const [ls, grow] of lineGrow) {
-      let le = content.indexOf("\n", ls);
-      if (le < 0)
-        le = content.length;
-      const cur = le - ls + (_nullishCoalesce(grown.get(ls), () => ( 0)));
-      if (cur <= 400 && cur + grow > 400)
-        longer = true;
-    }
-    if (longer)
-      continue;
-    for (const [ls, grow] of lineGrow)
-      grown.set(ls, (_nullishCoalesce(grown.get(ls), () => ( 0))) + grow);
-    for (const e of all)
-      rewrites.push(e);
-  }
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  out += content.slice(last);
-  return out;
-}
-function strLocalReassign(content) {
-  const OPT = {
-    safe_string: "safe_string_opt",
-    safe_string_k: "safe_string_k_opt",
-    safe_string_lower_k: "safe_string_lower_k_opt",
-    safe_string_upper_k: "safe_string_upper_k_opt"
-  };
-  const declRe = /^([ \t]*)let mut ([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_string[a-z_0-9]*)\(/gm;
-  const strKeyRe = /^"(?:[^"\\]|\\.)*"$/;
-  const strLitRe = /^Value::Str\(("(?:[^"\\]|\\.)*")\.into\(\)\)$/;
-  const maskText2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const closeParen2 = (src, open) => {
-    let depth = 0;
-    for (let k = open; k < src.length; k++) {
-      const c = src[k];
-      if (c === "(")
-        depth++;
-      else if (c === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const braceEnd = (src, from) => {
-    let depth = 0;
-    for (let k = from; k < src.length; k++) {
-      const c = src[k];
-      if (c === "{")
-        depth++;
-      else if (c === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return src.length;
-  };
-  const stmtEndAt = (src, from) => {
-    let depth = 0;
-    for (let k = from; k < src.length; k++) {
-      const c = src[k];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}") {
-        depth--;
-        if (depth < 0)
-          return -1;
-      } else if (c === ";" && depth === 0)
-        return k;
-    }
-    return -1;
-  };
-  const argSpans2 = (src) => {
-    const out2 = [];
-    let depth = 0;
-    let start = 0;
-    for (let i = 0; i < src.length; i++) {
-      const c = src[i];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      else if (c === "," && depth === 0) {
-        out2.push([start, i]);
-        start = i + 1;
-      }
-    }
-    out2.push([start, src.length]);
-    return out2;
-  };
-  const masked = maskText2(content);
-  const grown = /* @__PURE__ */ new Map();
-  const groups = [];
-  let m;
-  while ((m = declRe.exec(masked)) !== null) {
-    const fam = m[3];
-    const opt = OPT[fam];
-    if (opt === void 0)
-      continue;
-    const name = m[2];
-    const callOpen = m.index + m[0].length - 1;
-    const callClose = closeParen2(masked, callOpen);
-    if (callClose < 0)
-      continue;
-    const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
-    if (tail === null)
-      continue;
-    const stmtEnd2 = callClose + tail[0].length;
-    const callEdit = (famName, open, close) => {
-      const twin = OPT[famName];
-      if (twin === void 0)
-        return null;
-      const base = open + 1;
-      const spans = argSpans2(masked.slice(base, close - 1));
-      if (spans.length !== 3)
-        return null;
-      const keyRaw = content.slice(base + spans[1][0], base + spans[1][1]).trim();
-      if (famName.endsWith("_k") && !strKeyRe.test(keyRaw))
-        return null;
-      if (keyRaw.length === 0)
-        return null;
-      const defRaw = content.slice(base + spans[2][0], base + spans[2][1]).trim();
-      const defMasked = masked.slice(base + spans[2][0], base + spans[2][1]).trim();
-      if (!(defMasked === "&[]" || /^&\[Value::Str\("\s*"\.into\(\)\)\]$/.test(defMasked)))
-        return null;
-      if (defRaw.length === 0)
-        return null;
-      const nameAt = open - famName.length;
-      return { start: nameAt, end: open, text: twin };
-    };
-    const declEdit = callEdit(fam, callOpen, callClose);
-    if (declEdit === null)
-      continue;
-    const end = braceEnd(masked, stmtEnd2);
-    const body = masked.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
-      continue;
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
-    const edits = [declEdit];
-    let assigned = 0;
-    let ok = true;
-    let u;
-    while ((u = useRe.exec(body)) !== null) {
-      const at = u.index;
-      const abs = stmtEnd2 + at;
-      const after = body.slice(at + name.length);
-      const before = body.slice(0, at);
-      let g;
-      if ((g = /^\s*=(?!=)\s*/.exec(after)) !== null && /(?:^|[;{}])\s*$/.test(before)) {
-        const rhsStart = abs + name.length + g[0].length;
-        const rhsEnd = stmtEndAt(masked, rhsStart);
-        if (rhsEnd < 0) {
-          ok = false;
-          break;
-        }
-        const rhsMasked = masked.slice(rhsStart, rhsEnd).trim();
-        const rhsRaw = content.slice(rhsStart, rhsEnd).trim();
-        let lit;
-        let call;
-        if (rhsMasked === "Value::Null") {
-          edits.push({ start: rhsStart, end: rhsStart + "Value::Null".length, text: "None" });
-        } else if ((lit = strLitRe.exec(rhsRaw)) !== null) {
-          edits.push({ start: rhsStart, end: rhsStart + rhsRaw.length, text: `Some(${lit[1]}.to_string())` });
-        } else if ((call = /^self\.(safe_string[a-z_0-9]*)\(/.exec(rhsMasked)) !== null) {
-          const open = rhsStart + call[0].length - 1;
-          const close = closeParen2(masked, open);
-          if (close < 0 || masked.slice(close, rhsEnd).trim() !== "") {
-            ok = false;
-            break;
-          }
-          const ce = callEdit(call[1], open, close);
-          if (ce === null) {
-            ok = false;
-            break;
-          }
-          edits.push(ce);
-        } else {
-          ok = false;
-          break;
-        }
-        assigned++;
-        useRe.lastIndex = rhsStart - stmtEnd2;
-        continue;
-      }
-      if ((g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === "==" ? "is_none" : "is_some"}()` });
-      } else if ((g = /^\.as_str\(\)/.exec(after)) !== null) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.as_deref()` });
-      } else if (/(?:[(,\[]\s*&?|(?<![=!<>])=\s)$/.test(before) && !/&\s*mut\s*$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[,)\];])/.exec(after)) !== null && !/==\s*$/.test(before)) {
-        const lastUse = !new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`).test(after.slice(g[0].length));
-        const inLoop = /\b(?:loop|while|for)\b/.test(body);
-        const move = lastUse && !inLoop && !/&\s*$/.test(before);
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}${move ? "" : ".clone()"}.map(Value::from).unwrap_or(Value::Null)` });
-      } else {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok || assigned === 0)
-      continue;
-    const declText = `${m[1]}let mut ${name}: Option<String> = `;
-    const all = [{ start: m.index, end: m.index + m[0].length - `self.${fam}(`.length, text: declText }, ...edits];
-    const lineGrow = /* @__PURE__ */ new Map();
-    for (const e of all) {
-      const ls = content.lastIndexOf("\n", e.start) + 1;
-      lineGrow.set(ls, (_nullishCoalesce(lineGrow.get(ls), () => ( 0))) + e.text.length - (e.end - e.start));
-    }
-    let longer = false;
-    for (const [ls, grow] of lineGrow) {
-      let le = content.indexOf("\n", ls);
-      if (le < 0)
-        le = content.length;
-      const cur = le - ls + (_nullishCoalesce(grown.get(ls), () => ( 0)));
-      if (cur <= 400 && cur + grow > 400)
-        longer = true;
-    }
-    if (longer)
-      continue;
-    for (const [ls, grow] of lineGrow)
-      grown.set(ls, (_nullishCoalesce(grown.get(ls), () => ( 0))) + grow);
-    groups.push({ decl: { start: m.index, end: stmtEnd2, text: "" }, edits: all });
-  }
-  for (let again = true; again; ) {
-    again = false;
-    for (let a = 0; a < groups.length && !again; a++) {
-      for (let b = 0; b < groups.length; b++) {
-        if (a === b)
-          continue;
-        const bEdits = groups[b].edits;
-        const bs = groups[b].decl.start;
-        const be = groups[b].decl.end;
-        if (groups[a].edits.some((e) => e.start >= bs && e.start < be && e.start !== bs) && bEdits.length > 0) {
-          groups.splice(a, 1);
-          again = true;
-          break;
-        }
-      }
-    }
-  }
-  const rewrites = [];
-  for (const gr of groups)
-    for (const e of gr.edits)
-      rewrites.push(e);
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  out += content.slice(last);
-  return out;
-}
-function rustBool2LocalOptionBool(content) {
-  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_bool2)\(/gm;
-  const maskText2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const closeParen2 = (src, open) => {
-    let depth = 0;
-    for (let k = open; k < src.length; k++) {
-      const c = src[k];
-      if (c === "(")
-        depth++;
-      else if (c === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const braceEnd = (src, from) => {
-    let depth = 0;
-    for (let k = from; k < src.length; k++) {
-      const c = src[k];
-      if (c === "{")
-        depth++;
-      else if (c === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return src.length;
-  };
-  const argSpans2 = (src) => {
-    const out2 = [];
-    let depth = 0;
-    let start = 0;
-    for (let i = 0; i < src.length; i++) {
-      const c = src[i];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      else if (c === "," && depth === 0) {
-        out2.push([start, i]);
-        start = i + 1;
-      }
-    }
-    out2.push([start, src.length]);
-    return out2;
-  };
-  const masked = maskText2(content);
-  const grown = /* @__PURE__ */ new Map();
-  const rewrites = [];
-  let m;
-  while ((m = declRe.exec(masked)) !== null) {
-    const name = m[3];
-    const callOpen = m.index + m[0].length - 1;
-    const callClose = closeParen2(masked, callOpen);
-    if (callClose < 0)
-      continue;
-    const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
-    if (tail === null)
-      continue;
-    const stmtEnd2 = callClose + tail[0].length;
-    const base = callOpen + 1;
-    const spans = argSpans2(masked.slice(base, callClose - 1));
-    if (spans.length !== 4)
-      continue;
-    const obj = content.slice(base + spans[0][0], base + spans[0][1]).trim();
-    const key1 = content.slice(base + spans[1][0], base + spans[1][1]).trim();
-    const key2 = content.slice(base + spans[2][0], base + spans[2][1]).trim();
-    const defRaw = content.slice(base + spans[3][0], base + spans[3][1]).trim();
-    if (obj.length === 0 || key1.length === 0 || key2.length === 0)
-      continue;
-    let dflt;
-    const dm = /^&\[Value::Bool\((true|false)\)\]$/.exec(defRaw);
-    if (defRaw === "&[]")
-      dflt = null;
-    else if (dm !== null)
-      dflt = dm[1] === "true";
-    else
-      continue;
-    const isOpt = dflt === null;
-    const end = braceEnd(masked, stmtEnd2);
-    const body = masked.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
-      continue;
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
-    const edits = [];
-    const cmp = (eq, b) => {
-      if (isOpt)
-        return `${name} ${eq ? "==" : "!="} Some(${b})`;
-      return eq === b ? name : `!${name}`;
-    };
-    let ok = true;
-    let u;
-    while ((u = useRe.exec(body)) !== null) {
-      const at = u.index;
-      const abs = stmtEnd2 + at;
-      const after = body.slice(at + name.length);
-      const before = body.slice(0, at);
-      let g;
-      if ((g = /^\.as_bool\(\) (==|!=) Some\((true|false)\)/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: cmp(g[1] === "==", g[2] === "true") });
-      } else if ((g = /^\.is_truthy\(\)/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: isOpt ? `${name} == Some(true)` : name });
-      } else if ((g = /^\s*(==|!=)\s*Value::Bool\((true|false)\)/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: cmp(g[1] === "==", g[2] === "true") });
-      } else if (isOpt && (g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === "==" ? "is_none" : "is_some"}()` });
-      } else if ((g = /^\s*=\s*Value::Bool\((true|false)\);/.exec(after)) !== null && /(?:^|[;{}\s])\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name} = ${isOpt ? `Some(${g[1]})` : g[1]};` });
-      } else if (!isOpt && /is_true\(&$/.test(before) && /^\)/.test(after)) {
-        continue;
-      } else if (/\.insert\(\s*"[^"]*"(?:\.to_string\(\)|\.into\(\))?,\s*$/.test(before.slice(-80).replace(/\n/g, " ")) && (g = /^(\.clone\(\))?\)/.exec(after)) !== null) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length - 1, text: isOpt ? `${name}.map(Value::Bool).unwrap_or(Value::Null)` : `Value::Bool(${name})` });
-      } else {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok || edits.length === 0)
-      continue;
-    const optName = "safe_bool2_opt";
-    const typeStart = m.index + m[1].length + "let ".length + (_nullishCoalesce(m[2], () => ( ""))).length + name.length;
-    const declEdits = [
-      { start: typeStart, end: callOpen, text: `: ${isOpt ? "Option<bool>" : "bool"} = self.${optName}` }
-    ];
-    if (!isOpt)
-      declEdits.push({ start: callClose, end: callClose, text: `.unwrap_or(${dflt})` });
-    const all = [...declEdits, ...edits];
-    const lineGrow = /* @__PURE__ */ new Map();
-    for (const e of all) {
-      const ls = content.lastIndexOf("\n", e.start) + 1;
-      lineGrow.set(ls, (_nullishCoalesce(lineGrow.get(ls), () => ( 0))) + e.text.length - (e.end - e.start));
-    }
-    let longer = false;
-    for (const [ls, grow] of lineGrow) {
-      let le = content.indexOf("\n", ls);
-      if (le < 0)
-        le = content.length;
-      const cur = le - ls + (_nullishCoalesce(grown.get(ls), () => ( 0)));
-      if (cur <= 400 && cur + grow > 400)
-        longer = true;
-    }
-    if (longer)
-      continue;
-    for (const [ls, grow] of lineGrow)
-      grown.set(ls, (_nullishCoalesce(grown.get(ls), () => ( 0))) + grow);
-    for (const e of all)
-      rewrites.push(e);
-  }
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  out += content.slice(last);
-  return out;
-}
-function rustBoolNLocalOptionBool(content) {
-  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_bool_n)\(/gm;
-  const keyListRe = /^Value::from\(vec!\[Value::Str\("(?:[^"\\]|\\.)*"\.(?:into|to_string)\(\)\)(?:, Value::Str\("(?:[^"\\]|\\.)*"\.(?:into|to_string)\(\)\))*\]\)$/;
-  const maskText2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const closeParen2 = (src, open) => {
-    let depth = 0;
-    for (let k = open; k < src.length; k++) {
-      const c = src[k];
-      if (c === "(")
-        depth++;
-      else if (c === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const braceEnd = (src, from) => {
-    let depth = 0;
-    for (let k = from; k < src.length; k++) {
-      const c = src[k];
-      if (c === "{")
-        depth++;
-      else if (c === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return src.length;
-  };
-  const argSpans2 = (src) => {
-    const out2 = [];
-    let depth = 0;
-    let start = 0;
-    for (let i = 0; i < src.length; i++) {
-      const c = src[i];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      else if (c === "," && depth === 0) {
-        out2.push([start, i]);
-        start = i + 1;
-      }
-    }
-    out2.push([start, src.length]);
-    return out2;
-  };
-  const masked = maskText2(content);
-  const grown = /* @__PURE__ */ new Map();
-  const rewrites = [];
-  let m;
-  while ((m = declRe.exec(masked)) !== null) {
-    const name = m[3];
-    const callOpen = m.index + m[0].length - 1;
-    const callClose = closeParen2(masked, callOpen);
-    if (callClose < 0)
-      continue;
-    const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
-    if (tail === null)
-      continue;
-    const stmtEnd2 = callClose + tail[0].length;
-    const base = callOpen + 1;
-    const spans = argSpans2(masked.slice(base, callClose - 1));
-    if (spans.length !== 3)
-      continue;
-    const obj = content.slice(base + spans[0][0], base + spans[0][1]).trim();
-    const keyRaw = content.slice(base + spans[1][0], base + spans[1][1]).trim();
-    const defRaw = content.slice(base + spans[2][0], base + spans[2][1]).trim();
-    if (obj.length === 0 || keyRaw.length === 0)
-      continue;
-    if (!keyListRe.test(keyRaw))
-      continue;
-    let dflt;
-    const dm = /^&\[Value::Bool\((true|false)\)\]$/.exec(defRaw);
-    if (defRaw === "&[]")
-      dflt = null;
-    else if (dm !== null)
-      dflt = dm[1] === "true";
-    else
-      continue;
-    const isOpt = dflt === null;
-    const end = braceEnd(masked, stmtEnd2);
-    const body = masked.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
-      continue;
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
-    const edits = [];
-    const cmp = (eq, b) => {
-      if (isOpt)
-        return `${name} ${eq ? "==" : "!="} Some(${b})`;
-      return eq === b ? name : `!${name}`;
-    };
-    let ok = true;
-    let u;
-    while ((u = useRe.exec(body)) !== null) {
-      const at = u.index;
-      const abs = stmtEnd2 + at;
-      const after = body.slice(at + name.length);
-      const before = body.slice(0, at);
-      let g;
-      if ((g = /^\.as_bool\(\) (==|!=) Some\((true|false)\)/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: cmp(g[1] === "==", g[2] === "true") });
-      } else if ((g = /^\.is_truthy\(\)/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: isOpt ? `${name} == Some(true)` : name });
-      } else if ((g = /^\s*(==|!=)\s*Value::Bool\((true|false)\)/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: cmp(g[1] === "==", g[2] === "true") });
-      } else if (isOpt && (g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === "==" ? "is_none" : "is_some"}()` });
-      } else if ((g = /^\s*=\s*Value::Bool\((true|false)\);/.exec(after)) !== null && /(?:^|[;{}\s])\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name} = ${isOpt ? `Some(${g[1]})` : g[1]};` });
-      } else if (!isOpt && /is_true\(&$/.test(before) && /^\)/.test(after)) {
-        continue;
-      } else if (/\.insert\(\s*"[^"]*"(?:\.to_string\(\)|\.into\(\))?,\s*$/.test(before.slice(-80).replace(/\n/g, " ")) && (g = /^(\.clone\(\))?\)/.exec(after)) !== null) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length - 1, text: isOpt ? `${name}.map(Value::Bool).unwrap_or(Value::Null)` : `Value::Bool(${name})` });
-      } else {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok || edits.length === 0)
-      continue;
-    const optName = "safe_bool_n_opt";
-    const typeStart = m.index + m[1].length + "let ".length + (_nullishCoalesce(m[2], () => ( ""))).length + name.length;
-    const declEdits = [
-      { start: typeStart, end: callOpen, text: `: ${isOpt ? "Option<bool>" : "bool"} = self.${optName}` }
-    ];
-    if (!isOpt)
-      declEdits.push({ start: callClose, end: callClose, text: `.unwrap_or(${dflt})` });
-    const all = [...declEdits, ...edits];
-    const lineGrow = /* @__PURE__ */ new Map();
-    for (const e of all) {
-      const ls = content.lastIndexOf("\n", e.start) + 1;
-      lineGrow.set(ls, (_nullishCoalesce(lineGrow.get(ls), () => ( 0))) + e.text.length - (e.end - e.start));
-    }
-    let longer = false;
-    for (const [ls, grow] of lineGrow) {
-      let le = content.indexOf("\n", ls);
-      if (le < 0)
-        le = content.length;
-      const cur = le - ls + (_nullishCoalesce(grown.get(ls), () => ( 0)));
-      if (cur <= 400 && cur + grow > 400)
-        longer = true;
-    }
-    if (longer)
-      continue;
-    for (const [ls, grow] of lineGrow)
-      grown.set(ls, (_nullishCoalesce(grown.get(ls), () => ( 0))) + grow);
-    for (const e of all)
-      rewrites.push(e);
-  }
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  out += content.slice(last);
-  return out;
-}
-function rustInt2IntNLocalOptionI64(content) {
-  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.safe_integer(2|_n)\(/gm;
-  const closeOf2 = (src, open) => {
-    let depth = 0;
-    let inStr = false;
-    let esc = false;
-    let inLine = false;
-    for (let k = open; k < src.length; k++) {
-      const c = src[k];
-      if (inLine) {
-        if (c === "\n")
-          inLine = false;
-        continue;
-      }
-      if (inStr) {
-        if (esc)
-          esc = false;
-        else if (c === "\\")
-          esc = true;
-        else if (c === '"')
-          inStr = false;
-        continue;
-      }
-      if (c === '"') {
-        inStr = true;
-        continue;
-      }
-      if (c === "/" && src[k + 1] === "/") {
-        inLine = true;
-        continue;
-      }
-      if (c === "(")
-        depth++;
-      else if (c === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const mask2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    const blank = (s) => s.replace(/[^\n]/g, " ");
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === "/" && src[i + 1] === "*") {
-        const e = src.indexOf("*/", i + 2);
-        const stop = e < 0 ? src.length : e + 2;
-        out2 += blank(src.slice(i, stop));
-        i = stop;
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const scopeEnd = (masked, from) => {
-    let depth = 0;
-    for (let k = from; k < masked.length; k++) {
-      if (masked[k] === "{")
-        depth++;
-      else if (masked[k] === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return masked.length;
-  };
-  const splitArgs2 = (src) => {
-    const out2 = [];
-    let cur = "";
-    let depth = 0;
-    let inStr = false;
-    let esc = false;
-    for (const c of src) {
-      if (inStr) {
-        cur += c;
-        if (esc)
-          esc = false;
-        else if (c === "\\")
-          esc = true;
-        else if (c === '"')
-          inStr = false;
-        continue;
-      }
-      if (c === '"') {
-        inStr = true;
-        cur += c;
-        continue;
-      }
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      if (c === "," && depth === 0) {
-        out2.push(cur);
-        cur = "";
-        continue;
-      }
-      cur += c;
-    }
-    out2.push(cur);
-    return out2;
-  };
-  const maskedAll = mask2(content);
-  const rewrites = [];
-  let m;
-  while ((m = declRe.exec(content)) !== null) {
-    const name = m[3];
-    const isTwo = m[4] === "2";
-    const callOpen = m.index + m[0].length - 1;
-    const callClose = closeOf2(content, callOpen);
-    if (callClose < 0)
-      continue;
-    const tail = /^\s*;/.exec(content.slice(callClose, callClose + 3));
-    if (tail === null)
-      continue;
-    const stmtEnd2 = callClose + tail[0].length;
-    const args = splitArgs2(content.slice(callOpen + 1, callClose - 1));
-    if (args.length !== (isTwo ? 4 : 3))
-      continue;
-    if (!/^&\[\s*(?:Value::Null)?\s*\]$/.test(args[args.length - 1].trim()))
-      continue;
-    const end = scopeEnd(maskedAll, stmtEnd2);
-    const masked = maskedAll.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(masked))
-      continue;
-    if (new RegExp(`\\blet\\b[^=;\\n]*\\b${name}\\b`).test(masked))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(masked))
-      continue;
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, "g");
-    const uses = [];
-    let ok = true;
-    let u;
-    while ((u = useRe.exec(masked)) !== null) {
-      const s = u.index;
-      const e = s + name.length;
-      const after = masked.slice(e);
-      const before = masked.slice(0, s);
-      const abs = (x) => stmtEnd2 + x;
-      let g;
-      if (after.startsWith(".clone()")) {
-        uses.push({ start: abs(s), end: abs(e + 8), text: `Value::from(${name})` });
-        useRe.lastIndex = e + 8;
-      } else if ((g = /^\s*(!=|==)\s*Value::Null\b/.exec(after)) !== null) {
-        uses.push({ start: abs(s), end: abs(e + g[0].length), text: `${name}.${g[1] === "!=" ? "is_some" : "is_none"}()` });
-        useRe.lastIndex = e + g[0].length;
-      } else if ((g = /^\.as_f64\(\)\s*(==|!=)\s*Some\((-?\d+)(?:\.0)?\)/.exec(after)) !== null) {
-        uses.push({ start: abs(s), end: abs(e + g[0].length), text: `${name} ${g[1]} Some(${g[2]})` });
-        useRe.lastIndex = e + g[0].length;
-      } else if (/self\.iso8601\($/.test(before) && after.startsWith(")")) {
-        uses.push({ start: abs(s), end: abs(e), text: `Value::from(${name})` });
-      } else if (/\bm\.insert\("[^"\n]*"\.to_string\(\),\s*$/.test(before) && after.startsWith(");")) {
-        uses.push({ start: abs(s), end: abs(e), text: `Value::from(${name})` });
-      } else if (/(?:^|[;{}])\s*$/.test(before) && (g = /^\s*=(?!=)\s*/.exec(after)) !== null) {
-        const rhsAt = stmtEnd2 + e + g[0].length;
-        const rhs = /^(Value::Null|Value::Int\((-?\d+)\))\s*;/.exec(content.slice(rhsAt, rhsAt + 40));
-        if (rhs !== null) {
-          uses.push({ start: rhsAt, end: rhsAt + rhs[1].length, text: rhs[2] === void 0 ? "None" : `Some(${rhs[2]})` });
-        } else {
-          const call = /^self\.safe_integer(?:_k|2|_n)?\(/.exec(content.slice(rhsAt, rhsAt + 30));
-          if (call === null) {
-            ok = false;
-            break;
-          }
-          const o = rhsAt + call[0].length - 1;
-          const c = closeOf2(content, o);
-          if (c < 0 || !/^\s*;/.test(content.slice(c, c + 3))) {
-            ok = false;
-            break;
-          }
-          const a = splitArgs2(content.slice(o + 1, c - 1));
-          const want = call[0].endsWith("2(") ? 4 : 3;
-          if (a.length !== want || !/^&\[\s*(?:Value::Null|Value::Int\(-?\d+\))?\s*\]$/.test(a[a.length - 1].trim())) {
-            ok = false;
-            break;
-          }
-          uses.push({ start: c, end: c, text: ".as_i64()" });
-        }
-        useRe.lastIndex = e;
-      } else {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok)
-      continue;
-    rewrites.push({ start: m.index, end: callOpen, text: content.slice(m.index, callOpen).replace(": Value =", ": Option<i64> =") + "_opt" });
-    for (const use of uses)
-      rewrites.push(use);
-  }
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  return out + content.slice(last);
-}
-function rustIntLocalNullSinkOptionI64(content) {
-  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.safe_integer(_k|2)?\(/gm;
-  const closeOf2 = (src, open) => {
-    let depth = 0;
-    let inStr = false;
-    let esc = false;
-    let inLine = false;
-    for (let k = open; k < src.length; k++) {
-      const c = src[k];
-      if (inLine) {
-        if (c === "\n")
-          inLine = false;
-        continue;
-      }
-      if (inStr) {
-        if (esc)
-          esc = false;
-        else if (c === "\\")
-          esc = true;
-        else if (c === '"')
-          inStr = false;
-        continue;
-      }
-      if (c === '"') {
-        inStr = true;
-        continue;
-      }
-      if (c === "/" && src[k + 1] === "/") {
-        inLine = true;
-        continue;
-      }
-      if (c === "(")
-        depth++;
-      else if (c === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const mask2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    const blank = (s) => s.replace(/[^\n]/g, " ");
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === "/" && src[i + 1] === "*") {
-        const e = src.indexOf("*/", i + 2);
-        const stop = e < 0 ? src.length : e + 2;
-        out2 += blank(src.slice(i, stop));
-        i = stop;
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const scopeEnd = (masked, from) => {
-    let depth = 0;
-    for (let k = from; k < masked.length; k++) {
-      if (masked[k] === "{")
-        depth++;
-      else if (masked[k] === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return masked.length;
-  };
-  const splitArgs2 = (src) => {
-    const out2 = [];
-    let cur = "";
-    let depth = 0;
-    let inStr = false;
-    let esc = false;
-    for (const c of src) {
-      if (inStr) {
-        cur += c;
-        if (esc)
-          esc = false;
-        else if (c === "\\")
-          esc = true;
-        else if (c === '"')
-          inStr = false;
-        continue;
-      }
-      if (c === '"') {
-        inStr = true;
-        cur += c;
-        continue;
-      }
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      if (c === "," && depth === 0) {
-        out2.push(cur);
-        cur = "";
-        continue;
-      }
-      cur += c;
-    }
-    out2.push(cur);
-    return out2;
-  };
-  const maskedAll = mask2(content);
-  const rewrites = [];
-  let m;
-  while ((m = declRe.exec(content)) !== null) {
-    const name = m[3];
-    const isTwo = m[4] === "2";
-    const callOpen = m.index + m[0].length - 1;
-    const callClose = closeOf2(content, callOpen);
-    if (callClose < 0)
-      continue;
-    const tail = /^\s*;/.exec(content.slice(callClose, callClose + 3));
-    if (tail === null)
-      continue;
-    const stmtEnd2 = callClose + tail[0].length;
-    const args = splitArgs2(content.slice(callOpen + 1, callClose - 1));
-    if (args.length !== (isTwo ? 4 : 3))
-      continue;
-    if (!/^&\[\s*(?:Value::Null|Value::Int\(-?\d+\))?\s*\]$/.test(args[args.length - 1].trim()))
-      continue;
-    const end = scopeEnd(maskedAll, stmtEnd2);
-    const masked = maskedAll.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(masked))
-      continue;
-    if (new RegExp(`\\blet\\b[^=;\\n]*\\b${name}\\b`).test(masked))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(masked))
-      continue;
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, "g");
-    const uses = [];
-    let ok = true;
-    let u;
-    while ((u = useRe.exec(masked)) !== null) {
-      const s = u.index;
-      const e = s + name.length;
-      const after = masked.slice(e);
-      const before = masked.slice(0, s);
-      const abs = (x) => stmtEnd2 + x;
-      let g;
-      if (after.startsWith(".clone()")) {
-        uses.push({ start: abs(s), end: abs(e + 8), text: `Value::from(${name})` });
-        useRe.lastIndex = e + 8;
-      } else if ((g = /^\s*(!=|==)\s*Value::Null\b/.exec(after)) !== null) {
-        uses.push({ start: abs(s), end: abs(e + g[0].length), text: `${name}.${g[1] === "!=" ? "is_some" : "is_none"}()` });
-        useRe.lastIndex = e + g[0].length;
-      } else if ((g = /^\.as_f64\(\)\s*(==|!=)\s*Some\((-?\d+)(?:\.0)?\)/.exec(after)) !== null) {
-        uses.push({ start: abs(s), end: abs(e + g[0].length), text: `${name} ${g[1]} Some(${g[2]})` });
-        useRe.lastIndex = e + g[0].length;
-      } else if (/self\.iso8601\($/.test(before) && after.startsWith(")")) {
-        uses.push({ start: abs(s), end: abs(e), text: `Value::from(${name})` });
-      } else if (/\bm\.insert\("[^"\n]*"\.to_string\(\),\s*$/.test(before) && after.startsWith(");")) {
-        uses.push({ start: abs(s), end: abs(e), text: `Value::from(${name})` });
-      } else if (/(?:^|[;{}])\s*$/.test(before) && (g = /^\s*=(?!=)\s*/.exec(after)) !== null) {
-        const rhsAt = stmtEnd2 + e + g[0].length;
-        const rhs = /^(Value::Null|Value::Int\((-?\d+)\))\s*;/.exec(content.slice(rhsAt, rhsAt + 40));
-        if (rhs !== null) {
-          uses.push({ start: rhsAt, end: rhsAt + rhs[1].length, text: rhs[2] === void 0 ? "None" : `Some(${rhs[2]})` });
-        } else {
-          const call = /^self\.safe_integer(?:_k|2)?\(/.exec(content.slice(rhsAt, rhsAt + 30));
-          if (call === null) {
-            ok = false;
-            break;
-          }
-          const o = rhsAt + call[0].length - 1;
-          const c = closeOf2(content, o);
-          if (c < 0 || !/^\s*;/.test(content.slice(c, c + 3))) {
-            ok = false;
-            break;
-          }
-          const a = splitArgs2(content.slice(o + 1, c - 1));
-          const want = call[0].endsWith("2(") ? 4 : 3;
-          if (a.length !== want || !/^&\[\s*(?:Value::Null|Value::Int\(-?\d+\))?\s*\]$/.test(a[a.length - 1].trim())) {
-            ok = false;
-            break;
-          }
-          uses.push({ start: c, end: c, text: ".as_i64()" });
-        }
-        useRe.lastIndex = e;
-      } else {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok)
-      continue;
-    rewrites.push({ start: m.index, end: callOpen, text: content.slice(m.index, callOpen).replace(": Value =", ": Option<i64> =") });
-    rewrites.push({ start: callClose, end: callClose, text: ".as_i64()" });
-    for (const use of uses)
-      rewrites.push(use);
-  }
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  return out + content.slice(last);
-}
-function rustNumber2LocalOptionF64(content) {
-  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.safe_number2\(/gm;
-  const mask2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    const blank = (s) => s.replace(/[^\n]/g, " ");
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === "/" && src[i + 1] === "*") {
-        const e = src.indexOf("*/", i + 2);
-        const stop = e < 0 ? src.length : e + 2;
-        out2 += blank(src.slice(i, stop));
-        i = stop;
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const maskedAll = mask2(content);
-  const closeOf2 = (masked, open) => {
-    let depth = 0;
-    for (let k = open; k < masked.length; k++) {
-      if (masked[k] === "(")
-        depth++;
-      else if (masked[k] === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const scopeEnd = (masked, from) => {
-    let depth = 0;
-    for (let k = from; k < masked.length; k++) {
-      if (masked[k] === "{")
-        depth++;
-      else if (masked[k] === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return masked.length;
-  };
-  const splitArgs2 = (src) => {
-    const out2 = [];
-    let cur = "";
-    let depth = 0;
-    let inStr = false;
-    let esc = false;
-    for (const c of src) {
-      if (inStr) {
-        cur += c;
-        if (esc)
-          esc = false;
-        else if (c === "\\")
-          esc = true;
-        else if (c === '"')
-          inStr = false;
-        continue;
-      }
-      if (c === '"') {
-        inStr = true;
-        cur += c;
-        continue;
-      }
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      if (c === "," && depth === 0) {
-        out2.push(cur);
-        cur = "";
-        continue;
-      }
-      cur += c;
-    }
-    out2.push(cur);
-    return out2;
-  };
-  const rewrites = [];
-  let m;
-  while ((m = declRe.exec(content)) !== null) {
-    const name = m[3];
-    const callOpen = m.index + m[0].length - 1;
-    const callClose = closeOf2(maskedAll, callOpen);
-    if (callClose < 0 || !/^\s*;/.test(content.slice(callClose, callClose + 3)))
-      continue;
-    const stmtEnd2 = callClose + /^\s*;/.exec(content.slice(callClose, callClose + 3))[0].length;
-    const args = splitArgs2(content.slice(callOpen + 1, callClose - 1));
-    if (args.length !== 4 || !/^&\[\s*(?:Value::Null)?\s*\]$/.test(args[3].trim()))
-      continue;
-    const end = scopeEnd(maskedAll, stmtEnd2);
-    const masked = maskedAll.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(masked))
-      continue;
-    if (new RegExp(`\\blet\\b[^=;\\n]*\\b${name}\\b`).test(masked))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(masked))
-      continue;
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, "g");
-    const uses = [];
-    let ok = true;
-    let u;
-    while ((u = useRe.exec(masked)) !== null) {
-      const s = u.index;
-      const e = s + name.length;
-      const after = masked.slice(e);
-      let g;
-      if ((g = /^\s*(!=|==)\s*Value::Null\b/.exec(after)) !== null) {
-        uses.push({ start: stmtEnd2 + s, end: stmtEnd2 + e + g[0].length, text: `${name}.${g[1] === "!=" ? "is_some" : "is_none"}()` });
-      } else if ((g = /^\.as_f64\(\)\s*(==|!=)\s*Some\((-?\d+\.0)\)/.exec(after)) !== null) {
-        uses.push({ start: stmtEnd2 + s, end: stmtEnd2 + e + g[0].length, text: `${name} ${g[1]} Some(${g[2]})` });
-      } else {
-        ok = false;
-        break;
-      }
-      useRe.lastIndex = e + g[0].length;
-    }
-    if (!ok)
-      continue;
-    rewrites.push({
-      start: m.index,
-      end: callOpen,
-      text: content.slice(m.index, callOpen).replace(": Value =", ": Option<f64> =").replace("safe_number2", "safe_number2_opt")
-    });
-    for (const use of uses)
-      rewrites.push(use);
-  }
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  return out + content.slice(last);
-}
-function rustNumber2SinkLocalOptionF64R2(content) {
-  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.safe_number2\(/gm;
-  const mask2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    const blank = (s) => s.replace(/[^\n]/g, " ");
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === "/" && src[i + 1] === "*") {
-        const e = src.indexOf("*/", i + 2);
-        const stop = e < 0 ? src.length : e + 2;
-        out2 += blank(src.slice(i, stop));
-        i = stop;
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const maskedAll = mask2(content);
-  const closeOf2 = (masked, open) => {
-    let depth = 0;
-    for (let k = open; k < masked.length; k++) {
-      if (masked[k] === "(")
-        depth++;
-      else if (masked[k] === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const scopeEnd = (masked, from) => {
-    let depth = 0;
-    for (let k = from; k < masked.length; k++) {
-      if (masked[k] === "{")
-        depth++;
-      else if (masked[k] === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return masked.length;
-  };
-  const splitArgs2 = (src) => {
-    const out2 = [];
-    let cur = "";
-    let depth = 0;
-    let inStr = false;
-    let esc = false;
-    for (const c of src) {
-      if (inStr) {
-        cur += c;
-        if (esc)
-          esc = false;
-        else if (c === "\\")
-          esc = true;
-        else if (c === '"')
-          inStr = false;
-        continue;
-      }
-      if (c === '"') {
-        inStr = true;
-        cur += c;
-        continue;
-      }
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      if (c === "," && depth === 0) {
-        out2.push(cur);
-        cur = "";
-        continue;
-      }
-      cur += c;
-    }
-    out2.push(cur);
-    return out2;
-  };
-  const rewrites = [];
-  let m;
-  while ((m = declRe.exec(content)) !== null) {
-    const name = m[3];
-    const callOpen = m.index + m[0].length - 1;
-    const callClose = closeOf2(maskedAll, callOpen);
-    if (callClose < 0 || !/^\s*;/.test(content.slice(callClose, callClose + 3)))
-      continue;
-    const stmtEnd2 = callClose + /^\s*;/.exec(content.slice(callClose, callClose + 3))[0].length;
-    const args = splitArgs2(content.slice(callOpen + 1, callClose - 1));
-    if (args.length !== 4 || !/^&\[\s*(?:Value::Null)?\s*\]$/.test(args[3].trim()))
-      continue;
-    const end = scopeEnd(maskedAll, stmtEnd2);
-    const masked = maskedAll.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(masked))
-      continue;
-    if (new RegExp(`\\blet\\b[^=;\\n]*\\b${name}\\b`).test(masked))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(masked))
-      continue;
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.])${name}(?![A-Za-z0-9_])`, "g");
-    const uses = [];
-    let ok = true;
-    let u;
-    while ((u = useRe.exec(masked)) !== null) {
-      const s = u.index;
-      const e = s + name.length;
-      const after = masked.slice(e);
-      let g;
-      if ((g = /^\s*(!=|==)\s*Value::Null\b/.exec(after)) !== null) {
-        uses.push({ start: stmtEnd2 + s, end: stmtEnd2 + e + g[0].length, text: `${name}.${g[1] === "!=" ? "is_some" : "is_none"}()` });
-      } else if ((g = /^\.as_f64\(\)\s*(==|!=)\s*Some\((-?\d+\.0)\)/.exec(after)) !== null) {
-        uses.push({ start: stmtEnd2 + s, end: stmtEnd2 + e + g[0].length, text: `${name} ${g[1]} Some(${g[2]})` });
-      } else if (after.startsWith(".clone()")) {
-        uses.push({ start: stmtEnd2 + s, end: stmtEnd2 + e + 8, text: `Value::from(${name})` });
-        useRe.lastIndex = e + 8;
-        continue;
-      } else if (/\bm\.insert\("[^"\n]*"\.to_string\(\),\s*$/.test(masked.slice(0, s)) && after.startsWith(");") || /self\.price_to_precision\([^;\n]*,\s*$/.test(masked.slice(0, s)) && after.startsWith(")")) {
-        uses.push({ start: stmtEnd2 + s, end: stmtEnd2 + e, text: `Value::from(${name})` });
-        continue;
-      } else {
-        ok = false;
-        break;
-      }
-      useRe.lastIndex = e + g[0].length;
-    }
-    if (!ok)
-      continue;
-    rewrites.push({
-      start: m.index,
-      end: callOpen,
-      text: content.slice(m.index, callOpen).replace(": Value =", ": Option<f64> =").replace("safe_number2", "safe_number2_opt")
-    });
-    for (const use of uses)
-      rewrites.push(use);
-  }
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start || a.end - b.end);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  return out + content.slice(last);
-}
-function rustStr2LocalOptionString(content) {
-  const opt = "safe_string2_opt";
-  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_string2)\(/gm;
-  const maskText2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const closeParen2 = (src, open) => {
-    let depth = 0;
-    for (let k = open; k < src.length; k++) {
-      const c = src[k];
-      if (c === "(")
-        depth++;
-      else if (c === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const braceEnd = (src, from) => {
-    let depth = 0;
-    for (let k = from; k < src.length; k++) {
-      const c = src[k];
-      if (c === "{")
-        depth++;
-      else if (c === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return src.length;
-  };
-  const argSpans2 = (src) => {
-    const out2 = [];
-    let depth = 0;
-    let start = 0;
-    for (let i = 0; i < src.length; i++) {
-      const c = src[i];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      else if (c === "," && depth === 0) {
-        out2.push([start, i]);
-        start = i + 1;
-      }
-    }
-    out2.push([start, src.length]);
-    return out2;
-  };
-  const masked = maskText2(content);
-  const grown = /* @__PURE__ */ new Map();
-  const groups = [];
-  const rewrites = [];
-  let m;
-  while ((m = declRe.exec(masked)) !== null) {
-    const name = m[3];
-    const callOpen = m.index + m[0].length - 1;
-    const callClose = closeParen2(masked, callOpen);
-    if (callClose < 0)
-      continue;
-    const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
-    if (tail === null)
-      continue;
-    const stmtEnd2 = callClose + tail[0].length;
-    const base = callOpen + 1;
-    const spans = argSpans2(masked.slice(base, callClose - 1));
-    if (spans.length !== 4)
-      continue;
-    const obj = content.slice(base + spans[0][0], base + spans[0][1]).trim();
-    const keyRaw = content.slice(base + spans[1][0], base + spans[1][1]).trim() + ", " + content.slice(base + spans[2][0], base + spans[2][1]).trim();
-    const defRaw = content.slice(base + spans[3][0], base + spans[3][1]).trim();
-    if (obj.length === 0 || keyRaw.length === 0)
-      continue;
-    if (defRaw !== "&[]" && !/^&\[Value::Str\("(?:[^"\\]|\\.)*"\.into\(\)\)\]$/.test(defRaw))
-      continue;
-    const end = braceEnd(masked, stmtEnd2);
-    const body = masked.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
-      continue;
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
-    const edits = [];
-    let ok = true;
-    let u;
-    while ((u = useRe.exec(body)) !== null) {
-      const at = u.index;
-      const abs = stmtEnd2 + at;
-      const after = body.slice(at + name.length);
-      const before = body.slice(0, at);
-      let g;
-      if ((g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === "==" ? "is_none" : "is_some"}()` });
-      } else if ((g = /^\.as_str\(\)/.exec(after)) !== null) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.as_deref()` });
-      } else if (/get_value\(&$/.test(before) && (g = /^, &Value::Int\(0\)\)\.as_str\(\) (==|!=) Some\("/.exec(after)) !== null) {
-        const chPos = abs + name.length + g[0].length;
-        const ch = /^([^"\\])"\)/.exec(content.slice(chPos, chPos + 3));
-        if (ch === null) {
-          ok = false;
-          break;
-        }
-        const probe = `${name}.as_deref().unwrap_or("").starts_with("${ch[1]}")`;
-        edits.push({ start: abs - "get_value(&".length, end: chPos + ch[0].length, text: g[1] === "==" ? probe : `!${probe}` });
-      } else if (/crate::runtime::stringify_param\(&$/.test(before) && /^\)/.test(after)) {
-        const from = abs - "crate::runtime::stringify_param(&".length;
-        edits.push({ start: from, end: abs + name.length + 1, text: `${name}.as_deref().unwrap_or("null").to_string()` });
-      } else if (/(?:[(,\[]\s*&?|(?<![=!<>])=\s)$/.test(before) && !/&\s*mut\s*$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[,)\];])/.exec(after)) !== null && !/==\s*$/.test(before)) {
-        const lastUse = !new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`).test(after.slice(g[0].length));
-        const inLoop = /\b(?:loop|while|for)\b/.test(body);
-        const move = lastUse && !inLoop && !/&\s*$/.test(before);
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}${move ? "" : ".clone()"}.map(Value::from).unwrap_or(Value::Null)` });
-      } else {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok || edits.length === 0)
-      continue;
-    const declText = `${m[1]}let ${_nullishCoalesce(m[2], () => ( ""))}${name}: Option<String> = self.${opt}(${obj}, ${keyRaw}, ${defRaw});`;
-    const all = [{ start: m.index, end: stmtEnd2, text: declText }, ...edits];
-    const lineGrow = /* @__PURE__ */ new Map();
-    for (const e of all) {
-      const ls = content.lastIndexOf("\n", e.start) + 1;
-      lineGrow.set(ls, (_nullishCoalesce(lineGrow.get(ls), () => ( 0))) + e.text.length - (e.end - e.start));
-    }
-    let longer = false;
-    for (const [ls, grow] of lineGrow) {
-      let le = content.indexOf("\n", ls);
-      if (le < 0)
-        le = content.length;
-      const cur = le - ls + (_nullishCoalesce(grown.get(ls), () => ( 0)));
-      if (cur <= 400 && cur + grow > 400)
-        longer = true;
-    }
-    if (longer)
-      continue;
-    for (const [ls, grow] of lineGrow)
-      grown.set(ls, (_nullishCoalesce(grown.get(ls), () => ( 0))) + grow);
-    groups.push({ decl: { start: m.index, end: stmtEnd2, text: declText }, edits });
-  }
-  for (let again = true; again; ) {
-    again = false;
-    for (let a = 0; a < groups.length; a++) {
-      const hit = groups.some((b, bi) => bi !== a && groups[a].edits.some((e) => e.start >= b.decl.start && e.start < b.decl.end));
-      if (hit) {
-        groups.splice(a, 1);
-        again = true;
-        break;
-      }
-    }
-  }
-  for (const gr of groups) {
-    rewrites.push(gr.decl);
-    for (const e of gr.edits)
-      rewrites.push(e);
-  }
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  out += content.slice(last);
-  return out;
-}
-function rustStrLiteralLocalNativeString(content) {
-  const declRe = /^([ \t]*)let mut ([a-zA-Z_][a-zA-Z0-9_]*): Value = Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);[ \t]*$/gm;
-  const litWriteRe = /^\s*=\s*Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);/;
-  const maskText2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const closeParen2 = (src, open) => {
-    let depth = 0;
-    for (let k = open; k < src.length; k++) {
-      const c = src[k];
-      if (c === "(")
-        depth++;
-      else if (c === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const braceEnd = (src, from) => {
-    let depth = 0;
-    for (let k = from; k < src.length; k++) {
-      const c = src[k];
-      if (c === "{")
-        depth++;
-      else if (c === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return src.length;
-  };
-  const argSpans2 = (src) => {
-    const out2 = [];
-    let depth = 0;
-    let start = 0;
-    for (let i = 0; i < src.length; i++) {
-      const c = src[i];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      else if (c === "," && depth === 0) {
-        out2.push([start, i]);
-        start = i + 1;
-      }
-    }
-    out2.push([start, src.length]);
-    return out2;
-  };
-  const boxUse = (name, kept, after, used, body) => {
-    const later = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`).test(after.slice(used));
-    const inLoop = /\b(?:loop|while|for)\b/.test(body);
-    const arg = kept === "" && (later || inLoop) ? `${name}.clone()` : `${name}${kept}`;
-    return `Value::from(${arg})`;
-  };
-  const masked = maskText2(content);
-  const groups = [];
-  const grown = /* @__PURE__ */ new Map();
-  let m;
-  while ((m = declRe.exec(masked)) !== null) {
-    const name = m[2];
-    const stmtEnd2 = m.index + m[0].length;
-    const lit = /Value::Str\(("(?:[^"\\\n]|\\.)*")\.(?:into|to_string)\(\)\);/.exec(content.slice(m.index, stmtEnd2));
-    if (lit === null)
-      continue;
-    const end = braceEnd(masked, stmtEnd2);
-    const body = masked.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
-      continue;
-    const fRe = /format!\(/g;
-    const fSpans = [];
-    let f;
-    while ((f = fRe.exec(body)) !== null) {
-      const close = closeParen2(body, f.index + f[0].length - 1);
-      if (close < 0)
-        continue;
-      const fl = /^"(?:[^"\\]|\\.)*"/.exec(body.slice(f.index + f[0].length, close));
-      fSpans.push([f.index, close, fl !== null && /:\?/.test(fl[0])]);
-    }
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
-    const edits = [];
-    let ok = true;
-    let u;
-    while ((u = useRe.exec(body)) !== null) {
-      const at = u.index;
-      const abs = stmtEnd2 + at;
-      const after = body.slice(at + name.length);
-      const before = body.slice(0, at);
-      let g;
-      if ((g = /^\s*=(?!=)/.exec(after)) !== null && !/[!<>=&|]\s*$/.test(before)) {
-        const w = litWriteRe.exec(content.slice(abs + name.length));
-        if (w === null) {
-          ok = false;
-          break;
-        }
-        edits.push({ start: abs + name.length, end: abs + name.length + w[0].length, text: ` = ${w[1]}.to_string();` });
-        continue;
-      }
-      const cand = fSpans.filter(([s, e]) => at > s && at < e);
-      if (cand.length > 0) {
-        const hit = cand.reduce((a, b) => b[0] > a[0] ? b : a);
-        const inner = hit[0] + "format!(".length;
-        const slot = argSpans2(body.slice(inner, hit[1] - 1)).filter(([a, b]) => inner + a <= at && at + name.length <= inner + b);
-        if (slot.length > 0 && body.slice(inner + slot[0][0], inner + slot[0][1]).replace(/\s+/g, "") === name) {
-          if (hit[2]) {
-            ok = false;
-            break;
-          }
-          continue;
-        }
-      }
-      if ((g = /^\.as_str\(\)/.exec(after)) !== null && !/&\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `Some(${name}.as_str())` });
-      } else if (/crate::runtime::stringify_param\(&$/.test(before) && /^\)/.test(after)) {
-        const from = abs - "crate::runtime::stringify_param(&".length;
-        edits.push({ start: from, end: abs + name.length + 1, text: `${name}.clone()` });
-      } else if (/(?:[(,\[]\s*)$/.test(before) && !/&\s*$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[,)\];])/.exec(after)) !== null) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: boxUse(name, g[0], after, g[0].length, body) });
-      } else if (/(?<![=!<>])=\s$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[;,)])/.exec(after)) !== null) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: boxUse(name, g[0], after, g[0].length, body) });
-      } else {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok)
-      continue;
-    const tail = content.slice(m.index + lit.index + lit[0].length, stmtEnd2);
-    const declText = `${m[1]}let mut ${name}: String = ${lit[1]}.to_string();${tail}`;
-    const all = [{ start: m.index, end: stmtEnd2, text: declText }, ...edits];
-    const lineGrow = /* @__PURE__ */ new Map();
-    for (const e of all) {
-      const ls = content.lastIndexOf("\n", e.start) + 1;
-      lineGrow.set(ls, (_nullishCoalesce(lineGrow.get(ls), () => ( 0))) + e.text.length - (e.end - e.start));
-    }
-    let longer = false;
-    for (const [ls, grow] of lineGrow) {
-      let le = content.indexOf("\n", ls);
-      if (le < 0)
-        le = content.length;
-      const cur = le - ls + (_nullishCoalesce(grown.get(ls), () => ( 0)));
-      if (cur <= 400 && cur + grow > 400)
-        longer = true;
-    }
-    if (longer)
-      continue;
-    for (const [ls, grow] of lineGrow)
-      grown.set(ls, (_nullishCoalesce(grown.get(ls), () => ( 0))) + grow);
-    groups.push(all);
-  }
-  const rewrites = groups.flat();
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  out += content.slice(last);
-  return out;
-}
-function rustStrNLocalOptionString(content) {
-  const opt = "safe_string_n_opt";
-  const declRe = /^([ \t]*)let (mut )?([a-zA-Z_][a-zA-Z0-9_]*): Value = self\.(safe_string_n)\(/gm;
-  const maskText2 = (src) => {
-    let out2 = "";
-    let i = 0;
-    while (i < src.length) {
-      const c = src[i];
-      if (c === "/" && src[i + 1] === "/") {
-        while (i < src.length && src[i] !== "\n") {
-          out2 += " ";
-          i++;
-        }
-        continue;
-      }
-      if (c === '"') {
-        out2 += '"';
-        i++;
-        while (i < src.length && src[i] !== '"') {
-          if (src[i] === "\\") {
-            out2 += "  ";
-            i += 2;
-            continue;
-          }
-          out2 += src[i] === "\n" ? "\n" : " ";
-          i++;
-        }
-        if (i < src.length) {
-          out2 += '"';
-          i++;
-        }
-        continue;
-      }
-      out2 += c;
-      i++;
-    }
-    return out2;
-  };
-  const closeParen2 = (src, open) => {
-    let depth = 0;
-    for (let k = open; k < src.length; k++) {
-      const c = src[k];
-      if (c === "(")
-        depth++;
-      else if (c === ")") {
-        depth--;
-        if (depth === 0)
-          return k + 1;
-      }
-    }
-    return -1;
-  };
-  const braceEnd = (src, from) => {
-    let depth = 0;
-    for (let k = from; k < src.length; k++) {
-      const c = src[k];
-      if (c === "{")
-        depth++;
-      else if (c === "}") {
-        depth--;
-        if (depth < 0)
-          return k;
-      }
-    }
-    return src.length;
-  };
-  const argSpans2 = (src) => {
-    const out2 = [];
-    let depth = 0;
-    let start = 0;
-    for (let i = 0; i < src.length; i++) {
-      const c = src[i];
-      if (c === "(" || c === "[" || c === "{")
-        depth++;
-      else if (c === ")" || c === "]" || c === "}")
-        depth--;
-      else if (c === "," && depth === 0) {
-        out2.push([start, i]);
-        start = i + 1;
-      }
-    }
-    out2.push([start, src.length]);
-    return out2;
-  };
-  const masked = maskText2(content);
-  const grown = /* @__PURE__ */ new Map();
-  const groups = [];
-  const rewrites = [];
-  let m;
-  while ((m = declRe.exec(masked)) !== null) {
-    const name = m[3];
-    const callOpen = m.index + m[0].length - 1;
-    const callClose = closeParen2(masked, callOpen);
-    if (callClose < 0)
-      continue;
-    const tail = /^\s*;/.exec(masked.slice(callClose, callClose + 3));
-    if (tail === null)
-      continue;
-    const stmtEnd2 = callClose + tail[0].length;
-    const base = callOpen + 1;
-    const spans = argSpans2(masked.slice(base, callClose - 1));
-    if (spans.length !== 3)
-      continue;
-    const obj = content.slice(base + spans[0][0], base + spans[0][1]).trim();
-    const keyRaw = content.slice(base + spans[1][0], base + spans[1][1]).trim();
-    const defRaw = content.slice(base + spans[2][0], base + spans[2][1]).trim();
-    if (obj.length === 0 || !/^Value::from\(vec!\[[^\]]*\]\)$/.test(keyRaw))
-      continue;
-    if (defRaw !== "&[]" && !/^&\[Value::Str\("(?:[^"\\]|\\.)*"\.into\(\)\)\]$/.test(defRaw))
-      continue;
-    const end = braceEnd(masked, stmtEnd2);
-    const body = masked.slice(stmtEnd2, end);
-    if (new RegExp(`\\b(?:let|for|fn)\\s+(?:mut\\s+)?${name}\\b`).test(body))
-      continue;
-    if (new RegExp(`\\|[^|\\n]*\\b${name}\\b[^|\\n]*\\|`).test(body))
-      continue;
-    const useRe = new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`, "g");
-    const edits = [];
-    let ok = true;
-    let u;
-    while ((u = useRe.exec(body)) !== null) {
-      const at = u.index;
-      const abs = stmtEnd2 + at;
-      const after = body.slice(at + name.length);
-      const before = body.slice(0, at);
-      let g;
-      if ((g = /^\s*(==|!=)\s*Value::Null\b/.exec(after)) !== null && !/[&*]\s*$/.test(before)) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.${g[1] === "==" ? "is_none" : "is_some"}()` });
-      } else if ((g = /^\.as_str\(\)/.exec(after)) !== null) {
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}.as_deref()` });
-      } else if (/get_value\(&$/.test(before) && (g = /^, &Value::Int\(0\)\)\.as_str\(\) (==|!=) Some\("/.exec(after)) !== null) {
-        const chPos = abs + name.length + g[0].length;
-        const ch = /^([^"\\])"\)/.exec(content.slice(chPos, chPos + 3));
-        if (ch === null) {
-          ok = false;
-          break;
-        }
-        const probe = `${name}.as_deref().unwrap_or("").starts_with("${ch[1]}")`;
-        edits.push({ start: abs - "get_value(&".length, end: chPos + ch[0].length, text: g[1] === "==" ? probe : `!${probe}` });
-      } else if (/crate::runtime::stringify_param\(&$/.test(before) && /^\)/.test(after)) {
-        const from = abs - "crate::runtime::stringify_param(&".length;
-        edits.push({ start: from, end: abs + name.length + 1, text: `${name}.as_deref().unwrap_or("null").to_string()` });
-      } else if (/(?:[(,\[]\s*&?|(?<![=!<>])=\s)$/.test(before) && !/&\s*mut\s*$/.test(before) && (g = /^(\.clone\(\))?(?=\s*[,)\];])/.exec(after)) !== null && !/==\s*$/.test(before)) {
-        const lastUse = !new RegExp(`(?<![A-Za-z0-9_.:])${name}(?![A-Za-z0-9_])`).test(after.slice(g[0].length));
-        const inLoop = /\b(?:loop|while|for)\b/.test(body);
-        const move = lastUse && !inLoop && !/&\s*$/.test(before);
-        edits.push({ start: abs, end: abs + name.length + g[0].length, text: `${name}${move ? "" : ".clone()"}.map(Value::from).unwrap_or(Value::Null)` });
-      } else {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok || edits.length === 0)
-      continue;
-    const declText = `${m[1]}let ${_nullishCoalesce(m[2], () => ( ""))}${name}: Option<String> = self.${opt}(${obj}, ${keyRaw}, ${defRaw});`;
-    const all = [{ start: m.index, end: stmtEnd2, text: declText }, ...edits];
-    const lineGrow = /* @__PURE__ */ new Map();
-    for (const e of all) {
-      const ls = content.lastIndexOf("\n", e.start) + 1;
-      lineGrow.set(ls, (_nullishCoalesce(lineGrow.get(ls), () => ( 0))) + e.text.length - (e.end - e.start));
-    }
-    let longer = false;
-    for (const [ls, grow] of lineGrow) {
-      let le = content.indexOf("\n", ls);
-      if (le < 0)
-        le = content.length;
-      const cur = le - ls + (_nullishCoalesce(grown.get(ls), () => ( 0)));
-      if (cur <= 400 && cur + grow > 400)
-        longer = true;
-    }
-    if (longer)
-      continue;
-    for (const [ls, grow] of lineGrow)
-      grown.set(ls, (_nullishCoalesce(grown.get(ls), () => ( 0))) + grow);
-    groups.push({ decl: { start: m.index, end: stmtEnd2, text: declText }, edits });
-  }
-  for (let again = true; again; ) {
-    again = false;
-    for (let a = 0; a < groups.length; a++) {
-      const hit = groups.some((b, bi) => bi !== a && groups[a].edits.some((e) => e.start >= b.decl.start && e.start < b.decl.end));
-      if (hit) {
-        groups.splice(a, 1);
-        again = true;
-        break;
-      }
-    }
-  }
-  for (const gr of groups) {
-    rewrites.push(gr.decl);
-    for (const e of gr.edits)
-      rewrites.push(e);
-  }
-  if (rewrites.length === 0)
-    return content;
-  rewrites.sort((a, b) => a.start - b.start);
-  let out = "";
-  let last = 0;
-  for (const r of rewrites) {
-    if (r.start < last)
-      continue;
-    out += content.slice(last, r.start) + r.text;
-    last = r.end;
-  }
-  out += content.slice(last);
-  return out;
-}
 var RUST_PLAIN_PLACE = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
 var parserConfig6 = {
   "ELSEIF_TOKEN": "else if",
@@ -57801,7 +49972,7 @@ function rustScopeNameTable(index) {
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
     const kind = n.kind;
-    if (RUST_NAME_BINDER_KINDS.has(kind) && _optionalChain([n, 'access', _8194 => _8194.name, 'optionalAccess', _8195 => _8195.kind]) === _ast.SyntaxKind.Identifier)
+    if (RUST_NAME_BINDER_KINDS.has(kind) && _optionalChain([n, 'access', _8184 => _8184.name, 'optionalAccess', _8185 => _8185.kind]) === _ast.SyntaxKind.Identifier)
       add(n.name.text, i);
     if (kind === _ast.SyntaxKind.Identifier)
       add(n.text, i);
@@ -57936,8 +50107,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** One bulk getTypeAtLocation for the class's nodes of those kinds, seeding the checker memo. */
   rustPrefetchClassTypes(node) {
-    const getType = _optionalChain([this, 'access', _8196 => _8196.checkerOrUndefined, 'call', _8197 => _8197(), 'optionalAccess', _8198 => _8198.getTypeAtLocation]);
-    if (_optionalChain([getType, 'optionalAccess', _8199 => _8199.seed]) === void 0 || getType.original === void 0)
+    const getType = _optionalChain([this, 'access', _8186 => _8186.checkerOrUndefined, 'call', _8187 => _8187(), 'optionalAccess', _8188 => _8188.getTypeAtLocation]);
+    if (_optionalChain([getType, 'optionalAccess', _8189 => _8189.seed]) === void 0 || getType.original === void 0)
       return;
     const kinds = _RustTranspiler.RUST_PREFETCH_TYPE_KINDS;
     const nodes = [];
@@ -58050,7 +50221,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     } catch (e) {
       return false;
     }
-    return declarations.length > 0 && declarations.every((d) => d.kind === _ast.SyntaxKind.ImportSpecifier || _is.isBindingElement.call(void 0, d) && _is.isSourceFile.call(void 0, _optionalChain([_chunkCNXC7LJYcjs.findAncestor.call(void 0, d, (a) => _is.isStatement.call(void 0, a)), 'optionalAccess', _8200 => _8200.parent])));
+    return declarations.length > 0 && declarations.every((d) => d.kind === _ast.SyntaxKind.ImportSpecifier || _is.isBindingElement.call(void 0, d) && _is.isSourceFile.call(void 0, _optionalChain([_chunkCNXC7LJYcjs.findAncestor.call(void 0, d, (a) => _is.isStatement.call(void 0, a)), 'optionalAccess', _8190 => _8190.parent])));
   }
   printStringLiteral(node) {
     const text = node.text;
@@ -58148,12 +50319,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** The declaration site emits `let mut x: bool = …` (see
    *  `getRustBoolLocalInitializer`): its reads are native bools, not `Value`. */
   rustDeclarationPrintsNativeBool(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8201 => _8201.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _8191 => _8191.kind]) !== _ast.SyntaxKind.VariableDeclaration)
       return false;
     if (this.rustBoolDeclaredLocals.has(declaration))
       return true;
     const initializer = declaration.initializer;
-    if (initializer === void 0 || _optionalChain([declaration, 'access', _8202 => _8202.name, 'optionalAccess', _8203 => _8203.kind]) !== _ast.SyntaxKind.Identifier)
+    if (initializer === void 0 || _optionalChain([declaration, 'access', _8192 => _8192.name, 'optionalAccess', _8193 => _8193.kind]) !== _ast.SyntaxKind.Identifier)
       return false;
     return this.rustTypeIsBoolean(initializer) && this.rustLocalUsesAcceptBool(declaration, declaration.name.text);
   }
@@ -58175,7 +50346,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     return current;
   }
-  // B-26 extends the proof with the printer's own bool-typed sinks: a narrowed `let x: bool = …`
+  // The proof extends to the printer's own bool-typed sinks: a narrowed `let x: bool = …`
   // (getRustBoolLocalInitializer) and a logical boxed in `Value::Bool(…)`
   // (printCustomBinaryExpressionIfAny) both demand a `bool`, so their operands may print bare.
   rustConditionBoolSlot(node) {
@@ -58187,7 +50358,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     }
     const declaration = current.parent;
-    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || declaration.initializer !== current || _optionalChain([declaration, 'access', _8204 => _8204.name, 'optionalAccess', _8205 => _8205.kind]) !== _ast.SyntaxKind.Identifier) {
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || declaration.initializer !== current || _optionalChain([declaration, 'access', _8194 => _8194.name, 'optionalAccess', _8195 => _8195.kind]) !== _ast.SyntaxKind.Identifier) {
       return false;
     }
     return this.rustNodeIsBoolExpression(declaration.initializer) && this.rustTypeIsBoolean(declaration.initializer) && this.rustLocalUsesAcceptBool(declaration, String(declaration.name.text));
@@ -58209,7 +50380,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     let current = node;
     while (current.parent !== void 0 && _is.isParenthesizedExpression.call(void 0, current.parent))
       current = current.parent;
-    const negated = _optionalChain([current, 'access', _8206 => _8206.parent, 'optionalAccess', _8207 => _8207.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && current.parent.operator === _ast.SyntaxKind.ExclamationToken;
+    const negated = _optionalChain([current, 'access', _8196 => _8196.parent, 'optionalAccess', _8197 => _8197.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && current.parent.operator === _ast.SyntaxKind.ExclamationToken;
     return negated ? `(${text})` : text;
   }
   // Kind of a literal operand whose printed Value variant is exactly known.
@@ -58304,7 +50475,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const declarations = _chunkCNXC7LJYcjs.symbolDeclarations.call(void 0, symbol);
     if (declarations.length === 0)
       return false;
-    return declarations.every((declaration) => _is.isParameterDeclaration.call(void 0, declaration) || _is.isVariableDeclaration.call(void 0, declaration) && _optionalChain([declaration, 'access', _8208 => _8208.initializer, 'optionalAccess', _8209 => _8209.kind]) !== _ast.SyntaxKind.NewExpression);
+    return declarations.every((declaration) => _is.isParameterDeclaration.call(void 0, declaration) || _is.isVariableDeclaration.call(void 0, declaration) && _optionalChain([declaration, 'access', _8198 => _8198.initializer, 'optionalAccess', _8199 => _8199.kind]) !== _ast.SyntaxKind.NewExpression);
   }
   // Can the checked type only hold a Bool, Null/undefined or a non-numeric
   // string? Then `x.as_bool() == Some(b)` answers exactly what is_equal(x, b)
@@ -58396,7 +50567,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // is exactly what the runtime helper computes; only then is the helper
   // call dropped, anything unproven keeps the helper.
   typeOfNodeIfAny(node) {
-    return _optionalChain([this, 'access', _8210 => _8210.checkerOrUndefined, 'call', _8211 => _8211(), 'optionalAccess', _8212 => _8212.getTypeAtLocation, 'call', _8213 => _8213(node)]);
+    return _optionalChain([this, 'access', _8200 => _8200.checkerOrUndefined, 'call', _8201 => _8201(), 'optionalAccess', _8202 => _8202.getTypeAtLocation, 'call', _8203 => _8203(node)]);
   }
   // Arrays/tuples/strings: `.length` is exactly what `Value::len()` returns.
   // Other shapes (Dict) keep the helper — ArrayCache / OrderBookSide markers
@@ -58443,7 +50614,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (receiver === void 0 || key !== "bids" && key !== "asks")
       return false;
-    const symbol = _optionalChain([this, 'access', _8214 => _8214.typeOfNodeIfAny, 'call', _8215 => _8215(receiver), 'optionalAccess', _8216 => _8216.getSymbol, 'optionalCall', _8217 => _8217()]);
+    const symbol = _optionalChain([this, 'access', _8204 => _8204.typeOfNodeIfAny, 'call', _8205 => _8205(receiver), 'optionalAccess', _8206 => _8206.getSymbol, 'optionalCall', _8207 => _8207()]);
     return symbol !== void 0 && /^(Indexed|Counted)?OrderBook$/.test(symbol.name);
   }
   // Native string search / slicing: `x.indexOf(y)` and `x.slice(a, b)` on a checker-proven
@@ -58471,7 +50642,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // `x.indexOf("lit")` on a proven string receiver: `str::find` is exactly
   // the helper's `Value::Str` arm (byte index, `-1` when absent).
   printNativeStringIndexOf(node, receiverText) {
-    if (node === void 0 || !_is.isCallExpression.call(void 0, node) || !_is.isPropertyAccessExpression.call(void 0, node.expression) || _optionalChain([node, 'access', _8218 => _8218.arguments, 'optionalAccess', _8219 => _8219.length]) !== 1) {
+    if (node === void 0 || !_is.isCallExpression.call(void 0, node) || !_is.isPropertyAccessExpression.call(void 0, node.expression) || _optionalChain([node, 'access', _8208 => _8208.arguments, 'optionalAccess', _8209 => _8209.length]) !== 1) {
       return void 0;
     }
     if (this.primitiveKindOfType(this.typeOfNodeIfAny(node.expression.expression)) !== "string")
@@ -58581,8 +50752,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // shapes the printer emits today (`Value::Str("k".to_string())`,
   // `Value::from("k")`) plus a bare `"k"` once an arg-shape unit drops the box.
   rustStringLiteralOf(printedKey) {
-    const boxed2 = printedKey.match(/^(?:Value::Str|Value::from)\((.+)\)$/);
-    const literal = (boxed2 ? boxed2[1].replace(/\.(?:to_string|into)\(\)$/, "") : printedKey).trim();
+    const boxed = printedKey.match(/^(?:Value::Str|Value::from)\((.+)\)$/);
+    const literal = (boxed ? boxed[1].replace(/\.(?:to_string|into)\(\)$/, "") : printedKey).trim();
     return /^"(?:[^"\\]|\\.)*"$/.test(literal) ? literal : void 0;
   }
   // `X["k"] = v` on a checker-proven plain Dict receiver: mutate the Dict
@@ -58602,7 +50773,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     }
     const type = this.typeOfNodeIfAny(baseExpr);
-    const name = type === void 0 ? void 0 : _optionalChain([this, 'access', _8220 => _8220.typeSymbolOf, 'call', _8221 => _8221(type), 'optionalAccess', _8222 => _8222.name]);
+    const name = type === void 0 ? void 0 : _optionalChain([this, 'access', _8210 => _8210.typeSymbolOf, 'call', _8211 => _8211(type), 'optionalAccess', _8212 => _8212.name]);
     if ((name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) && !this.rustReadsOrderbooksStore(baseExpr)) {
       return void 0;
     }
@@ -58618,10 +50789,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (new RegExp(`\\b${receiver}\\b`).test(value)) {
       return `{ let __be_tmp = ${value}; ${receiver}.set_book_meta(${keyLiteral[1]}, __be_tmp); }`;
     }
-    const trimmed = value.trim();
-    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed) && trimmed !== "self" && trimmed !== "true" && trimmed !== "false") {
-      value = `${trimmed}.clone()`;
-    }
+    value = _RustTranspiler.cloneIfBareLocal(value.trim(), value);
     return `${receiver}.set_book_meta(${keyLiteral[1]}, ${value})`;
   }
   // `let b = this.safeValue (this.orderbooks, k)`: the checker types it `any`, but it is an
@@ -58656,7 +50824,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `{ let __be_tmp = ${value}; ${insert("__be_tmp")} }`;
     }
     const trimmed = value.trim();
-    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed) && trimmed !== "self" && trimmed !== "true" && trimmed !== "false") {
+    if (_RustTranspiler.isBareLocal(trimmed)) {
       return insert(`${trimmed}.clone()`);
     }
     return insert(value);
@@ -58724,7 +50892,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return fits(out2) ? out2 : void 0;
     }
     const trimmed = value.trim();
-    const out = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed) && trimmed !== "self" && trimmed !== "true" && trimmed !== "false" ? guard(`${trimmed}.clone()`) : guard(value);
+    const out = guard(_RustTranspiler.cloneIfBareLocal(trimmed, value));
     return fits(out) ? out : void 0;
   }
   /** The `get_mut` key of a nested-dict hop: a borrowed `&str` — the literal itself,
@@ -58747,7 +50915,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const plain = this.rustInsertIdentifierReceiver(expr);
       return plain === void 0 ? void 0 : { text: expr.text, isField: false, plain, nameNode: expr };
     }
-    if (_is.isPropertyAccessExpression.call(void 0, expr) && expr.expression.kind === _ast.SyntaxKind.ThisKeyword && _optionalChain([expr, 'access', _8223 => _8223.name, 'optionalAccess', _8224 => _8224.kind]) === _ast.SyntaxKind.Identifier) {
+    if (_is.isPropertyAccessExpression.call(void 0, expr) && expr.expression.kind === _ast.SyntaxKind.ThisKeyword && _optionalChain([expr, 'access', _8213 => _8213.name, 'optionalAccess', _8214 => _8214.kind]) === _ast.SyntaxKind.Identifier) {
       return {
         text: `self.${expr.name.text}`,
         isField: true,
@@ -58852,7 +51020,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  family; each returns its own request/params dict arguments. */
   rustHandlerTupleCall(node) {
     const callee = node !== void 0 && _is.isCallExpression.call(void 0, node) ? node.expression : void 0;
-    return callee !== void 0 && _is.isPropertyAccessExpression.call(void 0, callee) && callee.expression.kind === _ast.SyntaxKind.ThisKeyword && _optionalChain([callee, 'access', _8225 => _8225.name, 'optionalAccess', _8226 => _8226.kind]) === _ast.SyntaxKind.Identifier && /^handle[A-Z]/.test(callee.name.text);
+    return callee !== void 0 && _is.isPropertyAccessExpression.call(void 0, callee) && callee.expression.kind === _ast.SyntaxKind.ThisKeyword && _optionalChain([callee, 'access', _8215 => _8215.name, 'optionalAccess', _8216 => _8216.kind]) === _ast.SyntaxKind.Identifier && /^handle[A-Z]/.test(callee.name.text);
   }
   /** A `null`/`undefined` write leaves the receiver a non-dict, which the
    *  emitted `if let Value::Dict` no-ops exactly like the helper. */
@@ -58914,7 +51082,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const name = ident.text;
     const initializer = declaration.initializer;
     const scope = this.rustEnclosingFunction(declaration);
-    if (initializer === void 0 || _is.isElementAccessExpression.call(void 0, initializer) || _optionalChain([declaration, 'access', _8227 => _8227.name, 'optionalAccess', _8228 => _8228.kind]) !== _ast.SyntaxKind.Identifier || scope === void 0) {
+    if (initializer === void 0 || _is.isElementAccessExpression.call(void 0, initializer) || _optionalChain([declaration, 'access', _8217 => _8217.name, 'optionalAccess', _8218 => _8218.kind]) !== _ast.SyntaxKind.Identifier || scope === void 0) {
       return false;
     }
     let safe = this.rustWriteDictShape(this.typeOfNodeIfAny(ident)) && this.rustWriteDictShape(this.typeOfNodeIfAny(initializer));
@@ -58943,7 +51111,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     let safe = true;
     this.rustWalkScope(scope, (n) => {
-      if (_is.isBinaryExpression.call(void 0, n) && n.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _is.isPropertyAccessExpression.call(void 0, n.left) && n.left.expression.kind === _ast.SyntaxKind.ThisKeyword && _optionalChain([n, 'access', _8229 => _8229.left, 'access', _8230 => _8230.name, 'optionalAccess', _8231 => _8231.text]) === fieldName && !this.rustWriteDictShape(this.typeOfNodeIfAny(n.right))) {
+      if (_is.isBinaryExpression.call(void 0, n) && n.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _is.isPropertyAccessExpression.call(void 0, n.left) && n.left.expression.kind === _ast.SyntaxKind.ThisKeyword && _optionalChain([n, 'access', _8219 => _8219.left, 'access', _8220 => _8220.name, 'optionalAccess', _8221 => _8221.text]) === fieldName && !this.rustWriteDictShape(this.typeOfNodeIfAny(n.right))) {
         safe = false;
         return RUST_WALK_STOP;
       }
@@ -58951,10 +51119,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return safe;
   }
   // A parameter the checker proves is a plain dict (`Dict`, `Dictionary<T>`,
-  // a `Market`-style alias — the proof B-25's native reads use) whose every
+  // a `Market`-style alias — the proof the native reads use) whose every
   // write in the body keeps that shape: an object literal with no runtime tag
   rustParamStaysPlainDict(declaration) {
-    if (declaration.type === void 0 || _optionalChain([declaration, 'access', _8232 => _8232.name, 'optionalAccess', _8233 => _8233.kind]) !== _ast.SyntaxKind.Identifier) {
+    if (declaration.type === void 0 || _optionalChain([declaration, 'access', _8222 => _8222.name, 'optionalAccess', _8223 => _8223.kind]) !== _ast.SyntaxKind.Identifier) {
       return false;
     }
     const type = this.getCheckedTypeOf(declaration.type);
@@ -59121,7 +51289,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   nativeIndexOfLiteralTestText(op, left, right) {
     const call = this.orderedComparisonOperand(left);
-    if (call === void 0 || !_is.isCallExpression.call(void 0, call) || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.name.text !== "indexOf" || _optionalChain([call, 'access', _8234 => _8234.arguments, 'optionalAccess', _8235 => _8235.length]) !== 1) {
+    if (call === void 0 || !_is.isCallExpression.call(void 0, call) || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.name.text !== "indexOf" || _optionalChain([call, 'access', _8224 => _8224.arguments, 'optionalAccess', _8225 => _8225.length]) !== 1) {
       return void 0;
     }
     const bound = this.rustSliceLiteralBound(this.orderedComparisonOperand(right));
@@ -59325,7 +51493,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   printVariableDeclarationList(node, identation) {
     const declaration = node.declarations[0];
     const indent = this.getIden(identation);
-    if (_optionalChain([declaration, 'optionalAccess', _8236 => _8236.name, 'access', _8237 => _8237.kind]) === _ast.SyntaxKind.ArrayBindingPattern) {
+    if (_optionalChain([declaration, 'optionalAccess', _8226 => _8226.name, 'access', _8227 => _8227.kind]) === _ast.SyntaxKind.ArrayBindingPattern) {
       const parsedElements = declaration.name.elements.map((e) => this.printNode(e.name, 0));
       const syntheticName = parsedElements.join("") + "Variable";
       const nativeList = this.rustNativeListSource(declaration.initializer);
@@ -59388,11 +51556,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // Call to a hand-written `-> bool` fn: the checker must agree the TS call
   // is boolean-typed and the callee must be in the verified table above.
   rustCallPrintsBool(node) {
-    if (_optionalChain([node, 'optionalAccess', _8238 => _8238.kind]) !== _ast.SyntaxKind.CallExpression) {
+    if (_optionalChain([node, 'optionalAccess', _8228 => _8228.kind]) !== _ast.SyntaxKind.CallExpression) {
       return false;
     }
     const callee = node.expression;
-    const name = _optionalChain([callee, 'optionalAccess', _8239 => _8239.kind]) === _ast.SyntaxKind.Identifier ? callee.text : _optionalChain([callee, 'optionalAccess', _8240 => _8240.kind]) === _ast.SyntaxKind.PropertyAccessExpression ? _optionalChain([callee, 'access', _8241 => _8241.name, 'optionalAccess', _8242 => _8242.text]) : void 0;
+    const name = _optionalChain([callee, 'optionalAccess', _8229 => _8229.kind]) === _ast.SyntaxKind.Identifier ? callee.text : _optionalChain([callee, 'optionalAccess', _8230 => _8230.kind]) === _ast.SyntaxKind.PropertyAccessExpression ? _optionalChain([callee, 'access', _8231 => _8231.name, 'optionalAccess', _8232 => _8232.text]) : void 0;
     return name !== void 0 && _RustTranspiler.RUST_BOOL_RESULT_CALLEES.has(name) && this.rustTypeIsBoolean(node);
   }
   // Index just past the `"..."` literal opening at `i` (escapes skipped).
@@ -59461,7 +51629,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // Source shapes the printer turns into a bool: comparisons, `&&`/`||`
   // (each operand is is_true-wrapped), `!`, `in`, `instanceof`, true/false.
   rustNodeIsBoolExpression(node) {
-    switch (_optionalChain([node, 'optionalAccess', _8243 => _8243.kind])) {
+    switch (_optionalChain([node, 'optionalAccess', _8233 => _8233.kind])) {
       case _ast.SyntaxKind.TrueKeyword:
       case _ast.SyntaxKind.FalseKeyword:
         return true;
@@ -59489,7 +51657,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return checker !== void 0 && this.isStringLikeType(checker.getTypeAtLocation(node));
   }
   rustEnclosingFunction(node) {
-    for (let current = _optionalChain([node, 'optionalAccess', _8244 => _8244.parent]); current; current = current.parent) {
+    for (let current = _optionalChain([node, 'optionalAccess', _8234 => _8234.parent]); current; current = current.parent) {
       switch (current.kind) {
         case _ast.SyntaxKind.MethodDeclaration:
         case _ast.SyntaxKind.FunctionDeclaration:
@@ -59503,7 +51671,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return void 0;
   }
   rustBindsName(node, name) {
-    switch (_optionalChain([node, 'optionalAccess', _8245 => _8245.kind])) {
+    switch (_optionalChain([node, 'optionalAccess', _8235 => _8235.kind])) {
       case _ast.SyntaxKind.VariableDeclaration:
       case _ast.SyntaxKind.Parameter:
       case _ast.SyntaxKind.FunctionDeclaration:
@@ -59511,7 +51679,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       case _ast.SyntaxKind.PropertyDeclaration:
       case _ast.SyntaxKind.FunctionExpression:
       case _ast.SyntaxKind.ArrowFunction:
-        return _optionalChain([node, 'access', _8246 => _8246.name, 'optionalAccess', _8247 => _8247.kind]) === _ast.SyntaxKind.Identifier && node.name.text === name;
+        return _optionalChain([node, 'access', _8236 => _8236.name, 'optionalAccess', _8237 => _8237.kind]) === _ast.SyntaxKind.Identifier && node.name.text === name;
     }
     return false;
   }
@@ -59571,7 +51739,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return this.rustLocalUsesAll(declaration, sourceName, false, (n) => this.rustIdentifierUseIsCondition(n) || this.rustBoolParamUseAccepted(n));
   }
   rustParamPrintsBool(param) {
-    if (_optionalChain([param, 'optionalAccess', _8248 => _8248.kind]) !== _ast.SyntaxKind.Parameter) {
+    if (_optionalChain([param, 'optionalAccess', _8238 => _8238.kind]) !== _ast.SyntaxKind.Parameter) {
       return false;
     }
     let decision = this.rustBoolParamDecisions.get(param);
@@ -59587,7 +51755,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!_is.isMethodDeclaration.call(void 0, method) || method.body === void 0) {
       return false;
     }
-    if (_optionalChain([param, 'access', _8249 => _8249.name, 'optionalAccess', _8250 => _8250.kind]) !== _ast.SyntaxKind.Identifier || param.dotDotDotToken !== void 0) {
+    if (_optionalChain([param, 'access', _8239 => _8239.name, 'optionalAccess', _8240 => _8240.kind]) !== _ast.SyntaxKind.Identifier || param.dotDotDotToken !== void 0) {
       return false;
     }
     if ((_nullishCoalesce(method.modifiers, () => ( []))).some((m) => m.kind === _ast.SyntaxKind.StaticKeyword)) {
@@ -59611,7 +51779,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** True when `this.<name>` is read as a value (not called) in the method's own file. */
   rustMethodReferencedAsValue(method) {
-    const name = _optionalChain([method, 'access', _8251 => _8251.name, 'optionalAccess', _8252 => _8252.text]);
+    const name = _optionalChain([method, 'access', _8241 => _8241.name, 'optionalAccess', _8242 => _8242.text]);
     if (name === void 0) {
       return false;
     }
@@ -59627,9 +51795,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return names;
     }
     const visit = (n) => {
-      if (n.kind === _ast.SyntaxKind.PropertyAccessExpression && _optionalChain([n, 'access', _8253 => _8253.name, 'optionalAccess', _8254 => _8254.kind]) === _ast.SyntaxKind.Identifier) {
+      if (n.kind === _ast.SyntaxKind.PropertyAccessExpression && _optionalChain([n, 'access', _8243 => _8243.name, 'optionalAccess', _8244 => _8244.kind]) === _ast.SyntaxKind.Identifier) {
         const parent = n.parent;
-        const called = _optionalChain([parent, 'optionalAccess', _8255 => _8255.kind]) === _ast.SyntaxKind.CallExpression && parent.expression === n;
+        const called = _optionalChain([parent, 'optionalAccess', _8245 => _8245.kind]) === _ast.SyntaxKind.CallExpression && parent.expression === n;
         if (!called) {
           names.add(n.name.text);
         }
@@ -59657,7 +51825,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     }
     const call = node.parent;
-    if (_optionalChain([call, 'optionalAccess', _8256 => _8256.kind]) !== _ast.SyntaxKind.CallExpression) {
+    if (_optionalChain([call, 'optionalAccess', _8246 => _8246.kind]) !== _ast.SyntaxKind.CallExpression) {
       return false;
     }
     const at = Array.from(call.arguments).indexOf(node);
@@ -59681,7 +51849,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (declaration === void 0 || declaration === null) {
       return void 0;
     }
-    const resolved = _nullishCoalesce(_optionalChain([declaration, 'access', _8257 => _8257.resolve, 'optionalCall', _8258 => _8258()]), () => ( declaration));
+    const resolved = _nullishCoalesce(_optionalChain([declaration, 'access', _8247 => _8247.resolve, 'optionalCall', _8248 => _8248()]), () => ( declaration));
     return resolved.parameters === void 0 ? void 0 : Array.from(resolved.parameters);
   }
   /** `bool` text for an argument in a native-`bool` parameter slot. */
@@ -59707,24 +51875,24 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** Argument shapes the printer already emits as a Rust `bool`. */
   rustNativeBoolArgumentText(node) {
-    const inner = _optionalChain([node, 'optionalAccess', _8259 => _8259.kind]) === _ast.SyntaxKind.ParenthesizedExpression ? node.expression : node;
-    if (_optionalChain([inner, 'optionalAccess', _8260 => _8260.kind]) === _ast.SyntaxKind.TrueKeyword) {
+    const inner = _optionalChain([node, 'optionalAccess', _8249 => _8249.kind]) === _ast.SyntaxKind.ParenthesizedExpression ? node.expression : node;
+    if (_optionalChain([inner, 'optionalAccess', _8250 => _8250.kind]) === _ast.SyntaxKind.TrueKeyword) {
       return "true";
     }
-    if (_optionalChain([inner, 'optionalAccess', _8261 => _8261.kind]) === _ast.SyntaxKind.FalseKeyword) {
+    if (_optionalChain([inner, 'optionalAccess', _8251 => _8251.kind]) === _ast.SyntaxKind.FalseKeyword) {
       return "false";
     }
-    if (_optionalChain([inner, 'optionalAccess', _8262 => _8262.kind]) === _ast.SyntaxKind.Identifier) {
+    if (_optionalChain([inner, 'optionalAccess', _8252 => _8252.kind]) === _ast.SyntaxKind.Identifier) {
       const declaration = this.rustDeclaredNode(inner);
-      if (_optionalChain([declaration, 'optionalAccess', _8263 => _8263.kind]) === _ast.SyntaxKind.Parameter && this.rustParamPrintsBool(declaration)) {
+      if (_optionalChain([declaration, 'optionalAccess', _8253 => _8253.kind]) === _ast.SyntaxKind.Parameter && this.rustParamPrintsBool(declaration)) {
         return this.printNode(inner, 0).trim();
       }
-      if (_optionalChain([declaration, 'optionalAccess', _8264 => _8264.kind]) === _ast.SyntaxKind.VariableDeclaration && this.getRustBoolLocalInitializer(declaration, this.printNode(inner, 0)) !== void 0) {
+      if (_optionalChain([declaration, 'optionalAccess', _8254 => _8254.kind]) === _ast.SyntaxKind.VariableDeclaration && this.getRustBoolLocalInitializer(declaration, this.printNode(inner, 0)) !== void 0) {
         return this.printNode(inner, 0).trim();
       }
       return void 0;
     }
-    if (_optionalChain([inner, 'optionalAccess', _8265 => _8265.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && inner.operator === _ast.SyntaxKind.ExclamationToken) {
+    if (_optionalChain([inner, 'optionalAccess', _8255 => _8255.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && inner.operator === _ast.SyntaxKind.ExclamationToken) {
       const operand = this.rustNativeBoolArgumentText(inner.operand);
       return operand === void 0 ? void 0 : `!${operand}`;
     }
@@ -59741,14 +51909,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** Condition text for a bare identifier of native-`bool` type, else undefined. */
   printNativeBoolParamCondition(node) {
     const inner = _nullishCoalesce(this.unwrapParens(node), () => ( node));
-    if (_optionalChain([inner, 'optionalAccess', _8266 => _8266.kind]) !== _ast.SyntaxKind.Identifier) {
+    if (_optionalChain([inner, 'optionalAccess', _8256 => _8256.kind]) !== _ast.SyntaxKind.Identifier) {
       return void 0;
     }
     const declaration = this.rustDeclaredNode(inner);
-    return _optionalChain([declaration, 'optionalAccess', _8267 => _8267.kind]) === _ast.SyntaxKind.Parameter && this.rustParamPrintsBool(declaration) ? this.printNode(inner, 0).trim() : void 0;
+    return _optionalChain([declaration, 'optionalAccess', _8257 => _8257.kind]) === _ast.SyntaxKind.Parameter && this.rustParamPrintsBool(declaration) ? this.printNode(inner, 0).trim() : void 0;
   }
   rustParamPrintsStrVec(param) {
-    if (_optionalChain([param, 'optionalAccess', _8268 => _8268.kind]) !== _ast.SyntaxKind.Parameter)
+    if (_optionalChain([param, 'optionalAccess', _8258 => _8258.kind]) !== _ast.SyntaxKind.Parameter)
       return false;
     let decision = this.rustStrVecParamDecisions.get(param);
     if (decision === void 0) {
@@ -59766,7 +51934,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const method = param.parent;
     if (!_is.isMethodDeclaration.call(void 0, method) || method.body === void 0)
       return false;
-    if (_optionalChain([param, 'access', _8269 => _8269.name, 'optionalAccess', _8270 => _8270.kind]) !== _ast.SyntaxKind.Identifier || param.dotDotDotToken !== void 0)
+    if (_optionalChain([param, 'access', _8259 => _8259.name, 'optionalAccess', _8260 => _8260.kind]) !== _ast.SyntaxKind.Identifier || param.dotDotDotToken !== void 0)
       return false;
     if (param.initializer !== void 0 || param.questionToken !== void 0 || param.type === void 0)
       return false;
@@ -59782,7 +51950,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const type = checker === void 0 ? void 0 : this.getCheckedTypeOf(param.type);
     if (type === void 0 || !checker.isArrayType(type))
       return false;
-    if (this.primitiveKindOfType(_optionalChain([checker, 'access', _8271 => _8271.getTypeArguments, 'optionalCall', _8272 => _8272(type), 'optionalAccess', _8273 => _8273[0]])) !== "string")
+    if (this.primitiveKindOfType(_optionalChain([checker, 'access', _8261 => _8261.getTypeArguments, 'optionalCall', _8262 => _8262(type), 'optionalAccess', _8263 => _8263[0]])) !== "string")
       return false;
     if (this.rustMethodReferencedAsValue(method))
       return false;
@@ -59806,7 +51974,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** Every call site resolving to `method` passes an array literal of plain `Value` identifiers (none is fine: the dispatcher converts). */
   rustStrVecCallSitesOk(method, index) {
-    const name = String(_nullishCoalesce(_optionalChain([method, 'access', _8274 => _8274.name, 'optionalAccess', _8275 => _8275.text]), () => ( "")));
+    const name = String(_nullishCoalesce(_optionalChain([method, 'access', _8264 => _8264.name, 'optionalAccess', _8265 => _8265.text]), () => ( "")));
     if (name === "")
       return false;
     const key = this.rustDeclarationKey(method);
@@ -59820,7 +51988,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       } catch (e) {
         return false;
       }
-      declaration = _nullishCoalesce(_optionalChain([declaration, 'optionalAccess', _8276 => _8276.resolve, 'optionalCall', _8277 => _8277()]), () => ( declaration));
+      declaration = _nullishCoalesce(_optionalChain([declaration, 'optionalAccess', _8266 => _8266.resolve, 'optionalCall', _8267 => _8267()]), () => ( declaration));
       if (declaration === void 0 || declaration === null || this.rustDeclarationKey(declaration) !== key)
         continue;
       if (!this.rustStrVecArgumentOk(args[index]))
@@ -59834,7 +52002,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     if (inner === void 0 || !_is.isArrayLiteralExpression.call(void 0, inner) || inner.elements.length === 0)
       return false;
-    return Array.from(inner.elements).every((e) => _is.isIdentifier.call(void 0, e) && this.primitiveKindOfType(this.getCheckedTypeOf(e)) === "string" && this.isDeclaredValueIdentifier(e) && !this.rustStringLocalIdentifierIsTyped(e) && _optionalChain([this, 'access', _8278 => _8278.rustDeclarationOfIdentifier, 'call', _8279 => _8279(e), 'optionalAccess', _8280 => _8280.kind]) !== _ast.SyntaxKind.BindingElement);
+    return Array.from(inner.elements).every((e) => _is.isIdentifier.call(void 0, e) && this.primitiveKindOfType(this.getCheckedTypeOf(e)) === "string" && this.isDeclaredValueIdentifier(e) && !this.rustStringLocalIdentifierIsTyped(e) && _optionalChain([this, 'access', _8268 => _8268.rustDeclarationOfIdentifier, 'call', _8269 => _8269(e), 'optionalAccess', _8270 => _8270.kind]) !== _ast.SyntaxKind.BindingElement);
   }
   /** A plain `Value` local (not a param, not a typed container): `x.to_str_vec()` converts it. */
   rustStrVecValueLocal(node) {
@@ -59843,7 +52011,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const declaration = this.rustDeclarationOfIdentifier(node);
     if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || declaration.name === node)
       return false;
-    if (declaration.initializer === void 0 || _optionalChain([declaration, 'access', _8281 => _8281.name, 'optionalAccess', _8282 => _8282.kind]) !== _ast.SyntaxKind.Identifier)
+    if (declaration.initializer === void 0 || _optionalChain([declaration, 'access', _8271 => _8271.name, 'optionalAccess', _8272 => _8272.kind]) !== _ast.SyntaxKind.Identifier)
       return false;
     if (this.rustStringLocalIdentifierIsTyped(node) || this.rustReadBearerKindOfDeclaration(declaration) !== false)
       return false;
@@ -59867,8 +52035,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return `vec![${Array.from(inner.elements).map((e) => `${this.printNode(e, 0).trim()}.to_string()`).join(", ")}]`;
   }
   printStrVecParamJoin(node) {
-    const access = _optionalChain([node, 'optionalAccess', _8283 => _8283.expression]);
-    if (!_is.isPropertyAccessExpression.call(void 0, access) || !_is.isIdentifier.call(void 0, access.expression) || _optionalChain([node, 'access', _8284 => _8284.arguments, 'optionalAccess', _8285 => _8285.length]) !== 1)
+    const access = _optionalChain([node, 'optionalAccess', _8273 => _8273.expression]);
+    if (!_is.isPropertyAccessExpression.call(void 0, access) || !_is.isIdentifier.call(void 0, access.expression) || _optionalChain([node, 'access', _8274 => _8274.arguments, 'optionalAccess', _8275 => _8275.length]) !== 1)
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(access.expression);
     if (declaration === void 0 || !_is.isParameterDeclaration.call(void 0, declaration) || !this.rustParamPrintsStrVec(declaration))
@@ -59879,7 +52047,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return `Value::Str(${this.printNode(access.expression, 0).trim()}.join("${literal}").into())`;
   }
   rustParamPrintsMap(param) {
-    if (_optionalChain([param, 'optionalAccess', _8286 => _8286.kind]) !== _ast.SyntaxKind.Parameter) {
+    if (_optionalChain([param, 'optionalAccess', _8276 => _8276.kind]) !== _ast.SyntaxKind.Parameter) {
       return false;
     }
     let decision = this.rustMapParamDecisions.get(param);
@@ -59899,7 +52067,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!_is.isMethodDeclaration.call(void 0, method) || method.body === void 0) {
       return false;
     }
-    if (_optionalChain([param, 'access', _8287 => _8287.name, 'optionalAccess', _8288 => _8288.kind]) !== _ast.SyntaxKind.Identifier || param.dotDotDotToken !== void 0) {
+    if (_optionalChain([param, 'access', _8277 => _8277.name, 'optionalAccess', _8278 => _8278.kind]) !== _ast.SyntaxKind.Identifier || param.dotDotDotToken !== void 0) {
       return false;
     }
     if (param.initializer !== void 0 || param.questionToken !== void 0 || param.type === void 0) {
@@ -59984,7 +52152,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** The value operand of a `m['k'] = x` write: the receiver takes a `Value`, so
    *  the map is boxed there (a move at its last use, a clone before it). */
   rustDictWriteValue(node) {
-    const parent = _optionalChain([node, 'optionalAccess', _8289 => _8289.parent]);
+    const parent = _optionalChain([node, 'optionalAccess', _8279 => _8279.parent]);
     return parent !== void 0 && _is.isBinaryExpression.call(void 0, parent) && parent.right === node && parent.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _is.isElementAccessExpression.call(void 0, parent.left);
   }
   /** A use that prints the map as `Value::Map(x.clone())`: the body scan's
@@ -60046,7 +52214,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** Program-wide call sites of `method`: every one passes a bearer in the slot. */
   rustMapParamCallSitesOk(method, index) {
-    const name = String(_nullishCoalesce(_optionalChain([method, 'access', _8290 => _8290.name, 'optionalAccess', _8291 => _8291.text]), () => ( "")));
+    const name = String(_nullishCoalesce(_optionalChain([method, 'access', _8280 => _8280.name, 'optionalAccess', _8281 => _8281.text]), () => ( "")));
     if (name === "") {
       return false;
     }
@@ -60063,7 +52231,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       } catch (e) {
         return false;
       }
-      declaration = _nullishCoalesce(_optionalChain([declaration, 'optionalAccess', _8292 => _8292.resolve, 'optionalCall', _8293 => _8293()]), () => ( declaration));
+      declaration = _nullishCoalesce(_optionalChain([declaration, 'optionalAccess', _8282 => _8282.resolve, 'optionalCall', _8283 => _8283()]), () => ( declaration));
       if (declaration === void 0 || declaration === null || this.rustDeclarationKey(declaration) !== key) {
         continue;
       }
@@ -60076,7 +52244,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return proven > 0;
   }
   rustDeclarationKey(node) {
-    const source = _optionalChain([node, 'optionalAccess', _8294 => _8294.getSourceFile, 'optionalCall', _8295 => _8295()]);
+    const source = _optionalChain([node, 'optionalAccess', _8284 => _8284.getSourceFile, 'optionalCall', _8285 => _8285()]);
     return source === void 0 ? "" : `${source.fileName}:${node.pos}:${node.end}`;
   }
   rustCallSitesForName(name) {
@@ -60092,16 +52260,16 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const calls = [];
     table.set(name, calls);
-    const names = _nullishCoalesce(_optionalChain([program, 'access', _8296 => _8296.getSourceFileNames, 'optionalCall', _8297 => _8297()]), () => ( []));
+    const names = _nullishCoalesce(_optionalChain([program, 'access', _8286 => _8286.getSourceFileNames, 'optionalCall', _8287 => _8287()]), () => ( []));
     for (const fileName of names) {
       const file = program.getSourceFile(fileName);
       if (file === void 0 || file.isDeclarationFile) {
         continue;
       }
       const visit = (node) => {
-        if (_optionalChain([node, 'optionalAccess', _8298 => _8298.kind]) === _ast.SyntaxKind.CallExpression) {
+        if (_optionalChain([node, 'optionalAccess', _8288 => _8288.kind]) === _ast.SyntaxKind.CallExpression) {
           const callee = node.expression;
-          const calleeName = _is.isPropertyAccessExpression.call(void 0, callee) && _optionalChain([callee, 'access', _8299 => _8299.name, 'optionalAccess', _8300 => _8300.kind]) === _ast.SyntaxKind.Identifier ? String(callee.name.text) : _is.isIdentifier.call(void 0, callee) ? String(callee.text) : void 0;
+          const calleeName = _is.isPropertyAccessExpression.call(void 0, callee) && _optionalChain([callee, 'access', _8289 => _8289.name, 'optionalAccess', _8290 => _8290.kind]) === _ast.SyntaxKind.Identifier ? String(callee.name.text) : _is.isIdentifier.call(void 0, callee) ? String(callee.text) : void 0;
           if (calleeName === name) {
             calls.push(node);
           }
@@ -60132,7 +52300,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** The native initializer text of a string-method local, else undefined. */
   rustStringMethodLocalInit(declaration) {
     const init = declaration.initializer;
-    if (_optionalChain([declaration, 'access', _8301 => _8301.name, 'optionalAccess', _8302 => _8302.kind]) !== _ast.SyntaxKind.Identifier || init === void 0 || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression))
+    if (_optionalChain([declaration, 'access', _8291 => _8291.name, 'optionalAccess', _8292 => _8292.kind]) !== _ast.SyntaxKind.Identifier || init === void 0 || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression))
       return void 0;
     const callee = init.expression;
     const method = String(callee.name.text);
@@ -60157,14 +52325,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   rustStringMethodLocalBoxUse(n) {
     const parent = n.parent;
-    return _is.isReturnStatement.call(void 0, parent) || this.rustDictWriteValue(n) || _optionalChain([parent, 'optionalAccess', _8303 => _8303.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n || _is.isCallExpression.call(void 0, parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression);
+    return _is.isReturnStatement.call(void 0, parent) || this.rustDictWriteValue(n) || _optionalChain([parent, 'optionalAccess', _8293 => _8293.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n || _is.isCallExpression.call(void 0, parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression);
   }
   // `let x = this.safeString(..)` / `safeString(..)` — the whole initializer;
   // a call whose callee already returns `Option<String>` (a native-`Str`
   // method) is the same payload without the unwrap.
   rustSafeStringLocalInitializer(declaration) {
     const initializer = declaration.initializer;
-    if (_optionalChain([declaration, 'access', _8304 => _8304.name, 'optionalAccess', _8305 => _8305.kind]) !== _ast.SyntaxKind.Identifier || _optionalChain([initializer, 'optionalAccess', _8306 => _8306.kind]) !== _ast.SyntaxKind.CallExpression) {
+    if (_optionalChain([declaration, 'access', _8294 => _8294.name, 'optionalAccess', _8295 => _8295.kind]) !== _ast.SyntaxKind.Identifier || _optionalChain([initializer, 'optionalAccess', _8296 => _8296.kind]) !== _ast.SyntaxKind.CallExpression) {
       return false;
     }
     if (this.rustNativeStrCalleeKind(initializer) === "str") {
@@ -60172,16 +52340,16 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const callee = initializer.expression;
     const helpers = _RustTranspiler.RUST_STRING_LOCAL_HELPERS;
-    if (_optionalChain([callee, 'optionalAccess', _8307 => _8307.kind]) === _ast.SyntaxKind.PropertyAccessExpression) {
-      return _optionalChain([callee, 'access', _8308 => _8308.expression, 'optionalAccess', _8309 => _8309.kind]) === _ast.SyntaxKind.ThisKeyword && helpers.has(callee.name.text);
+    if (_optionalChain([callee, 'optionalAccess', _8297 => _8297.kind]) === _ast.SyntaxKind.PropertyAccessExpression) {
+      return _optionalChain([callee, 'access', _8298 => _8298.expression, 'optionalAccess', _8299 => _8299.kind]) === _ast.SyntaxKind.ThisKeyword && helpers.has(callee.name.text);
     }
-    return _optionalChain([callee, 'optionalAccess', _8310 => _8310.kind]) === _ast.SyntaxKind.Identifier && helpers.has(callee.text);
+    return _optionalChain([callee, 'optionalAccess', _8300 => _8300.kind]) === _ast.SyntaxKind.Identifier && helpers.has(callee.text);
   }
   // The two uses that compile against an `Option<String>` local and print
   // natively: `x ==/!= null|undefined` and `x ==/!= "lit"`.
   rustStringLocalUseIsNative(node) {
     const parent = node.parent;
-    if (_optionalChain([parent, 'optionalAccess', _8311 => _8311.kind]) !== _ast.SyntaxKind.BinaryExpression) {
+    if (_optionalChain([parent, 'optionalAccess', _8301 => _8301.kind]) !== _ast.SyntaxKind.BinaryExpression) {
       return false;
     }
     const op = parent.operatorToken.kind;
@@ -60213,7 +52381,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     let literalUses = 0;
     const safe = this.rustLocalUsesAll(declaration, declaration.name.text, true, (n) => {
-      const other = _optionalChain([n, 'access', _8312 => _8312.parent, 'optionalAccess', _8313 => _8313.kind]) === _ast.SyntaxKind.BinaryExpression ? n.parent.left === n ? n.parent.right : n.parent.left : void 0;
+      const other = _optionalChain([n, 'access', _8302 => _8302.parent, 'optionalAccess', _8303 => _8303.kind]) === _ast.SyntaxKind.BinaryExpression ? n.parent.left === n ? n.parent.right : n.parent.left : void 0;
       if (other === void 0 || this.literalKindOfNode(other) !== "string" || !this.rustStringLocalUseIsNative(n))
         return false;
       literalUses++;
@@ -60246,12 +52414,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (!_RustTranspiler.RUST_SIGN_API_METHODS.has(fn.name.text) || fn.parameters.indexOf(declaration) !== 1)
       return void 0;
-    return String(_nullishCoalesce(_optionalChain([declaration, 'access', _8314 => _8314.type, 'optionalAccess', _8315 => _8315.getText, 'optionalCall', _8316 => _8316()]), () => ( ""))).replace(/\s+/g, "") === "string[]" ? declaration : void 0;
+    return String(_nullishCoalesce(_optionalChain([declaration, 'access', _8304 => _8304.type, 'optionalAccess', _8305 => _8305.getText, 'optionalCall', _8306 => _8306()]), () => ( ""))).replace(/\s+/g, "") === "string[]" ? declaration : void 0;
   }
   /** `api[N]` on a shadowed sign-api parameter: the element read the shadow prints as `api.get(N)`. */
   rustSignApiElementInit(declaration) {
     const init = declaration.initializer;
-    if (_optionalChain([declaration, 'access', _8317 => _8317.name, 'optionalAccess', _8318 => _8318.kind]) !== _ast.SyntaxKind.Identifier || init === void 0 || !_is.isElementAccessExpression.call(void 0, init))
+    if (_optionalChain([declaration, 'access', _8307 => _8307.name, 'optionalAccess', _8308 => _8308.kind]) !== _ast.SyntaxKind.Identifier || init === void 0 || !_is.isElementAccessExpression.call(void 0, init))
       return void 0;
     const key = init.argumentExpression;
     if (!_is.isNumericLiteral.call(void 0, key) || !/^\d+$/.test(String(key.text)) || !_is.isIdentifier.call(void 0, init.expression))
@@ -60263,7 +52431,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // `x.foo` / `{ foo: 1 }` — a property name is not a use of the local.
   rustIdentifierIsPropertyName(node) {
     const parent = node.parent;
-    switch (_optionalChain([parent, 'optionalAccess', _8319 => _8319.kind])) {
+    switch (_optionalChain([parent, 'optionalAccess', _8309 => _8309.kind])) {
       case _ast.SyntaxKind.PropertyAccessExpression:
       case _ast.SyntaxKind.PropertyAssignment:
       case _ast.SyntaxKind.PropertySignature:
@@ -60274,18 +52442,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   // Is this identifier occurrence bound to a typed string local?
   rustStringLocalIdentifierIsTyped(node) {
-    const checker = _optionalChain([node, 'optionalAccess', _8320 => _8320.kind]) === _ast.SyntaxKind.Identifier ? this.checkerOrUndefined() : void 0;
+    const checker = _optionalChain([node, 'optionalAccess', _8310 => _8310.kind]) === _ast.SyntaxKind.Identifier ? this.checkerOrUndefined() : void 0;
     if (checker === void 0) {
       return false;
     }
     const symbol = checker.getSymbolAtLocation(node);
     const declaration = _nullishCoalesce(_chunkCNXC7LJYcjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkCNXC7LJYcjs.symbolDeclarations.call(void 0, symbol)[0]));
-    return _optionalChain([declaration, 'optionalAccess', _8321 => _8321.kind]) === _ast.SyntaxKind.VariableDeclaration && this.rustSafeStringLocalIsTyped(declaration);
+    return _optionalChain([declaration, 'optionalAccess', _8311 => _8311.kind]) === _ast.SyntaxKind.VariableDeclaration && this.rustSafeStringLocalIsTyped(declaration);
   }
   // `let x = <bool expr>` → the printed bool expression, or undefined.
   getRustBoolLocalInitializer(declaration, printedValue) {
     const initializer = declaration.initializer;
-    if (initializer === void 0 || _optionalChain([declaration, 'access', _8322 => _8322.name, 'optionalAccess', _8323 => _8323.kind]) !== _ast.SyntaxKind.Identifier) {
+    if (initializer === void 0 || _optionalChain([declaration, 'access', _8312 => _8312.name, 'optionalAccess', _8313 => _8313.kind]) !== _ast.SyntaxKind.Identifier) {
       return void 0;
     }
     const inner = this.stripOuterParens(printedValue);
@@ -60322,7 +52490,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     let parentClass = _chunkCNXC7LJYcjs.getAllSuperTypeNodes.call(void 0, classDecl)[0];
     let ok = true;
     while (parentClass !== void 0) {
-      const parentClassDecl = _optionalChain([this, 'access', _8324 => _8324.getChecker, 'call', _8325 => _8325(), 'access', _8326 => _8326.getTypeAtLocation, 'call', _8327 => _8327(parentClass), 'optionalAccess', _8328 => _8328.getSymbol, 'call', _8329 => _8329(), 'optionalAccess', _8330 => _8330.valueDeclaration, 'optionalAccess', _8331 => _8331.resolve, 'call', _8332 => _8332()]);
+      const parentClassDecl = _optionalChain([this, 'access', _8314 => _8314.getChecker, 'call', _8315 => _8315(), 'access', _8316 => _8316.getTypeAtLocation, 'call', _8317 => _8317(parentClass), 'optionalAccess', _8318 => _8318.getSymbol, 'call', _8319 => _8319(), 'optionalAccess', _8320 => _8320.valueDeclaration, 'optionalAccess', _8321 => _8321.resolve, 'call', _8322 => _8322()]);
       if (parentClassDecl === void 0) {
         ok = false;
         break;
@@ -60377,7 +52545,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  statement is one of them (so Rust sees no `()`-valued tail the
    *  `-> Value` post-passes would have patched with `Value::Null`). */
   rustStrReturnPathsConvert(body) {
-    const last = _optionalChain([body, 'optionalAccess', _8333 => _8333.statements, 'access', _8334 => _8334[body.statements.length - 1]]);
+    const last = _optionalChain([body, 'optionalAccess', _8323 => _8323.statements, 'access', _8324 => _8324[body.statements.length - 1]]);
     if (last === void 0 || !_is.isReturnStatement.call(void 0, last)) {
       return false;
     }
@@ -60438,7 +52606,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       }
       this.rustCallDeclarations.set(node, declaration);
     }
-    return _optionalChain([declaration, 'optionalAccess', _8335 => _8335.kind]) === _ast.SyntaxKind.MethodDeclaration ? this.rustNativeStrReturnKind(declaration) : void 0;
+    return _optionalChain([declaration, 'optionalAccess', _8325 => _8325.kind]) === _ast.SyntaxKind.MethodDeclaration ? this.rustNativeStrReturnKind(declaration) : void 0;
   }
   /** `Option<String>` → `Value` (exact inverse of the return conversion). The operand is already a
    *  typed `String`, so the conversion is the standard `From` impl — no `|__s|` closure between them. */
@@ -60475,7 +52643,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  source file, keyed by local name in declaration order. */
   rustDeclaredDictLocals() {
     const src = this.getSrc();
-    if (_optionalChain([this, 'access', _8336 => _8336.declaredDictLocalsCache, 'optionalAccess', _8337 => _8337.src]) !== src) {
+    if (_optionalChain([this, 'access', _8326 => _8326.declaredDictLocalsCache, 'optionalAccess', _8327 => _8327.src]) !== src) {
       let table;
       try {
         table = this.collectRustDeclaredDictLocals(src);
@@ -60491,7 +52659,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  Accepts the receiver node of the helper call (identifier, `x['k']` chain,
    *  `this.x` chain) or the declaration itself. */
   rustDeclaredLocalTypeResolver(node) {
-    return _optionalChain([this, 'access', _8338 => _8338.rustDeclaredLocalEntry, 'call', _8339 => _8339(node), 'optionalAccess', _8340 => _8340.kind]);
+    return _optionalChain([this, 'access', _8328 => _8328.rustDeclaredLocalEntry, 'call', _8329 => _8329(node), 'optionalAccess', _8330 => _8330.kind]);
   }
   /** The table entry a use site resolves to (the declaration whose binding the
    *  use refers to, proven), or undefined. */
@@ -60542,7 +52710,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** Binding symbol of an identifier, or undefined when the checker cannot
    *  answer (ByContent probes without a class context, for instance). */
   rustSymbolOf(node) {
-    return _optionalChain([this, 'access', _8341 => _8341.checkerOrUndefined, 'call', _8342 => _8342(), 'optionalAccess', _8343 => _8343.getSymbolAtLocation, 'call', _8344 => _8344(node)]);
+    return _optionalChain([this, 'access', _8331 => _8331.checkerOrUndefined, 'call', _8332 => _8332(), 'optionalAccess', _8333 => _8333.getSymbolAtLocation, 'call', _8334 => _8334(node)]);
   }
   /** True when this identifier is a use of the given declaration's binding.
    *  Without a checker answer the callers stay conservative (reject). */
@@ -60835,11 +53003,11 @@ ${classMethods}
       this.rustProHandlerShadowParam = shadowPlan.param;
     const statements = node.body.statements.map((s) => this.printNode(s, identation + 2)).join("\n");
     this.rustProHandlerShadowParam = savedShadowParam;
-    const body = blockOpen + optionalInits + shadows + (_nullishCoalesce(_optionalChain([shadowPlan, 'optionalAccess', _8345 => _8345.lines]), () => ( ""))) + statements + blockClose;
+    const body = blockOpen + optionalInits + shadows + (_nullishCoalesce(_optionalChain([shadowPlan, 'optionalAccess', _8335 => _8335.lines]), () => ( ""))) + statements + blockClose;
     return this.printNodeCommentsIfAny(node, identation, methodDef + body);
   }
   printFunctionDefinition(node, identation) {
-    const name = _nullishCoalesce(_optionalChain([node, 'access', _8346 => _8346.name, 'optionalAccess', _8347 => _8347.text]), () => ( ""));
+    const name = _nullishCoalesce(_optionalChain([node, 'access', _8336 => _8336.name, 'optionalAccess', _8337 => _8337.text]), () => ( ""));
     const params = node.parameters;
     const parsedArgs = params.map((p) => `${this.printNode(p.name, 0)}: Value`).join(", ");
     const returnType = this.printRustFunctionType(node);
@@ -60862,6 +53030,18 @@ ${classMethods}
     }
     const expr = node.expression;
     const args = node.arguments;
+    if (expr.expression.kind === _ast.SyntaxKind.ThisKeyword && !this.methodSignatures[expr.name.text]) {
+      return _nullishCoalesce(this.printRuntimeVariadicCall(node, "self", expr.name.text, identation), () => ( this.printTranspiledVariadicCall(node, "self", expr.name.text, identation)));
+    }
+    if (_is.isIdentifier.call(void 0, expr.expression) && this.rustCallsTestExchange(node)) {
+      return this.printRuntimeVariadicCall(node, this.printNode(expr.expression, 0), expr.name.text, identation, true, true);
+    }
+    if (_is.isIdentifier.call(void 0, expr.expression) && this.rustCallsRuntimeHandle(node)) {
+      return this.printRuntimeVariadicCall(node, this.printNode(expr.expression, 0), expr.name.text, identation, false, true);
+    }
+    if (expr.expression.kind === _ast.SyntaxKind.SuperKeyword && /ts[\/]src[\/]pro[\/]/.test(String(node.getSourceFile().fileName))) {
+      return this.printRuntimeVariadicCall(node, "super", expr.name.text, identation);
+    }
     if (expr.expression.kind === _ast.SyntaxKind.ThisKeyword) {
       const methodName = expr.name.text;
       const sig = this.methodSignatures[methodName];
@@ -60875,6 +53055,112 @@ ${classMethods}
       }
     }
     return void 0;
+  }
+  /** A bare local name (not `self`/`true`/`false`): passing it by value needs a `.clone()`. */
+  static isBareLocal(text) {
+    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(text) && text !== "self" && text !== "true" && text !== "false";
+  }
+  /** `text.clone()` for a bare local, else `otherwise` (default: the text itself). */
+  static cloneIfBareLocal(text, otherwise = text) {
+    return _RustTranspiler.isBareLocal(text) ? `${text}.clone()` : otherwise;
+  }
+  printRuntimeVariadicCall(node, receiver, methodName, identation, testCrate = false, handleProven = false) {
+    if (!handleProven && !this.rustCalleeIsRuntimeBase(node))
+      return void 0;
+    const name = this.toSnakeCaseName(methodName);
+    const fixed = testCrate && _RustTranspiler.RUST_TEST_VARIADIC_ARITY.has(name) ? _RustTranspiler.RUST_TEST_VARIADIC_ARITY.get(name) : _RustTranspiler.RUST_RUNTIME_VARIADIC_ARITY.get(name);
+    if (fixed === void 0)
+      return void 0;
+    return this.printOptionalArgsSliceCall(node, receiver, methodName, fixed, identation);
+  }
+  // `receiver.m(a0..a{fixed-1}, &[rest])`; bare locals are cloned so a local reused by a later call is not moved.
+  printOptionalArgsSliceCall(node, receiver, methodName, fixed, identation) {
+    const args = this.rustPrintedArgs(node, identation);
+    if (args.length < fixed || args.length > 0 && args[args.length - 1].startsWith("&["))
+      return void 0;
+    const cloned = args.map((a) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(a) && a !== "self" ? `${a}.clone()` : a);
+    return `${receiver}.${methodName}(${cloned.slice(0, fixed).join(", ")}${fixed > 0 ? ", " : ""}&[${cloned.slice(fixed).join(", ")}])`;
+  }
+  // The callee is declared in `ts/src/base/` (a base method, or a base field aliasing a helper);
+  // a same-named method of the class itself keeps its own signature.
+  rustCalleeIsRuntimeBase(node) {
+    let decl;
+    try {
+      decl = _chunkCNXC7LJYcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(node));
+    } catch (e) {
+      return false;
+    }
+    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8338 => _8338.resolve, 'optionalCall', _8339 => _8339()]), () => ( decl));
+    if (decl !== void 0 && /ts[\/]src[\/]base[\/]/.test(String(_nullishCoalesce(_optionalChain([decl, 'access', _8340 => _8340.getSourceFile, 'optionalCall', _8341 => _8341(), 'optionalAccess', _8342 => _8342.fileName]), () => ( "")))))
+      return true;
+    const symbol = this.getChecker().getSymbolAtLocation(_nullishCoalesce(node.expression.name, () => ( node.expression)));
+    const member = symbol === void 0 ? void 0 : _optionalChain([_chunkCNXC7LJYcjs.symbolDeclarations.call(void 0, symbol), 'optionalAccess', _8343 => _8343[0]]);
+    return member !== void 0 && /ts[\/]src[\/]base[\/]/.test(String(_nullishCoalesce(_optionalChain([member, 'access', _8344 => _8344.getSourceFile, 'optionalCall', _8345 => _8345(), 'optionalAccess', _8346 => _8346.fileName]), () => ( ""))));
+  }
+  // `exchange.m(..)` in a test source, the receiver typed as the base `Exchange` class.
+  rustCallsTestExchange(node) {
+    if (!/ts[\/]src[\/]test[\/]/.test(String(node.getSourceFile().fileName)))
+      return false;
+    const type = this.getChecker().getTypeAtLocation(node.expression.expression);
+    if (type !== void 0 && (type.flags & _sync.TypeFlags.Any) !== 0)
+      return node.expression.expression.text === "exchange";
+    const symbol = _optionalChain([type, 'optionalAccess', _8347 => _8347.getSymbol, 'optionalCall', _8348 => _8348()]);
+    const decl = symbol === void 0 ? void 0 : _optionalChain([_chunkCNXC7LJYcjs.symbolDeclarations.call(void 0, symbol), 'optionalAccess', _8349 => _8349[0]]);
+    return decl !== void 0 && /ts[\/]src[\/]base[\/]Exchange\.ts$/.test(String(_nullishCoalesce(_optionalChain([decl, 'access', _8350 => _8350.getSourceFile, 'optionalCall', _8351 => _8351(), 'optionalAccess', _8352 => _8352.fileName]), () => ( ""))));
+  }
+  // `client.resolve(..)`, `future.resolve(..)`, `method.call(..)`: the callee is a ws handle method,
+  // `Function.call`, or a handle method on an `any` value; all are hand-written over `&[Value]`.
+  rustCallsRuntimeHandle(node) {
+    let decl;
+    try {
+      decl = _chunkCNXC7LJYcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(node));
+    } catch (e) {
+      return false;
+    }
+    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8353 => _8353.resolve, 'optionalCall', _8354 => _8354()]), () => ( decl));
+    if (decl === void 0)
+      return ["resolve", "reject", "future", "call"].includes(node.expression.name.text) && (this.getChecker().getTypeAtLocation(node.expression.expression).flags & _sync.TypeFlags.Any) !== 0;
+    const file = String(_nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8355 => _8355.getSourceFile, 'optionalCall', _8356 => _8356(), 'optionalAccess', _8357 => _8357.fileName]), () => ( "")));
+    if (/ts[\/]src[\/]base[\/]ws[\/](?:Client|Future)\.ts$/.test(file))
+      return true;
+    return node.expression.name.text === "call" && /lib\.[\w.]*\.d\.ts$/.test(file);
+  }
+  // A call to a transpiled method with optional parameters: its Rust signature is the required
+  // parameters plus `optional_args: &[Value]`. Hand-written base helpers keep their own ABI.
+  printTranspiledVariadicCall(node, receiver, methodName, identation) {
+    const params = this.rustTranspiledCalleeParams(node, methodName);
+    if (params === void 0 || params.some((p) => p.dotDotDotToken !== void 0))
+      return void 0;
+    const required = params.filter((p) => !p.initializer && !p.questionToken).length;
+    return required === params.length ? void 0 : this.printOptionalArgsSliceCall(node, receiver, methodName, required, identation);
+  }
+  // Parameters of the method body a call binds to (the implementation behind an overload), when that
+  // body is transpiled: any exchange class, or base `Exchange` below its transpile marker.
+  rustTranspiledCalleeParams(node, methodName) {
+    let decl;
+    try {
+      decl = _chunkCNXC7LJYcjs.signatureDeclaration.call(void 0, this.getChecker().getResolvedSignature(node));
+    } catch (e) {
+      return void 0;
+    }
+    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8358 => _8358.resolve, 'optionalCall', _8359 => _8359()]), () => ( decl));
+    if (decl === void 0 || decl.kind !== _ast.SyntaxKind.MethodDeclaration)
+      return void 0;
+    if (decl.body === void 0) {
+      decl = _optionalChain([decl, 'access', _8360 => _8360.parent, 'optionalAccess', _8361 => _8361.members, 'optionalAccess', _8362 => _8362.find, 'call', _8363 => _8363((m) => m.kind === _ast.SyntaxKind.MethodDeclaration && m.body !== void 0 && _optionalChain([m, 'access', _8364 => _8364.name, 'optionalAccess', _8365 => _8365.text]) === methodName)]);
+      if (decl === void 0)
+        return void 0;
+    }
+    const sourceFile = _optionalChain([decl, 'access', _8366 => _8366.getSourceFile, 'optionalCall', _8367 => _8367()]);
+    const file = String(_nullishCoalesce(_optionalChain([sourceFile, 'optionalAccess', _8368 => _8368.fileName]), () => ( "")));
+    if (!/ts[\/]src[\/]/.test(file) || /ts[\/]src[\/](?:test|abstract|base[\/]ws)[\/]/.test(file))
+      return void 0;
+    if (/ts[\/]src[\/]base[\/]/.test(file)) {
+      const marker = String(_nullishCoalesce(sourceFile.text, () => ( ""))).indexOf("METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT");
+      if (marker < 0 || decl.end < marker)
+        return void 0;
+    }
+    return Array.from(decl.parameters);
   }
   // Arguments in a native-`bool` parameter slot print a Rust `bool`, carrying
   // the truthiness the callee's own use sites applied.
@@ -60954,6 +53240,9 @@ ${classMethods}
         return `println_val(${argParts})`;
       }
     }
+    const dynamicCall = this.printDynamicSelfCall(node, identation);
+    if (dynamicCall !== void 0)
+      return dynamicCall;
     const outOfOrder = this.printOutOfOrderCallExpressionIfAny(node, identation);
     if (outOfOrder) {
       return this.rustBoxNativeStrCallIfNeeded(node, outOfOrder);
@@ -60973,13 +53262,34 @@ ${classMethods}
     }
     return this.rustBoxNativeStrCallIfNeeded(node, super.printCallExpression(node, identation));
   }
+  // `this[name]` with a variable key: `self.prop(&name)` resolves the field by name at runtime.
+  // Write targets and call callees keep their own forms.
+  printDynamicSelfRead(node) {
+    if (node.expression.kind !== _ast.SyntaxKind.ThisKeyword || !_is.isIdentifier.call(void 0, node.argumentExpression))
+      return void 0;
+    const parent = node.parent;
+    if (_is.isCallExpression.call(void 0, parent) && parent.expression === node)
+      return void 0;
+    if (_is.isBinaryExpression.call(void 0, parent) && parent.left === node && parent.operatorToken.kind >= _ast.SyntaxKind.FirstAssignment && parent.operatorToken.kind <= _ast.SyntaxKind.LastAssignment)
+      return void 0;
+    return `self.prop(&${this.printNode(node.argumentExpression, 0)})`;
+  }
+  // `this[name](args)`: `call_dynamic_checked` snake-cases the name, dispatches, and raises
+  // NotSupported when no arm or implicit endpoint matches. Args are cloned: pagination reuses them.
+  printDynamicSelfCall(node, identation) {
+    const callee = node.expression;
+    if (!_is.isElementAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword || !_is.isIdentifier.call(void 0, callee.argumentExpression))
+      return void 0;
+    const args = Array.from(node.arguments).map((a) => `(${this.printNode(a, identation).trim()}).clone()`);
+    return `self.call_dynamic_checked(${this.printNode(callee.argumentExpression, 0)}.clone(), vec![${args.join(", ")}])`;
+  }
   printThisKeyword(node, identation) {
     return "self";
   }
   // A string literal prints as the bare `"lit"` (`&str` — no String
   // allocation); a checker-proven string drops the redundant `Value::Str` box.
   printErrorConstructorArg(name, index, node, identation) {
-    const kind = _optionalChain([_RustTranspiler, 'access', _8348 => _8348.RUST_ERROR_CONSTRUCTOR_ARGS, 'access', _8349 => _8349[name], 'optionalAccess', _8350 => _8350[index]]);
+    const kind = _optionalChain([_RustTranspiler, 'access', _8369 => _8369.RUST_ERROR_CONSTRUCTOR_ARGS, 'access', _8370 => _8370[name], 'optionalAccess', _8371 => _8371[index]]);
     if (kind === void 0) {
       return this.printNode(node, identation);
     }
@@ -60999,7 +53309,7 @@ ${classMethods}
     return this.toSnakeCaseName(className);
   }
   printNewExpression(node, identation) {
-    let expression = _optionalChain([node, 'access', _8351 => _8351.expression, 'optionalAccess', _8352 => _8352.text]);
+    let expression = _optionalChain([node, 'access', _8372 => _8372.expression, 'optionalAccess', _8373 => _8373.text]);
     expression = expression ? expression : this.printNode(node.expression);
     if (expression === "Error") {
       const args2 = node.arguments.map((a) => this.printNode(a, identation)).join(", ");
@@ -61015,7 +53325,7 @@ ${classMethods}
     if (dynamicClass !== void 0) {
       const args2 = node.arguments.map((a) => this.printNode(a, identation)).join(", ");
       const built = `crate::exchange_errors::create_error(&crate::runtime::stringify_param(&(${dynamicClass})), &crate::runtime::stringify_param(&(${args2})))`;
-      return _optionalChain([node, 'access', _8353 => _8353.parent, 'optionalAccess', _8354 => _8354.kind]) === _ast.SyntaxKind.ThrowStatement ? built : `Value::from(${built})`;
+      return _optionalChain([node, 'access', _8374 => _8374.parent, 'optionalAccess', _8375 => _8375.kind]) === _ast.SyntaxKind.ThrowStatement ? built : `Value::from(${built})`;
     }
     const args = typeof expression === "string" ? node.arguments.map((a, index) => this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation)).join(", ") : node.arguments.map((a) => this.printNode(a, identation)).join(", ");
     return `${expression}::new(${args})`;
@@ -61025,7 +53335,7 @@ ${classMethods}
     const target = node.expression;
     if (_is.isElementAccessExpression.call(void 0, target))
       return this.printNode(target, 0).trim();
-    if (!_is.isIdentifier.call(void 0, target) || _optionalChain([node, 'access', _8355 => _8355.parent, 'optionalAccess', _8356 => _8356.kind]) !== _ast.SyntaxKind.ThrowStatement)
+    if (!_is.isIdentifier.call(void 0, target) || _optionalChain([node, 'access', _8376 => _8376.parent, 'optionalAccess', _8377 => _8377.kind]) !== _ast.SyntaxKind.ThrowStatement)
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(target);
     if (declaration === void 0 || !(_is.isVariableDeclaration.call(void 0, declaration) || _is.isParameterDeclaration.call(void 0, declaration) || _is.isBindingElement.call(void 0, declaration)))
@@ -61096,19 +53406,19 @@ ${classMethods}
     return String(text).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
   }
   getCheckedTypeOf(node) {
-    return _optionalChain([this, 'access', _8357 => _8357.checkerOrUndefined, 'call', _8358 => _8358(), 'optionalAccess', _8359 => _8359.getTypeAtLocation, 'call', _8360 => _8360(node)]);
+    return _optionalChain([this, 'access', _8378 => _8378.checkerOrUndefined, 'call', _8379 => _8379(), 'optionalAccess', _8380 => _8380.getTypeAtLocation, 'call', _8381 => _8381(node)]);
   }
   typeSymbolOf(type) {
     if (type === void 0 || type === null)
       return void 0;
-    return _nullishCoalesce(_optionalChain([type, 'optionalAccess', _8361 => _8361.getSymbol, 'call', _8362 => _8362()]), () => ( _optionalChain([type, 'optionalAccess', _8363 => _8363.getAliasSymbol, 'call', _8364 => _8364()])));
+    return _nullishCoalesce(_optionalChain([type, 'optionalAccess', _8382 => _8382.getSymbol, 'call', _8383 => _8383()]), () => ( _optionalChain([type, 'optionalAccess', _8384 => _8384.getAliasSymbol, 'call', _8385 => _8385()])));
   }
   /** Types declared outside ts/src (Date, Response, Array, Promise, …) are never
    *  backed by a plain `Value` map in the rust port. */
   isLibDeclaredType(type) {
     const declarations = _chunkCNXC7LJYcjs.symbolDeclarations.call(void 0, this.typeSymbolOf(type));
     return declarations.some((d) => {
-      const file = _nullishCoalesce(_optionalChain([d, 'optionalAccess', _8365 => _8365.getSourceFile, 'optionalCall', _8366 => _8366(), 'optionalAccess', _8367 => _8367.fileName]), () => ( ""));
+      const file = _nullishCoalesce(_optionalChain([d, 'optionalAccess', _8386 => _8386.getSourceFile, 'optionalCall', _8387 => _8387(), 'optionalAccess', _8388 => _8388.fileName]), () => ( ""));
       return /[\\/]lib\.[^\\/]*\.d\.ts$/.test(file) || /[\\/]node_modules[\\/]typescript[\\/]/.test(file);
     });
   }
@@ -61119,7 +53429,7 @@ ${classMethods}
       return (_nullishCoalesce(_chunkCNXC7LJYcjs.typeParts.call(void 0, type), () => ( []))).some((member) => this.isClassInstanceType(member));
     }
     const symbol = _nullishCoalesce(this.typeSymbolOf(type), () => ( type.getAliasSymbol()));
-    if (_optionalChain([symbol, 'optionalAccess', _8368 => _8368.flags]) & _sync.SymbolFlags.Class)
+    if (_optionalChain([symbol, 'optionalAccess', _8389 => _8389.flags]) & _sync.SymbolFlags.Class)
       return true;
     const declarations = _chunkCNXC7LJYcjs.symbolDeclarations.call(void 0, symbol);
     return declarations.some((d) => _is.isClassDeclaration.call(void 0, d) || _is.isClassExpression.call(void 0, d));
@@ -61131,13 +53441,13 @@ ${classMethods}
   isProvenListType(type) {
     if (!(type.flags & _sync.TypeFlags.Object))
       return false;
-    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkCNXC7LJYcjs.typeTarget.call(void 0, type), 'optionalAccess', _8369 => _8369.objectFlags]), () => ( 0)));
+    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkCNXC7LJYcjs.typeTarget.call(void 0, type), 'optionalAccess', _8390 => _8390.objectFlags]), () => ( 0)));
     if (objectFlags & _sync.ObjectFlags.Tuple)
       return true;
-    const name = _optionalChain([this, 'access', _8370 => _8370.typeSymbolOf, 'call', _8371 => _8371(type), 'optionalAccess', _8372 => _8372.name]);
+    const name = _optionalChain([this, 'access', _8391 => _8391.typeSymbolOf, 'call', _8392 => _8392(type), 'optionalAccess', _8393 => _8393.name]);
     if (name === "Array" || name === "ReadonlyArray")
       return true;
-    const targetName = _optionalChain([this, 'access', _8373 => _8373.typeSymbolOf, 'call', _8374 => _8374(_chunkCNXC7LJYcjs.typeTarget.call(void 0, type)), 'optionalAccess', _8375 => _8375.name]);
+    const targetName = _optionalChain([this, 'access', _8394 => _8394.typeSymbolOf, 'call', _8395 => _8395(_chunkCNXC7LJYcjs.typeTarget.call(void 0, type)), 'optionalAccess', _8396 => _8396.name]);
     return targetName === "Array" || targetName === "ReadonlyArray";
   }
   /** True only for object types the rust port represents as `Value::Dict`
@@ -61268,12 +53578,12 @@ ${classMethods}
   printNativeBookFieldRead(receiverText, receiverNode, keyText, viaStore = false) {
     if (!_RustTranspiler.RUST_ORDERBOOK_READ_FIELDS.has(keyText))
       return void 0;
-    if (/\/test\//.test(String(_nullishCoalesce(_optionalChain([receiverNode, 'access', _8376 => _8376.getSourceFile, 'optionalCall', _8377 => _8377(), 'access', _8378 => _8378.fileName]), () => ( "")))))
+    if (/\/test\//.test(String(_nullishCoalesce(_optionalChain([receiverNode, 'access', _8397 => _8397.getSourceFile, 'optionalCall', _8398 => _8398(), 'access', _8399 => _8399.fileName]), () => ( "")))))
       return void 0;
     if (this.rustDictBearerDeclaration(receiverNode) !== void 0 || this.rustMapParamDeclaration(receiverNode) !== void 0)
       return void 0;
     const type = this.typeOfNodeIfAny(receiverNode);
-    const name = type === void 0 ? void 0 : _optionalChain([this, 'access', _8379 => _8379.typeSymbolOf, 'call', _8380 => _8380(type), 'optionalAccess', _8381 => _8381.name]);
+    const name = type === void 0 ? void 0 : _optionalChain([this, 'access', _8400 => _8400.typeSymbolOf, 'call', _8401 => _8401(type), 'optionalAccess', _8402 => _8402.name]);
     if ((name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) && !(viaStore && this.rustReadsOrderbooksStore(receiverNode)))
       return void 0;
     return `${receiverText}.book_field("${keyText}")`;
@@ -61355,7 +53665,7 @@ ${classMethods}
     let statement = declaration;
     while (statement !== void 0 && !_is.isStatement.call(void 0, statement))
       statement = statement.parent;
-    const siblings = _nullishCoalesce(_optionalChain([statement, 'optionalAccess', _8382 => _8382.parent, 'optionalAccess', _8383 => _8383.statements]), () => ( []));
+    const siblings = _nullishCoalesce(_optionalChain([statement, 'optionalAccess', _8403 => _8403.parent, 'optionalAccess', _8404 => _8404.statements]), () => ( []));
     const at = siblings.indexOf(statement);
     if (at < 0 || at + 1 >= siblings.length)
       return false;
@@ -61434,7 +53744,7 @@ ${classMethods}
     return strings > 0;
   }
   /** The local/parameter proof of a dynamic-key map read: a parameter whose
-   *  annotation proves a plain dict (B-25), or any local whose checker type
+   *  annotation proves a plain dict, or any local whose checker type
    *  proves a plain map and which nothing in the enclosing function
    *  re-assigns (D2). Returns the proven declaration. */
   rustProvenDynamicMapReceiver(node) {
@@ -61607,17 +53917,17 @@ ${classMethods}
       return false;
     if (!(type.flags & _sync.TypeFlags.Object))
       return false;
-    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkCNXC7LJYcjs.typeTarget.call(void 0, type), 'optionalAccess', _8384 => _8384.objectFlags]), () => ( 0)));
+    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkCNXC7LJYcjs.typeTarget.call(void 0, type), 'optionalAccess', _8405 => _8405.objectFlags]), () => ( 0)));
     if (objectFlags & _sync.ObjectFlags.Tuple)
       return false;
     if (this.hasCallableShape(type))
       return false;
     if (this.isClassInstanceType(type))
       return false;
-    const name = _optionalChain([this, 'access', _8385 => _8385.typeSymbolOf, 'call', _8386 => _8386(type), 'optionalAccess', _8387 => _8387.name]);
+    const name = _optionalChain([this, 'access', _8406 => _8406.typeSymbolOf, 'call', _8407 => _8407(type), 'optionalAccess', _8408 => _8408.name]);
     if (name === "Array" || name === "ReadonlyArray")
       return true;
-    const targetName = _optionalChain([this, 'access', _8388 => _8388.typeSymbolOf, 'call', _8389 => _8389(_chunkCNXC7LJYcjs.typeTarget.call(void 0, type)), 'optionalAccess', _8390 => _8390.name]);
+    const targetName = _optionalChain([this, 'access', _8409 => _8409.typeSymbolOf, 'call', _8410 => _8410(_chunkCNXC7LJYcjs.typeTarget.call(void 0, type)), 'optionalAccess', _8411 => _8411.name]);
     return targetName === "Array" || targetName === "ReadonlyArray";
   }
   /** Every reference to the parameter must be a printable read, and at least
@@ -61856,7 +54166,7 @@ ${classMethods}
     this.rustWalkScope(scope, (n) => {
       if (_is.isCallExpression.call(void 0, n) && n.arguments.length > 0 && _is.isIdentifier.call(void 0, n.arguments[0]) && n.arguments[0].text === name) {
         const callee = n.expression;
-        written = merging.includes(_is.isPropertyAccessExpression.call(void 0, callee) ? String(_nullishCoalesce(_optionalChain([callee, 'access', _8391 => _8391.name, 'optionalAccess', _8392 => _8392.text]), () => ( ""))) : _is.isIdentifier.call(void 0, callee) ? String(_nullishCoalesce(callee.text, () => ( ""))) : "");
+        written = merging.includes(_is.isPropertyAccessExpression.call(void 0, callee) ? String(_nullishCoalesce(_optionalChain([callee, 'access', _8412 => _8412.name, 'optionalAccess', _8413 => _8413.text]), () => ( ""))) : _is.isIdentifier.call(void 0, callee) ? String(_nullishCoalesce(callee.text, () => ( ""))) : "");
         if (written)
           return RUST_WALK_STOP;
       }
@@ -61907,7 +54217,7 @@ ${ind}let ${view}: &${map} = &${arc};
       return void 0;
     if (callee.expression.kind !== _ast.SyntaxKind.ThisKeyword)
       return void 0;
-    const kind = _RustTranspiler.PRO_HANDLER_SHADOW_SAFE_READS[String(_nullishCoalesce(_optionalChain([callee, 'access', _8393 => _8393.name, 'optionalAccess', _8394 => _8394.text]), () => ( "")))];
+    const kind = _RustTranspiler.PRO_HANDLER_SHADOW_SAFE_READS[String(_nullishCoalesce(_optionalChain([callee, 'access', _8414 => _8414.name, 'optionalAccess', _8415 => _8415.text]), () => ( "")))];
     if (kind === void 0)
       return void 0;
     const args = _nullishCoalesce(node.arguments, () => ( []));
@@ -62199,7 +54509,7 @@ ${ind}let ${view}: &${map} = &${arc};
       return void 0;
     const recv = this.printNode(baseExpr, 0).trim();
     const trimmed = rhs.trim();
-    const value = this.rustPrintedBoolArg(rhs) ? `Value::Bool(${rhs})` : /^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed) && trimmed !== "self" && trimmed !== "true" && trimmed !== "false" ? `${trimmed}.clone()` : rhs;
+    const value = this.rustPrintedBoolArg(rhs) ? `Value::Bool(${rhs})` : _RustTranspiler.cloneIfBareLocal(trimmed, rhs);
     return `if let Value::Dict(__r08a) = &mut ${recv} { let __r08e = std::sync::Arc::make_mut(__r08a).entry(${k1}.to_string()).or_insert(Value::Null); if let Value::Dict(__r08b) = __r08e { std::sync::Arc::make_mut(__r08b).insert(${k2}.to_string(), ${value}); } }`;
   }
   /** `x[k] = f(x[k])`: the read sits in the value of an assignment the printer writes as a native
@@ -62218,7 +54528,7 @@ ${ind}let ${view}: &${map} = &${arc};
       if (_is.isBinaryExpression.call(void 0, current) && current.operatorToken.kind === _ast.SyntaxKind.EqualsToken && this.isNodeInsideNode(chain, current.right) && this.rootPlaceText(current.left) === root)
         host = current;
     }
-    if (host === void 0 || !_is.isElementAccessExpression.call(void 0, host.left) || _optionalChain([host, 'access', _8395 => _8395.parent, 'optionalAccess', _8396 => _8396.kind]) !== _ast.SyntaxKind.ExpressionStatement || !this.isNativeAccessPositionSafe(chain, host))
+    if (host === void 0 || !_is.isElementAccessExpression.call(void 0, host.left) || _optionalChain([host, 'access', _8416 => _8416.parent, 'optionalAccess', _8417 => _8417.kind]) !== _ast.SyntaxKind.ExpressionStatement || !this.isNativeAccessPositionSafe(chain, host))
       return void 0;
     const base = host.left.expression;
     const keyNode = host.left.argumentExpression;
@@ -62437,7 +54747,7 @@ ${ind}let ${view}: &${map} = &${arc};
     const declaration = this.rustDeclarationOfIdentifier(node);
     if (declaration === void 0)
       return false;
-    const name = _optionalChain([declaration, 'access', _8397 => _8397.name, 'optionalAccess', _8398 => _8398.text]);
+    const name = _optionalChain([declaration, 'access', _8418 => _8418.name, 'optionalAccess', _8419 => _8419.text]);
     if (typeof name !== "string")
       return false;
     if (_is.isParameterDeclaration.call(void 0, declaration)) {
@@ -62465,7 +54775,7 @@ ${ind}let ${view}: &${map} = &${arc};
     const symbol = this.typeSymbolOf(type);
     if (symbol === void 0 || symbol.name !== "OrderBook" || (symbol.flags & _sync.SymbolFlags.Class) === 0)
       return false;
-    const members = (_nullishCoalesce(_optionalChain([type, 'access', _8399 => _8399.getProperties, 'optionalCall', _8400 => _8400()]), () => ( []))).map((p) => String(p.name));
+    const members = (_nullishCoalesce(_optionalChain([type, 'access', _8420 => _8420.getProperties, 'optionalCall', _8421 => _8421()]), () => ( []))).map((p) => String(p.name));
     return members.includes("bids") && members.includes("asks");
   }
   /** Types the port stores as a plain `Value::Dict`: a checker-proven map, or the
@@ -62648,6 +54958,9 @@ ${ind}let ${view}: &${map} = &${arc};
     const special = this.printElementAccessExpressionExceptionIfAny(node);
     if (special)
       return special;
+    const dynamicField = this.printDynamicSelfRead(node);
+    if (dynamicField !== void 0)
+      return dynamicField;
     const parent = node.parent;
     const keepGetValue = parent !== void 0 && (_is.isBinaryExpression.call(void 0, parent) && parent.left === node && parent.operatorToken.kind >= _ast.SyntaxKind.FirstAssignment && parent.operatorToken.kind <= _ast.SyntaxKind.LastAssignment || (_is.isPropertyAccessExpression.call(void 0, parent) || _is.isCallExpression.call(void 0, parent)) && parent.expression === node);
     const chain = [];
@@ -62677,7 +54990,7 @@ ${ind}let ${view}: &${map} = &${arc};
     let condStr = node.condition ? this.printComparisonInBooleanContext(node.condition, 0).trim() : "true";
     const incrStr = node.incrementor ? this.printNode(node.incrementor, 0) : "";
     const counter = incrStr !== "" ? this.rustIntCounter(node, initStr, incrStr) : void 0;
-    const bound = _optionalChain([counter, 'optionalAccess', _8401 => _8401.sign]) === "+" ? this.rustI64CounterPlan(node, counter, condStr) : void 0;
+    const bound = _optionalChain([counter, 'optionalAccess', _8422 => _8422.sign]) === "+" ? this.rustI64CounterPlan(node, counter, condStr) : void 0;
     const printBody = () => node.statement.statements.map((s) => this.printNode(s, identation + 1)).join("\n");
     let statements;
     let typed = false;
@@ -62731,10 +55044,10 @@ ${idn}}`;
   rustIntCounter(node, initStr, incrStr) {
     const init = node.initializer;
     const incr = node.incrementor;
-    if (_optionalChain([init, 'optionalAccess', _8402 => _8402.kind]) !== _ast.SyntaxKind.VariableDeclarationList || init.declarations.length !== 1 || !(init.flags & _ast.NodeFlags.BlockScoped))
+    if (_optionalChain([init, 'optionalAccess', _8423 => _8423.kind]) !== _ast.SyntaxKind.VariableDeclarationList || init.declarations.length !== 1 || !(init.flags & _ast.NodeFlags.BlockScoped))
       return void 0;
     const declaration = init.declarations[0];
-    if (!_is.isIdentifier.call(void 0, declaration.name) || /\/test\//.test(String(_nullishCoalesce(_optionalChain([node, 'access', _8403 => _8403.getSourceFile, 'optionalCall', _8404 => _8404(), 'access', _8405 => _8405.fileName]), () => ( "")))))
+    if (!_is.isIdentifier.call(void 0, declaration.name) || /\/test\//.test(String(_nullishCoalesce(_optionalChain([node, 'access', _8424 => _8424.getSourceFile, 'optionalCall', _8425 => _8425(), 'access', _8426 => _8426.fileName]), () => ( "")))))
       return void 0;
     const name = String(declaration.name.text);
     const printed = new RegExp(`^let mut ${name}: Value = Value::Int\\((-?\\d+)\\);$`).exec(initStr.trim());
@@ -62854,7 +55167,7 @@ ${idn}}`;
     }
     return `${idn}is_true(&${this.printTruthyArgument(expression)})`;
   }
-  // B-26: `is_true(&(…)` on an operand the printer already emits as a native Rust `bool` (payload
+  // `is_true(&(…)` on an operand the printer already emits as a native Rust `bool` (payload
   // compares, `matches!` predicates, `&&`/`||` of those) is the identity (`IsTruthy for bool`);
   // native text has no helper token, so it is emitted only in a bool slot (`isBareBoolEmissionSafe`).
   /** Bool-slot text of a parenthesised native comparison/predicate, else undefined. */
@@ -62962,9 +55275,9 @@ ${idn}}`;
     const ifBody = this.printBlock(node.thenStatement, identation, elseStatement !== void 0);
     const head = node.parent.kind === _ast.SyntaxKind.IfStatement ? "else if " : `${this.getIden(identation)}if `;
     let ifComplete = `${head}${this.printCondition(node.expression, 0)}${ifBody}`;
-    if (_optionalChain([elseStatement, 'optionalAccess', _8406 => _8406.kind]) === _ast.SyntaxKind.Block) {
+    if (_optionalChain([elseStatement, 'optionalAccess', _8427 => _8427.kind]) === _ast.SyntaxKind.Block) {
       ifComplete += ` else${this.printBlock(elseStatement, identation)}`;
-    } else if (_optionalChain([elseStatement, 'optionalAccess', _8407 => _8407.kind]) === _ast.SyntaxKind.IfStatement) {
+    } else if (_optionalChain([elseStatement, 'optionalAccess', _8428 => _8428.kind]) === _ast.SyntaxKind.IfStatement) {
       ifComplete += " " + this.printIfStatement(elseStatement, identation);
     }
     return this.printNodeCommentsIfAny(node, identation, ifComplete);
@@ -63063,13 +55376,11 @@ ${this.getIden(identation)}}`;
     const trimmed = text.trim();
     if (_RustTranspiler.isBoolValueExpression(trimmed))
       return `Value::Bool(${trimmed})`;
-    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed) && trimmed !== "self" && trimmed !== "true" && trimmed !== "false")
-      return `${trimmed}.clone()`;
-    return text;
+    return _RustTranspiler.cloneIfBareLocal(trimmed, text);
   }
   // Built-in method call overrides
   printArrayIsArrayCall(node, identation, parsedArg = void 0) {
-    return `Value::Bool(${_nullishCoalesce(this.nativeValuePredicateText("array", _optionalChain([node, 'optionalAccess', _8408 => _8408.arguments, 'optionalAccess', _8409 => _8409[0]]), parsedArg), () => ( `is_array(&${parsedArg})`))})`;
+    return `Value::Bool(${_nullishCoalesce(this.nativeValuePredicateText("array", _optionalChain([node, 'optionalAccess', _8429 => _8429.arguments, 'optionalAccess', _8430 => _8430[0]]), parsedArg), () => ( `is_array(&${parsedArg})`))})`;
   }
   printObjectKeysCall(node, identation, parsedArg = void 0) {
     return _nullishCoalesce(_nullishCoalesce(_nullishCoalesce(_nullishCoalesce(this.bearerEnum(node, "keys"), () => ( this.provenDictFieldEnum(node, parsedArg, "keys"))), () => ( this.predictionEnum(node, parsedArg, "keys"))), () => ( this.baseEnum(node, parsedArg, "keys"))), () => ( `object_keys(&${parsedArg})`));
@@ -63089,7 +55400,7 @@ ${this.getIden(identation)}}`;
   }
   /** The single plain-identifier argument of `Object.keys/values(…)`. */
   bearerEnumArg(node) {
-    if (!_is.isCallExpression.call(void 0, node) || (_nullishCoalesce(_optionalChain([node, 'access', _8410 => _8410.arguments, 'optionalAccess', _8411 => _8411.length]), () => ( 0))) !== 1)
+    if (!_is.isCallExpression.call(void 0, node) || (_nullishCoalesce(_optionalChain([node, 'access', _8431 => _8431.arguments, 'optionalAccess', _8432 => _8432.length]), () => ( 0))) !== 1)
       return void 0;
     const callee = node.expression;
     if (!_is.isPropertyAccessExpression.call(void 0, callee) || !_is.isIdentifier.call(void 0, callee.expression) || String(callee.expression.text) !== "Object" || String(callee.name.text) !== "keys" && String(callee.name.text) !== "values") {
@@ -63207,7 +55518,7 @@ ${this.getIden(identation)}}`;
   }
   printTryStatement(node, identation) {
     const body = (block) => block.statements.map((s) => this.printNode(s, identation + 1)).join("\n");
-    const rawName = _optionalChain([node, 'access', _8412 => _8412.catchClause, 'optionalAccess', _8413 => _8413.variableDeclaration, 'optionalAccess', _8414 => _8414.name, 'optionalAccess', _8415 => _8415.text]);
+    const rawName = _optionalChain([node, 'access', _8433 => _8433.catchClause, 'optionalAccess', _8434 => _8434.variableDeclaration, 'optionalAccess', _8435 => _8435.name, 'optionalAccess', _8436 => _8436.text]);
     const iden = this.getIden(identation);
     const errorName = rawName ? `_${rawName}` : "_e";
     const head = rawName !== void 0 && this.rustCatchBindingIsRead(node.catchClause.block, rawName) ? `if let Err(${errorName}) = _try_result {` : "if _try_result.is_err() {";
@@ -63259,10 +55570,7 @@ ${iden}}`;
     if (new RegExp(`\\b${name}\\b`).test(value)) {
       return `{ let __be_tmp = ${value}; ${insert("__be_tmp")} }`;
     }
-    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value) && value !== "self" && value !== "true" && value !== "false") {
-      return insert(`${value}.clone()`);
-    }
-    return insert(value);
+    return insert(_RustTranspiler.cloneIfBareLocal(value));
   }
   /** A local (single binding in its function, no closure capture of a write)
    *  whose declaration and every write is a plain-dict source or nullish. A
@@ -63278,7 +55586,7 @@ ${iden}}`;
     if (declaration.kind === _ast.SyntaxKind.BindingElement) {
       return this.rustTupleBindingStaysPlain(ident, declaration, depth);
     }
-    if (!_is.isVariableDeclaration.call(void 0, declaration) || _optionalChain([declaration, 'access', _8416 => _8416.name, 'optionalAccess', _8417 => _8417.kind]) !== _ast.SyntaxKind.Identifier) {
+    if (!_is.isVariableDeclaration.call(void 0, declaration) || _optionalChain([declaration, 'access', _8437 => _8437.name, 'optionalAccess', _8438 => _8438.kind]) !== _ast.SyntaxKind.Identifier) {
       return false;
     }
     const scope = this.rustEnclosingFunction(declaration);
@@ -63321,8 +55629,8 @@ ${iden}}`;
    *  plain local: element 0 is `r` handed back, and `x` is never re-written. */
   rustTupleBindingStaysPlain(ident, element, depth) {
     const pattern = element.parent;
-    const declaration = _optionalChain([pattern, 'optionalAccess', _8418 => _8418.parent]);
-    if (_optionalChain([pattern, 'optionalAccess', _8419 => _8419.kind]) !== _ast.SyntaxKind.ArrayBindingPattern || declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || ![0, 1].includes(pattern.elements.indexOf(element)) || _optionalChain([element, 'access', _8420 => _8420.name, 'optionalAccess', _8421 => _8421.kind]) !== _ast.SyntaxKind.Identifier || element.initializer !== void 0 || element.dotDotDotToken !== void 0) {
+    const declaration = _optionalChain([pattern, 'optionalAccess', _8439 => _8439.parent]);
+    if (_optionalChain([pattern, 'optionalAccess', _8440 => _8440.kind]) !== _ast.SyntaxKind.ArrayBindingPattern || declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || ![0, 1].includes(pattern.elements.indexOf(element)) || _optionalChain([element, 'access', _8441 => _8441.name, 'optionalAccess', _8442 => _8442.kind]) !== _ast.SyntaxKind.Identifier || element.initializer !== void 0 || element.dotDotDotToken !== void 0) {
       return false;
     }
     if (pattern.elements.indexOf(element) === 1 ? !this.paramsSlot(declaration.initializer, void 0, depth) : !this.rustTupleHeadIsPlain(declaration.initializer, void 0, depth)) {
@@ -63368,9 +55676,9 @@ ${iden}}`;
     }
     if ((parent.kind === _ast.SyntaxKind.PropertyAssignment || parent.kind === _ast.SyntaxKind.ShorthandPropertyAssignment) && !(parent.kind === _ast.SyntaxKind.PropertyAssignment && parent.initializer !== target)) {
       let literal = parent.parent;
-      while (_optionalChain([literal, 'optionalAccess', _8422 => _8422.parent]) !== void 0 && (_is.isParenthesizedExpression.call(void 0, literal.parent) || _is.isAsExpression.call(void 0, literal.parent)))
+      while (_optionalChain([literal, 'optionalAccess', _8443 => _8443.parent]) !== void 0 && (_is.isParenthesizedExpression.call(void 0, literal.parent) || _is.isAsExpression.call(void 0, literal.parent)))
         literal = literal.parent;
-      if (_optionalChain([literal, 'optionalAccess', _8423 => _8423.parent]) === void 0 || _is.isVariableDeclaration.call(void 0, literal.parent))
+      if (_optionalChain([literal, 'optionalAccess', _8444 => _8444.parent]) === void 0 || _is.isVariableDeclaration.call(void 0, literal.parent))
         return false;
     }
     if (parent.kind === _ast.SyntaxKind.PrefixUnaryExpression || parent.kind === _ast.SyntaxKind.PostfixUnaryExpression || parent.kind === _ast.SyntaxKind.DeleteExpression || (_is.isForOfStatement.call(void 0, parent) || _is.isForInStatement.call(void 0, parent)) && parent.initializer === target) {
@@ -63405,7 +55713,7 @@ ${iden}}`;
     } catch (e) {
       return false;
     }
-    if (_optionalChain([declaration, 'optionalAccess', _8424 => _8424.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body === void 0 || declaration.getSourceFile() !== call.getSourceFile()) {
+    if (_optionalChain([declaration, 'optionalAccess', _8445 => _8445.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body === void 0 || declaration.getSourceFile() !== call.getSourceFile()) {
       return false;
     }
     let plain = true;
@@ -63417,8 +55725,8 @@ ${iden}}`;
         return;
       returns++;
       const tuple = this.rustStripWrappers(n.expression);
-      const head = _optionalChain([tuple, 'optionalAccess', _8425 => _8425.kind]) === _ast.SyntaxKind.ArrayLiteralExpression ? this.rustStripWrappers(tuple.elements[0]) : void 0;
-      const param = head !== void 0 && _is.isIdentifier.call(void 0, head) ? declaration.parameters.findIndex((p) => _optionalChain([p, 'access', _8426 => _8426.name, 'optionalAccess', _8427 => _8427.kind]) === _ast.SyntaxKind.Identifier && String(p.name.text) === String(head.text)) : -1;
+      const head = _optionalChain([tuple, 'optionalAccess', _8446 => _8446.kind]) === _ast.SyntaxKind.ArrayLiteralExpression ? this.rustStripWrappers(tuple.elements[0]) : void 0;
+      const param = head !== void 0 && _is.isIdentifier.call(void 0, head) ? declaration.parameters.findIndex((p) => _optionalChain([p, 'access', _8447 => _8447.name, 'optionalAccess', _8448 => _8448.kind]) === _ast.SyntaxKind.Identifier && String(p.name.text) === String(head.text)) : -1;
       const ok = head !== void 0 && (this.rustPlainDictLiteral(head) || (param >= 0 ? this.rustSymbolOf(head) === this.rustSymbolOf(declaration.parameters[param].name) && argPlain(param) && this.rustParamUnassigned(declaration, String(head.text)) : _is.isIdentifier.call(void 0, head) && this.rustLocalStaysPlain(head, depth + 1)));
       if (!ok) {
         plain = false;
@@ -63519,7 +55827,7 @@ ${iden}}`;
     return this.rustDictRead(receiverText, keyText, receiverNode);
   }
   rustVecLocalIsTyped(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8428 => _8428.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _8449 => _8449.kind]) !== _ast.SyntaxKind.VariableDeclaration)
       return false;
     let decision = this.rustVecLocalDecisions.get(declaration);
     if (decision === void 0) {
@@ -63531,23 +55839,23 @@ ${iden}}`;
   }
   rustVecLocalIsTypedUncached(declaration) {
     const init = declaration.initializer;
-    if (_optionalChain([declaration, 'access', _8429 => _8429.name, 'optionalAccess', _8430 => _8430.kind]) !== _ast.SyntaxKind.Identifier || init === void 0 || !_is.isArrayLiteralExpression.call(void 0, init) || init.elements.some((element) => element.kind === _ast.SyntaxKind.SpreadElement))
+    if (_optionalChain([declaration, 'access', _8450 => _8450.name, 'optionalAccess', _8451 => _8451.kind]) !== _ast.SyntaxKind.Identifier || init === void 0 || !_is.isArrayLiteralExpression.call(void 0, init) || init.elements.some((element) => element.kind === _ast.SyntaxKind.SpreadElement))
       return false;
     const checker = this.checkerOrUndefined();
-    const type = _optionalChain([checker, 'optionalAccess', _8431 => _8431.getTypeAtLocation, 'call', _8432 => _8432(declaration.name)]);
+    const type = _optionalChain([checker, 'optionalAccess', _8452 => _8452.getTypeAtLocation, 'call', _8453 => _8453(declaration.name)]);
     if (type === void 0 || !checker.isArrayType(type))
       return false;
     const name = String(declaration.name.text);
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || _is.isSourceFile.call(void 0, fn))
       return false;
-    const source = _optionalChain([declaration, 'access', _8433 => _8433.getSourceFile, 'optionalCall', _8434 => _8434(), 'optionalAccess', _8435 => _8435.fileName]);
+    const source = _optionalChain([declaration, 'access', _8454 => _8454.getSourceFile, 'optionalCall', _8455 => _8455(), 'optionalAccess', _8456 => _8456.fileName]);
     if (typeof source === "string" && /\/test\//.test(source))
       return false;
     let pushes = 0;
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       const parent = n.parent;
-      if (_is.isPropertyAccessExpression.call(void 0, parent) && parent.name === n || _optionalChain([parent, 'optionalAccess', _8436 => _8436.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.name === n)
+      if (_is.isPropertyAccessExpression.call(void 0, parent) && parent.name === n || _optionalChain([parent, 'optionalAccess', _8457 => _8457.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.name === n)
         return true;
       if (this.rustEnclosingFunction(n) !== fn)
         return false;
@@ -63555,7 +55863,7 @@ ${iden}}`;
         const member = String(parent.name.text);
         if (member === "length") {
           const up = parent.parent;
-          return !(_is.isBinaryExpression.call(void 0, up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind)) && _optionalChain([up, 'optionalAccess', _8437 => _8437.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([up, 'optionalAccess', _8438 => _8438.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression;
+          return !(_is.isBinaryExpression.call(void 0, up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind)) && _optionalChain([up, 'optionalAccess', _8458 => _8458.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([up, 'optionalAccess', _8459 => _8459.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression;
         }
         if (member === "push" && this.rustVecPushShape(parent.parent, name)) {
           pushes++;
@@ -63570,19 +55878,18 @@ ${iden}}`;
   /** The array literal's native `vec![..]`: elements are `Value`s taken by move, so a
    *  bare local is cloned (the boxed form relied on ccxt's argument-clone pass). */
   rustVecNativeLiteral(declaration) {
-    const initializer = _optionalChain([declaration, 'optionalAccess', _8439 => _8439.initializer]);
+    const initializer = _optionalChain([declaration, 'optionalAccess', _8460 => _8460.initializer]);
     if (!_is.isArrayLiteralExpression.call(void 0, initializer) || initializer.elements.length === 0)
       return void 0;
     const parts = initializer.elements.map((element) => {
       const text = this.printNode(element, 0).trim();
-      const bare = /^[A-Za-z_][A-Za-z0-9_]*$/.test(text) && text !== "self" && text !== "true" && text !== "false";
-      return bare ? `${text}.clone()` : text;
+      return _RustTranspiler.cloneIfBareLocal(text);
     });
     return `vec![${parts.join(", ")}]`;
   }
   // `x.push(v);` as a whole statement, one non-spread argument not naming `x`.
   rustVecPushShape(call, name) {
-    if (!_is.isCallExpression.call(void 0, call) || call.arguments.length !== 1 || _optionalChain([call, 'access', _8440 => _8440.parent, 'optionalAccess', _8441 => _8441.kind]) !== _ast.SyntaxKind.ExpressionStatement)
+    if (!_is.isCallExpression.call(void 0, call) || call.arguments.length !== 1 || _optionalChain([call, 'access', _8461 => _8461.parent, 'optionalAccess', _8462 => _8462.kind]) !== _ast.SyntaxKind.ExpressionStatement)
       return false;
     const arg = call.arguments[0];
     if (arg.kind === _ast.SyntaxKind.SpreadElement)
@@ -63595,7 +55902,7 @@ ${iden}}`;
         mentions = true;
         return;
       }
-      _optionalChain([m, 'access', _8442 => _8442.forEachChild, 'optionalCall', _8443 => _8443(visit)]);
+      _optionalChain([m, 'access', _8463 => _8463.forEachChild, 'optionalCall', _8464 => _8464(visit)]);
     };
     visit(arg);
     return !mentions;
@@ -63607,7 +55914,7 @@ ${iden}}`;
     if (_is.isReturnStatement.call(void 0, parent))
       return true;
     const isArg = _is.isCallExpression.call(void 0, parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression);
-    const isProp = _optionalChain([parent, 'optionalAccess', _8444 => _8444.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n;
+    const isProp = _optionalChain([parent, 'optionalAccess', _8465 => _8465.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n;
     if (!isArg && !isProp)
       return false;
     let statement = parent;
@@ -63621,7 +55928,7 @@ ${iden}}`;
     const visit = (m) => {
       if (m.kind === _ast.SyntaxKind.Identifier && m.text === name)
         count++;
-      _optionalChain([m, 'access', _8445 => _8445.forEachChild, 'optionalCall', _8446 => _8446(visit)]);
+      _optionalChain([m, 'access', _8466 => _8466.forEachChild, 'optionalCall', _8467 => _8467(visit)]);
     };
     visit(statement);
     return count === 1;
@@ -63638,8 +55945,8 @@ ${iden}}`;
           return false;
       }
     }
-    const end = _nullishCoalesce(_optionalChain([n, 'access', _8447 => _8447.getEnd, 'optionalCall', _8448 => _8448()]), () => ( n.end));
-    return !this.rustScopeNameNodes(fn, name).some((m) => m.kind === _ast.SyntaxKind.Identifier && m !== n && (_nullishCoalesce(_optionalChain([m, 'access', _8449 => _8449.getStart, 'optionalCall', _8450 => _8450()]), () => ( m.pos))) >= end && !this.rustIdentifierIsPropertyName(m));
+    const end = _nullishCoalesce(_optionalChain([n, 'access', _8468 => _8468.getEnd, 'optionalCall', _8469 => _8469()]), () => ( n.end));
+    return !this.rustScopeNameNodes(fn, name).some((m) => m.kind === _ast.SyntaxKind.Identifier && m !== n && (_nullishCoalesce(_optionalChain([m, 'access', _8470 => _8470.getStart, 'optionalCall', _8471 => _8471()]), () => ( m.pos))) >= end && !this.rustIdentifierIsPropertyName(m));
   }
   // `this.m(..)` / `super.m(..)` / `Promise.all(..)`: every argument prints through printNode as a `Value`.
   rustVecBoxingCallee(callee) {
@@ -63651,24 +55958,24 @@ ${iden}}`;
     return receiver.kind === _ast.SyntaxKind.Identifier && receiver.text === "Promise" && String(callee.name.text) === "all";
   }
   rustVecLocalDeclarationOf(node) {
-    if (_optionalChain([node, 'optionalAccess', _8451 => _8451.kind]) !== _ast.SyntaxKind.Identifier)
+    if (_optionalChain([node, 'optionalAccess', _8472 => _8472.kind]) !== _ast.SyntaxKind.Identifier)
       return void 0;
     const checker = this.checkerOrUndefined();
-    const symbol = _optionalChain([checker, 'optionalAccess', _8452 => _8452.getSymbolAtLocation, 'call', _8453 => _8453(node)]);
+    const symbol = _optionalChain([checker, 'optionalAccess', _8473 => _8473.getSymbolAtLocation, 'call', _8474 => _8474(node)]);
     const declaration = _nullishCoalesce(_chunkCNXC7LJYcjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkCNXC7LJYcjs.symbolDeclarations.call(void 0, symbol)[0]));
     return declaration !== void 0 && declaration.name !== node && this.rustVecLocalIsTyped(declaration) ? declaration : void 0;
   }
   printRustVecPush(node, name, parsedArg) {
-    const receiver = _optionalChain([node, 'optionalAccess', _8454 => _8454.expression, 'optionalAccess', _8455 => _8455.expression]);
+    const receiver = _optionalChain([node, 'optionalAccess', _8475 => _8475.expression, 'optionalAccess', _8476 => _8476.expression]);
     if (name === void 0 || parsedArg === void 0 || this.rustVecLocalDeclarationOf(receiver) === void 0)
       return void 0;
     const arg = parsedArg.trim();
-    const value = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(arg) && arg !== "self" && arg !== "true" && arg !== "false" ? `${arg}.clone()` : arg;
+    const value = _RustTranspiler.cloneIfBareLocal(arg);
     return `${name}.push(${value})`;
   }
   transformIdentifier(node, identifier) {
     const text = super.transformIdentifier(node, identifier);
-    const parent = _optionalChain([node, 'optionalAccess', _8456 => _8456.parent]);
+    const parent = _optionalChain([node, 'optionalAccess', _8477 => _8477.parent]);
     if (this.rustI64Counters.size > 0 && this.rustI64CounterOf(node) !== void 0 && (this.rustI64BoxedUse(node) || _is.isVariableDeclaration.call(void 0, parent) && parent.initializer === node))
       return `Value::Int(${text})`;
     if (parent !== void 0 && _is.isCallExpression.call(void 0, parent) && parent.arguments.some((a) => a === node)) {
@@ -63707,7 +56014,7 @@ ${iden}}`;
     return this.rustDictLocalIsTyped(declaration) ? declaration : void 0;
   }
   rustDictLocalIsTyped(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8457 => _8457.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _8478 => _8478.kind]) !== _ast.SyntaxKind.VariableDeclaration)
       return false;
     let decision = this.rustDictBearerDecisions.get(declaration);
     if (decision === void 0) {
@@ -63723,7 +56030,7 @@ ${iden}}`;
   }
   rustDictLocalIsTypedUncached(declaration) {
     const init = declaration.initializer;
-    if (_optionalChain([declaration, 'access', _8458 => _8458.name, 'optionalAccess', _8459 => _8459.kind]) !== _ast.SyntaxKind.Identifier || init === void 0)
+    if (_optionalChain([declaration, 'access', _8479 => _8479.name, 'optionalAccess', _8480 => _8480.kind]) !== _ast.SyntaxKind.Identifier || init === void 0)
       return false;
     const literal = this.rustSkipWrappers(init);
     const produced = !_is.isObjectLiteralExpression.call(void 0, literal) && this.rustDictProducer(init);
@@ -63743,7 +56050,7 @@ ${iden}}`;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || _is.isSourceFile.call(void 0, fn))
       return false;
-    const source = _optionalChain([declaration, 'access', _8460 => _8460.getSourceFile, 'optionalCall', _8461 => _8461(), 'optionalAccess', _8462 => _8462.fileName]);
+    const source = _optionalChain([declaration, 'access', _8481 => _8481.getSourceFile, 'optionalCall', _8482 => _8482(), 'optionalAccess', _8483 => _8483.fileName]);
     if (typeof source === "string" && /\/test\//.test(source))
       return false;
     const prediction = typeof source === "string" && _RustTranspiler.RUST_PREDICTION_VENUE_FILE.test(source.replace(/\\/g, "/"));
@@ -63751,7 +56058,7 @@ ${iden}}`;
     let elementUses = 0;
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n)) {
-        return !(_optionalChain([n, 'access', _8463 => _8463.parent, 'optionalAccess', _8464 => _8464.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
+        return !(_optionalChain([n, 'access', _8484 => _8484.parent, 'optionalAccess', _8485 => _8485.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
       }
       if (!this.rustIdentifierRefersToDeclaration(n, declaration))
         return false;
@@ -63816,7 +56123,7 @@ ${iden}}`;
     if (!_is.isCallExpression.call(void 0, call))
       return false;
     const callee = call.expression;
-    if (!_is.isPropertyAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword || _optionalChain([callee, 'access', _8465 => _8465.name, 'optionalAccess', _8466 => _8466.kind]) !== _ast.SyntaxKind.Identifier)
+    if (!_is.isPropertyAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword || _optionalChain([callee, 'access', _8486 => _8486.name, 'optionalAccess', _8487 => _8487.kind]) !== _ast.SyntaxKind.Identifier)
       return false;
     const method = String(callee.name.text);
     const handle = /^handle[A-Z]/.test(method);
@@ -63857,7 +56164,7 @@ ${iden}}`;
    *  fresh map, so the local keeps its `IndexMap` type and the print clones the
    *  box out at the assignment. */
   rustProducerReuse(node) {
-    const parent = _optionalChain([node, 'optionalAccess', _8467 => _8467.parent]);
+    const parent = _optionalChain([node, 'optionalAccess', _8488 => _8488.parent]);
     if (parent === void 0 || !_is.isBinaryExpression.call(void 0, parent) || parent.left !== node)
       return false;
     return parent.operatorToken.kind === _ast.SyntaxKind.EqualsToken && this.rustDictProducer(parent.right);
@@ -63868,8 +56175,8 @@ ${iden}}`;
   rustCallBuildsContainer(call, kind, depth = 0) {
     if (depth > 2)
       return false;
-    const passCallee = _optionalChain([call, 'optionalAccess', _8468 => _8468.expression]);
-    const passMethod = _is.isPropertyAccessExpression.call(void 0, passCallee) ? String(_optionalChain([passCallee, 'access', _8469 => _8469.name, 'optionalAccess', _8470 => _8470.text])) : void 0;
+    const passCallee = _optionalChain([call, 'optionalAccess', _8489 => _8489.expression]);
+    const passMethod = _is.isPropertyAccessExpression.call(void 0, passCallee) ? String(_optionalChain([passCallee, 'access', _8490 => _8490.name, 'optionalAccess', _8491 => _8491.text])) : void 0;
     if (passMethod !== void 0 && _RustTranspiler.RUST_BUILDER_PASSTHROUGH.has(passMethod)) {
       const passArgs = _nullishCoalesce(call.arguments, () => ( []));
       if (passArgs.length === 0)
@@ -64031,7 +56338,7 @@ ${iden}}`;
    *  `this.`/`super.` call. Anything else (a free-function argument) has no box
    *  site. */
   boxSiteOk(node) {
-    const parent = _optionalChain([node, 'optionalAccess', _8471 => _8471.parent]);
+    const parent = _optionalChain([node, 'optionalAccess', _8492 => _8492.parent]);
     if (parent === void 0)
       return false;
     if (_is.isReturnStatement.call(void 0, parent) && parent.expression === node)
@@ -64041,7 +56348,7 @@ ${iden}}`;
   /** `Object.keys/values/entries`, `JSON.*`, `String(x)`, `typeof`-style readers: the printer
    *  emits them from the receiver's own text, so a bearer boxed there is a wasted clone. */
   nativeReadCallee(call) {
-    const callee = _optionalChain([call, 'optionalAccess', _8472 => _8472.expression]);
+    const callee = _optionalChain([call, 'optionalAccess', _8493 => _8493.expression]);
     const native = _RustTranspiler.NATIVE_READ_NAMESPACES;
     if (callee === void 0 || native === void 0)
       return false;
@@ -64131,10 +56438,7 @@ ${iden}}`;
       return `{ let __be_tmp = ${value}; ${name}.insert(${keyArg}, __be_tmp); }`;
     }
     const trimmed = value.trim();
-    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed) && trimmed !== "self" && trimmed !== "true" && trimmed !== "false") {
-      return `${name}.insert(${keyArg}, ${trimmed}.clone())`;
-    }
-    return `${name}.insert(${keyArg}, ${value})`;
+    return `${name}.insert(${keyArg}, ${_RustTranspiler.cloneIfBareLocal(trimmed, value)})`;
   }
   // ── chained writes on a one-level bearer ──────────────────────────────────
   // `x[k1][k2] = v` roots at a plain `IndexMap<String, Value>`: the bucket is the map's own
@@ -64200,10 +56504,10 @@ ${iden}}`;
       return void 0;
     if (!this.rustKeyIsProvenString(key))
       return this.stringifiedWriteKeyArg(key, text);
-    const boxed2 = text.match(/^Value::Str\((.+)\)$/s);
-    if (boxed2 === null)
+    const boxed = text.match(/^Value::Str\((.+)\)$/s);
+    if (boxed === null)
       return this.stringifiedWriteKeyArg(key, text);
-    const payload = boxed2[1].trim().replace(/\.into\(\)$/, "").trim();
+    const payload = boxed[1].trim().replace(/\.into\(\)$/, "").trim();
     if (/^format!\(/s.test(payload))
       return payload;
     if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(payload) && payload !== "self")
@@ -64303,7 +56607,7 @@ ${iden}}`;
    *  (`{ x }`) is out: the literal printer clones the name without passing
    *  through the identifier printer, so the box could not be emitted. */
   rustBearerLiteralMove(node) {
-    const parent = _optionalChain([node, 'optionalAccess', _8473 => _8473.parent]);
+    const parent = _optionalChain([node, 'optionalAccess', _8494 => _8494.parent]);
     if (parent === void 0 || parent.kind !== _ast.SyntaxKind.PropertyAssignment || parent.initializer !== node)
       return false;
     return _is.isObjectLiteralExpression.call(void 0, parent.parent);
@@ -64319,7 +56623,7 @@ ${iden}}`;
     return kind === false ? void 0 : kind;
   }
   rustReadBearerKindOfDeclaration(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8474 => _8474.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _8495 => _8495.kind]) !== _ast.SyntaxKind.VariableDeclaration)
       return false;
     let decision = this.rustReadBearerDecisions.get(declaration);
     if (decision === void 0) {
@@ -64335,10 +56639,10 @@ ${iden}}`;
   }
   rustReadBearerKindUncached(declaration) {
     const init = this.rustSkipWrappers(declaration.initializer);
-    if (_optionalChain([declaration, 'access', _8475 => _8475.name, 'optionalAccess', _8476 => _8476.kind]) !== _ast.SyntaxKind.Identifier || init === void 0)
+    if (_optionalChain([declaration, 'access', _8496 => _8496.name, 'optionalAccess', _8497 => _8497.kind]) !== _ast.SyntaxKind.Identifier || init === void 0)
       return false;
     const list = declaration.parent;
-    if (_optionalChain([list, 'optionalAccess', _8477 => _8477.kind]) !== _ast.SyntaxKind.VariableDeclarationList || _optionalChain([list, 'access', _8478 => _8478.declarations, 'optionalAccess', _8479 => _8479.length]) !== 1)
+    if (_optionalChain([list, 'optionalAccess', _8498 => _8498.kind]) !== _ast.SyntaxKind.VariableDeclarationList || _optionalChain([list, 'access', _8499 => _8499.declarations, 'optionalAccess', _8500 => _8500.length]) !== 1)
       return false;
     if (_is.isArrayLiteralExpression.call(void 0, init) || _is.isObjectLiteralExpression.call(void 0, init))
       return false;
@@ -64349,14 +56653,14 @@ ${iden}}`;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || _is.isSourceFile.call(void 0, fn))
       return false;
-    const source = _optionalChain([declaration, 'access', _8480 => _8480.getSourceFile, 'optionalCall', _8481 => _8481(), 'optionalAccess', _8482 => _8482.fileName]);
+    const source = _optionalChain([declaration, 'access', _8501 => _8501.getSourceFile, 'optionalCall', _8502 => _8502(), 'optionalAccess', _8503 => _8503.fileName]);
     if (typeof source === "string" && /\/test\//.test(source))
       return false;
     if (this.rustLocalIsReassigned(declaration, name))
       return false;
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n)) {
-        return !(_optionalChain([n, 'access', _8483 => _8483.parent, 'optionalAccess', _8484 => _8484.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
+        return !(_optionalChain([n, 'access', _8504 => _8504.parent, 'optionalAccess', _8505 => _8505.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
       }
       if (!this.rustIdentifierRefersToDeclaration(n, declaration))
         return false;
@@ -64368,7 +56672,7 @@ ${iden}}`;
       }
       if (kind === "list" && _is.isPropertyAccessExpression.call(void 0, parent) && parent.expression === n && String(parent.name.text) === "length") {
         const up = parent.parent;
-        return _optionalChain([up, 'optionalAccess', _8485 => _8485.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([up, 'optionalAccess', _8486 => _8486.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression && !(_is.isBinaryExpression.call(void 0, up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind));
+        return _optionalChain([up, 'optionalAccess', _8506 => _8506.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([up, 'optionalAccess', _8507 => _8507.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression && !(_is.isBinaryExpression.call(void 0, up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind));
       }
       return false;
     });
@@ -64506,7 +56810,7 @@ ${iden}}`;
     return this.rustNestedDictLocalIsTyped(declaration) ? declaration : void 0;
   }
   rustNestedDictLocalIsTyped(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8487 => _8487.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _8508 => _8508.kind]) !== _ast.SyntaxKind.VariableDeclaration)
       return false;
     let decision = this.rustNestedBearerDecisions.get(declaration);
     if (decision === void 0) {
@@ -64546,9 +56850,9 @@ ${iden}}`;
     return literal;
   }
   rustNestedDictLocalIsTypedUncached(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8488 => _8488.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _8509 => _8509.kind]) !== _ast.SyntaxKind.VariableDeclaration)
       return false;
-    if (_optionalChain([declaration, 'access', _8489 => _8489.name, 'optionalAccess', _8490 => _8490.kind]) !== _ast.SyntaxKind.Identifier || declaration.initializer === void 0)
+    if (_optionalChain([declaration, 'access', _8510 => _8510.name, 'optionalAccess', _8511 => _8511.kind]) !== _ast.SyntaxKind.Identifier || declaration.initializer === void 0)
       return false;
     if (this.rustNestedDictLiteral(declaration.initializer) === void 0)
       return false;
@@ -64556,14 +56860,14 @@ ${iden}}`;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || _is.isSourceFile.call(void 0, fn))
       return false;
-    const source = _optionalChain([declaration, 'access', _8491 => _8491.getSourceFile, 'optionalCall', _8492 => _8492(), 'optionalAccess', _8493 => _8493.fileName]);
+    const source = _optionalChain([declaration, 'access', _8512 => _8512.getSourceFile, 'optionalCall', _8513 => _8513(), 'optionalAccess', _8514 => _8514.fileName]);
     if (typeof source === "string" && /\/test\//.test(source))
       return false;
     const escapes = [];
     let nestedUses = 0;
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n)) {
-        return !(_optionalChain([n, 'access', _8494 => _8494.parent, 'optionalAccess', _8495 => _8495.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
+        return !(_optionalChain([n, 'access', _8515 => _8515.parent, 'optionalAccess', _8516 => _8516.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
       }
       if (!this.rustIdentifierRefersToDeclaration(n, declaration))
         return false;
@@ -64584,7 +56888,7 @@ ${iden}}`;
         nestedUses += 1;
         return true;
       }
-      if (parent.kind === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n && _optionalChain([parent, 'access', _8496 => _8496.parent, 'optionalAccess', _8497 => _8497.parent]) !== void 0 && _is.isObjectLiteralExpression.call(void 0, parent.parent)) {
+      if (parent.kind === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n && _optionalChain([parent, 'access', _8517 => _8517.parent, 'optionalAccess', _8518 => _8518.parent]) !== void 0 && _is.isObjectLiteralExpression.call(void 0, parent.parent)) {
         escapes.push(n);
         return true;
       }
@@ -64629,7 +56933,7 @@ ${iden}}`;
     if (write) {
       if (up.operatorToken.kind !== _ast.SyntaxKind.EqualsToken)
         return false;
-      return !new RegExp(`\\b${name}\\b`).test(String(_nullishCoalesce(_optionalChain([up, 'access', _8498 => _8498.right, 'access', _8499 => _8499.getText, 'optionalCall', _8500 => _8500()]), () => ( ""))));
+      return !new RegExp(`\\b${name}\\b`).test(String(_nullishCoalesce(_optionalChain([up, 'access', _8519 => _8519.right, 'access', _8520 => _8520.getText, 'optionalCall', _8521 => _8521()]), () => ( ""))));
     }
     if (up !== void 0 && (_is.isDeleteExpression.call(void 0, up) || _is.isCallExpression.call(void 0, up) && up.expression === root || up.kind === _ast.SyntaxKind.PrefixUnaryExpression || up.kind === _ast.SyntaxKind.PostfixUnaryExpression))
       return false;
@@ -64685,7 +56989,7 @@ ${this.getIden(identation)}}`;
     if (k1 === void 0 || k2 === void 0)
       return void 0;
     const value = this.rustPrintedBoolArg(valueText) ? `Value::Bool(${valueText})` : valueText.trim();
-    const arg = /^[A-Za-z_][A-Za-z0-9_]*$/.test(value) && value !== "self" && value !== "true" && value !== "false" ? `${value}.clone()` : value;
+    const arg = _RustTranspiler.cloneIfBareLocal(value);
     return `${name}.entry(${k1}).or_default().insert(${k2}, ${arg})`;
   }
   /** `x[k1] = {}` on a two-level bearer: seed the bucket, no box, no helper. */
@@ -64714,8 +57018,8 @@ ${this.getIden(identation)}}`;
   // Native IndexMap ops for `k in X`, `delete X[k]`, `Object.keys/values(X)`.
   /** Source path of a node (forward slashes). */
   provenDictFieldPath(node) {
-    const src = _optionalChain([node, 'optionalAccess', _8501 => _8501.getSourceFile, 'optionalCall', _8502 => _8502()]);
-    return typeof _optionalChain([src, 'optionalAccess', _8503 => _8503.fileName]) === "string" ? src.fileName.replace(/\\/g, "/") : "";
+    const src = _optionalChain([node, 'optionalAccess', _8522 => _8522.getSourceFile, 'optionalCall', _8523 => _8523()]);
+    return typeof _optionalChain([src, 'optionalAccess', _8524 => _8524.fileName]) === "string" ? src.fileName.replace(/\\/g, "/") : "";
   }
   /** Test sources keep the helpers: tests-pipeline post-passes match `in_op(` text. */
   isTestSource(node) {
@@ -64738,14 +57042,14 @@ ${this.getIden(identation)}}`;
   /** `delete X[k]` on a receiver the native-insert proof admits (never a ws
    *  subscriptions snapshot, so `try_ws_subs_remove` is dead): `shift_remove`. */
   provenDictFieldDelete(node) {
-    const target = _optionalChain([node, 'optionalAccess', _8504 => _8504.expression]);
+    const target = _optionalChain([node, 'optionalAccess', _8525 => _8525.expression]);
     if (target === void 0 || !_is.isElementAccessExpression.call(void 0, target) || this.isTestSource(node)) {
       return void 0;
     }
     const base = target.expression;
     const receiver = this.rustNativeInsertReceiver(base);
     const restTier = /\/ts\/src\/[^/]+\.ts$/.test(this.provenDictFieldPath(node));
-    const declaredLocal = !_optionalChain([receiver, 'optionalAccess', _8505 => _8505.isField]) && this.rustDeclaredLocalEntry(base) !== void 0 && !this.rustLocalInitReadsTaggedContainer(base);
+    const declaredLocal = !_optionalChain([receiver, 'optionalAccess', _8526 => _8526.isField]) && this.rustDeclaredLocalEntry(base) !== void 0 && !this.rustLocalInitReadsTaggedContainer(base);
     if (receiver !== void 0 && !receiver.isField && !restTier && receiver.plain !== true && !declaredLocal) {
       return void 0;
     }
@@ -64794,7 +57098,7 @@ ${this.getIden(identation)}}`;
   /** `Object.keys/values(X)` in REST-tier sources (`ts/src/<id>.ts`): no ws client
    *  there, so X never carries the `__ws_subs_url`/`__ws_sub_ref` tags the helper filters. */
   provenDictFieldEnum(node, parsedArg, kind) {
-    const arg = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _8506 => _8506.arguments, 'optionalAccess', _8507 => _8507[0]]));
+    const arg = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _8527 => _8527.arguments, 'optionalAccess', _8528 => _8528[0]]));
     if (arg === void 0 || parsedArg === void 0 || !(/\/ts\/src\/[^/]+\.ts$/.test(this.provenDictFieldPath(node)) || this.untaggedDictField(arg)) || !(_is.isIdentifier.call(void 0, arg) || _is.isPropertyAccessExpression.call(void 0, arg) || _is.isElementAccessExpression.call(void 0, arg) || _is.isCallExpression.call(void 0, arg)) || this.rustParamShadowOf(arg) !== void 0) {
       return void 0;
     }
@@ -64838,7 +57142,7 @@ ${this.getIden(identation)}}`;
   // `x.toUpperCase()` / `x.toLowerCase()`: the helper's `Value::Str` arm, Null otherwise.
   printNativeStringCase(node, receiverText, method) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _8508 => _8508.arguments, 'optionalAccess', _8509 => _8509.length]), () => ( 0))) !== 0)
+    if (receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _8529 => _8529.arguments, 'optionalAccess', _8530 => _8530.length]), () => ( 0))) !== 0)
       return void 0;
     return this.rustStrCaseConvert(receiver, method);
   }
@@ -64852,7 +57156,7 @@ ${this.getIden(identation)}}`;
   // `x.startsWith("lit")` / `x.endsWith("lit")` → a bool (false for a non-`Str` receiver).
   printNativeStringAffixTest(node, receiverText, method) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || _optionalChain([node, 'access', _8510 => _8510.arguments, 'optionalAccess', _8511 => _8511.length]) !== 1)
+    if (receiver === void 0 || _optionalChain([node, 'access', _8531 => _8531.arguments, 'optionalAccess', _8532 => _8532.length]) !== 1)
       return void 0;
     const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
     if (literal === void 0)
@@ -64864,7 +57168,7 @@ ${this.getIden(identation)}}`;
   // `x.split("lit")`: an array of the parts, the empty array for a non-`Str` receiver.
   printNativeStringSplit(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || _optionalChain([node, 'access', _8512 => _8512.arguments, 'optionalAccess', _8513 => _8513.length]) !== 1)
+    if (receiver === void 0 || _optionalChain([node, 'access', _8533 => _8533.arguments, 'optionalAccess', _8534 => _8534.length]) !== 1)
       return void 0;
     const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
     if (literal === void 0)
@@ -64877,7 +57181,7 @@ ${this.getIden(identation)}}`;
   // `x.replace("a", "b")`: the helper replaces every occurrence (`str::replace`), else the receiver.
   printNativeStringReplace(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || _optionalChain([node, 'access', _8514 => _8514.arguments, 'optionalAccess', _8515 => _8515.length]) !== 2)
+    if (receiver === void 0 || _optionalChain([node, 'access', _8535 => _8535.arguments, 'optionalAccess', _8536 => _8536.length]) !== 2)
       return void 0;
     const from = this.rustNativeStringLiteralArg(node.arguments[0]);
     const to = this.rustNativeStringLiteralArg(node.arguments[1]);
@@ -64889,7 +57193,7 @@ ${this.getIden(identation)}}`;
   // truncates, which is the helper's arm for a one-char pad.
   printNativeStringPadStart(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || _optionalChain([node, 'access', _8516 => _8516.arguments, 'optionalAccess', _8517 => _8517.length]) !== 2)
+    if (receiver === void 0 || _optionalChain([node, 'access', _8537 => _8537.arguments, 'optionalAccess', _8538 => _8538.length]) !== 2)
       return void 0;
     const width = this.rustSliceLiteralBound(node.arguments[0]);
     const pad = node.arguments[1];
@@ -64903,7 +57207,7 @@ ${this.getIden(identation)}}`;
   // `repeat(need)` of a one-char pad, which `format!` width reproduces exactly.
   printNativeStringPadEnd(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || _optionalChain([node, 'access', _8518 => _8518.arguments, 'optionalAccess', _8519 => _8519.length]) !== 2)
+    if (receiver === void 0 || _optionalChain([node, 'access', _8539 => _8539.arguments, 'optionalAccess', _8540 => _8540.length]) !== 2)
       return void 0;
     const width = this.rustSliceLiteralBound(node.arguments[0]);
     const pad = node.arguments[1];
@@ -64920,7 +57224,7 @@ ${this.getIden(identation)}}`;
   printNativeToFixed(node, receiverText) {
     if (node === void 0 || !_is.isCallExpression.call(void 0, node) || !_is.isPropertyAccessExpression.call(void 0, node.expression))
       return void 0;
-    if (_optionalChain([node, 'access', _8520 => _8520.arguments, 'optionalAccess', _8521 => _8521.length]) !== 1)
+    if (_optionalChain([node, 'access', _8541 => _8541.arguments, 'optionalAccess', _8542 => _8542.length]) !== 1)
       return void 0;
     if (this.primitiveKindOfType(this.typeOfNodeIfAny(node.expression.expression)) !== "number")
       return void 0;
@@ -64935,7 +57239,7 @@ ${this.getIden(identation)}}`;
   // `x.indexOf(y)` with a proven-string needle: `-1` when either side is not a `Str` (byte index).
   printNativeStringIndexOfString(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || _optionalChain([node, 'access', _8522 => _8522.arguments, 'optionalAccess', _8523 => _8523.length]) !== 1)
+    if (receiver === void 0 || _optionalChain([node, 'access', _8543 => _8543.arguments, 'optionalAccess', _8544 => _8544.length]) !== 1)
       return void 0;
     const needle = node.arguments[0];
     if (!_is.isIdentifier.call(void 0, needle) || this.primitiveKindOfType(this.typeOfNodeIfAny(needle)) !== "string")
@@ -64950,7 +57254,7 @@ ${this.getIden(identation)}}`;
   // `xs.join("lit")` on a `string[]`: `Display` renders `Str`/`Null` like the helper does.
   printNativeStringJoin(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText, "array");
-    if (receiver === void 0 || _optionalChain([node, 'access', _8524 => _8524.arguments, 'optionalAccess', _8525 => _8525.length]) !== 1)
+    if (receiver === void 0 || _optionalChain([node, 'access', _8545 => _8545.arguments, 'optionalAccess', _8546 => _8546.length]) !== 1)
       return void 0;
     const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
     if (literal === void 0)
@@ -64959,7 +57263,7 @@ ${this.getIden(identation)}}`;
     const type = this.typeOfNodeIfAny(node.expression.expression);
     if (checker === void 0 || type === void 0 || !checker.isArrayType(type))
       return void 0;
-    const element = _optionalChain([checker, 'access', _8526 => _8526.getTypeArguments, 'optionalCall', _8527 => _8527(type), 'optionalAccess', _8528 => _8528[0]]);
+    const element = _optionalChain([checker, 'access', _8547 => _8547.getTypeArguments, 'optionalCall', _8548 => _8548(type), 'optionalAccess', _8549 => _8549[0]]);
     if (this.primitiveKindOfType(element) !== "string")
       return void 0;
     return `Value::Str(${receiver}.as_array().map(|__a| __a.iter().map(|__v| __v.to_string()).collect::<Vec<String>>().join("${literal}")).unwrap_or_default().into())`;
@@ -64979,7 +57283,7 @@ ${this.getIden(identation)}}`;
   // `x.toString()` on a number/string: `to_string_val` is `stringify_simple`, i.e. `Display`.
   // Typed `Option<String>` receivers have no `Display`, so they keep the helper.
   printRustNativeToString(node, name) {
-    const receiver = _optionalChain([node, 'optionalAccess', _8529 => _8529.expression, 'optionalAccess', _8530 => _8530.expression]);
+    const receiver = _optionalChain([node, 'optionalAccess', _8550 => _8550.expression, 'optionalAccess', _8551 => _8551.expression]);
     const kind = this.rustOperandKind(receiver);
     if (kind !== "number" && kind !== "string")
       return void 0;
@@ -64990,7 +57294,7 @@ ${this.getIden(identation)}}`;
   }
   // `Math.floor|round|ceil(n)`: the helper answers `Float(op(x))` for a numeric box, `Null` otherwise.
   printRustNativeMathCall(node, op, parsedArg) {
-    if (this.rustOperandKind(_optionalChain([node, 'optionalAccess', _8531 => _8531.arguments, 'optionalAccess', _8532 => _8532[0]])) !== "number")
+    if (this.rustOperandKind(_optionalChain([node, 'optionalAccess', _8552 => _8552.arguments, 'optionalAccess', _8553 => _8553[0]])) !== "number")
       return void 0;
     return `(${parsedArg}).as_f64().map(|__x| Value::Float(__x.${op}())).unwrap_or(Value::Null)`;
   }
@@ -65017,9 +57321,9 @@ ${this.getIden(identation)}}`;
     if (!_is.isIdentifier.call(void 0, inner))
       return false;
     const declaration = this.rustSingleLocalDeclaration(inner);
-    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || _optionalChain([declaration, 'access', _8533 => _8533.name, 'optionalAccess', _8534 => _8534.kind]) !== _ast.SyntaxKind.Identifier)
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || _optionalChain([declaration, 'access', _8554 => _8554.name, 'optionalAccess', _8555 => _8555.kind]) !== _ast.SyntaxKind.Identifier)
       return false;
-    if ((_optionalChain([declaration, 'access', _8535 => _8535.parent, 'optionalAccess', _8536 => _8536.flags]) & _ast.NodeFlags.Const) === 0)
+    if ((_optionalChain([declaration, 'access', _8556 => _8556.parent, 'optionalAccess', _8557 => _8557.flags]) & _ast.NodeFlags.Const) === 0)
       return false;
     const init = this.rustStripWrappers(declaration.initializer);
     return init !== void 0 && _is.isPropertyAccessExpression.call(void 0, init) && String(init.name.text) === "length";
@@ -65142,7 +57446,7 @@ ${this.getIden(identation)}}`;
       const visit = (m) => {
         if (m.kind === _ast.SyntaxKind.Identifier && m.text === n.text)
           mentions++;
-        _optionalChain([m, 'access', _8537 => _8537.forEachChild, 'optionalCall', _8538 => _8538(visit)]);
+        _optionalChain([m, 'access', _8558 => _8558.forEachChild, 'optionalCall', _8559 => _8559(visit)]);
       };
       parent.arguments.forEach(visit);
       if (mentions !== 1)
@@ -65190,8 +57494,8 @@ ${this.getIden(identation)}}`;
     return this.isRustValueIndexKey(key);
   }
   printElementAccessExpressionExceptionIfAny(node) {
-    const receiver = _optionalChain([node, 'optionalAccess', _8539 => _8539.expression]);
-    if (_optionalChain([receiver, 'optionalAccess', _8540 => _8540.kind]) !== _ast.SyntaxKind.Identifier || this.rustVecLocalDeclarationOf(receiver) === void 0 || !this.vecReadShape(node))
+    const receiver = _optionalChain([node, 'optionalAccess', _8560 => _8560.expression]);
+    if (_optionalChain([receiver, 'optionalAccess', _8561 => _8561.kind]) !== _ast.SyntaxKind.Identifier || this.rustVecLocalDeclarationOf(receiver) === void 0 || !this.vecReadShape(node))
       return super.printElementAccessExpressionExceptionIfAny(node);
     const name = this.printNode(receiver, 0).trim();
     const key = this.rustStripWrappers(node.argumentExpression);
@@ -65245,7 +57549,7 @@ ${this.getIden(identation)}}`;
       return false;
     if (_is.isParameterDeclaration.call(void 0, declaration))
       return true;
-    if (!_is.isVariableDeclaration.call(void 0, declaration) || (_optionalChain([declaration, 'access', _8541 => _8541.parent, 'optionalAccess', _8542 => _8542.flags]) & _ast.NodeFlags.Const) === 0 || declaration.initializer === void 0)
+    if (!_is.isVariableDeclaration.call(void 0, declaration) || (_optionalChain([declaration, 'access', _8562 => _8562.parent, 'optionalAccess', _8563 => _8563.flags]) & _ast.NodeFlags.Const) === 0 || declaration.initializer === void 0)
       return false;
     let clean = true;
     const visit = (n) => {
@@ -65315,7 +57619,7 @@ ${this.getIden(identation)}}`;
    *  overload set), in the calling file or the base tier. */
   rustMethodImpl(call) {
     const checker = this.checkerOrUndefined();
-    const callee = _optionalChain([call, 'optionalAccess', _8543 => _8543.expression]);
+    const callee = _optionalChain([call, 'optionalAccess', _8564 => _8564.expression]);
     if (checker === void 0 || !_is.isPropertyAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword) {
       return void 0;
     }
@@ -65409,7 +57713,7 @@ ${this.getIden(identation)}}`;
       return false;
     return this.rustEveryReturn(call, depth, (e) => {
       const tuple = this.rustStripWrappers(e);
-      if (_optionalChain([tuple, 'optionalAccess', _8544 => _8544.kind]) === _ast.SyntaxKind.ArrayLiteralExpression) {
+      if (_optionalChain([tuple, 'optionalAccess', _8565 => _8565.kind]) === _ast.SyntaxKind.ArrayLiteralExpression) {
         const element = tuple.elements[index];
         return element !== void 0 && element.kind !== _ast.SyntaxKind.SpreadElement && this.rustBoolValue(element, depth + 1);
       }
@@ -65430,12 +57734,12 @@ ${this.getIden(identation)}}`;
     let variable;
     if (declaration.kind === _ast.SyntaxKind.BindingElement) {
       const pattern = declaration.parent;
-      variable = _optionalChain([pattern, 'optionalAccess', _8545 => _8545.parent]);
-      if (_optionalChain([pattern, 'optionalAccess', _8546 => _8546.kind]) !== _ast.SyntaxKind.ArrayBindingPattern || variable === void 0 || !_is.isVariableDeclaration.call(void 0, variable) || declaration.initializer !== void 0 || declaration.dotDotDotToken !== void 0 || _optionalChain([declaration, 'access', _8547 => _8547.name, 'optionalAccess', _8548 => _8548.kind]) !== _ast.SyntaxKind.Identifier || !this.rustBoolTupleElement(variable.initializer, pattern.elements.indexOf(declaration), depth)) {
+      variable = _optionalChain([pattern, 'optionalAccess', _8566 => _8566.parent]);
+      if (_optionalChain([pattern, 'optionalAccess', _8567 => _8567.kind]) !== _ast.SyntaxKind.ArrayBindingPattern || variable === void 0 || !_is.isVariableDeclaration.call(void 0, variable) || declaration.initializer !== void 0 || declaration.dotDotDotToken !== void 0 || _optionalChain([declaration, 'access', _8568 => _8568.name, 'optionalAccess', _8569 => _8569.kind]) !== _ast.SyntaxKind.Identifier || !this.rustBoolTupleElement(variable.initializer, pattern.elements.indexOf(declaration), depth)) {
         return false;
       }
       nameNode = declaration.name;
-    } else if (_is.isVariableDeclaration.call(void 0, declaration) && _optionalChain([declaration, 'access', _8549 => _8549.name, 'optionalAccess', _8550 => _8550.kind]) === _ast.SyntaxKind.Identifier) {
+    } else if (_is.isVariableDeclaration.call(void 0, declaration) && _optionalChain([declaration, 'access', _8570 => _8570.name, 'optionalAccess', _8571 => _8571.kind]) === _ast.SyntaxKind.Identifier) {
       const init = this.rustStripWrappers(declaration.initializer);
       if (init !== void 0 && (this.rustNodeIsBoolExpression(init) || !(this.rustTypeIsUndefinedish(init) || _is.isIdentifier.call(void 0, init) && init.text === "undefined" || this.rustBoolValue(init, depth)))) {
         return false;
@@ -65462,11 +57766,11 @@ ${this.getIden(identation)}}`;
       if (_is.isBinaryExpression.call(void 0, parent) && parent.left === target && rustIsAssignmentOperator(parent.operatorToken.kind)) {
         if (parent.operatorToken.kind !== _ast.SyntaxKind.EqualsToken || this.rustNodeIsBoolExpression(this.rustStripWrappers(parent.right)) || !this.rustBoolValue(parent.right, depth))
           return false;
-      } else if (_optionalChain([parent, 'optionalAccess', _8551 => _8551.kind]) === _ast.SyntaxKind.ArrayLiteralExpression) {
+      } else if (_optionalChain([parent, 'optionalAccess', _8572 => _8572.kind]) === _ast.SyntaxKind.ArrayLiteralExpression) {
         const assign = parent.parent;
         if (assign !== void 0 && _is.isBinaryExpression.call(void 0, assign) && assign.left === parent && !this.rustBoolTupleElement(assign.right, parent.elements.indexOf(target), depth))
           return false;
-      } else if (_optionalChain([parent, 'optionalAccess', _8552 => _8552.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && parent.operator !== _ast.SyntaxKind.ExclamationToken || _optionalChain([parent, 'optionalAccess', _8553 => _8553.kind]) === _ast.SyntaxKind.PostfixUnaryExpression || _optionalChain([parent, 'optionalAccess', _8554 => _8554.kind]) === _ast.SyntaxKind.DeleteExpression || (_is.isForOfStatement.call(void 0, parent) || _is.isForInStatement.call(void 0, parent)) && parent.initializer === target) {
+      } else if (_optionalChain([parent, 'optionalAccess', _8573 => _8573.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && parent.operator !== _ast.SyntaxKind.ExclamationToken || _optionalChain([parent, 'optionalAccess', _8574 => _8574.kind]) === _ast.SyntaxKind.PostfixUnaryExpression || _optionalChain([parent, 'optionalAccess', _8575 => _8575.kind]) === _ast.SyntaxKind.DeleteExpression || (_is.isForOfStatement.call(void 0, parent) || _is.isForInStatement.call(void 0, parent)) && parent.initializer === target) {
         return false;
       }
     }
@@ -65483,7 +57787,7 @@ ${this.getIden(identation)}}`;
     let current = node;
     while (current.parent !== void 0 && _is.isParenthesizedExpression.call(void 0, current.parent))
       current = current.parent;
-    const negated = _optionalChain([current, 'access', _8555 => _8555.parent, 'optionalAccess', _8556 => _8556.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && current.parent.operator === _ast.SyntaxKind.ExclamationToken;
+    const negated = _optionalChain([current, 'access', _8576 => _8576.parent, 'optionalAccess', _8577 => _8577.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && current.parent.operator === _ast.SyntaxKind.ExclamationToken;
     return negated ? `(${text})` : text;
   }
   /** `x === true|false` with `x` proven a bool value: `is_equal` against a `Value::Bool` is
@@ -65530,14 +57834,14 @@ ${this.getIden(identation)}}`;
     if (declarations.length !== 1 || !_is.isVariableDeclaration.call(void 0, declarations[0]))
       return false;
     const declaration = declarations[0];
-    if (_optionalChain([declaration, 'access', _8557 => _8557.name, 'optionalAccess', _8558 => _8558.kind]) !== _ast.SyntaxKind.Identifier || !this.rustProvenStrSource(declaration.initializer))
+    if (_optionalChain([declaration, 'access', _8578 => _8578.name, 'optionalAccess', _8579 => _8579.kind]) !== _ast.SyntaxKind.Identifier || !this.rustProvenStrSource(declaration.initializer))
       return false;
     return this.rustLocalUsesAll(declaration, declaration.name.text, true, (n) => {
       if (this.rustWriteTarget(n))
         return false;
       const parent = n.parent;
-      if (_optionalChain([parent, 'optionalAccess', _8559 => _8559.kind]) !== _ast.SyntaxKind.BinaryExpression || parent.left !== n)
-        return !(_optionalChain([parent, 'optionalAccess', _8560 => _8560.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _8561 => _8561.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) || parent.operator === _ast.SyntaxKind.ExclamationToken;
+      if (_optionalChain([parent, 'optionalAccess', _8580 => _8580.kind]) !== _ast.SyntaxKind.BinaryExpression || parent.left !== n)
+        return !(_optionalChain([parent, 'optionalAccess', _8581 => _8581.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _8582 => _8582.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) || parent.operator === _ast.SyntaxKind.ExclamationToken;
       const op = parent.operatorToken.kind;
       if (op < _ast.SyntaxKind.FirstAssignment || op > _ast.SyntaxKind.LastAssignment)
         return true;
@@ -65612,7 +57916,7 @@ ${this.getIden(identation)}}`;
   // `s.replace(p, "lit")`: the helper replaces every occurrence when all three are `Str`, else
   // returns the receiver; `p` is a proven/checker string operand.
   printRustReplace(node, receiverText) {
-    if (_optionalChain([node, 'optionalAccess', _8562 => _8562.arguments, 'optionalAccess', _8563 => _8563.length]) !== 2)
+    if (_optionalChain([node, 'optionalAccess', _8583 => _8583.arguments, 'optionalAccess', _8584 => _8584.length]) !== 2)
       return void 0;
     const receiver = _nullishCoalesce(this.rustReceiver(node, receiverText), () => ( this.rustCheckerStrReceiver(node, receiverText)));
     const to = this.rustNativeStringLiteralArg(node.arguments[1]);
@@ -65625,7 +57929,7 @@ ${this.getIden(identation)}}`;
   }
   // `s.split(d)` with a proven/checker string delimiter: the parts, `[]` unless both are `Str`.
   printRustSplit(node, receiverText) {
-    if (_optionalChain([node, 'optionalAccess', _8564 => _8564.arguments, 'optionalAccess', _8565 => _8565.length]) !== 1 || this.rustNativeStringLiteralArg(node.arguments[0]) !== void 0)
+    if (_optionalChain([node, 'optionalAccess', _8585 => _8585.arguments, 'optionalAccess', _8586 => _8586.length]) !== 1 || this.rustNativeStringLiteralArg(node.arguments[0]) !== void 0)
       return void 0;
     const receiver = _nullishCoalesce(this.rustReceiver(node, receiverText), () => ( this.rustCheckerStrReceiver(node, receiverText)));
     const delim = receiver === void 0 ? void 0 : this.rustStrOperand(node.arguments[0], true);
@@ -65636,25 +57940,25 @@ ${this.getIden(identation)}}`;
   // `x.toString()` on a proven-`Str` local: `stringify_simple` of `Str`/`Null` is `Display`.
   printRustToString(node, receiverText) {
     const receiver = this.rustReceiver(node, receiverText);
-    return receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _8566 => _8566.arguments, 'optionalAccess', _8567 => _8567.length]), () => ( 0))) !== 0 ? void 0 : `Value::Str(format!("{}", ${receiver}).into())`;
+    return receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _8587 => _8587.arguments, 'optionalAccess', _8588 => _8588.length]), () => ( 0))) !== 0 ? void 0 : `Value::Str(format!("{}", ${receiver}).into())`;
   }
   // `x.toUpperCase()` / `x.toLowerCase()` on a proven-`Str` local (any TS type).
   printRustCase(node, receiverText, method) {
     const receiver = this.rustReceiver(node, receiverText);
-    return receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _8568 => _8568.arguments, 'optionalAccess', _8569 => _8569.length]), () => ( 0))) !== 0 ? void 0 : this.rustStrCaseConvert(receiver, method);
+    return receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _8589 => _8589.arguments, 'optionalAccess', _8590 => _8590.length]), () => ( 0))) !== 0 ? void 0 : this.rustStrCaseConvert(receiver, method);
   }
   // The plain-dict source proof reaches overloaded base readers (`safeDict` declares
   // bodiless overload signatures; the implementation in the same class is what runs).
   /** A bodiless overload signature whose class also holds the bodied implementation. */
   baseOverload(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8570 => _8570.kind]) === _ast.SyntaxKind.FunctionDeclaration && declaration.body === void 0 && _is.isIdentifier.call(void 0, declaration.name)) {
+    if (_optionalChain([declaration, 'optionalAccess', _8591 => _8591.kind]) === _ast.SyntaxKind.FunctionDeclaration && declaration.body === void 0 && _is.isIdentifier.call(void 0, declaration.name)) {
       const fname = String(declaration.name.text);
-      return (_nullishCoalesce(_optionalChain([declaration, 'access', _8571 => _8571.parent, 'optionalAccess', _8572 => _8572.statements]), () => ( []))).some((m) => m.kind === _ast.SyntaxKind.FunctionDeclaration && m.body !== void 0 && _is.isIdentifier.call(void 0, m.name) && String(m.name.text) === fname);
+      return (_nullishCoalesce(_optionalChain([declaration, 'access', _8592 => _8592.parent, 'optionalAccess', _8593 => _8593.statements]), () => ( []))).some((m) => m.kind === _ast.SyntaxKind.FunctionDeclaration && m.body !== void 0 && _is.isIdentifier.call(void 0, m.name) && String(m.name.text) === fname);
     }
-    if (_optionalChain([declaration, 'optionalAccess', _8573 => _8573.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body !== void 0 || !_is.isIdentifier.call(void 0, declaration.name))
+    if (_optionalChain([declaration, 'optionalAccess', _8594 => _8594.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body !== void 0 || !_is.isIdentifier.call(void 0, declaration.name))
       return false;
     const name = String(declaration.name.text);
-    return (_nullishCoalesce(_optionalChain([declaration, 'access', _8574 => _8574.parent, 'optionalAccess', _8575 => _8575.members]), () => ( []))).some((m) => m.kind === _ast.SyntaxKind.MethodDeclaration && m.body !== void 0 && _is.isIdentifier.call(void 0, m.name) && String(m.name.text) === name);
+    return (_nullishCoalesce(_optionalChain([declaration, 'access', _8595 => _8595.parent, 'optionalAccess', _8596 => _8596.members]), () => ( []))).some((m) => m.kind === _ast.SyntaxKind.MethodDeclaration && m.body !== void 0 && _is.isIdentifier.call(void 0, m.name) && String(m.name.text) === name);
   }
   /** `x[a ± b]` on a checker-proven list, each operand a numeric literal, a `Value` loop
    *  counter or a `const n = y.length` local: the key prints as a `Value` number, so the
@@ -65683,7 +57987,7 @@ ${this.getIden(identation)}}`;
     if (this.rustParamShadowOf(operand) !== void 0 || this.rustStringLocalIdentifierIsTyped(operand))
       return false;
     const declaration = this.rustDeclarationOfIdentifier(operand);
-    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || (_optionalChain([declaration, 'access', _8576 => _8576.parent, 'optionalAccess', _8577 => _8577.flags]) & _ast.NodeFlags.Const) === 0)
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || (_optionalChain([declaration, 'access', _8597 => _8597.parent, 'optionalAccess', _8598 => _8598.flags]) & _ast.NodeFlags.Const) === 0)
       return false;
     const init = this.rustSkipWrappers(declaration.initializer);
     return init !== void 0 && _is.isPropertyAccessExpression.call(void 0, init) && String(init.name.text) === "length";
@@ -65698,13 +58002,13 @@ ${this.getIden(identation)}}`;
     if (this.rustNativeStringLiteralArg(call.arguments[0]) === void 0)
       return false;
     const checker = this.checkerOrUndefined();
-    const type = _optionalChain([checker, 'optionalAccess', _8578 => _8578.getTypeAtLocation, 'call', _8579 => _8579(access.expression)]);
+    const type = _optionalChain([checker, 'optionalAccess', _8599 => _8599.getTypeAtLocation, 'call', _8600 => _8600(access.expression)]);
     if (type === void 0 || !checker.isArrayType(type))
       return false;
-    return this.primitiveKindOfType(_optionalChain([checker, 'access', _8580 => _8580.getTypeArguments, 'optionalCall', _8581 => _8581(type), 'optionalAccess', _8582 => _8582[0]])) === "string";
+    return this.primitiveKindOfType(_optionalChain([checker, 'access', _8601 => _8601.getTypeArguments, 'optionalCall', _8602 => _8602(type), 'optionalAccess', _8603 => _8603[0]])) === "string";
   }
   printVecJoin(node) {
-    const access = _optionalChain([node, 'optionalAccess', _8583 => _8583.expression]);
+    const access = _optionalChain([node, 'optionalAccess', _8604 => _8604.expression]);
     if (!_is.isPropertyAccessExpression.call(void 0, access) || !_is.isIdentifier.call(void 0, access.expression) || this.rustVecLocalDeclarationOf(access.expression) === void 0 || !this.vecJoinUse(access))
       return void 0;
     const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
@@ -65715,7 +58019,7 @@ ${this.getIden(identation)}}`;
   // and no `x.push` after it: the clone is the array's final contents, as the aliased box was.
   vecPropertyUse(n) {
     const parent = n.parent;
-    if (_optionalChain([parent, 'optionalAccess', _8584 => _8584.kind]) !== _ast.SyntaxKind.PropertyAssignment || parent.initializer !== n || this.loopBetween(n))
+    if (_optionalChain([parent, 'optionalAccess', _8605 => _8605.kind]) !== _ast.SyntaxKind.PropertyAssignment || parent.initializer !== n || this.loopBetween(n))
       return false;
     const name = String(n.text);
     let statement = parent;
@@ -65727,14 +58031,14 @@ ${this.getIden(identation)}}`;
     const visit = (m) => {
       if (m.kind === _ast.SyntaxKind.Identifier && m.text === name)
         count++;
-      _optionalChain([m, 'access', _8585 => _8585.forEachChild, 'optionalCall', _8586 => _8586(visit)]);
+      _optionalChain([m, 'access', _8606 => _8606.forEachChild, 'optionalCall', _8607 => _8607(visit)]);
     };
     visit(statement);
     if (count !== 1)
       return false;
     const fn = this.rustEnclosingFunction(n);
-    const end = _nullishCoalesce(_optionalChain([n, 'access', _8587 => _8587.getEnd, 'optionalCall', _8588 => _8588()]), () => ( n.end));
-    return !this.rustScopeNameNodes(fn, name).some((m) => m.kind === _ast.SyntaxKind.Identifier && m !== n && (_nullishCoalesce(_optionalChain([m, 'access', _8589 => _8589.getStart, 'optionalCall', _8590 => _8590()]), () => ( m.pos))) >= end && _is.isPropertyAccessExpression.call(void 0, m.parent) && m.parent.expression === m && String(m.parent.name.text) === "push");
+    const end = _nullishCoalesce(_optionalChain([n, 'access', _8608 => _8608.getEnd, 'optionalCall', _8609 => _8609()]), () => ( n.end));
+    return !this.rustScopeNameNodes(fn, name).some((m) => m.kind === _ast.SyntaxKind.Identifier && m !== n && (_nullishCoalesce(_optionalChain([m, 'access', _8610 => _8610.getStart, 'optionalCall', _8611 => _8611()]), () => ( m.pos))) >= end && _is.isPropertyAccessExpression.call(void 0, m.parent) && m.parent.expression === m && String(m.parent.name.text) === "push");
   }
   rustNumericKind(node, depth = 0) {
     const inner = this.rustStripWrappers(node);
@@ -65796,7 +58100,7 @@ ${this.getIden(identation)}}`;
     } catch (e) {
       return void 0;
     }
-    if (_optionalChain([declaration, 'optionalAccess', _8591 => _8591.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body === void 0 || declaration.getSourceFile() !== call.getSourceFile())
+    if (_optionalChain([declaration, 'optionalAccess', _8612 => _8612.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body === void 0 || declaration.getSourceFile() !== call.getSourceFile())
       return void 0;
     const kinds = [];
     const visit = (n) => {
@@ -65804,7 +58108,7 @@ ${this.getIden(identation)}}`;
         return;
       if (_is.isReturnStatement.call(void 0, n))
         kinds.push(n.expression === void 0 ? void 0 : this.rustNumericKind(n.expression, depth + 1));
-      _optionalChain([n, 'access', _8592 => _8592.forEachChild, 'optionalCall', _8593 => _8593(visit)]);
+      _optionalChain([n, 'access', _8613 => _8613.forEachChild, 'optionalCall', _8614 => _8614(visit)]);
     };
     declaration.body.forEachChild(visit);
     return this.rustCombine(kinds) === void 0 ? void 0 : "number";
@@ -65813,7 +58117,7 @@ ${this.getIden(identation)}}`;
     if (this.rustParamShadowOf(ident) !== void 0 || !this.printsValueExpression(ident))
       return void 0;
     const declaration = this.rustSingleLocalDeclaration(ident);
-    if (declaration === void 0 || _optionalChain([declaration, 'access', _8594 => _8594.name, 'optionalAccess', _8595 => _8595.kind]) !== _ast.SyntaxKind.Identifier)
+    if (declaration === void 0 || _optionalChain([declaration, 'access', _8615 => _8615.name, 'optionalAccess', _8616 => _8616.kind]) !== _ast.SyntaxKind.Identifier)
       return void 0;
     const here = this.typeOfNodeIfAny(ident);
     const declared = this.typeOfNodeIfAny(declaration.name);
@@ -65850,7 +58154,7 @@ ${this.getIden(identation)}}`;
           kinds.push(right === void 0 ? void 0 : "number");
         else
           kinds.push(void 0);
-      } else if ((_optionalChain([parent, 'optionalAccess', _8596 => _8596.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _8597 => _8597.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) && (parent.operator === _ast.SyntaxKind.PlusPlusToken || parent.operator === _ast.SyntaxKind.MinusMinusToken)) {
+      } else if ((_optionalChain([parent, 'optionalAccess', _8617 => _8617.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _8618 => _8618.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) && (parent.operator === _ast.SyntaxKind.PlusPlusToken || parent.operator === _ast.SyntaxKind.MinusMinusToken)) {
         continue;
       } else if (parent !== void 0 && (_is.isArrayLiteralExpression.call(void 0, parent) && _is.isBinaryExpression.call(void 0, parent.parent) && parent.parent.left === parent || (_is.isForOfStatement.call(void 0, parent) || _is.isForInStatement.call(void 0, parent)) && parent.initializer === m)) {
         kinds.push(void 0);
@@ -65867,7 +58171,7 @@ ${this.getIden(identation)}}`;
       const parent = m.parent;
       if (m.kind !== _ast.SyntaxKind.Identifier || m === declaration.name)
         return false;
-      return _is.isBinaryExpression.call(void 0, parent) && parent.left === m && rustIsAssignmentOperator(parent.operatorToken.kind) || _optionalChain([parent, 'optionalAccess', _8598 => _8598.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && (parent.operator === _ast.SyntaxKind.PlusPlusToken || parent.operator === _ast.SyntaxKind.MinusMinusToken) || _optionalChain([parent, 'optionalAccess', _8599 => _8599.kind]) === _ast.SyntaxKind.PostfixUnaryExpression;
+      return _is.isBinaryExpression.call(void 0, parent) && parent.left === m && rustIsAssignmentOperator(parent.operatorToken.kind) || _optionalChain([parent, 'optionalAccess', _8619 => _8619.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && (parent.operator === _ast.SyntaxKind.PlusPlusToken || parent.operator === _ast.SyntaxKind.MinusMinusToken) || _optionalChain([parent, 'optionalAccess', _8620 => _8620.kind]) === _ast.SyntaxKind.PostfixUnaryExpression;
     });
   }
   // Both sides Int/Float/Null: `<`/`>` are f64 compares with Null false; `<=`/`>=` also OR in
@@ -65902,7 +58206,7 @@ ${this.getIden(identation)}}`;
       return true;
     if (_is.isBinaryExpression.call(void 0, inner) && inner.operatorToken.kind === _ast.SyntaxKind.PlusToken)
       return this.alwaysStr(inner.left) || this.alwaysStr(inner.right);
-    return _is.isCallExpression.call(void 0, inner) && _is.isPropertyAccessExpression.call(void 0, inner.expression) && inner.expression.name.text === "toString" && (_nullishCoalesce(_optionalChain([inner, 'access', _8600 => _8600.arguments, 'optionalAccess', _8601 => _8601.length]), () => ( 0))) === 0 && this.printsValueExpression(inner.expression.expression);
+    return _is.isCallExpression.call(void 0, inner) && _is.isPropertyAccessExpression.call(void 0, inner.expression) && inner.expression.name.text === "toString" && (_nullishCoalesce(_optionalChain([inner, 'access', _8621 => _8621.arguments, 'optionalAccess', _8622 => _8622.length]), () => ( 0))) === 0 && this.printsValueExpression(inner.expression.expression);
   }
   concatOperandSafe(node, type) {
     if (this.alwaysStr(node))
@@ -65913,7 +58217,7 @@ ${this.getIden(identation)}}`;
     if (_is.isIdentifier.call(void 0, inner) && (this.rustStringLocalIdentifierIsTyped(inner) || this.rustVecLocalDeclarationOf(inner) !== void 0))
       return false;
     const parts = type === void 0 ? [] : type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkCNXC7LJYcjs.typeParts.call(void 0, type), () => ( [])) : [type];
-    return parts.length > 0 && parts.every((t) => String(_nullishCoalesce(_nullishCoalesce(_optionalChain([t, 'optionalAccess', _8602 => _8602.symbol, 'optionalAccess', _8603 => _8603.escapedName]), () => ( _optionalChain([t, 'optionalAccess', _8604 => _8604.symbol, 'optionalAccess', _8605 => _8605.name]))), () => ( ""))) !== "Precise");
+    return parts.length > 0 && parts.every((t) => String(_nullishCoalesce(_nullishCoalesce(_optionalChain([t, 'optionalAccess', _8623 => _8623.symbol, 'optionalAccess', _8624 => _8624.escapedName]), () => ( _optionalChain([t, 'optionalAccess', _8625 => _8625.symbol, 'optionalAccess', _8626 => _8626.name]))), () => ( ""))) !== "Precise");
   }
   concatIsAnchored(left, right, leftType, rightType) {
     return this.alwaysStr(left) && this.concatOperandSafe(right, rightType) || this.alwaysStr(right) && this.concatOperandSafe(left, leftType);
@@ -65925,13 +58229,13 @@ ${this.getIden(identation)}}`;
   // `x.trim()`: the helper's `Str` arm is `str::trim`, Null otherwise.
   printTrim(node, receiverText) {
     const receiver = this.strReceiverText(node, receiverText);
-    if (receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _8606 => _8606.arguments, 'optionalAccess', _8607 => _8607.length]), () => ( 0))) !== 0)
+    if (receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _8627 => _8627.arguments, 'optionalAccess', _8628 => _8628.length]), () => ( 0))) !== 0)
       return void 0;
     return `${receiver}.as_str().map(|__s| Value::Str(__s.trim().to_string().into())).unwrap_or(Value::Null)`;
   }
   // `x.startsWith(p)` / `x.endsWith(p)` with a proven/checker string operand: false unless both are `Str`.
   printAffixTest(node, receiverText, method) {
-    if (_optionalChain([node, 'optionalAccess', _8608 => _8608.arguments, 'optionalAccess', _8609 => _8609.length]) !== 1)
+    if (_optionalChain([node, 'optionalAccess', _8629 => _8629.arguments, 'optionalAccess', _8630 => _8630.length]) !== 1)
       return void 0;
     const receiver = this.strReceiverText(node, receiverText);
     const arg = receiver === void 0 ? void 0 : this.rustStrOperand(node.arguments[0], true);
@@ -65942,7 +58246,7 @@ ${this.getIden(identation)}}`;
   // `x.replace(p, r)` / `x.replaceAll(p, r)`: both helpers replace every occurrence when all three
   // are `Str`, else return the receiver; `p`/`r` are literals or proven/checker string operands.
   printReplace(node, receiverText) {
-    if (_optionalChain([node, 'optionalAccess', _8610 => _8610.arguments, 'optionalAccess', _8611 => _8611.length]) !== 2)
+    if (_optionalChain([node, 'optionalAccess', _8631 => _8631.arguments, 'optionalAccess', _8632 => _8632.length]) !== 2)
       return void 0;
     const receiver = this.strReceiverText(node, receiverText);
     if (receiver === void 0 || !/^[A-Za-z_][A-Za-z0-9_.]*$/.test(receiver))
@@ -65974,7 +58278,7 @@ ${this.getIden(identation)}}`;
   }
   /** `Object.keys/values(x)` in `ts/src/prediction/<id>.ts` on a proven plain local. */
   predictionEnum(node, parsedArg, kind) {
-    const arg = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _8612 => _8612.arguments, 'optionalAccess', _8613 => _8613[0]]));
+    const arg = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _8633 => _8633.arguments, 'optionalAccess', _8634 => _8634[0]]));
     if (arg === void 0 || parsedArg === void 0 || !_is.isIdentifier.call(void 0, arg) || !/\/ts\/src\/prediction\/[^/]+\.ts$/.test(this.provenDictFieldPath(node)) || this.rustPlainReceiver(arg) !== "local")
       return void 0;
     const body = kind === "keys" ? "__m.keys().map(|__k| Value::Str(__k.clone().into())).collect()" : "__m.values().cloned().collect()";
@@ -66053,7 +58357,7 @@ ${this.getIden(identation)}}`;
     if (!this.arrLocal(ident, true))
       return false;
     const declaration = this.rustSingleLocalDeclaration(ident);
-    const initializer = _optionalChain([declaration, 'optionalAccess', _8614 => _8614.initializer]);
+    const initializer = _optionalChain([declaration, 'optionalAccess', _8635 => _8635.initializer]);
     if (initializer === void 0)
       return false;
     return !this.ownedArrayInitializer(initializer);
@@ -66076,25 +58380,25 @@ ${this.getIden(identation)}}`;
   }
   /** `x.length` on an Arr-only local: `get_array_length`'s marker arms need a Dict. */
   arrLength(node, receiver) {
-    const recv = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _8615 => _8615.expression]));
+    const recv = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _8636 => _8636.expression]));
     if (!this.arrLocal(recv, true))
       return void 0;
     return `Value::Int(${receiver}.len() as i64)`;
   }
   /** `x.push(v)` statement on an Arr-only local: `append_to_array`'s cache-push arm needs a Dict. */
   arrPush(node, name, parsedArg) {
-    const recv = _optionalChain([node, 'optionalAccess', _8616 => _8616.expression, 'optionalAccess', _8617 => _8617.expression]);
-    if (name !== void 0 && parsedArg !== void 0 && this.bearerReadLocal(recv) && _optionalChain([node, 'optionalAccess', _8618 => _8618.arguments, 'optionalAccess', _8619 => _8619.length]) === 1 && node.arguments[0].kind !== _ast.SyntaxKind.SpreadElement && _optionalChain([node, 'access', _8620 => _8620.parent, 'optionalAccess', _8621 => _8621.kind]) === _ast.SyntaxKind.ExpressionStatement && name.trim() === this.printNode(recv, 0).trim() && this.rustVecPushShape(node, String(recv.text))) {
+    const recv = _optionalChain([node, 'optionalAccess', _8637 => _8637.expression, 'optionalAccess', _8638 => _8638.expression]);
+    if (name !== void 0 && parsedArg !== void 0 && this.bearerReadLocal(recv) && _optionalChain([node, 'optionalAccess', _8639 => _8639.arguments, 'optionalAccess', _8640 => _8640.length]) === 1 && node.arguments[0].kind !== _ast.SyntaxKind.SpreadElement && _optionalChain([node, 'access', _8641 => _8641.parent, 'optionalAccess', _8642 => _8642.kind]) === _ast.SyntaxKind.ExpressionStatement && name.trim() === this.printNode(recv, 0).trim() && this.rustVecPushShape(node, String(recv.text))) {
       const bareArg = parsedArg.trim();
-      const bareValue = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(bareArg) && bareArg !== "self" && bareArg !== "true" && bareArg !== "false" ? `${bareArg}.clone()` : bareArg;
+      const bareValue = _RustTranspiler.cloneIfBareLocal(bareArg);
       return `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${bareValue}); }`;
     }
-    if (name === void 0 || parsedArg === void 0 || _optionalChain([node, 'optionalAccess', _8622 => _8622.arguments, 'optionalAccess', _8623 => _8623.length]) !== 1 || node.arguments[0].kind === _ast.SyntaxKind.SpreadElement || _optionalChain([node, 'access', _8624 => _8624.parent, 'optionalAccess', _8625 => _8625.kind]) !== _ast.SyntaxKind.ExpressionStatement || !this.arrLocal(recv, false) || name.trim() !== this.printNode(recv, 0).trim())
+    if (name === void 0 || parsedArg === void 0 || _optionalChain([node, 'optionalAccess', _8643 => _8643.arguments, 'optionalAccess', _8644 => _8644.length]) !== 1 || node.arguments[0].kind === _ast.SyntaxKind.SpreadElement || _optionalChain([node, 'access', _8645 => _8645.parent, 'optionalAccess', _8646 => _8646.kind]) !== _ast.SyntaxKind.ExpressionStatement || !this.arrLocal(recv, false) || name.trim() !== this.printNode(recv, 0).trim())
       return void 0;
     if (!this.rustVecPushShape(node, String(recv.text)))
       return void 0;
     const arg = parsedArg.trim();
-    const value = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(arg) && arg !== "self" && arg !== "true" && arg !== "false" ? `${arg}.clone()` : arg;
+    const value = _RustTranspiler.cloneIfBareLocal(arg);
     return `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${value}); }`;
   }
   /** A `Value` local whose single declaration is an element read of a local typed as a
@@ -66103,7 +58407,7 @@ ${this.getIden(identation)}}`;
     if (ident === void 0 || !_is.isIdentifier.call(void 0, ident))
       return false;
     const declaration = this.rustSingleLocalDeclaration(ident);
-    const init = this.rustSkipWrappers(_optionalChain([declaration, 'optionalAccess', _8626 => _8626.initializer]));
+    const init = this.rustSkipWrappers(_optionalChain([declaration, 'optionalAccess', _8647 => _8647.initializer]));
     if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || init === void 0)
       return false;
     if (!_is.isElementAccessExpression.call(void 0, init))
@@ -66120,7 +58424,7 @@ ${this.getIden(identation)}}`;
   boolCallEquality(left, right, op) {
     const l = this.unwrapParensNode(left);
     const r = this.unwrapParensNode(right);
-    const isBoolLit = (n) => _optionalChain([n, 'optionalAccess', _8627 => _8627.kind]) === _ast.SyntaxKind.TrueKeyword || _optionalChain([n, 'optionalAccess', _8628 => _8628.kind]) === _ast.SyntaxKind.FalseKeyword;
+    const isBoolLit = (n) => _optionalChain([n, 'optionalAccess', _8648 => _8648.kind]) === _ast.SyntaxKind.TrueKeyword || _optionalChain([n, 'optionalAccess', _8649 => _8649.kind]) === _ast.SyntaxKind.FalseKeyword;
     if (isBoolLit(l) === isBoolLit(r))
       return void 0;
     const literal = isBoolLit(l) ? l : r;
@@ -66173,7 +58477,7 @@ ${this.getIden(identation)}}`;
   // that are the receiver of a non-mutating string method (`currency['id'].toUpperCase ()`).
   /** Base-tier (`ts/src/base/**`) `Object.keys/values(x)` on a proven plain local. */
   baseEnum(node, parsedArg, kind) {
-    const arg = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _8629 => _8629.arguments, 'optionalAccess', _8630 => _8630[0]]));
+    const arg = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _8650 => _8650.arguments, 'optionalAccess', _8651 => _8651[0]]));
     if (arg === void 0 || parsedArg === void 0 || !_is.isIdentifier.call(void 0, arg) || !_RustTranspiler.RUST_BASE_TIER_FILE.test(this.provenDictFieldPath(node)) || this.rustPlainReceiver(arg) !== "local")
       return void 0;
     const body = kind === "keys" ? "__m.keys().map(|__k| Value::Str(__k.clone().into())).collect()" : "__m.values().cloned().collect()";
@@ -66182,8 +58486,8 @@ ${this.getIden(identation)}}`;
   /** `x['k'].m (…)` with `m` a non-mutating string method on a checker-`string` read: no
    *  ccxt pass rewrites that target (only `.push` / calls of the read itself). */
   pureStringMethodReceiver(node) {
-    const access = _optionalChain([node, 'optionalAccess', _8631 => _8631.parent]);
-    const call = _optionalChain([access, 'optionalAccess', _8632 => _8632.parent]);
+    const access = _optionalChain([node, 'optionalAccess', _8652 => _8652.parent]);
+    const call = _optionalChain([access, 'optionalAccess', _8653 => _8653.parent]);
     if (!_is.isElementAccessExpression.call(void 0, node) || access === void 0 || !_is.isPropertyAccessExpression.call(void 0, access) || access.expression !== node || call === void 0 || !_is.isCallExpression.call(void 0, call) || call.expression !== access || !_RustTranspiler.RUST_PURE_STRING_METHODS.has(String(access.name.text)))
       return false;
     const type = this.typeOfNodeIfAny(node);
@@ -66253,7 +58557,7 @@ ${this.getIden(identation)}}`;
     const narrowed = allowNull || here !== void 0 && this.isStringLikeType(here);
     const nullish = (e) => {
       const n = this.unwrapParensNode(e);
-      return _optionalChain([n, 'optionalAccess', _8633 => _8633.kind]) === _ast.SyntaxKind.NullKeyword || _is.isIdentifier.call(void 0, n) && String(n.text) === "undefined";
+      return _optionalChain([n, 'optionalAccess', _8654 => _8654.kind]) === _ast.SyntaxKind.NullKeyword || _is.isIdentifier.call(void 0, n) && String(n.text) === "undefined";
     };
     const local = (e) => {
       const n = this.unwrapParensNode(e);
@@ -66268,7 +58572,7 @@ ${this.getIden(identation)}}`;
         if (this.rustEnclosingFunction(n) !== fn || this.rustWriteTarget(n))
           return false;
         const parent = n.parent;
-        if ((_optionalChain([parent, 'optionalAccess', _8634 => _8634.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _8635 => _8635.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) && parent.operator !== _ast.SyntaxKind.ExclamationToken)
+        if ((_optionalChain([parent, 'optionalAccess', _8655 => _8655.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _8656 => _8656.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) && parent.operator !== _ast.SyntaxKind.ExclamationToken)
           return false;
         if (!_is.isBinaryExpression.call(void 0, parent) || parent.left !== n || !rustIsAssignmentOperator(parent.operatorToken.kind))
           return true;
@@ -66445,7 +58749,7 @@ ${this.getIden(identation)}}`;
     if (!_is.isIdentifier.call(void 0, inner))
       return false;
     const declaration = this.rustSingleLocalDeclaration(inner);
-    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || !_is.isIdentifier.call(void 0, declaration.name) || declaration.initializer === void 0 || (_optionalChain([declaration, 'access', _8636 => _8636.parent, 'optionalAccess', _8637 => _8637.flags]) & _ast.NodeFlags.Const) === 0)
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || !_is.isIdentifier.call(void 0, declaration.name) || declaration.initializer === void 0 || (_optionalChain([declaration, 'access', _8657 => _8657.parent, 'optionalAccess', _8658 => _8658.flags]) & _ast.NodeFlags.Const) === 0)
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0)
@@ -66475,7 +58779,7 @@ ${this.getIden(identation)}}`;
     } catch (e) {
       return false;
     }
-    if (_optionalChain([declaration, 'optionalAccess', _8638 => _8638.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body === void 0 || declaration.getSourceFile() !== call.getSourceFile() || _RustTranspiler.RUST_BASE_TIER_FILE.test(this.provenDictFieldPath(call)))
+    if (_optionalChain([declaration, 'optionalAccess', _8659 => _8659.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body === void 0 || declaration.getSourceFile() !== call.getSourceFile() || _RustTranspiler.RUST_BASE_TIER_FILE.test(this.provenDictFieldPath(call)))
       return false;
     let ok = true;
     const visit = (n) => {
@@ -66483,7 +58787,7 @@ ${this.getIden(identation)}}`;
         return;
       if (_is.isReturnStatement.call(void 0, n) && n.expression !== void 0 && !this.dictFieldStrOrNull(n.expression, key, depth + 1))
         ok = false;
-      _optionalChain([n, 'access', _8639 => _8639.forEachChild, 'optionalCall', _8640 => _8640(visit)]);
+      _optionalChain([n, 'access', _8660 => _8660.forEachChild, 'optionalCall', _8661 => _8661(visit)]);
     };
     declaration.body.forEachChild(visit);
     return ok;
@@ -66819,6 +59123,23 @@ _RustTranspiler.RUST_SIGN_API_METHODS = /* @__PURE__ */ new Set(["sign", "fetch2
 // `ts/src/base/**` — the shared `Exchange` / `PredictionExchange` classes
 // (the transpiler synthesises variants like `.__ExchangeNoOverloads.ts`).
 _RustTranspiler.RUST_BASE_TIER_FILE = /ts[\\/]src[\\/]base[\\/]/;
+// Hand-written runtime methods (`exchange_stubs.rs`, `exchange.rs`, the ws `Client`/`Future` handles) take a
+// fixed number of positional `Value`s plus `optional_args: &[Value]`; their TS declarations (field aliases,
+// above-marker bodies) do not carry that arity, so it is listed here by Rust name.
+_RustTranspiler.RUST_RUNTIME_VARIADIC_ARITY = new Map([
+  [0, "sum is_json_encoded_object uuid uuid16 uuid22 safe_market create_safe_dictionary create_safe_list parse_precision network_id_to_code fetch_balance fetch_positions fetch_ledger fetch_last_prices fetch_withdrawals fetch_transactions fetch_trading_fees sign_in load_markets fetch_tickers fetch_status fetch_orders fetch_open_orders fetch_order_books client spawn order_book indexed_order_book counted_order_book safe_order_tracker market_symbols future call resolve reject check_required_credentials send lock_id unlock_id lock_last_nonce unlock_last_nonce extend_exchange_options on_error on_close on_pong crc32 load_order_book load_accounts market_ids decode_proto_msg get_market_from_symbols "],
+  [1, "remove_repeated_elements_from_array string_to_base64 base16_to_binary base58_to_binary base64_to_binary binary_to_base58 binary_to_base16 binary_to_base64 binary_to_string binary_length number_to_be parse_date is_binary_message string_to_binary urlencode_base64 urlencode_nested strip sort eth_get_address_from_private_key int_to_base16 packb yymmdd yyyymmdd ymd ymdhms rawencode safe_currency_code safe_currency safe_symbol safe_trade safe_order safe_order2 safe_ticker urlencode network_code_to_id handle_market_type_and_params handle_sub_type_and_params handle_margin_mode_and_params binary_concat totp extend deep_extend keysort parse_number create_orders fetch_ticker fetch fetch_trading_fee fetch_trades fetch_order_book delay un_watch fetch_rest_order_book_safe parse_ticker parse_ohlcv parse_funding_rate parse_position find_timeframe exception_message is_linear is_inverse filter_by_since_limit filter_by_symbol_since_limit filter_by_symbols_since_limit parse_balance_custom parse_orders parse_trades parse_ohlc_vs parse_order parse_trade parse_position_risk safe_liquidation "],
+  [2, "safe_value safe_value_n safe_string safe_string_n safe_string_upper safe_string_lower safe_string_lower_n safe_string_upper_n safe_integer safe_integer_n safe_float safe_timestamp safe_timestamp_n safe_float_n safe_bool safe_bool_n safe_dict safe_list safe_list_n safe_dict_n safe_integer_omit_zero safe_number_omit_zero safe_number safe_number_n hash omit sort_by group_by array_slice watch watch_multiple handle_user_data_stream_subscribe handle_option handle_param_string filter_by_array filter_by_array_positions filter_by_array_tickers filter_by_array_adl_ranks currency_to_precision parse_order_book "],
+  [3, "safe_value2 safe_string2 safe_string_upper2 safe_string_lower2 safe_integer2 safe_timestamp2 safe_integer_product safe_integer_product_n safe_float2 safe_bool2 safe_dict2 safe_list2 safe_number2 handle_request_network handle_option_and_params handle_option_string_and_params handle_option_bool_and_params handle_option_integer_and_params hmac ecdsa eddsa jwt rsa sort_by2 filter_by decimal_to_precision clean_unsubscription handle_param_string2 "],
+  [4, "safe_integer_product2 handle_option_and_params2 handle_option_string_and_params2 handle_option_bool_and_params2 handle_option_integer_and_params2 create_order "]
+].flatMap(([arity, names]) => names.trim().split(/\s+/).map((n) => [n, arity])));
+// The test crate's `ExchangeOps` trait declares these two with fixed signatures and adds two variadic base methods.
+_RustTranspiler.RUST_TEST_VARIADIC_ARITY = /* @__PURE__ */ new Map([
+  ["extend_exchange_options", void 0],
+  ["exception_message", void 0],
+  ["fetch2", 1],
+  ["build_ohlcvc", 1]
+]);
 // `Math.X(..)` / `Precise.X(..)` call the runtime namespaces by reference; the Precise
 // wrappers take their TS arity without the optional precision (`stringDiv` keeps it as `stringDivPrec`).
 _RustTranspiler.RUST_PRECISE_TRIMMED = /^string(?:Div|Mul|Add|Sub|Mod|Eq|Gt|Ge|Lt|Le|Min|Max|Abs|Neg)$/;
@@ -66855,7 +59176,7 @@ _RustTranspiler.RUST_PARSE_HELPERS = {
   parseInt: "i64",
   parseFloat: "f64"
 };
-// ── pro-tier WS handler `message` shadow (D-27) ───────────────────────────
+// ── pro-tier WS handler `message` shadow ─────────────────────────────────
 // `handle_x (client: Client, message: Dict)` is dispatched by NAME with
 // `Value` args, so the printed signature keeps `Value`; the annotation still
 /** The borrowed view bound by the shadow. */
@@ -67224,7 +59545,7 @@ var CppTranspiler = class extends BaseTranspiler {
     const constructorBody = this.printFunctionBody(node, identation);
     let superCallParams = "";
     let hasSuperCall = false;
-    _optionalChain([node, 'access', _8641 => _8641.body, 'optionalAccess', _8642 => _8642.statements, 'access', _8643 => _8643.forEach, 'call', _8644 => _8644((statement) => {
+    _optionalChain([node, 'access', _8662 => _8662.body, 'optionalAccess', _8663 => _8663.statements, 'access', _8664 => _8664.forEach, 'call', _8665 => _8665((statement) => {
       if (_is.isExpressionStatement.call(void 0, statement)) {
         const expression = statement.expression;
         if (_is.isCallExpression.call(void 0, expression)) {
@@ -67385,7 +59706,7 @@ var CppTranspiler = class extends BaseTranspiler {
   }
   printVariableDeclarationList(node, identation) {
     const declaration = node.declarations[0];
-    if (_optionalChain([declaration, 'optionalAccess', _8645 => _8645.name, 'access', _8646 => _8646.kind]) === _ast.SyntaxKind.ArrayBindingPattern) {
+    if (_optionalChain([declaration, 'optionalAccess', _8666 => _8666.name, 'access', _8667 => _8667.kind]) === _ast.SyntaxKind.ArrayBindingPattern) {
       const arrayBindingPattern = declaration.name;
       const arrayBindingPatternElements = arrayBindingPattern.elements;
       const parsedArrayBindingElements = arrayBindingPatternElements.map((e) => this.printNode(e.name, 0));
@@ -67638,14 +59959,14 @@ var CppTranspiler = class extends BaseTranspiler {
     }
     if (node.expression.kind === _ast.SyntaxKind.NewExpression) {
       const expression = node.expression;
-      const argumentsExp = _nullishCoalesce(_optionalChain([expression, 'optionalAccess', _8647 => _8647.arguments]), () => ( []));
+      const argumentsExp = _nullishCoalesce(_optionalChain([expression, 'optionalAccess', _8668 => _8668.arguments]), () => ( []));
       const parsedArg = _nullishCoalesce(argumentsExp.map((n) => this.printNode(n, 0)).join(", "), () => ( ""));
       const newExpression = this.printNode(expression.expression, 0);
       if (expression.expression.kind === _ast.SyntaxKind.Identifier) {
         const id = expression.expression;
         const symbol = this.getChecker().getSymbolAtLocation(expression.expression);
         if (symbol) {
-          const declarations = (_nullishCoalesce(_optionalChain([this, 'access', _8648 => _8648.getChecker, 'call', _8649 => _8649(), 'access', _8650 => _8650.getDeclaredTypeOfSymbol, 'call', _8651 => _8651(symbol), 'access', _8652 => _8652.getSymbol, 'call', _8653 => _8653(), 'optionalAccess', _8654 => _8654.declarations]), () => ( []))).map((d) => d.resolve());
+          const declarations = (_nullishCoalesce(_optionalChain([this, 'access', _8669 => _8669.getChecker, 'call', _8670 => _8670(), 'access', _8671 => _8671.getDeclaredTypeOfSymbol, 'call', _8672 => _8672(symbol), 'access', _8673 => _8673.getSymbol, 'call', _8674 => _8674(), 'optionalAccess', _8675 => _8675.declarations]), () => ( []))).map((d) => d.resolve());
           const isClassDeclaration5 = declarations.find((l) => l.kind === _ast.SyntaxKind.InterfaceDeclaration || l.kind === _ast.SyntaxKind.ClassDeclaration);
           if (isClassDeclaration5) {
             return this.getIden(identation) + `${this.THROW_TOKEN} ${id.text}(toString(${parsedArg}))${this.LINE_TERMINATOR}`;
@@ -67760,7 +60081,7 @@ function memoizePairMethod(owner, name) {
     if (args.length !== 2 || a === null || typeof a !== "object" || b === null || typeof b !== "object") {
       return original.apply(owner, args);
     }
-    const cached = _optionalChain([cache, 'access', _8655 => _8655.get, 'call', _8656 => _8656(a), 'optionalAccess', _8657 => _8657.get, 'call', _8658 => _8658(b)]);
+    const cached = _optionalChain([cache, 'access', _8676 => _8676.get, 'call', _8677 => _8677(a), 'optionalAccess', _8678 => _8678.get, 'call', _8679 => _8679(b)]);
     if (cached !== void 0) {
       return cached === UNDEFINED_SENTINEL ? void 0 : cached;
     }
@@ -67800,7 +60121,7 @@ function memoizeUnaryMethod(owner, name) {
 }
 function memoizeBinaryKindMethod(owner, name) {
   const unary = owner[name];
-  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _8659 => _8659.original]), () => ( unary));
+  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _8680 => _8680.original]), () => ( unary));
   if (typeof original !== "function") {
     return;
   }
@@ -67850,17 +60171,17 @@ function prefetchChecker(checker, root, options = {}) {
   const typeNodes = [], symbolNodes = [], callNodes = [];
   const visit = (node) => {
     const kind = node.kind;
-    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _8660 => _8660.has, 'optionalCall', _8661 => _8661(node)]))
+    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _8681 => _8681.has, 'optionalCall', _8682 => _8682(node)]))
       typeNodes.push(node);
-    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _8662 => _8662.has, 'optionalCall', _8663 => _8663(node)]))
+    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _8683 => _8683.has, 'optionalCall', _8684 => _8684(node)]))
       symbolNodes.push(node);
-    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _8664 => _8664.has, 'optionalCall', _8665 => _8665(node)]))
+    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _8685 => _8685.has, 'optionalCall', _8686 => _8686(node)]))
       callNodes.push(node);
     node.forEachChild(visit);
   };
   visit(root);
   const run = (nodes, fn) => {
-    if (_optionalChain([fn, 'optionalAccess', _8666 => _8666.seed]) === void 0 || fn.original === void 0)
+    if (_optionalChain([fn, 'optionalAccess', _8687 => _8687.seed]) === void 0 || fn.original === void 0)
       return;
     for (let i = 0; i < nodes.length; i += PREFETCH_BATCH) {
       const chunk = nodes.slice(i, i + PREFETCH_BATCH);
@@ -67876,7 +60197,7 @@ function prefetchChecker(checker, root, options = {}) {
   run(typeNodes, getType);
   run(symbolNodes, getSymbol);
   const api = checker.__astTranspilerApi;
-  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _8667 => _8667.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _8668 => _8668.original, 'optionalAccess', _8669 => _8669.gen]) !== void 0) {
+  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _8688 => _8688.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _8689 => _8689.original, 'optionalAccess', _8690 => _8690.gen]) !== void 0) {
     for (let i = 0; i < callNodes.length; i += PREFETCH_BATCH) {
       const chunk = callNodes.slice(i, i + PREFETCH_BATCH);
       const gens = chunk.map((n) => {
@@ -67903,7 +60224,7 @@ function prefetchChecker(checker, root, options = {}) {
 function prefetchDeclarationSignatures(checker, api, root) {
   const getSigDecl = checker.getSignatureFromDeclaration;
   const getTypeOfSymbolAtLocation = checker.getTypeOfSymbolAtLocation;
-  if (_optionalChain([getSigDecl, 'optionalAccess', _8670 => _8670.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _8671 => _8671.original, 'optionalAccess', _8672 => _8672.gen]) === void 0)
+  if (_optionalChain([getSigDecl, 'optionalAccess', _8691 => _8691.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _8692 => _8692.original, 'optionalAccess', _8693 => _8693.gen]) === void 0)
     return;
   const decls = [];
   const visit = (node) => {
@@ -67929,9 +60250,9 @@ function prefetchDeclarationSignatures(checker, api, root) {
     }())));
     api.batch(...chunk.map((decl) => safe(function* () {
       const type = checker.getTypeAtLocation(decl);
-      const symbol = _optionalChain([type, 'optionalAccess', _8673 => _8673.getSymbol, 'optionalAccess', _8674 => _8674.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
-      const location = _optionalChain([symbol, 'optionalAccess', _8675 => _8675.valueDeclaration, 'optionalAccess', _8676 => _8676.resolve, 'call', _8677 => _8677()]);
-      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _8678 => _8678.seed2]) === void 0)
+      const symbol = _optionalChain([type, 'optionalAccess', _8694 => _8694.getSymbol, 'optionalAccess', _8695 => _8695.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
+      const location = _optionalChain([symbol, 'optionalAccess', _8696 => _8696.valueDeclaration, 'optionalAccess', _8697 => _8697.resolve, 'call', _8698 => _8698()]);
+      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _8699 => _8699.seed2]) === void 0)
         return;
       const symbolType = yield* getTypeOfSymbolAtLocation.original.gen(symbol, location);
       getTypeOfSymbolAtLocation.seed2(symbol, location, symbolType);
@@ -68023,7 +60344,7 @@ var Transpiler = class _Transpiler {
     const src = _nullishCoalesce(program.getSourceFile(fileName), () => ( program.getSourceFile(path3.resolve(fileName))));
     const previous = this.snapshot;
     this.snapshot = snapshot;
-    _optionalChain([previous, 'optionalAccess', _8679 => _8679.dispose, 'call', _8680 => _8680()]);
+    _optionalChain([previous, 'optionalAccess', _8700 => _8700.dispose, 'call', _8701 => _8701()]);
     return this.setContext({ src, checker, program });
   }
   createProgramInMemoryAndSetContext(content) {
@@ -68047,7 +60368,7 @@ var Transpiler = class _Transpiler {
   // long as the file's text on disk still equals the snapshot's. Replaces any
   // previous shared program; pass [] to drop it.
   setSharedProgram(paths) {
-    _optionalChain([this, 'access', _8681 => _8681.programCache, 'access', _8682 => _8682.shared, 'optionalAccess', _8683 => _8683.snapshot, 'access', _8684 => _8684.dispose, 'call', _8685 => _8685()]);
+    _optionalChain([this, 'access', _8702 => _8702.programCache, 'access', _8703 => _8703.shared, 'optionalAccess', _8704 => _8704.snapshot, 'access', _8705 => _8705.dispose, 'call', _8706 => _8706()]);
     this.programCache.shared = void 0;
     if (paths.length === 0) {
       return;
@@ -68061,7 +60382,7 @@ var Transpiler = class _Transpiler {
       return void 0;
     }
     const src = shared.program.getSourceFile(path3.resolve(filePath));
-    if (src === void 0 || !fs4.existsSync(filePath) || fs4.readFileSync(filePath, "utf8") !== src.text) {
+    if (src === void 0 || !fs3.existsSync(filePath) || fs3.readFileSync(filePath, "utf8") !== src.text) {
       return void 0;
     }
     return { src, checker: shared.checker, program: shared.program };
@@ -68400,36 +60721,5 @@ var TranspileProgramBatch = class {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-exports.CCXT_GO_BOOL_METHOD_NAMES = CCXT_GO_BOOL_METHOD_NAMES; exports.CCXT_GO_HELPER_RETURN_TYPES = CCXT_GO_HELPER_RETURN_TYPES; exports.CCXT_GO_STRING_PTR_METHOD_NAMES = CCXT_GO_STRING_PTR_METHOD_NAMES; exports.CheckFlags = _sync.CheckFlags; exports.ElementFlags = _sync.ElementFlags; exports.IndexKind = _sync.IndexKind; exports.ObjectFlags = _sync.ObjectFlags; exports.RUST_DECLARED_DICT_LOCALS = RUST_DECLARED_DICT_LOCALS; exports.SignatureKind = _sync.SignatureKind; exports.SymbolFlags = _sync.SymbolFlags; exports.SyntaxKind = _ast.SyntaxKind; exports.TranspileProgramBatch = TranspileProgramBatch; exports.Transpiler = Transpiler; exports.TypeFlags = _sync.TypeFlags; exports.TypeFormatFlags = _sync.TypeFormatFlags; exports.alignGoTrailingComments = alignGoTrailingComments; exports.arrOnlyVecPush = arrOnlyVecPush; exports.calleeShapeContainerOps = calleeShapeContainerOps; exports.clientHandleViews = clientHandleViews; exports.default = Transpiler; exports.fieldChainInserts = fieldChainInserts; exports.goDictParamTypesSelfTest = goDictParamTypesSelfTest; exports.goDynamicCallParamsCheck = goDynamicCallParamsCheck; exports.goHandleErrorsCodeSelfTest = goHandleErrorsCodeSelfTest; exports.goNilJoinTypeSelfTest = goNilJoinTypeSelfTest; exports.goParseFrameParamTypesSelfTest = goParseFrameParamTypesSelfTest; exports.installCcxtGoDictParams = installCcxtGoDictParams; exports.installCcxtGoGb05ParamTypes = installCcxtGoGb05ParamTypes; exports.installCcxtGoGb11HandleErrorsCode = installCcxtGoGb11HandleErrorsCode; exports.installCcxtGoHooks = installCcxtGoHooks; exports.installCcxtGoIndexableTypes = installCcxtGoIndexableTypes; exports.installCcxtGoLocalTypes = installCcxtGoLocalTypes; exports.installCcxtGoParamTypes = installCcxtGoParamTypes; exports.installCcxtGoSignTyping = installCcxtGoSignTyping; exports.installCcxtGoTupleSlotReads = installCcxtGoTupleSlotReads; exports.installFmGo5G01 = installFmGo5G01; exports.installFmGo5G04 = installFmGo5G04; exports.installFmGo5GP08 = installFmGo5GP08; exports.installFmGo5OG02 = installFmGo5OG02; exports.installNumParams = installNumParams; exports.installRfGo5OwnedTables = installRfGo5OwnedTables; exports.mapParamDispatchArg = mapParamDispatchArg; exports.mapParamKind = mapParamKind; exports.mapParamSplitArgs = mapParamSplitArgs; exports.narrowStrNullLocals = narrowStrNullLocals; exports.narrowStrSinkLocals = narrowStrSinkLocals; exports.nativeBoolCallee = nativeBoolCallee; exports.nativeBoolScalars = nativeBoolScalars; exports.nativeContainerOps = nativeContainerOps; exports.nativeGetValue = nativeGetValue; exports.nativeInserts = nativeInserts; exports.plainDictChains = plainDictChains; exports.refMapParamNames = refMapParamNames; exports.rustBool2LocalOptionBool = rustBool2LocalOptionBool; exports.rustBoolKLocalOptionBool = rustBoolKLocalOptionBool; exports.rustBoolNLocalOptionBool = rustBoolNLocalOptionBool; exports.rustInt2IntNLocalOptionI64 = rustInt2IntNLocalOptionI64; exports.rustIntLocalNullSinkOptionI64 = rustIntLocalNullSinkOptionI64; exports.rustNumber2LocalOptionF64 = rustNumber2LocalOptionF64; exports.rustNumber2SinkLocalOptionF64R2 = rustNumber2SinkLocalOptionF64R2; exports.rustSignApiStr = rustSignApiStr; exports.rustStr2LocalOptionString = rustStr2LocalOptionString; exports.rustStrLiteralLocalNativeString = rustStrLiteralLocalNativeString; exports.rustStrNLocalOptionString = rustStrNLocalOptionString; exports.rustStringNatives = rustStringNatives; exports.rustTypedLocals = rustTypedLocals; exports.rustVecPushInline = rustVecPushInline; exports.strLocalReassign = strLocalReassign;
+exports.CCXT_GO_BOOL_METHOD_NAMES = CCXT_GO_BOOL_METHOD_NAMES; exports.CCXT_GO_HELPER_RETURN_TYPES = CCXT_GO_HELPER_RETURN_TYPES; exports.CCXT_GO_STRING_PTR_METHOD_NAMES = CCXT_GO_STRING_PTR_METHOD_NAMES; exports.CheckFlags = _sync.CheckFlags; exports.ElementFlags = _sync.ElementFlags; exports.IndexKind = _sync.IndexKind; exports.ObjectFlags = _sync.ObjectFlags; exports.RUST_DECLARED_DICT_LOCALS = RUST_DECLARED_DICT_LOCALS; exports.SignatureKind = _sync.SignatureKind; exports.SymbolFlags = _sync.SymbolFlags; exports.SyntaxKind = _ast.SyntaxKind; exports.TranspileProgramBatch = TranspileProgramBatch; exports.Transpiler = Transpiler; exports.TypeFlags = _sync.TypeFlags; exports.TypeFormatFlags = _sync.TypeFormatFlags; exports.alignGoTrailingComments = alignGoTrailingComments; exports.default = Transpiler; exports.goDictParamTypesSelfTest = goDictParamTypesSelfTest; exports.goDynamicCallParamsCheck = goDynamicCallParamsCheck; exports.goHandleErrorsCodeSelfTest = goHandleErrorsCodeSelfTest; exports.goNilJoinTypeSelfTest = goNilJoinTypeSelfTest; exports.goParseFrameParamTypesSelfTest = goParseFrameParamTypesSelfTest; exports.installCcxtGoDictParams = installCcxtGoDictParams; exports.installCcxtGoGb05ParamTypes = installCcxtGoGb05ParamTypes; exports.installCcxtGoGb11HandleErrorsCode = installCcxtGoGb11HandleErrorsCode; exports.installCcxtGoHooks = installCcxtGoHooks; exports.installCcxtGoIndexableTypes = installCcxtGoIndexableTypes; exports.installCcxtGoLocalTypes = installCcxtGoLocalTypes; exports.installCcxtGoParamTypes = installCcxtGoParamTypes; exports.installCcxtGoSignTyping = installCcxtGoSignTyping; exports.installCcxtGoTupleSlotReads = installCcxtGoTupleSlotReads; exports.installFmGo5G01 = installFmGo5G01; exports.installFmGo5G04 = installFmGo5G04; exports.installFmGo5GP08 = installFmGo5GP08; exports.installFmGo5OG02 = installFmGo5OG02; exports.installNumParams = installNumParams; exports.installRfGo5OwnedTables = installRfGo5OwnedTables;
 //# sourceMappingURL=transpiler.cjs.map
