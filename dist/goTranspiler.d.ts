@@ -1721,6 +1721,9 @@ export declare class GoTranspiler extends BaseTranspiler {
     isArrayNonSliceTypes: string[];
     goIdentifierUsedElsewhere(nameNode: any): boolean;
     goLocalHoldsOnlyArrays(nameNode: any): boolean;
+    goIsSafeContainerIsArray(call: any): boolean;
+    printNegatedSafeContainerIsArray(operand: any): string | undefined;
+    goSingleWriteSafeContainerKind(nameNode: any): 'list' | 'dict' | undefined;
     printNativeIsArray(node: any, parsedArg: string | undefined): string | undefined;
     printArrayIsArrayCall(node: any, identation: any, parsedArg?: any): string;
     printObjectKeysCall(node: any, identation: any, parsedArg?: any): string;
