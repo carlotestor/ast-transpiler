@@ -255,6 +255,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     constructor(config?: {});
     initConfig(): void;
     quotedStringLiteral(text: string): string;
+    static readonly RUST_NAME_VALUE_IMPORTS: Set<string>;
+    static readonly RUST_NUMBER_CONSTANT_IMPORTS: Set<string>;
+    printIdentifier(node: any): string;
+    /** A bare read of an imported (or top-level destructured) binding: never a callee, member, key or `new` target. */
+    rustIsImportedValueName(node: any): boolean;
     printStringLiteral(node: any): any;
     printNumericLiteral(node: any): string;
     printBooleanLiteral(node: any): string;
@@ -628,6 +633,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     printFunctionDeclaration(node: any, identation: any): string;
     printOutOfOrderCallExpressionIfAny(node: any, identation: any): string;
     printArgsForCallExpression(node: any, identation: any): any;
+    rustPrintedArgs(node: any, identation: any, params?: any[]): string[];
+    private static readonly RUST_PRECISE_TRIMMED;
+    printRustNamespaceCall(node: any, identation: any): string | undefined;
+    printRustSignerCall(node: any, identation: any): string | undefined;
     printCallExpression(node: any, identation: any): string;
     printThisKeyword(node: any, identation: any): string;
     private static readonly RUST_ERROR_CONSTRUCTOR_ARGS;
@@ -897,6 +906,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  class is the default export of `ts/src/base/ws/Client.ts`, so its type
      *  symbol is named `default`; the declaration itself carries the name. */
     rustParameterIsClientHandle(declaration: ParameterDeclaration): boolean;
+    /** The ws `Client` class (or a union with it); its type symbol is the file's `default` export. */
+    rustIsWsClientType(type: Type | undefined): boolean;
     /** Constant string argument of `parseInt`/`parseFloat` folded the way rust's
      *  `str::parse` would; undefined when the fold is not obviously exact. */
     foldParsedStringLiteral(name: string, text: string): string | undefined;

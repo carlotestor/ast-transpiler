@@ -58024,6 +58024,35 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     text = text.replaceAll('"', '\\"');
     return `"${text}"`;
   }
+  printIdentifier(node) {
+    const name = String(node.text);
+    if (_RustTranspiler.RUST_NAME_VALUE_IMPORTS.has(name) && this.rustIsImportedValueName(node)) {
+      return `Value::Str(${this.quotedStringLiteral(name)}.into())`;
+    }
+    if (_RustTranspiler.RUST_NUMBER_CONSTANT_IMPORTS.has(name) && this.rustIsImportedValueName(node)) {
+      return `Value::Int(crate::runtime::${name})`;
+    }
+    return super.printIdentifier(node);
+  }
+  /** A bare read of an imported (or top-level destructured) binding: never a callee, member, key or `new` target. */
+  rustIsImportedValueName(node) {
+    const parent = node.parent;
+    if (parent === void 0)
+      return false;
+    if ((isCallExpression6(parent) || parent.kind === SyntaxKind7.NewExpression) && parent.expression === node)
+      return false;
+    if (isPropertyAccessExpression3(parent) || parent.kind === SyntaxKind7.PropertyAssignment && parent.name === node)
+      return false;
+    if (isElementAccessExpression4(parent) && parent.expression === node)
+      return false;
+    let declarations;
+    try {
+      declarations = symbolDeclarations(this.getChecker().getSymbolAtLocation(node));
+    } catch (e) {
+      return false;
+    }
+    return declarations.length > 0 && declarations.every((d) => d.kind === SyntaxKind7.ImportSpecifier || isBindingElement(d) && isSourceFile5(findAncestor(d, (a) => isStatement(a))?.parent));
+  }
   printStringLiteral(node) {
     const text = node.text;
     if (text in this.StringLiteralReplacements)
@@ -60855,6 +60884,11 @@ ${classMethods}
     if (params === void 0) {
       return super.printArgsForCallExpression(node, identation);
     }
+    return this.rustPrintedArgs(node, identation, params).join(", ");
+  }
+  rustPrintedArgs(node, identation, params = this.rustCalleeParams(node)) {
+    if (params === void 0)
+      return Array.from(node.arguments).map((a) => this.printNode(a, identation).trim());
     return Array.from(node.arguments).map((arg, at) => {
       if (this.rustNativeMapArgumentSlot(params, at) !== void 0) {
         return this.rustMapArgumentText(arg, identation);
@@ -60863,7 +60897,40 @@ ${classMethods}
         return this.rustStrVecArgumentText(arg, identation);
       }
       return this.rustNativeBoolArgumentSlot(params, at) ? this.rustBoolArgumentText(arg, identation) : this.printNode(arg, identation).trim();
-    }).join(", ");
+    });
+  }
+  printRustNamespaceCall(node, identation) {
+    const callee = node.expression;
+    if (!isPropertyAccessExpression3(callee) || !isIdentifier3(callee.expression))
+      return void 0;
+    const ns = String(callee.expression.text);
+    let name = String(callee.name.text);
+    if (ns !== "Math" && ns !== "Precise")
+      return void 0;
+    if (ns === "Math" && node.arguments.length === 1 && (name === "round" || name === "floor" || name === "ceil"))
+      return void 0;
+    let args = this.rustPrintedArgs(node, identation).map((a) => a.trim());
+    if (ns === "Precise" && _RustTranspiler.RUST_PRECISE_TRIMMED.test(name)) {
+      if (name === "stringDiv" && args.length >= 3)
+        name = "stringDivPrec";
+      args = args.slice(0, name === "stringDivPrec" ? 3 : name === "stringAbs" || name === "stringNeg" ? 1 : 2);
+    }
+    const path4 = ns === "Math" ? "crate::runtime::Math" : "crate::precise::Precise";
+    return `${path4}::${name}(${args.map((a) => a.startsWith("&") ? a : `&${a}`).join(", ")})`;
+  }
+  // The runtime signers have fixed arities: `jwt(request, secret, hash, isRsa, opts)`, `rsa(request, secret, hash)`.
+  printRustSignerCall(node, identation) {
+    const callee = node.expression;
+    if (!isIdentifier3(callee) || callee.text !== "jwt" && callee.text !== "rsa")
+      return void 0;
+    const args = this.rustPrintedArgs(node, identation);
+    if (callee.text === "rsa")
+      return `rsa(${args.slice(0, 3).join(", ")})`;
+    const defaults = ["Value::Null", "Value::Null", "Value::Null", "Value::Bool(false)", "Value::Null"];
+    const fixed = args.slice(0, 5);
+    while (fixed.length < 5)
+      fixed.push(defaults[fixed.length]);
+    return `jwt(${fixed.join(", ")})`;
   }
   printCallExpression(node, identation) {
     const expression = node.expression;
@@ -60895,6 +60962,9 @@ ${classMethods}
     const nativeParse = this.printNativeParseCall(node);
     if (nativeParse !== void 0)
       return nativeParse;
+    const runtimeCall = this.printRustNamespaceCall(node, identation) ?? this.printRustSignerCall(node, identation);
+    if (runtimeCall !== void 0)
+      return runtimeCall;
     if (expression.kind === SyntaxKind7.PropertyAccessExpression && expression.expression.kind === SyntaxKind7.ThisKeyword && expression.name.text === "json" && node.arguments.length === 1) {
       const argText = this.printNode(node.arguments[0], 0).trim();
       if (!argText.includes("self.")) {
@@ -60937,7 +61007,7 @@ ${classMethods}
       return args2 || "Value::Null";
     }
     const errorClassPattern = /^(?:[A-Z][a-zA-Z]*(?:Error|Required|Found|Failed|Rejected|Available|Exceeded|Limit|Pending|Funds|Address|Order|Cached|Fillable|Closed|Maintenance|Nonce|Timeout|Response|Settings|User|Supported|Implemented|Denied|Enabled|Suspended|Symbol|Change|Unavailable|Proxy|Set|Needed))$/;
-    if (typeof expression === "string" && errorClassPattern.test(expression)) {
+    if (typeof expression === "string" && (errorClassPattern.test(expression) || _RustTranspiler.RUST_NAME_VALUE_IMPORTS.has(expression) && /^[A-Z]/.test(expression))) {
       const snake = this.rustErrorConstructorName(expression);
       const args2 = node.arguments.map((a, index) => this.printErrorConstructorArg(snake, index, a, identation)).join(", ");
       return `crate::exchange_errors::${snake}(${args2})`;
@@ -62263,6 +62333,8 @@ ${ind}let ${view}: &${map} = &${arc};
     }
   }
   printNativeMapAccess(receiverText, receiverNode, keyText) {
+    if (keyText === "url" && this.rustIsWsClientType(this.getCheckedTypeOf(receiverNode)))
+      return `${receiverText}.url()`;
     if (this.rustMapParamDeclaration(receiverNode) !== void 0 && _RustTranspiler.rustBearerKeyTextOk(keyText)) {
       return `${receiverText}.get("${this.escapeRustStringLiteral(keyText)}").cloned().unwrap_or(Value::Null)`;
     }
@@ -62388,22 +62460,21 @@ ${ind}let ${view}: &${map} = &${arc};
    *  class is the default export of `ts/src/base/ws/Client.ts`, so its type
    *  symbol is named `default`; the declaration itself carries the name. */
   rustParameterIsClientHandle(declaration) {
-    const named = (type2) => {
-      if (type2 === void 0)
+    return this.rustIsWsClientType(this.getCheckedTypeOf(declaration.name));
+  }
+  /** The ws `Client` class (or a union with it); its type symbol is the file's `default` export. */
+  rustIsWsClientType(type) {
+    const named = (t) => {
+      if (t === void 0)
         return false;
-      const symbol = this.typeSymbolOf(type2);
-      const declarations = symbolDeclarations(symbol);
-      return declarations.some((d) => {
+      return symbolDeclarations(this.typeSymbolOf(t)).some((d) => {
         if (!isClassDeclaration4(d) || d.name === void 0 || d.name.text !== "Client")
           return false;
         const file = String(d.getSourceFile().fileName).replace(/\\/g, "/");
         return file.endsWith("/ws/Client.ts") || file.endsWith("/ws/Client.d.ts");
       });
     };
-    const type = this.getCheckedTypeOf(declaration.name);
-    if (named(type))
-      return true;
-    return (typeParts(type) ?? []).some((member) => named(member));
+    return named(type) || (typeParts(type) ?? []).some((member) => named(member));
   }
   /** Constant string argument of `parseInt`/`parseFloat` folded the way rust's
    *  `str::parse` would; undefined when the fold is not obviously exact. */
@@ -66485,6 +66556,75 @@ _RustTranspiler.RUST_PREFETCH_TYPE_KINDS = /* @__PURE__ */ new Set([
   SyntaxKind7.ConditionalExpression,
   SyntaxKind7.AsExpression
 ]);
+// Imported hash algorithms and ccxt error classes used as values are their names.
+_RustTranspiler.RUST_NAME_VALUE_IMPORTS = /* @__PURE__ */ new Set([
+  "sha256",
+  "sha512",
+  "sha384",
+  "sha224",
+  "sha3",
+  "sha1",
+  "md5",
+  "keccak",
+  "ed25519",
+  "ripemd160",
+  "secp256k1",
+  "p256",
+  "NotSupported",
+  "ArgumentsRequired",
+  "InvalidOrder",
+  "InvalidAddress",
+  "BadRequest",
+  "BadResponse",
+  "AuthenticationError",
+  "ExchangeError",
+  "ExchangeNotAvailable",
+  "NetworkError",
+  "DDoSProtection",
+  "RateLimitExceeded",
+  "InsufficientFunds",
+  "OrderNotFound",
+  "InvalidNonce",
+  "PermissionDenied",
+  "AccountNotEnabled",
+  "AccountSuspended",
+  "NotImplemented",
+  "OperationFailed",
+  "OperationRejected",
+  "RequestTimeout",
+  "MarginModeAlreadySet",
+  "ManualInteractionNeeded",
+  "UnsubscribeError",
+  "ContractUnavailable",
+  "MarketClosed",
+  "ExchangeClosedByUser",
+  "NullResponse",
+  "InvalidProxySettings",
+  "ChecksumError",
+  "OnMaintenance",
+  "BadSymbol",
+  "NoChange",
+  "CancelPending",
+  "OrderNotCached",
+  "OrderImmediatelyFillable",
+  "OrderNotFillable",
+  "DuplicateOrderId",
+  "RestrictedLocation",
+  "AddressPending",
+  "BaseError"
+]);
+// Precision-mode constants imported from base/functions/number.
+_RustTranspiler.RUST_NUMBER_CONSTANT_IMPORTS = /* @__PURE__ */ new Set([
+  "TICK_SIZE",
+  "TRUNCATE",
+  "ROUND",
+  "ROUND_UP",
+  "ROUND_DOWN",
+  "NO_PADDING",
+  "PAD_WITH_ZERO",
+  "SIGNIFICANT_DIGITS",
+  "DECIMAL_PLACES"
+]);
 // ── native equality emission ────────────────────────────────────────────
 // When the checker proves both operands hold the same primitive payload
 // (string / number / boolean, or one side is a matching literal) the
@@ -66662,6 +66802,9 @@ _RustTranspiler.RUST_SIGN_API_METHODS = /* @__PURE__ */ new Set(["sign", "fetch2
 // `ts/src/base/**` — the shared `Exchange` / `PredictionExchange` classes
 // (the transpiler synthesises variants like `.__ExchangeNoOverloads.ts`).
 _RustTranspiler.RUST_BASE_TIER_FILE = /ts[\\/]src[\\/]base[\\/]/;
+// `Math.X(..)` / `Precise.X(..)` call the runtime namespaces by reference; the Precise
+// wrappers take their TS arity without the optional precision (`stringDiv` keeps it as `stringDivPrec`).
+_RustTranspiler.RUST_PRECISE_TRIMMED = /^string(?:Div|Mul|Add|Sub|Mod|Eq|Gt|Ge|Lt|Le|Min|Max|Abs|Neg)$/;
 // Native string args to the runtime error constructors, audited against
 // rust/ccxt-base/src/exchange_errors.rs: `msg` is `impl ToErrorMessage` (`&str`/`String`/`Value`
 // yield the same string) and `create_error`'s class name is `&str` (bare literal only).
