@@ -9587,6 +9587,12 @@ var CSharpTranspiler = class extends BaseTranspiler {
         return `${this.printNode(node.expression, 0)}[Convert.ToInt32(${this.printNode(node.argumentExpression, 0)})]`;
       }
     }
+    if (this.csharpIsPlainIndexWrite(node) && this.csharpDeclaredLocalType(node.expression) === "ccxt.pro.ArrayCache") {
+      const type = this.getChecker().getTypeAtLocation(node.argumentExpression);
+      if ((type.flags & TypeFlags3.NumberLike) !== 0 && (type.flags & TypeFlags3.Union) === 0) {
+        return `((IList<object>)${this.printNode(node.expression, 0)})[Convert.ToInt32(${this.printNode(node.argumentExpression, 0)})]`;
+      }
+    }
     const listRead = this.csharpListIndexRead(node);
     if (listRead !== void 0) {
       return listRead;
@@ -9990,19 +9996,20 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // `List<object>` (identity conversion; not IList<object>, a checked downcast). Type comes via the
   // `csharpLocalTypeOf` hook; `x[i] += v` and reads stay on the base path (third override layer).
   csharpElementAccessReceiverIsList(node) {
-    if (node?.kind !== SyntaxKind4.ElementAccessExpression) {
-      return false;
-    }
-    const parent = node.parent;
-    if (parent?.kind !== SyntaxKind4.BinaryExpression || parent.operatorToken?.kind !== SyntaxKind4.EqualsToken || parent.left !== node) {
-      return false;
-    }
-    const receiver = node.expression;
-    if (receiver?.kind !== SyntaxKind4.Identifier) {
-      return false;
+    return this.csharpIndexWriteReceiverType(node) === "List<object>";
+  }
+  // the printed declaration type of the identifier receiver of a plain `x[i] = v`, else undefined
+  csharpIndexWriteReceiverType(node) {
+    if (!this.csharpIsPlainIndexWrite(node)) {
+      return void 0;
     }
     const localTypeOf = this.csharpLocalTypeOf;
-    return typeof localTypeOf === "function" && localTypeOf.call(this, receiver) === "List<object>";
+    return typeof localTypeOf === "function" ? localTypeOf.call(this, node.expression) : void 0;
+  }
+  // `x[i] = v` with an identifier receiver
+  csharpIsPlainIndexWrite(node) {
+    const parent = node?.parent;
+    return node?.kind === SyntaxKind4.ElementAccessExpression && node.expression?.kind === SyntaxKind4.Identifier && parent?.kind === SyntaxKind4.BinaryExpression && parent.operatorToken?.kind === SyntaxKind4.EqualsToken && parent.left === node;
   }
   // an index WRITE (`x["k"] = v`) needs no `((IDictionary<string,object>)x)` cast when the
   // receiver's printed C# declaration already IS a dictionary. The ccxt classifier

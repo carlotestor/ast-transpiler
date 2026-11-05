@@ -508,6 +508,8 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpGuardIsNegated(guard: any): boolean;
     csharpAlwaysExits(statement: any): boolean;
     csharpElementAccessReceiverIsList(node: any): boolean;
+    csharpIndexWriteReceiverType(node: any): string | undefined;
+    csharpIsPlainIndexWrite(node: any): boolean;
     csharpDictionaryIndexWriteNeedsNoCast(node: any): boolean | undefined;
     csharpElementAccessTypedReceiver(node: any): string | undefined;
     printTypedDictElementAccessIfAny(node: any): string;
