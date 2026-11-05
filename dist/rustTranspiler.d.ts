@@ -643,6 +643,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     printErrorConstructorArg(name: string, index: number, node: any, identation: number): string;
     rustErrorConstructorName(className: string): string;
     printNewExpression(node: any, identation: any): any;
+    /** Printed class expression of a `new` whose class is a runtime value, else undefined. */
+    rustDynamicErrorClass(node: any): string | undefined;
     /** `param.member` where `param` is a class-typed parameter, the member is
      *  string-typed and the read is a plain rvalue: `get_value_k(&param, "member")`. */
     printStringMemberOfClassParam(node: any, receiverText: string): string | undefined;

@@ -61012,8 +61012,26 @@ ${classMethods}
       const args2 = node.arguments.map((a, index) => this.printErrorConstructorArg(snake, index, a, identation)).join(", ");
       return `crate::exchange_errors::${snake}(${args2})`;
     }
+    const dynamicClass = this.rustDynamicErrorClass(node);
+    if (dynamicClass !== void 0) {
+      const args2 = node.arguments.map((a) => this.printNode(a, identation)).join(", ");
+      const built = `crate::exchange_errors::create_error(&crate::runtime::stringify_param(&(${dynamicClass})), &crate::runtime::stringify_param(&(${args2})))`;
+      return node.parent?.kind === SyntaxKind7.ThrowStatement ? built : `Value::from(${built})`;
+    }
     const args = typeof expression === "string" ? node.arguments.map((a, index) => this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation)).join(", ") : node.arguments.map((a) => this.printNode(a, identation)).join(", ");
     return `${expression}::new(${args})`;
+  }
+  /** Printed class expression of a `new` whose class is a runtime value, else undefined. */
+  rustDynamicErrorClass(node) {
+    const target = node.expression;
+    if (isElementAccessExpression4(target))
+      return this.printNode(target, 0).trim();
+    if (!isIdentifier3(target) || node.parent?.kind !== SyntaxKind7.ThrowStatement)
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(target);
+    if (declaration === void 0 || !(isVariableDeclaration3(declaration) || isParameterDeclaration3(declaration) || isBindingElement(declaration)))
+      return void 0;
+    return this.printNode(target, 0).trim();
   }
   /** `param.member` where `param` is a class-typed parameter, the member is
    *  string-typed and the read is a plain rvalue: `get_value_k(&param, "member")`. */
