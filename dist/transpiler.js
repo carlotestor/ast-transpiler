@@ -8084,6 +8084,22 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     return admitted === true ? "IList<object>" : void 0;
   }
+  // a top-level function's `string[]` parameter holds a list box; the list interface types it
+  // unless the body rebinds the name
+  csharpFunctionStringListParamType(node) {
+    const fn = node.parent;
+    if (fn?.kind !== SyntaxKind4.FunctionDeclaration || fn.body === void 0 || !isIdentifier(node.name) || node.type?.kind !== SyntaxKind4.ArrayType || node.type.elementType?.kind !== SyntaxKind4.StringKeyword) {
+      return void 0;
+    }
+    let written = false;
+    this.csharpWalkIdentifiers(fn.body, (identifier) => {
+      const parent = identifier.parent;
+      if (!written && this.csharpIsSameDeclaration(identifier, node) && isBinaryExpression2(parent) && parent.left === identifier) {
+        written = CSHARP_ASSIGNMENT_OPERATOR_KINDS.indexOf(parent.operatorToken.kind) >= 0;
+      }
+    });
+    return written ? void 0 : "IList<object>";
+  }
   // The C# spelling an annotation proves, or undefined: an array (or a `T[] | undefined` union)
   // whose cells the generated C# holds as `object` -- an `any` cell, a JSON dictionary, or a row
   // class/interface (a TS object is a Dictionary<string, object> in every generated port). A
@@ -8433,7 +8449,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (node === void 0 || node.kind !== SyntaxKind4.Parameter) {
       return super.printParameterType(node);
     }
-    const listType = this.csharpArrayListParamType(node);
+    const listType = this.csharpArrayListParamType(node) ?? this.csharpFunctionStringListParamType(node);
     if (listType !== void 0) {
       return listType;
     }

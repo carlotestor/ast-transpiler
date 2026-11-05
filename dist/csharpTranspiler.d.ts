@@ -352,6 +352,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     printInstanceOfExpression(node: any, identation: any): string;
     printAsExpression(node: any, identation: any): string;
     csharpArrayListParamType(node: any): string | undefined;
+    csharpFunctionStringListParamType(node: any): string | undefined;
     csharpListParamSpelling(node: any, anyCell?: boolean): string | undefined;
     csharpListSpellingOfType(type: any, unionArms?: number, anyCell?: boolean): string | undefined;
     csharpListParamCensus(): Map<string, boolean> | undefined;
