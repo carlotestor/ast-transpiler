@@ -5245,6 +5245,10 @@ export class JavaTranspiler extends BaseTranspiler {
             if (declaredBox !== undefined) {
                 return declaredBox;
             }
+            const integral = this.printIntegralCallArithmetic(left, right, leftText, rightText, op);
+            if (integral !== undefined) {
+                return integral;
+            }
 
 
             if (op === SyntaxKind.PlusEqualsToken) {
@@ -7379,6 +7383,75 @@ export class JavaTranspiler extends BaseTranspiler {
             return parent.condition !== child;
         }
         return (isPropertyAccessExpression(parent) || isElementAccessExpression(parent)) && parent.expression === child;
+    }
+
+    // ---- integral arithmetic on base int calls ----
+    // `- *` where each operand is a primitive long/int local, an integer literal, a nested native
+    // product/difference, or a base `this.precisionFromString/parseTimeframe(..)` (BaseExchange
+    // declares both `public int`): Helpers.multiply/subtract's Long arm is the same long result.
+    javaIntegralOperandKind(node, text: string): 'long' | 'int' | undefined {
+        if (isNumericLiteral(node)) {
+            return /^\d{1,18}$/.test(node.text) ? 'long' : undefined;
+        }
+        if (isPrefixUnaryExpression(node) && node.operator === SyntaxKind.MinusToken && isNumericLiteral(node.operand)) {
+            return /^\d{1,18}$/.test(node.operand.text) ? 'long' : undefined;
+        }
+        if (isBinaryExpression(node)) {
+            return (node.operatorToken.kind === SyntaxKind.MinusToken || node.operatorToken.kind === SyntaxKind.AsteriskToken)
+                && /^\(.*\)$/.test(text) && !text.includes('Helpers.') ? 'long' : undefined;
+        }
+        if (isIdentifier(node)) {
+            const kind = this.javaDeclaredBoxOperandKind(node, text);
+            return kind === 'longprim' ? 'long' : kind === 'intprim' ? 'int' : undefined;
+        }
+        if (isCallExpression(node) && isPropertyAccessExpression(node.expression)
+            && node.expression.expression.kind === SyntaxKind.ThisKeyword
+            && ['precisionFromString', 'parseTimeframe'].includes(node.expression.name.text)) {
+            const declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+            const fileName = declaration?.getSourceFile?.()?.fileName ?? '';
+            return /(^|[\\/])ts[\\/]src[\\/]base[\\/](Exchange(\.nooverloads\.\d+)?|functions[\\/]\w+)\.ts$/.test(fileName) ? 'int' : undefined;
+        }
+        return undefined;
+    }
+
+    printIntegralCallArithmetic(left, right, leftText: string, rightText: string, op): string | undefined {
+        if (op !== SyntaxKind.MinusToken && op !== SyntaxKind.AsteriskToken) {
+            return undefined;
+        }
+        const ta = this.javaIntegralOperandKind(left, leftText);
+        const tb = this.javaIntegralOperandKind(right, rightText);
+        // only a site with an int call operand: the declared-local pairs belong to the box rules
+        if (ta === undefined || tb === undefined || (!isCallExpression(left) && !isCallExpression(right))) {
+            return undefined;
+        }
+        const literal = (n, t: string) => (isNumericLiteral(n) || isPrefixUnaryExpression(n)) ? t + 'L' : t;
+        const a = ta === 'int' ? `((long) ${leftText})` : literal(left, leftText);
+        const b = tb === 'int' && ta === 'int' ? `((long) ${rightText})` : literal(right, rightText);
+        return `(${a} ${op === SyntaxKind.MinusToken ? '-' : '*'} ${/^-/.test(b) ? `(${b})` : b})`;
+    }
+
+    // `a && b` / `a || b` as a condition: both sides print through printCondition, so the Java
+    // operator already yields a primitive boolean. The test tree keeps the helper spelling.
+    printLogicalCondition(node): string | undefined {
+        let inner = node;
+        while (isParenthesizedExpression(inner)) {
+            inner = inner.expression;
+        }
+        if (!isBinaryExpression(inner) || (inner.operatorToken.kind !== SyntaxKind.AmpersandAmpersandToken
+            && inner.operatorToken.kind !== SyntaxKind.BarBarToken)
+            || /(^|[\\/])ts[\\/]src[\\/]test[\\/]/.test(node.getSourceFile?.()?.fileName ?? '')) {
+            return undefined;
+        }
+        let outer = node.parent;
+        while (outer !== undefined && isParenthesizedExpression(outer)) {
+            outer = outer.parent;
+        }
+        // an operand of an enclosing `&&` / `||` keeps its own spelling; the outermost test unwraps
+        if (this.javaConditionPrintsBoolean(node) || (outer !== undefined && isBinaryExpression(outer)
+            && (outer.operatorToken.kind === SyntaxKind.AmpersandAmpersandToken || outer.operatorToken.kind === SyntaxKind.BarBarToken))) {
+            return undefined;
+        }
+        return `(${this.printNode(node, 0)})`;
     }
 
     printDeclaredBoxArithmetic(node, left, right, leftText: string, rightText: string, op): string | undefined {
@@ -10461,6 +10534,10 @@ export class JavaTranspiler extends BaseTranspiler {
     }
 
     printCondition(node, identation) {
+        const logical = this.printLogicalCondition(node);
+        if (logical !== undefined) {
+            return this.getIden(identation) + logical;
+        }
         if (this.javaConditionPrintsBoolean(node)) {
             return this.getIden(identation) + this.printNode(node, 0);
         }

@@ -1136,9 +1136,9 @@ describe('java boolean conditions emitted without the Helpers.isTrue wrapper', (
             .toContain("if (!Helpers.isTrue(x))");
     });
 
-    test('logical operators over non-boolean operands keep the wrapper', () => {
+    test('logical operators wrap only their non-boolean operands', () => {
         const output = conditionOf("        if (x && x) { return; }\n", 'test(x: string): void');
-        expect(output).toContain("if (Helpers.isTrue(Helpers.isTrue(x) && Helpers.isTrue(x)))");
+        expect(output).toContain("if ((Helpers.isTrue(x) && Helpers.isTrue(x)))");
     });
 
     test('comparison operands inside a logical expression are unwrapped individually', () => {
@@ -10162,5 +10162,17 @@ describe ('rfJava3StringTypedParse', () => {
         test('an any operand keeps the helper', () => {
             expect(out).toContain('Helpers.parseFloat(p)');
         });
+    });
+});
+
+describe('java logical conditions and base int-call arithmetic', () => {
+    test('an outermost && / || condition prints the Java operator without isTrue', () => {
+        const out = transpiler.transpileJava('function f (x: any, y: any) { if (x && y) { return 1; } const z = (x || y) && x; return z; }').content;
+        expect(out).toContain('if ((Helpers.isTrue(x) && Helpers.isTrue(y)))');
+        expect(out).toContain('Object z = Helpers.isTrue((Helpers.isTrue(x) || Helpers.isTrue(y))) && Helpers.isTrue(x);');
+    });
+    test('a non-base precisionFromString call keeps Helpers.multiply', () => {
+        const out = transpiler.transpileJava('class A { precisionFromString (s: string): number { return 1; } f (s: string) { return this.precisionFromString (s) * 2; } }').content;
+        expect(out).toContain('Helpers.multiply(this.precisionFromString(s), 2)');
     });
 });

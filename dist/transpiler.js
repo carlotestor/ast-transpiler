@@ -44439,6 +44439,10 @@ ${this.getIden(identation)}}}`;
       if (declaredBox !== void 0) {
         return declaredBox;
       }
+      const integral = this.printIntegralCallArithmetic(left, right, leftText, rightText, op);
+      if (integral !== void 0) {
+        return integral;
+      }
       if (op === SyntaxKind6.PlusEqualsToken) {
         return `${leftText} = Helpers.add(${leftText}, ${rightText})`;
       }
@@ -46321,6 +46325,64 @@ ${this.getIden(identation)}}}`;
       return parent.condition !== child;
     }
     return (isPropertyAccessExpression2(parent) || isElementAccessExpression3(parent)) && parent.expression === child;
+  }
+  // ---- integral arithmetic on base int calls ----
+  // `- *` where each operand is a primitive long/int local, an integer literal, a nested native
+  // product/difference, or a base `this.precisionFromString/parseTimeframe(..)` (BaseExchange
+  // declares both `public int`): Helpers.multiply/subtract's Long arm is the same long result.
+  javaIntegralOperandKind(node, text) {
+    if (isNumericLiteral3(node)) {
+      return /^\d{1,18}$/.test(node.text) ? "long" : void 0;
+    }
+    if (isPrefixUnaryExpression2(node) && node.operator === SyntaxKind6.MinusToken && isNumericLiteral3(node.operand)) {
+      return /^\d{1,18}$/.test(node.operand.text) ? "long" : void 0;
+    }
+    if (isBinaryExpression4(node)) {
+      return (node.operatorToken.kind === SyntaxKind6.MinusToken || node.operatorToken.kind === SyntaxKind6.AsteriskToken) && /^\(.*\)$/.test(text) && !text.includes("Helpers.") ? "long" : void 0;
+    }
+    if (isIdentifier2(node)) {
+      const kind = this.javaDeclaredBoxOperandKind(node, text);
+      return kind === "longprim" ? "long" : kind === "intprim" ? "int" : void 0;
+    }
+    if (isCallExpression5(node) && isPropertyAccessExpression2(node.expression) && node.expression.expression.kind === SyntaxKind6.ThisKeyword && ["precisionFromString", "parseTimeframe"].includes(node.expression.name.text)) {
+      const declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+      const fileName = declaration?.getSourceFile?.()?.fileName ?? "";
+      return /(^|[\\/])ts[\\/]src[\\/]base[\\/](Exchange(\.nooverloads\.\d+)?|functions[\\/]\w+)\.ts$/.test(fileName) ? "int" : void 0;
+    }
+    return void 0;
+  }
+  printIntegralCallArithmetic(left, right, leftText, rightText, op) {
+    if (op !== SyntaxKind6.MinusToken && op !== SyntaxKind6.AsteriskToken) {
+      return void 0;
+    }
+    const ta = this.javaIntegralOperandKind(left, leftText);
+    const tb = this.javaIntegralOperandKind(right, rightText);
+    if (ta === void 0 || tb === void 0 || !isCallExpression5(left) && !isCallExpression5(right)) {
+      return void 0;
+    }
+    const literal = (n, t) => isNumericLiteral3(n) || isPrefixUnaryExpression2(n) ? t + "L" : t;
+    const a = ta === "int" ? `((long) ${leftText})` : literal(left, leftText);
+    const b = tb === "int" && ta === "int" ? `((long) ${rightText})` : literal(right, rightText);
+    return `(${a} ${op === SyntaxKind6.MinusToken ? "-" : "*"} ${/^-/.test(b) ? `(${b})` : b})`;
+  }
+  // `a && b` / `a || b` as a condition: both sides print through printCondition, so the Java
+  // operator already yields a primitive boolean. The test tree keeps the helper spelling.
+  printLogicalCondition(node) {
+    let inner = node;
+    while (isParenthesizedExpression2(inner)) {
+      inner = inner.expression;
+    }
+    if (!isBinaryExpression4(inner) || inner.operatorToken.kind !== SyntaxKind6.AmpersandAmpersandToken && inner.operatorToken.kind !== SyntaxKind6.BarBarToken || /(^|[\\/])ts[\\/]src[\\/]test[\\/]/.test(node.getSourceFile?.()?.fileName ?? "")) {
+      return void 0;
+    }
+    let outer = node.parent;
+    while (outer !== void 0 && isParenthesizedExpression2(outer)) {
+      outer = outer.parent;
+    }
+    if (this.javaConditionPrintsBoolean(node) || outer !== void 0 && isBinaryExpression4(outer) && (outer.operatorToken.kind === SyntaxKind6.AmpersandAmpersandToken || outer.operatorToken.kind === SyntaxKind6.BarBarToken)) {
+      return void 0;
+    }
+    return `(${this.printNode(node, 0)})`;
   }
   printDeclaredBoxArithmetic(node, left, right, leftText, rightText, op) {
     const operator = op === SyntaxKind6.PlusToken ? "+" : op === SyntaxKind6.MinusToken ? "-" : op === SyntaxKind6.AsteriskToken ? "*" : void 0;
@@ -48826,6 +48888,10 @@ ${this.getIden(identation)}}}`;
     return box === void 0 ? void 0 : `Boolean.TRUE.equals(${box})`;
   }
   printCondition(node, identation) {
+    const logical = this.printLogicalCondition(node);
+    if (logical !== void 0) {
+      return this.getIden(identation) + logical;
+    }
     if (this.javaConditionPrintsBoolean(node)) {
       return this.getIden(identation) + this.printNode(node, 0);
     }
