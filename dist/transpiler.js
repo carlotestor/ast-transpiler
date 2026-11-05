@@ -40218,6 +40218,57 @@ var JAVA_LIST_BACKED_TS_CLASSES = /* @__PURE__ */ new Set([
 ]);
 var JAVA_DECLARED_STRING_TYPE = /^(java\.util\.)?String$/;
 var THIS_WS_ORDERBOOK_TYPE = /^(?:io\.github\.ccxt\.ws\.)?WsOrderBook$/;
+var JAVA_BASE_DECLARED_MAP_CACHE_FIELDS = /* @__PURE__ */ new Set(["tickers", "bidsasks", "fundingRates"]);
+var JAVA_WS_RECEIVER_TIER_FILE = /(^|\/)ts\/src\/(pro|prediction)\/[a-z0-9_]+\.ts$/;
+var JAVA_WS_DYNAMIC_METHODS = /* @__PURE__ */ new Set(["append", "reset", "storeArray", "store"]);
+var JAVA_WS_DYNAMIC_FIELDS = /* @__PURE__ */ new Set(["myTrades", "positions", "orders", "trades", "ohlcvs", "tickers", "orderbooks"]);
+var JAVA_WS_PLAIN_RECEIVERS = /* @__PURE__ */ new Set([
+  "new",
+  "var",
+  "for",
+  "if",
+  "else",
+  "return",
+  "try",
+  "catch",
+  "throw",
+  "list",
+  "channel",
+  "response",
+  "request",
+  "message",
+  "data",
+  "params",
+  "options",
+  "config",
+  "entry",
+  "item",
+  "key",
+  "value",
+  "client",
+  "exchange",
+  "string",
+  "array",
+  "map",
+  "set",
+  "ticker",
+  "trade",
+  "order",
+  "balance",
+  "position",
+  "currency",
+  "market"
+]);
+var JAVA_WS_TYPED_METHODS = {
+  "io.github.ccxt.ws.ArrayCache": { "append": { argc: [1], value: false } },
+  "io.github.ccxt.ws.WsOrderBook": { "reset": { argc: [0, 1], value: false }, "limit": { argc: [0], value: true } },
+  "io.github.ccxt.ws.OrderBookSide": { "store": { argc: [2, 3], value: false }, "storeArray": { argc: [1], value: false }, "limit": { argc: [0], value: false } }
+};
+var JAVA_WS_CAST_METHODS = {
+  "append": { cls: "io.github.ccxt.ws.ArrayCache", argc: [1] },
+  "store": { cls: "io.github.ccxt.ws.OrderBookSide", argc: [2, 3] },
+  "storeArray": { cls: "io.github.ccxt.ws.OrderBookSide", argc: [1] }
+};
 var JAVA_NATIVE_PARAMETER_TYPES = {
   "Dict": "java.util.Map<String, Object>",
   "Market": "java.util.Map<String, Object>",
@@ -40947,6 +40998,27 @@ var JavaTranspiler = class extends BaseTranspiler {
     const declared = this.javaDeclaredTypeOf(node);
     return declared !== void 0 && declared.replace(/\s+/g, "").replace(/^java\.util\./, "") === type.replace(/\s+/g, "").replace(/^java\.util\./, "");
   }
+  // `k in xs` over a local declared List: Helpers.inOp's List branch is a null-guarded contains
+  javaDeclaredListContains(right, left, objText, keyText) {
+    if (!isIdentifier2(right) || objText !== right.text) {
+      return void 0;
+    }
+    const literal = isStringLiteralLikeNode3(left);
+    if (!literal && !(isIdentifier2(left) && keyText === left.text)) {
+      return void 0;
+    }
+    if (!literal) {
+      const keyDeclared = this.javaDeclaredTypeOf(left);
+      if (keyDeclared === void 0 || !/^[A-Z][\w.]*(?:<.*>)?$/.test(keyDeclared)) {
+        return void 0;
+      }
+    }
+    const declared = this.javaDeclaredTypeOf(right);
+    if (declared === void 0 || !/^(?:java\.util\.)?(?:List|ArrayList)<[^<>]*>$/.test(declared)) {
+      return void 0;
+    }
+    return `(${objText} != null && ${literal ? "" : `${keyText} != null && `}${objText}.contains(${keyText}))`;
+  }
   // Java erasure of a printed type, for override/bridge comparisons
   javaErasure(type) {
     return type.replace(/<.*>/, "").replace(/^java\.util\./, "").trim();
@@ -41593,6 +41665,53 @@ ${this.getIden(identation)}}}`;
       return this.printNodeCommentsIfAny(node, identation, handlerDispatch);
     }
     return super.printExpressionStatement(node, identation);
+  }
+  printCallExpression(node, identation) {
+    return this.printJavaWsReceiverCall(node, identation) ?? super.printCallExpression(node, identation);
+  }
+  // `x.append|reset|store|storeArray|limit (...)` in a ws/prediction venue: native on a local declared the
+  // ws class that has the method, a cast statement where one class alone declares it, else callDynamically
+  printJavaWsReceiverCall(node, identation) {
+    const callee = node.expression;
+    if (!isPropertyAccessExpression2(callee) || !JAVA_WS_RECEIVER_TIER_FILE.test(node.getSourceFile().fileName)) {
+      return void 0;
+    }
+    const method = callee.name.text;
+    const receiver = callee.expression;
+    const argc = node.arguments.length;
+    let receiverText;
+    if (isPropertyAccessExpression2(receiver) && receiver.expression.kind === SyntaxKind6.ThisKeyword && JAVA_WS_DYNAMIC_FIELDS.has(receiver.name.text)) {
+      if (!JAVA_WS_DYNAMIC_METHODS.has(method)) {
+        return void 0;
+      }
+      receiverText = "this." + receiver.name.text;
+    } else if (isIdentifier2(receiver)) {
+      receiverText = this.printNode(receiver, 0);
+      if (!/^[a-z]\w+$/.test(receiverText)) {
+        return void 0;
+      }
+      if (method === "limit" ? argc !== 0 : !JAVA_WS_DYNAMIC_METHODS.has(method) || JAVA_WS_PLAIN_RECEIVERS.has(receiverText)) {
+        return void 0;
+      }
+    } else {
+      return void 0;
+    }
+    const args = this.printArgsForCallExpression(node, identation);
+    const statement = node.parent?.kind === SyntaxKind6.ExpressionStatement;
+    if (isIdentifier2(receiver)) {
+      const declaration = this.javaDeclarationOfIdentifier(receiver);
+      const cls = declaration !== void 0 && isVariableDeclaration2(declaration) && declaration.name?.text === receiverText ? this.javaDeclaredTypeOfDeclaration(declaration) : void 0;
+      const spec = cls !== void 0 ? JAVA_WS_TYPED_METHODS[cls]?.[method] : void 0;
+      const single = cls === "io.github.ccxt.ws.WsOrderBook" || !args.includes("\n");
+      if (spec !== void 0 && spec.argc.includes(argc) && (spec.value || statement) && single) {
+        return `${receiverText}.${method}(${argc === 0 && method === "reset" ? "null" : args.trim()})`;
+      }
+    }
+    const cast = JAVA_WS_CAST_METHODS[method];
+    if (cast !== void 0 && statement && cast.argc.includes(argc)) {
+      return `((${cast.cls}) ${receiverText}).${method}(${args.trim()})`;
+    }
+    return `${this.DYNAMIC_CALL_OPEN}${receiverText}, "${method}", new Object[]{${args}})`;
   }
   printConstructorDeclaration(node, identation) {
     const classNode = node.parent;
@@ -44404,11 +44523,16 @@ ${this.getIden(identation)}}}`;
           return withGuard(`${objText}.containsKey(${keyText})`);
         }
         if (this.isJavaMapType(objectType)) {
-          return withGuard(`((java.util.Map<?, ?>)${objText}).containsKey(${keyText})`);
+          const receiverText = this.javaBaseDeclaredMapCacheField(right) ? objText : `((java.util.Map<?, ?>)${objText})`;
+          return withGuard(`${receiverText}.containsKey(${keyText})`);
         }
         if (this.isJavaNullableMapType(objectType) && this.javaRepeatableOperand(right)) {
           return `(${objText} != null && ${guarded}((java.util.Map<?, ?>)${objText}).containsKey(${keyText}))`;
         }
+      }
+      const listContains = this.javaDeclaredListContains(right, left, objText, keyText);
+      if (listContains !== void 0) {
+        return listContains;
       }
       return `Helpers.inOp(${objText}, ${keyText})`;
     }
@@ -44438,6 +44562,10 @@ ${this.getIden(identation)}}}`;
       const declaredBox = this.printDeclaredBoxArithmetic(node, left, right, leftText, rightText, op);
       if (declaredBox !== void 0) {
         return declaredBox;
+      }
+      const integral = this.printIntegralCallArithmetic(left, right, leftText, rightText, op);
+      if (integral !== void 0) {
+        return integral;
       }
       if (op === SyntaxKind6.PlusEqualsToken) {
         return `${leftText} = Helpers.add(${leftText}, ${rightText})`;
@@ -45407,6 +45535,11 @@ ${this.getIden(identation)}}}`;
   printElementAccessExpression(node, identation) {
     return this.printCheckerTypedElementAccessRead(node) ?? super.printElementAccessExpression(node, identation);
   }
+  // generated library tiers only (exchanges, pro, prediction, base); tests keep the helpers
+  javaLibraryTierNode(node) {
+    const file = node?.getSourceFile?.()?.fileName ?? "";
+    return file.includes("ts/src/") && !file.includes("ts/src/test/");
+  }
   // `Helpers.GetValue(book, "asks")` on a receiver declared the ws order book class: the class's
   // own `get` is the helper's map branch (containsKey holds every one of these keys), and GetValue
   // answers null for a null receiver, so the native read carries the same guard
@@ -46321,6 +46454,64 @@ ${this.getIden(identation)}}}`;
       return parent.condition !== child;
     }
     return (isPropertyAccessExpression2(parent) || isElementAccessExpression3(parent)) && parent.expression === child;
+  }
+  // ---- integral arithmetic on base int calls ----
+  // `- *` where each operand is a primitive long/int local, an integer literal, a nested native
+  // product/difference, or a base `this.precisionFromString/parseTimeframe(..)` (BaseExchange
+  // declares both `public int`): Helpers.multiply/subtract's Long arm is the same long result.
+  javaIntegralOperandKind(node, text) {
+    if (isNumericLiteral3(node)) {
+      return /^\d{1,18}$/.test(node.text) ? "long" : void 0;
+    }
+    if (isPrefixUnaryExpression2(node) && node.operator === SyntaxKind6.MinusToken && isNumericLiteral3(node.operand)) {
+      return /^\d{1,18}$/.test(node.operand.text) ? "long" : void 0;
+    }
+    if (isBinaryExpression4(node)) {
+      return (node.operatorToken.kind === SyntaxKind6.MinusToken || node.operatorToken.kind === SyntaxKind6.AsteriskToken) && /^\(.*\)$/.test(text) && !text.includes("Helpers.") ? "long" : void 0;
+    }
+    if (isIdentifier2(node)) {
+      const kind = this.javaDeclaredBoxOperandKind(node, text);
+      return kind === "longprim" ? "long" : kind === "intprim" ? "int" : void 0;
+    }
+    if (isCallExpression5(node) && isPropertyAccessExpression2(node.expression) && node.expression.expression.kind === SyntaxKind6.ThisKeyword && ["precisionFromString", "parseTimeframe"].includes(node.expression.name.text)) {
+      const declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+      const fileName = declaration?.getSourceFile?.()?.fileName ?? "";
+      return /(^|[\\/])ts[\\/]src[\\/]base[\\/](Exchange(\.nooverloads\.\d+)?|functions[\\/]\w+)\.ts$/.test(fileName) ? "int" : void 0;
+    }
+    return void 0;
+  }
+  printIntegralCallArithmetic(left, right, leftText, rightText, op) {
+    if (op !== SyntaxKind6.MinusToken && op !== SyntaxKind6.AsteriskToken) {
+      return void 0;
+    }
+    const ta = this.javaIntegralOperandKind(left, leftText);
+    const tb = this.javaIntegralOperandKind(right, rightText);
+    if (ta === void 0 || tb === void 0 || !isCallExpression5(left) && !isCallExpression5(right)) {
+      return void 0;
+    }
+    const literal = (n, t) => isNumericLiteral3(n) || isPrefixUnaryExpression2(n) ? t + "L" : t;
+    const a = ta === "int" ? `((long) ${leftText})` : literal(left, leftText);
+    const b = tb === "int" && ta === "int" ? `((long) ${rightText})` : literal(right, rightText);
+    return `(${a} ${op === SyntaxKind6.MinusToken ? "-" : "*"} ${/^-/.test(b) ? `(${b})` : b})`;
+  }
+  // `a && b` / `a || b` as a condition: both sides print through printCondition, so the Java
+  // operator already yields a primitive boolean. The test tree keeps the helper spelling.
+  printLogicalCondition(node) {
+    let inner = node;
+    while (isParenthesizedExpression2(inner)) {
+      inner = inner.expression;
+    }
+    if (!isBinaryExpression4(inner) || inner.operatorToken.kind !== SyntaxKind6.AmpersandAmpersandToken && inner.operatorToken.kind !== SyntaxKind6.BarBarToken || /(^|[\\/])ts[\\/]src[\\/]test[\\/]/.test(node.getSourceFile?.()?.fileName ?? "")) {
+      return void 0;
+    }
+    let outer = node.parent;
+    while (outer !== void 0 && isParenthesizedExpression2(outer)) {
+      outer = outer.parent;
+    }
+    if (this.javaConditionPrintsBoolean(node) || outer !== void 0 && isBinaryExpression4(outer) && (outer.operatorToken.kind === SyntaxKind6.AmpersandAmpersandToken || outer.operatorToken.kind === SyntaxKind6.BarBarToken)) {
+      return void 0;
+    }
+    return `(${this.printNode(node, 0)})`;
   }
   printDeclaredBoxArithmetic(node, left, right, leftText, rightText, op) {
     const operator = op === SyntaxKind6.PlusToken ? "+" : op === SyntaxKind6.MinusToken ? "-" : op === SyntaxKind6.AsteriskToken ? "*" : void 0;
@@ -47763,7 +47954,17 @@ ${this.getIden(identation)}}}`;
     return declaration?.kind === SyntaxKind6.VariableDeclaration && (getCombinedNodeFlags(declaration) & NodeFlags3.Const) === NodeFlags3.Const;
   }
   printPromiseAllCall(node, identation, parsedArg = void 0) {
-    return this.printNativePromiseAllCall(node) ?? `Helpers.promiseAll(${parsedArg})`;
+    return this.printNativePromiseAllCall(node) ?? this.printJavaPromiseAllStream(node, parsedArg) ?? `Helpers.promiseAll(${parsedArg})`;
+  }
+  // Helpers.promiseAll's own steps inline (List cast, CompletableFuture filter, allOf, in-order join
+  // into an ArrayList) in the ts/src exchange and base tiers; the test tier keeps the helper call
+  printJavaPromiseAllStream(node, parsedArg) {
+    const fileName = String(node?.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    if (parsedArg === void 0 || !/(^|\/)ts\/src\//.test(fileName) || JAVA_TEST_TIER_FILES.test(fileName)) {
+      return void 0;
+    }
+    const future = "java.util.concurrent.CompletableFuture";
+    return `((java.util.List<?>)(${parsedArg})).stream().filter(${future}.class::isInstance).map((promiseAllItem) -> (${future}<?>) promiseAllItem).collect(java.util.stream.Collectors.collectingAndThen(java.util.stream.Collectors.toList(), (promiseAllFutures) -> ${future}.allOf(promiseAllFutures.toArray(new ${future}<?>[0])).<java.util.List<Object>>thenApply((promiseAllDone) -> promiseAllFutures.stream().<Object>map(${future}::join).collect(java.util.stream.Collectors.toCollection(java.util.ArrayList<Object>::new)))))`;
   }
   printMathFloorCall(node, _identation, parsedArg = void 0) {
     return `(Math.floor(Double.parseDouble(${this.javaStringBoxText(node?.arguments?.[0], parsedArg)})))`;
@@ -47966,6 +48167,10 @@ ${this.getIden(identation)}}}`;
     const receiver = this.sideEffectFreeReceiver(node?.expression);
     if (pattern !== void 0 && replacement !== void 0 && receiver) {
       return `(${name} == null ? null : ((String)${name}).replace(${pattern}, ${replacement}))`;
+    }
+    const callee = node?.expression?.expression;
+    if (pattern !== void 0 && replacement !== void 0 && this.javaLibraryTierNode(node) && isCallExpression5(callee) && isPropertyAccessExpression2(callee.expression) && callee.arguments.length === 0 && ["toLowerCase", "toUpperCase", "trim"].includes(callee.expression.name.text) && /^(?:\(\(String\)[\w.]+\)|[\w.]+)\.(?:toLowerCase|toUpperCase|trim)\(\)$/.test(name)) {
+      return `${name}.replace(${pattern}, ${replacement})`;
     }
     const typed = this.javaTypedStringReplaceAllCall(node, name, parsedArg, parsedArg2);
     if (typed !== void 0) {
@@ -48226,6 +48431,44 @@ ${this.getIden(identation)}}}`;
     }
     return node.kind === SyntaxKind6.PropertyAccessExpression && node.name.text === "length" && this.javaLengthKind(node.expression) !== void 0;
   }
+  // `-x` in the true arm of `(x !== undefined) ? ... : ...` on an unwritten Long/Double local:
+  // the guard rules out null, so the helper's box-preserving negation is the box's valueOf
+  javaNullGuardedNegationBox(node) {
+    const operand = node.operand;
+    if (!isIdentifier2(operand)) {
+      return void 0;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(operand);
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || this.javaLocalHasWriteAtAll(declaration.name)) {
+      return void 0;
+    }
+    const box = this.javaDeclaredTypeOfDeclaration(declaration);
+    if (box !== "Long" && box !== "Double") {
+      return void 0;
+    }
+    const symbol = this.getChecker().getSymbolAtLocation(operand);
+    let child = node;
+    for (let current = node.parent; current !== void 0 && !isFunctionLike(current); child = current, current = current.parent) {
+      if (current.kind !== SyntaxKind6.ConditionalExpression) {
+        continue;
+      }
+      if (current.whenTrue !== child) {
+        return void 0;
+      }
+      let condition = current.condition;
+      while (condition?.kind === SyntaxKind6.ParenthesizedExpression) {
+        condition = condition.expression;
+      }
+      const op = condition?.operatorToken?.kind;
+      const right = condition?.right;
+      const nullish = right?.kind === SyntaxKind6.NullKeyword || isIdentifier2(right) && right.text === "undefined";
+      if (condition?.kind === SyntaxKind6.BinaryExpression && (op === SyntaxKind6.ExclamationEqualsEqualsToken || op === SyntaxKind6.ExclamationEqualsToken) && nullish && isIdentifier2(condition.left) && this.getChecker().getSymbolAtLocation(condition.left) === symbol) {
+        return box;
+      }
+      return void 0;
+    }
+    return void 0;
+  }
   printPrefixUnaryExpression(node, identation) {
     const { operand, operator } = node;
     if (operator === SyntaxKind6.ExclamationToken) {
@@ -48237,6 +48480,10 @@ ${this.getIden(identation)}}}`;
     } else if (operator === SyntaxKind6.MinusToken) {
       if (this.javaNativeNegation(operand)) {
         return `-${leftSide}`;
+      }
+      const guardedBox = this.javaNullGuardedNegationBox(node);
+      if (guardedBox !== void 0) {
+        return `${guardedBox}.valueOf(-${leftSide})`;
       }
       return `Helpers.opNeg(${leftSide})`;
     }
@@ -48826,6 +49073,10 @@ ${this.getIden(identation)}}}`;
     return box === void 0 ? void 0 : `Boolean.TRUE.equals(${box})`;
   }
   printCondition(node, identation) {
+    const logical = this.printLogicalCondition(node);
+    if (logical !== void 0) {
+      return this.getIden(identation) + logical;
+    }
     if (this.javaConditionPrintsBoolean(node)) {
       return this.getIden(identation) + this.printNode(node, 0);
     }
@@ -48861,7 +49112,19 @@ ${this.getIden(identation)}}}`;
     if (this.javaWsClientMapReceiver(node.expression.expression)) {
       return `${object}.remove((String)${key})`;
     }
+    if (this.javaBaseDeclaredMapCacheField(node.expression.expression)) {
+      return `${object}.remove((String)${key})`;
+    }
     return `((java.util.Map<String,Object>)${object}).remove((String)${key})`;
+  }
+  // `this.<field>` resolving to an Exchange.ts field of JAVA_BASE_DECLARED_MAP_CACHE_FIELDS
+  javaBaseDeclaredMapCacheField(expression) {
+    if (expression === void 0 || !isPropertyAccessExpression2(expression) || expression.expression.kind !== SyntaxKind6.ThisKeyword || !JAVA_BASE_DECLARED_MAP_CACHE_FIELDS.has(expression.name.text)) {
+      return false;
+    }
+    const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(expression.name)?.valueDeclaration?.resolve();
+    const fileName = declaration?.getSourceFile?.()?.fileName;
+    return typeof fileName === "string" && JAVA_THIS_RETURN_TYPES_BASE_FILE.test(fileName);
   }
   printThrowStatement(node, identation) {
     if (node.expression.kind === SyntaxKind6.Identifier) {
@@ -49206,7 +49469,8 @@ ${this.getIden(identation)}}}`;
     const target = this.printNode(receiver, 0);
     const keyText = this.printNode(key, 0);
     const keyGuard = literal ? "" : `${keyText} == null || `;
-    return `(${keyGuard}${target} == null ? null : ((java.util.Map<?, ?>)${target}).get(${keyText}))`;
+    const read = this.javaBaseDeclaredMapCacheField(receiver) ? target : `((java.util.Map<?, ?>)${target})`;
+    return `(${keyGuard}${target} == null ? null : ${read}.get(${keyText}))`;
   }
   javaBaseMapFieldReadText(receiver, key, field) {
     const operand = isAsExpression2(key) && key.type?.kind === SyntaxKind6.StringKeyword ? key.expression : key;

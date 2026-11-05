@@ -33,6 +33,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaStringListLiteral(node: any): string | undefined;
     javaStringListElementIsProven(node: any): boolean;
     javaLocalDeclaredAs(node: any, printed: string, type: string): boolean;
+    javaDeclaredListContains(right: any, left: any, objText: string, keyText: string): string | undefined;
     javaErasure(type: string): string;
     printOverrideBridges(node: any, identation: any): string;
     printOverrideBridge(node: any, ancestor: any, ancestorTypes: string[], ownTypes: string[], identation: any): string;
@@ -82,6 +83,8 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaHandlerCallArgument(node: any, position: any): string;
     printJavaHandlerDispatch(node: any, identation: any): string;
     printExpressionStatement(node: any, identation: any): string;
+    printCallExpression(node: any, identation: any): any;
+    printJavaWsReceiverCall(node: any, identation: any): string | undefined;
     printConstructorDeclaration(node: any, identation: any): string;
     injectLeadingInBody(body: any, firstLine: any): any;
     printDynamicCall(node: any, identation: any): string;
@@ -290,6 +293,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaFieldMapReadIfAllowed(node: any): string | undefined;
     printCheckerTypedElementAccessRead(node: any): string;
     printElementAccessExpression(node: any, identation: any): any;
+    javaLibraryTierNode(node: any): boolean;
     javaClassTypedElementRead(node: any): string;
     javaScalarFamily(node: any): string | undefined;
     javaProvableString(node: any): boolean;
@@ -338,6 +342,9 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaNumberOrNullishType(node: any): boolean;
     javaStripPrintedParens(text: string): string;
     javaArithmeticResultIsBoxSensitive(node: any): boolean;
+    javaIntegralOperandKind(node: any, text: string): 'long' | 'int' | undefined;
+    printIntegralCallArithmetic(left: any, right: any, leftText: string, rightText: string, op: any): string | undefined;
+    printLogicalCondition(node: any): string | undefined;
     printDeclaredBoxArithmetic(node: any, left: any, right: any, leftText: string, rightText: string, op: any): string | undefined;
     printInlineHelperArithmetic(left: any, right: any, leftText: any, rightText: any, op: any): string;
     javaPrintArithmeticOperand(kind: any, node: any, text: any): any;
@@ -424,6 +431,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printNativePromiseAllCall(node: any): string;
     isConstBoundIdentifier(node: any): boolean;
     printPromiseAllCall(node: any, identation: any, parsedArg?: any): string;
+    printJavaPromiseAllStream(node: any, parsedArg: any): string;
     printMathFloorCall(node: any, _identation: any, parsedArg?: any): string;
     printMathRoundCall(node: any, _identation: any, parsedArg?: any): string;
     printMathCeilCall(node: any, _identation: any, parsedArg?: any): string;
@@ -474,6 +482,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printPostFixUnaryExpression(node: any, identation: any): string;
     javaPrimitiveCounter(node: any): boolean;
     javaNativeNegation(node: any): boolean;
+    javaNullGuardedNegationBox(node: any): string | undefined;
     printPrefixUnaryExpression(node: any, identation: any): any;
     javaBooleanCondition(node: any): any;
     javaPreciseBooleanCall(node: any): any;
@@ -505,6 +514,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printCondition(node: any, identation: any): any;
     printConditionalExpression(node: any, _identation: any): string;
     printDeleteExpression(node: any, _identation: any): string;
+    javaBaseDeclaredMapCacheField(expression: any): boolean;
     printThrowStatement(node: any, identation: any): string;
     csModifiers: {};
     printPropertyAccessModifiers(node: any): string;
