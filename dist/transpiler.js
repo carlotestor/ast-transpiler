@@ -25137,7 +25137,9 @@ var GoTranspiler = class extends BaseTranspiler {
       // the ws client registry
       // declared `map[string]any` in go/v4/exchange.go
       "Timeframes": "map[string]any",
-      "Balance": "map[string]any"
+      "Balance": "map[string]any",
+      "Urls": "map[string]any",
+      "HttpExceptions": "map[string]any"
     };
     // the market/currency tables are plain `map[string]any` fields of BaseExchange (go/v4/exchange.go),
     // written only by whole-map assignment or AddMarketsEntry-style copy-on-write, never in place
@@ -28010,6 +28012,15 @@ ${this.getIden(identation)}${this.printNode(node.left, 0)} = &${local}`;
   }
   // the variable declaration an identifier binds to, through the checker (undefined for every
   // other shape) — the market rule resolves its own locals this way, never by printed name
+  // the parameter an identifier reads, or undefined for any other binding
+  goParameterOfIdentifier(node) {
+    try {
+      const declaration = this.getChecker().getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+      return declaration?.kind === SyntaxKind5.Parameter ? declaration : void 0;
+    } catch (e) {
+      return void 0;
+    }
+  }
   goDeclarationOfIdentifier(node) {
     try {
       const symbol = this.getChecker().getSymbolAtLocation(node);
@@ -32656,6 +32667,14 @@ ${iden}}`;
     const bare = parent?.kind === SyntaxKind5.BinaryExpression && (parent.operatorToken.kind === SyntaxKind5.AmpersandAmpersandToken || parent.operatorToken.kind === SyntaxKind5.BarBarToken);
     return bare ? text : `(${text})`;
   }
+  // `this.balance[k] === undefined`: the entry read off the Balance map is a plain `any`, nil when the key is absent
+  goBalanceEntryNilCompare(left, right, leftText, rightText, isEq, lFam, rFam) {
+    const entry = rFam === "nil" ? [left, leftText] : lFam === "nil" ? [right, rightText] : void 0;
+    if (entry === void 0 || entry[0]?.kind !== SyntaxKind5.ElementAccessExpression || this.goA9fL1CacheField(entry[0].expression) !== "Balance" || !/^this\.Balance\[\w+\]$/.test(entry[1])) {
+      return void 0;
+    }
+    return `(${entry[1]} ${isEq ? "==" : "!="} nil)`;
+  }
   // a key the map index takes as is: a Go string (literal / `string` local / string-returning call), or an element
   // of a `[]string` local read at a counter its own `for (let i = 0; i < xs.length; i++)` bounds to that slice
   goCacheKeyText(keyNode, keyStr) {
@@ -35243,7 +35262,7 @@ ${indent}}`);
     if (rFam === "nil" && lPtr) {
       return isEq ? `(${leftText} == nil)` : `(${leftText} != nil)`;
     }
-    const cacheNil = this.goCacheNilCompare(left, right, leftText, rightText, isEq, lFam, rFam);
+    const cacheNil = this.goCacheNilCompare(left, right, leftText, rightText, isEq, lFam, rFam) ?? this.goBalanceEntryNilCompare(left, right, leftText, rightText, isEq, lFam, rFam);
     if (cacheNil !== void 0) {
       return cacheNil;
     }
@@ -38324,7 +38343,7 @@ ${tryBodyBlock}
       case SyntaxKind5.AsExpression:
         return this.goKeyIsString(node.expression, printed);
       case SyntaxKind5.Identifier:
-        return this.goDeclaredTypeOfIdentifier(node) === "string";
+        return this.goDeclaredTypeOfIdentifier(node) === "string" || this.goGetArgParameterType(this.goParameterOfIdentifier(node)) === "string";
       case SyntaxKind5.CallExpression:
         return this.goTypeOfInitializer(node, printed) === "string";
       case SyntaxKind5.ElementAccessExpression:

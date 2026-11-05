@@ -1137,6 +1137,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goMarketUseHandsTheMapOn(node: any, parent: any): boolean;
     goMarketLocalUnboxUncached(declaration: any): string | undefined;
     goMarketUnboxValue(declaration: any, parsedValue: string): string | undefined;
+    goParameterOfIdentifier(node: any): any;
     goDeclarationOfIdentifier(node: any): any;
     goMarketComparisonElementRead(node: any): boolean;
     goIsComparedOperand(node: any): boolean;
@@ -1457,6 +1458,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goIsPlainValuedMapField(node: any): boolean;
     goCacheField(node: any): boolean;
     goCacheNilCompare(left: any, right: any, leftText: string, rightText: string, isEq: boolean, lFam: any, rFam: any): string | undefined;
+    goBalanceEntryNilCompare(left: any, right: any, leftText: string, rightText: string, isEq: boolean, lFam: any, rFam: any): string | undefined;
     goCacheKeyText(keyNode: any, keyStr: string): string | undefined;
     goIndexBoundedBy(index: any, list: any, use: any): boolean;
     goCacheKeysRange(declaration: any, declaredType: string, varName: string, identation: any): string | undefined;
