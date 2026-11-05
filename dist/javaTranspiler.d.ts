@@ -82,6 +82,8 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaHandlerCallArgument(node: any, position: any): string;
     printJavaHandlerDispatch(node: any, identation: any): string;
     printExpressionStatement(node: any, identation: any): string;
+    printCallExpression(node: any, identation: any): any;
+    printJavaWsReceiverCall(node: any, identation: any): string | undefined;
     printConstructorDeclaration(node: any, identation: any): string;
     injectLeadingInBody(body: any, firstLine: any): any;
     printDynamicCall(node: any, identation: any): string;
@@ -505,6 +507,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printCondition(node: any, identation: any): any;
     printConditionalExpression(node: any, _identation: any): string;
     printDeleteExpression(node: any, _identation: any): string;
+    javaBaseDeclaredMapCacheField(expression: any): boolean;
     printThrowStatement(node: any, identation: any): string;
     csModifiers: {};
     printPropertyAccessModifiers(node: any): string;

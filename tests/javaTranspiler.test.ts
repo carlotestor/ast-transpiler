@@ -10164,3 +10164,82 @@ describe ('rfJava3StringTypedParse', () => {
         });
     });
 });
+
+describe('java ws receiver calls', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'java-ws-receiver-calls-'));
+    const write = (relative: string, content: string): string => {
+        const file = path.join(root, relative);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, content);
+        return file;
+    };
+    write('ts/src/base/Exchange.ts', 'export default class Exchange {\n    tickers: { [key: string]: any } = {};\n    orders: any = undefined;\n}\n');
+    let venue = 0;
+    const transpile = (relative: string, body: string, types: { [name: string]: string } = {}): string => {
+        const printer: any = (transpiler as any).javaTranspiler;
+        const original = printer.javaDeclaredLocalTypeResolver;
+        try {
+            printer.javaDeclaredLocalTypeResolver = (declaration: any) => types[declaration?.name?.text];
+            return transpiler.transpileJavaByPath(write(relative.replace('#', String(venue++)), body)).content;
+        } finally {
+            printer.javaDeclaredLocalTypeResolver = original;
+        }
+    };
+    const venueClass = (base: string, members: string) => `import Exchange from '${base}/Exchange.js';\nexport default class V extends Exchange {\n${members}\n}\n`;
+    const members = `    handle (raw: any, symbol: string, snapshot: any) {
+        const cache = raw;
+        const book = raw;
+        const side = raw;
+        cache.append (1);
+        book.reset (snapshot);
+        book.reset ();
+        side.store (1, 2);
+        this.orders.append (3);
+        const limit = book.limit ();
+        if (symbol in this.tickers) {
+            delete this.tickers[symbol];
+        }
+        return [ limit, this.tickers[symbol] ];
+    }
+    other (stored: any) {
+        stored.append (1);
+        stored.reset (2);
+        return stored.limit ();
+    }`;
+    const body = venueClass('../base', members);
+
+    test('a ws local declared a ws class calls its method natively', () => {
+        const output = transpile('ts/src/pro/venue#.ts', body, {
+            'cache': 'io.github.ccxt.ws.ArrayCache', 'book': 'io.github.ccxt.ws.WsOrderBook', 'side': 'io.github.ccxt.ws.OrderBookSide',
+        });
+        expect(output.split('public Object other')[0]).not.toContain('Helpers.callDynamically(');
+        expect(output).toContain('book.reset(snapshot);');
+        expect(output).toContain('book.reset(null);');
+        expect(output).toContain('side.store(1, 2);');
+        expect(output).toContain('((io.github.ccxt.ws.ArrayCache) this.orders).append(3);');
+        expect(output).toContain('book.limit()');
+        expect(output).toContain('this.tickers.containsKey(symbol)');
+        expect(output).toContain('this.tickers.remove((String)symbol)');
+        expect(output).toContain(': this.tickers.get(symbol))');
+    });
+
+    test('an undeclared ws receiver dispatches reflectively, a sole-declaring class takes a cast', () => {
+        const output = transpile('ts/src/pro/venue#.ts', body);
+        expect(output).toContain('((io.github.ccxt.ws.ArrayCache) stored).append(1);');
+        expect(output).toContain('Helpers.callDynamically(stored, "reset", new Object[]{2});');
+        expect(output).toContain('Helpers.callDynamically(stored, "limit", new Object[]{})');
+    });
+
+    test('REST venues print the plain call', () => {
+        const output = transpile('ts/src/venue#.ts', venueClass('./base', members), { 'book': 'io.github.ccxt.ws.WsOrderBook' });
+        expect(output).not.toContain('Helpers.callDynamically(');
+        expect(output).toContain('book.reset(snapshot)');
+        expect(output).toContain('stored.reset(2)');
+        // the base cache field is declared a Map in either tier
+        expect(output).toContain('this.tickers.containsKey(symbol)');
+    });
+
+    afterAll(() => {
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+});

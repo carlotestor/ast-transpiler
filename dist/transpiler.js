@@ -40218,6 +40218,57 @@ var JAVA_LIST_BACKED_TS_CLASSES = /* @__PURE__ */ new Set([
 ]);
 var JAVA_DECLARED_STRING_TYPE = /^(java\.util\.)?String$/;
 var THIS_WS_ORDERBOOK_TYPE = /^(?:io\.github\.ccxt\.ws\.)?WsOrderBook$/;
+var JAVA_BASE_DECLARED_MAP_CACHE_FIELDS = /* @__PURE__ */ new Set(["tickers", "bidsasks", "fundingRates"]);
+var JAVA_WS_RECEIVER_TIER_FILE = /(^|\/)ts\/src\/(pro|prediction)\/[a-z0-9_]+\.ts$/;
+var JAVA_WS_DYNAMIC_METHODS = /* @__PURE__ */ new Set(["append", "reset", "storeArray", "store"]);
+var JAVA_WS_DYNAMIC_FIELDS = /* @__PURE__ */ new Set(["myTrades", "positions", "orders", "trades", "ohlcvs", "tickers", "orderbooks"]);
+var JAVA_WS_PLAIN_RECEIVERS = /* @__PURE__ */ new Set([
+  "new",
+  "var",
+  "for",
+  "if",
+  "else",
+  "return",
+  "try",
+  "catch",
+  "throw",
+  "list",
+  "channel",
+  "response",
+  "request",
+  "message",
+  "data",
+  "params",
+  "options",
+  "config",
+  "entry",
+  "item",
+  "key",
+  "value",
+  "client",
+  "exchange",
+  "string",
+  "array",
+  "map",
+  "set",
+  "ticker",
+  "trade",
+  "order",
+  "balance",
+  "position",
+  "currency",
+  "market"
+]);
+var JAVA_WS_TYPED_METHODS = {
+  "io.github.ccxt.ws.ArrayCache": { "append": { argc: [1], value: false } },
+  "io.github.ccxt.ws.WsOrderBook": { "reset": { argc: [0, 1], value: false }, "limit": { argc: [0], value: true } },
+  "io.github.ccxt.ws.OrderBookSide": { "store": { argc: [2, 3], value: false }, "storeArray": { argc: [1], value: false }, "limit": { argc: [0], value: false } }
+};
+var JAVA_WS_CAST_METHODS = {
+  "append": { cls: "io.github.ccxt.ws.ArrayCache", argc: [1] },
+  "store": { cls: "io.github.ccxt.ws.OrderBookSide", argc: [2, 3] },
+  "storeArray": { cls: "io.github.ccxt.ws.OrderBookSide", argc: [1] }
+};
 var JAVA_NATIVE_PARAMETER_TYPES = {
   "Dict": "java.util.Map<String, Object>",
   "Market": "java.util.Map<String, Object>",
@@ -41593,6 +41644,53 @@ ${this.getIden(identation)}}}`;
       return this.printNodeCommentsIfAny(node, identation, handlerDispatch);
     }
     return super.printExpressionStatement(node, identation);
+  }
+  printCallExpression(node, identation) {
+    return this.printJavaWsReceiverCall(node, identation) ?? super.printCallExpression(node, identation);
+  }
+  // `x.append|reset|store|storeArray|limit (...)` in a ws/prediction venue: native on a local declared the
+  // ws class that has the method, a cast statement where one class alone declares it, else callDynamically
+  printJavaWsReceiverCall(node, identation) {
+    const callee = node.expression;
+    if (!isPropertyAccessExpression2(callee) || !JAVA_WS_RECEIVER_TIER_FILE.test(node.getSourceFile().fileName)) {
+      return void 0;
+    }
+    const method = callee.name.text;
+    const receiver = callee.expression;
+    const argc = node.arguments.length;
+    let receiverText;
+    if (isPropertyAccessExpression2(receiver) && receiver.expression.kind === SyntaxKind6.ThisKeyword && JAVA_WS_DYNAMIC_FIELDS.has(receiver.name.text)) {
+      if (!JAVA_WS_DYNAMIC_METHODS.has(method)) {
+        return void 0;
+      }
+      receiverText = "this." + receiver.name.text;
+    } else if (isIdentifier2(receiver)) {
+      receiverText = this.printNode(receiver, 0);
+      if (!/^[a-z]\w+$/.test(receiverText)) {
+        return void 0;
+      }
+      if (method === "limit" ? argc !== 0 : !JAVA_WS_DYNAMIC_METHODS.has(method) || JAVA_WS_PLAIN_RECEIVERS.has(receiverText)) {
+        return void 0;
+      }
+    } else {
+      return void 0;
+    }
+    const args = this.printArgsForCallExpression(node, identation);
+    const statement = node.parent?.kind === SyntaxKind6.ExpressionStatement;
+    if (isIdentifier2(receiver)) {
+      const declaration = this.javaDeclarationOfIdentifier(receiver);
+      const cls = declaration !== void 0 && isVariableDeclaration2(declaration) && declaration.name?.text === receiverText ? this.javaDeclaredTypeOfDeclaration(declaration) : void 0;
+      const spec = cls !== void 0 ? JAVA_WS_TYPED_METHODS[cls]?.[method] : void 0;
+      const single = cls === "io.github.ccxt.ws.WsOrderBook" || !args.includes("\n");
+      if (spec !== void 0 && spec.argc.includes(argc) && (spec.value || statement) && single) {
+        return `${receiverText}.${method}(${argc === 0 && method === "reset" ? "null" : args.trim()})`;
+      }
+    }
+    const cast = JAVA_WS_CAST_METHODS[method];
+    if (cast !== void 0 && statement && cast.argc.includes(argc)) {
+      return `((${cast.cls}) ${receiverText}).${method}(${args.trim()})`;
+    }
+    return `${this.DYNAMIC_CALL_OPEN}${receiverText}, "${method}", new Object[]{${args}})`;
   }
   printConstructorDeclaration(node, identation) {
     const classNode = node.parent;
@@ -44404,7 +44502,8 @@ ${this.getIden(identation)}}}`;
           return withGuard(`${objText}.containsKey(${keyText})`);
         }
         if (this.isJavaMapType(objectType)) {
-          return withGuard(`((java.util.Map<?, ?>)${objText}).containsKey(${keyText})`);
+          const receiverText = this.javaBaseDeclaredMapCacheField(right) ? objText : `((java.util.Map<?, ?>)${objText})`;
+          return withGuard(`${receiverText}.containsKey(${keyText})`);
         }
         if (this.isJavaNullableMapType(objectType) && this.javaRepeatableOperand(right)) {
           return `(${objText} != null && ${guarded}((java.util.Map<?, ?>)${objText}).containsKey(${keyText}))`;
@@ -48861,7 +48960,19 @@ ${this.getIden(identation)}}}`;
     if (this.javaWsClientMapReceiver(node.expression.expression)) {
       return `${object}.remove((String)${key})`;
     }
+    if (this.javaBaseDeclaredMapCacheField(node.expression.expression)) {
+      return `${object}.remove((String)${key})`;
+    }
     return `((java.util.Map<String,Object>)${object}).remove((String)${key})`;
+  }
+  // `this.<field>` resolving to an Exchange.ts field of JAVA_BASE_DECLARED_MAP_CACHE_FIELDS
+  javaBaseDeclaredMapCacheField(expression) {
+    if (expression === void 0 || !isPropertyAccessExpression2(expression) || expression.expression.kind !== SyntaxKind6.ThisKeyword || !JAVA_BASE_DECLARED_MAP_CACHE_FIELDS.has(expression.name.text)) {
+      return false;
+    }
+    const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(expression.name)?.valueDeclaration?.resolve();
+    const fileName = declaration?.getSourceFile?.()?.fileName;
+    return typeof fileName === "string" && JAVA_THIS_RETURN_TYPES_BASE_FILE.test(fileName);
   }
   printThrowStatement(node, identation) {
     if (node.expression.kind === SyntaxKind6.Identifier) {
@@ -49206,7 +49317,8 @@ ${this.getIden(identation)}}}`;
     const target = this.printNode(receiver, 0);
     const keyText = this.printNode(key, 0);
     const keyGuard = literal ? "" : `${keyText} == null || `;
-    return `(${keyGuard}${target} == null ? null : ((java.util.Map<?, ?>)${target}).get(${keyText}))`;
+    const read = this.javaBaseDeclaredMapCacheField(receiver) ? target : `((java.util.Map<?, ?>)${target})`;
+    return `(${keyGuard}${target} == null ? null : ${read}.get(${keyText}))`;
   }
   javaBaseMapFieldReadText(receiver, key, field) {
     const operand = isAsExpression2(key) && key.type?.kind === SyntaxKind6.StringKeyword ? key.expression : key;
