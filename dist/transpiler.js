@@ -41700,7 +41700,7 @@ ${this.getIden(identation)}}}`;
     const statement = node.parent?.kind === SyntaxKind6.ExpressionStatement;
     if (isIdentifier2(receiver)) {
       const declaration = this.javaDeclarationOfIdentifier(receiver);
-      const cls = declaration !== void 0 && isVariableDeclaration2(declaration) && declaration.name?.text === receiverText ? this.javaDeclaredTypeOfDeclaration(declaration) : void 0;
+      const cls = declaration !== void 0 && isVariableDeclaration2(declaration) && isIdentifier2(declaration.name) && declaration.name.text === receiverText ? this.javaDeclaredTypeOfDeclaration(declaration) : void 0;
       const spec = cls !== void 0 ? JAVA_WS_TYPED_METHODS[cls]?.[method] : void 0;
       const single = cls === "io.github.ccxt.ws.WsOrderBook" || !args.includes("\n");
       if (spec !== void 0 && spec.argc.includes(argc) && (spec.value || statement) && single) {
