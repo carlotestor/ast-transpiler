@@ -3233,6 +3233,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     // prefix is final, so every later read of the local is statically that type and its
     // members may replace inOp/getArrayLength
     this.csharpTypedLocals = /* @__PURE__ */ new WeakMap();
+    this.csharpNativeForIncrementors = /* @__PURE__ */ new WeakSet();
     // for-counter declaration -> true when csharpInt64ForCounter proved it Int64 (undefined = not asked yet)
     this.csharpInt64ForCounters = /* @__PURE__ */ new WeakMap();
     // parameter declarations this printer typed as `IList<object>` (csharpArrayListParamType), so
@@ -10412,8 +10413,35 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (this.csharpExpressionTypeOf(node.operand) === "int") {
       return true;
     }
+    if (this.csharpNativeForIncrementors.has(node)) {
+      return true;
+    }
     const declaration = this.getChecker().getSymbolAtLocation(node.operand)?.valueDeclaration?.resolve();
     return declaration !== void 0 && this.csharpInt64ForCounter(declaration);
+  }
+  // `x++` on the loop's own counter is native once its printed declaration names a numeric type
+  csharpTypedForCounterIncrement(node, initializer) {
+    const list = node.initializer;
+    const step = node.incrementor;
+    if (!list || list.kind !== SyntaxKind4.VariableDeclarationList || list.declarations.length !== 1 || !step || !isPostfixUnaryExpression(step) || step.operator !== SyntaxKind4.PlusPlusToken || !isIdentifier(step.operand) || !isIdentifier(list.declarations[0].name)) {
+      return false;
+    }
+    const declaration = list.declarations[0];
+    if (this.getChecker().getSymbolAtLocation(step.operand)?.valueDeclaration?.resolve() !== declaration) {
+      return false;
+    }
+    const printedName = this.printNode(declaration.name, 0);
+    return new RegExp("^(?:int|Int64|double) " + printedName + " = ").test(initializer);
+  }
+  printForStatement(node, identation) {
+    const initializer = this.printNode(node.initializer, 0);
+    const condition = this.printNode(node.condition, 0);
+    if (this.csharpTypedForCounterIncrement(node, initializer)) {
+      this.csharpNativeForIncrementors.add(node.incrementor);
+    }
+    const incrementor = this.printNode(node.incrementor, 0);
+    const forStm = this.getIden(identation) + this.FOR_TOKEN + " " + this.CONDITION_OPENING + initializer + "; " + condition + "; " + incrementor + this.CONDITION_CLOSE + this.printBlock(node.statement, identation);
+    return this.printNodeCommentsIfAny(node, identation, forStm);
   }
   printPostFixUnaryExpression(node, identation) {
     const { operand, operator } = node;

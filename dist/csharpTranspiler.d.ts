@@ -35,6 +35,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpListParamExclusions?: (name: string, index: number) => boolean;
     csharpElementRowLocalSource?: (fileName: string) => boolean;
     csharpTypedLocals: WeakMap<Node, string>;
+    csharpNativeForIncrementors: WeakSet<Node>;
     csharpInt64ForCounters: WeakMap<Node, boolean>;
     csharpListParamDeclarations: WeakSet<Node>;
     csharpMemberWriteCache: WeakMap<object, Map<string, boolean>>;
@@ -530,6 +531,8 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     printDateNowCall(node: any, identation: any): string;
     printLengthProperty(node: any, identation: any, name?: any): string;
     csharpNativePostFixIncrement(node: any): boolean;
+    csharpTypedForCounterIncrement(node: any, initializer: string): boolean;
+    printForStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
     printPrefixUnaryExpression(node: any, identation: any): any;
     csharpConditionPrintsBool(node: any): boolean;
