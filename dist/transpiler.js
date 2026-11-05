@@ -28012,15 +28012,6 @@ ${this.getIden(identation)}${this.printNode(node.left, 0)} = &${local}`;
   }
   // the variable declaration an identifier binds to, through the checker (undefined for every
   // other shape) — the market rule resolves its own locals this way, never by printed name
-  // the parameter an identifier reads, or undefined for any other binding
-  goParameterOfIdentifier(node) {
-    try {
-      const declaration = this.getChecker().getSymbolAtLocation(node)?.valueDeclaration?.resolve();
-      return declaration?.kind === SyntaxKind5.Parameter ? declaration : void 0;
-    } catch (e) {
-      return void 0;
-    }
-  }
   goDeclarationOfIdentifier(node) {
     try {
       const symbol = this.getChecker().getSymbolAtLocation(node);
@@ -32118,10 +32109,14 @@ ${iden}}`;
   }
   // `<param>.url` of a `<param>: Client` parameter
   goIsClientUrl(arg) {
-    if (arg?.kind !== SyntaxKind5.PropertyAccessExpression || arg.name?.text !== "url" || arg.expression?.kind !== SyntaxKind5.Identifier) {
+    return arg?.kind === SyntaxKind5.PropertyAccessExpression && arg.name?.text === "url" && this.goIsClientParameter(arg.expression);
+  }
+  // an identifier bound to a `<param>: Client` parameter
+  goIsClientParameter(node) {
+    if (node?.kind !== SyntaxKind5.Identifier) {
       return false;
     }
-    const decl = this.checkerOrUndefined()?.getSymbolAtLocation(arg.expression)?.valueDeclaration?.resolve?.();
+    const decl = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve?.();
     return decl?.kind === SyntaxKind5.Parameter && decl.type?.getText() === "Client";
   }
   // the Go type an identifier is bound to when its declaration is not a typed local: a defaulted
@@ -37799,7 +37794,13 @@ ${this.getIden(level)}}()`;
   }
   goDeleteReceiverText(node) {
     if (node?.kind === SyntaxKind5.Identifier) {
-      return this.goDeclaredTypeOfIdentifier(node) === "map[string]any" ? this.printNode(node, 0) : void 0;
+      const declaration = this.goDeclarationOfIdentifier(node);
+      const declared = this.goDeclaredTypeOfIdentifier(node) ?? this.goPrintedLocalDeclarationType(node) ?? (declaration !== void 0 ? this.rf6aSafeDictMapLocal(declaration) : void 0);
+      return declared === "map[string]any" ? this.printNode(node, 0) : void 0;
+    }
+    const field = this.goDeletableMapField(node);
+    if (field !== void 0) {
+      return field;
     }
     const book = node;
     if (book?.kind !== SyntaxKind5.ElementAccessExpression || book.expression?.kind !== SyntaxKind5.PropertyAccessExpression || book.expression.expression?.kind !== SyntaxKind5.ThisKeyword || book.expression.name?.text !== "ohlcvs") {
@@ -37807,6 +37808,21 @@ ${this.getIden(level)}}()`;
     }
     const symbol = this.goDeleteKeyText(book.argumentExpression);
     return symbol === void 0 ? void 0 : `this.Ohlcvs[${symbol}]`;
+  }
+  // `this.options` / a ws cache field / `client.rejections`: a Go map the struct declares, so Remove is the builtin delete
+  goDeletableMapField(node) {
+    if (node?.kind !== SyntaxKind5.PropertyAccessExpression || node.name?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    const name = node.name.text;
+    if (node.expression?.kind === SyntaxKind5.ThisKeyword) {
+      const goName = this.transformPropertyAccessExpressionName(name, node.name);
+      return GO_DELETABLE_MAP_FIELDS.has(goName) ? `this.${goName}` : void 0;
+    }
+    if (name !== "rejections" || node.expression?.kind !== SyntaxKind5.Identifier) {
+      return void 0;
+    }
+    return this.goIsClientParameter(node.expression) ? `${this.printNode(node.expression, 0)}.(ClientInterface).GetRejections()` : void 0;
   }
   goDeleteKeyText(keyNode) {
     const node = this.goUnwrapPrintedAssertions(keyNode);
@@ -38343,7 +38359,7 @@ ${tryBodyBlock}
       case SyntaxKind5.AsExpression:
         return this.goKeyIsString(node.expression, printed);
       case SyntaxKind5.Identifier:
-        return this.goDeclaredTypeOfIdentifier(node) === "string" || this.goGetArgParameterType(this.goParameterOfIdentifier(node)) === "string";
+        return (this.goDeclaredTypeOfIdentifier(node) ?? this.goBoundIdentifierType(node)) === "string";
       case SyntaxKind5.CallExpression:
         return this.goTypeOfInitializer(node, printed) === "string";
       case SyntaxKind5.ElementAccessExpression:
@@ -39933,6 +39949,7 @@ GoTranspiler.prototype.goNumericParameterCandidates = function(param) {
   }
   return [];
 };
+var GO_DELETABLE_MAP_FIELDS = /* @__PURE__ */ new Set(["Options", "Clients", "Tickers", "Bidsasks", "FundingRates", "Ohlcvs", "Trades"]);
 var GO_A9F_L1_CACHE_FIELDS = {
   "orderbooks": "Orderbooks",
   "ohlcvs": "Ohlcvs",

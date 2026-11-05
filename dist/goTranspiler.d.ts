@@ -1137,7 +1137,6 @@ export declare class GoTranspiler extends BaseTranspiler {
     goMarketUseHandsTheMapOn(node: any, parent: any): boolean;
     goMarketLocalUnboxUncached(declaration: any): string | undefined;
     goMarketUnboxValue(declaration: any, parsedValue: string): string | undefined;
-    goParameterOfIdentifier(node: any): any;
     goDeclarationOfIdentifier(node: any): any;
     goMarketComparisonElementRead(node: any): boolean;
     goIsComparedOperand(node: any): boolean;
@@ -1427,6 +1426,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goIsPrivateKeyField(arg: any): boolean;
     goPrintedArgType(arg: any): string | undefined;
     goIsClientUrl(arg: any): boolean;
+    goIsClientParameter(node: any): boolean;
     goBoundIdentifierType(arg: any): string | undefined;
     goUncalledStringParameterType(param: any): string | undefined;
     goSiblingPassesUnifiedString(argText: string, fileText: string, at: number | undefined): boolean;
@@ -1791,6 +1791,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     goClientsDeleteText(node: any): string | undefined;
     goNativeDelete(node: any): string | undefined;
     goDeleteReceiverText(node: any): string | undefined;
+    goDeletableMapField(node: any): string | undefined;
     goDeleteKeyText(keyNode: any): string | undefined;
     printThrowStatement(node: any, identation: any): string;
     goExprDepth: number;
