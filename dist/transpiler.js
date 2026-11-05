@@ -47763,7 +47763,17 @@ ${this.getIden(identation)}}}`;
     return declaration?.kind === SyntaxKind6.VariableDeclaration && (getCombinedNodeFlags(declaration) & NodeFlags3.Const) === NodeFlags3.Const;
   }
   printPromiseAllCall(node, identation, parsedArg = void 0) {
-    return this.printNativePromiseAllCall(node) ?? `Helpers.promiseAll(${parsedArg})`;
+    return this.printNativePromiseAllCall(node) ?? this.printJavaPromiseAllStream(node, parsedArg) ?? `Helpers.promiseAll(${parsedArg})`;
+  }
+  // Helpers.promiseAll's own steps inline (List cast, CompletableFuture filter, allOf, in-order join
+  // into an ArrayList) in the ts/src exchange and base tiers; the test tier keeps the helper call
+  printJavaPromiseAllStream(node, parsedArg) {
+    const fileName = String(node?.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    if (parsedArg === void 0 || !/(^|\/)ts\/src\//.test(fileName) || JAVA_TEST_TIER_FILES.test(fileName)) {
+      return void 0;
+    }
+    const future = "java.util.concurrent.CompletableFuture";
+    return `((java.util.List<?>)(${parsedArg})).stream().filter(${future}.class::isInstance).map((promiseAllItem) -> (${future}<?>) promiseAllItem).collect(java.util.stream.Collectors.collectingAndThen(java.util.stream.Collectors.toList(), (promiseAllFutures) -> ${future}.allOf(promiseAllFutures.toArray(new ${future}<?>[0])).<java.util.List<Object>>thenApply((promiseAllDone) -> promiseAllFutures.stream().<Object>map(${future}::join).collect(java.util.stream.Collectors.toCollection(java.util.ArrayList<Object>::new)))))`;
   }
   printMathFloorCall(node, _identation, parsedArg = void 0) {
     return `(Math.floor(Double.parseDouble(${this.javaStringBoxText(node?.arguments?.[0], parsedArg)})))`;
@@ -48226,6 +48236,44 @@ ${this.getIden(identation)}}}`;
     }
     return node.kind === SyntaxKind6.PropertyAccessExpression && node.name.text === "length" && this.javaLengthKind(node.expression) !== void 0;
   }
+  // `-x` in the true arm of `(x !== undefined) ? ... : ...` on an unwritten Long/Double local:
+  // the guard rules out null, so the helper's box-preserving negation is the box's valueOf
+  javaNullGuardedNegationBox(node) {
+    const operand = node.operand;
+    if (!isIdentifier2(operand)) {
+      return void 0;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(operand);
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || this.javaLocalHasWriteAtAll(declaration.name)) {
+      return void 0;
+    }
+    const box = this.javaDeclaredTypeOfDeclaration(declaration);
+    if (box !== "Long" && box !== "Double") {
+      return void 0;
+    }
+    const symbol = this.getChecker().getSymbolAtLocation(operand);
+    let child = node;
+    for (let current = node.parent; current !== void 0 && !isFunctionLike(current); child = current, current = current.parent) {
+      if (current.kind !== SyntaxKind6.ConditionalExpression) {
+        continue;
+      }
+      if (current.whenTrue !== child) {
+        return void 0;
+      }
+      let condition = current.condition;
+      while (condition?.kind === SyntaxKind6.ParenthesizedExpression) {
+        condition = condition.expression;
+      }
+      const op = condition?.operatorToken?.kind;
+      const right = condition?.right;
+      const nullish = right?.kind === SyntaxKind6.NullKeyword || isIdentifier2(right) && right.text === "undefined";
+      if (condition?.kind === SyntaxKind6.BinaryExpression && (op === SyntaxKind6.ExclamationEqualsEqualsToken || op === SyntaxKind6.ExclamationEqualsToken) && nullish && isIdentifier2(condition.left) && this.getChecker().getSymbolAtLocation(condition.left) === symbol) {
+        return box;
+      }
+      return void 0;
+    }
+    return void 0;
+  }
   printPrefixUnaryExpression(node, identation) {
     const { operand, operator } = node;
     if (operator === SyntaxKind6.ExclamationToken) {
@@ -48237,6 +48285,10 @@ ${this.getIden(identation)}}}`;
     } else if (operator === SyntaxKind6.MinusToken) {
       if (this.javaNativeNegation(operand)) {
         return `-${leftSide}`;
+      }
+      const guardedBox = this.javaNullGuardedNegationBox(node);
+      if (guardedBox !== void 0) {
+        return `${guardedBox}.valueOf(-${leftSide})`;
       }
       return `Helpers.opNeg(${leftSide})`;
     }

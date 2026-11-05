@@ -424,6 +424,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printNativePromiseAllCall(node: any): string;
     isConstBoundIdentifier(node: any): boolean;
     printPromiseAllCall(node: any, identation: any, parsedArg?: any): string;
+    printJavaPromiseAllStream(node: any, parsedArg: any): string;
     printMathFloorCall(node: any, _identation: any, parsedArg?: any): string;
     printMathRoundCall(node: any, _identation: any, parsedArg?: any): string;
     printMathCeilCall(node: any, _identation: any, parsedArg?: any): string;
@@ -474,6 +475,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     printPostFixUnaryExpression(node: any, identation: any): string;
     javaPrimitiveCounter(node: any): boolean;
     javaNativeNegation(node: any): boolean;
+    javaNullGuardedNegationBox(node: any): string | undefined;
     printPrefixUnaryExpression(node: any, identation: any): any;
     javaBooleanCondition(node: any): any;
     javaPreciseBooleanCall(node: any): any;

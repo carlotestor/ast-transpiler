@@ -9221,7 +9221,23 @@ export class JavaTranspiler extends BaseTranspiler {
     }
 
     printPromiseAllCall(node, identation, parsedArg = undefined) {
-        return this.printNativePromiseAllCall(node) ?? `Helpers.promiseAll(${parsedArg})`;
+        return this.printNativePromiseAllCall(node) ?? this.printJavaPromiseAllStream(node, parsedArg) ?? `Helpers.promiseAll(${parsedArg})`;
+    }
+
+    // Helpers.promiseAll's own steps inline (List cast, CompletableFuture filter, allOf, in-order join
+    // into an ArrayList) in the ts/src exchange and base tiers; the test tier keeps the helper call
+    printJavaPromiseAllStream(node, parsedArg) {
+        const fileName = String(node?.getSourceFile?.()?.fileName ?? '').replace(/\\/g, '/');
+        if (parsedArg === undefined || !/(^|\/)ts\/src\//.test(fileName) || JAVA_TEST_TIER_FILES.test(fileName)) {
+            return undefined;
+        }
+        const future = 'java.util.concurrent.CompletableFuture';
+        return `((java.util.List<?>)(${parsedArg})).stream().filter(${future}.class::isInstance)`
+            + `.map((promiseAllItem) -> (${future}<?>) promiseAllItem)`
+            + '.collect(java.util.stream.Collectors.collectingAndThen(java.util.stream.Collectors.toList(), (promiseAllFutures) -> '
+            + `${future}.allOf(promiseAllFutures.toArray(new ${future}<?>[0]))`
+            + `.<java.util.List<Object>>thenApply((promiseAllDone) -> promiseAllFutures.stream().<Object>map(${future}::join)`
+            + '.collect(java.util.stream.Collectors.toCollection(java.util.ArrayList<Object>::new)))))';
     }
 
     printMathFloorCall(node, _identation, parsedArg = undefined) {
@@ -9777,6 +9793,46 @@ export class JavaTranspiler extends BaseTranspiler {
             && this.javaLengthKind(node.expression) !== undefined;
     }
 
+    // `-x` in the true arm of `(x !== undefined) ? ... : ...` on an unwritten Long/Double local:
+    // the guard rules out null, so the helper's box-preserving negation is the box's valueOf
+    javaNullGuardedNegationBox(node): string | undefined {
+        const operand = node.operand;
+        if (!isIdentifier(operand)) {
+            return undefined;
+        }
+        const declaration: any = this.javaDeclarationOfIdentifier(operand);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || this.javaLocalHasWriteAtAll(declaration.name)) {
+            return undefined;
+        }
+        const box = this.javaDeclaredTypeOfDeclaration(declaration);
+        if (box !== 'Long' && box !== 'Double') {
+            return undefined;
+        }
+        const symbol = this.getChecker().getSymbolAtLocation(operand);
+        let child: any = node;
+        for (let current: any = node.parent; current !== undefined && !isFunctionLike(current); child = current, current = current.parent) {
+            if (current.kind !== SyntaxKind.ConditionalExpression) {
+                continue;
+            }
+            if (current.whenTrue !== child) {
+                return undefined;
+            }
+            let condition: any = current.condition;
+            while (condition?.kind === SyntaxKind.ParenthesizedExpression) {
+                condition = condition.expression;
+            }
+            const op = condition?.operatorToken?.kind;
+            const right = condition?.right;
+            const nullish = right?.kind === SyntaxKind.NullKeyword || (isIdentifier(right) && right.text === 'undefined');
+            if (condition?.kind === SyntaxKind.BinaryExpression && (op === SyntaxKind.ExclamationEqualsEqualsToken || op === SyntaxKind.ExclamationEqualsToken)
+                && nullish && isIdentifier(condition.left) && this.getChecker().getSymbolAtLocation(condition.left) === symbol) {
+                return box;
+            }
+            return undefined;
+        }
+        return undefined;
+    }
+
     printPrefixUnaryExpression(node, identation) {
         const { operand, operator } = node;
         if (operator === SyntaxKind.ExclamationToken) {
@@ -9788,6 +9844,10 @@ export class JavaTranspiler extends BaseTranspiler {
         } else if (operator === SyntaxKind.MinusToken) {
             if (this.javaNativeNegation(operand)) {
                 return `-${leftSide}`;
+            }
+            const guardedBox = this.javaNullGuardedNegationBox(node);
+            if (guardedBox !== undefined) {
+                return `${guardedBox}.valueOf(-${leftSide})`;
             }
             return `Helpers.opNeg(${leftSide})`;
         }

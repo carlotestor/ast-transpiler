@@ -5333,6 +5333,22 @@ describe('java parseInt/parseFloat/toString/padStart native emission', () => {
         expect(output).toContain('Helpers.promiseAll(new java.util.ArrayList<Object>(java.util.Arrays.asList(this.fetchA(), this.fetchB())))');
     });
 
+    test('a null-guarded negation of an unwritten Long local prints Long.valueOf', () => {
+        const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        (byPath as any).javaTranspiler.javaDeclaredLocalTypeResolver = (d: any) => (d?.name?.text === 'scale' ? 'Long' : undefined);
+        const input = "class T {\n" +
+            "    f (c: any): any {\n" +
+            "        const scale: number = c['s'];\n" +
+            "        const a = (scale !== undefined) ? Math.pow (10, -scale) : undefined;\n" +
+            "        const b = -scale;\n" +
+            "        return [ a, b ];\n" +
+            "    }\n" +
+            "}\n";
+        const output = byPath.transpileJava(input).content;
+        expect(output).toContain('Long.valueOf(-scale)');
+        expect(output).toContain('Object b = Helpers.opNeg(scale);');
+    });
+
     test('a Promise.all over a list variable keeps the helper (element types unknown)', () => {
         const input = promiseAllSnippet(
             "    async test (): Promise<void> {\n" +
@@ -10162,5 +10178,44 @@ describe ('rfJava3StringTypedParse', () => {
         test('an any operand keeps the helper', () => {
             expect(out).toContain('Helpers.parseFloat(p)');
         });
+    });
+});
+
+describe('Promise.all over a list in the ts/src tiers', () => {
+    const TMP = path.join(__dirname, 'files', 'tmp-promise-all-stream');
+    const VENUE_FIXTURE = path.join(TMP, 'ts', 'src', 'probe.ts');
+    const TEST_FIXTURE = path.join(TMP, 'ts', 'src', 'test', 'probe.ts');
+    const body = "class T {\n" +
+        "    async fetchA (): Promise<number> {\n" +
+        "        return 1;\n" +
+        "    }\n" +
+        "    async run (): Promise<any> {\n" +
+        "        const tasks: Promise<any>[] = [ this.fetchA () ];\n" +
+        "        return await Promise.all (tasks);\n" +
+        "    }\n" +
+        "}\n";
+    let venue: string;
+    let testTier: string;
+
+    beforeAll(() => {
+        fs.mkdirSync(path.dirname(TEST_FIXTURE), { recursive: true });
+        fs.writeFileSync(VENUE_FIXTURE, body);
+        fs.writeFileSync(TEST_FIXTURE, body);
+        const byPath = new Transpiler({ 'verbose': false, 'java': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        venue = byPath.transpileJavaByPath(VENUE_FIXTURE).content;
+        testTier = byPath.transpileJavaByPath(TEST_FIXTURE).content;
+    });
+
+    afterAll(() => {
+        fs.rmSync(TMP, { recursive: true, force: true });
+    });
+
+    test('an exchange-tier Promise.all inlines the helper steps', () => {
+        expect(venue).toContain('((java.util.List<?>)(tasks)).stream().filter(java.util.concurrent.CompletableFuture.class::isInstance).map((promiseAllItem) -> (java.util.concurrent.CompletableFuture<?>) promiseAllItem)');
+        expect(venue).not.toContain('Helpers.promiseAll');
+    });
+
+    test('the test tier keeps the helper', () => {
+        expect(testTier).toContain('Helpers.promiseAll(tasks)');
     });
 });
