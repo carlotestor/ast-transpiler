@@ -33,6 +33,7 @@ export declare class JavaTranspiler extends BaseTranspiler {
     javaStringListLiteral(node: any): string | undefined;
     javaStringListElementIsProven(node: any): boolean;
     javaLocalDeclaredAs(node: any, printed: string, type: string): boolean;
+    javaDeclaredListContains(right: any, left: any, objText: string, keyText: string): string | undefined;
     javaErasure(type: string): string;
     printOverrideBridges(node: any, identation: any): string;
     printOverrideBridge(node: any, ancestor: any, ancestorTypes: string[], ownTypes: string[], identation: any): string;

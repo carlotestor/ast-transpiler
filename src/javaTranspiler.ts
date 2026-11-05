@@ -1124,6 +1124,28 @@ export class JavaTranspiler extends BaseTranspiler {
             === type.replace(/\s+/g, '').replace(/^java\.util\./, '');
     }
 
+    // `k in xs` over a local declared List: Helpers.inOp's List branch is a null-guarded contains
+    javaDeclaredListContains(right, left, objText: string, keyText: string): string | undefined {
+        if (!isIdentifier(right) || objText !== right.text) {
+            return undefined;
+        }
+        const literal = isStringLiteralLikeNode(left);
+        if (!literal && !(isIdentifier(left) && keyText === left.text)) {
+            return undefined;
+        }
+        if (!literal) {
+            const keyDeclared = this.javaDeclaredTypeOf(left);
+            if (keyDeclared === undefined || !/^[A-Z][\w.]*(?:<.*>)?$/.test(keyDeclared)) {
+                return undefined;
+            }
+        }
+        const declared = this.javaDeclaredTypeOf(right);
+        if (declared === undefined || !/^(?:java\.util\.)?(?:List|ArrayList)<[^<>]*>$/.test(declared)) {
+            return undefined;
+        }
+        return `(${objText} != null && ${literal ? '' : `${keyText} != null && `}${objText}.contains(${keyText}))`;
+    }
+
     // Java erasure of a printed type, for override/bridge comparisons
     javaErasure(type: string): string {
         return type.replace(/<.*>/, '').replace(/^java\.util\./, '').trim();
@@ -5204,6 +5226,10 @@ export class JavaTranspiler extends BaseTranspiler {
                 if (this.isJavaNullableMapType(objectType) && this.javaRepeatableOperand(right)) {
                     return `(${objText} != null && ${guarded}((java.util.Map<?, ?>)${objText}).containsKey(${keyText}))`;
                 }
+            }
+            const listContains = this.javaDeclaredListContains(right, left, objText, keyText);
+            if (listContains !== undefined) {
+                return listContains;
             }
             return `Helpers.inOp(${objText}, ${keyText})`;
         }

@@ -40946,6 +40946,27 @@ var JavaTranspiler = class extends BaseTranspiler {
     const declared = this.javaDeclaredTypeOf(node);
     return declared !== void 0 && declared.replace(/\s+/g, "").replace(/^java\.util\./, "") === type.replace(/\s+/g, "").replace(/^java\.util\./, "");
   }
+  // `k in xs` over a local declared List: Helpers.inOp's List branch is a null-guarded contains
+  javaDeclaredListContains(right, left, objText, keyText) {
+    if (!_is.isIdentifier.call(void 0, right) || objText !== right.text) {
+      return void 0;
+    }
+    const literal = _is.isStringLiteralLikeNode.call(void 0, left);
+    if (!literal && !(_is.isIdentifier.call(void 0, left) && keyText === left.text)) {
+      return void 0;
+    }
+    if (!literal) {
+      const keyDeclared = this.javaDeclaredTypeOf(left);
+      if (keyDeclared === void 0 || !/^[A-Z][\w.]*(?:<.*>)?$/.test(keyDeclared)) {
+        return void 0;
+      }
+    }
+    const declared = this.javaDeclaredTypeOf(right);
+    if (declared === void 0 || !/^(?:java\.util\.)?(?:List|ArrayList)<[^<>]*>$/.test(declared)) {
+      return void 0;
+    }
+    return `(${objText} != null && ${literal ? "" : `${keyText} != null && `}${objText}.contains(${keyText}))`;
+  }
   // Java erasure of a printed type, for override/bridge comparisons
   javaErasure(type) {
     return type.replace(/<.*>/, "").replace(/^java\.util\./, "").trim();
@@ -44408,6 +44429,10 @@ ${this.getIden(identation)}}}`;
         if (this.isJavaNullableMapType(objectType) && this.javaRepeatableOperand(right)) {
           return `(${objText} != null && ${guarded}((java.util.Map<?, ?>)${objText}).containsKey(${keyText}))`;
         }
+      }
+      const listContains = this.javaDeclaredListContains(right, left, objText, keyText);
+      if (listContains !== void 0) {
+        return listContains;
       }
       return `Helpers.inOp(${objText}, ${keyText})`;
     }

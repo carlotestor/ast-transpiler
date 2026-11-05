@@ -10164,3 +10164,25 @@ describe ('rfJava3StringTypedParse', () => {
         });
     });
 });
+
+describe('java in over a declared List local', () => {
+    test('a List-declared receiver prints the null-guarded contains of Helpers.inOp', () => {
+        const printer: any = (transpiler as any).javaTranspiler;
+        const original = printer.javaDeclaredLocalTypeResolver;
+        try {
+            printer.javaDeclaredLocalTypeResolver = (declaration: any) => {
+                const name = declaration?.name?.text;
+                if (name === 'ids') { return 'List<Object>'; }
+                if (name === 'id' || name === 'other') { return 'String'; }
+                return undefined;
+            };
+            const ts = "class t {\n    f (raw) {\n        const ids = [];\n        const id = this.safeString (raw, 'a');\n        let other: number = 1;\n        if (!(id in ids)) { ids.push (id); }\n        if ('x' in ids) { return 1; }\n        if (other in raw) { return 2; }\n        return ids;\n    }\n}\n";
+            const out = transpiler.transpileJava(ts).content;
+            expect(out).toContain('(ids != null && id != null && ids.contains(id))');
+            expect(out).toContain('(ids != null && ids.contains("x"))');
+            expect(out).not.toContain('Helpers.inOp(ids');
+        } finally {
+            printer.javaDeclaredLocalTypeResolver = original;
+        }
+    });
+});
