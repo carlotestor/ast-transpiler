@@ -4194,8 +4194,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const func = this.csharpEnclosingFunction(node);
     return func !== void 0 && !this.csharpReceiverIsRewritten(func, expression);
   }
-  csharpObjectLiteralDeclaresKey(literal, key) {
-    for (const property of literal.properties) {
+  csharpObjectLiteralDeclaresKey(literal2, key) {
+    for (const property of literal2.properties) {
       if (isSpreadAssignment(property)) {
         return false;
       }
@@ -5221,13 +5221,13 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // (below 2^53), and the lifted `==` answers false for a null `x` exactly like isEqual. The printed
   // remainder is the form mod(Int64, literal) prints once the host's numeric pass has typed `x`
   csharpNativeModEquality(left, right, isEquality) {
-    const [modSide, literal] = this.csharpUnparenthesized(left)?.kind === SyntaxKind4.BinaryExpression ? [left, right] : [right, left];
+    const [modSide, literal2] = this.csharpUnparenthesized(left)?.kind === SyntaxKind4.BinaryExpression ? [left, right] : [right, left];
     const mod = this.csharpUnparenthesized(modSide);
     if (mod?.kind !== SyntaxKind4.BinaryExpression || mod.operatorToken.kind !== SyntaxKind4.PercentToken || !isIdentifier(mod.left)) {
       return void 0;
     }
     const divisor = csharpLiteralNumericValue(mod.right);
-    const expected = this.csharpIntegerLiteralKind(literal);
+    const expected = this.csharpIntegerLiteralKind(literal2);
     if (divisor === void 0 || !Number.isInteger(divisor) || divisor <= 0 || divisor > 999999999 || expected === void 0) {
       return void 0;
     }
@@ -5237,7 +5237,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (remainder === void 0 || !this.csharpNumericKindHoldsLiteral("Int64", expected)) {
       return void 0;
     }
-    const printedLiteral = this.printNode(literal, 0);
+    const printedLiteral = this.printNode(literal2, 0);
     return isEquality ? `(${remainder} == ${printedLiteral})` : `(${remainder} != ${printedLiteral})`;
   }
   // the C# value kind of a `this.<field>` read of a hand-written numeric field
@@ -5486,8 +5486,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     const base = (o) => o.kind.replace("?", "");
     if (left.literal !== right.literal) {
-      const [literal, other] = left.literal ? [left, right] : [right, left];
-      if (base(other) === "int" && literal.literalKind !== "int") {
+      const [literal2, other] = left.literal ? [left, right] : [right, left];
+      if (base(other) === "int" && literal2.literalKind !== "int") {
         return void 0;
       }
     } else if (base(left) !== base(right)) {
@@ -5817,8 +5817,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
     const r = strip(right);
     const modIsLeft = isBinaryExpression2(l) && l.operatorToken.kind === SyntaxKind4.PercentToken;
     const mod = modIsLeft ? l : r;
-    const literal = modIsLeft ? r : l;
-    if (!isBinaryExpression2(mod) || mod.operatorToken.kind !== SyntaxKind4.PercentToken || this.csharpIntegerLiteralKind(literal) === void 0) {
+    const literal2 = modIsLeft ? r : l;
+    if (!isBinaryExpression2(mod) || mod.operatorToken.kind !== SyntaxKind4.PercentToken || this.csharpIntegerLiteralKind(literal2) === void 0) {
       return void 0;
     }
     const int64 = (n) => ["Int64", "Int64?", "long", "long?"].indexOf(this.csharpArithmeticOperandType(n)) >= 0;
@@ -5828,7 +5828,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return void 0;
     }
     const arithmetic = `(${this.printNode(mod.left, 0)} % ${this.printNode(divisor, 0)})`;
-    const literalText = this.printNode(literal, 0);
+    const literalText = this.printNode(literal2, 0);
     return isEquality ? `(${arithmetic} == ${literalText})` : `(${arithmetic} != ${literalText})`;
   }
   // `parseInt(...)` / `parseFloat(...)` print the runtime helper call; the folds below replace
@@ -5908,9 +5908,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (!this.csharpCalleeIsGlobalFunction(node.expression)) {
       return void 0;
     }
-    const literal = callee === "parseInt" ? csharpParseIntLiteralArgument(args[0]) : csharpParseFloatLiteralArgument(args[0]);
-    if (literal !== void 0) {
-      return literal;
+    const literal2 = callee === "parseInt" ? csharpParseIntLiteralArgument(args[0]) : csharpParseFloatLiteralArgument(args[0]);
+    if (literal2 !== void 0) {
+      return literal2;
     }
     return this.csharpNativeParseCallOnDeclaredLocal(callee, args[0]);
   }
@@ -6603,9 +6603,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (!elementIsLeft && !this.csharpStringKeyedElementAccess(right)) {
       return void 0;
     }
-    const [element, literal] = elementIsLeft ? [left, right] : [right, left];
-    const isBoolLiteral = literal.kind === SyntaxKind4.TrueKeyword || literal.kind === SyntaxKind4.FalseKeyword;
-    const isStringLiteral4 = isStringLiteralLikeNode2(literal);
+    const [element, literal2] = elementIsLeft ? [left, right] : [right, left];
+    const isBoolLiteral = literal2.kind === SyntaxKind4.TrueKeyword || literal2.kind === SyntaxKind4.FalseKeyword;
+    const isStringLiteral4 = isStringLiteralLikeNode2(literal2);
     if (!isBoolLiteral && !isStringLiteral4) {
       return void 0;
     }
@@ -6617,7 +6617,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return void 0;
     }
     const token = isEquality ? "==" : "!=";
-    if (isStringLiteral4 && this.csharpNumericStringLiteral(literal)) {
+    if (isStringLiteral4 && this.csharpNumericStringLiteral(literal2)) {
       return void 0;
     }
     const cast = isBoolLiteral ? "bool?" : "string";
@@ -9618,20 +9618,20 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     const argument = call.arguments[0];
     let list = void 0;
-    let literal = void 0;
+    let literal2 = void 0;
     const elements = [];
     if (argument.kind === SyntaxKind4.ArrayLiteralExpression) {
-      literal = argument;
+      literal2 = argument;
     } else if (argument.kind === SyntaxKind4.Identifier) {
       list = this.csharpPromiseAllLocalDeclaration(fn, argument);
-      literal = list?.initializer;
-      if (literal?.kind !== SyntaxKind4.ArrayLiteralExpression || !this.csharpPromiseAllListUsesAreProvable(fn, list, argument, elements)) {
+      literal2 = list?.initializer;
+      if (literal2?.kind !== SyntaxKind4.ArrayLiteralExpression || !this.csharpPromiseAllListUsesAreProvable(fn, list, argument, elements)) {
         return;
       }
     } else {
       return;
     }
-    elements.unshift(...literal.elements);
+    elements.unshift(...literal2.elements);
     if (elements.length === 0) {
       return;
     }
@@ -9651,7 +9651,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return;
     }
     this.csharpPromiseAllTypedAwaits.set(this.csharpPromiseAllKey(awaited), taskType);
-    this.csharpPromiseAllTypedLists.set(this.csharpPromiseAllKey(literal), taskType);
+    this.csharpPromiseAllTypedLists.set(this.csharpPromiseAllKey(literal2), taskType);
     if (list !== void 0) {
       this.csharpPromiseAllTypedLists.set(this.csharpPromiseAllKey(list), taskType);
     }
@@ -10049,8 +10049,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
           return false;
         }
         const tested = isIdentifier(test.left) ? test.left : test.right;
-        const literal = isIdentifier(test.left) ? test.right : test.left;
-        return isIdentifier(tested) && this.csharpInitializerIsUndefined(literal) && this.csharpSameBinding(tested, symbol);
+        const literal2 = isIdentifier(test.left) ? test.right : test.left;
+        return isIdentifier(tested) && this.csharpInitializerIsUndefined(literal2) && this.csharpSameBinding(tested, symbol);
       }
     }
     return false;
@@ -10241,9 +10241,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
   // null / undefined, which the helper answers as "to the end". The value is repeated by the
   // clamp, so a call / assignment operand is refused; `double` is truncated by the helper.
   csharpSliceBoundOperand(node, isEnd = false) {
-    const literal = this.csharpSliceLiteralBound(node);
-    if (literal !== void 0) {
-      return { kind: "literal", value: literal };
+    const literal2 = this.csharpSliceLiteralBound(node);
+    if (literal2 !== void 0) {
+      return { kind: "literal", value: literal2 };
     }
     if (isEnd && (node?.kind === SyntaxKind4.NullKeyword || node?.kind === SyntaxKind4.Identifier && node.text === "undefined")) {
       return { kind: "open" };
@@ -10296,9 +10296,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
       const kind2 = left.kind === "int" && right.kind === "int" ? "int" : "Int64";
       return { kind: kind2, text: `(${left.text} ${op} ${right.text})` };
     }
-    const literal = this.csharpSliceLiteralBound(node);
-    if (literal !== void 0) {
-      return { kind: "int", text: literal < 0 ? `(${literal})` : String(literal) };
+    const literal2 = this.csharpSliceLiteralBound(node);
+    if (literal2 !== void 0) {
+      return { kind: "int", text: literal2 < 0 ? `(${literal2})` : String(literal2) };
     }
     const kind = this.csharpArithmeticOperandKind(this.csharpArithmeticOperandType(node));
     const raw = this.csharpArithmeticOperandType(node);
@@ -11063,7 +11063,7 @@ function ownDescribeLiteral(sourceFile) {
   if (describeOwnLiterals.has(sourceFile)) {
     return describeOwnLiterals.get(sourceFile);
   }
-  let literal;
+  let literal2;
   const visit = (node) => {
     if (node.kind === ts.SyntaxKind.MethodDeclaration && node.name?.text === "describe") {
       const returned = node.body?.statements?.find((statement) => statement.kind === ts.SyntaxKind.ReturnStatement);
@@ -11078,16 +11078,16 @@ function ownDescribeLiteral(sourceFile) {
         }
       }
       if (expression?.kind === ts.SyntaxKind.ObjectLiteralExpression) {
-        literal = expression;
+        literal2 = expression;
       } else {
-        literal = describeOwnLiteralMethodCall(sourceFile, expression);
+        literal2 = describeOwnLiteralMethodCall(sourceFile, expression);
       }
     }
     node?.forEachChild(visit);
   };
   visit(sourceFile);
-  describeOwnLiterals.set(sourceFile, literal);
-  return literal;
+  describeOwnLiterals.set(sourceFile, literal2);
+  return literal2;
 }
 function describeLiteralKey(property) {
   const name = property.name;
@@ -11096,11 +11096,11 @@ function describeLiteralKey(property) {
   }
   return name?.kind === ts.SyntaxKind.Identifier ? name.text : void 0;
 }
-function describeLiteralProperty(literal, key) {
-  if (literal?.kind !== ts.SyntaxKind.ObjectLiteralExpression) {
+function describeLiteralProperty(literal2, key) {
+  if (literal2?.kind !== ts.SyntaxKind.ObjectLiteralExpression) {
     return void 0;
   }
-  for (const property of literal.properties) {
+  for (const property of literal2.properties) {
     if (property.kind === ts.SyntaxKind.PropertyAssignment && describeLiteralKey(property) === key) {
       return property.initializer;
     }
@@ -11134,8 +11134,8 @@ function describeLiteralKind(value) {
   }
   return void 0;
 }
-function describeLiteralPathKind(literal, keys) {
-  let node = literal;
+function describeLiteralPathKind(literal2, keys) {
+  let node = literal2;
   for (const key of keys) {
     node = describeLiteralProperty(node, key);
     if (node === void 0) {
@@ -11240,8 +11240,8 @@ function tupleJoinDefaultIsValue(arg) {
   if (arg?.kind === ts.SyntaxKind.TrueKeyword || arg?.kind === ts.SyntaxKind.FalseKeyword) {
     return true;
   }
-  const literal = arg?.kind === ts.SyntaxKind.PrefixUnaryExpression && arg.operator === ts.SyntaxKind.MinusToken ? arg.operand : arg;
-  return literal?.kind === ts.SyntaxKind.NumericLiteral && /^\d+$/.test(literal.text ?? "");
+  const literal2 = arg?.kind === ts.SyntaxKind.PrefixUnaryExpression && arg.operator === ts.SyntaxKind.MinusToken ? arg.operand : arg;
+  return literal2?.kind === ts.SyntaxKind.NumericLiteral && /^\d+$/.test(literal2.text ?? "");
 }
 var GO_TUPLE_JOIN_GUARD_NAMES = ["string", "int", "int64", "float64", "bool", "any", "byte"];
 var GO_TUPLE_JOIN_ABSENT_SAFE_CALLEES = [
@@ -13228,11 +13228,11 @@ function ccxtGoSafeCollectionRestUse(goTranspiler, node, family, defaulted) {
   if (!defaulted) {
     return false;
   }
-  let literal = parent.kind === ts.SyntaxKind.ArrayLiteralExpression ? parent : parent.parent;
-  while (literal?.parent !== void 0 && (literal.parent.kind === ts.SyntaxKind.ArrayLiteralExpression || literal.parent.kind === ts.SyntaxKind.ObjectLiteralExpression || literal.parent.kind === ts.SyntaxKind.PropertyAssignment)) {
-    literal = literal.parent;
+  let literal2 = parent.kind === ts.SyntaxKind.ArrayLiteralExpression ? parent : parent.parent;
+  while (literal2?.parent !== void 0 && (literal2.parent.kind === ts.SyntaxKind.ArrayLiteralExpression || literal2.parent.kind === ts.SyntaxKind.ObjectLiteralExpression || literal2.parent.kind === ts.SyntaxKind.PropertyAssignment)) {
+    literal2 = literal2.parent;
   }
-  if (literal?.parent?.kind === ts.SyntaxKind.BinaryExpression && literal.parent.left === literal) {
+  if (literal2?.parent?.kind === ts.SyntaxKind.BinaryExpression && literal2.parent.left === literal2) {
     return false;
   }
   switch (parent.kind) {
@@ -13830,11 +13830,11 @@ function retypeAsyncArrayBindingHolder(goTranspiler, node, printed, identation =
     return printed;
   }
   const recv = match[3];
-  const bare = recv.replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  const bare2 = recv.replace(/"(?:[^"\\]|\\.)*"/g, '""');
   let depth = 0;
-  for (let i = 0; i < bare.length; i++) {
-    depth += bare[i] === "(" ? 1 : bare[i] === ")" ? -1 : 0;
-    if (depth === 0 && i < bare.length - 1) {
+  for (let i = 0; i < bare2.length; i++) {
+    depth += bare2[i] === "(" ? 1 : bare2[i] === ")" ? -1 : 0;
+    if (depth === 0 && i < bare2.length - 1) {
       return printed;
     }
   }
@@ -15529,8 +15529,8 @@ function ccxtGoClosureLiteralLines(printed) {
     body: printed.substring(lines[0].length)
   };
 }
-function ccxtGoClosureRewrite(literal, joinType) {
-  return literal.indent + "var " + literal.name + " " + joinType + " = func() " + joinType + " {" + literal.body;
+function ccxtGoClosureRewrite(literal2, joinType) {
+  return literal2.indent + "var " + literal2.name + " " + joinType + " = func() " + joinType + " {" + literal2.body;
 }
 function ccxtGoClosureArmType(goTranspiler, armNode, armText) {
   const text = (armText ?? "").trim();
@@ -15695,8 +15695,8 @@ function installCcxtGoClosurePointerJoin(goTranspiler) {
       return printed;
     }
     const declaration = declarations[0];
-    const literal = ccxtGoClosureLiteralLines(printed);
-    if (literal === void 0 || literal.name !== (goTranspiler.printNode(declaration.name) ?? "").trim()) {
+    const literal2 = ccxtGoClosureLiteralLines(printed);
+    if (literal2 === void 0 || literal2.name !== (goTranspiler.printNode(declaration.name) ?? "").trim()) {
       return printed;
     }
     const joinType = ccxtGoClosureJoinType(goTranspiler, declaration);
@@ -15705,10 +15705,10 @@ function installCcxtGoClosurePointerJoin(goTranspiler) {
     }
     const whenTrue = declaration.initializer.whenTrue === void 0 ? void 0 : (goTranspiler.printNode(declaration.initializer.whenTrue, 0) ?? "").trim();
     const whenFalse = (goTranspiler.printNode(declaration.initializer.whenFalse, 0) ?? "").trim();
-    if (whenTrue !== literal.whenTrue || whenFalse !== literal.whenFalse) {
+    if (whenTrue !== literal2.whenTrue || whenFalse !== literal2.whenFalse) {
       return printed;
     }
-    return ccxtGoClosureRewrite(literal, joinType);
+    return ccxtGoClosureRewrite(literal2, joinType);
   };
 }
 var CCXT_GO_CLOSURE_DEFAULT_VALUE_TYPES = { "*string": "string", "*int64": "int64", "*float64": "float64" };
@@ -15786,8 +15786,8 @@ function installCcxtGoClosureDefaultValue(goTranspiler) {
       return printed;
     }
     const declaration = node.declarations[0];
-    const literal = ccxtGoClosureLiteralLines(printed);
-    if (literal === void 0 || literal.name !== (goTranspiler.printNode(declaration.name) ?? "").trim()) {
+    const literal2 = ccxtGoClosureLiteralLines(printed);
+    if (literal2 === void 0 || literal2.name !== (goTranspiler.printNode(declaration.name) ?? "").trim()) {
       return printed;
     }
     const shape = ccxtGoClosureDefaultShape(goTranspiler, declaration);
@@ -15795,14 +15795,14 @@ function installCcxtGoClosureDefaultValue(goTranspiler) {
       return printed;
     }
     const lines = printed.split("\n");
-    const body = literal.indent + "	";
+    const body = literal2.indent + "	";
     const pointerLine = shape.pointerIsTrueArm ? 2 : 4;
     const expectedCondition = body + "if " + shape.pointerName + (shape.pointerIsTrueArm ? " != nil {" : " == nil {");
     const expectedReturn = (shape.pointerIsTrueArm ? body + "	" : body) + "return " + shape.pointerName;
     if (lines[1] !== expectedCondition || lines[pointerLine] !== expectedReturn || !ccxtGoClosureDefaultReadsAreSafe(goTranspiler, declaration, shape.valueType)) {
       return printed;
     }
-    lines[0] = literal.indent + "var " + literal.name + " " + shape.valueType + " = func() " + shape.valueType + " {";
+    lines[0] = literal2.indent + "var " + literal2.name + " " + shape.valueType + " = func() " + shape.valueType + " {";
     lines[pointerLine] = expectedReturn.replace(/return (\w+)$/, "return *$1");
     return lines.join("\n");
   };
@@ -20020,11 +20020,11 @@ var GoNilDeclaredValueAssignmentScan = class extends GoNilDeclaredAssignmentScan
       node = node.expression;
     }
     if (node?.kind === ts.SyntaxKind.NumericLiteral || node?.kind === ts.SyntaxKind.PrefixUnaryExpression && node.operator === ts.SyntaxKind.MinusToken && node.operand?.kind === ts.SyntaxKind.NumericLiteral) {
-      const literal = node.kind === ts.SyntaxKind.NumericLiteral ? node : node.operand;
-      if (/^[0-9]+$/.test(literal.text)) {
+      const literal2 = node.kind === ts.SyntaxKind.NumericLiteral ? node : node.operand;
+      if (/^[0-9]+$/.test(literal2.text)) {
         return "int";
       }
-      return /^[0-9]+\.[0-9]+$/.test(literal.text) ? "float64" : void 0;
+      return /^[0-9]+\.[0-9]+$/.test(literal2.text) ? "float64" : void 0;
     }
     const goType = this.goTranspiler.goTypeOfInitializer(rhs, this.goTranspiler.printNode(rhs, 0));
     return goType === "bool" ? "bool" : void 0;
@@ -20174,12 +20174,12 @@ function ccxtGoTernaryLiftArm(goTranspiler, armNode, armText) {
   const lift = CCXT_GO_TERNARY_LIFT[armType];
   return lift === void 0 ? void 0 : { type: lift[0], wrap: lift[1], call: node };
 }
-function ccxtGoTernaryLiftJoin(goTranspiler, declaration, literal) {
+function ccxtGoTernaryLiftJoin(goTranspiler, declaration, literal2) {
   const initializer = declaration?.initializer;
   if (declaration?.name?.kind !== ts.SyntaxKind.Identifier || initializer?.kind !== ts.SyntaxKind.ConditionalExpression) {
     return void 0;
   }
-  const arms = [[initializer.whenTrue, literal.whenTrue], [initializer.whenFalse, literal.whenFalse]].map(([armNode, armText]) => ccxtGoTernaryLiftArm(goTranspiler, armNode, armText));
+  const arms = [[initializer.whenTrue, literal2.whenTrue], [initializer.whenFalse, literal2.whenFalse]].map(([armNode, armText]) => ccxtGoTernaryLiftArm(goTranspiler, armNode, armText));
   if (arms.some((arm) => arm === void 0) || !arms.some((arm) => arm.wrap !== void 0)) {
     return void 0;
   }
@@ -20212,12 +20212,12 @@ function ccxtGoTernaryLiftJoin(goTranspiler, declaration, literal) {
   const hoisted = arms.map((arm, i) => arm.wrap === "SafeStringPtr" && typeof goTranspiler.goStringCallLocalName === "function" ? goTranspiler.goStringCallLocalName(arm.call) : void 0);
   return {
     joinType,
-    whenTrue: lifted(arms[0], literal.whenTrue),
-    whenFalse: lifted(arms[1], literal.whenFalse),
+    whenTrue: lifted(arms[0], literal2.whenTrue),
+    whenFalse: lifted(arms[1], literal2.whenFalse),
     whenTrueLocal: hoisted[0],
     whenFalseLocal: hoisted[1],
-    whenTrueCall: literal.whenTrue,
-    whenFalseCall: literal.whenFalse
+    whenTrueCall: literal2.whenTrue,
+    whenFalseCall: literal2.whenFalse
   };
 }
 function installCcxtGoTernaryLiftJoin(goTranspiler) {
@@ -20231,17 +20231,17 @@ function installCcxtGoTernaryLiftJoin(goTranspiler) {
       return printed;
     }
     const declaration = node.declarations[0];
-    const literal = ccxtGoClosureLiteralLines(printed);
-    if (literal === void 0 || literal.name !== (goTranspiler.printNode(declaration.name) ?? "").trim()) {
+    const literal2 = ccxtGoClosureLiteralLines(printed);
+    if (literal2 === void 0 || literal2.name !== (goTranspiler.printNode(declaration.name) ?? "").trim()) {
       return printed;
     }
-    const join3 = ccxtGoTernaryLiftJoin(goTranspiler, declaration, literal);
+    const join3 = ccxtGoTernaryLiftJoin(goTranspiler, declaration, literal2);
     if (join3 === void 0) {
       return printed;
     }
     const lines = printed.split("\n");
-    const body = literal.indent + "	";
-    lines[0] = literal.indent + "var " + literal.name + " " + join3.joinType + " = func() " + join3.joinType + " {";
+    const body = literal2.indent + "	";
+    lines[0] = literal2.indent + "var " + literal2.name + " " + join3.joinType + " = func() " + join3.joinType + " {";
     lines[2] = join3.whenTrueLocal === void 0 ? body + "	return " + join3.whenTrue : body + "	" + join3.whenTrueLocal + " := " + join3.whenTrueCall + "\n" + body + "	return &" + join3.whenTrueLocal;
     lines[4] = join3.whenFalseLocal === void 0 ? body + "return " + join3.whenFalse : body + join3.whenFalseLocal + " := " + join3.whenFalseCall + "\n" + body + "return &" + join3.whenFalseLocal;
     return lines.join("\n");
@@ -20273,12 +20273,12 @@ function installCcxtGoTernaryMapJoin(goTranspiler) {
     }
     const declaration = node.declarations[0];
     const initializer = declaration.initializer;
-    const literal = ccxtGoClosureLiteralLines(printed);
-    if (literal === void 0 || initializer?.kind !== ts.SyntaxKind.ConditionalExpression || literal.name !== (goTranspiler.printNode(declaration.name) ?? "").trim()) {
+    const literal2 = ccxtGoClosureLiteralLines(printed);
+    if (literal2 === void 0 || initializer?.kind !== ts.SyntaxKind.ConditionalExpression || literal2.name !== (goTranspiler.printNode(declaration.name) ?? "").trim()) {
       return printed;
     }
-    const whenTrue = ccxtGoTernaryMapArm(goTranspiler, initializer.whenTrue, literal.whenTrue);
-    const whenFalse = ccxtGoTernaryMapArm(goTranspiler, initializer.whenFalse, literal.whenFalse);
+    const whenTrue = ccxtGoTernaryMapArm(goTranspiler, initializer.whenTrue, literal2.whenTrue);
+    const whenFalse = ccxtGoTernaryMapArm(goTranspiler, initializer.whenFalse, literal2.whenFalse);
     const scope = goTranspiler.goEnclosingFunction(declaration);
     if (whenTrue === void 0 || whenFalse === void 0 || scope === void 0) {
       return printed;
@@ -20301,8 +20301,8 @@ function installCcxtGoTernaryMapJoin(goTranspiler) {
       return printed;
     }
     const lines = printed.split("\n");
-    const body = literal.indent + "	";
-    lines[0] = literal.indent + "var " + literal.name + " " + mapType + " = func() " + mapType + " {";
+    const body = literal2.indent + "	";
+    lines[0] = literal2.indent + "var " + literal2.name + " " + mapType + " = func() " + mapType + " {";
     lines[2] = body + "	return " + whenTrue;
     lines[4] = body + "return " + whenFalse;
     return lines.join("\n");
@@ -21037,8 +21037,8 @@ function installCcxtGoTupleResults(goTranspiler) {
     }
     const first = CCXT_GO_TUPLE_RESULT_ELEMENT_0[name] ?? "SafeStringPtr";
     const [a, b] = expr.elements.map((e) => this.printNode(e, 0).trim());
-    const bare = ccxtGoJoinedParamsLocal(this, expr.elements[1]);
-    return m[1] + first + "(" + a + "), " + (bare ? b : "MapTyped(" + b + ")") + m[3];
+    const bare2 = ccxtGoJoinedParamsLocal(this, expr.elements[1]);
+    return m[1] + first + "(" + a + "), " + (bare2 ? b : "MapTyped(" + b + ")") + m[3];
   };
   goTranspiler.__ccxtGoTupleResultsInstalled = true;
 }
@@ -21414,8 +21414,8 @@ function installClosureNumericDefault(goTranspiler) {
       return printed;
     }
     const declaration = node.declarations[0];
-    const literal = ccxtGoClosureLiteralLines(printed);
-    if (literal === void 0 || literal.name !== (goTranspiler.printNode(declaration.name) ?? "").trim()) {
+    const literal2 = ccxtGoClosureLiteralLines(printed);
+    if (literal2 === void 0 || literal2.name !== (goTranspiler.printNode(declaration.name) ?? "").trim()) {
       return printed;
     }
     const initializer = declaration.initializer;
@@ -21448,7 +21448,7 @@ function installClosureNumericDefault(goTranspiler) {
     const valueType = pointerType.slice(1);
     const pointerName = (goTranspiler.printNode(pointer, 0) ?? "").trim();
     const lines = printed.split("\n");
-    const body = literal.indent + "	";
+    const body = literal2.indent + "	";
     const pointerLine = negated ? 2 : 4;
     const defaultLine = negated ? 4 : 2;
     const expectedCondition = body + "if " + pointerName + (negated ? " != nil {" : " == nil {");
@@ -21476,7 +21476,7 @@ function installClosureNumericDefault(goTranspiler) {
     if (unproven || goTranspiler.goTypeNameIsShadowed(scope, valueType) || !goTranspiler.goLocalIsSafeToType(scope, declaration, varName, valueType)) {
       return printed;
     }
-    lines[0] = literal.indent + "var " + literal.name + " " + valueType + " = func() " + valueType + " {";
+    lines[0] = literal2.indent + "var " + literal2.name + " " + valueType + " = func() " + valueType + " {";
     lines[pointerLine] = expectedReturn.replace(/return (\w+)$/, "return *$1");
     if (defaultText !== void 0) {
       lines[defaultLine] = lines[defaultLine].replace(/return .*$/, "return " + defaultText);
@@ -22069,9 +22069,9 @@ var TupleSlots = class {
       if (typed !== null) {
         return { "kind": "var", "type": typed[1], "init": typed[2], fn };
       }
-      const bare = new RegExp("^\\s*var " + name + " ([\\w\\[\\].*]+)\\s*$").exec(line);
-      if (bare !== null) {
-        return { "kind": "var", "type": bare[1], "init": null, fn };
+      const bare2 = new RegExp("^\\s*var " + name + " ([\\w\\[\\].*]+)\\s*$").exec(line);
+      if (bare2 !== null) {
+        return { "kind": "var", "type": bare2[1], "init": null, fn };
       }
       const short = new RegExp("^\\s*" + name + " := (.*)$").exec(line);
       if (short !== null) {
@@ -23020,8 +23020,8 @@ function gb11UsesAreIntOnly(go, body, param) {
       }
       if (parent?.kind === SK2.BinaryExpression && comparisons[parent.operatorToken?.kind]) {
         const other = parent.left === n ? parent.right : parent.left;
-        const literal = other?.kind === SK2.NumericLiteral || other?.kind === SK2.PrefixUnaryExpression && other.operator === SK2.MinusToken && other.operand?.kind === SK2.NumericLiteral;
-        if (!literal) {
+        const literal2 = other?.kind === SK2.NumericLiteral || other?.kind === SK2.PrefixUnaryExpression && other.operator === SK2.MinusToken && other.operand?.kind === SK2.NumericLiteral;
+        if (!literal2) {
           ok = false;
         }
         return;
@@ -23785,14 +23785,14 @@ function countIdentifier(root, name) {
 }
 function counterSpan(go, body, fn) {
   const SK2 = ts.SyntaxKind;
-  const sumOfOne = (call) => {
+  const sumOfOne2 = (call) => {
     call = unparen(call);
     return isBaseCall(go, call, "sum", 2) && call.arguments[1]?.kind === SK2.NumericLiteral && call.arguments[1].text === "1" ? call : void 0;
   };
   if (body.length === 2) {
     const decl = constDecl(body[0]);
     const write = optionWrite(go, body[1]);
-    const sum = decl !== void 0 ? sumOfOne(decl.initializer) : void 0;
+    const sum = decl !== void 0 ? sumOfOne2(decl.initializer) : void 0;
     const key = sum !== void 0 ? counterRead(go, sum.arguments[0]) : void 0;
     if (key !== void 0 && write !== void 0 && write[0].text === key.text && write[1] === decl.name.text) {
       return [decl.name, key];
@@ -23804,7 +23804,7 @@ function counterSpan(go, body, fn) {
     const next = constDecl(body[1]);
     const write = optionWrite(go, body[2]);
     const key = seed !== void 0 ? counterRead(go, seed.initializer) : void 0;
-    const sum = next !== void 0 ? sumOfOne(next.initializer) : void 0;
+    const sum = next !== void 0 ? sumOfOne2(next.initializer) : void 0;
     if (key !== void 0 && sum !== void 0 && write !== void 0 && sum.arguments[0]?.kind === SK2.Identifier && sum.arguments[0].text === seed.name.text && write[0].text === key.text && write[1] === next.name.text && countIdentifier(fn, seed.name.text) === 2) {
       return [next.name, key];
     }
@@ -24567,11 +24567,11 @@ function goBracketBalance(code) {
   return depth;
 }
 function goFuncLiteralReturnType(value) {
-  const literal = /^func\(\) ([\w.[\]]*) \{/.exec(value);
-  if (literal === null || !value.endsWith("}()") || literal[1] === "any") {
+  const literal2 = /^func\(\) ([\w.[\]]*) \{/.exec(value);
+  if (literal2 === null || !value.endsWith("}()") || literal2[1] === "any") {
     return void 0;
   }
-  return literal[1];
+  return literal2[1];
 }
 function goTrailingCommentIndex(line, state) {
   let i = 0;
@@ -27246,8 +27246,8 @@ ${this.getIden(identation)}${this.printNode(node.left, 0)} = &${local}`;
       return false;
     }
     const fallback = this.goUnwrapParenthesizedNode(found.fallback);
-    const literal = fallback.kind === SyntaxKind5.ObjectLiteralExpression && fallback.properties.length === 0 || this.rf6aNeverNilDict(fallback, ws);
-    return literal && this.rf6aPlainContainer(found.call.arguments[0], ws, false);
+    const literal2 = fallback.kind === SyntaxKind5.ObjectLiteralExpression && fallback.properties.length === 0 || this.rf6aNeverNilDict(fallback, ws);
+    return literal2 && this.rf6aPlainContainer(found.call.arguments[0], ws, false);
   }
   rf6aSourceKind(node) {
     const fileName = String(node?.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
@@ -32482,9 +32482,9 @@ ${iden}}`;
     }
     if (goType === "map[string]any" || goType === "[]any") {
       const isMap = goType === "map[string]any";
-      const literal = isMap ? "{" : "[";
+      const literal2 = isMap ? "{" : "[";
       const producers = isMap ? GO_TS_SRC_MAP_PRODUCERS : [];
-      if (text.startsWith(literal) || producers.some((rx) => rx.test(text))) {
+      if (text.startsWith(literal2) || producers.some((rx) => rx.test(text))) {
         return true;
       }
       const identifier = /^([A-Za-z_$][\w$]*)$/.exec(text);
@@ -32653,8 +32653,8 @@ ${iden}}`;
     }
     const text = `${field} ${isEq ? "==" : "!="} nil`;
     const parent = (left?.parent ?? right?.parent)?.parent;
-    const bare = parent?.kind === SyntaxKind5.BinaryExpression && (parent.operatorToken.kind === SyntaxKind5.AmpersandAmpersandToken || parent.operatorToken.kind === SyntaxKind5.BarBarToken);
-    return bare ? text : `(${text})`;
+    const bare2 = parent?.kind === SyntaxKind5.BinaryExpression && (parent.operatorToken.kind === SyntaxKind5.AmpersandAmpersandToken || parent.operatorToken.kind === SyntaxKind5.BarBarToken);
+    return bare2 ? text : `(${text})`;
   }
   // a key the map index takes as is: a Go string (literal / `string` local / string-returning call), or an element
   // of a `[]string` local read at a counter its own `for (let i = 0; i < xs.length; i++)` bounds to that slice
@@ -36297,8 +36297,8 @@ ${indent}}`);
     }
     const defaultAt = this.goTupleValueDefaultArg[producer];
     const defaultArg = defaultAt === void 0 ? void 0 : holder.initializer?.arguments?.[defaultAt];
-    const literal = defaultArg?.kind === SyntaxKind5.PrefixUnaryExpression ? defaultArg.operand : defaultArg;
-    if (literal?.kind === SyntaxKind5.NumericLiteral || this.goTypeNameIsShadowed(scope, "*int64")) {
+    const literal2 = defaultArg?.kind === SyntaxKind5.PrefixUnaryExpression ? defaultArg.operand : defaultArg;
+    if (literal2?.kind === SyntaxKind5.NumericLiteral || this.goTypeNameIsShadowed(scope, "*int64")) {
       return void 0;
     }
     const name = element.name.text;
@@ -36443,8 +36443,8 @@ ${indent}}`);
       if (arg?.kind === SyntaxKind5.PrefixUnaryExpression && arg.operator === SyntaxKind5.MinusToken) {
         arg = arg.operand;
       }
-      const literal = entry.goType === "*bool" ? arg?.kind === SyntaxKind5.TrueKeyword || arg?.kind === SyntaxKind5.FalseKeyword : arg?.kind === SyntaxKind5.NumericLiteral && /^\d+$/.test(String(arg.text ?? ""));
-      if (literal) {
+      const literal2 = entry.goType === "*bool" ? arg?.kind === SyntaxKind5.TrueKeyword || arg?.kind === SyntaxKind5.FalseKeyword : arg?.kind === SyntaxKind5.NumericLiteral && /^\d+$/.test(String(arg.text ?? ""));
+      if (literal2) {
         return void 0;
       }
     }
@@ -40193,15 +40193,6 @@ var JAVA_DECLARED_NUMERIC_TYPES = /* @__PURE__ */ new Set(["Integer", "Long", "D
 var JAVA_BOXED_NUMERIC_TYPES = /* @__PURE__ */ new Set(["Integer", "Long", "Double"]);
 var JAVA_HANDLER_NAME_TYPE = "String";
 var JAVA_HANDLER_TABLE_TYPE = "java.util.Map<String, String>";
-var JAVA_SPLIT_RECEIVER_KINDS = /* @__PURE__ */ new Set([
-  SyntaxKind6.Identifier,
-  SyntaxKind6.PropertyAccessExpression,
-  SyntaxKind6.ElementAccessExpression,
-  SyntaxKind6.CallExpression,
-  SyntaxKind6.ParenthesizedExpression,
-  SyntaxKind6.StringLiteral,
-  SyntaxKind6.NoSubstitutionTemplateLiteral
-]);
 var JAVA_LIST_BACKED_TS_CLASSES = /* @__PURE__ */ new Set([
   "ArrayCache",
   "ArrayCacheByTimestamp",
@@ -40500,10 +40491,150 @@ function memoizeJavaCheckerCalls(checker) {
   }
   return checker;
 }
+var JAVA_FILE_BUILT_MAP_FIELDS = /* @__PURE__ */ new Set(["markets", "positions"]);
+var JAVA_HASH_MAP_FIELDS = {
+  "tickers": true,
+  "bidsasks": true,
+  "trades": true,
+  "fees": true,
+  "urls": true,
+  "markets_by_id": true
+};
+var JAVA_BASE_MAP_READ_FIELDS = {
+  "has": { declared: true, anyKey: true },
+  "features": { declared: true, anyKey: true },
+  "currencies": { declared: true, anyKey: false },
+  "requiredCredentials": { declared: false, anyKey: true }
+};
+var JAVA_SYNC_CALL_FILE = /(^|[\\/])ts[\\/]src[\\/]base[\\/](functions[\\/][^\\/]+|Exchange(\.nooverloads\.\d+)?)\.ts$|(^|[\\/])lib\.[^\\/]*\.d\.ts$/;
+var JAVA_IMPLICIT_API_FILE = /(^|[\\/])ts[\\/]src[\\/]abstract[\\/][a-z0-9_]+\.ts$/;
+var JAVA_CRC32_BASE_FILE = /(^|[\\/])ts[\\/]src[\\/]base[\\/]functions[\\/]crypto\.ts$/;
+function unwrapParens(node) {
+  while (node?.kind === SyntaxKind6.ParenthesizedExpression) {
+    node = node.expression;
+  }
+  return node;
+}
+var baseMemberDecl2 = (java, node, name) => {
+  if (node?.kind !== SyntaxKind6.PropertyAccessExpression || node.expression?.kind !== SyntaxKind6.ThisKeyword || node.name?.text !== name) {
+    return void 0;
+  }
+  let decl;
+  try {
+    decl = java.checkerOrUndefined()?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+  } catch (e) {
+    return void 0;
+  }
+  return decl?.parent?.name?.text === JAVA_OWNER_CLASS ? decl : void 0;
+};
+var baseCall = (java, node, name, args) => {
+  node = unwrapParens(node);
+  return node?.kind === SyntaxKind6.CallExpression && (node.arguments?.length ?? 0) === args && baseMemberDecl2(java, node.expression, name) !== void 0;
+};
+var callStatement2 = (java, stmt, name) => stmt?.kind === SyntaxKind6.ExpressionStatement && baseCall(java, stmt.expression, name, 0);
+var constDecl2 = (stmt) => {
+  const list = stmt?.kind === SyntaxKind6.VariableStatement ? stmt.declarationList : void 0;
+  const d = list?.declarations;
+  if (d?.length !== 1 || d[0].name?.kind !== SyntaxKind6.Identifier || d[0].initializer === void 0 || (getCombinedNodeFlags(d[0]) & NodeFlags3.Const) === 0) {
+    return void 0;
+  }
+  return d[0];
+};
+var literal = (node) => node?.kind === SyntaxKind6.StringLiteral ? node : void 0;
+var optionWrite2 = (java, stmt) => {
+  const e = stmt?.kind === SyntaxKind6.ExpressionStatement ? stmt.expression : void 0;
+  if (e?.kind !== SyntaxKind6.BinaryExpression || e.operatorToken?.kind !== SyntaxKind6.EqualsToken) {
+    return void 0;
+  }
+  const target = e.left;
+  if (target?.kind !== SyntaxKind6.ElementAccessExpression || baseMemberDecl2(java, target.expression, "options") === void 0 || literal(target.argumentExpression) === void 0 || e.right?.kind !== SyntaxKind6.Identifier) {
+    return void 0;
+  }
+  return [target.argumentExpression, e.right.text];
+};
+var counterRead2 = (java, node) => {
+  node = unwrapParens(node);
+  if (!baseCall(java, node, "safeInteger", 3)) {
+    return void 0;
+  }
+  const [options, key, fallback] = node.arguments;
+  if (baseMemberDecl2(java, options, "options") === void 0 || literal(key) === void 0 || fallback?.kind !== SyntaxKind6.NumericLiteral || fallback.text !== "0") {
+    return void 0;
+  }
+  return key;
+};
+var countIdentifier2 = (root, name) => {
+  let n = 0;
+  const visit = (node) => {
+    if (node.kind === SyntaxKind6.Identifier && node.text === name) {
+      n++;
+    }
+    node.forEachChild(visit);
+  };
+  visit(root);
+  return n;
+};
+var sumOfOne = (java, call) => {
+  call = unwrapParens(call);
+  return baseCall(java, call, "sum", 2) && call.arguments[1]?.kind === SyntaxKind6.NumericLiteral && call.arguments[1].text === "1" ? call : void 0;
+};
+var counterSpan2 = (java, body, fn) => {
+  if (body.length === 2) {
+    const decl = constDecl2(body[0]);
+    const write = optionWrite2(java, body[1]);
+    const sum = decl !== void 0 ? sumOfOne(java, decl.initializer) : void 0;
+    const key = sum !== void 0 ? counterRead2(java, sum.arguments[0]) : void 0;
+    if (key !== void 0 && write !== void 0 && write[0].text === key.text && write[1] === decl.name.text) {
+      return [decl.name, key];
+    }
+    return void 0;
+  }
+  if (body.length === 3) {
+    const seed = constDecl2(body[0]);
+    const next = constDecl2(body[1]);
+    const write = optionWrite2(java, body[2]);
+    const key = seed !== void 0 ? counterRead2(java, seed.initializer) : void 0;
+    const sum = next !== void 0 ? sumOfOne(java, next.initializer) : void 0;
+    if (key !== void 0 && sum !== void 0 && write !== void 0 && sum.arguments[0]?.kind === SyntaxKind6.Identifier && sum.arguments[0].text === seed.name.text && write[0].text === key.text && write[1] === next.name.text && countIdentifier2(fn, seed.name.text) === 2) {
+      return [next.name, key];
+    }
+  }
+  return void 0;
+};
+var nonceShape2 = (java, method) => {
+  if (method?.kind !== SyntaxKind6.MethodDeclaration || method.name?.text !== "incrementingNonce" || method.parent?.name?.text !== JAVA_OWNER_CLASS || method.parameters?.length !== 0) {
+    return void 0;
+  }
+  const s = method.body?.statements;
+  if (s === void 0 || s.length !== 7) {
+    return void 0;
+  }
+  const current = constDecl2(s[0]);
+  const last = constDecl2(s[2]);
+  const result = constDecl2(s[3]);
+  const write = optionWrite2(java, s[4]);
+  if (current === void 0 || last === void 0 || result === void 0 || write === void 0 || !baseCall(java, current.initializer, "nonce", 0) || !callStatement2(java, s[1], "lockLastNonce") || !callStatement2(java, s[5], "unlockLastNonce")) {
+    return void 0;
+  }
+  const key = counterRead2(java, last.initializer);
+  const cond = unwrapParens(result.initializer);
+  if (key?.text !== "lastNonce" || write[0].text !== "lastNonce" || write[1] !== result.name.text || cond?.kind !== SyntaxKind6.ConditionalExpression) {
+    return void 0;
+  }
+  const compare = unwrapParens(cond.condition);
+  const plusOne = unwrapParens(cond.whenFalse);
+  const isId = (n, name) => n?.kind === SyntaxKind6.Identifier && n.text === name;
+  if (compare?.kind !== SyntaxKind6.BinaryExpression || compare.operatorToken?.kind !== SyntaxKind6.GreaterThanToken || !isId(compare.left, current.name.text) || !isId(compare.right, last.name.text) || !isId(cond.whenTrue, current.name.text) || plusOne?.kind !== SyntaxKind6.BinaryExpression || plusOne.operatorToken?.kind !== SyntaxKind6.PlusToken || !isId(plusOne.left, last.name.text) || plusOne.right?.kind !== SyntaxKind6.NumericLiteral || plusOne.right.text !== "1" || s[6].kind !== SyntaxKind6.ReturnStatement || !isId(s[6].expression, result.name.text) || countIdentifier2(method, last.name.text) !== 3) {
+    return void 0;
+  }
+  return { current, result };
+};
+var bare = (java, stmt) => java.printLeadingComments(stmt, 0) === "" && java.printTraillingComment(stmt, 0) === "";
 var JavaTranspiler = class extends BaseTranspiler {
   constructor(config = {}) {
     config["parser"] = Object.assign({}, parserConfig5, config["parser"] ?? {});
     super(config);
+    // ===== instance state and caches =====
     // override lookups repeat per method on every printed call and hook; the answer is fixed per node
     this.methodOverrideCache = /* @__PURE__ */ new WeakMap();
     // BaseTranspiler.getMethodOverride answered from a per-class ancestor chain of
@@ -40557,7 +40688,7 @@ var JavaTranspiler = class extends BaseTranspiler {
     // the names the enclosing method body assigns with a compound operator (`x += ..`),
     // by method node; a plain assignment is handled by javaParameterAssignmentCast
     this.javaMethodAssignedNames = /* @__PURE__ */ new WeakMap();
-    // D-09 memo/cycle guard for javaNativeReturnType (mutually recursive return chains)
+    // memo/cycle guard for javaNativeReturnType (mutually recursive return chains)
     this.javaReturnTypeCache = /* @__PURE__ */ new WeakMap();
     this.javaReturnTypeInProgress = /* @__PURE__ */ new Set();
     // the build layer answers a printed local's type from what THIS worker has printed so far, so
@@ -40613,9 +40744,212 @@ var JavaTranspiler = class extends BaseTranspiler {
     this.asyncExecutor = config["asyncExecutor"] ?? "";
     this.asyncSupplier = config["asyncSupplier"] ?? "";
   }
+  // ===== configuration, checker access and node printing entry points =====
   getChecker() {
     return memoizeJavaCheckerCalls(super.getChecker());
   }
+  checkerOrUndefined() {
+    const checker = super.checkerOrUndefined();
+    return checker === void 0 ? void 0 : memoizeJavaCheckerCalls(checker);
+  }
+  initConfig() {
+    this.LeftPropertyAccessReplacements = {
+      // 'this': '$this',
+    };
+    this.RightPropertyAccessReplacements = {
+      // Java list/string methods (lowerCamelCase)
+      push: "add",
+      indexOf: "indexOf",
+      toUpperCase: "toUpperCase",
+      toLowerCase: "toLowerCase",
+      toString: "toString"
+    };
+    this.FullPropertyAccessReplacements = {
+      "JSON.parse": "parseJson",
+      "console.log": "System.out.println",
+      "Number.MAX_SAFE_INTEGER": "Long.MAX_VALUE",
+      "Math.min": "Math.min",
+      "Math.max": "Math.max",
+      "Math.log": "Math.log",
+      "Math.abs": "Math.abs",
+      "Math.floor": "Math.floor",
+      "Math.pow": "Math.pow"
+      // 'Promise.all' handled via promiseAll wrapper
+    };
+    this.CallExpressionReplacements = {
+      "parseInt": "Helpers.parseInt",
+      "parseFloat": "Helpers.parseFloat"
+      // Add ad-hoc function call rewrites here if you need them
+    };
+    this.ReservedKeywordsReplacements = {
+      string: "str",
+      object: "obj",
+      params: "parameters",
+      // base: "bs",
+      internal: "intern",
+      event: "eventVar",
+      fixed: "fixedVar",
+      final: "finalVar",
+      native: "nativeVar"
+      // add Java keywords if you need to avoid collisions (e.g., enum, assert)
+    };
+    this.VariableTypeReplacements = {
+      string: "String",
+      Str: "String",
+      number: "double",
+      Int: "long",
+      Num: "double",
+      Dict: "java.util.Map<String, Object>",
+      Strings: "java.util.List<String>",
+      List: "java.util.List<Object>",
+      boolean: "boolean",
+      object: "Object"
+    };
+    this.ArgTypeReplacements = { ...this.VariableTypeReplacements };
+    this.binaryExpressionsWrappers = {
+      [SyntaxKind6.EqualsEqualsToken]: [this.EQUALS_EQUALS_WRAPPER_OPEN, this.EQUALS_EQUALS_WRAPPER_CLOSE],
+      [SyntaxKind6.EqualsEqualsEqualsToken]: [this.EQUALS_EQUALS_WRAPPER_OPEN, this.EQUALS_EQUALS_WRAPPER_CLOSE],
+      [SyntaxKind6.ExclamationEqualsToken]: [this.DIFFERENT_WRAPPER_OPEN, this.DIFFERENT_WRAPPER_CLOSE],
+      [SyntaxKind6.ExclamationEqualsEqualsToken]: [this.DIFFERENT_WRAPPER_OPEN, this.DIFFERENT_WRAPPER_CLOSE],
+      [SyntaxKind6.GreaterThanToken]: [this.GREATER_THAN_WRAPPER_OPEN, this.GREATER_THAN_WRAPPER_CLOSE],
+      [SyntaxKind6.GreaterThanEqualsToken]: [this.GREATER_THAN_EQUALS_WRAPPER_OPEN, this.GREATER_THAN_EQUALS_WRAPPER_CLOSE],
+      [SyntaxKind6.LessThanToken]: [this.LESS_THAN_WRAPPER_OPEN, this.LESS_THAN_WRAPPER_CLOSE],
+      [SyntaxKind6.LessThanEqualsToken]: [this.LESS_THAN_EQUALS_WRAPPER_OPEN, this.LESS_THAN_EQUALS_WRAPPER_CLOSE],
+      [SyntaxKind6.PlusToken]: [this.PLUS_WRAPPER_OPEN, this.PLUS_WRAPPER_CLOSE],
+      [SyntaxKind6.MinusToken]: [this.MINUS_WRAPPER_OPEN, this.MINUS_WRAPPER_CLOSE],
+      [SyntaxKind6.AsteriskToken]: [this.MULTIPLY_WRAPPER_OPEN, this.MULTIPLY_WRAPPER_CLOSE],
+      [SyntaxKind6.PercentToken]: [this.MOD_WRAPPER_OPEN, this.MOD_WRAPPER_CLOSE],
+      [SyntaxKind6.SlashToken]: [this.DIVIDE_WRAPPER_OPEN, this.DIVIDE_WRAPPER_CLOSE]
+    };
+  }
+  getBlockOpen(identation) {
+    return "\n" + this.getIden(identation) + this.BLOCK_OPENING_TOKEN + "\n";
+  }
+  getCustomClassName(node) {
+    return this.capitalize(node.name.text);
+  }
+  getClassModifier(node) {
+    return "public ";
+  }
+  printSuperCallInsideConstructor(_node, _identation) {
+    return "";
+  }
+  printNumericLiteral(node) {
+    const javaMax = 2147483647;
+    const nodeText = node.text;
+    if (Number(nodeText) > javaMax && Number.isInteger(Number(nodeText)) && node.text.indexOf("e") === -1) {
+      return `${nodeText}L`;
+    }
+    return node.text;
+  }
+  printIdentifier(node) {
+    let idValue = node.text ?? node.text;
+    if (this.ReservedKeywordsReplacements[idValue]) {
+      idValue = this.ReservedKeywordsReplacements[idValue];
+    }
+    if (idValue === "undefined") {
+      return this.UNDEFINED_TOKEN;
+    }
+    const defaulted = this.javaDefaultedLocalName(node);
+    if (defaulted !== void 0) {
+      return defaulted;
+    }
+    const isInsideNewExpression = node?.parent?.kind === SyntaxKind6.NewExpression;
+    const isInsideCatch = node?.parent?.kind === SyntaxKind6.ThrowStatement;
+    const isLeftSide = node?.parent?.name === node || node?.parent?.left === node;
+    const isCallOrPropertyAccess = node?.parent?.kind === SyntaxKind6.PropertyAccessExpression || node?.parent?.kind === SyntaxKind6.ElementAccessExpression;
+    if (!isLeftSide && !isCallOrPropertyAccess && !isInsideCatch && !isInsideNewExpression) {
+      const type = this.getChecker().getTypeAtLocation(node);
+      const typeSymbol = type?.getSymbol?.();
+      if (typeSymbol !== void 0) {
+        const decl = (typeSymbol?.declarations ?? []).map((d) => d.resolve());
+        if (decl.length > 0 && decl[0].getSourceFile().fileName.indexOf("typescript") === -1) {
+          const symbol = this.getChecker().getSymbolAtLocation(node);
+          const first = symbol?.declarations[0]?.resolve();
+          const isClassDeclaration5 = !!symbol && (first.kind === SyntaxKind6.ClassDeclaration || first.kind === SyntaxKind6.ImportSpecifier && this.getChecker().getAliasedSymbol(symbol)?.declarations[0]?.resolve()?.kind === SyntaxKind6.ClassDeclaration);
+          if (isClassDeclaration5) {
+            return `${idValue}.class`;
+          }
+        }
+      }
+    }
+    return this.transformIdentifier(node, idValue);
+  }
+  printConstructorDeclaration(node, identation) {
+    const classNode = node.parent;
+    const className = this.printNode(classNode.name, 0);
+    const args = this.printMethodParameters(node);
+    const constructorBody = this.printFunctionBody(node, identation);
+    let superCallParams = "";
+    let hasSuperCall = false;
+    node.body?.statements.forEach((statement) => {
+      const expression = isExpressionStatement3(statement) ? statement.expression : void 0;
+      if (expression && isCallExpression5(expression) && expression.expression.getText().trim() === "super") {
+        hasSuperCall = true;
+        superCallParams = expression.arguments.map((a) => this.printNode(a, identation).trim()).join(", ");
+      }
+    });
+    const header = this.getIden(identation) + className + "(" + args + ")";
+    return header + (hasSuperCall ? this.injectLeadingInBody(constructorBody, `super(${superCallParams});`) : constructorBody);
+  }
+  injectLeadingInBody(body, firstLine) {
+    const lines = body.split("\n");
+    if (lines.length >= 2) {
+      lines.splice(1, 0, this.getIden(1) + firstLine);
+    }
+    return lines.join("\n");
+  }
+  printNode(node, identation = 0) {
+    if (node && node.kind === SyntaxKind6.SourceFile) {
+      this.restoreFinalVarMutations();
+      this.ReassignedVars = {};
+      this.varListFromObjectLiterals = {};
+      this.usageToFinalName = /* @__PURE__ */ new WeakMap();
+      this.finalVarScopeStack = [];
+      try {
+        return super.printNode(node, identation);
+      } finally {
+        this.restoreFinalVarMutations();
+      }
+    }
+    return super.printNode(node, identation);
+  }
+  printThisKeyword(node, identation) {
+    let current = node?.parent;
+    while (current) {
+      if (current.kind === SyntaxKind6.PropertyAssignment && !this.builderObjectLiterals.has(current.parent)) {
+        const className = this.currentClassName;
+        return `${this.capitalize(className)}.this`;
+      }
+      current = current?.parent;
+    }
+    return this.THIS_TOKEN;
+  }
+  printPropertyAccessModifiers(node) {
+    let modifiers = this.printModifiers(node);
+    if (modifiers === "") {
+      modifiers = this.defaultPropertyAccess;
+    }
+    let typeText = "Object";
+    if (node.type) {
+      typeText = this.getType(node);
+      if (!typeText) {
+        if (node.type.kind === SyntaxKind6.AnyKeyword) {
+          typeText = this.OBJECT_KEYWORD + " ";
+        }
+      }
+    }
+    return modifiers + " " + typeText + " ";
+  }
+  printModifiers(node) {
+    let modifiers = node.modifiers;
+    if (modifiers === void 0) {
+      return "";
+    }
+    modifiers = modifiers.filter((mod) => this.FuncModifiers[mod.kind] && mod.kind !== SyntaxKind6.AsyncKeyword);
+    return modifiers.map((modifier) => this.FuncModifiers[modifier.kind]).join(" ");
+  }
+  // ===== method overrides, heritage chains and override bridges =====
   getMethodOverride(node) {
     if (node === void 0 || node === null) {
       return super.getMethodOverride(node);
@@ -40664,10 +40998,150 @@ var JavaTranspiler = class extends BaseTranspiler {
     }
     return method;
   }
-  checkerOrUndefined() {
-    const checker = super.checkerOrUndefined();
-    return checker === void 0 ? void 0 : memoizeJavaCheckerCalls(checker);
+  // the implementation declaration of a resolved method (an overload signature has no body)
+  javaMethodImplementation(declaration) {
+    if (declaration === void 0 || !isMethodDeclaration4(declaration)) {
+      return void 0;
+    }
+    if (declaration.body !== void 0) {
+      return declaration;
+    }
+    try {
+      const symbol = this.getChecker().getSymbolAtLocation(declaration.name);
+      return symbol?.declarations?.map((d) => d.resolve()).find((d) => isMethodDeclaration4(d) && d.body !== void 0);
+    } catch (e) {
+      return void 0;
+    }
   }
+  // a method this printer emits with its single typed signature: hand-written Java declares
+  // ts/src/base/** except the base tiers below their transpile delimiter
+  javaIsPrintedMethod(method) {
+    if (method === void 0 || !isMethodDeclaration4(method) || method.body === void 0 || !isClassDeclaration3(method.parent)) {
+      return false;
+    }
+    const file = method.getSourceFile();
+    const fileName = file.fileName.replace(/\\/g, "/");
+    if (!/(^|\/)ts\/src\//.test(fileName)) {
+      return true;
+    }
+    if (JAVA_NATIVE_PARAMETER_BASE_FILES.test(fileName)) {
+      const delimiter = file.text.indexOf(JAVA_TRANSPILE_DELIMITER);
+      return delimiter >= 0 && method.pos > delimiter || JAVA_HANDWRITTEN_FULL_ARITY.has(method.name?.text);
+    }
+    return !JAVA_HANDWRITTEN_TIER_FILES.test(fileName);
+  }
+  // an `any` receiver (the tests' `exchange: any`) compiles against the Java Exchange class:
+  // bind the base Exchange method of that name when it is implemented exactly once
+  javaAnyReceiverBaseMethod(callee) {
+    const type = this.getChecker().getTypeAtLocation(callee.expression);
+    if ((type.flags & TypeFlags5.Any) === 0) {
+      return void 0;
+    }
+    const methods = this.baseExchangeMethodsByName().get(callee.name?.text);
+    return methods?.length === 1 ? methods[0] : void 0;
+  }
+  baseExchangeMethodsByName() {
+    const program = this.getProgram();
+    const cached = this._baseExchangeMethodsByName.get(program);
+    if (cached !== void 0) {
+      return cached;
+    }
+    const names = /* @__PURE__ */ new Map();
+    const fileName = program.getSourceFileNames().find((f) => /(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange\.ts$/.test(f));
+    const file = fileName !== void 0 ? program.getSourceFile(fileName) : void 0;
+    for (const className of ["BaseExchange", "Exchange"]) {
+      const cls = file?.statements.find((s) => isClassDeclaration3(s) && s.name?.text === className);
+      const own = /* @__PURE__ */ new Map();
+      for (const member of cls?.members ?? []) {
+        if (isMethodDeclaration4(member) && member.body !== void 0 && isIdentifier2(member.name)) {
+          own.set(member.name.text, (own.get(member.name.text) ?? []).concat([member]));
+        }
+      }
+      own.forEach((methods, key) => names.has(key) || names.set(key, methods));
+    }
+    this._baseExchangeMethodsByName.set(program, names);
+    return names;
+  }
+  // Java erasure of a printed type, for override/bridge comparisons
+  javaErasure(type) {
+    return type.replace(/<.*>/, "").replace(/^java\.util\./, "").trim();
+  }
+  // An override whose typed core differs from an ancestor's (another parameter count, another
+  // default position or type) no longer overrides it in Java: a bridge with the ancestor's
+  // signature forwards to this method, so base code calling the ancestor core reaches it.
+  printOverrideBridges(node, identation) {
+    const ownTypes = this.javaCoreParameterTypes(node);
+    const ownKey = ownTypes.map((t) => this.javaErasure(t)).join(",");
+    const seen = /* @__PURE__ */ new Set();
+    let out = "";
+    let ancestor;
+    try {
+      ancestor = this.getMethodOverride(node);
+    } catch (e) {
+      return "";
+    }
+    while (ancestor !== void 0) {
+      if (this.hasDefaultedTail(ancestor)) {
+        const ancestorTypes = this.javaCoreParameterTypes(ancestor);
+        const key = ancestorTypes.map((t) => this.javaErasure(t)).join(",");
+        if (key !== ownKey && !seen.has(key)) {
+          seen.add(key);
+          out += this.printOverrideBridge(node, ancestor, ancestorTypes, ownTypes, identation);
+        }
+      }
+      try {
+        ancestor = this.getMethodOverride(ancestor);
+      } catch (e) {
+        ancestor = void 0;
+      }
+    }
+    return out;
+  }
+  printOverrideBridge(node, ancestor, ancestorTypes, ownTypes, identation) {
+    const name = this.transformMethodNameIfNeeded(node.name.text);
+    const ancestorNames = ancestor.parameters.map((p) => this.printNode(p.name, 0));
+    const ancestorDef = this.printMethodDefinition(
+      ancestor,
+      identation,
+      () => ancestorTypes.map((t, i) => `${t} ${ancestorNames[i]}`).join(", ")
+    );
+    const forwarded = node.parameters.map((p, i) => i < ancestorNames.length ? this.javaErasure(ownTypes[i]) === this.javaErasure(ancestorTypes[i]) ? ancestorNames[i] : this.javaConvertToCoreType(ownTypes[i], ancestorNames[i], void 0) : this.javaCoreDefaultArgument(p, ownTypes[i])).join(", ");
+    const call = `this.${name}(${forwarded})`;
+    const returnOf = (def) => def.match(/(?:public|protected|private)\s+(?:static\s+)?(.+?)\s+\w+\s*\(/)?.[1]?.trim() ?? "Object";
+    const returnType = returnOf(ancestorDef);
+    const ownReturn = returnOf(this.printMethodDefinition(node, identation, () => ""));
+    const body = returnType === "void" ? `${call};` : returnType === ownReturn ? `return ${call};` : `return (${returnType}) (Object) ${call};`;
+    return "\n" + ancestorDef + this.getBlockOpen(identation) + this.getIden(identation + 1) + body + this.getBlockClose(identation);
+  }
+  exchangeTierMethods() {
+    if (this._exchangeTierMethods !== void 0) {
+      return this._exchangeTierMethods;
+    }
+    const names = /* @__PURE__ */ new Map();
+    try {
+      const program = this.getProgram();
+      const fileName = program.getSourceFileNames().find((f) => JAVA_NATIVE_PARAMETER_BASE_FILES.test(f));
+      const file = fileName !== void 0 ? program.getSourceFile(fileName) : void 0;
+      const collect = (node) => {
+        if (isClassDeclaration3(node) && node.name?.text === "Exchange") {
+          for (const member of node.members) {
+            const key = member.name?.getText().trim();
+            if (isMethodDeclaration4(member) && key !== void 0 && !names.has(key)) {
+              names.set(key, member);
+            }
+          }
+        }
+        node.forEachChild(collect);
+      };
+      if (file !== void 0) {
+        collect(file);
+      }
+    } catch (e) {
+    }
+    this._exchangeTierMethods = names;
+    return names;
+  }
+  // ===== call expressions, call arguments and core-type conversions =====
   // the embedding build layer (build/java-local-types.js) installs this: it names the
   // Java type of a local whose printed declaration line it rewrote (`Long`/`Double`).
   // The arithmetic rule reads it for identifier operands only.
@@ -40722,38 +41196,6 @@ var JavaTranspiler = class extends BaseTranspiler {
       return `(${type}) (${parsedArg})`;
     }).join(", ");
   }
-  // the implementation declaration of a resolved method (an overload signature has no body)
-  javaMethodImplementation(declaration) {
-    if (declaration === void 0 || !isMethodDeclaration4(declaration)) {
-      return void 0;
-    }
-    if (declaration.body !== void 0) {
-      return declaration;
-    }
-    try {
-      const symbol = this.getChecker().getSymbolAtLocation(declaration.name);
-      return symbol?.declarations?.map((d) => d.resolve()).find((d) => isMethodDeclaration4(d) && d.body !== void 0);
-    } catch (e) {
-      return void 0;
-    }
-  }
-  // a method this printer emits with its single typed signature: hand-written Java declares
-  // ts/src/base/** except the base tiers below their transpile delimiter
-  javaIsPrintedMethod(method) {
-    if (method === void 0 || !isMethodDeclaration4(method) || method.body === void 0 || !isClassDeclaration3(method.parent)) {
-      return false;
-    }
-    const file = method.getSourceFile();
-    const fileName = file.fileName.replace(/\\/g, "/");
-    if (!/(^|\/)ts\/src\//.test(fileName)) {
-      return true;
-    }
-    if (JAVA_NATIVE_PARAMETER_BASE_FILES.test(fileName)) {
-      const delimiter = file.text.indexOf(JAVA_TRANSPILE_DELIMITER);
-      return delimiter >= 0 && method.pos > delimiter || JAVA_HANDWRITTEN_FULL_ARITY.has(method.name?.text);
-    }
-    return !JAVA_HANDWRITTEN_TIER_FILES.test(fileName);
-  }
   javaHasOptionalParameter(method) {
     return (method?.parameters ?? []).some((p) => p.initializer !== void 0 || p.questionToken !== void 0);
   }
@@ -40771,38 +41213,6 @@ var JavaTranspiler = class extends BaseTranspiler {
       return void 0;
     }
     return this.javaFullArityArguments(method, args, identation);
-  }
-  // an `any` receiver (the tests' `exchange: any`) compiles against the Java Exchange class:
-  // bind the base Exchange method of that name when it is implemented exactly once
-  javaAnyReceiverBaseMethod(callee) {
-    const type = this.getChecker().getTypeAtLocation(callee.expression);
-    if ((type.flags & TypeFlags5.Any) === 0) {
-      return void 0;
-    }
-    const methods = this.baseExchangeMethodsByName().get(callee.name?.text);
-    return methods?.length === 1 ? methods[0] : void 0;
-  }
-  baseExchangeMethodsByName() {
-    const program = this.getProgram();
-    const cached = this._baseExchangeMethodsByName.get(program);
-    if (cached !== void 0) {
-      return cached;
-    }
-    const names = /* @__PURE__ */ new Map();
-    const fileName = program.getSourceFileNames().find((f) => /(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange\.ts$/.test(f));
-    const file = fileName !== void 0 ? program.getSourceFile(fileName) : void 0;
-    for (const className of ["BaseExchange", "Exchange"]) {
-      const cls = file?.statements.find((s) => isClassDeclaration3(s) && s.name?.text === className);
-      const own = /* @__PURE__ */ new Map();
-      for (const member of cls?.members ?? []) {
-        if (isMethodDeclaration4(member) && member.body !== void 0 && isIdentifier2(member.name)) {
-          own.set(member.name.text, (own.get(member.name.text) ?? []).concat([member]));
-        }
-      }
-      own.forEach((methods, key) => names.has(key) || names.set(key, methods));
-    }
-    this._baseExchangeMethodsByName.set(program, names);
-    return names;
   }
   javaFullArityArguments(method, args, identation) {
     if (!this.javaIsPrintedMethod(method) || !this.javaHasOptionalParameter(method)) {
@@ -40928,7 +41338,30 @@ var JavaTranspiler = class extends BaseTranspiler {
     return this.javaConvertToCoreType(type, value, initializer);
   }
   // a value of any static type converted to a typed-core parameter, with the fronts' semantics
+  // core-argument conversions a declaration already proves: a const `= undefined` local is
+  // null; a const `x.length` local the build layer declares Integer widens to the Long slot
+  javaCoreArgument(type, printed, node) {
+    if (node === void 0 || !isIdentifier2(node) || printed !== node.text || type !== "Long" && type !== "String") {
+      return void 0;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || declaration.name?.text !== node.text || (getCombinedNodeFlags(declaration) & NodeFlags3.Const) === 0) {
+      return void 0;
+    }
+    const initializer = declaration.initializer;
+    if (initializer !== void 0 && isIdentifier2(initializer) && initializer.text === "undefined") {
+      return `(${type}) null`;
+    }
+    if (type === "Long" && initializer !== void 0 && isPropertyAccessExpression2(initializer) && initializer.name.text === "length" && this.javaDeclaredTypeOf(node) === "Integer") {
+      return `((long) ${printed})`;
+    }
+    return void 0;
+  }
   javaConvertToCoreType(type, printed, node) {
+    const proven = this.javaCoreArgument(type, printed, node);
+    if (proven !== void 0) {
+      return proven;
+    }
     if (node?.kind === SyntaxKind6.NullKeyword || node?.kind === SyntaxKind6.Identifier && node.text === "undefined") {
       return `(${type}) null`;
     }
@@ -40951,8 +41384,8 @@ var JavaTranspiler = class extends BaseTranspiler {
       return `Helpers.toMapArg(${printed})`;
     }
     if (type === JAVA_STRING_LIST_TYPE) {
-      const literal = this.javaStringListLiteral(node);
-      return literal !== void 0 ? literal : `Helpers.toStringListArg(${printed})`;
+      const literal2 = this.javaStringListLiteral(node);
+      return literal2 !== void 0 ? literal2 : `Helpers.toStringListArg(${printed})`;
     }
     return `(${type}) (${printed})`;
   }
@@ -40984,91 +41417,6 @@ var JavaTranspiler = class extends BaseTranspiler {
       return true;
     }
     return this.javaProvableString(node);
-  }
-  // an identifier whose final Java declaration (the build layer's table, or a natively typed
-  // parameter) is exactly the core type and which prints under its own name: no conversion
-  javaLocalDeclaredAs(node, printed, type) {
-    if (node === void 0 || !isIdentifier2(node) || printed !== node.text) {
-      return false;
-    }
-    const declaration = this.javaDeclarationOfIdentifier(node);
-    if (declaration === void 0 || !isVariableDeclaration2(declaration)) {
-      return this.javaArgumentHasType(node, type) && (type !== JAVA_STRING_LIST_TYPE || this.javaDeclaredTypeOf(node) === JAVA_STRING_LIST_TYPE);
-    }
-    const declared = this.javaDeclaredTypeOf(node);
-    return declared !== void 0 && declared.replace(/\s+/g, "").replace(/^java\.util\./, "") === type.replace(/\s+/g, "").replace(/^java\.util\./, "");
-  }
-  // `k in xs` over a local declared List: Helpers.inOp's List branch is a null-guarded contains
-  javaDeclaredListContains(right, left, objText, keyText) {
-    if (!isIdentifier2(right) || objText !== right.text) {
-      return void 0;
-    }
-    const literal = isStringLiteralLikeNode3(left);
-    if (!literal && !(isIdentifier2(left) && keyText === left.text)) {
-      return void 0;
-    }
-    if (!literal) {
-      const keyDeclared = this.javaDeclaredTypeOf(left);
-      if (keyDeclared === void 0 || !/^[A-Z][\w.]*(?:<.*>)?$/.test(keyDeclared)) {
-        return void 0;
-      }
-    }
-    const declared = this.javaDeclaredTypeOf(right);
-    if (declared === void 0 || !/^(?:java\.util\.)?(?:List|ArrayList)<[^<>]*>$/.test(declared)) {
-      return void 0;
-    }
-    return `(${objText} != null && ${literal ? "" : `${keyText} != null && `}${objText}.contains(${keyText}))`;
-  }
-  // Java erasure of a printed type, for override/bridge comparisons
-  javaErasure(type) {
-    return type.replace(/<.*>/, "").replace(/^java\.util\./, "").trim();
-  }
-  // An override whose typed core differs from an ancestor's (another parameter count, another
-  // default position or type) no longer overrides it in Java: a bridge with the ancestor's
-  // signature forwards to this method, so base code calling the ancestor core reaches it.
-  printOverrideBridges(node, identation) {
-    const ownTypes = this.javaCoreParameterTypes(node);
-    const ownKey = ownTypes.map((t) => this.javaErasure(t)).join(",");
-    const seen = /* @__PURE__ */ new Set();
-    let out = "";
-    let ancestor;
-    try {
-      ancestor = this.getMethodOverride(node);
-    } catch (e) {
-      return "";
-    }
-    while (ancestor !== void 0) {
-      if (this.hasDefaultedTail(ancestor)) {
-        const ancestorTypes = this.javaCoreParameterTypes(ancestor);
-        const key = ancestorTypes.map((t) => this.javaErasure(t)).join(",");
-        if (key !== ownKey && !seen.has(key)) {
-          seen.add(key);
-          out += this.printOverrideBridge(node, ancestor, ancestorTypes, ownTypes, identation);
-        }
-      }
-      try {
-        ancestor = this.getMethodOverride(ancestor);
-      } catch (e) {
-        ancestor = void 0;
-      }
-    }
-    return out;
-  }
-  printOverrideBridge(node, ancestor, ancestorTypes, ownTypes, identation) {
-    const name = this.transformMethodNameIfNeeded(node.name.text);
-    const ancestorNames = ancestor.parameters.map((p) => this.printNode(p.name, 0));
-    const ancestorDef = this.printMethodDefinition(
-      ancestor,
-      identation,
-      () => ancestorTypes.map((t, i) => `${t} ${ancestorNames[i]}`).join(", ")
-    );
-    const forwarded = node.parameters.map((p, i) => i < ancestorNames.length ? this.javaErasure(ownTypes[i]) === this.javaErasure(ancestorTypes[i]) ? ancestorNames[i] : this.javaConvertToCoreType(ownTypes[i], ancestorNames[i], void 0) : this.javaCoreDefaultArgument(p, ownTypes[i])).join(", ");
-    const call = `this.${name}(${forwarded})`;
-    const returnOf = (def) => def.match(/(?:public|protected|private)\s+(?:static\s+)?(.+?)\s+\w+\s*\(/)?.[1]?.trim() ?? "Object";
-    const returnType = returnOf(ancestorDef);
-    const ownReturn = returnOf(this.printMethodDefinition(node, identation, () => ""));
-    const body = returnType === "void" ? `${call};` : returnType === ownReturn ? `return ${call};` : `return (${returnType}) (Object) ${call};`;
-    return "\n" + ancestorDef + this.getBlockOpen(identation) + this.getIden(identation + 1) + body + this.getBlockClose(identation);
   }
   // `this.spawn(this.someMethod, args...)`: the spawned work executes `this.someMethod(args)`
   // (the ccxt post-pass rewrites the reference into a lambda), so the arguments belong to the
@@ -41151,514 +41499,6 @@ var JavaTranspiler = class extends BaseTranspiler {
       return this.javaNativeParameterType(param);
     });
   }
-  initConfig() {
-    this.LeftPropertyAccessReplacements = {
-      // 'this': '$this',
-    };
-    this.RightPropertyAccessReplacements = {
-      // Java list/string methods (lowerCamelCase)
-      push: "add",
-      indexOf: "indexOf",
-      toUpperCase: "toUpperCase",
-      toLowerCase: "toLowerCase",
-      toString: "toString"
-    };
-    this.FullPropertyAccessReplacements = {
-      "JSON.parse": "parseJson",
-      "console.log": "System.out.println",
-      "Number.MAX_SAFE_INTEGER": "Long.MAX_VALUE",
-      "Math.min": "Math.min",
-      "Math.max": "Math.max",
-      "Math.log": "Math.log",
-      "Math.abs": "Math.abs",
-      "Math.floor": "Math.floor",
-      "Math.pow": "Math.pow"
-      // 'Promise.all' handled via promiseAll wrapper
-    };
-    this.CallExpressionReplacements = {
-      "parseInt": "Helpers.parseInt",
-      "parseFloat": "Helpers.parseFloat"
-      // Add ad-hoc function call rewrites here if you need them
-    };
-    this.ReservedKeywordsReplacements = {
-      string: "str",
-      object: "obj",
-      params: "parameters",
-      // base: "bs",
-      internal: "intern",
-      event: "eventVar",
-      fixed: "fixedVar",
-      final: "finalVar",
-      native: "nativeVar"
-      // add Java keywords if you need to avoid collisions (e.g., enum, assert)
-    };
-    this.VariableTypeReplacements = {
-      string: "String",
-      Str: "String",
-      number: "double",
-      Int: "long",
-      Num: "double",
-      Dict: "java.util.Map<String, Object>",
-      Strings: "java.util.List<String>",
-      List: "java.util.List<Object>",
-      boolean: "boolean",
-      object: "Object"
-    };
-    this.ArgTypeReplacements = { ...this.VariableTypeReplacements };
-    this.binaryExpressionsWrappers = {
-      [SyntaxKind6.EqualsEqualsToken]: [this.EQUALS_EQUALS_WRAPPER_OPEN, this.EQUALS_EQUALS_WRAPPER_CLOSE],
-      [SyntaxKind6.EqualsEqualsEqualsToken]: [this.EQUALS_EQUALS_WRAPPER_OPEN, this.EQUALS_EQUALS_WRAPPER_CLOSE],
-      [SyntaxKind6.ExclamationEqualsToken]: [this.DIFFERENT_WRAPPER_OPEN, this.DIFFERENT_WRAPPER_CLOSE],
-      [SyntaxKind6.ExclamationEqualsEqualsToken]: [this.DIFFERENT_WRAPPER_OPEN, this.DIFFERENT_WRAPPER_CLOSE],
-      [SyntaxKind6.GreaterThanToken]: [this.GREATER_THAN_WRAPPER_OPEN, this.GREATER_THAN_WRAPPER_CLOSE],
-      [SyntaxKind6.GreaterThanEqualsToken]: [this.GREATER_THAN_EQUALS_WRAPPER_OPEN, this.GREATER_THAN_EQUALS_WRAPPER_CLOSE],
-      [SyntaxKind6.LessThanToken]: [this.LESS_THAN_WRAPPER_OPEN, this.LESS_THAN_WRAPPER_CLOSE],
-      [SyntaxKind6.LessThanEqualsToken]: [this.LESS_THAN_EQUALS_WRAPPER_OPEN, this.LESS_THAN_EQUALS_WRAPPER_CLOSE],
-      [SyntaxKind6.PlusToken]: [this.PLUS_WRAPPER_OPEN, this.PLUS_WRAPPER_CLOSE],
-      [SyntaxKind6.MinusToken]: [this.MINUS_WRAPPER_OPEN, this.MINUS_WRAPPER_CLOSE],
-      [SyntaxKind6.AsteriskToken]: [this.MULTIPLY_WRAPPER_OPEN, this.MULTIPLY_WRAPPER_CLOSE],
-      [SyntaxKind6.PercentToken]: [this.MOD_WRAPPER_OPEN, this.MOD_WRAPPER_CLOSE],
-      [SyntaxKind6.SlashToken]: [this.DIVIDE_WRAPPER_OPEN, this.DIVIDE_WRAPPER_CLOSE]
-    };
-  }
-  getBlockOpen(identation) {
-    return "\n" + this.getIden(identation) + this.BLOCK_OPENING_TOKEN + "\n";
-  }
-  getCustomClassName(node) {
-    return this.capitalize(node.name.text);
-  }
-  getClassModifier(node) {
-    return "public ";
-  }
-  printSuperCallInsideConstructor(_node, _identation) {
-    return "";
-  }
-  printNumericLiteral(node) {
-    const javaMax = 2147483647;
-    const nodeText = node.text;
-    if (Number(nodeText) > javaMax && Number.isInteger(Number(nodeText)) && node.text.indexOf("e") === -1) {
-      return `${nodeText}L`;
-    }
-    return node.text;
-  }
-  printIdentifier(node) {
-    let idValue = node.text ?? node.text;
-    if (this.ReservedKeywordsReplacements[idValue]) {
-      idValue = this.ReservedKeywordsReplacements[idValue];
-    }
-    if (idValue === "undefined") {
-      return this.UNDEFINED_TOKEN;
-    }
-    const defaulted = this.javaDefaultedLocalName(node);
-    if (defaulted !== void 0) {
-      return defaulted;
-    }
-    const isInsideNewExpression = node?.parent?.kind === SyntaxKind6.NewExpression;
-    const isInsideCatch = node?.parent?.kind === SyntaxKind6.ThrowStatement;
-    const isLeftSide = node?.parent?.name === node || node?.parent?.left === node;
-    const isCallOrPropertyAccess = node?.parent?.kind === SyntaxKind6.PropertyAccessExpression || node?.parent?.kind === SyntaxKind6.ElementAccessExpression;
-    if (!isLeftSide && !isCallOrPropertyAccess && !isInsideCatch && !isInsideNewExpression) {
-      const type = this.getChecker().getTypeAtLocation(node);
-      const typeSymbol = type?.getSymbol?.();
-      if (typeSymbol !== void 0) {
-        const decl = (typeSymbol?.declarations ?? []).map((d) => d.resolve());
-        if (decl.length > 0 && decl[0].getSourceFile().fileName.indexOf("typescript") === -1) {
-          const symbol = this.getChecker().getSymbolAtLocation(node);
-          const first = symbol?.declarations[0]?.resolve();
-          const isClassDeclaration5 = !!symbol && (first.kind === SyntaxKind6.ClassDeclaration || first.kind === SyntaxKind6.ImportSpecifier && this.getChecker().getAliasedSymbol(symbol)?.declarations[0]?.resolve()?.kind === SyntaxKind6.ClassDeclaration);
-          if (isClassDeclaration5) {
-            return `${idValue}.class`;
-          }
-        }
-      }
-    }
-    return this.transformIdentifier(node, idValue);
-  }
-  // a node key that survives `symbol.valueDeclaration.resolve()` (which may hand back a copy)
-  javaHandlerKey(node) {
-    return `${node.getSourceFile()?.fileName}:${node.getStart()}:${node.getEnd()}`;
-  }
-  // `this.<name>` naming a 2-arg (Client, message) handler, as the java method name, else undefined
-  javaHandlerMethod(reference) {
-    if (!isPropertyAccessExpression2(reference) || reference.expression?.kind !== SyntaxKind6.ThisKeyword) {
-      return void 0;
-    }
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0) {
-      return void 0;
-    }
-    let symbol;
-    try {
-      symbol = checker.getSymbolAtLocation(reference.name);
-    } catch (e) {
-      return void 0;
-    }
-    const declaration = symbol?.valueDeclaration?.resolve();
-    if (declaration === void 0 || !isMethodDeclaration4(declaration) || declaration.body === void 0) {
-      return void 0;
-    }
-    if ((declaration.modifiers ?? []).some((modifier) => modifier.kind === SyntaxKind6.StaticKeyword)) {
-      return void 0;
-    }
-    const parameters = declaration.parameters ?? [];
-    if (parameters.length !== 2) {
-      return void 0;
-    }
-    const types = parameters.map((parameter, index) => this.javaHandlerSlotType(parameter, index === 0 ? "client" : "message"));
-    if (types[0] !== "Client" || types[1] !== "Map<String, Object>") {
-      return void 0;
-    }
-    const name = this.printNode(reference.name, 0).trim();
-    return name === reference.name.text ? name : void 0;
-  }
-  // the Java type a handler-slot parameter prints, or undefined when a box would reach the interface.
-  // The ws post-pass retypes a `client` parameter (`(Object client,` -> `(Client client,`); the
-  // message slot must already print the dict, since nothing rewrites it later.
-  javaHandlerSlotType(parameter, position) {
-    if (parameter === void 0 || !isParameterDeclaration2(parameter) || parameter.initializer !== void 0) {
-      return void 0;
-    }
-    const printed = (this.printParameterType(parameter) || "Object").trim();
-    if (position === "client") {
-      if (printed === "Client") {
-        return "Client";
-      }
-      const name = parameter.name !== void 0 && parameter.name.text;
-      return printed === "Object" && name === "client" ? "Client" : void 0;
-    }
-    return this.javaErasure(printed) === this.javaErasure("java.util.Map<String, Object>") ? "Map<String, Object>" : void 0;
-  }
-  // every value of the literal is a `this.<handler>` reference, so it can hold method references
-  javaHandlerTableEntries(literal) {
-    const entries = [];
-    for (const property of literal.properties) {
-      if (!isPropertyAssignment(property) || !isStringLiteralLikeNode3(property.name)) {
-        return void 0;
-      }
-      const handler = this.javaHandlerMethod(property.initializer);
-      if (handler === void 0) {
-        return void 0;
-      }
-      entries.push({ key: property.name.text, name: handler });
-    }
-    return entries;
-  }
-  // the enclosing method body (or the file) a table and its reads live in
-  javaHandlerScopeOf(node) {
-    let current = node.parent;
-    while (current !== void 0) {
-      if (isMethodDeclaration4(current) || current.kind === SyntaxKind6.FunctionDeclaration || current.kind === SyntaxKind6.FunctionExpression || current.kind === SyntaxKind6.ArrowFunction) {
-        return current.body ?? current;
-      }
-      current = current.parent;
-    }
-    return node.getSourceFile();
-  }
-  // every read of the declaration in that scope; undefined if the checker cannot place one
-  javaHandlerReferences(scope, name) {
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0) {
-      return void 0;
-    }
-    let symbol;
-    try {
-      symbol = checker.getSymbolAtLocation(name);
-    } catch (e) {
-      return void 0;
-    }
-    if (symbol === void 0) {
-      return void 0;
-    }
-    const references = [];
-    let failed = false;
-    const visit = (current) => {
-      if (current === void 0 || failed) {
-        return;
-      }
-      if (isIdentifier2(current) && current !== name && current.text === name.text) {
-        let other;
-        try {
-          other = checker.getSymbolAtLocation(current);
-        } catch (e) {
-          other = void 0;
-        }
-        if (other === void 0) {
-          failed = true;
-          return;
-        }
-        if (other === symbol) {
-          references.push(current);
-        }
-      }
-      current.forEachChild(visit);
-    };
-    visit(scope);
-    return failed ? void 0 : references;
-  }
-  // the table is read only as the first argument of `this.safeValue (methods, key)`
-  javaIsHandlerTableRead(call, read) {
-    return call !== void 0 && isCallExpression5(call) && call.arguments?.[0] === read && isPropertyAccessExpression2(call.expression) && call.expression.name?.text === "safeValue" && call.expression.expression?.kind === SyntaxKind6.ThisKeyword;
-  }
-  // the local a table read is bound to: its declaration, or the plain write that reassigns it
-  javaHandlerBoundName(call) {
-    let node = call;
-    let parent = call.parent;
-    while (parent !== void 0 && (parent.kind === SyntaxKind6.ParenthesizedExpression || parent.kind === SyntaxKind6.ConditionalExpression)) {
-      if (parent.kind === SyntaxKind6.ConditionalExpression) {
-        const other = parent.whenTrue === node ? parent.whenFalse : parent.whenTrue;
-        if (parent.whenTrue !== node && parent.whenFalse !== node) {
-          return void 0;
-        }
-        if (other === void 0 || other.kind !== SyntaxKind6.Identifier || other.text !== "undefined") {
-          return void 0;
-        }
-      }
-      node = parent;
-      parent = parent.parent;
-    }
-    if (parent === void 0) {
-      return void 0;
-    }
-    if (isVariableDeclaration2(parent) && parent.initializer === node && isIdentifier2(parent.name)) {
-      return parent.name;
-    }
-    if (parent.kind === SyntaxKind6.BinaryExpression && parent.operatorToken.kind === SyntaxKind6.EqualsToken && parent.right === node && isIdentifier2(parent.left)) {
-      return parent.left;
-    }
-    return void 0;
-  }
-  // the table name a `.call` argument or a write reads: a plain `this.safeValue (methods, key)` on that table
-  javaIsHandlerReadOf(node, tableName) {
-    let current = node;
-    while (current !== void 0 && (current.kind === SyntaxKind6.ParenthesizedExpression || current.kind === SyntaxKind6.ConditionalExpression)) {
-      current = current.kind === SyntaxKind6.ConditionalExpression ? current.whenTrue === void 0 ? current.whenFalse : current.whenTrue : current.expression;
-    }
-    const read = current?.kind === SyntaxKind6.CallExpression ? current.arguments?.[0] : void 0;
-    if (current === void 0 || read === void 0 || read.kind !== SyntaxKind6.Identifier || read.text !== tableName.text) {
-      return false;
-    }
-    return this.javaIsHandlerTableRead(current, read);
-  }
-  // the safeValue result is only bound from that table, `method.call (this, a, b)`-ed and null-tested
-  javaIsHandlerCallUse(use, tableName) {
-    if (isVariableDeclaration2(use.parent) && use.parent.name === use) {
-      return true;
-    }
-    const write = use.parent;
-    if (write !== void 0 && write.kind === SyntaxKind6.BinaryExpression && write.operatorToken.kind === SyntaxKind6.EqualsToken && write.left === use) {
-      return this.javaIsHandlerReadOf(write.right, tableName);
-    }
-    const access = use.parent;
-    if (isPropertyAccessExpression2(access) && access.expression === use && access.name?.text === "call" && isCallExpression5(access.parent) && access.parent.expression === access) {
-      const callArguments = access.parent.arguments ?? [];
-      return access.parent.parent?.kind === SyntaxKind6.ExpressionStatement && callArguments.length === 3 && callArguments[0].kind === SyntaxKind6.ThisKeyword && isIdentifier2(callArguments[1]) && isIdentifier2(callArguments[2]) && this.javaHandlerArgumentType(callArguments[1], "client") !== void 0 && this.javaHandlerArgumentType(callArguments[2], "message") !== void 0;
-    }
-    const comparison = use.parent;
-    if (comparison === void 0 || comparison.kind !== SyntaxKind6.BinaryExpression || comparison.left !== use && comparison.right !== use) {
-      return false;
-    }
-    const other = comparison.left === use ? comparison.right : comparison.left;
-    return other !== void 0 && other.kind === SyntaxKind6.Identifier && other.text === "undefined";
-  }
-  // one walk per file: record the tables whose every read is that idiom, keyed by the literal
-  // node and by the local that holds the safeValue result
-  javaScanHandlerTables(node) {
-    const file = node.getSourceFile();
-    if (file === void 0 || this.javaHandlerScannedFile === file) {
-      return;
-    }
-    this.javaHandlerScannedFile = file;
-    if (this.checkerOrUndefined() === void 0) {
-      return;
-    }
-    const declarations = [];
-    const collect = (current) => {
-      if (current === void 0) {
-        return;
-      }
-      if (isVariableDeclaration2(current)) {
-        declarations.push(current);
-      }
-      current.forEachChild(collect);
-    };
-    collect(file);
-    for (const declaration of declarations) {
-      const literal = declaration.initializer;
-      if (literal === void 0 || !isObjectLiteralExpression3(literal) || literal.properties.length === 0 || !isIdentifier2(declaration.name)) {
-        continue;
-      }
-      const entries = this.javaHandlerTableEntries(literal);
-      if (entries === void 0) {
-        continue;
-      }
-      const scope = this.javaHandlerScopeOf(declaration);
-      if (scope === void 0) {
-        continue;
-      }
-      const reads = this.javaHandlerReferences(scope, declaration.name);
-      if (reads === void 0 || reads.length === 0) {
-        continue;
-      }
-      const results = /* @__PURE__ */ new Map();
-      const readCalls = [];
-      let proven = true;
-      for (const read of reads) {
-        const call = read.parent;
-        if (!this.javaIsHandlerTableRead(call, read)) {
-          proven = false;
-          break;
-        }
-        readCalls.push(call);
-        const bound = this.javaHandlerBoundName(call);
-        if (bound === void 0) {
-          proven = false;
-          break;
-        }
-        results.set(this.javaHandlerKey(bound), bound);
-      }
-      for (const bound of Array.from(results.values())) {
-        if (!proven) {
-          break;
-        }
-        const uses = this.javaHandlerReferences(scope, bound);
-        if (uses === void 0 || !uses.every((use) => this.javaIsHandlerCallUse(use, declaration.name))) {
-          proven = false;
-        }
-      }
-      if (!proven) {
-        continue;
-      }
-      this.javaHandlerTables.set(this.javaHandlerKey(literal), entries);
-      for (const call of readCalls) {
-        this.javaHandlerReads.add(this.javaHandlerKey(call));
-      }
-      for (const bound of Array.from(results.values())) {
-        this.javaHandlerCalls.set(this.javaHandlerKey(bound), entries);
-      }
-    }
-  }
-  // the table literal, as a typed map of method references
-  printJavaHandlerTable(node, identation) {
-    this.javaScanHandlerTables(node);
-    const entries = this.javaHandlerTables.get(this.javaHandlerKey(node));
-    if (entries === void 0) {
-      return void 0;
-    }
-    const byKey = /* @__PURE__ */ new Map();
-    for (const entry of entries) {
-      byKey.set(entry.key, entry.name);
-    }
-    const keys = Array.from(byKey.keys());
-    const entryIndent = this.getIden(identation + 1);
-    const parts = [];
-    for (const key of keys) {
-      parts.push(`${entryIndent}put(${JSON.stringify(key)}, ${JSON.stringify(byKey.get(key))});`);
-    }
-    return `new java.util.HashMap<String, ${JAVA_HANDLER_NAME_TYPE}>() {{
-${parts.join("\n")}
-${this.getIden(identation)}}}`;
-  }
-  // the Java type a safeValue read of a proven table prints: the handler interface
-  printJavaHandlerRead(node) {
-    if (!isCallExpression5(node) || !this.javaHandlerReads.has(this.javaHandlerKey(node))) {
-      return void 0;
-    }
-    const table = this.printNode(node.arguments[0], 0).trim();
-    const key = this.printNode(node.arguments[1], 0).trim();
-    return `${table}.get(${key})`;
-  }
-  // the declared Java type of the table local or of the local bound to one of its reads
-  javaHandlerDeclarationType(declaration) {
-    const initializer = declaration?.initializer;
-    if (initializer === void 0 || !isIdentifier2(declaration.name)) {
-      return void 0;
-    }
-    this.javaScanHandlerTables(initializer);
-    if (this.javaHandlerTables.has(this.javaHandlerKey(initializer))) {
-      return JAVA_HANDLER_TABLE_TYPE;
-    }
-    if (this.javaHandlerReads.has(this.javaHandlerKey(initializer))) {
-      return JAVA_HANDLER_NAME_TYPE;
-    }
-    return void 0;
-  }
-  // the java type the interface takes for a `.call` argument, or undefined when the box cannot hold it
-  javaHandlerArgumentType(node, position) {
-    if (node === void 0 || !isIdentifier2(node)) {
-      return void 0;
-    }
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0) {
-      return void 0;
-    }
-    let declaration;
-    try {
-      declaration = checker.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
-    } catch (e) {
-      return void 0;
-    }
-    if (declaration === void 0 || !isParameterDeclaration2(declaration)) {
-      return void 0;
-    }
-    return this.javaHandlerSlotType(declaration, position);
-  }
-  // the `.call` argument, already the interface slot's type
-  javaHandlerCallArgument(node, position) {
-    if (this.javaHandlerArgumentType(node, position) === void 0) {
-      return void 0;
-    }
-    return this.printNode(node, 0).trim();
-  }
-  printJavaHandlerDispatch(node, identation) {
-    if (!isCallExpression5(node) || node.parent?.kind !== SyntaxKind6.ExpressionStatement) {
-      return void 0;
-    }
-    const callee = node.expression;
-    if (!isPropertyAccessExpression2(callee) || callee.name?.text !== "call" || !isIdentifier2(callee.expression)) {
-      return void 0;
-    }
-    const receiver = callee.expression;
-    const callArguments = node.arguments ?? [];
-    if (callArguments.length !== 3 || callArguments[0].kind !== SyntaxKind6.ThisKeyword) {
-      return void 0;
-    }
-    this.javaScanHandlerTables(node);
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0) {
-      return void 0;
-    }
-    let symbol;
-    try {
-      symbol = checker.getSymbolAtLocation(receiver);
-    } catch (e) {
-      return void 0;
-    }
-    const declaration = symbol?.valueDeclaration?.resolve();
-    if (declaration === void 0 || !isVariableDeclaration2(declaration) || declaration.name === void 0 || !this.javaHandlerCalls.has(this.javaHandlerKey(declaration.name))) {
-      return void 0;
-    }
-    const client = this.javaHandlerCallArgument(callArguments[1], "client");
-    const message = this.javaHandlerCallArgument(callArguments[2], "message");
-    if (client === void 0 || message === void 0) {
-      return void 0;
-    }
-    const receiverText = this.printNode(receiver, 0).trim();
-    const names = [];
-    for (const entry of this.javaHandlerCalls.get(this.javaHandlerKey(declaration.name))) {
-      if (!names.includes(entry.name)) {
-        names.push(entry.name);
-      }
-    }
-    const iden = this.getIden(identation);
-    const caseIden = this.getIden(identation + 1);
-    const bodyIden = this.getIden(identation + 2);
-    const lines = [`${iden}switch (${receiverText}) {`];
-    for (const name of names) {
-      lines.push(`${caseIden}case ${JSON.stringify(name)}:`, `${bodyIden}this.${name}(${client}, ${message});`, `${bodyIden}break;`);
-    }
-    lines.push(`${caseIden}default:`, `${bodyIden}throw new RuntimeException("Method not found: " + ${receiverText});`, `${iden}}`);
-    return lines.join("\n");
-  }
   printExpressionStatement(node, identation) {
     const handlerDispatch = this.printJavaHandlerDispatch(node.expression, identation);
     if (handlerDispatch !== void 0) {
@@ -41668,74 +41508,6 @@ ${this.getIden(identation)}}}`;
   }
   printCallExpression(node, identation) {
     return this.printJavaWsReceiverCall(node, identation) ?? super.printCallExpression(node, identation);
-  }
-  // `x.append|reset|store|storeArray|limit (...)` in a ws/prediction venue: native on a local declared the
-  // ws class that has the method, a cast statement where one class alone declares it, else callDynamically
-  printJavaWsReceiverCall(node, identation) {
-    const callee = node.expression;
-    if (!isPropertyAccessExpression2(callee) || !JAVA_WS_RECEIVER_TIER_FILE.test(node.getSourceFile().fileName)) {
-      return void 0;
-    }
-    const method = callee.name.text;
-    const receiver = callee.expression;
-    const argc = node.arguments.length;
-    let receiverText;
-    if (isPropertyAccessExpression2(receiver) && receiver.expression.kind === SyntaxKind6.ThisKeyword && JAVA_WS_DYNAMIC_FIELDS.has(receiver.name.text)) {
-      if (!JAVA_WS_DYNAMIC_METHODS.has(method)) {
-        return void 0;
-      }
-      receiverText = "this." + receiver.name.text;
-    } else if (isIdentifier2(receiver)) {
-      receiverText = this.printNode(receiver, 0);
-      if (!/^[a-z]\w+$/.test(receiverText)) {
-        return void 0;
-      }
-      if (method === "limit" ? argc !== 0 : !JAVA_WS_DYNAMIC_METHODS.has(method) || JAVA_WS_PLAIN_RECEIVERS.has(receiverText)) {
-        return void 0;
-      }
-    } else {
-      return void 0;
-    }
-    const args = this.printArgsForCallExpression(node, identation);
-    const statement = node.parent?.kind === SyntaxKind6.ExpressionStatement;
-    if (isIdentifier2(receiver)) {
-      const declaration = this.javaDeclarationOfIdentifier(receiver);
-      const cls = declaration !== void 0 && isVariableDeclaration2(declaration) && isIdentifier2(declaration.name) && declaration.name.text === receiverText ? this.javaDeclaredTypeOfDeclaration(declaration) : void 0;
-      const spec = cls !== void 0 ? JAVA_WS_TYPED_METHODS[cls]?.[method] : void 0;
-      const single = cls === "io.github.ccxt.ws.WsOrderBook" || !args.includes("\n");
-      if (spec !== void 0 && spec.argc.includes(argc) && (spec.value || statement) && single) {
-        return `${receiverText}.${method}(${argc === 0 && method === "reset" ? "null" : args.trim()})`;
-      }
-    }
-    const cast = JAVA_WS_CAST_METHODS[method];
-    if (cast !== void 0 && statement && cast.argc.includes(argc)) {
-      return `((${cast.cls}) ${receiverText}).${method}(${args.trim()})`;
-    }
-    return `${this.DYNAMIC_CALL_OPEN}${receiverText}, "${method}", new Object[]{${args}})`;
-  }
-  printConstructorDeclaration(node, identation) {
-    const classNode = node.parent;
-    const className = this.printNode(classNode.name, 0);
-    const args = this.printMethodParameters(node);
-    const constructorBody = this.printFunctionBody(node, identation);
-    let superCallParams = "";
-    let hasSuperCall = false;
-    node.body?.statements.forEach((statement) => {
-      const expression = isExpressionStatement3(statement) ? statement.expression : void 0;
-      if (expression && isCallExpression5(expression) && expression.expression.getText().trim() === "super") {
-        hasSuperCall = true;
-        superCallParams = expression.arguments.map((a) => this.printNode(a, identation).trim()).join(", ");
-      }
-    });
-    const header = this.getIden(identation) + className + "(" + args + ")";
-    return header + (hasSuperCall ? this.injectLeadingInBody(constructorBody, `super(${superCallParams});`) : constructorBody);
-  }
-  injectLeadingInBody(body, firstLine) {
-    const lines = body.split("\n");
-    if (lines.length >= 2) {
-      lines.splice(1, 0, this.getIden(1) + firstLine);
-    }
-    return lines.join("\n");
   }
   printDynamicCall(node, identation) {
     const elementAccess = node.expression;
@@ -41842,1465 +41614,71 @@ ${this.getIden(identation)}}}`;
     }
     return void 0;
   }
-  handleTypeOfInsideBinaryExpression(node, _identation) {
-    const left = node.left;
-    const right = node.right.text;
-    const op = node.operatorToken.kind;
-    const expression = left.expression;
-    const isDifferentOperator = op === SyntaxKind6.ExclamationEqualsEqualsToken || op === SyntaxKind6.ExclamationEqualsToken;
-    const notOperator = isDifferentOperator ? this.NOT_TOKEN : "";
-    const target = this.printNode(expression, 0);
-    switch (right) {
-      case "string":
-        return `${notOperator}(${target} instanceof String)`;
-      case "number":
-        return `${notOperator}(${target} instanceof Long || ${target} instanceof Integer || ${target} instanceof Float || ${target} instanceof Double)`;
-      case "boolean":
-        return `${notOperator}(${target} instanceof Boolean)`;
-      case "object":
-        return `${notOperator}(${target} instanceof java.util.Map)`;
-      case "function":
-        return `${notOperator}(${target} instanceof java.util.concurrent.Callable)`;
+  javaThisCallsInFile(file, name) {
+    let index = this.javaThisCallIndex.get(file);
+    if (index === void 0) {
+      index = /* @__PURE__ */ new Map();
+      const collect = (n) => {
+        if (isCallExpression5(n) && isPropertyAccessExpression2(n.expression) && n.expression.expression.kind === SyntaxKind6.ThisKeyword) {
+          const key = String(n.expression.name.text);
+          index.set(key, (index.get(key) ?? []).concat([n]));
+        }
+        n.forEachChild(collect);
+      };
+      collect(file);
+      this.javaThisCallIndex.set(file, index);
     }
-    return void 0;
+    return index.get(name) ?? [];
   }
-  getVarMethodIfAny(node) {
-    let current = node?.parent;
-    while (current) {
-      if (isMethodDeclaration4(current) || isFunctionDeclaration4(current)) {
-        return String(current.name?.text ?? "");
-      }
-      current = current.parent;
-    }
-    return "outsideAnyMethod";
-  }
-  getVarClassIfAny(node) {
-    let current = node?.parent;
-    while (current) {
-      if (isClassDeclaration3(current)) {
-        return String(current.name?.text ?? "");
-      }
-      current = current.parent;
-    }
-    return "";
-  }
-  getVarKey(node) {
-    const varName = node?.text ?? node?.name?.text;
-    if (!varName) {
-      return "";
-    }
-    return `${this.getVarClassIfAny(node)}-${this.getVarMethodIfAny(node)}-${varName}`;
-  }
-  // Static operand family of one side of an equality, undefined when the checker proves
-  // nothing usable. Null/undefined union members are folded away: Objects.equals handles
-  // those exactly like the helper, so `string | undefined` still counts as string.
-  equalityOperandFamily(type) {
-    if (type === void 0 || type === null) {
+  // the Java kind a `this.<name>(...)` call provably prints with (JAVA_THIS_RETURN_TYPES), or
+  // undefined. The signature must resolve to the base tier or the Date.now lib signature of the
+  // functions/time.ts mixin; a venue override prints its own (usually Object) signature.
+  javaThisCallNumericKind(node) {
+    if (node?.kind !== SyntaxKind6.CallExpression) {
       return void 0;
     }
-    const flags = type.flags;
-    if (flags & TypeFlags5.Intersection) {
+    const callee = node.expression;
+    if (callee?.kind !== SyntaxKind6.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind6.ThisKeyword) {
       return void 0;
     }
-    if (flags & TypeFlags5.Union) {
-      if (flags & TypeFlags5.Boolean) {
-        return "boolean";
-      }
-      const families = new Set((type.getTypes?.() ?? []).map((t) => this.equalityOperandFamily(t)));
-      families.delete(void 0);
-      families.delete("null");
-      return families.size === 1 ? families.values().next().value : void 0;
-    }
-    if (flags & (TypeFlags5.String | TypeFlags5.StringLiteral)) {
-      return "string";
-    }
-    if (flags & (TypeFlags5.Boolean | TypeFlags5.BooleanLiteral)) {
-      return "boolean";
-    }
-    if (flags & (TypeFlags5.Null | TypeFlags5.Undefined | TypeFlags5.Void)) {
-      return "null";
-    }
-    return void 0;
-  }
-  // The null/undefined literal: its Java text is `null`, so Objects.equals(x, null)
-  // is literally the identity test Helpers.isEqual performs on that operand.
-  isNullishLiteral(node) {
-    return node?.kind === SyntaxKind6.NullKeyword || node?.kind === SyntaxKind6.Identifier && node.text === "undefined";
-  }
-  // ---- numeric operand kinds (java-15) ----
-  // Helpers.isEqual compares numeric operands by value (integers via toLong, Double/Float via
-  // toDouble, class mismatch false), so two operands of the SAME kind compare natively.
-  // the Java kind a decimal numeric literal prints with: integer literal as `N` (int) or `NL` (long),
-  // a '.'/exponent literal as a Java double. TypeScript normalizes the literal text (`1e3` -> `1000`,
-  // `0x10` -> `16`, `100.0` -> `100`), so node.text is exactly what prints.
-  javaEqualityLiteralKind(node) {
-    if (!node) {
+    const name = callee.name?.text;
+    if (typeof name !== "string") {
       return void 0;
     }
-    if (node.kind === SyntaxKind6.PrefixUnaryExpression && node.operator === SyntaxKind6.MinusToken) {
-      return this.javaIntegerLiteralKind(node.operand) === "int" ? "int" : void 0;
-    }
-    if (!isNumericLiteral3(node)) {
-      return void 0;
-    }
-    return /[.eE]/.test(node.text) ? "double" : this.javaIntegerLiteralKind(node);
-  }
-  // `x.length` on a checker-proven String/List receiver prints a native int
-  // (((String)x).length() / ((List<?>)x).size(), see javaLengthKind). Every other
-  // receiver prints Helpers.getArrayLength, whose value is not an int.
-  javaNativeLengthKind(node) {
-    if (node?.kind !== SyntaxKind6.PropertyAccessExpression || node.name.text !== "length") {
-      return void 0;
-    }
-    return this.javaLengthKind(node.expression) !== void 0 ? "int" : void 0;
-  }
-  // `for (var i = <int literal>; ...; i++)`: javac infers a primitive int counter, so
-  // every read of it — not only the loop condition the comparison rule sees — is a
-  // native int. ++/-- keep it int and the counter cannot hold another box.
-  isJavaPrimitiveCounterReference(node) {
-    if (!node || node.kind !== SyntaxKind6.Identifier) {
-      return false;
-    }
-    const checker = this.getChecker();
-    const symbol = checker.getSymbolAtLocation(node);
-    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
-    if (!declaration || declaration.kind !== SyntaxKind6.VariableDeclaration || !isIdentifier2(declaration.name)) {
-      return false;
-    }
-    const list = declaration.parent;
-    const forStatement = list?.parent;
-    if (!list || !forStatement || forStatement.kind !== SyntaxKind6.ForStatement || forStatement.initializer !== list) {
-      return false;
-    }
-    if (list.declarations?.length !== 1 || this.javaIntegerLiteralKind(declaration.initializer) === void 0) {
-      return false;
-    }
-    const incrementor = forStatement.incrementor;
-    if (!incrementor || incrementor.kind !== SyntaxKind6.PostfixUnaryExpression && incrementor.kind !== SyntaxKind6.PrefixUnaryExpression || incrementor.operator !== SyntaxKind6.PlusPlusToken && incrementor.operator !== SyntaxKind6.MinusMinusToken || incrementor.operand?.kind !== SyntaxKind6.Identifier) {
-      return false;
-    }
-    const incrementorSymbol = checker.getSymbolAtLocation(incrementor.operand);
-    return incrementorSymbol === void 0 || symbol === void 0 || incrementorSymbol === symbol;
-  }
-  // the box a printed local carries: the kind of its declaration's initializer, kept
-  // only while every write in the declaring function writes the same kind (D2 scan).
-  // A `const` declaration has no write to scan.
-  javaLocalNumberKind(node, depth) {
-    if (!node || node.kind !== SyntaxKind6.Identifier) {
-      return void 0;
-    }
-    const symbol = this.getChecker().getSymbolAtLocation(node);
-    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
-    if (!declaration || declaration.kind !== SyntaxKind6.VariableDeclaration || !isIdentifier2(declaration.name)) {
-      return void 0;
-    }
-    const kind = this.javaPrintedNumberKind(declaration.initializer, depth + 1);
+    const kind = JAVA_THIS_RETURN_TYPES[name];
     if (kind === void 0) {
       return void 0;
     }
-    const isConst = (declaration.parent?.flags & NodeFlags3.Const) !== 0;
-    if (!isConst && !this.javaWritesKeepNumberKind(declaration, symbol, kind)) {
+    const checker = this.checkerOrUndefined();
+    const declaration = checker.getResolvedSignature(node)?.declaration?.resolve();
+    const fileName = declaration?.getSourceFile?.().fileName;
+    if (typeof fileName !== "string") {
+      return void 0;
+    }
+    if (!JAVA_THIS_RETURN_TYPES_BASE_FILE.test(fileName) && !JAVA_THIS_RETURN_TYPES_LIB_FILE.test(fileName)) {
       return void 0;
     }
     return kind;
   }
-  // true when every assignment to the symbol inside its function writes the same
-  // numeric kind; a compound assignment (`x += 1` prints Helpers.add) changes the box.
-  javaWritesKeepNumberKind(declaration, symbol, kind) {
-    const owner = this.enclosingFunctionLike(declaration);
-    if (owner === void 0) {
-      return false;
-    }
-    let safe = true;
-    const visit = (node) => {
-      if (!safe) {
-        return;
-      }
-      if (isBinaryExpression4(node)) {
-        const op = node.operatorToken.kind;
-        if (this.isAssignmentOperator(op) && this.expressionReferencesSymbol(node.left, symbol)) {
-          if (op !== SyntaxKind6.EqualsToken || this.javaPrintedNumberKind(node.right, 0) !== kind) {
-            safe = false;
-            return;
-          }
-        }
-      } else if ((node.kind === SyntaxKind6.ForOfStatement || node.kind === SyntaxKind6.ForInStatement) && this.expressionReferencesSymbol(node.initializer, symbol)) {
-        safe = false;
-        return;
-      } else if ((isPrefixUnaryExpression2(node) || isPostfixUnaryExpression2(node)) && (node.operator === SyntaxKind6.PlusPlusToken || node.operator === SyntaxKind6.MinusMinusToken) && kind !== "int" && this.expressionReferencesSymbol(node.operand, symbol)) {
-        safe = false;
-        return;
-      }
-      node.forEachChild(visit);
-    };
-    owner.forEachChild(visit);
-    return safe;
-  }
-  expressionReferencesSymbol(node, symbol) {
-    if (node === void 0 || symbol === void 0) {
-      return false;
-    }
-    let found = false;
-    const visit = (child) => {
-      if (found) {
-        return;
-      }
-      if (child.kind === SyntaxKind6.Identifier && this.getChecker().getSymbolAtLocation(child) === symbol) {
-        found = true;
-        return;
-      }
-      child.forEachChild(visit);
-    };
-    visit(node);
-    return found;
-  }
-  enclosingFunctionLike(node) {
-    let current = node?.parent;
-    while (current) {
-      if (isFunctionLike(current)) {
-        return current;
-      }
-      current = current.parent;
-    }
-    return void 0;
-  }
-  // box/primitive kind of an operand the printer prints as a native number, or undefined
-  // when the printed value could be any box (a call, a parameter, an `any` local)
-  javaPrintedNumberKind(node, depth = 0) {
-    const literalKind = this.javaEqualityLiteralKind(node);
-    if (literalKind !== void 0) {
-      return literalKind;
-    }
-    const lengthKind = this.javaNativeLengthKind(node);
-    if (lengthKind !== void 0) {
-      return lengthKind;
-    }
-    if (this.isJavaPrimitiveCounterReference(node)) {
-      return "int";
-    }
-    const arithmeticKind = this.javaNativeArithmeticKind(node);
-    if (arithmeticKind !== void 0) {
-      return arithmeticKind;
-    }
-    return depth < 2 ? this.javaLocalNumberKind(node, depth) : void 0;
-  }
-  // numeric equality operand: the checker proves a plain number and the printed Java
-  // value carries a known kind. Aliases (Int/Num), unions and `any` stay with the
-  // helper, like in the arithmetic rule.
-  javaEqualityNumberKind(node) {
-    if (this.javaScalarFamily(node) !== "number") {
+  // the method name of a `this.<name>(...)` call, or undefined for any other node
+  javaThisCallName(node) {
+    const callee = node?.kind === SyntaxKind6.CallExpression ? node.expression : void 0;
+    if (callee?.kind !== SyntaxKind6.PropertyAccessExpression || callee.expression.kind !== SyntaxKind6.ThisKeyword) {
       return void 0;
     }
-    return this.javaPrintedNumberKind(node);
+    return callee.name?.text;
   }
-  // ==/===/!=/!== become java.util.Objects.equals once the checker proves one operand is
-  // a string, a boolean or the null/undefined literal: for those Helpers.isEqual reduces
-  // to Objects.equals (value compare, class-strict, no numeric promotion). Two operands
-  // the checker types as plain numbers compare natively when their printed Java kinds
-  // match (java-15): the helper's numeric paths are the same value compare.
-  printNativeEqualityIfProvable(node, leftText, rightText) {
-    const op = node.operatorToken.kind;
-    const negated = op === SyntaxKind6.ExclamationEqualsToken || op === SyntaxKind6.ExclamationEqualsEqualsToken;
-    if (!negated && op !== SyntaxKind6.EqualsEqualsToken && op !== SyntaxKind6.EqualsEqualsEqualsToken) {
-      return void 0;
-    }
-    const checker = this.getChecker();
-    const leftFamily = this.equalityOperandFamily(checker?.getTypeAtLocation(node.left));
-    const rightFamily = this.equalityOperandFamily(checker?.getTypeAtLocation(node.right));
-    const leftProved = leftFamily !== void 0 && (leftFamily !== "null" || this.isNullishLiteral(node.left));
-    const rightProved = rightFamily !== void 0 && (rightFamily !== "null" || this.isNullishLiteral(node.right));
-    const equalCall = `${negated ? "!" : ""}java.util.Objects.equals(${leftText}, ${rightText})`;
-    if (leftProved || rightProved || this.javaDeclaredStringType(node.left) || this.javaDeclaredStringType(node.right)) {
-      return equalCall;
-    }
-    if (this.javaOperandPrintsPrimitiveNumber(node.left) && this.javaOperandPrintsPrimitiveNumber(node.right)) {
-      return `(${leftText} ${negated ? "!=" : "=="} ${rightText})`;
-    }
-    const leftKind = this.javaEqualityNumberKind(node.left);
-    const rightKind = this.javaEqualityNumberKind(node.right);
-    if (leftKind !== void 0 && leftKind === rightKind) {
-      if (leftKind !== "double") {
-        return equalCall;
-      }
-    }
-    const leftDeclared = this.javaDeclaredNumericFamily(node.left);
-    const rightDeclared = this.javaDeclaredNumericFamily(node.right);
-    if (leftDeclared !== void 0 || rightDeclared !== void 0) {
-      const leftOk = leftDeclared !== void 0 || this.javaOperandPrintsPrimitiveNumber(node.left);
-      const rightOk = rightDeclared !== void 0 || this.javaOperandPrintsPrimitiveNumber(node.right);
-      if (leftOk && rightOk) {
-        const boxes = [];
-        if (leftDeclared !== void 0 && JAVA_BOXED_NUMERIC_TYPES.has(leftDeclared)) {
-          boxes.push(leftText);
-        }
-        if (rightDeclared !== void 0 && JAVA_BOXED_NUMERIC_TYPES.has(rightDeclared)) {
-          boxes.push(rightText);
-        }
-        const compare = `${leftText} ${negated ? "!=" : "=="} ${rightText}`;
-        if (boxes.length === 0) {
-          return `(${compare})`;
-        }
-        return negated ? `(${boxes.map((box) => `${box} == null`).join(" || ")} || ${compare})` : `(${boxes.map((box) => `${box} != null`).join(" && ")} && ${compare})`;
-      }
-    }
-    return void 0;
-  }
-  // true when the printer prints the operand as a Java primitive (a decimal literal, a
-  // native .length/.size(), a for counter or a nested native arithmetic node) rather
-  // than as the Object-declared box every other local gets
-  javaOperandPrintsPrimitiveNumber(node) {
-    return this.javaEqualityLiteralKind(node) !== void 0 || this.javaNativeLengthKind(node) !== void 0 || this.isJavaPrimitiveCounterReference(node) || this.javaNativeArithmeticKind(node) !== void 0 || this.javaPrimitiveOperandKind(node) !== void 0;
-  }
-  // the numeric family the pass declared for a local (`Long`/`Double`/`Integer` boxed,
-  // `int`/`long`/`double` primitive), undefined when nothing was declared or the declared
-  // type is not numeric
-  javaDeclaredNumericFamily(expression) {
-    const type = this.javaDeclaredTypeOf(expression)?.trim();
-    return type !== void 0 && JAVA_DECLARED_NUMERIC_TYPES.has(type) ? type : void 0;
-  }
-  // `x[k] = v` prints the runtime helper by default. Helpers.addElementToObject
-  // exists for receivers the printer cannot type (Lists, arbitrary objects via
-  // reflection) and for ConcurrentHashMap null-removal, so the native Map.put is
-  // printed only when the checker excludes all of those.
-  elementWriteTargetsMap(container, base, keys, value) {
-    const lastKey = keys[keys.length - 1];
-    if (!isStringLiteral2(lastKey) && !this.isJavaStringType(this.getChecker().getTypeAtLocation(lastKey))) {
-      return false;
-    }
-    if (isPropertyAccessExpression2(base) && base.expression.kind === SyntaxKind6.ThisKeyword) {
-      return false;
-    }
-    if (this.isPlainHashMapReceiver(container, keys)) {
-      return true;
-    }
-    return this.isDictionaryType(container) && !this.elementWriteValueMayBeNull(value);
-  }
-  // true unless the checker proves the written value is never null/undefined
-  elementWriteValueMayBeNull(value) {
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0 || value === void 0) {
-      return true;
-    }
-    if (this.javaFreshMapLocalValue(value)) {
-      return false;
-    }
-    const type = checker.getTypeAtLocation(value);
-    const parts = type.flags & TypeFlags5.Union ? type.getTypes?.() ?? [] : [type];
-    const nullable = TypeFlags5.Any | TypeFlags5.Unknown | JAVA_NULLISH_TYPE_FLAGS | TypeFlags5.TypeParameter;
-    return parts.length === 0 || parts.some((t) => (t.flags & nullable) !== 0);
-  }
-  // an identifier bound once to a fresh map (object literal, two-argument extend, this.account()) and
-  // never reassigned: it holds that map on every path, so the written value is never null
-  javaFreshMapLocalValue(value) {
-    const node = this.unwrapPrintTransparentExpression(value);
-    if (node === void 0 || !isIdentifier2(node)) {
-      return false;
-    }
-    const declaration = this.javaDeclarationOfIdentifier(node);
-    if (declaration === void 0 || declaration.kind !== SyntaxKind6.VariableDeclaration || !declaration.initializer || !this.javaElementWriteMapSource(declaration.initializer)) {
-      return false;
-    }
-    return !this.javaLocalIsReassigned(node, (rhs) => this.javaElementWriteMapSource(rhs));
-  }
-  // a key proven by the checker to be a string prints as a java String: the read is
-  // the same expression, only the key needs the (String) cast the typed put demands
-  elementWriteKeyText(key, keyText) {
-    return isStringLiteral2(key) ? keyText : `(String)${keyText}`;
-  }
-  // Receivers that are a plain java.util.HashMap at runtime, where ".put" and the helper's map branch
-  // are the same write: a local initialized with an object literal or a call whose every return is
-  // such a literal (this.account()). Lists, class instances and ConcurrentHashMaps stay helpers.
-  isPlainHashMapReceiver(container, keys) {
-    if (keys.length !== 1 || container === void 0 || container.kind !== SyntaxKind6.Identifier) {
-      return false;
-    }
+  // mirrors printWrappedUnknownThisProperty: a `this.<name>(...)` call the checker cannot
+  // resolve prints `Helpers.callDynamically(this, "<name>", ...)`, whose Java return is Object
+  javaCalleeResolves(node) {
     const checker = this.checkerOrUndefined();
     if (checker === void 0) {
       return false;
     }
-    const symbol = checker.getSymbolAtLocation(container);
-    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
-    if (!declaration || declaration.kind !== SyntaxKind6.VariableDeclaration || !declaration.initializer) {
-      return false;
-    }
-    if (!this.javaFreshHashMapValue(container, declaration.initializer)) {
-      return false;
-    }
-    return !this.javaLocalIsReassigned(container, (rhs) => this.javaFreshHashMapValue(container, rhs));
+    const signature = checker.getResolvedSignature(node);
+    return signature?.declaration !== void 0;
   }
-  // a value that is a freshly built HashMap/LinkedHashMap on the Java side
-  javaFreshHashMapValue(container, value) {
-    const initializer = this.unwrapPrintTransparentExpression(value);
-    return initializer !== void 0 && (isObjectLiteralExpression3(initializer) || isCallExpression5(initializer) && this.callAlwaysReturnsPlainHashMap(initializer, 0) || this.javaDeclaredMapReceiver(container) && (this.javaFreshExtendMap(initializer) || this.javaFreshMapBaseCall(initializer)));
-  }
-  // `this.account()` on the hand-written base builds a new HashMap per call, so the result is a
-  // plain map no other owner holds. A venue override prints its own signature and is not provable.
-  javaFreshMapBaseCall(node) {
-    if (node === void 0 || !isCallExpression5(node) || node.arguments.length !== 0 || !isPropertyAccessExpression2(node.expression) || node.expression.expression.kind !== SyntaxKind6.ThisKeyword || !JAVA_FRESH_MAP_BASE_CALLS.has(node.expression.name.text)) {
-      return false;
-    }
-    const checker = this.checkerOrUndefined();
-    const fileName = checker?.getResolvedSignature(node)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
-    return typeof fileName === "string" && JAVA_THIS_RETURN_TYPES_BASE_FILE.test(fileName);
-  }
-  // the map type a local the printer itself feeds a fresh plain map prints with: its element
-  // writes then bind the native put, and (a fresh HashMap holds a null like the helper does) a
-  // null value needs no helper. Only the shapes whose Java print IS `Map<String, Object>`.
-  javaElementWriteMapLocalType(declaration) {
-    if (!isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || !declaration.initializer) {
-      return void 0;
-    }
-    const name = declaration.name;
-    if (!this.javaElementWriteMapSource(declaration.initializer)) {
-      return void 0;
-    }
-    if (this.javaLocalHasWriteAtAll(name)) {
-      return void 0;
-    }
-    return JAVA_ELEMENT_WRITE_MAP_TYPE;
-  }
-  // `Object x = this.<field>` where the hand-written base declares that field
-  // `Map<String, Object>`: binding the local to the field's own type makes its element reads
-  // bind the accessor with no cast. Only a local nothing writes and nothing consumes as
-  // another Java type may carry it, or javac rejects the declaration's own uses.
-  javaBaseMapFieldLocalType(declaration) {
-    if (!isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || !declaration.initializer) {
-      return void 0;
-    }
-    const initializer = this.unwrapPrintTransparentExpression(declaration.initializer);
-    if (!isPropertyAccessExpression2(initializer) || initializer.expression?.kind !== SyntaxKind6.ThisKeyword) {
-      return void 0;
-    }
-    if (!JAVA_DECLARED_MAP_FIELD_NAMES.has(String(initializer.name?.text))) {
-      return void 0;
-    }
-    if (this.javaLocalHasWriteAtAll(declaration.name)) {
-      return void 0;
-    }
-    if (!this.javaLocalUsesKeepContainerType(declaration.name)) {
-      return void 0;
-    }
-    return JAVA_ELEMENT_WRITE_MAP_TYPE;
-  }
-  // RF-java-2: `const x = Object.values(..)` with no other write prints the helper's exact return type
-  // `const x = Object.keys(this.<BaseExchange Map field>)` prints the null-guarded key copy
-  // (printNativeBaseMapFieldKeys), a fresh ArrayList, so the same List<Object> local applies.
-  javaObjectValuesLocalType(declaration) {
-    if (!isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || !declaration.initializer) {
-      return void 0;
-    }
-    const init = this.unwrapPrintTransparentExpression(declaration.initializer);
-    if (init === void 0 || !isCallExpression5(init) || !isPropertyAccessExpression2(init.expression) || !isIdentifier2(init.expression.expression) || init.expression.expression.text !== "Object" || init.arguments.length !== 1) {
-      return void 0;
-    }
-    const method = init.expression.name.text;
-    const arg = init.arguments[0];
-    if (method === "keys" ? !(isPropertyAccessExpression2(arg) && this.printNativeBaseMapFieldKeys(arg) !== void 0) : method !== "values") {
-      return void 0;
-    }
-    if (this.javaLocalHasWriteAtAll(declaration.name)) {
-      return void 0;
-    }
-    return "List<Object>";
-  }
-  // a json object box: the generic `Dictionary<T>` of ts/src/base/types.ts (so `Dict` and
-  // `Dictionary<Dictionary<..>>`): an object type with a string index signature and no numeric one.
-  // Arrays, tuples, DTOs, primitives, unions and the named typed views that extend it (Balances,
-  // Tickers, ..., which own a typed print) all decline.
-  javaJsonBoxType(type) {
-    if (type === void 0 || type === null || !(type.flags & TypeFlags5.Object)) {
-      return false;
-    }
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0) {
-      return false;
-    }
-    try {
-      if (checker.isArrayType(type) || checker.isTupleType(type)) {
-        return false;
-      }
-      const symbol = type.getSymbol?.();
-      const declaration = symbol?.declarations?.[0]?.resolve();
-      if (symbol?.escapedName !== "Dictionary" || !/(^|[\\/])ts[\\/]src[\\/]base[\\/]types\.ts$/.test(declaration?.getSourceFile?.()?.fileName ?? "")) {
-        return false;
-      }
-      return checker.getIndexTypeOfType(type, IndexKind3.String) !== void 0 && checker.getIndexTypeOfType(type, IndexKind3.Number) === void 0;
-    } catch (e) {
-      return false;
-    }
-  }
-  // How the identifier at `node` is used. 'element' = the printed Java is a native get/put on the
-  // local; 'neutral' = a property NAME, not a read of the local; 'value' = a position that takes the
-  // box as an Object (return, copy, the value of an element write); 'other' = any use that would see
-  // the local's new static type (argument, receiver, comparison, delete, spread, call of an element)
-  javaBoxUseVerdict(node) {
-    const parent = node.parent;
-    if (parent === void 0 || parent === null) {
-      return "other";
-    }
-    if (isPropertyAccessExpression2(parent) && parent.name === node) {
-      return "neutral";
-    }
-    if (parent.kind === SyntaxKind6.ReturnStatement && parent.expression === node || parent.kind === SyntaxKind6.VariableDeclaration && parent.initializer === node || parent.kind === SyntaxKind6.BinaryExpression && parent.right === node && parent.operatorToken?.kind === SyntaxKind6.EqualsToken) {
-      return "value";
-    }
-    if (isElementAccessExpression3(parent) && parent.expression === node) {
-      const grand = parent.parent;
-      if (grand?.kind === SyntaxKind6.DeleteExpression || isSpreadElement2(grand) || isSpreadAssignment2(grand) || isCallExpression5(grand) && grand.expression === parent) {
-        return "other";
-      }
-      const key = parent.argumentExpression;
-      return key !== void 0 && (isStringLiteralLikeNode3(key) || isIdentifier2(key)) ? "element" : "other";
-    }
-    return "other";
-  }
-  // every use of the local in its function is an element access (at least one), so declaring it a
-  // Map cannot rebind any call in the file through the new static type
-  javaBoxLocalUsedOnlyAsElements(nameNode) {
-    const checker = this.checkerOrUndefined();
-    const symbol = checker?.getSymbolAtLocation(nameNode);
-    if (symbol === void 0) {
-      return false;
-    }
-    let scope = nameNode.parent;
-    while (scope && !isFunctionLike(scope)) {
-      scope = scope.parent;
-    }
-    if (!scope) {
-      return false;
-    }
-    let uses = 0;
-    let ok = true;
-    const walk = (current) => {
-      if (!ok || current === void 0) {
-        return;
-      }
-      if (current !== nameNode && isIdentifier2(current) && current.text === nameNode.text && checker.getSymbolAtLocation(current) === symbol) {
-        const verdict = this.javaBoxUseVerdict(current);
-        if (verdict === "element") {
-          uses++;
-        } else if (verdict === "other") {
-          ok = false;
-          return;
-        }
-      }
-      current.forEachChild(walk);
-    };
-    scope.forEachChild(walk);
-    return ok && uses > 0;
-  }
-  // `const x = await this.m(..)` / `[a, b] = this.m(..)` slot: the awaited / tuple-element TS type is
-  // a json object box and the local is only element-accessed. The erased `.join()` / list `get` needs
-  // the checkcast the declaration carries.
-  javaCheckedBoxLocalType(declaration) {
-    if (declaration === void 0) {
-      return void 0;
-    }
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0) {
-      return void 0;
-    }
-    if (isVariableDeclaration2(declaration) && isIdentifier2(declaration.name) && declaration.initializer?.kind === SyntaxKind6.AwaitExpression) {
-      const call = this.unwrapParenthesesOnly(declaration.initializer.expression);
-      if (!isCallExpression5(call) || !isPropertyAccessExpression2(call.expression) || call.expression.expression.kind !== SyntaxKind6.ThisKeyword && call.expression.expression.kind !== SyntaxKind6.SuperKeyword) {
-        return void 0;
-      }
-      let type;
-      try {
-        type = checker.getTypeAtLocation(declaration.initializer);
-      } catch (e) {
-        return void 0;
-      }
-      return this.javaJsonBoxType(type) && this.javaBoxLocalUsedOnlyAsElements(declaration.name) ? JAVA_ELEMENT_WRITE_MAP_TYPE : void 0;
-    }
-    if (declaration.kind === SyntaxKind6.BindingElement && isIdentifier2(declaration.name) && declaration.dotDotDotToken === void 0 && declaration.initializer === void 0) {
-      const pattern = declaration.parent;
-      const owner = pattern?.parent;
-      if (pattern?.kind !== SyntaxKind6.ArrayBindingPattern || owner === void 0 || !isVariableDeclaration2(owner) || owner.name !== pattern || owner.initializer === void 0) {
-        return void 0;
-      }
-      const call = this.unwrapParenthesesOnly(owner.initializer);
-      if (!isCallExpression5(call)) {
-        return void 0;
-      }
-      let element;
-      try {
-        const type = checker.getTypeAtLocation(call);
-        if (!checker.isTupleType(type)) {
-          return void 0;
-        }
-        const arguments_ = checker.getTypeArguments(type);
-        if (arguments_ === void 0 || arguments_.length !== pattern.elements.length) {
-          return void 0;
-        }
-        element = arguments_[pattern.elements.indexOf(declaration)];
-      } catch (e) {
-        return void 0;
-      }
-      return this.javaJsonBoxType(element) && this.javaBoxLocalUsedOnlyAsElements(declaration.name) ? JAVA_ELEMENT_WRITE_MAP_TYPE : void 0;
-    }
-    return void 0;
-  }
-  javaCheckedBoxLocalTypeCached(declaration) {
-    if (declaration === void 0) {
-      return void 0;
-    }
-    const cached = this.javaCheckedBoxLocalTypeCache.get(declaration);
-    if (cached !== void 0) {
-      return cached === JAVA_MEMO_UNDEFINED ? void 0 : cached;
-    }
-    let type;
-    try {
-      type = this.javaCheckedBoxLocalType(declaration);
-    } catch (e) {
-      type = void 0;
-    }
-    this.javaCheckedBoxLocalTypeCache.set(declaration, type ?? JAVA_MEMO_UNDEFINED);
-    return type;
-  }
-  unwrapParenthesesOnly(node) {
-    let current = node;
-    while (current !== void 0 && isParenthesizedExpression2(current)) {
-      current = current.expression;
-    }
-    return current;
-  }
-  // every other mention of the local must be a read a `Map<String, Object>` declaration leaves
-  // unchanged: an element-access receiver, a call argument, a return value, an assignment's
-  // right-hand side, a comparison or a container element. A cast, a method call, a spread or a
-  // for-of loop on it prints code that only compiles for the box.
-  javaLocalUsesKeepContainerType(node) {
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0) {
-      return false;
-    }
-    const symbol = checker.getSymbolAtLocation(node);
-    if (symbol === void 0) {
-      return false;
-    }
-    let scope = node;
-    while (scope && !isFunctionLike(scope) && !isSourceFile4(scope)) {
-      scope = scope.parent;
-    }
-    if (!scope) {
-      return false;
-    }
-    let safe = true;
-    const walk = (current) => {
-      if (!safe || current === void 0) {
-        return;
-      }
-      if (isIdentifier2(current) && current !== node && checker.getSymbolAtLocation(current) === symbol) {
-        if (!this.javaContainerNeutralIdentifierUse(current)) {
-          safe = false;
-          return;
-        }
-      }
-      current.forEachChild(walk);
-    };
-    scope.forEachChild(walk);
-    return safe;
-  }
-  javaContainerNeutralIdentifierUse(node) {
-    const parent = node.parent;
-    if (parent === void 0) {
-      return false;
-    }
-    switch (parent.kind) {
-      case SyntaxKind6.ElementAccessExpression:
-        return parent.expression === node;
-      case SyntaxKind6.CallExpression:
-      case SyntaxKind6.NewExpression:
-        return parent.arguments !== void 0 && parent.arguments.includes(node);
-      case SyntaxKind6.ReturnStatement:
-        return true;
-      case SyntaxKind6.BinaryExpression:
-        return parent.operatorToken.kind === SyntaxKind6.EqualsToken ? parent.right === node : true;
-      case SyntaxKind6.VariableDeclaration:
-        return parent.initializer === node;
-      case SyntaxKind6.ArrayLiteralExpression:
-      case SyntaxKind6.ParenthesizedExpression:
-      case SyntaxKind6.ConditionalExpression:
-      case SyntaxKind6.PrefixUnaryExpression:
-        return true;
-      default:
-        return false;
-    }
-  }
-  // any write at all - plain, compound, or a destructuring target - keeps the local on the type
-  // the build layer assigned it: it casts the write of an Object local and rewrites a destructuring
-  // hand-back into a raw element read, both of which need the box
-  javaLocalHasWriteAtAll(node) {
-    const symbol = this.getChecker().getSymbolAtLocation(node);
-    if (symbol === void 0) {
-      return true;
-    }
-    let scope = node;
-    while (scope && !isFunctionLike(scope) && !isSourceFile4(scope)) {
-      scope = scope.parent;
-    }
-    if (!scope) {
-      return true;
-    }
-    let wrote = false;
-    const walk = (current) => {
-      if (wrote || current === void 0) {
-        return;
-      }
-      if (current.kind === SyntaxKind6.BinaryExpression && current.operatorToken.kind >= SyntaxKind6.FirstAssignment && current.operatorToken.kind <= SyntaxKind6.LastAssignment) {
-        const left = current.left;
-        if (isIdentifier2(left) && this.getChecker().getSymbolAtLocation(left) === symbol) {
-          wrote = true;
-          return;
-        }
-        if (!isIdentifier2(left) && !isElementAccessExpression3(left) && !isPropertyAccessExpression2(left) && this.javaPatternBindsSymbol(left, symbol)) {
-          wrote = true;
-          return;
-        }
-      }
-      if ((isForOfStatement(current) || isForInStatement(current)) && isIdentifier2(current.initializer) && this.getChecker().getSymbolAtLocation(current.initializer) === symbol) {
-        wrote = true;
-        return;
-      }
-      current.forEachChild(walk);
-    };
-    walk(scope);
-    return wrote;
-  }
-  // fresh-map values whose Java print carries `Map<String, Object>`: an object literal, the
-  // base-tier extend/deepExtend (declared `java.util.Map<String, Object>`), `this.account()`
-  javaElementWriteMapSource(value) {
-    const node = this.unwrapPrintTransparentExpression(value);
-    if (node === void 0) {
-      return false;
-    }
-    return isObjectLiteralExpression3(node) || this.javaFreshExtendMap(node) || this.javaFreshMapBaseCall(node);
-  }
-  // a value whose Java print can never be null: non-null literals and fresh containers
-  javaPrintsNonNullValue(node) {
-    const value = this.unwrapPrintTransparentExpression(node);
-    if (value === void 0) {
-      return false;
-    }
-    return isStringLiteralLikeNode3(value) || isNumericLiteral3(value) || value.kind === SyntaxKind6.TrueKeyword || value.kind === SyntaxKind6.FalseKeyword || isObjectLiteralExpression3(value) || isArrayLiteralExpression3(value) || isPrefixUnaryExpression2(value) && value.operator === SyntaxKind6.MinusToken && isNumericLiteral3(value.operand);
-  }
-  // `this.extend(..)` / `this.deepExtend(..)` from the base tier hand back a fresh LinkedHashMap
-  // when the call has two arguments (Generic.Extend copies both) or ends in an object literal
-  // (deepExtend's last Map argument replaces any earlier non-Map box with a new map)
-  javaFreshExtendMap(initializer) {
-    if (initializer === void 0 || !isCallExpression5(initializer) || !isPropertyAccessExpression2(initializer.expression) || initializer.expression.expression.kind !== SyntaxKind6.ThisKeyword) {
-      return false;
-    }
-    const name = initializer.expression.name.text;
-    const args = initializer.arguments;
-    const last = args.length > 0 ? this.unwrapPrintTransparentExpression(args[args.length - 1]) : void 0;
-    const endsInLiteral = last !== void 0 && isObjectLiteralExpression3(last);
-    if (!(name === "extend" && (args.length === 2 || endsInLiteral) || name === "deepExtend" && endsInLiteral)) {
-      return false;
-    }
-    const checker = this.checkerOrUndefined();
-    const fileName = checker?.getResolvedSignature(initializer)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
-    return typeof fileName === "string" && JAVA_FRESH_EXTEND_FILE.test(fileName);
-  }
-  // the bottom container of `x[k1][k2].. = v` when x is a declared Map / List and k1 is not a
-  // string literal: the guarded native read of the element-read families (the literal key is
-  // printed by the caller's own arm)
-  javaDeclaredChainContainerRead(left, keyCount) {
-    let inner = left;
-    for (let i = 1; i < keyCount; i++) {
-      inner = inner.expression;
-    }
-    if (inner === void 0 || !isElementAccessExpression3(inner) || isStringLiteralLikeNode3(inner.argumentExpression)) {
-      return void 0;
-    }
-    const declared = this.javaDeclaredTypeOf(inner.expression);
-    if (declared === void 0) {
-      return void 0;
-    }
-    if (JAVA_DECLARED_MAP_TYPES.test(declared)) {
-      return this.javaDeclaredMapElementRead(inner);
-    }
-    if (JAVA_DECLARED_LIST_TYPES.test(declared) && this.javaPrimitiveCounterIndex(inner.argumentExpression)) {
-      return this.javaDeclaredListElementRead(inner, true);
-    }
-    return void 0;
-  }
-  unwrapPrintTransparentExpression(node) {
-    let current = node;
-    while (current && (isParenthesizedExpression2(current) || isAsExpression2(current) || isTypeAssertion2(current) || current.kind === SyntaxKind6.NonNullExpression)) {
-      current = current.expression;
-    }
-    return current;
-  }
-  // Every write of the local in its enclosing function must be the element write
-  // itself; an assignment could replace the HashMap with a List or a class instance.
-  javaLocalIsReassigned(node, admitsWrite) {
-    let scope = node;
-    while (scope && !isFunctionLike(scope) && !isSourceFile4(scope)) {
-      scope = scope.parent;
-    }
-    if (!scope) {
-      return true;
-    }
-    const symbol = this.getChecker().getSymbolAtLocation(node);
-    let reassigned = false;
-    const walk = (current) => {
-      if (reassigned || current === void 0) {
-        return;
-      }
-      if (current.kind === SyntaxKind6.BinaryExpression && current.operatorToken.kind === SyntaxKind6.EqualsToken && current.left.kind === SyntaxKind6.Identifier && this.getChecker().getSymbolAtLocation(current.left) === symbol) {
-        if (admitsWrite === void 0 || !admitsWrite(current.right)) {
-          reassigned = true;
-          return;
-        }
-      }
-      if (current.kind === SyntaxKind6.BinaryExpression && current.operatorToken.kind >= SyntaxKind6.FirstAssignment && current.operatorToken.kind <= SyntaxKind6.LastAssignment && !isIdentifier2(current.left) && !isElementAccessExpression3(current.left) && !isPropertyAccessExpression2(current.left) && this.javaPatternBindsSymbol(current.left, symbol) && !this.javaDestructuringHandsBackLocal(current, symbol)) {
-        reassigned = true;
-        return;
-      }
-      if (current.kind === SyntaxKind6.BinaryExpression && current.operatorToken.kind !== SyntaxKind6.EqualsToken && current.operatorToken.kind >= SyntaxKind6.FirstAssignment && current.operatorToken.kind <= SyntaxKind6.LastAssignment && isIdentifier2(current.left) && this.getChecker().getSymbolAtLocation(current.left) === symbol) {
-        reassigned = true;
-        return;
-      }
-      if ((isForOfStatement(current) || isForInStatement(current)) && isIdentifier2(current.initializer) && this.getChecker().getSymbolAtLocation(current.initializer) === symbol) {
-        reassigned = true;
-        return;
-      }
-      current.forEachChild(walk);
-    };
-    walk(scope);
-    return reassigned;
-  }
-  // `[.., x, ..] = this.m(.., x, ..)` where every return of m is an array literal whose
-  // element at x's position is the never-reassigned parameter x was passed to: x keeps its object
-  javaDestructuringHandsBackLocal(assignment, symbol) {
-    const checker = this.getChecker();
-    const left = assignment.left;
-    const call = this.unwrapPrintTransparentExpression(assignment.right);
-    if (!isArrayLiteralExpression3(left) || call === void 0 || !isCallExpression5(call)) {
-      return false;
-    }
-    const index = left.elements.findIndex((e) => isIdentifier2(e) && checker.getSymbolAtLocation(e) === symbol);
-    if (index < 0 || left.elements.some((e, i) => i !== index && this.javaPatternBindsSymbol(e, symbol))) {
-      return false;
-    }
-    const declaration = checker.getResolvedSignature(call)?.declaration?.resolve();
-    if (!declaration || !isMethodDeclaration4(declaration) || !declaration.body) {
-      return false;
-    }
-    const argIndex = call.arguments.findIndex((a) => isIdentifier2(a) && checker.getSymbolAtLocation(a) === symbol);
-    const parameter = argIndex >= 0 ? declaration.parameters[argIndex] : void 0;
-    if (parameter === void 0 || !isIdentifier2(parameter.name) || parameter.dotDotDotToken) {
-      return false;
-    }
-    const parameterSymbol = checker.getSymbolAtLocation(parameter.name);
-    let returns = 0;
-    let proven = true;
-    const walk = (n) => {
-      if (!proven || n === void 0 || n !== declaration.body && isFunctionLike(n)) {
-        return;
-      }
-      if (isReturnStatement3(n)) {
-        returns++;
-        const value = this.unwrapPrintTransparentExpression(n.expression);
-        const element = value !== void 0 && isArrayLiteralExpression3(value) ? value.elements[index] : void 0;
-        proven = element !== void 0 && isIdentifier2(element) && checker.getSymbolAtLocation(element) === parameterSymbol;
-        return;
-      }
-      n.forEachChild(walk);
-    };
-    walk(declaration.body);
-    if (!proven || returns === 0 || this.javaHandBackVisiting.has(declaration)) {
-      return false;
-    }
-    this.javaHandBackVisiting.add(declaration);
-    try {
-      return !this.javaLocalIsReassigned(parameter.name);
-    } finally {
-      this.javaHandBackVisiting.delete(declaration);
-    }
-  }
-  // true when a destructuring target mentions the symbol anywhere
-  javaPatternBindsSymbol(pattern, symbol) {
-    let found = false;
-    const walk = (n) => {
-      if (found || n === void 0) {
-        return;
-      }
-      if (isIdentifier2(n) && this.getChecker().getSymbolAtLocation(n) === symbol) {
-        found = true;
-        return;
-      }
-      n.forEachChild(walk);
-    };
-    walk(pattern);
-    return found;
-  }
-  // A call whose callee body returns object literals only, so the value it hands
-  // back is always a freshly built HashMap on the Java side as well.
-  callAlwaysReturnsPlainHashMap(node, depth) {
-    if (depth > 3) {
-      return false;
-    }
-    const checker = this.getChecker();
-    let callee = this.unwrapPrintTransparentExpression(node.expression);
-    if (callee !== void 0 && isPropertyAccessExpression2(callee)) {
-      if (callee.expression.kind !== SyntaxKind6.ThisKeyword) {
-        return false;
-      }
-      callee = callee.name;
-    }
-    if (callee === void 0 || callee.kind !== SyntaxKind6.Identifier) {
-      return false;
-    }
-    let symbol;
-    try {
-      symbol = checker.getSymbolAtLocation(callee);
-    } catch (e) {
-      return false;
-    }
-    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
-    if (!declaration || declaration.kind !== SyntaxKind6.MethodDeclaration && declaration.kind !== SyntaxKind6.FunctionDeclaration) {
-      return false;
-    }
-    if (!this.returnTypePrintsAsHashMap(declaration)) {
-      return false;
-    }
-    const body = declaration.body;
-    if (!body || !isBlock3(body)) {
-      return false;
-    }
-    let plain = true;
-    let returns = 0;
-    const walk = (current) => {
-      if (!plain || current === void 0) {
-        return;
-      }
-      if (isFunctionLike(current) && current !== declaration) {
-        return;
-      }
-      if (isReturnStatement3(current)) {
-        returns += 1;
-        const expression = current.expression;
-        if (expression === void 0) {
-          plain = false;
-          return;
-        }
-        const value = this.unwrapPrintTransparentExpression(expression);
-        if (isObjectLiteralExpression3(value)) {
-          return;
-        }
-        if (isCallExpression5(value) && this.callAlwaysReturnsPlainHashMap(value, depth + 1)) {
-          return;
-        }
-        plain = false;
-        return;
-      }
-      current.forEachChild(walk);
-    };
-    walk(body);
-    return plain && returns > 0;
-  }
-  // the declared return type must not be a class instance (those print as objects)
-  // or an array (those print as Lists), so the object-literal returns above are what
-  // the caller can rely on
-  returnTypePrintsAsHashMap(declaration) {
-    try {
-      const checker = this.getChecker();
-      const signature = checker.getSignatureFromDeclaration(declaration);
-      const type = signature?.getReturnType();
-      if (!type || (type.flags & TypeFlags5.Object) === 0) {
-        return false;
-      }
-      if (checker.isArrayType(type) || checker.isTupleType(type)) {
-        return false;
-      }
-      const declarations = (type.getSymbol()?.declarations ?? []).map((d) => d.resolve());
-      if (declarations.some((d) => d.kind === SyntaxKind6.ClassDeclaration)) {
-        return false;
-      }
-      return type.getCallSignatures().length === 0;
-    } catch (e) {
-      return false;
-    }
-  }
-  isDictionaryType(node) {
-    try {
-      const checker = this.getChecker();
-      const type = checker.getTypeAtLocation(node);
-      return this.isDictionaryTsType(type, checker, 0);
-    } catch (e) {
-      return false;
-    }
-  }
-  // A TS dictionary (`{ [key: string]: any }`, i.e. ccxt's Dict) is a Map on every
-  // print and run path. Arrays, class instances and unknown types are not, so they
-  // keep the helper.
-  isDictionaryTsType(type, checker, depth) {
-    if (!type || depth > 3) {
-      return false;
-    }
-    const flags = type.flags;
-    if (flags & TypeFlags5.Union) {
-      const parts = type.getTypes?.() ?? [];
-      return parts.length > 0 && parts.every((t) => this.isDictionaryTsType(t, checker, depth + 1));
-    }
-    if (!(flags & TypeFlags5.Object)) {
-      return false;
-    }
-    try {
-      if (checker.isArrayType(type) || checker.isTupleType(type)) {
-        return false;
-      }
-      return checker.getIndexTypeOfType(type, IndexKind3.String) !== void 0;
-    } catch (e) {
-      return false;
-    }
-  }
-  // -------------------------------------------------------------------
-  // helper removal: native emission when the checker proves the printed
-  // operand is a Java numeric primitive / List / Map
-  // -------------------------------------------------------------------
-  // int/long kind of a literal as printNumericLiteral emits it. Fraction and
-  // exponent forms are Java doubles and a double can hold NaN, which the
-  // comparison helpers order differently (`NaN < x` is true there), so those
-  // never become a native comparison.
-  javaIntegerLiteralKind(node) {
-    if (!node || !isNumericLiteral3(node)) {
-      return void 0;
-    }
-    if (/[.eE]/.test(node.text)) {
-      return void 0;
-    }
-    return Number(node.text) > 2147483647 ? "long" : "int";
-  }
-  // A rest parameter is a Java varargs array, not a List, so a List cast on it
-  // would throw ClassCastException; simple identifier aliases are followed too.
-  isVarargsArrayReference(node, depth = 0) {
-    if (!node || depth > 4 || node.kind !== SyntaxKind6.Identifier) {
-      return false;
-    }
-    const symbol = this.getChecker().getSymbolAtLocation(node);
-    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
-    if (!declaration) {
-      return false;
-    }
-    if (declaration.dotDotDotToken !== void 0) {
-      return true;
-    }
-    const initializer = declaration.initializer;
-    if (initializer && isIdentifier2(initializer)) {
-      return this.isVarargsArrayReference(initializer, depth + 1);
-    }
-    return false;
-  }
-  // checker proof that the value is printed as a java.util.List: TS arrays and
-  // tuples become ArrayList, ReadonlyArray only adds a readonly modifier
-  isJavaListType(type) {
-    if (!type) {
-      return false;
-    }
-    const checker = this.getChecker();
-    if (checker.isArrayType(type) || checker.isTupleType(type)) {
-      return true;
-    }
-    return type.isTypeReference?.() === true && type.getTarget().getSymbol()?.escapedName === "ReadonlyArray";
-  }
-  // `.length` is a Java int for exactly these receivers; every other receiver keeps
-  // Helpers.getArrayLength, whose result type is not proven
-  javaLengthKind(expression) {
-    const type = this.getChecker().getTypeAtLocation(expression);
-    if (this.isJavaStringType(type)) {
-      return "String";
-    }
-    if (this.isJavaListValueType(type) && !this.isVarargsArrayReference(expression)) {
-      return "List";
-    }
-    if (isIdentifier2(expression)) {
-      if (this.isJavaNullishUnion(type, (member) => this.isStringType(member.flags))) {
-        return "StringOrNull";
-      }
-      if (this.isJavaNullishUnion(type, (member) => this.isJavaListValueType(member)) && !this.isVarargsArrayReference(expression)) {
-        return "ListOrNull";
-      }
-    }
-    return void 0;
-  }
-  // every union member is a List-printing type (TS array/tuple/ReadonlyArray, or an
-  // Array-derived class whose hand-written java counterpart is an ArrayList)
-  isJavaListValueType(type) {
-    if (!type) {
-      return false;
-    }
-    if ((type.flags & TypeFlags5.Union) !== 0) {
-      return type.getTypes().length > 0 && type.getTypes().every((member) => this.isJavaListValueType(member));
-    }
-    return this.isJavaListType(type) || this.isJavaListBackedClassType(type);
-  }
-  // TS class/interface whose java counterpart extends java.util.ArrayList<Object>:
-  // the ws caches (ws/ArrayCache.java) and the order-book sides (ws/OrderBookSide.java)
-  isJavaListBackedClassType(type) {
-    if (!type || (type.flags & TypeFlags5.Object) === 0) {
-      return false;
-    }
-    let current = type.isTypeReference?.() ? type.getTarget() : type;
-    for (let depth = 0; current && depth < 8; depth++) {
-      const name = current.getSymbol?.()?.escapedName;
-      if (name !== void 0 && JAVA_LIST_BACKED_TS_CLASSES.has(name)) {
-        return true;
-      }
-      const bases = current.getBaseTypes?.() ?? [];
-      current = bases.length > 0 ? bases[0].isTypeReference?.() ? bases[0].getTarget() : bases[0] : void 0;
-    }
-    return false;
-  }
-  // union of one accepted member family plus null/undefined: the emitted guard is the
-  // helper's answer for the nullish case and the native read otherwise
-  isJavaNullishUnion(type, isMember) {
-    if (!type || (type.flags & TypeFlags5.Union) === 0 || type.getTypes().length === 0) {
-      return false;
-    }
-    return type.getTypes().every((member) => isMember(member) || (member.flags & (TypeFlags5.Undefined | TypeFlags5.Null)) !== 0);
-  }
-  // shared by printLengthProperty and transformPropertyAcessExpressionIfNeeded
-  printJavaLength(expression, leftSide) {
-    const kind = this.javaLengthKind(expression);
-    if (kind !== void 0) {
-      const read = kind.startsWith("String") ? `((String)${leftSide}).length()` : `((java.util.List<?>)${leftSide}).size()`;
-      return kind.endsWith("OrNull") ? `(${leftSide} == null ? 0 : ${read})` : read;
-    }
-    const declared = this.javaDeclaredTypeOf(expression);
-    if (declared !== void 0 && JAVA_DECLARED_LIST_TYPES.test(declared)) {
-      return `(${leftSide} == null ? 0 : ${leftSide}.size())`;
-    }
-    return `${this.ARRAY_LENGTH_WRAPPER_OPEN}${leftSide}${this.ARRAY_LENGTH_WRAPPER_CLOSE}`;
-  }
-  // `for (var i = <int literal>; ...; i++)`: printForStatement rewrites the
-  // Object initializer into `var`, so javac infers a primitive counter there,
-  // and only ++/-- writes keep it primitive
-  isJavaPrimitiveForCounter(node) {
-    if (node.kind !== SyntaxKind6.Identifier) {
-      return false;
-    }
-    const comparison = node.parent;
-    if (!comparison || comparison.kind !== SyntaxKind6.BinaryExpression) {
-      return false;
-    }
-    const forStatement = comparison.parent;
-    if (!forStatement || forStatement.kind !== SyntaxKind6.ForStatement || forStatement.condition !== comparison) {
-      return false;
-    }
-    const initializer = forStatement.initializer;
-    if (!initializer || initializer.kind !== SyntaxKind6.VariableDeclarationList) {
-      return false;
-    }
-    const declarations = initializer.declarations ?? [];
-    if (declarations.length !== 1) {
-      return false;
-    }
-    const declaration = declarations[0];
-    if (!isIdentifier2(declaration.name) || declaration.name.text !== node.text) {
-      return false;
-    }
-    if (this.javaIntegerLiteralKind(declaration.initializer) === void 0) {
-      return false;
-    }
-    const counterSymbol = this.getChecker().getSymbolAtLocation(node);
-    const declarationSymbol = this.getChecker().getSymbolAtLocation(declaration.name);
-    if (counterSymbol !== void 0 && declarationSymbol !== void 0 && counterSymbol !== declarationSymbol) {
-      return false;
-    }
-    const incrementor = forStatement.incrementor;
-    if (!incrementor || incrementor.operand?.kind !== SyntaxKind6.Identifier || incrementor.operand.text !== node.text) {
-      return false;
-    }
-    return incrementor.kind === SyntaxKind6.PostfixUnaryExpression || incrementor.kind === SyntaxKind6.PrefixUnaryExpression;
-  }
-  // Java primitive kind of a comparison operand; undefined keeps the helper. Proof sources: literals
-  // (int/long/double) and expressions the printer's own emitter pins: `var` for-counter, `.length`,
-  // `x.indexOf(arg)`/`x.search(arg)` (int), Math.round (long), Math.floor/ceil/pow (double).
-  javaPrimitiveOperandKind(node) {
-    if (node === void 0 || node === null) {
-      return void 0;
-    }
-    if (node.kind === SyntaxKind6.ParenthesizedExpression) {
-      return this.javaPrimitiveOperandKind(node.expression);
-    }
-    const literalKind = this.javaIntegerLiteralKind(node);
-    if (literalKind !== void 0) {
-      return literalKind;
-    }
-    if (this.isJavaFloatLiteral(node)) {
-      return "double";
-    }
-    if (this.isJavaPrimitiveForCounter(node) || this.javaPrintedIntCounter(node)) {
-      return "int";
-    }
-    if (node.kind === SyntaxKind6.PrefixUnaryExpression && node.operator === SyntaxKind6.MinusToken && this.javaIntegerLiteralKind(node.operand) === "int") {
-      return "int";
-    }
-    if (node.kind === SyntaxKind6.PropertyAccessExpression && node.name.text === "length") {
-      return "int";
-    }
-    if (node.kind === SyntaxKind6.CallExpression) {
-      return this.javaPrintedCallKind(node);
-    }
-    if (node.kind === SyntaxKind6.BinaryExpression) {
-      return this.javaNativeArithmeticKind(node);
-    }
-    return void 0;
-  }
-  // a read of a `for (var i = <int literal>; ..; i++)` counter anywhere in the loop: javac types it
-  // int and no box write reaches it; a capture rename (`finalI`) prints an Object copy instead
-  javaPrintedIntCounter(node) {
-    return node?.kind === SyntaxKind6.Identifier && this.javaIntForCounter(node) && this.javaIdentifierPrintsDeclaredName(node);
-  }
-  // fractional / exponent literals print as Java double literals (printNumericLiteral)
-  isJavaFloatLiteral(node) {
-    if (!node || !isNumericLiteral3(node)) {
-      return false;
-    }
-    return !/^0[xXbBoO]/.test(node.text) && /[.eE]/.test(node.text);
-  }
-  // Java kind of a call the printer emits itself, undefined otherwise. Mirrors printIndexOfCall /
-  // printSearchCall / printMathRoundCall / printMathFloorCall / printMathCeilCall and Math.pow:
-  // x.indexOf(a) / x.search(a) -> int; Math.round(x) -> long; Math.floor/ceil/pow -> double.
-  javaPrintedCallKind(node) {
-    const callee = node.expression;
-    if (callee?.kind !== SyntaxKind6.PropertyAccessExpression) {
-      return void 0;
-    }
-    const name = callee.name?.text;
-    const argCount = node.arguments?.length ?? 0;
-    const onMath = callee.expression?.kind === SyntaxKind6.Identifier && callee.expression.text === "Math";
-    switch (name) {
-      case "indexOf":
-      case "search":
-        return argCount >= 1 ? "int" : void 0;
-      case "round":
-        return onMath && argCount === 1 ? "long" : void 0;
-      case "floor":
-      case "ceil":
-        return onMath && argCount === 1 ? "double" : void 0;
-      case "pow":
-        return onMath && argCount === 2 ? "double" : void 0;
-    }
-    return void 0;
-  }
-  // operand usability for `>=` / `<` / `<=`, which route through the helper's isEqual. Two integral
-  // operands are always exact; once a double is involved, toLong saturates and BigDecimal throws on
-  // ±Infinity, so a double or long is accepted only as a finite literal within ±2^53.
-  javaComparisonOperandsAreExact(left, leftKind, right, rightKind) {
-    if (leftKind !== "double" && rightKind !== "double") {
-      return true;
-    }
-    return this.javaComparisonOperandIsExactAgainstDouble(left, leftKind) && this.javaComparisonOperandIsExactAgainstDouble(right, rightKind);
-  }
-  javaComparisonOperandIsExactAgainstDouble(node, kind) {
-    if (kind === "int") {
-      return true;
-    }
-    if (kind !== "long" && kind !== "double" || !isNumericLiteral3(node)) {
-      return false;
-    }
-    const text = node.text;
-    if (/^[0-9]+$/.test(text)) {
-      return BigInt(text) <= 9007199254740992n;
-    }
-    const value = Number(text);
-    return Number.isFinite(value) && Math.abs(value) <= 9007199254740992;
-  }
-  // checker proof that the value is printed as a java.util.HashMap: TS object
-  // shapes (interfaces, object literals, aliases) become HashMaps, while class
-  // instances are real Java objects and arrays/unions are not proven here
-  isJavaMapType(type) {
-    if (!type || (type.flags & TypeFlags5.Object) === 0) {
-      return false;
-    }
-    const checker = this.getChecker();
-    if (checker.isArrayType(type) || checker.isTupleType(type)) {
-      return false;
-    }
-    if (type.getCallSignatures().length > 0) {
-      return false;
-    }
-    const declarations = (type.getSymbol()?.declarations ?? []).map((d) => d.resolve());
-    return !declarations.some((declaration) => declaration.kind === SyntaxKind6.ClassDeclaration || declaration.getSourceFile().fileName.indexOf("typescript") > -1);
-  }
-  // string keys (plain, literal or a union of literals) print as Java Strings
-  isJavaStringType(type) {
-    if (!type) {
-      return false;
-    }
-    if (this.isStringType(type.flags)) {
-      return true;
-    }
-    if ((type.flags & TypeFlags5.Union) === 0) {
-      return false;
-    }
-    return type.getTypes().every((member) => this.isStringType(member.flags));
-  }
-  // `Dictionary | undefined` (what a no-overload safe* signature widens to): the helper
-  // answers false for the nullish arm and the guarded emission keeps exactly that; every
-  // non-map member (arrays, classes, scalars) keeps the helper
-  isJavaNullableMapType(type) {
-    return this.isJavaNullishUnion(type, (member) => this.isJavaMapType(member)) && (type.getTypes?.() ?? []).some((member) => (member.flags & (TypeFlags5.Undefined | TypeFlags5.Null)) === 0);
-  }
-  // the guarded emission reads the receiver twice, so it is only printed for an operand
-  // that cannot run anything twice: a name or a `this.` field. Everything else (calls,
-  // element reads) keeps the helper so the operand is still evaluated once.
-  javaRepeatableOperand(node) {
-    if (node === void 0) {
-      return false;
-    }
-    if (isIdentifier2(node)) {
-      return true;
-    }
-    if (isParenthesizedExpression2(node)) {
-      return this.javaRepeatableOperand(node.expression);
-    }
-    return isPropertyAccessExpression2(node) && node.expression?.kind === SyntaxKind6.ThisKeyword;
-  }
-  // The declared Java type of a local/parameter is known to the pass that rewrites the declaration
-  // text (build/java-local-types.js), which records every name it typed here. With no consumer
-  // installed the table is empty and every read keeps the helper.
-  javaDeclaredTypeOf(expression) {
-    if (expression === void 0 || !isIdentifier2(expression)) {
-      return void 0;
-    }
-    const declaration = this.javaDeclarationOfIdentifier(expression);
-    if (declaration === void 0 || expression.text !== declaration.name?.text) {
-      return void 0;
-    }
-    return this.javaDeclaredTypeOfDeclaration(declaration);
-  }
-  // the declared Java type of a declaration: the embedding build layer names the
-  // declarations it retypes itself, and a parameter the printer retypes
-  // (javaNativeParameterType) answers for itself, so its element reads go native too
-  javaDeclaredTypeOfDeclaration(declaration) {
-    if (this.javaDeclaredLocalTypeResolver !== void 0) {
-      let type;
-      try {
-        type = this.javaDeclaredLocalType(declaration);
-      } catch (e) {
-        type = void 0;
-      }
-      if (typeof type === "string" && type.trim().length > 0) {
-        return type.trim();
-      }
-    }
-    const own = this.javaElementWriteMapLocalType(declaration);
-    if (own !== void 0) {
-      return own;
-    }
-    const baseField = this.javaBaseMapFieldLocalType(declaration);
-    if (baseField !== void 0) {
-      return baseField;
-    }
-    const checkedBox = this.javaCheckedBoxLocalTypeCached(declaration);
-    if (checkedBox !== void 0) {
-      return checkedBox;
-    }
-    if (isParameterDeclaration2(declaration)) {
-      const fixed = this.javaNativeParameterType(declaration);
-      if (fixed !== void 0) {
-        return fixed;
-      }
-      const optional = this.javaOptionalParameterTypeCached(declaration);
-      return optional === JAVA_NATIVE_DICT_PARAMETER_TYPE ? optional : void 0;
-    }
-    return void 0;
-  }
-  // The declared Java type of a local as the embedding build layer publishes it
-  // (javaDeclaredLocalTypeResolver), else the type its own initialiser prints when that is a
-  // sync `this.<m> (...)` call of a generated venue method whose declaration prints a native
-  // Map/List (javaVenueCalleeReturnType). The resolver only knows the files the calling worker
-  // printed, and a callee's local can sit in another file: the fallback answers from the callee's
-  // declaration, so the answer never depends on what an earlier generation or worker printed.
-  // No resolver installed (no consumer) = no fallback, every read keeps the helper.
-  javaDeclaredLocalType(declaration) {
-    const resolver = this.javaDeclaredLocalTypeResolver;
-    if (typeof resolver !== "function") {
-      return void 0;
-    }
-    const own = resolver(declaration);
-    if (own !== void 0 || declaration === void 0) {
-      return own;
-    }
-    try {
-      return this.javaVenueCalleeLocalType(declaration);
-    } catch (e) {
-      return void 0;
-    }
-  }
-  javaVenueCalleeLocalType(declaration) {
-    if (!isVariableDeclaration2(declaration) || declaration.initializer === void 0) {
-      return void 0;
-    }
-    let initializer = declaration.initializer;
-    while (isParenthesizedExpression2(initializer)) {
-      initializer = initializer.expression;
-    }
-    return this.javaVenueCalleeReturnType(initializer);
-  }
-  // the emitted Java type of a sync `this.<m> (...)` / `super.<m> (...)` call whose resolved callee
-  // is a generated venue method (ts/src/<id>.ts, pro/, prediction/) and whose declaration prints a
-  // native Map<String, Object> / List<Object> return: the annotation print, or the native fallback
-  // printMethodDefinition takes when that prints the boxed `Object`. A base-tier or hand-written
-  // callee, a future, a DTO or a scalar answers undefined (the build layer's tables stay the proof).
-  javaVenueCalleeReturnType(call) {
-    if (call === void 0 || !isCallExpression5(call)) {
-      return void 0;
-    }
-    const callee = call.expression;
-    if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword && !(isIdentifier2(callee.expression) && callee.expression.text === "super")) {
-      return void 0;
-    }
-    if (this.javaVenueCalleeInProgress.has(call)) {
-      return void 0;
-    }
-    this.javaVenueCalleeInProgress.add(call);
-    try {
-      let declaration = this.javaVenueCalleeDeclarations.get(call);
-      for (let attempt = 0; attempt < 2 && declaration === void 0; attempt++) {
-        try {
-          declaration = this.getChecker().getResolvedSignature(call)?.declaration?.resolve();
-        } catch (e) {
-          declaration = void 0;
-        }
-      }
-      if (declaration !== void 0) {
-        this.javaVenueCalleeDeclarations.set(call, declaration);
-      }
-      if (declaration === void 0 || declaration.kind !== SyntaxKind6.MethodDeclaration || declaration.body === void 0) {
-        return void 0;
-      }
-      const fileName = String(declaration.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
-      if (!JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName)) {
-        return void 0;
-      }
-      let printed;
-      try {
-        printed = this.printFunctionType(declaration);
-      } catch (e) {
-        return void 0;
-      }
-      const direct = javaVenueCalleeNativeType(printed);
-      if (direct !== void 0) {
-        return direct;
-      }
-      if (printed !== this.DEFAULT_RETURN_TYPE) {
-        return void 0;
-      }
-      try {
-        return javaVenueCalleeNativeType(this.javaNativeReturnType(declaration));
-      } catch (e) {
-        return void 0;
-      }
-    } finally {
-      this.javaVenueCalleeInProgress.delete(call);
-    }
-  }
+  // ===== parameters, defaults and method signatures =====
   javaOptionalParameterTypeCached(node) {
     const cached = this.javaOptionalParameterTypeCache.get(node);
     if (cached !== void 0) {
@@ -43351,34 +41729,6 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     return type;
-  }
-  exchangeTierMethods() {
-    if (this._exchangeTierMethods !== void 0) {
-      return this._exchangeTierMethods;
-    }
-    const names = /* @__PURE__ */ new Map();
-    try {
-      const program = this.getProgram();
-      const fileName = program.getSourceFileNames().find((f) => JAVA_NATIVE_PARAMETER_BASE_FILES.test(f));
-      const file = fileName !== void 0 ? program.getSourceFile(fileName) : void 0;
-      const collect = (node) => {
-        if (isClassDeclaration3(node) && node.name?.text === "Exchange") {
-          for (const member of node.members) {
-            const key = member.name?.getText().trim();
-            if (isMethodDeclaration4(member) && key !== void 0 && !names.has(key)) {
-              names.set(key, member);
-            }
-          }
-        }
-        node.forEachChild(collect);
-      };
-      if (file !== void 0) {
-        collect(file);
-      }
-    } catch (e) {
-    }
-    this._exchangeTierMethods = names;
-    return names;
   }
   // the same parameter position of an ancestor declaration prints this native type: its
   // own annotation names it, or - with no annotation of its own - it inherits the same
@@ -43521,25 +41871,6 @@ ${this.getIden(identation)}}}`;
     const fileName = declaration?.getSourceFile?.()?.fileName;
     return JAVA_NATIVE_PARAMETER_SOURCE_FILES.test(fileName ?? "") ? JAVA_NATIVE_PARAMETER_TYPES_OPTIONAL[name] : void 0;
   }
-  // a `string[]` annotation (optionally `| undefined`), the unaliased spelling of `Strings`
-  javaIsStringArrayType(checker, type) {
-    const members = type.isUnionType?.() ? type.getTypes() : [type];
-    let arrays = 0;
-    for (const member of members) {
-      if (member.flags & (TypeFlags5.Undefined | TypeFlags5.Null)) {
-        continue;
-      }
-      if (!checker.isArrayType(member)) {
-        return false;
-      }
-      const element = checker.getTypeArguments(member)?.[0];
-      if (element === void 0 || !(element.flags & TypeFlags5.String)) {
-        return false;
-      }
-      arrays++;
-    }
-    return arrays === 1;
-  }
   // Java overrides are invariant: every ancestor declaration must match the parameter count,
   // the first default-valued index and this position's type, otherwise the position stays Object.
   javaOptionalParameterFamilyAgrees(method, override, index, type) {
@@ -43584,18 +41915,6 @@ ${this.getIden(identation)}}}`;
     }
     return this.javaOptionalParameterType(node);
   }
-  // the async body copy of a reassigned default-valued parameter keeps a `List<String>` type;
-  // its writes convert like the sync in-place ones (other types keep the `Object` copy)
-  javaAsyncParameterLocalType(node) {
-    if (node?.initializer === void 0 || !this.hasDefaultedTail(node.parent) || !this.isAsyncFunction(node.parent)) {
-      return void 0;
-    }
-    const type = this.javaOptionalParameterType(node);
-    if (type === "Long" && !this.javaParameterIsWritten(node)) {
-      return type;
-    }
-    return type === JAVA_STRING_LIST_TYPE ? type : void 0;
-  }
   // any write to the parameter in its method: assignment (plain or compound), a destructuring
   // target, `++`/`--`, a for-of/in binding
   javaParameterIsWritten(node) {
@@ -43633,88 +41952,6 @@ ${this.getIden(identation)}}}`;
     };
     visit(method.body);
     return written;
-  }
-  // a read the enclosing code only reaches with the binding non-null: the right operand of
-  // `x !== undefined && ..`, the matching arm of an `if`/`?:` on that test, or any statement
-  // after `if (x === undefined) { return/throw/.. }`. Callers require an unwritten binding.
-  javaNullGuardAdmitsRead(node) {
-    const checker = this.checkerOrUndefined();
-    const symbol = checker?.getSymbolAtLocation(node);
-    if (symbol === void 0) {
-      return false;
-    }
-    let current = node;
-    while (current.parent !== void 0) {
-      const parent = current.parent;
-      if (isBinaryExpression4(parent) && parent.operatorToken.kind === SyntaxKind6.AmpersandAmpersandToken && parent.right === current && this.javaTestProvesNonNull(parent.left, symbol, true)) {
-        return true;
-      }
-      if (isBinaryExpression4(parent) && parent.operatorToken.kind === SyntaxKind6.BarBarToken && parent.right === current && this.javaTestProvesNonNull(parent.left, symbol, false)) {
-        return true;
-      }
-      if (isIfStatement3(parent) || isConditionalExpression2(parent)) {
-        const test = isIfStatement3(parent) ? parent.expression : parent.condition;
-        const whenTrue = isIfStatement3(parent) ? parent.thenStatement : parent.whenTrue;
-        const whenFalse = isIfStatement3(parent) ? parent.elseStatement : parent.whenFalse;
-        if (whenTrue === current && this.javaTestProvesNonNull(test, symbol, true) || whenFalse === current && this.javaTestProvesNonNull(test, symbol, false)) {
-          return true;
-        }
-      }
-      if (isBlock3(parent)) {
-        for (const sibling of parent.statements) {
-          if (sibling === current) {
-            break;
-          }
-          if (isIfStatement3(sibling) && (this.javaTestProvesNonNull(sibling.expression, symbol, false) && this.javaStatementAlwaysExits(sibling.thenStatement) || this.javaTestProvesNonNull(sibling.expression, symbol, true) && this.javaStatementAlwaysExits(sibling.elseStatement))) {
-            return true;
-          }
-        }
-      }
-      current = parent;
-    }
-    return false;
-  }
-  // `x !== undefined` / `x != null` (either order) proves x non-null when the test is true;
-  // `x === undefined` when false; `&&` (true) / `||` (false) prove through either side, `!` flips
-  javaTestProvesNonNull(test, symbol, truthy) {
-    if (test === void 0) {
-      return false;
-    }
-    if (isParenthesizedExpression2(test)) {
-      return this.javaTestProvesNonNull(test.expression, symbol, truthy);
-    }
-    if (isPrefixUnaryExpression2(test) && test.operator === SyntaxKind6.ExclamationToken) {
-      return this.javaTestProvesNonNull(test.operand, symbol, !truthy);
-    }
-    if (!isBinaryExpression4(test)) {
-      return false;
-    }
-    const op = test.operatorToken.kind;
-    if (op === SyntaxKind6.AmpersandAmpersandToken) {
-      return truthy && (this.javaTestProvesNonNull(test.left, symbol, true) || this.javaTestProvesNonNull(test.right, symbol, true));
-    }
-    if (op === SyntaxKind6.BarBarToken) {
-      return !truthy && (this.javaTestProvesNonNull(test.left, symbol, false) || this.javaTestProvesNonNull(test.right, symbol, false));
-    }
-    const inequality = op === SyntaxKind6.ExclamationEqualsToken || op === SyntaxKind6.ExclamationEqualsEqualsToken;
-    const equality = op === SyntaxKind6.EqualsEqualsToken || op === SyntaxKind6.EqualsEqualsEqualsToken;
-    if (!inequality && !equality || truthy !== inequality) {
-      return false;
-    }
-    const nullish = (n) => n.kind === SyntaxKind6.NullKeyword || isIdentifier2(n) && n.text === "undefined";
-    const tested = nullish(test.right) ? test.left : nullish(test.left) ? test.right : void 0;
-    const checker = this.checkerOrUndefined();
-    return tested !== void 0 && isIdentifier2(tested) && checker?.getSymbolAtLocation(tested) === symbol;
-  }
-  javaStatementAlwaysExits(statement) {
-    if (statement === void 0) {
-      return false;
-    }
-    const exits = (n) => isReturnStatement3(n) || isThrowStatement3(n) || isContinueStatement2(n) || isBreakStatement2(n);
-    if (exits(statement)) {
-      return true;
-    }
-    return isBlock3(statement) && statement.statements.length > 0 && exits(statement.statements[statement.statements.length - 1]);
   }
   // `Long` when the body reads this default-valued `Int` parameter as the core's own Long (the
   // parameter itself or its read-only async copy); undefined otherwise
@@ -43784,322 +42021,6 @@ ${this.getIden(identation)}}}`;
     }
     return `${leftText} = (${native}) (${this.printNode(right, identation)})`;
   }
-  // ===== native return types (D-09) =====
-  //
-  // The native Java return a generated method declaration prints with, when its TS
-  javaNativeReturnType(node) {
-    if (node === void 0 || node.kind !== SyntaxKind6.MethodDeclaration || node.name === void 0 || node.type === void 0 || node.body === void 0 || !isClassDeclaration3(node.parent)) {
-      return void 0;
-    }
-    if (this.javaReturnTypeInProgress.has(node)) {
-      return void 0;
-    }
-    if (this.javaReturnTypeCache.has(node)) {
-      return this.javaReturnTypeCache.get(node);
-    }
-    this.javaReturnTypeInProgress.add(node);
-    const outerUsedDeclaredLocals = this.javaReturnTypeUsedDeclaredLocals;
-    this.javaReturnTypeUsedDeclaredLocals = false;
-    let result;
-    try {
-      result = this.javaNativeReturnTypeUncached(node);
-    } finally {
-      this.javaReturnTypeInProgress.delete(node);
-    }
-    const usedDeclaredLocals = this.javaReturnTypeUsedDeclaredLocals;
-    this.javaReturnTypeUsedDeclaredLocals = outerUsedDeclaredLocals || usedDeclaredLocals;
-    if (result !== void 0 || !usedDeclaredLocals) {
-      this.javaReturnTypeCache.set(node, result);
-    }
-    return result;
-  }
-  javaNativeReturnTypeUncached(node) {
-    const fileName = node.getSourceFile().fileName;
-    const generated = JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName);
-    const baseTier = !generated && JAVA_NATIVE_PARAMETER_BASE_FILES.test(fileName) && this.javaIsPrintedMethod(node);
-    if (!generated && !baseTier || this.isAsyncFunction(node)) {
-      return void 0;
-    }
-    let target = this.javaNativeReturnTypeTarget(node);
-    if (target === void 0 && !baseTier) {
-      target = this.javaReturnTypeFromBody(node);
-    }
-    if (target === void 0 || baseTier && target !== "Boolean") {
-      return void 0;
-    }
-    const ancestor = this.getMethodOverride(node);
-    const ancestorBoolean = ancestor !== void 0 && this.javaNativeReturnType(ancestor) === "Boolean";
-    if (ancestorBoolean && (target !== "Boolean" || !this.javaReturnSitesPrintType(node, target) || this.javaMethodReturnsNonNullBoolean(ancestor, 0) && !this.javaMethodReturnsNonNullBoolean(node, 0))) {
-      throw new Error(`java: ${String(node.name.text)} overrides a Boolean base method but its returns do not all print Boolean`);
-    }
-    if (ancestor !== void 0 && !ancestorBoolean) {
-      return void 0;
-    }
-    if (!this.javaReturnSitesPrintType(node, target)) {
-      return void 0;
-    }
-    return target;
-  }
-  // a native-Boolean method whose every return prints a primitive Java boolean (never null):
-  // a call to it can be a condition as is (unboxing cannot throw)
-  javaMethodReturnsNonNullBoolean(method, depth) {
-    if (method === void 0 || depth > 3 || method.body === void 0) {
-      return false;
-    }
-    const name = String(method.name?.text);
-    if (this.javaNativeReturnType(method) !== "Boolean" && !JAVA_THIS_BOOLEAN_METHODS.has(name)) {
-      return false;
-    }
-    let returns = 0;
-    let ok = true;
-    const scan = (n) => {
-      if (!ok || n !== method && isFunctionLike(n)) {
-        return;
-      }
-      if (isReturnStatement3(n)) {
-        returns++;
-        ok = n.expression !== void 0 && this.javaPrintsNonNullBoolean(n.expression, depth);
-        return;
-      }
-      n.forEachChild(scan);
-    };
-    scan(method.body);
-    return ok && returns > 0;
-  }
-  javaPrintsNonNullBoolean(node, depth) {
-    switch (node?.kind) {
-      case SyntaxKind6.TrueKeyword:
-      case SyntaxKind6.FalseKeyword:
-        return true;
-      case SyntaxKind6.ParenthesizedExpression:
-        return this.javaPrintsNonNullBoolean(node.expression, depth);
-      case SyntaxKind6.PrefixUnaryExpression:
-        return node.operator === SyntaxKind6.ExclamationToken;
-      case SyntaxKind6.BinaryExpression:
-        return JAVA_BOOLEAN_OPERATOR_KINDS.has(node.operatorToken.kind);
-      case SyntaxKind6.ConditionalExpression:
-        return this.javaPrintsNonNullBoolean(node.whenTrue, depth) && this.javaPrintsNonNullBoolean(node.whenFalse, depth);
-      case SyntaxKind6.CallExpression:
-        return this.javaCallPrintsNonNullBoolean(node, depth + 1);
-    }
-    return false;
-  }
-  // `this.<name>(...)` resolving to a method proven by javaMethodReturnsNonNullBoolean
-  javaCallPrintsNonNullBoolean(node, depth) {
-    if (this.isArrayIsArrayCall(node) || this.javaPreciseBooleanCall(node) || this.javaStringAffixCall(node)) {
-      return true;
-    }
-    const callee = node.expression;
-    if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword) {
-      return false;
-    }
-    let declaration;
-    try {
-      declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
-    } catch (e) {
-      return false;
-    }
-    if (declaration === void 0 || declaration.kind !== SyntaxKind6.MethodDeclaration) {
-      return false;
-    }
-    if (JAVA_THIS_BOOLEAN_METHODS.has(String(callee.name.text))) {
-      return this.javaCallBooleanKind(node) === "boolean";
-    }
-    return this.javaMethodReturnsNonNullBoolean(declaration, depth);
-  }
-  javaNativeReturnTypeTarget(node) {
-    let type;
-    try {
-      type = this.getChecker().getTypeAtLocation(node.type);
-    } catch (e) {
-      return void 0;
-    }
-    if (type === void 0) {
-      return void 0;
-    }
-    const aliasSymbol = type.getAliasSymbol?.();
-    if (aliasSymbol !== void 0) {
-      const name = aliasSymbol.name;
-      const fileName = aliasSymbol.declarations?.[0]?.resolve()?.getSourceFile?.()?.fileName;
-      if (fileName !== void 0 && JAVA_NATIVE_PARAMETER_SOURCE_FILES.test(fileName) && (name === "Str" || name === "Bool")) {
-        return name === "Str" ? "String" : "Boolean";
-      }
-    }
-    if (type.flags === TypeFlags5.String) {
-      return "String";
-    }
-    if (aliasSymbol === void 0 && (type.flags & TypeFlags5.Boolean) !== 0) {
-      return "Boolean";
-    }
-    if (!this.javaStringArrayAnnotation(node) && this.javaArrayReturnType(type)) {
-      return JAVA_NATIVE_RETURN_LIST_TYPE;
-    }
-    return this.isJavaMapStructureType(type) ? JAVA_NATIVE_RETURN_MAP_TYPE : void 0;
-  }
-  // a return annotation that names a string array: `string[]`, `Str[]`, or the `Strings`
-  // alias. Its printed slots are java.util.List<String>, so the List<Object> target never
-  // fits, whatever the body returns.
-  javaStringArrayAnnotation(node) {
-    const annotation = node?.type;
-    if (annotation === void 0) {
-      return false;
-    }
-    if (isArrayTypeNode(annotation)) {
-      const element = annotation.elementType;
-      if (element.kind === SyntaxKind6.StringKeyword) {
-        return true;
-      }
-      return isTypeReferenceNode(element) && isIdentifier2(element.typeName) && /^(?:Str|string)$/.test(String(element.typeName.text));
-    }
-    return isTypeReferenceNode(annotation) && isIdentifier2(annotation.typeName) && /^Strings$/.test(String(annotation.typeName.text));
-  }
-  // a tuple annotation (`[Bool, Dict]`, `[Str, Str, Bool]`): its destructured slots print as
-  // Pair/List pairs at the call sites, so the return keeps the boxed declaration
-  javaTupleAnnotation(node) {
-    return isTupleTypeNode(node?.type);
-  }
-  // the checker type of an array annotation whose element slots are not strings. A tuple
-  // annotation stays out: its slots print as Pair/List pairs the return proof cannot see.
-  javaArrayReturnType(type) {
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0 || !checker.isArrayType(type) || checker.isTupleType(type)) {
-      return false;
-    }
-    let element;
-    try {
-      element = checker.getTypeArguments(type)?.[0] ?? type.typeArguments?.[0];
-    } catch (e) {
-      element = void 0;
-    }
-    if (element === void 0) {
-      return false;
-    }
-    const flags = element.flags;
-    return (flags & TypeFlags5.StringLike) === 0;
-  }
-  // every `return` of the method body (nested functions are separate scopes) prints the
-  // target Java type
-  javaReturnSitesPrintType(method, target) {
-    const returns = [];
-    const collect = (n) => {
-      if (n === void 0) {
-        return;
-      }
-      if (n !== method && isFunctionLike(n)) {
-        return;
-      }
-      if (isReturnStatement3(n)) {
-        returns.push(n);
-      }
-      n.forEachChild(collect);
-    };
-    collect(method.body);
-    if (returns.length === 0) {
-      return false;
-    }
-    return returns.every((r) => r.expression !== void 0 && this.javaExpressionPrintsType(r.expression, target));
-  }
-  // the carriable target every return site of the body prints, when the annotation names
-  // none (`any`, an unmodelled structure): a body that only ever returns a fresh map is a
-  // Map at runtime, one that only ever returns a fresh list is a List. A string-array
-  // annotation keeps its boxed declaration (its slots are java.util.List<String>).
-  javaReturnTypeFromBody(method) {
-    const candidates = this.javaStringArrayAnnotation(method) || this.javaTupleAnnotation(method) ? [JAVA_NATIVE_RETURN_MAP_TYPE] : [JAVA_NATIVE_RETURN_MAP_TYPE, JAVA_NATIVE_RETURN_LIST_TYPE];
-    for (const target of candidates) {
-      if (this.javaReturnSitesPrintType(method, target)) {
-        return target;
-      }
-    }
-    return void 0;
-  }
-  javaExpressionPrintsType(expression, target) {
-    const node = this.javaUnwrapReturnExpression(expression);
-    if (node === void 0) {
-      return false;
-    }
-    if (node.kind === SyntaxKind6.NullKeyword) {
-      return true;
-    }
-    if (isIdentifier2(node) && node.text === "undefined") {
-      return true;
-    }
-    if (node.kind === SyntaxKind6.ConditionalExpression) {
-      return this.javaExpressionPrintsType(node.whenTrue, target) && this.javaExpressionPrintsType(node.whenFalse, target);
-    }
-    let literal;
-    if (target === JAVA_NATIVE_RETURN_MAP_TYPE) {
-      literal = isObjectLiteralExpression3(node);
-    } else if (target === JAVA_NATIVE_RETURN_LIST_TYPE) {
-      literal = isArrayLiteralExpression3(node);
-    } else if (target === "String") {
-      literal = isStringLiteralLikeNode3(node);
-    } else if (target === "Boolean") {
-      literal = this.javaPrintsBooleanValue(node, /* @__PURE__ */ new Set(), 0);
-    } else {
-      return false;
-    }
-    return literal || this.javaReturnedParameterType(node) === target || this.javaReturnedCallType(node) === target || this.javaDeclaredReturnTarget(node, target) || target === JAVA_NATIVE_RETURN_LIST_TYPE && this.javaReturnedObjectListCall(node) || target === "String" && this.javaStringCallReturn(node);
-  }
-  // a local whose emitted declaration the build layer already typed with the target Java
-  // type (javaDeclaredLocalTypeResolver publishes exactly the printed `Map<String, Object> x`
-  // / `List<Object> x` lines), so the return prints the target on that path
-  javaDeclaredReturnTarget(node, target) {
-    if (!isIdentifier2(node) || typeof this.javaDeclaredLocalTypeResolver !== "function") {
-      return false;
-    }
-    this.javaReturnTypeUsedDeclaredLocals = true;
-    const declaration = this.javaDeclarationOfIdentifier(node);
-    if (declaration === void 0) {
-      return false;
-    }
-    let declared;
-    try {
-      declared = this.javaDeclaredLocalType(declaration);
-    } catch (e) {
-      return false;
-    }
-    if (declared === void 0) {
-      return false;
-    }
-    const normalize = (type) => String(type).replace(/^final\s+/, "").replace(/\s+/g, "").replace(/^java\.util\./, "");
-    return normalize(declared) === normalize(target);
-  }
-  // `this.toArray (x)` and `Object.keys/values (x)` print calls the hand-written runtime
-  // declares `java.util.List<Object>` (BaseExchange.toArray, Helpers.objectKeys/objectValues)
-  javaReturnedObjectListCall(node) {
-    if (!isCallExpression5(node)) {
-      return false;
-    }
-    const callee = node.expression;
-    if (!isPropertyAccessExpression2(callee)) {
-      return false;
-    }
-    const name = String(callee.name.text);
-    if (JAVA_OBJECT_LIST_CALL_NAMES.has(name) && isIdentifier2(callee.expression) && callee.expression.text === "Object") {
-      return true;
-    }
-    if (!JAVA_LIST_RETURN_BASE_METHODS.has(name) || callee.expression.kind !== SyntaxKind6.ThisKeyword) {
-      return false;
-    }
-    let declaration;
-    try {
-      declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
-    } catch (e) {
-      return false;
-    }
-    const fileName = declaration?.getSourceFile?.()?.fileName;
-    return fileName !== void 0 && JAVA_STRING_RETURN_BASE_FILES.test(fileName);
-  }
-  javaUnwrapReturnExpression(expression) {
-    if (expression === void 0) {
-      return void 0;
-    }
-    let node = expression;
-    while (node !== void 0 && (isParenthesizedExpression2(node) || isAsExpression2(node) || isNonNullExpression(node) || isTypeAssertion2(node) || node.kind === SyntaxKind6.SatisfiesExpression)) {
-      node = node.expression;
-    }
-    return node;
-  }
   // an identifier bound to a parameter the printer itself declares with the target Java
   // type (javaNativeParameterType: Dict/Market/Currency/Str/Bool annotations)
   javaReturnedParameterType(node) {
@@ -44111,53 +42032,6 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     return this.javaNativeParameterType(declaration);
-  }
-  // a `this.<name> (...)` / `super.<name> (...)` return is the callee's native return type
-  // (fixpoint over javaNativeReturnType)
-  javaReturnedCallType(node) {
-    if (!isCallExpression5(node)) {
-      return void 0;
-    }
-    const callee = node.expression;
-    if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword && !(isIdentifier2(callee.expression) && callee.expression.text === "super")) {
-      return void 0;
-    }
-    let declaration;
-    try {
-      declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
-    } catch (e) {
-      return void 0;
-    }
-    if (declaration === void 0 || declaration.kind !== SyntaxKind6.MethodDeclaration) {
-      return void 0;
-    }
-    return this.javaNativeReturnType(declaration);
-  }
-  // a `this.<name> (...)` return of a hand-written base String producer: the resolved
-  // signature must still live in the base tier (a venue override prints its own boxed
-  // Object signature)
-  javaStringCallReturn(node) {
-    if (!isCallExpression5(node)) {
-      return false;
-    }
-    const callee = node.expression;
-    if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword) {
-      return false;
-    }
-    if (!JAVA_STRING_RETURN_BASE_METHODS.has(callee.name.text)) {
-      return false;
-    }
-    let declaration;
-    try {
-      declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
-    } catch (e) {
-      return false;
-    }
-    if (declaration === void 0) {
-      return false;
-    }
-    const fileName = declaration.getSourceFile?.()?.fileName;
-    return fileName !== void 0 && JAVA_STRING_RETURN_BASE_FILES.test(fileName);
   }
   // the alias a parameter's annotation names; `OrderType` ('limit' | 'market' | string) reduces
   // to plain `string` and keeps no aliasSymbol, so read the annotation's type reference instead
@@ -44264,22 +42138,6 @@ ${this.getIden(identation)}}}`;
     });
     return listOutside && listInside ? JAVA_NATIVE_RETURN_LIST_TYPE : void 0;
   }
-  javaThisCallsInFile(file, name) {
-    let index = this.javaThisCallIndex.get(file);
-    if (index === void 0) {
-      index = /* @__PURE__ */ new Map();
-      const collect = (n) => {
-        if (isCallExpression5(n) && isPropertyAccessExpression2(n.expression) && n.expression.expression.kind === SyntaxKind6.ThisKeyword) {
-          const key = String(n.expression.name.text);
-          index.set(key, (index.get(key) ?? []).concat([n]));
-        }
-        n.forEachChild(collect);
-      };
-      collect(file);
-      this.javaThisCallIndex.set(file, index);
-    }
-    return index.get(name) ?? [];
-  }
   // an argument node that needs no program to show it prints a bare List: an array literal without spread
   // or hole, or a `this.<producer> (..)` call of a hand-written list producer the repo declares once
   javaSyntacticListArgument(arg, producerDeclared) {
@@ -44378,209 +42236,1907 @@ ${this.getIden(identation)}}}`;
     }
     return this.OBJECT_KEYWORD;
   }
-  // `k` where the consumer declares k as a Java String: the helper's String branch (the
-  // only one that can answer true for a map) is the native lookup, and no null key can
-  // reach containsKey
-  javaDeclaredStringType(expression) {
-    const type = this.javaDeclaredTypeOf(expression);
-    return type !== void 0 && JAVA_DECLARED_STRING_TYPE.test(type);
-  }
-  printCustomBinaryExpressionIfAny(node, identation) {
-    const left = node.left;
-    const right = node.right;
-    const op = node.operatorToken.kind;
-    if (left.kind === SyntaxKind6.Identifier) {
-      this.ReassignedVars[this.getVarKey(left)] = true;
+  printCustomDefaultValueIfNeeded(node) {
+    if (isArrayLiteralExpression3(node) || isObjectLiteralExpression3(node) || isStringLiteral2(node) || isBooleanLiteral4(node) || isNumericLiteral3(node)) {
+      return this.UNDEFINED_TOKEN;
     }
-    if (left.kind === SyntaxKind6.TypeOfExpression) {
-      const typeOfExpression = this.handleTypeOfInsideBinaryExpression(
-        node,
-        identation
-      );
-      if (typeOfExpression)
-        return typeOfExpression;
-    }
-    if (op === SyntaxKind6.EqualsToken && left.kind === SyntaxKind6.Identifier) {
-      const assignment = this.javaParameterAssignmentCast(left, right, identation);
-      if (assignment !== void 0) {
-        return assignment;
-      }
-    }
-    if (op === SyntaxKind6.EqualsToken && left.kind === SyntaxKind6.ArrayLiteralExpression) {
-      const arrayBindingPatternElements = left.elements;
-      const parsedArrayBindingElements = arrayBindingPatternElements.map((e) => {
-        this.ReassignedVars[this.getVarKey(e)] = true;
-        return this.printNode(e, 0);
-      });
-      const syntheticName = parsedArrayBindingElements.join("") + "Variable";
-      let arrayBindingStatement = `var ${syntheticName} = ${this.printNode(right, 0)};
-`;
-      parsedArrayBindingElements.forEach((e, index) => {
-        let elementValue = `((java.util.List<Object>) ${syntheticName}).get(${index})`;
-        const target = arrayBindingPatternElements[index];
-        if (isIdentifier2(target)) {
-          const declaration = this.javaDeclarationOfIdentifier(target);
-          const native = declaration !== void 0 && isParameterDeclaration2(declaration) ? this.javaNativeParameterType(declaration) ?? this.javaSplitParameterWriteType(declaration) : void 0;
-          if (native === "Long") {
-            elementValue = `Helpers.toLongOrNull(${elementValue})`;
-          } else if (native !== void 0) {
-            elementValue = `(${native}) ${elementValue}`;
-          }
-        }
-        const terminator = index < parsedArrayBindingElements.length - 1 ? ";\n" : "";
-        arrayBindingStatement += this.getIden(identation) + `${e} = ${elementValue}` + terminator;
-      });
-      return arrayBindingStatement;
-    }
-    if (op === SyntaxKind6.EqualsToken && left.kind === SyntaxKind6.ElementAccessExpression) {
-      const keys = [];
-      let baseExpr = null;
-      let cur = left;
-      while (isElementAccessExpression3(cur)) {
-        keys.unshift(cur.argumentExpression);
-        const expr = cur.expression;
-        if (!isElementAccessExpression3(expr)) {
-          baseExpr = expr;
-          break;
-        }
-        cur = expr;
-      }
-      const containerStr = this.printNode(baseExpr, 0);
-      const keyStrs = keys.map((k) => this.printNode(k, 0));
-      let acc = containerStr;
-      let firstKey = 0;
-      const chainRead = keyStrs.length > 1 ? this.javaDeclaredChainContainerRead(left, keys.length) : void 0;
-      if (keyStrs.length > 1 && this.javaDeclaredMapReceiver(baseExpr) && isStringLiteralLikeNode3(keys[0])) {
-        acc = `${containerStr}.get(${keyStrs[0]})`;
-        firstKey = 1;
-      } else if (chainRead !== void 0) {
-        acc = chainRead;
-        firstKey = 1;
-      } else if (keyStrs.length > 1) {
-        const fieldRead = this.javaFieldMapReadText(baseExpr, keys[0]) ?? (isStringLiteralLikeNode3(keys[0]) && this.javaWsClientMapField(baseExpr) !== void 0 ? `(${containerStr} == null ? null : ${containerStr}.get(${keyStrs[0]}))` : this.javaWsClientMapReadText(baseExpr, keys[0]));
-        if (fieldRead !== void 0) {
-          acc = fieldRead;
-          firstKey = 1;
-        }
-      }
-      for (let i = firstKey; i < keyStrs.length - 1; i++) {
-        acc = `${this.ELEMENT_ACCESS_WRAPPER_OPEN}${acc}, ${keyStrs[i]}${this.ELEMENT_ACCESS_WRAPPER_CLOSE}`;
-      }
-      const prefixes = "";
-      const lastKey = keyStrs[keyStrs.length - 1];
-      const rhs = this.printNode(right, 0);
-      const keyArg = this.elementWriteKeyText(keys[keys.length - 1], lastKey);
-      if (this.elementWriteTargetsMap(left.expression, baseExpr, keys, right)) {
-        const target = keys.length === 1 && (this.javaDeclaredMapReceiver(baseExpr) || this.javaWsClientObjectMapReceiver(baseExpr)) ? acc : `((${this.OBJECT_KEYWORD})${acc})`;
-        return `${prefixes}${target}.put(${keyArg}, ${rhs})`;
-      }
-      if (keys.length === 1 && this.javaWsClientObjectMapReceiver(baseExpr) && (isStringLiteralLikeNode3(keys[0]) || this.javaDeclaredStringType(keys[0]))) {
-        return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
-      }
-      if (keys.length === 1 && this.javaDeclaredMapReceiver(baseExpr) && (isStringLiteralLikeNode3(keys[0]) || this.javaDeclaredStringType(keys[0])) && this.javaPrintsNonNullValue(right)) {
-        return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
-      }
-      if (keys.length === 1 && this.javaMapWriteFieldReceiver(baseExpr) && (isStringLiteralLikeNode3(keys[0]) || this.javaDeclaredStringType(keys[0])) && !this.elementWriteValueMayBeNull(right)) {
-        return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
-      }
-      if (keys.length === 1 && this.javaPlainCacheFieldReceiver(baseExpr) && this.javaStringProvenKey(keys[0])) {
-        return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
-      }
-      if (keys.length === 1 && this.javaOwnerStoreFieldReceiver(baseExpr) && isStringLiteralLikeNode3(keys[0])) {
-        return this.isNullishLiteral(this.unwrapPrintTransparentExpression(right)) ? `${prefixes}${acc}.remove(${lastKey})` : `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
-      }
-      if (keys.length === 1 && node.parent?.kind === SyntaxKind6.ExpressionStatement && this.javaPlainMapFieldReceiver(baseExpr) && (isStringLiteralLikeNode3(this.unwrapPrintTransparentExpression(keys[0])) || this.javaDeclaredStringType(this.unwrapPrintTransparentExpression(keys[0]))) && this.javaInOwnerMember(node) && !JAVA_BOX_CAST.test(lastKey) && !JAVA_BOX_CAST.test(rhs)) {
-        return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
-      }
-      if (this.javaMapPutIsNative(baseExpr, keys)) {
-        return `${prefixes}${acc}.put(${keyArg}, ${rhs})`;
-      }
-      if (keys.length === 1 && isPropertyAccessExpression2(baseExpr) && this.javaFileBuiltMapField(baseExpr, baseExpr.name.text, true)) {
-        return `${prefixes}((java.util.Map<Object, Object>) (java.util.Map<?, ?>) ${acc}).put(${lastKey}, ${rhs})`;
-      }
-      return `${prefixes}Helpers.addElementToObject(${acc}, ${lastKey}, ${rhs})`;
-    }
-    if (op === SyntaxKind6.InKeyword) {
-      const objectType = this.getChecker().getTypeAtLocation(right);
-      const keyType = this.getChecker().getTypeAtLocation(left);
-      const objText = this.printNode(right, 0);
-      const keyText = this.printNode(left, 0);
-      let guarded;
-      if (this.isJavaStringType(keyType) || this.javaDeclaredStringType(left)) {
-        guarded = "";
-      } else if (this.javaSideEffectFreeReference(left) && !this.javaOperandPrintsPrimitiveNumber(left) && !this.isNullishLiteral(left) && left.kind !== SyntaxKind6.TrueKeyword && left.kind !== SyntaxKind6.FalseKeyword) {
-        guarded = `${keyText} != null && `;
-      }
-      const withGuard = (read) => guarded ? `(${guarded}${read})` : read;
-      if (guarded !== void 0) {
-        if (this.javaDeclaredMapReceiver(right)) {
-          return withGuard(`${objText}.containsKey(${keyText})`);
-        }
-        if (this.javaWsClientMapReceiver(right)) {
-          if (guarded === "" && this.javaWsClientReceiverIsAny(right) && !isStringLiteralLikeNode3(left) && this.javaSideEffectFreeReference(left) && !this.javaOperandPrintsPrimitiveNumber(left)) {
-            return `(${keyText} != null && ${objText}.containsKey(${keyText}))`;
-          }
-          return withGuard(`${objText}.containsKey(${keyText})`);
-        }
-        if (this.isJavaMapType(objectType)) {
-          const receiverText = this.javaBaseDeclaredMapCacheField(right) ? objText : `((java.util.Map<?, ?>)${objText})`;
-          return withGuard(`${receiverText}.containsKey(${keyText})`);
-        }
-        if (this.isJavaNullableMapType(objectType) && this.javaRepeatableOperand(right)) {
-          return `(${objText} != null && ${guarded}((java.util.Map<?, ?>)${objText}).containsKey(${keyText}))`;
-        }
-      }
-      const listContains = this.javaDeclaredListContains(right, left, objText, keyText);
-      if (listContains !== void 0) {
-        return listContains;
-      }
-      return `Helpers.inOp(${objText}, ${keyText})`;
-    }
-    const modComparison = this.printJavaModComparison(left, right, op);
-    if (modComparison !== void 0) {
-      return modComparison;
-    }
-    if (op === SyntaxKind6.LessThanToken || op === SyntaxKind6.GreaterThanToken || op === SyntaxKind6.LessThanEqualsToken || op === SyntaxKind6.GreaterThanEqualsToken) {
-      const leftKind = this.javaPrimitiveOperandKind(left);
-      const rightKind = this.javaPrimitiveOperandKind(right);
-      const orderingSafe = op === SyntaxKind6.GreaterThanToken || this.javaComparisonOperandsAreExact(left, leftKind, right, rightKind);
-      if (leftKind !== void 0 && rightKind !== void 0 && orderingSafe) {
-        return `${this.printNode(left, 0)} ${this.SupportedKindNames[op]} ${this.printNode(right, 0)}`;
-      }
-      const declaredCompare = this.printDeclaredNumericComparison(left, right, op);
-      if (declaredCompare !== void 0) {
-        return declaredCompare;
-      }
-    }
-    if (op === SyntaxKind6.PlusEqualsToken || op === SyntaxKind6.MinusEqualsToken || op in this.binaryExpressionsWrappers) {
-      const leftText = this.printNode(left, 0);
-      const rightText = this.printNode(right, 0);
-      const inlined = this.printInlineHelperArithmetic(left, right, leftText, rightText, op);
-      if (inlined !== void 0) {
-        return inlined;
-      }
-      const declaredBox = this.printDeclaredBoxArithmetic(node, left, right, leftText, rightText, op);
-      if (declaredBox !== void 0) {
-        return declaredBox;
-      }
-      const integral = this.printIntegralCallArithmetic(left, right, leftText, rightText, op);
-      if (integral !== void 0) {
-        return integral;
-      }
-      if (op === SyntaxKind6.PlusEqualsToken) {
-        return `${leftText} = Helpers.add(${leftText}, ${rightText})`;
-      }
-      if (op === SyntaxKind6.MinusEqualsToken) {
-        return `${leftText} = Helpers.subtract(${leftText}, ${rightText})`;
-      }
-      const wrapper = this.binaryExpressionsWrappers[op];
-      const nativeEquality = this.printNativeEqualityIfProvable(node, leftText, rightText);
-      if (nativeEquality !== void 0) {
-        return nativeEquality;
-      }
-      return `${wrapper[0]}${leftText}, ${rightText}${wrapper[1]}`;
+    if (node?.text === "undefined" && this.getChecker().getTypeAtLocation(node?.parent)?.flags === TypeFlags5.Number) {
+      return this.UNDEFINED_TOKEN;
     }
     return void 0;
+  }
+  // Unpacks one optional parameter. Native array access replaces Helpers.getArg
+  // when the initializer is a pure literal; the null check keeps the helper's
+  // contract that a null varargs array reads like an empty one.
+  // The expression half is shared with the untyped front, which passes the same value to the
+  // typed core as an argument instead of binding a local.
+  printOptionalArgExpression(index, initializer) {
+    const defaultValue = this.printNode(initializer, 0);
+    if (!this.isPureInitializer(initializer)) {
+      return `Helpers.getArg(optionalArgs, ${index}, ${defaultValue})`;
+    }
+    return `optionalArgs != null && optionalArgs.length > ${index} ? optionalArgs[${index}] : ${defaultValue}`;
+  }
+  printOptionalArgInit(paramName, index, initializer) {
+    return `Object ${paramName} = ${this.printOptionalArgExpression(index, initializer)};`;
+  }
+  // Pure = evaluating the initializer has no effect and cannot throw, so
+  // skipping it when the argument was supplied cannot change behavior.
+  isPureInitializer(node) {
+    switch (node?.kind) {
+      case SyntaxKind6.NullKeyword:
+      case SyntaxKind6.TrueKeyword:
+      case SyntaxKind6.FalseKeyword:
+      case SyntaxKind6.StringLiteral:
+      case SyntaxKind6.NoSubstitutionTemplateLiteral:
+      case SyntaxKind6.NumericLiteral:
+        return true;
+      case SyntaxKind6.Identifier:
+        return node.text === "undefined";
+      case SyntaxKind6.ArrayLiteralExpression:
+        return node.elements.every((element) => this.isPureInitializer(element));
+      case SyntaxKind6.ObjectLiteralExpression:
+        return node.properties.every((property) => isPropertyAssignment(property) && this.isPureInitializer(property.initializer));
+      case SyntaxKind6.ParenthesizedExpression:
+      case SyntaxKind6.AsExpression:
+      case SyntaxKind6.TypeAssertionExpression:
+      case SyntaxKind6.NonNullExpression:
+        return this.isPureInitializer(node.expression);
+      default:
+        return false;
+    }
+  }
+  javaDefaultedParameterLocals(node) {
+    if (node.body === void 0) {
+      return [];
+    }
+    const types = this.javaCoreParameterTypes(node);
+    node.parameters.forEach((param, i) => {
+      if (!this.javaIsLiteralDefault(param.initializer) || !isIdentifier2(param.name)) {
+        return;
+      }
+      const symbol = this.javaSymbolOf(param.name);
+      if (symbol === void 0) {
+        return;
+      }
+      const name = this.printNode(param.name, 0);
+      const value = this.javaCoreDefaultArgument(param, types[i]);
+      this.javaDefaultedLocalNames.set(symbol, `java.util.Objects.requireNonNullElse(${name}, ${value})`);
+    });
+    return [];
+  }
+  // a string, number or boolean literal default (null, `undefined` and `{}` / `[]` keep the parameter)
+  javaIsLiteralDefault(initializer) {
+    let node = initializer;
+    while (node !== void 0 && (isParenthesizedExpression2(node) || isAsExpression2(node))) {
+      node = node.expression;
+    }
+    if (node !== void 0 && isPrefixUnaryExpression2(node) && node.operator === SyntaxKind6.MinusToken) {
+      node = node.operand;
+    }
+    return node !== void 0 && (isStringLiteralLikeNode3(node) || isNumericLiteral3(node) || node.kind === SyntaxKind6.TrueKeyword || node.kind === SyntaxKind6.FalseKeyword);
+  }
+  javaDefaultedLocalName(node) {
+    if (this.javaDefaultedLocalNames.size === 0 || isParameterDeclaration2(node.parent) || isPropertyAccessExpression2(node.parent) && node.parent.name === node || isPropertyAssignment(node.parent) && node.parent.name === node) {
+      return void 0;
+    }
+    let symbol;
+    try {
+      symbol = this.getChecker().getSymbolAtLocation(node);
+    } catch (e) {
+      return void 0;
+    }
+    return symbol === void 0 ? void 0 : this.javaDefaultedLocalNames.get(symbol);
+  }
+  printFunctionBody(node, identation) {
+    const savedVarList = this.varListFromObjectLiterals;
+    const savedUsageToFinalName = this.usageToFinalName;
+    const savedScopeStack = this.finalVarScopeStack;
+    this.varListFromObjectLiterals = {};
+    this.analyzeFinalVars(node.body);
+    this.finalVarScopeStack = [/* @__PURE__ */ new Set()];
+    const funcParams = node.parameters ?? [];
+    const bodyStatements = node.body.statements;
+    const isAsync = this.isAsyncFunction(node);
+    const splitCore = isMethodDeclaration4(node);
+    const initParams = splitCore ? this.javaDefaultedParameterLocals(node) : [];
+    const processedParts = [];
+    try {
+      processedParts.push(...this.javaPrintBodyStatements(bodyStatements, identation + 1));
+    } finally {
+      this.varListFromObjectLiterals = savedVarList;
+      this.usageToFinalName = savedUsageToFinalName;
+      this.finalVarScopeStack = savedScopeStack;
+    }
+    let firstStatement = processedParts[0] || "";
+    const remainingString = processedParts.slice(1).join("\n");
+    let offSetIndex = 0;
+    funcParams.forEach((param, i) => {
+      const initializer = param.initializer;
+      if (initializer) {
+        if (splitCore) {
+          if (!this.isPureInitializer(initializer) && !this.javaDefaultedLocalNames.has(this.javaSymbolOf(param.name))) {
+            const name = this.printNode(param.name, 0);
+            initParams.push(`if (${name} == null) { ${name} = ${this.printNode(initializer, 0)}; }`);
+          }
+          return;
+        }
+        const index = i + offSetIndex;
+        const paramName = this.printNode(param.name, 0);
+        initParams.push(this.printOptionalArgInit(paramName, index, initializer));
+      } else {
+        offSetIndex--;
+      }
+    });
+    if (initParams.length > 0) {
+      const defaultInitializers = initParams.map((l) => this.getIden(identation + 1) + l).join("\n") + "\n";
+      const bodyParts = firstStatement.split("\n");
+      const commentPart = bodyParts.filter((line) => this.isComment(line));
+      const isComment = commentPart.length > 0;
+      if (isComment) {
+        const commentPartString = commentPart.map((c) => this.getIden(identation + 1) + c.trim()).join("\n");
+        const firstStmNoComment = bodyParts.filter((line) => !this.isComment(line)).join("\n");
+        firstStatement = commentPartString + "\n" + defaultInitializers + firstStmNoComment;
+      } else {
+        firstStatement = defaultInitializers + firstStatement;
+      }
+    }
+    const blockOpen = this.getBlockOpen(identation);
+    const blockClose = this.getBlockClose(identation);
+    firstStatement = remainingString.length > 0 ? firstStatement + "\n" : firstStatement;
+    if (isAsync && isMethodDeclaration4(node) && this.javaReassignsParameter(node)) {
+      const where = `${node.getSourceFile().fileName}:${node.name.text}`;
+      this.javaReassigningMethods.push(where);
+      const message = `[Java] async method reassigns a parameter (not effectively final, the TS source must use a new local): ${where}`;
+      if (this.javaStrictEffectivelyFinal) {
+        throw new Error(message);
+      }
+      Logger.warning(message);
+    }
+    if (isAsync) {
+      const finalWrapperVars = isMethodDeclaration4(node) ? "\n" : this.printFinalOutsideMethodVariableWrappersIfAny(node, identation) + "\n";
+      const insideWrappers = isMethodDeclaration4(node) ? "\n" : this.printInsideMethodVariableWrappersIfAny(node, identation + 1) + "\n";
+      const body = (firstStatement + remainingString).split("\n").map((line) => this.getIden(identation) + line).join("\n");
+      const failedFuture = bodyStatements.length === 1 && insideWrappers.trim() === "" ? this.javaFailedFutureOfThrow(bodyStatements[0], identation + 1) : void 0;
+      if (failedFuture !== void 0) {
+        return blockOpen + finalWrapperVars + failedFuture + blockClose;
+      }
+      const lastStatement = bodyStatements.length > 1 ? bodyStatements[bodyStatements.length - 1] : bodyStatements.length > 0 ? bodyStatements[0] : void 0;
+      const lastStmtIsReturn = lastStatement && (isReturnStatement3(lastStatement) || this.allBranchesTerminate(lastStatement));
+      const returnNull = lastStmtIsReturn ? "" : this.getIden(identation + 2) + "return null;\n";
+      const supplier = this.asyncSupplier || "java.util.concurrent.CompletableFuture.supplyAsync";
+      const executorArg = !this.asyncSupplier && this.asyncExecutor ? `, ${this.asyncExecutor}` : "";
+      const asyncBody = this.getIden(identation + 1) + `return ${supplier}(() -> {
+` + insideWrappers + body + "\n" + returnNull + this.getIden(identation + 1) + `}${executorArg});
+`;
+      return blockOpen + finalWrapperVars + asyncBody + blockClose;
+    }
+    return blockOpen + firstStatement + remainingString + blockClose;
+  }
+  // every Java parameter is `Object` (base printParameterType), except the ones whose TS
+  // annotation names a native-carriable alias (javaNativeParameterType)
+  printParameterType(node) {
+    const native = this.javaNativeParameterType(node);
+    if (native !== void 0) {
+      return native;
+    }
+    return super.printParameterType(node);
+  }
+  printParameter(node, defaultValue = true) {
+    const name = this.printNode(node.name, 0);
+    const initializer = node.initializer;
+    const type = this.printParameterType(node) || "";
+    if (defaultValue) {
+      if (initializer) {
+        const def = this.printCustomDefaultValueIfNeeded(initializer) || this.printNode(initializer, 0);
+        return type + " " + name + this.SPACE_DEFAULT_PARAM + "=" + this.SPACE_DEFAULT_PARAM + def;
+      }
+      return type + " " + name;
+    }
+    return name;
+  }
+  // the typed core signature: every parameter prints its Java type, the default-valued ones
+  // included (a Java signature cannot carry a default - the front supplies it)
+  printCoreMethodParameters(node) {
+    return node.parameters.map((param) => param.initializer !== void 0 ? `${this.javaOptionalParameterJavaType(param)} ${this.printNode(param.name, 0)}` : this.printParameter(param)).join(", ");
+  }
+  // an async method's reassigned parameter prints under sigName (post keyword-remap),
+  // freeing the original name for the lambda body to bind
+  javaAsyncSignatureParameter(param, isAsyncMethod, printedParam) {
+    if (isAsyncMethod && this.ReassignedVars[this.getVarKey(param)]) {
+      const { localName, sigName } = this.getAsyncParamWrapperNames(param.name.text);
+      return printedParam.replace(localName, sigName);
+    }
+    return printedParam;
+  }
+  printMethodParameters(node) {
+    const isAsyncMethod = this.isAsyncFunction(node);
+    const params = node.parameters.map((param) => this.javaAsyncSignatureParameter(param, isAsyncMethod, this.printParameter(param)));
+    const hasOptionalParameter = node.parameters.some((p) => p.initializer !== void 0 || p.questionToken !== void 0);
+    if (!hasOptionalParameter) {
+      return params.join(", ");
+    }
+    const paramsWithOptional = params.filter((param) => param.indexOf("=") === -1);
+    paramsWithOptional.push("Object... optionalArgs");
+    return paramsWithOptional.join(", ");
+  }
+  printMethodDeclaration(node, identation) {
+    const funcBody = this.printFunctionBody(node, identation);
+    let methodDef = this.printMethodDefinition(node, identation, (n) => this.printCoreMethodParameters(n));
+    methodDef += funcBody;
+    methodDef += this.printOverrideBridges(node, identation);
+    return methodDef;
+  }
+  printMethodDefinition(node, identation, paramsPrinter = void 0) {
+    const name = this.transformMethodNameIfNeeded(node.name.text);
+    let returnType = this.printFunctionType(node);
+    if (returnType === "java.util.concurrent.CompletableFuture") {
+      returnType = "java.util.concurrent.CompletableFuture<Object>";
+    }
+    if (returnType === this.DEFAULT_RETURN_TYPE) {
+      const native = this.javaNativeReturnType(node);
+      if (native !== void 0) {
+        returnType = native;
+      }
+    }
+    const modifiers = this.METHOD_DEFAULT_ACCESS ? this.METHOD_DEFAULT_ACCESS + " " : "";
+    const parsedArgs = paramsPrinter ? paramsPrinter(node) : this.printMethodParameters(node);
+    returnType = returnType ? returnType + " " : returnType;
+    const methodToken = this.METHOD_TOKEN ? this.METHOD_TOKEN + " " : "";
+    const signature = this.getIden(identation) + modifiers + returnType + methodToken + name + "(" + parsedArgs + ")";
+    return this.printNodeCommentsIfAny(node, identation, signature);
+  }
+  // `p = undefined` with no annotation: the checker's `undefined` is only the default, callers pass anything
+  javaUntypedNullishDefault(operand) {
+    const decl = this.javaDeclarationOfIdentifier(operand);
+    return decl !== void 0 && decl.kind === SyntaxKind6.Parameter && decl.type === void 0 && decl.initializer !== void 0;
+  }
+  // a `boolean` / `Bool` (`boolean | undefined`) METHOD parameter the body never writes: its callers
+  // are typed, so the Java slot holds a Boolean or null and `Helpers.isTrue (p)` is exactly
+  // `Boolean.TRUE.equals (p)`. Returns the operand as the printer prints it (the bare name or its
+  // literal-default read), undefined to keep the helper. A lambda parameter is typed by its
+  // functional interface, not by a TS caller contract; a parameter the body writes is filled by
+  // the body; every member of the checker type must be boolean or nullish.
+  javaBooleanParameterBox(node) {
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration === void 0 || !isParameterDeclaration2(declaration) || node.text !== declaration.name?.text || declaration.parent?.kind !== SyntaxKind6.MethodDeclaration || this.javaParameterIsWritten(declaration)) {
+      return void 0;
+    }
+    let type;
+    try {
+      type = this.getChecker().getTypeAtLocation(node);
+    } catch (e) {
+      return void 0;
+    }
+    if (type === void 0) {
+      return void 0;
+    }
+    const booleanish = (t) => ((t?.flags ?? 0) & (TypeFlags5.Boolean | TypeFlags5.BooleanLiteral)) !== 0;
+    if (!booleanish(type)) {
+      const members = (((type.flags ?? 0) & TypeFlags5.Union) !== 0 ? type.getTypes?.() : void 0) ?? [];
+      if (!members.some(booleanish) || !members.every((m) => booleanish(m) || ((m?.flags ?? 0) & (TypeFlags5.Undefined | TypeFlags5.Null | TypeFlags5.Void)) !== 0)) {
+        return void 0;
+      }
+    }
+    const printed = this.printNode(node, 0);
+    return printed === node.text || printed === this.javaDefaultedLocalName(node) ? printed : void 0;
+  }
+  // ===== native return types =====
+  // A call whose callee body returns object literals only, so the value it hands
+  // back is always a freshly built HashMap on the Java side as well.
+  callAlwaysReturnsPlainHashMap(node, depth) {
+    if (depth > 3) {
+      return false;
+    }
+    const checker = this.getChecker();
+    let callee = this.unwrapPrintTransparentExpression(node.expression);
+    if (callee !== void 0 && isPropertyAccessExpression2(callee)) {
+      if (callee.expression.kind !== SyntaxKind6.ThisKeyword) {
+        return false;
+      }
+      callee = callee.name;
+    }
+    if (callee === void 0 || callee.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    let symbol;
+    try {
+      symbol = checker.getSymbolAtLocation(callee);
+    } catch (e) {
+      return false;
+    }
+    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
+    if (!declaration || declaration.kind !== SyntaxKind6.MethodDeclaration && declaration.kind !== SyntaxKind6.FunctionDeclaration) {
+      return false;
+    }
+    if (!this.returnTypePrintsAsHashMap(declaration)) {
+      return false;
+    }
+    const body = declaration.body;
+    if (!body || !isBlock3(body)) {
+      return false;
+    }
+    let plain = true;
+    let returns = 0;
+    const walk = (current) => {
+      if (!plain || current === void 0) {
+        return;
+      }
+      if (isFunctionLike(current) && current !== declaration) {
+        return;
+      }
+      if (isReturnStatement3(current)) {
+        returns += 1;
+        const expression = current.expression;
+        if (expression === void 0) {
+          plain = false;
+          return;
+        }
+        const value = this.unwrapPrintTransparentExpression(expression);
+        if (isObjectLiteralExpression3(value)) {
+          return;
+        }
+        if (isCallExpression5(value) && this.callAlwaysReturnsPlainHashMap(value, depth + 1)) {
+          return;
+        }
+        plain = false;
+        return;
+      }
+      current.forEachChild(walk);
+    };
+    walk(body);
+    return plain && returns > 0;
+  }
+  // the declared return type must not be a class instance (those print as objects)
+  // or an array (those print as Lists), so the object-literal returns above are what
+  // the caller can rely on
+  returnTypePrintsAsHashMap(declaration) {
+    try {
+      const checker = this.getChecker();
+      const signature = checker.getSignatureFromDeclaration(declaration);
+      const type = signature?.getReturnType();
+      if (!type || (type.flags & TypeFlags5.Object) === 0) {
+        return false;
+      }
+      if (checker.isArrayType(type) || checker.isTupleType(type)) {
+        return false;
+      }
+      const declarations = (type.getSymbol()?.declarations ?? []).map((d) => d.resolve());
+      if (declarations.some((d) => d.kind === SyntaxKind6.ClassDeclaration)) {
+        return false;
+      }
+      return type.getCallSignatures().length === 0;
+    } catch (e) {
+      return false;
+    }
+  }
+  javaVenueCalleeLocalType(declaration) {
+    if (!isVariableDeclaration2(declaration) || declaration.initializer === void 0) {
+      return void 0;
+    }
+    let initializer = declaration.initializer;
+    while (isParenthesizedExpression2(initializer)) {
+      initializer = initializer.expression;
+    }
+    return this.javaVenueCalleeReturnType(initializer);
+  }
+  // the emitted Java type of a sync `this.<m> (...)` / `super.<m> (...)` call whose resolved callee
+  // is a generated venue method (ts/src/<id>.ts, pro/, prediction/) and whose declaration prints a
+  // native Map<String, Object> / List<Object> return: the annotation print, or the native fallback
+  // printMethodDefinition takes when that prints the boxed `Object`. A base-tier or hand-written
+  // callee, a future, a DTO or a scalar answers undefined (the build layer's tables stay the proof).
+  javaVenueCalleeReturnType(call) {
+    if (call === void 0 || !isCallExpression5(call)) {
+      return void 0;
+    }
+    const callee = call.expression;
+    if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword && !(isIdentifier2(callee.expression) && callee.expression.text === "super")) {
+      return void 0;
+    }
+    if (this.javaVenueCalleeInProgress.has(call)) {
+      return void 0;
+    }
+    this.javaVenueCalleeInProgress.add(call);
+    try {
+      let declaration = this.javaVenueCalleeDeclarations.get(call);
+      for (let attempt = 0; attempt < 2 && declaration === void 0; attempt++) {
+        try {
+          declaration = this.getChecker().getResolvedSignature(call)?.declaration?.resolve();
+        } catch (e) {
+          declaration = void 0;
+        }
+      }
+      if (declaration !== void 0) {
+        this.javaVenueCalleeDeclarations.set(call, declaration);
+      }
+      if (declaration === void 0 || declaration.kind !== SyntaxKind6.MethodDeclaration || declaration.body === void 0) {
+        return void 0;
+      }
+      const fileName = String(declaration.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+      if (!JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName)) {
+        return void 0;
+      }
+      let printed;
+      try {
+        printed = this.printFunctionType(declaration);
+      } catch (e) {
+        return void 0;
+      }
+      const direct = javaVenueCalleeNativeType(printed);
+      if (direct !== void 0) {
+        return direct;
+      }
+      if (printed !== this.DEFAULT_RETURN_TYPE) {
+        return void 0;
+      }
+      try {
+        return javaVenueCalleeNativeType(this.javaNativeReturnType(declaration));
+      } catch (e) {
+        return void 0;
+      }
+    } finally {
+      this.javaVenueCalleeInProgress.delete(call);
+    }
+  }
+  //
+  // The native Java return a generated method declaration prints with, when its TS
+  javaNativeReturnType(node) {
+    if (node === void 0 || node.kind !== SyntaxKind6.MethodDeclaration || node.name === void 0 || node.type === void 0 || node.body === void 0 || !isClassDeclaration3(node.parent)) {
+      return void 0;
+    }
+    if (this.javaReturnTypeInProgress.has(node)) {
+      return void 0;
+    }
+    if (this.javaReturnTypeCache.has(node)) {
+      return this.javaReturnTypeCache.get(node);
+    }
+    this.javaReturnTypeInProgress.add(node);
+    const outerUsedDeclaredLocals = this.javaReturnTypeUsedDeclaredLocals;
+    this.javaReturnTypeUsedDeclaredLocals = false;
+    let result;
+    try {
+      result = this.javaNativeReturnTypeUncached(node);
+    } finally {
+      this.javaReturnTypeInProgress.delete(node);
+    }
+    const usedDeclaredLocals = this.javaReturnTypeUsedDeclaredLocals;
+    this.javaReturnTypeUsedDeclaredLocals = outerUsedDeclaredLocals || usedDeclaredLocals;
+    if (result !== void 0 || !usedDeclaredLocals) {
+      this.javaReturnTypeCache.set(node, result);
+    }
+    return result;
+  }
+  javaNativeReturnTypeUncached(node) {
+    const fileName = node.getSourceFile().fileName;
+    const generated = JAVA_NATIVE_PARAMETER_GENERATED_FILES.test(fileName);
+    const baseTier = !generated && JAVA_NATIVE_PARAMETER_BASE_FILES.test(fileName) && this.javaIsPrintedMethod(node);
+    if (!generated && !baseTier || this.isAsyncFunction(node)) {
+      return void 0;
+    }
+    let target = this.javaNativeReturnTypeTarget(node);
+    if (target === void 0 && !baseTier) {
+      target = this.javaReturnTypeFromBody(node);
+    }
+    if (target === void 0 || baseTier && target !== "Boolean") {
+      return void 0;
+    }
+    const ancestor = this.getMethodOverride(node);
+    const ancestorBoolean = ancestor !== void 0 && this.javaNativeReturnType(ancestor) === "Boolean";
+    if (ancestorBoolean && (target !== "Boolean" || !this.javaReturnSitesPrintType(node, target) || this.javaMethodReturnsNonNullBoolean(ancestor, 0) && !this.javaMethodReturnsNonNullBoolean(node, 0))) {
+      throw new Error(`java: ${String(node.name.text)} overrides a Boolean base method but its returns do not all print Boolean`);
+    }
+    if (ancestor !== void 0 && !ancestorBoolean) {
+      return void 0;
+    }
+    if (!this.javaReturnSitesPrintType(node, target)) {
+      return void 0;
+    }
+    return target;
+  }
+  javaNativeReturnTypeTarget(node) {
+    let type;
+    try {
+      type = this.getChecker().getTypeAtLocation(node.type);
+    } catch (e) {
+      return void 0;
+    }
+    if (type === void 0) {
+      return void 0;
+    }
+    const aliasSymbol = type.getAliasSymbol?.();
+    if (aliasSymbol !== void 0) {
+      const name = aliasSymbol.name;
+      const fileName = aliasSymbol.declarations?.[0]?.resolve()?.getSourceFile?.()?.fileName;
+      if (fileName !== void 0 && JAVA_NATIVE_PARAMETER_SOURCE_FILES.test(fileName) && (name === "Str" || name === "Bool")) {
+        return name === "Str" ? "String" : "Boolean";
+      }
+    }
+    if (type.flags === TypeFlags5.String) {
+      return "String";
+    }
+    if (aliasSymbol === void 0 && (type.flags & TypeFlags5.Boolean) !== 0) {
+      return "Boolean";
+    }
+    if (!this.javaStringArrayAnnotation(node) && this.javaArrayReturnType(type)) {
+      return JAVA_NATIVE_RETURN_LIST_TYPE;
+    }
+    return this.isJavaMapStructureType(type) ? JAVA_NATIVE_RETURN_MAP_TYPE : void 0;
+  }
+  // a tuple annotation (`[Bool, Dict]`, `[Str, Str, Bool]`): its destructured slots print as
+  // Pair/List pairs at the call sites, so the return keeps the boxed declaration
+  javaTupleAnnotation(node) {
+    return isTupleTypeNode(node?.type);
+  }
+  // the checker type of an array annotation whose element slots are not strings. A tuple
+  // annotation stays out: its slots print as Pair/List pairs the return proof cannot see.
+  javaArrayReturnType(type) {
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0 || !checker.isArrayType(type) || checker.isTupleType(type)) {
+      return false;
+    }
+    let element;
+    try {
+      element = checker.getTypeArguments(type)?.[0] ?? type.typeArguments?.[0];
+    } catch (e) {
+      element = void 0;
+    }
+    if (element === void 0) {
+      return false;
+    }
+    const flags = element.flags;
+    return (flags & TypeFlags5.StringLike) === 0;
+  }
+  // every `return` of the method body (nested functions are separate scopes) prints the
+  // target Java type
+  javaReturnSitesPrintType(method, target) {
+    const returns = [];
+    const collect = (n) => {
+      if (n === void 0) {
+        return;
+      }
+      if (n !== method && isFunctionLike(n)) {
+        return;
+      }
+      if (isReturnStatement3(n)) {
+        returns.push(n);
+      }
+      n.forEachChild(collect);
+    };
+    collect(method.body);
+    if (returns.length === 0) {
+      return false;
+    }
+    return returns.every((r) => r.expression !== void 0 && this.javaExpressionPrintsType(r.expression, target));
+  }
+  // the carriable target every return site of the body prints, when the annotation names
+  // none (`any`, an unmodelled structure): a body that only ever returns a fresh map is a
+  // Map at runtime, one that only ever returns a fresh list is a List. A string-array
+  // annotation keeps its boxed declaration (its slots are java.util.List<String>).
+  javaReturnTypeFromBody(method) {
+    const candidates = this.javaStringArrayAnnotation(method) || this.javaTupleAnnotation(method) ? [JAVA_NATIVE_RETURN_MAP_TYPE] : [JAVA_NATIVE_RETURN_MAP_TYPE, JAVA_NATIVE_RETURN_LIST_TYPE];
+    for (const target of candidates) {
+      if (this.javaReturnSitesPrintType(method, target)) {
+        return target;
+      }
+    }
+    return void 0;
+  }
+  javaExpressionPrintsType(expression, target) {
+    const node = this.javaUnwrapReturnExpression(expression);
+    if (node === void 0) {
+      return false;
+    }
+    if (node.kind === SyntaxKind6.NullKeyword) {
+      return true;
+    }
+    if (isIdentifier2(node) && node.text === "undefined") {
+      return true;
+    }
+    if (node.kind === SyntaxKind6.ConditionalExpression) {
+      return this.javaExpressionPrintsType(node.whenTrue, target) && this.javaExpressionPrintsType(node.whenFalse, target);
+    }
+    let literal2;
+    if (target === JAVA_NATIVE_RETURN_MAP_TYPE) {
+      literal2 = isObjectLiteralExpression3(node);
+    } else if (target === JAVA_NATIVE_RETURN_LIST_TYPE) {
+      literal2 = isArrayLiteralExpression3(node);
+    } else if (target === "String") {
+      literal2 = isStringLiteralLikeNode3(node);
+    } else if (target === "Boolean") {
+      literal2 = this.javaPrintsBooleanValue(node, /* @__PURE__ */ new Set(), 0);
+    } else {
+      return false;
+    }
+    return literal2 || this.javaReturnedParameterType(node) === target || this.javaReturnedCallType(node) === target || this.javaDeclaredReturnTarget(node, target) || target === JAVA_NATIVE_RETURN_LIST_TYPE && this.javaReturnedObjectListCall(node) || target === "String" && this.javaStringCallReturn(node);
+  }
+  // `this.toArray (x)` and `Object.keys/values (x)` print calls the hand-written runtime
+  // declares `java.util.List<Object>` (BaseExchange.toArray, Helpers.objectKeys/objectValues)
+  javaReturnedObjectListCall(node) {
+    if (!isCallExpression5(node)) {
+      return false;
+    }
+    const callee = node.expression;
+    if (!isPropertyAccessExpression2(callee)) {
+      return false;
+    }
+    const name = String(callee.name.text);
+    if (JAVA_OBJECT_LIST_CALL_NAMES.has(name) && isIdentifier2(callee.expression) && callee.expression.text === "Object") {
+      return true;
+    }
+    if (!JAVA_LIST_RETURN_BASE_METHODS.has(name) || callee.expression.kind !== SyntaxKind6.ThisKeyword) {
+      return false;
+    }
+    let declaration;
+    try {
+      declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+    } catch (e) {
+      return false;
+    }
+    const fileName = declaration?.getSourceFile?.()?.fileName;
+    return fileName !== void 0 && JAVA_STRING_RETURN_BASE_FILES.test(fileName);
+  }
+  javaUnwrapReturnExpression(expression) {
+    if (expression === void 0) {
+      return void 0;
+    }
+    let node = expression;
+    while (node !== void 0 && (isParenthesizedExpression2(node) || isAsExpression2(node) || isNonNullExpression(node) || isTypeAssertion2(node) || node.kind === SyntaxKind6.SatisfiesExpression)) {
+      node = node.expression;
+    }
+    return node;
+  }
+  // a `this.<name> (...)` / `super.<name> (...)` return is the callee's native return type
+  // (fixpoint over javaNativeReturnType)
+  javaReturnedCallType(node) {
+    if (!isCallExpression5(node)) {
+      return void 0;
+    }
+    const callee = node.expression;
+    if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword && !(isIdentifier2(callee.expression) && callee.expression.text === "super")) {
+      return void 0;
+    }
+    let declaration;
+    try {
+      declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+    } catch (e) {
+      return void 0;
+    }
+    if (declaration === void 0 || declaration.kind !== SyntaxKind6.MethodDeclaration) {
+      return void 0;
+    }
+    return this.javaNativeReturnType(declaration);
+  }
+  // An async body that is only `throw new X(..)` can complete its future exceptionally and
+  // nothing else, so the native completion API stands in for the supplier lambda.
+  javaFailedFutureOfThrow(statement, identation) {
+    if (!isThrowStatement3(statement) || statement.expression.kind !== SyntaxKind6.NewExpression) {
+      return void 0;
+    }
+    const thrown = statement.expression.expression;
+    if (thrown === void 0 || !isIdentifier2(thrown)) {
+      return void 0;
+    }
+    const printed = this.printNode(statement, 0).trim();
+    const head = `${this.THROW_TOKEN} ${this.NEW_TOKEN} `;
+    if (!printed.startsWith(head)) {
+      return void 0;
+    }
+    const value = printed.slice(this.THROW_TOKEN.length + 1).replace(/;\s*$/, "").trim();
+    return this.getIden(identation) + `return java.util.concurrent.CompletableFuture.failedFuture(${value});
+`;
+  }
+  printReturnStatement(node, identation) {
+    const leadingComment = this.printLeadingComments(node, identation);
+    let trailingComment = this.printTraillingComment(node, identation);
+    trailingComment = trailingComment ? " " + trailingComment : trailingComment;
+    let exp = node.expression;
+    if (exp && exp.kind === SyntaxKind6.AsExpression && (exp.expression.kind === SyntaxKind6.ObjectLiteralExpression || SyntaxKind6.CallExpression)) {
+      exp = exp.expression;
+    }
+    let rightPart = exp ? " " + this.printNode(exp, identation) : "";
+    rightPart = rightPart.trim();
+    if (!rightPart) {
+      let parent = node.parent;
+      while (parent) {
+        if (isFunctionDeclaration4(parent) || isMethodDeclaration4(parent) || isFunctionExpression5(parent) || isArrowFunction4(parent)) {
+          if (this.isAsyncFunction(parent)) {
+            rightPart = "null";
+          }
+          break;
+        }
+        parent = parent.parent;
+      }
+    }
+    rightPart = rightPart ? " " + rightPart + this.LINE_TERMINATOR : this.LINE_TERMINATOR;
+    return leadingComment + this.getIden(identation) + this.RETURN_TOKEN + rightPart + trailingComment;
+  }
+  allBranchesTerminate(node) {
+    if (isReturnStatement3(node) || isThrowStatement3(node)) {
+      return true;
+    }
+    if (isBlock3(node)) {
+      const stmts = node.statements;
+      return stmts.length > 0 && this.allBranchesTerminate(stmts[stmts.length - 1]);
+    }
+    if (isIfStatement3(node)) {
+      if (!node.elseStatement) {
+        return false;
+      }
+      return this.allBranchesTerminate(node.thenStatement) && this.allBranchesTerminate(node.elseStatement);
+    }
+    return false;
+  }
+  // ===== final variables, lambda captures and async wrappers =====
+  // the async body copy of a reassigned default-valued parameter keeps a `List<String>` type;
+  // its writes convert like the sync in-place ones (other types keep the `Object` copy)
+  javaAsyncParameterLocalType(node) {
+    if (node?.initializer === void 0 || !this.hasDefaultedTail(node.parent) || !this.isAsyncFunction(node.parent)) {
+      return void 0;
+    }
+    const type = this.javaOptionalParameterType(node);
+    if (type === "Long" && !this.javaParameterIsWritten(node)) {
+      return type;
+    }
+    return type === JAVA_STRING_LIST_TYPE ? type : void 0;
+  }
+  getFinalVarName(varName) {
+    varName = this.getOriginalVarName(varName);
+    if (varName.startsWith("final")) {
+      return varName;
+    }
+    return `final${this.capitalize(varName)}`;
+  }
+  getOriginalVarName(name) {
+    if (this.ReservedKeywordsReplacements[name]) {
+      name = this.ReservedKeywordsReplacements[name];
+    }
+    return name;
+  }
+  // Resolves the trio of names used to wrap a reassigned async-method param
+  // so the lambda body sees an effectively-final local. We base every name on
+  // the keyword-remapped Java identifier — using the raw TS name when remapped
+  // (e.g. params -> parameters) makes the wrapper text and the body diverge,
+  // because identifier emission already routes through ReservedKeywordsReplacements.
+  getAsyncParamWrapperNames(paramName) {
+    const javaName = this.getOriginalVarName(paramName);
+    return {
+      sigName: `${javaName}2`,
+      snapName: `${javaName}3`,
+      localName: javaName
+    };
+  }
+  isAssignmentOperator(op) {
+    return op >= SyntaxKind6.FirstAssignment && op <= SyntaxKind6.LastAssignment;
+  }
+  isIncDecOperator(op) {
+    return op === SyntaxKind6.PlusPlusToken || op === SyntaxKind6.MinusMinusToken;
+  }
+  // Walk the function body in source order and assign a version-aware finalName to
+  // every identifier that appears inside an object literal property and refers to a
+  // variable that's reassigned anywhere in this function. Each reassignment bumps the
+  // per-variable version counter; usages of the same (var, version) share one finalName.
+  //
+  // Naming:
+  //   - If only one version of a var is ever used in object literals, use `final<Var>`
+  //     (matches prior behavior).
+  //   - If multiple versions are used, name them `final<Var>`, `final<Var>_2`,
+  //     `final<Var>_3` in source-order of the version they correspond to.
+  analyzeFinalVars(fnBody) {
+    this.usageToFinalName = /* @__PURE__ */ new WeakMap();
+    if (!fnBody)
+      return;
+    const symbolIdOf = (n) => {
+      try {
+        const checker = this.getChecker();
+        const sym = checker?.getSymbolAtLocation?.(n);
+        const decl = sym?.declarations?.[0]?.resolve() ?? sym?.valueDeclaration?.resolve();
+        if (decl)
+          return `s:${decl.pos}:${decl.end}`;
+      } catch {
+      }
+      return `n:${n.text}`;
+    };
+    const reassignedSyms = /* @__PURE__ */ new Set();
+    const discoverPotentialReassignments = (node) => {
+      if (!node)
+        return;
+      if (node.kind === SyntaxKind6.BinaryExpression) {
+        if (node.left?.kind === SyntaxKind6.Identifier) {
+          reassignedSyms.add(symbolIdOf(node.left));
+        } else if (node.operatorToken.kind === SyntaxKind6.EqualsToken && node.left?.kind === SyntaxKind6.ArrayLiteralExpression) {
+          for (const elem of node.left.elements ?? []) {
+            if (elem?.kind === SyntaxKind6.Identifier) {
+              reassignedSyms.add(symbolIdOf(elem));
+            }
+          }
+        }
+      }
+      if ((node.kind === SyntaxKind6.PrefixUnaryExpression || node.kind === SyntaxKind6.PostfixUnaryExpression) && this.isIncDecOperator(node.operator) && node.operand?.kind === SyntaxKind6.Identifier) {
+        reassignedSyms.add(symbolIdOf(node.operand));
+      }
+      if (node.kind === SyntaxKind6.Identifier) {
+        const name = node.text;
+        if (name && name !== "undefined" && !name.startsWith?.("null")) {
+          if (this.ReassignedVars[this.getVarKey(node)]) {
+            reassignedSyms.add(symbolIdOf(node));
+          }
+        }
+        return;
+      }
+      node.forEachChild(discoverPotentialReassignments);
+    };
+    discoverPotentialReassignments(fnBody);
+    if (reassignedSyms.size === 0)
+      return;
+    const events = [];
+    const visitExprInObjLit = (n) => {
+      if (!n)
+        return;
+      if (n.kind === SyntaxKind6.Identifier) {
+        const name = n.text;
+        if (name && name !== "undefined" && !name.startsWith?.("null")) {
+          const sym = symbolIdOf(n);
+          if (reassignedSyms.has(sym)) {
+            events.push({ kind: "use", sym, name, node: n });
+          }
+        }
+        return;
+      }
+      if (n.kind === SyntaxKind6.BinaryExpression) {
+        visitExprInObjLit(n.left);
+        visitExprInObjLit(n.right);
+        return;
+      }
+      if (n.kind === SyntaxKind6.ParenthesizedExpression) {
+        visitExprInObjLit(n.expression);
+        return;
+      }
+      if (n.kind === SyntaxKind6.ConditionalExpression) {
+        visitExprInObjLit(n.condition);
+        visitExprInObjLit(n.whenTrue);
+        visitExprInObjLit(n.whenFalse);
+        return;
+      }
+      if (n.kind === SyntaxKind6.CallExpression) {
+        n.arguments?.forEach(visitExprInObjLit);
+        if (n.expression?.kind === SyntaxKind6.PropertyAccessExpression) {
+          visitExprInObjLit(n.expression.expression);
+        }
+        return;
+      }
+      if (n.kind === SyntaxKind6.PrefixUnaryExpression) {
+        visitExprInObjLit(n.operand);
+        return;
+      }
+      if (n.kind === SyntaxKind6.ElementAccessExpression) {
+        let left = n.expression;
+        while (left?.kind === SyntaxKind6.ElementAccessExpression) {
+          left = left.expression;
+        }
+        visitExprInObjLit(left);
+        visitExprInObjLit(n.argumentExpression);
+        return;
+      }
+      if (n.kind === SyntaxKind6.ObjectLiteralExpression) {
+        n.properties?.forEach((p) => {
+          if (p.initializer)
+            visitExprInObjLit(p.initializer);
+        });
+        return;
+      }
+      n.forEachChild(visitExprInObjLit);
+    };
+    const walk = (node) => {
+      if (!node)
+        return;
+      if (node.kind === SyntaxKind6.BinaryExpression && this.isAssignmentOperator(node.operatorToken.kind)) {
+        walk(node.right);
+        if (node.left?.kind === SyntaxKind6.Identifier) {
+          const sym = symbolIdOf(node.left);
+          if (reassignedSyms.has(sym)) {
+            events.push({ kind: "reassign", sym });
+          }
+        } else {
+          walk(node.left);
+        }
+        return;
+      }
+      if ((node.kind === SyntaxKind6.PrefixUnaryExpression || node.kind === SyntaxKind6.PostfixUnaryExpression) && this.isIncDecOperator(node.operator) && node.operand?.kind === SyntaxKind6.Identifier) {
+        const sym = symbolIdOf(node.operand);
+        if (reassignedSyms.has(sym)) {
+          events.push({ kind: "reassign", sym });
+        }
+        return;
+      }
+      if (node.kind === SyntaxKind6.ObjectLiteralExpression) {
+        node.properties?.forEach((prop) => {
+          if (prop.initializer) {
+            visitExprInObjLit(prop.initializer);
+            walk(prop.initializer);
+          }
+        });
+        return;
+      }
+      const walkBlockAndBump = (subNode) => {
+        const usedInBlock = /* @__PURE__ */ new Set();
+        if (!subNode)
+          return usedInBlock;
+        const eventsBefore = events.length;
+        walk(subNode);
+        for (let i = eventsBefore; i < events.length; i++) {
+          const e = events[i];
+          if (e.kind === "use")
+            usedInBlock.add(e.sym);
+        }
+        for (const sym of usedInBlock) {
+          events.push({ kind: "reassign", sym });
+        }
+        return usedInBlock;
+      };
+      if (node.kind === SyntaxKind6.IfStatement) {
+        walk(node.expression);
+        walkBlockAndBump(node.thenStatement);
+        walkBlockAndBump(node.elseStatement);
+        return;
+      }
+      if (node.kind === SyntaxKind6.TryStatement) {
+        walkBlockAndBump(node.tryBlock);
+        walkBlockAndBump(node.catchClause?.block);
+        walkBlockAndBump(node.finallyBlock);
+        return;
+      }
+      node.forEachChild(walk);
+    };
+    walk(fnBody);
+    const counters = /* @__PURE__ */ new Map();
+    const perSym = /* @__PURE__ */ new Map();
+    for (const e of events) {
+      if (e.kind === "reassign") {
+        counters.set(e.sym, (counters.get(e.sym) ?? 0) + 1);
+      } else {
+        const v = counters.get(e.sym) ?? 0;
+        if (!perSym.has(e.sym))
+          perSym.set(e.sym, { name: e.name, byVer: /* @__PURE__ */ new Map() });
+        const entry = perSym.get(e.sym);
+        if (!entry.byVer.has(v))
+          entry.byVer.set(v, []);
+        entry.byVer.get(v).push(e.node);
+      }
+    }
+    for (const { name, byVer } of perSym.values()) {
+      const versions = [...byVer.keys()].sort((a, b) => a - b);
+      const baseName = this.getFinalVarName(name);
+      versions.forEach((v, idx) => {
+        const finalName = idx === 0 ? baseName : `${baseName}_${idx + 1}`;
+        for (const n of byVer.get(v)) {
+          this.usageToFinalName.set(n, finalName);
+        }
+      });
+    }
+  }
+  // Undo every in-place identifier rewrite made during the current emit, newest
+  // first so repeated rewrites of one node unwind to the original value.
+  restoreFinalVarMutations() {
+    for (let i = this.finalVarMutations.length - 1; i >= 0; i--) {
+      const mutation = this.finalVarMutations[i];
+      Object.defineProperty(mutation.node, "text", { value: mutation.text, configurable: true, writable: true });
+      if (mutation.ownGetFullText) {
+        mutation.node.getFullText = mutation.getFullText;
+      } else {
+        delete mutation.node.getFullText;
+      }
+    }
+    this.finalVarMutations = [];
+  }
+  // true when a property value reads a local the body reassigns (or the analyzer saw
+  // reassigned ahead): a double-brace anonymous class could not capture it
+  objectLiteralCapturesReassigned(node) {
+    return this.objectLiteralCapturedKeys(node).length > 0;
+  }
+  // ReassignedVars keys of the reassigned locals a literal's property values read
+  objectLiteralCapturedKeys(node) {
+    const keys = [];
+    const walk = (n) => {
+      if (!n)
+        return;
+      if (n.kind === SyntaxKind6.Identifier) {
+        const name = n.text;
+        const key = this.getVarKey(n);
+        if (name && name !== "undefined" && !name.startsWith("null") && (this.usageToFinalName.has(n) || this.ReassignedVars[key])) {
+          keys.push(key);
+        }
+        return;
+      }
+      n.forEachChild(walk);
+    };
+    for (const prop of node.properties) {
+      walk(prop.initializer);
+    }
+    return keys;
+  }
+  // the async method body writes one of its parameters, or a non-pure default must be applied
+  // by an `if (x == null) { x = init; }` inside the lambda (both break effective finality)
+  javaReassignsParameter(node) {
+    const params = node.parameters ?? [];
+    if (params.some((p) => p.initializer !== void 0 && !this.isPureInitializer(p.initializer) && this.isAsyncFunction(node))) {
+      return true;
+    }
+    const symbols = /* @__PURE__ */ new Set();
+    params.forEach((p) => {
+      const symbol = this.javaSymbolOf(p.name);
+      if (symbol !== void 0) {
+        symbols.add(symbol);
+      }
+    });
+    return symbols.size > 0 && node.body !== void 0 && this.javaWritesSymbol(node.body, symbols);
+  }
+  javaSymbolOf(node) {
+    return this.getChecker().getSymbolAtLocation(node);
+  }
+  // syntactic walk: assignment targets, ++/--, destructuring targets and for-in/of expression heads
+  javaWritesSymbol(node, symbols) {
+    if (isBinaryExpression4(node)) {
+      const op = node.operatorToken.kind;
+      if (op >= SyntaxKind6.FirstAssignment && op <= SyntaxKind6.LastAssignment && this.javaTargetWritesSymbol(node.left, symbols, op === SyntaxKind6.EqualsToken)) {
+        return true;
+      }
+    } else if ((isPrefixUnaryExpression2(node) || isPostfixUnaryExpression2(node)) && (node.operator === SyntaxKind6.PlusPlusToken || node.operator === SyntaxKind6.MinusMinusToken) && this.javaTargetWritesSymbol(node.operand, symbols, false)) {
+      return true;
+    } else if ((isForInStatement(node) || isForOfStatement(node)) && !isVariableDeclarationList(node.initializer) && this.javaTargetWritesSymbol(node.initializer, symbols, true)) {
+      return true;
+    }
+    return node.forEachChild((child) => this.javaWritesSymbol(child, symbols) || void 0) === true;
+  }
+  javaTargetWritesSymbol(target, symbols, destructuring) {
+    if (isParenthesizedExpression2(target) || isNonNullExpression(target) || isAsExpression2(target)) {
+      return this.javaTargetWritesSymbol(target.expression, symbols, destructuring);
+    }
+    if (isIdentifier2(target)) {
+      const symbol = this.javaSymbolOf(target);
+      return symbol !== void 0 && symbols.has(symbol);
+    }
+    if (!destructuring) {
+      return false;
+    }
+    if (isArrayLiteralExpression3(target)) {
+      return target.elements.some((e) => this.javaTargetWritesSymbol(isSpreadElement2(e) ? e.expression : e, symbols, true));
+    }
+    if (isObjectLiteralExpression3(target)) {
+      return target.properties.some((p) => {
+        if (isShorthandPropertyAssignment(p)) {
+          return this.javaTargetWritesSymbol(p.name, symbols, true);
+        }
+        if (isPropertyAssignment(p)) {
+          return this.javaTargetWritesSymbol(p.initializer, symbols, true);
+        }
+        return isSpreadAssignment2(p) && this.javaTargetWritesSymbol(p.expression, symbols, true);
+      });
+    }
+    if (isBinaryExpression4(target) && target.operatorToken.kind === SyntaxKind6.EqualsToken) {
+      return this.javaTargetWritesSymbol(target.left, symbols, true);
+    }
+    return false;
+  }
+  printFinalOutsideMethodVariableWrappersIfAny(node, identation) {
+    return this.javaAsyncParamWrapperLines(node, identation, (param, isOptionalParam, { sigName, snapName }) => {
+      const snapType = this.javaTestTierWrapperType(param) ?? (isOptionalParam && param.initializer !== void 0 ? this.javaOptionalParameterJavaType(param) : "Object");
+      return `final ${snapType} ${snapName} = ${sigName};`;
+    });
+  }
+  printInsideMethodVariableWrappersIfAny(node, identation) {
+    return this.javaAsyncParamWrapperLines(node, identation, (param, _isOptionalParam, { localName, snapName }) => `${this.javaTestTierWrapperType(param) ?? this.javaAsyncParameterLocalType(param) ?? "Object"} ${localName} = ${snapName};`);
+  }
+  // one line per reassigned parameter of an async method (optional ones only in a split core)
+  javaAsyncParamWrapperLines(node, identation, printLine) {
+    const parameters = node?.parameters;
+    const finalVarWrappers = [];
+    if (parameters) {
+      const isAsyncMethod = this.isAsyncFunction(node);
+      const splitCore = this.hasDefaultedTail(node);
+      parameters.forEach((param) => {
+        const isOptionalParam = param.initializer !== void 0 || param.questionToken !== void 0;
+        if ((!isOptionalParam || splitCore) && isAsyncMethod && this.ReassignedVars[this.getVarKey(param)]) {
+          const names = this.getAsyncParamWrapperNames(param.name.text);
+          finalVarWrappers.push(this.getIden(identation + 1) + printLine(param, isOptionalParam, names));
+        }
+      });
+    }
+    return finalVarWrappers.join("\n");
+  }
+  // ===== local declaration types and container proofs =====
+  // an identifier whose final Java declaration (the build layer's table, or a natively typed
+  // parameter) is exactly the core type and which prints under its own name: no conversion
+  javaLocalDeclaredAs(node, printed, type) {
+    if (node === void 0 || !isIdentifier2(node) || printed !== node.text) {
+      return false;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration === void 0 || !isVariableDeclaration2(declaration)) {
+      return this.javaArgumentHasType(node, type) && (type !== JAVA_STRING_LIST_TYPE || this.javaDeclaredTypeOf(node) === JAVA_STRING_LIST_TYPE);
+    }
+    const declared = this.javaDeclaredTypeOf(node);
+    return declared !== void 0 && declared.replace(/\s+/g, "").replace(/^java\.util\./, "") === type.replace(/\s+/g, "").replace(/^java\.util\./, "");
+  }
+  // `k in xs` over a local declared List: Helpers.inOp's List branch is a null-guarded contains
+  javaDeclaredListContains(right, left, objText, keyText) {
+    if (!isIdentifier2(right) || objText !== right.text) {
+      return void 0;
+    }
+    const literal2 = isStringLiteralLikeNode3(left);
+    if (!literal2 && !(isIdentifier2(left) && keyText === left.text)) {
+      return void 0;
+    }
+    if (!literal2) {
+      const keyDeclared = this.javaDeclaredTypeOf(left);
+      if (keyDeclared === void 0 || !/^[A-Z][\w.]*(?:<.*>)?$/.test(keyDeclared)) {
+        return void 0;
+      }
+    }
+    const declared = this.javaDeclaredTypeOf(right);
+    if (declared === void 0 || !/^(?:java\.util\.)?(?:List|ArrayList)<[^<>]*>$/.test(declared)) {
+      return void 0;
+    }
+    return `(${objText} != null && ${literal2 ? "" : `${keyText} != null && `}${objText}.contains(${keyText}))`;
+  }
+  handleTypeOfInsideBinaryExpression(node, _identation) {
+    const left = node.left;
+    const right = node.right.text;
+    const op = node.operatorToken.kind;
+    const expression = left.expression;
+    const isDifferentOperator = op === SyntaxKind6.ExclamationEqualsEqualsToken || op === SyntaxKind6.ExclamationEqualsToken;
+    const notOperator = isDifferentOperator ? this.NOT_TOKEN : "";
+    const target = this.printNode(expression, 0);
+    switch (right) {
+      case "string":
+        return `${notOperator}(${target} instanceof String)`;
+      case "number":
+        return `${notOperator}(${target} instanceof Long || ${target} instanceof Integer || ${target} instanceof Float || ${target} instanceof Double)`;
+      case "boolean":
+        return `${notOperator}(${target} instanceof Boolean)`;
+      case "object":
+        return `${notOperator}(${target} instanceof java.util.Map)`;
+      case "function":
+        return `${notOperator}(${target} instanceof java.util.concurrent.Callable)`;
+    }
+    return void 0;
+  }
+  getVarMethodIfAny(node) {
+    let current = node?.parent;
+    while (current) {
+      if (isMethodDeclaration4(current) || isFunctionDeclaration4(current)) {
+        return String(current.name?.text ?? "");
+      }
+      current = current.parent;
+    }
+    return "outsideAnyMethod";
+  }
+  getVarClassIfAny(node) {
+    let current = node?.parent;
+    while (current) {
+      if (isClassDeclaration3(current)) {
+        return String(current.name?.text ?? "");
+      }
+      current = current.parent;
+    }
+    return "";
+  }
+  getVarKey(node) {
+    const varName = node?.text ?? node?.name?.text;
+    if (!varName) {
+      return "";
+    }
+    return `${this.getVarClassIfAny(node)}-${this.getVarMethodIfAny(node)}-${varName}`;
+  }
+  // `x.length` on a checker-proven String/List receiver prints a native int
+  // (((String)x).length() / ((List<?>)x).size(), see javaLengthKind). Every other
+  // receiver prints Helpers.getArrayLength, whose value is not an int.
+  javaNativeLengthKind(node) {
+    if (node?.kind !== SyntaxKind6.PropertyAccessExpression || node.name.text !== "length") {
+      return void 0;
+    }
+    return this.javaLengthKind(node.expression) !== void 0 ? "int" : void 0;
+  }
+  expressionReferencesSymbol(node, symbol) {
+    if (node === void 0 || symbol === void 0) {
+      return false;
+    }
+    let found = false;
+    const visit = (child) => {
+      if (found) {
+        return;
+      }
+      if (child.kind === SyntaxKind6.Identifier && this.getChecker().getSymbolAtLocation(child) === symbol) {
+        found = true;
+        return;
+      }
+      child.forEachChild(visit);
+    };
+    visit(node);
+    return found;
+  }
+  enclosingFunctionLike(node) {
+    let current = node?.parent;
+    while (current) {
+      if (isFunctionLike(current)) {
+        return current;
+      }
+      current = current.parent;
+    }
+    return void 0;
+  }
+  // `const x = Object.values(..)` with no other write prints the helper's exact return type
+  // `const x = Object.keys(this.<BaseExchange Map field>)` prints the null-guarded key copy
+  // (printNativeBaseMapFieldKeys), a fresh ArrayList, so the same List<Object> local applies.
+  javaObjectValuesLocalType(declaration) {
+    if (!isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || !declaration.initializer) {
+      return void 0;
+    }
+    const init = this.unwrapPrintTransparentExpression(declaration.initializer);
+    if (init === void 0 || !isCallExpression5(init) || !isPropertyAccessExpression2(init.expression) || !isIdentifier2(init.expression.expression) || init.expression.expression.text !== "Object" || init.arguments.length !== 1) {
+      return void 0;
+    }
+    const method = init.expression.name.text;
+    const arg = init.arguments[0];
+    if (method === "keys" ? !(isPropertyAccessExpression2(arg) && this.printNativeBaseMapFieldKeys(arg) !== void 0) : method !== "values") {
+      return void 0;
+    }
+    if (this.javaLocalHasWriteAtAll(declaration.name)) {
+      return void 0;
+    }
+    return "List<Object>";
+  }
+  // a json object box: the generic `Dictionary<T>` of ts/src/base/types.ts (so `Dict` and
+  // `Dictionary<Dictionary<..>>`): an object type with a string index signature and no numeric one.
+  // Arrays, tuples, DTOs, primitives, unions and the named typed views that extend it (Balances,
+  // Tickers, ..., which own a typed print) all decline.
+  javaJsonBoxType(type) {
+    if (type === void 0 || type === null || !(type.flags & TypeFlags5.Object)) {
+      return false;
+    }
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return false;
+    }
+    try {
+      if (checker.isArrayType(type) || checker.isTupleType(type)) {
+        return false;
+      }
+      const symbol = type.getSymbol?.();
+      const declaration = symbol?.declarations?.[0]?.resolve();
+      if (symbol?.escapedName !== "Dictionary" || !/(^|[\\/])ts[\\/]src[\\/]base[\\/]types\.ts$/.test(declaration?.getSourceFile?.()?.fileName ?? "")) {
+        return false;
+      }
+      return checker.getIndexTypeOfType(type, IndexKind3.String) !== void 0 && checker.getIndexTypeOfType(type, IndexKind3.Number) === void 0;
+    } catch (e) {
+      return false;
+    }
+  }
+  // How the identifier at `node` is used. 'element' = the printed Java is a native get/put on the
+  // local; 'neutral' = a property NAME, not a read of the local; 'value' = a position that takes the
+  // box as an Object (return, copy, the value of an element write); 'other' = any use that would see
+  // the local's new static type (argument, receiver, comparison, delete, spread, call of an element)
+  javaBoxUseVerdict(node) {
+    const parent = node.parent;
+    if (parent === void 0 || parent === null) {
+      return "other";
+    }
+    if (isPropertyAccessExpression2(parent) && parent.name === node) {
+      return "neutral";
+    }
+    if (parent.kind === SyntaxKind6.ReturnStatement && parent.expression === node || parent.kind === SyntaxKind6.VariableDeclaration && parent.initializer === node || parent.kind === SyntaxKind6.BinaryExpression && parent.right === node && parent.operatorToken?.kind === SyntaxKind6.EqualsToken) {
+      return "value";
+    }
+    if (isElementAccessExpression3(parent) && parent.expression === node) {
+      const grand = parent.parent;
+      if (grand?.kind === SyntaxKind6.DeleteExpression || isSpreadElement2(grand) || isSpreadAssignment2(grand) || isCallExpression5(grand) && grand.expression === parent) {
+        return "other";
+      }
+      const key = parent.argumentExpression;
+      return key !== void 0 && (isStringLiteralLikeNode3(key) || isIdentifier2(key)) ? "element" : "other";
+    }
+    return "other";
+  }
+  // every use of the local in its function is an element access (at least one), so declaring it a
+  // Map cannot rebind any call in the file through the new static type
+  javaBoxLocalUsedOnlyAsElements(nameNode) {
+    const checker = this.checkerOrUndefined();
+    const symbol = checker?.getSymbolAtLocation(nameNode);
+    if (symbol === void 0) {
+      return false;
+    }
+    let scope = nameNode.parent;
+    while (scope && !isFunctionLike(scope)) {
+      scope = scope.parent;
+    }
+    if (!scope) {
+      return false;
+    }
+    let uses = 0;
+    let ok = true;
+    const walk = (current) => {
+      if (!ok || current === void 0) {
+        return;
+      }
+      if (current !== nameNode && isIdentifier2(current) && current.text === nameNode.text && checker.getSymbolAtLocation(current) === symbol) {
+        const verdict = this.javaBoxUseVerdict(current);
+        if (verdict === "element") {
+          uses++;
+        } else if (verdict === "other") {
+          ok = false;
+          return;
+        }
+      }
+      current.forEachChild(walk);
+    };
+    scope.forEachChild(walk);
+    return ok && uses > 0;
+  }
+  // `const x = await this.m(..)` / `[a, b] = this.m(..)` slot: the awaited / tuple-element TS type is
+  // a json object box and the local is only element-accessed. The erased `.join()` / list `get` needs
+  // the checkcast the declaration carries.
+  javaCheckedBoxLocalType(declaration) {
+    if (declaration === void 0) {
+      return void 0;
+    }
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return void 0;
+    }
+    if (isVariableDeclaration2(declaration) && isIdentifier2(declaration.name) && declaration.initializer?.kind === SyntaxKind6.AwaitExpression) {
+      const call = this.unwrapParenthesized(declaration.initializer.expression);
+      if (!isCallExpression5(call) || !isPropertyAccessExpression2(call.expression) || call.expression.expression.kind !== SyntaxKind6.ThisKeyword && call.expression.expression.kind !== SyntaxKind6.SuperKeyword) {
+        return void 0;
+      }
+      let type;
+      try {
+        type = checker.getTypeAtLocation(declaration.initializer);
+      } catch (e) {
+        return void 0;
+      }
+      return this.javaJsonBoxType(type) && this.javaBoxLocalUsedOnlyAsElements(declaration.name) ? JAVA_ELEMENT_WRITE_MAP_TYPE : void 0;
+    }
+    if (declaration.kind === SyntaxKind6.BindingElement && isIdentifier2(declaration.name) && declaration.dotDotDotToken === void 0 && declaration.initializer === void 0) {
+      const pattern = declaration.parent;
+      const owner = pattern?.parent;
+      if (pattern?.kind !== SyntaxKind6.ArrayBindingPattern || owner === void 0 || !isVariableDeclaration2(owner) || owner.name !== pattern || owner.initializer === void 0) {
+        return void 0;
+      }
+      const call = this.unwrapParenthesized(owner.initializer);
+      if (!isCallExpression5(call)) {
+        return void 0;
+      }
+      let element;
+      try {
+        const type = checker.getTypeAtLocation(call);
+        if (!checker.isTupleType(type)) {
+          return void 0;
+        }
+        const arguments_ = checker.getTypeArguments(type);
+        if (arguments_ === void 0 || arguments_.length !== pattern.elements.length) {
+          return void 0;
+        }
+        element = arguments_[pattern.elements.indexOf(declaration)];
+      } catch (e) {
+        return void 0;
+      }
+      return this.javaJsonBoxType(element) && this.javaBoxLocalUsedOnlyAsElements(declaration.name) ? JAVA_ELEMENT_WRITE_MAP_TYPE : void 0;
+    }
+    return void 0;
+  }
+  javaCheckedBoxLocalTypeCached(declaration) {
+    if (declaration === void 0) {
+      return void 0;
+    }
+    const cached = this.javaCheckedBoxLocalTypeCache.get(declaration);
+    if (cached !== void 0) {
+      return cached === JAVA_MEMO_UNDEFINED ? void 0 : cached;
+    }
+    let type;
+    try {
+      type = this.javaCheckedBoxLocalType(declaration);
+    } catch (e) {
+      type = void 0;
+    }
+    this.javaCheckedBoxLocalTypeCache.set(declaration, type ?? JAVA_MEMO_UNDEFINED);
+    return type;
+  }
+  // every other mention of the local must be a read a `Map<String, Object>` declaration leaves
+  // unchanged: an element-access receiver, a call argument, a return value, an assignment's
+  // right-hand side, a comparison or a container element. A cast, a method call, a spread or a
+  // for-of loop on it prints code that only compiles for the box.
+  javaLocalUsesKeepContainerType(node) {
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return false;
+    }
+    const symbol = checker.getSymbolAtLocation(node);
+    if (symbol === void 0) {
+      return false;
+    }
+    let scope = node;
+    while (scope && !isFunctionLike(scope) && !isSourceFile4(scope)) {
+      scope = scope.parent;
+    }
+    if (!scope) {
+      return false;
+    }
+    let safe = true;
+    const walk = (current) => {
+      if (!safe || current === void 0) {
+        return;
+      }
+      if (isIdentifier2(current) && current !== node && checker.getSymbolAtLocation(current) === symbol) {
+        if (!this.javaContainerNeutralIdentifierUse(current)) {
+          safe = false;
+          return;
+        }
+      }
+      current.forEachChild(walk);
+    };
+    scope.forEachChild(walk);
+    return safe;
+  }
+  javaContainerNeutralIdentifierUse(node) {
+    const parent = node.parent;
+    if (parent === void 0) {
+      return false;
+    }
+    switch (parent.kind) {
+      case SyntaxKind6.ElementAccessExpression:
+        return parent.expression === node;
+      case SyntaxKind6.CallExpression:
+      case SyntaxKind6.NewExpression:
+        return parent.arguments !== void 0 && parent.arguments.includes(node);
+      case SyntaxKind6.ReturnStatement:
+        return true;
+      case SyntaxKind6.BinaryExpression:
+        return parent.operatorToken.kind === SyntaxKind6.EqualsToken ? parent.right === node : true;
+      case SyntaxKind6.VariableDeclaration:
+        return parent.initializer === node;
+      case SyntaxKind6.ArrayLiteralExpression:
+      case SyntaxKind6.ParenthesizedExpression:
+      case SyntaxKind6.ConditionalExpression:
+      case SyntaxKind6.PrefixUnaryExpression:
+        return true;
+      default:
+        return false;
+    }
+  }
+  // any write at all - plain, compound, or a destructuring target - keeps the local on the type
+  // the build layer assigned it: it casts the write of an Object local and rewrites a destructuring
+  // hand-back into a raw element read, both of which need the box
+  javaLocalHasWriteAtAll(node) {
+    const symbol = this.getChecker().getSymbolAtLocation(node);
+    if (symbol === void 0) {
+      return true;
+    }
+    let scope = node;
+    while (scope && !isFunctionLike(scope) && !isSourceFile4(scope)) {
+      scope = scope.parent;
+    }
+    if (!scope) {
+      return true;
+    }
+    let wrote = false;
+    const walk = (current) => {
+      if (wrote || current === void 0) {
+        return;
+      }
+      if (current.kind === SyntaxKind6.BinaryExpression && current.operatorToken.kind >= SyntaxKind6.FirstAssignment && current.operatorToken.kind <= SyntaxKind6.LastAssignment) {
+        const left = current.left;
+        if (isIdentifier2(left) && this.getChecker().getSymbolAtLocation(left) === symbol) {
+          wrote = true;
+          return;
+        }
+        if (!isIdentifier2(left) && !isElementAccessExpression3(left) && !isPropertyAccessExpression2(left) && this.javaPatternBindsSymbol(left, symbol)) {
+          wrote = true;
+          return;
+        }
+      }
+      if ((isForOfStatement(current) || isForInStatement(current)) && isIdentifier2(current.initializer) && this.getChecker().getSymbolAtLocation(current.initializer) === symbol) {
+        wrote = true;
+        return;
+      }
+      current.forEachChild(walk);
+    };
+    walk(scope);
+    return wrote;
+  }
+  unwrapPrintTransparentExpression(node) {
+    let current = node;
+    while (current && (isParenthesizedExpression2(current) || isAsExpression2(current) || isTypeAssertion2(current) || current.kind === SyntaxKind6.NonNullExpression)) {
+      current = current.expression;
+    }
+    return current;
+  }
+  // Every write of the local in its enclosing function must be the element write
+  // itself; an assignment could replace the HashMap with a List or a class instance.
+  javaLocalIsReassigned(node, admitsWrite) {
+    let scope = node;
+    while (scope && !isFunctionLike(scope) && !isSourceFile4(scope)) {
+      scope = scope.parent;
+    }
+    if (!scope) {
+      return true;
+    }
+    const symbol = this.getChecker().getSymbolAtLocation(node);
+    let reassigned = false;
+    const walk = (current) => {
+      if (reassigned || current === void 0) {
+        return;
+      }
+      if (current.kind === SyntaxKind6.BinaryExpression && current.operatorToken.kind === SyntaxKind6.EqualsToken && current.left.kind === SyntaxKind6.Identifier && this.getChecker().getSymbolAtLocation(current.left) === symbol) {
+        if (admitsWrite === void 0 || !admitsWrite(current.right)) {
+          reassigned = true;
+          return;
+        }
+      }
+      if (current.kind === SyntaxKind6.BinaryExpression && current.operatorToken.kind >= SyntaxKind6.FirstAssignment && current.operatorToken.kind <= SyntaxKind6.LastAssignment && !isIdentifier2(current.left) && !isElementAccessExpression3(current.left) && !isPropertyAccessExpression2(current.left) && this.javaPatternBindsSymbol(current.left, symbol) && !this.javaDestructuringHandsBackLocal(current, symbol)) {
+        reassigned = true;
+        return;
+      }
+      if (current.kind === SyntaxKind6.BinaryExpression && current.operatorToken.kind !== SyntaxKind6.EqualsToken && current.operatorToken.kind >= SyntaxKind6.FirstAssignment && current.operatorToken.kind <= SyntaxKind6.LastAssignment && isIdentifier2(current.left) && this.getChecker().getSymbolAtLocation(current.left) === symbol) {
+        reassigned = true;
+        return;
+      }
+      if ((isForOfStatement(current) || isForInStatement(current)) && isIdentifier2(current.initializer) && this.getChecker().getSymbolAtLocation(current.initializer) === symbol) {
+        reassigned = true;
+        return;
+      }
+      current.forEachChild(walk);
+    };
+    walk(scope);
+    return reassigned;
+  }
+  isDictionaryType(node) {
+    try {
+      const checker = this.getChecker();
+      const type = checker.getTypeAtLocation(node);
+      return this.isDictionaryTsType(type, checker, 0);
+    } catch (e) {
+      return false;
+    }
+  }
+  // A TS dictionary (`{ [key: string]: any }`, i.e. ccxt's Dict) is a Map on every
+  // print and run path. Arrays, class instances and unknown types are not, so they
+  // keep the helper.
+  isDictionaryTsType(type, checker, depth) {
+    if (!type || depth > 3) {
+      return false;
+    }
+    const flags = type.flags;
+    if (flags & TypeFlags5.Union) {
+      const parts = type.getTypes?.() ?? [];
+      return parts.length > 0 && parts.every((t) => this.isDictionaryTsType(t, checker, depth + 1));
+    }
+    if (!(flags & TypeFlags5.Object)) {
+      return false;
+    }
+    try {
+      if (checker.isArrayType(type) || checker.isTupleType(type)) {
+        return false;
+      }
+      return checker.getIndexTypeOfType(type, IndexKind3.String) !== void 0;
+    } catch (e) {
+      return false;
+    }
+  }
+  // A rest parameter is a Java varargs array, not a List, so a List cast on it
+  // would throw ClassCastException; simple identifier aliases are followed too.
+  isVarargsArrayReference(node, depth = 0) {
+    if (!node || depth > 4 || node.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    const symbol = this.getChecker().getSymbolAtLocation(node);
+    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
+    if (!declaration) {
+      return false;
+    }
+    if (declaration.dotDotDotToken !== void 0) {
+      return true;
+    }
+    const initializer = declaration.initializer;
+    if (initializer && isIdentifier2(initializer)) {
+      return this.isVarargsArrayReference(initializer, depth + 1);
+    }
+    return false;
+  }
+  // checker proof that the value is printed as a java.util.List: TS arrays and
+  // tuples become ArrayList, ReadonlyArray only adds a readonly modifier
+  isJavaListType(type) {
+    if (!type) {
+      return false;
+    }
+    const checker = this.getChecker();
+    if (checker.isArrayType(type) || checker.isTupleType(type)) {
+      return true;
+    }
+    return type.isTypeReference?.() === true && type.getTarget().getSymbol()?.escapedName === "ReadonlyArray";
+  }
+  // `.length` is a Java int for exactly these receivers; every other receiver keeps
+  // Helpers.getArrayLength, whose result type is not proven
+  javaLengthKind(expression) {
+    const type = this.getChecker().getTypeAtLocation(expression);
+    if (this.isJavaStringType(type)) {
+      return "String";
+    }
+    if (this.isJavaListValueType(type) && !this.isVarargsArrayReference(expression)) {
+      return "List";
+    }
+    if (isIdentifier2(expression)) {
+      if (this.isJavaNullishUnion(type, (member) => this.isStringType(member.flags))) {
+        return "StringOrNull";
+      }
+      if (this.isJavaNullishUnion(type, (member) => this.isJavaListValueType(member)) && !this.isVarargsArrayReference(expression)) {
+        return "ListOrNull";
+      }
+    }
+    return void 0;
+  }
+  // every union member is a List-printing type (TS array/tuple/ReadonlyArray, or an
+  // Array-derived class whose hand-written java counterpart is an ArrayList)
+  isJavaListValueType(type) {
+    if (!type) {
+      return false;
+    }
+    if ((type.flags & TypeFlags5.Union) !== 0) {
+      return type.getTypes().length > 0 && type.getTypes().every((member) => this.isJavaListValueType(member));
+    }
+    return this.isJavaListType(type) || this.isJavaListBackedClassType(type);
+  }
+  // TS class/interface whose java counterpart extends java.util.ArrayList<Object>:
+  // the ws caches (ws/ArrayCache.java) and the order-book sides (ws/OrderBookSide.java)
+  isJavaListBackedClassType(type) {
+    if (!type || (type.flags & TypeFlags5.Object) === 0) {
+      return false;
+    }
+    let current = type.isTypeReference?.() ? type.getTarget() : type;
+    for (let depth = 0; current && depth < 8; depth++) {
+      const name = current.getSymbol?.()?.escapedName;
+      if (name !== void 0 && JAVA_LIST_BACKED_TS_CLASSES.has(name)) {
+        return true;
+      }
+      const bases = current.getBaseTypes?.() ?? [];
+      current = bases.length > 0 ? bases[0].isTypeReference?.() ? bases[0].getTarget() : bases[0] : void 0;
+    }
+    return false;
+  }
+  // union of one accepted member family plus null/undefined: the emitted guard is the
+  // helper's answer for the nullish case and the native read otherwise
+  isJavaNullishUnion(type, isMember) {
+    if (!type || (type.flags & TypeFlags5.Union) === 0 || type.getTypes().length === 0) {
+      return false;
+    }
+    return type.getTypes().every((member) => isMember(member) || (member.flags & (TypeFlags5.Undefined | TypeFlags5.Null)) !== 0);
+  }
+  // shared by printLengthProperty and transformPropertyAcessExpressionIfNeeded
+  printJavaLength(expression, leftSide) {
+    const kind = this.javaLengthKind(expression);
+    if (kind !== void 0) {
+      const read = kind.startsWith("String") ? `((String)${leftSide}).length()` : `((java.util.List<?>)${leftSide}).size()`;
+      return kind.endsWith("OrNull") ? `(${leftSide} == null ? 0 : ${read})` : read;
+    }
+    const declared = this.javaDeclaredTypeOf(expression);
+    if (declared !== void 0 && JAVA_DECLARED_LIST_TYPES.test(declared)) {
+      return `(${leftSide} == null ? 0 : ${leftSide}.size())`;
+    }
+    return `${this.ARRAY_LENGTH_WRAPPER_OPEN}${leftSide}${this.ARRAY_LENGTH_WRAPPER_CLOSE}`;
+  }
+  // checker proof that the value is printed as a java.util.HashMap: TS object
+  // shapes (interfaces, object literals, aliases) become HashMaps, while class
+  // instances are real Java objects and arrays/unions are not proven here
+  isJavaMapType(type) {
+    if (!type || (type.flags & TypeFlags5.Object) === 0) {
+      return false;
+    }
+    const checker = this.getChecker();
+    if (checker.isArrayType(type) || checker.isTupleType(type)) {
+      return false;
+    }
+    if (type.getCallSignatures().length > 0) {
+      return false;
+    }
+    const declarations = (type.getSymbol()?.declarations ?? []).map((d) => d.resolve());
+    return !declarations.some((declaration) => declaration.kind === SyntaxKind6.ClassDeclaration || declaration.getSourceFile().fileName.indexOf("typescript") > -1);
+  }
+  // `Dictionary | undefined` (what a no-overload safe* signature widens to): the helper
+  // answers false for the nullish arm and the guarded emission keeps exactly that; every
+  // non-map member (arrays, classes, scalars) keeps the helper
+  isJavaNullableMapType(type) {
+    return this.isJavaNullishUnion(type, (member) => this.isJavaMapType(member)) && (type.getTypes?.() ?? []).some((member) => (member.flags & (TypeFlags5.Undefined | TypeFlags5.Null)) === 0);
+  }
+  // the guarded emission reads the receiver twice, so it is only printed for an operand
+  // that cannot run anything twice: a name or a `this.` field. Everything else (calls,
+  // element reads) keeps the helper so the operand is still evaluated once.
+  javaRepeatableOperand(node) {
+    if (node === void 0) {
+      return false;
+    }
+    if (isIdentifier2(node)) {
+      return true;
+    }
+    if (isParenthesizedExpression2(node)) {
+      return this.javaRepeatableOperand(node.expression);
+    }
+    return isPropertyAccessExpression2(node) && node.expression?.kind === SyntaxKind6.ThisKeyword;
+  }
+  // The declared Java type of a local/parameter is known to the pass that rewrites the declaration
+  // text (build/java-local-types.js), which records every name it typed here. With no consumer
+  // installed the table is empty and every read keeps the helper.
+  javaDeclaredTypeOf(expression) {
+    if (expression === void 0 || !isIdentifier2(expression)) {
+      return void 0;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(expression);
+    if (declaration === void 0 || expression.text !== declaration.name?.text) {
+      return void 0;
+    }
+    return this.javaDeclaredTypeOfDeclaration(declaration);
+  }
+  // the declared Java type of a declaration: the embedding build layer names the
+  // declarations it retypes itself, and a parameter the printer retypes
+  // (javaNativeParameterType) answers for itself, so its element reads go native too
+  javaDeclaredTypeOfDeclaration(declaration) {
+    if (this.javaDeclaredLocalTypeResolver !== void 0) {
+      let type;
+      try {
+        type = this.javaDeclaredLocalType(declaration);
+      } catch (e) {
+        type = void 0;
+      }
+      if (typeof type === "string" && type.trim().length > 0) {
+        return type.trim();
+      }
+    }
+    const own = this.javaElementWriteMapLocalType(declaration);
+    if (own !== void 0) {
+      return own;
+    }
+    const baseField = this.javaBaseMapFieldLocalType(declaration);
+    if (baseField !== void 0) {
+      return baseField;
+    }
+    const checkedBox = this.javaCheckedBoxLocalTypeCached(declaration);
+    if (checkedBox !== void 0) {
+      return checkedBox;
+    }
+    if (isParameterDeclaration2(declaration)) {
+      const fixed = this.javaNativeParameterType(declaration);
+      if (fixed !== void 0) {
+        return fixed;
+      }
+      const optional = this.javaOptionalParameterTypeCached(declaration);
+      return optional === JAVA_NATIVE_DICT_PARAMETER_TYPE ? optional : void 0;
+    }
+    return void 0;
+  }
+  // The declared Java type of a local as the embedding build layer publishes it
+  // (javaDeclaredLocalTypeResolver), else the type its own initialiser prints when that is a
+  // sync `this.<m> (...)` call of a generated venue method whose declaration prints a native
+  // Map/List (javaVenueCalleeReturnType). The resolver only knows the files the calling worker
+  // printed, and a callee's local can sit in another file: the fallback answers from the callee's
+  // declaration, so the answer never depends on what an earlier generation or worker printed.
+  // No resolver installed (no consumer) = no fallback, every read keeps the helper.
+  javaDeclaredLocalType(declaration) {
+    const resolver = this.javaDeclaredLocalTypeResolver;
+    if (typeof resolver !== "function") {
+      return void 0;
+    }
+    const own = resolver(declaration);
+    if (own !== void 0 || declaration === void 0) {
+      return own;
+    }
+    try {
+      return this.javaVenueCalleeLocalType(declaration);
+    } catch (e) {
+      return void 0;
+    }
+  }
+  // a read the enclosing code only reaches with the binding non-null: the right operand of
+  // `x !== undefined && ..`, the matching arm of an `if`/`?:` on that test, or any statement
+  // after `if (x === undefined) { return/throw/.. }`. Callers require an unwritten binding.
+  javaNullGuardAdmitsRead(node) {
+    const checker = this.checkerOrUndefined();
+    const symbol = checker?.getSymbolAtLocation(node);
+    if (symbol === void 0) {
+      return false;
+    }
+    let current = node;
+    while (current.parent !== void 0) {
+      const parent = current.parent;
+      if (isBinaryExpression4(parent) && parent.operatorToken.kind === SyntaxKind6.AmpersandAmpersandToken && parent.right === current && this.javaTestProvesNonNull(parent.left, symbol, true)) {
+        return true;
+      }
+      if (isBinaryExpression4(parent) && parent.operatorToken.kind === SyntaxKind6.BarBarToken && parent.right === current && this.javaTestProvesNonNull(parent.left, symbol, false)) {
+        return true;
+      }
+      if (isIfStatement3(parent) || isConditionalExpression2(parent)) {
+        const test = isIfStatement3(parent) ? parent.expression : parent.condition;
+        const whenTrue = isIfStatement3(parent) ? parent.thenStatement : parent.whenTrue;
+        const whenFalse = isIfStatement3(parent) ? parent.elseStatement : parent.whenFalse;
+        if (whenTrue === current && this.javaTestProvesNonNull(test, symbol, true) || whenFalse === current && this.javaTestProvesNonNull(test, symbol, false)) {
+          return true;
+        }
+      }
+      if (isBlock3(parent)) {
+        for (const sibling of parent.statements) {
+          if (sibling === current) {
+            break;
+          }
+          if (isIfStatement3(sibling) && (this.javaTestProvesNonNull(sibling.expression, symbol, false) && this.javaStatementAlwaysExits(sibling.thenStatement) || this.javaTestProvesNonNull(sibling.expression, symbol, true) && this.javaStatementAlwaysExits(sibling.elseStatement))) {
+            return true;
+          }
+        }
+      }
+      current = parent;
+    }
+    return false;
+  }
+  // `x !== undefined` / `x != null` (either order) proves x non-null when the test is true;
+  // `x === undefined` when false; `&&` (true) / `||` (false) prove through either side, `!` flips
+  javaTestProvesNonNull(test, symbol, truthy) {
+    if (test === void 0) {
+      return false;
+    }
+    if (isParenthesizedExpression2(test)) {
+      return this.javaTestProvesNonNull(test.expression, symbol, truthy);
+    }
+    if (isPrefixUnaryExpression2(test) && test.operator === SyntaxKind6.ExclamationToken) {
+      return this.javaTestProvesNonNull(test.operand, symbol, !truthy);
+    }
+    if (!isBinaryExpression4(test)) {
+      return false;
+    }
+    const op = test.operatorToken.kind;
+    if (op === SyntaxKind6.AmpersandAmpersandToken) {
+      return truthy && (this.javaTestProvesNonNull(test.left, symbol, true) || this.javaTestProvesNonNull(test.right, symbol, true));
+    }
+    if (op === SyntaxKind6.BarBarToken) {
+      return !truthy && (this.javaTestProvesNonNull(test.left, symbol, false) || this.javaTestProvesNonNull(test.right, symbol, false));
+    }
+    const inequality = op === SyntaxKind6.ExclamationEqualsToken || op === SyntaxKind6.ExclamationEqualsEqualsToken;
+    const equality = op === SyntaxKind6.EqualsEqualsToken || op === SyntaxKind6.EqualsEqualsEqualsToken;
+    if (!inequality && !equality || truthy !== inequality) {
+      return false;
+    }
+    const nullish = (n) => n.kind === SyntaxKind6.NullKeyword || isIdentifier2(n) && n.text === "undefined";
+    const tested = nullish(test.right) ? test.left : nullish(test.left) ? test.right : void 0;
+    const checker = this.checkerOrUndefined();
+    return tested !== void 0 && isIdentifier2(tested) && checker?.getSymbolAtLocation(tested) === symbol;
+  }
+  javaStatementAlwaysExits(statement) {
+    if (statement === void 0) {
+      return false;
+    }
+    const exits = (n) => isReturnStatement3(n) || isThrowStatement3(n) || isContinueStatement2(n) || isBreakStatement2(n);
+    if (exits(statement)) {
+      return true;
+    }
+    return isBlock3(statement) && statement.statements.length > 0 && exits(statement.statements[statement.statements.length - 1]);
+  }
+  // a local whose emitted declaration the build layer already typed with the target Java
+  // type (javaDeclaredLocalTypeResolver publishes exactly the printed `Map<String, Object> x`
+  // / `List<Object> x` lines), so the return prints the target on that path
+  javaDeclaredReturnTarget(node, target) {
+    if (!isIdentifier2(node) || typeof this.javaDeclaredLocalTypeResolver !== "function") {
+      return false;
+    }
+    this.javaReturnTypeUsedDeclaredLocals = true;
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration === void 0) {
+      return false;
+    }
+    let declared;
+    try {
+      declared = this.javaDeclaredLocalType(declaration);
+    } catch (e) {
+      return false;
+    }
+    if (declared === void 0) {
+      return false;
+    }
+    const normalize = (type) => String(type).replace(/^final\s+/, "").replace(/\s+/g, "").replace(/^java\.util\./, "");
+    return normalize(declared) === normalize(target);
   }
   // dict-shaped values are Map<String, Object> in the Java port: raw HashMap/ConcurrentHashMap
   // or a types.TypedMap view (AbstractMap<String, Object> over the raw payload). Proven by the
@@ -44654,26 +44210,6 @@ ${this.getIden(identation)}}}`;
         return false;
     }
   }
-  // receivers whose printed elements the ccxt post-pass types as String FROM the helper call
-  // (`x.split(sep)` and string-literal array producers): those locals narrow to String only
-  // while the read prints `Helpers.GetValue(`, so their reads keep the helper.
-  javaStringElementsReceiver(node) {
-    if (!isIdentifier2(node)) {
-      return false;
-    }
-    const declaration = this.getChecker().getSymbolAtLocation(node)?.valueDeclaration?.resolve();
-    const initializer = declaration !== void 0 && isVariableDeclaration2(declaration) ? declaration.initializer : void 0;
-    if (initializer === void 0) {
-      return false;
-    }
-    if (isCallExpression5(initializer) && isPropertyAccessExpression2(initializer.expression)) {
-      return initializer.expression.name?.text === "split";
-    }
-    if (isArrayLiteralExpression3(initializer)) {
-      return initializer.elements.length > 0 && initializer.elements.every((element) => element.kind === SyntaxKind6.StringLiteral || element.kind === SyntaxKind6.NoSubstitutionTemplateLiteral);
-    }
-    return false;
-  }
   isLeftSideOfAssignment(node) {
     const parent = node.parent;
     if (parent?.kind !== SyntaxKind6.BinaryExpression || parent.left !== node) {
@@ -44709,15 +44245,255 @@ ${this.getIden(identation)}}}`;
     const type = this.javaDeclaredTypeOfDeclaration(declaration);
     return type !== void 0 && JAVA_DECLARED_MAP_TYPES.test(type);
   }
-  // `this.<field>` for a BaseExchange.java field declared Map<String, Object>
-  javaMapWriteFieldReceiver(expression) {
-    if (expression === void 0 || !isPropertyAccessExpression2(expression)) {
+  unwrapParenthesized(node) {
+    let current = node;
+    while (current !== void 0 && isParenthesizedExpression2(current)) {
+      current = current.expression;
+    }
+    return current;
+  }
+  // `x[<integer expression>]` on a declared List. Helpers.GetValue truncates the key to an int
+  // and answers null outside [0, size), so the read carries both tests on the narrowed index.
+  // The guarded form prints the index three times, so only an operand of literals and
+  // declared-numeric names may take it.
+  javaDeclaredListIndexRead(node) {
+    if (node.parent?.kind === SyntaxKind6.ExpressionStatement) {
+      return void 0;
+    }
+    if (this.printElementAccessExpressionExceptionIfAny(node) !== void 0 || this.isLeftSideOfAssignment(node)) {
+      return void 0;
+    }
+    const declared = this.javaDeclaredTypeOf(node.expression);
+    if (declared === void 0 || !JAVA_DECLARED_LIST_TYPES.test(declared)) {
+      return void 0;
+    }
+    const key = node.argumentExpression;
+    if (!this.javaRepeatableIntegerExpression(key, 0)) {
+      return void 0;
+    }
+    const index = this.printNode(key, 0);
+    if (index.includes("Helpers.") || index.includes("()") || index.includes(" ? ")) {
+      return void 0;
+    }
+    if (/^[A-Za-z_$][\w$]*$/.test(index)) {
+      return void 0;
+    }
+    if (/^\(\(\(long\) [A-Za-z_$][\w$]*\) - 1L\)$/.test(index)) {
+      return void 0;
+    }
+    if (!this.javaNonNullableNumberType(key)) {
+      return void 0;
+    }
+    const target = this.printNode(node.expression, 0);
+    const narrowed = index.startsWith("(") ? `((int) ${index})` : `((int) (${index}))`;
+    return `(${target} == null || ${narrowed} < 0 || ${narrowed} >= ${target}.size() ? null : ${target}.get(${narrowed}))`;
+  }
+  // the use prints the declaration's own name: a local or parameter the printer renamed
+  // (the `finalX` object-literal capture, the async parameter wrapper) prints against a
+  // different declaration, whose recorded type does not describe it
+  javaIdentifierPrintsDeclaredName(node) {
+    try {
+      return this.printNode(node, 0) === String(node.text);
+    } catch (e) {
       return false;
     }
-    if (expression.expression.kind !== SyntaxKind6.ThisKeyword) {
+  }
+  // a use the printer rewrote to its `finalX` anonymous-class capture prints against its
+  // own `Object finalX = x;` local, so the recorded type of the declaration no longer
+  // holds (`(finalTime - 8L)` on an Object local does not compile)
+  javaIdentifierKeepsDeclaredName(node) {
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
       return false;
     }
-    return JAVA_MAP_WRITE_FIELDS.has(expression.name.text);
+    const declaration = checker.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+    if (declaration === void 0 || declaration.kind !== SyntaxKind6.VariableDeclaration && !isParameterDeclaration2(declaration)) {
+      return false;
+    }
+    return String(node.text) === String(declaration.name?.text);
+  }
+  printVariableDeclarationList(node, identation) {
+    const declaration = node.declarations[0];
+    if (this.removeVariableDeclarationForFunctionExpression && declaration?.initializer && isFunctionExpression5(declaration.initializer)) {
+      return this.printNode(declaration.initializer, identation).trimEnd();
+    }
+    if (declaration?.name.kind === SyntaxKind6.ArrayBindingPattern) {
+      const arrayBindingPattern = declaration.name;
+      const arrayBindingPatternElements = arrayBindingPattern.elements;
+      const parsedArrayBindingElements = arrayBindingPatternElements.map(
+        (e) => this.printNode(e.name, 0)
+      );
+      const syntheticName = parsedArrayBindingElements.join("") + "Variable";
+      const arrayBindingStatement = `${this.getIden(identation)}var ${syntheticName} = ${this.printNode(
+        declaration.initializer,
+        0
+      )};
+`;
+      return arrayBindingStatement + parsedArrayBindingElements.map((e, index) => {
+        const boxType = this.javaCheckedBoxLocalTypeCached(arrayBindingPatternElements[index]);
+        if (boxType !== void 0) {
+          return this.getIden(identation) + `${boxType} ${e} = (${boxType}) ((java.util.List<Object>) ${syntheticName}).get(${index})`;
+        }
+        return this.getIden(identation) + `var ${e} = ((java.util.List<Object>) ${syntheticName}).get(${index})`;
+      }).join(";\n");
+    }
+    const isNew = declaration?.initializer && declaration.initializer.kind === SyntaxKind6.NewExpression;
+    let varToken = isNew ? "var " : this.VAR_TOKEN + " ";
+    if (!isNew) {
+      const arithmeticType = this.javaArithmeticLocalType(declaration);
+      if (arithmeticType !== void 0) {
+        varToken = arithmeticType + " ";
+      } else {
+        const elementWriteType = this.javaElementWriteMapLocalType(declaration);
+        if (elementWriteType !== void 0) {
+          varToken = elementWriteType + " ";
+        }
+        const baseFieldType = this.javaBaseMapFieldLocalType(declaration);
+        if (baseFieldType !== void 0) {
+          varToken = baseFieldType + " ";
+        }
+      }
+      const valuesType = this.javaObjectValuesLocalType(declaration);
+      if (valuesType !== void 0) {
+        varToken = valuesType + " ";
+      }
+      const wsClientType = this.javaWsClientLocalType(declaration);
+      if (wsClientType !== void 0) {
+        varToken = wsClientType + " ";
+      }
+      const wsClientAliasType = this.javaWsClientAliasLocalType(declaration);
+      if (wsClientAliasType !== void 0) {
+        varToken = wsClientAliasType + " ";
+      }
+      const handlerType = this.javaHandlerDeclarationType(declaration);
+      if (handlerType !== void 0) {
+        varToken = handlerType + " ";
+      }
+    }
+    if (!declaration.initializer) {
+      return this.getIden(identation) + "Object " + this.printNode(declaration.name) + " = " + this.UNDEFINED_TOKEN;
+    }
+    const parsedValue = this.printNode(declaration.initializer, identation).trimStart();
+    if (parsedValue === this.UNDEFINED_TOKEN) {
+      let specificVarToken = "Object";
+      if (this.INFER_VAR_TYPE) {
+        const variableType = this.getChecker().typeToString(
+          this.getChecker().getTypeAtLocation(declaration)
+        );
+        if (this.VariableTypeReplacements[variableType]) {
+          specificVarToken = this.VariableTypeReplacements[variableType];
+        }
+      }
+      return this.getIden(identation) + specificVarToken + " " + this.printNode(declaration.name) + " = " + parsedValue;
+    }
+    const awaitedBox = !isNew && declaration.initializer.kind === SyntaxKind6.AwaitExpression ? this.javaCheckedBoxLocalTypeCached(declaration) : void 0;
+    if (awaitedBox !== void 0) {
+      return this.getIden(identation) + awaitedBox + " " + this.printNode(declaration.name) + " = (" + awaitedBox + ") " + parsedValue;
+    }
+    return this.getIden(identation) + varToken + this.printNode(declaration.name) + " = " + parsedValue;
+  }
+  transformPropertyAcessExpressionIfNeeded(node) {
+    const expression = node.expression;
+    const leftSide = this.printNode(expression, 0);
+    const rightSide = node.name.text;
+    let rawExpression = void 0;
+    switch (rightSide) {
+      case "length": {
+        const type = this.getChecker().getTypeAtLocation(
+          expression
+        );
+        this.warnIfAnyType(node, type.flags, leftSide, "length");
+        rawExpression = this.printJavaLength(expression, leftSide);
+        break;
+      }
+      case "push":
+        rawExpression = `((java.util.List<Object>)${leftSide}).add`;
+        break;
+    }
+    return rawExpression;
+  }
+  printAsExpression(node, identation) {
+    const type = node.type;
+    if (type.kind === SyntaxKind6.AnyKeyword) {
+      return `((${this.VariableTypeReplacements["object"]})${this.printNode(
+        node.expression,
+        identation
+      )})`;
+    }
+    if (type.kind === SyntaxKind6.StringKeyword) {
+      return `((String)${this.printNode(node.expression, identation)})`;
+    }
+    if (type.kind === SyntaxKind6.ArrayType) {
+      const element = type.elementType.kind === SyntaxKind6.AnyKeyword ? "Object" : type.elementType.kind === SyntaxKind6.StringKeyword ? "String" : void 0;
+      if (element !== void 0) {
+        return `(java.util.List<${element}>)(${this.printNode(node.expression, identation)})`;
+      }
+    }
+    return this.printNode(node.expression, identation);
+  }
+  javaOperandType(operand) {
+    return this.checkerOrUndefined()?.getTypeAtLocation(operand);
+  }
+  // types whose Java print is a scalar final class (`instanceof java.util.List` is not
+  // convertible on them): the scalar family, and unions made only of scalars/nulls
+  javaScalarType(type) {
+    return this.javaTypeFlagsOnly(type, JAVA_SCALAR_TYPE_FLAGS);
+  }
+  // types that provably never hold a List: every scalar (Java String/Long/Double/Boolean
+  // answer false) and the nullish types (JS Array.isArray(null) is false)
+  javaNonArrayType(type) {
+    return this.javaTypeFlagsOnly(type, JAVA_SCALAR_TYPE_FLAGS | JAVA_NULLISH_TYPE_FLAGS);
+  }
+  // the type, or every member of its (nested) union, carries one of the mask's flags
+  javaTypeFlagsOnly(type, mask2, depth = 0) {
+    if (type === void 0 || type === null || depth > 3) {
+      return false;
+    }
+    const flags = type.flags;
+    if (flags & TypeFlags5.Union) {
+      const parts = type.getTypes?.() ?? [];
+      return parts.length > 0 && parts.every((part) => this.javaTypeFlagsOnly(part, mask2, depth + 1));
+    }
+    return (flags & mask2) !== 0;
+  }
+  // a `const`-bound local is assigned exactly once, so the printed java local is
+  // effectively final (a lambda can capture it) and re-reading it joins the same future
+  isConstBoundIdentifier(node) {
+    if (node.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    const declaration = this.getChecker().getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+    return declaration?.kind === SyntaxKind6.VariableDeclaration && (getCombinedNodeFlags(declaration) & NodeFlags3.Const) === NodeFlags3.Const;
+  }
+  printLengthProperty(node, _identation, _name = void 0) {
+    const leftSide = this.printNode(node.expression, 0);
+    const type = this.getChecker().getTypeAtLocation(node.expression);
+    this.warnIfAnyType(node, type.flags, leftSide, "length");
+    return this.printJavaLength(node.expression, leftSide);
+  }
+  // ===== element reads (Helpers.GetValue) =====
+  // the bottom container of `x[k1][k2].. = v` when x is a declared Map / List and k1 is not a
+  // string literal: the guarded native read of the element-read families (the literal key is
+  // printed by the caller's own arm)
+  javaDeclaredChainContainerRead(left, keyCount) {
+    let inner = left;
+    for (let i = 1; i < keyCount; i++) {
+      inner = inner.expression;
+    }
+    if (inner === void 0 || !isElementAccessExpression3(inner) || isStringLiteralLikeNode3(inner.argumentExpression)) {
+      return void 0;
+    }
+    const declared = this.javaDeclaredTypeOf(inner.expression);
+    if (declared === void 0) {
+      return void 0;
+    }
+    if (JAVA_DECLARED_MAP_TYPES.test(declared)) {
+      return this.javaDeclaredMapElementRead(inner);
+    }
+    if (JAVA_DECLARED_LIST_TYPES.test(declared) && this.javaPrimitiveCounterIndex(inner.argumentExpression)) {
+      return this.javaDeclaredListElementRead(inner, true);
+    }
+    return void 0;
   }
   // `this.<cache>` whose TS declaration types the values (an `any`-valued bag is reassigned freely)
   javaPlainCacheFieldReceiver(expression) {
@@ -44730,17 +44506,6 @@ ${this.getIden(identation)}}}`;
     }
     const value = checker.getIndexTypeOfType(checker.getTypeAtLocation(expression), IndexKind3.String);
     return value !== void 0 && (value.flags & (TypeFlags5.Any | TypeFlags5.Unknown)) === 0;
-  }
-  // a key Java proves String: a literal, an `x as string` (prints `((String)x)`) or a String-declared name
-  javaStringProvenKey(key) {
-    if (isStringLiteralLikeNode3(key)) {
-      return true;
-    }
-    let node = key;
-    while (isParenthesizedExpression2(node)) {
-      node = node.expression;
-    }
-    return isAsExpression2(node) && node.type?.kind === SyntaxKind6.StringKeyword || this.javaDeclaredStringType(node);
   }
   // `this.<cache>[k]` with a non-literal String key: GetValue answers null for a null receiver or
   // key and the plain map get is its Map branch. The key prints twice, so it must be repeatable.
@@ -44773,9 +44538,9 @@ ${this.getIden(identation)}}}`;
     }
     return false;
   }
-  javaLiteralTree(literal) {
+  javaLiteralTree(literal2) {
     const tree = {};
-    for (const property of literal.properties) {
+    for (const property of literal2.properties) {
       if (!isPropertyAssignment(property) || !isIdentifier2(property.name) && !isStringLiteralLikeNode3(property.name)) {
         return void 0;
       }
@@ -44816,8 +44581,8 @@ ${this.getIden(identation)}}}`;
       }
       return found;
     };
-    for (const literal of returnedLiterals(method("describe")?.body, 0)) {
-      const candidate = this.javaLiteralTree(literal);
+    for (const literal2 of returnedLiterals(method("describe")?.body, 0)) {
+      const candidate = this.javaLiteralTree(literal2);
       if (candidate !== void 0 && typeof candidate["urls"] === "object") {
         tree = candidate;
         break;
@@ -44869,13 +44634,6 @@ ${this.getIden(identation)}}}`;
     }
     return `(${keyText} == null ? null : ((java.util.Map<String, Object>)${target}).get(${keyText}))`;
   }
-  // `this.<field>` for a BaseExchange.java field declared over a single-owner store
-  javaOwnerStoreFieldReceiver(expression) {
-    if (expression === void 0 || !isPropertyAccessExpression2(expression)) {
-      return false;
-    }
-    return expression.expression.kind === SyntaxKind6.ThisKeyword && this.javaOwnerStoreFields.has(expression.name.text);
-  }
   // `x[k]` where x is `this.ohlcvs[s]`: see javaOhlcvsSymbolMapRead
   javaOhlcvsElementRead(node) {
     if (node.parent?.kind === SyntaxKind6.ExpressionStatement || node.parent?.kind === SyntaxKind6.DeleteExpression || this.printElementAccessExpressionExceptionIfAny(node) !== void 0 || this.isLeftSideOfAssignment(node)) {
@@ -44883,42 +44641,6 @@ ${this.getIden(identation)}}}`;
     }
     const receiver = this.unwrapPrintTransparentExpression(node.expression);
     return receiver !== void 0 && isElementAccessExpression3(receiver) ? this.javaOhlcvsSymbolMapRead(node, receiver) : void 0;
-  }
-  // `(x as string[])[i]` over a for-counter, x a side-effect-free reference the checker types
-  // `string[]` (| undefined): the printed receiver is the cast `(java.util.List<String>)(x)` either way,
-  // so the helper's null / range answers become the explicit guard on that same cast
-  javaStringArrayAssertedCounterRead(node) {
-    if (node.parent?.kind === SyntaxKind6.ExpressionStatement || this.isLeftSideOfAssignment(node) || this.printElementAccessExpressionExceptionIfAny(node) !== void 0) {
-      return void 0;
-    }
-    const asserted = this.unwrapParenthesized(node.expression);
-    if (asserted === void 0 || !isAsExpression2(asserted) || !isArrayTypeNode(asserted.type) || asserted.type.elementType.kind !== SyntaxKind6.StringKeyword) {
-      return void 0;
-    }
-    const operand = this.unwrapParenthesized(asserted.expression);
-    if (operand === void 0 || !isIdentifier2(operand) || this.isVarargsArrayReference(operand) || this.javaStringElementsReceiver(operand) || this.printNode(operand, 0).trim() !== operand.text) {
-      return void 0;
-    }
-    const checker = this.checkerOrUndefined();
-    let operandType;
-    try {
-      operandType = checker?.getTypeAtLocation(operand);
-    } catch (e) {
-      return void 0;
-    }
-    if (operandType === void 0 || !this.javaIsStringArrayType(checker, operandType)) {
-      return void 0;
-    }
-    const list = `((java.util.List<String>)(${operand.text}))`;
-    const index = this.printNode(node.argumentExpression, 0);
-    return `(${list} == null || ${index} < 0 || ${index} >= ${list}.size() ? null : ${list}.get(${index}))`;
-  }
-  unwrapParenthesized(node) {
-    let current = node;
-    while (current !== void 0 && isParenthesizedExpression2(current)) {
-      current = current.expression;
-    }
-    return current;
   }
   // `this.ohlcvs[s][k]` (base field `Dictionary<Dictionary<ArrayCacheByTimestamp>>`): once the member
   // has put a fresh map under s the per-symbol value is a non-null Map, so the helper's read is the
@@ -45233,8 +44955,8 @@ ${this.getIden(identation)}}}`;
     if (fallback === void 0 || this.isNullishLiteral(fallback)) {
       return `this.${accessors[0]}()`;
     }
-    const literal = this.unwrapPrintTransparentExpression(fallback);
-    if (isObjectLiteralExpression3(literal) && literal.properties.length === 0) {
+    const literal2 = this.unwrapPrintTransparentExpression(fallback);
+    if (isObjectLiteralExpression3(literal2) && literal2.properties.length === 0) {
       return `this.${accessors[1]}()`;
     }
     return void 0;
@@ -45314,99 +45036,6 @@ ${this.getIden(identation)}}}`;
       return `(${target} == null || ${this.printNode(operand, 0)} == null ? null : ${target}.get(${keyText}))`;
     }
     return `(${target} == null || !(${keyText} instanceof String) ? null : ${target}.get(${keyText}))`;
-  }
-  // `x[<integer expression>]` on a declared List. Helpers.GetValue truncates the key to an int
-  // and answers null outside [0, size), so the read carries both tests on the narrowed index.
-  // The guarded form prints the index three times, so only an operand of literals and
-  // declared-numeric names may take it.
-  javaDeclaredListIndexRead(node) {
-    if (node.parent?.kind === SyntaxKind6.ExpressionStatement) {
-      return void 0;
-    }
-    if (this.printElementAccessExpressionExceptionIfAny(node) !== void 0 || this.isLeftSideOfAssignment(node)) {
-      return void 0;
-    }
-    const declared = this.javaDeclaredTypeOf(node.expression);
-    if (declared === void 0 || !JAVA_DECLARED_LIST_TYPES.test(declared)) {
-      return void 0;
-    }
-    const key = node.argumentExpression;
-    if (!this.javaRepeatableIntegerExpression(key, 0)) {
-      return void 0;
-    }
-    const index = this.printNode(key, 0);
-    if (index.includes("Helpers.") || index.includes("()") || index.includes(" ? ")) {
-      return void 0;
-    }
-    if (/^[A-Za-z_$][\w$]*$/.test(index)) {
-      return void 0;
-    }
-    if (/^\(\(\(long\) [A-Za-z_$][\w$]*\) - 1L\)$/.test(index)) {
-      return void 0;
-    }
-    if (!this.javaNonNullableNumberType(key)) {
-      return void 0;
-    }
-    const target = this.printNode(node.expression, 0);
-    const narrowed = index.startsWith("(") ? `((int) ${index})` : `((int) (${index}))`;
-    return `(${target} == null || ${narrowed} < 0 || ${narrowed} >= ${target}.size() ? null : ${target}.get(${narrowed}))`;
-  }
-  // a plain non-nullable TS number: the narrowed index is a primitive on every path
-  javaNonNullableNumberType(node) {
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0 || node === void 0) {
-      return false;
-    }
-    let type;
-    try {
-      type = checker.getTypeAtLocation(node);
-    } catch (e) {
-      return false;
-    }
-    if (type === void 0 || type.getAliasSymbol?.() !== void 0) {
-      return false;
-    }
-    return (type.flags & TypeFlags5.Number) !== 0 || (type.flags & TypeFlags5.NumberLiteral) !== 0;
-  }
-  // a side-effect-free expression of integer leaves: a numeric literal, a `var` loop counter, or
-  // a name whose declaration prints a Java numeric type, combined with + - * / %
-  javaRepeatableIntegerExpression(node, depth) {
-    if (node === void 0 || depth > 4) {
-      return false;
-    }
-    switch (node.kind) {
-      case SyntaxKind6.NumericLiteral:
-        return true;
-      case SyntaxKind6.Identifier: {
-        if (this.javaPrimitiveCounterIndex(node)) {
-          return true;
-        }
-        const declared = this.javaDeclaredTypeOf(node);
-        return declared !== void 0 && JAVA_DECLARED_NUMERIC_TYPES.has(declared.trim());
-      }
-      case SyntaxKind6.ParenthesizedExpression:
-        return this.javaRepeatableIntegerExpression(node.expression, depth + 1);
-      case SyntaxKind6.PrefixUnaryExpression:
-        return this.javaRepeatableIntegerExpression(node.operand, depth + 1);
-      case SyntaxKind6.BinaryExpression: {
-        const operator = node.operatorToken.kind;
-        if (operator !== SyntaxKind6.PlusToken && operator !== SyntaxKind6.MinusToken && operator !== SyntaxKind6.AsteriskToken && operator !== SyntaxKind6.SlashToken && operator !== SyntaxKind6.PercentToken) {
-          return false;
-        }
-        return this.javaRepeatableIntegerExpression(node.left, depth + 1) && this.javaRepeatableIntegerExpression(node.right, depth + 1);
-      }
-      default:
-        return false;
-    }
-  }
-  // the identifier of a `for (var i = <int literal>; …; i++)` counter that still prints as
-  // `i`: the JN capture rename prints `finalI`, a `final Object` box, which is not an int
-  javaPrimitiveCounterIndex(node) {
-    if (!this.isJavaPrimitiveCounterReference(node)) {
-      return false;
-    }
-    const declaration = this.javaDeclarationOfIdentifier(node);
-    return declaration !== void 0 && node.text === declaration.name?.text;
   }
   // `this.<field>[k]` on a hand-written base map field (JAVA_FIELD_TYPES): the helper's Map branch is
   // the native `get`. The helper answers null for a null receiver or key, so both stay guarded; the
@@ -45555,7 +45184,2589 @@ ${this.getIden(identation)}}}`;
     const target = this.printNode(node.expression, 0);
     return `(${target} == null ? null : ${target}.get(${this.printNode(key, 0)}))`;
   }
-  // ---- helper-family inlining: `+ - * / += -=` ---------------------------
+  // ===== element writes, fresh maps and object literals =====
+  // `x[k] = v` prints the runtime helper by default. Helpers.addElementToObject
+  // exists for receivers the printer cannot type (Lists, arbitrary objects via
+  // reflection) and for ConcurrentHashMap null-removal, so the native Map.put is
+  // printed only when the checker excludes all of those.
+  elementWriteTargetsMap(container, base, keys, value) {
+    const lastKey = keys[keys.length - 1];
+    if (!isStringLiteral2(lastKey) && !this.isJavaStringType(this.getChecker().getTypeAtLocation(lastKey))) {
+      return false;
+    }
+    if (isPropertyAccessExpression2(base) && base.expression.kind === SyntaxKind6.ThisKeyword) {
+      return false;
+    }
+    if (this.isPlainHashMapReceiver(container, keys)) {
+      return true;
+    }
+    return this.isDictionaryType(container) && !this.elementWriteValueMayBeNull(value);
+  }
+  // true unless the checker proves the written value is never null/undefined
+  elementWriteValueMayBeNull(value) {
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0 || value === void 0) {
+      return true;
+    }
+    if (this.javaFreshMapLocalValue(value)) {
+      return false;
+    }
+    const type = checker.getTypeAtLocation(value);
+    const parts = type.flags & TypeFlags5.Union ? type.getTypes?.() ?? [] : [type];
+    const nullable = TypeFlags5.Any | TypeFlags5.Unknown | JAVA_NULLISH_TYPE_FLAGS | TypeFlags5.TypeParameter;
+    return parts.length === 0 || parts.some((t) => (t.flags & nullable) !== 0);
+  }
+  // an identifier bound once to a fresh map (object literal, two-argument extend, this.account()) and
+  // never reassigned: it holds that map on every path, so the written value is never null
+  javaFreshMapLocalValue(value) {
+    const node = this.unwrapPrintTransparentExpression(value);
+    if (node === void 0 || !isIdentifier2(node)) {
+      return false;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration === void 0 || declaration.kind !== SyntaxKind6.VariableDeclaration || !declaration.initializer || !this.javaElementWriteMapSource(declaration.initializer)) {
+      return false;
+    }
+    return !this.javaLocalIsReassigned(node, (rhs) => this.javaElementWriteMapSource(rhs));
+  }
+  // a key proven by the checker to be a string prints as a java String: the read is
+  // the same expression, only the key needs the (String) cast the typed put demands
+  elementWriteKeyText(key, keyText) {
+    return isStringLiteral2(key) ? keyText : `(String)${keyText}`;
+  }
+  // Receivers that are a plain java.util.HashMap at runtime, where ".put" and the helper's map branch
+  // are the same write: a local initialized with an object literal or a call whose every return is
+  // such a literal (this.account()). Lists, class instances and ConcurrentHashMaps stay helpers.
+  isPlainHashMapReceiver(container, keys) {
+    if (keys.length !== 1 || container === void 0 || container.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return false;
+    }
+    const symbol = checker.getSymbolAtLocation(container);
+    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
+    if (!declaration || declaration.kind !== SyntaxKind6.VariableDeclaration || !declaration.initializer) {
+      return false;
+    }
+    if (!this.javaFreshHashMapValue(container, declaration.initializer)) {
+      return false;
+    }
+    return !this.javaLocalIsReassigned(container, (rhs) => this.javaFreshHashMapValue(container, rhs));
+  }
+  // a value that is a freshly built HashMap/LinkedHashMap on the Java side
+  javaFreshHashMapValue(container, value) {
+    const initializer = this.unwrapPrintTransparentExpression(value);
+    return initializer !== void 0 && (isObjectLiteralExpression3(initializer) || isCallExpression5(initializer) && this.callAlwaysReturnsPlainHashMap(initializer, 0) || this.javaDeclaredMapReceiver(container) && (this.javaFreshExtendMap(initializer) || this.javaFreshMapBaseCall(initializer)));
+  }
+  // `this.account()` on the hand-written base builds a new HashMap per call, so the result is a
+  // plain map no other owner holds. A venue override prints its own signature and is not provable.
+  javaFreshMapBaseCall(node) {
+    if (node === void 0 || !isCallExpression5(node) || node.arguments.length !== 0 || !isPropertyAccessExpression2(node.expression) || node.expression.expression.kind !== SyntaxKind6.ThisKeyword || !JAVA_FRESH_MAP_BASE_CALLS.has(node.expression.name.text)) {
+      return false;
+    }
+    const checker = this.checkerOrUndefined();
+    const fileName = checker?.getResolvedSignature(node)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
+    return typeof fileName === "string" && JAVA_THIS_RETURN_TYPES_BASE_FILE.test(fileName);
+  }
+  // the map type a local the printer itself feeds a fresh plain map prints with: its element
+  // writes then bind the native put, and (a fresh HashMap holds a null like the helper does) a
+  // null value needs no helper. Only the shapes whose Java print IS `Map<String, Object>`.
+  javaElementWriteMapLocalType(declaration) {
+    if (!isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || !declaration.initializer) {
+      return void 0;
+    }
+    const name = declaration.name;
+    if (!this.javaElementWriteMapSource(declaration.initializer)) {
+      return void 0;
+    }
+    if (this.javaLocalHasWriteAtAll(name)) {
+      return void 0;
+    }
+    return JAVA_ELEMENT_WRITE_MAP_TYPE;
+  }
+  // `Object x = this.<field>` where the hand-written base declares that field
+  // `Map<String, Object>`: binding the local to the field's own type makes its element reads
+  // bind the accessor with no cast. Only a local nothing writes and nothing consumes as
+  // another Java type may carry it, or javac rejects the declaration's own uses.
+  javaBaseMapFieldLocalType(declaration) {
+    if (!isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || !declaration.initializer) {
+      return void 0;
+    }
+    const initializer = this.unwrapPrintTransparentExpression(declaration.initializer);
+    if (!isPropertyAccessExpression2(initializer) || initializer.expression?.kind !== SyntaxKind6.ThisKeyword) {
+      return void 0;
+    }
+    if (!JAVA_DECLARED_MAP_FIELD_NAMES.has(String(initializer.name?.text))) {
+      return void 0;
+    }
+    if (this.javaLocalHasWriteAtAll(declaration.name)) {
+      return void 0;
+    }
+    if (!this.javaLocalUsesKeepContainerType(declaration.name)) {
+      return void 0;
+    }
+    return JAVA_ELEMENT_WRITE_MAP_TYPE;
+  }
+  // fresh-map values whose Java print carries `Map<String, Object>`: an object literal, the
+  // base-tier extend/deepExtend (declared `java.util.Map<String, Object>`), `this.account()`
+  javaElementWriteMapSource(value) {
+    const node = this.unwrapPrintTransparentExpression(value);
+    if (node === void 0) {
+      return false;
+    }
+    return isObjectLiteralExpression3(node) || this.javaFreshExtendMap(node) || this.javaFreshMapBaseCall(node);
+  }
+  // a value whose Java print can never be null: non-null literals and fresh containers
+  javaPrintsNonNullValue(node) {
+    const value = this.unwrapPrintTransparentExpression(node);
+    if (value === void 0) {
+      return false;
+    }
+    return isStringLiteralLikeNode3(value) || isNumericLiteral3(value) || value.kind === SyntaxKind6.TrueKeyword || value.kind === SyntaxKind6.FalseKeyword || isObjectLiteralExpression3(value) || isArrayLiteralExpression3(value) || isPrefixUnaryExpression2(value) && value.operator === SyntaxKind6.MinusToken && isNumericLiteral3(value.operand);
+  }
+  // `this.extend(..)` / `this.deepExtend(..)` from the base tier hand back a fresh LinkedHashMap
+  // when the call has two arguments (Generic.Extend copies both) or ends in an object literal
+  // (deepExtend's last Map argument replaces any earlier non-Map box with a new map)
+  javaFreshExtendMap(initializer) {
+    if (initializer === void 0 || !isCallExpression5(initializer) || !isPropertyAccessExpression2(initializer.expression) || initializer.expression.expression.kind !== SyntaxKind6.ThisKeyword) {
+      return false;
+    }
+    const name = initializer.expression.name.text;
+    const args = initializer.arguments;
+    const last = args.length > 0 ? this.unwrapPrintTransparentExpression(args[args.length - 1]) : void 0;
+    const endsInLiteral = last !== void 0 && isObjectLiteralExpression3(last);
+    if (!(name === "extend" && (args.length === 2 || endsInLiteral) || name === "deepExtend" && endsInLiteral)) {
+      return false;
+    }
+    const checker = this.checkerOrUndefined();
+    const fileName = checker?.getResolvedSignature(initializer)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
+    return typeof fileName === "string" && JAVA_FRESH_EXTEND_FILE.test(fileName);
+  }
+  // `[.., x, ..] = this.m(.., x, ..)` where every return of m is an array literal whose
+  // element at x's position is the never-reassigned parameter x was passed to: x keeps its object
+  javaDestructuringHandsBackLocal(assignment, symbol) {
+    const checker = this.getChecker();
+    const left = assignment.left;
+    const call = this.unwrapPrintTransparentExpression(assignment.right);
+    if (!isArrayLiteralExpression3(left) || call === void 0 || !isCallExpression5(call)) {
+      return false;
+    }
+    const index = left.elements.findIndex((e) => isIdentifier2(e) && checker.getSymbolAtLocation(e) === symbol);
+    if (index < 0 || left.elements.some((e, i) => i !== index && this.javaPatternBindsSymbol(e, symbol))) {
+      return false;
+    }
+    const declaration = checker.getResolvedSignature(call)?.declaration?.resolve();
+    if (!declaration || !isMethodDeclaration4(declaration) || !declaration.body) {
+      return false;
+    }
+    const argIndex = call.arguments.findIndex((a) => isIdentifier2(a) && checker.getSymbolAtLocation(a) === symbol);
+    const parameter = argIndex >= 0 ? declaration.parameters[argIndex] : void 0;
+    if (parameter === void 0 || !isIdentifier2(parameter.name) || parameter.dotDotDotToken) {
+      return false;
+    }
+    const parameterSymbol = checker.getSymbolAtLocation(parameter.name);
+    let returns = 0;
+    let proven = true;
+    const walk = (n) => {
+      if (!proven || n === void 0 || n !== declaration.body && isFunctionLike(n)) {
+        return;
+      }
+      if (isReturnStatement3(n)) {
+        returns++;
+        const value = this.unwrapPrintTransparentExpression(n.expression);
+        const element = value !== void 0 && isArrayLiteralExpression3(value) ? value.elements[index] : void 0;
+        proven = element !== void 0 && isIdentifier2(element) && checker.getSymbolAtLocation(element) === parameterSymbol;
+        return;
+      }
+      n.forEachChild(walk);
+    };
+    walk(declaration.body);
+    if (!proven || returns === 0 || this.javaHandBackVisiting.has(declaration)) {
+      return false;
+    }
+    this.javaHandBackVisiting.add(declaration);
+    try {
+      return !this.javaLocalIsReassigned(parameter.name);
+    } finally {
+      this.javaHandBackVisiting.delete(declaration);
+    }
+  }
+  // true when a destructuring target mentions the symbol anywhere
+  javaPatternBindsSymbol(pattern, symbol) {
+    let found = false;
+    const walk = (n) => {
+      if (found || n === void 0) {
+        return;
+      }
+      if (isIdentifier2(n) && this.getChecker().getSymbolAtLocation(n) === symbol) {
+        found = true;
+        return;
+      }
+      n.forEachChild(walk);
+    };
+    walk(pattern);
+    return found;
+  }
+  // `this.<field>` for a BaseExchange.java field declared Map<String, Object>
+  javaMapWriteFieldReceiver(expression) {
+    if (expression === void 0 || !isPropertyAccessExpression2(expression)) {
+      return false;
+    }
+    if (expression.expression.kind !== SyntaxKind6.ThisKeyword) {
+      return false;
+    }
+    return JAVA_MAP_WRITE_FIELDS.has(expression.name.text);
+  }
+  // `this.<field>` for a BaseExchange.java field declared over a single-owner store
+  javaOwnerStoreFieldReceiver(expression) {
+    if (expression === void 0 || !isPropertyAccessExpression2(expression)) {
+      return false;
+    }
+    return expression.expression.kind === SyntaxKind6.ThisKeyword && this.javaOwnerStoreFields.has(expression.name.text);
+  }
+  printArrayLiteralExpression(node) {
+    const elements = node.elements.map((e) => this.printNode(e)).join(", ");
+    return `${this.ARRAY_OPENING_TOKEN}${elements}${this.ARRAY_CLOSING_TOKEN}`;
+  }
+  // literals and identifiers have nothing an array-literal wrapper could skip by dropping
+  javaArrayLiteralDropsNothing(node, depth = 0) {
+    if (depth > 4) {
+      return false;
+    }
+    return node.elements.every((element) => isStringLiteral2(element) || isNumericLiteral3(element) || element.kind === SyntaxKind6.TrueKeyword || element.kind === SyntaxKind6.FalseKeyword || element.kind === SyntaxKind6.NullKeyword || element.kind === SyntaxKind6.Identifier || isArrayLiteralExpression3(element) && this.javaArrayLiteralDropsNothing(element, depth + 1));
+  }
+  printArrayPushCall(_node, _identation, name = void 0, parsedArg = void 0) {
+    return `((java.util.List<Object>)${name}).add(${parsedArg})`;
+  }
+  printDeleteExpression(node, _identation) {
+    const object = this.printNode(node.expression.expression, 0);
+    const key = this.printNode(node.expression.argumentExpression, 0);
+    if (this.javaWsClientMapReceiver(node.expression.expression)) {
+      return `${object}.remove((String)${key})`;
+    }
+    if (this.javaBaseDeclaredMapCacheField(node.expression.expression)) {
+      return `${object}.remove((String)${key})`;
+    }
+    return `((java.util.Map<String,Object>)${object}).remove((String)${key})`;
+  }
+  // `this.<field>` resolving to an Exchange.ts field of JAVA_BASE_DECLARED_MAP_CACHE_FIELDS
+  javaBaseDeclaredMapCacheField(expression) {
+    if (expression === void 0 || !isPropertyAccessExpression2(expression) || expression.expression.kind !== SyntaxKind6.ThisKeyword || !JAVA_BASE_DECLARED_MAP_CACHE_FIELDS.has(expression.name.text)) {
+      return false;
+    }
+    const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(expression.name)?.valueDeclaration?.resolve();
+    const fileName = declaration?.getSourceFile?.()?.fileName;
+    return typeof fileName === "string" && JAVA_THIS_RETURN_TYPES_BASE_FILE.test(fileName);
+  }
+  printObjectLiteralExpression(node, identation) {
+    const handlerTable = this.printJavaHandlerTable(node, identation);
+    if (handlerTable !== void 0) {
+      return handlerTable;
+    }
+    if (node.properties.length > 0 && node.properties.every((p) => isPropertyAssignment(p)) && this.objectLiteralCapturesReassigned(node)) {
+      this.builderObjectLiterals.add(node);
+      return this.printObjectLiteralBuilder(node, identation);
+    }
+    this.builderObjectLiterals.delete(node);
+    const objectBody = this.printObjectLiteralBody(node, identation);
+    const formattedObjectBody = objectBody ? "\n" + objectBody + "\n" + this.getIden(identation) : objectBody;
+    return this.OBJECT_OPENING + formattedObjectBody + this.OBJECT_CLOSING;
+  }
+  printObjectLiteralBuilder(node, identation) {
+    const keys = this.objectLiteralCapturedKeys(node);
+    const saved = keys.map((key) => this.ReassignedVars[key]);
+    try {
+      return this.printObjectLiteralBuilderText(node, identation);
+    } finally {
+      keys.forEach((key, i) => {
+        if (saved[i] === void 0) {
+          delete this.ReassignedVars[key];
+        } else {
+          this.ReassignedVars[key] = saved[i];
+        }
+      });
+    }
+  }
+  printObjectLiteralBuilderText(node, identation) {
+    const props = node.properties;
+    const lines = props.map((prop, i) => {
+      const name = this.printNode(prop.name, 0);
+      const custom = this.printCustomRightSidePropertyAssignment(prop.initializer, identation + 1);
+      const value = (custom ? custom : this.printNode(prop.initializer, identation + 1)).trim();
+      let comment = this.printTraillingComment(prop, identation + 1);
+      comment = comment ? " " + comment : "";
+      const sep = i < props.length - 1 ? "," : "";
+      return this.getIden(identation + 1) + name + ", " + value + sep + comment;
+    });
+    return "Helpers.newMap(\n" + lines.join("\n") + "\n" + this.getIden(identation) + ")";
+  }
+  printObjectLiteralBody(node, identation) {
+    const body = node.properties.map((p) => this.printNode(p, identation + 1)).join("\n");
+    return body;
+  }
+  // `m[k] = v` on a local the printer declared `Map<String, Object>` whose every write is a
+  // provably non-concurrent map (fresh literal/extend/omit, or a base safeDict* of non-field data):
+  // the helper's map branch is then `m.put(k, v)` (null value included; its CHM removal never applies)
+  javaMapPutIsNative(baseExpr, keys) {
+    if (keys.length !== 1 || baseExpr === void 0 || !isIdentifier2(baseExpr) || !this.javaDeclaredMapReceiver(baseExpr)) {
+      return false;
+    }
+    const key = keys[0];
+    if (!isStringLiteralLikeNode3(key) && !this.javaDeclaredStringType(key) && !this.isJavaStringType(this.getChecker().getTypeAtLocation(key))) {
+      return false;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(baseExpr);
+    if (declaration === void 0 || declaration.kind !== SyntaxKind6.VariableDeclaration || !declaration.initializer) {
+      return false;
+    }
+    const admits = (rhs) => this.javaPlainMapSource(baseExpr, rhs);
+    return admits(declaration.initializer) && !this.javaLocalIsReassigned(baseExpr, admits);
+  }
+  javaPlainMapSource(container, value) {
+    const node = this.unwrapPrintTransparentExpression(value);
+    if (node === void 0) {
+      return false;
+    }
+    if (this.javaFreshHashMapValue(container, node)) {
+      return true;
+    }
+    if (!isCallExpression5(node) || !isPropertyAccessExpression2(node.expression) || node.expression.expression.kind !== SyntaxKind6.ThisKeyword) {
+      return false;
+    }
+    const name = node.expression.name.text;
+    const fileName = this.checkerOrUndefined()?.getResolvedSignature(node)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
+    if (typeof fileName !== "string" || !JAVA_FRESH_EXTEND_FILE.test(fileName)) {
+      return false;
+    }
+    if (name === "extend" || name === "deepExtend" || name === "omit") {
+      return true;
+    }
+    if (name === "safeDict" || name === "safeDict2" || name === "safeDictN") {
+      return node.arguments.length > 0 && this.javaNonSharedSource(node.arguments[0], 0) && (node.arguments.length < (name === "safeDict2" ? 4 : 3) || this.javaMapDefaultIsPlain(node.arguments[node.arguments.length - 1]));
+    }
+    return false;
+  }
+  javaMapDefaultIsPlain(value) {
+    const node = this.unwrapPrintTransparentExpression(value);
+    return node !== void 0 && (isObjectLiteralExpression3(node) || node.kind === SyntaxKind6.UndefinedKeyword || isIdentifier2(node) && node.text === "undefined" || node.kind === SyntaxKind6.NullKeyword);
+  }
+  // data that can not hold one of the runtime's ConcurrentHashMaps (this.<field> top level, ws client
+  // futures/subscriptions/rejections and their entries): a local/param/element chain not rooted at them
+  javaNonSharedSource(value, depth) {
+    const node = this.unwrapPrintTransparentExpression(value);
+    if (node === void 0 || depth > 40) {
+      return false;
+    }
+    if (isElementAccessExpression3(node)) {
+      return this.javaNonSharedSource(node.expression, depth + 1);
+    }
+    if (!isIdentifier2(node)) {
+      return false;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration === void 0) {
+      return false;
+    }
+    if (declaration.kind === SyntaxKind6.Parameter) {
+      const type = this.getChecker().getTypeAtLocation(node);
+      const text = (type?.getSymbol?.()?.escapedName ?? "") + "";
+      return !/Client/.test(text) && !/^(client|subscriptions|futures|rejections)$/.test(node.text);
+    }
+    const known = this.javaNonSharedSourceVerdicts.get(declaration);
+    if (known !== void 0) {
+      return known;
+    }
+    this.javaNonSharedSourceVerdicts.set(declaration, true);
+    this.javaMapSourceInProgress.add(declaration);
+    const writes = declaration.initializer ? [declaration.initializer] : [];
+    const verdict = !this.javaLocalIsReassigned(node, (rhs) => {
+      writes.push(rhs);
+      return true;
+    }) && writes.every((w) => this.javaNonSharedValue(w, depth + 1));
+    this.javaMapSourceInProgress.delete(declaration);
+    if (verdict && this.javaMapSourceInProgress.size > 0) {
+      this.javaNonSharedSourceVerdicts.delete(declaration);
+    } else {
+      this.javaNonSharedSourceVerdicts.set(declaration, verdict);
+    }
+    return verdict;
+  }
+  // a value expression that never reads a field map or a ws client's maps
+  // an awaited implicit-API call (ts/src/abstract/<id>.ts, body `this.request(..)`) hands back a
+  // fresh Jackson parse of the HTTP body, so the map-put non-shared proof admits it as a put source
+  javaImplicitApiResponse(value) {
+    let node = this.unwrapPrintTransparentExpression(value);
+    if (node?.kind !== SyntaxKind6.AwaitExpression) {
+      return false;
+    }
+    node = this.unwrapPrintTransparentExpression(node.expression);
+    if (node === void 0 || !isCallExpression5(node) || !isPropertyAccessExpression2(node.expression) || node.expression.expression.kind !== SyntaxKind6.ThisKeyword) {
+      return false;
+    }
+    let declaration;
+    try {
+      declaration = this.checkerOrUndefined()?.getResolvedSignature(node)?.declaration?.resolve();
+    } catch (e) {
+      return false;
+    }
+    const fileName = declaration?.getSourceFile?.()?.fileName;
+    if (typeof fileName !== "string" || !JAVA_IMPLICIT_API_FILE.test(fileName) || !declaration.body) {
+      return false;
+    }
+    const statements = declaration.body.statements ?? [];
+    const ret = statements.length === 1 && isReturnStatement3(statements[0]) ? statements[0].expression : void 0;
+    return ret !== void 0 && isCallExpression5(ret) && isPropertyAccessExpression2(ret.expression) && ret.expression.expression.kind === SyntaxKind6.ThisKeyword && ret.expression.name.text === "request";
+  }
+  javaNonSharedValue(value, depth) {
+    if (this.javaImplicitApiResponse(value)) {
+      return true;
+    }
+    let shared = false;
+    const walk = (n) => {
+      if (shared || n === void 0) {
+        return;
+      }
+      if (isPropertyAccessExpression2(n)) {
+        const called = n.parent !== void 0 && isCallExpression5(n.parent) && n.parent.expression === n;
+        if (!called && (n.expression.kind === SyntaxKind6.ThisKeyword || /^(subscriptions|futures|rejections|hashmap)$/.test(n.name.text)) || called && n.name.text === "createSafeDictionary") {
+          shared = true;
+          return;
+        }
+      }
+      if (n.kind === SyntaxKind6.ThisKeyword && !(n.parent !== void 0 && isPropertyAccessExpression2(n.parent))) {
+        shared = true;
+        return;
+      }
+      if (isIdentifier2(n) && n !== value && !(n.parent !== void 0 && isPropertyAccessExpression2(n.parent) && n.parent.name === n)) {
+        const declaration = this.javaDeclarationOfIdentifier(n);
+        if (declaration !== void 0 && !this.javaNonSharedSource(n, depth + 1)) {
+          shared = true;
+          return;
+        }
+      }
+      n.forEachChild(walk);
+    };
+    walk(value);
+    return !shared;
+  }
+  // `this.<field>` of a base field declared Object/Map whose Java type a file cannot change: the
+  // field is a plain map in this class exactly when every `this.<field> =` in the source file builds
+  // one (an object literal, a zero-arg base createSafeDictionary, a local holding a literal) or
+  // nulls it. A read needs no assignment to be any other kind; a put also needs one plain build,
+  // because the helper removes a null value from a ConcurrentHashMap.
+  javaFileBuiltMapField(receiver, name, forWrite) {
+    if (!JAVA_FILE_BUILT_MAP_FIELDS.has(name) || receiver?.expression?.kind !== SyntaxKind6.ThisKeyword) {
+      return false;
+    }
+    const file = receiver.getSourceFile?.();
+    if (file === void 0) {
+      return false;
+    }
+    let byField = this.javaFieldAssignmentKindsCache.get(file);
+    if (byField === void 0) {
+      const found = /* @__PURE__ */ new Map();
+      const visit = (n) => {
+        if (isBinaryExpression4(n) && n.operatorToken.kind >= SyntaxKind6.FirstAssignment && n.operatorToken.kind <= SyntaxKind6.LastAssignment && isPropertyAccessExpression2(n.left) && n.left.expression.kind === SyntaxKind6.ThisKeyword) {
+          const field = n.left.name.text;
+          const kind = n.operatorToken.kind === SyntaxKind6.EqualsToken ? this.javaAssignedMapKind(n.right, 0) : "other";
+          found.set(field, [...found.get(field) ?? [], kind]);
+        }
+        n.forEachChild(visit);
+      };
+      file.forEachChild(visit);
+      byField = found;
+      this.javaFieldAssignmentKindsCache.set(file, byField);
+    }
+    const kinds = byField.get(name) ?? [];
+    if (kinds.some((k) => k === "other")) {
+      return false;
+    }
+    return forWrite ? kinds.some((k) => k === "plain") : kinds.length > 0;
+  }
+  // 'plain': a java.util.HashMap the code builds; 'null': a null reset; 'other': anything else
+  javaAssignedMapKind(value, depth) {
+    const node = this.unwrapPrintTransparentExpression(value);
+    if (node === void 0) {
+      return "other";
+    }
+    if (node.kind === SyntaxKind6.NullKeyword || node.kind === SyntaxKind6.UndefinedKeyword || isIdentifier2(node) && node.text === "undefined") {
+      return "null";
+    }
+    if (isObjectLiteralExpression3(node)) {
+      return "plain";
+    }
+    if (isCallExpression5(node) && node.arguments.length === 0 && isPropertyAccessExpression2(node.expression) && node.expression.expression.kind === SyntaxKind6.ThisKeyword && node.expression.name.text === "createSafeDictionary") {
+      const fileName = this.checkerOrUndefined()?.getResolvedSignature(node)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
+      return typeof fileName === "string" && JAVA_THIS_RETURN_TYPES_BASE_FILE.test(fileName) ? "plain" : "other";
+    }
+    if (isIdentifier2(node) && depth < 2) {
+      const declaration = this.javaDeclarationOfIdentifier(node);
+      if (declaration !== void 0 && isVariableDeclaration2(declaration) && declaration.initializer && this.javaAssignedMapKind(declaration.initializer, depth + 1) === "plain" && !this.javaLocalIsReassigned(node, (rhs) => this.javaAssignedMapKind(rhs, depth + 1) === "plain")) {
+        return "plain";
+      }
+    }
+    return "other";
+  }
+  // `this.<field>[k]` on the JAVA_HASH_MAP_FIELDS base map fields. ConcurrentHashMap.get(null) throws
+  // where the helper answers null, so a non-literal key is always null-tested; the receiver can
+  // be null too. Key and receiver print twice, so both must be side-effect free.
+  javaHashMapFieldReadText(receiver, key) {
+    const name = receiver?.name?.text;
+    if (typeof name === "string" && Object.prototype.hasOwnProperty.call(JAVA_BASE_MAP_READ_FIELDS, name)) {
+      return this.javaBaseMapFieldReadText(receiver, key, JAVA_BASE_MAP_READ_FIELDS[name]);
+    }
+    if (typeof name !== "string" || !Object.prototype.hasOwnProperty.call(JAVA_HASH_MAP_FIELDS, name) && !this.javaFileBuiltMapField(receiver, name, false)) {
+      return void 0;
+    }
+    const literal2 = isStringLiteralLikeNode3(key);
+    if (!literal2 && !this.javaRepeatableOperand(key)) {
+      return void 0;
+    }
+    const target = this.printNode(receiver, 0);
+    const keyText = this.printNode(key, 0);
+    const keyGuard = literal2 ? "" : `${keyText} == null || `;
+    const read = this.javaBaseDeclaredMapCacheField(receiver) ? target : `((java.util.Map<?, ?>)${target})`;
+    return `(${keyGuard}${target} == null ? null : ${read}.get(${keyText}))`;
+  }
+  javaBaseMapFieldReadText(receiver, key, field) {
+    const operand = isAsExpression2(key) && key.type?.kind === SyntaxKind6.StringKeyword ? key.expression : key;
+    const literal2 = isStringLiteralLikeNode3(key);
+    if (!literal2) {
+      if (!isIdentifier2(operand) || !this.javaRepeatableOperand(operand)) {
+        return void 0;
+      }
+      if (!field.anyKey && !this.isJavaStringType(this.getChecker().getTypeAtLocation(key)) && !this.javaDeclaredStringType(operand)) {
+        return void 0;
+      }
+    }
+    const target = this.printNode(receiver, 0);
+    const read = field.declared ? target : `((java.util.Map<?, ?>)${target})`;
+    const guard = literal2 ? `${target} == null` : `${target} == null || ${this.printNode(operand, 0)} == null`;
+    return `(${guard} ? null : ${read}.get(${this.printNode(key, 0)}))`;
+  }
+  // ===== binary expressions: equality, `in` and ordered comparisons =====
+  // Static operand family of one side of an equality, undefined when the checker proves
+  // nothing usable. Null/undefined union members are folded away: Objects.equals handles
+  // those exactly like the helper, so `string | undefined` still counts as string.
+  equalityOperandFamily(type) {
+    if (type === void 0 || type === null) {
+      return void 0;
+    }
+    const flags = type.flags;
+    if (flags & TypeFlags5.Intersection) {
+      return void 0;
+    }
+    if (flags & TypeFlags5.Union) {
+      if (flags & TypeFlags5.Boolean) {
+        return "boolean";
+      }
+      const families = new Set((type.getTypes?.() ?? []).map((t) => this.equalityOperandFamily(t)));
+      families.delete(void 0);
+      families.delete("null");
+      return families.size === 1 ? families.values().next().value : void 0;
+    }
+    if (flags & (TypeFlags5.String | TypeFlags5.StringLiteral)) {
+      return "string";
+    }
+    if (flags & (TypeFlags5.Boolean | TypeFlags5.BooleanLiteral)) {
+      return "boolean";
+    }
+    if (flags & (TypeFlags5.Null | TypeFlags5.Undefined | TypeFlags5.Void)) {
+      return "null";
+    }
+    return void 0;
+  }
+  // The null/undefined literal: its Java text is `null`, so Objects.equals(x, null)
+  // is literally the identity test Helpers.isEqual performs on that operand.
+  isNullishLiteral(node) {
+    return node?.kind === SyntaxKind6.NullKeyword || node?.kind === SyntaxKind6.Identifier && node.text === "undefined";
+  }
+  // Helpers.isEqual compares numeric operands by value (integers via toLong, Double/Float via
+  // toDouble, class mismatch false), so two operands of the SAME kind compare natively.
+  // the Java kind a decimal numeric literal prints with: integer literal as `N` (int) or `NL` (long),
+  // a '.'/exponent literal as a Java double. TypeScript normalizes the literal text (`1e3` -> `1000`,
+  // `0x10` -> `16`, `100.0` -> `100`), so node.text is exactly what prints.
+  javaEqualityLiteralKind(node) {
+    if (!node) {
+      return void 0;
+    }
+    if (node.kind === SyntaxKind6.PrefixUnaryExpression && node.operator === SyntaxKind6.MinusToken) {
+      return this.javaIntegerLiteralKind(node.operand) === "int" ? "int" : void 0;
+    }
+    if (!isNumericLiteral3(node)) {
+      return void 0;
+    }
+    return /[.eE]/.test(node.text) ? "double" : this.javaIntegerLiteralKind(node);
+  }
+  // numeric equality operand: the checker proves a plain number and the printed Java
+  // value carries a known kind. Aliases (Int/Num), unions and `any` stay with the
+  // helper, like in the arithmetic rule.
+  javaEqualityNumberKind(node) {
+    if (this.javaScalarFamily(node) !== "number") {
+      return void 0;
+    }
+    return this.javaPrintedNumberKind(node);
+  }
+  // ==/===/!=/!== become java.util.Objects.equals once the checker proves one operand is
+  // a string, a boolean or the null/undefined literal: for those Helpers.isEqual reduces
+  // to Objects.equals (value compare, class-strict, no numeric promotion). Two operands
+  // the checker types as plain numbers compare natively when their printed Java kinds
+  // match: the helper's numeric paths are the same value compare.
+  // `a !== b` / `a === b` where one side is a never-rewritten const read off `this.crc32(..)` and the
+  // other a local declared `Long`: BaseExchange.crc32 returns a Long box, so Objects.equals is isEqual
+  javaCrc32Local(node) {
+    if (node === void 0 || !isIdentifier2(node)) {
+      return false;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || declaration.name.text !== node.text) {
+      return false;
+    }
+    const init = this.unwrapPrintTransparentExpression(declaration.initializer);
+    if (init === void 0 || !isCallExpression5(init) || !isPropertyAccessExpression2(init.expression) || init.expression.expression.kind !== SyntaxKind6.ThisKeyword || init.expression.name.text !== "crc32") {
+      return false;
+    }
+    let fileName;
+    try {
+      fileName = this.checkerOrUndefined()?.getResolvedSignature(init)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
+    } catch (e) {
+      return false;
+    }
+    return typeof fileName === "string" && JAVA_CRC32_BASE_FILE.test(fileName) && !this.javaLocalIsReassigned(node);
+  }
+  printNativeEqualityIfProvable(node, leftText, rightText) {
+    const op = node.operatorToken.kind;
+    const negated = op === SyntaxKind6.ExclamationEqualsToken || op === SyntaxKind6.ExclamationEqualsEqualsToken;
+    if (!negated && op !== SyntaxKind6.EqualsEqualsToken && op !== SyntaxKind6.EqualsEqualsEqualsToken) {
+      return void 0;
+    }
+    const crcLeft = this.javaCrc32Local(node.left);
+    const crcRight = this.javaCrc32Local(node.right);
+    if (crcLeft && this.javaDeclaredNumericFamily(node.right) === "Long" && leftText === node.left.text && rightText === node.right.text || crcRight && this.javaDeclaredNumericFamily(node.left) === "Long" && leftText === node.left.text && rightText === node.right.text) {
+      return `${negated ? "!" : ""}java.util.Objects.equals(${leftText}, ${rightText})`;
+    }
+    const leftBox = this.javaDeclaredNumericFamily(node.left);
+    const rightBox = this.javaDeclaredNumericFamily(node.right);
+    const isBool = (n) => String(this.javaDeclaredTypeOf(n) ?? "").trim() === "Boolean";
+    if (isBool(node.left) || isBool(node.right)) {
+      return `${negated ? "!" : ""}java.util.Objects.equals(${leftText}, ${rightText})`;
+    }
+    if (JAVA_BOXED_NUMERIC_TYPES.has(leftBox) && JAVA_BOXED_NUMERIC_TYPES.has(rightBox)) {
+      let equal;
+      if (leftBox === rightBox && leftBox !== "Double") {
+        equal = `java.util.Objects.equals(${leftText}, ${rightText})`;
+      } else {
+        const unbox = leftBox === "Double" || rightBox === "Double" ? "doubleValue" : "longValue";
+        equal = `(${leftText} == null ? ${rightText} == null : (${rightText} != null && ${leftText}.${unbox}() == ${rightText}.${unbox}()))`;
+      }
+      return negated ? `!${equal}` : equal;
+    }
+    const checker = this.getChecker();
+    const leftFamily = this.equalityOperandFamily(checker?.getTypeAtLocation(node.left));
+    const rightFamily = this.equalityOperandFamily(checker?.getTypeAtLocation(node.right));
+    const leftProved = leftFamily !== void 0 && (leftFamily !== "null" || this.isNullishLiteral(node.left));
+    const rightProved = rightFamily !== void 0 && (rightFamily !== "null" || this.isNullishLiteral(node.right));
+    const equalCall = `${negated ? "!" : ""}java.util.Objects.equals(${leftText}, ${rightText})`;
+    if (leftProved || rightProved || this.javaDeclaredStringType(node.left) || this.javaDeclaredStringType(node.right)) {
+      return equalCall;
+    }
+    if (this.javaOperandPrintsPrimitiveNumber(node.left) && this.javaOperandPrintsPrimitiveNumber(node.right)) {
+      return `(${leftText} ${negated ? "!=" : "=="} ${rightText})`;
+    }
+    const leftKind = this.javaEqualityNumberKind(node.left);
+    const rightKind = this.javaEqualityNumberKind(node.right);
+    if (leftKind !== void 0 && leftKind === rightKind) {
+      if (leftKind !== "double") {
+        return equalCall;
+      }
+    }
+    const leftDeclared = this.javaDeclaredNumericFamily(node.left);
+    const rightDeclared = this.javaDeclaredNumericFamily(node.right);
+    if (leftDeclared !== void 0 || rightDeclared !== void 0) {
+      const leftOk = leftDeclared !== void 0 || this.javaOperandPrintsPrimitiveNumber(node.left);
+      const rightOk = rightDeclared !== void 0 || this.javaOperandPrintsPrimitiveNumber(node.right);
+      if (leftOk && rightOk) {
+        const boxes = [];
+        if (leftDeclared !== void 0 && JAVA_BOXED_NUMERIC_TYPES.has(leftDeclared)) {
+          boxes.push(leftText);
+        }
+        if (rightDeclared !== void 0 && JAVA_BOXED_NUMERIC_TYPES.has(rightDeclared)) {
+          boxes.push(rightText);
+        }
+        const compare = `${leftText} ${negated ? "!=" : "=="} ${rightText}`;
+        if (boxes.length === 0) {
+          return `(${compare})`;
+        }
+        return negated ? `(${boxes.map((box) => `${box} == null`).join(" || ")} || ${compare})` : `(${boxes.map((box) => `${box} != null`).join(" && ")} && ${compare})`;
+      }
+    }
+    return void 0;
+  }
+  // Java primitive kind of a comparison operand; undefined keeps the helper. Proof sources: literals
+  // (int/long/double) and expressions the printer's own emitter pins: `var` for-counter, `.length`,
+  // `x.indexOf(arg)`/`x.search(arg)` (int), Math.round (long), Math.floor/ceil/pow (double).
+  javaPrimitiveOperandKind(node) {
+    if (node === void 0 || node === null) {
+      return void 0;
+    }
+    if (node.kind === SyntaxKind6.ParenthesizedExpression) {
+      return this.javaPrimitiveOperandKind(node.expression);
+    }
+    const literalKind = this.javaIntegerLiteralKind(node);
+    if (literalKind !== void 0) {
+      return literalKind;
+    }
+    if (this.isJavaFloatLiteral(node)) {
+      return "double";
+    }
+    if (this.isJavaPrimitiveForCounter(node) || this.javaPrintedIntCounter(node)) {
+      return "int";
+    }
+    if (node.kind === SyntaxKind6.PrefixUnaryExpression && node.operator === SyntaxKind6.MinusToken && this.javaIntegerLiteralKind(node.operand) === "int") {
+      return "int";
+    }
+    if (node.kind === SyntaxKind6.PropertyAccessExpression && node.name.text === "length") {
+      return "int";
+    }
+    if (node.kind === SyntaxKind6.CallExpression) {
+      return this.javaPrintedCallKind(node);
+    }
+    if (node.kind === SyntaxKind6.BinaryExpression) {
+      return this.javaNativeArithmeticKind(node);
+    }
+    return void 0;
+  }
+  // a read of a `for (var i = <int literal>; ..; i++)` counter anywhere in the loop: javac types it
+  // int and no box write reaches it; a capture rename (`finalI`) prints an Object copy instead
+  javaPrintedIntCounter(node) {
+    return node?.kind === SyntaxKind6.Identifier && this.javaIntForCounter(node) && this.javaIdentifierPrintsDeclaredName(node);
+  }
+  // fractional / exponent literals print as Java double literals (printNumericLiteral)
+  isJavaFloatLiteral(node) {
+    if (!node || !isNumericLiteral3(node)) {
+      return false;
+    }
+    return !/^0[xXbBoO]/.test(node.text) && /[.eE]/.test(node.text);
+  }
+  // Java kind of a call the printer emits itself, undefined otherwise. Mirrors printIndexOfCall /
+  // printSearchCall / printMathRoundCall / printMathFloorCall / printMathCeilCall and Math.pow:
+  // x.indexOf(a) / x.search(a) -> int; Math.round(x) -> long; Math.floor/ceil/pow -> double.
+  javaPrintedCallKind(node) {
+    const callee = node.expression;
+    if (callee?.kind !== SyntaxKind6.PropertyAccessExpression) {
+      return void 0;
+    }
+    const name = callee.name?.text;
+    const argCount = node.arguments?.length ?? 0;
+    const onMath = callee.expression?.kind === SyntaxKind6.Identifier && callee.expression.text === "Math";
+    switch (name) {
+      case "indexOf":
+      case "search":
+        return argCount >= 1 ? "int" : void 0;
+      case "round":
+        return onMath && argCount === 1 ? "long" : void 0;
+      case "floor":
+      case "ceil":
+        return onMath && argCount === 1 ? "double" : void 0;
+      case "pow":
+        return onMath && argCount === 2 ? "double" : void 0;
+    }
+    return void 0;
+  }
+  // operand usability for `>=` / `<` / `<=`, which route through the helper's isEqual. Two integral
+  // operands are always exact; once a double is involved, toLong saturates and BigDecimal throws on
+  // ±Infinity, so a double or long is accepted only as a finite literal within ±2^53.
+  javaComparisonOperandsAreExact(left, leftKind, right, rightKind) {
+    if (leftKind !== "double" && rightKind !== "double") {
+      return true;
+    }
+    return this.javaComparisonOperandIsExactAgainstDouble(left, leftKind) && this.javaComparisonOperandIsExactAgainstDouble(right, rightKind);
+  }
+  javaComparisonOperandIsExactAgainstDouble(node, kind) {
+    if (kind === "int") {
+      return true;
+    }
+    if (kind !== "long" && kind !== "double" || !isNumericLiteral3(node)) {
+      return false;
+    }
+    const text = node.text;
+    if (/^[0-9]+$/.test(text)) {
+      return BigInt(text) <= 9007199254740992n;
+    }
+    const value = Number(text);
+    return Number.isFinite(value) && Math.abs(value) <= 9007199254740992;
+  }
+  printCustomBinaryExpressionIfAny(node, identation) {
+    const left = node.left;
+    const right = node.right;
+    const op = node.operatorToken.kind;
+    if (left.kind === SyntaxKind6.Identifier) {
+      this.ReassignedVars[this.getVarKey(left)] = true;
+    }
+    if (left.kind === SyntaxKind6.TypeOfExpression) {
+      const typeOfExpression = this.handleTypeOfInsideBinaryExpression(
+        node,
+        identation
+      );
+      if (typeOfExpression)
+        return typeOfExpression;
+    }
+    if (op === SyntaxKind6.EqualsToken && left.kind === SyntaxKind6.Identifier) {
+      const assignment = this.javaParameterAssignmentCast(left, right, identation);
+      if (assignment !== void 0) {
+        return assignment;
+      }
+    }
+    if (op === SyntaxKind6.EqualsToken && left.kind === SyntaxKind6.ArrayLiteralExpression) {
+      const arrayBindingPatternElements = left.elements;
+      const parsedArrayBindingElements = arrayBindingPatternElements.map((e) => {
+        this.ReassignedVars[this.getVarKey(e)] = true;
+        return this.printNode(e, 0);
+      });
+      const syntheticName = parsedArrayBindingElements.join("") + "Variable";
+      let arrayBindingStatement = `var ${syntheticName} = ${this.printNode(right, 0)};
+`;
+      parsedArrayBindingElements.forEach((e, index) => {
+        let elementValue = `((java.util.List<Object>) ${syntheticName}).get(${index})`;
+        const target = arrayBindingPatternElements[index];
+        if (isIdentifier2(target)) {
+          const declaration = this.javaDeclarationOfIdentifier(target);
+          const native = declaration !== void 0 && isParameterDeclaration2(declaration) ? this.javaNativeParameterType(declaration) ?? this.javaSplitParameterWriteType(declaration) : void 0;
+          if (native === "Long") {
+            elementValue = `Helpers.toLongOrNull(${elementValue})`;
+          } else if (native !== void 0) {
+            elementValue = `(${native}) ${elementValue}`;
+          }
+        }
+        const terminator = index < parsedArrayBindingElements.length - 1 ? ";\n" : "";
+        arrayBindingStatement += this.getIden(identation) + `${e} = ${elementValue}` + terminator;
+      });
+      return arrayBindingStatement;
+    }
+    if (op === SyntaxKind6.EqualsToken && left.kind === SyntaxKind6.ElementAccessExpression) {
+      const keys = [];
+      let baseExpr = null;
+      let cur = left;
+      while (isElementAccessExpression3(cur)) {
+        keys.unshift(cur.argumentExpression);
+        const expr = cur.expression;
+        if (!isElementAccessExpression3(expr)) {
+          baseExpr = expr;
+          break;
+        }
+        cur = expr;
+      }
+      const containerStr = this.printNode(baseExpr, 0);
+      const keyStrs = keys.map((k) => this.printNode(k, 0));
+      let acc = containerStr;
+      let firstKey = 0;
+      const chainRead = keyStrs.length > 1 ? this.javaDeclaredChainContainerRead(left, keys.length) : void 0;
+      if (keyStrs.length > 1 && this.javaDeclaredMapReceiver(baseExpr) && isStringLiteralLikeNode3(keys[0])) {
+        acc = `${containerStr}.get(${keyStrs[0]})`;
+        firstKey = 1;
+      } else if (chainRead !== void 0) {
+        acc = chainRead;
+        firstKey = 1;
+      } else if (keyStrs.length > 1) {
+        const fieldRead = this.javaFieldMapReadText(baseExpr, keys[0]) ?? (isStringLiteralLikeNode3(keys[0]) && this.javaWsClientMapField(baseExpr) !== void 0 ? `(${containerStr} == null ? null : ${containerStr}.get(${keyStrs[0]}))` : this.javaWsClientMapReadText(baseExpr, keys[0]));
+        if (fieldRead !== void 0) {
+          acc = fieldRead;
+          firstKey = 1;
+        }
+      }
+      for (let i = firstKey; i < keyStrs.length - 1; i++) {
+        acc = `${this.ELEMENT_ACCESS_WRAPPER_OPEN}${acc}, ${keyStrs[i]}${this.ELEMENT_ACCESS_WRAPPER_CLOSE}`;
+      }
+      const prefixes = "";
+      const lastKey = keyStrs[keyStrs.length - 1];
+      const rhs = this.printNode(right, 0);
+      const keyArg = this.elementWriteKeyText(keys[keys.length - 1], lastKey);
+      if (this.elementWriteTargetsMap(left.expression, baseExpr, keys, right)) {
+        const target = keys.length === 1 && (this.javaDeclaredMapReceiver(baseExpr) || this.javaWsClientObjectMapReceiver(baseExpr)) ? acc : `((${this.OBJECT_KEYWORD})${acc})`;
+        return `${prefixes}${target}.put(${keyArg}, ${rhs})`;
+      }
+      if (keys.length === 1 && this.javaWsClientObjectMapReceiver(baseExpr) && (isStringLiteralLikeNode3(keys[0]) || this.javaDeclaredStringType(keys[0]))) {
+        return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
+      }
+      if (keys.length === 1 && this.javaDeclaredMapReceiver(baseExpr) && (isStringLiteralLikeNode3(keys[0]) || this.javaDeclaredStringType(keys[0])) && this.javaPrintsNonNullValue(right)) {
+        return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
+      }
+      if (keys.length === 1 && this.javaMapWriteFieldReceiver(baseExpr) && (isStringLiteralLikeNode3(keys[0]) || this.javaDeclaredStringType(keys[0])) && !this.elementWriteValueMayBeNull(right)) {
+        return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
+      }
+      if (keys.length === 1 && this.javaPlainCacheFieldReceiver(baseExpr) && this.javaStringProvenKey(keys[0])) {
+        return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
+      }
+      if (keys.length === 1 && this.javaOwnerStoreFieldReceiver(baseExpr) && isStringLiteralLikeNode3(keys[0])) {
+        return this.isNullishLiteral(this.unwrapPrintTransparentExpression(right)) ? `${prefixes}${acc}.remove(${lastKey})` : `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
+      }
+      if (keys.length === 1 && node.parent?.kind === SyntaxKind6.ExpressionStatement && this.javaPlainMapFieldReceiver(baseExpr) && (isStringLiteralLikeNode3(this.unwrapPrintTransparentExpression(keys[0])) || this.javaDeclaredStringType(this.unwrapPrintTransparentExpression(keys[0]))) && this.javaInOwnerMember(node) && !JAVA_BOX_CAST.test(lastKey) && !JAVA_BOX_CAST.test(rhs)) {
+        return `${prefixes}${acc}.put(${lastKey}, ${rhs})`;
+      }
+      if (this.javaMapPutIsNative(baseExpr, keys)) {
+        return `${prefixes}${acc}.put(${keyArg}, ${rhs})`;
+      }
+      if (keys.length === 1 && isPropertyAccessExpression2(baseExpr) && this.javaFileBuiltMapField(baseExpr, baseExpr.name.text, true)) {
+        return `${prefixes}((java.util.Map<Object, Object>) (java.util.Map<?, ?>) ${acc}).put(${lastKey}, ${rhs})`;
+      }
+      return `${prefixes}Helpers.addElementToObject(${acc}, ${lastKey}, ${rhs})`;
+    }
+    if (op === SyntaxKind6.InKeyword) {
+      const objectType = this.getChecker().getTypeAtLocation(right);
+      const keyType = this.getChecker().getTypeAtLocation(left);
+      const objText = this.printNode(right, 0);
+      const keyText = this.printNode(left, 0);
+      let guarded;
+      if (this.isJavaStringType(keyType) || this.javaDeclaredStringType(left)) {
+        guarded = "";
+      } else if (this.javaSideEffectFreeReference(left) && !this.javaOperandPrintsPrimitiveNumber(left) && !this.isNullishLiteral(left) && left.kind !== SyntaxKind6.TrueKeyword && left.kind !== SyntaxKind6.FalseKeyword) {
+        guarded = `${keyText} != null && `;
+      }
+      const withGuard = (read) => guarded ? `(${guarded}${read})` : read;
+      if (guarded !== void 0) {
+        if (this.javaDeclaredMapReceiver(right)) {
+          return withGuard(`${objText}.containsKey(${keyText})`);
+        }
+        if (this.javaWsClientMapReceiver(right)) {
+          if (guarded === "" && this.javaWsClientReceiverIsAny(right) && !isStringLiteralLikeNode3(left) && this.javaSideEffectFreeReference(left) && !this.javaOperandPrintsPrimitiveNumber(left)) {
+            return `(${keyText} != null && ${objText}.containsKey(${keyText}))`;
+          }
+          return withGuard(`${objText}.containsKey(${keyText})`);
+        }
+        if (this.isJavaMapType(objectType)) {
+          const receiverText = this.javaBaseDeclaredMapCacheField(right) ? objText : `((java.util.Map<?, ?>)${objText})`;
+          return withGuard(`${receiverText}.containsKey(${keyText})`);
+        }
+        if (this.isJavaNullableMapType(objectType) && this.javaRepeatableOperand(right)) {
+          return `(${objText} != null && ${guarded}((java.util.Map<?, ?>)${objText}).containsKey(${keyText}))`;
+        }
+      }
+      const listContains = this.javaDeclaredListContains(right, left, objText, keyText);
+      if (listContains !== void 0) {
+        return listContains;
+      }
+      return `Helpers.inOp(${objText}, ${keyText})`;
+    }
+    const modComparison = this.printJavaModComparison(left, right, op);
+    if (modComparison !== void 0) {
+      return modComparison;
+    }
+    if (op === SyntaxKind6.LessThanToken || op === SyntaxKind6.GreaterThanToken || op === SyntaxKind6.LessThanEqualsToken || op === SyntaxKind6.GreaterThanEqualsToken) {
+      const leftKind = this.javaPrimitiveOperandKind(left);
+      const rightKind = this.javaPrimitiveOperandKind(right);
+      const orderingSafe = op === SyntaxKind6.GreaterThanToken || this.javaComparisonOperandsAreExact(left, leftKind, right, rightKind);
+      if (leftKind !== void 0 && rightKind !== void 0 && orderingSafe) {
+        return `${this.printNode(left, 0)} ${this.SupportedKindNames[op]} ${this.printNode(right, 0)}`;
+      }
+      const declaredCompare = this.printDeclaredNumericComparison(left, right, op);
+      if (declaredCompare !== void 0) {
+        return declaredCompare;
+      }
+    }
+    if (op === SyntaxKind6.PlusEqualsToken || op === SyntaxKind6.MinusEqualsToken || op in this.binaryExpressionsWrappers) {
+      const leftText = this.printNode(left, 0);
+      const rightText = this.printNode(right, 0);
+      const inlined = this.printInlineHelperArithmetic(left, right, leftText, rightText, op);
+      if (inlined !== void 0) {
+        return inlined;
+      }
+      const declaredBox = this.printDeclaredBoxArithmetic(node, left, right, leftText, rightText, op);
+      if (declaredBox !== void 0) {
+        return declaredBox;
+      }
+      const integral = this.printIntegralCallArithmetic(left, right, leftText, rightText, op);
+      if (integral !== void 0) {
+        return integral;
+      }
+      if (op === SyntaxKind6.PlusEqualsToken) {
+        return `${leftText} = Helpers.add(${leftText}, ${rightText})`;
+      }
+      if (op === SyntaxKind6.MinusEqualsToken) {
+        return `${leftText} = Helpers.subtract(${leftText}, ${rightText})`;
+      }
+      const wrapper = this.binaryExpressionsWrappers[op];
+      const nativeEquality = this.printNativeEqualityIfProvable(node, leftText, rightText);
+      if (nativeEquality !== void 0) {
+        return nativeEquality;
+      }
+      return `${wrapper[0]}${leftText}, ${rightText}${wrapper[1]}`;
+    }
+    return void 0;
+  }
+  // Helpers.isGreaterThan answers its own predicate when an operand is null (GT: a != null && b == null;
+  // LT = !GT && !EQ; GE = GT || EQ; LE = LT || EQ), so a Long/Integer/Double box compares natively
+  // inside that exact null table. `>` is a toDouble compare for every numeric pair; `>= < <=` also go
+  // through isEqual, so they stay native only for integral pairs (no NaN / BigDecimal rounding arm).
+  // 'long' | 'double' for an operand the printer proves: a primitive-printing expression, or an
+  // identifier whose printed declaration is a numeric type (boxed = may be null)
+  // a `const q = recv.indexOf("lit")` local prints `Object q = <int indexOf>`: a non-null Integer box
+  javaConstIndexOfLocal(node) {
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    if (declaration?.kind !== SyntaxKind6.VariableDeclaration || !isIdentifier2(declaration.name) || (getCombinedNodeFlags(declaration) & NodeFlags3.Const) === 0) {
+      return false;
+    }
+    const init = declaration.initializer;
+    if (init?.kind !== SyntaxKind6.CallExpression || init.expression?.kind !== SyntaxKind6.PropertyAccessExpression || init.expression.name.text !== "indexOf" || init.arguments.length !== 1 || !isStringLiteral2(init.arguments[0])) {
+      return false;
+    }
+    let receiver = init.expression.expression;
+    while (receiver.kind === SyntaxKind6.PropertyAccessExpression) {
+      receiver = receiver.expression;
+    }
+    return isIdentifier2(receiver) || receiver.kind === SyntaxKind6.ThisKeyword;
+  }
+  javaComparisonOperand(node) {
+    let inner = node;
+    while (inner !== void 0 && inner.kind === SyntaxKind6.ParenthesizedExpression) {
+      inner = inner.expression;
+    }
+    if (inner === void 0) {
+      return void 0;
+    }
+    const primitive = this.javaPrimitiveOperandKind(inner);
+    if (primitive !== void 0) {
+      return { kind: primitive === "double" ? "double" : "long", boxed: false };
+    }
+    if (!isIdentifier2(inner) || !this.javaIdentifierPrintsDeclaredName(inner)) {
+      return void 0;
+    }
+    if (this.javaLongParameterRead(inner)) {
+      return { kind: "long", boxed: !this.javaNullGuardAdmitsRead(inner) };
+    }
+    const declared = this.javaDeclaredNumericFamily(inner);
+    if (declared === void 0) {
+      return this.javaConstIndexOfLocal(inner) ? { kind: "long", boxed: false, text: `((Integer) ${inner.text})` } : void 0;
+    }
+    const kind = declared === "Double" || declared === "double" ? "double" : "long";
+    return { kind, boxed: JAVA_BOXED_NUMERIC_TYPES.has(declared) };
+  }
+  printDeclaredNumericComparison(left, right, op) {
+    const l = this.javaComparisonOperand(left);
+    const r = this.javaComparisonOperand(right);
+    if (l === void 0 || r === void 0) {
+      return void 0;
+    }
+    if (op !== SyntaxKind6.GreaterThanToken && (l.kind !== "long" || r.kind !== "long")) {
+      return void 0;
+    }
+    const a = l.text ?? this.printNode(left, 0);
+    const b = r.text ?? this.printNode(right, 0);
+    const cmp = `${a} ${this.SupportedKindNames[op]} ${b}`;
+    if (!l.boxed && !r.boxed) {
+      return `(${cmp})`;
+    }
+    const aNull = `${a} == null`;
+    const aSet = `${a} != null`;
+    const bNull = `${b} == null`;
+    const bSet = `${b} != null`;
+    switch (op) {
+      case SyntaxKind6.GreaterThanToken:
+        return `(${[l.boxed ? aSet : void 0, r.boxed ? `(${bNull} || ${cmp})` : cmp].filter((x) => x !== void 0).join(" && ")})`;
+      case SyntaxKind6.LessThanToken:
+        return `(${[r.boxed ? bSet : void 0, l.boxed ? `(${aNull} || ${cmp})` : cmp].filter((x) => x !== void 0).join(" && ")})`;
+      case SyntaxKind6.GreaterThanEqualsToken:
+        return `(${[r.boxed ? bNull : void 0, l.boxed ? `(${aSet} && ${cmp})` : cmp].filter((x) => x !== void 0).join(" || ")})`;
+      case SyntaxKind6.LessThanEqualsToken:
+        return `(${[l.boxed ? aNull : void 0, r.boxed ? `(${bSet} && ${cmp})` : cmp].filter((x) => x !== void 0).join(" || ")})`;
+    }
+    return void 0;
+  }
+  // `(a % N) <op> M` (N a non-zero integer literal, a an int/long operand, M an int literal): the
+  // native mod prints a finite integral double |v| < |N|, where isEqual (IsInteger -> toLong) and
+  // isGreaterThan (toDouble) both reduce to the plain double comparison against M.
+  javaIntegralModOperand(node) {
+    while (node !== void 0 && node.kind === SyntaxKind6.ParenthesizedExpression) {
+      node = node.expression;
+    }
+    if (node === void 0 || !isBinaryExpression4(node) || node.operatorToken.kind !== SyntaxKind6.PercentToken) {
+      return false;
+    }
+    if (this.javaScalarFamily(node.left) !== "number" || this.javaScalarFamily(node.right) !== "number") {
+      return false;
+    }
+    const leftKind = this.javaProvableNumericKind(node.left);
+    if (leftKind !== "int" && leftKind !== "long" && !this.javaProvableCounterInt(node.left)) {
+      return false;
+    }
+    const divisor = node.right;
+    if (this.javaIntegerLiteralKind(divisor) !== "int" || Number(divisor.text) === 0) {
+      return false;
+    }
+    return true;
+  }
+  printJavaModComparison(left, right, op) {
+    const javaOps = {
+      [SyntaxKind6.EqualsEqualsToken]: "==",
+      [SyntaxKind6.EqualsEqualsEqualsToken]: "==",
+      [SyntaxKind6.ExclamationEqualsToken]: "!=",
+      [SyntaxKind6.ExclamationEqualsEqualsToken]: "!=",
+      [SyntaxKind6.LessThanToken]: "<",
+      [SyntaxKind6.LessThanEqualsToken]: "<=",
+      [SyntaxKind6.GreaterThanToken]: ">",
+      [SyntaxKind6.GreaterThanEqualsToken]: ">="
+    };
+    const javaOp = javaOps[op];
+    if (javaOp === void 0) {
+      return void 0;
+    }
+    const modLeft = this.javaIntegralModOperand(left);
+    const modRight = !modLeft && this.javaIntegralModOperand(right);
+    if (!modLeft && !modRight) {
+      return void 0;
+    }
+    if (this.javaEqualityLiteralKind(modLeft ? right : left) !== "int") {
+      return void 0;
+    }
+    const leftText = this.printNode(left, 0);
+    const rightText = this.printNode(right, 0);
+    if (!/^\(+double\) /.test(modLeft ? leftText : rightText)) {
+      return void 0;
+    }
+    return `(${leftText} ${javaOp} ${rightText})`;
+  }
+  // ===== numeric operands and native arithmetic =====
+  // `for (var i = <int literal>; ...; i++)`: javac infers a primitive int counter, so
+  // every read of it — not only the loop condition the comparison rule sees — is a
+  // native int. ++/-- keep it int and the counter cannot hold another box.
+  isJavaPrimitiveCounterReference(node) {
+    if (!node || node.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    const checker = this.getChecker();
+    const symbol = checker.getSymbolAtLocation(node);
+    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
+    if (!declaration || declaration.kind !== SyntaxKind6.VariableDeclaration || !isIdentifier2(declaration.name)) {
+      return false;
+    }
+    const list = declaration.parent;
+    const forStatement = list?.parent;
+    if (!list || !forStatement || forStatement.kind !== SyntaxKind6.ForStatement || forStatement.initializer !== list) {
+      return false;
+    }
+    if (list.declarations?.length !== 1 || this.javaIntegerLiteralKind(declaration.initializer) === void 0) {
+      return false;
+    }
+    const incrementor = forStatement.incrementor;
+    if (!incrementor || incrementor.kind !== SyntaxKind6.PostfixUnaryExpression && incrementor.kind !== SyntaxKind6.PrefixUnaryExpression || incrementor.operator !== SyntaxKind6.PlusPlusToken && incrementor.operator !== SyntaxKind6.MinusMinusToken || incrementor.operand?.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    const incrementorSymbol = checker.getSymbolAtLocation(incrementor.operand);
+    return incrementorSymbol === void 0 || symbol === void 0 || incrementorSymbol === symbol;
+  }
+  // the box a printed local carries: the kind of its declaration's initializer, kept
+  // only while every write in the declaring function writes the same kind.
+  // A `const` declaration has no write to scan.
+  javaLocalNumberKind(node, depth) {
+    if (!node || node.kind !== SyntaxKind6.Identifier) {
+      return void 0;
+    }
+    const symbol = this.getChecker().getSymbolAtLocation(node);
+    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
+    if (!declaration || declaration.kind !== SyntaxKind6.VariableDeclaration || !isIdentifier2(declaration.name)) {
+      return void 0;
+    }
+    const kind = this.javaPrintedNumberKind(declaration.initializer, depth + 1);
+    if (kind === void 0) {
+      return void 0;
+    }
+    const isConst = (declaration.parent?.flags & NodeFlags3.Const) !== 0;
+    if (!isConst && !this.javaWritesKeepNumberKind(declaration, symbol, kind)) {
+      return void 0;
+    }
+    return kind;
+  }
+  // true when every assignment to the symbol inside its function writes the same
+  // numeric kind; a compound assignment (`x += 1` prints Helpers.add) changes the box.
+  javaWritesKeepNumberKind(declaration, symbol, kind) {
+    const owner = this.enclosingFunctionLike(declaration);
+    if (owner === void 0) {
+      return false;
+    }
+    let safe = true;
+    const visit = (node) => {
+      if (!safe) {
+        return;
+      }
+      if (isBinaryExpression4(node)) {
+        const op = node.operatorToken.kind;
+        if (this.isAssignmentOperator(op) && this.expressionReferencesSymbol(node.left, symbol)) {
+          if (op !== SyntaxKind6.EqualsToken || this.javaPrintedNumberKind(node.right, 0) !== kind) {
+            safe = false;
+            return;
+          }
+        }
+      } else if ((node.kind === SyntaxKind6.ForOfStatement || node.kind === SyntaxKind6.ForInStatement) && this.expressionReferencesSymbol(node.initializer, symbol)) {
+        safe = false;
+        return;
+      } else if ((isPrefixUnaryExpression2(node) || isPostfixUnaryExpression2(node)) && (node.operator === SyntaxKind6.PlusPlusToken || node.operator === SyntaxKind6.MinusMinusToken) && kind !== "int" && this.expressionReferencesSymbol(node.operand, symbol)) {
+        safe = false;
+        return;
+      }
+      node.forEachChild(visit);
+    };
+    owner.forEachChild(visit);
+    return safe;
+  }
+  // box/primitive kind of an operand the printer prints as a native number, or undefined
+  // when the printed value could be any box (a call, a parameter, an `any` local)
+  javaPrintedNumberKind(node, depth = 0) {
+    const literalKind = this.javaEqualityLiteralKind(node);
+    if (literalKind !== void 0) {
+      return literalKind;
+    }
+    const lengthKind = this.javaNativeLengthKind(node);
+    if (lengthKind !== void 0) {
+      return lengthKind;
+    }
+    if (this.isJavaPrimitiveCounterReference(node)) {
+      return "int";
+    }
+    const arithmeticKind = this.javaNativeArithmeticKind(node);
+    if (arithmeticKind !== void 0) {
+      return arithmeticKind;
+    }
+    return depth < 2 ? this.javaLocalNumberKind(node, depth) : void 0;
+  }
+  // true when the printer prints the operand as a Java primitive (a decimal literal, a
+  // native .length/.size(), a for counter or a nested native arithmetic node) rather
+  // than as the Object-declared box every other local gets
+  javaOperandPrintsPrimitiveNumber(node) {
+    return this.javaEqualityLiteralKind(node) !== void 0 || this.javaNativeLengthKind(node) !== void 0 || this.isJavaPrimitiveCounterReference(node) || this.javaNativeArithmeticKind(node) !== void 0 || this.javaPrimitiveOperandKind(node) !== void 0;
+  }
+  // the numeric family the pass declared for a local (`Long`/`Double`/`Integer` boxed,
+  // `int`/`long`/`double` primitive), undefined when nothing was declared or the declared
+  // type is not numeric
+  javaDeclaredNumericFamily(expression) {
+    const type = this.javaDeclaredTypeOf(expression)?.trim();
+    return type !== void 0 && JAVA_DECLARED_NUMERIC_TYPES.has(type) ? type : void 0;
+  }
+  // helper removal: native emission when the checker proves the printed
+  // operand is a Java numeric primitive / List / Map
+  // int/long kind of a literal as printNumericLiteral emits it. Fraction and
+  // exponent forms are Java doubles and a double can hold NaN, which the
+  // comparison helpers order differently (`NaN < x` is true there), so those
+  // never become a native comparison.
+  javaIntegerLiteralKind(node) {
+    if (!node || !isNumericLiteral3(node)) {
+      return void 0;
+    }
+    if (/[.eE]/.test(node.text)) {
+      return void 0;
+    }
+    return Number(node.text) > 2147483647 ? "long" : "int";
+  }
+  // `for (var i = <int literal>; ...; i++)`: printForStatement rewrites the
+  // Object initializer into `var`, so javac infers a primitive counter there,
+  // and only ++/-- writes keep it primitive
+  isJavaPrimitiveForCounter(node) {
+    if (node.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    const comparison = node.parent;
+    if (!comparison || comparison.kind !== SyntaxKind6.BinaryExpression) {
+      return false;
+    }
+    const forStatement = comparison.parent;
+    if (!forStatement || forStatement.kind !== SyntaxKind6.ForStatement || forStatement.condition !== comparison) {
+      return false;
+    }
+    const initializer = forStatement.initializer;
+    if (!initializer || initializer.kind !== SyntaxKind6.VariableDeclarationList) {
+      return false;
+    }
+    const declarations = initializer.declarations ?? [];
+    if (declarations.length !== 1) {
+      return false;
+    }
+    const declaration = declarations[0];
+    if (!isIdentifier2(declaration.name) || declaration.name.text !== node.text) {
+      return false;
+    }
+    if (this.javaIntegerLiteralKind(declaration.initializer) === void 0) {
+      return false;
+    }
+    const counterSymbol = this.getChecker().getSymbolAtLocation(node);
+    const declarationSymbol = this.getChecker().getSymbolAtLocation(declaration.name);
+    if (counterSymbol !== void 0 && declarationSymbol !== void 0 && counterSymbol !== declarationSymbol) {
+      return false;
+    }
+    const incrementor = forStatement.incrementor;
+    if (!incrementor || incrementor.operand?.kind !== SyntaxKind6.Identifier || incrementor.operand.text !== node.text) {
+      return false;
+    }
+    return incrementor.kind === SyntaxKind6.PostfixUnaryExpression || incrementor.kind === SyntaxKind6.PrefixUnaryExpression;
+  }
+  // a plain non-nullable TS number: the narrowed index is a primitive on every path
+  javaNonNullableNumberType(node) {
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0 || node === void 0) {
+      return false;
+    }
+    let type;
+    try {
+      type = checker.getTypeAtLocation(node);
+    } catch (e) {
+      return false;
+    }
+    if (type === void 0 || type.getAliasSymbol?.() !== void 0) {
+      return false;
+    }
+    return (type.flags & TypeFlags5.Number) !== 0 || (type.flags & TypeFlags5.NumberLiteral) !== 0;
+  }
+  // a side-effect-free expression of integer leaves: a numeric literal, a `var` loop counter, or
+  // a name whose declaration prints a Java numeric type, combined with + - * / %
+  javaRepeatableIntegerExpression(node, depth) {
+    if (node === void 0 || depth > 4) {
+      return false;
+    }
+    switch (node.kind) {
+      case SyntaxKind6.NumericLiteral:
+        return true;
+      case SyntaxKind6.Identifier: {
+        if (this.javaPrimitiveCounterIndex(node)) {
+          return true;
+        }
+        const declared = this.javaDeclaredTypeOf(node);
+        return declared !== void 0 && JAVA_DECLARED_NUMERIC_TYPES.has(declared.trim());
+      }
+      case SyntaxKind6.ParenthesizedExpression:
+        return this.javaRepeatableIntegerExpression(node.expression, depth + 1);
+      case SyntaxKind6.PrefixUnaryExpression:
+        return this.javaRepeatableIntegerExpression(node.operand, depth + 1);
+      case SyntaxKind6.BinaryExpression: {
+        const operator = node.operatorToken.kind;
+        if (operator !== SyntaxKind6.PlusToken && operator !== SyntaxKind6.MinusToken && operator !== SyntaxKind6.AsteriskToken && operator !== SyntaxKind6.SlashToken && operator !== SyntaxKind6.PercentToken) {
+          return false;
+        }
+        return this.javaRepeatableIntegerExpression(node.left, depth + 1) && this.javaRepeatableIntegerExpression(node.right, depth + 1);
+      }
+      default:
+        return false;
+    }
+  }
+  // the identifier of a `for (var i = <int literal>; …; i++)` counter that still prints as
+  // `i`: the JN capture rename prints `finalI`, a `final Object` box, which is not an int
+  javaPrimitiveCounterIndex(node) {
+    if (!this.isJavaPrimitiveCounterReference(node)) {
+      return false;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    return declaration !== void 0 && node.text === declaration.name?.text;
+  }
+  // the Java kind a numeric operand provably prints with: decimal integer literal -> 'long',
+  // fractional literal -> 'double', a nested native `+ - * /` -> its kind, a local retyped
+  // `Long`/`Double` -> that kind. Hex/binary literals, negatives, calls, untyped locals: undefined.
+  javaProvableNumericKind(node, allowDeclaredLocals = true) {
+    if (node === void 0) {
+      return void 0;
+    }
+    if (node.kind === SyntaxKind6.ParenthesizedExpression) {
+      return this.javaProvableNumericKind(node.expression, allowDeclaredLocals);
+    }
+    if (isNumericLiteral3(node)) {
+      const text = node.text;
+      if (/^0[xXbBoO]/.test(text)) {
+        return void 0;
+      }
+      return /[.eE]/.test(text) ? "double" : "long";
+    }
+    if (node.kind === SyntaxKind6.Identifier) {
+      if (this.javaPrintedIntCounter(node)) {
+        return "int";
+      }
+      if (allowDeclaredLocals && this.javaLongParameterRead(node) && this.javaNullGuardAdmitsRead(node)) {
+        return "long";
+      }
+      return allowDeclaredLocals ? this.javaDeclaredNumericLocalKind(node) : void 0;
+    }
+    if (node.kind === SyntaxKind6.CallExpression) {
+      if (this.javaBaseTimeLongCall(node)) {
+        return "long";
+      }
+      if (this.javaBaseIntCall(node)) {
+        return "int";
+      }
+      const printed = this.javaPrintedCallKind(node);
+      return printed === "int" || printed === "long" ? printed : void 0;
+    }
+    if (node.kind === SyntaxKind6.BinaryExpression) {
+      return this.javaNativeArithmeticKind(node, allowDeclaredLocals);
+    }
+    if (this.javaLengthIntRead(node)) {
+      return "int";
+    }
+    return void 0;
+  }
+  // a bare identifier the embedding layer declares `Long`/`Double` prints as a boxed numeric, but a
+  // null box would NPE where the helpers return null, so the checker must see a plain non-nullable
+  // number here (nullable aliases and `any` excluded; a narrowed `number` is a real guard in Java).
+  javaDeclaredNumericLocalKind(node) {
+    if (!this.javaOperandIsNonNullNumber(node) || !this.javaIdentifierKeepsDeclaredName(node) || !this.javaIdentifierPrintsDeclaredName(node)) {
+      return void 0;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(node);
+    let javaType;
+    if (declaration !== void 0) {
+      try {
+        javaType = this.javaDeclaredTypeOfDeclaration(declaration);
+      } catch (e) {
+        javaType = void 0;
+      }
+    }
+    if (javaType === void 0 && typeof this.javaExpressionTypeResolver === "function") {
+      try {
+        javaType = this.javaExpressionTypeResolver(node);
+      } catch (e) {
+        javaType = void 0;
+      }
+    }
+    return this.javaDeclaredNumericTypeKind(javaType);
+  }
+  // the numeric kind a printed Java declaration type names, or undefined for every other
+  // type (`Object`, `String`, a boxed collection)
+  javaDeclaredNumericTypeKind(javaType) {
+    if (javaType === void 0) {
+      return void 0;
+    }
+    const type = String(javaType).replace(/^final\s+/, "").trim();
+    const kinds = /* @__PURE__ */ new Map([
+      ["Long", "long"],
+      ["long", "long"],
+      ["Double", "double"],
+      ["double", "double"],
+      ["Integer", "int"],
+      ["int", "int"]
+    ]);
+    return kinds.get(type);
+  }
+  // the checker type is the plain non-nullable `number` (TypeFlags.Number/NumberLiteral, no
+  // alias): `Int`/`Num`/`any` and unions hold undefined at runtime, which the helpers absorb
+  javaOperandIsNonNullNumber(node) {
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return false;
+    }
+    const type = checker.getTypeAtLocation(node);
+    return type !== void 0 && type.getAliasSymbol?.() === void 0 && (type.flags === TypeFlags5.Number || type.flags === TypeFlags5.NumberLiteral);
+  }
+  // the kind of the native arithmetic this rule prints for `+ - * /`, or undefined when
+  // the node keeps the helper. Mirrors printInlineHelperArithmetic operand-for-operand
+  // so callers can reason about the printed text of a nested arithmetic operand;
+  // `allowDeclaredLocals=false` asks for a kind that does not rely on a retyped local
+  // anywhere in the subtree (`+` never consumes one).
+  javaNativeArithmeticKind(node, allowDeclaredLocals = true) {
+    const op = node?.operatorToken?.kind;
+    const isPlus = op === SyntaxKind6.PlusToken;
+    const isMinus = op === SyntaxKind6.MinusToken;
+    const isMultiply = op === SyntaxKind6.AsteriskToken;
+    const isDivide = op === SyntaxKind6.SlashToken;
+    if (!isPlus && !isMinus && !isMultiply && !isDivide) {
+      return void 0;
+    }
+    if (this.javaScalarFamily(node.left) !== "number" || this.javaScalarFamily(node.right) !== "number") {
+      return void 0;
+    }
+    if (isMultiply && this.javaLiteralFractionalProduct(node.left, node.right)) {
+      return "double";
+    }
+    const childAllows = allowDeclaredLocals && !isPlus;
+    const leftKind = this.javaProvableNumericKind(node.left, childAllows);
+    const rightKind = this.javaProvableNumericKind(node.right, childAllows);
+    return this.javaNativeArithmeticPairKind(isPlus, isMultiply, isDivide, leftKind, rightKind);
+  }
+  // `2 * 1.67`: two decimal literals whose IEEE product is finite and fractional. Helpers.multiply
+  // re-boxes only an integral product as Long, so a fractional one is the native double product.
+  javaLiteralFractionalProduct(left, right) {
+    const value = (node) => node !== void 0 && isNumericLiteral3(node) && !/^0[xXbBoO]/.test(node.text) ? Number(node.text) : void 0;
+    const a = value(left);
+    const b = value(right);
+    if (a === void 0 || b === void 0 || !/[.eE]/.test(left.text) && !/[.eE]/.test(right.text)) {
+      return false;
+    }
+    const product = a * b;
+    return Number.isFinite(product) && !Number.isInteger(product);
+  }
+  // the native operator kind for a proven pair, or undefined. The helper's branch IS this operator:
+  // `/` is always double division; `-` boxes long for long/long and double otherwise; `*` only on
+  // long pairs (multiply re-boxes an integral double product as Long); `+` keeps the equal-kind rule.
+  javaNativeArithmeticPairKind(isPlus, isMultiply, isDivide, leftKind, rightKind) {
+    if (leftKind === void 0 || rightKind === void 0) {
+      return void 0;
+    }
+    if (isDivide) {
+      return "double";
+    }
+    const hasDouble = leftKind === "double" || rightKind === "double";
+    if (isMultiply) {
+      return hasDouble ? void 0 : "long";
+    }
+    if (isPlus) {
+      return leftKind === rightKind ? leftKind : void 0;
+    }
+    return hasDouble ? "double" : "long";
+  }
+  // 'long' | 'double' for a nested `+` this printer already prints natively through
+  // printWidenedNativeAdd, or undefined. Mirrors that printer's operand proof (javaWidenedNumericKind)
+  // behind the family and concat tests printInlineHelperArithmetic applies before it calls it.
+  javaNestedAddKind(node) {
+    while (node?.kind === SyntaxKind6.ParenthesizedExpression) {
+      node = node.expression;
+    }
+    if (node?.kind !== SyntaxKind6.BinaryExpression || node.operatorToken?.kind !== SyntaxKind6.PlusToken) {
+      return void 0;
+    }
+    const leftFamily = this.javaScalarFamily(node.left);
+    const rightFamily = this.javaScalarFamily(node.right);
+    if (leftFamily !== "number" || rightFamily !== "number") {
+      return void 0;
+    }
+    if (this.javaStringConcatIsProvable(node.left, node.right, leftFamily, rightFamily)) {
+      return void 0;
+    }
+    return this.javaWidenedAddKind(node);
+  }
+  // the `- * /` operand kind: the printer's own proof first, then the nested-sum proof
+  javaArithmeticKind(node, allowDeclaredLocals = true) {
+    const kind = this.javaProvableNumericKind(node, allowDeclaredLocals);
+    return kind !== void 0 ? kind : this.javaNestedAddKind(node);
+  }
+  // Helpers.add normalizes Integer to Long, boxes Long for integral operands and Double otherwise
+  // (null in -> null out), so native `+` over proven numeric non-null operands gives the same box.
+  // `this.milliseconds()` / `this.seconds()`: the hand-written Java declares both `public Long` over
+  // a primitive time value, so the box is never null. Only a signature resolving into the base time
+  // mixin or the Date.now lib chain qualifies; an unresolved call or venue override keeps the helper.
+  javaBaseTimeLongCall(node) {
+    const name = this.javaThisCallName(node);
+    if (name !== "milliseconds" && name !== "seconds") {
+      return false;
+    }
+    const checker = this.checkerOrUndefined();
+    const declaration = checker.getResolvedSignature(node)?.declaration?.resolve();
+    if (declaration === void 0) {
+      return false;
+    }
+    const fileName = declaration.getSourceFile?.()?.fileName ?? "";
+    return /(^|[\\/])ts[\\/]src[\\/]base[\\/]functions[\\/]time\.ts$/.test(fileName) || /(^|[\\/])lib\.[^\\/]*\.d\.ts$/.test(fileName);
+  }
+  // `this.parseTimeframe(..)`: the hand-written java BaseExchange declares `public int
+  // parseTimeframe(Object)` (java/lib/.../BaseExchange.java:1513) over the primitive-int
+  // ts/src/base/functions/misc.ts arrow, so the call is a never-null Java int. A venue's
+  javaBaseIntCall(node) {
+    if (this.javaThisCallName(node) !== "parseTimeframe") {
+      return false;
+    }
+    let declaration;
+    try {
+      declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+    } catch (e) {
+      declaration = void 0;
+    }
+    if (declaration === void 0) {
+      return false;
+    }
+    const fileName = declaration.getSourceFile?.()?.fileName ?? "";
+    return /(^|[\\/])ts[\\/]src[\\/]base[\\/]functions[\\/]misc\.ts$/.test(fileName);
+  }
+  // `for (var i = <int literal>; ...; i++)`: printForStatement rewrites the emitted
+  // `Object i = 0` initializer to `var i = 0`, so javac types the counter int. The
+  // counter is widened explicitly by javaPrintWidenedOperand, and no `=`/compound
+  javaIntForCounter(node) {
+    if (node?.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    const symbol = this.getChecker().getSymbolAtLocation(node);
+    const declaration = symbol?.valueDeclaration?.resolve();
+    if (declaration === void 0 || !isVariableDeclaration2(declaration)) {
+      return false;
+    }
+    const declarationList = declaration.parent;
+    if (declarationList === void 0 || !isVariableDeclarationList(declarationList) || declarationList.declarations.length !== 1) {
+      return false;
+    }
+    const forStatement = declarationList.parent;
+    if (forStatement === void 0 || forStatement.kind !== SyntaxKind6.ForStatement || forStatement.initializer !== declarationList) {
+      return false;
+    }
+    if (this.javaIntegerLiteralKind(declaration.initializer) !== "int") {
+      return false;
+    }
+    return this.javaCounterHasNoBoxWrite(node, symbol);
+  }
+  // no `=`/compound assignment anywhere in the enclosing function writes this counter;
+  // `++`/`--` keep the primitive int, any other operator would not
+  javaCounterHasNoBoxWrite(node, symbol) {
+    let scope = node.parent;
+    while (scope !== void 0 && !isFunctionLike(scope) && scope.kind !== SyntaxKind6.SourceFile) {
+      scope = scope.parent;
+    }
+    if (scope === void 0) {
+      return false;
+    }
+    let safe = true;
+    const visit = (current) => {
+      if (!safe || current === void 0) {
+        return;
+      }
+      if (isIdentifier2(current) && this.getChecker().getSymbolAtLocation(current) === symbol) {
+        const parent = current.parent;
+        if (parent !== void 0 && isBinaryExpression4(parent) && parent.left === current && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(parent.operatorToken.kind)) {
+          safe = false;
+          return;
+        }
+      }
+      current.forEachChild(visit);
+    };
+    scope.forEachChild(visit);
+    return safe;
+  }
+  // `x.length` on a String/List receiver prints `((String)x).length()` /
+  // `((java.util.List<?>)x).size()` — a Java int on every path printJavaLength takes
+  javaLengthIntRead(node) {
+    if (node?.kind !== SyntaxKind6.PropertyAccessExpression || node.name?.text !== "length") {
+      return false;
+    }
+    return this.javaLengthKind(node.expression) !== void 0;
+  }
+  // the Java numeric kind of one `+` operand: the literal proofs above plus the
+  // non-null base-tier Long accessors, primitive int for-counters and String/List
+  // length reads. Undefined keeps the helper.
+  javaWidenedNumericKind(node) {
+    if (node === void 0) {
+      return void 0;
+    }
+    if (node.kind === SyntaxKind6.ParenthesizedExpression) {
+      return this.javaWidenedNumericKind(node.expression);
+    }
+    const literalKind = this.javaIntegerLiteralKind(node);
+    if (literalKind !== void 0) {
+      return literalKind;
+    }
+    if (isNumericLiteral3(node)) {
+      if (/^0[xXbBoO]/.test(node.text)) {
+        return void 0;
+      }
+      return /[.eE]/.test(node.text) ? "double" : void 0;
+    }
+    if (this.javaBaseTimeLongCall(node)) {
+      return "long";
+    }
+    if (this.javaBaseIntCall(node) || this.javaIntForCounter(node) || this.javaLengthIntRead(node)) {
+      return "int";
+    }
+    if (node.kind === SyntaxKind6.Identifier) {
+      if (this.javaLongParameterRead(node) && this.javaNullGuardAdmitsRead(node)) {
+        return "long";
+      }
+      return this.javaDeclaredNumericLocalKind(node);
+    }
+    if (node.kind === SyntaxKind6.BinaryExpression && node.operatorToken.kind === SyntaxKind6.PlusToken) {
+      return this.javaWidenedAddKind(node);
+    }
+    return this.javaNativeArithmeticKind(node);
+  }
+  // the kind of a nested native `+` this rule prints, or undefined when it keeps the helper
+  javaWidenedAddKind(node) {
+    const leftKind = this.javaWidenedNumericKind(node.left);
+    const rightKind = this.javaWidenedNumericKind(node.right);
+    if (leftKind === void 0 || rightKind === void 0) {
+      return void 0;
+    }
+    return leftKind === "double" || rightKind === "double" ? "double" : "long";
+  }
+  // the native form of a numeric `+`, or undefined to keep Helpers.add
+  printWidenedNativeAdd(left, right, leftText, rightText) {
+    const leftKind = this.javaWidenedNumericKind(left);
+    const rightKind = this.javaWidenedNumericKind(right);
+    if (leftKind === void 0 || rightKind === void 0) {
+      return void 0;
+    }
+    const resultKind = leftKind === "double" || rightKind === "double" ? "double" : "long";
+    const leftOperand = this.javaPrintWidenedOperand(leftKind, resultKind, left, leftText);
+    const rightOperand = this.javaPrintWidenedOperand(rightKind, resultKind, right, rightText);
+    return `(${leftOperand} + ${rightOperand})`;
+  }
+  // `x + <int literal>` where the embedding layer reports x printed as the nullable box `Long x`:
+  // Helpers.add's Long arm is the long sum and its null arm answers null, so the null test
+  // keeps both. Only a plain name (read twice) qualifies.
+  printBoxedLongLiteralAdd(left, right, leftText, rightText) {
+    if (this.javaBoxedLongResolver === void 0 || !isIdentifier2(left) || !isNumericLiteral3(right) || this.javaIntegerLiteralKind(right) === void 0 || !/^\d{1,15}$/.test(rightText) || leftText !== left.text) {
+      return void 0;
+    }
+    let boxed2 = false;
+    try {
+      boxed2 = this.javaBoxedLongResolver(left) === true;
+    } catch (e) {
+      boxed2 = false;
+    }
+    return boxed2 ? `(${leftText} == null ? null : (Object) (${leftText} + ${rightText}L))` : void 0;
+  }
+  // an int operand is widened to long explicitly: `i + 1` would box an Integer where
+  // Helpers.add hands back a Long, and an all-int sum wraps where the helper's long
+  // does not. Integer literals print long; a Double result needs no widening.
+  javaPrintWidenedOperand(kind, resultKind, node, text) {
+    if (kind === "double") {
+      return text;
+    }
+    if (kind === "long" || isNumericLiteral3(node)) {
+      return this.javaPrintOperandAsLong(node, text);
+    }
+    if (resultKind === "long") {
+      return `((long) ${text})`;
+    }
+    return text;
+  }
+  // integer literals print as Java `int`; the helpers normalize Integer to Long before
+  // the arithmetic, so native integer arithmetic is emitted in long to keep the boxed
+  // result identical
+  javaPrintOperandAsLong(node, text) {
+    if (!isNumericLiteral3(node) || /[.eE]/.test(node.text)) {
+      return text;
+    }
+    return /L$/.test(text) ? text : text + "L";
+  }
+  // the native form of a helper-family binary operator, or undefined to keep the helper
+  // `for (var i = <int literal>; ...; i++)` prints a primitive `var` counter (see
+  // isJavaPrimitiveForCounter). Only ++/-- may write it: any other assignment in the
+  // loop would print a different kind into the same slot , so the proof bails.
+  javaProvableCounterInt(node) {
+    if (!node || node.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    const symbol = this.getChecker().getSymbolAtLocation(node);
+    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
+    if (!declaration || declaration.kind !== SyntaxKind6.VariableDeclaration) {
+      return false;
+    }
+    if (this.javaIntegerLiteralKind(declaration.initializer) !== "int") {
+      return false;
+    }
+    const list = declaration.parent;
+    const forStatement = list?.parent;
+    if (!forStatement || forStatement.kind !== SyntaxKind6.ForStatement || forStatement.initializer !== list) {
+      return false;
+    }
+    const incrementor = forStatement.incrementor;
+    if (!incrementor || incrementor.operand?.kind !== SyntaxKind6.Identifier || incrementor.operand.text !== node.text) {
+      return false;
+    }
+    if (incrementor.kind !== SyntaxKind6.PostfixUnaryExpression && incrementor.kind !== SyntaxKind6.PrefixUnaryExpression) {
+      return false;
+    }
+    const name = node.text;
+    let safe = true;
+    const scan = (n) => {
+      if (!safe || !n || n === incrementor) {
+        return;
+      }
+      if (n.kind === SyntaxKind6.BinaryExpression && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(n.operatorToken.kind) && n.left?.kind === SyntaxKind6.Identifier && n.left.text === name) {
+        safe = false;
+        return;
+      }
+      if ((n.kind === SyntaxKind6.PostfixUnaryExpression || n.kind === SyntaxKind6.PrefixUnaryExpression) && n.operand?.kind === SyntaxKind6.Identifier && n.operand.text === name) {
+        return;
+      }
+      n.forEachChild(scan);
+    };
+    scan(forStatement.statement);
+    if (!safe) {
+      return false;
+    }
+    let enclosing = forStatement.parent;
+    while (enclosing && !isFunctionLike(enclosing)) {
+      enclosing = enclosing.parent;
+    }
+    if (enclosing) {
+      const body = enclosing.body ?? enclosing;
+      const scanOuter = (n) => {
+        if (!safe || !n || n === forStatement || isFunctionLike(n)) {
+          return;
+        }
+        if (n.kind === SyntaxKind6.BinaryExpression && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(n.operatorToken.kind) && n.left?.kind === SyntaxKind6.Identifier && n.left.text === name) {
+          safe = false;
+          return;
+        }
+        n.forEachChild(scanOuter);
+      };
+      scanOuter(body);
+    }
+    return safe;
+  }
+  // `Helpers.add/subtract/multiply/divide` on operands whose DECLARED Java type (the embedding layer's
+  // javaDeclaredLocalTypeResolver, or a Long core parameter) is Long/long/Integer/int/Double/double, or an
+  // integer literal. Every helper answers `null` for a null operand, so a boxed operand's null arm is
+  // the explicit ternary; integral operands print widened (`((long) i)`, `1L`) because the helpers
+  // normalize Integer to Long; a double operand promotes natively. `multiply` stays integral-only
+  // (it re-boxes an integral double product as Long), `+ - *` on a double keep `double` boxes.
+  // 'longbox' | 'longprim' | 'intbox' | 'intprim' | 'doublebox' | 'doubleprim' | 'intlit' | 'longlit'
+  javaDeclaredBoxOperandKind(node, text) {
+    let inner = node;
+    while (inner !== void 0 && (isParenthesizedExpression2(inner) || isAsExpression2(inner) || inner.kind === SyntaxKind6.NonNullExpression)) {
+      inner = inner.expression;
+    }
+    if (inner === void 0) {
+      return void 0;
+    }
+    if (isNumericLiteral3(inner)) {
+      const kind2 = this.javaIntegerLiteralKind(inner);
+      return kind2 === void 0 ? void 0 : kind2 === "long" ? "longlit" : "intlit";
+    }
+    if (!isIdentifier2(inner) || this.javaStripPrintedParens(text) !== String(inner.text) || !this.javaIdentifierPrintsDeclaredName(inner)) {
+      return void 0;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(inner);
+    if (declaration !== void 0 && !this.javaIdentifierKeepsDeclaredName(inner)) {
+      return void 0;
+    }
+    let declared;
+    if (declaration !== void 0) {
+      try {
+        declared = this.javaDeclaredTypeOfDeclaration(declaration);
+      } catch (e) {
+        declared = void 0;
+      }
+      if (declared === void 0 && this.javaLongParameterRead(inner)) {
+        declared = "Long";
+      }
+    } else if (typeof this.javaBindingElementTypeResolver === "function") {
+      const element = this.getChecker().getSymbolAtLocation(inner)?.valueDeclaration?.resolve();
+      if (element?.kind === SyntaxKind6.BindingElement && element.name?.text === inner.text) {
+        try {
+          declared = this.javaBindingElementTypeResolver(element);
+        } catch (e) {
+          declared = void 0;
+        }
+      }
+    }
+    const kinds = {
+      Long: "longbox",
+      long: "longprim",
+      Integer: "intbox",
+      int: "intprim",
+      Double: "doublebox",
+      double: "doubleprim"
+    };
+    const kind = declared === void 0 ? void 0 : kinds[declared.replace(/^final\s+/, "").trim()];
+    if (kind !== void 0 && kind.endsWith("box") && declaration !== void 0 && (this.javaNullGuardAdmitsRead(inner) || this.javaLocalIsLengthDerived(declaration))) {
+      return void 0;
+    }
+    return kind !== void 0 && this.javaNumberOrNullishType(inner) ? kind : void 0;
+  }
+  // `const n = x.length` (a Java int read, never null)
+  javaLocalIsLengthDerived(declaration) {
+    const init = declaration?.kind === SyntaxKind6.VariableDeclaration ? this.unwrapPrintTransparentExpression(declaration.initializer) : void 0;
+    return init !== void 0 && isPropertyAccessExpression2(init) && init.name.text === "length";
+  }
+  // number, number-literal, or a union of those with undefined / null / void
+  javaNumberOrNullishType(node) {
+    let type;
+    try {
+      type = this.checkerOrUndefined()?.getTypeAtLocation(node);
+    } catch (e) {
+      return false;
+    }
+    if (type === void 0) {
+      return false;
+    }
+    const isNumber = (t) => ((t?.flags ?? 0) & (TypeFlags5.Number | TypeFlags5.NumberLiteral)) !== 0;
+    if (isNumber(type)) {
+      return true;
+    }
+    const members = (((type.flags ?? 0) & TypeFlags5.Union) !== 0 ? type.getTypes?.() : void 0) ?? [];
+    return members.some(isNumber) && members.every((m) => isNumber(m) || ((m?.flags ?? 0) & (TypeFlags5.Undefined | TypeFlags5.Null | TypeFlags5.Void)) !== 0);
+  }
+  javaStripPrintedParens(text) {
+    let value = text.trim();
+    while (value.startsWith("(") && value.endsWith(")")) {
+      let depth = 0;
+      let closesAtEnd = true;
+      for (let i = 0; i < value.length; i++) {
+        if (value[i] === "(") {
+          depth++;
+        } else if (value[i] === ")") {
+          depth--;
+          if (depth === 0 && i < value.length - 1) {
+            closesAtEnd = false;
+            break;
+          }
+        }
+      }
+      if (!closesAtEnd) {
+        break;
+      }
+      value = value.slice(1, -1).trim();
+    }
+    return value;
+  }
+  // the value is read as itself: a ternary arm (`c ? (a + b) : 1.5` would binary-promote the boxed
+  // arm and unbox a null) or a member-access receiver keeps the helper's Object box
+  javaArithmeticResultIsBoxSensitive(node) {
+    let child = node;
+    let parent = node?.parent;
+    while (parent !== void 0 && isParenthesizedExpression2(parent)) {
+      child = parent;
+      parent = parent.parent;
+    }
+    if (parent === void 0) {
+      return false;
+    }
+    if (parent.kind === SyntaxKind6.ConditionalExpression) {
+      return parent.condition !== child;
+    }
+    return (isPropertyAccessExpression2(parent) || isElementAccessExpression3(parent)) && parent.expression === child;
+  }
+  // `- *` where each operand is a primitive long/int local, an integer literal, a nested native
+  // product/difference, or a base `this.precisionFromString/parseTimeframe(..)` (BaseExchange
+  // declares both `public int`): Helpers.multiply/subtract's Long arm is the same long result.
+  javaIntegralOperandKind(node, text) {
+    if (isNumericLiteral3(node)) {
+      return /^\d{1,18}$/.test(node.text) ? "long" : void 0;
+    }
+    if (isPrefixUnaryExpression2(node) && node.operator === SyntaxKind6.MinusToken && isNumericLiteral3(node.operand)) {
+      return /^\d{1,18}$/.test(node.operand.text) ? "long" : void 0;
+    }
+    if (isBinaryExpression4(node)) {
+      return (node.operatorToken.kind === SyntaxKind6.MinusToken || node.operatorToken.kind === SyntaxKind6.AsteriskToken) && /^\(.*\)$/.test(text) && !text.includes("Helpers.") ? "long" : void 0;
+    }
+    if (isIdentifier2(node)) {
+      const kind = this.javaDeclaredBoxOperandKind(node, text);
+      return kind === "longprim" ? "long" : kind === "intprim" ? "int" : void 0;
+    }
+    if (isCallExpression5(node) && isPropertyAccessExpression2(node.expression) && node.expression.expression.kind === SyntaxKind6.ThisKeyword && ["precisionFromString", "parseTimeframe"].includes(node.expression.name.text)) {
+      const declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+      const fileName = declaration?.getSourceFile?.()?.fileName ?? "";
+      return /(^|[\\/])ts[\\/]src[\\/]base[\\/](Exchange(\.nooverloads\.\d+)?|functions[\\/]\w+)\.ts$/.test(fileName) ? "int" : void 0;
+    }
+    return void 0;
+  }
+  printIntegralCallArithmetic(left, right, leftText, rightText, op) {
+    if (op !== SyntaxKind6.MinusToken && op !== SyntaxKind6.AsteriskToken) {
+      return void 0;
+    }
+    const ta = this.javaIntegralOperandKind(left, leftText);
+    const tb = this.javaIntegralOperandKind(right, rightText);
+    if (ta === void 0 || tb === void 0 || !isCallExpression5(left) && !isCallExpression5(right)) {
+      return void 0;
+    }
+    const literal2 = (n, t) => isNumericLiteral3(n) || isPrefixUnaryExpression2(n) ? t + "L" : t;
+    const a = ta === "int" ? `((long) ${leftText})` : literal2(left, leftText);
+    const b = tb === "int" && ta === "int" ? `((long) ${rightText})` : literal2(right, rightText);
+    return `(${a} ${op === SyntaxKind6.MinusToken ? "-" : "*"} ${/^-/.test(b) ? `(${b})` : b})`;
+  }
+  printDeclaredBoxArithmetic(node, left, right, leftText, rightText, op) {
+    const operator = op === SyntaxKind6.PlusToken ? "+" : op === SyntaxKind6.MinusToken ? "-" : op === SyntaxKind6.AsteriskToken ? "*" : void 0;
+    if (operator === void 0 || this.javaArithmeticResultIsBoxSensitive(node)) {
+      return void 0;
+    }
+    const leftKind = this.javaDeclaredBoxOperandKind(left, leftText);
+    const rightKind = this.javaDeclaredBoxOperandKind(right, rightText);
+    if (leftKind === void 0 || rightKind === void 0) {
+      return void 0;
+    }
+    const isLiteral = (kind) => kind === "intlit" || kind === "longlit";
+    if (isLiteral(leftKind) && isLiteral(rightKind)) {
+      return void 0;
+    }
+    const isDouble = (kind) => kind === "doublebox" || kind === "doubleprim";
+    const hasDouble = isDouble(leftKind) || isDouble(rightKind);
+    if (hasDouble && operator === "*") {
+      return void 0;
+    }
+    if (hasDouble && (operator === "+" || operator === "-") && (leftKind.endsWith("box") || rightKind.endsWith("box"))) {
+      return void 0;
+    }
+    const texts = [this.javaStripPrintedParens(leftText), this.javaStripPrintedParens(rightText)];
+    const kinds = [leftKind, rightKind];
+    const asLong = (i) => {
+      if (kinds[i] === "longbox" || kinds[i] === "longprim" || kinds[i] === "longlit") {
+        return texts[i];
+      }
+      return kinds[i] === "intlit" ? `${texts[i]}L` : `((long) ${texts[i]})`;
+    };
+    const asDouble = (i) => isDouble(kinds[i]) ? texts[i] : `((double) ${texts[i]})`;
+    const wide = (i) => hasDouble ? asDouble(i) : asLong(i);
+    const expression = `(${wide(0)} ${operator} ${wide(1)})`;
+    const boxes = kinds.map((kind, i) => kind.endsWith("box") ? texts[i] : void 0).filter((text, i, all) => text !== void 0 && all.indexOf(text) === i);
+    return boxes.length === 0 ? expression : `((${boxes.map((box) => `${box} == null`).join(" || ")}) ? null : ${expression})`;
+  }
+  printInlineHelperArithmetic(left, right, leftText, rightText, op) {
+    const isPlus = op === SyntaxKind6.PlusToken || op === SyntaxKind6.PlusEqualsToken;
+    const isMinus = op === SyntaxKind6.MinusToken || op === SyntaxKind6.MinusEqualsToken;
+    const isMultiply = op === SyntaxKind6.AsteriskToken;
+    const isDivide = op === SyntaxKind6.SlashToken;
+    const isMod = op === SyntaxKind6.PercentToken;
+    if (!isPlus && !isMinus && !isMultiply && !isDivide && !isMod) {
+      return void 0;
+    }
+    const leftFamily = this.javaScalarFamily(left);
+    const rightFamily = this.javaScalarFamily(right);
+    if (isPlus && this.javaStringConcatIsProvable(left, right, leftFamily, rightFamily)) {
+      const concat = `(${leftText} + ${rightText})`;
+      return op === SyntaxKind6.PlusEqualsToken ? `${leftText} = ${concat}` : concat;
+    }
+    if (op === SyntaxKind6.PlusEqualsToken || op === SyntaxKind6.MinusEqualsToken) {
+      return void 0;
+    }
+    if (op === SyntaxKind6.MinusToken) {
+      const anchoredKind = this.javaThisCallNumericKind(left);
+      if (anchoredKind === "long" && this.javaProvableNumericKind(right) === "long") {
+        return `(${leftText} - ${this.javaPrintOperandAsLong(right, rightText)})`;
+      }
+    }
+    if (leftFamily !== "number" || rightFamily !== "number") {
+      return op === SyntaxKind6.PlusToken ? this.printBoxedLongLiteralAdd(left, right, leftText, rightText) : void 0;
+    }
+    if (op === SyntaxKind6.PlusToken) {
+      return this.printWidenedNativeAdd(left, right, leftText, rightText) ?? this.printBoxedLongLiteralAdd(left, right, leftText, rightText);
+    }
+    if (isMod) {
+      if (!this.javaProvableNumericDoubleOperand(left) || !this.javaProvableNumericDoubleOperand(right)) {
+        return void 0;
+      }
+      return `(((double) ${leftText}) % ((double) ${rightText}))`;
+    }
+    if (isMultiply && this.javaLiteralFractionalProduct(left, right)) {
+      return `(${leftText} * ${rightText})`;
+    }
+    const childAllows = !isPlus;
+    let leftKind = this.javaProvableNumericKind(left, childAllows);
+    let rightKind = this.javaProvableNumericKind(right, childAllows);
+    let pairKind = this.javaNativeArithmeticPairKind(isPlus, isMultiply, isDivide, leftKind, rightKind);
+    if (pairKind === void 0) {
+      const nestedLeft = this.javaArithmeticKind(left, childAllows);
+      const nestedRight = this.javaArithmeticKind(right, childAllows);
+      const nestedPair = this.javaNativeArithmeticPairKind(isPlus, isMultiply, isDivide, nestedLeft, nestedRight);
+      if (nestedPair !== void 0) {
+        leftKind = nestedLeft;
+        rightKind = nestedRight;
+        pairKind = nestedPair;
+      }
+    }
+    if (pairKind === void 0) {
+      return void 0;
+    }
+    if (isDivide) {
+      return `(((double) ${leftText}) / ((double) ${rightText}))`;
+    }
+    const operator = isPlus ? "+" : isMinus ? "-" : "*";
+    const widenedLeft = this.javaPrintArithmeticOperand(leftKind, left, leftText);
+    const widenedRight = this.javaPrintArithmeticOperand(rightKind, right, rightText);
+    return `(${widenedLeft} ${operator} ${widenedRight})`;
+  }
+  // an Integer/int operand is widened to long before the operator: Helpers normalizes an
+  // Integer to Long first, so the native long arithmetic reproduces both the value (no
+  // int-width wrap) and the Long box the helper hands back
+  javaPrintArithmeticOperand(kind, node, text) {
+    if (kind === "int") {
+      return `((long) ${text})`;
+    }
+    return this.javaPrintOperandAsLong(node, text);
+  }
+  // Helpers.mathMin/mathMax take Object, tolerate null and return the ORIGINAL box; Math.min/max take
+  // primitives, so the native call needs both operands primitive of one family: literals, `for`
+  // counters, `.length`/`.size()`, native long arithmetic; the only NaN-free double is a literal.
+  javaNativeMathMinMaxOperandKind(node) {
+    if (this.javaIntegerLiteralKind(node) !== void 0 || this.isJavaPrimitiveForCounter(node) || isPropertyAccessExpression2(node) && node.name.text === "length" && this.javaLengthKind(node.expression) !== void 0) {
+      return "integral";
+    }
+    if (isNumericLiteral3(node)) {
+      return this.javaProvableNumericKind(node) === "double" ? "double" : void 0;
+    }
+    return this.javaProvableNumericKind(node) === "long" ? "integral" : void 0;
+  }
+  // a primitive has no members, so a receiver position (and the printer's cast wrappers) keep the
+  // helper - every other position boxes the primitive exactly like the helper's own box (Jackson,
+  // isEqual and toString all read an Integer and a Long the same way)
+  javaNativeMathMinMaxResultIsPlainValue(node) {
+    let parent = node.parent;
+    while (parent !== void 0 && isParenthesizedExpression2(parent)) {
+      parent = parent.parent;
+    }
+    if (parent === void 0) {
+      return false;
+    }
+    if ((isPropertyAccessExpression2(parent) || isElementAccessExpression3(parent) || isCallExpression5(parent)) && parent.expression === node) {
+      return false;
+    }
+    return parent.kind !== SyntaxKind6.AsExpression && parent.kind !== SyntaxKind6.TypeAssertionExpression && parent.kind !== SyntaxKind6.NonNullExpression;
+  }
+  // the native form of Math.min/Math.max, or undefined to keep the helper
+  printNativeMathMinMax(node, left, right, leftText, rightText, name) {
+    if (!this.javaNativeMathMinMaxResultIsPlainValue(node)) {
+      return void 0;
+    }
+    const kind = this.javaNativeMathMinMaxOperandKind(left);
+    if (kind === void 0 || kind !== this.javaNativeMathMinMaxOperandKind(right)) {
+      return void 0;
+    }
+    return `Math.${name}(${leftText}, ${rightText})`;
+  }
+  // A local whose initializer prints as native arithmetic holds a String / Long / Double box, so the
+  // declaration carries that type; every other use is scanned first, as it changes resolution.
+  javaUnwrapParentheses(node) {
+    let current = node;
+    while (current?.kind === SyntaxKind6.ParenthesizedExpression) {
+      current = current.expression;
+    }
+    return current;
+  }
+  // the Java type of the native arithmetic this printer prints for a `+ - * / +=`
+  // node, or undefined when the node keeps the helper (its printed value is an
+  // Object box). Mirrors printInlineHelperArithmetic operand-for-operand.
+  javaNativeArithmeticType(node) {
+    const value = this.javaUnwrapParentheses(node);
+    if (value?.kind !== SyntaxKind6.BinaryExpression) {
+      return void 0;
+    }
+    const op = value.operatorToken.kind;
+    if (op === SyntaxKind6.PlusToken && this.javaNativeConcat(value)) {
+      return "String";
+    }
+    if (op === SyntaxKind6.PlusEqualsToken) {
+      const isStringPair = this.javaScalarFamily(value.left) === "string" && this.javaScalarFamily(value.right) === "string" && (this.javaProvableString(value.left) || this.javaProvableString(value.right));
+      return isStringPair ? "String" : void 0;
+    }
+    const kind = this.javaNativeArithmeticKind(value);
+    return kind === "long" ? "Long" : kind === "double" ? "Double" : void 0;
+  }
+  // the enclosing function-like node: the write scan scope of a typed local
+  javaEnclosingFunction(node) {
+    let current = node?.parent;
+    while (current !== void 0) {
+      const kind = current.kind;
+      if (kind === SyntaxKind6.MethodDeclaration || kind === SyntaxKind6.FunctionDeclaration || kind === SyntaxKind6.FunctionExpression || kind === SyntaxKind6.ArrowFunction || kind === SyntaxKind6.GetAccessor || kind === SyntaxKind6.SetAccessor || kind === SyntaxKind6.Constructor) {
+        return current;
+      }
+      current = current.parent;
+    }
+    return void 0;
+  }
+  // a reassignment may keep the narrowed declaration only when its printed value is the
+  // same Java type (the helper's box stays an Object, so it keeps the box)
+  javaArithmeticWriteIsSafe(right, javaType) {
+    const value = this.javaUnwrapParentheses(right);
+    if (value === void 0) {
+      return false;
+    }
+    if (value.kind === SyntaxKind6.NullKeyword) {
+      return true;
+    }
+    if (value.kind === SyntaxKind6.Identifier && value.text === "undefined") {
+      return true;
+    }
+    return javaType === "String" && (value.kind === SyntaxKind6.StringLiteral || value.kind === SyntaxKind6.NoSubstitutionTemplateLiteral) || this.javaNativeArithmeticType(value) === javaType;
+  }
+  // the innermost block that scopes a declaration (Java locals live to the end of
+  // their block; sibling blocks may reuse the name, nested ones may not)
+  javaScopingBlock(node) {
+    let current = node?.parent;
+    let last = void 0;
+    while (current !== void 0) {
+      if (current.kind === SyntaxKind6.Block || current.kind === SyntaxKind6.SourceFile) {
+        return current;
+      }
+      last = current;
+      current = current.parent;
+    }
+    return last;
+  }
+  javaNodeContains(outer, inner) {
+    return outer !== void 0 && inner !== void 0 && outer.pos <= inner.pos && inner.end <= outer.end;
+  }
+  // two same-named bindings may both keep their own printed type only in disjoint
+  // blocks: a nested one would already be an illegal Java shadowing of the Object
+  // declaration the corpus compiles with
+  javaBindingsAreDisjoint(declaration, other) {
+    const mine = this.javaScopingBlock(declaration);
+    const theirs = this.javaScopingBlock(other);
+    if (mine === void 0 || theirs === void 0) {
+      return false;
+    }
+    return !this.javaNodeContains(mine, theirs) && !this.javaNodeContains(theirs, mine);
+  }
+  // is this occurrence of the local compatible with the narrowed declaration?
+  javaArithmeticLocalUseIsSafe(node, declaration, javaType) {
+    const parent = node.parent;
+    if (parent === void 0) {
+      return false;
+    }
+    if ((parent.kind === SyntaxKind6.PropertyAccessExpression || parent.kind === SyntaxKind6.PropertyAssignment) && parent.name === node) {
+      return true;
+    }
+    if ((parent.kind === SyntaxKind6.VariableDeclaration || parent.kind === SyntaxKind6.Parameter || parent.kind === SyntaxKind6.BindingElement) && parent.name === node) {
+      return this.javaBindingsAreDisjoint(declaration, parent);
+    }
+    if (parent.kind === SyntaxKind6.PostfixUnaryExpression || parent.kind === SyntaxKind6.PrefixUnaryExpression) {
+      return false;
+    }
+    if (parent.kind === SyntaxKind6.SpreadElement || parent.kind === SyntaxKind6.DeleteExpression || parent.kind === SyntaxKind6.ForOfStatement || parent.kind === SyntaxKind6.ForInStatement) {
+      return false;
+    }
+    if (parent.kind === SyntaxKind6.TypeOfExpression) {
+      return javaType === "String";
+    }
+    if (parent.kind === SyntaxKind6.AsExpression || parent.kind === SyntaxKind6.TypeAssertionExpression) {
+      return javaType === "String" && parent.type?.kind === SyntaxKind6.StringKeyword;
+    }
+    if (parent.kind === SyntaxKind6.ConditionalExpression) {
+      return javaType === "String";
+    }
+    if (parent.kind === SyntaxKind6.ElementAccessExpression && parent.expression === node) {
+      const grand = parent.parent;
+      if (grand?.kind === SyntaxKind6.DeleteExpression) {
+        return false;
+      }
+      if (grand?.kind === SyntaxKind6.BinaryExpression && grand.left === parent && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(grand.operatorToken.kind)) {
+        return false;
+      }
+    }
+    if (parent.kind === SyntaxKind6.ArrayLiteralExpression) {
+      const grand = parent.parent;
+      if (grand?.kind === SyntaxKind6.BinaryExpression && grand.left === parent && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(grand.operatorToken.kind)) {
+        return false;
+      }
+    }
+    if (parent.kind === SyntaxKind6.BinaryExpression && parent.left === node) {
+      const op = parent.operatorToken.kind;
+      if (op === SyntaxKind6.EqualsToken) {
+        return this.javaArithmeticWriteIsSafe(parent.right, javaType);
+      }
+      if (op === SyntaxKind6.PlusEqualsToken) {
+        return this.javaNativeArithmeticType(parent) === javaType;
+      }
+      if (JAVA_ASSIGNMENT_OPERATOR_KINDS.has(op)) {
+        return false;
+      }
+      if (op === SyntaxKind6.PlusToken && javaType === "String") {
+        return this.javaNativeArithmeticType(parent) === "String";
+      }
+    }
+    return true;
+  }
+  // the narrowed declaration needs every later use of the local in the enclosing
+  // function to still compile and resolve the way the Object declaration did
+  javaArithmeticLocalIsSafeToType(scope, declaration, javaType) {
+    if (scope === void 0) {
+      return false;
+    }
+    const sourceName = declaration.name.text;
+    let safe = true;
+    const visit = (n) => {
+      if (!safe) {
+        return;
+      }
+      if (n.kind === SyntaxKind6.Identifier && n.text === sourceName && n !== declaration.name) {
+        if (!this.javaArithmeticLocalUseIsSafe(n, declaration, javaType)) {
+          safe = false;
+          return;
+        }
+      }
+      n.forEachChild(visit);
+    };
+    scope.forEachChild(visit);
+    return safe;
+  }
+  // the Java type a declaration can carry because its initializer prints as native
+  // arithmetic, or undefined to keep the Object declaration
+  javaArithmeticLocalType(declaration) {
+    if (!isIdentifier2(declaration.name) || declaration.initializer === void 0) {
+      return void 0;
+    }
+    const javaType = this.javaNativeArithmeticType(declaration.initializer);
+    if (javaType === void 0) {
+      return void 0;
+    }
+    const scope = this.javaEnclosingFunction(declaration);
+    return this.javaArithmeticLocalIsSafeToType(scope, declaration, javaType) ? javaType : void 0;
+  }
+  // an operand `(double) <text>` can be applied to without changing what Helpers.mod
+  // computes: a numeric literal or a native arithmetic node (javaProvableNumericKind,
+  // already printed as a java number) or a primitive int loop counter
+  javaProvableNumericDoubleOperand(node) {
+    return this.javaProvableNumericKind(node) !== void 0 || this.javaProvableCounterInt(node);
+  }
+  // the operand prints as an integral Java number: `+ - Math.min Math.max` and `(int)` compile on it
+  javaPrintsIntegralNumber(node) {
+    const n = this.unwrapParenthesized(node);
+    if (n === void 0) {
+      return false;
+    }
+    switch (n.kind) {
+      case SyntaxKind6.NumericLiteral:
+        return !/[.eE]/.test(n.text);
+      case SyntaxKind6.PrefixUnaryExpression:
+        return n.operator === SyntaxKind6.MinusToken && this.javaPrintsIntegralNumber(n.operand);
+      case SyntaxKind6.PropertyAccessExpression:
+        return n.name?.text === "length" && this.javaScalarFamily(n) === "number";
+      case SyntaxKind6.BinaryExpression: {
+        const op = n.operatorToken.kind;
+        return (op === SyntaxKind6.PlusToken || op === SyntaxKind6.MinusToken || op === SyntaxKind6.AsteriskToken) && this.javaPrintsIntegralNumber(n.left) && this.javaPrintsIntegralNumber(n.right);
+      }
+    }
+    if (n.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    const type = this.javaDeclaredTypeOf(n);
+    return type !== void 0 && this.javaIntegralDeclaredTypes.has(type.replace(/^final\s+/, "").trim());
+  }
+  // For ++/--, prefer native Java operators rather than the C# ref-helpers
+  printPostFixUnaryExpression(node, identation) {
+    const { operand, operator } = node;
+    const leftSide = this.printNode(operand, 0);
+    return this.PostFixOperators[operator] === "--" ? `${leftSide}--` : `${leftSide}++`;
+  }
+  // the identifier declared by a `for (var i = <int literal>; ...; i++)` header: the
+  // printer writes that initializer as `var`, so javac infers a primitive int and the
+  // ++/-- increment keeps it one
+  javaPrimitiveCounter(node) {
+    if (node?.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    const symbol = this.getChecker().getSymbolAtLocation(node);
+    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name)) {
+      return false;
+    }
+    if (declaration.name.text !== node.text || declaration.initializer === void 0) {
+      return false;
+    }
+    const list = declaration.parent;
+    if (list?.kind !== SyntaxKind6.VariableDeclarationList || list.declarations.length !== 1) {
+      return false;
+    }
+    const forStatement = list.parent;
+    if (forStatement?.kind !== SyntaxKind6.ForStatement || forStatement.initializer !== list) {
+      return false;
+    }
+    if (this.javaIntegerLiteralKind(declaration.initializer) === void 0) {
+      return false;
+    }
+    const incrementor = forStatement.incrementor;
+    return incrementor?.kind === SyntaxKind6.PostfixUnaryExpression && incrementor.operand?.kind === SyntaxKind6.Identifier && incrementor.operand.text === node.text;
+  }
+  // `-x` prints as the plain Java operator when the operand is already primitive: a decimal literal,
+  // a nested native `+ - * /`, a `for (var i = <int literal>` counter or a `.length` read.
+  // Helpers.opNeg preserves the box and maps null to null, so every boxed local keeps the helper.
+  javaNativeNegation(node) {
+    if (node === void 0) {
+      return false;
+    }
+    if (node.kind === SyntaxKind6.ParenthesizedExpression) {
+      return this.javaNativeNegation(node.expression);
+    }
+    if (isNumericLiteral3(node)) {
+      return this.javaProvableNumericKind(node) !== void 0;
+    }
+    if (node.kind === SyntaxKind6.BinaryExpression) {
+      return this.javaNativeArithmeticKind(node) !== void 0;
+    }
+    if (this.javaPrimitiveCounter(node)) {
+      return true;
+    }
+    return node.kind === SyntaxKind6.PropertyAccessExpression && node.name.text === "length" && this.javaLengthKind(node.expression) !== void 0;
+  }
+  // `-x` in the true arm of `(x !== undefined) ? ... : ...` on an unwritten Long/Double local:
+  // the guard rules out null, so the helper's box-preserving negation is the box's valueOf
+  javaNullGuardedNegationBox(node) {
+    const operand = node.operand;
+    if (!isIdentifier2(operand)) {
+      return void 0;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(operand);
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || this.javaLocalHasWriteAtAll(declaration.name)) {
+      return void 0;
+    }
+    const box = this.javaDeclaredTypeOfDeclaration(declaration);
+    if (box !== "Long" && box !== "Double") {
+      return void 0;
+    }
+    const symbol = this.getChecker().getSymbolAtLocation(operand);
+    let child = node;
+    for (let current = node.parent; current !== void 0 && !isFunctionLike(current); child = current, current = current.parent) {
+      if (current.kind !== SyntaxKind6.ConditionalExpression) {
+        continue;
+      }
+      if (current.whenTrue !== child) {
+        return void 0;
+      }
+      let condition = current.condition;
+      while (condition?.kind === SyntaxKind6.ParenthesizedExpression) {
+        condition = condition.expression;
+      }
+      const op = condition?.operatorToken?.kind;
+      const right = condition?.right;
+      const nullish = right?.kind === SyntaxKind6.NullKeyword || isIdentifier2(right) && right.text === "undefined";
+      if (condition?.kind === SyntaxKind6.BinaryExpression && (op === SyntaxKind6.ExclamationEqualsEqualsToken || op === SyntaxKind6.ExclamationEqualsToken) && nullish && isIdentifier2(condition.left) && this.getChecker().getSymbolAtLocation(condition.left) === symbol) {
+        return box;
+      }
+      return void 0;
+    }
+    return void 0;
+  }
+  printPrefixUnaryExpression(node, identation) {
+    const { operand, operator } = node;
+    if (operator === SyntaxKind6.ExclamationToken) {
+      return this.PrefixFixOperators[operator] + this.printCondition(node.operand, 0);
+    }
+    const leftSide = this.printNode(operand, 0);
+    if (operator === SyntaxKind6.PlusToken) {
+      return `+(${leftSide})`;
+    } else if (operator === SyntaxKind6.MinusToken) {
+      if (this.javaNativeNegation(operand)) {
+        return `-${leftSide}`;
+      }
+      const guardedBox = this.javaNullGuardedNegationBox(node);
+      if (guardedBox !== void 0) {
+        return `${guardedBox}.valueOf(-${leftSide})`;
+      }
+      return `Helpers.opNeg(${leftSide})`;
+    }
+    return super.printPrefixUnaryExpression(node, identation);
+  }
+  // ===== strings: concat, parse, slice, split and string methods =====
+  // string keys (plain, literal or a union of literals) print as Java Strings
+  isJavaStringType(type) {
+    if (!type) {
+      return false;
+    }
+    if (this.isStringType(type.flags)) {
+      return true;
+    }
+    if ((type.flags & TypeFlags5.Union) === 0) {
+      return false;
+    }
+    return type.getTypes().every((member) => this.isStringType(member.flags));
+  }
+  // a `string[]` annotation (optionally `| undefined`), the unaliased spelling of `Strings`
+  javaIsStringArrayType(checker, type) {
+    const members = type.isUnionType?.() ? type.getTypes() : [type];
+    let arrays = 0;
+    for (const member of members) {
+      if (member.flags & (TypeFlags5.Undefined | TypeFlags5.Null)) {
+        continue;
+      }
+      if (!checker.isArrayType(member)) {
+        return false;
+      }
+      const element = checker.getTypeArguments(member)?.[0];
+      if (element === void 0 || !(element.flags & TypeFlags5.String)) {
+        return false;
+      }
+      arrays++;
+    }
+    return arrays === 1;
+  }
+  // a return annotation that names a string array: `string[]`, `Str[]`, or the `Strings`
+  // alias. Its printed slots are java.util.List<String>, so the List<Object> target never
+  // fits, whatever the body returns.
+  javaStringArrayAnnotation(node) {
+    const annotation = node?.type;
+    if (annotation === void 0) {
+      return false;
+    }
+    if (isArrayTypeNode(annotation)) {
+      const element = annotation.elementType;
+      if (element.kind === SyntaxKind6.StringKeyword) {
+        return true;
+      }
+      return isTypeReferenceNode(element) && isIdentifier2(element.typeName) && /^(?:Str|string)$/.test(String(element.typeName.text));
+    }
+    return isTypeReferenceNode(annotation) && isIdentifier2(annotation.typeName) && /^Strings$/.test(String(annotation.typeName.text));
+  }
+  // a `this.<name> (...)` return of a hand-written base String producer: the resolved
+  // signature must still live in the base tier (a venue override prints its own boxed
+  // Object signature)
+  javaStringCallReturn(node) {
+    if (!isCallExpression5(node)) {
+      return false;
+    }
+    const callee = node.expression;
+    if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword) {
+      return false;
+    }
+    if (!JAVA_STRING_RETURN_BASE_METHODS.has(callee.name.text)) {
+      return false;
+    }
+    let declaration;
+    try {
+      declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+    } catch (e) {
+      return false;
+    }
+    if (declaration === void 0) {
+      return false;
+    }
+    const fileName = declaration.getSourceFile?.()?.fileName;
+    return fileName !== void 0 && JAVA_STRING_RETURN_BASE_FILES.test(fileName);
+  }
+  // `k` where the consumer declares k as a Java String: the helper's String branch (the
+  // only one that can answer true for a map) is the native lookup, and no null key can
+  // reach containsKey
+  javaDeclaredStringType(expression) {
+    const type = this.javaDeclaredTypeOf(expression);
+    return type !== void 0 && JAVA_DECLARED_STRING_TYPE.test(type);
+  }
+  // receivers whose printed elements the ccxt post-pass types as String FROM the helper call
+  // (`x.split(sep)` and string-literal array producers): those locals narrow to String only
+  // while the read prints `Helpers.GetValue(`, so their reads keep the helper.
+  javaStringElementsReceiver(node) {
+    if (!isIdentifier2(node)) {
+      return false;
+    }
+    const declaration = this.getChecker().getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+    const initializer = declaration !== void 0 && isVariableDeclaration2(declaration) ? declaration.initializer : void 0;
+    if (initializer === void 0) {
+      return false;
+    }
+    if (isCallExpression5(initializer) && isPropertyAccessExpression2(initializer.expression)) {
+      return initializer.expression.name?.text === "split";
+    }
+    if (isArrayLiteralExpression3(initializer)) {
+      return initializer.elements.length > 0 && initializer.elements.every((element) => element.kind === SyntaxKind6.StringLiteral || element.kind === SyntaxKind6.NoSubstitutionTemplateLiteral);
+    }
+    return false;
+  }
+  // a key Java proves String: a literal, an `x as string` (prints `((String)x)`) or a String-declared name
+  javaStringProvenKey(key) {
+    if (isStringLiteralLikeNode3(key)) {
+      return true;
+    }
+    let node = key;
+    while (isParenthesizedExpression2(node)) {
+      node = node.expression;
+    }
+    return isAsExpression2(node) && node.type?.kind === SyntaxKind6.StringKeyword || this.javaDeclaredStringType(node);
+  }
+  // `(x as string[])[i]` over a for-counter, x a side-effect-free reference the checker types
+  // `string[]` (| undefined): the printed receiver is the cast `(java.util.List<String>)(x)` either way,
+  // so the helper's null / range answers become the explicit guard on that same cast
+  javaStringArrayAssertedCounterRead(node) {
+    if (node.parent?.kind === SyntaxKind6.ExpressionStatement || this.isLeftSideOfAssignment(node) || this.printElementAccessExpressionExceptionIfAny(node) !== void 0) {
+      return void 0;
+    }
+    const asserted = this.unwrapParenthesized(node.expression);
+    if (asserted === void 0 || !isAsExpression2(asserted) || !isArrayTypeNode(asserted.type) || asserted.type.elementType.kind !== SyntaxKind6.StringKeyword) {
+      return void 0;
+    }
+    const operand = this.unwrapParenthesized(asserted.expression);
+    if (operand === void 0 || !isIdentifier2(operand) || this.isVarargsArrayReference(operand) || this.javaStringElementsReceiver(operand) || this.printNode(operand, 0).trim() !== operand.text) {
+      return void 0;
+    }
+    const checker = this.checkerOrUndefined();
+    let operandType;
+    try {
+      operandType = checker?.getTypeAtLocation(operand);
+    } catch (e) {
+      return void 0;
+    }
+    if (operandType === void 0 || !this.javaIsStringArrayType(checker, operandType)) {
+      return void 0;
+    }
+    const list = `((java.util.List<String>)(${operand.text}))`;
+    const index = this.printNode(node.argumentExpression, 0);
+    return `(${list} == null || ${index} < 0 || ${index} >= ${list}.size() ? null : ${list}.get(${index}))`;
+  }
   // `x + y` normally prints Helpers.add, `- * /` print Helpers.subtract/multiply/
   // divide, and `+=`/`-=` print `x = Helpers.add/subtract(...)`. They print native
   // Java when BOTH operands are checker-typed in the same non-nullable scalar family
@@ -45707,494 +47918,6 @@ ${this.getIden(identation)}}}`;
     };
     return !notNumeric(type);
   }
-  // the Java kind a `this.<name>(...)` call provably prints with (JAVA_THIS_RETURN_TYPES), or
-  // undefined. The signature must resolve to the base tier or the Date.now lib signature of the
-  // functions/time.ts mixin; a venue override prints its own (usually Object) signature.
-  javaThisCallNumericKind(node) {
-    if (node?.kind !== SyntaxKind6.CallExpression) {
-      return void 0;
-    }
-    const callee = node.expression;
-    if (callee?.kind !== SyntaxKind6.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind6.ThisKeyword) {
-      return void 0;
-    }
-    const name = callee.name?.text;
-    if (typeof name !== "string") {
-      return void 0;
-    }
-    const kind = JAVA_THIS_RETURN_TYPES[name];
-    if (kind === void 0) {
-      return void 0;
-    }
-    const checker = this.checkerOrUndefined();
-    const declaration = checker.getResolvedSignature(node)?.declaration?.resolve();
-    const fileName = declaration?.getSourceFile?.().fileName;
-    if (typeof fileName !== "string") {
-      return void 0;
-    }
-    if (!JAVA_THIS_RETURN_TYPES_BASE_FILE.test(fileName) && !JAVA_THIS_RETURN_TYPES_LIB_FILE.test(fileName)) {
-      return void 0;
-    }
-    return kind;
-  }
-  // the Java kind a numeric operand provably prints with: decimal integer literal -> 'long',
-  // fractional literal -> 'double', a nested native `+ - * /` -> its kind, a local retyped
-  // `Long`/`Double` -> that kind. Hex/binary literals, negatives, calls, untyped locals: undefined.
-  javaProvableNumericKind(node, allowDeclaredLocals = true) {
-    if (node === void 0) {
-      return void 0;
-    }
-    if (node.kind === SyntaxKind6.ParenthesizedExpression) {
-      return this.javaProvableNumericKind(node.expression, allowDeclaredLocals);
-    }
-    if (isNumericLiteral3(node)) {
-      const text = node.text;
-      if (/^0[xXbBoO]/.test(text)) {
-        return void 0;
-      }
-      return /[.eE]/.test(text) ? "double" : "long";
-    }
-    if (node.kind === SyntaxKind6.Identifier) {
-      if (this.javaPrintedIntCounter(node)) {
-        return "int";
-      }
-      if (allowDeclaredLocals && this.javaLongParameterRead(node) && this.javaNullGuardAdmitsRead(node)) {
-        return "long";
-      }
-      return allowDeclaredLocals ? this.javaDeclaredNumericLocalKind(node) : void 0;
-    }
-    if (node.kind === SyntaxKind6.CallExpression) {
-      if (this.javaBaseTimeLongCall(node)) {
-        return "long";
-      }
-      if (this.javaBaseIntCall(node)) {
-        return "int";
-      }
-      const printed = this.javaPrintedCallKind(node);
-      return printed === "int" || printed === "long" ? printed : void 0;
-    }
-    if (node.kind === SyntaxKind6.BinaryExpression) {
-      return this.javaNativeArithmeticKind(node, allowDeclaredLocals);
-    }
-    if (this.javaLengthIntRead(node)) {
-      return "int";
-    }
-    return void 0;
-  }
-  // a bare identifier the embedding layer declares `Long`/`Double` prints as a boxed numeric, but a
-  // null box would NPE where the helpers return null, so the checker must see a plain non-nullable
-  // number here (nullable aliases and `any` excluded; a narrowed `number` is a real guard in Java).
-  javaDeclaredNumericLocalKind(node) {
-    if (!this.javaOperandIsNonNullNumber(node) || !this.javaIdentifierKeepsDeclaredName(node) || !this.javaIdentifierPrintsDeclaredName(node)) {
-      return void 0;
-    }
-    const declaration = this.javaDeclarationOfIdentifier(node);
-    let javaType;
-    if (declaration !== void 0) {
-      try {
-        javaType = this.javaDeclaredTypeOfDeclaration(declaration);
-      } catch (e) {
-        javaType = void 0;
-      }
-    }
-    if (javaType === void 0 && typeof this.javaExpressionTypeResolver === "function") {
-      try {
-        javaType = this.javaExpressionTypeResolver(node);
-      } catch (e) {
-        javaType = void 0;
-      }
-    }
-    return this.javaDeclaredNumericTypeKind(javaType);
-  }
-  // the numeric kind a printed Java declaration type names, or undefined for every other
-  // type (`Object`, `String`, a boxed collection)
-  javaDeclaredNumericTypeKind(javaType) {
-    if (javaType === void 0) {
-      return void 0;
-    }
-    const type = String(javaType).replace(/^final\s+/, "").trim();
-    const kinds = /* @__PURE__ */ new Map([
-      ["Long", "long"],
-      ["long", "long"],
-      ["Double", "double"],
-      ["double", "double"],
-      ["Integer", "int"],
-      ["int", "int"]
-    ]);
-    return kinds.get(type);
-  }
-  // the use prints the declaration's own name: a local or parameter the printer renamed
-  // (the `finalX` object-literal capture, the async parameter wrapper) prints against a
-  // different declaration, whose recorded type does not describe it
-  javaIdentifierPrintsDeclaredName(node) {
-    try {
-      return this.printNode(node, 0) === String(node.text);
-    } catch (e) {
-      return false;
-    }
-  }
-  // a use the printer rewrote to its `finalX` anonymous-class capture prints against its
-  // own `Object finalX = x;` local, so the recorded type of the declaration no longer
-  // holds (`(finalTime - 8L)` on an Object local does not compile)
-  javaIdentifierKeepsDeclaredName(node) {
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0) {
-      return false;
-    }
-    const declaration = checker.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
-    if (declaration === void 0 || declaration.kind !== SyntaxKind6.VariableDeclaration && !isParameterDeclaration2(declaration)) {
-      return false;
-    }
-    return String(node.text) === String(declaration.name?.text);
-  }
-  // the checker type is the plain non-nullable `number` (TypeFlags.Number/NumberLiteral, no
-  // alias): `Int`/`Num`/`any` and unions hold undefined at runtime, which the helpers absorb
-  javaOperandIsNonNullNumber(node) {
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0) {
-      return false;
-    }
-    const type = checker.getTypeAtLocation(node);
-    return type !== void 0 && type.getAliasSymbol?.() === void 0 && (type.flags === TypeFlags5.Number || type.flags === TypeFlags5.NumberLiteral);
-  }
-  // the kind of the native arithmetic this rule prints for `+ - * /`, or undefined when
-  // the node keeps the helper. Mirrors printInlineHelperArithmetic operand-for-operand
-  // so callers can reason about the printed text of a nested arithmetic operand;
-  // `allowDeclaredLocals=false` asks for a kind that does not rely on a retyped local
-  // anywhere in the subtree (`+` never consumes one — java-13/14 own Add).
-  javaNativeArithmeticKind(node, allowDeclaredLocals = true) {
-    const op = node?.operatorToken?.kind;
-    const isPlus = op === SyntaxKind6.PlusToken;
-    const isMinus = op === SyntaxKind6.MinusToken;
-    const isMultiply = op === SyntaxKind6.AsteriskToken;
-    const isDivide = op === SyntaxKind6.SlashToken;
-    if (!isPlus && !isMinus && !isMultiply && !isDivide) {
-      return void 0;
-    }
-    if (this.javaScalarFamily(node.left) !== "number" || this.javaScalarFamily(node.right) !== "number") {
-      return void 0;
-    }
-    if (isMultiply && this.javaLiteralFractionalProduct(node.left, node.right)) {
-      return "double";
-    }
-    const childAllows = allowDeclaredLocals && !isPlus;
-    const leftKind = this.javaProvableNumericKind(node.left, childAllows);
-    const rightKind = this.javaProvableNumericKind(node.right, childAllows);
-    return this.javaNativeArithmeticPairKind(isPlus, isMultiply, isDivide, leftKind, rightKind);
-  }
-  // `2 * 1.67`: two decimal literals whose IEEE product is finite and fractional. Helpers.multiply
-  // re-boxes only an integral product as Long, so a fractional one is the native double product.
-  javaLiteralFractionalProduct(left, right) {
-    const value = (node) => node !== void 0 && isNumericLiteral3(node) && !/^0[xXbBoO]/.test(node.text) ? Number(node.text) : void 0;
-    const a = value(left);
-    const b = value(right);
-    if (a === void 0 || b === void 0 || !/[.eE]/.test(left.text) && !/[.eE]/.test(right.text)) {
-      return false;
-    }
-    const product = a * b;
-    return Number.isFinite(product) && !Number.isInteger(product);
-  }
-  // the native operator kind for a proven pair, or undefined. The helper's branch IS this operator:
-  // `/` is always double division; `-` boxes long for long/long and double otherwise; `*` only on
-  // long pairs (multiply re-boxes an integral double product as Long); `+` keeps the equal-kind rule.
-  javaNativeArithmeticPairKind(isPlus, isMultiply, isDivide, leftKind, rightKind) {
-    if (leftKind === void 0 || rightKind === void 0) {
-      return void 0;
-    }
-    if (isDivide) {
-      return "double";
-    }
-    const hasDouble = leftKind === "double" || rightKind === "double";
-    if (isMultiply) {
-      return hasDouble ? void 0 : "long";
-    }
-    if (isPlus) {
-      return leftKind === rightKind ? leftKind : void 0;
-    }
-    return hasDouble ? "double" : "long";
-  }
-  // 'long' | 'double' for a nested `+` this printer already prints natively through
-  // printWidenedNativeAdd, or undefined. Mirrors that printer's operand proof (javaWidenedNumericKind)
-  // behind the family and concat tests printInlineHelperArithmetic applies before it calls it.
-  javaNestedAddKind(node) {
-    while (node?.kind === SyntaxKind6.ParenthesizedExpression) {
-      node = node.expression;
-    }
-    if (node?.kind !== SyntaxKind6.BinaryExpression || node.operatorToken?.kind !== SyntaxKind6.PlusToken) {
-      return void 0;
-    }
-    const leftFamily = this.javaScalarFamily(node.left);
-    const rightFamily = this.javaScalarFamily(node.right);
-    if (leftFamily !== "number" || rightFamily !== "number") {
-      return void 0;
-    }
-    if (this.javaStringConcatIsProvable(node.left, node.right, leftFamily, rightFamily)) {
-      return void 0;
-    }
-    return this.javaWidenedAddKind(node);
-  }
-  // the `- * /` operand kind: the printer's own proof first, then the nested-sum proof
-  javaArithmeticKind(node, allowDeclaredLocals = true) {
-    const kind = this.javaProvableNumericKind(node, allowDeclaredLocals);
-    return kind !== void 0 ? kind : this.javaNestedAddKind(node);
-  }
-  // ---- ordered comparison over declared numeric locals ----
-  // Helpers.isGreaterThan answers its own predicate when an operand is null (GT: a != null && b == null;
-  // LT = !GT && !EQ; GE = GT || EQ; LE = LT || EQ), so a Long/Integer/Double box compares natively
-  // inside that exact null table. `>` is a toDouble compare for every numeric pair; `>= < <=` also go
-  // through isEqual, so they stay native only for integral pairs (no NaN / BigDecimal rounding arm).
-  // 'long' | 'double' for an operand the printer proves: a primitive-printing expression, or an
-  // identifier whose printed declaration is a numeric type (boxed = may be null)
-  javaComparisonOperand(node) {
-    let inner = node;
-    while (inner !== void 0 && inner.kind === SyntaxKind6.ParenthesizedExpression) {
-      inner = inner.expression;
-    }
-    if (inner === void 0) {
-      return void 0;
-    }
-    const primitive = this.javaPrimitiveOperandKind(inner);
-    if (primitive !== void 0) {
-      return { kind: primitive === "double" ? "double" : "long", boxed: false };
-    }
-    if (!isIdentifier2(inner) || !this.javaIdentifierPrintsDeclaredName(inner)) {
-      return void 0;
-    }
-    if (this.javaLongParameterRead(inner)) {
-      return { kind: "long", boxed: !this.javaNullGuardAdmitsRead(inner) };
-    }
-    const declared = this.javaDeclaredNumericFamily(inner);
-    if (declared === void 0) {
-      return void 0;
-    }
-    const kind = declared === "Double" || declared === "double" ? "double" : "long";
-    return { kind, boxed: JAVA_BOXED_NUMERIC_TYPES.has(declared) };
-  }
-  printDeclaredNumericComparison(left, right, op) {
-    const l = this.javaComparisonOperand(left);
-    const r = this.javaComparisonOperand(right);
-    if (l === void 0 || r === void 0) {
-      return void 0;
-    }
-    if (op !== SyntaxKind6.GreaterThanToken && (l.kind !== "long" || r.kind !== "long")) {
-      return void 0;
-    }
-    const a = this.printNode(left, 0);
-    const b = this.printNode(right, 0);
-    const cmp = `${a} ${this.SupportedKindNames[op]} ${b}`;
-    if (!l.boxed && !r.boxed) {
-      return `(${cmp})`;
-    }
-    const aNull = `${a} == null`;
-    const aSet = `${a} != null`;
-    const bNull = `${b} == null`;
-    const bSet = `${b} != null`;
-    switch (op) {
-      case SyntaxKind6.GreaterThanToken:
-        return `(${[l.boxed ? aSet : void 0, r.boxed ? `(${bNull} || ${cmp})` : cmp].filter((x) => x !== void 0).join(" && ")})`;
-      case SyntaxKind6.LessThanToken:
-        return `(${[r.boxed ? bSet : void 0, l.boxed ? `(${aNull} || ${cmp})` : cmp].filter((x) => x !== void 0).join(" && ")})`;
-      case SyntaxKind6.GreaterThanEqualsToken:
-        return `(${[r.boxed ? bNull : void 0, l.boxed ? `(${aSet} && ${cmp})` : cmp].filter((x) => x !== void 0).join(" || ")})`;
-      case SyntaxKind6.LessThanEqualsToken:
-        return `(${[l.boxed ? aNull : void 0, r.boxed ? `(${bSet} && ${cmp})` : cmp].filter((x) => x !== void 0).join(" || ")})`;
-    }
-    return void 0;
-  }
-  // ---- widened native add (`+` only) ----
-  // Helpers.add normalizes Integer to Long, boxes Long for integral operands and Double otherwise
-  // (null in -> null out), so native `+` over proven numeric non-null operands gives the same box.
-  // `this.milliseconds()` / `this.seconds()`: the hand-written Java declares both `public Long` over
-  // a primitive time value, so the box is never null. Only a signature resolving into the base time
-  // mixin or the Date.now lib chain qualifies; an unresolved call or venue override keeps the helper.
-  javaBaseTimeLongCall(node) {
-    const name = this.javaThisCallName(node);
-    if (name !== "milliseconds" && name !== "seconds") {
-      return false;
-    }
-    const checker = this.checkerOrUndefined();
-    const declaration = checker.getResolvedSignature(node)?.declaration?.resolve();
-    if (declaration === void 0) {
-      return false;
-    }
-    const fileName = declaration.getSourceFile?.()?.fileName ?? "";
-    return /(^|[\\/])ts[\\/]src[\\/]base[\\/]functions[\\/]time\.ts$/.test(fileName) || /(^|[\\/])lib\.[^\\/]*\.d\.ts$/.test(fileName);
-  }
-  // `this.parseTimeframe(..)`: the hand-written java BaseExchange declares `public int
-  // parseTimeframe(Object)` (java/lib/.../BaseExchange.java:1513) over the primitive-int
-  // ts/src/base/functions/misc.ts arrow, so the call is a never-null Java int. A venue's
-  javaBaseIntCall(node) {
-    if (this.javaThisCallName(node) !== "parseTimeframe") {
-      return false;
-    }
-    let declaration;
-    try {
-      declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
-    } catch (e) {
-      declaration = void 0;
-    }
-    if (declaration === void 0) {
-      return false;
-    }
-    const fileName = declaration.getSourceFile?.()?.fileName ?? "";
-    return /(^|[\\/])ts[\\/]src[\\/]base[\\/]functions[\\/]misc\.ts$/.test(fileName);
-  }
-  // the method name of a `this.<name>(...)` call, or undefined for any other node
-  javaThisCallName(node) {
-    const callee = node?.kind === SyntaxKind6.CallExpression ? node.expression : void 0;
-    if (callee?.kind !== SyntaxKind6.PropertyAccessExpression || callee.expression.kind !== SyntaxKind6.ThisKeyword) {
-      return void 0;
-    }
-    return callee.name?.text;
-  }
-  // `for (var i = <int literal>; ...; i++)`: printForStatement rewrites the emitted
-  // `Object i = 0` initializer to `var i = 0`, so javac types the counter int. The
-  // counter is widened explicitly by javaPrintWidenedOperand, and no `=`/compound
-  javaIntForCounter(node) {
-    if (node?.kind !== SyntaxKind6.Identifier) {
-      return false;
-    }
-    const symbol = this.getChecker().getSymbolAtLocation(node);
-    const declaration = symbol?.valueDeclaration?.resolve();
-    if (declaration === void 0 || !isVariableDeclaration2(declaration)) {
-      return false;
-    }
-    const declarationList = declaration.parent;
-    if (declarationList === void 0 || !isVariableDeclarationList(declarationList) || declarationList.declarations.length !== 1) {
-      return false;
-    }
-    const forStatement = declarationList.parent;
-    if (forStatement === void 0 || forStatement.kind !== SyntaxKind6.ForStatement || forStatement.initializer !== declarationList) {
-      return false;
-    }
-    if (this.javaIntegerLiteralKind(declaration.initializer) !== "int") {
-      return false;
-    }
-    return this.javaCounterHasNoBoxWrite(node, symbol);
-  }
-  // no `=`/compound assignment anywhere in the enclosing function writes this counter;
-  // `++`/`--` keep the primitive int, any other operator would not
-  javaCounterHasNoBoxWrite(node, symbol) {
-    let scope = node.parent;
-    while (scope !== void 0 && !isFunctionLike(scope) && scope.kind !== SyntaxKind6.SourceFile) {
-      scope = scope.parent;
-    }
-    if (scope === void 0) {
-      return false;
-    }
-    let safe = true;
-    const visit = (current) => {
-      if (!safe || current === void 0) {
-        return;
-      }
-      if (isIdentifier2(current) && this.getChecker().getSymbolAtLocation(current) === symbol) {
-        const parent = current.parent;
-        if (parent !== void 0 && isBinaryExpression4(parent) && parent.left === current && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(parent.operatorToken.kind)) {
-          safe = false;
-          return;
-        }
-      }
-      current.forEachChild(visit);
-    };
-    scope.forEachChild(visit);
-    return safe;
-  }
-  // `x.length` on a String/List receiver prints `((String)x).length()` /
-  // `((java.util.List<?>)x).size()` — a Java int on every path printJavaLength takes
-  javaLengthIntRead(node) {
-    if (node?.kind !== SyntaxKind6.PropertyAccessExpression || node.name?.text !== "length") {
-      return false;
-    }
-    return this.javaLengthKind(node.expression) !== void 0;
-  }
-  // the Java numeric kind of one `+` operand: the literal proofs above plus the
-  // non-null base-tier Long accessors, primitive int for-counters and String/List
-  // length reads. Undefined keeps the helper.
-  javaWidenedNumericKind(node) {
-    if (node === void 0) {
-      return void 0;
-    }
-    if (node.kind === SyntaxKind6.ParenthesizedExpression) {
-      return this.javaWidenedNumericKind(node.expression);
-    }
-    const literalKind = this.javaIntegerLiteralKind(node);
-    if (literalKind !== void 0) {
-      return literalKind;
-    }
-    if (isNumericLiteral3(node)) {
-      if (/^0[xXbBoO]/.test(node.text)) {
-        return void 0;
-      }
-      return /[.eE]/.test(node.text) ? "double" : void 0;
-    }
-    if (this.javaBaseTimeLongCall(node)) {
-      return "long";
-    }
-    if (this.javaBaseIntCall(node) || this.javaIntForCounter(node) || this.javaLengthIntRead(node)) {
-      return "int";
-    }
-    if (node.kind === SyntaxKind6.Identifier) {
-      if (this.javaLongParameterRead(node) && this.javaNullGuardAdmitsRead(node)) {
-        return "long";
-      }
-      return this.javaDeclaredNumericLocalKind(node);
-    }
-    if (node.kind === SyntaxKind6.BinaryExpression && node.operatorToken.kind === SyntaxKind6.PlusToken) {
-      return this.javaWidenedAddKind(node);
-    }
-    return this.javaNativeArithmeticKind(node);
-  }
-  // the kind of a nested native `+` this rule prints, or undefined when it keeps the helper
-  javaWidenedAddKind(node) {
-    const leftKind = this.javaWidenedNumericKind(node.left);
-    const rightKind = this.javaWidenedNumericKind(node.right);
-    if (leftKind === void 0 || rightKind === void 0) {
-      return void 0;
-    }
-    return leftKind === "double" || rightKind === "double" ? "double" : "long";
-  }
-  // the native form of a numeric `+`, or undefined to keep Helpers.add
-  printWidenedNativeAdd(left, right, leftText, rightText) {
-    const leftKind = this.javaWidenedNumericKind(left);
-    const rightKind = this.javaWidenedNumericKind(right);
-    if (leftKind === void 0 || rightKind === void 0) {
-      return void 0;
-    }
-    const resultKind = leftKind === "double" || rightKind === "double" ? "double" : "long";
-    const leftOperand = this.javaPrintWidenedOperand(leftKind, resultKind, left, leftText);
-    const rightOperand = this.javaPrintWidenedOperand(rightKind, resultKind, right, rightText);
-    return `(${leftOperand} + ${rightOperand})`;
-  }
-  // `x + <int literal>` where the embedding layer reports x printed as the nullable box `Long x`:
-  // Helpers.add's Long arm is the long sum and its null arm answers null, so the null test
-  // keeps both. Only a plain name (read twice) qualifies.
-  printBoxedLongLiteralAdd(left, right, leftText, rightText) {
-    if (this.javaBoxedLongResolver === void 0 || !isIdentifier2(left) || !isNumericLiteral3(right) || this.javaIntegerLiteralKind(right) === void 0 || !/^\d{1,15}$/.test(rightText) || leftText !== left.text) {
-      return void 0;
-    }
-    let boxed2 = false;
-    try {
-      boxed2 = this.javaBoxedLongResolver(left) === true;
-    } catch (e) {
-      boxed2 = false;
-    }
-    return boxed2 ? `(${leftText} == null ? null : (Object) (${leftText} + ${rightText}L))` : void 0;
-  }
-  // an int operand is widened to long explicitly: `i + 1` would box an Integer where
-  // Helpers.add hands back a Long, and an all-int sum wraps where the helper's long
-  // does not. Integer literals print long; a Double result needs no widening.
-  javaPrintWidenedOperand(kind, resultKind, node, text) {
-    if (kind === "double") {
-      return text;
-    }
-    if (kind === "long" || isNumericLiteral3(node)) {
-      return this.javaPrintOperandAsLong(node, text);
-    }
-    if (resultKind === "long") {
-      return `((long) ${text})`;
-    }
-    return text;
-  }
   // true when the receiver's printed Java would be a `cond ? a : b` (a parenthesised
   // conditional): those keep the helper so no added line carries a `?`
   javaSplitTernaryReceiver(node) {
@@ -46255,413 +47978,6 @@ ${this.getIden(identation)}}}`;
     const skip = index > 0 ? `.skip(${index})` : "";
     return `java.util.Arrays.stream(${array})${skip}.findFirst().orElse(null)`;
   }
-  // integer literals print as Java `int`; the helpers normalize Integer to Long before
-  // the arithmetic, so native integer arithmetic is emitted in long to keep the boxed
-  // result identical
-  javaPrintOperandAsLong(node, text) {
-    if (!isNumericLiteral3(node) || /[.eE]/.test(node.text)) {
-      return text;
-    }
-    return /L$/.test(text) ? text : text + "L";
-  }
-  // the native form of a helper-family binary operator, or undefined to keep the helper
-  // `for (var i = <int literal>; ...; i++)` prints a primitive `var` counter (see
-  // isJavaPrimitiveForCounter). Only ++/-- may write it: any other assignment in the
-  // loop would print a different kind into the same slot (D2), so the proof bails.
-  javaProvableCounterInt(node) {
-    if (!node || node.kind !== SyntaxKind6.Identifier) {
-      return false;
-    }
-    const symbol = this.getChecker().getSymbolAtLocation(node);
-    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
-    if (!declaration || declaration.kind !== SyntaxKind6.VariableDeclaration) {
-      return false;
-    }
-    if (this.javaIntegerLiteralKind(declaration.initializer) !== "int") {
-      return false;
-    }
-    const list = declaration.parent;
-    const forStatement = list?.parent;
-    if (!forStatement || forStatement.kind !== SyntaxKind6.ForStatement || forStatement.initializer !== list) {
-      return false;
-    }
-    const incrementor = forStatement.incrementor;
-    if (!incrementor || incrementor.operand?.kind !== SyntaxKind6.Identifier || incrementor.operand.text !== node.text) {
-      return false;
-    }
-    if (incrementor.kind !== SyntaxKind6.PostfixUnaryExpression && incrementor.kind !== SyntaxKind6.PrefixUnaryExpression) {
-      return false;
-    }
-    const name = node.text;
-    let safe = true;
-    const scan = (n) => {
-      if (!safe || !n || n === incrementor) {
-        return;
-      }
-      if (n.kind === SyntaxKind6.BinaryExpression && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(n.operatorToken.kind) && n.left?.kind === SyntaxKind6.Identifier && n.left.text === name) {
-        safe = false;
-        return;
-      }
-      if ((n.kind === SyntaxKind6.PostfixUnaryExpression || n.kind === SyntaxKind6.PrefixUnaryExpression) && n.operand?.kind === SyntaxKind6.Identifier && n.operand.text === name) {
-        return;
-      }
-      n.forEachChild(scan);
-    };
-    scan(forStatement.statement);
-    if (!safe) {
-      return false;
-    }
-    let enclosing = forStatement.parent;
-    while (enclosing && !isFunctionLike(enclosing)) {
-      enclosing = enclosing.parent;
-    }
-    if (enclosing) {
-      const body = enclosing.body ?? enclosing;
-      const scanOuter = (n) => {
-        if (!safe || !n || n === forStatement || isFunctionLike(n)) {
-          return;
-        }
-        if (n.kind === SyntaxKind6.BinaryExpression && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(n.operatorToken.kind) && n.left?.kind === SyntaxKind6.Identifier && n.left.text === name) {
-          safe = false;
-          return;
-        }
-        n.forEachChild(scanOuter);
-      };
-      scanOuter(body);
-    }
-    return safe;
-  }
-  // ---- declared-box arithmetic ----
-  // `Helpers.add/subtract/multiply/divide` on operands whose DECLARED Java type (the embedding layer's
-  // javaDeclaredLocalTypeResolver, or a Long core parameter) is Long/long/Integer/int/Double/double, or an
-  // integer literal. Every helper answers `null` for a null operand, so a boxed operand's null arm is
-  // the explicit ternary; integral operands print widened (`((long) i)`, `1L`) because the helpers
-  // normalize Integer to Long; a double operand promotes natively. `multiply` stays integral-only
-  // (it re-boxes an integral double product as Long), `+ - *` on a double keep `double` boxes.
-  // 'longbox' | 'longprim' | 'intbox' | 'intprim' | 'doublebox' | 'doubleprim' | 'intlit' | 'longlit'
-  javaDeclaredBoxOperandKind(node, text) {
-    let inner = node;
-    while (inner !== void 0 && (isParenthesizedExpression2(inner) || isAsExpression2(inner) || inner.kind === SyntaxKind6.NonNullExpression)) {
-      inner = inner.expression;
-    }
-    if (inner === void 0) {
-      return void 0;
-    }
-    if (isNumericLiteral3(inner)) {
-      const kind2 = this.javaIntegerLiteralKind(inner);
-      return kind2 === void 0 ? void 0 : kind2 === "long" ? "longlit" : "intlit";
-    }
-    if (!isIdentifier2(inner) || this.javaStripPrintedParens(text) !== String(inner.text) || !this.javaIdentifierPrintsDeclaredName(inner)) {
-      return void 0;
-    }
-    const declaration = this.javaDeclarationOfIdentifier(inner);
-    if (declaration !== void 0 && !this.javaIdentifierKeepsDeclaredName(inner)) {
-      return void 0;
-    }
-    let declared;
-    if (declaration !== void 0) {
-      try {
-        declared = this.javaDeclaredTypeOfDeclaration(declaration);
-      } catch (e) {
-        declared = void 0;
-      }
-      if (declared === void 0 && this.javaLongParameterRead(inner)) {
-        declared = "Long";
-      }
-    } else if (typeof this.javaBindingElementTypeResolver === "function") {
-      const element = this.getChecker().getSymbolAtLocation(inner)?.valueDeclaration?.resolve();
-      if (element?.kind === SyntaxKind6.BindingElement && element.name?.text === inner.text) {
-        try {
-          declared = this.javaBindingElementTypeResolver(element);
-        } catch (e) {
-          declared = void 0;
-        }
-      }
-    }
-    const kinds = {
-      Long: "longbox",
-      long: "longprim",
-      Integer: "intbox",
-      int: "intprim",
-      Double: "doublebox",
-      double: "doubleprim"
-    };
-    const kind = declared === void 0 ? void 0 : kinds[declared.replace(/^final\s+/, "").trim()];
-    if (kind !== void 0 && kind.endsWith("box") && declaration !== void 0 && (this.javaNullGuardAdmitsRead(inner) || this.javaLocalIsLengthDerived(declaration))) {
-      return void 0;
-    }
-    return kind !== void 0 && this.javaNumberOrNullishType(inner) ? kind : void 0;
-  }
-  // `const n = x.length` (a Java int read, never null)
-  javaLocalIsLengthDerived(declaration) {
-    const init = declaration?.kind === SyntaxKind6.VariableDeclaration ? this.unwrapPrintTransparentExpression(declaration.initializer) : void 0;
-    return init !== void 0 && isPropertyAccessExpression2(init) && init.name.text === "length";
-  }
-  // number, number-literal, or a union of those with undefined / null / void
-  javaNumberOrNullishType(node) {
-    let type;
-    try {
-      type = this.checkerOrUndefined()?.getTypeAtLocation(node);
-    } catch (e) {
-      return false;
-    }
-    if (type === void 0) {
-      return false;
-    }
-    const isNumber = (t) => ((t?.flags ?? 0) & (TypeFlags5.Number | TypeFlags5.NumberLiteral)) !== 0;
-    if (isNumber(type)) {
-      return true;
-    }
-    const members = (((type.flags ?? 0) & TypeFlags5.Union) !== 0 ? type.getTypes?.() : void 0) ?? [];
-    return members.some(isNumber) && members.every((m) => isNumber(m) || ((m?.flags ?? 0) & (TypeFlags5.Undefined | TypeFlags5.Null | TypeFlags5.Void)) !== 0);
-  }
-  javaStripPrintedParens(text) {
-    let value = text.trim();
-    while (value.startsWith("(") && value.endsWith(")")) {
-      let depth = 0;
-      let closesAtEnd = true;
-      for (let i = 0; i < value.length; i++) {
-        if (value[i] === "(") {
-          depth++;
-        } else if (value[i] === ")") {
-          depth--;
-          if (depth === 0 && i < value.length - 1) {
-            closesAtEnd = false;
-            break;
-          }
-        }
-      }
-      if (!closesAtEnd) {
-        break;
-      }
-      value = value.slice(1, -1).trim();
-    }
-    return value;
-  }
-  // the value is read as itself: a ternary arm (`c ? (a + b) : 1.5` would binary-promote the boxed
-  // arm and unbox a null) or a member-access receiver keeps the helper's Object box
-  javaArithmeticResultIsBoxSensitive(node) {
-    let child = node;
-    let parent = node?.parent;
-    while (parent !== void 0 && isParenthesizedExpression2(parent)) {
-      child = parent;
-      parent = parent.parent;
-    }
-    if (parent === void 0) {
-      return false;
-    }
-    if (parent.kind === SyntaxKind6.ConditionalExpression) {
-      return parent.condition !== child;
-    }
-    return (isPropertyAccessExpression2(parent) || isElementAccessExpression3(parent)) && parent.expression === child;
-  }
-  // ---- integral arithmetic on base int calls ----
-  // `- *` where each operand is a primitive long/int local, an integer literal, a nested native
-  // product/difference, or a base `this.precisionFromString/parseTimeframe(..)` (BaseExchange
-  // declares both `public int`): Helpers.multiply/subtract's Long arm is the same long result.
-  javaIntegralOperandKind(node, text) {
-    if (isNumericLiteral3(node)) {
-      return /^\d{1,18}$/.test(node.text) ? "long" : void 0;
-    }
-    if (isPrefixUnaryExpression2(node) && node.operator === SyntaxKind6.MinusToken && isNumericLiteral3(node.operand)) {
-      return /^\d{1,18}$/.test(node.operand.text) ? "long" : void 0;
-    }
-    if (isBinaryExpression4(node)) {
-      return (node.operatorToken.kind === SyntaxKind6.MinusToken || node.operatorToken.kind === SyntaxKind6.AsteriskToken) && /^\(.*\)$/.test(text) && !text.includes("Helpers.") ? "long" : void 0;
-    }
-    if (isIdentifier2(node)) {
-      const kind = this.javaDeclaredBoxOperandKind(node, text);
-      return kind === "longprim" ? "long" : kind === "intprim" ? "int" : void 0;
-    }
-    if (isCallExpression5(node) && isPropertyAccessExpression2(node.expression) && node.expression.expression.kind === SyntaxKind6.ThisKeyword && ["precisionFromString", "parseTimeframe"].includes(node.expression.name.text)) {
-      const declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
-      const fileName = declaration?.getSourceFile?.()?.fileName ?? "";
-      return /(^|[\\/])ts[\\/]src[\\/]base[\\/](Exchange(\.nooverloads\.\d+)?|functions[\\/]\w+)\.ts$/.test(fileName) ? "int" : void 0;
-    }
-    return void 0;
-  }
-  printIntegralCallArithmetic(left, right, leftText, rightText, op) {
-    if (op !== SyntaxKind6.MinusToken && op !== SyntaxKind6.AsteriskToken) {
-      return void 0;
-    }
-    const ta = this.javaIntegralOperandKind(left, leftText);
-    const tb = this.javaIntegralOperandKind(right, rightText);
-    if (ta === void 0 || tb === void 0 || !isCallExpression5(left) && !isCallExpression5(right)) {
-      return void 0;
-    }
-    const literal = (n, t) => isNumericLiteral3(n) || isPrefixUnaryExpression2(n) ? t + "L" : t;
-    const a = ta === "int" ? `((long) ${leftText})` : literal(left, leftText);
-    const b = tb === "int" && ta === "int" ? `((long) ${rightText})` : literal(right, rightText);
-    return `(${a} ${op === SyntaxKind6.MinusToken ? "-" : "*"} ${/^-/.test(b) ? `(${b})` : b})`;
-  }
-  // `a && b` / `a || b` as a condition: both sides print through printCondition, so the Java
-  // operator already yields a primitive boolean. The test tree keeps the helper spelling.
-  printLogicalCondition(node) {
-    let inner = node;
-    while (isParenthesizedExpression2(inner)) {
-      inner = inner.expression;
-    }
-    if (!isBinaryExpression4(inner) || inner.operatorToken.kind !== SyntaxKind6.AmpersandAmpersandToken && inner.operatorToken.kind !== SyntaxKind6.BarBarToken || /(^|[\\/])ts[\\/]src[\\/]test[\\/]/.test(node.getSourceFile?.()?.fileName ?? "")) {
-      return void 0;
-    }
-    let outer = node.parent;
-    while (outer !== void 0 && isParenthesizedExpression2(outer)) {
-      outer = outer.parent;
-    }
-    if (this.javaConditionPrintsBoolean(node) || outer !== void 0 && isBinaryExpression4(outer) && (outer.operatorToken.kind === SyntaxKind6.AmpersandAmpersandToken || outer.operatorToken.kind === SyntaxKind6.BarBarToken)) {
-      return void 0;
-    }
-    return `(${this.printNode(node, 0)})`;
-  }
-  printDeclaredBoxArithmetic(node, left, right, leftText, rightText, op) {
-    const operator = op === SyntaxKind6.PlusToken ? "+" : op === SyntaxKind6.MinusToken ? "-" : op === SyntaxKind6.AsteriskToken ? "*" : void 0;
-    if (operator === void 0 || this.javaArithmeticResultIsBoxSensitive(node)) {
-      return void 0;
-    }
-    const leftKind = this.javaDeclaredBoxOperandKind(left, leftText);
-    const rightKind = this.javaDeclaredBoxOperandKind(right, rightText);
-    if (leftKind === void 0 || rightKind === void 0) {
-      return void 0;
-    }
-    const isLiteral = (kind) => kind === "intlit" || kind === "longlit";
-    if (isLiteral(leftKind) && isLiteral(rightKind)) {
-      return void 0;
-    }
-    const isDouble = (kind) => kind === "doublebox" || kind === "doubleprim";
-    const hasDouble = isDouble(leftKind) || isDouble(rightKind);
-    if (hasDouble && operator === "*") {
-      return void 0;
-    }
-    if (hasDouble && (operator === "+" || operator === "-") && (leftKind.endsWith("box") || rightKind.endsWith("box"))) {
-      return void 0;
-    }
-    const texts = [this.javaStripPrintedParens(leftText), this.javaStripPrintedParens(rightText)];
-    const kinds = [leftKind, rightKind];
-    const asLong = (i) => {
-      if (kinds[i] === "longbox" || kinds[i] === "longprim" || kinds[i] === "longlit") {
-        return texts[i];
-      }
-      return kinds[i] === "intlit" ? `${texts[i]}L` : `((long) ${texts[i]})`;
-    };
-    const asDouble = (i) => isDouble(kinds[i]) ? texts[i] : `((double) ${texts[i]})`;
-    const wide = (i) => hasDouble ? asDouble(i) : asLong(i);
-    const expression = `(${wide(0)} ${operator} ${wide(1)})`;
-    const boxes = kinds.map((kind, i) => kind.endsWith("box") ? texts[i] : void 0).filter((text, i, all) => text !== void 0 && all.indexOf(text) === i);
-    return boxes.length === 0 ? expression : `((${boxes.map((box) => `${box} == null`).join(" || ")}) ? null : ${expression})`;
-  }
-  printInlineHelperArithmetic(left, right, leftText, rightText, op) {
-    const isPlus = op === SyntaxKind6.PlusToken || op === SyntaxKind6.PlusEqualsToken;
-    const isMinus = op === SyntaxKind6.MinusToken || op === SyntaxKind6.MinusEqualsToken;
-    const isMultiply = op === SyntaxKind6.AsteriskToken;
-    const isDivide = op === SyntaxKind6.SlashToken;
-    const isMod = op === SyntaxKind6.PercentToken;
-    if (!isPlus && !isMinus && !isMultiply && !isDivide && !isMod) {
-      return void 0;
-    }
-    const leftFamily = this.javaScalarFamily(left);
-    const rightFamily = this.javaScalarFamily(right);
-    if (isPlus && this.javaStringConcatIsProvable(left, right, leftFamily, rightFamily)) {
-      const concat = `(${leftText} + ${rightText})`;
-      return op === SyntaxKind6.PlusEqualsToken ? `${leftText} = ${concat}` : concat;
-    }
-    if (op === SyntaxKind6.PlusEqualsToken || op === SyntaxKind6.MinusEqualsToken) {
-      return void 0;
-    }
-    if (op === SyntaxKind6.MinusToken) {
-      const anchoredKind = this.javaThisCallNumericKind(left);
-      if (anchoredKind === "long" && this.javaProvableNumericKind(right) === "long") {
-        return `(${leftText} - ${this.javaPrintOperandAsLong(right, rightText)})`;
-      }
-    }
-    if (leftFamily !== "number" || rightFamily !== "number") {
-      return op === SyntaxKind6.PlusToken ? this.printBoxedLongLiteralAdd(left, right, leftText, rightText) : void 0;
-    }
-    if (op === SyntaxKind6.PlusToken) {
-      return this.printWidenedNativeAdd(left, right, leftText, rightText) ?? this.printBoxedLongLiteralAdd(left, right, leftText, rightText);
-    }
-    if (isMod) {
-      if (!this.javaProvableNumericDoubleOperand(left) || !this.javaProvableNumericDoubleOperand(right)) {
-        return void 0;
-      }
-      return `(((double) ${leftText}) % ((double) ${rightText}))`;
-    }
-    if (isMultiply && this.javaLiteralFractionalProduct(left, right)) {
-      return `(${leftText} * ${rightText})`;
-    }
-    const childAllows = !isPlus;
-    let leftKind = this.javaProvableNumericKind(left, childAllows);
-    let rightKind = this.javaProvableNumericKind(right, childAllows);
-    let pairKind = this.javaNativeArithmeticPairKind(isPlus, isMultiply, isDivide, leftKind, rightKind);
-    if (pairKind === void 0) {
-      const nestedLeft = this.javaArithmeticKind(left, childAllows);
-      const nestedRight = this.javaArithmeticKind(right, childAllows);
-      const nestedPair = this.javaNativeArithmeticPairKind(isPlus, isMultiply, isDivide, nestedLeft, nestedRight);
-      if (nestedPair !== void 0) {
-        leftKind = nestedLeft;
-        rightKind = nestedRight;
-        pairKind = nestedPair;
-      }
-    }
-    if (pairKind === void 0) {
-      return void 0;
-    }
-    if (isDivide) {
-      return `(((double) ${leftText}) / ((double) ${rightText}))`;
-    }
-    const operator = isPlus ? "+" : isMinus ? "-" : "*";
-    const widenedLeft = this.javaPrintArithmeticOperand(leftKind, left, leftText);
-    const widenedRight = this.javaPrintArithmeticOperand(rightKind, right, rightText);
-    return `(${widenedLeft} ${operator} ${widenedRight})`;
-  }
-  // an Integer/int operand is widened to long before the operator: Helpers normalizes an
-  // Integer to Long first, so the native long arithmetic reproduces both the value (no
-  // int-width wrap) and the Long box the helper hands back
-  javaPrintArithmeticOperand(kind, node, text) {
-    if (kind === "int") {
-      return `((long) ${text})`;
-    }
-    return this.javaPrintOperandAsLong(node, text);
-  }
-  // Helpers.mathMin/mathMax take Object, tolerate null and return the ORIGINAL box; Math.min/max take
-  // primitives, so the native call needs both operands primitive of one family: literals, `for`
-  // counters, `.length`/`.size()`, native long arithmetic; the only NaN-free double is a literal.
-  javaNativeMathMinMaxOperandKind(node) {
-    if (this.javaIntegerLiteralKind(node) !== void 0 || this.isJavaPrimitiveForCounter(node) || isPropertyAccessExpression2(node) && node.name.text === "length" && this.javaLengthKind(node.expression) !== void 0) {
-      return "integral";
-    }
-    if (isNumericLiteral3(node)) {
-      return this.javaProvableNumericKind(node) === "double" ? "double" : void 0;
-    }
-    return this.javaProvableNumericKind(node) === "long" ? "integral" : void 0;
-  }
-  // a primitive has no members, so a receiver position (and the printer's cast wrappers) keep the
-  // helper - every other position boxes the primitive exactly like the helper's own box (Jackson,
-  // isEqual and toString all read an Integer and a Long the same way)
-  javaNativeMathMinMaxResultIsPlainValue(node) {
-    let parent = node.parent;
-    while (parent !== void 0 && isParenthesizedExpression2(parent)) {
-      parent = parent.parent;
-    }
-    if (parent === void 0) {
-      return false;
-    }
-    if ((isPropertyAccessExpression2(parent) || isElementAccessExpression3(parent) || isCallExpression5(parent)) && parent.expression === node) {
-      return false;
-    }
-    return parent.kind !== SyntaxKind6.AsExpression && parent.kind !== SyntaxKind6.TypeAssertionExpression && parent.kind !== SyntaxKind6.NonNullExpression;
-  }
-  // the native form of Math.min/Math.max, or undefined to keep the helper
-  printNativeMathMinMax(node, left, right, leftText, rightText, name) {
-    if (!this.javaNativeMathMinMaxResultIsPlainValue(node)) {
-      return void 0;
-    }
-    const kind = this.javaNativeMathMinMaxOperandKind(left);
-    if (kind === void 0 || kind !== this.javaNativeMathMinMaxOperandKind(right)) {
-      return void 0;
-    }
-    return `Math.${name}(${leftText}, ${rightText})`;
-  }
-  // ---- helper-family inlining: `parseInt/parseFloat/toString/padStart` ----
   // parseInt catches NumberFormatException into null, parseFloat into 0.0, Helpers.toString maps
   // null to null, Helpers.padStart truncates: native form only where the fallback is unreachable.
   // `Helpers.toString(x)` is `x == null ? null : x.toString()`, so `String.valueOf(x)`
@@ -46762,1224 +48078,8 @@ ${this.getIden(identation)}}}`;
     }
     return character;
   }
-  // ---- typed locals for native arithmetic ----
-  // A local whose initializer prints as native arithmetic holds a String / Long / Double box, so the
-  // declaration carries that type; every other use is scanned first (D2) as it changes resolution.
-  javaUnwrapParentheses(node) {
-    let current = node;
-    while (current?.kind === SyntaxKind6.ParenthesizedExpression) {
-      current = current.expression;
-    }
-    return current;
-  }
-  // the Java type of the native arithmetic this printer prints for a `+ - * / +=`
-  // node, or undefined when the node keeps the helper (its printed value is an
-  // Object box). Mirrors printInlineHelperArithmetic operand-for-operand.
-  javaNativeArithmeticType(node) {
-    const value = this.javaUnwrapParentheses(node);
-    if (value?.kind !== SyntaxKind6.BinaryExpression) {
-      return void 0;
-    }
-    const op = value.operatorToken.kind;
-    if (op === SyntaxKind6.PlusToken && this.javaNativeConcat(value)) {
-      return "String";
-    }
-    if (op === SyntaxKind6.PlusEqualsToken) {
-      const isStringPair = this.javaScalarFamily(value.left) === "string" && this.javaScalarFamily(value.right) === "string" && (this.javaProvableString(value.left) || this.javaProvableString(value.right));
-      return isStringPair ? "String" : void 0;
-    }
-    const kind = this.javaNativeArithmeticKind(value);
-    return kind === "long" ? "Long" : kind === "double" ? "Double" : void 0;
-  }
-  // the enclosing function-like node: the D2 scan scope of a typed local
-  javaEnclosingFunction(node) {
-    let current = node?.parent;
-    while (current !== void 0) {
-      const kind = current.kind;
-      if (kind === SyntaxKind6.MethodDeclaration || kind === SyntaxKind6.FunctionDeclaration || kind === SyntaxKind6.FunctionExpression || kind === SyntaxKind6.ArrowFunction || kind === SyntaxKind6.GetAccessor || kind === SyntaxKind6.SetAccessor || kind === SyntaxKind6.Constructor) {
-        return current;
-      }
-      current = current.parent;
-    }
-    return void 0;
-  }
-  // a reassignment may keep the narrowed declaration only when its printed value is the
-  // same Java type (the helper's box stays an Object, so it keeps the box)
-  javaArithmeticWriteIsSafe(right, javaType) {
-    const value = this.javaUnwrapParentheses(right);
-    if (value === void 0) {
-      return false;
-    }
-    if (value.kind === SyntaxKind6.NullKeyword) {
-      return true;
-    }
-    if (value.kind === SyntaxKind6.Identifier && value.text === "undefined") {
-      return true;
-    }
-    return javaType === "String" && (value.kind === SyntaxKind6.StringLiteral || value.kind === SyntaxKind6.NoSubstitutionTemplateLiteral) || this.javaNativeArithmeticType(value) === javaType;
-  }
-  // the innermost block that scopes a declaration (Java locals live to the end of
-  // their block; sibling blocks may reuse the name, nested ones may not)
-  javaScopingBlock(node) {
-    let current = node?.parent;
-    let last = void 0;
-    while (current !== void 0) {
-      if (current.kind === SyntaxKind6.Block || current.kind === SyntaxKind6.SourceFile) {
-        return current;
-      }
-      last = current;
-      current = current.parent;
-    }
-    return last;
-  }
-  javaNodeContains(outer, inner) {
-    return outer !== void 0 && inner !== void 0 && outer.pos <= inner.pos && inner.end <= outer.end;
-  }
-  // two same-named bindings may both keep their own printed type only in disjoint
-  // blocks: a nested one would already be an illegal Java shadowing of the Object
-  // declaration the corpus compiles with
-  javaBindingsAreDisjoint(declaration, other) {
-    const mine = this.javaScopingBlock(declaration);
-    const theirs = this.javaScopingBlock(other);
-    if (mine === void 0 || theirs === void 0) {
-      return false;
-    }
-    return !this.javaNodeContains(mine, theirs) && !this.javaNodeContains(theirs, mine);
-  }
-  // is this occurrence of the local compatible with the narrowed declaration?
-  javaArithmeticLocalUseIsSafe(node, declaration, javaType) {
-    const parent = node.parent;
-    if (parent === void 0) {
-      return false;
-    }
-    if ((parent.kind === SyntaxKind6.PropertyAccessExpression || parent.kind === SyntaxKind6.PropertyAssignment) && parent.name === node) {
-      return true;
-    }
-    if ((parent.kind === SyntaxKind6.VariableDeclaration || parent.kind === SyntaxKind6.Parameter || parent.kind === SyntaxKind6.BindingElement) && parent.name === node) {
-      return this.javaBindingsAreDisjoint(declaration, parent);
-    }
-    if (parent.kind === SyntaxKind6.PostfixUnaryExpression || parent.kind === SyntaxKind6.PrefixUnaryExpression) {
-      return false;
-    }
-    if (parent.kind === SyntaxKind6.SpreadElement || parent.kind === SyntaxKind6.DeleteExpression || parent.kind === SyntaxKind6.ForOfStatement || parent.kind === SyntaxKind6.ForInStatement) {
-      return false;
-    }
-    if (parent.kind === SyntaxKind6.TypeOfExpression) {
-      return javaType === "String";
-    }
-    if (parent.kind === SyntaxKind6.AsExpression || parent.kind === SyntaxKind6.TypeAssertionExpression) {
-      return javaType === "String" && parent.type?.kind === SyntaxKind6.StringKeyword;
-    }
-    if (parent.kind === SyntaxKind6.ConditionalExpression) {
-      return javaType === "String";
-    }
-    if (parent.kind === SyntaxKind6.ElementAccessExpression && parent.expression === node) {
-      const grand = parent.parent;
-      if (grand?.kind === SyntaxKind6.DeleteExpression) {
-        return false;
-      }
-      if (grand?.kind === SyntaxKind6.BinaryExpression && grand.left === parent && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(grand.operatorToken.kind)) {
-        return false;
-      }
-    }
-    if (parent.kind === SyntaxKind6.ArrayLiteralExpression) {
-      const grand = parent.parent;
-      if (grand?.kind === SyntaxKind6.BinaryExpression && grand.left === parent && JAVA_ASSIGNMENT_OPERATOR_KINDS.has(grand.operatorToken.kind)) {
-        return false;
-      }
-    }
-    if (parent.kind === SyntaxKind6.BinaryExpression && parent.left === node) {
-      const op = parent.operatorToken.kind;
-      if (op === SyntaxKind6.EqualsToken) {
-        return this.javaArithmeticWriteIsSafe(parent.right, javaType);
-      }
-      if (op === SyntaxKind6.PlusEqualsToken) {
-        return this.javaNativeArithmeticType(parent) === javaType;
-      }
-      if (JAVA_ASSIGNMENT_OPERATOR_KINDS.has(op)) {
-        return false;
-      }
-      if (op === SyntaxKind6.PlusToken && javaType === "String") {
-        return this.javaNativeArithmeticType(parent) === "String";
-      }
-    }
-    return true;
-  }
-  // D2: the narrowed declaration needs every later use of the local in the enclosing
-  // function to still compile and resolve the way the Object declaration did
-  javaArithmeticLocalIsSafeToType(scope, declaration, javaType) {
-    if (scope === void 0) {
-      return false;
-    }
-    const sourceName = declaration.name.text;
-    let safe = true;
-    const visit = (n) => {
-      if (!safe) {
-        return;
-      }
-      if (n.kind === SyntaxKind6.Identifier && n.text === sourceName && n !== declaration.name) {
-        if (!this.javaArithmeticLocalUseIsSafe(n, declaration, javaType)) {
-          safe = false;
-          return;
-        }
-      }
-      n.forEachChild(visit);
-    };
-    scope.forEachChild(visit);
-    return safe;
-  }
-  // the Java type a declaration can carry because its initializer prints as native
-  // arithmetic, or undefined to keep the Object declaration
-  javaArithmeticLocalType(declaration) {
-    if (!isIdentifier2(declaration.name) || declaration.initializer === void 0) {
-      return void 0;
-    }
-    const javaType = this.javaNativeArithmeticType(declaration.initializer);
-    if (javaType === void 0) {
-      return void 0;
-    }
-    const scope = this.javaEnclosingFunction(declaration);
-    return this.javaArithmeticLocalIsSafeToType(scope, declaration, javaType) ? javaType : void 0;
-  }
-  // an operand `(double) <text>` can be applied to without changing what Helpers.mod
-  // computes: a numeric literal or a native arithmetic node (javaProvableNumericKind,
-  // already printed as a java number) or a primitive int loop counter
-  javaProvableNumericDoubleOperand(node) {
-    return this.javaProvableNumericKind(node) !== void 0 || this.javaProvableCounterInt(node);
-  }
-  getFinalVarName(varName) {
-    varName = this.getOriginalVarName(varName);
-    if (varName.startsWith("final")) {
-      return varName;
-    }
-    return `final${this.capitalize(varName)}`;
-  }
-  getOriginalVarName(name) {
-    if (this.ReservedKeywordsReplacements[name]) {
-      name = this.ReservedKeywordsReplacements[name];
-    }
-    return name;
-  }
-  // Resolves the trio of names used to wrap a reassigned async-method param
-  // so the lambda body sees an effectively-final local. We base every name on
-  // the keyword-remapped Java identifier — using the raw TS name when remapped
-  // (e.g. params -> parameters) makes the wrapper text and the body diverge,
-  // because identifier emission already routes through ReservedKeywordsReplacements.
-  getAsyncParamWrapperNames(paramName) {
-    const javaName = this.getOriginalVarName(paramName);
-    return {
-      sigName: `${javaName}2`,
-      snapName: `${javaName}3`,
-      localName: javaName
-    };
-  }
-  isAssignmentOperator(op) {
-    return op >= SyntaxKind6.FirstAssignment && op <= SyntaxKind6.LastAssignment;
-  }
-  isIncDecOperator(op) {
-    return op === SyntaxKind6.PlusPlusToken || op === SyntaxKind6.MinusMinusToken;
-  }
-  // Walk the function body in source order and assign a version-aware finalName to
-  // every identifier that appears inside an object literal property and refers to a
-  // variable that's reassigned anywhere in this function. Each reassignment bumps the
-  // per-variable version counter; usages of the same (var, version) share one finalName.
-  //
-  // Naming:
-  //   - If only one version of a var is ever used in object literals, use `final<Var>`
-  //     (matches prior behavior).
-  //   - If multiple versions are used, name them `final<Var>`, `final<Var>_2`,
-  //     `final<Var>_3` in source-order of the version they correspond to.
-  analyzeFinalVars(fnBody) {
-    this.usageToFinalName = /* @__PURE__ */ new WeakMap();
-    if (!fnBody)
-      return;
-    const symbolIdOf = (n) => {
-      try {
-        const checker = this.getChecker();
-        const sym = checker?.getSymbolAtLocation?.(n);
-        const decl = sym?.declarations?.[0]?.resolve() ?? sym?.valueDeclaration?.resolve();
-        if (decl)
-          return `s:${decl.pos}:${decl.end}`;
-      } catch {
-      }
-      return `n:${n.text}`;
-    };
-    const reassignedSyms = /* @__PURE__ */ new Set();
-    const discoverPotentialReassignments = (node) => {
-      if (!node)
-        return;
-      if (node.kind === SyntaxKind6.BinaryExpression) {
-        if (node.left?.kind === SyntaxKind6.Identifier) {
-          reassignedSyms.add(symbolIdOf(node.left));
-        } else if (node.operatorToken.kind === SyntaxKind6.EqualsToken && node.left?.kind === SyntaxKind6.ArrayLiteralExpression) {
-          for (const elem of node.left.elements ?? []) {
-            if (elem?.kind === SyntaxKind6.Identifier) {
-              reassignedSyms.add(symbolIdOf(elem));
-            }
-          }
-        }
-      }
-      if ((node.kind === SyntaxKind6.PrefixUnaryExpression || node.kind === SyntaxKind6.PostfixUnaryExpression) && this.isIncDecOperator(node.operator) && node.operand?.kind === SyntaxKind6.Identifier) {
-        reassignedSyms.add(symbolIdOf(node.operand));
-      }
-      if (node.kind === SyntaxKind6.Identifier) {
-        const name = node.text;
-        if (name && name !== "undefined" && !name.startsWith?.("null")) {
-          if (this.ReassignedVars[this.getVarKey(node)]) {
-            reassignedSyms.add(symbolIdOf(node));
-          }
-        }
-        return;
-      }
-      node.forEachChild(discoverPotentialReassignments);
-    };
-    discoverPotentialReassignments(fnBody);
-    if (reassignedSyms.size === 0)
-      return;
-    const events = [];
-    const visitExprInObjLit = (n) => {
-      if (!n)
-        return;
-      if (n.kind === SyntaxKind6.Identifier) {
-        const name = n.text;
-        if (name && name !== "undefined" && !name.startsWith?.("null")) {
-          const sym = symbolIdOf(n);
-          if (reassignedSyms.has(sym)) {
-            events.push({ kind: "use", sym, name, node: n });
-          }
-        }
-        return;
-      }
-      if (n.kind === SyntaxKind6.BinaryExpression) {
-        visitExprInObjLit(n.left);
-        visitExprInObjLit(n.right);
-        return;
-      }
-      if (n.kind === SyntaxKind6.ParenthesizedExpression) {
-        visitExprInObjLit(n.expression);
-        return;
-      }
-      if (n.kind === SyntaxKind6.ConditionalExpression) {
-        visitExprInObjLit(n.condition);
-        visitExprInObjLit(n.whenTrue);
-        visitExprInObjLit(n.whenFalse);
-        return;
-      }
-      if (n.kind === SyntaxKind6.CallExpression) {
-        n.arguments?.forEach(visitExprInObjLit);
-        if (n.expression?.kind === SyntaxKind6.PropertyAccessExpression) {
-          visitExprInObjLit(n.expression.expression);
-        }
-        return;
-      }
-      if (n.kind === SyntaxKind6.PrefixUnaryExpression) {
-        visitExprInObjLit(n.operand);
-        return;
-      }
-      if (n.kind === SyntaxKind6.ElementAccessExpression) {
-        let left = n.expression;
-        while (left?.kind === SyntaxKind6.ElementAccessExpression) {
-          left = left.expression;
-        }
-        visitExprInObjLit(left);
-        visitExprInObjLit(n.argumentExpression);
-        return;
-      }
-      if (n.kind === SyntaxKind6.ObjectLiteralExpression) {
-        n.properties?.forEach((p) => {
-          if (p.initializer)
-            visitExprInObjLit(p.initializer);
-        });
-        return;
-      }
-      n.forEachChild(visitExprInObjLit);
-    };
-    const walk = (node) => {
-      if (!node)
-        return;
-      if (node.kind === SyntaxKind6.BinaryExpression && this.isAssignmentOperator(node.operatorToken.kind)) {
-        walk(node.right);
-        if (node.left?.kind === SyntaxKind6.Identifier) {
-          const sym = symbolIdOf(node.left);
-          if (reassignedSyms.has(sym)) {
-            events.push({ kind: "reassign", sym });
-          }
-        } else {
-          walk(node.left);
-        }
-        return;
-      }
-      if ((node.kind === SyntaxKind6.PrefixUnaryExpression || node.kind === SyntaxKind6.PostfixUnaryExpression) && this.isIncDecOperator(node.operator) && node.operand?.kind === SyntaxKind6.Identifier) {
-        const sym = symbolIdOf(node.operand);
-        if (reassignedSyms.has(sym)) {
-          events.push({ kind: "reassign", sym });
-        }
-        return;
-      }
-      if (node.kind === SyntaxKind6.ObjectLiteralExpression) {
-        node.properties?.forEach((prop) => {
-          if (prop.initializer) {
-            visitExprInObjLit(prop.initializer);
-            walk(prop.initializer);
-          }
-        });
-        return;
-      }
-      const walkBlockAndBump = (subNode) => {
-        const usedInBlock = /* @__PURE__ */ new Set();
-        if (!subNode)
-          return usedInBlock;
-        const eventsBefore = events.length;
-        walk(subNode);
-        for (let i = eventsBefore; i < events.length; i++) {
-          const e = events[i];
-          if (e.kind === "use")
-            usedInBlock.add(e.sym);
-        }
-        for (const sym of usedInBlock) {
-          events.push({ kind: "reassign", sym });
-        }
-        return usedInBlock;
-      };
-      if (node.kind === SyntaxKind6.IfStatement) {
-        walk(node.expression);
-        walkBlockAndBump(node.thenStatement);
-        walkBlockAndBump(node.elseStatement);
-        return;
-      }
-      if (node.kind === SyntaxKind6.TryStatement) {
-        walkBlockAndBump(node.tryBlock);
-        walkBlockAndBump(node.catchClause?.block);
-        walkBlockAndBump(node.finallyBlock);
-        return;
-      }
-      node.forEachChild(walk);
-    };
-    walk(fnBody);
-    const counters = /* @__PURE__ */ new Map();
-    const perSym = /* @__PURE__ */ new Map();
-    for (const e of events) {
-      if (e.kind === "reassign") {
-        counters.set(e.sym, (counters.get(e.sym) ?? 0) + 1);
-      } else {
-        const v = counters.get(e.sym) ?? 0;
-        if (!perSym.has(e.sym))
-          perSym.set(e.sym, { name: e.name, byVer: /* @__PURE__ */ new Map() });
-        const entry = perSym.get(e.sym);
-        if (!entry.byVer.has(v))
-          entry.byVer.set(v, []);
-        entry.byVer.get(v).push(e.node);
-      }
-    }
-    for (const { name, byVer } of perSym.values()) {
-      const versions = [...byVer.keys()].sort((a, b) => a - b);
-      const baseName = this.getFinalVarName(name);
-      versions.forEach((v, idx) => {
-        const finalName = idx === 0 ? baseName : `${baseName}_${idx + 1}`;
-        for (const n of byVer.get(v)) {
-          this.usageToFinalName.set(n, finalName);
-        }
-      });
-    }
-  }
-  // Undo every in-place identifier rewrite made during the current emit, newest
-  // first so repeated rewrites of one node unwind to the original value.
-  restoreFinalVarMutations() {
-    for (let i = this.finalVarMutations.length - 1; i >= 0; i--) {
-      const mutation = this.finalVarMutations[i];
-      Object.defineProperty(mutation.node, "text", { value: mutation.text, configurable: true, writable: true });
-      if (mutation.ownGetFullText) {
-        mutation.node.getFullText = mutation.getFullText;
-      } else {
-        delete mutation.node.getFullText;
-      }
-    }
-    this.finalVarMutations = [];
-  }
-  printNode(node, identation = 0) {
-    if (node && node.kind === SyntaxKind6.SourceFile) {
-      this.restoreFinalVarMutations();
-      this.ReassignedVars = {};
-      this.varListFromObjectLiterals = {};
-      this.usageToFinalName = /* @__PURE__ */ new WeakMap();
-      this.finalVarScopeStack = [];
-      try {
-        return super.printNode(node, identation);
-      } finally {
-        this.restoreFinalVarMutations();
-      }
-    }
-    return super.printNode(node, identation);
-  }
-  // true when a property value reads a local the body reassigns (or the analyzer saw
-  // reassigned ahead): a double-brace anonymous class could not capture it
-  objectLiteralCapturesReassigned(node) {
-    return this.objectLiteralCapturedKeys(node).length > 0;
-  }
-  // ReassignedVars keys of the reassigned locals a literal's property values read
-  objectLiteralCapturedKeys(node) {
-    const keys = [];
-    const walk = (n) => {
-      if (!n)
-        return;
-      if (n.kind === SyntaxKind6.Identifier) {
-        const name = n.text;
-        const key = this.getVarKey(n);
-        if (name && name !== "undefined" && !name.startsWith("null") && (this.usageToFinalName.has(n) || this.ReassignedVars[key])) {
-          keys.push(key);
-        }
-        return;
-      }
-      n.forEachChild(walk);
-    };
-    for (const prop of node.properties) {
-      walk(prop.initializer);
-    }
-    return keys;
-  }
-  printVariableDeclarationList(node, identation) {
-    const declaration = node.declarations[0];
-    if (this.removeVariableDeclarationForFunctionExpression && declaration?.initializer && isFunctionExpression5(declaration.initializer)) {
-      return this.printNode(declaration.initializer, identation).trimEnd();
-    }
-    if (declaration?.name.kind === SyntaxKind6.ArrayBindingPattern) {
-      const arrayBindingPattern = declaration.name;
-      const arrayBindingPatternElements = arrayBindingPattern.elements;
-      const parsedArrayBindingElements = arrayBindingPatternElements.map(
-        (e) => this.printNode(e.name, 0)
-      );
-      const syntheticName = parsedArrayBindingElements.join("") + "Variable";
-      const arrayBindingStatement = `${this.getIden(identation)}var ${syntheticName} = ${this.printNode(
-        declaration.initializer,
-        0
-      )};
-`;
-      return arrayBindingStatement + parsedArrayBindingElements.map((e, index) => {
-        const boxType = this.javaCheckedBoxLocalTypeCached(arrayBindingPatternElements[index]);
-        if (boxType !== void 0) {
-          return this.getIden(identation) + `${boxType} ${e} = (${boxType}) ((java.util.List<Object>) ${syntheticName}).get(${index})`;
-        }
-        return this.getIden(identation) + `var ${e} = ((java.util.List<Object>) ${syntheticName}).get(${index})`;
-      }).join(";\n");
-    }
-    const isNew = declaration?.initializer && declaration.initializer.kind === SyntaxKind6.NewExpression;
-    let varToken = isNew ? "var " : this.VAR_TOKEN + " ";
-    if (!isNew) {
-      const arithmeticType = this.javaArithmeticLocalType(declaration);
-      if (arithmeticType !== void 0) {
-        varToken = arithmeticType + " ";
-      } else {
-        const elementWriteType = this.javaElementWriteMapLocalType(declaration);
-        if (elementWriteType !== void 0) {
-          varToken = elementWriteType + " ";
-        }
-        const baseFieldType = this.javaBaseMapFieldLocalType(declaration);
-        if (baseFieldType !== void 0) {
-          varToken = baseFieldType + " ";
-        }
-      }
-      const valuesType = this.javaObjectValuesLocalType(declaration);
-      if (valuesType !== void 0) {
-        varToken = valuesType + " ";
-      }
-      const wsClientType = this.javaWsClientLocalType(declaration);
-      if (wsClientType !== void 0) {
-        varToken = wsClientType + " ";
-      }
-      const wsClientAliasType = this.javaWsClientAliasLocalType(declaration);
-      if (wsClientAliasType !== void 0) {
-        varToken = wsClientAliasType + " ";
-      }
-      const handlerType = this.javaHandlerDeclarationType(declaration);
-      if (handlerType !== void 0) {
-        varToken = handlerType + " ";
-      }
-    }
-    if (!declaration.initializer) {
-      return this.getIden(identation) + "Object " + this.printNode(declaration.name) + " = " + this.UNDEFINED_TOKEN;
-    }
-    const parsedValue = this.printNode(declaration.initializer, identation).trimStart();
-    if (parsedValue === this.UNDEFINED_TOKEN) {
-      let specificVarToken = "Object";
-      if (this.INFER_VAR_TYPE) {
-        const variableType = this.getChecker().typeToString(
-          this.getChecker().getTypeAtLocation(declaration)
-        );
-        if (this.VariableTypeReplacements[variableType]) {
-          specificVarToken = this.VariableTypeReplacements[variableType];
-        }
-      }
-      return this.getIden(identation) + specificVarToken + " " + this.printNode(declaration.name) + " = " + parsedValue;
-    }
-    const awaitedBox = !isNew && declaration.initializer.kind === SyntaxKind6.AwaitExpression ? this.javaCheckedBoxLocalTypeCached(declaration) : void 0;
-    if (awaitedBox !== void 0) {
-      return this.getIden(identation) + awaitedBox + " " + this.printNode(declaration.name) + " = (" + awaitedBox + ") " + parsedValue;
-    }
-    return this.getIden(identation) + varToken + this.printNode(declaration.name) + " = " + parsedValue;
-  }
-  printThisKeyword(node, identation) {
-    let current = node?.parent;
-    while (current) {
-      if (current.kind === SyntaxKind6.PropertyAssignment && !this.builderObjectLiterals.has(current.parent)) {
-        const className = this.currentClassName;
-        return `${this.capitalize(className)}.this`;
-      }
-      current = current?.parent;
-    }
-    return this.THIS_TOKEN;
-  }
-  transformPropertyAcessExpressionIfNeeded(node) {
-    const expression = node.expression;
-    const leftSide = this.printNode(expression, 0);
-    const rightSide = node.name.text;
-    let rawExpression = void 0;
-    switch (rightSide) {
-      case "length": {
-        const type = this.getChecker().getTypeAtLocation(
-          expression
-        );
-        this.warnIfAnyType(node, type.flags, leftSide, "length");
-        rawExpression = this.printJavaLength(expression, leftSide);
-        break;
-      }
-      case "push":
-        rawExpression = `((java.util.List<Object>)${leftSide}).add`;
-        break;
-    }
-    return rawExpression;
-  }
-  printCustomDefaultValueIfNeeded(node) {
-    if (isArrayLiteralExpression3(node) || isObjectLiteralExpression3(node) || isStringLiteral2(node) || isBooleanLiteral4(node) || isNumericLiteral3(node)) {
-      return this.UNDEFINED_TOKEN;
-    }
-    if (node?.text === "undefined" && this.getChecker().getTypeAtLocation(node?.parent)?.flags === TypeFlags5.Number) {
-      return this.UNDEFINED_TOKEN;
-    }
-    return void 0;
-  }
-  // Unpacks one optional parameter. Native array access replaces Helpers.getArg
-  // when the initializer is a pure literal; the null check keeps the helper's
-  // contract that a null varargs array reads like an empty one.
-  // The expression half is shared with the untyped front, which passes the same value to the
-  // typed core as an argument instead of binding a local.
-  printOptionalArgExpression(index, initializer) {
-    const defaultValue = this.printNode(initializer, 0);
-    if (!this.isPureInitializer(initializer)) {
-      return `Helpers.getArg(optionalArgs, ${index}, ${defaultValue})`;
-    }
-    return `optionalArgs != null && optionalArgs.length > ${index} ? optionalArgs[${index}] : ${defaultValue}`;
-  }
-  printOptionalArgInit(paramName, index, initializer) {
-    return `Object ${paramName} = ${this.printOptionalArgExpression(index, initializer)};`;
-  }
-  // Pure = evaluating the initializer has no effect and cannot throw, so
-  // skipping it when the argument was supplied cannot change behavior.
-  isPureInitializer(node) {
-    switch (node?.kind) {
-      case SyntaxKind6.NullKeyword:
-      case SyntaxKind6.TrueKeyword:
-      case SyntaxKind6.FalseKeyword:
-      case SyntaxKind6.StringLiteral:
-      case SyntaxKind6.NoSubstitutionTemplateLiteral:
-      case SyntaxKind6.NumericLiteral:
-        return true;
-      case SyntaxKind6.Identifier:
-        return node.text === "undefined";
-      case SyntaxKind6.ArrayLiteralExpression:
-        return node.elements.every((element) => this.isPureInitializer(element));
-      case SyntaxKind6.ObjectLiteralExpression:
-        return node.properties.every((property) => isPropertyAssignment(property) && this.isPureInitializer(property.initializer));
-      case SyntaxKind6.ParenthesizedExpression:
-      case SyntaxKind6.AsExpression:
-      case SyntaxKind6.TypeAssertionExpression:
-      case SyntaxKind6.NonNullExpression:
-        return this.isPureInitializer(node.expression);
-      default:
-        return false;
-    }
-  }
-  javaDefaultedParameterLocals(node) {
-    if (node.body === void 0) {
-      return [];
-    }
-    const types = this.javaCoreParameterTypes(node);
-    node.parameters.forEach((param, i) => {
-      if (!this.javaIsLiteralDefault(param.initializer) || !isIdentifier2(param.name)) {
-        return;
-      }
-      const symbol = this.javaSymbolOf(param.name);
-      if (symbol === void 0) {
-        return;
-      }
-      const name = this.printNode(param.name, 0);
-      const value = this.javaCoreDefaultArgument(param, types[i]);
-      this.javaDefaultedLocalNames.set(symbol, `java.util.Objects.requireNonNullElse(${name}, ${value})`);
-    });
-    return [];
-  }
-  // a string, number or boolean literal default (null, `undefined` and `{}` / `[]` keep the parameter)
-  javaIsLiteralDefault(initializer) {
-    let node = initializer;
-    while (node !== void 0 && (isParenthesizedExpression2(node) || isAsExpression2(node))) {
-      node = node.expression;
-    }
-    if (node !== void 0 && isPrefixUnaryExpression2(node) && node.operator === SyntaxKind6.MinusToken) {
-      node = node.operand;
-    }
-    return node !== void 0 && (isStringLiteralLikeNode3(node) || isNumericLiteral3(node) || node.kind === SyntaxKind6.TrueKeyword || node.kind === SyntaxKind6.FalseKeyword);
-  }
-  javaDefaultedLocalName(node) {
-    if (this.javaDefaultedLocalNames.size === 0 || isParameterDeclaration2(node.parent) || isPropertyAccessExpression2(node.parent) && node.parent.name === node || isPropertyAssignment(node.parent) && node.parent.name === node) {
-      return void 0;
-    }
-    let symbol;
-    try {
-      symbol = this.getChecker().getSymbolAtLocation(node);
-    } catch (e) {
-      return void 0;
-    }
-    return symbol === void 0 ? void 0 : this.javaDefaultedLocalNames.get(symbol);
-  }
-  printFunctionBody(node, identation) {
-    const savedVarList = this.varListFromObjectLiterals;
-    const savedUsageToFinalName = this.usageToFinalName;
-    const savedScopeStack = this.finalVarScopeStack;
-    this.varListFromObjectLiterals = {};
-    this.analyzeFinalVars(node.body);
-    this.finalVarScopeStack = [/* @__PURE__ */ new Set()];
-    const funcParams = node.parameters ?? [];
-    const bodyStatements = node.body.statements;
-    const isAsync = this.isAsyncFunction(node);
-    const splitCore = isMethodDeclaration4(node);
-    const initParams = splitCore ? this.javaDefaultedParameterLocals(node) : [];
-    const processedParts = [];
-    try {
-      processedParts.push(...this.javaPrintBodyStatements(bodyStatements, identation + 1));
-    } finally {
-      this.varListFromObjectLiterals = savedVarList;
-      this.usageToFinalName = savedUsageToFinalName;
-      this.finalVarScopeStack = savedScopeStack;
-    }
-    let firstStatement = processedParts[0] || "";
-    const remainingString = processedParts.slice(1).join("\n");
-    let offSetIndex = 0;
-    funcParams.forEach((param, i) => {
-      const initializer = param.initializer;
-      if (initializer) {
-        if (splitCore) {
-          if (!this.isPureInitializer(initializer) && !this.javaDefaultedLocalNames.has(this.javaSymbolOf(param.name))) {
-            const name = this.printNode(param.name, 0);
-            initParams.push(`if (${name} == null) { ${name} = ${this.printNode(initializer, 0)}; }`);
-          }
-          return;
-        }
-        const index = i + offSetIndex;
-        const paramName = this.printNode(param.name, 0);
-        initParams.push(this.printOptionalArgInit(paramName, index, initializer));
-      } else {
-        offSetIndex--;
-      }
-    });
-    if (initParams.length > 0) {
-      const defaultInitializers = initParams.map((l) => this.getIden(identation + 1) + l).join("\n") + "\n";
-      const bodyParts = firstStatement.split("\n");
-      const commentPart = bodyParts.filter((line) => this.isComment(line));
-      const isComment = commentPart.length > 0;
-      if (isComment) {
-        const commentPartString = commentPart.map((c) => this.getIden(identation + 1) + c.trim()).join("\n");
-        const firstStmNoComment = bodyParts.filter((line) => !this.isComment(line)).join("\n");
-        firstStatement = commentPartString + "\n" + defaultInitializers + firstStmNoComment;
-      } else {
-        firstStatement = defaultInitializers + firstStatement;
-      }
-    }
-    const blockOpen = this.getBlockOpen(identation);
-    const blockClose = this.getBlockClose(identation);
-    firstStatement = remainingString.length > 0 ? firstStatement + "\n" : firstStatement;
-    if (isAsync && isMethodDeclaration4(node) && this.javaReassignsParameter(node)) {
-      const where = `${node.getSourceFile().fileName}:${node.name.text}`;
-      this.javaReassigningMethods.push(where);
-      const message = `[Java] async method reassigns a parameter (not effectively final, the TS source must use a new local): ${where}`;
-      if (this.javaStrictEffectivelyFinal) {
-        throw new Error(message);
-      }
-      Logger.warning(message);
-    }
-    if (isAsync) {
-      const finalWrapperVars = isMethodDeclaration4(node) ? "\n" : this.printFinalOutsideMethodVariableWrappersIfAny(node, identation) + "\n";
-      const insideWrappers = isMethodDeclaration4(node) ? "\n" : this.printInsideMethodVariableWrappersIfAny(node, identation + 1) + "\n";
-      const body = (firstStatement + remainingString).split("\n").map((line) => this.getIden(identation) + line).join("\n");
-      const failedFuture = bodyStatements.length === 1 && insideWrappers.trim() === "" ? this.javaFailedFutureOfThrow(bodyStatements[0], identation + 1) : void 0;
-      if (failedFuture !== void 0) {
-        return blockOpen + finalWrapperVars + failedFuture + blockClose;
-      }
-      const lastStatement = bodyStatements.length > 1 ? bodyStatements[bodyStatements.length - 1] : bodyStatements.length > 0 ? bodyStatements[0] : void 0;
-      const lastStmtIsReturn = lastStatement && (isReturnStatement3(lastStatement) || this.allBranchesTerminate(lastStatement));
-      const returnNull = lastStmtIsReturn ? "" : this.getIden(identation + 2) + "return null;\n";
-      const supplier = this.asyncSupplier || "java.util.concurrent.CompletableFuture.supplyAsync";
-      const executorArg = !this.asyncSupplier && this.asyncExecutor ? `, ${this.asyncExecutor}` : "";
-      const asyncBody = this.getIden(identation + 1) + `return ${supplier}(() -> {
-` + insideWrappers + body + "\n" + returnNull + this.getIden(identation + 1) + `}${executorArg});
-`;
-      return blockOpen + finalWrapperVars + asyncBody + blockClose;
-    }
-    return blockOpen + firstStatement + remainingString + blockClose;
-  }
-  // An async body that is only `throw new X(..)` can complete its future exceptionally and
-  // nothing else, so the native completion API stands in for the supplier lambda.
-  javaFailedFutureOfThrow(statement, identation) {
-    if (!isThrowStatement3(statement) || statement.expression.kind !== SyntaxKind6.NewExpression) {
-      return void 0;
-    }
-    const thrown = statement.expression.expression;
-    if (thrown === void 0 || !isIdentifier2(thrown)) {
-      return void 0;
-    }
-    const printed = this.printNode(statement, 0).trim();
-    const head = `${this.THROW_TOKEN} ${this.NEW_TOKEN} `;
-    if (!printed.startsWith(head)) {
-      return void 0;
-    }
-    const value = printed.slice(this.THROW_TOKEN.length + 1).replace(/;\s*$/, "").trim();
-    return this.getIden(identation) + `return java.util.concurrent.CompletableFuture.failedFuture(${value});
-`;
-  }
-  printBlock(node, identation, chainBlock = false) {
-    const managed = this.finalVarScopeStack.length > 0;
-    if (managed)
-      this.finalVarScopeStack.push(/* @__PURE__ */ new Set());
-    try {
-      if (this.javaCounterPlan(node.statements, identation + 1) !== void 0) {
-        const body = this.javaPrintBodyStatements(node.statements, identation + 1).join("\n");
-        return this.getBlockOpen(identation) + body + this.getBlockClose(identation, chainBlock);
-      }
-      return super.printBlock(node, identation, chainBlock);
-    } finally {
-      if (managed)
-        this.finalVarScopeStack.pop();
-    }
-  }
-  printInstanceOfExpression(node, identation) {
-    const right = node.right.text;
-    const left = this.printNode(node.left, 0);
-    return this.getIden(identation) + `Helpers.isInstance(${left}, ${right}.class)`;
-  }
-  printAwaitExpression(node, identation) {
-    const expression = this.printNode(node.expression, identation);
-    return `(${expression}).join()`;
-  }
-  printAsExpression(node, identation) {
-    const type = node.type;
-    if (type.kind === SyntaxKind6.AnyKeyword) {
-      return `((${this.VariableTypeReplacements["object"]})${this.printNode(
-        node.expression,
-        identation
-      )})`;
-    }
-    if (type.kind === SyntaxKind6.StringKeyword) {
-      return `((String)${this.printNode(node.expression, identation)})`;
-    }
-    if (type.kind === SyntaxKind6.ArrayType) {
-      const element = type.elementType.kind === SyntaxKind6.AnyKeyword ? "Object" : type.elementType.kind === SyntaxKind6.StringKeyword ? "String" : void 0;
-      if (element !== void 0) {
-        return `(java.util.List<${element}>)(${this.printNode(node.expression, identation)})`;
-      }
-    }
-    return this.printNode(node.expression, identation);
-  }
-  // every Java parameter is `Object` (base printParameterType), except the ones whose TS
-  // annotation names a native-carriable alias (javaNativeParameterType)
-  printParameterType(node) {
-    const native = this.javaNativeParameterType(node);
-    if (native !== void 0) {
-      return native;
-    }
-    return super.printParameterType(node);
-  }
-  printParameter(node, defaultValue = true) {
-    const name = this.printNode(node.name, 0);
-    const initializer = node.initializer;
-    const type = this.printParameterType(node) || "";
-    if (defaultValue) {
-      if (initializer) {
-        const def = this.printCustomDefaultValueIfNeeded(initializer) || this.printNode(initializer, 0);
-        return type + " " + name + this.SPACE_DEFAULT_PARAM + "=" + this.SPACE_DEFAULT_PARAM + def;
-      }
-      return type + " " + name;
-    }
-    return name;
-  }
-  // the typed core signature: every parameter prints its Java type, the default-valued ones
-  // included (a Java signature cannot carry a default - the front supplies it)
-  printCoreMethodParameters(node) {
-    return node.parameters.map((param) => param.initializer !== void 0 ? `${this.javaOptionalParameterJavaType(param)} ${this.printNode(param.name, 0)}` : this.printParameter(param)).join(", ");
-  }
-  // an async method's reassigned parameter prints under sigName (post keyword-remap),
-  // freeing the original name for the lambda body to bind
-  javaAsyncSignatureParameter(param, isAsyncMethod, printedParam) {
-    if (isAsyncMethod && this.ReassignedVars[this.getVarKey(param)]) {
-      const { localName, sigName } = this.getAsyncParamWrapperNames(param.name.text);
-      return printedParam.replace(localName, sigName);
-    }
-    return printedParam;
-  }
-  // the async method body writes one of its parameters, or a non-pure default must be applied
-  // by an `if (x == null) { x = init; }` inside the lambda (both break effective finality)
-  javaReassignsParameter(node) {
-    const params = node.parameters ?? [];
-    if (params.some((p) => p.initializer !== void 0 && !this.isPureInitializer(p.initializer) && this.isAsyncFunction(node))) {
-      return true;
-    }
-    const symbols = /* @__PURE__ */ new Set();
-    params.forEach((p) => {
-      const symbol = this.javaSymbolOf(p.name);
-      if (symbol !== void 0) {
-        symbols.add(symbol);
-      }
-    });
-    return symbols.size > 0 && node.body !== void 0 && this.javaWritesSymbol(node.body, symbols);
-  }
-  javaSymbolOf(node) {
-    return this.getChecker().getSymbolAtLocation(node);
-  }
-  // syntactic walk: assignment targets, ++/--, destructuring targets and for-in/of expression heads
-  javaWritesSymbol(node, symbols) {
-    if (isBinaryExpression4(node)) {
-      const op = node.operatorToken.kind;
-      if (op >= SyntaxKind6.FirstAssignment && op <= SyntaxKind6.LastAssignment && this.javaTargetWritesSymbol(node.left, symbols, op === SyntaxKind6.EqualsToken)) {
-        return true;
-      }
-    } else if ((isPrefixUnaryExpression2(node) || isPostfixUnaryExpression2(node)) && (node.operator === SyntaxKind6.PlusPlusToken || node.operator === SyntaxKind6.MinusMinusToken) && this.javaTargetWritesSymbol(node.operand, symbols, false)) {
-      return true;
-    } else if ((isForInStatement(node) || isForOfStatement(node)) && !isVariableDeclarationList(node.initializer) && this.javaTargetWritesSymbol(node.initializer, symbols, true)) {
-      return true;
-    }
-    return node.forEachChild((child) => this.javaWritesSymbol(child, symbols) || void 0) === true;
-  }
-  javaTargetWritesSymbol(target, symbols, destructuring) {
-    if (isParenthesizedExpression2(target) || isNonNullExpression(target) || isAsExpression2(target)) {
-      return this.javaTargetWritesSymbol(target.expression, symbols, destructuring);
-    }
-    if (isIdentifier2(target)) {
-      const symbol = this.javaSymbolOf(target);
-      return symbol !== void 0 && symbols.has(symbol);
-    }
-    if (!destructuring) {
-      return false;
-    }
-    if (isArrayLiteralExpression3(target)) {
-      return target.elements.some((e) => this.javaTargetWritesSymbol(isSpreadElement2(e) ? e.expression : e, symbols, true));
-    }
-    if (isObjectLiteralExpression3(target)) {
-      return target.properties.some((p) => {
-        if (isShorthandPropertyAssignment(p)) {
-          return this.javaTargetWritesSymbol(p.name, symbols, true);
-        }
-        if (isPropertyAssignment(p)) {
-          return this.javaTargetWritesSymbol(p.initializer, symbols, true);
-        }
-        return isSpreadAssignment2(p) && this.javaTargetWritesSymbol(p.expression, symbols, true);
-      });
-    }
-    if (isBinaryExpression4(target) && target.operatorToken.kind === SyntaxKind6.EqualsToken) {
-      return this.javaTargetWritesSymbol(target.left, symbols, true);
-    }
-    return false;
-  }
-  printMethodParameters(node) {
-    const isAsyncMethod = this.isAsyncFunction(node);
-    const params = node.parameters.map((param) => this.javaAsyncSignatureParameter(param, isAsyncMethod, this.printParameter(param)));
-    const hasOptionalParameter = node.parameters.some((p) => p.initializer !== void 0 || p.questionToken !== void 0);
-    if (!hasOptionalParameter) {
-      return params.join(", ");
-    }
-    const paramsWithOptional = params.filter((param) => param.indexOf("=") === -1);
-    paramsWithOptional.push("Object... optionalArgs");
-    return paramsWithOptional.join(", ");
-  }
-  printArrayLiteralExpression(node) {
-    const elements = node.elements.map((e) => this.printNode(e)).join(", ");
-    return `${this.ARRAY_OPENING_TOKEN}${elements}${this.ARRAY_CLOSING_TOKEN}`;
-  }
-  printFinalOutsideMethodVariableWrappersIfAny(node, identation) {
-    return this.javaAsyncParamWrapperLines(node, identation, (param, isOptionalParam, { sigName, snapName }) => {
-      const snapType = this.javaTestTierWrapperType(param) ?? (isOptionalParam && param.initializer !== void 0 ? this.javaOptionalParameterJavaType(param) : "Object");
-      return `final ${snapType} ${snapName} = ${sigName};`;
-    });
-  }
-  printInsideMethodVariableWrappersIfAny(node, identation) {
-    return this.javaAsyncParamWrapperLines(node, identation, (param, _isOptionalParam, { localName, snapName }) => `${this.javaTestTierWrapperType(param) ?? this.javaAsyncParameterLocalType(param) ?? "Object"} ${localName} = ${snapName};`);
-  }
-  // one line per reassigned parameter of an async method (optional ones only in a split core)
-  javaAsyncParamWrapperLines(node, identation, printLine) {
-    const parameters = node?.parameters;
-    const finalVarWrappers = [];
-    if (parameters) {
-      const isAsyncMethod = this.isAsyncFunction(node);
-      const splitCore = this.hasDefaultedTail(node);
-      parameters.forEach((param) => {
-        const isOptionalParam = param.initializer !== void 0 || param.questionToken !== void 0;
-        if ((!isOptionalParam || splitCore) && isAsyncMethod && this.ReassignedVars[this.getVarKey(param)]) {
-          const names = this.getAsyncParamWrapperNames(param.name.text);
-          finalVarWrappers.push(this.getIden(identation + 1) + printLine(param, isOptionalParam, names));
-        }
-      });
-    }
-    return finalVarWrappers.join("\n");
-  }
-  printMethodDeclaration(node, identation) {
-    const funcBody = this.printFunctionBody(node, identation);
-    let methodDef = this.printMethodDefinition(node, identation, (n) => this.printCoreMethodParameters(n));
-    methodDef += funcBody;
-    methodDef += this.printOverrideBridges(node, identation);
-    return methodDef;
-  }
-  printMethodDefinition(node, identation, paramsPrinter = void 0) {
-    const name = this.transformMethodNameIfNeeded(node.name.text);
-    let returnType = this.printFunctionType(node);
-    if (returnType === "java.util.concurrent.CompletableFuture") {
-      returnType = "java.util.concurrent.CompletableFuture<Object>";
-    }
-    if (returnType === this.DEFAULT_RETURN_TYPE) {
-      const native = this.javaNativeReturnType(node);
-      if (native !== void 0) {
-        returnType = native;
-      }
-    }
-    const modifiers = this.METHOD_DEFAULT_ACCESS ? this.METHOD_DEFAULT_ACCESS + " " : "";
-    const parsedArgs = paramsPrinter ? paramsPrinter(node) : this.printMethodParameters(node);
-    returnType = returnType ? returnType + " " : returnType;
-    const methodToken = this.METHOD_TOKEN ? this.METHOD_TOKEN + " " : "";
-    const signature = this.getIden(identation) + modifiers + returnType + methodToken + name + "(" + parsedArgs + ")";
-    return this.printNodeCommentsIfAny(node, identation, signature);
-  }
-  // `Array.isArray(x)` prints `(x instanceof java.util.List)`: false for null, true for a List, same
-  // as the helper for every Java-object operand. The helper stays where the operand prints as a Java
-  // array (rest parameter: `getClass().isArray()` branch) or a final class not convertible to List.
-  printArrayIsArrayCall(node, _identation, parsedArg = void 0) {
-    const native = this.printNativeArrayIsArray(node, parsedArg);
-    return native === void 0 ? `Helpers.isArray(${parsedArg})` : native;
-  }
-  printNativeArrayIsArray(node, parsedArg) {
-    const operand = node?.arguments?.[0];
-    if (operand === void 0 || parsedArg === void 0) {
-      return void 0;
-    }
-    if (node.parent !== void 0 && isExpressionStatement3(node.parent)) {
-      return void 0;
-    }
-    if (isArrayLiteralExpression3(operand)) {
-      return this.javaArrayLiteralDropsNothing(operand) ? "true" : void 0;
-    }
-    if (!this.javaPrimaryIsArrayOperand(operand)) {
-      return void 0;
-    }
-    const type = this.javaOperandType(operand);
-    if (operand.kind === SyntaxKind6.Identifier && this.javaNonArrayType(type) && !this.javaUntypedNullishDefault(operand)) {
-      return "false";
-    }
-    if (this.isVarargsArrayReference(operand)) {
-      return void 0;
-    }
-    if (this.javaScalarType(type)) {
-      return void 0;
-    }
-    return `(${parsedArg} instanceof java.util.List)`;
-  }
-  // `p = undefined` with no annotation: the checker's `undefined` is only the default, callers pass anything
-  javaUntypedNullishDefault(operand) {
-    const decl = this.javaDeclarationOfIdentifier(operand);
-    return decl !== void 0 && decl.kind === SyntaxKind6.Parameter && decl.type === void 0 && decl.initializer !== void 0;
-  }
-  // Operand shapes whose print is a primary expression: `instanceof` binds tighter than the
-  // low-precedence operators, so a ternary/binary operand would re-parse, and a constructor
-  // or cast print can be a final Java class on which `instanceof List` is not convertible.
-  javaPrimaryIsArrayOperand(node) {
-    const kind = node.kind;
-    return kind === SyntaxKind6.Identifier || kind === SyntaxKind6.PropertyAccessExpression || kind === SyntaxKind6.ElementAccessExpression || kind === SyntaxKind6.CallExpression;
-  }
-  javaOperandType(operand) {
-    return this.checkerOrUndefined()?.getTypeAtLocation(operand);
-  }
-  // literals and identifiers have nothing an array-literal wrapper could skip by dropping
-  javaArrayLiteralDropsNothing(node, depth = 0) {
-    if (depth > 4) {
-      return false;
-    }
-    return node.elements.every((element) => isStringLiteral2(element) || isNumericLiteral3(element) || element.kind === SyntaxKind6.TrueKeyword || element.kind === SyntaxKind6.FalseKeyword || element.kind === SyntaxKind6.NullKeyword || element.kind === SyntaxKind6.Identifier || isArrayLiteralExpression3(element) && this.javaArrayLiteralDropsNothing(element, depth + 1));
-  }
-  // types whose Java print is a scalar final class (`instanceof java.util.List` is not
-  // convertible on them): the scalar family, and unions made only of scalars/nulls
-  javaScalarType(type) {
-    return this.javaTypeFlagsOnly(type, JAVA_SCALAR_TYPE_FLAGS);
-  }
-  // types that provably never hold a List: every scalar (Java String/Long/Double/Boolean
-  // answer false) and the nullish types (JS Array.isArray(null) is false)
-  javaNonArrayType(type) {
-    return this.javaTypeFlagsOnly(type, JAVA_SCALAR_TYPE_FLAGS | JAVA_NULLISH_TYPE_FLAGS);
-  }
-  // the type, or every member of its (nested) union, carries one of the mask's flags
-  javaTypeFlagsOnly(type, mask2, depth = 0) {
-    if (type === void 0 || type === null || depth > 3) {
-      return false;
-    }
-    const flags = type.flags;
-    if (flags & TypeFlags5.Union) {
-      const parts = type.getTypes?.() ?? [];
-      return parts.length > 0 && parts.every((part) => this.javaTypeFlagsOnly(part, mask2, depth + 1));
-    }
-    return (flags & mask2) !== 0;
-  }
-  // A checker-proven dict prints a Map on every path, so the key copy is native;
-  // every other target keeps the helper — shared field maps need its synchronized
-  // snapshot, the rest need its instanceof/null fallbacks.
-  printObjectKeysCall(node, _identation, parsedArg = void 0) {
-    return this.printNativeObjectKeysCall(node) ?? `Helpers.objectKeys(${parsedArg})`;
-  }
-  printNativeObjectKeysCall(node) {
-    const argument = node?.arguments?.[0];
-    if (argument === void 0) {
-      return void 0;
-    }
-    if (this.javaWsClientMapReceiver(argument)) {
-      return `new java.util.ArrayList<Object>(${this.printNode(argument, 0)}.keySet())`;
-    }
-    if (isPropertyAccessExpression2(argument)) {
-      return this.printNativeBaseMapFieldKeys(argument);
-    }
-    if (this.javaDeclaredMapReceiver(argument)) {
-      return `new java.util.ArrayList<Object>(${this.printNode(argument, 0)}.keySet())`;
-    }
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0) {
-      return void 0;
-    }
-    const type = checker.getTypeAtLocation(argument);
-    if (!this.isJavaMapStructureType(type)) {
-      return void 0;
-    }
-    return `new java.util.ArrayList<Object>(((java.util.Map<String, Object>)${this.printNode(argument, 0)}).keySet())`;
-  }
-  // `Object.keys(this.<f>)` where f is a BaseExchange field the hand-written Java declares
-  // Map<String, Object>: the key copy of that Map, an empty list for the null the field may hold
-  // (the helper's non-Map branch). Owner stores and every other receiver keep the helper.
-  printNativeBaseMapFieldKeys(access) {
-    if (access.expression.kind !== SyntaxKind6.ThisKeyword) {
-      return void 0;
-    }
-    const name = String(access.name.text);
-    if (!JAVA_DECLARED_MAP_FIELD_NAMES.has(name) || this.javaOwnerStoreFields.has(name)) {
-      return void 0;
-    }
-    let file = "";
-    try {
-      const symbol = this.checkerOrUndefined()?.getSymbolAtLocation(access.name);
-      file = symbol?.valueDeclaration?.resolve()?.getSourceFile?.()?.fileName ?? "";
-    } catch (e) {
-      return void 0;
-    }
-    if (!/(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange(\.nooverloads\.\d+)?\.ts$/.test(file)) {
-      return void 0;
-    }
-    const receiver = this.printNode(access, 0);
-    return `(${receiver} == null ? new java.util.ArrayList<Object>() : new java.util.ArrayList<Object>(${receiver}.keySet()))`;
-  }
-  printObjectValuesCall(node, _identation, parsedArg = void 0) {
-    const wsArgument = node?.arguments?.[0];
-    if (wsArgument !== void 0 && this.javaWsClientMapReceiver(wsArgument)) {
-      return `new java.util.ArrayList<Object>(${this.printNode(wsArgument, 0)}.values())`;
-    }
-    return this.printNativeObjectValuesCall(node) ?? `Helpers.objectValues(${parsedArg})`;
-  }
-  // `Object.values(m)` where m is a local the printer declares `Map<String, Object>` and nothing
-  // else writes: the helper's only surviving branch is the `Map.values()` copy (a declared map is
-  // never the null / non-map fallback), so the copy binds on the declaration's own type
-  printNativeObjectValuesCall(node) {
-    const argument = node?.arguments?.[0];
-    if (argument === void 0 || node.arguments.length !== 1 || !isIdentifier2(argument)) {
-      return void 0;
-    }
-    const declaration = this.javaDeclarationOfIdentifier(argument);
-    if (declaration === void 0 || !isVariableDeclaration2(declaration) || !declaration.initializer || !this.javaDeclaredMapReceiver(argument) || this.javaLocalHasWriteAtAll(declaration.name)) {
-      return void 0;
-    }
-    return `new java.util.ArrayList<Object>(${this.printNode(argument, 0)}.values())`;
-  }
-  printJsonParseCall(_node, _identation, parsedArg = void 0) {
-    return `Helpers.parseJson(${parsedArg})`;
-  }
   printJsonStringifyCall(_node, _identation, parsedArg = void 0) {
     return `Helpers.json(${parsedArg})`;
-  }
-  // `await Promise.all ([e1, ..., en])` with every element checker-typed `Promise<...>`:
-  // CompletableFuture.allOf waits for exactly those, so Helpers.promiseAll's reflective loop adds
-  // nothing. Result used -> thenApply collecting values, only for `const` locals (no double runs).
-  printNativePromiseAllCall(node) {
-    const awaitNode = node?.parent;
-    if (awaitNode?.kind !== SyntaxKind6.AwaitExpression) {
-      return void 0;
-    }
-    const listNode = node.arguments?.[0];
-    if (listNode?.kind !== SyntaxKind6.ArrayLiteralExpression) {
-      return void 0;
-    }
-    const elements = listNode.elements;
-    const checker = this.getChecker();
-    for (const element of elements) {
-      if (element.kind === SyntaxKind6.SpreadElement || !this.isPromiseType(checker.getTypeAtLocation(element))) {
-        return void 0;
-      }
-    }
-    const printed = elements.map((element) => this.printNode(element));
-    const futureCast = `((${this.PROMISE_TYPE_KEYWORD}<?>) `;
-    const casted = printed.map((element) => `${futureCast}${element})`);
-    const allOf = `${this.PROMISE_TYPE_KEYWORD}.allOf(${casted.join(", ")})`;
-    if (awaitNode.parent?.kind === SyntaxKind6.ExpressionStatement) {
-      return allOf;
-    }
-    if (elements.length === 0 || !elements.every((element) => this.isConstBoundIdentifier(element)) || printed.indexOf("promiseAllValue") !== -1) {
-      return void 0;
-    }
-    const collected = casted.map((element) => `${element}.join()`).join(", ");
-    const collectList = `${this.ARRAY_OPENING_TOKEN}${collected}${this.ARRAY_CLOSING_TOKEN}`;
-    return `${allOf}.thenApply(promiseAllValue -> ${collectList})`;
-  }
-  // a `const`-bound local is assigned exactly once, so the printed java local is
-  // effectively final (a lambda can capture it) and re-reading it joins the same future
-  isConstBoundIdentifier(node) {
-    if (node.kind !== SyntaxKind6.Identifier) {
-      return false;
-    }
-    const declaration = this.getChecker().getSymbolAtLocation(node)?.valueDeclaration?.resolve();
-    return declaration?.kind === SyntaxKind6.VariableDeclaration && (getCombinedNodeFlags(declaration) & NodeFlags3.Const) === NodeFlags3.Const;
-  }
-  printPromiseAllCall(node, identation, parsedArg = void 0) {
-    return this.printNativePromiseAllCall(node) ?? this.printJavaPromiseAllStream(node, parsedArg) ?? `Helpers.promiseAll(${parsedArg})`;
-  }
-  // Helpers.promiseAll's own steps inline (List cast, CompletableFuture filter, allOf, in-order join
-  // into an ArrayList) in the ts/src exchange and base tiers; the test tier keeps the helper call
-  printJavaPromiseAllStream(node, parsedArg) {
-    const fileName = String(node?.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
-    if (parsedArg === void 0 || !/(^|\/)ts\/src\//.test(fileName) || JAVA_TEST_TIER_FILES.test(fileName)) {
-      return void 0;
-    }
-    const future = "java.util.concurrent.CompletableFuture";
-    return `((java.util.List<?>)(${parsedArg})).stream().filter(${future}.class::isInstance).map((promiseAllItem) -> (${future}<?>) promiseAllItem).collect(java.util.stream.Collectors.collectingAndThen(java.util.stream.Collectors.toList(), (promiseAllFutures) -> ${future}.allOf(promiseAllFutures.toArray(new ${future}<?>[0])).<java.util.List<Object>>thenApply((promiseAllDone) -> promiseAllFutures.stream().<Object>map(${future}::join).collect(java.util.stream.Collectors.toCollection(java.util.ArrayList<Object>::new)))))`;
-  }
-  printMathFloorCall(node, _identation, parsedArg = void 0) {
-    return `(Math.floor(Double.parseDouble(${this.javaStringBoxText(node?.arguments?.[0], parsedArg)})))`;
-  }
-  printMathRoundCall(node, _identation, parsedArg = void 0) {
-    return `Math.round(Double.parseDouble(${this.javaStringBoxText(node?.arguments?.[0], parsedArg)}))`;
-  }
-  printMathCeilCall(node, _identation, parsedArg = void 0) {
-    return `Math.ceil(Double.parseDouble(${this.javaStringBoxText(node?.arguments?.[0], parsedArg)}))`;
-  }
-  printNumberIsIntegerCall(_node, _identation, parsedArg = void 0) {
-    return `((${parsedArg} instanceof Integer) || (${parsedArg} instanceof Long))`;
-  }
-  printArrayPushCall(_node, _identation, name = void 0, parsedArg = void 0) {
-    return `((java.util.List<Object>)${name}).add(${parsedArg})`;
   }
   printIncludesCall(_node, _identation, name = void 0, parsedArg = void 0) {
     return `${name}.contains(${parsedArg})`;
@@ -48061,18 +48161,6 @@ ${this.getIden(identation)}}}`;
   }
   printToLowerCaseCall(_node, _identation, name = void 0) {
     return `((String)${name}).toLowerCase()`;
-  }
-  printShiftCall(_node, _identation, name = void 0) {
-    return `((java.util.List<Object>)${name}).get(0)`;
-  }
-  printReverseCall(_node, _identation, name = void 0) {
-    return `java.util.Collections.reverse((java.util.List<Object>)${name})`;
-  }
-  printPopCall(_node, _identation, name = void 0) {
-    return `((java.util.List<Object>)${name}).get(((java.util.List<Object>)${name}).size()-1)`;
-  }
-  printAssertCall(_node, _identation, parsedArgs) {
-    return `assert(${parsedArgs})`;
   }
   printSliceCall(node, _identation, name = void 0, parsedArg = void 0, parsedArg2 = void 0) {
     const nativeCall = this.nativeSliceCallIfProvable(node, name) ?? this.javaTypedStringSliceCall(node, name, parsedArg, parsedArg2, _identation);
@@ -48178,20 +48266,13 @@ ${this.getIden(identation)}}}`;
     }
     return `Helpers.replaceAll((String)${name}, (String)${parsedArg}, (String)${parsedArg2})`;
   }
-  javaUnwrapParens(node) {
-    let current = node;
-    while (current !== void 0 && isParenthesizedExpression2(current)) {
-      current = current.expression;
-    }
-    return current;
-  }
   javaIsAtomOperand(node) {
-    const n = this.javaUnwrapParens(node);
+    const n = this.unwrapParenthesized(node);
     return n !== void 0 && (n.kind === SyntaxKind6.Identifier || n.kind === SyntaxKind6.PropertyAccessExpression || n.kind === SyntaxKind6.ThisKeyword || n.kind === SyntaxKind6.NumericLiteral);
   }
   // the printed text of this operand may appear more than once in the native form
   javaIsRepeatableBound(node) {
-    const n = this.javaUnwrapParens(node);
+    const n = this.unwrapParenthesized(node);
     if (n === void 0) {
       return false;
     }
@@ -48211,37 +48292,13 @@ ${this.getIden(identation)}}}`;
         return false;
     }
   }
-  // the operand prints as an integral Java number: `+ - Math.min Math.max` and `(int)` compile on it
-  javaPrintsIntegralNumber(node) {
-    const n = this.javaUnwrapParens(node);
-    if (n === void 0) {
-      return false;
-    }
-    switch (n.kind) {
-      case SyntaxKind6.NumericLiteral:
-        return !/[.eE]/.test(n.text);
-      case SyntaxKind6.PrefixUnaryExpression:
-        return n.operator === SyntaxKind6.MinusToken && this.javaPrintsIntegralNumber(n.operand);
-      case SyntaxKind6.PropertyAccessExpression:
-        return n.name?.text === "length" && this.javaScalarFamily(n) === "number";
-      case SyntaxKind6.BinaryExpression: {
-        const op = n.operatorToken.kind;
-        return (op === SyntaxKind6.PlusToken || op === SyntaxKind6.MinusToken || op === SyntaxKind6.AsteriskToken) && this.javaPrintsIntegralNumber(n.left) && this.javaPrintsIntegralNumber(n.right);
-      }
-    }
-    if (n.kind !== SyntaxKind6.Identifier) {
-      return false;
-    }
-    const type = this.javaDeclaredTypeOf(n);
-    return type !== void 0 && this.javaIntegralDeclaredTypes.has(type.replace(/^final\s+/, "").trim());
-  }
   // a slice bound as the integer the helper's toInt answers: an integral print is its own text, a
   // boxed number (an `Object` from indexOf, a Double) takes the helper's own intValue truncation
   javaSliceBoundOperand(node, printed) {
     if (this.javaPrintsIntegralNumber(node)) {
       return { text: this.javaIsAtomOperand(node) ? printed : `(${printed})` };
     }
-    const n = this.javaUnwrapParens(node);
+    const n = this.unwrapParenthesized(node);
     if (n === void 0 || n.kind !== SyntaxKind6.Identifier || this.javaScalarFamily(n) !== "number") {
       return void 0;
     }
@@ -48366,128 +48423,436 @@ ${this.getIden(identation)}}}`;
   printPadStartCall(node, _identation, name, parsedArg, parsedArg2) {
     return this.printNativePadStart(node, name) ?? `Helpers.padStart((String)${name}, ((Number)${parsedArg}).intValue(), ((String)${parsedArg2}).charAt(0))`;
   }
-  printDateNowCall(_node, _identation) {
-    return "System.currentTimeMillis()";
-  }
-  printLengthProperty(node, _identation, _name = void 0) {
-    const leftSide = this.printNode(node.expression, 0);
-    const type = this.getChecker().getTypeAtLocation(node.expression);
-    this.warnIfAnyType(node, type.flags, leftSide, "length");
-    return this.printJavaLength(node.expression, leftSide);
-  }
-  // For ++/--, prefer native Java operators rather than the C# ref-helpers
-  printPostFixUnaryExpression(node, identation) {
-    const { operand, operator } = node;
-    const leftSide = this.printNode(operand, 0);
-    return this.PostFixOperators[operator] === "--" ? `${leftSide}--` : `${leftSide}++`;
-  }
-  // the identifier declared by a `for (var i = <int literal>; ...; i++)` header: the
-  // printer writes that initializer as `var`, so javac infers a primitive int and the
-  // ++/-- increment keeps it one
-  javaPrimitiveCounter(node) {
-    if (node?.kind !== SyntaxKind6.Identifier) {
-      return false;
-    }
-    const symbol = this.getChecker().getSymbolAtLocation(node);
-    const declaration = symbol?.valueDeclaration?.resolve() ?? symbol?.declarations?.[0]?.resolve();
-    if (declaration === void 0 || !isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name)) {
-      return false;
-    }
-    if (declaration.name.text !== node.text || declaration.initializer === void 0) {
-      return false;
-    }
-    const list = declaration.parent;
-    if (list?.kind !== SyntaxKind6.VariableDeclarationList || list.declarations.length !== 1) {
-      return false;
-    }
-    const forStatement = list.parent;
-    if (forStatement?.kind !== SyntaxKind6.ForStatement || forStatement.initializer !== list) {
-      return false;
-    }
-    if (this.javaIntegerLiteralKind(declaration.initializer) === void 0) {
-      return false;
-    }
-    const incrementor = forStatement.incrementor;
-    return incrementor?.kind === SyntaxKind6.PostfixUnaryExpression && incrementor.operand?.kind === SyntaxKind6.Identifier && incrementor.operand.text === node.text;
-  }
-  // `-x` prints as the plain Java operator when the operand is already primitive: a decimal literal,
-  // a nested native `+ - * /`, a `for (var i = <int literal>` counter or a `.length` read.
-  // Helpers.opNeg preserves the box and maps null to null, so every boxed local keeps the helper.
-  javaNativeNegation(node) {
-    if (node === void 0) {
-      return false;
-    }
-    if (node.kind === SyntaxKind6.ParenthesizedExpression) {
-      return this.javaNativeNegation(node.expression);
-    }
-    if (isNumericLiteral3(node)) {
-      return this.javaProvableNumericKind(node) !== void 0;
-    }
-    if (node.kind === SyntaxKind6.BinaryExpression) {
-      return this.javaNativeArithmeticKind(node) !== void 0;
-    }
-    if (this.javaPrimitiveCounter(node)) {
-      return true;
-    }
-    return node.kind === SyntaxKind6.PropertyAccessExpression && node.name.text === "length" && this.javaLengthKind(node.expression) !== void 0;
-  }
-  // `-x` in the true arm of `(x !== undefined) ? ... : ...` on an unwritten Long/Double local:
-  // the guard rules out null, so the helper's box-preserving negation is the box's valueOf
-  javaNullGuardedNegationBox(node) {
-    const operand = node.operand;
-    if (!isIdentifier2(operand)) {
+  // `x.indexOf(t)` where a string/Str-declared x is narrowed to a union of string literals
+  // (`===` tests): x is a non-null String, so String.indexOf is the helper's String arm
+  javaNarrowedIndexOf(node, name, parsedArg) {
+    const receiver = node?.expression?.expression;
+    const arg = node?.arguments?.[0];
+    if (receiver === void 0 || arg === void 0 || name === void 0 || parsedArg === void 0 || !isIdentifier2(receiver) || this.isVarargsArrayReference(receiver)) {
       return void 0;
     }
-    const declaration = this.javaDeclarationOfIdentifier(operand);
-    if (declaration === void 0 || !isVariableDeclaration2(declaration) || this.javaLocalHasWriteAtAll(declaration.name)) {
+    let receiverType;
+    try {
+      receiverType = this.getChecker().getTypeAtLocation(receiver);
+    } catch (e) {
       return void 0;
     }
-    const box = this.javaDeclaredTypeOfDeclaration(declaration);
-    if (box !== "Long" && box !== "Double") {
+    if (receiverType === void 0 || (receiverType.flags & TypeFlags5.Union) === 0 || !receiverType.getTypes().every((member) => this.isStringType(member.flags))) {
       return void 0;
     }
-    const symbol = this.getChecker().getSymbolAtLocation(operand);
-    let child = node;
-    for (let current = node.parent; current !== void 0 && !isFunctionLike(current); child = current, current = current.parent) {
-      if (current.kind !== SyntaxKind6.ConditionalExpression) {
-        continue;
-      }
-      if (current.whenTrue !== child) {
-        return void 0;
-      }
-      let condition = current.condition;
-      while (condition?.kind === SyntaxKind6.ParenthesizedExpression) {
-        condition = condition.expression;
-      }
-      const op = condition?.operatorToken?.kind;
-      const right = condition?.right;
-      const nullish = right?.kind === SyntaxKind6.NullKeyword || isIdentifier2(right) && right.text === "undefined";
-      if (condition?.kind === SyntaxKind6.BinaryExpression && (op === SyntaxKind6.ExclamationEqualsEqualsToken || op === SyntaxKind6.ExclamationEqualsToken) && nullish && isIdentifier2(condition.left) && this.getChecker().getSymbolAtLocation(condition.left) === symbol) {
-        return box;
-      }
+    const symbol = this.getChecker().getSymbolAtLocation(receiver);
+    const declaration = symbol?.valueDeclaration?.resolve?.() ?? symbol?.valueDeclaration;
+    let declared;
+    try {
+      declared = declaration?.name === void 0 ? void 0 : this.getChecker().getTypeAtLocation(declaration.name);
+    } catch (e) {
+      declared = void 0;
+    }
+    const declaredMembers = declared === void 0 ? [] : (declared.flags & TypeFlags5.Union) !== 0 ? declared.getTypes() : [declared];
+    if (!declaredMembers.some((member) => member.flags === TypeFlags5.String)) {
       return void 0;
+    }
+    if (this.javaProvableString(arg)) {
+      return `((String)${name}).indexOf(${parsedArg})`;
     }
     return void 0;
   }
-  printPrefixUnaryExpression(node, identation) {
-    const { operand, operator } = node;
-    if (operator === SyntaxKind6.ExclamationToken) {
-      return this.PrefixFixOperators[operator] + this.printCondition(node.operand, 0);
-    }
-    const leftSide = this.printNode(operand, 0);
-    if (operator === SyntaxKind6.PlusToken) {
-      return `+(${leftSide})`;
-    } else if (operator === SyntaxKind6.MinusToken) {
-      if (this.javaNativeNegation(operand)) {
-        return `-${leftSide}`;
+  // ===== built-in calls and statements =====
+  printBlock(node, identation, chainBlock = false) {
+    const managed = this.finalVarScopeStack.length > 0;
+    if (managed)
+      this.finalVarScopeStack.push(/* @__PURE__ */ new Set());
+    try {
+      if (this.javaCounterPlan(node.statements, identation + 1) !== void 0) {
+        const body = this.javaPrintBodyStatements(node.statements, identation + 1).join("\n");
+        return this.getBlockOpen(identation) + body + this.getBlockClose(identation, chainBlock);
       }
-      const guardedBox = this.javaNullGuardedNegationBox(node);
-      if (guardedBox !== void 0) {
-        return `${guardedBox}.valueOf(-${leftSide})`;
-      }
-      return `Helpers.opNeg(${leftSide})`;
+      return super.printBlock(node, identation, chainBlock);
+    } finally {
+      if (managed)
+        this.finalVarScopeStack.pop();
     }
-    return super.printPrefixUnaryExpression(node, identation);
+  }
+  printAwaitExpression(node, identation) {
+    const expression = this.printNode(node.expression, identation);
+    return `(${expression}).join()`;
+  }
+  // A checker-proven dict prints a Map on every path, so the key copy is native;
+  // every other target keeps the helper — shared field maps need its synchronized
+  // snapshot, the rest need its instanceof/null fallbacks.
+  printObjectKeysCall(node, _identation, parsedArg = void 0) {
+    return this.printNativeObjectKeysCall(node) ?? `Helpers.objectKeys(${parsedArg})`;
+  }
+  printNativeObjectKeysCall(node) {
+    const argument = node?.arguments?.[0];
+    if (argument === void 0) {
+      return void 0;
+    }
+    if (this.javaWsClientMapReceiver(argument)) {
+      return `new java.util.ArrayList<Object>(${this.printNode(argument, 0)}.keySet())`;
+    }
+    if (isPropertyAccessExpression2(argument)) {
+      return this.printNativeBaseMapFieldKeys(argument);
+    }
+    if (this.javaDeclaredMapReceiver(argument)) {
+      return `new java.util.ArrayList<Object>(${this.printNode(argument, 0)}.keySet())`;
+    }
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return void 0;
+    }
+    const type = checker.getTypeAtLocation(argument);
+    if (!this.isJavaMapStructureType(type)) {
+      return void 0;
+    }
+    return `new java.util.ArrayList<Object>(((java.util.Map<String, Object>)${this.printNode(argument, 0)}).keySet())`;
+  }
+  // `Object.keys(this.<f>)` where f is a BaseExchange field the hand-written Java declares
+  // Map<String, Object>: the key copy of that Map, an empty list for the null the field may hold
+  // (the helper's non-Map branch). Owner stores and every other receiver keep the helper.
+  printNativeBaseMapFieldKeys(access) {
+    if (access.expression.kind !== SyntaxKind6.ThisKeyword) {
+      return void 0;
+    }
+    const name = String(access.name.text);
+    if (!JAVA_DECLARED_MAP_FIELD_NAMES.has(name) || this.javaOwnerStoreFields.has(name)) {
+      return void 0;
+    }
+    let file = "";
+    try {
+      const symbol = this.checkerOrUndefined()?.getSymbolAtLocation(access.name);
+      file = symbol?.valueDeclaration?.resolve()?.getSourceFile?.()?.fileName ?? "";
+    } catch (e) {
+      return void 0;
+    }
+    if (!/(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange(\.nooverloads\.\d+)?\.ts$/.test(file)) {
+      return void 0;
+    }
+    const receiver = this.printNode(access, 0);
+    return `(${receiver} == null ? new java.util.ArrayList<Object>() : new java.util.ArrayList<Object>(${receiver}.keySet()))`;
+  }
+  printObjectValuesCall(node, _identation, parsedArg = void 0) {
+    const wsArgument = node?.arguments?.[0];
+    if (wsArgument !== void 0 && this.javaWsClientMapReceiver(wsArgument)) {
+      return `new java.util.ArrayList<Object>(${this.printNode(wsArgument, 0)}.values())`;
+    }
+    return this.printNativeObjectValuesCall(node) ?? `Helpers.objectValues(${parsedArg})`;
+  }
+  // `Object.values(m)` where m is a local the printer declares `Map<String, Object>` and nothing
+  // else writes: the helper's only surviving branch is the `Map.values()` copy (a declared map is
+  // never the null / non-map fallback), so the copy binds on the declaration's own type
+  printNativeObjectValuesCall(node) {
+    const argument = node?.arguments?.[0];
+    if (argument === void 0 || node.arguments.length !== 1 || !isIdentifier2(argument)) {
+      return void 0;
+    }
+    const declaration = this.javaDeclarationOfIdentifier(argument);
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || !declaration.initializer || !this.javaDeclaredMapReceiver(argument) || this.javaLocalHasWriteAtAll(declaration.name)) {
+      return void 0;
+    }
+    return `new java.util.ArrayList<Object>(${this.printNode(argument, 0)}.values())`;
+  }
+  printJsonParseCall(_node, _identation, parsedArg = void 0) {
+    return `Helpers.parseJson(${parsedArg})`;
+  }
+  // `await Promise.all ([e1, ..., en])` with every element checker-typed `Promise<...>`:
+  // CompletableFuture.allOf waits for exactly those, so Helpers.promiseAll's reflective loop adds
+  // nothing. Result used -> thenApply collecting values, only for `const` locals (no double runs).
+  printNativePromiseAllCall(node) {
+    const awaitNode = node?.parent;
+    if (awaitNode?.kind !== SyntaxKind6.AwaitExpression) {
+      return void 0;
+    }
+    const listNode = node.arguments?.[0];
+    if (listNode?.kind !== SyntaxKind6.ArrayLiteralExpression) {
+      return void 0;
+    }
+    const elements = listNode.elements;
+    const checker = this.getChecker();
+    for (const element of elements) {
+      if (element.kind === SyntaxKind6.SpreadElement || !this.isPromiseType(checker.getTypeAtLocation(element))) {
+        return void 0;
+      }
+    }
+    const printed = elements.map((element) => this.printNode(element));
+    const futureCast = `((${this.PROMISE_TYPE_KEYWORD}<?>) `;
+    const casted = printed.map((element) => `${futureCast}${element})`);
+    const allOf = `${this.PROMISE_TYPE_KEYWORD}.allOf(${casted.join(", ")})`;
+    if (awaitNode.parent?.kind === SyntaxKind6.ExpressionStatement) {
+      return allOf;
+    }
+    if (elements.length === 0 || !elements.every((element) => this.isConstBoundIdentifier(element)) || printed.indexOf("promiseAllValue") !== -1) {
+      return void 0;
+    }
+    const collected = casted.map((element) => `${element}.join()`).join(", ");
+    const collectList = `${this.ARRAY_OPENING_TOKEN}${collected}${this.ARRAY_CLOSING_TOKEN}`;
+    return `${allOf}.thenApply(promiseAllValue -> ${collectList})`;
+  }
+  printPromiseAllCall(node, identation, parsedArg = void 0) {
+    return this.printNativePromiseAllCall(node) ?? this.printJavaPromiseAllStream(node, parsedArg) ?? `Helpers.promiseAll(${parsedArg})`;
+  }
+  // Helpers.promiseAll's own steps inline (List cast, CompletableFuture filter, allOf, in-order join
+  // into an ArrayList) in the ts/src exchange and base tiers; the test tier keeps the helper call
+  printJavaPromiseAllStream(node, parsedArg) {
+    const fileName = String(node?.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    if (parsedArg === void 0 || !/(^|\/)ts\/src\//.test(fileName) || JAVA_TEST_TIER_FILES.test(fileName)) {
+      return void 0;
+    }
+    const future = "java.util.concurrent.CompletableFuture";
+    return `((java.util.List<?>)(${parsedArg})).stream().filter(${future}.class::isInstance).map((promiseAllItem) -> (${future}<?>) promiseAllItem).collect(java.util.stream.Collectors.collectingAndThen(java.util.stream.Collectors.toList(), (promiseAllFutures) -> ${future}.allOf(promiseAllFutures.toArray(new ${future}<?>[0])).<java.util.List<Object>>thenApply((promiseAllDone) -> promiseAllFutures.stream().<Object>map(${future}::join).collect(java.util.stream.Collectors.toCollection(java.util.ArrayList<Object>::new)))))`;
+  }
+  printMathFloorCall(node, _identation, parsedArg = void 0) {
+    return `(Math.floor(Double.parseDouble(${this.javaStringBoxText(node?.arguments?.[0], parsedArg)})))`;
+  }
+  printMathRoundCall(node, _identation, parsedArg = void 0) {
+    return `Math.round(Double.parseDouble(${this.javaStringBoxText(node?.arguments?.[0], parsedArg)}))`;
+  }
+  printMathCeilCall(node, _identation, parsedArg = void 0) {
+    return `Math.ceil(Double.parseDouble(${this.javaStringBoxText(node?.arguments?.[0], parsedArg)}))`;
+  }
+  printNumberIsIntegerCall(_node, _identation, parsedArg = void 0) {
+    return `((${parsedArg} instanceof Integer) || (${parsedArg} instanceof Long))`;
+  }
+  printShiftCall(_node, _identation, name = void 0) {
+    return `((java.util.List<Object>)${name}).get(0)`;
+  }
+  printReverseCall(_node, _identation, name = void 0) {
+    return `java.util.Collections.reverse((java.util.List<Object>)${name})`;
+  }
+  printPopCall(_node, _identation, name = void 0) {
+    return `((java.util.List<Object>)${name}).get(((java.util.List<Object>)${name}).size()-1)`;
+  }
+  printAssertCall(_node, _identation, parsedArgs) {
+    return `assert(${parsedArgs})`;
+  }
+  printDateNowCall(_node, _identation) {
+    return "System.currentTimeMillis()";
+  }
+  printThrowStatement(node, identation) {
+    if (node.expression.kind === SyntaxKind6.Identifier) {
+      const name = this.printNode(node.expression, 0);
+      return this.getIden(identation) + `${this.THROW_TOKEN} (${name} instanceof RuntimeException ? (RuntimeException)${name} : new RuntimeException(${name}))${this.LINE_TERMINATOR}`;
+    }
+    if (node.expression.kind === SyntaxKind6.NewExpression) {
+      const expression = node.expression;
+      const argumentsExp = expression?.arguments ?? [];
+      const parsedArg = argumentsExp.map((n) => this.printNode(n, 0)).join(",") ?? "";
+      const newExpression = this.printNode(expression.expression, 0);
+      if (expression.expression.kind === SyntaxKind6.Identifier) {
+        const id = expression.expression;
+        const exceptionName = id.text === "Error" ? "RuntimeException" : id.text;
+        const symbol = this.getChecker().getSymbolAtLocation(expression.expression);
+        if (symbol) {
+          const declarations = (this.getChecker().getDeclaredTypeOfSymbol(symbol).getSymbol()?.declarations ?? []).map((d) => d.resolve());
+          const isClassDeclaration5 = declarations.find(
+            (l) => l.kind === SyntaxKind6.InterfaceDeclaration || l.kind === SyntaxKind6.ClassDeclaration
+          );
+          if (isClassDeclaration5) {
+            return this.getIden(identation) + `${this.THROW_TOKEN} ${this.NEW_TOKEN} ${exceptionName}((String)${parsedArg}) ${this.LINE_TERMINATOR}`;
+          } else {
+            return this.getIden(identation) + `Helpers.throwDynamicException(${exceptionName}, ${parsedArg});return null;`;
+          }
+        }
+        return this.getIden(identation) + `${this.THROW_TOKEN} ${this.NEW_TOKEN} ${exceptionName}(${parsedArg}) ${this.LINE_TERMINATOR}`;
+      } else if (expression.expression.kind === SyntaxKind6.ElementAccessExpression) {
+        return this.getIden(identation) + `Helpers.throwDynamicException(${newExpression}, ${parsedArg});`;
+      }
+      return super.printThrowStatement(node, identation);
+    }
+  }
+  printForStatement(node, identation) {
+    const initializer = this.printNode(node.initializer, 0).replace("Object ", "var ");
+    const condition = this.printNode(node.condition, 0);
+    const incrementor = this.printNode(node.incrementor, 0);
+    const forStm = this.getIden(identation) + this.FOR_TOKEN + " " + this.CONDITION_OPENING + initializer + "; " + condition + "; " + incrementor + this.CONDITION_CLOSE + this.printBlock(node.statement, identation);
+    return this.printNodeCommentsIfAny(node, identation, forStm);
+  }
+  // ===== boolean conditions (Helpers.isTrue) =====
+  // a native-Boolean method whose every return prints a primitive Java boolean (never null):
+  // a call to it can be a condition as is (unboxing cannot throw)
+  javaMethodReturnsNonNullBoolean(method, depth) {
+    if (method === void 0 || depth > 3 || method.body === void 0) {
+      return false;
+    }
+    const name = String(method.name?.text);
+    if (this.javaNativeReturnType(method) !== "Boolean" && !JAVA_THIS_BOOLEAN_METHODS.has(name)) {
+      return false;
+    }
+    let returns = 0;
+    let ok = true;
+    const scan = (n) => {
+      if (!ok || n !== method && isFunctionLike(n)) {
+        return;
+      }
+      if (isReturnStatement3(n)) {
+        returns++;
+        ok = n.expression !== void 0 && this.javaPrintsNonNullBoolean(n.expression, depth);
+        return;
+      }
+      n.forEachChild(scan);
+    };
+    scan(method.body);
+    return ok && returns > 0;
+  }
+  javaPrintsNonNullBoolean(node, depth) {
+    switch (node?.kind) {
+      case SyntaxKind6.TrueKeyword:
+      case SyntaxKind6.FalseKeyword:
+        return true;
+      case SyntaxKind6.ParenthesizedExpression:
+        return this.javaPrintsNonNullBoolean(node.expression, depth);
+      case SyntaxKind6.PrefixUnaryExpression:
+        return node.operator === SyntaxKind6.ExclamationToken;
+      case SyntaxKind6.BinaryExpression:
+        return JAVA_BOOLEAN_OPERATOR_KINDS.has(node.operatorToken.kind);
+      case SyntaxKind6.ConditionalExpression:
+        return this.javaPrintsNonNullBoolean(node.whenTrue, depth) && this.javaPrintsNonNullBoolean(node.whenFalse, depth);
+      case SyntaxKind6.CallExpression:
+        return this.javaCallPrintsNonNullBoolean(node, depth + 1);
+    }
+    return false;
+  }
+  // `this.<name>(...)` resolving to a method proven by javaMethodReturnsNonNullBoolean
+  javaCallPrintsNonNullBoolean(node, depth) {
+    if (this.isArrayIsArrayCall(node) || this.javaPreciseBooleanCall(node) || this.javaStringAffixCall(node)) {
+      return true;
+    }
+    const callee = node.expression;
+    if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword) {
+      return false;
+    }
+    let declaration;
+    try {
+      declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+    } catch (e) {
+      return false;
+    }
+    if (declaration === void 0 || declaration.kind !== SyntaxKind6.MethodDeclaration) {
+      return false;
+    }
+    if (JAVA_THIS_BOOLEAN_METHODS.has(String(callee.name.text))) {
+      return this.javaCallBooleanKind(node) === "boolean";
+    }
+    return this.javaMethodReturnsNonNullBoolean(declaration, depth);
+  }
+  // `a && b` / `a || b` as a condition: both sides print through printCondition, so the Java
+  // operator already yields a primitive boolean. The test tree keeps the helper spelling.
+  printLogicalCondition(node) {
+    let inner = node;
+    while (isParenthesizedExpression2(inner)) {
+      inner = inner.expression;
+    }
+    if (!isBinaryExpression4(inner) || inner.operatorToken.kind !== SyntaxKind6.AmpersandAmpersandToken && inner.operatorToken.kind !== SyntaxKind6.BarBarToken || /(^|[\\/])ts[\\/]src[\\/]test[\\/]/.test(node.getSourceFile?.()?.fileName ?? "")) {
+      return void 0;
+    }
+    let outer = node.parent;
+    while (outer !== void 0 && isParenthesizedExpression2(outer)) {
+      outer = outer.parent;
+    }
+    if (this.javaConditionPrintsBoolean(node) || outer !== void 0 && isBinaryExpression4(outer) && (outer.operatorToken.kind === SyntaxKind6.AmpersandAmpersandToken || outer.operatorToken.kind === SyntaxKind6.BarBarToken)) {
+      return void 0;
+    }
+    return `(${this.printNode(node, 0)})`;
+  }
+  // a class declared in ts/src/base/errors.ts: its Java twin extends RuntimeException, so
+  // `catchVar instanceof X` compiles against the `Exception` catch parameter
+  javaCcxtErrorClass(node) {
+    const checker = this.checkerOrUndefined();
+    let symbol;
+    try {
+      symbol = checker?.getSymbolAtLocation(node);
+      if (symbol !== void 0 && symbol.flags & SymbolFlags2.Alias) {
+        symbol = checker.getAliasedSymbol(symbol);
+      }
+    } catch (e) {
+      return false;
+    }
+    const declaration = symbol?.declarations?.[0]?.resolve();
+    return declaration?.kind === SyntaxKind6.ClassDeclaration && /(^|[\\/])ts[\\/]src[\\/]base[\\/]errors\.ts$/.test(declaration.getSourceFile?.()?.fileName ?? "");
+  }
+  // `e instanceof X` on a catch variable equals Helpers.isInstance (which first unwraps a
+  // CompletionException/ExecutionException) when the try block cannot raise a wrapped one:
+  // no await, every call a synchronous base-tier accessor/thrower
+  javaCatchCannotWrap(node) {
+    if (node?.kind !== SyntaxKind6.Identifier) {
+      return false;
+    }
+    const checker = this.checkerOrUndefined();
+    const decl = checker?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+    const clause = decl?.parent;
+    const tryStatement = clause?.parent;
+    if (decl?.kind !== SyntaxKind6.VariableDeclaration || clause?.kind !== SyntaxKind6.CatchClause || tryStatement?.kind !== SyntaxKind6.TryStatement || tryStatement.catchClause !== clause) {
+      return false;
+    }
+    let ok = true;
+    const scan = (current) => {
+      if (!ok) {
+        return;
+      }
+      if (isFunctionLike(current) || current.kind === SyntaxKind6.AwaitExpression || current.kind === SyntaxKind6.TryStatement) {
+        ok = false;
+        return;
+      }
+      if (current.kind === SyntaxKind6.CallExpression) {
+        const signature = checker.getResolvedSignature(current);
+        const declaration = signature?.declaration?.resolve();
+        if (declaration === void 0 || !isPropertyAccessExpression2(current.expression) || !JAVA_SYNC_CALL_FILE.test(declaration.getSourceFile?.()?.fileName ?? "") || this.hasAsyncModifier(declaration) || this.isPromiseType(checker.getReturnTypeOfSignature(signature))) {
+          ok = false;
+          return;
+        }
+      }
+      current.forEachChild(scan);
+    };
+    scan(tryStatement.tryBlock);
+    return ok;
+  }
+  printInstanceOfExpression(node, identation) {
+    if (node.right?.kind === SyntaxKind6.Identifier && this.javaCcxtErrorClass(node.right) && this.javaCatchCannotWrap(node.left)) {
+      return this.getIden(identation) + `(${this.printNode(node.left, 0)} instanceof ${node.right.text})`;
+    }
+    const right = node.right.text;
+    const left = this.printNode(node.left, 0);
+    return this.getIden(identation) + `Helpers.isInstance(${left}, ${right}.class)`;
+  }
+  // `Array.isArray(x)` prints `(x instanceof java.util.List)`: false for null, true for a List, same
+  // as the helper for every Java-object operand. The helper stays where the operand prints as a Java
+  // array (rest parameter: `getClass().isArray()` branch) or a final class not convertible to List.
+  printArrayIsArrayCall(node, _identation, parsedArg = void 0) {
+    const native = this.printNativeArrayIsArray(node, parsedArg);
+    return native === void 0 ? `Helpers.isArray(${parsedArg})` : native;
+  }
+  printNativeArrayIsArray(node, parsedArg) {
+    const operand = node?.arguments?.[0];
+    if (operand === void 0 || parsedArg === void 0) {
+      return void 0;
+    }
+    if (node.parent !== void 0 && isExpressionStatement3(node.parent)) {
+      return void 0;
+    }
+    if (isArrayLiteralExpression3(operand)) {
+      return this.javaArrayLiteralDropsNothing(operand) ? "true" : void 0;
+    }
+    if (!this.javaPrimaryIsArrayOperand(operand)) {
+      return void 0;
+    }
+    const type = this.javaOperandType(operand);
+    if (operand.kind === SyntaxKind6.Identifier && this.javaNonArrayType(type) && !this.javaUntypedNullishDefault(operand)) {
+      return "false";
+    }
+    if (this.isVarargsArrayReference(operand)) {
+      return void 0;
+    }
+    if (this.javaScalarType(type)) {
+      return void 0;
+    }
+    return `(${parsedArg} instanceof java.util.List)`;
+  }
+  // Operand shapes whose print is a primary expression: `instanceof` binds tighter than the
+  // low-precedence operators, so a ternary/binary operand would re-parse, and a constructor
+  // or cast print can be a final Java class on which `instanceof List` is not convertible.
+  javaPrimaryIsArrayOperand(node) {
+    const kind = node.kind;
+    return kind === SyntaxKind6.Identifier || kind === SyntaxKind6.PropertyAccessExpression || kind === SyntaxKind6.ElementAccessExpression || kind === SyntaxKind6.CallExpression;
   }
   javaBooleanCondition(node) {
     if (node.kind === SyntaxKind6.ParenthesizedExpression) {
@@ -48536,16 +48901,6 @@ ${this.getIden(identation)}}}`;
     const booleanishMembers = TypeFlags5.BooleanLike | TypeFlags5.Null | TypeFlags5.Undefined | TypeFlags5.Void;
     const allBooleanish = members.length > 0 && members.every((member) => ((member.flags ?? 0) & booleanishMembers) !== 0);
     return allBooleanish ? "nullableBoolean" : void 0;
-  }
-  // mirrors printWrappedUnknownThisProperty: a `this.<name>(...)` call the checker cannot
-  // resolve prints `Helpers.callDynamically(this, "<name>", ...)`, whose Java return is Object
-  javaCalleeResolves(node) {
-    const checker = this.checkerOrUndefined();
-    if (checker === void 0) {
-      return false;
-    }
-    const signature = checker.getResolvedSignature(node);
-    return signature?.declaration !== void 0;
   }
   // the boolean the printed Java of a `this.<name>(...)` call already carries, from the
   // hand-written base declarations in JAVA_THIS_BOOLEAN_METHODS / the box proof in
@@ -48760,7 +49115,7 @@ ${this.getIden(identation)}}}`;
   }
   // the Java name of an identifier that provably holds a Boolean box or null, so `Helpers.isTrue(x)`
   // IS `Boolean.TRUE.equals(x)`. Proof: the TS type (`boolean`, never `any`/`undefined`-able) plus
-  // the D2 write scan: every write in the enclosing function must print a Java boolean value.
+  // the write scan: every write in the enclosing function must print a Java boolean value.
   javaBooleanBoxIdentifier(node, seen) {
     if (node?.kind !== SyntaxKind6.Identifier || seen.has(node)) {
       return void 0;
@@ -48799,7 +49154,7 @@ ${this.getIden(identation)}}}`;
     next.add(node);
     return this.javaWritesAreBoxed(symbol, decl, next, (value) => this.javaPrintsBooleanValue(value, next), false);
   }
-  // shared D2 write scan over the function the declaration lives in: the initializer and every
+  // shared write scan over the function the declaration lives in: the initializer and every
   // identifier write must pass `accepts`; `tuples` also checks `[ x, params ] = ...` destructures
   javaWritesAreBoxed(symbol, decl, next, accepts, tuples) {
     let fn = decl.parent;
@@ -48859,36 +49214,6 @@ ${this.getIden(identation)}}}`;
       return void 0;
     }
     return declared === "boolean" || declared === "Boolean" ? declared : void 0;
-  }
-  // a `boolean` / `Bool` (`boolean | undefined`) METHOD parameter the body never writes: its callers
-  // are typed, so the Java slot holds a Boolean or null and `Helpers.isTrue (p)` is exactly
-  // `Boolean.TRUE.equals (p)`. Returns the operand as the printer prints it (the bare name or its
-  // literal-default read), undefined to keep the helper. A lambda parameter is typed by its
-  // functional interface, not by a TS caller contract; a parameter the body writes is filled by
-  // the body; every member of the checker type must be boolean or nullish.
-  javaBooleanParameterBox(node) {
-    const declaration = this.javaDeclarationOfIdentifier(node);
-    if (declaration === void 0 || !isParameterDeclaration2(declaration) || node.text !== declaration.name?.text || declaration.parent?.kind !== SyntaxKind6.MethodDeclaration || this.javaParameterIsWritten(declaration)) {
-      return void 0;
-    }
-    let type;
-    try {
-      type = this.getChecker().getTypeAtLocation(node);
-    } catch (e) {
-      return void 0;
-    }
-    if (type === void 0) {
-      return void 0;
-    }
-    const booleanish = (t) => ((t?.flags ?? 0) & (TypeFlags5.Boolean | TypeFlags5.BooleanLiteral)) !== 0;
-    if (!booleanish(type)) {
-      const members = (((type.flags ?? 0) & TypeFlags5.Union) !== 0 ? type.getTypes?.() : void 0) ?? [];
-      if (!members.some(booleanish) || !members.every((m) => booleanish(m) || ((m?.flags ?? 0) & (TypeFlags5.Undefined | TypeFlags5.Null | TypeFlags5.Void)) !== 0)) {
-        return void 0;
-      }
-    }
-    const printed = this.printNode(node, 0);
-    return printed === node.text || printed === this.javaDefaultedLocalName(node) ? printed : void 0;
   }
   // the DECLARED type of the local is a nullable boolean: `Bool` (`boolean | undefined`) or an
   // equivalent union. Every member must be boolean or nullish - an `Int`/`Str`/`any` member can
@@ -48971,7 +49296,7 @@ ${this.getIden(identation)}}}`;
     return index === 0;
   }
   // `const [ x, p ] = this.handle*Bool (...)` binds x to element 0, a Boolean-or-null box; any
-  // later identifier or tuple write must also be a proven box (the D2 scan over the function)
+  // later identifier or tuple write must also be a proven box (the write scan over the function)
   javaBooleanTupleBindingIdentifier(node, seen = /* @__PURE__ */ new Set()) {
     if (node?.kind !== SyntaxKind6.Identifier) {
       return void 0;
@@ -48998,7 +49323,7 @@ ${this.getIden(identation)}}}`;
     }
     return this.printNode(node, 0);
   }
-  // the D2 scan over a nullable boolean local: every write prints a Java boolean value or a
+  // the write scan over a nullable boolean local: every write prints a Java boolean value or a
   // proven Boolean-or-null box, so no path can leave a truthy non-boolean box in it
   javaBooleanNullableWritesAreBoxed(symbol, declaration, node, seen) {
     const next = new Set(seen);
@@ -49073,6 +49398,137 @@ ${this.getIden(identation)}}}`;
     return box === void 0 ? void 0 : `Boolean.TRUE.equals(${box})`;
   }
   printCondition(node, identation) {
+    const printed = this.printConditionUnboxed(node, identation);
+    const inner = this.unwrapParenthesized(node);
+    if (inner?.kind === SyntaxKind6.Identifier && printed.trimStart().startsWith(this.FALSY_WRAPPER_OPEN) && this.javaBoxIdentifier(inner, /* @__PURE__ */ new Set(), 0)) {
+      return this.getIden(identation) + `Boolean.TRUE.equals(${this.printNode(inner, 0)})`;
+    }
+    return printed;
+  }
+  // a local whose declared TS type is boolean-family and whose every write (write scan, tuples
+  // included) is a Boolean-or-null box; a write cycle back to a local under proof is accepted
+  javaBoxIdentifier(node, seen, depth) {
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0 || node?.kind !== SyntaxKind6.Identifier || depth > 6) {
+      return false;
+    }
+    const symbol = checker.getSymbolAtLocation(node);
+    const decl = symbol?.valueDeclaration?.resolve();
+    if (decl === void 0 || decl.name?.text !== node.text) {
+      return false;
+    }
+    if (seen.has(decl)) {
+      return true;
+    }
+    const next = new Set(seen);
+    next.add(decl);
+    const accepts = (value) => this.javaBoxValue(value, next, depth + 1);
+    if (decl.kind === SyntaxKind6.BindingElement) {
+      const pattern = decl.parent;
+      const declaration = pattern?.parent;
+      if (decl.initializer !== void 0 || decl.dotDotDotToken !== void 0 || pattern?.kind !== SyntaxKind6.ArrayBindingPattern || declaration?.kind !== SyntaxKind6.VariableDeclaration) {
+        return false;
+      }
+      const index = pattern.elements.indexOf(decl);
+      if (!this.javaBooleanBoxTupleElement(declaration.initializer, index) && !this.javaLiteralTupleElement(declaration.initializer, index)) {
+        return false;
+      }
+      return this.javaWritesAreBoxed(symbol, { initializer: void 0, parent: declaration }, next, accepts, true);
+    }
+    if (decl.kind !== SyntaxKind6.VariableDeclaration) {
+      return false;
+    }
+    let type;
+    try {
+      type = this.javaTypeOfDeclaration(decl);
+    } catch (e) {
+      return false;
+    }
+    if (!this.javaBooleanBoxType(type) && !this.javaNullableBooleanDeclaration(decl)) {
+      return false;
+    }
+    return this.javaWritesAreBoxed(symbol, decl, next, accepts, true);
+  }
+  // a value whose printed Java is a Boolean, boolean or null
+  javaBoxValue(node, seen, depth) {
+    if (node === void 0) {
+      return false;
+    }
+    if (node.kind === SyntaxKind6.ParenthesizedExpression || node.kind === SyntaxKind6.AsExpression || node.kind === SyntaxKind6.NonNullExpression) {
+      return this.javaBoxValue(node.expression, seen, depth);
+    }
+    if (node.kind === SyntaxKind6.NullKeyword || node.kind === SyntaxKind6.Identifier && node.text === "undefined") {
+      return true;
+    }
+    if (node.kind === SyntaxKind6.ConditionalExpression) {
+      return this.javaBoxValue(node.whenTrue, seen, depth) && this.javaBoxValue(node.whenFalse, seen, depth);
+    }
+    if (node.kind === SyntaxKind6.Identifier) {
+      return this.javaBoxIdentifier(node, seen, depth);
+    }
+    if (this.javaPrintsBooleanValue(node, /* @__PURE__ */ new Set())) {
+      return true;
+    }
+    if (node.kind !== SyntaxKind6.CallExpression) {
+      return false;
+    }
+    if (this.javaCallBooleanKind(node) !== void 0) {
+      return true;
+    }
+    const callee = node.expression;
+    if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword) {
+      return false;
+    }
+    const at = JAVA_THIS_BOOLEAN_BOX_METHODS[String(callee.name.text)];
+    if (at === void 0 || this.javaBooleanValueKind(node) === void 0 || !this.javaCalleeResolves(node)) {
+      return false;
+    }
+    const declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+    if (declaration?.name?.text !== callee.name.text || !JAVA_THIS_RETURN_TYPES_BASE_FILE.test(declaration.getSourceFile?.()?.fileName ?? "")) {
+      return false;
+    }
+    const fallback = node.arguments?.[at];
+    return fallback !== void 0 && this.javaBoxValue(fallback, seen, depth);
+  }
+  // element `index` of a base-tier `this.m(..)` whose every return is an array literal with a
+  // Java boolean at that position (`handlePostOnly`: `[ true, p ]` / `[ false, p ]`)
+  javaLiteralTupleElement(node, index) {
+    if (node?.kind !== SyntaxKind6.CallExpression || index < 0) {
+      return false;
+    }
+    const callee = node.expression;
+    if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword) {
+      return false;
+    }
+    let declaration;
+    try {
+      declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
+    } catch (e) {
+      return false;
+    }
+    if (declaration?.kind !== SyntaxKind6.MethodDeclaration || declaration.body === void 0 || declaration.name?.text !== callee.name.text || !JAVA_THIS_RETURN_TYPES_BASE_FILE.test(declaration.getSourceFile?.()?.fileName ?? "")) {
+      return false;
+    }
+    let returns = 0;
+    let ok = true;
+    const scan = (current) => {
+      if (!ok || current !== declaration && isFunctionLike(current)) {
+        return;
+      }
+      if (isReturnStatement3(current)) {
+        returns++;
+        const value = current.expression;
+        if (value === void 0 || !isArrayLiteralExpression3(value) || !this.javaPrintsBooleanValue(value.elements[index], /* @__PURE__ */ new Set())) {
+          ok = false;
+          return;
+        }
+      }
+      current.forEachChild(scan);
+    };
+    scan(declaration.body);
+    return ok && returns > 0;
+  }
+  printConditionUnboxed(node, identation) {
     const logical = this.printLogicalCondition(node);
     if (logical !== void 0) {
       return this.getIden(identation) + logical;
@@ -49106,919 +49562,445 @@ ${this.getIden(identation)}}}`;
     const whenFalse = this.printNode(node.whenFalse, 0);
     return `((${condition})) ? ${whenTrue} : ${whenFalse}`;
   }
-  printDeleteExpression(node, _identation) {
-    const object = this.printNode(node.expression.expression, 0);
-    const key = this.printNode(node.expression.argumentExpression, 0);
-    if (this.javaWsClientMapReceiver(node.expression.expression)) {
-      return `${object}.remove((String)${key})`;
-    }
-    if (this.javaBaseDeclaredMapCacheField(node.expression.expression)) {
-      return `${object}.remove((String)${key})`;
-    }
-    return `((java.util.Map<String,Object>)${object}).remove((String)${key})`;
+  // ===== ws handler tables and dispatch =====
+  // a node key that survives `symbol.valueDeclaration.resolve()` (which may hand back a copy)
+  javaHandlerKey(node) {
+    return `${node.getSourceFile()?.fileName}:${node.getStart()}:${node.getEnd()}`;
   }
-  // `this.<field>` resolving to an Exchange.ts field of JAVA_BASE_DECLARED_MAP_CACHE_FIELDS
-  javaBaseDeclaredMapCacheField(expression) {
-    if (expression === void 0 || !isPropertyAccessExpression2(expression) || expression.expression.kind !== SyntaxKind6.ThisKeyword || !JAVA_BASE_DECLARED_MAP_CACHE_FIELDS.has(expression.name.text)) {
+  // `this.<name>` naming a 2-arg (Client, message) handler, as the java method name, else undefined
+  javaHandlerMethod(reference) {
+    if (!isPropertyAccessExpression2(reference) || reference.expression?.kind !== SyntaxKind6.ThisKeyword) {
+      return void 0;
+    }
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return void 0;
+    }
+    let symbol;
+    try {
+      symbol = checker.getSymbolAtLocation(reference.name);
+    } catch (e) {
+      return void 0;
+    }
+    const declaration = symbol?.valueDeclaration?.resolve();
+    if (declaration === void 0 || !isMethodDeclaration4(declaration) || declaration.body === void 0) {
+      return void 0;
+    }
+    if ((declaration.modifiers ?? []).some((modifier) => modifier.kind === SyntaxKind6.StaticKeyword)) {
+      return void 0;
+    }
+    const parameters = declaration.parameters ?? [];
+    if (parameters.length !== 2) {
+      return void 0;
+    }
+    const types = parameters.map((parameter, index) => this.javaHandlerSlotType(parameter, index === 0 ? "client" : "message"));
+    if (types[0] !== "Client" || types[1] !== "Map<String, Object>") {
+      return void 0;
+    }
+    const name = this.printNode(reference.name, 0).trim();
+    return name === reference.name.text ? name : void 0;
+  }
+  // the Java type a handler-slot parameter prints, or undefined when a box would reach the interface.
+  // The ws post-pass retypes a `client` parameter (`(Object client,` -> `(Client client,`); the
+  // message slot must already print the dict, since nothing rewrites it later.
+  javaHandlerSlotType(parameter, position) {
+    if (parameter === void 0 || !isParameterDeclaration2(parameter) || parameter.initializer !== void 0) {
+      return void 0;
+    }
+    const printed = (this.printParameterType(parameter) || "Object").trim();
+    if (position === "client") {
+      if (printed === "Client") {
+        return "Client";
+      }
+      const name = parameter.name !== void 0 && parameter.name.text;
+      return printed === "Object" && name === "client" ? "Client" : void 0;
+    }
+    return this.javaErasure(printed) === this.javaErasure("java.util.Map<String, Object>") ? "Map<String, Object>" : void 0;
+  }
+  // every value of the literal is a `this.<handler>` reference, so it can hold method references
+  javaHandlerTableEntries(literal2) {
+    const entries = [];
+    for (const property of literal2.properties) {
+      if (!isPropertyAssignment(property) || !isStringLiteralLikeNode3(property.name)) {
+        return void 0;
+      }
+      const handler = this.javaHandlerMethod(property.initializer);
+      if (handler === void 0) {
+        return void 0;
+      }
+      entries.push({ key: property.name.text, name: handler });
+    }
+    return entries;
+  }
+  // the enclosing method body (or the file) a table and its reads live in
+  javaHandlerScopeOf(node) {
+    let current = node.parent;
+    while (current !== void 0) {
+      if (isMethodDeclaration4(current) || current.kind === SyntaxKind6.FunctionDeclaration || current.kind === SyntaxKind6.FunctionExpression || current.kind === SyntaxKind6.ArrowFunction) {
+        return current.body ?? current;
+      }
+      current = current.parent;
+    }
+    return node.getSourceFile();
+  }
+  // every read of the declaration in that scope; undefined if the checker cannot place one
+  javaHandlerReferences(scope, name) {
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return void 0;
+    }
+    let symbol;
+    try {
+      symbol = checker.getSymbolAtLocation(name);
+    } catch (e) {
+      return void 0;
+    }
+    if (symbol === void 0) {
+      return void 0;
+    }
+    const references = [];
+    let failed = false;
+    const visit = (current) => {
+      if (current === void 0 || failed) {
+        return;
+      }
+      if (isIdentifier2(current) && current !== name && current.text === name.text) {
+        let other;
+        try {
+          other = checker.getSymbolAtLocation(current);
+        } catch (e) {
+          other = void 0;
+        }
+        if (other === void 0) {
+          failed = true;
+          return;
+        }
+        if (other === symbol) {
+          references.push(current);
+        }
+      }
+      current.forEachChild(visit);
+    };
+    visit(scope);
+    return failed ? void 0 : references;
+  }
+  // the table is read only as the first argument of `this.safeValue (methods, key)`
+  javaIsHandlerTableRead(call, read) {
+    return call !== void 0 && isCallExpression5(call) && call.arguments?.[0] === read && isPropertyAccessExpression2(call.expression) && call.expression.name?.text === "safeValue" && call.expression.expression?.kind === SyntaxKind6.ThisKeyword;
+  }
+  // the local a table read is bound to: its declaration, or the plain write that reassigns it
+  javaHandlerBoundName(call) {
+    let node = call;
+    let parent = call.parent;
+    while (parent !== void 0 && (parent.kind === SyntaxKind6.ParenthesizedExpression || parent.kind === SyntaxKind6.ConditionalExpression)) {
+      if (parent.kind === SyntaxKind6.ConditionalExpression) {
+        const other = parent.whenTrue === node ? parent.whenFalse : parent.whenTrue;
+        if (parent.whenTrue !== node && parent.whenFalse !== node) {
+          return void 0;
+        }
+        if (other === void 0 || other.kind !== SyntaxKind6.Identifier || other.text !== "undefined") {
+          return void 0;
+        }
+      }
+      node = parent;
+      parent = parent.parent;
+    }
+    if (parent === void 0) {
+      return void 0;
+    }
+    if (isVariableDeclaration2(parent) && parent.initializer === node && isIdentifier2(parent.name)) {
+      return parent.name;
+    }
+    if (parent.kind === SyntaxKind6.BinaryExpression && parent.operatorToken.kind === SyntaxKind6.EqualsToken && parent.right === node && isIdentifier2(parent.left)) {
+      return parent.left;
+    }
+    return void 0;
+  }
+  // the table name a `.call` argument or a write reads: a plain `this.safeValue (methods, key)` on that table
+  javaIsHandlerReadOf(node, tableName) {
+    let current = node;
+    while (current !== void 0 && (current.kind === SyntaxKind6.ParenthesizedExpression || current.kind === SyntaxKind6.ConditionalExpression)) {
+      current = current.kind === SyntaxKind6.ConditionalExpression ? current.whenTrue === void 0 ? current.whenFalse : current.whenTrue : current.expression;
+    }
+    const read = current?.kind === SyntaxKind6.CallExpression ? current.arguments?.[0] : void 0;
+    if (current === void 0 || read === void 0 || read.kind !== SyntaxKind6.Identifier || read.text !== tableName.text) {
       return false;
     }
-    const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(expression.name)?.valueDeclaration?.resolve();
-    const fileName = declaration?.getSourceFile?.()?.fileName;
-    return typeof fileName === "string" && JAVA_THIS_RETURN_TYPES_BASE_FILE.test(fileName);
+    return this.javaIsHandlerTableRead(current, read);
   }
-  printThrowStatement(node, identation) {
-    if (node.expression.kind === SyntaxKind6.Identifier) {
-      const name = this.printNode(node.expression, 0);
-      return this.getIden(identation) + `${this.THROW_TOKEN} (${name} instanceof RuntimeException ? (RuntimeException)${name} : new RuntimeException(${name}))${this.LINE_TERMINATOR}`;
+  // the safeValue result is only bound from that table, `method.call (this, a, b)`-ed and null-tested
+  javaIsHandlerCallUse(use, tableName) {
+    if (isVariableDeclaration2(use.parent) && use.parent.name === use) {
+      return true;
     }
-    if (node.expression.kind === SyntaxKind6.NewExpression) {
-      const expression = node.expression;
-      const argumentsExp = expression?.arguments ?? [];
-      const parsedArg = argumentsExp.map((n) => this.printNode(n, 0)).join(",") ?? "";
-      const newExpression = this.printNode(expression.expression, 0);
-      if (expression.expression.kind === SyntaxKind6.Identifier) {
-        const id = expression.expression;
-        const exceptionName = id.text === "Error" ? "RuntimeException" : id.text;
-        const symbol = this.getChecker().getSymbolAtLocation(expression.expression);
-        if (symbol) {
-          const declarations = (this.getChecker().getDeclaredTypeOfSymbol(symbol).getSymbol()?.declarations ?? []).map((d) => d.resolve());
-          const isClassDeclaration5 = declarations.find(
-            (l) => l.kind === SyntaxKind6.InterfaceDeclaration || l.kind === SyntaxKind6.ClassDeclaration
-          );
-          if (isClassDeclaration5) {
-            return this.getIden(identation) + `${this.THROW_TOKEN} ${this.NEW_TOKEN} ${exceptionName}((String)${parsedArg}) ${this.LINE_TERMINATOR}`;
-          } else {
-            return this.getIden(identation) + `Helpers.throwDynamicException(${exceptionName}, ${parsedArg});return null;`;
-          }
-        }
-        return this.getIden(identation) + `${this.THROW_TOKEN} ${this.NEW_TOKEN} ${exceptionName}(${parsedArg}) ${this.LINE_TERMINATOR}`;
-      } else if (expression.expression.kind === SyntaxKind6.ElementAccessExpression) {
-        return this.getIden(identation) + `Helpers.throwDynamicException(${newExpression}, ${parsedArg});`;
+    const write = use.parent;
+    if (write !== void 0 && write.kind === SyntaxKind6.BinaryExpression && write.operatorToken.kind === SyntaxKind6.EqualsToken && write.left === use) {
+      return this.javaIsHandlerReadOf(write.right, tableName);
+    }
+    const access = use.parent;
+    if (isPropertyAccessExpression2(access) && access.expression === use && access.name?.text === "call" && isCallExpression5(access.parent) && access.parent.expression === access) {
+      const callArguments = access.parent.arguments ?? [];
+      return access.parent.parent?.kind === SyntaxKind6.ExpressionStatement && callArguments.length === 3 && callArguments[0].kind === SyntaxKind6.ThisKeyword && isIdentifier2(callArguments[1]) && isIdentifier2(callArguments[2]) && this.javaHandlerArgumentType(callArguments[1], "client") !== void 0 && this.javaHandlerArgumentType(callArguments[2], "message") !== void 0;
+    }
+    const comparison = use.parent;
+    if (comparison === void 0 || comparison.kind !== SyntaxKind6.BinaryExpression || comparison.left !== use && comparison.right !== use) {
+      return false;
+    }
+    const other = comparison.left === use ? comparison.right : comparison.left;
+    return other !== void 0 && other.kind === SyntaxKind6.Identifier && other.text === "undefined";
+  }
+  // one walk per file: record the tables whose every read is that idiom, keyed by the literal
+  // node and by the local that holds the safeValue result
+  javaScanHandlerTables(node) {
+    const file = node.getSourceFile();
+    if (file === void 0 || this.javaHandlerScannedFile === file) {
+      return;
+    }
+    this.javaHandlerScannedFile = file;
+    if (this.checkerOrUndefined() === void 0) {
+      return;
+    }
+    const declarations = [];
+    const collect = (current) => {
+      if (current === void 0) {
+        return;
       }
-      return super.printThrowStatement(node, identation);
-    }
-  }
-  printPropertyAccessModifiers(node) {
-    let modifiers = this.printModifiers(node);
-    if (modifiers === "") {
-      modifiers = this.defaultPropertyAccess;
-    }
-    let typeText = "Object";
-    if (node.type) {
-      typeText = this.getType(node);
-      if (!typeText) {
-        if (node.type.kind === SyntaxKind6.AnyKeyword) {
-          typeText = this.OBJECT_KEYWORD + " ";
-        }
+      if (isVariableDeclaration2(current)) {
+        declarations.push(current);
       }
-    }
-    return modifiers + " " + typeText + " ";
-  }
-  printModifiers(node) {
-    let modifiers = node.modifiers;
-    if (modifiers === void 0) {
-      return "";
-    }
-    modifiers = modifiers.filter((mod) => this.FuncModifiers[mod.kind] && mod.kind !== SyntaxKind6.AsyncKeyword);
-    return modifiers.map((modifier) => this.FuncModifiers[modifier.kind]).join(" ");
-  }
-  printObjectLiteralExpression(node, identation) {
-    const handlerTable = this.printJavaHandlerTable(node, identation);
-    if (handlerTable !== void 0) {
-      return handlerTable;
-    }
-    if (node.properties.length > 0 && node.properties.every((p) => isPropertyAssignment(p)) && this.objectLiteralCapturesReassigned(node)) {
-      this.builderObjectLiterals.add(node);
-      return this.printObjectLiteralBuilder(node, identation);
-    }
-    this.builderObjectLiterals.delete(node);
-    const objectBody = this.printObjectLiteralBody(node, identation);
-    const formattedObjectBody = objectBody ? "\n" + objectBody + "\n" + this.getIden(identation) : objectBody;
-    return this.OBJECT_OPENING + formattedObjectBody + this.OBJECT_CLOSING;
-  }
-  printObjectLiteralBuilder(node, identation) {
-    const keys = this.objectLiteralCapturedKeys(node);
-    const saved = keys.map((key) => this.ReassignedVars[key]);
-    try {
-      return this.printObjectLiteralBuilderText(node, identation);
-    } finally {
-      keys.forEach((key, i) => {
-        if (saved[i] === void 0) {
-          delete this.ReassignedVars[key];
-        } else {
-          this.ReassignedVars[key] = saved[i];
-        }
-      });
-    }
-  }
-  printObjectLiteralBuilderText(node, identation) {
-    const props = node.properties;
-    const lines = props.map((prop, i) => {
-      const name = this.printNode(prop.name, 0);
-      const custom = this.printCustomRightSidePropertyAssignment(prop.initializer, identation + 1);
-      const value = (custom ? custom : this.printNode(prop.initializer, identation + 1)).trim();
-      let comment = this.printTraillingComment(prop, identation + 1);
-      comment = comment ? " " + comment : "";
-      const sep = i < props.length - 1 ? "," : "";
-      return this.getIden(identation + 1) + name + ", " + value + sep + comment;
-    });
-    return "Helpers.newMap(\n" + lines.join("\n") + "\n" + this.getIden(identation) + ")";
-  }
-  printObjectLiteralBody(node, identation) {
-    const body = node.properties.map((p) => this.printNode(p, identation + 1)).join("\n");
-    return body;
-  }
-  printForStatement(node, identation) {
-    const initializer = this.printNode(node.initializer, 0).replace("Object ", "var ");
-    const condition = this.printNode(node.condition, 0);
-    const incrementor = this.printNode(node.incrementor, 0);
-    const forStm = this.getIden(identation) + this.FOR_TOKEN + " " + this.CONDITION_OPENING + initializer + "; " + condition + "; " + incrementor + this.CONDITION_CLOSE + this.printBlock(node.statement, identation);
-    return this.printNodeCommentsIfAny(node, identation, forStm);
-  }
-  printReturnStatement(node, identation) {
-    const leadingComment = this.printLeadingComments(node, identation);
-    let trailingComment = this.printTraillingComment(node, identation);
-    trailingComment = trailingComment ? " " + trailingComment : trailingComment;
-    let exp = node.expression;
-    if (exp && exp.kind === SyntaxKind6.AsExpression && (exp.expression.kind === SyntaxKind6.ObjectLiteralExpression || SyntaxKind6.CallExpression)) {
-      exp = exp.expression;
-    }
-    let rightPart = exp ? " " + this.printNode(exp, identation) : "";
-    rightPart = rightPart.trim();
-    if (!rightPart) {
-      let parent = node.parent;
-      while (parent) {
-        if (isFunctionDeclaration4(parent) || isMethodDeclaration4(parent) || isFunctionExpression5(parent) || isArrowFunction4(parent)) {
-          if (this.isAsyncFunction(parent)) {
-            rightPart = "null";
-          }
+      current.forEachChild(collect);
+    };
+    collect(file);
+    for (const declaration of declarations) {
+      const literal2 = declaration.initializer;
+      if (literal2 === void 0 || !isObjectLiteralExpression3(literal2) || literal2.properties.length === 0 || !isIdentifier2(declaration.name)) {
+        continue;
+      }
+      const entries = this.javaHandlerTableEntries(literal2);
+      if (entries === void 0) {
+        continue;
+      }
+      const scope = this.javaHandlerScopeOf(declaration);
+      if (scope === void 0) {
+        continue;
+      }
+      const reads = this.javaHandlerReferences(scope, declaration.name);
+      if (reads === void 0 || reads.length === 0) {
+        continue;
+      }
+      const results = /* @__PURE__ */ new Map();
+      const readCalls = [];
+      let proven = true;
+      for (const read of reads) {
+        const call = read.parent;
+        if (!this.javaIsHandlerTableRead(call, read)) {
+          proven = false;
           break;
         }
-        parent = parent.parent;
+        readCalls.push(call);
+        const bound = this.javaHandlerBoundName(call);
+        if (bound === void 0) {
+          proven = false;
+          break;
+        }
+        results.set(this.javaHandlerKey(bound), bound);
       }
-    }
-    rightPart = rightPart ? " " + rightPart + this.LINE_TERMINATOR : this.LINE_TERMINATOR;
-    return leadingComment + this.getIden(identation) + this.RETURN_TOKEN + rightPart + trailingComment;
-  }
-  allBranchesTerminate(node) {
-    if (isReturnStatement3(node) || isThrowStatement3(node)) {
-      return true;
-    }
-    if (isBlock3(node)) {
-      const stmts = node.statements;
-      return stmts.length > 0 && this.allBranchesTerminate(stmts[stmts.length - 1]);
-    }
-    if (isIfStatement3(node)) {
-      if (!node.elseStatement) {
-        return false;
-      }
-      return this.allBranchesTerminate(node.thenStatement) && this.allBranchesTerminate(node.elseStatement);
-    }
-    return false;
-  }
-  // `m[k] = v` on a local the printer declared `Map<String, Object>` whose every write is a
-  // provably non-concurrent map (fresh literal/extend/omit, or a base safeDict* of non-field data):
-  // the helper's map branch is then `m.put(k, v)` (null value included; its CHM removal never applies)
-  javaMapPutIsNative(baseExpr, keys) {
-    if (keys.length !== 1 || baseExpr === void 0 || !isIdentifier2(baseExpr) || !this.javaDeclaredMapReceiver(baseExpr)) {
-      return false;
-    }
-    const key = keys[0];
-    if (!isStringLiteralLikeNode3(key) && !this.javaDeclaredStringType(key) && !this.isJavaStringType(this.getChecker().getTypeAtLocation(key))) {
-      return false;
-    }
-    const declaration = this.javaDeclarationOfIdentifier(baseExpr);
-    if (declaration === void 0 || declaration.kind !== SyntaxKind6.VariableDeclaration || !declaration.initializer) {
-      return false;
-    }
-    const admits = (rhs) => this.javaPlainMapSource(baseExpr, rhs);
-    return admits(declaration.initializer) && !this.javaLocalIsReassigned(baseExpr, admits);
-  }
-  javaPlainMapSource(container, value) {
-    const node = this.unwrapPrintTransparentExpression(value);
-    if (node === void 0) {
-      return false;
-    }
-    if (this.javaFreshHashMapValue(container, node)) {
-      return true;
-    }
-    if (!isCallExpression5(node) || !isPropertyAccessExpression2(node.expression) || node.expression.expression.kind !== SyntaxKind6.ThisKeyword) {
-      return false;
-    }
-    const name = node.expression.name.text;
-    const fileName = this.checkerOrUndefined()?.getResolvedSignature(node)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
-    if (typeof fileName !== "string" || !JAVA_FRESH_EXTEND_FILE.test(fileName)) {
-      return false;
-    }
-    if (name === "extend" || name === "deepExtend" || name === "omit") {
-      return true;
-    }
-    if (name === "safeDict" || name === "safeDict2" || name === "safeDictN") {
-      return node.arguments.length > 0 && this.javaNonSharedSource(node.arguments[0], 0) && (node.arguments.length < (name === "safeDict2" ? 4 : 3) || this.javaMapDefaultIsPlain(node.arguments[node.arguments.length - 1]));
-    }
-    return false;
-  }
-  javaMapDefaultIsPlain(value) {
-    const node = this.unwrapPrintTransparentExpression(value);
-    return node !== void 0 && (isObjectLiteralExpression3(node) || node.kind === SyntaxKind6.UndefinedKeyword || isIdentifier2(node) && node.text === "undefined" || node.kind === SyntaxKind6.NullKeyword);
-  }
-  // data that can not hold one of the runtime's ConcurrentHashMaps (this.<field> top level, ws client
-  // futures/subscriptions/rejections and their entries): a local/param/element chain not rooted at them
-  javaNonSharedSource(value, depth) {
-    const node = this.unwrapPrintTransparentExpression(value);
-    if (node === void 0 || depth > 40) {
-      return false;
-    }
-    if (isElementAccessExpression3(node)) {
-      return this.javaNonSharedSource(node.expression, depth + 1);
-    }
-    if (!isIdentifier2(node)) {
-      return false;
-    }
-    const declaration = this.javaDeclarationOfIdentifier(node);
-    if (declaration === void 0) {
-      return false;
-    }
-    if (declaration.kind === SyntaxKind6.Parameter) {
-      const type = this.getChecker().getTypeAtLocation(node);
-      const text = (type?.getSymbol?.()?.escapedName ?? "") + "";
-      return !/Client/.test(text) && !/^(client|subscriptions|futures|rejections)$/.test(node.text);
-    }
-    const known = this.javaNonSharedSourceVerdicts.get(declaration);
-    if (known !== void 0) {
-      return known;
-    }
-    this.javaNonSharedSourceVerdicts.set(declaration, true);
-    this.javaMapSourceInProgress.add(declaration);
-    const writes = declaration.initializer ? [declaration.initializer] : [];
-    const verdict = !this.javaLocalIsReassigned(node, (rhs) => {
-      writes.push(rhs);
-      return true;
-    }) && writes.every((w) => this.javaNonSharedValue(w, depth + 1));
-    this.javaMapSourceInProgress.delete(declaration);
-    if (verdict && this.javaMapSourceInProgress.size > 0) {
-      this.javaNonSharedSourceVerdicts.delete(declaration);
-    } else {
-      this.javaNonSharedSourceVerdicts.set(declaration, verdict);
-    }
-    return verdict;
-  }
-  // a value expression that never reads a field map or a ws client's maps
-  javaNonSharedValue(value, depth) {
-    let shared = false;
-    const walk = (n) => {
-      if (shared || n === void 0) {
-        return;
-      }
-      if (isPropertyAccessExpression2(n)) {
-        const called = n.parent !== void 0 && isCallExpression5(n.parent) && n.parent.expression === n;
-        if (!called && (n.expression.kind === SyntaxKind6.ThisKeyword || /^(subscriptions|futures|rejections|hashmap)$/.test(n.name.text)) || called && n.name.text === "createSafeDictionary") {
-          shared = true;
-          return;
+      for (const bound of Array.from(results.values())) {
+        if (!proven) {
+          break;
+        }
+        const uses = this.javaHandlerReferences(scope, bound);
+        if (uses === void 0 || !uses.every((use) => this.javaIsHandlerCallUse(use, declaration.name))) {
+          proven = false;
         }
       }
-      if (n.kind === SyntaxKind6.ThisKeyword && !(n.parent !== void 0 && isPropertyAccessExpression2(n.parent))) {
-        shared = true;
-        return;
+      if (!proven) {
+        continue;
       }
-      if (isIdentifier2(n) && n !== value && !(n.parent !== void 0 && isPropertyAccessExpression2(n.parent) && n.parent.name === n)) {
-        const declaration = this.javaDeclarationOfIdentifier(n);
-        if (declaration !== void 0 && !this.javaNonSharedSource(n, depth + 1)) {
-          shared = true;
-          return;
-        }
+      this.javaHandlerTables.set(this.javaHandlerKey(literal2), entries);
+      for (const call of readCalls) {
+        this.javaHandlerReads.add(this.javaHandlerKey(call));
       }
-      n.forEachChild(walk);
-    };
-    walk(value);
-    return !shared;
-  }
-  // `this.<field>` of a base field declared Object/Map whose Java type a file cannot change: the
-  // field is a plain map in this class exactly when every `this.<field> =` in the source file builds
-  // one (an object literal, a zero-arg base createSafeDictionary, a local holding a literal) or
-  // nulls it. A read needs no assignment to be any other kind; a put also needs one plain build,
-  // because the helper removes a null value from a ConcurrentHashMap.
-  javaFileBuiltMapField(receiver, name, forWrite) {
-    if (!JAVA_FILE_BUILT_MAP_FIELDS.has(name) || receiver?.expression?.kind !== SyntaxKind6.ThisKeyword) {
-      return false;
-    }
-    const file = receiver.getSourceFile?.();
-    if (file === void 0) {
-      return false;
-    }
-    let byField = this.javaFieldAssignmentKindsCache.get(file);
-    if (byField === void 0) {
-      const found = /* @__PURE__ */ new Map();
-      const visit = (n) => {
-        if (isBinaryExpression4(n) && n.operatorToken.kind >= SyntaxKind6.FirstAssignment && n.operatorToken.kind <= SyntaxKind6.LastAssignment && isPropertyAccessExpression2(n.left) && n.left.expression.kind === SyntaxKind6.ThisKeyword) {
-          const field = n.left.name.text;
-          const kind = n.operatorToken.kind === SyntaxKind6.EqualsToken ? this.javaAssignedMapKind(n.right, 0) : "other";
-          found.set(field, [...found.get(field) ?? [], kind]);
-        }
-        n.forEachChild(visit);
-      };
-      file.forEachChild(visit);
-      byField = found;
-      this.javaFieldAssignmentKindsCache.set(file, byField);
-    }
-    const kinds = byField.get(name) ?? [];
-    if (kinds.some((k) => k === "other")) {
-      return false;
-    }
-    return forWrite ? kinds.some((k) => k === "plain") : kinds.length > 0;
-  }
-  // 'plain': a java.util.HashMap the code builds; 'null': a null reset; 'other': anything else
-  javaAssignedMapKind(value, depth) {
-    const node = this.unwrapPrintTransparentExpression(value);
-    if (node === void 0) {
-      return "other";
-    }
-    if (node.kind === SyntaxKind6.NullKeyword || node.kind === SyntaxKind6.UndefinedKeyword || isIdentifier2(node) && node.text === "undefined") {
-      return "null";
-    }
-    if (isObjectLiteralExpression3(node)) {
-      return "plain";
-    }
-    if (isCallExpression5(node) && node.arguments.length === 0 && isPropertyAccessExpression2(node.expression) && node.expression.expression.kind === SyntaxKind6.ThisKeyword && node.expression.name.text === "createSafeDictionary") {
-      const fileName = this.checkerOrUndefined()?.getResolvedSignature(node)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
-      return typeof fileName === "string" && JAVA_THIS_RETURN_TYPES_BASE_FILE.test(fileName) ? "plain" : "other";
-    }
-    if (isIdentifier2(node) && depth < 2) {
-      const declaration = this.javaDeclarationOfIdentifier(node);
-      if (declaration !== void 0 && isVariableDeclaration2(declaration) && declaration.initializer && this.javaAssignedMapKind(declaration.initializer, depth + 1) === "plain" && !this.javaLocalIsReassigned(node, (rhs) => this.javaAssignedMapKind(rhs, depth + 1) === "plain")) {
-        return "plain";
+      for (const bound of Array.from(results.values())) {
+        this.javaHandlerCalls.set(this.javaHandlerKey(bound), entries);
       }
     }
-    return "other";
   }
-  // `this.<field>[k]` on the JAVA_HASH_MAP_FIELDS base map fields. ConcurrentHashMap.get(null) throws
-  // where the helper answers null, so a non-literal key is always null-tested; the receiver can
-  // be null too. Key and receiver print twice, so both must be side-effect free.
-  javaHashMapFieldReadText(receiver, key) {
-    const name = receiver?.name?.text;
-    if (typeof name === "string" && Object.prototype.hasOwnProperty.call(JAVA_BASE_MAP_READ_FIELDS, name)) {
-      return this.javaBaseMapFieldReadText(receiver, key, JAVA_BASE_MAP_READ_FIELDS[name]);
-    }
-    if (typeof name !== "string" || !Object.prototype.hasOwnProperty.call(JAVA_HASH_MAP_FIELDS, name) && !this.javaFileBuiltMapField(receiver, name, false)) {
+  // the table literal, as a typed map of method references
+  printJavaHandlerTable(node, identation) {
+    this.javaScanHandlerTables(node);
+    const entries = this.javaHandlerTables.get(this.javaHandlerKey(node));
+    if (entries === void 0) {
       return void 0;
     }
-    const literal = isStringLiteralLikeNode3(key);
-    if (!literal && !this.javaRepeatableOperand(key)) {
-      return void 0;
+    const byKey = /* @__PURE__ */ new Map();
+    for (const entry of entries) {
+      byKey.set(entry.key, entry.name);
     }
-    const target = this.printNode(receiver, 0);
-    const keyText = this.printNode(key, 0);
-    const keyGuard = literal ? "" : `${keyText} == null || `;
-    const read = this.javaBaseDeclaredMapCacheField(receiver) ? target : `((java.util.Map<?, ?>)${target})`;
-    return `(${keyGuard}${target} == null ? null : ${read}.get(${keyText}))`;
+    const keys = Array.from(byKey.keys());
+    const entryIndent = this.getIden(identation + 1);
+    const parts = [];
+    for (const key of keys) {
+      parts.push(`${entryIndent}put(${JSON.stringify(key)}, ${JSON.stringify(byKey.get(key))});`);
+    }
+    return `new java.util.HashMap<String, ${JAVA_HANDLER_NAME_TYPE}>() {{
+${parts.join("\n")}
+${this.getIden(identation)}}}`;
   }
-  javaBaseMapFieldReadText(receiver, key, field) {
-    const operand = isAsExpression2(key) && key.type?.kind === SyntaxKind6.StringKeyword ? key.expression : key;
-    const literal = isStringLiteralLikeNode3(key);
-    if (!literal) {
-      if (!isIdentifier2(operand) || !this.javaRepeatableOperand(operand)) {
-        return void 0;
-      }
-      if (!field.anyKey && !this.isJavaStringType(this.getChecker().getTypeAtLocation(key)) && !this.javaDeclaredStringType(operand)) {
-        return void 0;
-      }
+  // the Java type a safeValue read of a proven table prints: the handler interface
+  printJavaHandlerRead(node) {
+    if (!isCallExpression5(node) || !this.javaHandlerReads.has(this.javaHandlerKey(node))) {
+      return void 0;
     }
-    const target = this.printNode(receiver, 0);
-    const read = field.declared ? target : `((java.util.Map<?, ?>)${target})`;
-    const guard = literal ? `${target} == null` : `${target} == null || ${this.printNode(operand, 0)} == null`;
-    return `(${guard} ? null : ${read}.get(${this.printNode(key, 0)}))`;
+    const table = this.printNode(node.arguments[0], 0).trim();
+    const key = this.printNode(node.arguments[1], 0).trim();
+    return `${table}.get(${key})`;
   }
-  // `(a % N) <op> M` (N a non-zero integer literal, a an int/long operand, M an int literal): the
-  // native mod prints a finite integral double |v| < |N|, where isEqual (IsInteger -> toLong) and
-  // isGreaterThan (toDouble) both reduce to the plain double comparison against M.
-  javaIntegralModOperand(node) {
-    while (node !== void 0 && node.kind === SyntaxKind6.ParenthesizedExpression) {
-      node = node.expression;
-    }
-    if (node === void 0 || !isBinaryExpression4(node) || node.operatorToken.kind !== SyntaxKind6.PercentToken) {
-      return false;
-    }
-    if (this.javaScalarFamily(node.left) !== "number" || this.javaScalarFamily(node.right) !== "number") {
-      return false;
-    }
-    const leftKind = this.javaProvableNumericKind(node.left);
-    if (leftKind !== "int" && leftKind !== "long" && !this.javaProvableCounterInt(node.left)) {
-      return false;
-    }
-    const divisor = node.right;
-    if (this.javaIntegerLiteralKind(divisor) !== "int" || Number(divisor.text) === 0) {
-      return false;
-    }
-    return true;
-  }
-  printJavaModComparison(left, right, op) {
-    const javaOps = {
-      [SyntaxKind6.EqualsEqualsToken]: "==",
-      [SyntaxKind6.EqualsEqualsEqualsToken]: "==",
-      [SyntaxKind6.ExclamationEqualsToken]: "!=",
-      [SyntaxKind6.ExclamationEqualsEqualsToken]: "!=",
-      [SyntaxKind6.LessThanToken]: "<",
-      [SyntaxKind6.LessThanEqualsToken]: "<=",
-      [SyntaxKind6.GreaterThanToken]: ">",
-      [SyntaxKind6.GreaterThanEqualsToken]: ">="
-    };
-    const javaOp = javaOps[op];
-    if (javaOp === void 0) {
+  // the declared Java type of the table local or of the local bound to one of its reads
+  javaHandlerDeclarationType(declaration) {
+    const initializer = declaration?.initializer;
+    if (initializer === void 0 || !isIdentifier2(declaration.name)) {
       return void 0;
     }
-    const modLeft = this.javaIntegralModOperand(left);
-    const modRight = !modLeft && this.javaIntegralModOperand(right);
-    if (!modLeft && !modRight) {
-      return void 0;
+    this.javaScanHandlerTables(initializer);
+    if (this.javaHandlerTables.has(this.javaHandlerKey(initializer))) {
+      return JAVA_HANDLER_TABLE_TYPE;
     }
-    if (this.javaEqualityLiteralKind(modLeft ? right : left) !== "int") {
-      return void 0;
-    }
-    const leftText = this.printNode(left, 0);
-    const rightText = this.printNode(right, 0);
-    if (!/^\(+double\) /.test(modLeft ? leftText : rightText)) {
-      return void 0;
-    }
-    return `(${leftText} ${javaOp} ${rightText})`;
-  }
-  // `x.indexOf(t)` where a string/Str-declared x is narrowed to a union of string literals
-  // (`===` tests): x is a non-null String, so String.indexOf is the helper's String arm
-  javaNarrowedIndexOf(node, name, parsedArg) {
-    const receiver = node?.expression?.expression;
-    const arg = node?.arguments?.[0];
-    if (receiver === void 0 || arg === void 0 || name === void 0 || parsedArg === void 0 || !isIdentifier2(receiver) || this.isVarargsArrayReference(receiver)) {
-      return void 0;
-    }
-    let receiverType;
-    try {
-      receiverType = this.getChecker().getTypeAtLocation(receiver);
-    } catch (e) {
-      return void 0;
-    }
-    if (receiverType === void 0 || (receiverType.flags & TypeFlags5.Union) === 0 || !receiverType.getTypes().every((member) => this.isStringType(member.flags))) {
-      return void 0;
-    }
-    const symbol = this.getChecker().getSymbolAtLocation(receiver);
-    const declaration = symbol?.valueDeclaration?.resolve?.() ?? symbol?.valueDeclaration;
-    let declared;
-    try {
-      declared = declaration?.name === void 0 ? void 0 : this.getChecker().getTypeAtLocation(declaration.name);
-    } catch (e) {
-      declared = void 0;
-    }
-    const declaredMembers = declared === void 0 ? [] : (declared.flags & TypeFlags5.Union) !== 0 ? declared.getTypes() : [declared];
-    if (!declaredMembers.some((member) => member.flags === TypeFlags5.String)) {
-      return void 0;
-    }
-    if (this.javaProvableString(arg)) {
-      return `((String)${name}).indexOf(${parsedArg})`;
+    if (this.javaHandlerReads.has(this.javaHandlerKey(initializer))) {
+      return JAVA_HANDLER_NAME_TYPE;
     }
     return void 0;
   }
-};
-var JAVA_FILE_BUILT_MAP_FIELDS = /* @__PURE__ */ new Set(["markets", "positions"]);
-var JAVA_HASH_MAP_FIELDS = {
-  "tickers": true,
-  "bidsasks": true,
-  "trades": true,
-  "fees": true,
-  "urls": true,
-  "markets_by_id": true
-};
-var JAVA_BASE_MAP_READ_FIELDS = {
-  "has": { declared: true, anyKey: true },
-  "features": { declared: true, anyKey: true },
-  "currencies": { declared: true, anyKey: false },
-  "requiredCredentials": { declared: false, anyKey: true }
-};
-var JAVA_SYNC_CALL_FILE = /(^|[\\/])ts[\\/]src[\\/]base[\\/](functions[\\/][^\\/]+|Exchange(\.nooverloads\.\d+)?)\.ts$|(^|[\\/])lib\.[^\\/]*\.d\.ts$/;
-JavaTranspiler.prototype.javaCcxtErrorClass = function(node) {
-  const checker = this.checkerOrUndefined();
-  let symbol;
-  try {
-    symbol = checker?.getSymbolAtLocation(node);
-    if (symbol !== void 0 && symbol.flags & SymbolFlags2.Alias) {
-      symbol = checker.getAliasedSymbol(symbol);
+  // the java type the interface takes for a `.call` argument, or undefined when the box cannot hold it
+  javaHandlerArgumentType(node, position) {
+    if (node === void 0 || !isIdentifier2(node)) {
+      return void 0;
     }
-  } catch (e) {
-    return false;
-  }
-  const declaration = symbol?.declarations?.[0]?.resolve();
-  return declaration?.kind === SyntaxKind6.ClassDeclaration && /(^|[\\/])ts[\\/]src[\\/]base[\\/]errors\.ts$/.test(declaration.getSourceFile?.()?.fileName ?? "");
-};
-JavaTranspiler.prototype.javaBoxIdentifier = function(node, seen, depth) {
-  const checker = this.checkerOrUndefined();
-  if (checker === void 0 || node?.kind !== SyntaxKind6.Identifier || depth > 6) {
-    return false;
-  }
-  const symbol = checker.getSymbolAtLocation(node);
-  const decl = symbol?.valueDeclaration?.resolve();
-  if (decl === void 0 || decl.name?.text !== node.text) {
-    return false;
-  }
-  if (seen.has(decl)) {
-    return true;
-  }
-  const next = new Set(seen);
-  next.add(decl);
-  const accepts = (value) => this.javaBoxValue(value, next, depth + 1);
-  if (decl.kind === SyntaxKind6.BindingElement) {
-    const pattern = decl.parent;
-    const declaration = pattern?.parent;
-    if (decl.initializer !== void 0 || decl.dotDotDotToken !== void 0 || pattern?.kind !== SyntaxKind6.ArrayBindingPattern || declaration?.kind !== SyntaxKind6.VariableDeclaration) {
-      return false;
-    }
-    const index = pattern.elements.indexOf(decl);
-    if (!this.javaBooleanBoxTupleElement(declaration.initializer, index) && !this.javaLiteralTupleElement(declaration.initializer, index)) {
-      return false;
-    }
-    return this.javaWritesAreBoxed(symbol, { initializer: void 0, parent: declaration }, next, accepts, true);
-  }
-  if (decl.kind !== SyntaxKind6.VariableDeclaration) {
-    return false;
-  }
-  let type;
-  try {
-    type = this.javaTypeOfDeclaration(decl);
-  } catch (e) {
-    return false;
-  }
-  if (!this.javaBooleanBoxType(type) && !this.javaNullableBooleanDeclaration(decl)) {
-    return false;
-  }
-  return this.javaWritesAreBoxed(symbol, decl, next, accepts, true);
-};
-JavaTranspiler.prototype.javaBoxValue = function(node, seen, depth) {
-  if (node === void 0) {
-    return false;
-  }
-  if (node.kind === SyntaxKind6.ParenthesizedExpression || node.kind === SyntaxKind6.AsExpression || node.kind === SyntaxKind6.NonNullExpression) {
-    return this.javaBoxValue(node.expression, seen, depth);
-  }
-  if (node.kind === SyntaxKind6.NullKeyword || node.kind === SyntaxKind6.Identifier && node.text === "undefined") {
-    return true;
-  }
-  if (node.kind === SyntaxKind6.ConditionalExpression) {
-    return this.javaBoxValue(node.whenTrue, seen, depth) && this.javaBoxValue(node.whenFalse, seen, depth);
-  }
-  if (node.kind === SyntaxKind6.Identifier) {
-    return this.javaBoxIdentifier(node, seen, depth);
-  }
-  if (this.javaPrintsBooleanValue(node, /* @__PURE__ */ new Set())) {
-    return true;
-  }
-  if (node.kind !== SyntaxKind6.CallExpression) {
-    return false;
-  }
-  if (this.javaCallBooleanKind(node) !== void 0) {
-    return true;
-  }
-  const callee = node.expression;
-  if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword) {
-    return false;
-  }
-  const at = JAVA_THIS_BOOLEAN_BOX_METHODS[String(callee.name.text)];
-  if (at === void 0 || this.javaBooleanValueKind(node) === void 0 || !this.javaCalleeResolves(node)) {
-    return false;
-  }
-  const declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
-  if (declaration?.name?.text !== callee.name.text || !JAVA_THIS_RETURN_TYPES_BASE_FILE.test(declaration.getSourceFile?.()?.fileName ?? "")) {
-    return false;
-  }
-  const fallback = node.arguments?.[at];
-  return fallback !== void 0 && this.javaBoxValue(fallback, seen, depth);
-};
-JavaTranspiler.prototype.javaLiteralTupleElement = function(node, index) {
-  if (node?.kind !== SyntaxKind6.CallExpression || index < 0) {
-    return false;
-  }
-  const callee = node.expression;
-  if (!isPropertyAccessExpression2(callee) || callee.expression.kind !== SyntaxKind6.ThisKeyword) {
-    return false;
-  }
-  let declaration;
-  try {
-    declaration = this.getChecker().getResolvedSignature(node)?.declaration?.resolve();
-  } catch (e) {
-    return false;
-  }
-  if (declaration?.kind !== SyntaxKind6.MethodDeclaration || declaration.body === void 0 || declaration.name?.text !== callee.name.text || !JAVA_THIS_RETURN_TYPES_BASE_FILE.test(declaration.getSourceFile?.()?.fileName ?? "")) {
-    return false;
-  }
-  let returns = 0;
-  let ok = true;
-  const scan = (current) => {
-    if (!ok || current !== declaration && isFunctionLike(current)) {
-      return;
-    }
-    if (isReturnStatement3(current)) {
-      returns++;
-      const value = current.expression;
-      if (value === void 0 || !isArrayLiteralExpression3(value) || !this.javaPrintsBooleanValue(value.elements[index], /* @__PURE__ */ new Set())) {
-        ok = false;
-        return;
-      }
-    }
-    current.forEachChild(scan);
-  };
-  scan(declaration.body);
-  return ok && returns > 0;
-};
-JavaTranspiler.prototype.javaCatchCannotWrap = function(node) {
-  if (node?.kind !== SyntaxKind6.Identifier) {
-    return false;
-  }
-  const checker = this.checkerOrUndefined();
-  const decl = checker?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
-  const clause = decl?.parent;
-  const tryStatement = clause?.parent;
-  if (decl?.kind !== SyntaxKind6.VariableDeclaration || clause?.kind !== SyntaxKind6.CatchClause || tryStatement?.kind !== SyntaxKind6.TryStatement || tryStatement.catchClause !== clause) {
-    return false;
-  }
-  let ok = true;
-  const scan = (current) => {
-    if (!ok) {
-      return;
-    }
-    if (isFunctionLike(current) || current.kind === SyntaxKind6.AwaitExpression || current.kind === SyntaxKind6.TryStatement) {
-      ok = false;
-      return;
-    }
-    if (current.kind === SyntaxKind6.CallExpression) {
-      const signature = checker.getResolvedSignature(current);
-      const declaration = signature?.declaration?.resolve();
-      if (declaration === void 0 || !isPropertyAccessExpression2(current.expression) || !JAVA_SYNC_CALL_FILE.test(declaration.getSourceFile?.()?.fileName ?? "") || this.hasAsyncModifier(declaration) || this.isPromiseType(checker.getReturnTypeOfSignature(signature))) {
-        ok = false;
-        return;
-      }
-    }
-    current.forEachChild(scan);
-  };
-  scan(tryStatement.tryBlock);
-  return ok;
-};
-JavaTranspiler.prototype.javaCoreArgument = function(type, printed, node) {
-  if (node === void 0 || !isIdentifier2(node) || printed !== node.text || type !== "Long" && type !== "String") {
-    return void 0;
-  }
-  const declaration = this.javaDeclarationOfIdentifier(node);
-  if (declaration === void 0 || !isVariableDeclaration2(declaration) || declaration.name?.text !== node.text || (getCombinedNodeFlags(declaration) & NodeFlags3.Const) === 0) {
-    return void 0;
-  }
-  const initializer = declaration.initializer;
-  if (initializer !== void 0 && isIdentifier2(initializer) && initializer.text === "undefined") {
-    return `(${type}) null`;
-  }
-  if (type === "Long" && initializer !== void 0 && isPropertyAccessExpression2(initializer) && initializer.name.text === "length" && this.javaDeclaredTypeOf(node) === "Integer") {
-    return `((long) ${printed})`;
-  }
-  return void 0;
-};
-{
-  const proto = JavaTranspiler.prototype;
-  const printCondition = proto.printCondition;
-  proto.printCondition = function(node, identation) {
-    const printed = printCondition.call(this, node, identation);
-    let inner = node;
-    while (inner?.kind === SyntaxKind6.ParenthesizedExpression) {
-      inner = inner.expression;
-    }
-    if (inner?.kind === SyntaxKind6.Identifier && printed.trimStart().startsWith(this.FALSY_WRAPPER_OPEN) && this.javaBoxIdentifier(inner, /* @__PURE__ */ new Set(), 0)) {
-      return this.getIden(identation) + `Boolean.TRUE.equals(${this.printNode(inner, 0)})`;
-    }
-    return printed;
-  };
-  const printInstanceOfExpression = proto.printInstanceOfExpression;
-  proto.printInstanceOfExpression = function(node, identation) {
-    if (node.right?.kind === SyntaxKind6.Identifier && this.javaCcxtErrorClass(node.right) && this.javaCatchCannotWrap(node.left)) {
-      return this.getIden(identation) + `(${this.printNode(node.left, 0)} instanceof ${node.right.text})`;
-    }
-    return printInstanceOfExpression.call(this, node, identation);
-  };
-  const javaConvertToCoreType = proto.javaConvertToCoreType;
-  proto.javaConvertToCoreType = function(type, printed, node) {
-    return this.javaCoreArgument(type, printed, node) ?? javaConvertToCoreType.call(this, type, printed, node);
-  };
-}
-{
-  const proto = JavaTranspiler.prototype;
-  const printNativeEquality = proto.printNativeEqualityIfProvable;
-  proto.printNativeEqualityIfProvable = function(node, leftText, rightText) {
-    const op = node?.operatorToken?.kind;
-    const negated = op === SyntaxKind6.ExclamationEqualsToken || op === SyntaxKind6.ExclamationEqualsEqualsToken;
-    if (negated || op === SyntaxKind6.EqualsEqualsToken || op === SyntaxKind6.EqualsEqualsEqualsToken) {
-      const left = this.javaDeclaredNumericFamily(node.left);
-      const right = this.javaDeclaredNumericFamily(node.right);
-      const isBool = (n) => String(this.javaDeclaredTypeOf(n) ?? "").trim() === "Boolean";
-      if (isBool(node.left) || isBool(node.right)) {
-        return `${negated ? "!" : ""}java.util.Objects.equals(${leftText}, ${rightText})`;
-      }
-      if (JAVA_BOXED_NUMERIC_TYPES.has(left) && JAVA_BOXED_NUMERIC_TYPES.has(right)) {
-        let equal;
-        if (left === right && left !== "Double") {
-          equal = `java.util.Objects.equals(${leftText}, ${rightText})`;
-        } else {
-          const unbox = left === "Double" || right === "Double" ? "doubleValue" : "longValue";
-          equal = `(${leftText} == null ? ${rightText} == null : (${rightText} != null && ${leftText}.${unbox}() == ${rightText}.${unbox}()))`;
-        }
-        return negated ? `!${equal}` : equal;
-      }
-    }
-    return printNativeEquality.call(this, node, leftText, rightText);
-  };
-}
-var JAVA_IMPLICIT_API_FILE = /(^|[\\/])ts[\\/]src[\\/]abstract[\\/][a-z0-9_]+\.ts$/;
-{
-  const proto = JavaTranspiler.prototype;
-  const nonSharedValue = proto.javaNonSharedValue;
-  proto.javaNonSharedValue = function(value, depth) {
-    return this.javaImplicitApiResponse(value) || nonSharedValue.call(this, value, depth);
-  };
-  proto.javaImplicitApiResponse = function(value) {
-    let node = this.unwrapPrintTransparentExpression(value);
-    if (node?.kind !== SyntaxKind6.AwaitExpression) {
-      return false;
-    }
-    node = this.unwrapPrintTransparentExpression(node.expression);
-    if (node === void 0 || !isCallExpression5(node) || !isPropertyAccessExpression2(node.expression) || node.expression.expression.kind !== SyntaxKind6.ThisKeyword) {
-      return false;
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return void 0;
     }
     let declaration;
     try {
-      declaration = this.checkerOrUndefined()?.getResolvedSignature(node)?.declaration?.resolve();
+      declaration = checker.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
     } catch (e) {
-      return false;
+      return void 0;
     }
-    const fileName = declaration?.getSourceFile?.()?.fileName;
-    if (typeof fileName !== "string" || !JAVA_IMPLICIT_API_FILE.test(fileName) || !declaration.body) {
-      return false;
+    if (declaration === void 0 || !isParameterDeclaration2(declaration)) {
+      return void 0;
     }
-    const statements = declaration.body.statements ?? [];
-    const ret = statements.length === 1 && isReturnStatement3(statements[0]) ? statements[0].expression : void 0;
-    return ret !== void 0 && isCallExpression5(ret) && isPropertyAccessExpression2(ret.expression) && ret.expression.expression.kind === SyntaxKind6.ThisKeyword && ret.expression.name.text === "request";
-  };
-}
-var JAVA_CRC32_BASE_FILE = /(^|[\\/])ts[\\/]src[\\/]base[\\/]functions[\\/]crypto\.ts$/;
-{
-  const proto = JavaTranspiler.prototype;
-  const printNativeEquality = proto.printNativeEqualityIfProvable;
-  proto.javaCrc32Local = function(node) {
-    if (node === void 0 || !isIdentifier2(node)) {
-      return false;
+    return this.javaHandlerSlotType(declaration, position);
+  }
+  // the `.call` argument, already the interface slot's type
+  javaHandlerCallArgument(node, position) {
+    if (this.javaHandlerArgumentType(node, position) === void 0) {
+      return void 0;
     }
-    const declaration = this.javaDeclarationOfIdentifier(node);
-    if (declaration === void 0 || !isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || declaration.name.text !== node.text) {
-      return false;
+    return this.printNode(node, 0).trim();
+  }
+  printJavaHandlerDispatch(node, identation) {
+    if (!isCallExpression5(node) || node.parent?.kind !== SyntaxKind6.ExpressionStatement) {
+      return void 0;
     }
-    const init = this.unwrapPrintTransparentExpression(declaration.initializer);
-    if (init === void 0 || !isCallExpression5(init) || !isPropertyAccessExpression2(init.expression) || init.expression.expression.kind !== SyntaxKind6.ThisKeyword || init.expression.name.text !== "crc32") {
-      return false;
+    const callee = node.expression;
+    if (!isPropertyAccessExpression2(callee) || callee.name?.text !== "call" || !isIdentifier2(callee.expression)) {
+      return void 0;
     }
-    let fileName;
+    const receiver = callee.expression;
+    const callArguments = node.arguments ?? [];
+    if (callArguments.length !== 3 || callArguments[0].kind !== SyntaxKind6.ThisKeyword) {
+      return void 0;
+    }
+    this.javaScanHandlerTables(node);
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0) {
+      return void 0;
+    }
+    let symbol;
     try {
-      fileName = this.checkerOrUndefined()?.getResolvedSignature(init)?.declaration?.resolve()?.getSourceFile?.()?.fileName;
-    } catch (e) {
-      return false;
-    }
-    return typeof fileName === "string" && JAVA_CRC32_BASE_FILE.test(fileName) && !this.javaLocalIsReassigned(node);
-  };
-  proto.printNativeEqualityIfProvable = function(node, leftText, rightText) {
-    const op = node?.operatorToken?.kind;
-    const negated = op === SyntaxKind6.ExclamationEqualsToken || op === SyntaxKind6.ExclamationEqualsEqualsToken;
-    if (negated || op === SyntaxKind6.EqualsEqualsToken || op === SyntaxKind6.EqualsEqualsEqualsToken) {
-      const crcLeft = this.javaCrc32Local(node.left);
-      const crcRight = this.javaCrc32Local(node.right);
-      if (crcLeft && this.javaDeclaredNumericFamily(node.right) === "Long" && leftText === node.left.text && rightText === node.right.text || crcRight && this.javaDeclaredNumericFamily(node.left) === "Long" && leftText === node.left.text && rightText === node.right.text) {
-        return `${negated ? "!" : ""}java.util.Objects.equals(${leftText}, ${rightText})`;
-      }
-    }
-    return printNativeEquality.call(this, node, leftText, rightText);
-  };
-}
-{
-  const proto = JavaTranspiler.prototype;
-  const unparen2 = (node) => {
-    while (node?.kind === SyntaxKind6.ParenthesizedExpression) {
-      node = node.expression;
-    }
-    return node;
-  };
-  const baseMemberDecl2 = (java, node, name) => {
-    if (node?.kind !== SyntaxKind6.PropertyAccessExpression || node.expression?.kind !== SyntaxKind6.ThisKeyword || node.name?.text !== name) {
-      return void 0;
-    }
-    let decl;
-    try {
-      decl = java.checkerOrUndefined()?.getSymbolAtLocation(node.name)?.valueDeclaration?.resolve();
+      symbol = checker.getSymbolAtLocation(receiver);
     } catch (e) {
       return void 0;
     }
-    return decl?.parent?.name?.text === JAVA_OWNER_CLASS ? decl : void 0;
-  };
-  const baseCall = (java, node, name, args) => {
-    node = unparen2(node);
-    return node?.kind === SyntaxKind6.CallExpression && (node.arguments?.length ?? 0) === args && baseMemberDecl2(java, node.expression, name) !== void 0;
-  };
-  const callStatement2 = (java, stmt, name) => stmt?.kind === SyntaxKind6.ExpressionStatement && baseCall(java, stmt.expression, name, 0);
-  const constDecl2 = (stmt) => {
-    const list = stmt?.kind === SyntaxKind6.VariableStatement ? stmt.declarationList : void 0;
-    const d = list?.declarations;
-    if (d?.length !== 1 || d[0].name?.kind !== SyntaxKind6.Identifier || d[0].initializer === void 0 || (getCombinedNodeFlags(d[0]) & NodeFlags3.Const) === 0) {
+    const declaration = symbol?.valueDeclaration?.resolve();
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || declaration.name === void 0 || !this.javaHandlerCalls.has(this.javaHandlerKey(declaration.name))) {
       return void 0;
     }
-    return d[0];
-  };
-  const literal = (node) => node?.kind === SyntaxKind6.StringLiteral ? node : void 0;
-  const optionWrite2 = (java, stmt) => {
-    const e = stmt?.kind === SyntaxKind6.ExpressionStatement ? stmt.expression : void 0;
-    if (e?.kind !== SyntaxKind6.BinaryExpression || e.operatorToken?.kind !== SyntaxKind6.EqualsToken) {
+    const client = this.javaHandlerCallArgument(callArguments[1], "client");
+    const message = this.javaHandlerCallArgument(callArguments[2], "message");
+    if (client === void 0 || message === void 0) {
       return void 0;
     }
-    const target = e.left;
-    if (target?.kind !== SyntaxKind6.ElementAccessExpression || baseMemberDecl2(java, target.expression, "options") === void 0 || literal(target.argumentExpression) === void 0 || e.right?.kind !== SyntaxKind6.Identifier) {
-      return void 0;
-    }
-    return [target.argumentExpression, e.right.text];
-  };
-  const counterRead2 = (java, node) => {
-    node = unparen2(node);
-    if (!baseCall(java, node, "safeInteger", 3)) {
-      return void 0;
-    }
-    const [options, key, fallback] = node.arguments;
-    if (baseMemberDecl2(java, options, "options") === void 0 || literal(key) === void 0 || fallback?.kind !== SyntaxKind6.NumericLiteral || fallback.text !== "0") {
-      return void 0;
-    }
-    return key;
-  };
-  const countIdentifier2 = (root, name) => {
-    let n = 0;
-    const visit = (node) => {
-      if (node.kind === SyntaxKind6.Identifier && node.text === name) {
-        n++;
-      }
-      node.forEachChild(visit);
-    };
-    visit(root);
-    return n;
-  };
-  const sumOfOne = (java, call) => {
-    call = unparen2(call);
-    return baseCall(java, call, "sum", 2) && call.arguments[1]?.kind === SyntaxKind6.NumericLiteral && call.arguments[1].text === "1" ? call : void 0;
-  };
-  const counterSpan2 = (java, body, fn) => {
-    if (body.length === 2) {
-      const decl = constDecl2(body[0]);
-      const write = optionWrite2(java, body[1]);
-      const sum = decl !== void 0 ? sumOfOne(java, decl.initializer) : void 0;
-      const key = sum !== void 0 ? counterRead2(java, sum.arguments[0]) : void 0;
-      if (key !== void 0 && write !== void 0 && write[0].text === key.text && write[1] === decl.name.text) {
-        return [decl.name, key];
-      }
-      return void 0;
-    }
-    if (body.length === 3) {
-      const seed = constDecl2(body[0]);
-      const next = constDecl2(body[1]);
-      const write = optionWrite2(java, body[2]);
-      const key = seed !== void 0 ? counterRead2(java, seed.initializer) : void 0;
-      const sum = next !== void 0 ? sumOfOne(java, next.initializer) : void 0;
-      if (key !== void 0 && sum !== void 0 && write !== void 0 && sum.arguments[0]?.kind === SyntaxKind6.Identifier && sum.arguments[0].text === seed.name.text && write[0].text === key.text && write[1] === next.name.text && countIdentifier2(fn, seed.name.text) === 2) {
-        return [next.name, key];
+    const receiverText = this.printNode(receiver, 0).trim();
+    const names = [];
+    for (const entry of this.javaHandlerCalls.get(this.javaHandlerKey(declaration.name))) {
+      if (!names.includes(entry.name)) {
+        names.push(entry.name);
       }
     }
-    return void 0;
-  };
-  const nonceShape2 = (java, method) => {
-    if (method?.kind !== SyntaxKind6.MethodDeclaration || method.name?.text !== "incrementingNonce" || method.parent?.name?.text !== JAVA_OWNER_CLASS || method.parameters?.length !== 0) {
+    const iden = this.getIden(identation);
+    const caseIden = this.getIden(identation + 1);
+    const bodyIden = this.getIden(identation + 2);
+    const lines = [`${iden}switch (${receiverText}) {`];
+    for (const name of names) {
+      lines.push(`${caseIden}case ${JSON.stringify(name)}:`, `${bodyIden}this.${name}(${client}, ${message});`, `${bodyIden}break;`);
+    }
+    lines.push(`${caseIden}default:`, `${bodyIden}throw new RuntimeException("Method not found: " + ${receiverText});`, `${iden}}`);
+    return lines.join("\n");
+  }
+  // `x.append|reset|store|storeArray|limit (...)` in a ws/prediction venue: native on a local declared the
+  // ws class that has the method, a cast statement where one class alone declares it, else callDynamically
+  printJavaWsReceiverCall(node, identation) {
+    const callee = node.expression;
+    if (!isPropertyAccessExpression2(callee) || !JAVA_WS_RECEIVER_TIER_FILE.test(node.getSourceFile().fileName)) {
       return void 0;
     }
-    const s = method.body?.statements;
-    if (s === void 0 || s.length !== 7) {
+    const method = callee.name.text;
+    const receiver = callee.expression;
+    const argc = node.arguments.length;
+    let receiverText;
+    if (isPropertyAccessExpression2(receiver) && receiver.expression.kind === SyntaxKind6.ThisKeyword && JAVA_WS_DYNAMIC_FIELDS.has(receiver.name.text)) {
+      if (!JAVA_WS_DYNAMIC_METHODS.has(method)) {
+        return void 0;
+      }
+      receiverText = "this." + receiver.name.text;
+    } else if (isIdentifier2(receiver)) {
+      receiverText = this.printNode(receiver, 0);
+      if (!/^[a-z]\w+$/.test(receiverText)) {
+        return void 0;
+      }
+      if (method === "limit" ? argc !== 0 : !JAVA_WS_DYNAMIC_METHODS.has(method) || JAVA_WS_PLAIN_RECEIVERS.has(receiverText)) {
+        return void 0;
+      }
+    } else {
       return void 0;
     }
-    const current = constDecl2(s[0]);
-    const last = constDecl2(s[2]);
-    const result = constDecl2(s[3]);
-    const write = optionWrite2(java, s[4]);
-    if (current === void 0 || last === void 0 || result === void 0 || write === void 0 || !baseCall(java, current.initializer, "nonce", 0) || !callStatement2(java, s[1], "lockLastNonce") || !callStatement2(java, s[5], "unlockLastNonce")) {
-      return void 0;
+    const args = this.printArgsForCallExpression(node, identation);
+    const statement = node.parent?.kind === SyntaxKind6.ExpressionStatement;
+    if (isIdentifier2(receiver)) {
+      const declaration = this.javaDeclarationOfIdentifier(receiver);
+      const cls = declaration !== void 0 && isVariableDeclaration2(declaration) && isIdentifier2(declaration.name) && declaration.name.text === receiverText ? this.javaDeclaredTypeOfDeclaration(declaration) : void 0;
+      const spec = cls !== void 0 ? JAVA_WS_TYPED_METHODS[cls]?.[method] : void 0;
+      const single = cls === "io.github.ccxt.ws.WsOrderBook" || !args.includes("\n");
+      if (spec !== void 0 && spec.argc.includes(argc) && (spec.value || statement) && single) {
+        return `${receiverText}.${method}(${argc === 0 && method === "reset" ? "null" : args.trim()})`;
+      }
     }
-    const key = counterRead2(java, last.initializer);
-    const cond = unparen2(result.initializer);
-    if (key?.text !== "lastNonce" || write[0].text !== "lastNonce" || write[1] !== result.name.text || cond?.kind !== SyntaxKind6.ConditionalExpression) {
-      return void 0;
+    const cast = JAVA_WS_CAST_METHODS[method];
+    if (cast !== void 0 && statement && cast.argc.includes(argc)) {
+      return `((${cast.cls}) ${receiverText}).${method}(${args.trim()})`;
     }
-    const compare = unparen2(cond.condition);
-    const plusOne = unparen2(cond.whenFalse);
-    const isId = (n, name) => n?.kind === SyntaxKind6.Identifier && n.text === name;
-    if (compare?.kind !== SyntaxKind6.BinaryExpression || compare.operatorToken?.kind !== SyntaxKind6.GreaterThanToken || !isId(compare.left, current.name.text) || !isId(compare.right, last.name.text) || !isId(cond.whenTrue, current.name.text) || plusOne?.kind !== SyntaxKind6.BinaryExpression || plusOne.operatorToken?.kind !== SyntaxKind6.PlusToken || !isId(plusOne.left, last.name.text) || plusOne.right?.kind !== SyntaxKind6.NumericLiteral || plusOne.right.text !== "1" || s[6].kind !== SyntaxKind6.ReturnStatement || !isId(s[6].expression, result.name.text) || countIdentifier2(method, last.name.text) !== 3) {
-      return void 0;
-    }
-    return { current, result };
-  };
-  const bare = (java, stmt) => java.printLeadingComments(stmt, 0) === "" && java.printTraillingComment(stmt, 0) === "";
-  proto.javaCounterPlan = function(statements, _identation) {
+    return `${this.DYNAMIC_CALL_OPEN}${receiverText}, "${method}", new Object[]{${args}})`;
+  }
+  // ===== owner-store counters =====
+  // Owner-store counters. The base class keeps `this.options` single-owner, so a request-id / nonce counter that
+  // lives in it is ONE owner task (BaseExchange.nextCounter / nextCounterAbove) instead of a lock bracket:
+  //   this.lockId (); <read-modify-write of this.options[k]>; this.unlockId ()  -> Long x = this.nextCounter("k", 1L)
+  //   BaseExchange.incrementingNonce (): lock / compare / store / unlock         -> Long r = this.nextCounterAbove("lastNonce", 1L, c)
+  // Every member is proven by its checker-resolved declaration (a member of the base class), never by printed text;
+  // a span whose shape is not proven prints as before.
+  // statement -> { counter: [name, key] } | { nonce: { current, result } } | { drop: true }
+  javaCounterPlan(statements, _identation) {
     if (statements === void 0 || statements.length === 0) {
       return void 0;
     }
@@ -50067,8 +50049,8 @@ var JAVA_CRC32_BASE_FILE = /(^|[\\/])ts[\\/]src[\\/]base[\\/]functions[\\/]crypt
       }
     }
     return plan;
-  };
-  proto.javaPrintBodyStatements = function(statements, identation) {
+  }
+  javaPrintBodyStatements(statements, identation) {
     const plan = this.javaCounterPlan(statements, identation);
     const parts = [];
     for (const stmt of statements) {
@@ -50086,8 +50068,8 @@ var JAVA_CRC32_BASE_FILE = /(^|[\\/])ts[\\/]src[\\/]base[\\/]functions[\\/]crypt
       }
     }
     return parts;
-  };
-}
+  }
+};
 
 // src/rustTranspiler.ts
 init_esm_shims();
@@ -50776,12 +50758,12 @@ var Proof = class {
     if (body.includes('"__'))
       return false;
     const decl = new RegExp("^[ \\t]*let mut " + name + "[ \\t]*:[ \\t]*Value\\b(.*)$", "gm");
-    const bare = new RegExp("^[ \\t]*let mut " + name + "[ \\t]*=(.*)$", "gm");
+    const bare2 = new RegExp("^[ \\t]*let mut " + name + "[ \\t]*=(.*)$", "gm");
     const bound = new RegExp("(^|[^.\\w])" + name + "[ \\t]*=(?!=)(.*)$", "gm");
     const sources = [];
     let sawBind = false;
     let m;
-    while ((m = bare.exec(body)) !== null) {
+    while ((m = bare2.exec(body)) !== null) {
       sawBind = true;
       sources.push(m[1]);
     }
@@ -58581,7 +58563,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (leftLiteral !== void 0 && rightLiteral !== void 0)
       return void 0;
     if (leftLiteral !== void 0 || rightLiteral !== void 0) {
-      const literal = leftLiteral !== void 0 ? left : right;
+      const literal2 = leftLiteral !== void 0 ? left : right;
       const literalKind = leftLiteral ?? rightLiteral;
       const other = leftLiteral !== void 0 ? right : left;
       if (!this.printsValueExpression(other) && (literalKind !== "null" || !this.rustReadPrintsValue(other)))
@@ -58595,17 +58577,17 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return `${this.printNode(other, 0)} ${operator} Value::Null`;
       }
       if (literalKind === "string") {
-        if (literal.text in this.StringLiteralReplacements)
+        if (literal2.text in this.StringLiteralReplacements)
           return void 0;
-        if (this.textCoercesToNumber(literal.text) && otherKind !== "string")
+        if (this.textCoercesToNumber(literal2.text) && otherKind !== "string")
           return void 0;
         const accessor2 = typedStringLocal ? "as_deref" : "as_str";
-        return `${this.printNode(other, 0)}.${accessor2}() ${operator} Some(${this.quotedStringLiteral(literal.text)})`;
+        return `${this.printNode(other, 0)}.${accessor2}() ${operator} Some(${this.quotedStringLiteral(literal2.text)})`;
       }
       if (literalKind === "number") {
         if (otherKind !== "number")
           return void 0;
-        const text = this.numericLiteralF64Text(literal);
+        const text = this.numericLiteralF64Text(literal2);
         if (text === void 0)
           return void 0;
         return `${this.printNode(other, 0)}.as_f64() ${operator} Some(${text})`;
@@ -58613,7 +58595,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (literalKind === "boolean") {
         if (otherKind !== "boolean" && !this.rustBooleanComparableType(otherType))
           return void 0;
-        const value = literal.kind === SyntaxKind7.TrueKeyword ? "true" : "false";
+        const value = literal2.kind === SyntaxKind7.TrueKeyword ? "true" : "false";
         return `${this.printNode(other, 0)}.as_bool() ${operator} Some(${value})`;
       }
       return void 0;
@@ -58717,8 +58699,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (typeof receiverText !== "string" || receiverText.includes("\n"))
       return void 0;
-    const literal = this.escapeRustStringLiteral(needle.text);
-    return `Value::Int(${receiverText}.as_str().and_then(|__s| __s.find("${literal}")).map(|__i| __i as i64).unwrap_or(-1))`;
+    const literal2 = this.escapeRustStringLiteral(needle.text);
+    return `Value::Int(${receiverText}.as_str().and_then(|__s| __s.find("${literal2}")).map(|__i| __i as i64).unwrap_or(-1))`;
   }
   // `x.slice(a)` / `x.slice(a, b)` with literal bounds on a proven string
   // receiver: the helper's char-vector clamps are inlined, so the emission
@@ -58818,8 +58800,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // `Value::from("k")`) plus a bare `"k"` once an arg-shape unit drops the box.
   rustStringLiteralOf(printedKey) {
     const boxed2 = printedKey.match(/^(?:Value::Str|Value::from)\((.+)\)$/);
-    const literal = (boxed2 ? boxed2[1].replace(/\.(?:to_string|into)\(\)$/, "") : printedKey).trim();
-    return /^"(?:[^"\\]|\\.)*"$/.test(literal) ? literal : void 0;
+    const literal2 = (boxed2 ? boxed2[1].replace(/\.(?:to_string|into)\(\)$/, "") : printedKey).trim();
+    return /^"(?:[^"\\]|\\.)*"$/.test(literal2) ? literal2 : void 0;
   }
   // `X["k"] = v` on a checker-proven plain Dict receiver: mutate the Dict
   // natively. The helper's tag hooks (book meta, ws subscriptions, cache
@@ -59368,11 +59350,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const needle = call.arguments[0];
     if (!isStringLiteral3(needle) && !isNoSubstitutionTemplateLiteral(needle) || needle.text === "")
       return void 0;
-    const literal = this.rustNativeStringLiteralArg(needle);
-    const receiver = literal === void 0 ? void 0 : this.rustNativeStringReceiver(call, this.printNode(call.expression.expression, 0));
-    if (literal === void 0 || receiver === void 0 || !RUST_PLAIN_PLACE.test(receiver))
+    const literal2 = this.rustNativeStringLiteralArg(needle);
+    const receiver = literal2 === void 0 ? void 0 : this.rustNativeStringReceiver(call, this.printNode(call.expression.expression, 0));
+    if (literal2 === void 0 || receiver === void 0 || !RUST_PLAIN_PLACE.test(receiver))
       return void 0;
-    return `${no ? "!" : ""}${receiver}.as_str().unwrap_or("").contains("${literal}")`;
+    return `${no ? "!" : ""}${receiver}.as_str().unwrap_or("").contains("${literal2}")`;
   }
   // ── native arithmetic (`+ - * /`) ────────────────────────────────────────
   // When the checker proves both operands are numbers (`Int`/`Float` at
@@ -59595,8 +59577,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${indent}let mut ${varName}: indexmap::IndexMap<String, indexmap::IndexMap<String, Value>> = (${block})`;
     }
     if (node.declarations.length === 1 && this.rustDictLocalIsTyped(declaration)) {
-      const literal = this.rustSkipWrappers(declaration.initializer);
-      if (!isObjectLiteralExpression4(literal)) {
+      const literal2 = this.rustSkipWrappers(declaration.initializer);
+      if (!isObjectLiteralExpression4(literal2)) {
         return `${indent}let mut ${varName}: indexmap::IndexMap<String, Value> = ${parsedValue}.as_map().cloned().unwrap_or_default()`;
       }
       const block = this.rustObjectLiteralBlock(this.rustSkipWrappers(declaration.initializer), identation);
@@ -60109,10 +60091,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const declaration = this.rustDeclarationOfIdentifier(access.expression);
     if (declaration === void 0 || !isParameterDeclaration3(declaration) || !this.rustParamPrintsStrVec(declaration))
       return void 0;
-    const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
-    if (literal === void 0)
+    const literal2 = this.rustNativeStringLiteralArg(node.arguments[0]);
+    if (literal2 === void 0)
       return void 0;
-    return `Value::Str(${this.printNode(access.expression, 0).trim()}.join("${literal}").into())`;
+    return `Value::Str(${this.printNode(access.expression, 0).trim()}.join("${literal2}").into())`;
   }
   rustParamPrintsMap(param) {
     if (param?.kind !== SyntaxKind7.Parameter) {
@@ -62311,11 +62293,11 @@ ${ind}let ${view}: &${map} = &${arc};
     const proof = this.rustDictLocalProof(receiverNode);
     if (proof === void 0 || _RustTranspiler.RUST_DICT_MARKER_KEYS.test(keyText))
       return void 0;
-    const literal = `"${this.escapeRustStringLiteral(keyText)}"`;
+    const literal2 = `"${this.escapeRustStringLiteral(keyText)}"`;
     return this.rustDictSite({
       guarded: true,
-      helper: `get_value(&${receiverText}, &Value::Str(${literal}.into()))`,
-      closure: `${receiverText}.as_map().and_then(|__m| __m.get(${literal})).cloned().unwrap_or(Value::Null)`
+      helper: `get_value(&${receiverText}, &Value::Str(${literal2}.into()))`,
+      closure: `${receiverText}.as_map().and_then(|__m| __m.get(${literal2})).cloned().unwrap_or(Value::Null)`
     });
   }
   /** `k in D` on a base-field / field-container map or a proven local: `in_op`'s Dict arm. */
@@ -62340,13 +62322,13 @@ ${ind}let ${view}: &${map} = &${arc};
     const recvText = this.printNode(recv, 0).trim();
     let keyText;
     if (isStringLiteral3(key)) {
-      const literal = this.rustStringLiteralOf(this.printStringLiteral(key));
-      if (literal === void 0 || guarded && _RustTranspiler.RUST_DICT_MARKER_KEYS.test(String(key.text)))
+      const literal2 = this.rustStringLiteralOf(this.printStringLiteral(key));
+      if (literal2 === void 0 || guarded && _RustTranspiler.RUST_DICT_MARKER_KEYS.test(String(key.text)))
         return void 0;
       return `Value::Bool(${this.rustDictSite({
         guarded,
-        helper: `in_op(&${recvText}, &Value::Str(${literal}.into()))`,
-        closure: `${recvText}.as_map().is_some_and(|__m| __m.contains_key(${literal}))`
+        helper: `in_op(&${recvText}, &Value::Str(${literal2}.into()))`,
+        closure: `${recvText}.as_map().is_some_and(|__m| __m.contains_key(${literal2}))`
       })})`;
     }
     const printed = this.rustDictKeyText(key);
@@ -62435,11 +62417,11 @@ ${ind}let ${view}: &${map} = &${arc};
     const text = String(key.text);
     if (text === "" || !/^[A-Za-z0-9_./-]+$/.test(text))
       return void 0;
-    const literal = `"${text}"`;
+    const literal2 = `"${text}"`;
     return this.rustDictSite({
       guarded: true,
-      helper: `get_value(&${acc}, &Value::Str(${literal}.into()))`,
-      closure: `${acc}.as_map().and_then(|__m| __m.get(${literal})).cloned().unwrap_or(Value::Null)`
+      helper: `get_value(&${acc}, &Value::Str(${literal2}.into()))`,
+      closure: `${acc}.as_map().and_then(|__m| __m.get(${literal2})).cloned().unwrap_or(Value::Null)`
     });
   }
   /** Statement-like nodes whose finished lines the 400-char budget is measured on. */
@@ -63543,10 +63525,10 @@ ${iden}}`;
       }
     }
     if ((parent.kind === SyntaxKind7.PropertyAssignment || parent.kind === SyntaxKind7.ShorthandPropertyAssignment) && !(parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer !== target)) {
-      let literal = parent.parent;
-      while (literal?.parent !== void 0 && (isParenthesizedExpression3(literal.parent) || isAsExpression3(literal.parent)))
-        literal = literal.parent;
-      if (literal?.parent === void 0 || isVariableDeclaration3(literal.parent))
+      let literal2 = parent.parent;
+      while (literal2?.parent !== void 0 && (isParenthesizedExpression3(literal2.parent) || isAsExpression3(literal2.parent)))
+        literal2 = literal2.parent;
+      if (literal2?.parent === void 0 || isVariableDeclaration3(literal2.parent))
         return false;
     }
     if (parent.kind === SyntaxKind7.PrefixUnaryExpression || parent.kind === SyntaxKind7.PostfixUnaryExpression || parent.kind === SyntaxKind7.DeleteExpression || (isForOfStatement2(parent) || isForInStatement2(parent)) && parent.initializer === target) {
@@ -63751,8 +63733,8 @@ ${iden}}`;
       return void 0;
     const parts = initializer.elements.map((element) => {
       const text = this.printNode(element, 0).trim();
-      const bare = /^[A-Za-z_][A-Za-z0-9_]*$/.test(text) && text !== "self" && text !== "true" && text !== "false";
-      return bare ? `${text}.clone()` : text;
+      const bare2 = /^[A-Za-z_][A-Za-z0-9_]*$/.test(text) && text !== "self" && text !== "true" && text !== "false";
+      return bare2 ? `${text}.clone()` : text;
     });
     return `vec![${parts.join(", ")}]`;
   }
@@ -63901,13 +63883,13 @@ ${iden}}`;
     const init = declaration.initializer;
     if (declaration.name?.kind !== SyntaxKind7.Identifier || init === void 0)
       return false;
-    const literal = this.rustSkipWrappers(init);
-    const produced = !isObjectLiteralExpression4(literal) && this.rustDictProducer(init);
-    if (!isObjectLiteralExpression4(literal) && !produced)
+    const literal2 = this.rustSkipWrappers(init);
+    const produced = !isObjectLiteralExpression4(literal2) && this.rustDictProducer(init);
+    if (!isObjectLiteralExpression4(literal2) && !produced)
       return false;
     if (produced && this.rustInitReadsTaggedStore(init))
       return false;
-    const entries = produced ? [] : literal.properties;
+    const entries = produced ? [] : literal2.properties;
     for (const property of entries) {
       if (property.kind === SyntaxKind7.SpreadAssignment)
         return false;
@@ -64455,12 +64437,12 @@ ${iden}}`;
   /** A plain object literal a bearer may be rebuilt from (`x = { .. }`): no
    *  spread, literal keys only — the same rules the declaration proof applies. */
   rustBearerPlainLiteral(node) {
-    const literal = this.rustSkipWrappers(node);
-    if (!isObjectLiteralExpression4(literal))
+    const literal2 = this.rustSkipWrappers(node);
+    if (!isObjectLiteralExpression4(literal2))
       return false;
-    if (literal.properties.some((p) => p.kind === SyntaxKind7.SpreadAssignment))
+    if (literal2.properties.some((p) => p.kind === SyntaxKind7.SpreadAssignment))
       return false;
-    return literal.properties.every((property) => {
+    return literal2.properties.every((property) => {
       const propertyName = property.name;
       return propertyName !== void 0 && propertyName.kind !== SyntaxKind7.ComputedPropertyName && _RustTranspiler.rustBearerKeyTextOk(String(propertyName.text));
     });
@@ -64699,10 +64681,10 @@ ${iden}}`;
   /** `{ k: { .. }, .. }` — every value an object literal, every key a plain
    *  string: the outer map's value type is the inner `IndexMap`, never a box. */
   rustNestedDictLiteral(node) {
-    const literal = this.rustSkipWrappers(node);
-    if (!isObjectLiteralExpression4(literal))
+    const literal2 = this.rustSkipWrappers(node);
+    if (!isObjectLiteralExpression4(literal2))
       return void 0;
-    for (const property of literal.properties) {
+    for (const property of literal2.properties) {
       if (property.kind !== SyntaxKind7.PropertyAssignment || property.name === void 0 || property.name.kind === SyntaxKind7.ComputedPropertyName)
         return void 0;
       if (!_RustTranspiler.rustBearerKeyTextOk(String(property.name.text)))
@@ -64719,7 +64701,7 @@ ${iden}}`;
           return void 0;
       }
     }
-    return literal;
+    return literal2;
   }
   rustNestedDictLocalIsTypedUncached(declaration) {
     if (declaration?.kind !== SyntaxKind7.VariableDeclaration)
@@ -64816,11 +64798,11 @@ ${iden}}`;
     return true;
   }
   /** The initialiser of a two-level bearer: one bucket per key, a line per entry. */
-  rustNestedObjectLiteralBlock(literal, identation = 0) {
+  rustNestedObjectLiteralBlock(literal2, identation = 0) {
     const escapeKey = (s) => String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
     const idn1 = this.getIden(identation + 1);
     const lines = [];
-    for (const property of literal.properties) {
+    for (const property of literal2.properties) {
       const inner = this.rustSkipWrappers(property.initializer);
       lines.push(`${idn1}let mut __inner = indexmap::IndexMap::<String, Value>::new();`);
       for (const entry of inner.properties) {
@@ -64930,9 +64912,9 @@ ${this.getIden(identation)}}`;
     }
     const recv = this.printNode(base, 0).trim();
     const keyNode = target.argumentExpression;
-    const literal = isStringLiteral3(keyNode) ? this.rustStringLiteralOf(this.printNode(keyNode, 0).trim()) : void 0;
-    if (literal !== void 0) {
-      return `if let Value::Dict(__d) = &mut ${recv} { std::sync::Arc::make_mut(__d).shift_remove(${literal}); }`;
+    const literal2 = isStringLiteral3(keyNode) ? this.rustStringLiteralOf(this.printNode(keyNode, 0).trim()) : void 0;
+    if (literal2 !== void 0) {
+      return `if let Value::Dict(__d) = &mut ${recv} { std::sync::Arc::make_mut(__d).shift_remove(${literal2}); }`;
     }
     const keyExpr = this.printNode(keyNode, 0).trim();
     if (!this.rustDeleteKeyBorrowable(keyExpr, recv)) {
@@ -65030,25 +65012,25 @@ ${this.getIden(identation)}}`;
     const receiver = this.rustNativeStringReceiver(node, receiverText);
     if (receiver === void 0 || node.arguments?.length !== 1)
       return void 0;
-    const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
-    if (literal === void 0)
+    const literal2 = this.rustNativeStringLiteralArg(node.arguments[0]);
+    if (literal2 === void 0)
       return void 0;
-    if (literal !== "" && RUST_PLAIN_PLACE.test(receiver))
-      return `${receiver}.as_str().unwrap_or("").${method}("${literal}")`;
-    return `${receiver}.as_str().is_some_and(|__s| __s.${method}("${literal}"))`;
+    if (literal2 !== "" && RUST_PLAIN_PLACE.test(receiver))
+      return `${receiver}.as_str().unwrap_or("").${method}("${literal2}")`;
+    return `${receiver}.as_str().is_some_and(|__s| __s.${method}("${literal2}"))`;
   }
   // `x.split("lit")`: an array of the parts, the empty array for a non-`Str` receiver.
   printNativeStringSplit(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
     if (receiver === void 0 || node.arguments?.length !== 1)
       return void 0;
-    const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
-    if (literal === void 0)
+    const literal2 = this.rustNativeStringLiteralArg(node.arguments[0]);
+    if (literal2 === void 0)
       return void 0;
     if (RUST_PLAIN_PLACE.test(receiver)) {
-      return `Value::Array(if let Some(__s) = ${receiver}.as_str() { __s.split("${literal}").map(Value::from).collect() } else { Vec::new() })`;
+      return `Value::Array(if let Some(__s) = ${receiver}.as_str() { __s.split("${literal2}").map(Value::from).collect() } else { Vec::new() })`;
     }
-    return `Value::Array(${receiver}.as_str().map(|__s| __s.split("${literal}").map(Value::from).collect()).unwrap_or_default())`;
+    return `Value::Array(${receiver}.as_str().map(|__s| __s.split("${literal2}").map(Value::from).collect()).unwrap_or_default())`;
   }
   // `x.replace("a", "b")`: the helper replaces every occurrence (`str::replace`), else the receiver.
   printNativeStringReplace(node, receiverText) {
@@ -65128,8 +65110,8 @@ ${this.getIden(identation)}}`;
     const receiver = this.rustNativeStringReceiver(node, receiverText, "array");
     if (receiver === void 0 || node.arguments?.length !== 1)
       return void 0;
-    const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
-    if (literal === void 0)
+    const literal2 = this.rustNativeStringLiteralArg(node.arguments[0]);
+    if (literal2 === void 0)
       return void 0;
     const checker = this.checkerOrUndefined();
     const type = this.typeOfNodeIfAny(node.expression.expression);
@@ -65138,7 +65120,7 @@ ${this.getIden(identation)}}`;
     const element = checker.getTypeArguments?.(type)?.[0];
     if (this.primitiveKindOfType(element) !== "string")
       return void 0;
-    return `Value::Str(${receiver}.as_array().map(|__a| __a.iter().map(|__v| __v.to_string()).collect::<Vec<String>>().join("${literal}")).unwrap_or_default().into())`;
+    return `Value::Str(${receiver}.as_array().map(|__a| __a.iter().map(|__v| __v.to_string()).collect::<Vec<String>>().join("${literal2}")).unwrap_or_default().into())`;
   }
   // Numeric/string helpers on checker-proven `number` / `string` operands (nullish members
   // allowed: the helper's Null arm is reproduced). Each native form answers exactly what the helper
@@ -65669,13 +65651,13 @@ ${this.getIden(identation)}}`;
     const rightLiteral = right.kind === SyntaxKind7.TrueKeyword || right.kind === SyntaxKind7.FalseKeyword;
     if (leftLiteral === rightLiteral)
       return void 0;
-    const [literal, other] = leftLiteral ? [left, right] : [right, left];
+    const [literal2, other] = leftLiteral ? [left, right] : [right, left];
     const inner = this.unwrapParens(other);
     if (inner === void 0 || !isIdentifier3(inner) && !isCallExpression6(inner) || !this.printsValueExpression(inner) || isCallExpression6(inner) && this.rustCallPrintsBool(inner) || !this.rustBoolValue(inner)) {
       return void 0;
     }
     const operator = op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken ? "==" : "!=";
-    return `${this.printNode(inner, 0)}.as_bool() ${operator} Some(${literal.kind === SyntaxKind7.TrueKeyword ? "true" : "false"})`;
+    return `${this.printNode(inner, 0)}.as_bool() ${operator} Some(${literal2.kind === SyntaxKind7.TrueKeyword ? "true" : "false"})`;
   }
   // Proven-`Str` operands: a `this.safeString*` call (no default or a string-literal
   // default) or a native-`Str` callee re-boxed into `Value`, or a `const`/never-reassigned local
@@ -65883,9 +65865,9 @@ ${this.getIden(identation)}}`;
     const access = node?.expression;
     if (!isPropertyAccessExpression3(access) || !isIdentifier3(access.expression) || this.rustVecLocalDeclarationOf(access.expression) === void 0 || !this.vecJoinUse(access))
       return void 0;
-    const literal = this.rustNativeStringLiteralArg(node.arguments[0]);
+    const literal2 = this.rustNativeStringLiteralArg(node.arguments[0]);
     const name = this.printNode(access.expression, 0).trim();
-    return `Value::Str(${name}.iter().map(|__v| __v.to_string()).collect::<Vec<String>>().join("${literal}").into())`;
+    return `Value::Str(${name}.iter().map(|__v| __v.to_string()).collect::<Vec<String>>().join("${literal2}").into())`;
   }
   // `{ 'k': x }` with `x` named once in the statement, outside any loop the declaration is not in,
   // and no `x.push` after it: the clone is the array's final contents, as the aliased box was.
@@ -66124,8 +66106,8 @@ ${this.getIden(identation)}}`;
     if (receiver === void 0 || !/^[A-Za-z_][A-Za-z0-9_.]*$/.test(receiver))
       return void 0;
     const operand = (arg) => {
-      const literal = this.rustNativeStringLiteralArg(arg);
-      return literal !== void 0 ? `Value::Str("${literal}".into())` : this.rustStrOperand(arg, true);
+      const literal2 = this.rustNativeStringLiteralArg(arg);
+      return literal2 !== void 0 ? `Value::Str("${literal2}".into())` : this.rustStrOperand(arg, true);
     };
     const from = operand(node.arguments[0]);
     const to = operand(node.arguments[1]);
@@ -66299,7 +66281,7 @@ ${this.getIden(identation)}}`;
     const isBoolLit = (n) => n?.kind === SyntaxKind7.TrueKeyword || n?.kind === SyntaxKind7.FalseKeyword;
     if (isBoolLit(l) === isBoolLit(r))
       return void 0;
-    const literal = isBoolLit(l) ? l : r;
+    const literal2 = isBoolLit(l) ? l : r;
     const call = isBoolLit(l) ? r : l;
     if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression))
       return void 0;
@@ -66312,7 +66294,7 @@ ${this.getIden(identation)}}`;
     if (m === null || !m[1].startsWith(`${fn}(`) || !this.boolCallBalanced(m[1]) || text.includes("\n"))
       return void 0;
     const equals = op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken;
-    return literal.kind === SyntaxKind7.TrueKeyword === equals ? m[1] : `!${m[1]}`;
+    return literal2.kind === SyntaxKind7.TrueKeyword === equals ? m[1] : `!${m[1]}`;
   }
   /** `fn(...)` whose first `(` closes at the very end (string literals skipped). */
   boolCallBalanced(text) {
