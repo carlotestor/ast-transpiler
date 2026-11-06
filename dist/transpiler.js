@@ -53220,6 +53220,7 @@ ${this.getIden(identation + 1)}}
   printClass(node, identation) {
     this.rustPrefetchClassTypes(node);
     this.className = node.name.text;
+    this.methodSignatures = {};
     const methods = node.members.filter((m) => m.kind === SyntaxKind7.MethodDeclaration);
     methods.forEach((method) => {
       const requiredCount = method.parameters.filter((p) => !p.initializer && !p.questionToken).length;
