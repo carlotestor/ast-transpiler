@@ -3195,6 +3195,7 @@ function csharpListParamDeclaration(transpiler, expression) {
   return declarations !== void 0 && declaration !== void 0 && declarations.has(declaration) ? declaration : void 0;
 }
 var CSHARP_LENGTH_CAST = /^\(([A-Za-z_][\w.]*(?:<[^<>]*(?:<[^<>]*>)?[^<>]*>)?)\)/;
+var CSHARP_WS_CACHE_CLASS_NAMES = ["ArrayCache", "ArrayCacheByTimestamp", "ArrayCacheBySymbolById", "ArrayCacheBySymbolBySide", "ArrayCacheByOutcomeById"];
 var CSHARP_NULL_COMPARISON_REFERENCE_HEADS = ["string", "IDictionary<", "Dictionary<", "IList<", "List<", "ConcurrentDictionary<", "ccxt.pro.", "ArrayCache", "IOrderBook", "Future", "WebSocketClient", "Delegates"];
 var CSharpTranspiler = class extends BaseTranspiler {
   // ==== configuration, class/method-override lookup and identifiers ====
@@ -4828,6 +4829,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (listType !== void 0) {
       return listType;
     }
+    const cacheType = this.csharpWsCacheParamType(node);
+    if (cacheType !== void 0) {
+      return cacheType;
+    }
     const method = findAncestor(node, (n) => isMethodDeclaration2(n));
     const name = method === void 0 || method.name === void 0 ? void 0 : method.name.getText().trim();
     const row = name === void 0 ? void 0 : CSHARP_OVERRIDE_PARAM_TYPES[name];
@@ -4840,6 +4845,16 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return super.printParameterType(node);
     }
     return wanted;
+  }
+  // a parameter annotated with a ws cache class prints that class: every caller passes the
+  // cache instance, so the body binds the class's own members (append, getLimit)
+  csharpWsCacheParamType(node) {
+    const type = node.type;
+    if (type === void 0 || type.kind !== SyntaxKind4.TypeReference || !isIdentifier(type.typeName)) {
+      return void 0;
+    }
+    const name = type.typeName.text;
+    return CSHARP_WS_CACHE_CLASS_NAMES.indexOf(name) >= 0 ? "ccxt.pro." + name : void 0;
   }
   // checker spelling of a parameter the override table covers: a dictionary-shaped type (string
   // index signature, never a class instance or a callable) or an array of any/dictionary cells

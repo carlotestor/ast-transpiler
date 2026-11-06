@@ -159,6 +159,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpListBindingIsWritten(declaration: any): boolean;
     csharpListParamArgumentPrintsList(argument: any, decide?: (key: string) => boolean): boolean;
     printParameterType(node: any): any;
+    csharpWsCacheParamType(node: any): string | undefined;
     csharpOverrideParamSpelling(node: any): string | undefined;
     csharpOverrideParamSpellingOfType(type: any, unionArms?: number): string | undefined;
     csharpBooleanParamType(node: any): string;
