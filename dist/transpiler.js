@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-YEJ2U6VR.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -25015,6 +25015,31 @@ function retypeGoProvenFamily(content, names, type, paramWrap, calls, receivers 
   }
   return out + content.substring(cursor);
 }
+function goOmitTupleMap(func, name, methods) {
+  const binds = new RegExp("\\bvar " + name + "\\b|(?<![\\w.])" + name + "\\s*(?:,\\s*\\w+\\s*)*:=|,\\s*" + name + "\\s*(?:,\\s*\\w+\\s*)*:=|[(,]\\s*" + name + " [\\w\\[*.]|&" + name + "\\b");
+  const decls = func.split("\n").filter((l) => binds.test(l));
+  const tuple = new RegExp("^\\s*\\w+, " + name + " := this\\.(?:Exchange\\.)?(?:" + methods + ")\\(");
+  return decls.length === 1 && tuple.test(decls[0]);
+}
+function retypeGoOmitTupleMapReturns(content, methods) {
+  const head = /\nfunc \(this \*\w+\) \w+\([^)\n]*\) any \{\n/g;
+  let out = "";
+  let cursor = 0;
+  for (let m = head.exec(content); m !== null; m = head.exec(content)) {
+    const open = m.index + m[0].length - 1;
+    const close = content.indexOf("\n}\n", open);
+    const body = close < 0 ? "" : content.substring(open, close + 1);
+    const exprs = close < 0 ? void 0 : goFunctionLevelReturnExprs(body);
+    const omit = /^this\.Omit\((\w+), /;
+    if (exprs === void 0 || !exprs.length || body.includes("func(") || !exprs.every((e) => omit.test(e) && goOmitTupleMap(body, omit.exec(e)[1], methods))) {
+      continue;
+    }
+    out += content.substring(cursor, m.index) + m[0].replace(/\) any \{\n$/, ") map[string]any {\n") + body.replace(/\n(\t+)return this\.Omit\(/g, "\n$1return this.OmitDict(").substring(1);
+    cursor = close + 1;
+    head.lastIndex = cursor;
+  }
+  return out + content.substring(cursor);
+}
 var GoTranspiler = class extends BaseTranspiler {
   // stdlib packages the printed source file references. A Go import must precede the first
   // declaration, so the file-level print (printSourceFileStatements) collects names here and
@@ -25056,6 +25081,7 @@ var GoTranspiler = class extends BaseTranspiler {
     // ccxt return families (see retypeGoProvenFamily) and the struct->map converters they may return
     this.provenReturnFamilies = [];
     this.provenStructToMapCalls = [];
+    this.omitTupleMapMethods = void 0;
     // array literals the current print opens as a Go slice (set by the call-argument rule)
     this.goSliceLiteralTypes = /* @__PURE__ */ new Map();
     // declarations whose Go local type is being resolved right now (see goLocalStaticType)
@@ -25421,6 +25447,7 @@ var GoTranspiler = class extends BaseTranspiler {
     this.goTupleValueDefaultArg = config["goTupleValueDefaultArg"] ?? {};
     this.provenReturnFamilies = config["provenReturnFamilies"] ?? [];
     this.provenStructToMapCalls = config["provenStructToMapCalls"] ?? [];
+    this.omitTupleMapMethods = config["omitTupleMapMethods"];
   }
   goDescendantsOf(scope) {
     let list = this.goScopeDescendants.get(scope);
@@ -25659,6 +25686,10 @@ func New${this.capitalize(this.className)}() *${this.className} {
         const text = retypeGoProvenFamily("\n" + out + "\n", family.names, family.type, family.paramWrap, family.calls, family.receivers ?? "\\w+", this.provenStructToMapCalls);
         out = text.substring(1, text.length - 1);
       }
+    }
+    if (this.omitTupleMapMethods !== void 0) {
+      const text = retypeGoOmitTupleMapReturns("\n" + out + "\n", this.omitTupleMapMethods);
+      out = text.substring(1, text.length - 1);
     }
     return out;
   }

@@ -858,6 +858,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     };
     provenReturnFamilies: any[];
     provenStructToMapCalls: string[];
+    omitTupleMapMethods: string | undefined;
     goSliceLiteralTypes: Map<any, string>;
     CCXT_GO_GETARG_DECLARED_TYPES: any;
     CCXT_GO_GETARG_SAFE_CONSUMERS: any;
