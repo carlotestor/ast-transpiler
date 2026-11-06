@@ -3197,6 +3197,24 @@ function csharpListParamDeclaration(transpiler, expression) {
 var CSHARP_LENGTH_CAST = /^\(([A-Za-z_][\w.]*(?:<[^<>]*(?:<[^<>]*>)?[^<>]*>)?)\)/;
 var CSHARP_WS_CACHE_CLASS_NAMES = ["ArrayCache", "ArrayCacheByTimestamp", "ArrayCacheBySymbolById", "ArrayCacheBySymbolBySide", "ArrayCacheByOutcomeById"];
 var CSHARP_NULL_COMPARISON_REFERENCE_HEADS = ["string", "IDictionary<", "Dictionary<", "IList<", "List<", "ConcurrentDictionary<", "ccxt.pro.", "ArrayCache", "IOrderBook", "Future", "WebSocketClient", "Delegates"];
+var CSHARP_ASSIGNMENT_TOKENS = /* @__PURE__ */ new Set([
+  SyntaxKind4.EqualsToken,
+  SyntaxKind4.PlusEqualsToken,
+  SyntaxKind4.MinusEqualsToken,
+  SyntaxKind4.AsteriskEqualsToken,
+  SyntaxKind4.SlashEqualsToken,
+  SyntaxKind4.PercentEqualsToken,
+  SyntaxKind4.AsteriskAsteriskEqualsToken,
+  SyntaxKind4.QuestionQuestionEqualsToken,
+  SyntaxKind4.BarBarEqualsToken,
+  SyntaxKind4.AmpersandAmpersandEqualsToken,
+  SyntaxKind4.AmpersandEqualsToken,
+  SyntaxKind4.BarEqualsToken,
+  SyntaxKind4.CaretEqualsToken,
+  SyntaxKind4.LessThanLessThanEqualsToken,
+  SyntaxKind4.GreaterThanGreaterThanEqualsToken,
+  SyntaxKind4.GreaterThanGreaterThanGreaterThanEqualsToken
+]);
 var CSharpTranspiler = class extends BaseTranspiler {
   // ==== configuration, class/method-override lookup and identifiers ====
   constructor(config = {}) {
@@ -3274,6 +3292,15 @@ var CSharpTranspiler = class extends BaseTranspiler {
     // methods (camel or Pascal name) whose trailing `params` the embedding layer proved a
     // Dictionary on every path (config.csharp.dictParamsMethods)
     this.csharpDictParamsMethods = /* @__PURE__ */ new Set();
+    // method name -> parameter position -> the C# type that position prints on every declaration of the
+    // name (config.csharp.coreArgTypes; C# overrides are invariant). A body that writes the parameter keeps
+    // an `object <name>Var = <name>;` slot and reads it instead (csharpCoreArgShadows)
+    this.csharpCoreArgTypes = {};
+    // same, for positions retyped without a shadow (config.csharp.signatureArgTypes: sign / handleErrors / ...)
+    this.csharpSignatureArgTypes = {};
+    // parameter declaration -> its shadow name while the owning method body prints
+    this.csharpActiveShadows = /* @__PURE__ */ new Map();
+    this.csharpCoreArgShadowParams = /* @__PURE__ */ new WeakMap();
     // declaration node -> C# type of the local ('' = the printer prints `object`); see
     // csharpStringReceiverType -- the ccxt classifier asks once per string-method receiver
     this.stringReceiverTypes = /* @__PURE__ */ new WeakMap();
@@ -3336,6 +3363,8 @@ var CSharpTranspiler = class extends BaseTranspiler {
     this.csharpNumericArgTypes = Object.assign({}, config["numericArgTypes"] ?? {});
     this.csharpShadowCallees = new Set(Array.isArray(config["coreArgShadowCallees"]) ? config["coreArgShadowCallees"] : []);
     this.csharpDictParamsMethods = new Set(Array.isArray(config["dictParamsMethods"]) ? config["dictParamsMethods"] : []);
+    this.csharpCoreArgTypes = Object.assign({}, config["coreArgTypes"] ?? {});
+    this.csharpSignatureArgTypes = Object.assign({}, config["signatureArgTypes"] ?? {});
   }
   initConfig() {
     this.LeftPropertyAccessReplacements = {
@@ -3451,6 +3480,12 @@ var CSharpTranspiler = class extends BaseTranspiler {
     return method;
   }
   printIdentifier(node) {
+    if (this.csharpActiveShadows.size > 0) {
+      const shadow = this.csharpShadowNameOf(node);
+      if (shadow !== void 0) {
+        return shadow;
+      }
+    }
     let idValue = node.text ?? node.text;
     if (this.ReservedKeywordsReplacements[idValue]) {
       idValue = this.ReservedKeywordsReplacements[idValue];
@@ -8539,6 +8574,27 @@ var CSharpTranspiler = class extends BaseTranspiler {
     return void 0;
   }
   printFunctionBody(node, identation) {
+    const shadows = this.csharpCoreArgShadows(node);
+    if (shadows.length === 0) {
+      return this.printFunctionBodyUnshadowed(node, identation);
+    }
+    const previous = this.csharpActiveShadows;
+    this.csharpActiveShadows = new Map(previous);
+    for (const param of shadows) {
+      this.csharpActiveShadows.set(param, param.name.text + "Var");
+    }
+    let body;
+    try {
+      body = this.printFunctionBodyUnshadowed(node, identation);
+    } finally {
+      this.csharpActiveShadows = previous;
+    }
+    const open = this.getBlockOpen(identation);
+    const lines = shadows.map((param) => `${this.getIden(identation + 1)}object ${param.name.text}Var = ${param.name.text};
+`).join("");
+    return body.startsWith(open) ? open + lines + body.slice(open.length) : body;
+  }
+  printFunctionBodyUnshadowed(node, identation) {
     this.csharpPromiseAllPlanBlock(node?.body);
     this.csharpPromiseAllTypedPlanFunction(node);
     const funcParams = node.parameters;
@@ -8947,14 +9003,130 @@ var CSharpTranspiler = class extends BaseTranspiler {
       if (firstType === void 0) {
         const currentArgs = node.parameters;
         const parentArgs = methodOverride.parameters;
-        parsedArgs = parentArgs.map((param, index) => this.printParameteCustomName(param, this.printNode(currentArgs[index].name, 0))).join(", ");
+        parsedArgs = this.csharpCoreArgParams(node, parentArgs.map((param, index) => this.printParameteCustomName(param, this.printNode(currentArgs[index].name, 0)))).join(", ");
       }
     }
-    parsedArgs = parsedArgs ? parsedArgs : this.printMethodParameters(node);
+    parsedArgs = parsedArgs ? parsedArgs : this.csharpCoreArgParams(node, node.parameters.map((param) => this.printParameter(param))).join(", ");
     returnType = returnType ? returnType + " " : returnType;
     const methodToken = this.METHOD_TOKEN ? this.METHOD_TOKEN + " " : "";
     const methodDef = this.getIden(identation) + modifiers + returnType + methodToken + name + "(" + parsedArgs + ")";
     return this.printNodeCommentsIfAny(node, identation, methodDef);
+  }
+  // ==== configured core argument types (config.csharp.coreArgTypes / signatureArgTypes) ====
+  // the configured type of each parameter position of a generated instance method, or undefined
+  csharpCoreArgRow(node, table) {
+    if (!isMethodDeclaration2(node) || !isIdentifier(node.name) || node.body === void 0 || this.csharpIsStaticMethod(node)) {
+      return void 0;
+    }
+    const name = node.name.text;
+    return Object.prototype.hasOwnProperty.call(table, name) ? table[name] : void 0;
+  }
+  csharpIsStaticMethod(node) {
+    return (node.modifiers ?? []).some((m) => m.kind === SyntaxKind4.StaticKeyword);
+  }
+  // a printed `object <name>...` parameter at a configured position takes the configured type
+  // (the default text is kept as printed: `string timeframe = null`, `Int64? since = null`); a
+  // retyped parameter the body writes is recorded for csharpCoreArgShadows
+  csharpCoreArgParams(node, printed) {
+    const rows = [this.csharpCoreArgRow(node, this.csharpCoreArgTypes), this.csharpCoreArgRow(node, this.csharpSignatureArgTypes)];
+    if (rows[0] === void 0 && rows[1] === void 0) {
+      return printed;
+    }
+    const shadows = [];
+    const out = printed.map((text, index) => {
+      const wanted = rows[0]?.[index] ?? rows[1]?.[index];
+      if (wanted === void 0 || !text.startsWith("object ")) {
+        return text;
+      }
+      const param = node.parameters[index];
+      if (rows[0]?.[index] !== void 0 && param !== void 0 && this.csharpCoreArgNeedsShadow(node, param, wanted)) {
+        shadows.push(param);
+      }
+      return wanted + text.slice("object".length);
+    });
+    this.csharpCoreArgShadowParams.set(node, shadows);
+    return out;
+  }
+  csharpCoreArgShadows(node) {
+    return this.csharpCoreArgShadowParams.get(node) ?? [];
+  }
+  // a body write keeps an `object <name>Var` slot seeded from the narrowed parameter and every body
+  // read of the parameter reads the slot. A literal default counts as a write (the `<name> ??= <literal>;`
+  // prologue); a list target whose writes all produce a list keeps no slot
+  csharpCoreArgNeedsShadow(node, param, wanted) {
+    if (!isIdentifier(param.name)) {
+      return false;
+    }
+    const init = param.initializer;
+    const literalDefault = init !== void 0 && (isArrayLiteralExpression2(init) || isObjectLiteralExpression2(init) || isNumericLiteral2(init) || isStringLiteral(init) || isBooleanLiteral2(init));
+    const writes = this.csharpParamWrites(node, param);
+    if (!literalDefault && writes.length === 0) {
+      return false;
+    }
+    const listDefault = init === void 0 || isArrayLiteralExpression2(init);
+    return !(wanted === "IList<object>" && listDefault && writes.every((rhs) => this.csharpWriteProducesList(rhs)));
+  }
+  // the right-hand sides (undefined for ++/--/compound writes) of every write to the parameter in the body
+  csharpParamWrites(method, param) {
+    const writes = [];
+    const checker = this.checkerOrUndefined();
+    const isParam = (n) => isIdentifier(n) && n.text === param.name.text && (checker === void 0 || checker.getSymbolAtLocation(n)?.valueDeclaration?.resolve() === param);
+    const visit = (n) => {
+      if (isBinaryExpression2(n) && CSHARP_ASSIGNMENT_TOKENS.has(n.operatorToken.kind)) {
+        let left = n.left;
+        while (isParenthesizedExpression(left)) {
+          left = left.expression;
+        }
+        if (isParam(left)) {
+          writes.push(n.operatorToken.kind === SyntaxKind4.EqualsToken ? n.right : void 0);
+        } else if (n.operatorToken.kind === SyntaxKind4.EqualsToken && left.kind === SyntaxKind4.ArrayLiteralExpression) {
+          if (left.elements.some((e) => isParam(e))) {
+            writes.push(void 0);
+          }
+        }
+      } else if ((isPrefixUnaryExpression(n) || isPostfixUnaryExpression(n)) && isParam(n.operand) && [SyntaxKind4.PlusPlusToken, SyntaxKind4.MinusMinusToken, SyntaxKind4.MinusToken, SyntaxKind4.PlusToken].includes(n.operator)) {
+        writes.push(void 0);
+      }
+      n.forEachChild(visit);
+    };
+    method.body.forEachChild(visit);
+    return writes;
+  }
+  // `this.marketSymbols (...)`, an array literal, `this.getActiveSymbols (...)`, `this.symbols`
+  csharpWriteProducesList(rhs) {
+    if (rhs === void 0) {
+      return false;
+    }
+    if (isArrayLiteralExpression2(rhs)) {
+      return true;
+    }
+    const callee = isCallExpression3(rhs) ? rhs.expression : void 0;
+    if (callee !== void 0 && isPropertyAccessExpression(callee) && callee.expression.kind === SyntaxKind4.ThisKeyword) {
+      return ["marketSymbols", "getActiveSymbols"].indexOf(callee.name.text) >= 0;
+    }
+    return isPropertyAccessExpression(rhs) && rhs.expression.kind === SyntaxKind4.ThisKeyword && rhs.name.text === "symbols";
+  }
+  // the shadow slot a read of a shadowed parameter prints, or undefined
+  csharpShadowNameOf(node) {
+    if (!isIdentifier(node)) {
+      return void 0;
+    }
+    if (isParameterDeclaration(node.parent) && node.parent.name === node) {
+      return this.csharpActiveShadows.get(node.parent);
+    }
+    const parent = node.parent;
+    if (parent !== void 0 && (isPropertyAccessExpression(parent) && parent.name === node)) {
+      return void 0;
+    }
+    for (const [param, alias] of this.csharpActiveShadows) {
+      if (param.name.text === node.text) {
+        const declaration = this.checkerOrUndefined()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve();
+        if (declaration === param) {
+          return alias;
+        }
+      }
+    }
+    return void 0;
   }
   // a `this.<name>(...)` call whose emitted signature is already a string: the printer's own typed
   // returns, or a `string` the hand-written base declares (cs/ccxt/base, resolved callee only)
@@ -9578,6 +9750,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     return this.printNode(expression, 0) + "[" + cast + this.printNode(argumentExpression, 0) + "]";
   }
   printElementAccessExpressionExceptionIfAny(node) {
+    return void 0;
   }
   // reads print getValue(recv, key), which yields null for a missing key; a C# indexer
   // throws instead, so the native form is only emitted where the source guarantees the key
@@ -53350,7 +53523,7 @@ ${classMethods}
     if (isIdentifier3(expr.expression) && this.rustCallsRuntimeHandle(node)) {
       return this.printRuntimeVariadicCall(node, this.printNode(expr.expression, 0), expr.name.text, identation, false, true);
     }
-    if (expr.expression.kind === SyntaxKind7.SuperKeyword && (/ts[\/]src[\/]pro[\/]/.test(String(node.getSourceFile().fileName)) || /^network(?:CodeToId|IdToCode)$/.test(expr.name.text))) {
+    if (expr.expression.kind === SyntaxKind7.SuperKeyword && (/ts[/]src[/]pro[/]/.test(String(node.getSourceFile().fileName)) || /^network(?:CodeToId|IdToCode)$/.test(expr.name.text))) {
       return this.printRuntimeVariadicCall(node, "super", expr.name.text, identation) ?? this.printTranspiledVariadicCall(node, "super", expr.name.text, identation);
     }
     if (expr.expression.kind === SyntaxKind7.ThisKeyword) {
@@ -53402,22 +53575,22 @@ ${classMethods}
       return false;
     }
     decl = decl?.resolve?.() ?? decl;
-    if (decl !== void 0 && /ts[\/]src[\/]base[\/]/.test(String(decl.getSourceFile?.()?.fileName ?? "")))
+    if (decl !== void 0 && /ts[/]src[/]base[/]/.test(String(decl.getSourceFile?.()?.fileName ?? "")))
       return true;
     const symbol = this.getChecker().getSymbolAtLocation(node.expression.name ?? node.expression);
     const member = symbol === void 0 ? void 0 : symbolDeclarations(symbol)?.[0];
-    return member !== void 0 && /ts[\/]src[\/]base[\/]/.test(String(member.getSourceFile?.()?.fileName ?? ""));
+    return member !== void 0 && /ts[/]src[/]base[/]/.test(String(member.getSourceFile?.()?.fileName ?? ""));
   }
   // `exchange.m(..)` in a test source, the receiver typed as the base `Exchange` class.
   rustCallsTestExchange(node) {
-    if (!/ts[\/]src[\/]test[\/]/.test(String(node.getSourceFile().fileName)))
+    if (!/ts[/]src[/]test[/]/.test(String(node.getSourceFile().fileName)))
       return false;
     const type = this.getChecker().getTypeAtLocation(node.expression.expression);
     if (type !== void 0 && (type.flags & TypeFlags6.Any) !== 0)
       return node.expression.expression.text === "exchange";
     const symbol = type?.getSymbol?.();
     const decl = symbol === void 0 ? void 0 : symbolDeclarations(symbol)?.[0];
-    return decl !== void 0 && /ts[\/]src[\/]base[\/]Exchange\.ts$/.test(String(decl.getSourceFile?.()?.fileName ?? ""));
+    return decl !== void 0 && /ts[/]src[/]base[/]Exchange\.ts$/.test(String(decl.getSourceFile?.()?.fileName ?? ""));
   }
   // `client.resolve(..)`, `future.resolve(..)`, `method.call(..)`: the callee is a ws handle method,
   // `Function.call`, or a handle method on an `any` value; all are hand-written over `&[Value]`.
@@ -53432,7 +53605,7 @@ ${classMethods}
     if (decl === void 0)
       return ["resolve", "reject", "future", "call"].includes(node.expression.name.text) && (this.getChecker().getTypeAtLocation(node.expression.expression).flags & TypeFlags6.Any) !== 0;
     const file = String(decl?.getSourceFile?.()?.fileName ?? "");
-    if (/ts[\/]src[\/]base[\/]ws[\/](?:Client|Future)\.ts$/.test(file))
+    if (/ts[/]src[/]base[/]ws[/](?:Client|Future)\.ts$/.test(file))
       return true;
     return node.expression.name.text === "call" && /lib\.[\w.]*\.d\.ts$/.test(file);
   }
@@ -53464,9 +53637,9 @@ ${classMethods}
     }
     const sourceFile = decl.getSourceFile?.();
     const file = String(sourceFile?.fileName ?? "");
-    if (!/ts[\/]src[\/]/.test(file) || /ts[\/]src[\/](?:test|abstract|base[\/]ws)[\/]/.test(file))
+    if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](?:test|abstract|base[/]ws)[/]/.test(file))
       return void 0;
-    if (/ts[\/]src[\/]base[\/]/.test(file)) {
+    if (/ts[/]src[/]base[/]/.test(file)) {
       const marker = String(sourceFile.text ?? "").indexOf("METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT");
       if (marker < 0 || decl.end < marker)
         return void 0;
