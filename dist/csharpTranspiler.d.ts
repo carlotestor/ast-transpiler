@@ -52,6 +52,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpListRouteClasses: WeakMap<Node, boolean>;
     csharpHandlerCallIndex: WeakMap<Node, Map<TsSymbol, boolean>>;
     csharpParamTypes: WeakMap<Node, string>;
+    csharpDictParamsMethods: Set<string>;
     stringReceiverTypes: WeakMap<Node, string>;
     conditionOperandTypes: WeakMap<Node, string>;
     boolSlotBindings: WeakMap<Node, boolean>;
@@ -173,6 +174,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpParamIsBooleanTyped(parameter: any): boolean;
     csharpBooleanArgumentProven(call: any, index: any, accepted: any): boolean;
     printParameter(node: any, defaultValue?: boolean): string;
+    csharpIsDictParamsBag(node: any): boolean;
     csharpMissingKeyFieldRead(expression: any, argumentExpression: any, isStringKey: any): string | undefined;
     csharpBaseDictionaryView(node: any): string | undefined;
     csharpBaseDictionaryViewKeyKind(key: any): 'string' | 'object' | undefined;

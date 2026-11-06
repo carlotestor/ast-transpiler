@@ -3271,6 +3271,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
     // `Dict` -> Dictionary<string, object>), recorded as the signature is printed. Read-only:
     // no printer rule consults it, see csharpPrintedParamType
     this.csharpParamTypes = /* @__PURE__ */ new WeakMap();
+    // methods (camel or Pascal name) whose trailing `params` the embedding layer proved a
+    // Dictionary on every path (config.csharp.dictParamsMethods)
+    this.csharpDictParamsMethods = /* @__PURE__ */ new Set();
     // declaration node -> C# type of the local ('' = the printer prints `object`); see
     // csharpStringReceiverType -- the ccxt classifier asks once per string-method receiver
     this.stringReceiverTypes = /* @__PURE__ */ new WeakMap();
@@ -3332,6 +3335,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     this.csharpPascalInt64TaskCalls = config["pascalInt64TaskCalls"] === true;
     this.csharpNumericArgTypes = Object.assign({}, config["numericArgTypes"] ?? {});
     this.csharpShadowCallees = new Set(Array.isArray(config["coreArgShadowCallees"]) ? config["coreArgShadowCallees"] : []);
+    this.csharpDictParamsMethods = new Set(Array.isArray(config["dictParamsMethods"]) ? config["dictParamsMethods"] : []);
   }
   initConfig() {
     this.LeftPropertyAccessReplacements = {
@@ -5120,6 +5124,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     let type = handlerType !== void 0 ? handlerType : this.printParameterType(node);
     type = type ? type : "";
+    if (defaultValue && type === "object" && this.csharpIsDictParamsBag(node)) {
+      this.csharpParamTypes.set(node, "Dictionary<string, object>");
+      return "Dictionary<string, object> " + name + this.SPACE_DEFAULT_PARAM + "=" + this.SPACE_DEFAULT_PARAM + "null";
+    }
     this.csharpParamTypes.set(node, type);
     if (defaultValue) {
       if (initializer) {
@@ -5132,6 +5140,16 @@ var CSharpTranspiler = class extends BaseTranspiler {
       return type + " " + name;
     }
     return name;
+  }
+  // the trailing `params = {}` of a method listed in csharpDictParamsMethods
+  csharpIsDictParamsBag(node) {
+    const method = node.parent;
+    if (this.csharpDictParamsMethods.size === 0 || !isMethodDeclaration2(method) || method.parameters[method.parameters.length - 1] !== node || !isIdentifier(node.name) || node.name.text !== "params" || node.initializer === void 0) {
+      return false;
+    }
+    const camel = method.name?.text ?? "";
+    const pascal = camel.charAt(0).toUpperCase() + camel.slice(1);
+    return this.csharpDictParamsMethods.has(camel) || this.csharpDictParamsMethods.has(pascal);
   }
   // ==== hand-written runtime members, base fields and their views ====
   // a read of a hand-written BaseExchange dictionary member whose key may be absent: the key
