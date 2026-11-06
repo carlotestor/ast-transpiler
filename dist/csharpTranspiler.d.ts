@@ -55,6 +55,9 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpDictParamsMethods: Set<string>;
     csharpCoreArgTypes: Record<string, Record<number, string>>;
     csharpSignatureArgTypes: Record<string, Record<number, string>>;
+    csharpCallSiteArgTypes: Record<string, Record<number, string>>;
+    csharpCallSiteTypedIdentifiers: Set<string>;
+    csharpPrintedDeclarationTypes: WeakMap<Node, string>;
     csharpActiveShadows: Map<Node, string>;
     csharpCoreArgShadowParams: WeakMap<Node, any[]>;
     stringReceiverTypes: WeakMap<Node, string>;
@@ -159,7 +162,18 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpListParamCensus(): Map<string, boolean> | undefined;
     csharpListParamBodyReadsAsList(parameter: any): boolean;
     csharpArgumentMayBeList(type: any): boolean;
-    printArgsForCallExpression(node: any, identation: any): any;
+    printArgsForCallExpression(node: any, identation: any): string;
+    csharpListParamArgs(node: any, identation: any): string[];
+    csharpCallSiteReceiverTier(node: any): 'source' | 'restTest' | 'wsTest' | undefined;
+    csharpCallSiteRow(node: any): Record<number, string> | undefined;
+    csharpCallSiteArgs(node: any, printed: string[]): string;
+    csharpCallSiteArg(argument: any, text: string, wanted: string, test: boolean): {
+        text: string;
+        tight: boolean;
+    } | undefined;
+    csharpCallSiteOperand(argument: any): any;
+    csharpCallSiteIdentityOperand(argument: any, wanted: string, text: string): string;
+    csharpCallSiteDeclaredType(argument: any, printedName: string): string | undefined;
     csharpListParamIsWritten(parameter: any): boolean;
     csharpListBindingIsWritten(declaration: any): boolean;
     csharpListParamArgumentPrintsList(argument: any, decide?: (key: string) => boolean): boolean;
