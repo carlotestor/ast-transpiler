@@ -40,6 +40,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpListParamDeclarations: WeakSet<Node>;
     csharpMemberWriteCache: WeakMap<object, Map<string, boolean>>;
     csharpMemberKeyCounters: WeakMap<object, number>;
+    csharpInOpDictCounters: WeakMap<object, number>;
     csharpBaseListParamDeclarations: WeakSet<Node>;
     csharpPromiseAllSites: WeakMap<Node, any>;
     csharpPromiseAllTaskDeclarations: WeakSet<Node>;
@@ -403,6 +404,9 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpDeclaredReadEqualityType(node: any, printerType: string | undefined): string | undefined;
     printInlineEquality(left: any, right: any, leftText: string, rightText: string, isEquality: boolean): string | undefined;
     csharpDeclaredReadEqualityKind(node: any, operandType: string | undefined): string | undefined;
+    csharpPrintedBoolParamType(node: any): string | undefined;
+    csharpPrintedBoolParamEquality(left: any, right: any, leftText: string, rightText: string, isEquality: boolean): string | undefined;
+    csharpDeclaredNullTestType(node: any): string | undefined;
     csharpNullComparison(text: string, isEquality: boolean): string;
     csharpNativeNumericCallEquality(left: any, right: any, leftText: string, rightText: string, isEquality: boolean): string | undefined;
     csharpPrintedArithmeticKind(node: any, text: string): string | undefined;
@@ -419,6 +423,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpOperandIsNumberLiteralUnion(operand: any): boolean;
     csharpOperandIsPlainNumber(operand: any): boolean;
     csharpNativeNumericComparison(node: any, identation: any): string | undefined;
+    csharpComparisonOperandKinds(left: any, right: any): [string | undefined, string | undefined];
     csharpNativeMathMinMax(node: any, name: string, parsedArg1: string, parsedArg2: string): string | undefined;
     csharpNativeSameKindMinMax(node: any, name: string, parsedArg1: string, parsedArg2: string): string | undefined;
     csharpMinMaxResultIsPlainValue(node: any): boolean;
@@ -576,6 +581,10 @@ export declare class CSharpTranspiler extends BaseTranspiler {
         nullTest?: string;
     } | undefined;
     csharpNativeInExpression(key: any, obj: any): string | undefined;
+    csharpDictOrNullInExpression(key: any, obj: any): string | undefined;
+    csharpIsExchangeSource(node: any): boolean;
+    csharpDictOrNullValue(node: any, depth: number): boolean;
+    csharpDictOrNullTupleSlot(node: any, depth: number): boolean;
     csharpMemberInExpression(key: any, obj: any): string | undefined;
     csharpMemberKeyKind(key: any): 'string' | 'string?' | 'object' | 'param' | undefined;
     csharpMemberKeyVariable(key: any): string;
