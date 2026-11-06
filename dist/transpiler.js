@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-YEJ2U6VR.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -10296,6 +10296,10 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (callee?.kind === SyntaxKind4.PropertyAccessExpression && callee.expression?.kind === SyntaxKind4.ThisKeyword && callee.name?.text === "parseJson" && node.arguments?.length === 1 && this.csharpCallReturnsString(node.arguments[0]) && this.csharpCalleeResolves(node)) {
       return `JsonHelper.Deserialize((string)${this.printNode(node.arguments[0], 0).trim()})`;
     }
+    const futureSettle = this.csharpFutureSettleCall(node);
+    if (futureSettle !== void 0) {
+      return futureSettle;
+    }
     const printed = super.printCallExpression(node, identation);
     const pascal = this.csharpInt64TaskCallName(node);
     if (pascal !== void 0) {
@@ -10306,6 +10310,31 @@ var CSharpTranspiler = class extends BaseTranspiler {
       }
     }
     return printed;
+  }
+  // ws `future.resolve (x)` / `future.reject (e)` statements: the local is the ws runtime's Future
+  // (cs/ccxt/ws/Future.cs: void resolve(object) / reject(object)), whose C# declaration may be
+  // `Future` or a `var` bound from an object read, so the call binds the declared method through
+  // the receiver cast `(future as Future).resolve(..)` / `((Future)future).reject(..)`.
+  // Only the ws trees (ts/src/pro, ts/src/prediction) hold that Future; other ccxt trees keep the printer.
+  csharpFutureSettleCall(node) {
+    const callee = node?.expression;
+    if (!isPropertyAccessExpression(callee) || !isIdentifier(callee.expression) || callee.expression.text !== "future" || node.parent?.kind !== SyntaxKind4.ExpressionStatement) {
+      return void 0;
+    }
+    const method = callee.name?.text;
+    if (method !== "resolve" && method !== "reject") {
+      return void 0;
+    }
+    const fileName = String(node.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    if (fileName.includes("ts/src/") && !fileName.includes("ts/src/pro/") && !fileName.includes("ts/src/prediction/")) {
+      return void 0;
+    }
+    const argc = node.arguments?.length ?? 0;
+    if (argc > 1 || method === "reject" && argc !== 1) {
+      return void 0;
+    }
+    const args = (node.arguments ?? []).map((arg) => this.printNode(arg, 0).trim()).join(", ");
+    return method === "resolve" ? `(future as Future).resolve(${args})` : `((Future)future).reject(${args})`;
   }
   // `this.<name> (...)` resolving to an async method whose checker return type is `Promise<int>` /
   // `Promise<Int>`: its C# signature is the typed core `Task<Int64> <Name>(...)` (the declaration is

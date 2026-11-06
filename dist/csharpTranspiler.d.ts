@@ -531,6 +531,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     printTypedDictElementAccessIfAny(node: any): string;
     printOutOfOrderCallExpressionIfAny(node: any, identation: any): string;
     printCallExpression(node: any, identation: any): any;
+    csharpFutureSettleCall(node: any): string | undefined;
     csharpInt64TaskCallName(node: any): string | undefined;
     csharpNativeStringKey(key: any): string | undefined;
     csharpIsDictionaryType(type: any): boolean;
