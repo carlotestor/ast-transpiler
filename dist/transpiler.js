@@ -24963,7 +24963,7 @@ function goBalanceLocalIsMap(body, name) {
 }
 function retypeGoProvenFamily(content, names, type, paramWrap, calls, receivers = "\\w+", converters = []) {
   const literal2 = type + "{";
-  const provenCall = new RegExp("^(?:ccxt\\.)?this\\.(?:DerivedExchange\\.|base\\.)?(?:" + calls.join("|") + ")\\(");
+  const provenCall = new RegExp("^(?:ccxt\\.)?(?:this\\.(?:DerivedExchange\\.|base\\.)?|base\\.)(?:" + calls.join("|") + ")\\(");
   const provenConverter = new RegExp("^(?:ccxt\\.)?(?:" + converters.join("|") + ")\\(");
   const proven = (e) => e.startsWith(literal2) || provenCall.test(e) || provenConverter.test(e);
   const typeRe = type.replace(/[[\]]/g, "\\$&");
