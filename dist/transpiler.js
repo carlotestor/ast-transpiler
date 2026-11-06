@@ -20117,6 +20117,7 @@ function installCcxtGoNilDeclaredValueJoins(goTranspiler) {
       return void 0;
     }
     if (!joined.has(declaration)) {
+      joined.set(declaration, void 0);
       const scan = new GoNilDeclaredValueAssignmentScan(goTranspiler, declaration, declaration.name.text);
       joined.set(declaration, scan.run() && scan.joinType === "bool" && !goTranspiler.goTypeNameIsShadowed?.(goTranspiler.goEnclosingFunction(declaration), "bool") ? "bool" : void 0);
     }
