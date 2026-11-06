@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-DSH7DNKY.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -53566,6 +53566,12 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const dynamicCall = this.printDynamicSelfCall(node, identation);
     if (dynamicCall !== void 0)
       return dynamicCall;
+    const selfCall = this.printSelfCallShape(node, identation);
+    if (selfCall !== void 0)
+      return selfCall;
+    const valueSpawn = this.printValueSpawnCall(node, identation);
+    if (valueSpawn !== void 0)
+      return valueSpawn;
     const freeFnCall = this.printFreeFnDefaultArgsCall(node, identation);
     if (freeFnCall !== void 0)
       return freeFnCall;
@@ -55770,7 +55776,60 @@ ${this.getIden(identation)}}`;
   }
   // Rust uses postfix `.await`; the base transpiler defaults to prefix.
   printAwaitExpression(node, identation) {
+    if (isIdentifier3(node.expression) && this.rustInlinesValueSpawn(findAncestor(node, isMethodDeclaration5))) {
+      return this.printNode(node.expression, identation);
+    }
     return `${this.printNode(node.expression, identation)}.await`;
+  }
+  // `this.<callback>(..)` on a proxy-callback field calls the `<callback>_fn` method (a name can't be
+  // both field and method); `this.setProperty(this, ..)` drops the receiver (`set_property` mutates
+  // `self`); `this.binaryConcat()` passes the empty first chunk of `(first, ...rest)`.
+  printSelfCallShape(node, identation) {
+    const callee = node.expression;
+    if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword)
+      return void 0;
+    const name = callee.name.text;
+    if (_RustTranspiler.RUST_PROXY_CALLBACK_FIELDS.has(this.toSnakeCaseName(name))) {
+      return `self.${this.toSnakeCaseName(name)}_fn(${this.printArgsForCallExpression(node, identation)})`;
+    }
+    if (name === "binaryConcat" && node.arguments.length === 0)
+      return "self.binary_concat(Value::Null, &[])";
+    if (name === "setProperty" && node.arguments.length > 0 && node.arguments[0].kind === SyntaxKind7.ThisKeyword) {
+      const [prop, ...rest] = node.arguments.slice(1).map((a) => this.printNode(a, 0).trim());
+      return `self.setProperty(${prop}, &[${rest.join(", ")}])`;
+    }
+    return void 0;
+  }
+  // `this.spawn(this.m, ...args)` used as a value: Rust can't hold a future in a `Value`, so the
+  // spawn runs inline as `self.call_dynamic("m", vec![args]).await`. Statement spawns stay enqueued.
+  rustValueSpawnCall(node) {
+    const callee = node.expression;
+    return isPropertyAccessExpression3(callee) && callee.expression.kind === SyntaxKind7.ThisKeyword && callee.name.text === "spawn" && node.arguments.length > 0 && isPropertyAccessExpression3(node.arguments[0]) && node.arguments[0].expression.kind === SyntaxKind7.ThisKeyword && node.parent?.kind !== SyntaxKind7.ExpressionStatement;
+  }
+  printValueSpawnCall(node, identation) {
+    if (!this.rustValueSpawnCall(node))
+      return void 0;
+    const args = node.arguments.slice(1).map((a) => {
+      const t = this.printNode(a, identation).trim();
+      return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(t) ? `${t}.clone()` : t;
+    });
+    return `self.call_dynamic("${this.toSnakeCaseName(node.arguments[0].name.text)}", vec![${args.join(", ")}]).await`;
+  }
+  rustInlinesValueSpawn(method) {
+    if (method === void 0 || method.body === void 0)
+      return false;
+    let found = false;
+    const visit = (n) => {
+      if (found)
+        return;
+      if (isCallExpression6(n) && this.rustValueSpawnCall(n)) {
+        found = true;
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    method.body.forEachChild(visit);
+    return found;
   }
   printMathRoundCall(node, identation, parsedArg = void 0) {
     return this.printRustNativeMathCall(node, "round", parsedArg) ?? `math_round(&${parsedArg})`;
@@ -55880,6 +55939,8 @@ ${iden}}`;
     const idn = this.getIden(identation);
     if (!exp)
       return `${idn}return;`;
+    if (exp.kind === SyntaxKind7.ThisKeyword)
+      return `${idn}return Value::Null;`;
     const fn = findAncestor(node.parent, isFunctionLike);
     if (this.rustNativeStrReturnKind(fn) === "str" && this.rustStrReturnValueConverts(exp)) {
       if (this.literalKindOfNode(this.unwrapParensNode(exp)) === "null")
@@ -59672,6 +59733,16 @@ _RustTranspiler.BOOL_VALUE_PREFIXES = [
   "is_number",
   "is_string"
 ];
+_RustTranspiler.RUST_PROXY_CALLBACK_FIELDS = /* @__PURE__ */ new Set([
+  "proxy",
+  "proxy_url_callback",
+  "http_proxy_callback",
+  "https_proxy_callback",
+  "socks_proxy_callback",
+  "ws_proxy_callback",
+  "wss_proxy_callback",
+  "ws_socks_proxy_callback"
+]);
 // Native element write on a local the plain-dict proof admits through its write history:
 // `const x = this.account ()`, a `let x = {}` / `let x: Dict = undefined` later reassigned,
 // `[ x, p ] = this.handleUntilOption (…)`.

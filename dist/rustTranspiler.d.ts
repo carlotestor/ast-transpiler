@@ -852,6 +852,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     printMathFloorCall(node: any, identation: any, parsedArg?: any): string;
     printPromiseAllCall(node: any, identation: any, parsedArg?: any): string;
     printAwaitExpression(node: any, identation: any): string;
+    printSelfCallShape(node: any, identation: any): string | undefined;
+    private static readonly RUST_PROXY_CALLBACK_FIELDS;
+    rustValueSpawnCall(node: any): boolean;
+    printValueSpawnCall(node: any, identation: any): string | undefined;
+    rustInlinesValueSpawn(method: any): boolean;
     printMathRoundCall(node: any, identation: any, parsedArg?: any): string;
     printMathCeilCall(node: any, identation: any, parsedArg?: any): string;
     printNumberIsIntegerCall(node: any, identation: any, parsedArg?: any): string;
