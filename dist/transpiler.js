@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-YEJ2U6VR.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -40708,6 +40708,7 @@ var JavaTranspiler = class extends BaseTranspiler {
     this.javaHandlerReads = /* @__PURE__ */ new Set();
     this.javaHandlerScannedFile = void 0;
     this.javaCheckedBoxLocalTypeCache = /* @__PURE__ */ new WeakMap();
+    this.javaLongLimitLiteralLocalCache = /* @__PURE__ */ new WeakMap();
     this.javaHandBackVisiting = /* @__PURE__ */ new Set();
     this.javaVenueCalleeInProgress = /* @__PURE__ */ new Set();
     this.javaVenueCalleeDeclarations = /* @__PURE__ */ new WeakMap();
@@ -41392,6 +41393,90 @@ var JavaTranspiler = class extends BaseTranspiler {
       return `Long.valueOf(${printed})`;
     }
     return void 0;
+  }
+  // the Long core slot an argument lands in: the printed method's defaulted parameter the
+  // full-arity call path converts with javaConvertToCoreType
+  javaArgumentFeedsLongCoreSlot(arg) {
+    const call = arg.parent;
+    const callee = call?.expression;
+    if (call === void 0 || !isCallExpression5(call) || !call.arguments.includes(arg) || callee?.kind !== SyntaxKind6.PropertyAccessExpression || callee.expression?.kind === SyntaxKind6.SuperKeyword) {
+      return false;
+    }
+    let method;
+    try {
+      method = this.javaMethodImplementation(this.getChecker().getResolvedSignature(call)?.declaration?.resolve()) ?? this.javaAnyReceiverBaseMethod(callee);
+    } catch (e) {
+      return false;
+    }
+    if (!this.javaIsPrintedMethod(method) || !this.javaHasOptionalParameter(method)) {
+      return false;
+    }
+    const params = method.parameters;
+    const i = call.arguments.indexOf(arg);
+    if (call.arguments.length > params.length || params.some((p) => p.dotDotDotToken !== void 0) || call.arguments.some((a) => a.kind === SyntaxKind6.SpreadElement)) {
+      return false;
+    }
+    return params[i].initializer !== void 0 && this.javaCoreParameterTypes(method)[i] === "Long";
+  }
+  // `const x = <int literal>` whose every use is an argument into a Long core slot: the
+  // declaration carries the Long box the slot takes (Helpers.toLongOrNull of an Integer is the
+  // same Long value), so the arguments pass the local itself
+  javaLongLimitLiteralLocal(declaration) {
+    if (declaration === void 0 || !isVariableDeclaration2(declaration) || !isIdentifier2(declaration.name) || declaration.parent?.declarations?.length !== 1 || declaration.parent?.parent?.kind === SyntaxKind6.ForStatement) {
+      return false;
+    }
+    const intLiteral = (n) => n !== void 0 && isNumericLiteral3(n) && /^\d+$/.test(n.text) && this.printNumericLiteral(n) === n.text;
+    if (!intLiteral(declaration.initializer)) {
+      return false;
+    }
+    const scope = this.javaEnclosingFunction(declaration);
+    const checker = this.checkerOrUndefined();
+    if (scope === void 0 || checker === void 0) {
+      return false;
+    }
+    const name = declaration.name.text;
+    const symbol = checker.getSymbolAtLocation(declaration.name);
+    if (symbol === void 0) {
+      return false;
+    }
+    let fed = false;
+    let ok = true;
+    const visit = (n) => {
+      if (!ok) {
+        return;
+      }
+      if (isIdentifier2(n) && n !== declaration.name && n.text === name && checker.getSymbolAtLocation(n) === symbol) {
+        const parent = n.parent;
+        if (this.javaArgumentFeedsLongCoreSlot(n)) {
+          fed = true;
+        } else if (isBinaryExpression4(parent) && parent.left === n) {
+          ok = parent.operatorToken.kind === SyntaxKind6.EqualsToken && intLiteral(parent.right);
+        } else {
+          const call = parent;
+          const write = call?.parent;
+          ok = isCallExpression5(call) && call.arguments.includes(n) && call.arguments.length === 2 && isPropertyAccessExpression2(call.expression) && isIdentifier2(call.expression.expression) && call.expression.expression.text === "Math" && call.expression.name.text === "min" && isBinaryExpression4(write) && write.right === call && write.operatorToken.kind === SyntaxKind6.EqualsToken && isElementAccessExpression3(write.left);
+        }
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    scope.forEachChild(visit);
+    return ok && fed;
+  }
+  javaLongLimitLiteralLocalCached(declaration) {
+    if (declaration === void 0 || !isVariableDeclaration2(declaration)) {
+      return false;
+    }
+    let value = this.javaLongLimitLiteralLocalCache.get(declaration);
+    if (value === void 0) {
+      try {
+        value = this.javaLongLimitLiteralLocal(declaration);
+      } catch (e) {
+        value = false;
+      }
+      this.javaLongLimitLiteralLocalCache.set(declaration, value);
+    }
+    return value;
   }
   javaConvertToCoreType(type, printed, node) {
     const proven = this.javaCoreArgument(type, printed, node);
@@ -44013,6 +44098,9 @@ var JavaTranspiler = class extends BaseTranspiler {
   // declarations it retypes itself, and a parameter the printer retypes
   // (javaNativeParameterType) answers for itself, so its element reads go native too
   javaDeclaredTypeOfDeclaration(declaration) {
+    if (this.javaLongLimitLiteralLocalCached(declaration)) {
+      return "Long";
+    }
     if (this.javaDeclaredLocalTypeResolver !== void 0) {
       let type;
       try {
@@ -44404,6 +44492,9 @@ var JavaTranspiler = class extends BaseTranspiler {
       const handlerType = this.javaHandlerDeclarationType(declaration);
       if (handlerType !== void 0) {
         varToken = handlerType + " ";
+      }
+      if (this.javaLongLimitLiteralLocalCached(declaration)) {
+        return this.getIden(identation) + "Long " + this.printNode(declaration.name) + " = " + this.printNode(declaration.initializer, 0).trim() + "L";
       }
     }
     if (!declaration.initializer) {
@@ -46048,6 +46139,9 @@ var JavaTranspiler = class extends BaseTranspiler {
       );
       if (typeOfExpression)
         return typeOfExpression;
+    }
+    if (op === SyntaxKind6.EqualsToken && isIdentifier2(left) && isNumericLiteral3(right) && this.javaLongLimitLiteralLocalCached(this.javaDeclarationOfIdentifier(left))) {
+      return `${this.printNode(left, 0)} = ${this.printNode(right, 0)}L`;
     }
     if (op === SyntaxKind6.EqualsToken && left.kind === SyntaxKind6.Identifier) {
       const assignment = this.javaParameterAssignmentCast(left, right, identation);
