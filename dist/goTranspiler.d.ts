@@ -1704,6 +1704,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     printAwaitExpression(node: any, identation: any): string;
     printInstanceOfExpression(node: BinaryExpression, identation: number): string;
     getLineBasedSuffix(node: any): string;
+    goInt64TernaryStore(node: any, identation: any): string | undefined;
     printExpressionStatement(node: any, identation: any): string;
     isInsideAsyncFunction(returnStatementNode: any): any;
     /**

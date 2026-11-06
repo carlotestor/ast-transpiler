@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-AWK6QGCM.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -34082,7 +34082,7 @@ ${iden}}`;
         continue;
       }
       const test = this.goUnwrapParenthesizedNode(sibling.expression);
-      if (this.goIsNilTestOf(test, ident) && this.goStatementAlwaysExits(sibling.thenStatement)) {
+      if ((this.goIsNilTestOf(test, ident) || this.goOrChainHasNilTestOf(test, ident)) && this.goStatementAlwaysExits(sibling.thenStatement)) {
         return true;
       }
     }
@@ -36994,11 +36994,43 @@ ${indent}}`);
     const { line, character } = this.getSrc().getLineAndCharacterOfPosition(node.getStart());
     return `${line}${character}`;
   }
+  // `m['k'] = (p !== undefined) ? p : this.sum (a, b)` over a `*int64` local p and int64 locals a, b: the
+  // nil guard proves `*p` and Sum of two int64 is `a + b`, so the store is a native if/else (no any closure)
+  goInt64TernaryStore(node, identation) {
+    const assign = node?.expression;
+    if (assign?.kind !== SyntaxKind5.BinaryExpression || assign.operatorToken?.kind !== SyntaxKind5.EqualsToken || assign.left?.kind !== SyntaxKind5.ElementAccessExpression || assign.left.expression?.kind !== SyntaxKind5.Identifier || assign.left.argumentExpression?.kind !== SyntaxKind5.StringLiteral || assign.right?.kind !== SyntaxKind5.ConditionalExpression) {
+      return void 0;
+    }
+    const ternary = assign.right;
+    const condition = this.goUnwrapParenthesizedNode(ternary.condition);
+    const whenTrue = this.goUnwrapParenthesizedNode(ternary.whenTrue);
+    const sum = this.goUnwrapParenthesizedNode(ternary.whenFalse);
+    const op = condition?.operatorToken?.kind;
+    if (condition?.kind !== SyntaxKind5.BinaryExpression || op !== SyntaxKind5.ExclamationEqualsEqualsToken && op !== SyntaxKind5.ExclamationEqualsToken || whenTrue?.kind !== SyntaxKind5.Identifier || !this.goIsSameSymbol(condition.left, whenTrue) || !this.goIsNilLiteral(condition.right) || sum?.kind !== SyntaxKind5.CallExpression || sum.expression?.kind !== SyntaxKind5.PropertyAccessExpression || sum.expression.expression?.kind !== SyntaxKind5.ThisKeyword || sum.expression.name?.text !== "sum" || sum.arguments?.length !== 2 || !sum.arguments.every((a2) => a2.kind === SyntaxKind5.Identifier && this.goDeclaredTypeOfIdentifier(a2) === "int64") || this.goDeclaredTypeOfIdentifier(whenTrue) !== "*int64") {
+      return void 0;
+    }
+    if (this.goDeclaredTypeOfIdentifier(assign.left.expression) !== "map[string]any") {
+      return void 0;
+    }
+    const target = `${this.printNode(assign.left.expression, 0)}[${this.printNode(assign.left.argumentExpression, 0)}]`;
+    const ind = this.getIden(identation);
+    const p = this.printNode(whenTrue, 0);
+    const [a, b] = sum.arguments.map((x) => this.printNode(x, 0));
+    return this.printNodeCommentsIfAny(node, identation, `${ind}if ${p} != nil {
+${ind}	${target} = *${p}
+${ind}} else {
+${ind}	${target} = ${a} + ${b}
+${ind}}`);
+  }
   printExpressionStatement(node, identation) {
     if (node?.expression?.kind === SyntaxKind5.AsExpression) {
       node = node.expression;
     }
     if (node.expression.kind !== SyntaxKind5.AwaitExpression) {
+      const ternary = this.goInt64TernaryStore(node, identation);
+      if (ternary !== void 0) {
+        return ternary;
+      }
       const printed = this.stripWhitespaceOnlyLines(super.printExpressionStatement(node, identation));
       return printed.length > 0 && this.goIsUrlsWrite(node) ? `${printed}
 ${this.getIden(identation)}this.RefreshUrlsViews()` : printed;
@@ -37494,15 +37526,16 @@ ${this.getIden(identation)}`;
     if (name.includes("\n") || parsedArg.includes("\n")) {
       return void 0;
     }
-    if (!this.goFileKeepsFileLevelImports() || this.goInsideExcisedSpan()) {
+    if (!this.goStdlibImportIsPlaceable()) {
       return void 0;
     }
+    const seamOnly = !this.goFileKeepsFileLevelImports();
     const receiver = this.goUnwrapPrintedAssertions(node?.expression?.expression);
     const target = this.goUnwrapPrintedAssertions(node?.arguments?.[0]);
     if (this.goIndexOfOperandType(target, parsedArg) !== "string") {
       return void 0;
     }
-    if (this.goAssertedStringDeref(node?.expression?.expression)) {
+    if (!seamOnly && this.goAssertedStringDeref(node?.expression?.expression)) {
       this.goFileStdlibImports.add("strings");
       return `strings.Index(*${name.trim()}, ${parsedArg})`;
     }
@@ -37511,7 +37544,7 @@ ${this.getIden(identation)}`;
       this.goFileStdlibImports.add("strings");
       return `strings.Index(${name}, ${parsedArg})`;
     }
-    if (receiverType === "*string" && receiver?.kind === SyntaxKind5.Identifier) {
+    if (!seamOnly && receiverType === "*string" && receiver?.kind === SyntaxKind5.Identifier) {
       this.goFileStdlibImports.add("strings");
       const level = this.goStatementLevel;
       const body = this.getIden(level + 1);
