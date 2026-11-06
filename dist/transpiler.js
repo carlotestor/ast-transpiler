@@ -20105,6 +20105,23 @@ function installCcxtGoNilDeclaredValueJoins(goTranspiler) {
     }
     return parsed[1] + "var " + parsed[2] + " " + scan.joinType;
   };
+  const joined = /* @__PURE__ */ new WeakMap();
+  const upstreamDeclared = goTranspiler.goDeclaredTypeOfIdentifier.bind(goTranspiler);
+  goTranspiler.goDeclaredTypeOfIdentifier = (node) => {
+    const known = upstreamDeclared(node);
+    if (known !== void 0 || node?.kind !== ts.SyntaxKind.Identifier) {
+      return known;
+    }
+    const declaration = goTranspiler.checkerOrUndefined?.()?.getSymbolAtLocation(node)?.valueDeclaration?.resolve?.();
+    if (declaration?.kind !== ts.SyntaxKind.VariableDeclaration || !ts.isIdentifier(declaration.name) || !isNilDeclaredInitializer(declaration.initializer) || declaration.parent?.parent?.kind !== ts.SyntaxKind.VariableStatement || declaration.parent.declarations.length !== 1 || NIL_DECLARED_GUARD_NAMES.indexOf(declaration.name.text) >= 0) {
+      return void 0;
+    }
+    if (!joined.has(declaration)) {
+      const scan = new GoNilDeclaredValueAssignmentScan(goTranspiler, declaration, declaration.name.text);
+      joined.set(declaration, scan.run() && scan.joinType === "bool" && !goTranspiler.goTypeNameIsShadowed?.(goTranspiler.goEnclosingFunction(declaration), "bool") ? "bool" : void 0);
+    }
+    return joined.get(declaration);
+  };
   goTranspiler.__ccxtGoNilDeclaredValueJoinsInstalled = true;
 }
 var CCXT_GO_PARSE_NUMBER_JOIN_ROW_BUILDERS_REJECTED = ["safeMarketStructure", "safeCurrencyStructure"];
