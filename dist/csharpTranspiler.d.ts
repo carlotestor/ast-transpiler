@@ -56,6 +56,16 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpCoreArgTypes: Record<string, Record<number, string>>;
     csharpSignatureArgTypes: Record<string, Record<number, string>>;
     csharpCallSiteArgTypes: Record<string, Record<number, string>>;
+    csharpTypedCoreInMemoryReceiver: string | undefined;
+    csharpTypedCores: {
+        base: Record<string, string>;
+        prediction: Record<string, string>;
+        snapshot: Record<string, {
+            type: string;
+            predictionType?: string;
+        }>;
+        venue: Record<string, Record<string, string>>;
+    } | undefined;
     csharpCallSiteTypedIdentifiers: Set<string>;
     csharpPrintedDeclarationTypes: WeakMap<Node, string>;
     csharpActiveShadows: Map<Node, string>;
@@ -545,6 +555,15 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     printTypedDictElementAccessIfAny(node: any): string;
     printOutOfOrderCallExpressionIfAny(node: any, identation: any): string;
     printCallExpression(node: any, identation: any): any;
+    csharpPascalName(name: string): string;
+    csharpTypedCoreTier(node: any): {
+        prediction: boolean;
+        venues: string[];
+    } | undefined;
+    csharpTypedCoreVenues(node: any): string[];
+    csharpTypedCoreType(node: any, name: string): string;
+    csharpTypedCoreTypeIn(name: string, prediction: boolean, venues: string[]): string;
+    csharpTypedCoreCallReceiver(node: any): string | undefined;
     csharpInt64TaskCallName(node: any): string | undefined;
     csharpNativeStringKey(key: any): string | undefined;
     csharpIsDictionaryType(type: any): boolean;

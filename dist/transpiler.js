@@ -3303,6 +3303,13 @@ var CSharpTranspiler = class extends BaseTranspiler {
     // type: `((string)x)`, `ToInt64Arg(x)` / `ToDoubleArg(x)` (`Required` for non-nullable), a suffixed
     // numeric literal (`1L`, `0d`); list targets are left as printed (csharpCallSiteArgs)
     this.csharpCallSiteArgTypes = {};
+    // typed cores (config.csharp.typedCores): method name -> the C# type its Task returns, per tier
+    // (`base`, `prediction`, `snapshot` {type, predictionType}, per-venue `venue`). A typed core's
+    // declaration and its `this.`/`base.` (ws / main tests: `exchange.`) calls print the PascalCase name
+    // the receiver whose typed-core calls print PascalCase in an in-memory print (ccxt: `exchange` while the
+    // main test file prints); undefined = in-memory prints keep the TS name
+    this.csharpTypedCoreInMemoryReceiver = void 0;
+    this.csharpTypedCores = void 0;
     // the identifiers whose declared `string` makes a string-target argument print bare
     this.csharpCallSiteTypedIdentifiers = /* @__PURE__ */ new Set();
     // VariableStatement -> the C# type its printed declaration names (csharpCallSiteDeclaredType)
@@ -3375,6 +3382,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     this.csharpCoreArgTypes = Object.assign({}, config["coreArgTypes"] ?? {});
     this.csharpSignatureArgTypes = Object.assign({}, config["signatureArgTypes"] ?? {});
     this.csharpCallSiteArgTypes = Object.assign({}, config["callSiteArgTypes"] ?? {});
+    this.csharpTypedCores = config["typedCores"] === void 0 ? void 0 : Object.assign({ base: {}, prediction: {}, snapshot: {}, venue: {} }, config["typedCores"]);
     this.csharpCallSiteTypedIdentifiers = new Set(Array.isArray(config["callSiteTypedIdentifiers"]) ? config["callSiteTypedIdentifiers"] : []);
   }
   initConfig() {
@@ -9192,6 +9200,9 @@ var CSharpTranspiler = class extends BaseTranspiler {
       }
     }
     parsedArgs = parsedArgs ? parsedArgs : this.csharpCoreArgParams(node, node.parameters.map((param) => this.printParameter(param))).join(", ");
+    if (returnType.startsWith("Task<") && !this.csharpIsStaticMethod(node) && this.csharpTypedCoreType(node, node.name.text) !== "") {
+      name = this.csharpPascalName(name);
+    }
     returnType = returnType ? returnType + " " : returnType;
     const methodToken = this.METHOD_TOKEN ? this.METHOD_TOKEN + " " : "";
     const methodDef = this.getIden(identation) + modifiers + returnType + methodToken + name + "(" + parsedArgs + ")";
@@ -10490,7 +10501,116 @@ var CSharpTranspiler = class extends BaseTranspiler {
         return printed.slice(0, at) + `this.${pascal}(` + printed.slice(at + camel.length);
       }
     }
+    const receiver = this.csharpTypedCoreCallReceiver(node);
+    if (receiver !== void 0) {
+      const camel = `${receiver}.${callee.name.text}(`;
+      const at = printed.indexOf(camel);
+      if (at !== -1 && printed.slice(0, at).trim() === "") {
+        return printed.slice(0, at) + `${receiver}.${this.csharpPascalName(callee.name.text)}(` + printed.slice(at + camel.length);
+      }
+    }
     return printed;
+  }
+  // ==== typed cores (config.csharp.typedCores) ====
+  csharpPascalName(name) {
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+  // which typed-core table answers for this node: the prediction tier prints ts/src/prediction/ and the
+  // PredictionExchange base; the ws and main tests bind the regular tier
+  csharpTypedCoreTier(node) {
+    if (this.csharpTypedCores === void 0) {
+      return void 0;
+    }
+    const fileName = String(node?.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    if (!fileName.includes("ts/src/") || /\/test\//.test(fileName) || fileName.includes("examples/")) {
+      return void 0;
+    }
+    const prediction = fileName.includes("ts/src/prediction/") || /ts\/src\/base\/PredictionExchange[^/]*\.ts$/.test(fileName);
+    return { prediction, venues: this.csharpTypedCoreVenues(node) };
+  }
+  // the class the node is printed in and its ancestors, by class name (bequant -> hitbtc -> ...)
+  csharpTypedCoreVenues(node) {
+    const venues = [];
+    let owner = findAncestor(node, (n) => isClassDeclaration2(n));
+    const checker = this.checkerOrUndefined();
+    const seen = /* @__PURE__ */ new Set();
+    while (owner !== void 0 && !seen.has(owner)) {
+      seen.add(owner);
+      const name = owner.name?.text;
+      if (name === void 0 || name === "Exchange" || name === "PredictionExchange") {
+        break;
+      }
+      if (!venues.includes(name)) {
+        venues.push(name);
+      }
+      const parent = getAllSuperTypeNodes(owner)[0];
+      if (parent === void 0 || checker === void 0) {
+        break;
+      }
+      try {
+        owner = checker.getTypeAtLocation(parent)?.getSymbol()?.valueDeclaration?.resolve();
+      } catch (e) {
+        owner = void 0;
+      }
+    }
+    return venues;
+  }
+  // the typed C# return of a core printed at `node`, or '' (the method keeps `Task<object>`)
+  csharpTypedCoreType(node, name) {
+    const tier = this.csharpTypedCoreTier(node);
+    if (tier === void 0) {
+      return "";
+    }
+    return this.csharpTypedCoreTypeIn(name, tier.prediction, tier.venues);
+  }
+  csharpTypedCoreTypeIn(name, prediction, venues) {
+    const tables = this.csharpTypedCores;
+    if (tables === void 0) {
+      return "";
+    }
+    const has = (table, key) => table !== void 0 && Object.prototype.hasOwnProperty.call(table, key);
+    for (const venue of venues) {
+      if (has(tables.venue, venue) && has(tables.venue[venue], name)) {
+        return tables.venue[venue][name];
+      }
+    }
+    if (has(tables.snapshot, name)) {
+      const snapshot = tables.snapshot[name];
+      return prediction && snapshot.predictionType !== void 0 ? snapshot.predictionType : snapshot.type;
+    }
+    if (prediction && has(tables.prediction, name)) {
+      return tables.prediction[name];
+    }
+    return has(tables.base, name) ? tables.base[name] : "";
+  }
+  // the printed receiver of a typed-core call that prints the PascalCase name: `this` / `base` in exchange
+  // sources, `exchange` in the ws and main tests; undefined for every other call
+  csharpTypedCoreCallReceiver(node) {
+    const callee = node?.expression;
+    if (this.csharpTypedCores === void 0 || callee === void 0 || !isPropertyAccessExpression(callee) || !isIdentifier(callee.name)) {
+      return void 0;
+    }
+    const fileName = String(node.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    const receiver = callee.expression;
+    let printed = void 0;
+    const inMemory = !fileName.includes("ts/src/") && this.csharpTypedCoreInMemoryReceiver !== void 0;
+    if (fileName.includes("ts/src/pro/test/Exchange/") || inMemory) {
+      const wanted = inMemory ? this.csharpTypedCoreInMemoryReceiver : "exchange";
+      printed = isIdentifier(receiver) && receiver.text === wanted ? wanted : void 0;
+      if (printed === void 0) {
+        return void 0;
+      }
+      return this.csharpTypedCoreTypeIn(callee.name.text, false, []) !== "" ? printed : void 0;
+    }
+    if (/\/test\//.test(fileName) || fileName.includes("examples/")) {
+      return void 0;
+    }
+    if (receiver.kind === SyntaxKind4.ThisKeyword) {
+      printed = "this";
+    } else if (receiver.kind === SyntaxKind4.SuperKeyword) {
+      printed = "base";
+    }
+    return printed !== void 0 && this.csharpTypedCoreType(node, callee.name.text) !== "" ? printed : void 0;
   }
   // `this.<name> (...)` resolving to an async method whose checker return type is `Promise<int>` /
   // `Promise<Int>`: its C# signature is the typed core `Task<Int64> <Name>(...)` (the declaration is
