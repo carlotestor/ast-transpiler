@@ -569,6 +569,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpTypedCoreType(node: any, name: string): string;
     csharpTypedCoreTypeIn(name: string, prediction: boolean, venues: string[]): string;
     csharpTypedCoreCallReceiver(node: any): string | undefined;
+    csharpFutureSettleCall(node: any): string | undefined;
     csharpInt64TaskCallName(node: any): string | undefined;
     csharpNativeStringKey(key: any): string | undefined;
     csharpIsDictionaryType(type: any): boolean;
