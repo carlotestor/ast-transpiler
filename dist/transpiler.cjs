@@ -9544,6 +9544,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     return this.printNode(expression, 0) + "[" + cast + this.printNode(argumentExpression, 0) + "]";
   }
   printElementAccessExpressionExceptionIfAny(node) {
+    return void 0;
   }
   // reads print getValue(recv, key), which yields null for a missing key; a C# indexer
   // throws instead, so the native form is only emitted where the source guarantees the key
@@ -41385,6 +41386,10 @@ var JavaTranspiler = class extends BaseTranspiler {
     if (type === "Long" && initializer !== void 0 && _is.isPropertyAccessExpression.call(void 0, initializer) && initializer.name.text === "length" && this.javaDeclaredTypeOf(node) === "Integer") {
       return `((long) ${printed})`;
     }
+    const literal2 = initializer !== void 0 && _is.isPrefixUnaryExpression.call(void 0, initializer) && initializer.operator === _ast.SyntaxKind.MinusToken ? initializer.operand : initializer;
+    if (type === "Long" && literal2 !== void 0 && _is.isNumericLiteral.call(void 0, literal2) && /^\d+$/.test(literal2.text) && this.javaDeclaredTypeOf(node) === "Integer") {
+      return `Long.valueOf(${printed})`;
+    }
     return void 0;
   }
   javaConvertToCoreType(type, printed, node) {
@@ -53316,7 +53321,7 @@ ${classMethods}
     if (_is.isIdentifier.call(void 0, expr.expression) && this.rustCallsRuntimeHandle(node)) {
       return this.printRuntimeVariadicCall(node, this.printNode(expr.expression, 0), expr.name.text, identation, false, true);
     }
-    if (expr.expression.kind === _ast.SyntaxKind.SuperKeyword && (/ts[\/]src[\/]pro[\/]/.test(String(node.getSourceFile().fileName)) || /^network(?:CodeToId|IdToCode)$/.test(expr.name.text))) {
+    if (expr.expression.kind === _ast.SyntaxKind.SuperKeyword && (/ts[/]src[/]pro[/]/.test(String(node.getSourceFile().fileName)) || /^network(?:CodeToId|IdToCode)$/.test(expr.name.text))) {
       return _nullishCoalesce(this.printRuntimeVariadicCall(node, "super", expr.name.text, identation), () => ( this.printTranspiledVariadicCall(node, "super", expr.name.text, identation)));
     }
     if (expr.expression.kind === _ast.SyntaxKind.ThisKeyword) {
@@ -53368,22 +53373,22 @@ ${classMethods}
       return false;
     }
     decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8417 => _8417.resolve, 'optionalCall', _8418 => _8418()]), () => ( decl));
-    if (decl !== void 0 && /ts[\/]src[\/]base[\/]/.test(String(_nullishCoalesce(_optionalChain([decl, 'access', _8419 => _8419.getSourceFile, 'optionalCall', _8420 => _8420(), 'optionalAccess', _8421 => _8421.fileName]), () => ( "")))))
+    if (decl !== void 0 && /ts[/]src[/]base[/]/.test(String(_nullishCoalesce(_optionalChain([decl, 'access', _8419 => _8419.getSourceFile, 'optionalCall', _8420 => _8420(), 'optionalAccess', _8421 => _8421.fileName]), () => ( "")))))
       return true;
     const symbol = this.getChecker().getSymbolAtLocation(_nullishCoalesce(node.expression.name, () => ( node.expression)));
     const member = symbol === void 0 ? void 0 : _optionalChain([_chunkCNXC7LJYcjs.symbolDeclarations.call(void 0, symbol), 'optionalAccess', _8422 => _8422[0]]);
-    return member !== void 0 && /ts[\/]src[\/]base[\/]/.test(String(_nullishCoalesce(_optionalChain([member, 'access', _8423 => _8423.getSourceFile, 'optionalCall', _8424 => _8424(), 'optionalAccess', _8425 => _8425.fileName]), () => ( ""))));
+    return member !== void 0 && /ts[/]src[/]base[/]/.test(String(_nullishCoalesce(_optionalChain([member, 'access', _8423 => _8423.getSourceFile, 'optionalCall', _8424 => _8424(), 'optionalAccess', _8425 => _8425.fileName]), () => ( ""))));
   }
   // `exchange.m(..)` in a test source, the receiver typed as the base `Exchange` class.
   rustCallsTestExchange(node) {
-    if (!/ts[\/]src[\/]test[\/]/.test(String(node.getSourceFile().fileName)))
+    if (!/ts[/]src[/]test[/]/.test(String(node.getSourceFile().fileName)))
       return false;
     const type = this.getChecker().getTypeAtLocation(node.expression.expression);
     if (type !== void 0 && (type.flags & _sync.TypeFlags.Any) !== 0)
       return node.expression.expression.text === "exchange";
     const symbol = _optionalChain([type, 'optionalAccess', _8426 => _8426.getSymbol, 'optionalCall', _8427 => _8427()]);
     const decl = symbol === void 0 ? void 0 : _optionalChain([_chunkCNXC7LJYcjs.symbolDeclarations.call(void 0, symbol), 'optionalAccess', _8428 => _8428[0]]);
-    return decl !== void 0 && /ts[\/]src[\/]base[\/]Exchange\.ts$/.test(String(_nullishCoalesce(_optionalChain([decl, 'access', _8429 => _8429.getSourceFile, 'optionalCall', _8430 => _8430(), 'optionalAccess', _8431 => _8431.fileName]), () => ( ""))));
+    return decl !== void 0 && /ts[/]src[/]base[/]Exchange\.ts$/.test(String(_nullishCoalesce(_optionalChain([decl, 'access', _8429 => _8429.getSourceFile, 'optionalCall', _8430 => _8430(), 'optionalAccess', _8431 => _8431.fileName]), () => ( ""))));
   }
   // `client.resolve(..)`, `future.resolve(..)`, `method.call(..)`: the callee is a ws handle method,
   // `Function.call`, or a handle method on an `any` value; all are hand-written over `&[Value]`.
@@ -53398,7 +53403,7 @@ ${classMethods}
     if (decl === void 0)
       return ["resolve", "reject", "future", "call"].includes(node.expression.name.text) && (this.getChecker().getTypeAtLocation(node.expression.expression).flags & _sync.TypeFlags.Any) !== 0;
     const file = String(_nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8434 => _8434.getSourceFile, 'optionalCall', _8435 => _8435(), 'optionalAccess', _8436 => _8436.fileName]), () => ( "")));
-    if (/ts[\/]src[\/]base[\/]ws[\/](?:Client|Future)\.ts$/.test(file))
+    if (/ts[/]src[/]base[/]ws[/](?:Client|Future)\.ts$/.test(file))
       return true;
     return node.expression.name.text === "call" && /lib\.[\w.]*\.d\.ts$/.test(file);
   }
@@ -53430,9 +53435,9 @@ ${classMethods}
     }
     const sourceFile = _optionalChain([decl, 'access', _8445 => _8445.getSourceFile, 'optionalCall', _8446 => _8446()]);
     const file = String(_nullishCoalesce(_optionalChain([sourceFile, 'optionalAccess', _8447 => _8447.fileName]), () => ( "")));
-    if (!/ts[\/]src[\/]/.test(file) || /ts[\/]src[\/](?:test|abstract|base[\/]ws)[\/]/.test(file))
+    if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](?:test|abstract|base[/]ws)[/]/.test(file))
       return void 0;
-    if (/ts[\/]src[\/]base[\/]/.test(file)) {
+    if (/ts[/]src[/]base[/]/.test(file)) {
       const marker = String(_nullishCoalesce(sourceFile.text, () => ( ""))).indexOf("METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT");
       if (marker < 0 || decl.end < marker)
         return void 0;
