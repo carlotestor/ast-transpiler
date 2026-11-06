@@ -395,6 +395,7 @@ export declare class CSharpTranspiler extends BaseTranspiler {
     csharpOperandIsNumberLiteralUnion(operand: any): boolean;
     csharpOperandIsPlainNumber(operand: any): boolean;
     csharpNativeNumericComparison(node: any, identation: any): string | undefined;
+    csharpComparisonOperandKinds(left: any, right: any): [string | undefined, string | undefined];
     csharpNativeMathMinMax(node: any, name: string, parsedArg1: string, parsedArg2: string): string | undefined;
     csharpNativeSameKindMinMax(node: any, name: string, parsedArg1: string, parsedArg2: string): string | undefined;
     csharpMinMaxResultIsPlainValue(node: any): boolean;

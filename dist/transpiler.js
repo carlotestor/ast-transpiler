@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-YEJ2U6VR.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -3050,7 +3050,8 @@ var CSHARP_NATIVE_BOOL_FIELDS = [
 ];
 var CSHARP_SCALAR_FIELD_KINDS = {
   "rateLimit": "double",
-  "rollingWindowSize": "double"
+  "rollingWindowSize": "double",
+  "fetchHistoryCacheSize": "int"
 };
 var CSHARP_HELPER_ARITHMETIC_OPENERS = ["mod(", "add(", "subtract(", "multiply(", "divide(", "callDynamically("];
 function csharpStripOuterParens(text) {
@@ -8013,8 +8014,7 @@ var CSharpTranspiler = class extends BaseTranspiler {
     if (token === void 0) {
       return void 0;
     }
-    const leftKind = this.csharpExpressionTypeOf(node.left);
-    const rightKind = this.csharpExpressionTypeOf(node.right);
+    const [leftKind, rightKind] = this.csharpComparisonOperandKinds(node.left, node.right);
     if (leftKind === void 0 || rightKind === void 0) {
       return void 0;
     }
@@ -8027,7 +8027,28 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     const leftText = this.printNode(node.left, 0).trim();
     const rightText = this.printNode(node.right, 0).trim();
+    if (this.csharpExpressionTypeOf(node.left) === void 0 || this.csharpExpressionTypeOf(node.right) === void 0) {
+      return "(" + leftText + " " + token + " " + rightText + ")";
+    }
     return leftText + " " + token + " " + rightText;
+  }
+  // the two operand kinds of an ordered comparison; a hand-written numeric field (CSHARP_SCALAR_FIELD_KINDS)
+  // names its declared kind, and an integer literal beside a double field compares as that double
+  csharpComparisonOperandKinds(left, right) {
+    const fieldKind = (n) => {
+      while (n?.kind === SyntaxKind4.ParenthesizedExpression) {
+        n = n.expression;
+      }
+      return isPropertyAccessExpression(n) && n.expression?.kind === SyntaxKind4.ThisKeyword && Object.prototype.hasOwnProperty.call(CSHARP_SCALAR_FIELD_KINDS, n.name?.text) ? CSHARP_SCALAR_FIELD_KINDS[n.name.text] : void 0;
+    };
+    let leftKind = this.csharpExpressionTypeOf(left) ?? fieldKind(left);
+    let rightKind = this.csharpExpressionTypeOf(right) ?? fieldKind(right);
+    if (fieldKind(left) === "double" && rightKind === "int" && isNumericLiteral2(right)) {
+      rightKind = "double";
+    } else if (fieldKind(right) === "double" && leftKind === "int" && isNumericLiteral2(left)) {
+      leftKind = "double";
+    }
+    return [leftKind, rightKind];
   }
   // `Math.min/max (a, b)`: mathMin/mathMax read both boxes via Convert.ToDouble, return an ORIGINAL
   // one (null if either is null); Math.Min/Max returns one numeric kind. Native only when both are
