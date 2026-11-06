@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-YEJ2U6VR.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -53287,13 +53287,26 @@ ${classMethods}
     const body = blockOpen + optionalInits + shadows + (shadowPlan?.lines ?? "") + statements + blockClose;
     return this.printNodeCommentsIfAny(node, identation, methodDef + body);
   }
+  // A free test-helper function with defaulted trailing parameters (`ts/src/[pro/]test/Exchange/`):
+  // they collapse into `optional_args: &[Value]` like a method's, read back as `Value::Null` defaults.
+  rustFreeFnFirstDefault(node) {
+    if (node?.kind !== SyntaxKind7.FunctionDeclaration || node.body === void 0)
+      return -1;
+    if (!/ts[/]src[/](?:pro[/])?test[/]Exchange[/]/.test(String(node.getSourceFile().fileName)))
+      return -1;
+    return Array.from(node.parameters).findIndex((p) => p.initializer !== void 0);
+  }
   printFunctionDefinition(node, identation) {
     const name = node.name?.text ?? "";
-    const params = node.parameters;
-    const parsedArgs = params.map((p) => `${this.printNode(p.name, 0)}: Value`).join(", ");
+    const firstDefault = this.rustFreeFnFirstDefault(node);
+    const params = firstDefault < 0 ? node.parameters : node.parameters.slice(0, firstDefault);
+    let parsedArgs = params.map((p) => `${this.printNode(p.name, 0)}: Value`).join(", ");
+    if (firstDefault >= 0)
+      parsedArgs += `${parsedArgs ? ", " : ""}optional_args: &[Value]`;
     const returnType = this.printRustFunctionType(node);
     const retStr = returnType ? ` -> ${returnType}` : "";
-    return `${this.getIden(identation)}fn ${name}(${parsedArgs})${retStr}`;
+    const isAsync = /ts[/]src[/]test[/]Exchange[/]/.test(String(node.getSourceFile().fileName)) && (node.modifiers ?? []).some((m) => m.kind === SyntaxKind7.AsyncKeyword);
+    return `${this.getIden(identation)}${isAsync ? "async " : ""}fn ${name}(${parsedArgs})${retStr}`;
   }
   printFunctionDeclaration(node, identation) {
     if (isArrowFunction5(node)) {
@@ -53302,7 +53315,13 @@ ${classMethods}
       return `|${parameters}| ${body}`;
     }
     const funcDef = this.printFunctionDefinition(node, identation);
-    const funcBody = super.printFunctionBody(node, identation);
+    let funcBody = super.printFunctionBody(node, identation);
+    const firstDefault = this.rustFreeFnFirstDefault(node);
+    if (firstDefault >= 0) {
+      const decls = node.parameters.slice(firstDefault).map((p, i) => `
+${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get_arg(optional_args, ${i}, Value::Null);`).join("");
+      funcBody = funcBody.replace("{", "{" + decls);
+    }
     return this.printNodeCommentsIfAny(node, identation, funcDef + funcBody);
   }
   printOutOfOrderCallExpressionIfAny(node, identation) {
@@ -53547,6 +53566,9 @@ ${classMethods}
     const dynamicCall = this.printDynamicSelfCall(node, identation);
     if (dynamicCall !== void 0)
       return dynamicCall;
+    const freeFnCall = this.printFreeFnDefaultArgsCall(node, identation);
+    if (freeFnCall !== void 0)
+      return freeFnCall;
     const outOfOrder = this.printOutOfOrderCallExpressionIfAny(node, identation);
     if (outOfOrder) {
       return this.rustBoxNativeStrCallIfNeeded(node, outOfOrder);
@@ -53565,6 +53587,26 @@ ${classMethods}
       }
     }
     return this.rustBoxNativeStrCallIfNeeded(node, super.printCallExpression(node, identation));
+  }
+  // `helper(a, b)` to a free function with defaulted parameters: `helper(a, &[b])`, awaited when async.
+  printFreeFnDefaultArgsCall(node, identation) {
+    if (!isIdentifier3(node.expression))
+      return void 0;
+    let decl;
+    try {
+      decl = signatureDeclaration(this.getChecker().getResolvedSignature(node));
+    } catch (e) {
+      return void 0;
+    }
+    decl = decl?.resolve?.() ?? decl;
+    const firstDefault = this.rustFreeFnFirstDefault(decl);
+    if (firstDefault < 0)
+      return void 0;
+    const args = this.rustPrintedArgs(node, identation);
+    const fixed = args.slice(0, firstDefault);
+    const isAsync = (decl.modifiers ?? []).some((m) => m.kind === SyntaxKind7.AsyncKeyword);
+    const awaited = node.parent?.kind === SyntaxKind7.AwaitExpression;
+    return `${node.expression.text}(${[...fixed, `&[${args.slice(firstDefault).join(", ")}]`].join(", ")})${isAsync && !awaited ? ".await" : ""}`;
   }
   // `this[name]` with a variable key: `self.prop(&name)` resolves the field by name at runtime.
   // Write targets and call callees keep their own forms.
