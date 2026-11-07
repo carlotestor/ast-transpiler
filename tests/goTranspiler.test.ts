@@ -11898,6 +11898,20 @@ describe ('goStringCallPointerLocal', () => {
             expect (out).toContain ('\t\thmacText := this.Hmac(data)\n\t\ts = &hmacText\n');
             expect (out).not.toContain ('SafeStringPtr(');
         });
+        test('an unwritten Go string parameter in a *string ternary arm is its address', () => {
+            const t = new Transpiler ({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 }, 'unifiedStringParams': { 'cancelOrder': [ 0 ] } } });
+            installCcxtGoHooks (t.goTranspiler);
+            const out = t.transpileGo (PRELUDE + 'class Foo extends Exchange {\n'
+                + '    async cancelOrder (id: string, symbol: Str = undefined, params: Dict = {}): Promise<any> {\n'
+                + '        const clientOrderId = this.safeString (params, \'clientOrderId\');\n'
+                + '        const orderId = (clientOrderId === undefined) ? id : undefined;\n'
+                + '        return { \'id\': orderId };\n'
+                + '    }\n'
+                + '}\n').content;
+            expect (out).toContain ('cancelOrderBody(ch chan any, id string');
+            expect (out).toContain ('return &id');
+            expect (out).not.toContain ('SafeStringPtr(id)');
+        });
         test('a call typed string | undefined keeps the SafeStringPtr box', () => {
             const out = print (
                 '    sign (o: Dict): any {\n'

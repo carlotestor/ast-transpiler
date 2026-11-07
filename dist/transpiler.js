@@ -20905,7 +20905,45 @@ function ccxtGoTernaryLiftArm(goTranspiler, armNode, armText) {
     return { type: armType };
   }
   const lift = CCXT_GO_TERNARY_LIFT[armType];
+  const address = armType === "string" ? ccxtGoStringParamAddress(goTranspiler, node) : void 0;
+  if (address !== void 0) {
+    return { type: lift[0], wrap: "&", address };
+  }
   return lift === void 0 ? void 0 : { type: lift[0], wrap: lift[1], call: node };
+}
+function ccxtGoStringParamAddress(goTranspiler, node) {
+  let n = node;
+  while (n?.kind === ts.SyntaxKind.ParenthesizedExpression) {
+    n = n.expression;
+  }
+  if (n?.kind !== ts.SyntaxKind.Identifier) {
+    return void 0;
+  }
+  let param;
+  try {
+    const symbol = goTranspiler.getChecker().getSymbolAtLocation(n);
+    param = symbol?.valueDeclaration?.resolve?.() ?? symbol?.valueDeclaration;
+  } catch (e) {
+    return void 0;
+  }
+  const fn = param?.parent;
+  if (param?.kind !== ts.SyntaxKind.Parameter || param.name?.kind !== ts.SyntaxKind.Identifier || fn?.body === void 0 || param.initializer !== void 0 || param.dotDotDotToken !== void 0 || goTranspiler.goNativeParameterType(param) !== "string") {
+    return void 0;
+  }
+  const name = param.name.text;
+  let written = false;
+  const visit = (x) => {
+    if (written) {
+      return;
+    }
+    if (x.kind === ts.SyntaxKind.BinaryExpression && x.left?.kind === ts.SyntaxKind.Identifier && x.left.text === name && x.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && x.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+      written = true;
+      return;
+    }
+    x.forEachChild(visit);
+  };
+  fn.body.forEachChild(visit);
+  return written ? void 0 : "&" + name;
 }
 function ccxtGoTernaryLiftJoin(goTranspiler, declaration, literal2) {
   const initializer = declaration?.initializer;
@@ -20941,7 +20979,7 @@ function ccxtGoTernaryLiftJoin(goTranspiler, declaration, literal2) {
   if (unproven || goTranspiler.goTypeNameIsShadowed(scope, joinType) || !goTranspiler.goLocalIsSafeToType(scope, declaration, varName, joinType)) {
     return void 0;
   }
-  const lifted = (arm, text) => arm.wrap === void 0 ? text : arm.wrap + "(" + text + ")";
+  const lifted = (arm, text) => arm.wrap === void 0 ? text : arm.address ?? arm.wrap + "(" + text + ")";
   const hoisted = arms.map((arm, i) => arm.wrap === "SafeStringPtr" && typeof goTranspiler.goStringCallLocalName === "function" ? goTranspiler.goStringCallLocalName(arm.call) : void 0);
   return {
     joinType,
@@ -22341,7 +22379,7 @@ function installStringPtrParams(goTranspiler) {
     const depth = this.goExprDepth + (args.length > 1 ? 1 : 0);
     return args.map((a, i) => {
       const text = this.goWithExprDepth(depth, () => this.printNode(a, identation)).trim();
-      return wrap[i] ? "SafeStringPtr(" + text + ")" : text;
+      return wrap[i] ? ccxtGoStringParamAddress(this, a) ?? "SafeStringPtr(" + text + ")" : text;
     }).join(", ");
   };
 }

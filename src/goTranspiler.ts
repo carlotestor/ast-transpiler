@@ -10993,7 +10993,51 @@ function ccxtGoTernaryLiftArm (goTranspiler, armNode, armText) {
         return { type: armType };
     }
     const lift = CCXT_GO_TERNARY_LIFT[armType];
+    const address = (armType === 'string') ? ccxtGoStringParamAddress (goTranspiler, node) : undefined;
+    if (address !== undefined) {
+        return { type: lift[0], wrap: '&', address: address };
+    }
     return (lift === undefined) ? undefined : { type: lift[0], wrap: lift[1], call: node };
+}
+
+// `&id` for an identifier naming a Go `string` parameter its body never writes: the address of
+// the unchanged value is what SafeStringPtr(id) builds
+function ccxtGoStringParamAddress (goTranspiler, node) {
+    let n = node;
+    while (n?.kind === ts.SyntaxKind.ParenthesizedExpression) {
+        n = n.expression;
+    }
+    if (n?.kind !== ts.SyntaxKind.Identifier) {
+        return undefined;
+    }
+    let param;
+    try {
+        const symbol = goTranspiler.getChecker ().getSymbolAtLocation (n);
+        param = symbol?.valueDeclaration?.resolve?.() ?? symbol?.valueDeclaration;
+    } catch (e) {
+        return undefined;
+    }
+    const fn = param?.parent;
+    if ((param?.kind !== ts.SyntaxKind.Parameter) || (param.name?.kind !== ts.SyntaxKind.Identifier) || (fn?.body === undefined)
+        || (param.initializer !== undefined) || (param.dotDotDotToken !== undefined)
+        || (goTranspiler.goNativeParameterType (param) !== 'string')) {
+        return undefined;
+    }
+    const name = param.name.text;
+    let written = false;
+    const visit = (x) => {
+        if (written) {
+            return;
+        }
+        if ((x.kind === ts.SyntaxKind.BinaryExpression) && (x.left?.kind === ts.SyntaxKind.Identifier) && (x.left.text === name)
+            && (x.operatorToken.kind >= ts.SyntaxKind.FirstAssignment) && (x.operatorToken.kind <= ts.SyntaxKind.LastAssignment)) {
+            written = true;
+            return;
+        }
+        x.forEachChild (visit);
+    };
+    fn.body.forEachChild (visit);
+    return written ? undefined : '&' + name;
 }
 
 // { joinType, whenTrue, whenFalse } with the lifted arm texts, or undefined when unproven
@@ -11032,7 +11076,7 @@ export function ccxtGoTernaryLiftJoin (goTranspiler, declaration, literal) {
     if (unproven || goTranspiler.goTypeNameIsShadowed (scope, joinType) || !goTranspiler.goLocalIsSafeToType (scope, declaration, varName, joinType)) {
         return undefined;
     }
-    const lifted = (arm, text) => ((arm.wrap === undefined) ? text : arm.wrap + '(' + text + ')');
+    const lifted = (arm, text) => ((arm.wrap === undefined) ? text : (arm.address ?? (arm.wrap + '(' + text + ')')));
     // a string-returning `this.<name>(..)` arm is not boxed: its value is kept in a typed local the
     // arm returns the address of (the arm node order is the source order the local names count in)
     const hoisted = arms.map ((arm, i) => ((arm.wrap === 'SafeStringPtr') && (typeof goTranspiler.goStringCallLocalName === 'function'))
@@ -12663,7 +12707,7 @@ function installStringPtrParams (goTranspiler) {
         const depth = this.goExprDepth + ((args.length > 1) ? 1 : 0);
         return args.map ((a, i) => {
             const text = this.goWithExprDepth (depth, () => this.printNode (a, identation)).trim ();
-            return wrap[i] ? ('SafeStringPtr(' + text + ')') : text;
+            return wrap[i] ? (ccxtGoStringParamAddress (this, a) ?? ('SafeStringPtr(' + text + ')')) : text;
         }).join (', ');
     };
 }
