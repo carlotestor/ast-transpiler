@@ -3628,6 +3628,11 @@ export class RustTranspiler extends BaseTranspiler {
         fetchTickers: 'crate::types::Tickers',
         fetchOrderBook: 'crate::types::OrderBook',
         fetchTrades: 'Vec<crate::types::Trade>',
+        fetchBalance: 'crate::types::Balances',
+        fetchMarkets: 'Vec<crate::types::Market>',
+        fetchCurrencies: 'crate::types::Currencies',
+        fetchPositions: 'Vec<crate::types::Position>',
+        fetchPosition: 'crate::types::Position',
     };
 
     // The typed signature of a unified method listed in `config.typedUnified`, when every parameter maps;
@@ -3670,7 +3675,9 @@ export class RustTranspiler extends BaseTranspiler {
     printTypedUnifiedCall(node): string | undefined {
         const callee = node.expression;
         if (!isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword) return undefined;
-        if (!this.rustTypedUnified.has(callee.name.text) || node.parent?.kind !== SyntaxKind.AwaitExpression) return undefined;
+        // awaited directly, or an element of a `Promise.all` array (`[this.fetchPositions (), ...]`)
+        const awaited = node.parent?.kind === SyntaxKind.AwaitExpression || node.parent?.kind === SyntaxKind.ArrayLiteralExpression;
+        if (!this.rustTypedUnified.has(callee.name.text) || !awaited) return undefined;
         let decl: any;
         try {
             decl = signatureDeclaration((this.getChecker() as any).getResolvedSignature(node));
