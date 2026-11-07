@@ -3617,6 +3617,9 @@ export class RustTranspiler extends BaseTranspiler {
         const optional = p.initializer !== undefined || p.questionToken !== undefined;
         if (ts === 'Dict' && optional) return { rustType: 'impl Into<crate::Params> + Send', toValue: `${name}.into().into_value()` };
         if (ts === 'string' && !optional) return { rustType: '&str', toValue: `Value::from(${name})` };
+        // an optional string (`Str`, `string = '1m'`, untyped `= '1m'`) is `None` for the declared default
+        const strDefault = ts === '' && p.initializer?.kind === SyntaxKind.StringLiteral;
+        if ((ts === 'Str' || ts === 'string' || strDefault) && optional) return { rustType: 'Option<&str>', toValue: `${name}.map(Value::from).unwrap_or_default()` };
         if (ts === 'Int' && optional) return { rustType: 'Option<i64>', toValue: `Value::from(${name})` };
         if (ts === 'Strings' && optional) return { rustType: 'Option<Vec<String>>', toValue: `Value::from(${name})` };
         return undefined;
@@ -3628,6 +3631,12 @@ export class RustTranspiler extends BaseTranspiler {
         fetchTickers: 'crate::types::Tickers',
         fetchOrderBook: 'crate::types::OrderBook',
         fetchTrades: 'Vec<crate::types::Trade>',
+        fetchOHLCV: 'Vec<crate::types::OHLCV>',
+        fetchOrder: 'crate::types::Order',
+        fetchOrders: 'Vec<crate::types::Order>',
+        fetchOpenOrders: 'Vec<crate::types::Order>',
+        fetchClosedOrders: 'Vec<crate::types::Order>',
+        fetchMyTrades: 'Vec<crate::types::Trade>',
     };
 
     // The typed signature of a unified method listed in `config.typedUnified`, when every parameter maps;
@@ -3685,11 +3694,13 @@ export class RustTranspiler extends BaseTranspiler {
         if (typed === undefined) return undefined;
         const args = Array.from(node.arguments) as any[];
         const printed = typed.params.map((p, i) => {
-            if (args[i] === undefined) return p.rustType.startsWith('impl') ? 'Value::Null' : 'None';
+            const absent = args[i] === undefined || (args[i].kind === SyntaxKind.Identifier && args[i].text === 'undefined');
+            if (absent) return p.rustType.startsWith('impl') ? 'Value::Null' : 'None';
             const v = this.printNode(args[i], 0).trim();
             const recv = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(v) ? v : `(${v})`;
             if (p.rustType === '&str') return `${recv}.as_str().unwrap_or_default()`;
             if (p.rustType === 'Option<i64>') return `${recv}.as_i64()`;
+            if (p.rustType === 'Option<&str>') return `${recv}.as_str()`;
             if (p.rustType === 'Option<Vec<String>>') return `${recv}.to_opt_str_vec()`;
             return RustTranspiler.cloneIfBareLocal(v);
         });

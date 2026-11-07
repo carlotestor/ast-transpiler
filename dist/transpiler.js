@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-AWK6QGCM.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -54273,6 +54273,9 @@ ${classMethods}
       return { rustType: "impl Into<crate::Params> + Send", toValue: `${name}.into().into_value()` };
     if (ts2 === "string" && !optional)
       return { rustType: "&str", toValue: `Value::from(${name})` };
+    const strDefault = ts2 === "" && p.initializer?.kind === SyntaxKind7.StringLiteral;
+    if ((ts2 === "Str" || ts2 === "string" || strDefault) && optional)
+      return { rustType: "Option<&str>", toValue: `${name}.map(Value::from).unwrap_or_default()` };
     if (ts2 === "Int" && optional)
       return { rustType: "Option<i64>", toValue: `Value::from(${name})` };
     if (ts2 === "Strings" && optional)
@@ -54343,7 +54346,8 @@ ${i1}}`;
       return void 0;
     const args = Array.from(node.arguments);
     const printed = typed.params.map((p, i) => {
-      if (args[i] === void 0)
+      const absent = args[i] === void 0 || args[i].kind === SyntaxKind7.Identifier && args[i].text === "undefined";
+      if (absent)
         return p.rustType.startsWith("impl") ? "Value::Null" : "None";
       const v = this.printNode(args[i], 0).trim();
       const recv = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(v) ? v : `(${v})`;
@@ -54351,6 +54355,8 @@ ${i1}}`;
         return `${recv}.as_str().unwrap_or_default()`;
       if (p.rustType === "Option<i64>")
         return `${recv}.as_i64()`;
+      if (p.rustType === "Option<&str>")
+        return `${recv}.as_str()`;
       if (p.rustType === "Option<Vec<String>>")
         return `${recv}.to_opt_str_vec()`;
       return _RustTranspiler.cloneIfBareLocal(v);
@@ -60653,7 +60659,13 @@ _RustTranspiler.RUST_TYPED_RETURNS = {
   fetchTicker: "crate::types::Ticker",
   fetchTickers: "crate::types::Tickers",
   fetchOrderBook: "crate::types::OrderBook",
-  fetchTrades: "Vec<crate::types::Trade>"
+  fetchTrades: "Vec<crate::types::Trade>",
+  fetchOHLCV: "Vec<crate::types::OHLCV>",
+  fetchOrder: "crate::types::Order",
+  fetchOrders: "Vec<crate::types::Order>",
+  fetchOpenOrders: "Vec<crate::types::Order>",
+  fetchClosedOrders: "Vec<crate::types::Order>",
+  fetchMyTrades: "Vec<crate::types::Trade>"
 };
 // Hand-written runtime methods (`exchange_stubs.rs`, `exchange.rs`, the ws `Client`/`Future` handles) take a
 // fixed number of positional `Value`s plus `optional_args: &[Value]`; their TS declarations (field aliases,
