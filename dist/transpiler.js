@@ -54329,7 +54329,10 @@ ${i1}}`;
     const callee = node.expression;
     if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword)
       return void 0;
-    if (!this.rustTypedUnified.has(callee.name.text) || node.parent?.kind !== SyntaxKind7.AwaitExpression)
+    if (!this.rustTypedUnified.has(callee.name.text))
+      return void 0;
+    const inPromiseAll = node.parent?.kind === SyntaxKind7.ArrayLiteralExpression && node.parent.parent?.kind === SyntaxKind7.CallExpression && /^Promise\.all$/.test(String(node.parent.parent.expression?.getText?.() ?? "").replace(/\s+/g, ""));
+    if (node.parent?.kind !== SyntaxKind7.AwaitExpression && !inPromiseAll)
       return void 0;
     let decl;
     try {
@@ -54349,6 +54352,10 @@ ${i1}}`;
       const absent = args[i] === void 0 || args[i].kind === SyntaxKind7.Identifier && args[i].text === "undefined";
       if (absent)
         return p.rustType.startsWith("impl") ? "Value::Null" : "None";
+      if (args[i].kind === SyntaxKind7.StringLiteral && p.rustType === "&str")
+        return JSON.stringify(args[i].text);
+      if (args[i].kind === SyntaxKind7.StringLiteral && p.rustType === "Option<&str>")
+        return `Some(${JSON.stringify(args[i].text)})`;
       const v = this.printNode(args[i], 0).trim();
       const recv = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(v) ? v : `(${v})`;
       if (p.rustType === "&str")

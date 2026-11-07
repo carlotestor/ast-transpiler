@@ -3679,7 +3679,12 @@ export class RustTranspiler extends BaseTranspiler {
     printTypedUnifiedCall(node): string | undefined {
         const callee = node.expression;
         if (!isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword) return undefined;
-        if (!this.rustTypedUnified.has(callee.name.text) || node.parent?.kind !== SyntaxKind.AwaitExpression) return undefined;
+        if (!this.rustTypedUnified.has(callee.name.text)) return undefined;
+        // awaited directly, or an element of an awaited `Promise.all ([..])` (each element is awaited in turn)
+        const inPromiseAll = node.parent?.kind === SyntaxKind.ArrayLiteralExpression
+            && node.parent.parent?.kind === SyntaxKind.CallExpression
+            && /^Promise\.all$/.test(String(node.parent.parent.expression?.getText?.() ?? '').replace(/\s+/g, ''));
+        if (node.parent?.kind !== SyntaxKind.AwaitExpression && !inPromiseAll) return undefined;
         let decl: any;
         try {
             decl = signatureDeclaration((this.getChecker() as any).getResolvedSignature(node));
@@ -3696,6 +3701,8 @@ export class RustTranspiler extends BaseTranspiler {
         const printed = typed.params.map((p, i) => {
             const absent = args[i] === undefined || (args[i].kind === SyntaxKind.Identifier && args[i].text === 'undefined');
             if (absent) return p.rustType.startsWith('impl') ? 'Value::Null' : 'None';
+            if (args[i].kind === SyntaxKind.StringLiteral && p.rustType === '&str') return JSON.stringify(args[i].text);
+            if (args[i].kind === SyntaxKind.StringLiteral && p.rustType === 'Option<&str>') return `Some(${JSON.stringify(args[i].text)})`;
             const v = this.printNode(args[i], 0).trim();
             const recv = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(v) ? v : `(${v})`;
             if (p.rustType === '&str') return `${recv}.as_str().unwrap_or_default()`;
