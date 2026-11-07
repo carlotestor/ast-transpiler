@@ -3692,7 +3692,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (typed === undefined) return undefined;
         const args = Array.from(node.arguments) as any[];
         const printed = typed.params.map((p, i) => {
-            if (args[i] === undefined) return p.rustType.startsWith('impl') ? 'Value::Null' : 'None';
+            if (args[i] === undefined || args[i].kind === SyntaxKind.UndefinedKeyword || (isIdentifier(args[i]) && args[i].text === 'undefined')) {
+                return p.rustType.startsWith('impl') ? 'Value::Null' : 'None';
+            }
             const v = this.printNode(args[i], 0).trim();
             const recv = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(v) ? v : `(${v})`;
             if (p.rustType === '&str') return `${recv}.as_str().unwrap_or_default()`;

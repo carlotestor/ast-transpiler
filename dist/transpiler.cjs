@@ -54343,8 +54343,9 @@ ${i1}}`;
       return void 0;
     const args = Array.from(node.arguments);
     const printed = typed.params.map((p, i) => {
-      if (args[i] === void 0)
+      if (args[i] === void 0 || args[i].kind === _ast.SyntaxKind.UndefinedKeyword || _is.isIdentifier.call(void 0, args[i]) && args[i].text === "undefined") {
         return p.rustType.startsWith("impl") ? "Value::Null" : "None";
+      }
       const v = this.printNode(args[i], 0).trim();
       const recv = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(v) ? v : `(${v})`;
       if (p.rustType === "&str")
