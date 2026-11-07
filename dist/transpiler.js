@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-DSH7DNKY.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -54277,6 +54277,16 @@ ${classMethods}
       return { rustType: "Option<i64>", toValue: `Value::from(${name})` };
     if (ts2 === "Strings" && optional)
       return { rustType: "Option<Vec<String>>", toValue: `Value::from(${name})` };
+    if ((ts2 === "OrderType" || ts2 === "OrderSide") && !optional)
+      return { rustType: "&str", toValue: `Value::from(${name})` };
+    if (ts2 === "Str" && optional)
+      return { rustType: "Option<&str>", toValue: `Value::from(${name})` };
+    if (ts2 === "number" && !optional)
+      return { rustType: "f64", toValue: `Value::from(${name})` };
+    if (ts2 === "Num" && optional)
+      return { rustType: "Option<f64>", toValue: `Value::from(${name})` };
+    if (ts2 === "string[]" && !optional)
+      return { rustType: "Vec<String>", toValue: `Value::from(Some(${name}))` };
     return void 0;
   }
   // The typed signature of a unified method listed in `config.typedUnified`, when every parameter maps;
@@ -54345,17 +54355,45 @@ ${i1}}`;
     const printed = typed.params.map((p, i) => {
       if (args[i] === void 0)
         return p.rustType.startsWith("impl") ? "Value::Null" : "None";
+      const lit = _RustTranspiler.rustTypedLiteralArg(args[i], p.rustType);
+      if (lit !== void 0)
+        return lit;
       const v = this.printNode(args[i], 0).trim();
       const recv = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(v) ? v : `(${v})`;
       if (p.rustType === "&str")
         return `${recv}.as_str().unwrap_or_default()`;
+      if (p.rustType === "Option<&str>")
+        return `${recv}.as_str()`;
       if (p.rustType === "Option<i64>")
         return `${recv}.as_i64()`;
+      if (p.rustType === "f64")
+        return `${recv}.as_f64().unwrap_or_default()`;
+      if (p.rustType === "Option<f64>")
+        return `${recv}.as_f64()`;
+      if (p.rustType === "Vec<String>")
+        return `${recv}.to_str_vec()`;
       if (p.rustType === "Option<Vec<String>>")
         return `${recv}.to_opt_str_vec()`;
       return _RustTranspiler.cloneIfBareLocal(v);
     });
     return `crate::types::IntoRaw::into_raw(self.${this.toSnakeCaseName(callee.name.text)}(${printed.join(", ")}).await)`;
+  }
+  // A literal argument of a typed unified call printed in the parameter's native type (`'market'` -> `"market"`).
+  static rustTypedLiteralArg(arg, rustType) {
+    const optional = rustType.startsWith("Option<");
+    if (optional && (arg.kind === SyntaxKind7.UndefinedKeyword || arg.kind === SyntaxKind7.Identifier && arg.text === "undefined"))
+      return "None";
+    if (arg.kind === SyntaxKind7.StringLiteral && (rustType === "&str" || rustType === "Option<&str>")) {
+      const lit = JSON.stringify(arg.text);
+      return optional ? `Some(${lit})` : lit;
+    }
+    const neg = arg.kind === SyntaxKind7.PrefixUnaryExpression && arg.operator === SyntaxKind7.MinusToken && arg.operand.kind === SyntaxKind7.NumericLiteral;
+    const num = arg.kind === SyntaxKind7.NumericLiteral ? arg.text : neg ? `-${arg.operand.text}` : void 0;
+    if (num !== void 0 && /^-?\d+(\.\d+)?$/.test(num) && (rustType === "f64" || rustType === "Option<f64>")) {
+      const f = num.includes(".") ? num : `${num}.0`;
+      return optional ? `Some(${f})` : f;
+    }
+    return void 0;
   }
   printRustFunctionType(node) {
     if (this.rustNativeStrReturnKind(node) === "str") {
@@ -60653,7 +60691,12 @@ _RustTranspiler.RUST_TYPED_RETURNS = {
   fetchTicker: "crate::types::Ticker",
   fetchTickers: "crate::types::Tickers",
   fetchOrderBook: "crate::types::OrderBook",
-  fetchTrades: "Vec<crate::types::Trade>"
+  fetchTrades: "Vec<crate::types::Trade>",
+  createOrder: "crate::types::Order",
+  editOrder: "crate::types::Order",
+  cancelOrder: "crate::types::Order",
+  cancelOrders: "Vec<crate::types::Order>",
+  cancelAllOrders: "Vec<crate::types::Order>"
 };
 // Hand-written runtime methods (`exchange_stubs.rs`, `exchange.rs`, the ws `Client`/`Future` handles) take a
 // fixed number of positional `Value`s plus `optional_args: &[Value]`; their TS declarations (field aliases,

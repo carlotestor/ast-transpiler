@@ -3619,6 +3619,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (ts === 'string' && !optional) return { rustType: '&str', toValue: `Value::from(${name})` };
         if (ts === 'Int' && optional) return { rustType: 'Option<i64>', toValue: `Value::from(${name})` };
         if (ts === 'Strings' && optional) return { rustType: 'Option<Vec<String>>', toValue: `Value::from(${name})` };
+        if ((ts === 'OrderType' || ts === 'OrderSide') && !optional) return { rustType: '&str', toValue: `Value::from(${name})` };
+        if (ts === 'Str' && optional) return { rustType: 'Option<&str>', toValue: `Value::from(${name})` };
+        if (ts === 'number' && !optional) return { rustType: 'f64', toValue: `Value::from(${name})` };
+        if (ts === 'Num' && optional) return { rustType: 'Option<f64>', toValue: `Value::from(${name})` };
+        if (ts === 'string[]' && !optional) return { rustType: 'Vec<String>', toValue: `Value::from(Some(${name}))` };
         return undefined;
     }
 
@@ -3628,6 +3633,11 @@ export class RustTranspiler extends BaseTranspiler {
         fetchTickers: 'crate::types::Tickers',
         fetchOrderBook: 'crate::types::OrderBook',
         fetchTrades: 'Vec<crate::types::Trade>',
+        createOrder: 'crate::types::Order',
+        editOrder: 'crate::types::Order',
+        cancelOrder: 'crate::types::Order',
+        cancelOrders: 'Vec<crate::types::Order>',
+        cancelAllOrders: 'Vec<crate::types::Order>',
     };
 
     // The typed signature of a unified method listed in `config.typedUnified`, when every parameter maps;
@@ -3686,14 +3696,37 @@ export class RustTranspiler extends BaseTranspiler {
         const args = Array.from(node.arguments) as any[];
         const printed = typed.params.map((p, i) => {
             if (args[i] === undefined) return p.rustType.startsWith('impl') ? 'Value::Null' : 'None';
+            const lit = RustTranspiler.rustTypedLiteralArg(args[i], p.rustType);
+            if (lit !== undefined) return lit;
             const v = this.printNode(args[i], 0).trim();
             const recv = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(v) ? v : `(${v})`;
             if (p.rustType === '&str') return `${recv}.as_str().unwrap_or_default()`;
+            if (p.rustType === 'Option<&str>') return `${recv}.as_str()`;
             if (p.rustType === 'Option<i64>') return `${recv}.as_i64()`;
+            if (p.rustType === 'f64') return `${recv}.as_f64().unwrap_or_default()`;
+            if (p.rustType === 'Option<f64>') return `${recv}.as_f64()`;
+            if (p.rustType === 'Vec<String>') return `${recv}.to_str_vec()`;
             if (p.rustType === 'Option<Vec<String>>') return `${recv}.to_opt_str_vec()`;
             return RustTranspiler.cloneIfBareLocal(v);
         });
         return `crate::types::IntoRaw::into_raw(self.${this.toSnakeCaseName(callee.name.text)}(${printed.join(', ')}).await)`;
+    }
+
+    // A literal argument of a typed unified call printed in the parameter's native type (`'market'` -> `"market"`).
+    private static rustTypedLiteralArg(arg: any, rustType: string): string | undefined {
+        const optional = rustType.startsWith('Option<');
+        if (optional && (arg.kind === SyntaxKind.UndefinedKeyword || (arg.kind === SyntaxKind.Identifier && arg.text === 'undefined'))) return 'None';
+        if (arg.kind === SyntaxKind.StringLiteral && (rustType === '&str' || rustType === 'Option<&str>')) {
+            const lit = JSON.stringify(arg.text);
+            return optional ? `Some(${lit})` : lit;
+        }
+        const neg = arg.kind === SyntaxKind.PrefixUnaryExpression && arg.operator === SyntaxKind.MinusToken && arg.operand.kind === SyntaxKind.NumericLiteral;
+        const num = arg.kind === SyntaxKind.NumericLiteral ? arg.text : (neg ? `-${arg.operand.text}` : undefined);
+        if (num !== undefined && /^-?\d+(\.\d+)?$/.test(num) && (rustType === 'f64' || rustType === 'Option<f64>')) {
+            const f = num.includes('.') ? num : `${num}.0`;
+            return optional ? `Some(${f})` : f;
+        }
+        return undefined;
     }
 
     printRustFunctionType(node): string {
