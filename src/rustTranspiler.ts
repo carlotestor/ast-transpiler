@@ -5098,6 +5098,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (!this.isRustValueIndexKey(key)) return undefined;
         const place = this.printNode(key, 0).trim();
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(place)) return undefined;
+        // a typed `i64` loop counter indexes the slice directly
+        if (this.rustI64CounterOf(this.rustSkipWrappers(key)) !== undefined) return `${shadow.name}.get(${place} as usize).cloned().unwrap_or(Value::Null)`;
         return `${shadow.name}.get((${place}).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
     }
 

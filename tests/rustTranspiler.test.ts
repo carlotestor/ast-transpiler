@@ -3326,7 +3326,8 @@ describe('rust native container reads on typed receivers', () => {
 
     const DYNAMIC = '.as_array().and_then(|__arr| match &i { Value::Int(__n) => __arr.get(*__n as usize), Value::Str(__s) => __s.parse::<usize>().ok().and_then(|__n| __arr.get(__n)), _ => None }).cloned().unwrap_or(Value::Null)';
     // A list parameter that is shadowed reads its slice directly.
-    const SHADOW_DYNAMIC = '.get((i).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)';
+    // (an i64 loop counter indexes it as usize)
+    const SHADOW_DYNAMIC = '.get(i as usize).cloned().unwrap_or(Value::Null)';
 
     test('a dynamic index into a proven list reads natively', () => {
         const ts =
@@ -3692,6 +3693,24 @@ describe('rust parameter shadows', () => {
         expect(output).toContain('let rows = rows.as_array().unwrap_or(&__rows_empty);');
         expect(output).toContain('let mut n: Value = Value::Int(rows.len() as i64);');
         expect(output).toContain('return rows.get(0).cloned().unwrap_or(Value::Null);');
+    });
+
+    test('a typed i64 counter indexes a List parameter shadow directly', () => {
+        const ts =
+            "class C {\n" +
+            "    f (ids: string[]): any {\n" +
+            "        const out = [];\n" +
+            "        for (let i = 0; i < ids.length; i++) {\n" +
+            "            out.push (this.g (ids[i]));\n" +
+            "        }\n" +
+            "        return out;\n" +
+            "    }\n" +
+            "    g (x: any): any { return x; }\n" +
+            "}";
+        const output = transpiler.transpileRust(ts).content;
+        expect(output).toContain('let mut i: i64 = 0;');
+        expect(output).toContain('ids.get(i as usize).cloned().unwrap_or(Value::Null)');
+        expect(output).not.toContain('as_i64().unwrap_or(-1) as usize');
     });
 
     test('returning the parameter keeps the box (D2/census)', () => {

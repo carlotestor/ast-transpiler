@@ -23340,12 +23340,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         while (text.startsWith('(') && text.endsWith(')')) {
             text = text.substring(1, text.length - 1).trim();
         }
-        if ((text.length < 3) || !text.startsWith('[') || !text.endsWith(']')) {
+        if ((text.length < 2) || !text.startsWith('[') || !text.endsWith(']')) {
             return false;
         }
         const inner = text.substring(1, text.length - 1).trim();
         if (inner === '') {
-            return false;
+            return true; // printed as the slot's own empty slice
         }
         const elements = goBalancedSliceArgs('(' + inner + ')', 0);
         if (elements === undefined) {
@@ -23436,13 +23436,14 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     // the Go slice type an array literal prints: every element a Go string makes `[]string`, every
     // element itself such a literal makes `[][]string`. A spread, an empty or a mixed literal keeps
     // the box, so the rule never widens a `[]any{...}` that the target slot did not ask for.
-    goArrayLiteralSliceType(node, depth = 0): string | undefined {
+    goArrayLiteralSliceType(node, depth = 0, want?: string): string | undefined {
         if ((node?.kind !== SyntaxKind.ArrayLiteralExpression) || (depth > 2)) {
             return undefined;
         }
         const elements = node.elements ?? [];
         if (elements.length === 0) {
-            return undefined;
+            // an empty literal opens as whatever slice its slot asks for
+            return (depth === 0) ? want : undefined;
         }
         let element: string | undefined;
         for (const node2 of elements) {
@@ -23486,9 +23487,9 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
     }
 
     // the type a call-site argument is proven to print at a slice parameter slot
-    goSliceArgumentType(arg): string | undefined {
+    goSliceArgumentType(arg, want?: string): string | undefined {
         if (arg?.kind === SyntaxKind.ArrayLiteralExpression) {
-            return this.goArrayLiteralSliceType(arg);
+            return this.goArrayLiteralSliceType(arg, 0, want);
         }
         const printed = this.goPrintedArgType(arg);
         return ((printed === '[]string') || (printed === '[][]string')) ? printed : undefined;
@@ -23546,7 +23547,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
                 continue;
             }
             const goType = this.goCallSliceArgumentType(node, name, i);
-            if ((goType === undefined) || (this.goArrayLiteralSliceType(arg) !== goType)) {
+            if ((goType === undefined) || (this.goArrayLiteralSliceType(arg, 0, goType) !== goType)) {
                 continue;
             }
             this.goSliceLiteralTypes.set(arg, goType);
@@ -23867,7 +23868,7 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
             // not the `[]any` box the default print opens. Every other parameter keeps the
             // printer's own argument type, so no existing `[]any` slot changes shape.
             const tableSlot = ((goType === '[]string') || (goType === '[][]string')) && this.goIsUnifiedSliceParameter(name, index);
-            const argType = tableSlot ? this.goSliceArgumentType(arg) : this.goPrintedArgType(arg);
+            const argType = tableSlot ? this.goSliceArgumentType(arg, goType) : this.goPrintedArgType(arg);
             if ((argType !== goType)
                 && !((goType === 'string') && (call.runner === undefined) && this.goNilProvenStringPtrArg(arg))) {
                 return false;

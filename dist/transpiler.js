@@ -32367,12 +32367,12 @@ ${iden}}`;
     while (text.startsWith("(") && text.endsWith(")")) {
       text = text.substring(1, text.length - 1).trim();
     }
-    if (text.length < 3 || !text.startsWith("[") || !text.endsWith("]")) {
+    if (text.length < 2 || !text.startsWith("[") || !text.endsWith("]")) {
       return false;
     }
     const inner = text.substring(1, text.length - 1).trim();
     if (inner === "") {
-      return false;
+      return true;
     }
     const elements = goBalancedSliceArgs("(" + inner + ")", 0);
     if (elements === void 0) {
@@ -32454,13 +32454,13 @@ ${iden}}`;
   // the Go slice type an array literal prints: every element a Go string makes `[]string`, every
   // element itself such a literal makes `[][]string`. A spread, an empty or a mixed literal keeps
   // the box, so the rule never widens a `[]any{...}` that the target slot did not ask for.
-  goArrayLiteralSliceType(node, depth = 0) {
+  goArrayLiteralSliceType(node, depth = 0, want) {
     if (node?.kind !== SyntaxKind5.ArrayLiteralExpression || depth > 2) {
       return void 0;
     }
     const elements = node.elements ?? [];
     if (elements.length === 0) {
-      return void 0;
+      return depth === 0 ? want : void 0;
     }
     let element;
     for (const node2 of elements) {
@@ -32500,9 +32500,9 @@ ${iden}}`;
     return initializer?.kind === SyntaxKind5.StringLiteral || initializer?.kind === SyntaxKind5.NoSubstitutionTemplateLiteral;
   }
   // the type a call-site argument is proven to print at a slice parameter slot
-  goSliceArgumentType(arg) {
+  goSliceArgumentType(arg, want) {
     if (arg?.kind === SyntaxKind5.ArrayLiteralExpression) {
-      return this.goArrayLiteralSliceType(arg);
+      return this.goArrayLiteralSliceType(arg, 0, want);
     }
     const printed = this.goPrintedArgType(arg);
     return printed === "[]string" || printed === "[][]string" ? printed : void 0;
@@ -32557,7 +32557,7 @@ ${iden}}`;
         continue;
       }
       const goType = this.goCallSliceArgumentType(node, name, i);
-      if (goType === void 0 || this.goArrayLiteralSliceType(arg) !== goType) {
+      if (goType === void 0 || this.goArrayLiteralSliceType(arg, 0, goType) !== goType) {
         continue;
       }
       this.goSliceLiteralTypes.set(arg, goType);
@@ -32833,7 +32833,7 @@ ${iden}}`;
         return false;
       }
       const tableSlot = (goType === "[]string" || goType === "[][]string") && this.goIsUnifiedSliceParameter(name, index);
-      const argType = tableSlot ? this.goSliceArgumentType(arg) : this.goPrintedArgType(arg);
+      const argType = tableSlot ? this.goSliceArgumentType(arg, goType) : this.goPrintedArgType(arg);
       if (argType !== goType && !(goType === "string" && call.runner === void 0 && this.goNilProvenStringPtrArg(arg))) {
         return false;
       }
@@ -55568,6 +55568,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const place = this.printNode(key, 0).trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(place))
       return void 0;
+    if (this.rustI64CounterOf(this.rustSkipWrappers(key)) !== void 0)
+      return `${shadow.name}.get(${place} as usize).cloned().unwrap_or(Value::Null)`;
     return `${shadow.name}.get((${place}).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
   }
   /** `'k' in x` on a shadowed dict parameter. */

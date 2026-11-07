@@ -11303,6 +11303,19 @@ describe ('goTypedSliceArgs', () => {
             expect(out).toContain('[][]string{[]string{"BTC/USDT", "1m"}}');
         });
 
+        test('an empty literal at a table slot opens as the slot slice', () => {
+            const ts = PRELUDE +
+                'class ex extends Exchange {\n' +
+                '    wrapper () {\n' +
+                '        return this.unWatchTradesForSymbols ([], {});\n' +
+                '    }\n' +
+                '}\n';
+            const out = go(ts);
+            expect(out).toContain('this.UnWatchTradesForSymbols([]string{}, ');
+            expect(out).toContain('unWatchTradesForSymbolsBody(ch chan any, symbols []string');
+            expect(out).not.toContain('[]any{}');
+        });
+
         test('a method outside the table keeps the box and the helper', () => {
             const ts = PRELUDE +
                 'class ex extends Exchange {\n' +
