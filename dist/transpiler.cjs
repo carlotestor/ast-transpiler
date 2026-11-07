@@ -54287,6 +54287,8 @@ ${classMethods}
       return { rustType: "Option<f64>", toValue: `Value::from(${name})` };
     if (ts2 === "string[]" && !optional)
       return { rustType: "Vec<String>", toValue: `Value::from(Some(${name}))` };
+    if ((ts2 === "OrderRequest[]" || ts2 === "PredictionOrderRequest[]") && !optional)
+      return { rustType: "Vec<crate::types::OrderRequest>", toValue: `crate::types::IntoRaw::into_raw(${name})` };
     return void 0;
   }
   // The typed signature of a unified method listed in `config.typedUnified`, when every parameter maps;
@@ -54377,6 +54379,8 @@ ${i1}}`;
         return `${recv}.to_str_vec()`;
       if (p.rustType === "Option<Vec<String>>")
         return `${recv}.to_opt_str_vec()`;
+      if (p.rustType === "Vec<crate::types::OrderRequest>")
+        return `crate::types::FromRaw::from_raw(${_RustTranspiler.cloneIfBareLocal(v)})`;
       return _RustTranspiler.cloneIfBareLocal(v);
     });
     return `crate::types::IntoRaw::into_raw(self.${this.toSnakeCaseName(callee.name.text)}(${printed.join(", ")}).await)`;
@@ -60706,6 +60710,34 @@ _RustTranspiler.RUST_TYPED_RETURNS = {
   cancelOrder: "crate::types::Order",
   cancelOrders: "Vec<crate::types::Order>",
   cancelAllOrders: "Vec<crate::types::Order>",
+  fetchOpenOrder: "crate::types::Order",
+  fetchClosedOrder: "crate::types::Order",
+  fetchCanceledOrders: "Vec<crate::types::Order>",
+  fetchCanceledAndClosedOrders: "Vec<crate::types::Order>",
+  fetchOrderTrades: "Vec<crate::types::Trade>",
+  createOrders: "Vec<crate::types::Order>",
+  editOrders: "Vec<crate::types::Order>",
+  createLimitOrder: "crate::types::Order",
+  createMarketOrder: "crate::types::Order",
+  createLimitBuyOrder: "crate::types::Order",
+  createLimitSellOrder: "crate::types::Order",
+  createMarketBuyOrder: "crate::types::Order",
+  createMarketSellOrder: "crate::types::Order",
+  createMarketOrderWithCost: "crate::types::Order",
+  createMarketBuyOrderWithCost: "crate::types::Order",
+  createMarketSellOrderWithCost: "crate::types::Order",
+  createPostOnlyOrder: "crate::types::Order",
+  createReduceOnlyOrder: "crate::types::Order",
+  createStopOrder: "crate::types::Order",
+  createStopLimitOrder: "crate::types::Order",
+  createStopMarketOrder: "crate::types::Order",
+  createStopLossOrder: "crate::types::Order",
+  createTakeProfitOrder: "crate::types::Order",
+  createTriggerOrder: "crate::types::Order",
+  createTrailingAmountOrder: "crate::types::Order",
+  createTrailingPercentOrder: "crate::types::Order",
+  createOrderWithTakeProfitAndStopLoss: "crate::types::Order",
+  createTwapOrder: "crate::types::Order",
   fetchBalance: "crate::types::Balances",
   fetchMarkets: "Vec<crate::types::Market>",
   fetchCurrencies: "crate::types::Currencies",
