@@ -3657,7 +3657,19 @@ export class RustTranspiler extends BaseTranspiler {
         watchTrades: 'Vec<crate::types::Trade>',
         watchOHLCV: 'Vec<crate::types::OHLCV>',
         watchOrders: 'Vec<crate::types::Order>',
-        watchBalance: 'crate::types::Balances',
+        watchBalance: 'crate::types::Balances',        fetchDeposits: 'Vec<crate::types::Transaction>',
+        fetchWithdrawals: 'Vec<crate::types::Transaction>',
+        fetchDepositsWithdrawals: 'Vec<crate::types::Transaction>',
+        fetchTransactions: 'Vec<crate::types::Transaction>',
+        fetchDepositAddress: 'crate::types::DepositAddress',
+        fetchDepositAddresses: 'Vec<crate::types::DepositAddress>',
+        withdraw: 'crate::types::Transaction',
+        transfer: 'crate::types::Transfer',
+        fetchTransfers: 'Vec<crate::types::Transfer>',
+        fetchLedger: 'Vec<crate::types::LedgerEntry>',
+        fetchTradingFee: 'crate::types::TradingFee',
+        fetchTradingFees: 'crate::types::TradingFees',
+        fetchDepositWithdrawFees: 'crate::types::DepositWithdrawFees',
     };
 
     // The typed signature of a unified method listed in `config.typedUnified`, when every parameter maps;

@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-LFDADZX5.js";
+} from "./chunk-AWK6QGCM.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -60718,7 +60718,20 @@ _RustTranspiler.RUST_TYPED_RETURNS = {
   watchTrades: "Vec<crate::types::Trade>",
   watchOHLCV: "Vec<crate::types::OHLCV>",
   watchOrders: "Vec<crate::types::Order>",
-  watchBalance: "crate::types::Balances"
+  watchBalance: "crate::types::Balances",
+  fetchDeposits: "Vec<crate::types::Transaction>",
+  fetchWithdrawals: "Vec<crate::types::Transaction>",
+  fetchDepositsWithdrawals: "Vec<crate::types::Transaction>",
+  fetchTransactions: "Vec<crate::types::Transaction>",
+  fetchDepositAddress: "crate::types::DepositAddress",
+  fetchDepositAddresses: "Vec<crate::types::DepositAddress>",
+  withdraw: "crate::types::Transaction",
+  transfer: "crate::types::Transfer",
+  fetchTransfers: "Vec<crate::types::Transfer>",
+  fetchLedger: "Vec<crate::types::LedgerEntry>",
+  fetchTradingFee: "crate::types::TradingFee",
+  fetchTradingFees: "crate::types::TradingFees",
+  fetchDepositWithdrawFees: "crate::types::DepositWithdrawFees"
 };
 // Hand-written runtime methods (`exchange_stubs.rs`, `exchange.rs`, the ws `Client`/`Future` handles) take a
 // fixed number of positional `Value`s plus `optional_args: &[Value]`; their TS declarations (field aliases,
