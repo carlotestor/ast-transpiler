@@ -3615,7 +3615,7 @@ export class RustTranspiler extends BaseTranspiler {
     private static rustTypedParam(p: any, name: string): { rustType: string, toValue: string } | undefined {
         const ts = String(p.type?.getText?.() ?? '').replace(/\s+/g, '');
         const optional = p.initializer !== undefined || p.questionToken !== undefined;
-        if (ts === 'Dict' && optional) return { rustType: 'impl Into<crate::Params> + Send', toValue: `${name}.into().into_value()` };
+        if ((ts === 'Dict' || ts === 'fetchEventsParams') && optional) return { rustType: 'impl Into<crate::Params> + Send', toValue: `${name}.into().into_value()` };
         if (ts === 'string' && !optional) return { rustType: '&str', toValue: `Value::from(${name})` };
         // an optional string (`Str`, `string = '1m'`, untyped `= '1m'`) is `None` for the declared default
         const strDefault = ts === '' && p.initializer?.kind === SyntaxKind.StringLiteral;
@@ -3626,6 +3626,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (ts === 'number' && !optional) return { rustType: 'f64', toValue: `Value::from(${name})` };
         if (ts === 'Num' && optional) return { rustType: 'Option<f64>', toValue: `Value::from(${name})` };
         if (ts === 'string[]' && !optional) return { rustType: 'Vec<String>', toValue: `Value::from(Some(${name}))` };
+        if (ts === 'string[][]' && !optional) return { rustType: 'Vec<Vec<String>>', toValue: `Value::from(Some(${name}))` };
         return undefined;
     }
 
@@ -3658,6 +3659,69 @@ export class RustTranspiler extends BaseTranspiler {
         watchOHLCV: 'Vec<crate::types::OHLCV>',
         watchOrders: 'Vec<crate::types::Order>',
         watchBalance: 'crate::types::Balances',
+        watchTradesForSymbols: 'Vec<crate::types::Trade>',
+        watchMyTrades: 'Vec<crate::types::Trade>',
+        watchMyTradesForSymbols: 'Vec<crate::types::Trade>',
+        watchOrderBookForSymbols: 'crate::types::OrderBook',
+        watchOHLCVForSymbols: 'crate::types::OHLCVsBySymbol',
+        watchOrdersForSymbols: 'Vec<crate::types::Order>',
+        watchPosition: 'crate::types::Position',
+        watchPositions: 'Vec<crate::types::Position>',
+        watchPositionForSymbols: 'Vec<crate::types::Position>',
+        watchBidsAsks: 'crate::types::Tickers',
+        watchLiquidations: 'Vec<crate::types::Liquidation>',
+        watchLiquidationsForSymbols: 'Vec<crate::types::Liquidation>',
+        watchMyLiquidations: 'Vec<crate::types::Liquidation>',
+        watchMyLiquidationsForSymbols: 'Vec<crate::types::Liquidation>',
+        watchFundingRate: 'crate::types::FundingRate',
+        watchFundingRates: 'crate::types::FundingRates',
+        watchFundingRatesForSymbols: 'crate::types::FundingRates',
+        watchMarkPrice: 'crate::types::Ticker',
+        watchMarkPrices: 'crate::types::Tickers',
+        createOrderWs: 'crate::types::Order',
+        editOrderWs: 'crate::types::Order',
+        cancelOrderWs: 'crate::types::Order',
+        cancelAllOrdersWs: 'Vec<crate::types::Order>',
+        fetchOrderWs: 'crate::types::Order',
+        fetchOrdersWs: 'Vec<crate::types::Order>',
+        fetchOpenOrdersWs: 'Vec<crate::types::Order>',
+        fetchClosedOrdersWs: 'Vec<crate::types::Order>',
+        fetchOrdersByStatusWs: 'Vec<crate::types::Order>',
+        fetchMyTradesWs: 'Vec<crate::types::Trade>',
+        fetchTradesWs: 'Vec<crate::types::Trade>',
+        fetchTickerWs: 'crate::types::Ticker',
+        fetchTickersWs: 'crate::types::Tickers',
+        fetchOrderBookWs: 'crate::types::OrderBook',
+        fetchOHLCVWs: 'Vec<crate::types::OHLCV>',
+        fetchBalanceWs: 'crate::types::Balances',
+        fetchPositionWs: 'Vec<crate::types::Position>',
+        fetchPositionsWs: 'Vec<crate::types::Position>',
+        fetchPositionsForSymbolWs: 'Vec<crate::types::Position>',
+        fetchTradingFeesWs: 'crate::types::TradingFees',
+        fetchDepositsWs: 'Vec<crate::types::Transaction>',
+        fetchWithdrawalsWs: 'Vec<crate::types::Transaction>',
+        fetchCurrenciesWs: 'crate::types::Currencies',
+        fetchMarketsWs: 'Vec<crate::types::Market>',
+        fetchEvents: 'Vec<crate::types::PredictionEvent>',
+        fetchEvent: 'crate::types::PredictionEvent',
+        fetchSettlements: 'Vec<crate::types::PredictionSettlement>',
+        // unsubscribe acks are untyped (`Promise<any>`)
+        unWatchBidsAsks: 'crate::Value',
+        unWatchFundingRate: 'crate::Value',
+        unWatchFundingRates: 'crate::Value',
+        unWatchMarkPrice: 'crate::Value',
+        unWatchMarkPrices: 'crate::Value',
+        unWatchMyTrades: 'crate::Value',
+        unWatchOHLCV: 'crate::Value',
+        unWatchOHLCVForSymbols: 'crate::Value',
+        unWatchOrderBook: 'crate::Value',
+        unWatchOrderBookForSymbols: 'crate::Value',
+        unWatchOrders: 'crate::Value',
+        unWatchPositions: 'crate::Value',
+        unWatchTicker: 'crate::Value',
+        unWatchTickers: 'crate::Value',
+        unWatchTrades: 'crate::Value',
+        unWatchTradesForSymbols: 'crate::Value',
     };
 
     // The typed signature of a unified method listed in `config.typedUnified`, when every parameter maps;
@@ -3731,6 +3795,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (p.rustType === 'f64') return `${recv}.as_f64().unwrap_or_default()`;
             if (p.rustType === 'Option<f64>') return `${recv}.as_f64()`;
             if (p.rustType === 'Vec<String>') return `${recv}.to_str_vec()`;
+            if (p.rustType === 'Vec<Vec<String>>') return `${recv}.to_str_vec_vec()`;
             if (p.rustType === 'Option<Vec<String>>') return `${recv}.to_opt_str_vec()`;
             return RustTranspiler.cloneIfBareLocal(v);
         });
