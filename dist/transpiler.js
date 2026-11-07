@@ -54326,7 +54326,8 @@ ${i1}}`;
     const callee = node.expression;
     if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword)
       return void 0;
-    if (!this.rustTypedUnified.has(callee.name.text) || node.parent?.kind !== SyntaxKind7.AwaitExpression)
+    const awaited = node.parent?.kind === SyntaxKind7.AwaitExpression || node.parent?.kind === SyntaxKind7.ArrayLiteralExpression;
+    if (!this.rustTypedUnified.has(callee.name.text) || !awaited)
       return void 0;
     let decl;
     try {
@@ -60653,7 +60654,12 @@ _RustTranspiler.RUST_TYPED_RETURNS = {
   fetchTicker: "crate::types::Ticker",
   fetchTickers: "crate::types::Tickers",
   fetchOrderBook: "crate::types::OrderBook",
-  fetchTrades: "Vec<crate::types::Trade>"
+  fetchTrades: "Vec<crate::types::Trade>",
+  fetchBalance: "crate::types::Balances",
+  fetchMarkets: "Vec<crate::types::Market>",
+  fetchCurrencies: "crate::types::Currencies",
+  fetchPositions: "Vec<crate::types::Position>",
+  fetchPosition: "crate::types::Position"
 };
 // Hand-written runtime methods (`exchange_stubs.rs`, `exchange.rs`, the ws `Client`/`Future` handles) take a
 // fixed number of positional `Value`s plus `optional_args: &[Value]`; their TS declarations (field aliases,
