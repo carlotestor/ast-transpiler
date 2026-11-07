@@ -11303,6 +11303,29 @@ describe ('goTypedSliceArgs', () => {
             expect(out).toContain('[][]string{[]string{"BTC/USDT", "1m"}}');
         });
 
+        test('an empty literal at a table slot is the slot\'s empty slice and the loop reads natively', () => {
+            const ts = PRELUDE +
+                'class ex extends Exchange {\n' +
+                '    wrapper () {\n' +
+                '        return this.unWatchTradesForSymbols ([], {});\n' +
+                '    }\n' +
+                '    async unWatchTradesForSymbols (symbols: string[], params: Dict = {}): Promise<any> {\n' +
+                '        const out = [];\n' +
+                '        for (let i = 0; i < symbols.length; i++) {\n' +
+                '            out.push (symbols[i]);\n' +
+                '        }\n' +
+                '        return out;\n' +
+                '    }\n' +
+                '}\n';
+            const out = go(ts);
+            expect(out).toContain('[]string{}');
+            expect(out).not.toContain('[]any{}, ');
+            expect(out).toContain('unWatchTradesForSymbolsBody(ch chan any, symbols []string');
+            expect(out).toContain('i < len(symbols)');
+            expect(out).toContain('out = append(out, symbols[i])');
+            expect(out).not.toContain('GetValue(symbols, i)');
+        });
+
         test('a method outside the table keeps the box and the helper', () => {
             const ts = PRELUDE +
                 'class ex extends Exchange {\n' +

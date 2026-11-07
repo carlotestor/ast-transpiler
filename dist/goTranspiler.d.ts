@@ -1403,7 +1403,7 @@ export declare class GoTranspiler extends BaseTranspiler {
     } | undefined;
     goArrayLiteralSliceType(node: any, depth?: number): string | undefined;
     goSliceElementIsString(node: any): boolean;
-    goSliceArgumentType(arg: any): string | undefined;
+    goSliceArgumentType(arg: any, slotType?: string): string | undefined;
     goResolvedCallParameter(node: any, index: number): any;
     goCallSliceArgumentType(node: any, calleeName: string, index: number): string | undefined;
     goSliceCallArgs(node: any, identation: any): string | undefined;

@@ -32366,12 +32366,12 @@ ${iden}}`;
     while (text.startsWith("(") && text.endsWith(")")) {
       text = text.substring(1, text.length - 1).trim();
     }
-    if (text.length < 3 || !text.startsWith("[") || !text.endsWith("]")) {
+    if (text.length < 2 || !text.startsWith("[") || !text.endsWith("]")) {
       return false;
     }
     const inner = text.substring(1, text.length - 1).trim();
     if (inner === "") {
-      return false;
+      return true;
     }
     const elements = goBalancedSliceArgs("(" + inner + ")", 0);
     if (elements === void 0) {
@@ -32499,9 +32499,9 @@ ${iden}}`;
     return _optionalChain([initializer, 'optionalAccess', _5108 => _5108.kind]) === _ast.SyntaxKind.StringLiteral || _optionalChain([initializer, 'optionalAccess', _5109 => _5109.kind]) === _ast.SyntaxKind.NoSubstitutionTemplateLiteral;
   }
   // the type a call-site argument is proven to print at a slice parameter slot
-  goSliceArgumentType(arg) {
+  goSliceArgumentType(arg, slotType) {
     if (_optionalChain([arg, 'optionalAccess', _5110 => _5110.kind]) === _ast.SyntaxKind.ArrayLiteralExpression) {
-      return this.goArrayLiteralSliceType(arg);
+      return (_nullishCoalesce(arg.elements, () => ( []))).length === 0 ? slotType : this.goArrayLiteralSliceType(arg);
     }
     const printed = this.goPrintedArgType(arg);
     return printed === "[]string" || printed === "[][]string" ? printed : void 0;
@@ -32556,7 +32556,7 @@ ${iden}}`;
         continue;
       }
       const goType = this.goCallSliceArgumentType(node, name, i);
-      if (goType === void 0 || this.goArrayLiteralSliceType(arg) !== goType) {
+      if (goType === void 0 || this.goSliceArgumentType(arg, goType) !== goType) {
         continue;
       }
       this.goSliceLiteralTypes.set(arg, goType);
@@ -32832,7 +32832,7 @@ ${iden}}`;
         return false;
       }
       const tableSlot = (goType === "[]string" || goType === "[][]string") && this.goIsUnifiedSliceParameter(name, index);
-      const argType = tableSlot ? this.goSliceArgumentType(arg) : this.goPrintedArgType(arg);
+      const argType = tableSlot ? this.goSliceArgumentType(arg, goType) : this.goPrintedArgType(arg);
       if (argType !== goType && !(goType === "string" && call.runner === void 0 && this.goNilProvenStringPtrArg(arg))) {
         return false;
       }
@@ -55567,6 +55567,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const place = this.printNode(key, 0).trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(place))
       return void 0;
+    if (this.rustI64CounterOf(key) !== void 0)
+      return `${shadow.name}.get(${place} as usize).cloned().unwrap_or(Value::Null)`;
     return `${shadow.name}.get((${place}).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
   }
   /** `'k' in x` on a shadowed dict parameter. */
@@ -56599,7 +56601,7 @@ ${idn}}`;
   }
   /** The place `X` of a `i < X.length` condition over this counter, when its uses are all admissible. */
   rustI64CounterPlan(node, counter, condStr) {
-    const printed = new RegExp(`^${counter.name}\\.as_f64\\(\\)\\.unwrap_or\\(f64::NAN\\) < Value::Int\\((self\\.\\w+|\\w+)\\.len\\(\\) as i64\\)\\.as_f64\\(\\)\\.unwrap_or\\(f64::NAN\\)$`).exec(condStr);
+    const printed = _nullishCoalesce(new RegExp(`^${counter.name}\\.as_f64\\(\\)\\.unwrap_or\\(f64::NAN\\) < Value::Int\\((self\\.\\w+|\\w+)\\.len\\(\\) as i64\\)\\.as_f64\\(\\)\\.unwrap_or\\(f64::NAN\\)$`).exec(condStr), () => ( new RegExp(`^${counter.name}\\.as_f64\\(\\)\\.unwrap_or\\(f64::NAN\\) < \\(\\((\\w+)\\.len\\(\\) as i64\\) as f64\\)$`).exec(condStr)));
     if (printed === null)
       return void 0;
     for (const id of this.rustScopeNameNodes(node.statement, counter.name)) {

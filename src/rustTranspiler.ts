@@ -5098,6 +5098,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (!this.isRustValueIndexKey(key)) return undefined;
         const place = this.printNode(key, 0).trim();
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(place)) return undefined;
+        if (this.rustI64CounterOf(key) !== undefined) return `${shadow.name}.get(${place} as usize).cloned().unwrap_or(Value::Null)`;
         return `${shadow.name}.get((${place}).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
     }
 
@@ -6175,7 +6176,9 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** The place `X` of a `i < X.length` condition over this counter, when its uses are all admissible. */
     rustI64CounterPlan(node, counter: { name: string, symbol: any }, condStr: string): string | undefined {
-        const printed = new RegExp(`^${counter.name}\\.as_f64\\(\\)\\.unwrap_or\\(f64::NAN\\) < Value::Int\\((self\\.\\w+|\\w+)\\.len\\(\\) as i64\\)\\.as_f64\\(\\)\\.unwrap_or\\(f64::NAN\\)$`).exec(condStr);
+        // the bound is a boxed list length, or the native length of a typed list parameter
+        const printed = new RegExp(`^${counter.name}\\.as_f64\\(\\)\\.unwrap_or\\(f64::NAN\\) < Value::Int\\((self\\.\\w+|\\w+)\\.len\\(\\) as i64\\)\\.as_f64\\(\\)\\.unwrap_or\\(f64::NAN\\)$`).exec(condStr)
+            ?? new RegExp(`^${counter.name}\\.as_f64\\(\\)\\.unwrap_or\\(f64::NAN\\) < \\(\\((\\w+)\\.len\\(\\) as i64\\) as f64\\)$`).exec(condStr);
         if (printed === null) return undefined;
         for (const id of this.rustScopeNameNodes(node.statement, counter.name) as any[]) {
             if (id.kind !== SyntaxKind.Identifier || this.rustIdentifierIsPropertyName(id) || this.rustSymbolOf(id) !== counter.symbol) continue;
