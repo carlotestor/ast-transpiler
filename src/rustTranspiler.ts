@@ -3621,6 +3621,7 @@ export class RustTranspiler extends BaseTranspiler {
         const strDefault = ts === '' && p.initializer?.kind === SyntaxKind.StringLiteral;
         if (((ts === 'Str' || ts === 'string' || strDefault) && optional) || ts === 'Str') return { rustType: 'Option<&str>', toValue: `${name}.map(Value::from).unwrap_or_default()` };
         if (ts === 'Int' && optional) return { rustType: 'Option<i64>', toValue: `Value::from(${name})` };
+        if (ts === 'int' && !optional) return { rustType: 'i64', toValue: `Value::from(${name})` };
         if (ts === 'Strings' && optional) return { rustType: 'Option<Vec<String>>', toValue: `Value::from(${name})` };
         if ((ts === 'OrderType' || ts === 'OrderSide') && !optional) return { rustType: '&str', toValue: `Value::from(${name})` };
         if (ts === 'number' && !optional) return { rustType: 'f64', toValue: `Value::from(${name})` };
@@ -3658,6 +3659,36 @@ export class RustTranspiler extends BaseTranspiler {
         watchOHLCV: 'Vec<crate::types::OHLCV>',
         watchOrders: 'Vec<crate::types::Order>',
         watchBalance: 'crate::types::Balances',
+        fetchFundingRate: 'crate::types::FundingRate',
+        fetchFundingRates: 'crate::types::FundingRates',
+        fetchFundingRateHistory: 'Vec<crate::types::FundingRateHistory>',
+        fetchFundingHistory: 'Vec<crate::types::FundingHistory>',
+        fetchLeverage: 'crate::types::Leverage',
+        fetchLeverages: 'crate::types::Leverages',
+        setLeverage: 'Value',
+        setMarginMode: 'Value',
+        fetchMarginMode: 'crate::types::MarginMode',
+        fetchMarginModes: 'crate::types::MarginModes',
+        addMargin: 'crate::types::MarginModification',
+        reduceMargin: 'crate::types::MarginModification',
+        fetchOpenInterest: 'crate::types::OpenInterest',
+        fetchOpenInterestHistory: 'Vec<crate::types::OpenInterest>',
+        fetchMarkPrice: 'crate::types::Ticker',
+        fetchMarkPrices: 'crate::types::Tickers',
+        fetchLiquidations: 'Vec<crate::types::Liquidation>',
+        fetchMyLiquidations: 'Vec<crate::types::Liquidation>',
+        fetchPositionsHistory: 'Vec<crate::types::Position>',
+        closePosition: 'crate::types::Order',
+        closeAllPositions: 'Vec<crate::types::Position>',
+        fetchLeverageTiers: 'crate::types::LeverageTiers',
+        fetchMarketLeverageTiers: 'Vec<crate::types::LeverageTier>',
+        fetchGreeks: 'crate::types::Greeks',
+        fetchOption: 'crate::types::OptionContract',
+        fetchOptionChain: 'crate::types::OptionChain',
+        fetchBidsAsks: 'crate::types::Tickers',
+        fetchLastPrices: 'crate::types::LastPrices',
+        fetchStatus: 'crate::types::Status',
+        fetchTime: 'Option<i64>',
     };
 
     // The typed signature of a unified method listed in `config.typedUnified`, when every parameter maps;
@@ -3728,6 +3759,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (p.rustType === '&str') return `${recv}.as_str().unwrap_or_default()`;
             if (p.rustType === 'Option<&str>') return `${recv}.as_str()`;
             if (p.rustType === 'Option<i64>') return `${recv}.as_i64()`;
+            if (p.rustType === 'i64') return `${recv}.as_i64().unwrap_or_default()`;
             if (p.rustType === 'f64') return `${recv}.as_f64().unwrap_or_default()`;
             if (p.rustType === 'Option<f64>') return `${recv}.as_f64()`;
             if (p.rustType === 'Vec<String>') return `${recv}.to_str_vec()`;

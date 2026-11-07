@@ -54278,6 +54278,8 @@ ${classMethods}
       return { rustType: "Option<&str>", toValue: `${name}.map(Value::from).unwrap_or_default()` };
     if (ts2 === "Int" && optional)
       return { rustType: "Option<i64>", toValue: `Value::from(${name})` };
+    if (ts2 === "int" && !optional)
+      return { rustType: "i64", toValue: `Value::from(${name})` };
     if (ts2 === "Strings" && optional)
       return { rustType: "Option<Vec<String>>", toValue: `Value::from(${name})` };
     if ((ts2 === "OrderType" || ts2 === "OrderSide") && !optional)
@@ -54370,6 +54372,8 @@ ${i1}}`;
         return `${recv}.as_str()`;
       if (p.rustType === "Option<i64>")
         return `${recv}.as_i64()`;
+      if (p.rustType === "i64")
+        return `${recv}.as_i64().unwrap_or_default()`;
       if (p.rustType === "f64")
         return `${recv}.as_f64().unwrap_or_default()`;
       if (p.rustType === "Option<f64>")
@@ -60718,7 +60722,37 @@ _RustTranspiler.RUST_TYPED_RETURNS = {
   watchTrades: "Vec<crate::types::Trade>",
   watchOHLCV: "Vec<crate::types::OHLCV>",
   watchOrders: "Vec<crate::types::Order>",
-  watchBalance: "crate::types::Balances"
+  watchBalance: "crate::types::Balances",
+  fetchFundingRate: "crate::types::FundingRate",
+  fetchFundingRates: "crate::types::FundingRates",
+  fetchFundingRateHistory: "Vec<crate::types::FundingRateHistory>",
+  fetchFundingHistory: "Vec<crate::types::FundingHistory>",
+  fetchLeverage: "crate::types::Leverage",
+  fetchLeverages: "crate::types::Leverages",
+  setLeverage: "Value",
+  setMarginMode: "Value",
+  fetchMarginMode: "crate::types::MarginMode",
+  fetchMarginModes: "crate::types::MarginModes",
+  addMargin: "crate::types::MarginModification",
+  reduceMargin: "crate::types::MarginModification",
+  fetchOpenInterest: "crate::types::OpenInterest",
+  fetchOpenInterestHistory: "Vec<crate::types::OpenInterest>",
+  fetchMarkPrice: "crate::types::Ticker",
+  fetchMarkPrices: "crate::types::Tickers",
+  fetchLiquidations: "Vec<crate::types::Liquidation>",
+  fetchMyLiquidations: "Vec<crate::types::Liquidation>",
+  fetchPositionsHistory: "Vec<crate::types::Position>",
+  closePosition: "crate::types::Order",
+  closeAllPositions: "Vec<crate::types::Position>",
+  fetchLeverageTiers: "crate::types::LeverageTiers",
+  fetchMarketLeverageTiers: "Vec<crate::types::LeverageTier>",
+  fetchGreeks: "crate::types::Greeks",
+  fetchOption: "crate::types::OptionContract",
+  fetchOptionChain: "crate::types::OptionChain",
+  fetchBidsAsks: "crate::types::Tickers",
+  fetchLastPrices: "crate::types::LastPrices",
+  fetchStatus: "crate::types::Status",
+  fetchTime: "Option<i64>"
 };
 // Hand-written runtime methods (`exchange_stubs.rs`, `exchange.rs`, the ws `Client`/`Future` handles) take a
 // fixed number of positional `Value`s plus `optional_args: &[Value]`; their TS declarations (field aliases,
