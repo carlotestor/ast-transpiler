@@ -22218,6 +22218,28 @@ function installClosureNumericDefault(goTranspiler) {
   };
   goTranspiler.__closureNumericDefaultInstalled = true;
 }
+function goParamNeverWritten(param) {
+  const SK2 = ts.SyntaxKind;
+  const body = param?.parent?.body;
+  if (param?.kind !== SK2.Parameter || param.name?.kind !== SK2.Identifier || body === void 0) {
+    return false;
+  }
+  const name = param.name.text;
+  let written = false;
+  const visit = (n) => {
+    if (written || n === void 0) {
+      return;
+    }
+    const target = n.kind === SK2.BinaryExpression && n.operatorToken.kind >= SK2.FirstAssignment && n.operatorToken.kind <= SK2.LastAssignment ? n.left : n.kind === SK2.PrefixUnaryExpression || n.kind === SK2.PostfixUnaryExpression ? n.operand : void 0;
+    if (target?.kind === SK2.Identifier && target.text === name) {
+      written = true;
+      return;
+    }
+    n.forEachChild(visit);
+  };
+  visit(body);
+  return !written;
+}
 function stringPtrParamCallDeclaration(goTranspiler, call) {
   let decl;
   try {
@@ -22341,7 +22363,8 @@ function installStringPtrParams(goTranspiler) {
     const depth = this.goExprDepth + (args.length > 1 ? 1 : 0);
     return args.map((a, i) => {
       const text = this.goWithExprDepth(depth, () => this.printNode(a, identation)).trim();
-      return wrap[i] ? "SafeStringPtr(" + text + ")" : text;
+      const address = wrap[i] && args[i].kind === ts.SyntaxKind.Identifier && /^\w+$/.test(text) && goParamNeverWritten(this.getChecker().getSymbolAtLocation(args[i])?.valueDeclaration?.resolve());
+      return address ? "&" + text : wrap[i] ? "SafeStringPtr(" + text + ")" : text;
     }).join(", ");
   };
 }

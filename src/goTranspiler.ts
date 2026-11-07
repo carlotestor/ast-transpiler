@@ -12524,6 +12524,30 @@ function installClosureNumericDefault (goTranspiler) {
 // did for a non-nil string (the empty-pointer trap needs a nil-or-empty pointer; this one is
 // neither nil nor different from the boxed string). Callers passing `any`, nil or an untyped
 // expression still fail the proof and the parameter keeps `any`.
+function goParamNeverWritten (param) {
+    const SK = ts.SyntaxKind;
+    const body = param?.parent?.body;
+    if ((param?.kind !== SK.Parameter) || (param.name?.kind !== SK.Identifier) || (body === undefined)) {
+        return false;
+    }
+    const name = param.name.text;
+    let written = false;
+    const visit = (n) => {
+        if (written || (n === undefined)) {
+            return;
+        }
+        const target = (n.kind === SK.BinaryExpression) && (n.operatorToken.kind >= SK.FirstAssignment) && (n.operatorToken.kind <= SK.LastAssignment) ? n.left
+            : (((n.kind === SK.PrefixUnaryExpression) || (n.kind === SK.PostfixUnaryExpression)) ? n.operand : undefined);
+        if ((target?.kind === SK.Identifier) && (target.text === name)) {
+            written = true;
+            return;
+        }
+        n.forEachChild (visit);
+    };
+    visit (body);
+    return !written;
+}
+
 function stringPtrParamCallDeclaration (goTranspiler, call) {
     let decl;
     try {
@@ -12663,7 +12687,10 @@ function installStringPtrParams (goTranspiler) {
         const depth = this.goExprDepth + ((args.length > 1) ? 1 : 0);
         return args.map ((a, i) => {
             const text = this.goWithExprDepth (depth, () => this.printNode (a, identation)).trim ();
-            return wrap[i] ? ('SafeStringPtr(' + text + ')') : text;
+            // an unwritten string parameter is addressable: its address is the same never-nil pointer
+            const address = wrap[i] && (args[i].kind === ts.SyntaxKind.Identifier) && /^\w+$/.test (text)
+                && goParamNeverWritten (this.getChecker ().getSymbolAtLocation (args[i])?.valueDeclaration?.resolve ());
+            return address ? ('&' + text) : (wrap[i] ? ('SafeStringPtr(' + text + ')') : text);
         }).join (', ');
     };
 }

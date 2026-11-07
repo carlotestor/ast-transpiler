@@ -9053,6 +9053,28 @@ describe ('goTupleFirstResultBinds', () => {
         expect (run (undefined)).not.toContain ('OmitDict');
     });
 
+    test('an unwritten string parameter passed to a *string slot is its address, a written one keeps SafeStringPtr', () => {
+        const src = [
+            'type Dict = { [key: string]: any };', 'type Str = string | undefined;',
+            'class Exchange {', '    x () { return 1; }', '}',
+            'class Ex extends Exchange {',
+            '    req (id: string, symbol: Str = undefined, params: Dict = {}): Dict {',
+            '        const r: Dict = {};', '        if (id !== undefined) {', "            r['id'] = id;", '        }', '        return r;', '    }',
+            '    run (id: string, params: Dict = {}) {', '        return this.req (id, undefined, params);', '    }',
+            '    rerun (id: string, params: Dict = {}) {', "        id = id + 'x';", '        return this.req (id, undefined, params);', '    }',
+            '}', '',
+        ].join ('\n');
+        const dir = fs.mkdtempSync (path.join (os.tmpdir (), 'go-addr-'));
+        fs.mkdirSync (path.join (dir, 'ts', 'src'), { 'recursive': true });
+        fs.writeFileSync (path.join (dir, 'ts', 'src', 'ex.ts'), src);
+        const x = new Transpiler ({ 'verbose': false, 'go': { 'unifiedStringParams': { 'run': [ 0 ], 'rerun': [ 0 ] }, 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        installCcxtGoLocalTypes (x.goTranspiler);
+        const out = x.transpileGoByPath (path.join (dir, 'ts', 'src', 'ex.ts')).content;
+        expect (out).toContain ('func (this *Ex) Req(id *string');
+        expect (out).toContain ('id = id + "x"\n\treturn this.Req(SafeStringPtr(id), nil, params)');
+        expect ((out.match (/this\.Req\(&id, nil, params\)/g) ?? []).length).toBe (1);
+    });
+
     test('m[k] = p !== undefined ? p : this.sum (a, b) over *int64 p and int64 a, b is a native if/else', () => {
         const src = BASE.replace ('    options: Dict = {};', '    options: Dict = {};\n    sum (a: any, b: any): any { return a; }\n    safeInteger (o: any, k: string): Int { return undefined; }\n    seconds (): number { return 0; }') .replace ('type Bool', 'type Int = number | undefined;\ntype Bool') + '\nclass Ex extends BaseExchange {\n    g (params: Dict = {}) {\n        const request: Dict = {};\n        const until: Int = this.safeInteger (params, "until");\n        const start = this.seconds ();\n        const w = this.seconds ();\n        request["end"] = (until !== undefined) ? until : this.sum (start, w);\n        return request;\n    }\n}\n';
         const x = new Transpiler ({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
