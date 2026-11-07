@@ -3619,6 +3619,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (ts === 'string' && !optional) return { rustType: '&str', toValue: `Value::from(${name})` };
         if (ts === 'Int' && optional) return { rustType: 'Option<i64>', toValue: `Value::from(${name})` };
         if (ts === 'Strings' && optional) return { rustType: 'Option<Vec<String>>', toValue: `Value::from(${name})` };
+        if ((ts === 'Str' || ts === 'string') && optional) return { rustType: 'Option<&str>', toValue: `Value::from(${name})` };
         return undefined;
     }
 
@@ -3628,6 +3629,13 @@ export class RustTranspiler extends BaseTranspiler {
         fetchTickers: 'crate::types::Tickers',
         fetchOrderBook: 'crate::types::OrderBook',
         fetchTrades: 'Vec<crate::types::Trade>',
+        watchTicker: 'crate::types::Ticker',
+        watchTickers: 'crate::types::Tickers',
+        watchOrderBook: 'crate::types::OrderBook',
+        watchTrades: 'Vec<crate::types::Trade>',
+        watchOHLCV: 'Vec<crate::types::OHLCV>',
+        watchOrders: 'Vec<crate::types::Order>',
+        watchBalance: 'crate::types::Balances',
     };
 
     // The typed signature of a unified method listed in `config.typedUnified`, when every parameter maps;
@@ -3690,6 +3698,7 @@ export class RustTranspiler extends BaseTranspiler {
             const recv = /^[A-Za-z_][A-Za-z0-9_.]*$/.test(v) ? v : `(${v})`;
             if (p.rustType === '&str') return `${recv}.as_str().unwrap_or_default()`;
             if (p.rustType === 'Option<i64>') return `${recv}.as_i64()`;
+            if (p.rustType === 'Option<&str>') return `${recv}.as_str()`;
             if (p.rustType === 'Option<Vec<String>>') return `${recv}.to_opt_str_vec()`;
             return RustTranspiler.cloneIfBareLocal(v);
         });

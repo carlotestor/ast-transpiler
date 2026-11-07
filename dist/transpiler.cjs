@@ -54276,6 +54276,8 @@ ${classMethods}
       return { rustType: "Option<i64>", toValue: `Value::from(${name})` };
     if (ts2 === "Strings" && optional)
       return { rustType: "Option<Vec<String>>", toValue: `Value::from(${name})` };
+    if ((ts2 === "Str" || ts2 === "string") && optional)
+      return { rustType: "Option<&str>", toValue: `Value::from(${name})` };
     return void 0;
   }
   // The typed signature of a unified method listed in `config.typedUnified`, when every parameter maps;
@@ -54350,6 +54352,8 @@ ${i1}}`;
         return `${recv}.as_str().unwrap_or_default()`;
       if (p.rustType === "Option<i64>")
         return `${recv}.as_i64()`;
+      if (p.rustType === "Option<&str>")
+        return `${recv}.as_str()`;
       if (p.rustType === "Option<Vec<String>>")
         return `${recv}.to_opt_str_vec()`;
       return _RustTranspiler.cloneIfBareLocal(v);
@@ -60652,7 +60656,14 @@ _RustTranspiler.RUST_TYPED_RETURNS = {
   fetchTicker: "crate::types::Ticker",
   fetchTickers: "crate::types::Tickers",
   fetchOrderBook: "crate::types::OrderBook",
-  fetchTrades: "Vec<crate::types::Trade>"
+  fetchTrades: "Vec<crate::types::Trade>",
+  watchTicker: "crate::types::Ticker",
+  watchTickers: "crate::types::Tickers",
+  watchOrderBook: "crate::types::OrderBook",
+  watchTrades: "Vec<crate::types::Trade>",
+  watchOHLCV: "Vec<crate::types::OHLCV>",
+  watchOrders: "Vec<crate::types::Order>",
+  watchBalance: "crate::types::Balances"
 };
 // Hand-written runtime methods (`exchange_stubs.rs`, `exchange.rs`, the ws `Client`/`Future` handles) take a
 // fixed number of positional `Value`s plus `optional_args: &[Value]`; their TS declarations (field aliases,
