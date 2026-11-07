@@ -11912,6 +11912,19 @@ describe ('goStringCallPointerLocal', () => {
             expect (out).toContain ('return &id');
             expect (out).not.toContain ('SafeStringPtr(id)');
         });
+        test('the address names the printed (renamed) parameter', () => {
+            const t = new Transpiler ({ 'verbose': false, 'go': { 'parser': { 'NUM_LINES_END_FILE': 0 }, 'unifiedStringParams': { 'cancelOrder': [ 0 ] } } });
+            installCcxtGoHooks (t.goTranspiler);
+            const out = t.transpileGo (PRELUDE + 'class Foo extends Exchange {\n'
+                + '    async cancelOrder (type: string, symbol: Str = undefined, params: Dict = {}): Promise<any> {\n'
+                + '        const clientOrderId = this.safeString (params, \'clientOrderId\');\n'
+                + '        const orderId = (clientOrderId === undefined) ? type : undefined;\n'
+                + '        return { \'id\': orderId };\n'
+                + '    }\n'
+                + '}\n').content;
+            expect (out).toContain ('return &typeVar');
+            expect (out).not.toMatch (/&type\b/);
+        });
         test('a call typed string | undefined keeps the SafeStringPtr box', () => {
             const out = print (
                 '    sign (o: Dict): any {\n'

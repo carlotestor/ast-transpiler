@@ -11037,7 +11037,7 @@ function ccxtGoStringParamAddress (goTranspiler, node) {
         x.forEachChild (visit);
     };
     fn.body.forEachChild (visit);
-    return written ? undefined : '&' + name;
+    return written ? undefined : '&' + goTranspiler.printNode (n, 0).trim ();
 }
 
 // { joinType, whenTrue, whenFalse } with the lifted arm texts, or undefined when unproven

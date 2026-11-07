@@ -20942,7 +20942,7 @@ function ccxtGoStringParamAddress(goTranspiler, node) {
     x.forEachChild(visit);
   };
   fn.body.forEachChild(visit);
-  return written ? void 0 : "&" + name;
+  return written ? void 0 : "&" + goTranspiler.printNode(n, 0).trim();
 }
 function ccxtGoTernaryLiftJoin(goTranspiler, declaration, literal2) {
   const initializer = _optionalChain([declaration, 'optionalAccess', _2885 => _2885.initializer]);
