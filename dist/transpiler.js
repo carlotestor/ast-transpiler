@@ -54001,9 +54001,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.EqualsToken) {
       if (parent.parent?.kind !== SyntaxKind7.ExpressionStatement)
         return void 0;
-      const rhs = this.rustScalarValueKind(parent.right, true);
-      const optional = kind.startsWith("o");
-      return rhs === kind || optional && (rhs === "null" || rhs === kind.slice(1)) ? "write" : void 0;
+      return this.rustScalarWriteOk(kind, parent.right, 0) ? "write" : void 0;
     }
     if (isBinaryExpression5(parent) && this.isEqualityOp(parent.operatorToken.kind)) {
       const other = parent.left === n ? parent.right : parent.left;
@@ -54041,6 +54039,20 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       current = current.parent;
     const write = isBinaryExpression5(current) ? current : void 0;
     return write !== void 0 && write.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(write.left) && (isElementAccessExpression4(write.left.expression) || isPropertyAccessExpression3(write.left.expression));
+  }
+  /** A write source the local's type holds exactly: a same-kind value, a typed scalar local of the
+   *  same kind, or a ternary of those (its condition printed as a bool). */
+  rustScalarWriteOk(kind, rhs, depth) {
+    const node = this.unwrapParens(rhs);
+    if (node === void 0 || depth > 3)
+      return false;
+    if (isConditionalExpression4(node))
+      return this.rustScalarWriteOk(kind, node.whenTrue, depth + 1) && this.rustScalarWriteOk(kind, node.whenFalse, depth + 1);
+    if (isIdentifier3(node) && node.text !== "undefined")
+      return this.rustScalarLocalOf(node)?.kind === kind;
+    const value = this.rustScalarValueKind(node, true);
+    const optional = kind.startsWith("o");
+    return value === kind || optional && (value === "null" || value === kind.slice(1));
   }
   /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */
   rustNilBoxSlotOk(call, at) {
@@ -54122,6 +54134,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const wrap = (t) => optional ? `Some(${t})` : t;
     if (this.literalKindOfNode(node) === "null")
       return optional ? "None" : void 0;
+    if (isConditionalExpression4(node)) {
+      const whenTrue = this.rustScalarNativeText(kind, node.whenTrue);
+      const whenFalse = this.rustScalarNativeText(kind, node.whenFalse);
+      return whenTrue === void 0 || whenFalse === void 0 ? void 0 : `(if ${this.printCondition(node.condition, 0).trim()} { ${whenTrue} } else { ${whenFalse} })`;
+    }
+    if (isIdentifier3(node) && this.rustScalarLocalOf(node)?.kind === kind) {
+      const name = super.printIdentifier(node);
+      return kind === "str" || kind === "ostr" ? `${name}.clone()` : name;
+    }
     if (base === "str" && this.literalKindOfNode(node) === "string")
       return wrap(`${this.quotedStringLiteral(node.text)}.to_string()`);
     if (base === "bool" && this.literalKindOfNode(node) === "boolean")

@@ -388,6 +388,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `write` (same-kind assignment statement), `concat` (a `format!` operand) or `box` (a by-value `Value` slot). */
     rustScalarUseForm(n: any, kind: string): string | undefined;
     rustScalarInNestedWrite(n: any): boolean;
+    /** A write source the local's type holds exactly: a same-kind value, a typed scalar local of the
+     *  same kind, or a ternary of those (its condition printed as a bool). */
+    rustScalarWriteOk(kind: string, rhs: any, depth: number): boolean;
     /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */
     rustNilBoxSlotOk(call: any, at: number): boolean;
     /** Native right-hand side of `x == <literal>` for a scalar local of `kind`; undefined when not exact. */

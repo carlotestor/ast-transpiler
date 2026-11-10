@@ -3262,9 +3262,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (parent === undefined) return undefined;
         if (isBinaryExpression(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind.EqualsToken) {
             if (parent.parent?.kind !== SyntaxKind.ExpressionStatement) return undefined;
-            const rhs = this.rustScalarValueKind(parent.right, true);
-            const optional = kind.startsWith('o');
-            return rhs === kind || (optional && (rhs === 'null' || rhs === kind.slice(1))) ? 'write' : undefined;
+            return this.rustScalarWriteOk(kind, parent.right, 0) ? 'write' : undefined;
         }
         if (isBinaryExpression(parent) && this.isEqualityOp(parent.operatorToken.kind)) {
             const other = parent.left === n ? parent.right : parent.left;
@@ -3297,6 +3295,18 @@ export class RustTranspiler extends BaseTranspiler {
         const write: any = isBinaryExpression(current) ? current : undefined;
         return write !== undefined && write.operatorToken.kind === SyntaxKind.EqualsToken && isElementAccessExpression(write.left)
             && (isElementAccessExpression(write.left.expression) || isPropertyAccessExpression(write.left.expression));
+    }
+
+    /** A write source the local's type holds exactly: a same-kind value, a typed scalar local of the
+     *  same kind, or a ternary of those (its condition printed as a bool). */
+    rustScalarWriteOk(kind: string, rhs, depth: number): boolean {
+        const node: any = this.unwrapParens(rhs);
+        if (node === undefined || depth > 3) return false;
+        if (isConditionalExpression(node)) return this.rustScalarWriteOk(kind, node.whenTrue, depth + 1) && this.rustScalarWriteOk(kind, node.whenFalse, depth + 1);
+        if (isIdentifier(node) && node.text !== 'undefined') return this.rustScalarLocalOf(node)?.kind === kind;
+        const value = this.rustScalarValueKind(node, true);
+        const optional = kind.startsWith('o');
+        return value === kind || (optional && (value === 'null' || value === kind.slice(1)));
     }
 
     /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */
@@ -3370,6 +3380,16 @@ export class RustTranspiler extends BaseTranspiler {
         const base = optional ? kind.slice(1) : kind;
         const wrap = (t: string) => optional ? `Some(${t})` : t;
         if (this.literalKindOfNode(node) === 'null') return optional ? 'None' : undefined;
+        if (isConditionalExpression(node)) {
+            const whenTrue = this.rustScalarNativeText(kind, node.whenTrue);
+            const whenFalse = this.rustScalarNativeText(kind, node.whenFalse);
+            return whenTrue === undefined || whenFalse === undefined ? undefined
+                : `(if ${this.printCondition(node.condition, 0).trim()} { ${whenTrue} } else { ${whenFalse} })`;
+        }
+        if (isIdentifier(node) && this.rustScalarLocalOf(node)?.kind === kind) {
+            const name = super.printIdentifier(node);
+            return kind === 'str' || kind === 'ostr' ? `${name}.clone()` : name;
+        }
         if (base === 'str' && this.literalKindOfNode(node) === 'string') return wrap(`${this.quotedStringLiteral(node.text)}.to_string()`);
         if (base === 'bool' && this.literalKindOfNode(node) === 'boolean') return node.kind === SyntaxKind.TrueKeyword ? 'true' : 'false';
         const int = base === 'int' ? this.rustScalarIntLiteral(node) : undefined;
