@@ -55438,7 +55438,7 @@ ${i1}}`;
     const key = this.rustMarketReadKey(receiver);
     if (key === void 0)
       return void 0;
-    const recv = `(${this.printNode(declaration.name, 0)})`;
+    const recv = this.printNode(declaration.name, 0);
     if (_RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key))
       return asBool ? `${recv}.${key}` : `Value::Bool(${recv}.${key})`;
     if (_RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key) && (asBool || _is.isCallExpression.call(void 0, node) && node.arguments.length === 3)) {
@@ -55494,7 +55494,7 @@ ${i1}}`;
     const declaration = this.rustTypedMarketLocalOf(node);
     if (declaration === void 0 || this.rustMarketReadKey(node) !== void 0)
       return void 0;
-    return `(${String(node.text)}).raw.clone()`;
+    return `${String(node.text)}.raw.clone()`;
   }
   // A literal argument of a typed unified call printed in the parameter's native type (`'market'` -> `"market"`).
   static rustTypedLiteralArg(arg, rustType) {

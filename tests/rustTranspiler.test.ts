@@ -6744,11 +6744,11 @@ describe('rust typed Market locals', () => {
 
     test('a read-only market local keeps the struct and reads listed fields natively', () => {
         expect(output).toContain('let mut market: crate::types::Market = (match self.market(');
-        expect(output).toContain('Value::from((market).id.clone())');
-        expect(output).toContain('(market).swap || (market.linear == Some(true))'.replace('market.linear', '(market).linear'));
-        expect(output).toContain('(market).raw.as_map().and_then(|__m| __m.get("info"))');
-        expect(output).toContain('Value::from((market).symbol.clone())');
-        expect(output).toContain('self.hold((market).raw.clone())');
+        expect(output).toContain('Value::from(market.id.clone())');
+        expect(output).toContain('market.swap || (market.linear == Some(true))');
+        expect(output).toContain('market.raw.as_map().and_then(|__m| __m.get("info"))');
+        expect(output).toContain('Value::from(market.symbol.clone())');
+        expect(output).toContain('self.hold(market.raw.clone())');
     });
 
     test('a market local re-written by this.market stays the struct', () => {
@@ -6757,11 +6757,11 @@ describe('rust typed Market locals', () => {
     });
 
     test('flag reads off a market struct print plain bools, never is_true', () => {
-        expect(output).toContain('let mut isStock: Value = (market).raw.as_map().and_then(|__m| __m.get("stock"))');
-        expect(output).toContain('isStock.as_bool() == Some(true) && ((market).spot)');
-        expect(output).toContain('!(market).spot');
+        expect(output).toContain('let mut isStock: Value = market.raw.as_map().and_then(|__m| __m.get("stock"))');
+        expect(output).toContain('isStock.as_bool() == Some(true) && (market.spot)');
+        expect(output).toContain('!market.spot');
         expect(output).not.toContain('is_true(&isStock)');
-        expect(output).not.toContain('Value::Bool((market).spot)');
+        expect(output).not.toContain('Value::Bool(market.spot)');
     });
 });
 
@@ -6786,10 +6786,10 @@ describe('rust typed core call results', () => {
     test('a reassigned market local stays a struct and reads declared keys as fields', () => {
         expect(output).toContain('let mut market: crate::types::Market = (match self.market(');
         expect(output).toContain('market = (match self.market(');
-        expect(output).toContain('Value::from((market).market_type.clone())');
-        expect(output).toContain('Value::from((market).settle.as_deref())');
-        expect(output).toContain('(market).linear.map(Value::Bool).unwrap_or_default()');
-        expect(output).toContain('Value::from((market).base_id.clone())');
+        expect(output).toContain('Value::from(market.market_type.clone())');
+        expect(output).toContain('Value::from(market.settle.as_deref())');
+        expect(output).toContain('market.linear.map(Value::Bool).unwrap_or_default()');
+        expect(output).toContain('Value::from(market.base_id.clone())');
         expect(output).not.toContain('IntoRaw::into_raw(self.market(');
     });
 

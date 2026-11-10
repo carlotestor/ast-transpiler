@@ -4910,8 +4910,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (declaration === undefined) return undefined;
         const key = this.rustMarketReadKey(receiver);
         if (key === undefined) return undefined;
-        // parenthesised receiver: ccxt's `<local>.<field>` -> `get_value` pass leaves `(m).f` alone
-        const recv = `(${this.printNode(declaration.name, 0)})`;
+        const recv = this.printNode(declaration.name, 0);
         if (RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key)) return asBool ? `${recv}.${key}` : `Value::Bool(${recv}.${key})`;
         if (RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key) && (asBool || (isCallExpression(node) && node.arguments.length === 3))) {
             // `safeBool (m, 'linear', false)` and a truthiness test both read `true` only for `Some(true)`
@@ -4960,7 +4959,7 @@ export class RustTranspiler extends BaseTranspiler {
         }
         const declaration = this.rustTypedMarketLocalOf(node);
         if (declaration === undefined || this.rustMarketReadKey(node) !== undefined) return undefined;
-        return `(${String(node.text)}).raw.clone()`;
+        return `${String(node.text)}.raw.clone()`;
     }
 
     // A literal argument of a typed unified call printed in the parameter's native type (`'market'` -> `"market"`).
