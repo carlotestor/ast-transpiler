@@ -3346,7 +3346,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (form === 'cond' || form === 'concat') return super.printIdentifier(node);
         if (form !== 'box') return undefined;
         const name = super.printIdentifier(node);
-        const moved = this.rustVecIsFinalUse(node, String(node.text)) ? name : `${name}.clone()`;
+        // only a direct `return x` moves: ccxt hoists call arguments ahead of their statement
+        const moved = isReturnStatement(node.parent) ? name : `${name}.clone()`;
         if (local.kind === 'ostr') return `${moved}.map(Value::from).unwrap_or(Value::Null)`;
         if (local.kind === 'str') return `Value::from(${moved})`;
         return local.kind === 'bool' ? `Value::Bool(${name})` : `Value::from(${name})`;

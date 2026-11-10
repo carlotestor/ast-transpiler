@@ -54097,7 +54097,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (form !== "box")
       return void 0;
     const name = super.printIdentifier(node);
-    const moved = this.rustVecIsFinalUse(node, String(node.text)) ? name : `${name}.clone()`;
+    const moved = _is.isReturnStatement.call(void 0, node.parent) ? name : `${name}.clone()`;
     if (local.kind === "ostr")
       return `${moved}.map(Value::from).unwrap_or(Value::Null)`;
     if (local.kind === "str")

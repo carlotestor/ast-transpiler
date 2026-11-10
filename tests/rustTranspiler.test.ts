@@ -4934,7 +4934,7 @@ describe('scalar locals from base safe readers and literals', () => {
         expect(out).toMatch(/let mut price: Option<f64> = .*\.as_f64\(\);/);
         expect(out).toContain('if (id.is_none()) {');
         expect(out).toContain('.insert("ts".into(), Value::from(ts)); }');
-        expect(out).toContain('.insert("id".into(), id.map(Value::from).unwrap_or(Value::Null)); }');
+        expect(out).toContain('.insert("id".into(), id.clone().map(Value::from).unwrap_or(Value::Null)); }');
     });
     test('a literal default makes the reader a bare String / i64 / bool', () => {
         expect(out).toMatch(/let mut lim: i64 = .*\.as_i64\(\)\.unwrap_or\(100\);/);
