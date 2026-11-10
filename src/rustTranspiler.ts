@@ -3419,7 +3419,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isCallExpression(node) || !isPropertyAccessExpression(node.expression) || node.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const name = String(node.expression.name.text);
         return RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name) || RustTranspiler.RUST_SCALAR_INT_HELPERS[name] !== undefined
-            || RustTranspiler.RUST_SCALAR_NUM_HELPERS[name] !== undefined || RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name] !== undefined;
+            || RustTranspiler.RUST_SCALAR_NUM_HELPERS[name] !== undefined || RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name] !== undefined
+            || RustTranspiler.RUST_BASE_SCALAR_RETURNS[name] !== undefined;
     }
 
     rustScalarLocalKindUncached(declaration): string | undefined {
@@ -3488,6 +3489,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword) return undefined;
         const name = String(callee.name.text);
         const args: any[] = Array.from(node.arguments ?? []);
+        const baseReturn = this.rustBaseReturnScalarKind(node, name);
+        if (baseReturn !== undefined) return baseReturn;
         const declaration: any = this.rustScalarCallee(node);
         if (declaration === undefined || !RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName))) return undefined;
         // a literal default is returned for every missing key, so the reader is never `Null`
@@ -3506,6 +3509,25 @@ export class RustTranspiler extends BaseTranspiler {
         const boolBase = RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name];
         if (fresh && boolBase !== undefined) return args.length === boolBase + 1 && this.literalKindOfNode(args[boolBase]) === 'boolean' ? 'bool' : undefined;
         return undefined;
+    }
+
+    // Base methods whose TS return is a concrete scalar: the local takes the callee's kind and
+    // converts the `Value` result once at the declaration (`Str` -> `Option<String>`, `number` -> `Option<i64>`).
+    private static readonly RUST_BASE_SCALAR_RETURNS: { [name: string]: string } = {
+        safeCurrencyCode: 'ostr', safeSymbol: 'ostr', numberToString: 'ostr', iso8601: 'ostr',
+        networkIdToCode: 'ostr', marketId: 'ostr', currencyId: 'ostr', milliseconds: 'oint', seconds: 'oint',
+    };
+
+    rustBaseReturnScalarKind(call, name: string): string | undefined {
+        const kind = RustTranspiler.RUST_BASE_SCALAR_RETURNS[name];
+        // a callee already printed `-> Option<String>` is the native-`Str` rule's
+        if (kind === undefined || this.rustNativeStrCalleeKind(call) === 'str') return undefined;
+        // the member is declared on the base class (an override keeps the base signature)
+        const member: any = this.getChecker().getSymbolAtLocation(call.expression.name)?.valueDeclaration;
+        const owner: any = member?.resolve?.() ?? member;
+        if (owner === undefined || !RustTranspiler.RUST_BASE_TIER_FILE.test(String(owner.getSourceFile?.()?.fileName ?? ''))) return undefined;
+        const want = kind === 'ostr' ? 'string' : 'number';
+        return this.primitiveKindOfType(this.typeOfNodeIfAny(call)) === want ? kind : undefined;
     }
 
     rustScalarCallee(call): any {

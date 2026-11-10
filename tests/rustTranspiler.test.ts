@@ -28,6 +28,10 @@ const rustInlineFixtures: Record<string, Record<string, string>> = {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Market { id: Str; symbol: string; spot: boolean; swap: boolean; stock?: boolean; linear: boolean | undefined; info: any }\nexport default class Exchange {\n    markets: Dict = {};\n    market (symbol: Str): Market {\n        return this.markets[symbol];\n    }\n    safeString (d: any, k: any): Str {\n        return d[k];\n    }\n    hold (m: any): any {\n        return m;\n    }\n}\n",
   "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fetchOne (symbol: string, params: Dict = {}) {\n        const market = this.market (symbol);\n        const request: Dict = { 'pair': market['id'] };\n        if (market['swap'] || market['linear']) {\n            request['info'] = market['info'];\n        }\n        request['s'] = this.safeString (market, 'symbol');\n        return this.hold (market);\n    }\n    fetchTwo (symbol: string) {\n        let market = this.market (symbol);\n        market = this.market ('x');\n        return market['id'];\n    }\n    fetchThree (symbol: string) {\n        const market = this.market (symbol);\n        const isStock = market['stock'];\n        const isStockSpot = isStock && (market['spot'] === true);\n        if (isStockSpot || (market['spot'] !== true)) {\n            return market['id'];\n        }\n        return market['symbol'];\n    }\n}\n"
  },
+ "base-scalar-returns": {
+  "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Currency { code: Str }\nexport default class Exchange {\n    currencies: Dict = {};\n    safeCurrency (currencyId: Str, currency: Currency = undefined): Currency {\n        return this.currencies[currencyId];\n    }\n    safeCurrencyCode (currencyId: Str, currency: Currency = undefined): Str {\n        const c: Currency = this.safeCurrency (currencyId, currency);\n        return c['code'];\n    }\n    milliseconds (): number {\n        return 0;\n    }\n    hold (x: any): any {\n        return x;\n    }\n}\n",
+  "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseEntry (entry: Dict) {\n        const code = this.safeCurrencyCode (entry['c']);\n        if (code === undefined) {\n            return undefined;\n        }\n        const now = this.milliseconds ();\n        const kept = this.safeCurrencyCode (entry['d']);\n        kept['x'] = 1;\n        return { 'code': code, 'ts': now, 'k': kept };\n    }\n}\n"
+ },
  "scalar-locals": {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport type Num = number | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeString2 (o: any, k1: any, k2: any, d: Str = undefined): Str { return o; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o; }\n    safeTimestamp (o: any, k: any, d: Int = undefined): Int { return o; }\n    safeNumber (o: any, k: any, d: Num = undefined): Num { return o; }\n    safeBool (o: any, k: any, d: boolean): boolean { return o; }\n    parseNumber (x: any, d: any = undefined): any { return x; }\n    milliseconds (): number { return 1; }\n}\n",
   "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseThing (resp: Dict, other: Dict) {\n        const id = this.safeString (resp, 'id');\n        const ts = this.safeInteger (resp, 'ts');\n        const lim = this.safeInteger (resp, 'limit', 100);\n        const price = this.safeNumber (resp, 'price');\n        const flag = this.safeBool (resp, 'flag', false);\n        const side = this.safeString (resp, 'side', 'buy');\n        let spot = true;\n        let name = 'abc';\n        let page = 1;\n        const fee = 0.25;\n        const req: Dict = {};\n        if (id === undefined) {\n            return undefined;\n        }\n        if (flag) {\n            req['f'] = 1;\n        }\n        if (name === 'x') {\n            name = 'y';\n            page = 2;\n            spot = false;\n        }\n        req['id'] = id;\n        req['ts'] = ts;\n        req['lim'] = lim;\n        req['p'] = price;\n        req['spot'] = spot;\n        req['side'] = side;\n        req['page'] = page;\n        req['fee'] = fee;\n        const kept = this.safeString (resp, 'kept');\n        const len = kept.length;\n        return [ req, name, len ];\n    }\n}\n"
@@ -5022,6 +5026,23 @@ describe('rust typed tuple-destructure slots', () => {
     test('a slot with another use stays Value', () => {
         expect(out).toContain('let mut kept: Value = keptotherVariable.get(0).cloned().unwrap_or(Value::Null)');
         expect(out).toContain('let mut query: Value = marketTypequeryVariable.get(1).cloned().unwrap_or(Value::Null)');
+    });
+});
+
+describe('scalar locals from base methods with a concrete return', () => {
+    let out: string;
+    beforeAll(() => {
+        out = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'base-scalar-returns', 'ts/src/venue.ts')).content;
+    });
+    test('a Str / number base return is an Option local, tested and re-boxed natively', () => {
+        expect(out).toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\(.*\)\.as_str\(\)\.map\(str::to_owned\);/);
+        expect(out).toMatch(/let mut now: Option<i64> = self\.milliseconds\(\)\.as_i64\(\);/);
+        expect(out).toContain('if (code.is_none()) {');
+        expect(out).toContain('code.clone().map(Value::from).unwrap_or(Value::Null)');
+        expect(out).toContain('Value::from(now)');
+    });
+    test('a local written through keeps its Value box', () => {
+        expect(out).toMatch(/let mut kept: Value = self\.safeCurrencyCode\(/);
     });
 });
 

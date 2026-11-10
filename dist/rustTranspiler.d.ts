@@ -413,6 +413,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The scalar kind an expression yields exactly (`null` for nullish); `fresh` admits the
      *  non-null literal kinds (`str|int|num|bool`) a declaration may seed. */
     rustScalarValueKind(expr: any, fresh: boolean): string | undefined;
+    private static readonly RUST_BASE_SCALAR_RETURNS;
+    rustBaseReturnScalarKind(call: any, name: string): string | undefined;
     rustScalarCallee(call: any): any;
     /** The bare `format!(..)` a string concat prints as (its `Value::Str(..into())` box peeled), else undefined. */
     rustScalarFormatText(node: any): string | undefined;

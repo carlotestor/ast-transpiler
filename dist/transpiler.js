@@ -54171,7 +54171,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     const name = String(node.expression.name.text);
-    return _RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name) || _RustTranspiler.RUST_SCALAR_INT_HELPERS[name] !== void 0 || _RustTranspiler.RUST_SCALAR_NUM_HELPERS[name] !== void 0 || _RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name] !== void 0;
+    return _RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name) || _RustTranspiler.RUST_SCALAR_INT_HELPERS[name] !== void 0 || _RustTranspiler.RUST_SCALAR_NUM_HELPERS[name] !== void 0 || _RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name] !== void 0 || _RustTranspiler.RUST_BASE_SCALAR_RETURNS[name] !== void 0;
   }
   rustScalarLocalKindUncached(declaration) {
     if (!this.rustScalarInitShape(declaration.initializer))
@@ -54254,6 +54254,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const name = String(callee.name.text);
     const args = Array.from(node.arguments ?? []);
+    const baseReturn = this.rustBaseReturnScalarKind(node, name);
+    if (baseReturn !== void 0)
+      return baseReturn;
     const declaration = this.rustScalarCallee(node);
     if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName)))
       return void 0;
@@ -54275,6 +54278,17 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (fresh && boolBase !== void 0)
       return args.length === boolBase + 1 && this.literalKindOfNode(args[boolBase]) === "boolean" ? "bool" : void 0;
     return void 0;
+  }
+  rustBaseReturnScalarKind(call, name) {
+    const kind = _RustTranspiler.RUST_BASE_SCALAR_RETURNS[name];
+    if (kind === void 0 || this.rustNativeStrCalleeKind(call) === "str")
+      return void 0;
+    const member = this.getChecker().getSymbolAtLocation(call.expression.name)?.valueDeclaration;
+    const owner = member?.resolve?.() ?? member;
+    if (owner === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(owner.getSourceFile?.()?.fileName ?? "")))
+      return void 0;
+    const want = kind === "ostr" ? "string" : "number";
+    return this.primitiveKindOfType(this.typeOfNodeIfAny(call)) === want ? kind : void 0;
   }
   rustScalarCallee(call) {
     let declaration = this.rustCallDeclarations.get(call);
@@ -61776,6 +61790,19 @@ _RustTranspiler.RUST_SCALAR_TYPES = {
   int: "i64",
   num: "f64",
   bool: "bool"
+};
+// Base methods whose TS return is a concrete scalar: the local takes the callee's kind and
+// converts the `Value` result once at the declaration (`Str` -> `Option<String>`, `number` -> `Option<i64>`).
+_RustTranspiler.RUST_BASE_SCALAR_RETURNS = {
+  safeCurrencyCode: "ostr",
+  safeSymbol: "ostr",
+  numberToString: "ostr",
+  iso8601: "ostr",
+  networkIdToCode: "ostr",
+  marketId: "ostr",
+  currencyId: "ostr",
+  milliseconds: "oint",
+  seconds: "oint"
 };
 // `ts/src/base/**` — the shared `Exchange` / `PredictionExchange` classes
 // (the transpiler synthesises variants like `.__ExchangeNoOverloads.ts`).
