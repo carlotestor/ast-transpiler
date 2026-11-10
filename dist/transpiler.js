@@ -52888,6 +52888,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const optMarket = node.declarations.length === 1 && (this.rustMarketLocalKind(declaration) === "opt" || this.rustMarketLocalKind(declaration) === "call") ? this.printTypedMarketLocal(declaration, indent, varName) : void 0;
     if (optMarket !== void 0)
       return optMarket;
+    const nilScalar = node.declarations.length === 1 ? this.printRustNilScalarDeclaration(declaration, varName, indent) : void 0;
+    if (nilScalar !== void 0)
+      return nilScalar;
     if (!declaration.initializer) {
       return `${indent}let mut ${varName}: Value = Value::Null`;
     }
@@ -53191,6 +53194,62 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const name = super.printIdentifier(node);
     return local.kind === "str" ? `${name}.clone().map(Value::from).unwrap_or(Value::Null)` : local.kind === "int" ? `Value::from(${name})` : `${name}.map(Value::from).unwrap_or(Value::Null)`;
+  }
+  /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
+  rustNilScalarKind(declaration) {
+    const list = declaration.parent;
+    if (!isIdentifier3(declaration.name) || list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations.length !== 1 || (list.flags & NodeFlags4.Const) !== 0 || list.parent?.kind !== SyntaxKind7.VariableStatement)
+      return void 0;
+    if (this.rustNilLocalKind(declaration) !== void 0)
+      return void 0;
+    if (/[\\/]test[\\/]/.test(String(declaration.getSourceFile?.()?.fileName ?? "")))
+      return void 0;
+    const scope = this.rustEnclosingFunction(declaration);
+    if (scope === void 0 || isSourceFile5(scope) || this.rustNativeStrReturnKind(scope) === "str")
+      return void 0;
+    const name = String(declaration.name.text);
+    let joined = "null";
+    for (const n of this.rustScopeNameNodes(scope, name)) {
+      const parent = n.parent;
+      if (!isIdentifier3(n) || !isBinaryExpression5(parent) || parent.left !== n || parent.operatorToken.kind !== SyntaxKind7.EqualsToken)
+        continue;
+      if (this.rustDeclaredNode(n) !== declaration)
+        continue;
+      const rhs = this.unwrapParens(parent.right);
+      const write = isIdentifier3(rhs) && this.literalKindOfNode(rhs) !== "null" ? this.rustScalarIdentifierKind(rhs) : this.rustScalarValueKind(rhs, true);
+      joined = this.rustScalarJoinKinds(joined, write);
+      if (joined === void 0)
+        return void 0;
+    }
+    if (joined !== "ostr" && joined !== "oint" && joined !== "onum")
+      return void 0;
+    const declared = declaration.type === void 0 ? void 0 : this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
+    if (declared !== void 0 && declared !== (joined === "ostr" ? "string" : "number"))
+      return void 0;
+    const kind = joined;
+    const boxed = [];
+    let native = 0;
+    const ok = this.rustLocalUsesAll(declaration, name, false, (n) => {
+      if (this.rustIdentifierIsPropertyName(n))
+        return n.parent?.kind !== SyntaxKind7.ShorthandPropertyAssignment;
+      if (this.rustEnclosingFunction(n) !== scope)
+        return false;
+      const form = this.rustScalarUseForm(n, kind);
+      this.rustScalarUseForms.set(n, form);
+      if (form === "box" || form === "xbox" || form === "err")
+        boxed.push(n);
+      if (_RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form))
+        native++;
+      return form !== void 0;
+    });
+    return ok && native > 0 && !this.rustScalarBoxesOverflow(declaration, boxed, kind) ? kind : void 0;
+  }
+  /** Declaration hook: `let mut x: Option<..> = None` for an empty scalar local. */
+  printRustNilScalarDeclaration(declaration, varName, indent) {
+    if (declaration.initializer !== void 0)
+      return void 0;
+    const kind = this.rustScalarLocalKind(declaration);
+    return kind === void 0 ? void 0 : `${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = None`;
   }
   /** Assignment hook: `x = <rhs>` with the right-hand side unwrapped to the local's payload. */
   printRustNilLocalWrite(left, right) {
@@ -54168,7 +54227,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (names === void 0) {
       names = /* @__PURE__ */ new Set();
       for (const n of this.rustScopeIndex(src).nodes) {
-        if (isVariableDeclaration3(n) && isIdentifier3(n.name) && this.rustScalarInitShape(n.initializer))
+        if (isVariableDeclaration3(n) && isIdentifier3(n.name) && (n.initializer === void 0 || this.rustScalarInitShape(n.initializer)))
           names.add(String(n.name.text));
       }
       this.rustScalarCandidates.set(src, names);
@@ -54200,6 +54259,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return _RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name) || _RustTranspiler.RUST_SCALAR_INT_HELPERS[name] !== void 0 || _RustTranspiler.RUST_SCALAR_NUM_HELPERS[name] !== void 0 || _RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name] !== void 0 || _RustTranspiler.RUST_BASE_SCALAR_RETURNS[name] !== void 0;
   }
   rustScalarLocalKindUncached(declaration) {
+    if (declaration.initializer === void 0 || this.literalKindOfNode(declaration.initializer) === "null")
+      return this.rustNilScalarKind(declaration);
     if (!this.rustScalarInitShape(declaration.initializer))
       return void 0;
     const list = declaration.parent;
@@ -62533,6 +62594,9 @@ _RustTranspiler.RUST_NIL_INT_HELPERS = {
 };
 _RustTranspiler.RUST_NIL_BOOL_HELPERS = { safeBool: 2, safeBool2: 3, safeBoolN: 2 };
 _RustTranspiler.RUST_NIL_PRECISE_STR = /^string(?:Add|Sub|Mul|Div|Mod|Abs|Neg|Min|Max)$/;
+// An empty local the literal rule above rejects can still join the scalar rule: its writes
+// are exact scalar sources, every use is a scalar use form, and at least one use is native.
+_RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS = /* @__PURE__ */ new Set(["test", "cond", "concat", "native", "targ"]);
 // ── native-typed locals ───────────────────────────────────────────────────
 //
 // A local is declared `bool` (instead of `Value`) when its initializer is

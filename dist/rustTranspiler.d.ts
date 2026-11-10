@@ -284,6 +284,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustNilLocalCondition(node: any): string | undefined;
     /** Identifier hook: a box read converts with the standard `From` impls. */
     printRustNilLocalRead(node: any): string | undefined;
+    private static readonly RUST_NIL_SCALAR_NATIVE_FORMS;
+    /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
+    rustNilScalarKind(declaration: any): string | undefined;
+    /** Declaration hook: `let mut x: Option<..> = None` for an empty scalar local. */
+    printRustNilScalarDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** Assignment hook: `x = <rhs>` with the right-hand side unwrapped to the local's payload. */
     printRustNilLocalWrite(left: any, right: any): string | undefined;
     private static readonly RUST_BOOL_RESULT_HELPERS;

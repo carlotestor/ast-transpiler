@@ -2000,6 +2000,8 @@ export class RustTranspiler extends BaseTranspiler {
         const optMarket = node.declarations.length === 1 && (this.rustMarketLocalKind(declaration) === 'opt' || this.rustMarketLocalKind(declaration) === 'call')
             ? this.printTypedMarketLocal(declaration, indent, varName) : undefined;
         if (optMarket !== undefined) return optMarket;
+        const nilScalar = node.declarations.length === 1 ? this.printRustNilScalarDeclaration(declaration, varName, indent) : undefined;
+        if (nilScalar !== undefined) return nilScalar;
         if (!declaration.initializer) {
             return `${indent}let mut ${varName}: Value = Value::Null`;
         }
@@ -2292,6 +2294,55 @@ export class RustTranspiler extends BaseTranspiler {
         const name = super.printIdentifier(node);
         return local.kind === 'str' ? `${name}.clone().map(Value::from).unwrap_or(Value::Null)`
             : (local.kind === 'int' ? `Value::from(${name})` : `${name}.map(Value::from).unwrap_or(Value::Null)`);
+    }
+
+    // An empty local the literal rule above rejects can still join the scalar rule: its writes
+    // are exact scalar sources, every use is a scalar use form, and at least one use is native.
+    private static readonly RUST_NIL_SCALAR_NATIVE_FORMS = new Set([ 'test', 'cond', 'concat', 'native', 'targ' ]);
+
+    /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
+    rustNilScalarKind(declaration): string | undefined {
+        const list: any = declaration.parent;
+        if (!isIdentifier(declaration.name) || list?.kind !== SyntaxKind.VariableDeclarationList || list.declarations.length !== 1
+            || (list.flags & NodeFlags.Const) !== 0 || list.parent?.kind !== SyntaxKind.VariableStatement) return undefined;
+        if (this.rustNilLocalKind(declaration) !== undefined) return undefined;
+        if (/[\\/]test[\\/]/.test(String(declaration.getSourceFile?.()?.fileName ?? ''))) return undefined;
+        const scope: any = this.rustEnclosingFunction(declaration);
+        if (scope === undefined || isSourceFile(scope) || this.rustNativeStrReturnKind(scope) === 'str') return undefined;
+        const name = String(declaration.name.text);
+        let joined: string | undefined = 'null';
+        for (const n of this.rustScopeNameNodes(scope, name) as any[]) {
+            const parent: any = n.parent;
+            if (!isIdentifier(n) || !isBinaryExpression(parent) || parent.left !== n || parent.operatorToken.kind !== SyntaxKind.EqualsToken) continue;
+            if (this.rustDeclaredNode(n) !== declaration) continue;
+            const rhs: any = this.unwrapParens(parent.right);
+            const write = isIdentifier(rhs) && this.literalKindOfNode(rhs) !== 'null' ? this.rustScalarIdentifierKind(rhs) : this.rustScalarValueKind(rhs, true);
+            joined = this.rustScalarJoinKinds(joined, write);
+            if (joined === undefined) return undefined;
+        }
+        if (joined !== 'ostr' && joined !== 'oint' && joined !== 'onum') return undefined;
+        const declared = declaration.type === undefined ? undefined : this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
+        if (declared !== undefined && declared !== (joined === 'ostr' ? 'string' : 'number')) return undefined;
+        const kind = joined;
+        const boxed: any[] = [];
+        let native = 0;
+        const ok = this.rustLocalUsesAll(declaration, name, false, (n) => {
+            if (this.rustIdentifierIsPropertyName(n)) return n.parent?.kind !== SyntaxKind.ShorthandPropertyAssignment;
+            if (this.rustEnclosingFunction(n) !== scope) return false;
+            const form = this.rustScalarUseForm(n, kind);
+            this.rustScalarUseForms.set(n, form);
+            if (form === 'box' || form === 'xbox' || form === 'err') boxed.push(n);
+            if (RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form)) native++;
+            return form !== undefined;
+        });
+        return ok && native > 0 && !this.rustScalarBoxesOverflow(declaration, boxed, kind) ? kind : undefined;
+    }
+
+    /** Declaration hook: `let mut x: Option<..> = None` for an empty scalar local. */
+    printRustNilScalarDeclaration(declaration, varName: string, indent: string): string | undefined {
+        if (declaration.initializer !== undefined) return undefined;
+        const kind = this.rustScalarLocalKind(declaration);
+        return kind === undefined ? undefined : `${indent}let mut ${varName}: ${RustTranspiler.RUST_SCALAR_TYPES[kind]} = None`;
     }
 
     /** Assignment hook: `x = <rhs>` with the right-hand side unwrapped to the local's payload. */
@@ -3409,7 +3460,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (names === undefined) {
             names = new Set<string>();
             for (const n of this.rustScopeIndex(src).nodes as any[]) {
-                if (isVariableDeclaration(n) && isIdentifier(n.name) && this.rustScalarInitShape(n.initializer)) names.add(String(n.name.text));
+                if (isVariableDeclaration(n) && isIdentifier(n.name) && (n.initializer === undefined || this.rustScalarInitShape(n.initializer))) names.add(String(n.name.text));
             }
             this.rustScalarCandidates.set(src, names);
         }
@@ -3436,6 +3487,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     rustScalarLocalKindUncached(declaration): string | undefined {
+        if (declaration.initializer === undefined || this.literalKindOfNode(declaration.initializer) === 'null') return this.rustNilScalarKind(declaration);
         if (!this.rustScalarInitShape(declaration.initializer)) return undefined;
         const list: any = declaration.parent;
         if (!isIdentifier(declaration.name) || list?.kind !== SyntaxKind.VariableDeclarationList || list.declarations.length !== 1

@@ -1280,6 +1280,22 @@ ${body}
             expect(out).toContain('let mut c: Value = Value::Null;');
         });
 
+        test('ternary and typed-local writes join the optional scalar kinds', () => {
+            const out = transpiler.transpileRust(cls(`        let side = undefined;
+        if (kind === 'a') { side = 'buy'; } else { side = (kind === 'b') ? 'sell' : 'buy'; }
+        if (side === 'buy') { return 1; }
+        let n = undefined;
+        if (kind === 'c') { n = (kind === 'd') ? 1 : 2; }
+        if (n === undefined) { return 0; }
+        return this.hold(side);`)).content;
+            expect(out).toContain('let mut side: Option<String> = None;');
+            expect(out).toContain('side = (if (kind.as_str() == Some("b")) { Some("sell".to_string()) } else { Some("buy".to_string()) });');
+            expect(out).toContain('side.as_deref() == Some("buy")');
+            expect(out).toContain('let mut n: Option<i64> = None;');
+            expect(out).toContain('n = (if (kind.as_str() == Some(\"d\")) { Some(1) } else { Some(2) });');
+            expect(out).toContain('if (n.is_none()) {');
+        });
+
         test('a read outside the proven sinks keeps the Value box', () => {
             const out = transpiler.transpileRust(cls(`        let s = undefined;
         s = 'x';
