@@ -1317,6 +1317,12 @@ ${body}
         p = (kind === 'a') ? 'x' : 'y';
         return this.hold(p);`)).content;
             expect(out).toContain('let mut p: Value = Value::Null;');
+            const decoded = transpiler.transpileRust(cls(`        let q = undefined;
+        if (kind === 'a') { q = this.safeString(o, 'a'); } else { q = this.safeString(o, 'b'); }
+        let r = undefined;
+        r = q;
+        return this.hold(r);`)).content;
+            expect(decoded).toContain('let mut q: Value = Value::Null;');
         });
 
         test('a read outside the proven sinks keeps the Value box', () => {

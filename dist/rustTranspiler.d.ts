@@ -287,6 +287,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_NIL_SCALAR_NATIVE_FORMS;
     /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
     rustNilScalarKind(declaration: any): string | undefined;
+    /** A write that decodes a `Value` result (a call, or a ternary over one). */
+    rustNilDecodedWrite(rhs: any): boolean;
     /** `[ x, .. ] = <list>` as its own statement: `x` is written from a tuple slot. */
     rustNilSlotWrite(n: any): boolean;
     /** Slot hook: an `Option<String>` local takes the slot's string. */

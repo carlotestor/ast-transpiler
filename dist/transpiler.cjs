@@ -53215,7 +53215,6 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         if (this.primitiveKindOfType(this.typeOfNodeIfAny(n)) !== "string")
           return void 0;
         joined = this.rustScalarJoinKinds(joined, "ostr");
-        writes++;
         continue;
       }
       const parent = n.parent;
@@ -53223,8 +53222,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         continue;
       if (this.rustDeclaredNode(n) !== declaration)
         continue;
-      writes++;
       const rhs = this.unwrapParens(parent.right);
+      if (!this.rustNilDecodedWrite(rhs))
+        writes++;
       const write = _is.isIdentifier.call(void 0, rhs) && this.literalKindOfNode(rhs) !== "null" ? this.rustScalarIdentifierKind(rhs) : this.rustScalarValueKind(rhs, true);
       joined = this.rustScalarJoinKinds(joined, write);
       if (joined === void 0)
@@ -53252,6 +53252,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return form !== void 0;
     });
     return ok && (native > 0 || writes > 1) && !this.rustScalarBoxesOverflow(declaration, boxed, kind) ? kind : void 0;
+  }
+  /** A write that decodes a `Value` result (a call, or a ternary over one). */
+  rustNilDecodedWrite(rhs) {
+    const node = this.unwrapParens(rhs);
+    if (node !== void 0 && _is.isConditionalExpression.call(void 0, node))
+      return this.rustNilDecodedWrite(node.whenTrue) || this.rustNilDecodedWrite(node.whenFalse);
+    return node !== void 0 && (_is.isCallExpression.call(void 0, node) || _is.isElementAccessExpression.call(void 0, node) || _is.isPropertyAccessExpression.call(void 0, node));
   }
   /** `[ x, .. ] = <list>` as its own statement: `x` is written from a tuple slot. */
   rustNilSlotWrite(n) {

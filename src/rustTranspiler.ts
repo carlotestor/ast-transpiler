@@ -2316,14 +2316,13 @@ export class RustTranspiler extends BaseTranspiler {
             if (isIdentifier(n) && this.rustNilSlotWrite(n) && this.rustDeclaredNode(n) === declaration) {
                 if (this.primitiveKindOfType(this.typeOfNodeIfAny(n)) !== 'string') return undefined;
                 joined = this.rustScalarJoinKinds(joined, 'ostr');
-                writes++;
                 continue;
             }
             const parent: any = n.parent;
             if (!isIdentifier(n) || !isBinaryExpression(parent) || parent.left !== n || parent.operatorToken.kind !== SyntaxKind.EqualsToken) continue;
             if (this.rustDeclaredNode(n) !== declaration) continue;
-            writes++;
             const rhs: any = this.unwrapParens(parent.right);
+            if (!this.rustNilDecodedWrite(rhs)) writes++;
             const write = isIdentifier(rhs) && this.literalKindOfNode(rhs) !== 'null' ? this.rustScalarIdentifierKind(rhs) : this.rustScalarValueKind(rhs, true);
             joined = this.rustScalarJoinKinds(joined, write);
             if (joined === undefined) return undefined;
@@ -2343,8 +2342,15 @@ export class RustTranspiler extends BaseTranspiler {
             if (RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form)) native++;
             return form !== undefined;
         });
-        // a single write boxed straight back stays `Value`
+        // without a native read, only repeated native writes (no `Value` decode) earn the type
         return ok && (native > 0 || writes > 1) && !this.rustScalarBoxesOverflow(declaration, boxed, kind) ? kind : undefined;
+    }
+
+    /** A write that decodes a `Value` result (a call, or a ternary over one). */
+    rustNilDecodedWrite(rhs): boolean {
+        const node: any = this.unwrapParens(rhs);
+        if (node !== undefined && isConditionalExpression(node)) return this.rustNilDecodedWrite(node.whenTrue) || this.rustNilDecodedWrite(node.whenFalse);
+        return node !== undefined && (isCallExpression(node) || isElementAccessExpression(node) || isPropertyAccessExpression(node));
     }
 
     /** `[ x, .. ] = <list>` as its own statement: `x` is written from a tuple slot. */
