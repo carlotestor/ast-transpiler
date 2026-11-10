@@ -3271,6 +3271,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustScalarLiteralTest(kind, other) !== undefined) return 'test';
         }
         if (kind === 'bool' && this.rustIdentifierUseIsCondition(n)) return 'cond';
+        // a nested `a[k1][k2] = ..` write is rewritten by ccxt text passes keyed on its boxed operands
+        if (this.rustScalarInNestedWrite(n)) return undefined;
         if (isCallExpression(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
             return this.rustNilBoxSlotOk(parent, parent.arguments.indexOf(n)) ? 'box' : undefined;
         }
@@ -3287,6 +3289,14 @@ export class RustTranspiler extends BaseTranspiler {
         }
         if (isConditionalExpression(parent) && parent.condition !== n) return 'box';
         return undefined;
+    }
+
+    rustScalarInNestedWrite(n): boolean {
+        let current: any = n;
+        while (current.parent !== undefined && !isStatement(current.parent)) current = current.parent;
+        const write: any = isBinaryExpression(current) ? current : undefined;
+        return write !== undefined && write.operatorToken.kind === SyntaxKind.EqualsToken && isElementAccessExpression(write.left)
+            && (isElementAccessExpression(write.left.expression) || isPropertyAccessExpression(write.left.expression));
     }
 
     /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */

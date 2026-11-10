@@ -54011,6 +54011,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (kind === "bool" && this.rustIdentifierUseIsCondition(n))
       return "cond";
+    if (this.rustScalarInNestedWrite(n))
+      return void 0;
     if (_is.isCallExpression.call(void 0, parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
       return this.rustNilBoxSlotOk(parent, parent.arguments.indexOf(n)) ? "box" : void 0;
     }
@@ -54031,6 +54033,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (_is.isConditionalExpression.call(void 0, parent) && parent.condition !== n)
       return "box";
     return void 0;
+  }
+  rustScalarInNestedWrite(n) {
+    let current = n;
+    while (current.parent !== void 0 && !_is.isStatement.call(void 0, current.parent))
+      current = current.parent;
+    const write = _is.isBinaryExpression.call(void 0, current) ? current : void 0;
+    return write !== void 0 && write.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _is.isElementAccessExpression.call(void 0, write.left) && (_is.isElementAccessExpression.call(void 0, write.left.expression) || _is.isPropertyAccessExpression.call(void 0, write.left.expression));
   }
   /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */
   rustNilBoxSlotOk(call, at) {
