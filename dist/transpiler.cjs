@@ -51764,6 +51764,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       case _ast.SyntaxKind.CallExpression:
         return !_RustTranspiler.BOOL_PRODUCING_CALLS.has(this.callExpressionName(node));
       case _ast.SyntaxKind.Identifier:
+        if (this.rustScalarLocalOf(node) !== void 0)
+          return false;
+        return !this.isClassInstanceType(this.getChecker().getTypeAtLocation(node));
       case _ast.SyntaxKind.PropertyAccessExpression:
       case _ast.SyntaxKind.ElementAccessExpression:
         return !this.isClassInstanceType(this.getChecker().getTypeAtLocation(node));
@@ -51940,6 +51943,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return (type.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Null | _sync.TypeFlags.Void)) !== 0 || this.getChecker().isArrayType(type) || this.getChecker().isTupleType(type) || this.isStringType(type.flags);
   }
   printArrayLength(node, identation, leftExpr = void 0) {
+    const scalarLength = this.rustScalarLengthText(node, true);
+    if (scalarLength !== void 0)
+      return scalarLength;
     const receiver = _nullishCoalesce(leftExpr, () => ( this.printNode(node.expression, 0)));
     if (!this.rustIsOrderBookSide(node.expression) && this.isValueLengthType(this.typeOfNodeIfAny(node.expression)))
       return `Value::Int(${receiver}.len() as i64)`;
@@ -52769,6 +52775,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const scalarWrite = isAssign && _is.isIdentifier.call(void 0, left) ? this.printRustScalarLocalWrite(left, right) : void 0;
     if (scalarWrite !== void 0)
       return scalarWrite;
+    const scalarBinary = this.printRustScalarBinary(node);
+    if (scalarBinary !== void 0)
+      return scalarBinary;
     if (isAssign && left.kind === _ast.SyntaxKind.ElementAccessExpression) {
       const keys = [];
       let baseExpr = left;
@@ -54180,7 +54189,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (this.literalKindOfNode(node) !== void 0 || this.rustScalarIntLiteral(node) !== void 0 || this.rustScalarFloatLiteral(node) !== void 0)
       return true;
     if (_is.isBinaryExpression.call(void 0, node))
-      return node.operatorToken.kind === _ast.SyntaxKind.PlusToken;
+      return _RustTranspiler.RUST_SCALAR_ARITH_OPS.has(node.operatorToken.kind);
+    if (_is.isIdentifier.call(void 0, node) || _is.isConditionalExpression.call(void 0, node) || this.rustScalarStrMethod(node, true) !== void 0 || this.rustScalarPreciseCall(node))
+      return true;
+    if (_is.isPropertyAccessExpression.call(void 0, node))
+      return _is.isIdentifier.call(void 0, node.name) && node.name.text === "length" && _is.isIdentifier.call(void 0, node.expression);
     if (!_is.isCallExpression.call(void 0, node) || !_is.isPropertyAccessExpression.call(void 0, node.expression) || node.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword)
       return false;
     const name = String(node.expression.name.text);
@@ -54197,7 +54210,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const scope = this.rustEnclosingFunction(declaration);
     if (scope === void 0 || _is.isSourceFile.call(void 0, scope))
       return void 0;
-    const kind = this.rustScalarValueKind(declaration.initializer, true);
+    let kind = this.rustScalarValueKind(declaration.initializer, true);
     if (kind === void 0 || kind === "null")
       return void 0;
     if (this.rustSafeStringLocalIsTyped(declaration) || this.rustStringMethodLocalInit(declaration) !== void 0 || kind === "bool" && this.getRustBoolLocalInitializer(declaration, this.printNode(declaration.initializer, 0)) !== void 0)
@@ -54206,6 +54219,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const expected = kind === "ostr" || kind === "str" ? "string" : kind === "bool" ? "boolean" : "number";
     if (checked !== expected)
       return void 0;
+    const seeded = kind;
+    kind = this.rustScalarWidenedKind(declaration, kind);
+    const widened = kind !== seeded || this.rustScalarExpressionKind(declaration.initializer) !== void 0;
+    const boxed = [];
+    let expressionUses = false;
     const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return _optionalChain([n, 'access', _8609 => _8609.parent, 'optionalAccess', _8610 => _8610.kind]) !== _ast.SyntaxKind.ShorthandPropertyAssignment;
@@ -54213,9 +54231,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return false;
       const form = this.rustScalarUseForm(n, kind);
       this.rustScalarUseForms.set(n, form);
+      if (form === "box" || form === "xbox" || form === "err")
+        boxed.push(n);
+      if (form === "xbox" || form === "native" || form === "targ" || form === "err")
+        expressionUses = true;
       return form !== void 0;
     });
-    return ok ? kind : void 0;
+    const accepted = ok && !((widened || expressionUses) && this.rustScalarBoxesOverflow(declaration, boxed, kind));
+    return accepted ? kind : void 0;
   }
   /** Integer literal text (`5`, `-5`) that fits an `i64`, else undefined. */
   rustScalarIntLiteral(node) {
@@ -54258,6 +54281,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "int";
     if (fresh && this.rustScalarFloatLiteral(node) !== void 0)
       return "num";
+    const expressionKind = this.rustScalarExpressionKind(node);
+    if (expressionKind !== void 0)
+      return expressionKind;
     if (fresh && _is.isBinaryExpression.call(void 0, node) && node.operatorToken.kind === _ast.SyntaxKind.PlusToken && this.rustScalarFormatText(node) !== void 0)
       return "str";
     if (!_is.isCallExpression.call(void 0, node))
@@ -54355,7 +54381,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (this.rustScalarInNestedWrite(n))
       return void 0;
     if (_is.isCallExpression.call(void 0, parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
-      return this.rustNilBoxSlotOk(parent, parent.arguments.indexOf(n)) ? "box" : void 0;
+      return this.rustNilBoxSlotOk(parent, parent.arguments.indexOf(n)) ? "box" : this.rustScalarExpressionUseForm(n, kind);
     }
     if (parent.kind === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n)
       return "box";
@@ -54368,12 +54394,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (_is.isBinaryExpression.call(void 0, parent) && parent.operatorToken.kind === _ast.SyntaxKind.PlusToken) {
       if (kind !== "str" && kind !== "ostr")
-        return void 0;
+        return this.rustScalarExpressionUseForm(n, kind);
       return kind === "str" && this.printNode(parent, 0).trim().startsWith("Value::Str(format!(") ? "concat" : "box";
     }
     if (_is.isConditionalExpression.call(void 0, parent) && parent.condition !== n)
       return "box";
-    return void 0;
+    return this.rustScalarExpressionUseForm(n, kind);
   }
   rustScalarInNestedWrite(n) {
     let current = n;
@@ -54390,10 +54416,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     if (_is.isConditionalExpression.call(void 0, node))
       return this.rustScalarWriteOk(kind, node.whenTrue, depth + 1) && this.rustScalarWriteOk(kind, node.whenFalse, depth + 1);
-    if (_is.isIdentifier.call(void 0, node) && node.text !== "undefined")
-      return _optionalChain([this, 'access', _8625 => _8625.rustScalarLocalOf, 'call', _8626 => _8626(node), 'optionalAccess', _8627 => _8627.kind]) === kind;
-    const value = this.rustScalarValueKind(node, true);
     const optional = kind.startsWith("o");
+    if (_is.isIdentifier.call(void 0, node) && node.text !== "undefined") {
+      const source = _optionalChain([this, 'access', _8625 => _8625.rustScalarLocalOf, 'call', _8626 => _8626(node), 'optionalAccess', _8627 => _8627.kind]);
+      return source === kind || optional && source === kind.slice(1);
+    }
+    const value = this.rustScalarValueKind(node, true);
     return value === kind || optional && (value === "null" || value === kind.slice(1));
   }
   /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */
@@ -54436,11 +54464,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const rightLocal = leftLocal === void 0 ? this.rustScalarLocalOf(this.unwrapParens(right)) : void 0;
     const local = _nullishCoalesce(leftLocal, () => ( rightLocal));
     if (local === void 0)
-      return void 0;
+      return this.rustScalarOwnsOperand(left) || this.rustScalarOwnsOperand(right) ? this.rustScalarPairEquality(left, right, op) : void 0;
     const [self, other] = leftLocal !== void 0 ? [this.unwrapParens(left), right] : [this.unwrapParens(right), left];
     const test = this.rustScalarLiteralTest(local.kind, other);
     if (test === void 0)
-      return void 0;
+      return this.rustScalarPairEquality(left, right, op);
     const name = super.printIdentifier(self);
     const equal = op === _ast.SyntaxKind.EqualsEqualsToken || op === _ast.SyntaxKind.EqualsEqualsEqualsToken;
     if (test === "null")
@@ -54456,9 +54484,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   printRustScalarLocalRead(node) {
     const local = this.rustScalarLocalOf(node);
     const form = local === void 0 ? void 0 : this.rustScalarUseForms.get(node);
-    if (form === "cond" || form === "concat")
+    if (form === "cond" || form === "concat" || form === "native" || form === "targ")
       return super.printIdentifier(node);
-    if (form !== "box")
+    if (form === "err")
+      return `${super.printIdentifier(node)}.clone()`;
+    if (form !== "box" && form !== "xbox")
       return void 0;
     const name = super.printIdentifier(node);
     const moved = _is.isReturnStatement.call(void 0, node.parent) ? name : `${name}.clone()`;
@@ -54479,12 +54509,17 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (_is.isConditionalExpression.call(void 0, node)) {
       const whenTrue = this.rustScalarNativeText(kind, node.whenTrue);
       const whenFalse = this.rustScalarNativeText(kind, node.whenFalse);
-      return whenTrue === void 0 || whenFalse === void 0 ? void 0 : `(if ${this.printCondition(node.condition, 0).trim()} { ${whenTrue} } else { ${whenFalse} })`;
+      if (whenTrue === void 0 || whenFalse === void 0)
+        return void 0;
+      return `(if ${this.printCondition(node.condition, 0).trim()} { ${whenTrue} } else { ${whenFalse} })`;
     }
     if (_is.isIdentifier.call(void 0, node) && _optionalChain([this, 'access', _8631 => _8631.rustScalarLocalOf, 'call', _8632 => _8632(node), 'optionalAccess', _8633 => _8633.kind]) === kind) {
       const name = super.printIdentifier(node);
       return kind === "str" || kind === "ostr" ? `${name}.clone()` : name;
     }
+    const expressionText = this.rustScalarExpressionText(kind, node);
+    if (expressionText !== void 0)
+      return expressionText;
     if (base === "str" && this.literalKindOfNode(node) === "string")
       return wrap(`${this.quotedStringLiteral(node.text)}.to_string()`);
     if (base === "bool" && this.literalKindOfNode(node) === "boolean")
@@ -54530,6 +54565,522 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const text = local === void 0 ? void 0 : this.rustScalarNativeText(local.kind, right);
     return text === void 0 ? void 0 : `${super.printIdentifier(left)} = ${text}`;
   }
+  /** Kind of a typed local an identifier reads: a scalar local, or a typed `Option<String>|Option<i64>` of another rule. */
+  rustScalarIdentifierKind(node) {
+    if (node === void 0 || !_is.isIdentifier.call(void 0, node) || node.text === "undefined")
+      return void 0;
+    const scalar = _optionalChain([this, 'access', _8634 => _8634.rustScalarLocalOf, 'call', _8635 => _8635(node), 'optionalAccess', _8636 => _8636.kind]);
+    if (scalar !== void 0)
+      return scalar;
+    if (this.rustStringLocalIdentifierIsTyped(node))
+      return "ostr";
+    const nil = _optionalChain([this, 'access', _8637 => _8637.rustNilLocalOfIdentifier, 'call', _8638 => _8638(node), 'optionalAccess', _8639 => _8639.kind]);
+    return nil === "str" ? "ostr" : nil === "int" ? "oint" : void 0;
+  }
+  /** `{ method, kind }` of a native string method on a typed string local receiver, else undefined. */
+  rustScalarStrMethod(node, syntactic = false) {
+    const call = this.unwrapParens(node);
+    if (call === void 0 || !_is.isCallExpression.call(void 0, call) || !_is.isPropertyAccessExpression.call(void 0, call.expression))
+      return void 0;
+    const recv = call.expression.expression;
+    if (!_is.isIdentifier.call(void 0, recv) || call.expression.expression.kind === _ast.SyntaxKind.ThisKeyword)
+      return void 0;
+    const method = String(call.expression.name.text);
+    const args = Array.from(_nullishCoalesce(call.arguments, () => ( [])));
+    const lit = (a) => a !== void 0 && this.rustNativeStringLiteralArg(a) !== void 0;
+    let shape;
+    if ((method === "toLowerCase" || method === "toUpperCase") && args.length === 0)
+      shape = "case";
+    else if ((method === "trim" || method === "toString") && args.length === 0)
+      shape = "self";
+    else if ((method === "startsWith" || method === "endsWith") && args.length === 1 && lit(args[0]) && args[0].text !== "")
+      shape = "affix";
+    else if (method === "replace" && args.length === 2 && lit(args[0]) && lit(args[1]) && args[0].text !== "")
+      shape = "replace";
+    if (shape === void 0)
+      return void 0;
+    if (syntactic)
+      return { recv, recvKind: "", method, kind: "" };
+    const recvKind = this.rustScalarIdentifierKind(recv);
+    if (recvKind !== "str" && recvKind !== "ostr")
+      return void 0;
+    if (shape === "affix")
+      return { recv, recvKind, method, kind: "bool" };
+    if (recvKind === "ostr" && shape !== "case")
+      return void 0;
+    return { recv, recvKind, method, kind: recvKind };
+  }
+  /** `Precise.string<Add|Sub|..>(..)`: a `string | undefined` result. */
+  rustScalarPreciseCall(node) {
+    const call = this.unwrapParens(node);
+    if (call === void 0 || !_is.isCallExpression.call(void 0, call) || !_is.isPropertyAccessExpression.call(void 0, call.expression))
+      return false;
+    const callee = call.expression;
+    return _is.isIdentifier.call(void 0, callee.expression) && callee.expression.text === "Precise" && _RustTranspiler.RUST_NIL_PRECISE_STR.test(String(callee.name.text));
+  }
+  /** `s.length` on a typed string local. */
+  rustScalarLengthRecv(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0 || !_is.isPropertyAccessExpression.call(void 0, inner) || !_is.isIdentifier.call(void 0, inner.name) || inner.name.text !== "length")
+      return void 0;
+    const kind = this.rustScalarIdentifierKind(inner.expression);
+    return kind === "str" || kind === "ostr" ? inner.expression : void 0;
+  }
+  /** Non-optional numeric operand kind (`int|num`), optional (`oint|onum`), or undefined. */
+  rustScalarNumericKind(node) {
+    const inner = this.unwrapParens(node);
+    if (this.rustScalarIntLiteral(inner) !== void 0)
+      return "int";
+    if (this.rustScalarFloatLiteral(inner) !== void 0)
+      return "num";
+    const kind = this.rustScalarExpressionKind(inner);
+    return kind === "int" || kind === "num" || kind === "oint" || kind === "onum" ? kind : void 0;
+  }
+  /** The exact kind an expression shape yields over typed operands, else undefined. */
+  rustScalarExpressionKind(expr) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0)
+      return void 0;
+    if (_is.isIdentifier.call(void 0, node))
+      return this.rustScalarIdentifierKind(node);
+    if (_is.isConditionalExpression.call(void 0, node)) {
+      const a = this.rustScalarValueKind(node.whenTrue, true);
+      const b = this.rustScalarValueKind(node.whenFalse, true);
+      const joined = this.rustScalarJoinKinds(a, b);
+      return joined === "null" ? void 0 : joined;
+    }
+    if (_is.isBinaryExpression.call(void 0, node)) {
+      const op = node.operatorToken.kind;
+      if (op === _ast.SyntaxKind.PlusToken || op === _ast.SyntaxKind.MinusToken || op === _ast.SyntaxKind.AsteriskToken) {
+        const a = this.rustScalarNumericKind(node.left);
+        const b = this.rustScalarNumericKind(node.right);
+        if (a !== "int" && a !== "num" || b !== "int" && b !== "num")
+          return void 0;
+        return a === "int" && b === "int" ? "int" : "num";
+      }
+      if (op === _ast.SyntaxKind.SlashToken) {
+        const a = this.rustScalarNumericKind(node.left);
+        const divisor = this.rustScalarFloatLiteral(node.right);
+        return (a === "int" || a === "num") && divisor !== void 0 && Number(divisor) !== 0 ? "num" : void 0;
+      }
+      return this.rustScalarCompareText(node, true) !== void 0 ? "bool" : void 0;
+    }
+    if (this.rustScalarLengthRecv(node) !== void 0)
+      return "int";
+    const method = this.rustScalarStrMethod(node);
+    if (method !== void 0)
+      return method.kind;
+    return this.rustScalarPreciseCall(node) ? "ostr" : void 0;
+  }
+  rustScalarJoinKinds(a, b) {
+    if (a === void 0 || b === void 0)
+      return void 0;
+    if (a === b)
+      return a;
+    const optional = (k) => k === "str" || k === "int" || k === "num" ? `o${k}` : k.startsWith("o") ? k : void 0;
+    if (a === "null")
+      return optional(b);
+    if (b === "null")
+      return optional(a);
+    if (optional(a) === b)
+      return b;
+    if (optional(b) === a)
+      return a;
+    return void 0;
+  }
+  /** Joins the initializer kind with every `x = <rhs>` write: a nullish write makes the local optional. */
+  rustScalarWidenedKind(declaration, kind) {
+    let joined = kind;
+    for (const n of this.rustScopeNameNodes(this.rustEnclosingFunction(declaration), String(declaration.name.text))) {
+      const parent = n.parent;
+      if (!_is.isIdentifier.call(void 0, n) || !_is.isBinaryExpression.call(void 0, parent) || parent.left !== n || parent.operatorToken.kind !== _ast.SyntaxKind.EqualsToken)
+        continue;
+      const write = _is.isIdentifier.call(void 0, this.unwrapParens(parent.right)) && this.literalKindOfNode(this.unwrapParens(parent.right)) !== "null" ? this.rustScalarIdentifierKind(this.unwrapParens(parent.right)) : this.rustScalarValueKind(parent.right, true);
+      const next = write === void 0 ? void 0 : this.rustScalarJoinKinds(joined, write);
+      if (next !== void 0 && (next === joined || next === `o${joined}`))
+        joined = next;
+    }
+    return joined;
+  }
+  /** Native text of an ordered/equality comparison over typed operands (`dry`: shape check only). */
+  rustScalarCompareText(node, dry) {
+    const op = node.operatorToken.kind;
+    const symbol = _RustTranspiler.NATIVE_COMPARISON_OPERATORS[op];
+    const equality = this.isEqualityOp(op);
+    if (symbol === void 0 && !equality)
+      return void 0;
+    const contains = this.rustScalarContainsTest(node, dry);
+    if (contains !== void 0)
+      return contains;
+    if (!this.rustScalarHasTypedOperand(node))
+      return void 0;
+    const left = this.unwrapParens(node.left);
+    const right = this.unwrapParens(node.right);
+    const text = (k, n) => dry ? "_" : this.rustScalarOperandText(k, n);
+    const lk = this.rustScalarCompareKind(left);
+    const rk = this.rustScalarCompareKind(right);
+    if (lk === void 0 || rk === void 0)
+      return void 0;
+    const sign = equality ? op === _ast.SyntaxKind.EqualsEqualsToken || op === _ast.SyntaxKind.EqualsEqualsEqualsToken ? "==" : "!=" : symbol;
+    if (equality && (lk === "slit" || rk === "slit")) {
+      const [lit, other, ok] = lk === "slit" ? [left, right, rk] : [right, left, lk];
+      if (ok !== "str" && ok !== "ostr")
+        return void 0;
+      const quoted = this.quotedStringLiteral(lit.text);
+      return ok === "str" ? `${text("str", other)} ${sign} ${quoted}` : `${text("ostr", other)}.as_deref() ${sign} Some(${quoted})`;
+    }
+    if (lk === "slit" || rk === "slit")
+      return void 0;
+    const base = (k) => k.startsWith("o") ? k.slice(1) : k;
+    if (equality && lk === rk)
+      return `${text(lk, left)} ${sign} ${text(rk, right)}`;
+    if (equality && (lk === "str" || rk === "str") && (lk === "ostr" || rk === "ostr")) {
+      const [o, s] = lk === "ostr" ? [left, right] : [right, left];
+      return `${text("ostr", o)}.as_deref() ${sign} Some(${text("str", s)}.as_str())`;
+    }
+    if (lk === "bool" || rk === "bool" || base(lk) === "str" || base(rk) === "str")
+      return void 0;
+    const lo = lk.startsWith("o");
+    const ro = rk.startsWith("o");
+    if (lo && ro)
+      return void 0;
+    if (lo || ro) {
+      if (base(lk) !== base(rk))
+        return void 0;
+      const greater = op === _ast.SyntaxKind.GreaterThanToken || op === _ast.SyntaxKind.GreaterThanEqualsToken ? lo : equality ? true : ro;
+      if (!greater)
+        return void 0;
+      return lo ? `${text(lk, left)} ${sign} Some(${text(rk, right)})` : `Some(${text(lk, left)}) ${sign} ${text(rk, right)}`;
+    }
+    const kind = lk === "num" || rk === "num" ? "num" : "int";
+    return `${text(kind, left)} ${sign} ${text(kind, right)}`;
+  }
+  rustScalarCompareKind(node) {
+    if (this.literalKindOfNode(node) === "string")
+      return node.text in this.StringLiteralReplacements ? void 0 : "slit";
+    if (this.literalKindOfNode(node) !== void 0 && this.literalKindOfNode(node) !== "number")
+      return void 0;
+    return _nullishCoalesce(this.rustScalarNumericKind(node), () => ( this.rustScalarExpressionKind(node)));
+  }
+  /** `s.indexOf("lit") >= 0` / `> -1` / `!== -1` (contains) and `< 0` / `=== -1` (absent) on a typed string. */
+  rustScalarContainsTest(node, dry) {
+    const left = this.unwrapParens(node.left);
+    if (!_is.isCallExpression.call(void 0, left) || !_is.isPropertyAccessExpression.call(void 0, left.expression) || left.expression.name.text !== "indexOf" || left.arguments.length !== 1)
+      return void 0;
+    const recv = left.expression.expression;
+    const kind = this.rustScalarIdentifierKind(recv);
+    const needle = left.arguments[0];
+    if (kind !== "str" && kind !== "ostr" || this.rustNativeStringLiteralArg(needle) === void 0 || needle.text === "")
+      return void 0;
+    const bound = this.rustScalarIntLiteral(node.right);
+    const op = node.operatorToken.kind;
+    let present;
+    if (op === _ast.SyntaxKind.GreaterThanEqualsToken && bound === "0" || op === _ast.SyntaxKind.GreaterThanToken && bound === "-1")
+      present = true;
+    else if (op === _ast.SyntaxKind.LessThanToken && bound === "0")
+      present = false;
+    else if (bound === "-1" && this.isEqualityOp(op))
+      present = op === _ast.SyntaxKind.ExclamationEqualsToken || op === _ast.SyntaxKind.ExclamationEqualsEqualsToken;
+    if (present === void 0)
+      return void 0;
+    if (dry)
+      return "_";
+    const name = super.printIdentifier(recv);
+    const hay = kind === "str" ? name : `${name}.as_deref().unwrap_or_default()`;
+    return `${present ? "" : "!"}${hay}.contains("${this.rustNativeStringLiteralArg(needle)}")`;
+  }
+  /** An operand printed by this rule: a scalar local, or a `.length` / string-method / `indexOf` of one. */
+  rustScalarOwnsOperand(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0)
+      return false;
+    if (_is.isIdentifier.call(void 0, inner))
+      return this.rustScalarLocalOf(inner) !== void 0;
+    if (_is.isBinaryExpression.call(void 0, inner))
+      return this.rustScalarOwnsOperand(inner.left) || this.rustScalarOwnsOperand(inner.right);
+    if (_is.isPropertyAccessExpression.call(void 0, inner))
+      return _is.isIdentifier.call(void 0, inner.name) && inner.name.text === "length" && this.rustScalarOwnsOperand(inner.expression);
+    if (_is.isCallExpression.call(void 0, inner) && _is.isPropertyAccessExpression.call(void 0, inner.expression)) {
+      const name = String(inner.expression.name.text);
+      return (name === "indexOf" || this.rustScalarStrMethod(inner) !== void 0) && this.rustScalarOwnsOperand(inner.expression.expression);
+    }
+    return false;
+  }
+  rustScalarHasTypedOperand(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0)
+      return false;
+    if (_is.isIdentifier.call(void 0, inner))
+      return this.rustScalarIdentifierKind(inner) !== void 0;
+    if (_is.isBinaryExpression.call(void 0, inner))
+      return this.rustScalarHasTypedOperand(inner.left) || this.rustScalarHasTypedOperand(inner.right);
+    return this.rustScalarLengthRecv(inner) !== void 0 || this.rustScalarStrMethod(inner) !== void 0;
+  }
+  /** Native text of an operand in `kind` (an `int` operand of an `f64` expression is cast). */
+  rustScalarOperandText(kind, node) {
+    const inner = this.unwrapParens(node);
+    if (kind === "num" && this.rustScalarIntLiteral(inner) !== void 0)
+      return this.rustScalarFloatLiteral(inner);
+    if ((kind === "int" || kind === "num") && (_nullishCoalesce(this.rustScalarIntLiteral(inner), () => ( this.rustScalarFloatLiteral(inner)))) !== void 0) {
+      return kind === "int" ? this.rustScalarIntLiteral(inner) : this.rustScalarFloatLiteral(inner);
+    }
+    if (_is.isIdentifier.call(void 0, inner)) {
+      const own2 = this.rustScalarIdentifierKind(inner);
+      const name = super.printIdentifier(inner);
+      return kind === "num" && own2 === "int" ? `(${name} as f64)` : name;
+    }
+    const own = _nullishCoalesce(this.rustScalarExpressionKind(inner), () => ( kind));
+    const text = _nullishCoalesce(this.rustScalarNativeText(own, inner), () => ( this.printNode(inner, 0)));
+    return kind === "num" && own === "int" ? `((${text}) as f64)` : `(${text})`;
+  }
+  /** Native text of an expression shape for a local of `kind`, else undefined. */
+  rustScalarExpressionText(kind, node) {
+    const own = this.rustScalarExpressionKind(node);
+    if (own === void 0)
+      return void 0;
+    const optional = kind.startsWith("o");
+    const wrap = (t) => own === kind ? t : optional && own === kind.slice(1) ? `Some(${t})` : void 0;
+    if (_is.isIdentifier.call(void 0, node)) {
+      const name = super.printIdentifier(node);
+      if (kind === "num" && own === "int")
+        return `(${name} as f64)`;
+      return wrap(own === "str" || own === "ostr" ? `${name}.clone()` : name);
+    }
+    if (_is.isBinaryExpression.call(void 0, node)) {
+      const op = node.operatorToken.kind;
+      if (own === "bool")
+        return wrap(this.rustScalarCompareText(node, false));
+      const sign = op === _ast.SyntaxKind.PlusToken ? "+" : op === _ast.SyntaxKind.MinusToken ? "-" : op === _ast.SyntaxKind.AsteriskToken ? "*" : "/";
+      const text = `(${this.rustScalarOperandText(own, node.left)} ${sign} ${this.rustScalarOperandText(own, node.right)})`;
+      return kind === "num" && own === "int" ? `(${text} as f64)` : wrap(text);
+    }
+    const length = this.rustScalarLengthRecv(node);
+    if (length !== void 0) {
+      const name = super.printIdentifier(length);
+      return wrap(`(${this.rustScalarIdentifierKind(length) === "str" ? name : `${name}.as_deref().unwrap_or_default()`}.chars().count() as i64)`);
+    }
+    const method = this.rustScalarStrMethod(node);
+    if (method !== void 0) {
+      const name = super.printIdentifier(method.recv);
+      const args = Array.from(_nullishCoalesce(node.arguments, () => ( [])));
+      const arg = (i) => this.rustNativeStringLiteralArg(args[i]);
+      if (method.method === "startsWith" || method.method === "endsWith") {
+        const hay = method.recvKind === "str" ? name : `${name}.as_deref().unwrap_or_default()`;
+        return wrap(`${hay}.${method.method === "startsWith" ? "starts_with" : "ends_with"}("${arg(0)}")`);
+      }
+      const fn = method.method === "toLowerCase" ? "to_lowercase" : "to_uppercase";
+      if (method.recvKind === "ostr")
+        return wrap(`${name}.as_deref().map(str::${fn})`);
+      if (method.method === "trim")
+        return wrap(`${name}.trim().to_string()`);
+      if (method.method === "toString")
+        return wrap(`${name}.clone()`);
+      if (method.method === "replace")
+        return wrap(`${name}.replace("${arg(0)}", "${arg(1)}")`);
+      return wrap(`${name}.${fn}()`);
+    }
+    if (this.rustScalarPreciseCall(node))
+      return wrap(`${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`);
+    return void 0;
+  }
+  /** The `Value` box of a native scalar text. */
+  rustScalarBoxText(kind, text, node) {
+    if (kind === "ostr")
+      return `${text}.map(Value::from).unwrap_or(Value::Null)`;
+    if (kind === "bool")
+      return this.isBooleanPosition(node) ? text : `Value::Bool(${text})`;
+    if (kind === "oint" || kind === "onum")
+      return `Value::from(${text})`;
+    return kind === "int" ? `Value::Int(${text})` : kind === "num" ? `Value::Float(${text})` : `Value::from(${text})`;
+  }
+  /** Binary hook: arithmetic/ordered comparisons over typed operands, and `+=`/`-=` on a typed local. */
+  printRustScalarBinary(node) {
+    const op = node.operatorToken.kind;
+    if (op === _ast.SyntaxKind.PlusEqualsToken || op === _ast.SyntaxKind.MinusEqualsToken)
+      return this.rustScalarCompoundText(node, false);
+    if (!_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) || this.isEqualityOp(op))
+      return void 0;
+    if (!this.rustScalarOwnsOperand(node.left) && !this.rustScalarOwnsOperand(node.right))
+      return void 0;
+    const kind = this.rustScalarExpressionKind(node);
+    if (kind !== "int" && kind !== "num" && kind !== "bool")
+      return void 0;
+    const text = this.rustScalarExpressionText(kind, node);
+    return text === void 0 ? void 0 : this.rustScalarBoxText(kind, text, node);
+  }
+  /** `s += <string>` (`push_str`) on a `String` local, `n += <int>` / `n -= <int>` on an `i64` local. */
+  rustScalarCompoundText(node, dry) {
+    if (!_is.isIdentifier.call(void 0, node.left) || _optionalChain([node, 'access', _8640 => _8640.parent, 'optionalAccess', _8641 => _8641.kind]) !== _ast.SyntaxKind.ExpressionStatement)
+      return void 0;
+    const kind = _optionalChain([this, 'access', _8642 => _8642.rustScalarLocalOf, 'call', _8643 => _8643(node.left), 'optionalAccess', _8644 => _8644.kind]);
+    const right = this.unwrapParens(node.right);
+    const name = dry ? "_" : super.printIdentifier(node.left);
+    if (kind === "str" && node.operatorToken.kind === _ast.SyntaxKind.PlusEqualsToken) {
+      if (this.literalKindOfNode(right) === "string" && !(right.text in this.StringLiteralReplacements))
+        return dry ? "_" : `${name}.push_str(${this.quotedStringLiteral(right.text)})`;
+      if (_is.isIdentifier.call(void 0, right) && _optionalChain([this, 'access', _8645 => _8645.rustScalarLocalOf, 'call', _8646 => _8646(right), 'optionalAccess', _8647 => _8647.kind]) === "str")
+        return dry ? "_" : `${name}.push_str(&${super.printIdentifier(right)})`;
+      if (!_is.isBinaryExpression.call(void 0, right) || right.operatorToken.kind !== _ast.SyntaxKind.PlusToken)
+        return void 0;
+      if (this.primitiveKindOfType(this.typeOfNodeIfAny(right)) !== "string")
+        return void 0;
+      const format = this.rustScalarFormatText(right);
+      return format === void 0 ? void 0 : dry ? "_" : `${name}.push_str(&${format})`;
+    }
+    if (kind !== "int" || this.rustScalarNumericKind(right) !== "int")
+      return void 0;
+    return dry ? "_" : `${name} ${node.operatorToken.kind === _ast.SyntaxKind.PlusEqualsToken ? "+=" : "-="} ${this.rustScalarOperandText("int", right)}`;
+  }
+  /** Pair equality of two typed operands (or a typed expression and a literal). */
+  rustScalarPairEquality(left, right, op) {
+    const node = { operatorToken: { kind: op }, left, right };
+    return this.rustScalarCompareText(node, false);
+  }
+  /** Typed-signature argument text for a scalar local (`&str`, `Option<&str>`, `i64`, ..), else undefined. */
+  rustScalarTypedArgText(arg, rustType, dry = false) {
+    const inner = this.unwrapParens(arg);
+    const kind = _is.isIdentifier.call(void 0, inner) ? _optionalChain([this, 'access', _8648 => _8648.rustScalarLocalOf, 'call', _8649 => _8649(inner), 'optionalAccess', _8650 => _8650.kind]) : void 0;
+    if (kind === void 0)
+      return void 0;
+    const name = dry ? "_" : super.printIdentifier(inner);
+    const table = {
+      str: { "&str": `${name}.as_str()`, "Option<&str>": `Some(${name}.as_str())` },
+      ostr: { "&str": `${name}.as_deref().unwrap_or_default()`, "Option<&str>": `${name}.as_deref()` },
+      int: { "i64": name, "Option<i64>": `Some(${name})` },
+      oint: { "Option<i64>": name },
+      num: { "f64": name, "Option<f64>": `Some(${name})` },
+      onum: { "Option<f64>": name },
+      bool: { "bool": name }
+    };
+    return _optionalChain([table, 'access', _8651 => _8651[kind], 'optionalAccess', _8652 => _8652[rustType]]);
+  }
+  /** The typed-signature param type of a `this.<typed unified>(..)` argument slot the call prints natively. */
+  rustScalarTypedParamType(call, at) {
+    const callee = call.expression;
+    if (!_is.isPropertyAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword || !this.rustTypedUnified.has(String(callee.name.text)))
+      return void 0;
+    let decl = this.rustScalarCallee(call);
+    if (decl !== void 0 && decl.body === void 0) {
+      decl = _optionalChain([decl, 'access', _8653 => _8653.parent, 'optionalAccess', _8654 => _8654.members, 'optionalAccess', _8655 => _8655.find, 'call', _8656 => _8656((m) => m.kind === _ast.SyntaxKind.MethodDeclaration && m.body !== void 0 && _optionalChain([m, 'access', _8657 => _8657.name, 'optionalAccess', _8658 => _8658.text]) === callee.name.text)]);
+    }
+    const typed = this.rustTypedSignature(decl);
+    if (typed === void 0)
+      return void 0;
+    const awaited = _optionalChain([call, 'access', _8659 => _8659.parent, 'optionalAccess', _8660 => _8660.kind]) === _ast.SyntaxKind.AwaitExpression || _optionalChain([call, 'access', _8661 => _8661.parent, 'optionalAccess', _8662 => _8662.kind]) === _ast.SyntaxKind.ArrayLiteralExpression;
+    if (this.isAsyncFunction(decl) && !awaited)
+      return void 0;
+    return _optionalChain([typed, 'access', _8663 => _8663.params, 'access', _8664 => _8664[at], 'optionalAccess', _8665 => _8665.rustType]);
+  }
+  /** A plain `Value` assignment target (no typed-local rule claims it). */
+  rustScalarPlainValueTarget(left) {
+    if (!_is.isIdentifier.call(void 0, left))
+      return false;
+    const declaration = this.rustDeclaredNode(left);
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || !_is.isIdentifier.call(void 0, declaration.name))
+      return false;
+    if (this.rustScalarLocalKind(declaration) !== void 0 || this.rustNilLocalKind(declaration) !== void 0)
+      return false;
+    if (declaration.initializer === void 0)
+      return true;
+    return !this.rustSafeStringLocalIsTyped(declaration) && this.rustStringMethodLocalInit(declaration) === void 0 && this.getRustBoolLocalInitializer(declaration, this.printNode(declaration.initializer, 0)) === void 0 && !this.rustVecLocalIsTyped(declaration) && !this.rustDictLocalIsTyped(declaration) && !this.rustNestedDictLocalIsTyped(declaration) && !this.rustMarketLocalIsTyped(declaration) && this.rustReadBearerKindOfDeclaration(declaration) === false;
+  }
+  /** Re-boxing an optional local lengthens each use: keep a line under the 400-char limit it was under. */
+  rustScalarBoxesOverflow(declaration, uses, kind) {
+    const roots = /* @__PURE__ */ new Map();
+    for (const n of uses) {
+      let root = n;
+      while (root.parent !== void 0 && !_is.isStatement.call(void 0, root.parent) && !_is.isBlock.call(void 0, root.parent))
+        root = root.parent;
+      const statement = root.parent;
+      const flat = statement !== void 0 && (statement.kind === _ast.SyntaxKind.ExpressionStatement || statement.kind === _ast.SyntaxKind.VariableStatement || statement.kind === _ast.SyntaxKind.ReturnStatement || statement.kind === _ast.SyntaxKind.ThrowStatement);
+      roots.set(flat ? statement : root, (_nullishCoalesce(roots.get(flat ? statement : root), () => ( 0))) + 1);
+    }
+    const long = [...roots].filter(([root]) => String(_nullishCoalesce(_optionalChain([root, 'access', _8666 => _8666.getText, 'optionalCall', _8667 => _8667()]), () => ( ""))).replace(/\s+/g, " ").length >= 40);
+    if (long.length === 0)
+      return false;
+    const growth = kind === "ostr" ? 46 : kind === "str" ? 23 : 14;
+    const text = String(_nullishCoalesce(_optionalChain([declaration, 'access', _8668 => _8668.getSourceFile, 'optionalCall', _8669 => _8669(), 'optionalAccess', _8670 => _8670.text]), () => ( "")));
+    const overflow = long.some(([root, count]) => {
+      const start = typeof root.getStart === "function" ? root.getStart() : root.pos;
+      const indent = start - text.lastIndexOf("\n", start - 1) - 1;
+      const source = String(_nullishCoalesce(_optionalChain([root, 'access', _8671 => _8671.getText, 'optionalCall', _8672 => _8672()]), () => ( ""))).replace(/\s+/g, " ").length;
+      const expression = root.kind === _ast.SyntaxKind.ExpressionStatement ? root.expression : root;
+      const destructure = _is.isBinaryExpression.call(void 0, expression) && _is.isArrayLiteralExpression.call(void 0, expression.left);
+      return indent + source * (destructure ? 3.3 : 2.3) + count * growth > 330;
+    });
+    return overflow;
+  }
+  /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
+   *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */
+  rustScalarExpressionUseForm(n, kind) {
+    const parent = n.parent;
+    if (_is.isParenthesizedExpression.call(void 0, parent) || parent.kind === _ast.SyntaxKind.AsExpression) {
+      const outer = this.rustScalarUseForm(parent, kind);
+      return outer === "box" || outer === "xbox" || outer === "native" && _is.isParenthesizedExpression.call(void 0, parent) ? outer : void 0;
+    }
+    if (_is.isBinaryExpression.call(void 0, parent)) {
+      const op = parent.operatorToken.kind;
+      if (op === _ast.SyntaxKind.PlusEqualsToken || op === _ast.SyntaxKind.MinusEqualsToken)
+        return this.rustScalarCompoundText(parent, true) !== void 0 ? "native" : void 0;
+      if (op === _ast.SyntaxKind.EqualsToken && parent.right === n && _optionalChain([parent, 'access', _8673 => _8673.parent, 'optionalAccess', _8674 => _8674.kind]) === _ast.SyntaxKind.ExpressionStatement) {
+        return this.rustScalarPlainValueTarget(parent.left) ? "xbox" : void 0;
+      }
+      if (_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) && this.rustScalarExpressionKind(parent) !== void 0)
+        return "native";
+      return void 0;
+    }
+    if (_is.isPropertyAccessExpression.call(void 0, parent) && parent.expression === n) {
+      if (this.rustScalarLengthRecv(parent) !== void 0)
+        return "native";
+      const call = parent.parent;
+      if (_is.isCallExpression.call(void 0, call) && call.expression === parent) {
+        if (this.rustScalarStrMethod(call) !== void 0)
+          return "native";
+        let top = call;
+        while (_is.isParenthesizedExpression.call(void 0, top.parent))
+          top = top.parent;
+        if (_is.isBinaryExpression.call(void 0, top.parent) && top.parent.left === top && this.rustScalarContainsTest(top.parent, true) !== void 0)
+          return "native";
+      }
+      return void 0;
+    }
+    if (_is.isCallExpression.call(void 0, parent) && parent.expression !== n) {
+      const at = parent.arguments.indexOf(n);
+      const paramType = this.rustScalarTypedParamType(parent, at);
+      if (paramType !== void 0)
+        return this.rustScalarTypedArgText(n, paramType, true) !== void 0 ? "targ" : void 0;
+      const callee = parent.expression;
+      const push = _is.isPropertyAccessExpression.call(void 0, callee) && callee.name.text === "push" && callee.expression.kind !== _ast.SyntaxKind.ThisKeyword && parent.arguments.length === 1;
+      return push ? "xbox" : void 0;
+    }
+    if (parent.kind === _ast.SyntaxKind.NewExpression && _is.isIdentifier.call(void 0, parent.expression) && (kind === "str" || kind === "ostr")) {
+      const ctor = _RustTranspiler.RUST_ERROR_CONSTRUCTOR_ARGS[this.rustErrorConstructorName(String(parent.expression.text))];
+      if (_optionalChain([ctor, 'optionalAccess', _8675 => _8675[parent.arguments.indexOf(n)]]) !== "msg" || _optionalChain([parent, 'access', _8676 => _8676.parent, 'optionalAccess', _8677 => _8677.kind]) !== _ast.SyntaxKind.ThrowStatement)
+        return void 0;
+      return kind === "str" ? "err" : "xbox";
+    }
+    if (_is.isVariableDeclaration.call(void 0, parent) && parent.initializer === n && _is.isIdentifier.call(void 0, parent.name) && kind !== "bool")
+      return "xbox";
+    return void 0;
+  }
+  /** Call hook: a string method of a typed string local, boxed back to `Value`. */
+  printRustScalarMethodCall(node) {
+    const method = this.rustScalarStrMethod(node);
+    if (method === void 0 || this.rustScalarLocalOf(method.recv) === void 0)
+      return void 0;
+    const text = this.rustScalarExpressionText(method.kind, node);
+    if (text !== void 0 && method.kind === "bool")
+      return `Value::Bool(${text})`;
+    return text === void 0 ? void 0 : this.rustScalarBoxText(method.kind, text, node);
+  }
+  /** `.length` hook: the char count of a typed string local. */
+  rustScalarLengthText(node, boxed) {
+    const recv = this.rustScalarLengthRecv(node);
+    if (recv === void 0 || this.rustScalarLocalOf(recv) === void 0)
+      return void 0;
+    const text = this.rustScalarExpressionText("int", node);
+    return text === void 0 ? void 0 : boxed ? `Value::Int(${text})` : text;
+  }
   /** `'str'` when the method is emitted `-> Option<String>`, else undefined. */
   rustNativeStrReturnKind(node) {
     if (node === void 0 || node.kind !== _ast.SyntaxKind.MethodDeclaration) {
@@ -54554,7 +55105,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     let parentClass = _chunkQYYT7MP4cjs.getAllSuperTypeNodes.call(void 0, classDecl)[0];
     let ok = true;
     while (parentClass !== void 0) {
-      const parentClassDecl = _optionalChain([this, 'access', _8634 => _8634.getChecker, 'call', _8635 => _8635(), 'access', _8636 => _8636.getTypeAtLocation, 'call', _8637 => _8637(parentClass), 'optionalAccess', _8638 => _8638.getSymbol, 'call', _8639 => _8639(), 'optionalAccess', _8640 => _8640.valueDeclaration, 'optionalAccess', _8641 => _8641.resolve, 'call', _8642 => _8642()]);
+      const parentClassDecl = _optionalChain([this, 'access', _8678 => _8678.getChecker, 'call', _8679 => _8679(), 'access', _8680 => _8680.getTypeAtLocation, 'call', _8681 => _8681(parentClass), 'optionalAccess', _8682 => _8682.getSymbol, 'call', _8683 => _8683(), 'optionalAccess', _8684 => _8684.valueDeclaration, 'optionalAccess', _8685 => _8685.resolve, 'call', _8686 => _8686()]);
       if (parentClassDecl === void 0) {
         ok = false;
         break;
@@ -54609,7 +55160,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  statement is one of them (so Rust sees no `()`-valued tail the
    *  `-> Value` post-passes would have patched with `Value::Null`). */
   rustStrReturnPathsConvert(body) {
-    const last = _optionalChain([body, 'optionalAccess', _8643 => _8643.statements, 'access', _8644 => _8644[body.statements.length - 1]]);
+    const last = _optionalChain([body, 'optionalAccess', _8687 => _8687.statements, 'access', _8688 => _8688[body.statements.length - 1]]);
     if (last === void 0 || !_is.isReturnStatement.call(void 0, last)) {
       return false;
     }
@@ -54670,7 +55221,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       }
       this.rustCallDeclarations.set(node, declaration);
     }
-    return _optionalChain([declaration, 'optionalAccess', _8645 => _8645.kind]) === _ast.SyntaxKind.MethodDeclaration ? this.rustNativeStrReturnKind(declaration) : void 0;
+    return _optionalChain([declaration, 'optionalAccess', _8689 => _8689.kind]) === _ast.SyntaxKind.MethodDeclaration ? this.rustNativeStrReturnKind(declaration) : void 0;
   }
   /** `Option<String>` → `Value` (exact inverse of the return conversion). The operand is already a
    *  typed `String`, so the conversion is the standard `From` impl — no `|__s|` closure between them. */
@@ -54707,7 +55258,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  source file, keyed by local name in declaration order. */
   rustDeclaredDictLocals() {
     const src = this.getSrc();
-    if (_optionalChain([this, 'access', _8646 => _8646.declaredDictLocalsCache, 'optionalAccess', _8647 => _8647.src]) !== src) {
+    if (_optionalChain([this, 'access', _8690 => _8690.declaredDictLocalsCache, 'optionalAccess', _8691 => _8691.src]) !== src) {
       let table;
       try {
         table = this.collectRustDeclaredDictLocals(src);
@@ -54723,7 +55274,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  Accepts the receiver node of the helper call (identifier, `x['k']` chain,
    *  `this.x` chain) or the declaration itself. */
   rustDeclaredLocalTypeResolver(node) {
-    return _optionalChain([this, 'access', _8648 => _8648.rustDeclaredLocalEntry, 'call', _8649 => _8649(node), 'optionalAccess', _8650 => _8650.kind]);
+    return _optionalChain([this, 'access', _8692 => _8692.rustDeclaredLocalEntry, 'call', _8693 => _8693(node), 'optionalAccess', _8694 => _8694.kind]);
   }
   /** The table entry a use site resolves to (the declaration whose binding the
    *  use refers to, proven), or undefined. */
@@ -54774,7 +55325,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** Binding symbol of an identifier, or undefined when the checker cannot
    *  answer (ByContent probes without a class context, for instance). */
   rustSymbolOf(node) {
-    return _optionalChain([this, 'access', _8651 => _8651.checkerOrUndefined, 'call', _8652 => _8652(), 'optionalAccess', _8653 => _8653.getSymbolAtLocation, 'call', _8654 => _8654(node)]);
+    return _optionalChain([this, 'access', _8695 => _8695.checkerOrUndefined, 'call', _8696 => _8696(), 'optionalAccess', _8697 => _8697.getSymbolAtLocation, 'call', _8698 => _8698(node)]);
   }
   /** True when this identifier is a use of the given declaration's binding.
    *  Without a checker answer the callers stay conservative (reject). */
@@ -55041,16 +55592,16 @@ ${classMethods}
   }
   // Typed public parameter for a unified-method TS parameter, with its lowering back to `Value`.
   static rustTypedParam(p, name) {
-    const ts2 = String(_nullishCoalesce(_optionalChain([p, 'access', _8655 => _8655.type, 'optionalAccess', _8656 => _8656.getText, 'optionalCall', _8657 => _8657()]), () => ( ""))).replace(/\s+/g, "");
+    const ts2 = String(_nullishCoalesce(_optionalChain([p, 'access', _8699 => _8699.type, 'optionalAccess', _8700 => _8700.getText, 'optionalCall', _8701 => _8701()]), () => ( ""))).replace(/\s+/g, "");
     const optional = p.initializer !== void 0 || p.questionToken !== void 0;
     if ((ts2 === "Dict" || ts2 === "object" || ts2 === "fetchEventsParams") && optional)
       return { rustType: "impl Into<crate::Params> + Send", toValue: `${name}.into().into_value()` };
     if (ts2 === "string" && !optional)
       return { rustType: "&str", toValue: `Value::from(${name})` };
-    const boolDefault = ts2 === "" && (_optionalChain([p, 'access', _8658 => _8658.initializer, 'optionalAccess', _8659 => _8659.kind]) === _ast.SyntaxKind.TrueKeyword || _optionalChain([p, 'access', _8660 => _8660.initializer, 'optionalAccess', _8661 => _8661.kind]) === _ast.SyntaxKind.FalseKeyword);
+    const boolDefault = ts2 === "" && (_optionalChain([p, 'access', _8702 => _8702.initializer, 'optionalAccess', _8703 => _8703.kind]) === _ast.SyntaxKind.TrueKeyword || _optionalChain([p, 'access', _8704 => _8704.initializer, 'optionalAccess', _8705 => _8705.kind]) === _ast.SyntaxKind.FalseKeyword);
     if (ts2 === "boolean" || boolDefault)
       return { rustType: "bool", toValue: `Value::from(${name})` };
-    const strDefault = ts2 === "" && _optionalChain([p, 'access', _8662 => _8662.initializer, 'optionalAccess', _8663 => _8663.kind]) === _ast.SyntaxKind.StringLiteral;
+    const strDefault = ts2 === "" && _optionalChain([p, 'access', _8706 => _8706.initializer, 'optionalAccess', _8707 => _8707.kind]) === _ast.SyntaxKind.StringLiteral;
     if ((ts2 === "Str" || ts2 === "string" || strDefault) && optional || ts2 === "Str")
       return { rustType: "Option<&str>", toValue: `${name}.map(Value::from).unwrap_or_default()` };
     if (ts2 === "Int" && optional)
@@ -55080,19 +55631,19 @@ ${classMethods}
   // The typed signature of a unified method listed in `config.typedUnified`, when every parameter maps;
   // the same shape for the base, prediction-base and every override, so the trait and inherents agree.
   rustTypedSignature(node) {
-    if (_optionalChain([node, 'optionalAccess', _8664 => _8664.kind]) !== _ast.SyntaxKind.MethodDeclaration || node.body === void 0)
+    if (_optionalChain([node, 'optionalAccess', _8708 => _8708.kind]) !== _ast.SyntaxKind.MethodDeclaration || node.body === void 0)
       return void 0;
-    const name = String(_nullishCoalesce(_optionalChain([node, 'access', _8665 => _8665.name, 'optionalAccess', _8666 => _8666.text]), () => ( "")));
+    const name = String(_nullishCoalesce(_optionalChain([node, 'access', _8709 => _8709.name, 'optionalAccess', _8710 => _8710.text]), () => ( "")));
     const ret = _RustTranspiler.RUST_TYPED_RETURNS[name];
     if (ret === void 0 || !this.rustTypedUnified.has(name))
       return void 0;
-    const file = String(_nullishCoalesce(_optionalChain([node, 'access', _8667 => _8667.getSourceFile, 'optionalCall', _8668 => _8668(), 'optionalAccess', _8669 => _8669.fileName]), () => ( "")));
+    const file = String(_nullishCoalesce(_optionalChain([node, 'access', _8711 => _8711.getSourceFile, 'optionalCall', _8712 => _8712(), 'optionalAccess', _8713 => _8713.fileName]), () => ( "")));
     if (!/ts[/]src[/]/.test(file) || /ts[/]src[/]test[/]/.test(file))
       return void 0;
     const params = [];
     for (const p of Array.from(node.parameters)) {
       const printed = this.printNode(p.name, 0).replace(/^mut\s+/, "");
-      const t = _RustTranspiler.RUST_TYPED_STR_PARAMS.has(name) && String(_nullishCoalesce(_optionalChain([p, 'access', _8670 => _8670.type, 'optionalAccess', _8671 => _8671.getText, 'optionalCall', _8672 => _8672()]), () => ( ""))) === "Str" ? { rustType: "&str", toValue: `Value::from(${printed})` } : _RustTranspiler.rustTypedParam(p, printed);
+      const t = _RustTranspiler.RUST_TYPED_STR_PARAMS.has(name) && String(_nullishCoalesce(_optionalChain([p, 'access', _8714 => _8714.type, 'optionalAccess', _8715 => _8715.getText, 'optionalCall', _8716 => _8716()]), () => ( ""))) === "Str" ? { rustType: "&str", toValue: `Value::from(${printed})` } : _RustTranspiler.rustTypedParam(p, printed);
       if (t === void 0)
         return void 0;
       params.push({ name: printed, optional: p.initializer !== void 0 || p.questionToken !== void 0, ...t });
@@ -55127,12 +55678,12 @@ ${i1}}`;
     if (!_is.isPropertyAccessExpression.call(void 0, callee))
       return void 0;
     const viaSuper = callee.expression.kind === _ast.SyntaxKind.SuperKeyword && /ts[/]src[/]pro[/]/.test(String(node.getSourceFile().fileName));
-    const localRef = _is.isIdentifier.call(void 0, callee.expression) ? _optionalChain([this, 'access', _8673 => _8673.getChecker, 'call', _8674 => _8674(), 'access', _8675 => _8675.getSymbolAtLocation, 'call', _8676 => _8676(callee.expression), 'optionalAccess', _8677 => _8677.valueDeclaration]) : void 0;
-    const local = _nullishCoalesce(_optionalChain([localRef, 'optionalAccess', _8678 => _8678.resolve, 'optionalCall', _8679 => _8679()]), () => ( localRef));
-    const testCore = _optionalChain([local, 'optionalAccess', _8680 => _8680.kind]) === _ast.SyntaxKind.VariableDeclaration && _optionalChain([local, 'access', _8681 => _8681.initializer, 'optionalAccess', _8682 => _8682.kind]) === _ast.SyntaxKind.NewExpression && this.rustCallsTestExchange(node);
+    const localRef = _is.isIdentifier.call(void 0, callee.expression) ? _optionalChain([this, 'access', _8717 => _8717.getChecker, 'call', _8718 => _8718(), 'access', _8719 => _8719.getSymbolAtLocation, 'call', _8720 => _8720(callee.expression), 'optionalAccess', _8721 => _8721.valueDeclaration]) : void 0;
+    const local = _nullishCoalesce(_optionalChain([localRef, 'optionalAccess', _8722 => _8722.resolve, 'optionalCall', _8723 => _8723()]), () => ( localRef));
+    const testCore = _optionalChain([local, 'optionalAccess', _8724 => _8724.kind]) === _ast.SyntaxKind.VariableDeclaration && _optionalChain([local, 'access', _8725 => _8725.initializer, 'optionalAccess', _8726 => _8726.kind]) === _ast.SyntaxKind.NewExpression && this.rustCallsTestExchange(node);
     if (callee.expression.kind !== _ast.SyntaxKind.ThisKeyword && !viaSuper && !testCore)
       return void 0;
-    const awaited = _optionalChain([node, 'access', _8683 => _8683.parent, 'optionalAccess', _8684 => _8684.kind]) === _ast.SyntaxKind.AwaitExpression || _optionalChain([node, 'access', _8685 => _8685.parent, 'optionalAccess', _8686 => _8686.kind]) === _ast.SyntaxKind.ArrayLiteralExpression;
+    const awaited = _optionalChain([node, 'access', _8727 => _8727.parent, 'optionalAccess', _8728 => _8728.kind]) === _ast.SyntaxKind.AwaitExpression || _optionalChain([node, 'access', _8729 => _8729.parent, 'optionalAccess', _8730 => _8730.kind]) === _ast.SyntaxKind.ArrayLiteralExpression;
     if (!this.rustTypedUnified.has(callee.name.text))
       return void 0;
     let decl;
@@ -55141,9 +55692,9 @@ ${i1}}`;
     } catch (e) {
       return void 0;
     }
-    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8687 => _8687.resolve, 'optionalCall', _8688 => _8688()]), () => ( decl));
+    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8731 => _8731.resolve, 'optionalCall', _8732 => _8732()]), () => ( decl));
     if (decl !== void 0 && decl.body === void 0) {
-      decl = _optionalChain([decl, 'access', _8689 => _8689.parent, 'optionalAccess', _8690 => _8690.members, 'optionalAccess', _8691 => _8691.find, 'call', _8692 => _8692((m) => m.kind === _ast.SyntaxKind.MethodDeclaration && m.body !== void 0 && _optionalChain([m, 'access', _8693 => _8693.name, 'optionalAccess', _8694 => _8694.text]) === callee.name.text)]);
+      decl = _optionalChain([decl, 'access', _8733 => _8733.parent, 'optionalAccess', _8734 => _8734.members, 'optionalAccess', _8735 => _8735.find, 'call', _8736 => _8736((m) => m.kind === _ast.SyntaxKind.MethodDeclaration && m.body !== void 0 && _optionalChain([m, 'access', _8737 => _8737.name, 'optionalAccess', _8738 => _8738.text]) === callee.name.text)]);
     }
     const typed = this.rustTypedSignature(decl);
     if (typed === void 0)
@@ -55156,17 +55707,20 @@ ${i1}}`;
     const printed = typed.params.map((p, i) => {
       const absent = args[i] === void 0 || args[i].kind === _ast.SyntaxKind.UndefinedKeyword || _is.isIdentifier.call(void 0, args[i]) && args[i].text === "undefined";
       if (absent && p.rustType === "bool")
-        return _optionalChain([declParams, 'access', _8695 => _8695[i], 'optionalAccess', _8696 => _8696.initializer, 'optionalAccess', _8697 => _8697.kind]) === _ast.SyntaxKind.TrueKeyword ? "true" : "false";
+        return _optionalChain([declParams, 'access', _8739 => _8739[i], 'optionalAccess', _8740 => _8740.initializer, 'optionalAccess', _8741 => _8741.kind]) === _ast.SyntaxKind.TrueKeyword ? "true" : "false";
       if (absent)
         return p.rustType.startsWith("impl") ? "Value::Null" : "None";
+      const scalarArg = this.rustScalarTypedArgText(args[i], p.rustType);
+      if (scalarArg !== void 0)
+        return scalarArg;
       if (p.rustType === "bool") {
         if (args[i].kind === _ast.SyntaxKind.TrueKeyword)
           return "true";
         if (args[i].kind === _ast.SyntaxKind.FalseKeyword)
           return "false";
-        const argRef = _is.isIdentifier.call(void 0, args[i]) ? _optionalChain([this, 'access', _8698 => _8698.getChecker, 'call', _8699 => _8699(), 'access', _8700 => _8700.getSymbolAtLocation, 'call', _8701 => _8701(args[i]), 'optionalAccess', _8702 => _8702.valueDeclaration]) : void 0;
-        const argDecl = _nullishCoalesce(_optionalChain([argRef, 'optionalAccess', _8703 => _8703.resolve, 'optionalCall', _8704 => _8704()]), () => ( argRef));
-        if (_optionalChain([argDecl, 'optionalAccess', _8705 => _8705.kind]) === _ast.SyntaxKind.Parameter && argDecl.parent !== void 0 && this.rustParamPrintsBool(argDecl))
+        const argRef = _is.isIdentifier.call(void 0, args[i]) ? _optionalChain([this, 'access', _8742 => _8742.getChecker, 'call', _8743 => _8743(), 'access', _8744 => _8744.getSymbolAtLocation, 'call', _8745 => _8745(args[i]), 'optionalAccess', _8746 => _8746.valueDeclaration]) : void 0;
+        const argDecl = _nullishCoalesce(_optionalChain([argRef, 'optionalAccess', _8747 => _8747.resolve, 'optionalCall', _8748 => _8748()]), () => ( argRef));
+        if (_optionalChain([argDecl, 'optionalAccess', _8749 => _8749.kind]) === _ast.SyntaxKind.Parameter && argDecl.parent !== void 0 && this.rustParamPrintsBool(argDecl))
           return this.printNode(args[i], 0).trim();
       }
       const lit = _RustTranspiler.rustTypedLiteralArg(args[i], p.rustType);
@@ -55207,9 +55761,9 @@ ${i1}}`;
   /** `await this.loadMarkets ();` as its own statement (the value is dropped). */
   rustTypedCallIsDiscarded(node) {
     let current = node;
-    if (_optionalChain([current, 'access', _8706 => _8706.parent, 'optionalAccess', _8707 => _8707.kind]) === _ast.SyntaxKind.AwaitExpression)
+    if (_optionalChain([current, 'access', _8750 => _8750.parent, 'optionalAccess', _8751 => _8751.kind]) === _ast.SyntaxKind.AwaitExpression)
       current = current.parent;
-    return _optionalChain([current, 'access', _8708 => _8708.parent, 'optionalAccess', _8709 => _8709.kind]) === _ast.SyntaxKind.ExpressionStatement;
+    return _optionalChain([current, 'access', _8752 => _8752.parent, 'optionalAccess', _8753 => _8753.kind]) === _ast.SyntaxKind.ExpressionStatement;
   }
   /** The typed struct core (`market` / `currency`) a call invokes, if any. */
   rustStructCalleeOf(node) {
@@ -55258,7 +55812,7 @@ ${i1}}`;
     const name = String(callee.name.text);
     if (!_RustTranspiler.RUST_MARKET_SAFE_READERS.has(name) || !_is.isStringLiteralLikeNode.call(void 0, call.arguments[1]))
       return void 0;
-    if (_optionalChain([call, 'access', _8710 => _8710.parent, 'optionalAccess', _8711 => _8711.kind]) === _ast.SyntaxKind.VariableDeclaration || _is.isParenthesizedExpression.call(void 0, call.parent))
+    if (_optionalChain([call, 'access', _8754 => _8754.parent, 'optionalAccess', _8755 => _8755.kind]) === _ast.SyntaxKind.VariableDeclaration || _is.isParenthesizedExpression.call(void 0, call.parent))
       return void 0;
     const key = String(call.arguments[1].text);
     const f = this.rustStructFieldsOf(call.arguments[0]);
@@ -55282,7 +55836,7 @@ ${i1}}`;
     return _is.isReturnStatement.call(void 0, parent);
   }
   rustMarketLocalKind(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8712 => _8712.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _8756 => _8756.kind]) !== _ast.SyntaxKind.VariableDeclaration)
       return false;
     let decision = this.rustMarketLocalDecisions.get(declaration);
     if (decision === void 0) {
@@ -55302,7 +55856,7 @@ ${i1}}`;
   /** `m = this.market (x)` as its own statement: a later write of the same struct. */
   rustIsTypedMarketWrite(n) {
     const parent = n.parent;
-    if (parent === void 0 || !_is.isBinaryExpression.call(void 0, parent) || parent.left !== n || parent.operatorToken.kind !== _ast.SyntaxKind.EqualsToken || _optionalChain([parent, 'access', _8713 => _8713.parent, 'optionalAccess', _8714 => _8714.kind]) !== _ast.SyntaxKind.ExpressionStatement)
+    if (parent === void 0 || !_is.isBinaryExpression.call(void 0, parent) || parent.left !== n || parent.operatorToken.kind !== _ast.SyntaxKind.EqualsToken || _optionalChain([parent, 'access', _8757 => _8757.parent, 'optionalAccess', _8758 => _8758.kind]) !== _ast.SyntaxKind.ExpressionStatement)
       return false;
     const callee = this.rustStructCalleeOf(parent.right);
     const declaration = _is.isIdentifier.call(void 0, n) ? this.rustDeclarationOfIdentifier(n) : void 0;
@@ -55319,12 +55873,12 @@ ${i1}}`;
   // `'opt'`: declared empty, every write `this.market (y)`, every read a null test or hand-off (`Option<Market>`).
   // `'call'`: a const bound to another typed core call (struct / Vec / map result) whose every use is a hand-off.
   rustMarketLocalIsTypedUncached(declaration) {
-    if (!_is.isIdentifier.call(void 0, declaration.name) || _optionalChain([declaration, 'access', _8715 => _8715.parent, 'optionalAccess', _8716 => _8716.declarations, 'optionalAccess', _8717 => _8717.length]) !== 1)
+    if (!_is.isIdentifier.call(void 0, declaration.name) || _optionalChain([declaration, 'access', _8759 => _8759.parent, 'optionalAccess', _8760 => _8760.declarations, 'optionalAccess', _8761 => _8761.length]) !== 1)
       return false;
     if (this.rustTypedCallResultType(declaration.initializer) !== void 0) {
       if ((declaration.parent.flags & _ast.NodeFlags.Const) === 0)
         return false;
-      const callFile = String(_nullishCoalesce(_optionalChain([declaration, 'access', _8718 => _8718.getSourceFile, 'optionalCall', _8719 => _8719(), 'optionalAccess', _8720 => _8720.fileName]), () => ( "")));
+      const callFile = String(_nullishCoalesce(_optionalChain([declaration, 'access', _8762 => _8762.getSourceFile, 'optionalCall', _8763 => _8763(), 'optionalAccess', _8764 => _8764.fileName]), () => ( "")));
       if (!/ts[/]src[/]/.test(callFile) || /ts[/]src[/](pro[/])?test[/]/.test(callFile))
         return false;
       const callScope = this.rustEnclosingFunction(declaration);
@@ -55338,7 +55892,7 @@ ${i1}}`;
     const fields = _RustTranspiler.RUST_STRUCT_CALLS[callee];
     if (empty && ((declaration.parent.flags & _ast.NodeFlags.Const) !== 0 || this.rustNilLocalKind(declaration) !== void 0))
       return false;
-    const file = String(_nullishCoalesce(_optionalChain([declaration, 'access', _8721 => _8721.getSourceFile, 'optionalCall', _8722 => _8722(), 'optionalAccess', _8723 => _8723.fileName]), () => ( "")));
+    const file = String(_nullishCoalesce(_optionalChain([declaration, 'access', _8765 => _8765.getSourceFile, 'optionalCall', _8766 => _8766(), 'optionalAccess', _8767 => _8767.fileName]), () => ( "")));
     if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file))
       return false;
     const scope = this.rustEnclosingFunction(declaration);
@@ -55379,13 +55933,13 @@ ${i1}}`;
       }
       n.forEachChild(visit);
     };
-    _optionalChain([this, 'access', _8724 => _8724.rustEnclosingFunction, 'call', _8725 => _8725(declaration), 'optionalAccess', _8726 => _8726.forEachChild, 'call', _8727 => _8727(visit)]);
+    _optionalChain([this, 'access', _8768 => _8768.rustEnclosingFunction, 'call', _8769 => _8769(declaration), 'optionalAccess', _8770 => _8770.forEachChild, 'call', _8771 => _8771(visit)]);
     return found.size === 1 ? [...found][0] : void 0;
   }
   /** The Rust result type of an awaited typed core call other than `market` that decodes into a struct. */
   rustTypedCallResultType(init) {
     const awaited = this.rustSkipWrappers(init);
-    if (_optionalChain([awaited, 'optionalAccess', _8728 => _8728.kind]) !== _ast.SyntaxKind.AwaitExpression)
+    if (_optionalChain([awaited, 'optionalAccess', _8772 => _8772.kind]) !== _ast.SyntaxKind.AwaitExpression)
       return void 0;
     const call = this.rustSkipWrappers(awaited.expression);
     if (call === void 0 || !_is.isCallExpression.call(void 0, call) || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword)
@@ -55489,7 +56043,7 @@ ${i1}}`;
       return `Value::from(${recv}.${field}.clone())`;
     if (f.optStr.has(key))
       return `Value::from(${recv}.${key}.as_deref())`;
-    if (f.optBool.has(key) && !_is.isCallExpression.call(void 0, node) && _optionalChain([node, 'access', _8729 => _8729.parent, 'optionalAccess', _8730 => _8730.kind]) !== _ast.SyntaxKind.VariableDeclaration) {
+    if (f.optBool.has(key) && !_is.isCallExpression.call(void 0, node) && _optionalChain([node, 'access', _8773 => _8773.parent, 'optionalAccess', _8774 => _8774.kind]) !== _ast.SyntaxKind.VariableDeclaration) {
       return `${recv}.${key}.map(Value::Bool).unwrap_or_default()`;
     }
     return `${recv}.raw.as_map().and_then(|__m| __m.get(${JSON.stringify(key)})).cloned().unwrap_or(Value::Null)`;
@@ -55500,10 +56054,10 @@ ${i1}}`;
     if (inner === void 0 || !_is.isIdentifier.call(void 0, inner))
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(inner);
-    if (_optionalChain([declaration, 'optionalAccess', _8731 => _8731.kind]) !== _ast.SyntaxKind.VariableDeclaration || declaration.name === inner || !_is.isIdentifier.call(void 0, declaration.name))
+    if (_optionalChain([declaration, 'optionalAccess', _8775 => _8775.kind]) !== _ast.SyntaxKind.VariableDeclaration || declaration.name === inner || !_is.isIdentifier.call(void 0, declaration.name))
       return void 0;
     const list = declaration.parent;
-    if (_optionalChain([list, 'optionalAccess', _8732 => _8732.kind]) !== _ast.SyntaxKind.VariableDeclarationList || list.declarations.length !== 1 || (list.flags & _ast.NodeFlags.Const) === 0)
+    if (_optionalChain([list, 'optionalAccess', _8776 => _8776.kind]) !== _ast.SyntaxKind.VariableDeclarationList || list.declarations.length !== 1 || (list.flags & _ast.NodeFlags.Const) === 0)
       return void 0;
     if (this.rustDeclarationPrintsNativeBool(declaration) || this.rustEnclosingFunction(inner) !== this.rustEnclosingFunction(declaration))
       return void 0;
@@ -55519,7 +56073,7 @@ ${i1}}`;
     let current = node;
     while (current.parent !== void 0 && _is.isParenthesizedExpression.call(void 0, current.parent))
       current = current.parent;
-    const negated = _optionalChain([current, 'access', _8733 => _8733.parent, 'optionalAccess', _8734 => _8734.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && current.parent.operator === _ast.SyntaxKind.ExclamationToken;
+    const negated = _optionalChain([current, 'access', _8777 => _8777.parent, 'optionalAccess', _8778 => _8778.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && current.parent.operator === _ast.SyntaxKind.ExclamationToken;
     return negated ? `(${text})` : text;
   }
   /** A whole-value hand-off of a struct local: the `Value` the untyped local held. */
@@ -55588,22 +56142,22 @@ ${i1}}`;
     this.rustProHandlerShadowParam = savedShadowParam;
     const typed = this.rustTypedSignature(node);
     if (typed !== void 0) {
-      return this.printNodeCommentsIfAny(node, identation, methodDef + this.rustTypedBody(node, typed, identation, optionalInits + shadows + (_nullishCoalesce(_optionalChain([shadowPlan, 'optionalAccess', _8735 => _8735.lines]), () => ( ""))) + statements));
+      return this.printNodeCommentsIfAny(node, identation, methodDef + this.rustTypedBody(node, typed, identation, optionalInits + shadows + (_nullishCoalesce(_optionalChain([shadowPlan, 'optionalAccess', _8779 => _8779.lines]), () => ( ""))) + statements));
     }
-    const body = blockOpen + optionalInits + shadows + (_nullishCoalesce(_optionalChain([shadowPlan, 'optionalAccess', _8736 => _8736.lines]), () => ( ""))) + statements + blockClose;
+    const body = blockOpen + optionalInits + shadows + (_nullishCoalesce(_optionalChain([shadowPlan, 'optionalAccess', _8780 => _8780.lines]), () => ( ""))) + statements + blockClose;
     return this.printNodeCommentsIfAny(node, identation, methodDef + body);
   }
   // A free test-helper function with defaulted trailing parameters (`ts/src/[pro/]test/Exchange/`):
   // they collapse into `optional_args: &[Value]` like a method's, read back as `Value::Null` defaults.
   rustFreeFnFirstDefault(node) {
-    if (_optionalChain([node, 'optionalAccess', _8737 => _8737.kind]) !== _ast.SyntaxKind.FunctionDeclaration || node.body === void 0)
+    if (_optionalChain([node, 'optionalAccess', _8781 => _8781.kind]) !== _ast.SyntaxKind.FunctionDeclaration || node.body === void 0)
       return -1;
     if (!/ts[/]src[/](?:pro[/])?test[/]Exchange[/]/.test(String(node.getSourceFile().fileName)))
       return -1;
     return Array.from(node.parameters).findIndex((p) => p.initializer !== void 0);
   }
   printFunctionDefinition(node, identation) {
-    const name = _nullishCoalesce(_optionalChain([node, 'access', _8738 => _8738.name, 'optionalAccess', _8739 => _8739.text]), () => ( ""));
+    const name = _nullishCoalesce(_optionalChain([node, 'access', _8782 => _8782.name, 'optionalAccess', _8783 => _8783.text]), () => ( ""));
     const firstDefault = this.rustFreeFnFirstDefault(node);
     const params = firstDefault < 0 ? node.parameters : node.parameters.slice(0, firstDefault);
     let parsedArgs = params.map((p) => `${this.printNode(p.name, 0)}: Value`).join(", ");
@@ -55701,12 +56255,12 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     } catch (e) {
       return false;
     }
-    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8740 => _8740.resolve, 'optionalCall', _8741 => _8741()]), () => ( decl));
-    if (decl !== void 0 && /ts[/]src[/]base[/]/.test(String(_nullishCoalesce(_optionalChain([decl, 'access', _8742 => _8742.getSourceFile, 'optionalCall', _8743 => _8743(), 'optionalAccess', _8744 => _8744.fileName]), () => ( "")))))
+    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8784 => _8784.resolve, 'optionalCall', _8785 => _8785()]), () => ( decl));
+    if (decl !== void 0 && /ts[/]src[/]base[/]/.test(String(_nullishCoalesce(_optionalChain([decl, 'access', _8786 => _8786.getSourceFile, 'optionalCall', _8787 => _8787(), 'optionalAccess', _8788 => _8788.fileName]), () => ( "")))))
       return true;
     const symbol = this.getChecker().getSymbolAtLocation(_nullishCoalesce(node.expression.name, () => ( node.expression)));
-    const member = symbol === void 0 ? void 0 : _optionalChain([_chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, symbol), 'optionalAccess', _8745 => _8745[0]]);
-    return member !== void 0 && /ts[/]src[/]base[/]/.test(String(_nullishCoalesce(_optionalChain([member, 'access', _8746 => _8746.getSourceFile, 'optionalCall', _8747 => _8747(), 'optionalAccess', _8748 => _8748.fileName]), () => ( ""))));
+    const member = symbol === void 0 ? void 0 : _optionalChain([_chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, symbol), 'optionalAccess', _8789 => _8789[0]]);
+    return member !== void 0 && /ts[/]src[/]base[/]/.test(String(_nullishCoalesce(_optionalChain([member, 'access', _8790 => _8790.getSourceFile, 'optionalCall', _8791 => _8791(), 'optionalAccess', _8792 => _8792.fileName]), () => ( ""))));
   }
   // `exchange.m(..)` in a test source, the receiver typed as the base `Exchange` class.
   rustCallsTestExchange(node) {
@@ -55715,9 +56269,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const type = this.getChecker().getTypeAtLocation(node.expression.expression);
     if (type !== void 0 && (type.flags & _sync.TypeFlags.Any) !== 0)
       return node.expression.expression.text === "exchange";
-    const symbol = _optionalChain([type, 'optionalAccess', _8749 => _8749.getSymbol, 'optionalCall', _8750 => _8750()]);
-    const decl = symbol === void 0 ? void 0 : _optionalChain([_chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, symbol), 'optionalAccess', _8751 => _8751[0]]);
-    return decl !== void 0 && /ts[/]src[/]base[/]Exchange\.ts$/.test(String(_nullishCoalesce(_optionalChain([decl, 'access', _8752 => _8752.getSourceFile, 'optionalCall', _8753 => _8753(), 'optionalAccess', _8754 => _8754.fileName]), () => ( ""))));
+    const symbol = _optionalChain([type, 'optionalAccess', _8793 => _8793.getSymbol, 'optionalCall', _8794 => _8794()]);
+    const decl = symbol === void 0 ? void 0 : _optionalChain([_chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, symbol), 'optionalAccess', _8795 => _8795[0]]);
+    return decl !== void 0 && /ts[/]src[/]base[/]Exchange\.ts$/.test(String(_nullishCoalesce(_optionalChain([decl, 'access', _8796 => _8796.getSourceFile, 'optionalCall', _8797 => _8797(), 'optionalAccess', _8798 => _8798.fileName]), () => ( ""))));
   }
   // `client.resolve(..)`, `future.resolve(..)`, `method.call(..)`: the callee is a ws handle method,
   // `Function.call`, or a handle method on an `any` value; all are hand-written over `&[Value]`.
@@ -55728,10 +56282,10 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     } catch (e) {
       return false;
     }
-    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8755 => _8755.resolve, 'optionalCall', _8756 => _8756()]), () => ( decl));
+    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8799 => _8799.resolve, 'optionalCall', _8800 => _8800()]), () => ( decl));
     if (decl === void 0)
       return ["resolve", "reject", "future", "call"].includes(node.expression.name.text) && (this.getChecker().getTypeAtLocation(node.expression.expression).flags & _sync.TypeFlags.Any) !== 0;
-    const file = String(_nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8757 => _8757.getSourceFile, 'optionalCall', _8758 => _8758(), 'optionalAccess', _8759 => _8759.fileName]), () => ( "")));
+    const file = String(_nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8801 => _8801.getSourceFile, 'optionalCall', _8802 => _8802(), 'optionalAccess', _8803 => _8803.fileName]), () => ( "")));
     if (/ts[/]src[/]base[/]ws[/](?:Client|Future)\.ts$/.test(file))
       return true;
     return node.expression.name.text === "call" && /lib\.[\w.]*\.d\.ts$/.test(file);
@@ -55745,13 +56299,13 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     } catch (e) {
       return void 0;
     }
-    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8760 => _8760.resolve, 'optionalCall', _8761 => _8761()]), () => ( decl));
+    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8804 => _8804.resolve, 'optionalCall', _8805 => _8805()]), () => ( decl));
     if (decl === void 0 || decl.kind !== _ast.SyntaxKind.MethodDeclaration)
       return void 0;
-    if (!/ts[/]src[/]abstract[/]/.test(String(_nullishCoalesce(_optionalChain([decl, 'access', _8762 => _8762.getSourceFile, 'optionalCall', _8763 => _8763(), 'optionalAccess', _8764 => _8764.fileName]), () => ( "")))))
+    if (!/ts[/]src[/]abstract[/]/.test(String(_nullishCoalesce(_optionalChain([decl, 'access', _8806 => _8806.getSourceFile, 'optionalCall', _8807 => _8807(), 'optionalAccess', _8808 => _8808.fileName]), () => ( "")))))
       return void 0;
     const args = this.printArgsForCallExpression(node, identation);
-    const awaited = _optionalChain([node, 'access', _8765 => _8765.parent, 'optionalAccess', _8766 => _8766.kind]) === _ast.SyntaxKind.AwaitExpression;
+    const awaited = _optionalChain([node, 'access', _8809 => _8809.parent, 'optionalAccess', _8810 => _8810.kind]) === _ast.SyntaxKind.AwaitExpression;
     return `self.${this.toSnakeCaseName(methodName)}(&[${args}])${awaited ? "" : ".await"}`;
   }
   // A call to a transpiled method with optional parameters: its Rust signature is the required
@@ -55772,16 +56326,16 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     } catch (e) {
       return void 0;
     }
-    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8767 => _8767.resolve, 'optionalCall', _8768 => _8768()]), () => ( decl));
+    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8811 => _8811.resolve, 'optionalCall', _8812 => _8812()]), () => ( decl));
     if (decl === void 0 || decl.kind !== _ast.SyntaxKind.MethodDeclaration)
       return void 0;
     if (decl.body === void 0) {
-      decl = _optionalChain([decl, 'access', _8769 => _8769.parent, 'optionalAccess', _8770 => _8770.members, 'optionalAccess', _8771 => _8771.find, 'call', _8772 => _8772((m) => m.kind === _ast.SyntaxKind.MethodDeclaration && m.body !== void 0 && _optionalChain([m, 'access', _8773 => _8773.name, 'optionalAccess', _8774 => _8774.text]) === methodName)]);
+      decl = _optionalChain([decl, 'access', _8813 => _8813.parent, 'optionalAccess', _8814 => _8814.members, 'optionalAccess', _8815 => _8815.find, 'call', _8816 => _8816((m) => m.kind === _ast.SyntaxKind.MethodDeclaration && m.body !== void 0 && _optionalChain([m, 'access', _8817 => _8817.name, 'optionalAccess', _8818 => _8818.text]) === methodName)]);
       if (decl === void 0)
         return void 0;
     }
-    const sourceFile = _optionalChain([decl, 'access', _8775 => _8775.getSourceFile, 'optionalCall', _8776 => _8776()]);
-    const file = String(_nullishCoalesce(_optionalChain([sourceFile, 'optionalAccess', _8777 => _8777.fileName]), () => ( "")));
+    const sourceFile = _optionalChain([decl, 'access', _8819 => _8819.getSourceFile, 'optionalCall', _8820 => _8820()]);
+    const file = String(_nullishCoalesce(_optionalChain([sourceFile, 'optionalAccess', _8821 => _8821.fileName]), () => ( "")));
     if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](?:test|abstract|base[/]ws)[/]/.test(file))
       return void 0;
     if (/ts[/]src[/]base[/]/.test(file)) {
@@ -55848,6 +56402,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   }
   printCallExpression(node, identation) {
     const expression = node.expression;
+    const scalarMethod = this.printRustScalarMethodCall(node);
+    if (scalarMethod !== void 0)
+      return scalarMethod;
     const marketRead = this.printTypedMarketRead(node);
     if (marketRead !== void 0)
       return marketRead;
@@ -55916,14 +56473,14 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     } catch (e) {
       return void 0;
     }
-    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8778 => _8778.resolve, 'optionalCall', _8779 => _8779()]), () => ( decl));
+    decl = _nullishCoalesce(_optionalChain([decl, 'optionalAccess', _8822 => _8822.resolve, 'optionalCall', _8823 => _8823()]), () => ( decl));
     const firstDefault = this.rustFreeFnFirstDefault(decl);
     if (firstDefault < 0)
       return void 0;
     const args = this.rustPrintedArgs(node, identation);
     const fixed = args.slice(0, firstDefault);
     const isAsync = (_nullishCoalesce(decl.modifiers, () => ( []))).some((m) => m.kind === _ast.SyntaxKind.AsyncKeyword);
-    const awaited = _optionalChain([node, 'access', _8780 => _8780.parent, 'optionalAccess', _8781 => _8781.kind]) === _ast.SyntaxKind.AwaitExpression;
+    const awaited = _optionalChain([node, 'access', _8824 => _8824.parent, 'optionalAccess', _8825 => _8825.kind]) === _ast.SyntaxKind.AwaitExpression;
     return `${node.expression.text}(${[...fixed, `&[${args.slice(firstDefault).join(", ")}]`].join(", ")})${isAsync && !awaited ? ".await" : ""}`;
   }
   // `this[name]` with a variable key: `self.prop(&name)` resolves the field by name at runtime.
@@ -55953,7 +56510,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   // A string literal prints as the bare `"lit"` (`&str` — no String
   // allocation); a checker-proven string drops the redundant `Value::Str` box.
   printErrorConstructorArg(name, index, node, identation) {
-    const kind = _optionalChain([_RustTranspiler, 'access', _8782 => _8782.RUST_ERROR_CONSTRUCTOR_ARGS, 'access', _8783 => _8783[name], 'optionalAccess', _8784 => _8784[index]]);
+    const kind = _optionalChain([_RustTranspiler, 'access', _8826 => _8826.RUST_ERROR_CONSTRUCTOR_ARGS, 'access', _8827 => _8827[name], 'optionalAccess', _8828 => _8828[index]]);
     if (kind === void 0) {
       return this.printNode(node, identation);
     }
@@ -55973,7 +56530,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     return this.toSnakeCaseName(className);
   }
   printNewExpression(node, identation) {
-    let expression = _optionalChain([node, 'access', _8785 => _8785.expression, 'optionalAccess', _8786 => _8786.text]);
+    let expression = _optionalChain([node, 'access', _8829 => _8829.expression, 'optionalAccess', _8830 => _8830.text]);
     expression = expression ? expression : this.printNode(node.expression);
     if (expression === "Error") {
       const args2 = node.arguments.map((a) => this.printNode(a, identation)).join(", ");
@@ -55989,7 +56546,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (dynamicClass !== void 0) {
       const args2 = node.arguments.map((a) => this.printNode(a, identation)).join(", ");
       const built = `crate::exchange_errors::create_error(&crate::runtime::stringify_param(&(${dynamicClass})), &crate::runtime::stringify_param(&(${args2})))`;
-      return _optionalChain([node, 'access', _8787 => _8787.parent, 'optionalAccess', _8788 => _8788.kind]) === _ast.SyntaxKind.ThrowStatement ? built : `Value::from(${built})`;
+      return _optionalChain([node, 'access', _8831 => _8831.parent, 'optionalAccess', _8832 => _8832.kind]) === _ast.SyntaxKind.ThrowStatement ? built : `Value::from(${built})`;
     }
     const args = typeof expression === "string" ? node.arguments.map((a, index) => this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation)).join(", ") : node.arguments.map((a) => this.printNode(a, identation)).join(", ");
     return `${expression}::new(${args})`;
@@ -55999,7 +56556,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const target = node.expression;
     if (_is.isElementAccessExpression.call(void 0, target))
       return this.printNode(target, 0).trim();
-    if (!_is.isIdentifier.call(void 0, target) || _optionalChain([node, 'access', _8789 => _8789.parent, 'optionalAccess', _8790 => _8790.kind]) !== _ast.SyntaxKind.ThrowStatement)
+    if (!_is.isIdentifier.call(void 0, target) || _optionalChain([node, 'access', _8833 => _8833.parent, 'optionalAccess', _8834 => _8834.kind]) !== _ast.SyntaxKind.ThrowStatement)
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(target);
     if (declaration === void 0 || !(_is.isVariableDeclaration.call(void 0, declaration) || _is.isParameterDeclaration.call(void 0, declaration) || _is.isBindingElement.call(void 0, declaration)))
@@ -56073,19 +56630,19 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     return String(text).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
   }
   getCheckedTypeOf(node) {
-    return _optionalChain([this, 'access', _8791 => _8791.checkerOrUndefined, 'call', _8792 => _8792(), 'optionalAccess', _8793 => _8793.getTypeAtLocation, 'call', _8794 => _8794(node)]);
+    return _optionalChain([this, 'access', _8835 => _8835.checkerOrUndefined, 'call', _8836 => _8836(), 'optionalAccess', _8837 => _8837.getTypeAtLocation, 'call', _8838 => _8838(node)]);
   }
   typeSymbolOf(type) {
     if (type === void 0 || type === null)
       return void 0;
-    return _nullishCoalesce(_optionalChain([type, 'optionalAccess', _8795 => _8795.getSymbol, 'call', _8796 => _8796()]), () => ( _optionalChain([type, 'optionalAccess', _8797 => _8797.getAliasSymbol, 'call', _8798 => _8798()])));
+    return _nullishCoalesce(_optionalChain([type, 'optionalAccess', _8839 => _8839.getSymbol, 'call', _8840 => _8840()]), () => ( _optionalChain([type, 'optionalAccess', _8841 => _8841.getAliasSymbol, 'call', _8842 => _8842()])));
   }
   /** Types declared outside ts/src (Date, Response, Array, Promise, …) are never
    *  backed by a plain `Value` map in the rust port. */
   isLibDeclaredType(type) {
     const declarations = _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, this.typeSymbolOf(type));
     return declarations.some((d) => {
-      const file = _nullishCoalesce(_optionalChain([d, 'optionalAccess', _8799 => _8799.getSourceFile, 'optionalCall', _8800 => _8800(), 'optionalAccess', _8801 => _8801.fileName]), () => ( ""));
+      const file = _nullishCoalesce(_optionalChain([d, 'optionalAccess', _8843 => _8843.getSourceFile, 'optionalCall', _8844 => _8844(), 'optionalAccess', _8845 => _8845.fileName]), () => ( ""));
       return /[\\/]lib\.[^\\/]*\.d\.ts$/.test(file) || /[\\/]node_modules[\\/]typescript[\\/]/.test(file);
     });
   }
@@ -56096,7 +56653,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       return (_nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( []))).some((member) => this.isClassInstanceType(member));
     }
     const symbol = _nullishCoalesce(this.typeSymbolOf(type), () => ( type.getAliasSymbol()));
-    if (_optionalChain([symbol, 'optionalAccess', _8802 => _8802.flags]) & _sync.SymbolFlags.Class)
+    if (_optionalChain([symbol, 'optionalAccess', _8846 => _8846.flags]) & _sync.SymbolFlags.Class)
       return true;
     const declarations = _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, symbol);
     return declarations.some((d) => _is.isClassDeclaration.call(void 0, d) || _is.isClassExpression.call(void 0, d));
@@ -56108,13 +56665,13 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   isProvenListType(type) {
     if (!(type.flags & _sync.TypeFlags.Object))
       return false;
-    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkQYYT7MP4cjs.typeTarget.call(void 0, type), 'optionalAccess', _8803 => _8803.objectFlags]), () => ( 0)));
+    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkQYYT7MP4cjs.typeTarget.call(void 0, type), 'optionalAccess', _8847 => _8847.objectFlags]), () => ( 0)));
     if (objectFlags & _sync.ObjectFlags.Tuple)
       return true;
-    const name = _optionalChain([this, 'access', _8804 => _8804.typeSymbolOf, 'call', _8805 => _8805(type), 'optionalAccess', _8806 => _8806.name]);
+    const name = _optionalChain([this, 'access', _8848 => _8848.typeSymbolOf, 'call', _8849 => _8849(type), 'optionalAccess', _8850 => _8850.name]);
     if (name === "Array" || name === "ReadonlyArray")
       return true;
-    const targetName = _optionalChain([this, 'access', _8807 => _8807.typeSymbolOf, 'call', _8808 => _8808(_chunkQYYT7MP4cjs.typeTarget.call(void 0, type)), 'optionalAccess', _8809 => _8809.name]);
+    const targetName = _optionalChain([this, 'access', _8851 => _8851.typeSymbolOf, 'call', _8852 => _8852(_chunkQYYT7MP4cjs.typeTarget.call(void 0, type)), 'optionalAccess', _8853 => _8853.name]);
     return targetName === "Array" || targetName === "ReadonlyArray";
   }
   /** True only for object types the rust port represents as `Value::Dict`
@@ -56240,7 +56797,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     return `${name}.get(${index}).cloned().unwrap_or(Value::Null)`;
   }
   rustTupleSlotKind(element) {
-    if (_optionalChain([element, 'optionalAccess', _8810 => _8810.kind]) !== _ast.SyntaxKind.BindingElement)
+    if (_optionalChain([element, 'optionalAccess', _8854 => _8854.kind]) !== _ast.SyntaxKind.BindingElement)
       return void 0;
     let decision = this.rustTupleSlotDecisions.get(element);
     if (decision === void 0) {
@@ -56256,14 +56813,14 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   }
   rustTupleSlotKindUncached(element) {
     const pattern = element.parent;
-    const declaration = _optionalChain([pattern, 'optionalAccess', _8811 => _8811.parent]);
-    if (_optionalChain([pattern, 'optionalAccess', _8812 => _8812.kind]) !== _ast.SyntaxKind.ArrayBindingPattern || declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || declaration.name !== pattern || _optionalChain([declaration, 'access', _8813 => _8813.parent, 'optionalAccess', _8814 => _8814.declarations, 'optionalAccess', _8815 => _8815[0]]) !== declaration)
+    const declaration = _optionalChain([pattern, 'optionalAccess', _8855 => _8855.parent]);
+    if (_optionalChain([pattern, 'optionalAccess', _8856 => _8856.kind]) !== _ast.SyntaxKind.ArrayBindingPattern || declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || declaration.name !== pattern || _optionalChain([declaration, 'access', _8857 => _8857.parent, 'optionalAccess', _8858 => _8858.declarations, 'optionalAccess', _8859 => _8859[0]]) !== declaration)
       return void 0;
     if (element.dotDotDotToken !== void 0 || element.initializer !== void 0 || !_is.isIdentifier.call(void 0, element.name))
       return void 0;
     if (declaration.initializer === void 0 || !this.rustNativeListSource(declaration.initializer))
       return void 0;
-    const source = _optionalChain([element, 'access', _8816 => _8816.getSourceFile, 'optionalCall', _8817 => _8817(), 'optionalAccess', _8818 => _8818.fileName]);
+    const source = _optionalChain([element, 'access', _8860 => _8860.getSourceFile, 'optionalCall', _8861 => _8861(), 'optionalAccess', _8862 => _8862.fileName]);
     if (typeof source === "string" && /[\\/]test[\\/]/.test(source))
       return void 0;
     const fn = this.rustEnclosingFunction(declaration);
@@ -56301,12 +56858,12 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   printNativeBookFieldRead(receiverText, receiverNode, keyText, viaStore = false) {
     if (!_RustTranspiler.RUST_ORDERBOOK_READ_FIELDS.has(keyText))
       return void 0;
-    if (/\/test\//.test(String(_nullishCoalesce(_optionalChain([receiverNode, 'access', _8819 => _8819.getSourceFile, 'optionalCall', _8820 => _8820(), 'access', _8821 => _8821.fileName]), () => ( "")))))
+    if (/\/test\//.test(String(_nullishCoalesce(_optionalChain([receiverNode, 'access', _8863 => _8863.getSourceFile, 'optionalCall', _8864 => _8864(), 'access', _8865 => _8865.fileName]), () => ( "")))))
       return void 0;
     if (this.rustDictBearerDeclaration(receiverNode) !== void 0 || this.rustMapParamDeclaration(receiverNode) !== void 0)
       return void 0;
     const type = this.typeOfNodeIfAny(receiverNode);
-    const name = type === void 0 ? void 0 : _optionalChain([this, 'access', _8822 => _8822.typeSymbolOf, 'call', _8823 => _8823(type), 'optionalAccess', _8824 => _8824.name]);
+    const name = type === void 0 ? void 0 : _optionalChain([this, 'access', _8866 => _8866.typeSymbolOf, 'call', _8867 => _8867(type), 'optionalAccess', _8868 => _8868.name]);
     if ((name === void 0 || !_RustTranspiler.RUST_ORDERBOOK_CLASSES.has(name)) && !(viaStore && this.rustReadsOrderbooksStore(receiverNode)))
       return void 0;
     return `${receiverText}.book_field("${keyText}")`;
@@ -56388,7 +56945,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     let statement = declaration;
     while (statement !== void 0 && !_is.isStatement.call(void 0, statement))
       statement = statement.parent;
-    const siblings = _nullishCoalesce(_optionalChain([statement, 'optionalAccess', _8825 => _8825.parent, 'optionalAccess', _8826 => _8826.statements]), () => ( []));
+    const siblings = _nullishCoalesce(_optionalChain([statement, 'optionalAccess', _8869 => _8869.parent, 'optionalAccess', _8870 => _8870.statements]), () => ( []));
     const at = siblings.indexOf(statement);
     if (at < 0 || at + 1 >= siblings.length)
       return false;
@@ -56640,17 +57197,17 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       return false;
     if (!(type.flags & _sync.TypeFlags.Object))
       return false;
-    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkQYYT7MP4cjs.typeTarget.call(void 0, type), 'optionalAccess', _8827 => _8827.objectFlags]), () => ( 0)));
+    const objectFlags = (_nullishCoalesce(type.objectFlags, () => ( 0))) | (_nullishCoalesce(_optionalChain([_chunkQYYT7MP4cjs.typeTarget.call(void 0, type), 'optionalAccess', _8871 => _8871.objectFlags]), () => ( 0)));
     if (objectFlags & _sync.ObjectFlags.Tuple)
       return false;
     if (this.hasCallableShape(type))
       return false;
     if (this.isClassInstanceType(type))
       return false;
-    const name = _optionalChain([this, 'access', _8828 => _8828.typeSymbolOf, 'call', _8829 => _8829(type), 'optionalAccess', _8830 => _8830.name]);
+    const name = _optionalChain([this, 'access', _8872 => _8872.typeSymbolOf, 'call', _8873 => _8873(type), 'optionalAccess', _8874 => _8874.name]);
     if (name === "Array" || name === "ReadonlyArray")
       return true;
-    const targetName = _optionalChain([this, 'access', _8831 => _8831.typeSymbolOf, 'call', _8832 => _8832(_chunkQYYT7MP4cjs.typeTarget.call(void 0, type)), 'optionalAccess', _8833 => _8833.name]);
+    const targetName = _optionalChain([this, 'access', _8875 => _8875.typeSymbolOf, 'call', _8876 => _8876(_chunkQYYT7MP4cjs.typeTarget.call(void 0, type)), 'optionalAccess', _8877 => _8877.name]);
     return targetName === "Array" || targetName === "ReadonlyArray";
   }
   /** Every reference to the parameter must be a printable read, and at least
@@ -56891,7 +57448,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     this.rustWalkScope(scope, (n) => {
       if (_is.isCallExpression.call(void 0, n) && n.arguments.length > 0 && _is.isIdentifier.call(void 0, n.arguments[0]) && n.arguments[0].text === name) {
         const callee = n.expression;
-        written = merging.includes(_is.isPropertyAccessExpression.call(void 0, callee) ? String(_nullishCoalesce(_optionalChain([callee, 'access', _8834 => _8834.name, 'optionalAccess', _8835 => _8835.text]), () => ( ""))) : _is.isIdentifier.call(void 0, callee) ? String(_nullishCoalesce(callee.text, () => ( ""))) : "");
+        written = merging.includes(_is.isPropertyAccessExpression.call(void 0, callee) ? String(_nullishCoalesce(_optionalChain([callee, 'access', _8878 => _8878.name, 'optionalAccess', _8879 => _8879.text]), () => ( ""))) : _is.isIdentifier.call(void 0, callee) ? String(_nullishCoalesce(callee.text, () => ( ""))) : "");
         if (written)
           return RUST_WALK_STOP;
       }
@@ -56942,7 +57499,7 @@ ${ind}let ${view}: &${map} = &${arc};
       return void 0;
     if (callee.expression.kind !== _ast.SyntaxKind.ThisKeyword)
       return void 0;
-    const kind = _RustTranspiler.PRO_HANDLER_SHADOW_SAFE_READS[String(_nullishCoalesce(_optionalChain([callee, 'access', _8836 => _8836.name, 'optionalAccess', _8837 => _8837.text]), () => ( "")))];
+    const kind = _RustTranspiler.PRO_HANDLER_SHADOW_SAFE_READS[String(_nullishCoalesce(_optionalChain([callee, 'access', _8880 => _8880.name, 'optionalAccess', _8881 => _8881.text]), () => ( "")))];
     if (kind === void 0)
       return void 0;
     const args = _nullishCoalesce(node.arguments, () => ( []));
@@ -57253,7 +57810,7 @@ ${ind}let ${view}: &${map} = &${arc};
       if (_is.isBinaryExpression.call(void 0, current) && current.operatorToken.kind === _ast.SyntaxKind.EqualsToken && this.isNodeInsideNode(chain, current.right) && this.rootPlaceText(current.left) === root)
         host = current;
     }
-    if (host === void 0 || !_is.isElementAccessExpression.call(void 0, host.left) || _optionalChain([host, 'access', _8838 => _8838.parent, 'optionalAccess', _8839 => _8839.kind]) !== _ast.SyntaxKind.ExpressionStatement || !this.isNativeAccessPositionSafe(chain, host))
+    if (host === void 0 || !_is.isElementAccessExpression.call(void 0, host.left) || _optionalChain([host, 'access', _8882 => _8882.parent, 'optionalAccess', _8883 => _8883.kind]) !== _ast.SyntaxKind.ExpressionStatement || !this.isNativeAccessPositionSafe(chain, host))
       return void 0;
     const base = host.left.expression;
     const keyNode = host.left.argumentExpression;
@@ -57472,7 +58029,7 @@ ${ind}let ${view}: &${map} = &${arc};
     const declaration = this.rustDeclarationOfIdentifier(node);
     if (declaration === void 0)
       return false;
-    const name = _optionalChain([declaration, 'access', _8840 => _8840.name, 'optionalAccess', _8841 => _8841.text]);
+    const name = _optionalChain([declaration, 'access', _8884 => _8884.name, 'optionalAccess', _8885 => _8885.text]);
     if (typeof name !== "string")
       return false;
     if (_is.isParameterDeclaration.call(void 0, declaration)) {
@@ -57500,7 +58057,7 @@ ${ind}let ${view}: &${map} = &${arc};
     const symbol = this.typeSymbolOf(type);
     if (symbol === void 0 || symbol.name !== "OrderBook" || (symbol.flags & _sync.SymbolFlags.Class) === 0)
       return false;
-    const members = (_nullishCoalesce(_optionalChain([type, 'access', _8842 => _8842.getProperties, 'optionalCall', _8843 => _8843()]), () => ( []))).map((p) => String(p.name));
+    const members = (_nullishCoalesce(_optionalChain([type, 'access', _8886 => _8886.getProperties, 'optionalCall', _8887 => _8887()]), () => ( []))).map((p) => String(p.name));
     return members.includes("bids") && members.includes("asks");
   }
   /** Types the port stores as a plain `Value::Dict`: a checker-proven map, or the
@@ -57718,7 +58275,7 @@ ${ind}let ${view}: &${map} = &${arc};
     let condStr = node.condition ? this.printComparisonInBooleanContext(node.condition, 0).trim() : "true";
     const incrStr = node.incrementor ? this.printNode(node.incrementor, 0) : "";
     const counter = incrStr !== "" ? this.rustIntCounter(node, initStr, incrStr) : void 0;
-    const bound = _optionalChain([counter, 'optionalAccess', _8844 => _8844.sign]) === "+" ? this.rustI64CounterPlan(node, counter, condStr) : void 0;
+    const bound = _optionalChain([counter, 'optionalAccess', _8888 => _8888.sign]) === "+" ? this.rustI64CounterPlan(node, counter, condStr) : void 0;
     const printBody = () => node.statement.statements.map((s) => this.printNode(s, identation + 1)).join("\n");
     let statements;
     let typed = false;
@@ -57772,10 +58329,10 @@ ${idn}}`;
   rustIntCounter(node, initStr, incrStr) {
     const init = node.initializer;
     const incr = node.incrementor;
-    if (_optionalChain([init, 'optionalAccess', _8845 => _8845.kind]) !== _ast.SyntaxKind.VariableDeclarationList || init.declarations.length !== 1 || !(init.flags & _ast.NodeFlags.BlockScoped))
+    if (_optionalChain([init, 'optionalAccess', _8889 => _8889.kind]) !== _ast.SyntaxKind.VariableDeclarationList || init.declarations.length !== 1 || !(init.flags & _ast.NodeFlags.BlockScoped))
       return void 0;
     const declaration = init.declarations[0];
-    if (!_is.isIdentifier.call(void 0, declaration.name) || /\/test\//.test(String(_nullishCoalesce(_optionalChain([node, 'access', _8846 => _8846.getSourceFile, 'optionalCall', _8847 => _8847(), 'access', _8848 => _8848.fileName]), () => ( "")))))
+    if (!_is.isIdentifier.call(void 0, declaration.name) || /\/test\//.test(String(_nullishCoalesce(_optionalChain([node, 'access', _8890 => _8890.getSourceFile, 'optionalCall', _8891 => _8891(), 'access', _8892 => _8892.fileName]), () => ( "")))))
       return void 0;
     const name = String(declaration.name.text);
     const printed = new RegExp(`^let mut ${name}: Value = Value::Int\\((-?\\d+)\\);$`).exec(initStr.trim());
@@ -57881,7 +58438,7 @@ ${idn}}`;
     if (marketFlag !== void 0)
       return idn + marketFlag;
     const marketNot = this.unwrapParens(node);
-    if (marketNot !== node && _optionalChain([marketNot, 'optionalAccess', _8849 => _8849.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && marketNot.operator === _ast.SyntaxKind.ExclamationToken && this.printTypedMarketRead(this.unwrapParens(marketNot.operand), true) !== void 0) {
+    if (marketNot !== node && _optionalChain([marketNot, 'optionalAccess', _8893 => _8893.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && marketNot.operator === _ast.SyntaxKind.ExclamationToken && this.printTypedMarketRead(this.unwrapParens(marketNot.operand), true) !== void 0) {
       return idn + this.printPrefixUnaryExpression(marketNot, 0);
     }
     const marketFlagLocal = this.printTypedMarketFlagLocalCondition(node);
@@ -58021,9 +58578,9 @@ ${idn}}`;
     const ifBody = this.printBlock(node.thenStatement, identation, elseStatement !== void 0);
     const head = node.parent.kind === _ast.SyntaxKind.IfStatement ? "else if " : `${this.getIden(identation)}if `;
     let ifComplete = `${head}${this.printCondition(node.expression, 0)}${ifBody}`;
-    if (_optionalChain([elseStatement, 'optionalAccess', _8850 => _8850.kind]) === _ast.SyntaxKind.Block) {
+    if (_optionalChain([elseStatement, 'optionalAccess', _8894 => _8894.kind]) === _ast.SyntaxKind.Block) {
       ifComplete += ` else${this.printBlock(elseStatement, identation)}`;
-    } else if (_optionalChain([elseStatement, 'optionalAccess', _8851 => _8851.kind]) === _ast.SyntaxKind.IfStatement) {
+    } else if (_optionalChain([elseStatement, 'optionalAccess', _8895 => _8895.kind]) === _ast.SyntaxKind.IfStatement) {
       ifComplete += " " + this.printIfStatement(elseStatement, identation);
     }
     return this.printNodeCommentsIfAny(node, identation, ifComplete);
@@ -58126,7 +58683,7 @@ ${this.getIden(identation)}}`;
   }
   // Built-in method call overrides
   printArrayIsArrayCall(node, identation, parsedArg = void 0) {
-    return `Value::Bool(${_nullishCoalesce(this.nativeValuePredicateText("array", _optionalChain([node, 'optionalAccess', _8852 => _8852.arguments, 'optionalAccess', _8853 => _8853[0]]), parsedArg), () => ( `is_array(&${parsedArg})`))})`;
+    return `Value::Bool(${_nullishCoalesce(this.nativeValuePredicateText("array", _optionalChain([node, 'optionalAccess', _8896 => _8896.arguments, 'optionalAccess', _8897 => _8897[0]]), parsedArg), () => ( `is_array(&${parsedArg})`))})`;
   }
   printObjectKeysCall(node, identation, parsedArg = void 0) {
     return _nullishCoalesce(_nullishCoalesce(_nullishCoalesce(_nullishCoalesce(this.bearerEnum(node, "keys"), () => ( this.provenDictFieldEnum(node, parsedArg, "keys"))), () => ( this.predictionEnum(node, parsedArg, "keys"))), () => ( this.baseEnum(node, parsedArg, "keys"))), () => ( `object_keys(&${parsedArg})`));
@@ -58146,7 +58703,7 @@ ${this.getIden(identation)}}`;
   }
   /** The single plain-identifier argument of `Object.keys/values(…)`. */
   bearerEnumArg(node) {
-    if (!_is.isCallExpression.call(void 0, node) || (_nullishCoalesce(_optionalChain([node, 'access', _8854 => _8854.arguments, 'optionalAccess', _8855 => _8855.length]), () => ( 0))) !== 1)
+    if (!_is.isCallExpression.call(void 0, node) || (_nullishCoalesce(_optionalChain([node, 'access', _8898 => _8898.arguments, 'optionalAccess', _8899 => _8899.length]), () => ( 0))) !== 1)
       return void 0;
     const callee = node.expression;
     if (!_is.isPropertyAccessExpression.call(void 0, callee) || !_is.isIdentifier.call(void 0, callee.expression) || String(callee.expression.text) !== "Object" || String(callee.name.text) !== "keys" && String(callee.name.text) !== "values") {
@@ -58201,7 +58758,7 @@ ${this.getIden(identation)}}`;
   // spawn runs inline as `self.call_dynamic("m", vec![args]).await`. Statement spawns stay enqueued.
   rustValueSpawnCall(node) {
     const callee = node.expression;
-    return _is.isPropertyAccessExpression.call(void 0, callee) && callee.expression.kind === _ast.SyntaxKind.ThisKeyword && callee.name.text === "spawn" && node.arguments.length > 0 && _is.isPropertyAccessExpression.call(void 0, node.arguments[0]) && node.arguments[0].expression.kind === _ast.SyntaxKind.ThisKeyword && _optionalChain([node, 'access', _8856 => _8856.parent, 'optionalAccess', _8857 => _8857.kind]) !== _ast.SyntaxKind.ExpressionStatement;
+    return _is.isPropertyAccessExpression.call(void 0, callee) && callee.expression.kind === _ast.SyntaxKind.ThisKeyword && callee.name.text === "spawn" && node.arguments.length > 0 && _is.isPropertyAccessExpression.call(void 0, node.arguments[0]) && node.arguments[0].expression.kind === _ast.SyntaxKind.ThisKeyword && _optionalChain([node, 'access', _8900 => _8900.parent, 'optionalAccess', _8901 => _8901.kind]) !== _ast.SyntaxKind.ExpressionStatement;
   }
   printValueSpawnCall(node, identation) {
     if (!this.rustValueSpawnCall(node))
@@ -58320,7 +58877,7 @@ ${this.getIden(identation)}}`;
   }
   printTryStatement(node, identation) {
     const body = (block) => block.statements.map((s) => this.printNode(s, identation + 1)).join("\n");
-    const rawName = _optionalChain([node, 'access', _8858 => _8858.catchClause, 'optionalAccess', _8859 => _8859.variableDeclaration, 'optionalAccess', _8860 => _8860.name, 'optionalAccess', _8861 => _8861.text]);
+    const rawName = _optionalChain([node, 'access', _8902 => _8902.catchClause, 'optionalAccess', _8903 => _8903.variableDeclaration, 'optionalAccess', _8904 => _8904.name, 'optionalAccess', _8905 => _8905.text]);
     const iden = this.getIden(identation);
     const errorName = rawName ? `_${rawName}` : "_e";
     const head = rawName !== void 0 && this.rustCatchBindingIsRead(node.catchClause.block, rawName) ? `if let Err(${errorName}) = _try_result {` : "if _try_result.is_err() {";
@@ -58390,7 +58947,7 @@ ${iden}}`;
     if (declaration.kind === _ast.SyntaxKind.BindingElement) {
       return this.rustTupleBindingStaysPlain(ident, declaration, depth);
     }
-    if (!_is.isVariableDeclaration.call(void 0, declaration) || _optionalChain([declaration, 'access', _8862 => _8862.name, 'optionalAccess', _8863 => _8863.kind]) !== _ast.SyntaxKind.Identifier) {
+    if (!_is.isVariableDeclaration.call(void 0, declaration) || _optionalChain([declaration, 'access', _8906 => _8906.name, 'optionalAccess', _8907 => _8907.kind]) !== _ast.SyntaxKind.Identifier) {
       return false;
     }
     const scope = this.rustEnclosingFunction(declaration);
@@ -58433,8 +58990,8 @@ ${iden}}`;
    *  plain local: element 0 is `r` handed back, and `x` is never re-written. */
   rustTupleBindingStaysPlain(ident, element, depth) {
     const pattern = element.parent;
-    const declaration = _optionalChain([pattern, 'optionalAccess', _8864 => _8864.parent]);
-    if (_optionalChain([pattern, 'optionalAccess', _8865 => _8865.kind]) !== _ast.SyntaxKind.ArrayBindingPattern || declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || ![0, 1].includes(pattern.elements.indexOf(element)) || _optionalChain([element, 'access', _8866 => _8866.name, 'optionalAccess', _8867 => _8867.kind]) !== _ast.SyntaxKind.Identifier || element.initializer !== void 0 || element.dotDotDotToken !== void 0) {
+    const declaration = _optionalChain([pattern, 'optionalAccess', _8908 => _8908.parent]);
+    if (_optionalChain([pattern, 'optionalAccess', _8909 => _8909.kind]) !== _ast.SyntaxKind.ArrayBindingPattern || declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || ![0, 1].includes(pattern.elements.indexOf(element)) || _optionalChain([element, 'access', _8910 => _8910.name, 'optionalAccess', _8911 => _8911.kind]) !== _ast.SyntaxKind.Identifier || element.initializer !== void 0 || element.dotDotDotToken !== void 0) {
       return false;
     }
     if (pattern.elements.indexOf(element) === 1 ? !this.paramsSlot(declaration.initializer, void 0, depth) : !this.rustTupleHeadIsPlain(declaration.initializer, void 0, depth)) {
@@ -58480,9 +59037,9 @@ ${iden}}`;
     }
     if ((parent.kind === _ast.SyntaxKind.PropertyAssignment || parent.kind === _ast.SyntaxKind.ShorthandPropertyAssignment) && !(parent.kind === _ast.SyntaxKind.PropertyAssignment && parent.initializer !== target)) {
       let literal2 = parent.parent;
-      while (_optionalChain([literal2, 'optionalAccess', _8868 => _8868.parent]) !== void 0 && (_is.isParenthesizedExpression.call(void 0, literal2.parent) || _is.isAsExpression.call(void 0, literal2.parent)))
+      while (_optionalChain([literal2, 'optionalAccess', _8912 => _8912.parent]) !== void 0 && (_is.isParenthesizedExpression.call(void 0, literal2.parent) || _is.isAsExpression.call(void 0, literal2.parent)))
         literal2 = literal2.parent;
-      if (_optionalChain([literal2, 'optionalAccess', _8869 => _8869.parent]) === void 0 || _is.isVariableDeclaration.call(void 0, literal2.parent))
+      if (_optionalChain([literal2, 'optionalAccess', _8913 => _8913.parent]) === void 0 || _is.isVariableDeclaration.call(void 0, literal2.parent))
         return false;
     }
     if (parent.kind === _ast.SyntaxKind.PrefixUnaryExpression || parent.kind === _ast.SyntaxKind.PostfixUnaryExpression || parent.kind === _ast.SyntaxKind.DeleteExpression || (_is.isForOfStatement.call(void 0, parent) || _is.isForInStatement.call(void 0, parent)) && parent.initializer === target) {
@@ -58517,7 +59074,7 @@ ${iden}}`;
     } catch (e) {
       return false;
     }
-    if (_optionalChain([declaration, 'optionalAccess', _8870 => _8870.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body === void 0 || declaration.getSourceFile() !== call.getSourceFile()) {
+    if (_optionalChain([declaration, 'optionalAccess', _8914 => _8914.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body === void 0 || declaration.getSourceFile() !== call.getSourceFile()) {
       return false;
     }
     let plain = true;
@@ -58529,8 +59086,8 @@ ${iden}}`;
         return;
       returns++;
       const tuple = this.rustStripWrappers(n.expression);
-      const head = _optionalChain([tuple, 'optionalAccess', _8871 => _8871.kind]) === _ast.SyntaxKind.ArrayLiteralExpression ? this.rustStripWrappers(tuple.elements[0]) : void 0;
-      const param = head !== void 0 && _is.isIdentifier.call(void 0, head) ? declaration.parameters.findIndex((p) => _optionalChain([p, 'access', _8872 => _8872.name, 'optionalAccess', _8873 => _8873.kind]) === _ast.SyntaxKind.Identifier && String(p.name.text) === String(head.text)) : -1;
+      const head = _optionalChain([tuple, 'optionalAccess', _8915 => _8915.kind]) === _ast.SyntaxKind.ArrayLiteralExpression ? this.rustStripWrappers(tuple.elements[0]) : void 0;
+      const param = head !== void 0 && _is.isIdentifier.call(void 0, head) ? declaration.parameters.findIndex((p) => _optionalChain([p, 'access', _8916 => _8916.name, 'optionalAccess', _8917 => _8917.kind]) === _ast.SyntaxKind.Identifier && String(p.name.text) === String(head.text)) : -1;
       const ok = head !== void 0 && (this.rustPlainDictLiteral(head) || (param >= 0 ? this.rustSymbolOf(head) === this.rustSymbolOf(declaration.parameters[param].name) && argPlain(param) && this.rustParamUnassigned(declaration, String(head.text)) : _is.isIdentifier.call(void 0, head) && this.rustLocalStaysPlain(head, depth + 1)));
       if (!ok) {
         plain = false;
@@ -58631,7 +59188,7 @@ ${iden}}`;
     return this.rustDictRead(receiverText, keyText, receiverNode);
   }
   rustVecLocalIsTyped(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8874 => _8874.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _8918 => _8918.kind]) !== _ast.SyntaxKind.VariableDeclaration)
       return false;
     let decision = this.rustVecLocalDecisions.get(declaration);
     if (decision === void 0) {
@@ -58643,23 +59200,23 @@ ${iden}}`;
   }
   rustVecLocalIsTypedUncached(declaration) {
     const init = declaration.initializer;
-    if (_optionalChain([declaration, 'access', _8875 => _8875.name, 'optionalAccess', _8876 => _8876.kind]) !== _ast.SyntaxKind.Identifier || init === void 0 || !_is.isArrayLiteralExpression.call(void 0, init) || init.elements.some((element) => element.kind === _ast.SyntaxKind.SpreadElement))
+    if (_optionalChain([declaration, 'access', _8919 => _8919.name, 'optionalAccess', _8920 => _8920.kind]) !== _ast.SyntaxKind.Identifier || init === void 0 || !_is.isArrayLiteralExpression.call(void 0, init) || init.elements.some((element) => element.kind === _ast.SyntaxKind.SpreadElement))
       return false;
     const checker = this.checkerOrUndefined();
-    const type = _optionalChain([checker, 'optionalAccess', _8877 => _8877.getTypeAtLocation, 'call', _8878 => _8878(declaration.name)]);
+    const type = _optionalChain([checker, 'optionalAccess', _8921 => _8921.getTypeAtLocation, 'call', _8922 => _8922(declaration.name)]);
     if (type === void 0 || !checker.isArrayType(type))
       return false;
     const name = String(declaration.name.text);
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || _is.isSourceFile.call(void 0, fn))
       return false;
-    const source = _optionalChain([declaration, 'access', _8879 => _8879.getSourceFile, 'optionalCall', _8880 => _8880(), 'optionalAccess', _8881 => _8881.fileName]);
+    const source = _optionalChain([declaration, 'access', _8923 => _8923.getSourceFile, 'optionalCall', _8924 => _8924(), 'optionalAccess', _8925 => _8925.fileName]);
     if (typeof source === "string" && /\/test\//.test(source))
       return false;
     let pushes = 0;
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       const parent = n.parent;
-      if (_is.isPropertyAccessExpression.call(void 0, parent) && parent.name === n || _optionalChain([parent, 'optionalAccess', _8882 => _8882.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.name === n)
+      if (_is.isPropertyAccessExpression.call(void 0, parent) && parent.name === n || _optionalChain([parent, 'optionalAccess', _8926 => _8926.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.name === n)
         return true;
       if (this.rustEnclosingFunction(n) !== fn)
         return false;
@@ -58667,7 +59224,7 @@ ${iden}}`;
         const member = String(parent.name.text);
         if (member === "length") {
           const up = parent.parent;
-          return !(_is.isBinaryExpression.call(void 0, up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind)) && _optionalChain([up, 'optionalAccess', _8883 => _8883.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([up, 'optionalAccess', _8884 => _8884.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression;
+          return !(_is.isBinaryExpression.call(void 0, up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind)) && _optionalChain([up, 'optionalAccess', _8927 => _8927.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([up, 'optionalAccess', _8928 => _8928.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression;
         }
         if (member === "push" && this.rustVecPushShape(parent.parent, name)) {
           pushes++;
@@ -58682,7 +59239,7 @@ ${iden}}`;
   /** The array literal's native `vec![..]`: elements are `Value`s taken by move, so a
    *  bare local is cloned (the boxed form relied on ccxt's argument-clone pass). */
   rustVecNativeLiteral(declaration) {
-    const initializer = _optionalChain([declaration, 'optionalAccess', _8885 => _8885.initializer]);
+    const initializer = _optionalChain([declaration, 'optionalAccess', _8929 => _8929.initializer]);
     if (!_is.isArrayLiteralExpression.call(void 0, initializer) || initializer.elements.length === 0)
       return void 0;
     const parts = initializer.elements.map((element) => {
@@ -58693,7 +59250,7 @@ ${iden}}`;
   }
   // `x.push(v);` as a whole statement, one non-spread argument not naming `x`.
   rustVecPushShape(call, name) {
-    if (!_is.isCallExpression.call(void 0, call) || call.arguments.length !== 1 || _optionalChain([call, 'access', _8886 => _8886.parent, 'optionalAccess', _8887 => _8887.kind]) !== _ast.SyntaxKind.ExpressionStatement)
+    if (!_is.isCallExpression.call(void 0, call) || call.arguments.length !== 1 || _optionalChain([call, 'access', _8930 => _8930.parent, 'optionalAccess', _8931 => _8931.kind]) !== _ast.SyntaxKind.ExpressionStatement)
       return false;
     const arg = call.arguments[0];
     if (arg.kind === _ast.SyntaxKind.SpreadElement)
@@ -58706,7 +59263,7 @@ ${iden}}`;
         mentions = true;
         return;
       }
-      _optionalChain([m, 'access', _8888 => _8888.forEachChild, 'optionalCall', _8889 => _8889(visit)]);
+      _optionalChain([m, 'access', _8932 => _8932.forEachChild, 'optionalCall', _8933 => _8933(visit)]);
     };
     visit(arg);
     return !mentions;
@@ -58718,7 +59275,7 @@ ${iden}}`;
     if (_is.isReturnStatement.call(void 0, parent))
       return true;
     const isArg = _is.isCallExpression.call(void 0, parent) && parent.arguments.some((a) => a === n) && this.rustVecBoxingCallee(parent.expression);
-    const isProp = _optionalChain([parent, 'optionalAccess', _8890 => _8890.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n;
+    const isProp = _optionalChain([parent, 'optionalAccess', _8934 => _8934.kind]) === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n;
     if (!isArg && !isProp)
       return false;
     let statement = parent;
@@ -58732,7 +59289,7 @@ ${iden}}`;
     const visit = (m) => {
       if (m.kind === _ast.SyntaxKind.Identifier && m.text === name)
         count++;
-      _optionalChain([m, 'access', _8891 => _8891.forEachChild, 'optionalCall', _8892 => _8892(visit)]);
+      _optionalChain([m, 'access', _8935 => _8935.forEachChild, 'optionalCall', _8936 => _8936(visit)]);
     };
     visit(statement);
     return count === 1;
@@ -58749,8 +59306,8 @@ ${iden}}`;
           return false;
       }
     }
-    const end = _nullishCoalesce(_optionalChain([n, 'access', _8893 => _8893.getEnd, 'optionalCall', _8894 => _8894()]), () => ( n.end));
-    return !this.rustScopeNameNodes(fn, name).some((m) => m.kind === _ast.SyntaxKind.Identifier && m !== n && (_nullishCoalesce(_optionalChain([m, 'access', _8895 => _8895.getStart, 'optionalCall', _8896 => _8896()]), () => ( m.pos))) >= end && !this.rustIdentifierIsPropertyName(m));
+    const end = _nullishCoalesce(_optionalChain([n, 'access', _8937 => _8937.getEnd, 'optionalCall', _8938 => _8938()]), () => ( n.end));
+    return !this.rustScopeNameNodes(fn, name).some((m) => m.kind === _ast.SyntaxKind.Identifier && m !== n && (_nullishCoalesce(_optionalChain([m, 'access', _8939 => _8939.getStart, 'optionalCall', _8940 => _8940()]), () => ( m.pos))) >= end && !this.rustIdentifierIsPropertyName(m));
   }
   // `this.m(..)` / `super.m(..)` / `Promise.all(..)`: every argument prints through printNode as a `Value`.
   rustVecBoxingCallee(callee) {
@@ -58762,15 +59319,15 @@ ${iden}}`;
     return receiver.kind === _ast.SyntaxKind.Identifier && receiver.text === "Promise" && String(callee.name.text) === "all";
   }
   rustVecLocalDeclarationOf(node) {
-    if (_optionalChain([node, 'optionalAccess', _8897 => _8897.kind]) !== _ast.SyntaxKind.Identifier)
+    if (_optionalChain([node, 'optionalAccess', _8941 => _8941.kind]) !== _ast.SyntaxKind.Identifier)
       return void 0;
     const checker = this.checkerOrUndefined();
-    const symbol = _optionalChain([checker, 'optionalAccess', _8898 => _8898.getSymbolAtLocation, 'call', _8899 => _8899(node)]);
+    const symbol = _optionalChain([checker, 'optionalAccess', _8942 => _8942.getSymbolAtLocation, 'call', _8943 => _8943(node)]);
     const declaration = _nullishCoalesce(_chunkQYYT7MP4cjs.symbolValueDeclaration.call(void 0, symbol), () => ( _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, symbol)[0]));
     return declaration !== void 0 && declaration.name !== node && this.rustVecLocalIsTyped(declaration) ? declaration : void 0;
   }
   printRustVecPush(node, name, parsedArg) {
-    const receiver = _optionalChain([node, 'optionalAccess', _8900 => _8900.expression, 'optionalAccess', _8901 => _8901.expression]);
+    const receiver = _optionalChain([node, 'optionalAccess', _8944 => _8944.expression, 'optionalAccess', _8945 => _8945.expression]);
     if (name === void 0 || parsedArg === void 0 || this.rustVecLocalDeclarationOf(receiver) === void 0)
       return void 0;
     const arg = parsedArg.trim();
@@ -58782,7 +59339,7 @@ ${iden}}`;
     const containerBox = this.printRustContainerLocalBox(node, text);
     if (containerBox !== void 0)
       return containerBox;
-    const parent = _optionalChain([node, 'optionalAccess', _8902 => _8902.parent]);
+    const parent = _optionalChain([node, 'optionalAccess', _8946 => _8946.parent]);
     if (this.rustI64Counters.size > 0 && this.rustI64CounterOf(node) !== void 0 && (this.rustI64BoxedUse(node) || _is.isVariableDeclaration.call(void 0, parent) && parent.initializer === node))
       return `Value::Int(${text})`;
     if (parent !== void 0 && _is.isCallExpression.call(void 0, parent) && parent.arguments.some((a) => a === node)) {
@@ -58821,7 +59378,7 @@ ${iden}}`;
     return this.rustDictLocalIsTyped(declaration) ? declaration : void 0;
   }
   rustDictLocalIsTyped(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8903 => _8903.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _8947 => _8947.kind]) !== _ast.SyntaxKind.VariableDeclaration)
       return false;
     let decision = this.rustDictBearerDecisions.get(declaration);
     if (decision === void 0) {
@@ -58837,7 +59394,7 @@ ${iden}}`;
   }
   rustDictLocalIsTypedUncached(declaration) {
     const init = declaration.initializer;
-    if (_optionalChain([declaration, 'access', _8904 => _8904.name, 'optionalAccess', _8905 => _8905.kind]) !== _ast.SyntaxKind.Identifier || init === void 0)
+    if (_optionalChain([declaration, 'access', _8948 => _8948.name, 'optionalAccess', _8949 => _8949.kind]) !== _ast.SyntaxKind.Identifier || init === void 0)
       return false;
     const literal2 = this.rustSkipWrappers(init);
     const produced = !_is.isObjectLiteralExpression.call(void 0, literal2) && this.rustDictProducer(init);
@@ -58857,7 +59414,7 @@ ${iden}}`;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || _is.isSourceFile.call(void 0, fn))
       return false;
-    const source = _optionalChain([declaration, 'access', _8906 => _8906.getSourceFile, 'optionalCall', _8907 => _8907(), 'optionalAccess', _8908 => _8908.fileName]);
+    const source = _optionalChain([declaration, 'access', _8950 => _8950.getSourceFile, 'optionalCall', _8951 => _8951(), 'optionalAccess', _8952 => _8952.fileName]);
     if (typeof source === "string" && /\/test\//.test(source))
       return false;
     const prediction = typeof source === "string" && _RustTranspiler.RUST_PREDICTION_VENUE_FILE.test(source.replace(/\\/g, "/"));
@@ -58865,7 +59422,7 @@ ${iden}}`;
     let elementUses = 0;
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n)) {
-        return !(_optionalChain([n, 'access', _8909 => _8909.parent, 'optionalAccess', _8910 => _8910.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
+        return !(_optionalChain([n, 'access', _8953 => _8953.parent, 'optionalAccess', _8954 => _8954.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
       }
       if (!this.rustIdentifierRefersToDeclaration(n, declaration))
         return false;
@@ -58930,7 +59487,7 @@ ${iden}}`;
     if (!_is.isCallExpression.call(void 0, call))
       return false;
     const callee = call.expression;
-    if (!_is.isPropertyAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword || _optionalChain([callee, 'access', _8911 => _8911.name, 'optionalAccess', _8912 => _8912.kind]) !== _ast.SyntaxKind.Identifier)
+    if (!_is.isPropertyAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword || _optionalChain([callee, 'access', _8955 => _8955.name, 'optionalAccess', _8956 => _8956.kind]) !== _ast.SyntaxKind.Identifier)
       return false;
     const method = String(callee.name.text);
     const handle = /^handle[A-Z]/.test(method);
@@ -58971,7 +59528,7 @@ ${iden}}`;
    *  fresh map, so the local keeps its `IndexMap` type and the print clones the
    *  box out at the assignment. */
   rustProducerReuse(node) {
-    const parent = _optionalChain([node, 'optionalAccess', _8913 => _8913.parent]);
+    const parent = _optionalChain([node, 'optionalAccess', _8957 => _8957.parent]);
     if (parent === void 0 || !_is.isBinaryExpression.call(void 0, parent) || parent.left !== node)
       return false;
     return parent.operatorToken.kind === _ast.SyntaxKind.EqualsToken && this.rustDictProducer(parent.right);
@@ -58982,8 +59539,8 @@ ${iden}}`;
   rustCallBuildsContainer(call, kind, depth = 0) {
     if (depth > 2)
       return false;
-    const passCallee = _optionalChain([call, 'optionalAccess', _8914 => _8914.expression]);
-    const passMethod = _is.isPropertyAccessExpression.call(void 0, passCallee) ? String(_optionalChain([passCallee, 'access', _8915 => _8915.name, 'optionalAccess', _8916 => _8916.text])) : void 0;
+    const passCallee = _optionalChain([call, 'optionalAccess', _8958 => _8958.expression]);
+    const passMethod = _is.isPropertyAccessExpression.call(void 0, passCallee) ? String(_optionalChain([passCallee, 'access', _8959 => _8959.name, 'optionalAccess', _8960 => _8960.text])) : void 0;
     if (passMethod !== void 0 && _RustTranspiler.RUST_BUILDER_PASSTHROUGH.has(passMethod)) {
       const passArgs = _nullishCoalesce(call.arguments, () => ( []));
       if (passArgs.length === 0)
@@ -59145,7 +59702,7 @@ ${iden}}`;
    *  `this.`/`super.` call. Anything else (a free-function argument) has no box
    *  site. */
   boxSiteOk(node) {
-    const parent = _optionalChain([node, 'optionalAccess', _8917 => _8917.parent]);
+    const parent = _optionalChain([node, 'optionalAccess', _8961 => _8961.parent]);
     if (parent === void 0)
       return false;
     if (_is.isReturnStatement.call(void 0, parent) && parent.expression === node)
@@ -59155,7 +59712,7 @@ ${iden}}`;
   /** `Object.keys/values/entries`, `JSON.*`, `String(x)`, `typeof`-style readers: the printer
    *  emits them from the receiver's own text, so a bearer boxed there is a wasted clone. */
   nativeReadCallee(call) {
-    const callee = _optionalChain([call, 'optionalAccess', _8918 => _8918.expression]);
+    const callee = _optionalChain([call, 'optionalAccess', _8962 => _8962.expression]);
     const native = _RustTranspiler.NATIVE_READ_NAMESPACES;
     if (callee === void 0 || native === void 0)
       return false;
@@ -59414,7 +59971,7 @@ ${iden}}`;
    *  (`{ x }`) is out: the literal printer clones the name without passing
    *  through the identifier printer, so the box could not be emitted. */
   rustBearerLiteralMove(node) {
-    const parent = _optionalChain([node, 'optionalAccess', _8919 => _8919.parent]);
+    const parent = _optionalChain([node, 'optionalAccess', _8963 => _8963.parent]);
     if (parent === void 0 || parent.kind !== _ast.SyntaxKind.PropertyAssignment || parent.initializer !== node)
       return false;
     return _is.isObjectLiteralExpression.call(void 0, parent.parent);
@@ -59430,7 +59987,7 @@ ${iden}}`;
     return kind === false ? void 0 : kind;
   }
   rustReadBearerKindOfDeclaration(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8920 => _8920.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _8964 => _8964.kind]) !== _ast.SyntaxKind.VariableDeclaration)
       return false;
     let decision = this.rustReadBearerDecisions.get(declaration);
     if (decision === void 0) {
@@ -59446,10 +60003,10 @@ ${iden}}`;
   }
   rustReadBearerKindUncached(declaration) {
     const init = this.rustSkipWrappers(declaration.initializer);
-    if (_optionalChain([declaration, 'access', _8921 => _8921.name, 'optionalAccess', _8922 => _8922.kind]) !== _ast.SyntaxKind.Identifier || init === void 0)
+    if (_optionalChain([declaration, 'access', _8965 => _8965.name, 'optionalAccess', _8966 => _8966.kind]) !== _ast.SyntaxKind.Identifier || init === void 0)
       return false;
     const list = declaration.parent;
-    if (_optionalChain([list, 'optionalAccess', _8923 => _8923.kind]) !== _ast.SyntaxKind.VariableDeclarationList || _optionalChain([list, 'access', _8924 => _8924.declarations, 'optionalAccess', _8925 => _8925.length]) !== 1)
+    if (_optionalChain([list, 'optionalAccess', _8967 => _8967.kind]) !== _ast.SyntaxKind.VariableDeclarationList || _optionalChain([list, 'access', _8968 => _8968.declarations, 'optionalAccess', _8969 => _8969.length]) !== 1)
       return false;
     if (_is.isArrayLiteralExpression.call(void 0, init) || _is.isObjectLiteralExpression.call(void 0, init))
       return false;
@@ -59460,14 +60017,14 @@ ${iden}}`;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || _is.isSourceFile.call(void 0, fn))
       return false;
-    const source = _optionalChain([declaration, 'access', _8926 => _8926.getSourceFile, 'optionalCall', _8927 => _8927(), 'optionalAccess', _8928 => _8928.fileName]);
+    const source = _optionalChain([declaration, 'access', _8970 => _8970.getSourceFile, 'optionalCall', _8971 => _8971(), 'optionalAccess', _8972 => _8972.fileName]);
     if (typeof source === "string" && /\/test\//.test(source))
       return false;
     if (this.rustLocalIsReassigned(declaration, name))
       return false;
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n)) {
-        return !(_optionalChain([n, 'access', _8929 => _8929.parent, 'optionalAccess', _8930 => _8930.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
+        return !(_optionalChain([n, 'access', _8973 => _8973.parent, 'optionalAccess', _8974 => _8974.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
       }
       if (!this.rustIdentifierRefersToDeclaration(n, declaration))
         return false;
@@ -59479,7 +60036,7 @@ ${iden}}`;
       }
       if (kind === "list" && _is.isPropertyAccessExpression.call(void 0, parent) && parent.expression === n && String(parent.name.text) === "length") {
         const up = parent.parent;
-        return _optionalChain([up, 'optionalAccess', _8931 => _8931.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([up, 'optionalAccess', _8932 => _8932.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression && !(_is.isBinaryExpression.call(void 0, up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind));
+        return _optionalChain([up, 'optionalAccess', _8975 => _8975.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([up, 'optionalAccess', _8976 => _8976.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression && !(_is.isBinaryExpression.call(void 0, up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind));
       }
       return false;
     });
@@ -59488,10 +60045,10 @@ ${iden}}`;
   /** `'list' | 'map'` for a container local with at least one boxing use, else false. */
   rustContainerLocalKind(declaration) {
     const init = this.rustSkipWrappers(declaration.initializer);
-    if (_optionalChain([declaration, 'access', _8933 => _8933.name, 'optionalAccess', _8934 => _8934.kind]) !== _ast.SyntaxKind.Identifier || init === void 0)
+    if (_optionalChain([declaration, 'access', _8977 => _8977.name, 'optionalAccess', _8978 => _8978.kind]) !== _ast.SyntaxKind.Identifier || init === void 0)
       return false;
     const list = declaration.parent;
-    if (_optionalChain([list, 'optionalAccess', _8935 => _8935.kind]) !== _ast.SyntaxKind.VariableDeclarationList || _optionalChain([list, 'access', _8936 => _8936.declarations, 'optionalAccess', _8937 => _8937.length]) !== 1)
+    if (_optionalChain([list, 'optionalAccess', _8979 => _8979.kind]) !== _ast.SyntaxKind.VariableDeclarationList || _optionalChain([list, 'access', _8980 => _8980.declarations, 'optionalAccess', _8981 => _8981.length]) !== 1)
       return false;
     if (_is.isArrayLiteralExpression.call(void 0, init) || _is.isObjectLiteralExpression.call(void 0, init))
       return false;
@@ -59499,7 +60056,7 @@ ${iden}}`;
     const method = callee !== void 0 && _is.isPropertyAccessExpression.call(void 0, callee) ? String(callee.name.text) : void 0;
     if (method !== void 0 && _RustTranspiler.RUST_CONTAINER_LOCAL_SKIP.has(method))
       return false;
-    const source = _optionalChain([declaration, 'access', _8938 => _8938.getSourceFile, 'optionalCall', _8939 => _8939(), 'optionalAccess', _8940 => _8940.fileName]);
+    const source = _optionalChain([declaration, 'access', _8982 => _8982.getSourceFile, 'optionalCall', _8983 => _8983(), 'optionalAccess', _8984 => _8984.fileName]);
     if (typeof source === "string" && /[\\/]test[\\/]/.test(source))
       return false;
     if (this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false)
@@ -59519,7 +60076,7 @@ ${iden}}`;
     let natives = 0;
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n))
-        return !(_optionalChain([n, 'access', _8941 => _8941.parent, 'optionalAccess', _8942 => _8942.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
+        return !(_optionalChain([n, 'access', _8985 => _8985.parent, 'optionalAccess', _8986 => _8986.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
       if (!this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn)
         return false;
       const parent = n.parent;
@@ -59530,7 +60087,7 @@ ${iden}}`;
       if (kind === "list" && _is.isPropertyAccessExpression.call(void 0, parent) && parent.expression === n && String(parent.name.text) === "length") {
         const up = parent.parent;
         natives++;
-        return _optionalChain([up, 'optionalAccess', _8943 => _8943.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([up, 'optionalAccess', _8944 => _8944.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression && !(_is.isBinaryExpression.call(void 0, up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind));
+        return _optionalChain([up, 'optionalAccess', _8987 => _8987.kind]) !== _ast.SyntaxKind.PrefixUnaryExpression && _optionalChain([up, 'optionalAccess', _8988 => _8988.kind]) !== _ast.SyntaxKind.PostfixUnaryExpression && !(_is.isBinaryExpression.call(void 0, up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind));
       }
       const form = this.rustContainerBoxForm(n, neverNull);
       if (form !== void 0)
@@ -59740,7 +60297,7 @@ ${iden}}`;
     return this.rustNestedDictLocalIsTyped(declaration) ? declaration : void 0;
   }
   rustNestedDictLocalIsTyped(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8945 => _8945.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _8989 => _8989.kind]) !== _ast.SyntaxKind.VariableDeclaration)
       return false;
     let decision = this.rustNestedBearerDecisions.get(declaration);
     if (decision === void 0) {
@@ -59780,9 +60337,9 @@ ${iden}}`;
     return literal2;
   }
   rustNestedDictLocalIsTypedUncached(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _8946 => _8946.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _8990 => _8990.kind]) !== _ast.SyntaxKind.VariableDeclaration)
       return false;
-    if (_optionalChain([declaration, 'access', _8947 => _8947.name, 'optionalAccess', _8948 => _8948.kind]) !== _ast.SyntaxKind.Identifier || declaration.initializer === void 0)
+    if (_optionalChain([declaration, 'access', _8991 => _8991.name, 'optionalAccess', _8992 => _8992.kind]) !== _ast.SyntaxKind.Identifier || declaration.initializer === void 0)
       return false;
     if (this.rustNestedDictLiteral(declaration.initializer) === void 0)
       return false;
@@ -59790,14 +60347,14 @@ ${iden}}`;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || _is.isSourceFile.call(void 0, fn))
       return false;
-    const source = _optionalChain([declaration, 'access', _8949 => _8949.getSourceFile, 'optionalCall', _8950 => _8950(), 'optionalAccess', _8951 => _8951.fileName]);
+    const source = _optionalChain([declaration, 'access', _8993 => _8993.getSourceFile, 'optionalCall', _8994 => _8994(), 'optionalAccess', _8995 => _8995.fileName]);
     if (typeof source === "string" && /\/test\//.test(source))
       return false;
     const escapes = [];
     let nestedUses = 0;
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n)) {
-        return !(_optionalChain([n, 'access', _8952 => _8952.parent, 'optionalAccess', _8953 => _8953.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
+        return !(_optionalChain([n, 'access', _8996 => _8996.parent, 'optionalAccess', _8997 => _8997.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
       }
       if (!this.rustIdentifierRefersToDeclaration(n, declaration))
         return false;
@@ -59818,7 +60375,7 @@ ${iden}}`;
         nestedUses += 1;
         return true;
       }
-      if (parent.kind === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n && _optionalChain([parent, 'access', _8954 => _8954.parent, 'optionalAccess', _8955 => _8955.parent]) !== void 0 && _is.isObjectLiteralExpression.call(void 0, parent.parent)) {
+      if (parent.kind === _ast.SyntaxKind.PropertyAssignment && parent.initializer === n && _optionalChain([parent, 'access', _8998 => _8998.parent, 'optionalAccess', _8999 => _8999.parent]) !== void 0 && _is.isObjectLiteralExpression.call(void 0, parent.parent)) {
         escapes.push(n);
         return true;
       }
@@ -59863,7 +60420,7 @@ ${iden}}`;
     if (write) {
       if (up.operatorToken.kind !== _ast.SyntaxKind.EqualsToken)
         return false;
-      return !new RegExp(`\\b${name}\\b`).test(String(_nullishCoalesce(_optionalChain([up, 'access', _8956 => _8956.right, 'access', _8957 => _8957.getText, 'optionalCall', _8958 => _8958()]), () => ( ""))));
+      return !new RegExp(`\\b${name}\\b`).test(String(_nullishCoalesce(_optionalChain([up, 'access', _9000 => _9000.right, 'access', _9001 => _9001.getText, 'optionalCall', _9002 => _9002()]), () => ( ""))));
     }
     if (up !== void 0 && (_is.isDeleteExpression.call(void 0, up) || _is.isCallExpression.call(void 0, up) && up.expression === root || up.kind === _ast.SyntaxKind.PrefixUnaryExpression || up.kind === _ast.SyntaxKind.PostfixUnaryExpression))
       return false;
@@ -59948,8 +60505,8 @@ ${this.getIden(identation)}}`;
   // Native IndexMap ops for `k in X`, `delete X[k]`, `Object.keys/values(X)`.
   /** Source path of a node (forward slashes). */
   provenDictFieldPath(node) {
-    const src = _optionalChain([node, 'optionalAccess', _8959 => _8959.getSourceFile, 'optionalCall', _8960 => _8960()]);
-    return typeof _optionalChain([src, 'optionalAccess', _8961 => _8961.fileName]) === "string" ? src.fileName.replace(/\\/g, "/") : "";
+    const src = _optionalChain([node, 'optionalAccess', _9003 => _9003.getSourceFile, 'optionalCall', _9004 => _9004()]);
+    return typeof _optionalChain([src, 'optionalAccess', _9005 => _9005.fileName]) === "string" ? src.fileName.replace(/\\/g, "/") : "";
   }
   /** Test sources keep the helpers: tests-pipeline post-passes match `in_op(` text. */
   isTestSource(node) {
@@ -59972,14 +60529,14 @@ ${this.getIden(identation)}}`;
   /** `delete X[k]` on a receiver the native-insert proof admits (never a ws
    *  subscriptions snapshot, so `try_ws_subs_remove` is dead): `shift_remove`. */
   provenDictFieldDelete(node) {
-    const target = _optionalChain([node, 'optionalAccess', _8962 => _8962.expression]);
+    const target = _optionalChain([node, 'optionalAccess', _9006 => _9006.expression]);
     if (target === void 0 || !_is.isElementAccessExpression.call(void 0, target) || this.isTestSource(node)) {
       return void 0;
     }
     const base = target.expression;
     const receiver = this.rustNativeInsertReceiver(base);
     const restTier = /\/ts\/src\/[^/]+\.ts$/.test(this.provenDictFieldPath(node));
-    const declaredLocal = !_optionalChain([receiver, 'optionalAccess', _8963 => _8963.isField]) && this.rustDeclaredLocalEntry(base) !== void 0 && !this.rustLocalInitReadsTaggedContainer(base);
+    const declaredLocal = !_optionalChain([receiver, 'optionalAccess', _9007 => _9007.isField]) && this.rustDeclaredLocalEntry(base) !== void 0 && !this.rustLocalInitReadsTaggedContainer(base);
     if (receiver !== void 0 && !receiver.isField && !restTier && receiver.plain !== true && !declaredLocal) {
       return void 0;
     }
@@ -60028,7 +60585,7 @@ ${this.getIden(identation)}}`;
   /** `Object.keys/values(X)` in REST-tier sources (`ts/src/<id>.ts`): no ws client
    *  there, so X never carries the `__ws_subs_url`/`__ws_sub_ref` tags the helper filters. */
   provenDictFieldEnum(node, parsedArg, kind) {
-    const arg = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _8964 => _8964.arguments, 'optionalAccess', _8965 => _8965[0]]));
+    const arg = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _9008 => _9008.arguments, 'optionalAccess', _9009 => _9009[0]]));
     if (arg === void 0 || parsedArg === void 0 || !(/\/ts\/src\/[^/]+\.ts$/.test(this.provenDictFieldPath(node)) || this.untaggedDictField(arg)) || !(_is.isIdentifier.call(void 0, arg) || _is.isPropertyAccessExpression.call(void 0, arg) || _is.isElementAccessExpression.call(void 0, arg) || _is.isCallExpression.call(void 0, arg)) || this.rustParamShadowOf(arg) !== void 0) {
       return void 0;
     }
@@ -60056,7 +60613,7 @@ ${this.getIden(identation)}}`;
       return void 0;
     if (kind === "string" && this.primitiveKindOfType(this.typeOfNodeIfAny(receiver)) !== "string")
       return void 0;
-    if (_is.isIdentifier.call(void 0, receiver) && this.rustStringLocalIdentifierIsTyped(receiver))
+    if (_is.isIdentifier.call(void 0, receiver) && (this.rustStringLocalIdentifierIsTyped(receiver) || this.rustScalarLocalOf(receiver) !== void 0))
       return void 0;
     const text = receiverText.trim();
     return /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/.test(text) ? text : `(${text})`;
@@ -60072,7 +60629,7 @@ ${this.getIden(identation)}}`;
   // `x.toUpperCase()` / `x.toLowerCase()`: the helper's `Value::Str` arm, Null otherwise.
   printNativeStringCase(node, receiverText, method) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _8966 => _8966.arguments, 'optionalAccess', _8967 => _8967.length]), () => ( 0))) !== 0)
+    if (receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _9010 => _9010.arguments, 'optionalAccess', _9011 => _9011.length]), () => ( 0))) !== 0)
       return void 0;
     return this.rustStrCaseConvert(receiver, method);
   }
@@ -60086,7 +60643,7 @@ ${this.getIden(identation)}}`;
   // `x.startsWith("lit")` / `x.endsWith("lit")` → a bool (false for a non-`Str` receiver).
   printNativeStringAffixTest(node, receiverText, method) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || _optionalChain([node, 'access', _8968 => _8968.arguments, 'optionalAccess', _8969 => _8969.length]) !== 1)
+    if (receiver === void 0 || _optionalChain([node, 'access', _9012 => _9012.arguments, 'optionalAccess', _9013 => _9013.length]) !== 1)
       return void 0;
     const literal2 = this.rustNativeStringLiteralArg(node.arguments[0]);
     if (literal2 === void 0)
@@ -60098,7 +60655,7 @@ ${this.getIden(identation)}}`;
   // `x.split("lit")`: an array of the parts, the empty array for a non-`Str` receiver.
   printNativeStringSplit(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || _optionalChain([node, 'access', _8970 => _8970.arguments, 'optionalAccess', _8971 => _8971.length]) !== 1)
+    if (receiver === void 0 || _optionalChain([node, 'access', _9014 => _9014.arguments, 'optionalAccess', _9015 => _9015.length]) !== 1)
       return void 0;
     const literal2 = this.rustNativeStringLiteralArg(node.arguments[0]);
     if (literal2 === void 0)
@@ -60111,7 +60668,7 @@ ${this.getIden(identation)}}`;
   // `x.replace("a", "b")`: the helper replaces every occurrence (`str::replace`), else the receiver.
   printNativeStringReplace(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || _optionalChain([node, 'access', _8972 => _8972.arguments, 'optionalAccess', _8973 => _8973.length]) !== 2)
+    if (receiver === void 0 || _optionalChain([node, 'access', _9016 => _9016.arguments, 'optionalAccess', _9017 => _9017.length]) !== 2)
       return void 0;
     const from = this.rustNativeStringLiteralArg(node.arguments[0]);
     const to = this.rustNativeStringLiteralArg(node.arguments[1]);
@@ -60123,7 +60680,7 @@ ${this.getIden(identation)}}`;
   // truncates, which is the helper's arm for a one-char pad.
   printNativeStringPadStart(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || _optionalChain([node, 'access', _8974 => _8974.arguments, 'optionalAccess', _8975 => _8975.length]) !== 2)
+    if (receiver === void 0 || _optionalChain([node, 'access', _9018 => _9018.arguments, 'optionalAccess', _9019 => _9019.length]) !== 2)
       return void 0;
     const width = this.rustSliceLiteralBound(node.arguments[0]);
     const pad = node.arguments[1];
@@ -60137,7 +60694,7 @@ ${this.getIden(identation)}}`;
   // `repeat(need)` of a one-char pad, which `format!` width reproduces exactly.
   printNativeStringPadEnd(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || _optionalChain([node, 'access', _8976 => _8976.arguments, 'optionalAccess', _8977 => _8977.length]) !== 2)
+    if (receiver === void 0 || _optionalChain([node, 'access', _9020 => _9020.arguments, 'optionalAccess', _9021 => _9021.length]) !== 2)
       return void 0;
     const width = this.rustSliceLiteralBound(node.arguments[0]);
     const pad = node.arguments[1];
@@ -60154,7 +60711,7 @@ ${this.getIden(identation)}}`;
   printNativeToFixed(node, receiverText) {
     if (node === void 0 || !_is.isCallExpression.call(void 0, node) || !_is.isPropertyAccessExpression.call(void 0, node.expression))
       return void 0;
-    if (_optionalChain([node, 'access', _8978 => _8978.arguments, 'optionalAccess', _8979 => _8979.length]) !== 1)
+    if (_optionalChain([node, 'access', _9022 => _9022.arguments, 'optionalAccess', _9023 => _9023.length]) !== 1)
       return void 0;
     if (this.primitiveKindOfType(this.typeOfNodeIfAny(node.expression.expression)) !== "number")
       return void 0;
@@ -60169,7 +60726,7 @@ ${this.getIden(identation)}}`;
   // `x.indexOf(y)` with a proven-string needle: `-1` when either side is not a `Str` (byte index).
   printNativeStringIndexOfString(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText);
-    if (receiver === void 0 || _optionalChain([node, 'access', _8980 => _8980.arguments, 'optionalAccess', _8981 => _8981.length]) !== 1)
+    if (receiver === void 0 || _optionalChain([node, 'access', _9024 => _9024.arguments, 'optionalAccess', _9025 => _9025.length]) !== 1)
       return void 0;
     const needle = node.arguments[0];
     if (!_is.isIdentifier.call(void 0, needle) || this.primitiveKindOfType(this.typeOfNodeIfAny(needle)) !== "string")
@@ -60184,7 +60741,7 @@ ${this.getIden(identation)}}`;
   // `xs.join("lit")` on a `string[]`: `Display` renders `Str`/`Null` like the helper does.
   printNativeStringJoin(node, receiverText) {
     const receiver = this.rustNativeStringReceiver(node, receiverText, "array");
-    if (receiver === void 0 || _optionalChain([node, 'access', _8982 => _8982.arguments, 'optionalAccess', _8983 => _8983.length]) !== 1)
+    if (receiver === void 0 || _optionalChain([node, 'access', _9026 => _9026.arguments, 'optionalAccess', _9027 => _9027.length]) !== 1)
       return void 0;
     const literal2 = this.rustNativeStringLiteralArg(node.arguments[0]);
     if (literal2 === void 0)
@@ -60193,7 +60750,7 @@ ${this.getIden(identation)}}`;
     const type = this.typeOfNodeIfAny(node.expression.expression);
     if (checker === void 0 || type === void 0 || !checker.isArrayType(type))
       return void 0;
-    const element = _optionalChain([checker, 'access', _8984 => _8984.getTypeArguments, 'optionalCall', _8985 => _8985(type), 'optionalAccess', _8986 => _8986[0]]);
+    const element = _optionalChain([checker, 'access', _9028 => _9028.getTypeArguments, 'optionalCall', _9029 => _9029(type), 'optionalAccess', _9030 => _9030[0]]);
     if (this.primitiveKindOfType(element) !== "string")
       return void 0;
     return `Value::Str(${receiver}.as_array().map(|__a| __a.iter().map(|__v| __v.to_string()).collect::<Vec<String>>().join("${literal2}")).unwrap_or_default().into())`;
@@ -60213,7 +60770,7 @@ ${this.getIden(identation)}}`;
   // `x.toString()` on a number/string: `to_string_val` is `stringify_simple`, i.e. `Display`.
   // Typed `Option<String>` receivers have no `Display`, so they keep the helper.
   printRustNativeToString(node, name) {
-    const receiver = _optionalChain([node, 'optionalAccess', _8987 => _8987.expression, 'optionalAccess', _8988 => _8988.expression]);
+    const receiver = _optionalChain([node, 'optionalAccess', _9031 => _9031.expression, 'optionalAccess', _9032 => _9032.expression]);
     const kind = this.rustOperandKind(receiver);
     if (kind !== "number" && kind !== "string")
       return void 0;
@@ -60224,7 +60781,7 @@ ${this.getIden(identation)}}`;
   }
   // `Math.floor|round|ceil(n)`: the helper answers `Float(op(x))` for a numeric box, `Null` otherwise.
   printRustNativeMathCall(node, op, parsedArg) {
-    if (this.rustOperandKind(_optionalChain([node, 'optionalAccess', _8989 => _8989.arguments, 'optionalAccess', _8990 => _8990[0]])) !== "number")
+    if (this.rustOperandKind(_optionalChain([node, 'optionalAccess', _9033 => _9033.arguments, 'optionalAccess', _9034 => _9034[0]])) !== "number")
       return void 0;
     return `(${parsedArg}).as_f64().map(|__x| Value::Float(__x.${op}())).unwrap_or(Value::Null)`;
   }
@@ -60251,9 +60808,9 @@ ${this.getIden(identation)}}`;
     if (!_is.isIdentifier.call(void 0, inner))
       return false;
     const declaration = this.rustSingleLocalDeclaration(inner);
-    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || _optionalChain([declaration, 'access', _8991 => _8991.name, 'optionalAccess', _8992 => _8992.kind]) !== _ast.SyntaxKind.Identifier)
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || _optionalChain([declaration, 'access', _9035 => _9035.name, 'optionalAccess', _9036 => _9036.kind]) !== _ast.SyntaxKind.Identifier)
       return false;
-    if ((_optionalChain([declaration, 'access', _8993 => _8993.parent, 'optionalAccess', _8994 => _8994.flags]) & _ast.NodeFlags.Const) === 0)
+    if ((_optionalChain([declaration, 'access', _9037 => _9037.parent, 'optionalAccess', _9038 => _9038.flags]) & _ast.NodeFlags.Const) === 0)
       return false;
     const init = this.rustStripWrappers(declaration.initializer);
     return init !== void 0 && _is.isPropertyAccessExpression.call(void 0, init) && String(init.name.text) === "length";
@@ -60376,7 +60933,7 @@ ${this.getIden(identation)}}`;
       const visit = (m) => {
         if (m.kind === _ast.SyntaxKind.Identifier && m.text === n.text)
           mentions++;
-        _optionalChain([m, 'access', _8995 => _8995.forEachChild, 'optionalCall', _8996 => _8996(visit)]);
+        _optionalChain([m, 'access', _9039 => _9039.forEachChild, 'optionalCall', _9040 => _9040(visit)]);
       };
       parent.arguments.forEach(visit);
       if (mentions !== 1)
@@ -60424,8 +60981,8 @@ ${this.getIden(identation)}}`;
     return this.isRustValueIndexKey(key);
   }
   printElementAccessExpressionExceptionIfAny(node) {
-    const receiver = _optionalChain([node, 'optionalAccess', _8997 => _8997.expression]);
-    if (_optionalChain([receiver, 'optionalAccess', _8998 => _8998.kind]) !== _ast.SyntaxKind.Identifier || this.rustVecLocalDeclarationOf(receiver) === void 0 || !this.vecReadShape(node))
+    const receiver = _optionalChain([node, 'optionalAccess', _9041 => _9041.expression]);
+    if (_optionalChain([receiver, 'optionalAccess', _9042 => _9042.kind]) !== _ast.SyntaxKind.Identifier || this.rustVecLocalDeclarationOf(receiver) === void 0 || !this.vecReadShape(node))
       return super.printElementAccessExpressionExceptionIfAny(node);
     const name = this.printNode(receiver, 0).trim();
     const key = this.rustStripWrappers(node.argumentExpression);
@@ -60479,7 +61036,7 @@ ${this.getIden(identation)}}`;
       return false;
     if (_is.isParameterDeclaration.call(void 0, declaration))
       return true;
-    if (!_is.isVariableDeclaration.call(void 0, declaration) || (_optionalChain([declaration, 'access', _8999 => _8999.parent, 'optionalAccess', _9000 => _9000.flags]) & _ast.NodeFlags.Const) === 0 || declaration.initializer === void 0)
+    if (!_is.isVariableDeclaration.call(void 0, declaration) || (_optionalChain([declaration, 'access', _9043 => _9043.parent, 'optionalAccess', _9044 => _9044.flags]) & _ast.NodeFlags.Const) === 0 || declaration.initializer === void 0)
       return false;
     let clean = true;
     const visit = (n) => {
@@ -60549,7 +61106,7 @@ ${this.getIden(identation)}}`;
    *  overload set), in the calling file or the base tier. */
   rustMethodImpl(call) {
     const checker = this.checkerOrUndefined();
-    const callee = _optionalChain([call, 'optionalAccess', _9001 => _9001.expression]);
+    const callee = _optionalChain([call, 'optionalAccess', _9045 => _9045.expression]);
     if (checker === void 0 || !_is.isPropertyAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword) {
       return void 0;
     }
@@ -60643,7 +61200,7 @@ ${this.getIden(identation)}}`;
       return false;
     return this.rustEveryReturn(call, depth, (e) => {
       const tuple = this.rustStripWrappers(e);
-      if (_optionalChain([tuple, 'optionalAccess', _9002 => _9002.kind]) === _ast.SyntaxKind.ArrayLiteralExpression) {
+      if (_optionalChain([tuple, 'optionalAccess', _9046 => _9046.kind]) === _ast.SyntaxKind.ArrayLiteralExpression) {
         const element = tuple.elements[index];
         return element !== void 0 && element.kind !== _ast.SyntaxKind.SpreadElement && this.rustBoolValue(element, depth + 1);
       }
@@ -60664,12 +61221,12 @@ ${this.getIden(identation)}}`;
     let variable;
     if (declaration.kind === _ast.SyntaxKind.BindingElement) {
       const pattern = declaration.parent;
-      variable = _optionalChain([pattern, 'optionalAccess', _9003 => _9003.parent]);
-      if (_optionalChain([pattern, 'optionalAccess', _9004 => _9004.kind]) !== _ast.SyntaxKind.ArrayBindingPattern || variable === void 0 || !_is.isVariableDeclaration.call(void 0, variable) || declaration.initializer !== void 0 || declaration.dotDotDotToken !== void 0 || _optionalChain([declaration, 'access', _9005 => _9005.name, 'optionalAccess', _9006 => _9006.kind]) !== _ast.SyntaxKind.Identifier || !this.rustBoolTupleElement(variable.initializer, pattern.elements.indexOf(declaration), depth)) {
+      variable = _optionalChain([pattern, 'optionalAccess', _9047 => _9047.parent]);
+      if (_optionalChain([pattern, 'optionalAccess', _9048 => _9048.kind]) !== _ast.SyntaxKind.ArrayBindingPattern || variable === void 0 || !_is.isVariableDeclaration.call(void 0, variable) || declaration.initializer !== void 0 || declaration.dotDotDotToken !== void 0 || _optionalChain([declaration, 'access', _9049 => _9049.name, 'optionalAccess', _9050 => _9050.kind]) !== _ast.SyntaxKind.Identifier || !this.rustBoolTupleElement(variable.initializer, pattern.elements.indexOf(declaration), depth)) {
         return false;
       }
       nameNode = declaration.name;
-    } else if (_is.isVariableDeclaration.call(void 0, declaration) && _optionalChain([declaration, 'access', _9007 => _9007.name, 'optionalAccess', _9008 => _9008.kind]) === _ast.SyntaxKind.Identifier) {
+    } else if (_is.isVariableDeclaration.call(void 0, declaration) && _optionalChain([declaration, 'access', _9051 => _9051.name, 'optionalAccess', _9052 => _9052.kind]) === _ast.SyntaxKind.Identifier) {
       const init = this.rustStripWrappers(declaration.initializer);
       if (init !== void 0 && (this.rustNodeIsBoolExpression(init) || !(this.rustTypeIsUndefinedish(init) || _is.isIdentifier.call(void 0, init) && init.text === "undefined" || this.rustBoolValue(init, depth)))) {
         return false;
@@ -60696,11 +61253,11 @@ ${this.getIden(identation)}}`;
       if (_is.isBinaryExpression.call(void 0, parent) && parent.left === target && rustIsAssignmentOperator(parent.operatorToken.kind)) {
         if (parent.operatorToken.kind !== _ast.SyntaxKind.EqualsToken || this.rustNodeIsBoolExpression(this.rustStripWrappers(parent.right)) || !this.rustBoolValue(parent.right, depth))
           return false;
-      } else if (_optionalChain([parent, 'optionalAccess', _9009 => _9009.kind]) === _ast.SyntaxKind.ArrayLiteralExpression) {
+      } else if (_optionalChain([parent, 'optionalAccess', _9053 => _9053.kind]) === _ast.SyntaxKind.ArrayLiteralExpression) {
         const assign = parent.parent;
         if (assign !== void 0 && _is.isBinaryExpression.call(void 0, assign) && assign.left === parent && !this.rustBoolTupleElement(assign.right, parent.elements.indexOf(target), depth))
           return false;
-      } else if (_optionalChain([parent, 'optionalAccess', _9010 => _9010.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && parent.operator !== _ast.SyntaxKind.ExclamationToken || _optionalChain([parent, 'optionalAccess', _9011 => _9011.kind]) === _ast.SyntaxKind.PostfixUnaryExpression || _optionalChain([parent, 'optionalAccess', _9012 => _9012.kind]) === _ast.SyntaxKind.DeleteExpression || (_is.isForOfStatement.call(void 0, parent) || _is.isForInStatement.call(void 0, parent)) && parent.initializer === target) {
+      } else if (_optionalChain([parent, 'optionalAccess', _9054 => _9054.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && parent.operator !== _ast.SyntaxKind.ExclamationToken || _optionalChain([parent, 'optionalAccess', _9055 => _9055.kind]) === _ast.SyntaxKind.PostfixUnaryExpression || _optionalChain([parent, 'optionalAccess', _9056 => _9056.kind]) === _ast.SyntaxKind.DeleteExpression || (_is.isForOfStatement.call(void 0, parent) || _is.isForInStatement.call(void 0, parent)) && parent.initializer === target) {
         return false;
       }
     }
@@ -60717,7 +61274,7 @@ ${this.getIden(identation)}}`;
     let current = node;
     while (current.parent !== void 0 && _is.isParenthesizedExpression.call(void 0, current.parent))
       current = current.parent;
-    const negated = _optionalChain([current, 'access', _9013 => _9013.parent, 'optionalAccess', _9014 => _9014.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && current.parent.operator === _ast.SyntaxKind.ExclamationToken;
+    const negated = _optionalChain([current, 'access', _9057 => _9057.parent, 'optionalAccess', _9058 => _9058.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && current.parent.operator === _ast.SyntaxKind.ExclamationToken;
     return negated ? `(${text})` : text;
   }
   /** `x === true|false` with `x` proven a bool value: `is_equal` against a `Value::Bool` is
@@ -60764,14 +61321,14 @@ ${this.getIden(identation)}}`;
     if (declarations.length !== 1 || !_is.isVariableDeclaration.call(void 0, declarations[0]))
       return false;
     const declaration = declarations[0];
-    if (_optionalChain([declaration, 'access', _9015 => _9015.name, 'optionalAccess', _9016 => _9016.kind]) !== _ast.SyntaxKind.Identifier || !this.rustProvenStrSource(declaration.initializer))
+    if (_optionalChain([declaration, 'access', _9059 => _9059.name, 'optionalAccess', _9060 => _9060.kind]) !== _ast.SyntaxKind.Identifier || !this.rustProvenStrSource(declaration.initializer))
       return false;
     return this.rustLocalUsesAll(declaration, declaration.name.text, true, (n) => {
       if (this.rustWriteTarget(n))
         return false;
       const parent = n.parent;
-      if (_optionalChain([parent, 'optionalAccess', _9017 => _9017.kind]) !== _ast.SyntaxKind.BinaryExpression || parent.left !== n)
-        return !(_optionalChain([parent, 'optionalAccess', _9018 => _9018.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _9019 => _9019.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) || parent.operator === _ast.SyntaxKind.ExclamationToken;
+      if (_optionalChain([parent, 'optionalAccess', _9061 => _9061.kind]) !== _ast.SyntaxKind.BinaryExpression || parent.left !== n)
+        return !(_optionalChain([parent, 'optionalAccess', _9062 => _9062.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _9063 => _9063.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) || parent.operator === _ast.SyntaxKind.ExclamationToken;
       const op = parent.operatorToken.kind;
       if (op < _ast.SyntaxKind.FirstAssignment || op > _ast.SyntaxKind.LastAssignment)
         return true;
@@ -60846,7 +61403,7 @@ ${this.getIden(identation)}}`;
   // `s.replace(p, "lit")`: the helper replaces every occurrence when all three are `Str`, else
   // returns the receiver; `p` is a proven/checker string operand.
   printRustReplace(node, receiverText) {
-    if (_optionalChain([node, 'optionalAccess', _9020 => _9020.arguments, 'optionalAccess', _9021 => _9021.length]) !== 2)
+    if (_optionalChain([node, 'optionalAccess', _9064 => _9064.arguments, 'optionalAccess', _9065 => _9065.length]) !== 2)
       return void 0;
     const receiver = _nullishCoalesce(this.rustReceiver(node, receiverText), () => ( this.rustCheckerStrReceiver(node, receiverText)));
     const to = this.rustNativeStringLiteralArg(node.arguments[1]);
@@ -60859,7 +61416,7 @@ ${this.getIden(identation)}}`;
   }
   // `s.split(d)` with a proven/checker string delimiter: the parts, `[]` unless both are `Str`.
   printRustSplit(node, receiverText) {
-    if (_optionalChain([node, 'optionalAccess', _9022 => _9022.arguments, 'optionalAccess', _9023 => _9023.length]) !== 1 || this.rustNativeStringLiteralArg(node.arguments[0]) !== void 0)
+    if (_optionalChain([node, 'optionalAccess', _9066 => _9066.arguments, 'optionalAccess', _9067 => _9067.length]) !== 1 || this.rustNativeStringLiteralArg(node.arguments[0]) !== void 0)
       return void 0;
     const receiver = _nullishCoalesce(this.rustReceiver(node, receiverText), () => ( this.rustCheckerStrReceiver(node, receiverText)));
     const delim = receiver === void 0 ? void 0 : this.rustStrOperand(node.arguments[0], true);
@@ -60870,25 +61427,25 @@ ${this.getIden(identation)}}`;
   // `x.toString()` on a proven-`Str` local: `stringify_simple` of `Str`/`Null` is `Display`.
   printRustToString(node, receiverText) {
     const receiver = this.rustReceiver(node, receiverText);
-    return receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _9024 => _9024.arguments, 'optionalAccess', _9025 => _9025.length]), () => ( 0))) !== 0 ? void 0 : `Value::Str(format!("{}", ${receiver}).into())`;
+    return receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _9068 => _9068.arguments, 'optionalAccess', _9069 => _9069.length]), () => ( 0))) !== 0 ? void 0 : `Value::Str(format!("{}", ${receiver}).into())`;
   }
   // `x.toUpperCase()` / `x.toLowerCase()` on a proven-`Str` local (any TS type).
   printRustCase(node, receiverText, method) {
     const receiver = this.rustReceiver(node, receiverText);
-    return receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _9026 => _9026.arguments, 'optionalAccess', _9027 => _9027.length]), () => ( 0))) !== 0 ? void 0 : this.rustStrCaseConvert(receiver, method);
+    return receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _9070 => _9070.arguments, 'optionalAccess', _9071 => _9071.length]), () => ( 0))) !== 0 ? void 0 : this.rustStrCaseConvert(receiver, method);
   }
   // The plain-dict source proof reaches overloaded base readers (`safeDict` declares
   // bodiless overload signatures; the implementation in the same class is what runs).
   /** A bodiless overload signature whose class also holds the bodied implementation. */
   baseOverload(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _9028 => _9028.kind]) === _ast.SyntaxKind.FunctionDeclaration && declaration.body === void 0 && _is.isIdentifier.call(void 0, declaration.name)) {
+    if (_optionalChain([declaration, 'optionalAccess', _9072 => _9072.kind]) === _ast.SyntaxKind.FunctionDeclaration && declaration.body === void 0 && _is.isIdentifier.call(void 0, declaration.name)) {
       const fname = String(declaration.name.text);
-      return (_nullishCoalesce(_optionalChain([declaration, 'access', _9029 => _9029.parent, 'optionalAccess', _9030 => _9030.statements]), () => ( []))).some((m) => m.kind === _ast.SyntaxKind.FunctionDeclaration && m.body !== void 0 && _is.isIdentifier.call(void 0, m.name) && String(m.name.text) === fname);
+      return (_nullishCoalesce(_optionalChain([declaration, 'access', _9073 => _9073.parent, 'optionalAccess', _9074 => _9074.statements]), () => ( []))).some((m) => m.kind === _ast.SyntaxKind.FunctionDeclaration && m.body !== void 0 && _is.isIdentifier.call(void 0, m.name) && String(m.name.text) === fname);
     }
-    if (_optionalChain([declaration, 'optionalAccess', _9031 => _9031.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body !== void 0 || !_is.isIdentifier.call(void 0, declaration.name))
+    if (_optionalChain([declaration, 'optionalAccess', _9075 => _9075.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body !== void 0 || !_is.isIdentifier.call(void 0, declaration.name))
       return false;
     const name = String(declaration.name.text);
-    return (_nullishCoalesce(_optionalChain([declaration, 'access', _9032 => _9032.parent, 'optionalAccess', _9033 => _9033.members]), () => ( []))).some((m) => m.kind === _ast.SyntaxKind.MethodDeclaration && m.body !== void 0 && _is.isIdentifier.call(void 0, m.name) && String(m.name.text) === name);
+    return (_nullishCoalesce(_optionalChain([declaration, 'access', _9076 => _9076.parent, 'optionalAccess', _9077 => _9077.members]), () => ( []))).some((m) => m.kind === _ast.SyntaxKind.MethodDeclaration && m.body !== void 0 && _is.isIdentifier.call(void 0, m.name) && String(m.name.text) === name);
   }
   /** `x[a ± b]` on a checker-proven list, each operand a numeric literal, a `Value` loop
    *  counter or a `const n = y.length` local: the key prints as a `Value` number, so the
@@ -60917,7 +61474,7 @@ ${this.getIden(identation)}}`;
     if (this.rustParamShadowOf(operand) !== void 0 || this.rustStringLocalIdentifierIsTyped(operand))
       return false;
     const declaration = this.rustDeclarationOfIdentifier(operand);
-    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || (_optionalChain([declaration, 'access', _9034 => _9034.parent, 'optionalAccess', _9035 => _9035.flags]) & _ast.NodeFlags.Const) === 0)
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || (_optionalChain([declaration, 'access', _9078 => _9078.parent, 'optionalAccess', _9079 => _9079.flags]) & _ast.NodeFlags.Const) === 0)
       return false;
     const init = this.rustSkipWrappers(declaration.initializer);
     return init !== void 0 && _is.isPropertyAccessExpression.call(void 0, init) && String(init.name.text) === "length";
@@ -60932,13 +61489,13 @@ ${this.getIden(identation)}}`;
     if (this.rustNativeStringLiteralArg(call.arguments[0]) === void 0)
       return false;
     const checker = this.checkerOrUndefined();
-    const type = _optionalChain([checker, 'optionalAccess', _9036 => _9036.getTypeAtLocation, 'call', _9037 => _9037(access.expression)]);
+    const type = _optionalChain([checker, 'optionalAccess', _9080 => _9080.getTypeAtLocation, 'call', _9081 => _9081(access.expression)]);
     if (type === void 0 || !checker.isArrayType(type))
       return false;
-    return this.primitiveKindOfType(_optionalChain([checker, 'access', _9038 => _9038.getTypeArguments, 'optionalCall', _9039 => _9039(type), 'optionalAccess', _9040 => _9040[0]])) === "string";
+    return this.primitiveKindOfType(_optionalChain([checker, 'access', _9082 => _9082.getTypeArguments, 'optionalCall', _9083 => _9083(type), 'optionalAccess', _9084 => _9084[0]])) === "string";
   }
   printVecJoin(node) {
-    const access = _optionalChain([node, 'optionalAccess', _9041 => _9041.expression]);
+    const access = _optionalChain([node, 'optionalAccess', _9085 => _9085.expression]);
     if (!_is.isPropertyAccessExpression.call(void 0, access) || !_is.isIdentifier.call(void 0, access.expression) || this.rustVecLocalDeclarationOf(access.expression) === void 0 || !this.vecJoinUse(access))
       return void 0;
     const literal2 = this.rustNativeStringLiteralArg(node.arguments[0]);
@@ -60949,7 +61506,7 @@ ${this.getIden(identation)}}`;
   // and no `x.push` after it: the clone is the array's final contents, as the aliased box was.
   vecPropertyUse(n) {
     const parent = n.parent;
-    if (_optionalChain([parent, 'optionalAccess', _9042 => _9042.kind]) !== _ast.SyntaxKind.PropertyAssignment || parent.initializer !== n || this.loopBetween(n))
+    if (_optionalChain([parent, 'optionalAccess', _9086 => _9086.kind]) !== _ast.SyntaxKind.PropertyAssignment || parent.initializer !== n || this.loopBetween(n))
       return false;
     const name = String(n.text);
     let statement = parent;
@@ -60961,14 +61518,14 @@ ${this.getIden(identation)}}`;
     const visit = (m) => {
       if (m.kind === _ast.SyntaxKind.Identifier && m.text === name)
         count++;
-      _optionalChain([m, 'access', _9043 => _9043.forEachChild, 'optionalCall', _9044 => _9044(visit)]);
+      _optionalChain([m, 'access', _9087 => _9087.forEachChild, 'optionalCall', _9088 => _9088(visit)]);
     };
     visit(statement);
     if (count !== 1)
       return false;
     const fn = this.rustEnclosingFunction(n);
-    const end = _nullishCoalesce(_optionalChain([n, 'access', _9045 => _9045.getEnd, 'optionalCall', _9046 => _9046()]), () => ( n.end));
-    return !this.rustScopeNameNodes(fn, name).some((m) => m.kind === _ast.SyntaxKind.Identifier && m !== n && (_nullishCoalesce(_optionalChain([m, 'access', _9047 => _9047.getStart, 'optionalCall', _9048 => _9048()]), () => ( m.pos))) >= end && _is.isPropertyAccessExpression.call(void 0, m.parent) && m.parent.expression === m && String(m.parent.name.text) === "push");
+    const end = _nullishCoalesce(_optionalChain([n, 'access', _9089 => _9089.getEnd, 'optionalCall', _9090 => _9090()]), () => ( n.end));
+    return !this.rustScopeNameNodes(fn, name).some((m) => m.kind === _ast.SyntaxKind.Identifier && m !== n && (_nullishCoalesce(_optionalChain([m, 'access', _9091 => _9091.getStart, 'optionalCall', _9092 => _9092()]), () => ( m.pos))) >= end && _is.isPropertyAccessExpression.call(void 0, m.parent) && m.parent.expression === m && String(m.parent.name.text) === "push");
   }
   rustNumericKind(node, depth = 0) {
     const inner = this.rustStripWrappers(node);
@@ -61030,7 +61587,7 @@ ${this.getIden(identation)}}`;
     } catch (e) {
       return void 0;
     }
-    if (_optionalChain([declaration, 'optionalAccess', _9049 => _9049.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body === void 0 || declaration.getSourceFile() !== call.getSourceFile())
+    if (_optionalChain([declaration, 'optionalAccess', _9093 => _9093.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body === void 0 || declaration.getSourceFile() !== call.getSourceFile())
       return void 0;
     const kinds = [];
     const visit = (n) => {
@@ -61038,7 +61595,7 @@ ${this.getIden(identation)}}`;
         return;
       if (_is.isReturnStatement.call(void 0, n))
         kinds.push(n.expression === void 0 ? void 0 : this.rustNumericKind(n.expression, depth + 1));
-      _optionalChain([n, 'access', _9050 => _9050.forEachChild, 'optionalCall', _9051 => _9051(visit)]);
+      _optionalChain([n, 'access', _9094 => _9094.forEachChild, 'optionalCall', _9095 => _9095(visit)]);
     };
     declaration.body.forEachChild(visit);
     return this.rustCombine(kinds) === void 0 ? void 0 : "number";
@@ -61047,7 +61604,7 @@ ${this.getIden(identation)}}`;
     if (this.rustParamShadowOf(ident) !== void 0 || !this.printsValueExpression(ident))
       return void 0;
     const declaration = this.rustSingleLocalDeclaration(ident);
-    if (declaration === void 0 || _optionalChain([declaration, 'access', _9052 => _9052.name, 'optionalAccess', _9053 => _9053.kind]) !== _ast.SyntaxKind.Identifier)
+    if (declaration === void 0 || _optionalChain([declaration, 'access', _9096 => _9096.name, 'optionalAccess', _9097 => _9097.kind]) !== _ast.SyntaxKind.Identifier)
       return void 0;
     const here = this.typeOfNodeIfAny(ident);
     const declared = this.typeOfNodeIfAny(declaration.name);
@@ -61084,7 +61641,7 @@ ${this.getIden(identation)}}`;
           kinds.push(right === void 0 ? void 0 : "number");
         else
           kinds.push(void 0);
-      } else if ((_optionalChain([parent, 'optionalAccess', _9054 => _9054.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _9055 => _9055.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) && (parent.operator === _ast.SyntaxKind.PlusPlusToken || parent.operator === _ast.SyntaxKind.MinusMinusToken)) {
+      } else if ((_optionalChain([parent, 'optionalAccess', _9098 => _9098.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _9099 => _9099.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) && (parent.operator === _ast.SyntaxKind.PlusPlusToken || parent.operator === _ast.SyntaxKind.MinusMinusToken)) {
         continue;
       } else if (parent !== void 0 && (_is.isArrayLiteralExpression.call(void 0, parent) && _is.isBinaryExpression.call(void 0, parent.parent) && parent.parent.left === parent || (_is.isForOfStatement.call(void 0, parent) || _is.isForInStatement.call(void 0, parent)) && parent.initializer === m)) {
         kinds.push(void 0);
@@ -61101,7 +61658,7 @@ ${this.getIden(identation)}}`;
       const parent = m.parent;
       if (m.kind !== _ast.SyntaxKind.Identifier || m === declaration.name)
         return false;
-      return _is.isBinaryExpression.call(void 0, parent) && parent.left === m && rustIsAssignmentOperator(parent.operatorToken.kind) || _optionalChain([parent, 'optionalAccess', _9056 => _9056.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && (parent.operator === _ast.SyntaxKind.PlusPlusToken || parent.operator === _ast.SyntaxKind.MinusMinusToken) || _optionalChain([parent, 'optionalAccess', _9057 => _9057.kind]) === _ast.SyntaxKind.PostfixUnaryExpression;
+      return _is.isBinaryExpression.call(void 0, parent) && parent.left === m && rustIsAssignmentOperator(parent.operatorToken.kind) || _optionalChain([parent, 'optionalAccess', _9100 => _9100.kind]) === _ast.SyntaxKind.PrefixUnaryExpression && (parent.operator === _ast.SyntaxKind.PlusPlusToken || parent.operator === _ast.SyntaxKind.MinusMinusToken) || _optionalChain([parent, 'optionalAccess', _9101 => _9101.kind]) === _ast.SyntaxKind.PostfixUnaryExpression;
     });
   }
   // Both sides Int/Float/Null: `<`/`>` are f64 compares with Null false; `<=`/`>=` also OR in
@@ -61136,7 +61693,9 @@ ${this.getIden(identation)}}`;
       return true;
     if (_is.isBinaryExpression.call(void 0, inner) && inner.operatorToken.kind === _ast.SyntaxKind.PlusToken)
       return this.alwaysStr(inner.left) || this.alwaysStr(inner.right);
-    return _is.isCallExpression.call(void 0, inner) && _is.isPropertyAccessExpression.call(void 0, inner.expression) && inner.expression.name.text === "toString" && (_nullishCoalesce(_optionalChain([inner, 'access', _9058 => _9058.arguments, 'optionalAccess', _9059 => _9059.length]), () => ( 0))) === 0 && this.printsValueExpression(inner.expression.expression);
+    if (_is.isIdentifier.call(void 0, inner) && _optionalChain([this, 'access', _9102 => _9102.rustScalarLocalOf, 'call', _9103 => _9103(inner), 'optionalAccess', _9104 => _9104.kind]) === "str")
+      return true;
+    return _is.isCallExpression.call(void 0, inner) && _is.isPropertyAccessExpression.call(void 0, inner.expression) && inner.expression.name.text === "toString" && (_nullishCoalesce(_optionalChain([inner, 'access', _9105 => _9105.arguments, 'optionalAccess', _9106 => _9106.length]), () => ( 0))) === 0 && this.printsValueExpression(inner.expression.expression);
   }
   concatOperandSafe(node, type) {
     if (this.alwaysStr(node))
@@ -61147,7 +61706,7 @@ ${this.getIden(identation)}}`;
     if (_is.isIdentifier.call(void 0, inner) && (this.rustStringLocalIdentifierIsTyped(inner) || this.rustVecLocalDeclarationOf(inner) !== void 0))
       return false;
     const parts = type === void 0 ? [] : type.flags & _sync.TypeFlags.Union ? _nullishCoalesce(_chunkQYYT7MP4cjs.typeParts.call(void 0, type), () => ( [])) : [type];
-    return parts.length > 0 && parts.every((t) => String(_nullishCoalesce(_nullishCoalesce(_optionalChain([t, 'optionalAccess', _9060 => _9060.symbol, 'optionalAccess', _9061 => _9061.escapedName]), () => ( _optionalChain([t, 'optionalAccess', _9062 => _9062.symbol, 'optionalAccess', _9063 => _9063.name]))), () => ( ""))) !== "Precise");
+    return parts.length > 0 && parts.every((t) => String(_nullishCoalesce(_nullishCoalesce(_optionalChain([t, 'optionalAccess', _9107 => _9107.symbol, 'optionalAccess', _9108 => _9108.escapedName]), () => ( _optionalChain([t, 'optionalAccess', _9109 => _9109.symbol, 'optionalAccess', _9110 => _9110.name]))), () => ( ""))) !== "Precise");
   }
   concatIsAnchored(left, right, leftType, rightType) {
     return this.alwaysStr(left) && this.concatOperandSafe(right, rightType) || this.alwaysStr(right) && this.concatOperandSafe(left, leftType);
@@ -61159,13 +61718,13 @@ ${this.getIden(identation)}}`;
   // `x.trim()`: the helper's `Str` arm is `str::trim`, Null otherwise.
   printTrim(node, receiverText) {
     const receiver = this.strReceiverText(node, receiverText);
-    if (receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _9064 => _9064.arguments, 'optionalAccess', _9065 => _9065.length]), () => ( 0))) !== 0)
+    if (receiver === void 0 || (_nullishCoalesce(_optionalChain([node, 'access', _9111 => _9111.arguments, 'optionalAccess', _9112 => _9112.length]), () => ( 0))) !== 0)
       return void 0;
     return `${receiver}.as_str().map(|__s| Value::Str(__s.trim().to_string().into())).unwrap_or(Value::Null)`;
   }
   // `x.startsWith(p)` / `x.endsWith(p)` with a proven/checker string operand: false unless both are `Str`.
   printAffixTest(node, receiverText, method) {
-    if (_optionalChain([node, 'optionalAccess', _9066 => _9066.arguments, 'optionalAccess', _9067 => _9067.length]) !== 1)
+    if (_optionalChain([node, 'optionalAccess', _9113 => _9113.arguments, 'optionalAccess', _9114 => _9114.length]) !== 1)
       return void 0;
     const receiver = this.strReceiverText(node, receiverText);
     const arg = receiver === void 0 ? void 0 : this.rustStrOperand(node.arguments[0], true);
@@ -61176,7 +61735,7 @@ ${this.getIden(identation)}}`;
   // `x.replace(p, r)` / `x.replaceAll(p, r)`: both helpers replace every occurrence when all three
   // are `Str`, else return the receiver; `p`/`r` are literals or proven/checker string operands.
   printReplace(node, receiverText) {
-    if (_optionalChain([node, 'optionalAccess', _9068 => _9068.arguments, 'optionalAccess', _9069 => _9069.length]) !== 2)
+    if (_optionalChain([node, 'optionalAccess', _9115 => _9115.arguments, 'optionalAccess', _9116 => _9116.length]) !== 2)
       return void 0;
     const receiver = this.strReceiverText(node, receiverText);
     if (receiver === void 0 || !/^[A-Za-z_][A-Za-z0-9_.]*$/.test(receiver))
@@ -61208,7 +61767,7 @@ ${this.getIden(identation)}}`;
   }
   /** `Object.keys/values(x)` in `ts/src/prediction/<id>.ts` on a proven plain local. */
   predictionEnum(node, parsedArg, kind) {
-    const arg = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _9070 => _9070.arguments, 'optionalAccess', _9071 => _9071[0]]));
+    const arg = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _9117 => _9117.arguments, 'optionalAccess', _9118 => _9118[0]]));
     if (arg === void 0 || parsedArg === void 0 || !_is.isIdentifier.call(void 0, arg) || !/\/ts\/src\/prediction\/[^/]+\.ts$/.test(this.provenDictFieldPath(node)) || this.rustPlainReceiver(arg) !== "local")
       return void 0;
     const body = kind === "keys" ? "__m.keys().map(|__k| Value::Str(__k.clone().into())).collect()" : "__m.values().cloned().collect()";
@@ -61287,7 +61846,7 @@ ${this.getIden(identation)}}`;
     if (!this.arrLocal(ident, true))
       return false;
     const declaration = this.rustSingleLocalDeclaration(ident);
-    const initializer = _optionalChain([declaration, 'optionalAccess', _9072 => _9072.initializer]);
+    const initializer = _optionalChain([declaration, 'optionalAccess', _9119 => _9119.initializer]);
     if (initializer === void 0)
       return false;
     return !this.ownedArrayInitializer(initializer);
@@ -61310,20 +61869,20 @@ ${this.getIden(identation)}}`;
   }
   /** `x.length` on an Arr-only local: `get_array_length`'s marker arms need a Dict. */
   arrLength(node, receiver) {
-    const recv = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _9073 => _9073.expression]));
+    const recv = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _9120 => _9120.expression]));
     if (!this.arrLocal(recv, true))
       return void 0;
     return `Value::Int(${receiver}.len() as i64)`;
   }
   /** `x.push(v)` statement on an Arr-only local: `append_to_array`'s cache-push arm needs a Dict. */
   arrPush(node, name, parsedArg) {
-    const recv = _optionalChain([node, 'optionalAccess', _9074 => _9074.expression, 'optionalAccess', _9075 => _9075.expression]);
-    if (name !== void 0 && parsedArg !== void 0 && this.bearerReadLocal(recv) && _optionalChain([node, 'optionalAccess', _9076 => _9076.arguments, 'optionalAccess', _9077 => _9077.length]) === 1 && node.arguments[0].kind !== _ast.SyntaxKind.SpreadElement && _optionalChain([node, 'access', _9078 => _9078.parent, 'optionalAccess', _9079 => _9079.kind]) === _ast.SyntaxKind.ExpressionStatement && name.trim() === this.printNode(recv, 0).trim() && this.rustVecPushShape(node, String(recv.text))) {
+    const recv = _optionalChain([node, 'optionalAccess', _9121 => _9121.expression, 'optionalAccess', _9122 => _9122.expression]);
+    if (name !== void 0 && parsedArg !== void 0 && this.bearerReadLocal(recv) && _optionalChain([node, 'optionalAccess', _9123 => _9123.arguments, 'optionalAccess', _9124 => _9124.length]) === 1 && node.arguments[0].kind !== _ast.SyntaxKind.SpreadElement && _optionalChain([node, 'access', _9125 => _9125.parent, 'optionalAccess', _9126 => _9126.kind]) === _ast.SyntaxKind.ExpressionStatement && name.trim() === this.printNode(recv, 0).trim() && this.rustVecPushShape(node, String(recv.text))) {
       const bareArg = parsedArg.trim();
       const bareValue = _RustTranspiler.cloneIfBareLocal(bareArg);
       return `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${bareValue}); }`;
     }
-    if (name === void 0 || parsedArg === void 0 || _optionalChain([node, 'optionalAccess', _9080 => _9080.arguments, 'optionalAccess', _9081 => _9081.length]) !== 1 || node.arguments[0].kind === _ast.SyntaxKind.SpreadElement || _optionalChain([node, 'access', _9082 => _9082.parent, 'optionalAccess', _9083 => _9083.kind]) !== _ast.SyntaxKind.ExpressionStatement || !this.arrLocal(recv, false) || name.trim() !== this.printNode(recv, 0).trim())
+    if (name === void 0 || parsedArg === void 0 || _optionalChain([node, 'optionalAccess', _9127 => _9127.arguments, 'optionalAccess', _9128 => _9128.length]) !== 1 || node.arguments[0].kind === _ast.SyntaxKind.SpreadElement || _optionalChain([node, 'access', _9129 => _9129.parent, 'optionalAccess', _9130 => _9130.kind]) !== _ast.SyntaxKind.ExpressionStatement || !this.arrLocal(recv, false) || name.trim() !== this.printNode(recv, 0).trim())
       return void 0;
     if (!this.rustVecPushShape(node, String(recv.text)))
       return void 0;
@@ -61337,7 +61896,7 @@ ${this.getIden(identation)}}`;
     if (ident === void 0 || !_is.isIdentifier.call(void 0, ident))
       return false;
     const declaration = this.rustSingleLocalDeclaration(ident);
-    const init = this.rustSkipWrappers(_optionalChain([declaration, 'optionalAccess', _9084 => _9084.initializer]));
+    const init = this.rustSkipWrappers(_optionalChain([declaration, 'optionalAccess', _9131 => _9131.initializer]));
     if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || init === void 0)
       return false;
     if (!_is.isElementAccessExpression.call(void 0, init))
@@ -61354,7 +61913,7 @@ ${this.getIden(identation)}}`;
   boolCallEquality(left, right, op) {
     const l = this.unwrapParensNode(left);
     const r = this.unwrapParensNode(right);
-    const isBoolLit = (n) => _optionalChain([n, 'optionalAccess', _9085 => _9085.kind]) === _ast.SyntaxKind.TrueKeyword || _optionalChain([n, 'optionalAccess', _9086 => _9086.kind]) === _ast.SyntaxKind.FalseKeyword;
+    const isBoolLit = (n) => _optionalChain([n, 'optionalAccess', _9132 => _9132.kind]) === _ast.SyntaxKind.TrueKeyword || _optionalChain([n, 'optionalAccess', _9133 => _9133.kind]) === _ast.SyntaxKind.FalseKeyword;
     if (isBoolLit(l) === isBoolLit(r))
       return void 0;
     const literal2 = isBoolLit(l) ? l : r;
@@ -61407,7 +61966,7 @@ ${this.getIden(identation)}}`;
   // that are the receiver of a non-mutating string method (`currency['id'].toUpperCase ()`).
   /** Base-tier (`ts/src/base/**`) `Object.keys/values(x)` on a proven plain local. */
   baseEnum(node, parsedArg, kind) {
-    const arg = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _9087 => _9087.arguments, 'optionalAccess', _9088 => _9088[0]]));
+    const arg = this.rustStripWrappers(_optionalChain([node, 'optionalAccess', _9134 => _9134.arguments, 'optionalAccess', _9135 => _9135[0]]));
     if (arg === void 0 || parsedArg === void 0 || !_is.isIdentifier.call(void 0, arg) || !_RustTranspiler.RUST_BASE_TIER_FILE.test(this.provenDictFieldPath(node)) || this.rustPlainReceiver(arg) !== "local")
       return void 0;
     const body = kind === "keys" ? "__m.keys().map(|__k| Value::Str(__k.clone().into())).collect()" : "__m.values().cloned().collect()";
@@ -61416,8 +61975,8 @@ ${this.getIden(identation)}}`;
   /** `x['k'].m (…)` with `m` a non-mutating string method on a checker-`string` read: no
    *  ccxt pass rewrites that target (only `.push` / calls of the read itself). */
   pureStringMethodReceiver(node) {
-    const access = _optionalChain([node, 'optionalAccess', _9089 => _9089.parent]);
-    const call = _optionalChain([access, 'optionalAccess', _9090 => _9090.parent]);
+    const access = _optionalChain([node, 'optionalAccess', _9136 => _9136.parent]);
+    const call = _optionalChain([access, 'optionalAccess', _9137 => _9137.parent]);
     if (!_is.isElementAccessExpression.call(void 0, node) || access === void 0 || !_is.isPropertyAccessExpression.call(void 0, access) || access.expression !== node || call === void 0 || !_is.isCallExpression.call(void 0, call) || call.expression !== access || !_RustTranspiler.RUST_PURE_STRING_METHODS.has(String(access.name.text)))
       return false;
     const type = this.typeOfNodeIfAny(node);
@@ -61487,7 +62046,7 @@ ${this.getIden(identation)}}`;
     const narrowed = allowNull || here !== void 0 && this.isStringLikeType(here);
     const nullish = (e) => {
       const n = this.unwrapParensNode(e);
-      return _optionalChain([n, 'optionalAccess', _9091 => _9091.kind]) === _ast.SyntaxKind.NullKeyword || _is.isIdentifier.call(void 0, n) && String(n.text) === "undefined";
+      return _optionalChain([n, 'optionalAccess', _9138 => _9138.kind]) === _ast.SyntaxKind.NullKeyword || _is.isIdentifier.call(void 0, n) && String(n.text) === "undefined";
     };
     const local = (e) => {
       const n = this.unwrapParensNode(e);
@@ -61502,7 +62061,7 @@ ${this.getIden(identation)}}`;
         if (this.rustEnclosingFunction(n) !== fn || this.rustWriteTarget(n))
           return false;
         const parent = n.parent;
-        if ((_optionalChain([parent, 'optionalAccess', _9092 => _9092.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _9093 => _9093.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) && parent.operator !== _ast.SyntaxKind.ExclamationToken)
+        if ((_optionalChain([parent, 'optionalAccess', _9139 => _9139.kind]) === _ast.SyntaxKind.PrefixUnaryExpression || _optionalChain([parent, 'optionalAccess', _9140 => _9140.kind]) === _ast.SyntaxKind.PostfixUnaryExpression) && parent.operator !== _ast.SyntaxKind.ExclamationToken)
           return false;
         if (!_is.isBinaryExpression.call(void 0, parent) || parent.left !== n || !rustIsAssignmentOperator(parent.operatorToken.kind))
           return true;
@@ -61679,7 +62238,7 @@ ${this.getIden(identation)}}`;
     if (!_is.isIdentifier.call(void 0, inner))
       return false;
     const declaration = this.rustSingleLocalDeclaration(inner);
-    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || !_is.isIdentifier.call(void 0, declaration.name) || declaration.initializer === void 0 || (_optionalChain([declaration, 'access', _9094 => _9094.parent, 'optionalAccess', _9095 => _9095.flags]) & _ast.NodeFlags.Const) === 0)
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || !_is.isIdentifier.call(void 0, declaration.name) || declaration.initializer === void 0 || (_optionalChain([declaration, 'access', _9141 => _9141.parent, 'optionalAccess', _9142 => _9142.flags]) & _ast.NodeFlags.Const) === 0)
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0)
@@ -61709,7 +62268,7 @@ ${this.getIden(identation)}}`;
     } catch (e) {
       return false;
     }
-    if (_optionalChain([declaration, 'optionalAccess', _9096 => _9096.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body === void 0 || declaration.getSourceFile() !== call.getSourceFile() || _RustTranspiler.RUST_BASE_TIER_FILE.test(this.provenDictFieldPath(call)))
+    if (_optionalChain([declaration, 'optionalAccess', _9143 => _9143.kind]) !== _ast.SyntaxKind.MethodDeclaration || declaration.body === void 0 || declaration.getSourceFile() !== call.getSourceFile() || _RustTranspiler.RUST_BASE_TIER_FILE.test(this.provenDictFieldPath(call)))
       return false;
     let ok = true;
     const visit = (n) => {
@@ -61717,7 +62276,7 @@ ${this.getIden(identation)}}`;
         return;
       if (_is.isReturnStatement.call(void 0, n) && n.expression !== void 0 && !this.dictFieldStrOrNull(n.expression, key, depth + 1))
         ok = false;
-      _optionalChain([n, 'access', _9097 => _9097.forEachChild, 'optionalCall', _9098 => _9098(visit)]);
+      _optionalChain([n, 'access', _9144 => _9144.forEachChild, 'optionalCall', _9145 => _9145(visit)]);
     };
     declaration.body.forEachChild(visit);
     return ok;
@@ -62105,6 +62664,22 @@ _RustTranspiler.RUST_BASE_SCALAR_RETURNS = {
   milliseconds: "oint",
   seconds: "oint"
 };
+// Expression-shaped scalar locals: aliases, ternaries, arithmetic/comparisons over typed operands,
+// string-method and `.length` results of typed strings, and `Precise.string*` results.
+_RustTranspiler.RUST_SCALAR_ARITH_OPS = /* @__PURE__ */ new Set([
+  _ast.SyntaxKind.PlusToken,
+  _ast.SyntaxKind.MinusToken,
+  _ast.SyntaxKind.AsteriskToken,
+  _ast.SyntaxKind.SlashToken,
+  _ast.SyntaxKind.LessThanToken,
+  _ast.SyntaxKind.LessThanEqualsToken,
+  _ast.SyntaxKind.GreaterThanToken,
+  _ast.SyntaxKind.GreaterThanEqualsToken,
+  _ast.SyntaxKind.EqualsEqualsToken,
+  _ast.SyntaxKind.EqualsEqualsEqualsToken,
+  _ast.SyntaxKind.ExclamationEqualsToken,
+  _ast.SyntaxKind.ExclamationEqualsEqualsToken
+]);
 // `ts/src/base/**` — the shared `Exchange` / `PredictionExchange` classes
 // (the transpiler synthesises variants like `.__ExchangeNoOverloads.ts`).
 _RustTranspiler.RUST_BASE_TIER_FILE = /ts[\\/]src[\\/]base[\\/]/;
@@ -62828,7 +63403,7 @@ var CppTranspiler = class extends BaseTranspiler {
     const constructorBody = this.printFunctionBody(node, identation);
     let superCallParams = "";
     let hasSuperCall = false;
-    _optionalChain([node, 'access', _9099 => _9099.body, 'optionalAccess', _9100 => _9100.statements, 'access', _9101 => _9101.forEach, 'call', _9102 => _9102((statement) => {
+    _optionalChain([node, 'access', _9146 => _9146.body, 'optionalAccess', _9147 => _9147.statements, 'access', _9148 => _9148.forEach, 'call', _9149 => _9149((statement) => {
       if (_is.isExpressionStatement.call(void 0, statement)) {
         const expression = statement.expression;
         if (_is.isCallExpression.call(void 0, expression)) {
@@ -62989,7 +63564,7 @@ var CppTranspiler = class extends BaseTranspiler {
   }
   printVariableDeclarationList(node, identation) {
     const declaration = node.declarations[0];
-    if (_optionalChain([declaration, 'optionalAccess', _9103 => _9103.name, 'access', _9104 => _9104.kind]) === _ast.SyntaxKind.ArrayBindingPattern) {
+    if (_optionalChain([declaration, 'optionalAccess', _9150 => _9150.name, 'access', _9151 => _9151.kind]) === _ast.SyntaxKind.ArrayBindingPattern) {
       const arrayBindingPattern = declaration.name;
       const arrayBindingPatternElements = arrayBindingPattern.elements;
       const parsedArrayBindingElements = arrayBindingPatternElements.map((e) => this.printNode(e.name, 0));
@@ -63242,14 +63817,14 @@ var CppTranspiler = class extends BaseTranspiler {
     }
     if (node.expression.kind === _ast.SyntaxKind.NewExpression) {
       const expression = node.expression;
-      const argumentsExp = _nullishCoalesce(_optionalChain([expression, 'optionalAccess', _9105 => _9105.arguments]), () => ( []));
+      const argumentsExp = _nullishCoalesce(_optionalChain([expression, 'optionalAccess', _9152 => _9152.arguments]), () => ( []));
       const parsedArg = _nullishCoalesce(argumentsExp.map((n) => this.printNode(n, 0)).join(", "), () => ( ""));
       const newExpression = this.printNode(expression.expression, 0);
       if (expression.expression.kind === _ast.SyntaxKind.Identifier) {
         const id = expression.expression;
         const symbol = this.getChecker().getSymbolAtLocation(expression.expression);
         if (symbol) {
-          const declarations = (_nullishCoalesce(_optionalChain([this, 'access', _9106 => _9106.getChecker, 'call', _9107 => _9107(), 'access', _9108 => _9108.getDeclaredTypeOfSymbol, 'call', _9109 => _9109(symbol), 'access', _9110 => _9110.getSymbol, 'call', _9111 => _9111(), 'optionalAccess', _9112 => _9112.declarations]), () => ( []))).map((d) => d.resolve());
+          const declarations = (_nullishCoalesce(_optionalChain([this, 'access', _9153 => _9153.getChecker, 'call', _9154 => _9154(), 'access', _9155 => _9155.getDeclaredTypeOfSymbol, 'call', _9156 => _9156(symbol), 'access', _9157 => _9157.getSymbol, 'call', _9158 => _9158(), 'optionalAccess', _9159 => _9159.declarations]), () => ( []))).map((d) => d.resolve());
           const isClassDeclaration5 = declarations.find((l) => l.kind === _ast.SyntaxKind.InterfaceDeclaration || l.kind === _ast.SyntaxKind.ClassDeclaration);
           if (isClassDeclaration5) {
             return this.getIden(identation) + `${this.THROW_TOKEN} ${id.text}(toString(${parsedArg}))${this.LINE_TERMINATOR}`;
@@ -63364,7 +63939,7 @@ function memoizePairMethod(owner, name) {
     if (args.length !== 2 || a === null || typeof a !== "object" || b === null || typeof b !== "object") {
       return original.apply(owner, args);
     }
-    const cached = _optionalChain([cache, 'access', _9113 => _9113.get, 'call', _9114 => _9114(a), 'optionalAccess', _9115 => _9115.get, 'call', _9116 => _9116(b)]);
+    const cached = _optionalChain([cache, 'access', _9160 => _9160.get, 'call', _9161 => _9161(a), 'optionalAccess', _9162 => _9162.get, 'call', _9163 => _9163(b)]);
     if (cached !== void 0) {
       return cached === UNDEFINED_SENTINEL ? void 0 : cached;
     }
@@ -63404,7 +63979,7 @@ function memoizeUnaryMethod(owner, name) {
 }
 function memoizeBinaryKindMethod(owner, name) {
   const unary = owner[name];
-  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _9117 => _9117.original]), () => ( unary));
+  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _9164 => _9164.original]), () => ( unary));
   if (typeof original !== "function") {
     return;
   }
@@ -63454,17 +64029,17 @@ function prefetchChecker(checker, root, options = {}) {
   const typeNodes = [], symbolNodes = [], callNodes = [];
   const visit = (node) => {
     const kind = node.kind;
-    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _9118 => _9118.has, 'optionalCall', _9119 => _9119(node)]))
+    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _9165 => _9165.has, 'optionalCall', _9166 => _9166(node)]))
       typeNodes.push(node);
-    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _9120 => _9120.has, 'optionalCall', _9121 => _9121(node)]))
+    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _9167 => _9167.has, 'optionalCall', _9168 => _9168(node)]))
       symbolNodes.push(node);
-    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _9122 => _9122.has, 'optionalCall', _9123 => _9123(node)]))
+    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _9169 => _9169.has, 'optionalCall', _9170 => _9170(node)]))
       callNodes.push(node);
     node.forEachChild(visit);
   };
   visit(root);
   const run = (nodes, fn) => {
-    if (_optionalChain([fn, 'optionalAccess', _9124 => _9124.seed]) === void 0 || fn.original === void 0)
+    if (_optionalChain([fn, 'optionalAccess', _9171 => _9171.seed]) === void 0 || fn.original === void 0)
       return;
     for (let i = 0; i < nodes.length; i += PREFETCH_BATCH) {
       const chunk = nodes.slice(i, i + PREFETCH_BATCH);
@@ -63480,7 +64055,7 @@ function prefetchChecker(checker, root, options = {}) {
   run(typeNodes, getType);
   run(symbolNodes, getSymbol);
   const api = checker.__astTranspilerApi;
-  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _9125 => _9125.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _9126 => _9126.original, 'optionalAccess', _9127 => _9127.gen]) !== void 0) {
+  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _9172 => _9172.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _9173 => _9173.original, 'optionalAccess', _9174 => _9174.gen]) !== void 0) {
     for (let i = 0; i < callNodes.length; i += PREFETCH_BATCH) {
       const chunk = callNodes.slice(i, i + PREFETCH_BATCH);
       const gens = chunk.map((n) => {
@@ -63507,7 +64082,7 @@ function prefetchChecker(checker, root, options = {}) {
 function prefetchDeclarationSignatures(checker, api, root) {
   const getSigDecl = checker.getSignatureFromDeclaration;
   const getTypeOfSymbolAtLocation = checker.getTypeOfSymbolAtLocation;
-  if (_optionalChain([getSigDecl, 'optionalAccess', _9128 => _9128.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _9129 => _9129.original, 'optionalAccess', _9130 => _9130.gen]) === void 0)
+  if (_optionalChain([getSigDecl, 'optionalAccess', _9175 => _9175.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _9176 => _9176.original, 'optionalAccess', _9177 => _9177.gen]) === void 0)
     return;
   const decls = [];
   const visit = (node) => {
@@ -63533,9 +64108,9 @@ function prefetchDeclarationSignatures(checker, api, root) {
     }())));
     api.batch(...chunk.map((decl) => safe(function* () {
       const type = checker.getTypeAtLocation(decl);
-      const symbol = _optionalChain([type, 'optionalAccess', _9131 => _9131.getSymbol, 'optionalAccess', _9132 => _9132.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
-      const location = _optionalChain([symbol, 'optionalAccess', _9133 => _9133.valueDeclaration, 'optionalAccess', _9134 => _9134.resolve, 'call', _9135 => _9135()]);
-      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _9136 => _9136.seed2]) === void 0)
+      const symbol = _optionalChain([type, 'optionalAccess', _9178 => _9178.getSymbol, 'optionalAccess', _9179 => _9179.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
+      const location = _optionalChain([symbol, 'optionalAccess', _9180 => _9180.valueDeclaration, 'optionalAccess', _9181 => _9181.resolve, 'call', _9182 => _9182()]);
+      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _9183 => _9183.seed2]) === void 0)
         return;
       const symbolType = yield* getTypeOfSymbolAtLocation.original.gen(symbol, location);
       getTypeOfSymbolAtLocation.seed2(symbol, location, symbolType);
@@ -63627,7 +64202,7 @@ var Transpiler = class _Transpiler {
     const src = _nullishCoalesce(program.getSourceFile(fileName), () => ( program.getSourceFile(path3.resolve(fileName))));
     const previous = this.snapshot;
     this.snapshot = snapshot;
-    _optionalChain([previous, 'optionalAccess', _9137 => _9137.dispose, 'call', _9138 => _9138()]);
+    _optionalChain([previous, 'optionalAccess', _9184 => _9184.dispose, 'call', _9185 => _9185()]);
     return this.setContext({ src, checker, program });
   }
   createProgramInMemoryAndSetContext(content) {
@@ -63651,7 +64226,7 @@ var Transpiler = class _Transpiler {
   // long as the file's text on disk still equals the snapshot's. Replaces any
   // previous shared program; pass [] to drop it.
   setSharedProgram(paths) {
-    _optionalChain([this, 'access', _9139 => _9139.programCache, 'access', _9140 => _9140.shared, 'optionalAccess', _9141 => _9141.snapshot, 'access', _9142 => _9142.dispose, 'call', _9143 => _9143()]);
+    _optionalChain([this, 'access', _9186 => _9186.programCache, 'access', _9187 => _9187.shared, 'optionalAccess', _9188 => _9188.snapshot, 'access', _9189 => _9189.dispose, 'call', _9190 => _9190()]);
     this.programCache.shared = void 0;
     if (paths.length === 0) {
       return;
