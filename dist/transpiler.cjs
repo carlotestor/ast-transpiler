@@ -54581,7 +54581,7 @@ ${i1}}`;
     const call = boxed === void 0 ? void 0 : this.peelValueBox(boxed, "crate::types::IntoRaw::into_raw(");
     if (call === void 0)
       return void 0;
-    return `${indent}let mut ${varName}: crate::types::Market = match ${call} { Ok(__mk) => __mk, Err(__e) => panic!("{}", __e) }`;
+    return `${indent}let mut ${varName}: crate::types::Market = (match ${call} { Ok(__mk) => __mk, Err(__e) => panic!("{}", __e) })`;
   }
   /** A read off a struct local: a listed field natively, any other key off `raw`; `asBool` for a condition slot. */
   printTypedMarketRead(node, asBool = false) {

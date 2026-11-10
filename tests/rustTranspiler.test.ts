@@ -24,6 +24,10 @@ const rustInlineFixtures: Record<string, Record<string, string>> = {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Market { symbol: string }\nexport interface Dictionary<T> { [key: string]: T }\nexport default class Exchange {\n    markets: Dict = {};\n    options: Dict = {};\n    async loadMarkets (reload: boolean = false, params: object = {}): Promise<Dictionary<Market>> {\n        return this.markets;\n    }\n    market (symbol: Str): Market {\n        return this.markets[symbol];\n    }\n    setSandboxMode (enabled: boolean) {\n        this.options['sandboxMode'] = enabled;\n    }\n}\n",
   "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Market, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    override async loadMarkets (reload = false, params: Dict = {}) {\n        const markets = await super.loadMarkets (reload, params);\n        return markets;\n    }\n    override market (symbol: Str): Market {\n        return this.markets[symbol];\n    }\n    override setSandboxMode (enable: boolean) {\n        this.options['sandboxMode'] = enable;\n    }\n    async fetchSomething (symbol: string, params = {}) {\n        await this.loadMarkets ();\n        await this.loadMarkets (true);\n        const market = this.market (symbol);\n        this.setSandboxMode (true);\n        return market;\n    }\n}\n"
  },
+ "typed-market-local": {
+  "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Market { id: Str; symbol: string; swap: boolean; linear: boolean | undefined; info: any }\nexport default class Exchange {\n    markets: Dict = {};\n    market (symbol: Str): Market {\n        return this.markets[symbol];\n    }\n    safeString (d: any, k: any): Str {\n        return d[k];\n    }\n    hold (m: any): any {\n        return m;\n    }\n}\n",
+  "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fetchOne (symbol: string, params: Dict = {}) {\n        const market = this.market (symbol);\n        const request: Dict = { 'pair': market['id'] };\n        if (market['swap'] || market['linear']) {\n            request['info'] = market['info'];\n        }\n        request['s'] = this.safeString (market, 'symbol');\n        return this.hold (market);\n    }\n    fetchTwo (symbol: string) {\n        let market = this.market (symbol);\n        market = this.market ('x');\n        return market['id'];\n    }\n}\n"
+ },
  "typed-unified-r4": {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Order { id: string }\nexport interface CancellationRequest { id: string; symbol: string }\nexport default class Exchange {\n}\n",
   "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { CancellationRequest, Dict, Order, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async cancelOrdersForSymbols (orders: CancellationRequest[], params: Dict = {}): Promise<Order[]> {\n        return [];\n    }\n    async cancelUnifiedOrder (order: Order, params: Dict = {}): Promise<Order> {\n        const orders = await this.cancelOrdersForSymbols ([ order ], params);\n        return orders[0];\n    }\n    async fetchOrderStatus (id: string, symbol: Str = undefined, params: Dict = {}): Promise<Str> {\n        return 'open';\n    }\n}\n"
@@ -6533,5 +6537,26 @@ describe('rust typed setup methods (loadMarkets / market / setSandboxMode)', () 
         expect(output).toContain('crate::types::IntoRaw::into_raw(self.market(symbol.as_str().unwrap_or_default()))');
         expect(output).toContain('crate::types::IntoRaw::into_raw(self.set_sandbox_mode(true))');
         expect(output).not.toContain('self.set_sandbox_mode(true).await');
+    });
+});
+
+describe('rust typed Market locals (ral-d)', () => {
+    let output = '';
+    beforeAll(() => {
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        output = typed.transpileRustByPath(path.join (rustFixtureRoot, 'typed-market-local', 'ts/src/venue.ts')).content;
+    });
+
+    test('a read-only market local keeps the struct and reads listed fields natively', () => {
+        expect(output).toContain('let mut market: crate::types::Market = (match self.market(');
+        expect(output).toContain('Value::from((market).id.clone())');
+        expect(output).toContain('(market).swap || (market.linear == Some(true))'.replace('market.linear', '(market).linear'));
+        expect(output).toContain('(market).raw.as_map().and_then(|__m| __m.get("info"))');
+        expect(output).toContain('Value::from((market).symbol.clone())');
+        expect(output).toContain('self.hold((market).raw.clone())');
+    });
+
+    test('a reassigned market local stays a Value', () => {
+        expect(output).toContain('let mut market: Value = crate::types::IntoRaw::into_raw(self.market(');
     });
 });
