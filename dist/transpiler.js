@@ -56903,6 +56903,10 @@ ${idn}}`;
     const marketFlag = this.printTypedMarketRead(this.unwrapParens(node), true);
     if (marketFlag !== void 0)
       return idn + marketFlag;
+    const marketNot = this.unwrapParens(node);
+    if (marketNot !== node && marketNot?.kind === SyntaxKind7.PrefixUnaryExpression && marketNot.operator === SyntaxKind7.ExclamationToken && this.printTypedMarketRead(this.unwrapParens(marketNot.operand), true) !== void 0) {
+      return idn + this.printPrefixUnaryExpression(marketNot, 0);
+    }
     if (this.rustCallPrintsBool(node))
       return idn + this.printNode(node, 0);
     const nativeTruthiness = this.printNativeTruthiness(node);
@@ -57014,6 +57018,8 @@ ${idn}}`;
       return this.hasNativeComparisonOperand(inner.operand);
     }
     if (this.nativeEqualityText(inner) !== void 0)
+      return true;
+    if (this.printTypedMarketRead(inner, true) !== void 0)
       return true;
     if (inner.kind === SyntaxKind7.BinaryExpression && this.nativeIndexOfLiteralTestText(inner.operatorToken.kind, inner.left, inner.right) !== void 0)
       return true;

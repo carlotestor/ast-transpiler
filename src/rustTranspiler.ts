@@ -6656,6 +6656,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (nativeBoolParam !== undefined) return idn + nativeBoolParam;
         const marketFlag = this.printTypedMarketRead(this.unwrapParens(node), true);
         if (marketFlag !== undefined) return idn + marketFlag;
+        const marketNot: any = this.unwrapParens(node);
+        if (marketNot !== node && marketNot?.kind === SyntaxKind.PrefixUnaryExpression && marketNot.operator === SyntaxKind.ExclamationToken
+            && this.printTypedMarketRead(this.unwrapParens(marketNot.operand), true) !== undefined) {
+            return idn + this.printPrefixUnaryExpression(marketNot, 0); // ral-d: `(!m.flag)` is a bool
+        }
         // A call to a hand-written `-> bool` fn is already a Rust bool.
         if (this.rustCallPrintsBool(node)) return idn + this.printNode(node, 0);
         // Checker-proved boolean Value (safe_bool / get_value): native matches!.
@@ -6766,6 +6771,7 @@ export class RustTranspiler extends BaseTranspiler {
             return this.hasNativeComparisonOperand(inner.operand);
         }
         if (this.nativeEqualityText(inner) !== undefined) return true;
+        if (this.printTypedMarketRead(inner, true) !== undefined) return true; // ral-d: a typed market flag is a bool
         if (inner.kind === SyntaxKind.BinaryExpression && this.nativeIndexOfLiteralTestText(inner.operatorToken.kind, inner.left, inner.right) !== undefined) return true;
         return inner.kind === SyntaxKind.BinaryExpression && this.isLogicalOp(inner.operatorToken.kind) &&
             (this.hasNativeComparisonOperand(inner.left) || this.hasNativeComparisonOperand(inner.right));
