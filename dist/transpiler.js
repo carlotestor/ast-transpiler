@@ -51351,6 +51351,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
      *  `-> Option<String>`; undefined otherwise (no proof → keep the box). */
     // call node -> resolved signature's declaration (null: none); a handle resolve per call is JS-heavy
     this.rustCallDeclarations = /* @__PURE__ */ new WeakMap();
+    this.rustMarketLocalDecisions = /* @__PURE__ */ new Map();
     // ── closure-free dict reads / membership ──
     // A read keyed by a Str place prints `(if let (Some(__m), Some(__k)) = (M.as_map(), K.as_str()) { .. })`; `k in D`
     // on a proven Dict prints `D.as_map().is_some_and(..)`. Each site picks helper/closure/closure-free by line length.
@@ -51524,6 +51525,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   printIdentifier(node) {
     const name = String(node.text);
+    const marketValue = this.printTypedMarketValueUse(node);
+    if (marketValue !== void 0)
+      return marketValue;
     if (_RustTranspiler.RUST_NAME_VALUE_IMPORTS.has(name) && this.rustIsImportedValueName(node)) {
       return `Value::Str(${this.quotedStringLiteral(name)}.into())`;
     }
@@ -52839,6 +52843,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (declaration.initializer.kind === SyntaxKind7.NewExpression) {
       return `${indent}let mut ${varName} = ${parsedValue}`;
     }
+    const typedMarket = this.printTypedMarketLocal(declaration, indent, varName);
+    if (typedMarket !== void 0)
+      return typedMarket;
     const readBearer = node.declarations.length === 1 ? this.rustReadBearerKindOfDeclaration(declaration) : false;
     if (readBearer === "list") {
       return `${indent}let mut ${varName}: Vec<Value> = ${parsedValue}.as_array().cloned().unwrap_or_default()`;
@@ -54465,6 +54472,148 @@ ${i1}}`;
     const receiver = testCore ? this.printNode(callee.expression, 0) : "self";
     return `${testCore ? "ccxt" : "crate"}::types::IntoRaw::into_raw(${receiver}.${viaSuper ? "super_" : ""}${this.toSnakeCaseName(callee.name.text)}(${printed.join(", ")})${isAsync ? ".await" : ""})`;
   }
+  /** `this.market (x)` printed through the typed core. */
+  rustIsTypedMarketCall(node) {
+    const call = this.rustSkipWrappers(node);
+    return call !== void 0 && isCallExpression6(call) && isPropertyAccessExpression3(call.expression) && call.expression.expression.kind === SyntaxKind7.ThisKeyword && call.expression.name.text === "market" && call.arguments.length === 1 && this.rustTypedUnified.has("market");
+  }
+  /** The literal key of a struct-local read `m['k']` / `m.k` (not written, not called). */
+  rustMarketReadKey(n) {
+    const parent = n.parent;
+    if (parent !== void 0 && isCallExpression6(parent) && parent.arguments[0] === n && this.rustMarketSafeReadField(parent) !== void 0) {
+      return this.rustMarketSafeReadField(parent);
+    }
+    if (parent === void 0 || this.isNativeWriteTargetBase(n))
+      return void 0;
+    let key;
+    if (isElementAccessExpression4(parent) && parent.expression === n && isStringLiteralLikeNode4(parent.argumentExpression))
+      key = String(parent.argumentExpression.text);
+    else if (isPropertyAccessExpression3(parent) && parent.expression === n && isIdentifier3(parent.name))
+      key = String(parent.name.text);
+    if (key === void 0 || key === "length")
+      return void 0;
+    const outer = parent.parent;
+    if (outer !== void 0 && (isCallExpression6(outer) || isPropertyAccessExpression3(outer) || isElementAccessExpression4(outer)) && outer.expression === parent)
+      return void 0;
+    if (outer !== void 0 && (isDeleteExpression2(outer) || isBinaryExpression5(outer) && outer.left === parent && rustIsAssignmentOperator(outer.operatorToken.kind)))
+      return void 0;
+    return key;
+  }
+  /** The listed field a `this.safeString|safeBool (m, 'k')` call reads (no default, or a `false` default for a flag). */
+  rustMarketSafeReadField(call) {
+    const callee = call.expression;
+    if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword)
+      return void 0;
+    const name = String(callee.name.text);
+    if (!_RustTranspiler.RUST_MARKET_SAFE_READERS.has(name) || !isStringLiteralLikeNode4(call.arguments[1]))
+      return void 0;
+    const key = String(call.arguments[1].text);
+    if (name === "safeString" && call.arguments.length === 2 && _RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== void 0)
+      return key;
+    if (name === "safeBool" && (_RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key) || _RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key)) && (call.arguments.length === 2 || call.arguments.length === 3 && call.arguments[2].kind === SyntaxKind7.FalseKeyword))
+      return key;
+    return void 0;
+  }
+  /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
+  rustMarketValueUse(n) {
+    const parent = n.parent;
+    if (parent === void 0)
+      return false;
+    if (isCallExpression6(parent))
+      return parent.expression !== n && Array.from(parent.arguments).includes(n);
+    if (isArrayLiteralExpression4(parent))
+      return true;
+    if (parent.kind === SyntaxKind7.PropertyAssignment)
+      return parent.initializer === n;
+    return isReturnStatement4(parent);
+  }
+  rustMarketLocalIsTyped(declaration) {
+    if (declaration?.kind !== SyntaxKind7.VariableDeclaration)
+      return false;
+    let decision = this.rustMarketLocalDecisions.get(declaration);
+    if (decision === void 0) {
+      this.rustMarketLocalDecisions.set(declaration, false);
+      try {
+        decision = this.rustMarketLocalIsTypedUncached(declaration);
+      } catch (e) {
+        decision = false;
+      }
+      this.rustMarketLocalDecisions.set(declaration, decision);
+    }
+    return decision;
+  }
+  rustMarketLocalIsTypedUncached(declaration) {
+    if (!isIdentifier3(declaration.name) || declaration.parent?.declarations?.length !== 1)
+      return false;
+    if (!this.rustIsTypedMarketCall(declaration.initializer))
+      return false;
+    const file = String(declaration.getSourceFile?.()?.fileName ?? "");
+    if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file))
+      return false;
+    const scope = this.rustEnclosingFunction(declaration);
+    let fieldReads = 0;
+    const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
+      if (this.rustEnclosingFunction(n) !== scope)
+        return false;
+      const key = this.rustMarketReadKey(n);
+      if (key !== void 0) {
+        if (_RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== void 0 || _RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key) || _RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key))
+          fieldReads++;
+        return true;
+      }
+      return this.rustMarketValueUse(n);
+    });
+    return ok && fieldReads > 0;
+  }
+  /** The struct local behind an identifier use (never the declaration name). */
+  rustTypedMarketLocalOf(node) {
+    if (node === void 0 || !isIdentifier3(node))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration === void 0 || declaration.name === node || !this.rustMarketLocalIsTyped(declaration))
+      return void 0;
+    return declaration;
+  }
+  /** `let mut market: crate::types::Market = …` — the typed call, its `Err` re-raised as the untyped call did. */
+  printTypedMarketLocal(declaration, indent, varName) {
+    if (!this.rustMarketLocalIsTyped(declaration))
+      return void 0;
+    const boxed = this.printTypedUnifiedCall(this.rustSkipWrappers(declaration.initializer));
+    const call = boxed === void 0 ? void 0 : this.peelValueBox(boxed, "crate::types::IntoRaw::into_raw(");
+    if (call === void 0)
+      return void 0;
+    return `${indent}let mut ${varName}: crate::types::Market = match ${call} { Ok(__mk) => __mk, Err(__e) => panic!("{}", __e) }`;
+  }
+  /** A read off a struct local: a listed field natively, any other key off `raw`; `asBool` for a condition slot. */
+  printTypedMarketRead(node, asBool = false) {
+    const receiver = isElementAccessExpression4(node) || isPropertyAccessExpression3(node) ? node.expression : node !== void 0 && isCallExpression6(node) && this.rustMarketSafeReadField(node) !== void 0 ? node.arguments[0] : void 0;
+    const declaration = this.rustTypedMarketLocalOf(receiver);
+    if (declaration === void 0)
+      return void 0;
+    const key = this.rustMarketReadKey(receiver);
+    if (key === void 0)
+      return void 0;
+    const recv = `(${this.printNode(declaration.name, 0)})`;
+    if (_RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key))
+      return asBool ? `${recv}.${key}` : `Value::Bool(${recv}.${key})`;
+    if (_RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key) && (asBool || isCallExpression6(node) && node.arguments.length === 3)) {
+      return asBool ? `(${recv}.${key} == Some(true))` : `Value::Bool(${recv}.${key} == Some(true))`;
+    }
+    if (asBool)
+      return void 0;
+    const field = _RustTranspiler.RUST_MARKET_STR_FIELDS[key];
+    if (field !== void 0)
+      return `Value::from(${recv}.${field}.clone())`;
+    return `${recv}.raw.as_map().and_then(|__m| __m.get(${JSON.stringify(key)})).cloned().unwrap_or(Value::Null)`;
+  }
+  /** A whole-value hand-off of a struct local: the `Value` the untyped local held. */
+  printTypedMarketValueUse(node) {
+    const declaration = this.rustTypedMarketLocalOf(node);
+    if (declaration === void 0 || this.rustMarketReadKey(node) !== void 0)
+      return void 0;
+    return `(${String(node.text)}).raw.clone()`;
+  }
+  // ── end ral-d ──
   // A literal argument of a typed unified call printed in the parameter's native type (`'market'` -> `"market"`).
   static rustTypedLiteralArg(arg, rustType) {
     const optional = rustType.startsWith("Option<");
@@ -54779,6 +54928,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   }
   printCallExpression(node, identation) {
     const expression = node.expression;
+    const marketRead = this.printTypedMarketRead(node);
+    if (marketRead !== void 0)
+      return marketRead;
     const shadowSafeRead = this.printShadowSafeReadCall(node);
     if (shadowSafeRead !== void 0)
       return shadowSafeRead;
@@ -54963,6 +55115,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     return `crate::value::get_value_k(&${receiverText}, ${this.quotedStringLiteral(member)})`;
   }
   printPropertyAccessExpression(node, identation) {
+    const marketRead = this.printTypedMarketRead(node);
+    if (marketRead !== void 0)
+      return marketRead;
     const transformedProperty = this.transformPropertyAcessExpressionIfNeeded(node);
     if (transformedProperty) {
       return this.getIden(identation) + transformedProperty;
@@ -56549,6 +56704,9 @@ ${ind}let ${view}: &${map} = &${arc};
     return this.quotedStringLiteral(text);
   }
   printElementAccessExpression(node, identation) {
+    const marketRead = this.printTypedMarketRead(node);
+    if (marketRead !== void 0)
+      return marketRead;
     const special = this.printElementAccessExpressionExceptionIfAny(node);
     if (special)
       return special;
@@ -56740,6 +56898,9 @@ ${idn}}`;
     const nativeBoolParam = this.printNativeBoolParamCondition(node);
     if (nativeBoolParam !== void 0)
       return idn + nativeBoolParam;
+    const marketFlag = this.printTypedMarketRead(this.unwrapParens(node), true);
+    if (marketFlag !== void 0)
+      return idn + marketFlag;
     if (this.rustCallPrintsBool(node))
       return idn + this.printNode(node, 0);
     const nativeTruthiness = this.printNativeTruthiness(node);
@@ -61035,6 +61196,21 @@ _RustTranspiler.RUST_TYPED_RETURNS = {
   unWatchTrades: "crate::Value",
   unWatchTradesForSymbols: "crate::Value"
 };
+// ── ral-d: typed-call result locals (`const market = this.market (symbol)`) ──
+// The typed core returns `crate::types::Market`; a local whose every use is a literal-key read or a
+// whole-value hand-off keeps the struct: listed fields read natively, any other key reads the struct's
+// `raw`, and a hand-off to a `Value` slot passes `raw` (the payload `IntoRaw` would have produced).
+_RustTranspiler.RUST_MARKET_STR_FIELDS = {
+  id: "id",
+  symbol: "symbol",
+  base: "base",
+  quote: "quote"
+};
+// fields every loaded market carries (`from_value` defaults only a missing key, which a market never lacks)
+_RustTranspiler.RUST_MARKET_BOOL_FIELDS = /* @__PURE__ */ new Set(["spot", "margin", "swap", "future", "option", "contract"]);
+// nullable flags (`Option<bool>`): only a truthiness test reads them natively
+_RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS = /* @__PURE__ */ new Set(["linear", "inverse"]);
+_RustTranspiler.RUST_MARKET_SAFE_READERS = /* @__PURE__ */ new Set(["safeString", "safeBool"]);
 // Hand-written runtime methods (`exchange_stubs.rs`, `exchange.rs`, the ws `Client`/`Future` handles) take a
 // fixed number of positional `Value`s plus `optional_args: &[Value]`; their TS declarations (field aliases,
 // above-marker bodies) do not carry that arity, so it is listed here by Rust name.

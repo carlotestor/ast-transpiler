@@ -474,6 +474,29 @@ export declare class RustTranspiler extends BaseTranspiler {
     } | undefined;
     rustTypedBody(node: any, typed: any, identation: number, inner: string): string;
     printTypedUnifiedCall(node: any): string | undefined;
+    private static readonly RUST_MARKET_STR_FIELDS;
+    private static readonly RUST_MARKET_BOOL_FIELDS;
+    private static readonly RUST_MARKET_OPT_BOOL_FIELDS;
+    private static readonly RUST_MARKET_SAFE_READERS;
+    private rustMarketLocalDecisions;
+    /** `this.market (x)` printed through the typed core. */
+    rustIsTypedMarketCall(node: any): boolean;
+    /** The literal key of a struct-local read `m['k']` / `m.k` (not written, not called). */
+    rustMarketReadKey(n: any): string | undefined;
+    /** The listed field a `this.safeString|safeBool (m, 'k')` call reads (no default, or a `false` default for a flag). */
+    rustMarketSafeReadField(call: any): string | undefined;
+    /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
+    rustMarketValueUse(n: any): boolean;
+    rustMarketLocalIsTyped(declaration: any): boolean;
+    rustMarketLocalIsTypedUncached(declaration: any): boolean;
+    /** The struct local behind an identifier use (never the declaration name). */
+    rustTypedMarketLocalOf(node: any): any;
+    /** `let mut market: crate::types::Market = …` — the typed call, its `Err` re-raised as the untyped call did. */
+    printTypedMarketLocal(declaration: any, indent: string, varName: string): string | undefined;
+    /** A read off a struct local: a listed field natively, any other key off `raw`; `asBool` for a condition slot. */
+    printTypedMarketRead(node: any, asBool?: boolean): string | undefined;
+    /** A whole-value hand-off of a struct local: the `Value` the untyped local held. */
+    printTypedMarketValueUse(node: any): string | undefined;
     private static rustTypedLiteralArg;
     printRustFunctionType(node: any): string;
     printMethodDeclaration(node: any, identation: any): string;
