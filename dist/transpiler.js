@@ -51388,6 +51388,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // A local that provably holds a list (or a plain dict) and is only read by element access is declared
     // `Vec<Value>` (resp. a bare `IndexMap`), so reads print the native op. Any other use keeps the box and the helper.
     this.rustReadBearerDecisions = /* @__PURE__ */ new WeakMap();
+    // ── container locals ─────────────────────────────────────────────────────
+    // A local holding a proven list / plain dict that is also handed to `Value` slots: declared `Vec<Value>` /
+    // `IndexMap`, reads stay native and each `Value` slot boxes a clone (a move at `return x`).
+    this.rustContainerBoxUses = /* @__PURE__ */ new WeakMap();
     // Two-level dict bearers: an object literal whose every value is an object literal is declared
     // `IndexMap<String, IndexMap<String, Value>>`, so `x[k1][k2] = v` is one `entry(k1)..insert(k2, v)` and
     // `x[k1][k2]` a two-step lookup. Any other shape keeps the box.
@@ -58590,6 +58594,9 @@ ${iden}}`;
   }
   transformIdentifier(node, identifier) {
     const text = super.transformIdentifier(node, identifier);
+    const containerBox = this.printRustContainerLocalBox(node, text);
+    if (containerBox !== void 0)
+      return containerBox;
     const parent = node?.parent;
     if (this.rustI64Counters.size > 0 && this.rustI64CounterOf(node) !== void 0 && (this.rustI64BoxedUse(node) || isVariableDeclaration3(parent) && parent.initializer === node))
       return `Value::Int(${text})`;
@@ -59244,7 +59251,7 @@ ${iden}}`;
     if (decision === void 0) {
       this.rustReadBearerDecisions.set(declaration, false);
       try {
-        decision = this.rustReadBearerKindUncached(declaration);
+        decision = this.rustReadBearerKindUncached(declaration) || this.rustContainerLocalKind(declaration);
       } catch (e) {
         decision = false;
       }
@@ -59292,6 +59299,129 @@ ${iden}}`;
       return false;
     });
     return safe ? kind : false;
+  }
+  /** `'list' | 'map'` for a container local with at least one boxing use, else false. */
+  rustContainerLocalKind(declaration) {
+    const init = this.rustSkipWrappers(declaration.initializer);
+    if (declaration.name?.kind !== SyntaxKind7.Identifier || init === void 0)
+      return false;
+    const list = declaration.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations?.length !== 1)
+      return false;
+    if (isArrayLiteralExpression4(init) || isObjectLiteralExpression4(init))
+      return false;
+    const callee = isCallExpression6(init) ? init.expression : void 0;
+    const method = callee !== void 0 && isPropertyAccessExpression3(callee) ? String(callee.name.text) : void 0;
+    if (method !== void 0 && _RustTranspiler.RUST_CONTAINER_LOCAL_SKIP.has(method))
+      return false;
+    const source = declaration.getSourceFile?.()?.fileName;
+    if (typeof source === "string" && /[\\/]test[\\/]/.test(source))
+      return false;
+    if (this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalIsTyped(declaration))
+      return false;
+    if (!isCallExpression6(init) || this.rustContainerInitReadsStore(init))
+      return false;
+    const produced = this.rustDictProducer(init) && !this.rustInitReadsTaggedStore(init);
+    const kind = this.rustContainerProducingKind(init, /* @__PURE__ */ new Set()) ?? (produced ? "map" : void 0);
+    if (kind === void 0)
+      return false;
+    const name = String(declaration.name.text);
+    const fn = this.rustEnclosingFunction(declaration);
+    if (fn === void 0 || isSourceFile5(fn) || this.rustLocalIsReassigned(declaration, name))
+      return false;
+    const neverNull = produced || this.rustContainerInitNeverNull(init, kind);
+    const boxes = [];
+    let natives = 0;
+    const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
+      if (this.rustIdentifierIsPropertyName(n))
+        return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
+      if (!this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn)
+        return false;
+      const parent = n.parent;
+      if (isElementAccessExpression4(parent) && parent.expression === n) {
+        natives++;
+        return this.rustReadBearerElementUse(parent, kind);
+      }
+      if (kind === "list" && isPropertyAccessExpression3(parent) && parent.expression === n && String(parent.name.text) === "length") {
+        const up = parent.parent;
+        natives++;
+        return up?.kind !== SyntaxKind7.PrefixUnaryExpression && up?.kind !== SyntaxKind7.PostfixUnaryExpression && !(isBinaryExpression5(up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind));
+      }
+      const form = this.rustContainerBoxForm(n, neverNull);
+      if (form !== void 0)
+        boxes.push([n, form]);
+      return form !== void 0;
+    });
+    if (!safe || boxes.length === 0 || natives === 0)
+      return false;
+    for (const [n, form] of boxes)
+      this.rustContainerBoxUses.set(n, form);
+    return kind;
+  }
+  /** An argument rooted at a `this.` field other than `options` may be a runtime store (books, caches). */
+  rustContainerInitReadsStore(init) {
+    return Array.from(init.arguments ?? []).some((arg) => {
+      let root = this.rustSkipWrappers(arg);
+      while (root !== void 0 && (isElementAccessExpression4(root) || isPropertyAccessExpression3(root))) {
+        if (root.expression.kind === SyntaxKind7.ThisKeyword)
+          return !(isPropertyAccessExpression3(root) && String(root.name.text) === "options");
+        root = this.rustSkipWrappers(root.expression);
+      }
+      return false;
+    });
+  }
+  /** A literal list/dict default (or a reader that always builds one): the local is never `Null`. */
+  rustContainerInitNeverNull(init, kind) {
+    if (!isCallExpression6(init))
+      return false;
+    const callee = init.expression;
+    if (!isPropertyAccessExpression3(callee))
+      return false;
+    if (callee.expression.kind !== SyntaxKind7.ThisKeyword)
+      return String(callee.name.text) === "split" || isIdentifier3(callee.expression) && (String(callee.expression.text) === "Object" && String(callee.name.text) !== "entries" || String(callee.expression.text) === "Promise");
+    if (!/^safe(?:Dict|List)(?:2|N)?$/.test(String(callee.name.text)))
+      return false;
+    const last = this.rustSkipWrappers(init.arguments[init.arguments.length - 1]);
+    const base = /2$/.test(String(callee.name.text)) ? 3 : 2;
+    return init.arguments.length === base + 1 && (kind === "list" ? isArrayLiteralExpression4(last) : this.rustPlainDictLiteral(last));
+  }
+  /** How a non-read use boxes: an argument of a plain `Value` slot of a `this.` method, the value of an object
+   *  literal property or array element, or `return x`; a nullable local only feeds base `safe*` readers. */
+  rustContainerBoxForm(n, neverNull) {
+    const parent = n.parent;
+    if (parent === void 0 || this.rustScalarInNestedWrite(n))
+      return void 0;
+    if (isCallExpression6(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
+      const at = Array.from(parent.arguments).indexOf(n);
+      if (!this.rustNilBoxSlotOk(parent, at) || !isPropertyAccessExpression3(parent.expression) || parent.expression.expression.kind === SyntaxKind7.SuperKeyword)
+        return void 0;
+      if (neverNull)
+        return "clone";
+      const declaration = this.rustScalarCallee(parent);
+      return at === 0 && _RustTranspiler.RUST_CONTAINER_NULL_SAFE_READERS.test(String(parent.expression.name.text)) && declaration !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName)) ? "clone" : void 0;
+    }
+    if (!neverNull)
+      return void 0;
+    if (isReturnStatement4(parent) && parent.expression === n)
+      return "move";
+    if (parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === n)
+      return "clone";
+    if (isArrayLiteralExpression4(parent) && !(isBinaryExpression5(parent.parent) && parent.parent.left === parent))
+      return "clone";
+    return void 0;
+  }
+  /** `Value::Map(x.clone())` / `Value::from(x.clone())` at an admitted boxing use, else undefined. */
+  printRustContainerLocalBox(node, text) {
+    const form = this.rustContainerBoxUses.get(node);
+    if (form === void 0)
+      return void 0;
+    const kind = this.rustReadBearerKind(node);
+    if (kind === void 0)
+      return void 0;
+    const value = form === "move" ? text : `${text}.clone()`;
+    if (isCallExpression6(node.parent))
+      return `${value}.into()`;
+    return kind === "map" ? `Value::Map(${value})` : `Value::from(${value})`;
   }
   /** One element read rooted at the bearer: a plain read the native op serves. */
   rustReadBearerElementUse(access, kind) {
@@ -62294,6 +62424,9 @@ _RustTranspiler.RUST_DICT_PRODUCER_CALLEES = /* @__PURE__ */ new Set([
  *  the argument's (they only add fields to it). */
 _RustTranspiler.RUST_BUILDER_PASSTHROUGH = /* @__PURE__ */ new Set(["safeTicker", "safeOrder", "safeTrade", "safePosition"]);
 _RustTranspiler.NATIVE_READ_NAMESPACES = /* @__PURE__ */ new Set(["Object", "JSON", "Array", "Promise", "Math", "String", "Number"]);
+// Readers whose answer is the same for a `Null` container and an empty one.
+_RustTranspiler.RUST_CONTAINER_NULL_SAFE_READERS = /^safe(?:String(?:Lower|Upper)?|Integer|Number|Float|Bool|Timestamp|Value|Dict|List)(?:2|N)?$/;
+_RustTranspiler.RUST_CONTAINER_LOCAL_SKIP = /* @__PURE__ */ new Set(["market", "currency", "safeMarket", "safeCurrency", "safeMarketStructure"]);
 // Plain-dict sources from base `safeDict*` reads of unshared dicts and same-file
 // sync request builders; native truthiness / bool equality on operands proven `Value::Bool`
 // or `Value::Null` at runtime (bool tuple elements, bool-returning exchange methods).

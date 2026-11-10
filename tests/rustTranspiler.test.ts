@@ -5291,6 +5291,38 @@ describe('bearer write shapes', () => {
     });
 });
 
+describe('container locals with boxing uses', () => {
+    const rs = rustInParseXClass;
+
+    test('a defaulted safeList / safeDict local is typed; reads stay native, Value slots box a clone', () => {
+        const out = rs("        const xs = this.safeList (v, 'a', []);\n        const m = this.safeDict (v, 'k', {});\n        const b = xs[1];\n        const d = m['decimals'];\n        this.parseX (xs);\n        this.parseX (m);\n        return [ b, d, m ];");
+        expect(out).toContain('let mut xs: Vec<Value> = self.safeList(');
+        expect(out).toContain('let mut m: indexmap::IndexMap<String, Value> = self.safeDict(');
+        expect(out).toContain('xs.get(1).cloned().unwrap_or(Value::Null)');
+        expect(out).toContain('m.get("decimals").cloned().unwrap_or(Value::Null)');
+        expect(out).toContain('self.parseX(xs.clone().into())');
+        expect(out).toContain('self.parseX(m.clone().into())');
+        expect(out).toContain('Value::Map(m.clone())]');
+        expect(out).not.toContain('xs: Value');
+        expect(out).not.toContain('m: Value');
+    });
+
+    test('a returned non-null container moves into its box', () => {
+        const out = rs("        const xs = this.safeList (v, 'a', []);\n        const n = xs.length;\n        return xs;");
+        expect(out).toContain('let mut xs: Vec<Value> = ');
+        expect(out).toContain('return Value::from(xs);');
+    });
+
+    test('negative: a nullable local escaping beyond safe readers, a write or a reassignment keeps the box', () => {
+        const nullable = rs("        const m = this.safeDict (v, 'k');\n        return m;");
+        expect(nullable).toContain('let mut m: Value = self.safeDict(');
+        const written = rs("        const m = this.safeDict (v, 'k', {});\n        m['a'] = 1;\n        this.parseX (m);\n        return 1;");
+        expect(written).toContain('let mut m: Value = self.safeDict(');
+        const reassigned = rs("        let xs = this.safeList (v, 'a', []);\n        this.parseX (xs);\n        xs = [];\n        return 1;");
+        expect(reassigned).toContain('let mut xs: Value = self.safeList(');
+    });
+});
+
 describe('read-only container bearers', () => {
     const rs = rustInParseXClass;
 
@@ -5333,8 +5365,9 @@ describe('read-only container bearers', () => {
     test('negative: an escape, a push, a write or an unproven key keeps the box', () => {
         // returned
         const escaped = rs("        const parts = v.split ('-');\n        const a = parts[0];\n        return parts;");
-        expect(escaped).toContain('let mut parts: Value = split(&v, &Value::Str("-".into()));');
-        expect(escaped).toContain('get_value(&parts, &Value::Int(0))');
+        // a never-null container read natively and returned moves into its box
+        expect(escaped).toContain('let mut parts: Vec<Value> = split(&v, &Value::Str("-".into())).as_array().cloned().unwrap_or_default();');
+        expect(escaped).toContain('return Value::from(parts);');
         // pushed
         const pushed = rs("        const parts = v.split ('-');\n        parts.push (1);\n        return parts[0];");
         expect(pushed).toContain('let mut parts: Value = split(');

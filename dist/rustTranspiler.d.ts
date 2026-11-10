@@ -1192,6 +1192,20 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustReadBearerKind(node: any): 'list' | 'map' | undefined;
     rustReadBearerKindOfDeclaration(declaration: any): 'list' | 'map' | false;
     rustReadBearerKindUncached(declaration: any): 'list' | 'map' | false;
+    private rustContainerBoxUses;
+    private static readonly RUST_CONTAINER_NULL_SAFE_READERS;
+    private static readonly RUST_CONTAINER_LOCAL_SKIP;
+    /** `'list' | 'map'` for a container local with at least one boxing use, else false. */
+    rustContainerLocalKind(declaration: any): 'list' | 'map' | false;
+    /** An argument rooted at a `this.` field other than `options` may be a runtime store (books, caches). */
+    rustContainerInitReadsStore(init: any): boolean;
+    /** A literal list/dict default (or a reader that always builds one): the local is never `Null`. */
+    rustContainerInitNeverNull(init: any, kind: 'list' | 'map'): boolean;
+    /** How a non-read use boxes: an argument of a plain `Value` slot of a `this.` method, the value of an object
+     *  literal property or array element, or `return x`; a nullable local only feeds base `safe*` readers. */
+    rustContainerBoxForm(n: any, neverNull: boolean): 'clone' | 'move' | undefined;
+    /** `Value::Map(x.clone())` / `Value::from(x.clone())` at an admitted boxing use, else undefined. */
+    printRustContainerLocalBox(node: any, text: string): string | undefined;
     /** One element read rooted at the bearer: a plain read the native op serves. */
     rustReadBearerElementUse(access: any, kind: 'list' | 'map'): boolean;
     /** Key a read-only bearer serves natively: a literal string for a map, a
