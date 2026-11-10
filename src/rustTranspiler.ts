@@ -4056,6 +4056,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword) return undefined;
         const name = String(callee.name.text);
         if (!RustTranspiler.RUST_MARKET_SAFE_READERS.has(name) || !isStringLiteralLikeNode(call.arguments[1])) return undefined;
+        // `const spot = this.safeBool (m, 'spot', false)`: the bool-local passes key on the reader's own text
+        if (call.parent?.kind === SyntaxKind.VariableDeclaration || isParenthesizedExpression(call.parent)) return undefined;
         const key = String(call.arguments[1].text);
         if (name === 'safeString' && call.arguments.length === 2 && RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== undefined) return key;
         if (name === 'safeBool' && (RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key) || RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key))

@@ -54507,6 +54507,8 @@ ${i1}}`;
     const name = String(callee.name.text);
     if (!_RustTranspiler.RUST_MARKET_SAFE_READERS.has(name) || !isStringLiteralLikeNode4(call.arguments[1]))
       return void 0;
+    if (call.parent?.kind === SyntaxKind7.VariableDeclaration || isParenthesizedExpression3(call.parent))
+      return void 0;
     const key = String(call.arguments[1].text);
     if (name === "safeString" && call.arguments.length === 2 && _RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== void 0)
       return key;
