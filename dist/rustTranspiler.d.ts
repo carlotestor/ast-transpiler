@@ -556,10 +556,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     } | undefined;
     rustTypedBody(node: any, typed: any, identation: number, inner: string): string;
     printTypedUnifiedCall(node: any): string | undefined;
+    /** `await this.loadMarkets ();` as its own statement (the value is dropped). */
+    rustTypedCallIsDiscarded(node: any): boolean;
     private static readonly RUST_MARKET_STR_FIELDS;
     private static readonly RUST_MARKET_BOOL_FIELDS;
     private static readonly RUST_MARKET_OPT_BOOL_FIELDS;
     private static readonly RUST_MARKET_SAFE_READERS;
+    private static readonly RUST_MARKET_OPT_STR_FIELDS;
     private rustMarketLocalDecisions;
     /** `this.market (x)` printed through the typed core. */
     rustIsTypedMarketCall(node: any): boolean;
@@ -569,8 +572,23 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustMarketSafeReadField(call: any): string | undefined;
     /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
     rustMarketValueUse(n: any): boolean;
+    rustMarketLocalKind(declaration: any): false | 'struct' | 'opt' | 'call';
     rustMarketLocalIsTyped(declaration: any): boolean;
-    rustMarketLocalIsTypedUncached(declaration: any): boolean;
+    /** `m = this.market (x)` as its own statement: a later write of the same struct. */
+    rustIsTypedMarketWrite(n: any): boolean;
+    /** `m === undefined` / `m !== undefined` (either side). */
+    rustIsNullTestOf(n: any): boolean;
+    rustMarketLocalIsTypedUncached(declaration: any): false | 'struct' | 'opt' | 'call';
+    /** The Rust result type of an awaited typed core call other than `market` that decodes into a struct. */
+    rustTypedCallResultType(init: any): string | undefined;
+    rustCallLocalOf(node: any): any;
+    rustOptMarketLocalOf(node: any): any;
+    /** The typed `this.market (x)` call, unboxed; its `Err` re-raises as the untyped call did. */
+    printTypedMarketValue(call: any): string | undefined;
+    /** A later `m = this.market (y)` on a struct local (`Some(..)` on an `Option<Market>` one). */
+    printTypedMarketWrite(left: any, right: any): string | undefined;
+    /** `m === undefined` on an `Option<Market>` local. */
+    printOptMarketNullTest(left: any, right: any, op: any): string | undefined;
     /** The struct local behind an identifier use (never the declaration name). */
     rustTypedMarketLocalOf(node: any): any;
     /** `let mut market: crate::types::Market = …` — the typed call, its `Err` re-raised as the untyped call did. */
