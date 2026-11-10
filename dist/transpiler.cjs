@@ -59318,7 +59318,7 @@ ${iden}}`;
       return false;
     if (this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalIsTyped(declaration))
       return false;
-    if (!_is.isCallExpression.call(void 0, init) || this.rustContainerInitReadsStore(init))
+    if (!_is.isCallExpression.call(void 0, init) || this.rustContainerInitReadsStore(init) || this.rustCallPrintsRuntimeSplit(init))
       return false;
     const produced = this.rustDictProducer(init) && !this.rustInitReadsTaggedStore(init);
     const kind = _nullishCoalesce(this.rustContainerProducingKind(init, /* @__PURE__ */ new Set()), () => ( (produced ? "map" : void 0)));

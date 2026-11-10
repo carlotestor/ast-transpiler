@@ -59319,7 +59319,7 @@ ${iden}}`;
       return false;
     if (this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalIsTyped(declaration))
       return false;
-    if (!isCallExpression6(init) || this.rustContainerInitReadsStore(init))
+    if (!isCallExpression6(init) || this.rustContainerInitReadsStore(init) || this.rustCallPrintsRuntimeSplit(init))
       return false;
     const produced = this.rustDictProducer(init) && !this.rustInitReadsTaggedStore(init);
     const kind = this.rustContainerProducingKind(init, /* @__PURE__ */ new Set()) ?? (produced ? "map" : void 0);

@@ -9099,7 +9099,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (typeof source === 'string' && /[\\/]test[\\/]/.test(source)) return false;
         if (this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration)
             || this.rustMarketLocalIsTyped(declaration)) return false;
-        if (!isCallExpression(init) || this.rustContainerInitReadsStore(init)) return false;
+        // A boxed `split` local carries the string-element proof later joins rely on.
+        if (!isCallExpression(init) || this.rustContainerInitReadsStore(init) || this.rustCallPrintsRuntimeSplit(init)) return false;
         const produced = this.rustDictProducer(init) && !this.rustInitReadsTaggedStore(init);
         const kind = this.rustContainerProducingKind(init, new Set()) ?? (produced ? 'map' : undefined);
         if (kind === undefined) return false;

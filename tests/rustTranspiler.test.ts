@@ -5365,9 +5365,8 @@ describe('read-only container bearers', () => {
     test('negative: an escape, a push, a write or an unproven key keeps the box', () => {
         // returned
         const escaped = rs("        const parts = v.split ('-');\n        const a = parts[0];\n        return parts;");
-        // a never-null container read natively and returned moves into its box
-        expect(escaped).toContain('let mut parts: Vec<Value> = split(&v, &Value::Str("-".into())).as_array().cloned().unwrap_or_default();');
-        expect(escaped).toContain('return Value::from(parts);');
+        expect(escaped).toContain('let mut parts: Value = split(&v, &Value::Str("-".into()));');
+        expect(escaped).toContain('get_value(&parts, &Value::Int(0))');
         // pushed
         const pushed = rs("        const parts = v.split ('-');\n        parts.push (1);\n        return parts[0];");
         expect(pushed).toContain('let mut parts: Value = split(');
