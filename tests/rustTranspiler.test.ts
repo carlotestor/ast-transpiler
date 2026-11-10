@@ -1205,6 +1205,69 @@ describe('rust transpiling tests', () => {
     // the checker proves the string and every use is a native sink (null test,
     // string-literal compare); the helper call stays as its producer.
 
+    describe('nil-declared locals', () => {
+        const cls = (body: string) => `class Precise { static stringAdd(a: string, b: string): string { return a; } }
+class A {
+    safeString(o: any, k: any, d: string = undefined): string { return undefined as any; }
+    safeInteger(o: any, k: any, d: number = undefined): number { return undefined as any; }
+    hold(x: any): any { return x; }
+    run(o: any, kind: string) {
+${body}
+    }
+}`;
+
+        test('string writes join to Option<String> with exact unwraps', () => {
+            const out = transpiler.transpileRust(cls(`        let side: string = undefined;
+        if (kind === 'a') { side = 'buy'; } else if (kind === 'b') { side = this.safeString(o, 'side'); } else { side = Precise.stringAdd('1', '2'); }
+        if (side === 'buy') { return 1; }
+        return this.hold(side);`)).content;
+            expect(out).toContain('let mut side: Option<String> = None;');
+            expect(out).toContain('side = Some("buy".to_string());');
+            expect(out).toContain('side = self.safeString(o, Value::Str("side".into()), &[]).as_str().map(str::to_owned);');
+            expect(out).toContain('side.as_deref() == Some("buy")');
+            expect(out).toContain('self.hold(side.clone().map(Value::from).unwrap_or(Value::Null))');
+            expect(out).not.toContain('side: Value');
+        });
+
+        test('bool and int writes join to Option<bool> / Option<i64>', () => {
+            const out = transpiler.transpileRust(cls(`        let flag: boolean = undefined;
+        if (kind === 'x') { flag = true; } else { flag = (kind === 'y'); }
+        let n = undefined;
+        if (flag) { n = this.safeInteger(o, 'n'); }
+        if (n === undefined) { return 0; }
+        return { 'n': n, 'flag': flag };`)).content;
+            expect(out).toContain('let mut flag: Option<bool> = None;');
+            expect(out).toContain('flag = Some(true);');
+            expect(out).toContain('if (flag == Some(true)) {');
+            expect(out).toContain('let mut n: Option<i64> = None;');
+            expect(out).toContain('n = self.safeInteger(o, Value::Str("n".into()), &[]).as_i64();');
+            expect(out).toContain('if (n.is_none()) {');
+            expect(out).toContain('m.insert("n".to_string(), Value::from(n));');
+            expect(out).toContain('m.insert("flag".to_string(), flag.map(Value::from).unwrap_or(Value::Null));');
+        });
+
+        test('mixed or unproven writes keep the Value box', () => {
+            const out = transpiler.transpileRust(cls(`        let a = undefined;
+        if (kind === 'x') { a = 'str'; } else { a = 1; }
+        let b = undefined;
+        b = this.hold(o);
+        let c = undefined;
+        c = this.safeInteger(o, 'c', 1.5);
+        return [ a, b, c ];`)).content;
+            expect(out).toContain('let mut a: Value = Value::Null;');
+            expect(out).toContain('let mut b: Value = Value::Null;');
+            expect(out).toContain('let mut c: Value = Value::Null;');
+        });
+
+        test('a read outside the proven sinks keeps the Value box', () => {
+            const out = transpiler.transpileRust(cls(`        let s = undefined;
+        s = 'x';
+        const t = s + 'y';
+        return t;`)).content;
+            expect(out).toContain('let mut s: Value = Value::Null;');
+        });
+    });
+
     describe('typed string locals', () => {
         const withHelper = (helper: string, body: string) =>
             `class A {\n    ${helper}(o: any, k: any): string { return undefined as any; }\n    run(o: any) {\n${body}\n    }\n}`;
