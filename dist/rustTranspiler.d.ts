@@ -562,6 +562,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     printNativeListIndex(receiverText: string, index: number, receiverNode?: Node): string;
     /** Element read of a `Vec<Value>` binding (a destructuring temp the printer declares typed). */
     printTypedVecElementRead(name: string, index: number): string;
+    private rustTupleSlotDecisions;
+    rustTupleSlotKind(element: any): string | undefined;
+    private rustTupleSlotKindUncached;
+    /** `let mut a: Option<String> | bool = <temp>.get(i)..` for a typed tuple slot, else undefined. */
+    printRustTupleSlotLocal(element: any, printedName: string, temp: string, index: number, nativeList: boolean, indent: string): string | undefined;
     /** Native read for one chain level, or undefined to keep `get_value`. */
     printNativeBookFieldRead(receiverText: string, receiverNode: Node, keyText: string, viaStore?: boolean): string | undefined;
     printNativeContainerAccess(receiverText: string, receiverNode: Node, keyNode: Node): string | undefined;

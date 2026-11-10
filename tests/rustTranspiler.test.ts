@@ -4561,7 +4561,9 @@ describe('safeDict / builder plain dicts and bool-value truthiness', () => {
     });
 
     test('bool tuple elements and bool-returning methods test truthiness natively', () => {
-        expect(output).toContain('if paginate.as_bool() == Some(true) {');
+        // ral-a: a boolean tuple slot read only in conditions is declared `bool`
+        expect(output).toContain('let mut paginate: bool = ');
+        expect(output).toContain('if paginate {');
         expect(output).toContain('if isTrigger.as_bool() == Some(true) {');
         expect(output).toContain('if !(self.isConditionalOrder(&[params]).as_bool() == Some(true)) {');
     });
@@ -4915,6 +4917,39 @@ describe('tuple slot-1 params of base handle*AndParams helpers', () => {
     test('pro: a parameter source keeps the helper, a plain local source goes native', () => {
         expect(pro).toContain('add_element_to_object(&mut paramsStock');
         expect(pro).not.toContain('add_element_to_object(&mut paramsLocal');
+    });
+});
+
+describe('ral-a: typed tuple-destructure slots', () => {
+    const src = `class T {
+    pick (params: any): [string, any] { return [ 'spot', params ]; }
+    flag (params: any): [boolean, any] { return [ true, params ]; }
+    f (params: any) {
+        const [ marketType, query ] = this.pick (params);
+        const [ paginate, rest ] = this.flag (query);
+        if (paginate) {
+            return 1;
+        }
+        if (marketType === 'swap') {
+            return rest;
+        }
+        const [ kept, other ] = this.pick (params);
+        return marketType === undefined ? kept : other;
+    }
+}`;
+    let out: string;
+    beforeAll(() => { out = transpiler.transpileRust(src).content; });
+    test('a string slot read only by literal / null compares is Option<String>', () => {
+        expect(out).toContain('let mut marketType: Option<String> = marketTypequeryVariable.get(0).and_then(Value::as_str).map(str::to_owned)');
+        expect(out).toContain('marketType.as_deref() == Some("swap")');
+    });
+    test('a boolean slot read only in conditions is bool', () => {
+        expect(out).toContain('let mut paginate: bool = paginaterestVariable.get(0).and_then(Value::as_bool) == Some(true)');
+        expect(out).toMatch(/if paginate \{/);
+    });
+    test('a slot with another use stays Value', () => {
+        expect(out).toContain('let mut kept: Value = keptotherVariable.get(0).cloned().unwrap_or(Value::Null)');
+        expect(out).toContain('let mut query: Value = marketTypequeryVariable.get(1).cloned().unwrap_or(Value::Null)');
     });
 });
 

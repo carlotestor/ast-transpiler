@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-DSH7DNKY.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -51351,6 +51351,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
      *  `-> Option<String>`; undefined otherwise (no proof → keep the box). */
     // call node -> resolved signature's declaration (null: none); a handle resolve per call is JS-heavy
     this.rustCallDeclarations = /* @__PURE__ */ new WeakMap();
+    // ── typed tuple slots (ral-a: rustTupleSlotKind / printRustTupleSlotLocal) ──
+    // `const [a, b] = this.handleXAndParams (..)`: the destructure temp is a proven `Vec<Value>`
+    // (rustNativeListSource). A slot whose checker type is `string` (or a string-literal union)
+    // and whose every use is a null / string-literal compare is declared `Option<String>`
+    // (the same proof as the safe_string locals); a `boolean` slot whose every use is a
+    // condition is declared `bool`, read exactly as the old `x.as_bool() == Some(true)` test.
+    this.rustTupleSlotDecisions = /* @__PURE__ */ new WeakMap();
     // ── closure-free dict reads / membership ──
     // A read keyed by a Str place prints `(if let (Some(__m), Some(__k)) = (M.as_map(), K.as_str()) { .. })`; `k in D`
     // on a proven Dict prints `D.as_map().is_some_and(..)`. Each site picks helper/closure/closure-free by line length.
@@ -51647,6 +51654,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** The declaration site emits `let mut x: bool = …` (see
    *  `getRustBoolLocalInitializer`): its reads are native bools, not `Value`. */
   rustDeclarationPrintsNativeBool(declaration) {
+    if (declaration?.kind === SyntaxKind7.BindingElement)
+      return this.rustTupleSlotKind(declaration) === "bool";
     if (declaration?.kind !== SyntaxKind7.VariableDeclaration)
       return false;
     if (this.rustBoolDeclaredLocals.has(declaration))
@@ -52828,7 +52837,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const head = nativeList ? `${indent}let ${syntheticName}: Vec<Value> = ${this.printNode(declaration.initializer, 0)}.as_array().cloned().unwrap_or_default();
 ` : `${indent}let mut ${syntheticName} = ${this.printNode(declaration.initializer, 0)};
 `;
-      const lines = parsedElements.map((e, idx) => `${indent}let mut ${e}: Value = ${nativeList ? this.printTypedVecElementRead(syntheticName, idx) : `get_value(&${syntheticName}, &Value::Int(${idx}))`}`);
+      const lines = parsedElements.map((e, idx) => this.printRustTupleSlotLocal(declaration.name.elements[idx], e, syntheticName, idx, nativeList, indent) ?? `${indent}let mut ${e}: Value = ${nativeList ? this.printTypedVecElementRead(syntheticName, idx) : `get_value(&${syntheticName}, &Value::Int(${idx}))`}`);
       return head + lines.join(";\n");
     }
     const varName = this.printNode(declaration.name, 0);
@@ -53241,7 +53250,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     }
     const declaration = this.rustDeclaredNode(inner);
-    return declaration?.kind === SyntaxKind7.Parameter && this.rustParamPrintsBool(declaration) ? this.printNode(inner, 0).trim() : void 0;
+    return declaration?.kind === SyntaxKind7.Parameter && this.rustParamPrintsBool(declaration) || declaration?.kind === SyntaxKind7.BindingElement && this.rustTupleSlotKind(declaration) === "bool" ? this.printNode(inner, 0).trim() : void 0;
   }
   rustParamPrintsStrVec(param) {
     if (param?.kind !== SyntaxKind7.Parameter)
@@ -53776,6 +53785,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const symbol = checker.getSymbolAtLocation(node);
     const declaration = symbolValueDeclaration(symbol) ?? symbolDeclarations(symbol)[0];
+    if (declaration?.kind === SyntaxKind7.BindingElement)
+      return this.rustTupleSlotKind(declaration) === "str";
     return declaration?.kind === SyntaxKind7.VariableDeclaration && this.rustSafeStringLocalIsTyped(declaration);
   }
   // `let x = <bool expr>` → the printed bool expression, or undefined.
@@ -55163,6 +55174,62 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   /** Element read of a `Vec<Value>` binding (a destructuring temp the printer declares typed). */
   printTypedVecElementRead(name, index) {
     return `${name}.get(${index}).cloned().unwrap_or(Value::Null)`;
+  }
+  rustTupleSlotKind(element) {
+    if (element?.kind !== SyntaxKind7.BindingElement)
+      return void 0;
+    let decision = this.rustTupleSlotDecisions.get(element);
+    if (decision === void 0) {
+      this.rustTupleSlotDecisions.set(element, null);
+      try {
+        decision = this.rustTupleSlotKindUncached(element) ?? null;
+      } catch (e) {
+        decision = null;
+      }
+      this.rustTupleSlotDecisions.set(element, decision);
+    }
+    return decision ?? void 0;
+  }
+  rustTupleSlotKindUncached(element) {
+    const pattern = element.parent;
+    const declaration = pattern?.parent;
+    if (pattern?.kind !== SyntaxKind7.ArrayBindingPattern || declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.name !== pattern || declaration.parent?.declarations?.[0] !== declaration)
+      return void 0;
+    if (element.dotDotDotToken !== void 0 || element.initializer !== void 0 || !isIdentifier3(element.name))
+      return void 0;
+    if (declaration.initializer === void 0 || !this.rustNativeListSource(declaration.initializer))
+      return void 0;
+    const source = element.getSourceFile?.()?.fileName;
+    if (typeof source === "string" && /[\\/]test[\\/]/.test(source))
+      return void 0;
+    const fn = this.rustEnclosingFunction(declaration);
+    if (fn === void 0 || isSourceFile5(fn))
+      return void 0;
+    const name = String(element.name.text);
+    const kind = this.primitiveKindOfType(this.typeOfNodeIfAny(element.name));
+    if (kind !== "string" && kind !== "boolean")
+      return void 0;
+    let nativeUses = 0;
+    const safe = this.rustLocalUsesAll(element, name, true, (n) => {
+      if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn)
+        return false;
+      const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) : this.rustIdentifierUseIsCondition(n);
+      if (ok)
+        nativeUses++;
+      return ok;
+    });
+    return safe && nativeUses > 0 ? kind === "string" ? "str" : "bool" : void 0;
+  }
+  /** `let mut a: Option<String> | bool = <temp>.get(i)..` for a typed tuple slot, else undefined. */
+  printRustTupleSlotLocal(element, printedName, temp, index, nativeList, indent) {
+    if (!nativeList)
+      return void 0;
+    const kind = this.rustTupleSlotKind(element);
+    if (kind === "str")
+      return `${indent}let mut ${printedName}: Option<String> = ${temp}.get(${index}).and_then(Value::as_str).map(str::to_owned)`;
+    if (kind === "bool")
+      return `${indent}let mut ${printedName}: bool = ${temp}.get(${index}).and_then(Value::as_bool) == Some(true)`;
+    return void 0;
   }
   /** Native read for one chain level, or undefined to keep `get_value`. */
   // `book['bids'|'asks'|'nonce'|...]` on a checker-typed order-book class: the hand-written

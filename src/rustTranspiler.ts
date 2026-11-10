@@ -612,6 +612,7 @@ export class RustTranspiler extends BaseTranspiler {
     /** The declaration site emits `let mut x: bool = …` (see
      *  `getRustBoolLocalInitializer`): its reads are native bools, not `Value`. */
     rustDeclarationPrintsNativeBool(declaration): boolean {
+        if (declaration?.kind === SyntaxKind.BindingElement) return this.rustTupleSlotKind(declaration) === 'bool';
         if (declaration?.kind !== SyntaxKind.VariableDeclaration) return false;
         if (this.rustBoolDeclaredLocals.has(declaration)) return true;
         const initializer = declaration.initializer;
@@ -1969,7 +1970,8 @@ export class RustTranspiler extends BaseTranspiler {
             const head = nativeList
                 ? `${indent}let ${syntheticName}: Vec<Value> = ${this.printNode(declaration.initializer, 0)}.as_array().cloned().unwrap_or_default();\n`
                 : `${indent}let mut ${syntheticName} = ${this.printNode(declaration.initializer, 0)};\n`;
-            const lines = parsedElements.map((e, idx) => `${indent}let mut ${e}: Value = ${nativeList
+            const lines = parsedElements.map((e, idx) => this.printRustTupleSlotLocal(declaration.name.elements[idx], e, syntheticName, idx, nativeList, indent)
+                ?? `${indent}let mut ${e}: Value = ${nativeList
                 ? this.printTypedVecElementRead(syntheticName, idx) : `get_value(&${syntheticName}, &Value::Int(${idx}))`}`);
             return head + lines.join(';\n');
         }
@@ -2455,7 +2457,8 @@ export class RustTranspiler extends BaseTranspiler {
             return undefined;
         }
         const declaration: any = this.rustDeclaredNode(inner);
-        return declaration?.kind === SyntaxKind.Parameter && this.rustParamPrintsBool(declaration)
+        return (declaration?.kind === SyntaxKind.Parameter && this.rustParamPrintsBool(declaration))
+            || (declaration?.kind === SyntaxKind.BindingElement && this.rustTupleSlotKind(declaration) === 'bool')
             ? this.printNode(inner, 0).trim()
             : undefined;
     }
@@ -3046,6 +3049,7 @@ export class RustTranspiler extends BaseTranspiler {
         }
         const symbol = checker.getSymbolAtLocation(node);
         const declaration = symbolValueDeclaration(symbol) ?? symbolDeclarations(symbol)[0];
+        if (declaration?.kind === SyntaxKind.BindingElement) return this.rustTupleSlotKind(declaration) === 'str';
         return declaration?.kind === SyntaxKind.VariableDeclaration && this.rustSafeStringLocalIsTyped(declaration);
     }
 
@@ -4865,6 +4869,63 @@ export class RustTranspiler extends BaseTranspiler {
     /** Element read of a `Vec<Value>` binding (a destructuring temp the printer declares typed). */
     printTypedVecElementRead(name: string, index: number): string {
         return `${name}.get(${index}).cloned().unwrap_or(Value::Null)`;
+    }
+
+    // ── typed tuple slots (ral-a: rustTupleSlotKind / printRustTupleSlotLocal) ──
+    // `const [a, b] = this.handleXAndParams (..)`: the destructure temp is a proven `Vec<Value>`
+    // (rustNativeListSource). A slot whose checker type is `string` (or a string-literal union)
+    // and whose every use is a null / string-literal compare is declared `Option<String>`
+    // (the same proof as the safe_string locals); a `boolean` slot whose every use is a
+    // condition is declared `bool`, read exactly as the old `x.as_bool() == Some(true)` test.
+
+    private rustTupleSlotDecisions = new WeakMap<Node, string | null>();
+
+    rustTupleSlotKind(element): string | undefined {
+        if (element?.kind !== SyntaxKind.BindingElement) return undefined;
+        let decision = this.rustTupleSlotDecisions.get(element);
+        if (decision === undefined) {
+            this.rustTupleSlotDecisions.set(element, null); // re-entrancy guard
+            try {
+                decision = this.rustTupleSlotKindUncached(element) ?? null;
+            } catch (e) {
+                decision = null; // no proof -> the slot keeps its `Value` box
+            }
+            this.rustTupleSlotDecisions.set(element, decision);
+        }
+        return decision ?? undefined;
+    }
+
+    private rustTupleSlotKindUncached(element): string | undefined {
+        const pattern: any = element.parent;
+        const declaration: any = pattern?.parent;
+        if (pattern?.kind !== SyntaxKind.ArrayBindingPattern || declaration === undefined || !isVariableDeclaration(declaration)
+            || declaration.name !== pattern || (declaration.parent as any)?.declarations?.[0] !== declaration) return undefined;
+        if (element.dotDotDotToken !== undefined || element.initializer !== undefined || !isIdentifier(element.name)) return undefined;
+        if (declaration.initializer === undefined || !this.rustNativeListSource(declaration.initializer)) return undefined;
+        const source: any = element.getSourceFile?.()?.fileName;
+        if (typeof source === 'string' && /[\\/]test[\\/]/.test(source)) return undefined;
+        const fn: any = this.rustEnclosingFunction(declaration);
+        if (fn === undefined || isSourceFile(fn)) return undefined;
+        const name = String(element.name.text);
+        const kind = this.primitiveKindOfType(this.typeOfNodeIfAny(element.name));
+        if (kind !== 'string' && kind !== 'boolean') return undefined;
+        let nativeUses = 0;
+        const safe = this.rustLocalUsesAll(element, name, true, (n: any) => {
+            if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn) return false;
+            const ok = kind === 'string' ? this.rustStringLocalUseIsNative(n) : this.rustIdentifierUseIsCondition(n);
+            if (ok) nativeUses++;
+            return ok;
+        });
+        return safe && nativeUses > 0 ? (kind === 'string' ? 'str' : 'bool') : undefined;
+    }
+
+    /** `let mut a: Option<String> | bool = <temp>.get(i)..` for a typed tuple slot, else undefined. */
+    printRustTupleSlotLocal(element, printedName: string, temp: string, index: number, nativeList: boolean, indent: string): string | undefined {
+        if (!nativeList) return undefined;
+        const kind = this.rustTupleSlotKind(element);
+        if (kind === 'str') return `${indent}let mut ${printedName}: Option<String> = ${temp}.get(${index}).and_then(Value::as_str).map(str::to_owned)`;
+        if (kind === 'bool') return `${indent}let mut ${printedName}: bool = ${temp}.get(${index}).and_then(Value::as_bool) == Some(true)`;
+        return undefined;
     }
 
     /** Native read for one chain level, or undefined to keep `get_value`. */
