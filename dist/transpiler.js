@@ -51357,6 +51357,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // call node -> resolved signature's declaration (null: none); a handle resolve per call is JS-heavy
     this.rustCallDeclarations = /* @__PURE__ */ new WeakMap();
     this.rustMarketLocalDecisions = /* @__PURE__ */ new Map();
+    this.rustStructLocalCallee = /* @__PURE__ */ new Map();
     // `const [a, b] = this.handleXAndParams (..)` over a proven `Vec<Value>`: a `string` slot used only in
     // null / literal compares is `Option<String>`; a `boolean` slot used only as a condition is `bool`.
     this.rustTupleSlotDecisions = /* @__PURE__ */ new WeakMap();
@@ -55211,10 +55212,22 @@ ${i1}}`;
       current = current.parent;
     return current.parent?.kind === SyntaxKind7.ExpressionStatement;
   }
+  /** The typed struct core (`market` / `currency`) a call invokes, if any. */
+  rustStructCalleeOf(node) {
+    const call = this.rustSkipWrappers(node);
+    if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || call.arguments.length !== 1)
+      return void 0;
+    const name = String(call.expression.name.text);
+    return _RustTranspiler.RUST_STRUCT_CALLS[name] !== void 0 && this.rustTypedUnified.has(name) ? name : void 0;
+  }
+  /** The field table of the struct local an identifier names (market by default). */
+  rustStructFieldsOf(n) {
+    const declaration = n !== void 0 && isIdentifier3(n) ? this.rustDeclarationOfIdentifier(n) : void 0;
+    return _RustTranspiler.RUST_STRUCT_CALLS[this.rustStructLocalCallee.get(declaration) ?? "market"];
+  }
   /** `this.market (x)` printed through the typed core. */
   rustIsTypedMarketCall(node) {
-    const call = this.rustSkipWrappers(node);
-    return call !== void 0 && isCallExpression6(call) && isPropertyAccessExpression3(call.expression) && call.expression.expression.kind === SyntaxKind7.ThisKeyword && call.expression.name.text === "market" && call.arguments.length === 1 && this.rustTypedUnified.has("market");
+    return this.rustStructCalleeOf(node) !== void 0;
   }
   /** The literal key of a struct-local read `m['k']` / `m.k` (not written, not called). */
   rustMarketReadKey(n) {
@@ -55249,9 +55262,10 @@ ${i1}}`;
     if (call.parent?.kind === SyntaxKind7.VariableDeclaration || isParenthesizedExpression3(call.parent))
       return void 0;
     const key = String(call.arguments[1].text);
-    if (name === "safeString" && call.arguments.length === 2 && (_RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== void 0 || _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS.has(key)))
+    const f = this.rustStructFieldsOf(call.arguments[0]);
+    if (name === "safeString" && call.arguments.length === 2 && (f.str[key] !== void 0 || f.optStr.has(key)))
       return key;
-    if (name === "safeBool" && (_RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key) || _RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key)) && (call.arguments.length === 2 || call.arguments.length === 3 && call.arguments[2].kind === SyntaxKind7.FalseKeyword))
+    if (name === "safeBool" && (f.bool.has(key) || f.optBool.has(key)) && (call.arguments.length === 2 || call.arguments.length === 3 && call.arguments[2].kind === SyntaxKind7.FalseKeyword))
       return key;
     return void 0;
   }
@@ -55289,7 +55303,11 @@ ${i1}}`;
   /** `m = this.market (x)` as its own statement: a later write of the same struct. */
   rustIsTypedMarketWrite(n) {
     const parent = n.parent;
-    return parent !== void 0 && isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.EqualsToken && parent.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustIsTypedMarketCall(parent.right);
+    if (parent === void 0 || !isBinaryExpression5(parent) || parent.left !== n || parent.operatorToken.kind !== SyntaxKind7.EqualsToken || parent.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const callee = this.rustStructCalleeOf(parent.right);
+    const declaration = isIdentifier3(n) ? this.rustDeclarationOfIdentifier(n) : void 0;
+    return callee !== void 0 && (this.rustStructLocalCallee.get(declaration) ?? callee) === callee;
   }
   /** `m === undefined` / `m !== undefined` (either side). */
   rustIsNullTestOf(n) {
@@ -55314,8 +55332,11 @@ ${i1}}`;
       return this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => this.rustEnclosingFunction(n) === callScope && this.rustMarketValueUse(n)) ? "call" : false;
     }
     const empty = declaration.initializer === void 0 || this.literalKindOfNode(declaration.initializer) === "null";
-    if (!empty && !this.rustIsTypedMarketCall(declaration.initializer))
+    const callee = empty ? this.rustEmptyStructLocalCallee(declaration) : this.rustStructCalleeOf(declaration.initializer);
+    if (callee === void 0)
       return false;
+    this.rustStructLocalCallee.set(declaration, callee);
+    const fields = _RustTranspiler.RUST_STRUCT_CALLS[callee];
     if (empty && ((declaration.parent.flags & NodeFlags4.Const) !== 0 || this.rustNilLocalKind(declaration) !== void 0))
       return false;
     const file = String(declaration.getSourceFile?.()?.fileName ?? "");
@@ -55335,7 +55356,7 @@ ${i1}}`;
         return this.rustIsNullTestOf(n) || this.rustMarketValueUse(n);
       const key = this.rustMarketReadKey(n);
       if (key !== void 0) {
-        if (_RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== void 0 || _RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key) || _RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key) || _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS.has(key))
+        if (fields.str[key] !== void 0 || fields.bool.has(key) || fields.optBool.has(key) || fields.optStr.has(key))
           fieldReads++;
         return true;
       }
@@ -55346,6 +55367,21 @@ ${i1}}`;
     if (empty)
       return writes > 0 ? "opt" : false;
     return fieldReads > 0 ? "struct" : false;
+  }
+  /** The one struct core every `x = this.<core> (..)` statement write of an empty local calls. */
+  rustEmptyStructLocalCallee(declaration) {
+    const found = /* @__PURE__ */ new Set();
+    const name = String(declaration.name.text);
+    const visit = (n) => {
+      if (isBinaryExpression5(n) && n.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(n.left) && n.left.text === name && this.rustDeclarationOfIdentifier(n.left) === declaration) {
+        const callee = this.rustStructCalleeOf(n.right);
+        if (callee !== void 0)
+          found.add(callee);
+      }
+      n.forEachChild(visit);
+    };
+    this.rustEnclosingFunction(declaration)?.forEachChild(visit);
+    return found.size === 1 ? [...found][0] : void 0;
   }
   /** The Rust result type of an awaited typed core call other than `market` that decodes into a struct. */
   rustTypedCallResultType(init) {
@@ -55418,8 +55454,9 @@ ${i1}}`;
   /** `let mut market: crate::types::Market = …` — the typed call, its `Err` re-raised as the untyped call did. */
   printTypedMarketLocal(declaration, indent, varName) {
     const kind = this.rustMarketLocalKind(declaration);
+    const structType = _RustTranspiler.RUST_STRUCT_CALLS[this.rustStructLocalCallee.get(declaration) ?? "market"].type;
     if (kind === "opt")
-      return `${indent}let mut ${varName}: Option<crate::types::Market> = None`;
+      return `${indent}let mut ${varName}: Option<${structType}> = None`;
     if (kind === "call") {
       const ret = this.rustTypedCallResultType(declaration.initializer);
       const value2 = this.printTypedMarketValue(this.rustSkipWrappers(declaration.initializer).expression);
@@ -55428,7 +55465,7 @@ ${i1}}`;
     if (kind !== "struct")
       return void 0;
     const value = this.printTypedMarketValue(declaration.initializer);
-    return value === void 0 ? void 0 : `${indent}let mut ${varName}: crate::types::Market = ${value}`;
+    return value === void 0 ? void 0 : `${indent}let mut ${varName}: ${structType} = ${value}`;
   }
   /** A read off a struct local: a listed field natively, any other key off `raw`; `asBool` for a condition slot. */
   printTypedMarketRead(node, asBool = false) {
@@ -55440,19 +55477,20 @@ ${i1}}`;
     if (key === void 0)
       return void 0;
     const recv = `(${this.printNode(declaration.name, 0)})`;
-    if (_RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key))
+    const f = this.rustStructFieldsOf(receiver);
+    if (f.bool.has(key))
       return asBool ? `${recv}.${key}` : `Value::Bool(${recv}.${key})`;
-    if (_RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key) && (asBool || isCallExpression6(node) && node.arguments.length === 3)) {
+    if (f.optBool.has(key) && (asBool || isCallExpression6(node) && node.arguments.length === 3)) {
       return asBool ? `(${recv}.${key} == Some(true))` : `Value::Bool(${recv}.${key} == Some(true))`;
     }
     if (asBool)
       return void 0;
-    const field = _RustTranspiler.RUST_MARKET_STR_FIELDS[key];
+    const field = f.str[key];
     if (field !== void 0)
       return `Value::from(${recv}.${field}.clone())`;
-    if (_RustTranspiler.RUST_MARKET_OPT_STR_FIELDS.has(key))
+    if (f.optStr.has(key))
       return `Value::from(${recv}.${key}.as_deref())`;
-    if (_RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key) && !isCallExpression6(node) && node.parent?.kind !== SyntaxKind7.VariableDeclaration) {
+    if (f.optBool.has(key) && !isCallExpression6(node) && node.parent?.kind !== SyntaxKind7.VariableDeclaration) {
       return `${recv}.${key}.map(Value::Bool).unwrap_or_default()`;
     }
     return `${recv}.raw.as_map().and_then(|__m| __m.get(${JSON.stringify(key)})).cloned().unwrap_or(Value::Null)`;
@@ -55473,7 +55511,7 @@ ${i1}}`;
     const init = this.unwrapParens(declaration.initializer);
     if (init === void 0 || !(isElementAccessExpression4(init) || isPropertyAccessExpression3(init)))
       return void 0;
-    if (this.rustTypedMarketLocalOf(init.expression) === void 0)
+    if (this.rustTypedMarketLocalOf(init.expression) === void 0 || this.rustStructFieldsOf(init.expression).type !== "crate::types::Market")
       return void 0;
     const key = this.rustMarketReadKey(init.expression);
     if (key === void 0 || !_RustTranspiler.RUST_MARKET_FLAG_KEYS.has(key) || _RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key))
@@ -62073,7 +62111,7 @@ _RustTranspiler.RUST_BASE_SCALAR_RETURNS = {
 _RustTranspiler.RUST_BASE_TIER_FILE = /ts[\\/]src[\\/]base[\\/]/;
 // Unified methods whose `Str` parameter is a required base-spec `string` (`market (symbol: Str)` keeps `Str`
 // so its callers may pass one; the typed signature takes the symbol itself).
-_RustTranspiler.RUST_TYPED_STR_PARAMS = /* @__PURE__ */ new Set(["market"]);
+_RustTranspiler.RUST_TYPED_STR_PARAMS = /* @__PURE__ */ new Set(["market", "currency"]);
 // Unified return kind -> Rust type; the body's `Value` result decodes through `types::FromRaw`.
 _RustTranspiler.RUST_TYPED_RETURNS = {
   fetchTicker: "crate::types::Ticker",
@@ -62123,6 +62161,7 @@ _RustTranspiler.RUST_TYPED_RETURNS = {
   fetchMarkets: "Vec<crate::types::Market>",
   loadMarkets: "crate::types::Markets",
   market: "crate::types::Market",
+  currency: "crate::types::Currency",
   setSandboxMode: "()",
   fetchCurrencies: "crate::types::Currencies",
   fetchPositions: "Vec<crate::types::Position>",
@@ -62348,6 +62387,11 @@ _RustTranspiler.RUST_MARKET_BOOL_FIELDS = /* @__PURE__ */ new Set(["spot", "marg
 _RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS = /* @__PURE__ */ new Set(["linear", "inverse"]);
 _RustTranspiler.RUST_MARKET_SAFE_READERS = /* @__PURE__ */ new Set(["safeString", "safeBool"]);
 _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS = /* @__PURE__ */ new Set(["settle"]);
+// typed sync cores whose result locals keep the struct: Rust type and the keys read as fields
+_RustTranspiler.RUST_STRUCT_CALLS = {
+  market: { type: "crate::types::Market", str: _RustTranspiler.RUST_MARKET_STR_FIELDS, optStr: _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS, bool: _RustTranspiler.RUST_MARKET_BOOL_FIELDS, optBool: _RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS },
+  currency: { type: "crate::types::Currency", str: { id: "id", code: "code" }, optStr: /* @__PURE__ */ new Set(["name"]), bool: /* @__PURE__ */ new Set(), optBool: /* @__PURE__ */ new Set() }
+};
 // `MarketInterface` keys typed `Bool`: a raw read of one holds a Bool or Null.
 _RustTranspiler.RUST_MARKET_FLAG_KEYS = /* @__PURE__ */ new Set(["spot", "margin", "swap", "future", "option", "index", "stock", "prediction", "contract", "linear", "inverse", "quanto"]);
 // Hand-written runtime methods (`exchange_stubs.rs`, `exchange.rs`, the ws `Client`/`Future` handles) take a

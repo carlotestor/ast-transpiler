@@ -4310,7 +4310,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     // Unified methods whose `Str` parameter is a required base-spec `string` (`market (symbol: Str)` keeps `Str`
     // so its callers may pass one; the typed signature takes the symbol itself).
-    private static readonly RUST_TYPED_STR_PARAMS: Set<string> = new Set([ 'market' ]);
+    private static readonly RUST_TYPED_STR_PARAMS: Set<string> = new Set([ 'market', 'currency' ]);
 
     // Unified return kind -> Rust type; the body's `Value` result decodes through `types::FromRaw`.
     private static readonly RUST_TYPED_RETURNS: Record<string, string> = {
@@ -4361,6 +4361,7 @@ export class RustTranspiler extends BaseTranspiler {
         fetchMarkets: 'Vec<crate::types::Market>',
         loadMarkets: 'crate::types::Markets',
         market: 'crate::types::Market',
+        currency: 'crate::types::Currency',
         setSandboxMode: '()',
         fetchCurrencies: 'crate::types::Currencies',
         fetchPositions: 'Vec<crate::types::Position>',
@@ -4699,13 +4700,31 @@ export class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_MARKET_SAFE_READERS = new Set(['safeString', 'safeBool']);
     private static readonly RUST_MARKET_OPT_STR_FIELDS = new Set(['settle']);
     private rustMarketLocalDecisions = new Map<any, false | 'struct' | 'opt' | 'call'>();
+    // typed sync cores whose result locals keep the struct: Rust type and the keys read as fields
+    private static readonly RUST_STRUCT_CALLS: Record<string, { type: string, str: Record<string, string>, optStr: Set<string>, bool: Set<string>, optBool: Set<string> }> = {
+        market: { type: 'crate::types::Market', str: RustTranspiler.RUST_MARKET_STR_FIELDS, optStr: RustTranspiler.RUST_MARKET_OPT_STR_FIELDS, bool: RustTranspiler.RUST_MARKET_BOOL_FIELDS, optBool: RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS },
+        currency: { type: 'crate::types::Currency', str: { id: 'id', code: 'code' }, optStr: new Set(['name']), bool: new Set(), optBool: new Set() },
+    };
+    private rustStructLocalCallee = new Map<any, string>();
+
+    /** The typed struct core (`market` / `currency`) a call invokes, if any. */
+    rustStructCalleeOf(node: any): string | undefined {
+        const call: any = this.rustSkipWrappers(node);
+        if (call === undefined || !isCallExpression(call) || !isPropertyAccessExpression(call.expression)
+            || call.expression.expression.kind !== SyntaxKind.ThisKeyword || call.arguments.length !== 1) return undefined;
+        const name = String(call.expression.name.text);
+        return RustTranspiler.RUST_STRUCT_CALLS[name] !== undefined && this.rustTypedUnified.has(name) ? name : undefined;
+    }
+
+    /** The field table of the struct local an identifier names (market by default). */
+    rustStructFieldsOf(n: any) {
+        const declaration: any = n !== undefined && isIdentifier(n) ? this.rustDeclarationOfIdentifier(n) : undefined;
+        return RustTranspiler.RUST_STRUCT_CALLS[this.rustStructLocalCallee.get(declaration) ?? 'market'];
+    }
 
     /** `this.market (x)` printed through the typed core. */
     rustIsTypedMarketCall(node: any): boolean {
-        const call: any = this.rustSkipWrappers(node);
-        return call !== undefined && isCallExpression(call) && isPropertyAccessExpression(call.expression)
-            && call.expression.expression.kind === SyntaxKind.ThisKeyword && call.expression.name.text === 'market'
-            && call.arguments.length === 1 && this.rustTypedUnified.has('market');
+        return this.rustStructCalleeOf(node) !== undefined;
     }
 
     /** The literal key of a struct-local read `m['k']` / `m.k` (not written, not called). */
@@ -4735,8 +4754,9 @@ export class RustTranspiler extends BaseTranspiler {
         // `const spot = this.safeBool (m, 'spot', false)`: the bool-local passes key on the reader's own text
         if (call.parent?.kind === SyntaxKind.VariableDeclaration || isParenthesizedExpression(call.parent)) return undefined;
         const key = String(call.arguments[1].text);
-        if (name === 'safeString' && call.arguments.length === 2 && (RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== undefined || RustTranspiler.RUST_MARKET_OPT_STR_FIELDS.has(key))) return key;
-        if (name === 'safeBool' && (RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key) || RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key))
+        const f = this.rustStructFieldsOf(call.arguments[0]);
+        if (name === 'safeString' && call.arguments.length === 2 && (f.str[key] !== undefined || f.optStr.has(key))) return key;
+        if (name === 'safeBool' && (f.bool.has(key) || f.optBool.has(key))
             && (call.arguments.length === 2 || (call.arguments.length === 3 && call.arguments[2].kind === SyntaxKind.FalseKeyword))) return key;
         return undefined;
     }
@@ -4773,8 +4793,11 @@ export class RustTranspiler extends BaseTranspiler {
     /** `m = this.market (x)` as its own statement: a later write of the same struct. */
     rustIsTypedMarketWrite(n: any): boolean {
         const parent: any = n.parent;
-        return parent !== undefined && isBinaryExpression(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind.EqualsToken
-            && parent.parent?.kind === SyntaxKind.ExpressionStatement && this.rustIsTypedMarketCall(parent.right);
+        if (parent === undefined || !isBinaryExpression(parent) || parent.left !== n || parent.operatorToken.kind !== SyntaxKind.EqualsToken
+            || parent.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const callee = this.rustStructCalleeOf(parent.right);
+        const declaration: any = isIdentifier(n) ? this.rustDeclarationOfIdentifier(n) : undefined;
+        return callee !== undefined && (this.rustStructLocalCallee.get(declaration) ?? callee) === callee;
     }
 
     /** `m === undefined` / `m !== undefined` (either side). */
@@ -4798,7 +4821,10 @@ export class RustTranspiler extends BaseTranspiler {
                 && this.rustMarketValueUse(n)) ? 'call' : false;
         }
         const empty = declaration.initializer === undefined || this.literalKindOfNode(declaration.initializer) === 'null';
-        if (!empty && !this.rustIsTypedMarketCall(declaration.initializer)) return false;
+        const callee = empty ? this.rustEmptyStructLocalCallee(declaration) : this.rustStructCalleeOf(declaration.initializer);
+        if (callee === undefined) return false;
+        this.rustStructLocalCallee.set(declaration, callee);
+        const fields = RustTranspiler.RUST_STRUCT_CALLS[callee];
         if (empty && ((declaration.parent.flags & NodeFlags.Const) !== 0 || this.rustNilLocalKind(declaration) !== undefined)) return false;
         const file = String(declaration.getSourceFile?.()?.fileName ?? '');
         if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file)) return false;
@@ -4814,8 +4840,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (empty) return this.rustIsNullTestOf(n) || this.rustMarketValueUse(n);
             const key = this.rustMarketReadKey(n);
             if (key !== undefined) {
-                if (RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== undefined || RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key)
-                    || RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key) || RustTranspiler.RUST_MARKET_OPT_STR_FIELDS.has(key)) fieldReads++;
+                if (fields.str[key] !== undefined || fields.bool.has(key) || fields.optBool.has(key) || fields.optStr.has(key)) fieldReads++;
                 return true;
             }
             return this.rustMarketValueUse(n);
@@ -4823,6 +4848,22 @@ export class RustTranspiler extends BaseTranspiler {
         if (!ok) return false;
         if (empty) return writes > 0 ? 'opt' : false;
         return fieldReads > 0 ? 'struct' : false;
+    }
+
+    /** The one struct core every `x = this.<core> (..)` statement write of an empty local calls. */
+    rustEmptyStructLocalCallee(declaration: any): string | undefined {
+        const found = new Set<string>();
+        const name = String(declaration.name.text);
+        const visit = (n: any) => {
+            if (isBinaryExpression(n) && n.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(n.left) && n.left.text === name
+                && this.rustDeclarationOfIdentifier(n.left) === declaration) {
+                const callee = this.rustStructCalleeOf(n.right);
+                if (callee !== undefined) found.add(callee);
+            }
+            n.forEachChild(visit);
+        };
+        this.rustEnclosingFunction(declaration)?.forEachChild(visit);
+        return found.size === 1 ? [...found][0] : undefined;
     }
 
     /** The Rust result type of an awaited typed core call other than `market` that decodes into a struct. */
@@ -4891,7 +4932,8 @@ export class RustTranspiler extends BaseTranspiler {
     /** `let mut market: crate::types::Market = …` — the typed call, its `Err` re-raised as the untyped call did. */
     printTypedMarketLocal(declaration: any, indent: string, varName: string): string | undefined {
         const kind = this.rustMarketLocalKind(declaration);
-        if (kind === 'opt') return `${indent}let mut ${varName}: Option<crate::types::Market> = None`;
+        const structType = RustTranspiler.RUST_STRUCT_CALLS[this.rustStructLocalCallee.get(declaration) ?? 'market'].type;
+        if (kind === 'opt') return `${indent}let mut ${varName}: Option<${structType}> = None`;
         if (kind === 'call') {
             const ret = this.rustTypedCallResultType(declaration.initializer);
             const value = this.printTypedMarketValue(this.rustSkipWrappers(declaration.initializer).expression);
@@ -4899,7 +4941,7 @@ export class RustTranspiler extends BaseTranspiler {
         }
         if (kind !== 'struct') return undefined;
         const value = this.printTypedMarketValue(declaration.initializer);
-        return value === undefined ? undefined : `${indent}let mut ${varName}: crate::types::Market = ${value}`;
+        return value === undefined ? undefined : `${indent}let mut ${varName}: ${structType} = ${value}`;
     }
 
     /** A read off a struct local: a listed field natively, any other key off `raw`; `asBool` for a condition slot. */
@@ -4912,17 +4954,18 @@ export class RustTranspiler extends BaseTranspiler {
         if (key === undefined) return undefined;
         // parenthesised receiver: ccxt's `<local>.<field>` -> `get_value` pass leaves `(m).f` alone
         const recv = `(${this.printNode(declaration.name, 0)})`;
-        if (RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key)) return asBool ? `${recv}.${key}` : `Value::Bool(${recv}.${key})`;
-        if (RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key) && (asBool || (isCallExpression(node) && node.arguments.length === 3))) {
+        const f = this.rustStructFieldsOf(receiver);
+        if (f.bool.has(key)) return asBool ? `${recv}.${key}` : `Value::Bool(${recv}.${key})`;
+        if (f.optBool.has(key) && (asBool || (isCallExpression(node) && node.arguments.length === 3))) {
             // `safeBool (m, 'linear', false)` and a truthiness test both read `true` only for `Some(true)`
             return asBool ? `(${recv}.${key} == Some(true))` : `Value::Bool(${recv}.${key} == Some(true))`;
         }
         if (asBool) return undefined;
-        const field = RustTranspiler.RUST_MARKET_STR_FIELDS[key];
+        const field = f.str[key];
         if (field !== undefined) return `Value::from(${recv}.${field}.clone())`;
-        if (RustTranspiler.RUST_MARKET_OPT_STR_FIELDS.has(key)) return `Value::from(${recv}.${key}.as_deref())`;
+        if (f.optStr.has(key)) return `Value::from(${recv}.${key}.as_deref())`;
         // a declared flag's initializer keeps the raw read: the bool-local narrowing keys on it
-        if (RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key) && !isCallExpression(node) && node.parent?.kind !== SyntaxKind.VariableDeclaration) {
+        if (f.optBool.has(key) && !isCallExpression(node) && node.parent?.kind !== SyntaxKind.VariableDeclaration) {
             return `${recv}.${key}.map(Value::Bool).unwrap_or_default()`;
         }
         return `${recv}.raw.as_map().and_then(|__m| __m.get(${JSON.stringify(key)})).cloned().unwrap_or(Value::Null)`;
@@ -4942,7 +4985,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustDeclarationPrintsNativeBool(declaration) || this.rustEnclosingFunction(inner) !== this.rustEnclosingFunction(declaration)) return undefined;
         const init: any = this.unwrapParens(declaration.initializer);
         if (init === undefined || !(isElementAccessExpression(init) || isPropertyAccessExpression(init))) return undefined;
-        if (this.rustTypedMarketLocalOf(init.expression) === undefined) return undefined;
+        if (this.rustTypedMarketLocalOf(init.expression) === undefined || this.rustStructFieldsOf(init.expression).type !== 'crate::types::Market') return undefined;
         const key = this.rustMarketReadKey(init.expression);
         if (key === undefined || !RustTranspiler.RUST_MARKET_FLAG_KEYS.has(key) || RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key)) return undefined;
         const text = `${super.printIdentifier(inner)}.as_bool() == Some(true)`;

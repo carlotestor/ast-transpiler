@@ -28,6 +28,10 @@ const rustInlineFixtures: Record<string, Record<string, string>> = {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Market { id: Str; symbol: string; spot: boolean; swap: boolean; stock?: boolean; linear: boolean | undefined; info: any }\nexport default class Exchange {\n    markets: Dict = {};\n    market (symbol: Str): Market {\n        return this.markets[symbol];\n    }\n    safeString (d: any, k: any): Str {\n        return d[k];\n    }\n    hold (m: any): any {\n        return m;\n    }\n}\n",
   "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fetchOne (symbol: string, params: Dict = {}) {\n        const market = this.market (symbol);\n        const request: Dict = { 'pair': market['id'] };\n        if (market['swap'] || market['linear']) {\n            request['info'] = market['info'];\n        }\n        request['s'] = this.safeString (market, 'symbol');\n        return this.hold (market);\n    }\n    fetchTwo (symbol: string) {\n        let market = this.market (symbol);\n        market = this.market ('x');\n        return market['id'];\n    }\n    fetchThree (symbol: string) {\n        const market = this.market (symbol);\n        const isStock = market['stock'];\n        const isStockSpot = isStock && (market['spot'] === true);\n        if (isStockSpot || (market['spot'] !== true)) {\n            return market['id'];\n        }\n        return market['symbol'];\n    }\n}\n"
  },
+ "typed-currency-local": {
+  "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Currency { id: string; code: string; name: Str; info: any }\nexport default class Exchange {\n    currencies: Dict = {};\n    currency (code: Str): Currency {\n        return this.currencies[code];\n    }\n    hold (m: any, n: any = undefined): any {\n        return m;\n    }\n}\n",
+  "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fetchA (code: string, params: Dict = {}) {\n        const currency = this.currency (code);\n        return this.hold ({ 'asset': currency['id'], 'c': currency['code'], 'n': currency['name'] }, currency);\n    }\n    fetchB (code: Str = undefined, params: Dict = {}) {\n        let currency = undefined;\n        if (code !== undefined) {\n            currency = this.currency (code);\n        }\n        return this.hold (params, currency);\n    }\n}\n"
+ },
  "typed-call-results": {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Market { id: Str; symbol: string; type: string; settle: Str; linear: boolean | undefined; info: any }\nexport interface Order { id: string; info: any }\nexport default class Exchange {\n    markets: Dict = {};\n    market (symbol: Str): Market {\n        return this.markets[symbol];\n    }\n    async loadMarkets (reload = false, params: Dict = {}): Promise<Dict> {\n        return this.markets;\n    }\n    async fetchOrders (symbol: Str = undefined, params: Dict = {}): Promise<Order[]> {\n        return [];\n    }\n    hold (m: any, n: any = undefined): any {\n        return m;\n    }\n}\n",
   "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async fetchA (symbol: Str = undefined, params: Dict = {}) {\n        await this.loadMarkets ();\n        let market = undefined;\n        if (symbol !== undefined) {\n            market = this.market (symbol);\n        }\n        return this.hold (params, market);\n    }\n    async fetchB (symbol: string, params: Dict = {}) {\n        let market = this.market (symbol);\n        if (market['type'] === 'swap') {\n            market = this.market ('x');\n        }\n        return this.hold ({ 'k': market['settle'], 'l': market['linear'], 'b': market['baseId'] }, market);\n    }\n    async fetchC (symbol: string, params: Dict = {}) {\n        const orders = await this.fetchOrders (symbol, params);\n        return this.hold (orders);\n    }\n}\n"
@@ -6796,5 +6800,34 @@ describe('rust typed core call results', () => {
     test('a typed call result handed off keeps its struct type', () => {
         expect(output).toContain('let mut orders: Vec<crate::types::Order> = (match self.fetch_orders(');
         expect(output).toContain('self.hold(crate::types::IntoRaw::into_raw(orders.clone())');
+    });
+});
+
+describe('rust typed Currency locals', () => {
+    let output = '';
+    beforeAll(() => {
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['currency'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        output = typed.transpileRustByPath(path.join (rustFixtureRoot, 'typed-currency-local', 'ts/src/venue.ts')).content;
+    });
+
+    test('currency has one typed signature', () => {
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['currency'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const base = typed.transpileRustByPath(path.join (rustFixtureRoot, 'typed-currency-local', 'ts/src/base/Exchange.ts')).content;
+        expect(base).toContain('pub fn currency(&self, code: &str) -> crate::Result<crate::types::Currency>');
+    });
+
+    test('a read-only currency local keeps the struct and reads id/code/name natively', () => {
+        expect(output).toContain('let mut currency: crate::types::Currency = (match self.currency(');
+        expect(output).toContain('Value::from((currency).id.clone())');
+        expect(output).toContain('Value::from((currency).code.clone())');
+        expect(output).toContain('Value::from((currency).name.as_deref())');
+        expect(output).toContain('self.hold(');
+        expect(output).toContain('(currency).raw.clone()');
+    });
+
+    test('an empty local written only by this.currency is an Option<Currency>', () => {
+        expect(output).toContain('let mut currency: Option<crate::types::Currency> = None');
+        expect(output).toContain('currency = Some(match self.currency(');
+        expect(output).not.toContain('IntoRaw::into_raw(self.currency(');
     });
 });

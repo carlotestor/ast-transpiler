@@ -566,6 +566,18 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_MARKET_SAFE_READERS;
     private static readonly RUST_MARKET_OPT_STR_FIELDS;
     private rustMarketLocalDecisions;
+    private static readonly RUST_STRUCT_CALLS;
+    private rustStructLocalCallee;
+    /** The typed struct core (`market` / `currency`) a call invokes, if any. */
+    rustStructCalleeOf(node: any): string | undefined;
+    /** The field table of the struct local an identifier names (market by default). */
+    rustStructFieldsOf(n: any): {
+        type: string;
+        str: Record<string, string>;
+        optStr: Set<string>;
+        bool: Set<string>;
+        optBool: Set<string>;
+    };
     /** `this.market (x)` printed through the typed core. */
     rustIsTypedMarketCall(node: any): boolean;
     /** The literal key of a struct-local read `m['k']` / `m.k` (not written, not called). */
@@ -581,6 +593,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `m === undefined` / `m !== undefined` (either side). */
     rustIsNullTestOf(n: any): boolean;
     rustMarketLocalIsTypedUncached(declaration: any): false | 'struct' | 'opt' | 'call';
+    /** The one struct core every `x = this.<core> (..)` statement write of an empty local calls. */
+    rustEmptyStructLocalCallee(declaration: any): string | undefined;
     /** The Rust result type of an awaited typed core call other than `market` that decodes into a struct. */
     rustTypedCallResultType(init: any): string | undefined;
     rustCallLocalOf(node: any): any;
