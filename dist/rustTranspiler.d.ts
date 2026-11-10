@@ -396,8 +396,18 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustScalarDecisions;
     private rustScalarCandidates;
     private rustScalarUseForms;
+    private rustScalarSolved;
+    private rustScalarSolving;
+    private rustScalarSeeding;
+    private rustScalarVetoed;
+    private rustScalarGuarded;
     /** The Rust kind (`ostr|oint|onum|str|int|num|bool`) a scalar local is declared with, else undefined. */
     rustScalarLocalKind(declaration: any): string | undefined;
+    /** Decides every scalar candidate of one function together: seeds each with its initializer kind,
+     *  then re-checks all of them in declaration order until a whole pass changes nothing (each kept
+     *  decision is then proven against the final ones); a candidate that keeps flipping stays `Value`. */
+    rustScalarSolveScope(scope: any): void;
+    rustScalarTry(declaration: any): string | null;
     /** The scalar local an identifier reads (never its own declaration name). */
     rustScalarLocalOf(node: any): {
         declaration: any;
@@ -489,7 +499,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A plain `Value` assignment target (no typed-local rule claims it). */
     rustScalarPlainValueTarget(left: any): boolean;
     /** Re-boxing an optional local lengthens each use: keep a line under the 400-char limit it was under. */
-    rustScalarBoxesOverflow(declaration: any, uses: any[], kind: string): boolean;
+    /** Prints a method body; boxed expression-shape locals named on a printed line over 400 chars
+     *  are left `Value` when that lowers the count of such lines. */
+    printRustScalarGuardedBody(method: any, print: () => string): string;
+    /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
+    rustScalarInsertKeyUse(n: any): boolean;
+    /** The insert key of a `String` scalar local, else undefined. */
+    rustScalarInsertKeyArg(keyNode: any): string | undefined;
     /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
      *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */
     rustScalarExpressionUseForm(n: any, kind: string): string | undefined;

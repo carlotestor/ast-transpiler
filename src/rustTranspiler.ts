@@ -1181,6 +1181,7 @@ export class RustTranspiler extends BaseTranspiler {
         }
         // Dynamic key: a plain place, never one that reads the receiver (the
         // insert holds its `&mut`). Every other key shape keeps the helper.
+        const scalarKey = this.rustScalarInsertKeyArg(keyNode); if (scalarKey !== undefined) return scalarKey;
         const key = keyText.trim();
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)
             || (receiver.isField ? key.includes('self') : new RegExp(`\\b${receiver.text}\\b`).test(key))) {
@@ -1684,6 +1685,7 @@ export class RustTranspiler extends BaseTranspiler {
     // operands prove the helper's answer: one number pins `<`/`>`; `>=`/`<=`
     // OR `is_equal` in (TRUE for two Nulls) and need a 'definite' operand.
     printNativeOrderedComparison(node, op, left, right): string | undefined {
+        const scalar = this.rustScalarOwnsOperand(left) || this.rustScalarOwnsOperand(right) ? this.printRustScalarBinary(node) : undefined; if (scalar !== undefined) return scalar;
         const operator = RustTranspiler.NATIVE_COMPARISON_OPERATORS[op];
         if (operator === undefined || !this.printsValueExpression(this.orderedComparisonOperand(left)) ||
             !this.printsValueExpression(this.orderedComparisonOperand(right))) {
@@ -3384,21 +3386,72 @@ export class RustTranspiler extends BaseTranspiler {
     private rustScalarDecisions = new Map<any, string | null>();
     private rustScalarCandidates = new WeakMap<Node, Set<string>>();
     private rustScalarUseForms = new WeakMap<Node, string | undefined>();
+    private rustScalarSolved = new Set<Node>();
+    private rustScalarSolving = new Set<Node>();
+    private rustScalarSeeding = false;
+    private rustScalarVetoed = new WeakSet<Node>();
+    private rustScalarGuarded = new WeakSet<Node>();
 
     /** The Rust kind (`ostr|oint|onum|str|int|num|bool`) a scalar local is declared with, else undefined. */
     rustScalarLocalKind(declaration): string | undefined {
         if (declaration === undefined || !isVariableDeclaration(declaration)) return undefined;
-        let kind = this.rustScalarDecisions.get(declaration);
-        if (kind === undefined) {
-            this.rustScalarDecisions.set(declaration, null); // re-entrancy guard
-            try {
-                kind = this.rustScalarLocalKindUncached(declaration) ?? null;
-            } catch (e) {
-                kind = null; // no proof -> the local keeps its `Value` box
-            }
-            this.rustScalarDecisions.set(declaration, kind);
-        }
+        const scope: any = this.rustEnclosingFunction(declaration);
+        if (scope !== undefined && !this.rustScalarSolved.has(scope) && !this.rustScalarSolving.has(scope)) this.rustScalarSolveScope(scope);
+        const kind = this.rustScalarDecisions.get(declaration);
         return kind ?? undefined;
+    }
+
+    /** Decides every scalar candidate of one function together: seeds each with its initializer kind,
+     *  then re-checks all of them in declaration order until a whole pass changes nothing (each kept
+     *  decision is then proven against the final ones); a candidate that keeps flipping stays `Value`. */
+    rustScalarSolveScope(scope): void {
+        const candidates = (this.rustScopeIndex(scope.getSourceFile()).nodes as any[]).filter((n) => isVariableDeclaration(n) && isIdentifier(n.name)
+            && this.rustScalarInitShape(n.initializer) && this.rustEnclosingFunction(n) === scope);
+        this.rustScalarSolving.add(scope);
+        try {
+            // the other typed-local rules decide first and cache, so they never see a trial kind
+            for (const n of candidates) {
+                this.rustScalarDecisions.set(n, null);
+                try {
+                    this.rustSafeStringLocalIsTyped(n); this.rustStringMethodLocalInit(n);
+                } catch (e) {
+                    // the scalar rule re-checks and refuses on its own
+                }
+            }
+            this.rustScalarSeeding = true;
+            try {
+                for (let pass = 0; pass < 2; pass++) {
+                    for (const n of candidates) this.rustScalarDecisions.set(n, this.rustScalarTry(n));
+                }
+            } finally {
+                this.rustScalarSeeding = false;
+            }
+            const unstable = new Set<any>();
+            for (let pass = 0; pass < 12; pass++) {
+                let changed = false;
+                for (const n of candidates) {
+                    const kind = unstable.has(n) ? null : this.rustScalarTry(n);
+                    if (kind !== this.rustScalarDecisions.get(n)) {
+                        changed = true;
+                        if (pass >= 6) unstable.add(n);
+                    }
+                    this.rustScalarDecisions.set(n, unstable.has(n) ? null : kind);
+                }
+                if (!changed) return;
+            }
+            for (const n of candidates) this.rustScalarDecisions.set(n, null);
+        } finally {
+            this.rustScalarSolving.delete(scope);
+            this.rustScalarSolved.add(scope);
+        }
+    }
+
+    rustScalarTry(declaration): string | null {
+        try {
+            return this.rustScalarLocalKindUncached(declaration) ?? null;
+        } catch (e) {
+            return null; // no proof -> the local keeps its `Value` box
+        }
     }
 
     /** The scalar local an identifier reads (never its own declaration name). */
@@ -3436,7 +3489,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     rustScalarLocalKindUncached(declaration): string | undefined {
-        if (!this.rustScalarInitShape(declaration.initializer)) return undefined;
+        if (!this.rustScalarInitShape(declaration.initializer) || this.rustScalarVetoed.has(declaration)) return undefined;
         const list: any = declaration.parent;
         if (!isIdentifier(declaration.name) || list?.kind !== SyntaxKind.VariableDeclarationList || list.declarations.length !== 1
             || list.parent?.kind !== SyntaxKind.VariableStatement) return undefined;
@@ -3454,20 +3507,27 @@ export class RustTranspiler extends BaseTranspiler {
         const seeded = kind;
         kind = this.rustScalarWidenedKind(declaration, kind);
         const widened = kind !== seeded || this.rustScalarExpressionKind(declaration.initializer) !== undefined;
-        const boxed: any[] = [];
+        let boxed = false;
         let expressionUses = false;
+        // uses that read the local itself (`.length`, compares) see the candidate kind
+        if (this.rustScalarSeeding) return kind;
+        const previous = this.rustScalarDecisions.get(declaration);
+        this.rustScalarDecisions.set(declaration, kind);
         const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
             if (this.rustIdentifierIsPropertyName(n)) return n.parent?.kind !== SyntaxKind.ShorthandPropertyAssignment;
             if (this.rustEnclosingFunction(n) !== scope) return false;
             const form = this.rustScalarUseForm(n, kind);
             this.rustScalarUseForms.set(n, form);
-            if (form === 'box' || form === 'xbox' || form === 'err') boxed.push(n);
+            if (form === 'box' || form === 'xbox' || form === 'err') boxed = true;
             if (form === 'xbox' || form === 'native' || form === 'targ' || form === 'err') expressionUses = true;
             return form !== undefined;
         });
-        // the guard covers only the locals the expression shapes admit
-        const accepted = ok && !((widened || expressionUses) && this.rustScalarBoxesOverflow(declaration, boxed, kind));
-        return accepted ? kind : undefined;
+        this.rustScalarDecisions.set(declaration, previous);
+        // boxed uses of the expression shapes are checked against the printed method lines
+        const guarded = (widened || expressionUses) && boxed;
+        if (!ok || (guarded && scope.kind !== SyntaxKind.MethodDeclaration)) return undefined;
+        if (guarded) this.rustScalarGuarded.add(declaration);
+        return kind;
     }
 
     /** Integer literal text (`5`, `-5`) that fits an `i64`, else undefined. */
@@ -3598,6 +3658,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (kind === 'bool' && this.rustIdentifierUseIsCondition(n)) return 'cond';
         // a nested `a[k1][k2] = ..` write is rewritten by ccxt text passes keyed on its boxed operands
         if (this.rustScalarInNestedWrite(n)) return undefined;
+        if (kind === 'str' && this.rustScalarInsertKeyUse(n)) return 'key';
         if (isCallExpression(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
             return this.rustNilBoxSlotOk(parent, parent.arguments.indexOf(n)) ? 'box' : this.rustScalarExpressionUseForm(n, kind);
         }
@@ -3693,7 +3754,7 @@ export class RustTranspiler extends BaseTranspiler {
     printRustScalarLocalRead(node): string | undefined {
         const local = this.rustScalarLocalOf(node);
         const form = local === undefined ? undefined : this.rustScalarUseForms.get(node);
-        if (form === 'cond' || form === 'concat' || form === 'native' || form === 'targ') return super.printIdentifier(node);
+        if (form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'key') return super.printIdentifier(node);
         if (form === 'err') return `${super.printIdentifier(node)}.clone()`;
         if (form !== 'box' && form !== 'xbox') return undefined;
         const name = super.printIdentifier(node);
@@ -3893,7 +3954,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (symbol === undefined && !equality) return undefined;
         const contains = this.rustScalarContainsTest(node, dry);
         if (contains !== undefined) return contains;
-        if (!this.rustScalarHasTypedOperand(node)) return undefined;
+        if (!this.rustScalarHasTypedOperand(node.left) && !this.rustScalarHasTypedOperand(node.right)) return undefined;
         const left: any = this.unwrapParens(node.left);
         const right: any = this.unwrapParens(node.right);
         const text = (k: string, n) => dry ? '_' : this.rustScalarOperandText(k, n);
@@ -3920,10 +3981,13 @@ export class RustTranspiler extends BaseTranspiler {
         if (lo && ro) return undefined;
         if (lo || ro) {
             if (base(lk) !== base(rk)) return undefined;
-            // `None` orders below every `Some`, which matches a false JS comparison only on the greater side
+            // `None` orders below every `Some`; a JS compare with `undefined` is false, so the
+            // smaller side of an ordering is tested with `is_some()` first (locals only: read twice)
             const greater = op === SyntaxKind.GreaterThanToken || op === SyntaxKind.GreaterThanEqualsToken ? lo : (equality ? true : ro);
-            if (!greater) return undefined;
-            return lo ? `${text(lk, left)} ${sign} Some(${text(rk, right)})` : `Some(${text(lk, left)}) ${sign} ${text(rk, right)}`;
+            const cmp = lo ? `${text(lk, left)} ${sign} Some(${text(rk, right)})` : `Some(${text(lk, left)}) ${sign} ${text(rk, right)}`;
+            if (greater) return cmp;
+            const optional: any = lo ? left : right;
+            return isIdentifier(optional) ? `(${text(lo ? lk : rk, optional)}.is_some() && ${cmp})` : undefined;
         }
         const kind = lk === 'num' || rk === 'num' ? 'num' : 'int';
         return `${text(kind, left)} ${sign} ${text(kind, right)}`;
@@ -4129,32 +4193,50 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** Re-boxing an optional local lengthens each use: keep a line under the 400-char limit it was under. */
-    rustScalarBoxesOverflow(declaration, uses: any[], kind: string): boolean {
-        const roots = new Map<any, number>();
-        for (const n of uses) {
-            let root: any = n;
-            while (root.parent !== undefined && !isStatement(root.parent) && !isBlock(root.parent)) root = root.parent;
-            const statement: any = root.parent;
-            const flat = statement !== undefined && (statement.kind === SyntaxKind.ExpressionStatement || statement.kind === SyntaxKind.VariableStatement
-                || statement.kind === SyntaxKind.ReturnStatement || statement.kind === SyntaxKind.ThrowStatement);
-            roots.set(flat ? statement : root, (roots.get(flat ? statement : root) ?? 0) + 1);
+    /** Prints a method body; boxed expression-shape locals named on a printed line over 400 chars
+     *  are left `Value` when that lowers the count of such lines. */
+    printRustScalarGuardedBody(method, print: () => string): string {
+        const loops = this.forLoopCounter;
+        const typed = print();
+        const long = (text: string) => text.split('\n').filter((l) => l.length > 400);
+        const lines = long(typed);
+        if (lines.length === 0) return typed;
+        const held: any[] = [];
+        for (const n of this.rustScopeIndex(method.getSourceFile()).nodes as any[]) {
+            if (!isVariableDeclaration(n) || !this.rustScalarGuarded.has(n) || this.rustEnclosingFunction(n) !== method) continue;
+            if (this.rustScalarDecisions.get(n) && lines.some((l) => new RegExp(`\\b${n.name.text}\\b`).test(l))) held.push(n);
         }
-        const long = [ ...roots ].filter(([ root ]) => String(root.getText?.() ?? '').replace(/\s+/g, ' ').length >= 40);
-        if (long.length === 0) return false;
-        // estimated from the source (printing here would cache decisions taken with this one open):
-        // a printed line runs about 2.3x its source plus the box text of each typed use
-        const growth = kind === 'ostr' ? 46 : (kind === 'str' ? 23 : 14);
-        const text = String(declaration.getSourceFile?.()?.text ?? '');
-        const overflow = long.some(([ root, count ]) => {
-            const start = typeof root.getStart === 'function' ? root.getStart() : root.pos;
-            const indent = start - text.lastIndexOf('\n', start - 1) - 1;
-            const source = String(root.getText?.() ?? '').replace(/\s+/g, ' ').length;
-            // a destructuring write prints its tuple temp and every slot on the same line
-            const expression: any = root.kind === SyntaxKind.ExpressionStatement ? root.expression : root;
-            const destructure = isBinaryExpression(expression) && isArrayLiteralExpression(expression.left);
-            return indent + source * (destructure ? 3.3 : 2.3) + count * growth > 330;
-        });
-        return overflow;
+        if (held.length === 0) return typed;
+        // every decision of the method is re-taken, so use forms always match their decision
+        const redo = () => {
+            this.rustScalarSolved.delete(method);
+            this.forLoopCounter = loops;
+            return print();
+        };
+        for (const n of held) this.rustScalarVetoed.add(n);
+        const boxed = redo();
+        if (long(boxed).length < lines.length) return boxed;
+        for (const n of held) this.rustScalarVetoed.delete(n);
+        return redo();
+    }
+
+    /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
+    rustScalarInsertKeyUse(n): boolean {
+        const access: any = n.parent;
+        if (!isElementAccessExpression(access) || access.argumentExpression !== n || !isIdentifier(access.expression)) return false;
+        const write: any = access.parent;
+        if (!isBinaryExpression(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind.EqualsToken || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const base: any = access.expression;
+        const key = String(n.text);
+        if (new RegExp(`\\b${key}\\b`).test(String(write.right.getText()))) return false;
+        return (this.rustBearerDictInsert(base, n, key, 'x') ?? this.rustMapParamDictInsert(base, n, key, 'x')
+            ?? this.printNativeDictInsert(base, n, key, 'x') ?? this.rustNativeDictInsert(base, n, key, 'x')) !== undefined;
+    }
+
+    /** The insert key of a `String` scalar local, else undefined. */
+    rustScalarInsertKeyArg(keyNode): string | undefined {
+        const key: any = this.rustSkipWrappers(keyNode);
+        return isIdentifier(key) && this.rustScalarLocalOf(key)?.kind === 'str' && this.rustScalarUseForms.get(key) === 'key' ? `${super.printIdentifier(key)}.clone()` : undefined;
     }
 
     /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
@@ -5505,7 +5587,7 @@ export class RustTranspiler extends BaseTranspiler {
         const shadowPlan = this.rustProHandlerShadowPlan(node, identation);
         const savedShadowParam = this.rustProHandlerShadowParam;
         if (shadowPlan !== undefined) this.rustProHandlerShadowParam = shadowPlan.param;
-        const statements = node.body.statements.map(s => this.printNode(s, identation + 2)).join('\n');
+        const statements = this.printRustScalarGuardedBody(node, () => node.body.statements.map(s => this.printNode(s, identation + 2)).join('\n'));
         this.rustProHandlerShadowParam = savedShadowParam;
         const typed = this.rustTypedSignature(node);
         if (typed !== undefined) {
@@ -8124,6 +8206,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.nativeEqualityText(inner) !== undefined) return true;
         if (this.printTypedMarketRead(inner, true) !== undefined) return true; // a typed market flag is a bool
         if (inner.kind === SyntaxKind.BinaryExpression && this.nativeIndexOfLiteralTestText(inner.operatorToken.kind, inner.left, inner.right) !== undefined) return true;
+        if (inner.kind === SyntaxKind.BinaryExpression && this.rustScalarOwnsOperand(inner) && this.rustScalarCompareText(inner, true) !== undefined) return true;
         return inner.kind === SyntaxKind.BinaryExpression && this.isLogicalOp(inner.operatorToken.kind) &&
             (this.hasNativeComparisonOperand(inner.left) || this.hasNativeComparisonOperand(inner.right));
     }
@@ -9528,6 +9611,7 @@ export class RustTranspiler extends BaseTranspiler {
         const key: any = this.rustSkipWrappers(keyNode);
         if (key === undefined || isStringLiteral(key)) return undefined;
         if (this.placeKeyNative(key) === true) return `${String(key.text)}.clone().unwrap_or_default()`;
+        const scalarKey = this.rustScalarInsertKeyArg(key); if (scalarKey !== undefined) return scalarKey;
         const text = String(keyText).trim();
         if (text === '' || new RegExp(`\\b${receiverName}\\b`).test(text)) return undefined;
         if (!this.rustKeyIsProvenString(key)) return this.stringifiedWriteKeyArg(key, text);

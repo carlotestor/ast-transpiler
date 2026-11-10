@@ -51346,6 +51346,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustScalarDecisions = /* @__PURE__ */ new Map();
     this.rustScalarCandidates = /* @__PURE__ */ new WeakMap();
     this.rustScalarUseForms = /* @__PURE__ */ new WeakMap();
+    this.rustScalarSolved = /* @__PURE__ */ new Set();
+    this.rustScalarSolving = /* @__PURE__ */ new Set();
+    this.rustScalarSeeding = false;
+    this.rustScalarVetoed = /* @__PURE__ */ new WeakSet();
+    this.rustScalarGuarded = /* @__PURE__ */ new WeakSet();
     // ── native `Option<String>` returns (`: Str` methods) ─────────────────────
     //
     // An internal, non-override, non-async method declared `: Str`
@@ -52205,6 +52210,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const keyLiteral = keyText.match(/^Value::Str\((.+)\.(?:to_string|into)\(\)\)$/);
       return keyLiteral === null ? void 0 : `${keyLiteral[1]}.into()`;
     }
+    const scalarKey = this.rustScalarInsertKeyArg(keyNode);
+    if (scalarKey !== void 0)
+      return scalarKey;
     const key = keyText.trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || (receiver.isField ? key.includes("self") : new RegExp(`\\b${receiver.text}\\b`).test(key))) {
       return void 0;
@@ -52630,6 +52638,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // operands prove the helper's answer: one number pins `<`/`>`; `>=`/`<=`
   // OR `is_equal` in (TRUE for two Nulls) and need a 'definite' operand.
   printNativeOrderedComparison(node, op, left, right) {
+    const scalar = this.rustScalarOwnsOperand(left) || this.rustScalarOwnsOperand(right) ? this.printRustScalarBinary(node) : void 0;
+    if (scalar !== void 0)
+      return scalar;
     const operator = _RustTranspiler.NATIVE_COMPARISON_OPERATORS[op];
     if (operator === void 0 || !this.printsValueExpression(this.orderedComparisonOperand(left)) || !this.printsValueExpression(this.orderedComparisonOperand(right))) {
       return void 0;
@@ -54147,17 +54158,64 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustScalarLocalKind(declaration) {
     if (declaration === void 0 || !isVariableDeclaration3(declaration))
       return void 0;
-    let kind = this.rustScalarDecisions.get(declaration);
-    if (kind === void 0) {
-      this.rustScalarDecisions.set(declaration, null);
-      try {
-        kind = this.rustScalarLocalKindUncached(declaration) ?? null;
-      } catch (e) {
-        kind = null;
-      }
-      this.rustScalarDecisions.set(declaration, kind);
-    }
+    const scope = this.rustEnclosingFunction(declaration);
+    if (scope !== void 0 && !this.rustScalarSolved.has(scope) && !this.rustScalarSolving.has(scope))
+      this.rustScalarSolveScope(scope);
+    const kind = this.rustScalarDecisions.get(declaration);
     return kind ?? void 0;
+  }
+  /** Decides every scalar candidate of one function together: seeds each with its initializer kind,
+   *  then re-checks all of them in declaration order until a whole pass changes nothing (each kept
+   *  decision is then proven against the final ones); a candidate that keeps flipping stays `Value`. */
+  rustScalarSolveScope(scope) {
+    const candidates = this.rustScopeIndex(scope.getSourceFile()).nodes.filter((n) => isVariableDeclaration3(n) && isIdentifier3(n.name) && this.rustScalarInitShape(n.initializer) && this.rustEnclosingFunction(n) === scope);
+    this.rustScalarSolving.add(scope);
+    try {
+      for (const n of candidates) {
+        this.rustScalarDecisions.set(n, null);
+        try {
+          this.rustSafeStringLocalIsTyped(n);
+          this.rustStringMethodLocalInit(n);
+        } catch (e) {
+        }
+      }
+      this.rustScalarSeeding = true;
+      try {
+        for (let pass = 0; pass < 2; pass++) {
+          for (const n of candidates)
+            this.rustScalarDecisions.set(n, this.rustScalarTry(n));
+        }
+      } finally {
+        this.rustScalarSeeding = false;
+      }
+      const unstable = /* @__PURE__ */ new Set();
+      for (let pass = 0; pass < 12; pass++) {
+        let changed = false;
+        for (const n of candidates) {
+          const kind = unstable.has(n) ? null : this.rustScalarTry(n);
+          if (kind !== this.rustScalarDecisions.get(n)) {
+            changed = true;
+            if (pass >= 6)
+              unstable.add(n);
+          }
+          this.rustScalarDecisions.set(n, unstable.has(n) ? null : kind);
+        }
+        if (!changed)
+          return;
+      }
+      for (const n of candidates)
+        this.rustScalarDecisions.set(n, null);
+    } finally {
+      this.rustScalarSolving.delete(scope);
+      this.rustScalarSolved.add(scope);
+    }
+  }
+  rustScalarTry(declaration) {
+    try {
+      return this.rustScalarLocalKindUncached(declaration) ?? null;
+    } catch (e) {
+      return null;
+    }
   }
   /** The scalar local an identifier reads (never its own declaration name). */
   rustScalarLocalOf(node) {
@@ -54200,7 +54258,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return _RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name) || _RustTranspiler.RUST_SCALAR_INT_HELPERS[name] !== void 0 || _RustTranspiler.RUST_SCALAR_NUM_HELPERS[name] !== void 0 || _RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name] !== void 0 || _RustTranspiler.RUST_BASE_SCALAR_RETURNS[name] !== void 0;
   }
   rustScalarLocalKindUncached(declaration) {
-    if (!this.rustScalarInitShape(declaration.initializer))
+    if (!this.rustScalarInitShape(declaration.initializer) || this.rustScalarVetoed.has(declaration))
       return void 0;
     const list = declaration.parent;
     if (!isIdentifier3(declaration.name) || list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations.length !== 1 || list.parent?.kind !== SyntaxKind7.VariableStatement)
@@ -54222,8 +54280,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const seeded = kind;
     kind = this.rustScalarWidenedKind(declaration, kind);
     const widened = kind !== seeded || this.rustScalarExpressionKind(declaration.initializer) !== void 0;
-    const boxed = [];
+    let boxed = false;
     let expressionUses = false;
+    if (this.rustScalarSeeding)
+      return kind;
+    const previous = this.rustScalarDecisions.get(declaration);
+    this.rustScalarDecisions.set(declaration, kind);
     const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return n.parent?.kind !== SyntaxKind7.ShorthandPropertyAssignment;
@@ -54232,13 +54294,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const form = this.rustScalarUseForm(n, kind);
       this.rustScalarUseForms.set(n, form);
       if (form === "box" || form === "xbox" || form === "err")
-        boxed.push(n);
+        boxed = true;
       if (form === "xbox" || form === "native" || form === "targ" || form === "err")
         expressionUses = true;
       return form !== void 0;
     });
-    const accepted = ok && !((widened || expressionUses) && this.rustScalarBoxesOverflow(declaration, boxed, kind));
-    return accepted ? kind : void 0;
+    this.rustScalarDecisions.set(declaration, previous);
+    const guarded = (widened || expressionUses) && boxed;
+    if (!ok || guarded && scope.kind !== SyntaxKind7.MethodDeclaration)
+      return void 0;
+    if (guarded)
+      this.rustScalarGuarded.add(declaration);
+    return kind;
   }
   /** Integer literal text (`5`, `-5`) that fits an `i64`, else undefined. */
   rustScalarIntLiteral(node) {
@@ -54380,6 +54447,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "cond";
     if (this.rustScalarInNestedWrite(n))
       return void 0;
+    if (kind === "str" && this.rustScalarInsertKeyUse(n))
+      return "key";
     if (isCallExpression6(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
       return this.rustNilBoxSlotOk(parent, parent.arguments.indexOf(n)) ? "box" : this.rustScalarExpressionUseForm(n, kind);
     }
@@ -54484,7 +54553,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   printRustScalarLocalRead(node) {
     const local = this.rustScalarLocalOf(node);
     const form = local === void 0 ? void 0 : this.rustScalarUseForms.get(node);
-    if (form === "cond" || form === "concat" || form === "native" || form === "targ")
+    if (form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "key")
       return super.printIdentifier(node);
     if (form === "err")
       return `${super.printIdentifier(node)}.clone()`;
@@ -54712,7 +54781,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const contains = this.rustScalarContainsTest(node, dry);
     if (contains !== void 0)
       return contains;
-    if (!this.rustScalarHasTypedOperand(node))
+    if (!this.rustScalarHasTypedOperand(node.left) && !this.rustScalarHasTypedOperand(node.right))
       return void 0;
     const left = this.unwrapParens(node.left);
     const right = this.unwrapParens(node.right);
@@ -54748,9 +54817,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (base(lk) !== base(rk))
         return void 0;
       const greater = op === SyntaxKind7.GreaterThanToken || op === SyntaxKind7.GreaterThanEqualsToken ? lo : equality ? true : ro;
-      if (!greater)
-        return void 0;
-      return lo ? `${text(lk, left)} ${sign} Some(${text(rk, right)})` : `Some(${text(lk, left)}) ${sign} ${text(rk, right)}`;
+      const cmp = lo ? `${text(lk, left)} ${sign} Some(${text(rk, right)})` : `Some(${text(lk, left)}) ${sign} ${text(rk, right)}`;
+      if (greater)
+        return cmp;
+      const optional = lo ? left : right;
+      return isIdentifier3(optional) ? `(${text(lo ? lk : rk, optional)}.is_some() && ${cmp})` : void 0;
     }
     const kind = lk === "num" || rk === "num" ? "num" : "int";
     return `${text(kind, left)} ${sign} ${text(kind, right)}`;
@@ -54985,30 +55056,56 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return !this.rustSafeStringLocalIsTyped(declaration) && this.rustStringMethodLocalInit(declaration) === void 0 && this.getRustBoolLocalInitializer(declaration, this.printNode(declaration.initializer, 0)) === void 0 && !this.rustVecLocalIsTyped(declaration) && !this.rustDictLocalIsTyped(declaration) && !this.rustNestedDictLocalIsTyped(declaration) && !this.rustMarketLocalIsTyped(declaration) && this.rustReadBearerKindOfDeclaration(declaration) === false;
   }
   /** Re-boxing an optional local lengthens each use: keep a line under the 400-char limit it was under. */
-  rustScalarBoxesOverflow(declaration, uses, kind) {
-    const roots = /* @__PURE__ */ new Map();
-    for (const n of uses) {
-      let root = n;
-      while (root.parent !== void 0 && !isStatement(root.parent) && !isBlock4(root.parent))
-        root = root.parent;
-      const statement = root.parent;
-      const flat = statement !== void 0 && (statement.kind === SyntaxKind7.ExpressionStatement || statement.kind === SyntaxKind7.VariableStatement || statement.kind === SyntaxKind7.ReturnStatement || statement.kind === SyntaxKind7.ThrowStatement);
-      roots.set(flat ? statement : root, (roots.get(flat ? statement : root) ?? 0) + 1);
+  /** Prints a method body; boxed expression-shape locals named on a printed line over 400 chars
+   *  are left `Value` when that lowers the count of such lines. */
+  printRustScalarGuardedBody(method, print) {
+    const loops = this.forLoopCounter;
+    const typed = print();
+    const long = (text) => text.split("\n").filter((l) => l.length > 400);
+    const lines = long(typed);
+    if (lines.length === 0)
+      return typed;
+    const held = [];
+    for (const n of this.rustScopeIndex(method.getSourceFile()).nodes) {
+      if (!isVariableDeclaration3(n) || !this.rustScalarGuarded.has(n) || this.rustEnclosingFunction(n) !== method)
+        continue;
+      if (this.rustScalarDecisions.get(n) && lines.some((l) => new RegExp(`\\b${n.name.text}\\b`).test(l)))
+        held.push(n);
     }
-    const long = [...roots].filter(([root]) => String(root.getText?.() ?? "").replace(/\s+/g, " ").length >= 40);
-    if (long.length === 0)
+    if (held.length === 0)
+      return typed;
+    const redo = () => {
+      this.rustScalarSolved.delete(method);
+      this.forLoopCounter = loops;
+      return print();
+    };
+    for (const n of held)
+      this.rustScalarVetoed.add(n);
+    const boxed = redo();
+    if (long(boxed).length < lines.length)
+      return boxed;
+    for (const n of held)
+      this.rustScalarVetoed.delete(n);
+    return redo();
+  }
+  /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
+  rustScalarInsertKeyUse(n) {
+    const access = n.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== n || !isIdentifier3(access.expression))
       return false;
-    const growth = kind === "ostr" ? 46 : kind === "str" ? 23 : 14;
-    const text = String(declaration.getSourceFile?.()?.text ?? "");
-    const overflow = long.some(([root, count]) => {
-      const start = typeof root.getStart === "function" ? root.getStart() : root.pos;
-      const indent = start - text.lastIndexOf("\n", start - 1) - 1;
-      const source = String(root.getText?.() ?? "").replace(/\s+/g, " ").length;
-      const expression = root.kind === SyntaxKind7.ExpressionStatement ? root.expression : root;
-      const destructure = isBinaryExpression5(expression) && isArrayLiteralExpression4(expression.left);
-      return indent + source * (destructure ? 3.3 : 2.3) + count * growth > 330;
-    });
-    return overflow;
+    const write = access.parent;
+    if (!isBinaryExpression5(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const base = access.expression;
+    const key = String(n.text);
+    if (new RegExp(`\\b${key}\\b`).test(String(write.right.getText())))
+      return false;
+    return (this.rustBearerDictInsert(base, n, key, "x") ?? this.rustMapParamDictInsert(base, n, key, "x") ?? this.printNativeDictInsert(base, n, key, "x") ?? this.rustNativeDictInsert(base, n, key, "x")) !== void 0;
+  }
+  /** The insert key of a `String` scalar local, else undefined. */
+  rustScalarInsertKeyArg(keyNode) {
+    const key = this.rustSkipWrappers(keyNode);
+    return isIdentifier3(key) && this.rustScalarLocalOf(key)?.kind === "str" && this.rustScalarUseForms.get(key) === "key" ? `${super.printIdentifier(key)}.clone()` : void 0;
   }
   /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
    *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */
@@ -56101,7 +56198,7 @@ ${i1}}`;
     const savedShadowParam = this.rustProHandlerShadowParam;
     if (shadowPlan !== void 0)
       this.rustProHandlerShadowParam = shadowPlan.param;
-    const statements = node.body.statements.map((s) => this.printNode(s, identation + 2)).join("\n");
+    const statements = this.printRustScalarGuardedBody(node, () => node.body.statements.map((s) => this.printNode(s, identation + 2)).join("\n"));
     this.rustProHandlerShadowParam = savedShadowParam;
     const typed = this.rustTypedSignature(node);
     if (typed !== void 0) {
@@ -58526,6 +58623,8 @@ ${idn}}`;
       return true;
     if (inner.kind === SyntaxKind7.BinaryExpression && this.nativeIndexOfLiteralTestText(inner.operatorToken.kind, inner.left, inner.right) !== void 0)
       return true;
+    if (inner.kind === SyntaxKind7.BinaryExpression && this.rustScalarOwnsOperand(inner) && this.rustScalarCompareText(inner, true) !== void 0)
+      return true;
     return inner.kind === SyntaxKind7.BinaryExpression && this.isLogicalOp(inner.operatorToken.kind) && (this.hasNativeComparisonOperand(inner.left) || this.hasNativeComparisonOperand(inner.right));
   }
   // Bare `&&`/`||` text of a logical expression (its operands are bools).
@@ -59826,6 +59925,9 @@ ${iden}}`;
       return void 0;
     if (this.placeKeyNative(key) === true)
       return `${String(key.text)}.clone().unwrap_or_default()`;
+    const scalarKey = this.rustScalarInsertKeyArg(key);
+    if (scalarKey !== void 0)
+      return scalarKey;
     const text = String(keyText).trim();
     if (text === "" || new RegExp(`\\b${receiverName}\\b`).test(text))
       return void 0;

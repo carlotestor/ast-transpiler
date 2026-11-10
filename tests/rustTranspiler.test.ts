@@ -40,6 +40,10 @@ const rustInlineFixtures: Record<string, Record<string, string>> = {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport type Num = number | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeString2 (o: any, k1: any, k2: any, d: Str = undefined): Str { return o; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o; }\n    safeTimestamp (o: any, k: any, d: Int = undefined): Int { return o; }\n    safeNumber (o: any, k: any, d: Num = undefined): Num { return o; }\n    safeBool (o: any, k: any, d: boolean): boolean { return o; }\n    parseNumber (x: any, d: any = undefined): any { return x; }\n    milliseconds (): number { return 1; }\n}\n",
   "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseThing (resp: Dict, other: Dict) {\n        const id = this.safeString (resp, 'id');\n        const ts = this.safeInteger (resp, 'ts');\n        const lim = this.safeInteger (resp, 'limit', 100);\n        const price = this.safeNumber (resp, 'price');\n        const flag = this.safeBool (resp, 'flag', false);\n        const side = this.safeString (resp, 'side', 'buy');\n        let spot = true;\n        let name = 'abc';\n        let page = 1;\n        const fee = 0.25;\n        const req: Dict = {};\n        if (id === undefined) {\n            return undefined;\n        }\n        if (flag) {\n            req['f'] = 1;\n        }\n        if (name === 'x') {\n            name = 'y';\n            page = 2;\n            spot = false;\n        }\n        req['id'] = id;\n        req['ts'] = ts;\n        req['lim'] = lim;\n        req['p'] = price;\n        req['spot'] = spot;\n        req['side'] = side;\n        req['page'] = page;\n        req['fee'] = fee;\n        const kept = this.safeString (resp, 'kept');\n        const len = kept.length;\n        const other2 = kept.split ('-');\n        return [ req, name, len, other2 ];\n    }\n}\n"
  },
+ "scalar-order": {
+  "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport default class Exchange {\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o; }\n}\n",
+  "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    isStale (o: Dict) {\n        const now = this.safeInteger (o, 'now', 0);\n        const last = this.safeInteger (o, 'last');\n        const stale = now > last;\n        return { 's': stale, 'l': last };\n    }\n}\n"
+ },
  "expression-locals": {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o; }\n}\n",
   "ts/src/base/Precise.ts": "export default class Precise {\n    static stringAdd (a: string, b: string): string { return a; }\n}\n",
@@ -5101,12 +5105,25 @@ describe('expression-shaped scalar locals', () => {
         expect(out).toMatch(/let mut idx: i64 = \(if inverse \{ 7 \} else \{ 5 \}\);/);
     });
     test('string methods and Precise results on typed receivers are native', () => {
-        expect(out).toMatch(/let mut lower: String = side\.as_str\(\)\.map\(str::to_lowercase\)\.unwrap_or_default\(\);/);
+        expect(out).toMatch(/let mut lower: String = side\.to_lowercase\(\);/);
         expect(out).toMatch(/let mut total: Option<String> = crate::precise::Precise::stringAdd\(.*\)\.as_str\(\)\.map\(str::to_owned\);/);
     });
-    test('operands whose own typing depends on the derived local keep the box', () => {
-        expect(out).toMatch(/let mut sideLen: Value = /);
-        expect(out).toMatch(/let mut doubled: Value = /);
+    test('a local whose operand is itself an expression-typed local takes the native kind', () => {
+        expect(out).toContain('let mut sideLen: i64 = (side.chars().count() as i64);');
+        expect(out).toContain('let mut doubled: i64 = (lim * 2);');
+        expect(out).toContain('let mut big: bool = lim > sideLen;');
+    });
+    test('an optional number on the smaller side of an ordering is tested for presence first', () => {
+        const rs = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'scalar-order', 'ts/src/venue.ts')).content;
+        expect(rs).toContain('let mut last: Option<i64> = ');
+        expect(rs).toContain('let mut stale: bool = (last.is_some() && Some(');
+        expect(rs).not.toContain('is_greater_than');
+    });
+    test('a string key of a native insert keeps the insert', () => {
+        const src = "class T {\n    f (on: boolean, v: any) {\n        const req = {};\n        const key = on ? 'a' : 'b';\n        req[key] = v;\n        return req;\n    }\n}";
+        const rs = transpiler.transpileRust(src).content;
+        expect(rs).toContain('let mut key: String = ');
+        expect(rs).not.toContain('add_element_to_object');
     });
     test('a string local rewritten by a concat with an any operand prints the native concat', () => {
         const src = "class T {\n    f (method: string, body: any) {\n        let auth = 'x' + method;\n        if (body !== undefined) {\n            auth = auth + body;\n        }\n        return auth;\n    }\n}";
