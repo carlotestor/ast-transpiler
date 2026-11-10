@@ -3428,11 +3428,10 @@ export class RustTranspiler extends BaseTranspiler {
         if (isBinaryExpression(node)) return RustTranspiler.RUST_SCALAR_ARITH_OPS.has(node.operatorToken.kind);
         if (isIdentifier(node) || isConditionalExpression(node) || this.rustScalarStrMethod(node, true) !== undefined || this.rustScalarPreciseCall(node)) return true;
         if (isPropertyAccessExpression(node)) return isIdentifier(node.name) && node.name.text === 'length' && isIdentifier(node.expression);
+        if (isElementAccessExpression(node)) return isIdentifier(node.expression);
         if (!isCallExpression(node) || !isPropertyAccessExpression(node.expression) || node.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
-        const name = String(node.expression.name.text);
-        return RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name) || RustTranspiler.RUST_SCALAR_INT_HELPERS[name] !== undefined
-            || RustTranspiler.RUST_SCALAR_NUM_HELPERS[name] !== undefined || RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name] !== undefined
-            || RustTranspiler.RUST_BASE_SCALAR_RETURNS[name] !== undefined;
+        // any `this.m(..)`: the kind comes from the callee's checker return
+        return true;
     }
 
     rustScalarLocalKindUncached(declaration): string | undefined {
@@ -3456,17 +3455,20 @@ export class RustTranspiler extends BaseTranspiler {
         const widened = kind !== seeded || this.rustScalarExpressionKind(declaration.initializer) !== undefined;
         const boxed: any[] = [];
         let expressionUses = false;
+        let nativeUses = 0;
         const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
             if (this.rustIdentifierIsPropertyName(n)) return n.parent?.kind !== SyntaxKind.ShorthandPropertyAssignment;
             if (this.rustEnclosingFunction(n) !== scope) return false;
             const form = this.rustScalarUseForm(n, kind);
             this.rustScalarUseForms.set(n, form);
+            if (form === 'test' || form === 'cond' || form === 'concat' || form === 'native' || form === 'targ') nativeUses++;
             if (form === 'box' || form === 'xbox' || form === 'err') boxed.push(n);
             if (form === 'xbox' || form === 'native' || form === 'targ' || form === 'err') expressionUses = true;
             return form !== undefined;
         });
         // the guard covers only the locals the expression shapes admit
-        const accepted = ok && !((widened || expressionUses) && this.rustScalarBoxesOverflow(declaration, boxed, kind));
+        const accepted = ok && !((widened || expressionUses) && this.rustScalarBoxesOverflow(declaration, boxed, kind))
+            && (nativeUses > 0 || !this.rustScalarNeedsNativeUse(declaration.initializer));
         return accepted ? kind : undefined;
     }
 
@@ -3507,6 +3509,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (expressionKind !== undefined) return expressionKind;
         if (fresh && isBinaryExpression(node) && node.operatorToken.kind === SyntaxKind.PlusToken
             && this.rustScalarFormatText(node) !== undefined) return 'str';
+        if (this.rustElementReadScalarKind(node) !== undefined) return this.rustElementReadScalarKind(node);
         if (!isCallExpression(node)) return undefined;
         const callee: any = node.expression;
         if (!isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword) return undefined;
@@ -3542,7 +3545,7 @@ export class RustTranspiler extends BaseTranspiler {
     };
 
     rustBaseReturnScalarKind(call, name: string): string | undefined {
-        const kind = RustTranspiler.RUST_BASE_SCALAR_RETURNS[name];
+        const kind = RustTranspiler.RUST_BASE_SCALAR_RETURNS[name] ?? this.rustDerivedScalarKind(call);
         // a callee already printed `-> Option<String>` is the native-`Str` rule's
         if (kind === undefined || this.rustNativeStrCalleeKind(call) === 'str') return undefined;
         // the member is declared on the base class (an override keeps the base signature)
@@ -3551,6 +3554,40 @@ export class RustTranspiler extends BaseTranspiler {
         if (owner === undefined || !RustTranspiler.RUST_BASE_TIER_FILE.test(String(owner.getSourceFile?.()?.fileName ?? ''))) return undefined;
         const want = kind === 'ostr' ? 'string' : 'number';
         return this.primitiveKindOfType(this.typeOfNodeIfAny(call)) === want ? kind : undefined;
+    }
+
+    // Any other callee: a base one whose checker return is a string, or one declaring `string`/`Str`/`int`/`Int`
+    // (a bare `number` may hold a float, which `as_i64` would drop).
+    rustDerivedScalarKind(call): string | undefined {
+        if (!isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return undefined;
+        const name = String(call.expression.name.text);
+        if (RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name) || RustTranspiler.RUST_SCALAR_INT_HELPERS[name] !== undefined
+            || RustTranspiler.RUST_SCALAR_NUM_HELPERS[name] !== undefined || RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name] !== undefined) return undefined;
+        const declaration: any = this.rustScalarCallee(call);
+        if (declaration === undefined) return undefined;
+        const declared: any = declaration.type;
+        const typeName = declared?.kind === SyntaxKind.TypeReference && isIdentifier(declared.typeName) ? String(declared.typeName.text) : undefined;
+        if (typeName === 'int' || typeName === 'Int') return 'oint';
+        if (declared?.kind === SyntaxKind.StringKeyword || typeName === 'Str') return 'ostr';
+        const base = RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? ''));
+        return base && this.primitiveKindOfType(this.typeOfNodeIfAny(call)) === 'string' ? 'ostr' : undefined;
+    }
+
+    // `xs[i]` over a local string list (`string[]`, `split`, `Object.keys`): `Option<String>` from the element.
+    rustElementReadScalarKind(node): string | undefined {
+        if (!isElementAccessExpression(node) || !isIdentifier(node.expression) || this.checkerOrUndefined() === undefined) return undefined;
+        if (!isVariableDeclaration(this.rustDeclaredNode(node.expression))) return undefined;
+        const listType: any = this.typeOfNodeIfAny(node.expression);
+        if (listType === undefined || !this.getChecker().isArrayType(listType)) return undefined;
+        return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === 'string' ? 'ostr' : undefined;
+    }
+
+    /** True for the derived sources above, which must earn a native use (not only `Value` boxes). */
+    rustScalarNeedsNativeUse(init): boolean {
+        const node: any = this.unwrapParens(init);
+        if (this.rustElementReadScalarKind(node) !== undefined) return true;
+        if (!isCallExpression(node) || !isPropertyAccessExpression(node.expression)) return false;
+        return RustTranspiler.RUST_BASE_SCALAR_RETURNS[String(node.expression.name.text)] === undefined && this.rustDerivedScalarKind(node) !== undefined;
     }
 
     rustScalarCallee(call): any {
@@ -3732,6 +3769,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (base === 'str' && isBinaryExpression(node)) {
             const format = this.rustScalarFormatText(node);
             return format === undefined ? undefined : wrap(format);
+        }
+        if (kind === 'ostr' && this.rustElementReadScalarKind(node) !== undefined) {
+            const read = this.printNode(node, 0).trim();
+            const tail = '.cloned().unwrap_or(Value::Null)';
+            return read.endsWith(tail) ? `${read.slice(0, -tail.length)}.and_then(Value::as_str).map(str::to_owned)` : undefined;
         }
         if (!isCallExpression(node)) return undefined;
         const text = this.printNode(node, 0).trim();

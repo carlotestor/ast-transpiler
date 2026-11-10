@@ -415,6 +415,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarValueKind(expr: any, fresh: boolean): string | undefined;
     private static readonly RUST_BASE_SCALAR_RETURNS;
     rustBaseReturnScalarKind(call: any, name: string): string | undefined;
+    rustDerivedScalarKind(call: any): string | undefined;
+    rustElementReadScalarKind(node: any): string | undefined;
+    /** True for the derived sources above, which must earn a native use (not only `Value` boxes). */
+    rustScalarNeedsNativeUse(init: any): boolean;
     rustScalarCallee(call: any): any;
     /** The bare `format!(..)` a string concat prints as (its `Value::Str(..into())` box peeled), else undefined. */
     rustScalarFormatText(node: any): string | undefined;

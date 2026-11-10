@@ -28,6 +28,10 @@ const rustInlineFixtures: Record<string, Record<string, string>> = {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Market { id: Str; symbol: string; spot: boolean; swap: boolean; stock?: boolean; linear: boolean | undefined; info: any }\nexport default class Exchange {\n    markets: Dict = {};\n    market (symbol: Str): Market {\n        return this.markets[symbol];\n    }\n    safeString (d: any, k: any): Str {\n        return d[k];\n    }\n    hold (m: any): any {\n        return m;\n    }\n}\n",
   "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fetchOne (symbol: string, params: Dict = {}) {\n        const market = this.market (symbol);\n        const request: Dict = { 'pair': market['id'] };\n        if (market['swap'] || market['linear']) {\n            request['info'] = market['info'];\n        }\n        request['s'] = this.safeString (market, 'symbol');\n        return this.hold (market);\n    }\n    fetchTwo (symbol: string) {\n        let market = this.market (symbol);\n        market = this.market ('x');\n        return market['id'];\n    }\n    fetchThree (symbol: string) {\n        const market = this.market (symbol);\n        const isStock = market['stock'];\n        const isStockSpot = isStock && (market['spot'] === true);\n        if (isStockSpot || (market['spot'] !== true)) {\n            return market['id'];\n        }\n        return market['symbol'];\n    }\n}\n"
  },
+ "derived-scalar-returns": {
+  "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type int = number;\nexport default class Exchange {\n    findTimeframe (timeframe: any, timeframes: Dict = undefined): Str {\n        return undefined;\n    }\n    incrementingNonce (): int {\n        return 1;\n    }\n    hold (x: any): any {\n        return x;\n    }\n}\n",
+  "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseEntry (entry: Dict, keys: string[]) {\n        const timeframe = this.findTimeframe (entry['i']);\n        if (timeframe === undefined) {\n            return undefined;\n        }\n        const nonce = this.incrementingNonce ();\n        if (nonce === 0) {\n            return undefined;\n        }\n        const key = keys[0];\n        const parts = 'a-b'.split ('-');\n        const first = parts[0];\n        if (first === 'a') {\n            return this.hold (key);\n        }\n        const boxedOnly = this.findTimeframe (entry['j']);\n        return { 'tf': timeframe, 'n': nonce, 'f': first, 'b': boxedOnly };\n    }\n}\n"
+ },
  "typed-call-results": {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Market { id: Str; symbol: string; type: string; settle: Str; linear: boolean | undefined; info: any }\nexport interface Order { id: string; info: any }\nexport default class Exchange {\n    markets: Dict = {};\n    market (symbol: Str): Market {\n        return this.markets[symbol];\n    }\n    async loadMarkets (reload = false, params: Dict = {}): Promise<Dict> {\n        return this.markets;\n    }\n    async fetchOrders (symbol: Str = undefined, params: Dict = {}): Promise<Order[]> {\n        return [];\n    }\n    hold (m: any, n: any = undefined): any {\n        return m;\n    }\n}\n",
   "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async fetchA (symbol: Str = undefined, params: Dict = {}) {\n        await this.loadMarkets ();\n        let market = undefined;\n        if (symbol !== undefined) {\n            market = this.market (symbol);\n        }\n        return this.hold (params, market);\n    }\n    async fetchB (symbol: string, params: Dict = {}) {\n        let market = this.market (symbol);\n        if (market['type'] === 'swap') {\n            market = this.market ('x');\n        }\n        return this.hold ({ 'k': market['settle'], 'l': market['linear'], 'b': market['baseId'] }, market);\n    }\n    async fetchC (symbol: string, params: Dict = {}) {\n        const orders = await this.fetchOrders (symbol, params);\n        return this.hold (orders);\n    }\n}\n"
@@ -5055,6 +5059,24 @@ describe('scalar locals from base methods with a concrete return', () => {
     });
 });
 
+describe('scalar locals from declared callee returns and string-list element reads', () => {
+    let out: string;
+    beforeAll(() => {
+        out = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'derived-scalar-returns', 'ts/src/venue.ts')).content;
+    });
+    test('a declared Str / int return and a split element read are Option locals with native tests', () => {
+        expect(out).toMatch(/let mut timeframe: Option<String> = self\.findTimeframe\(.*\)\.as_str\(\)\.map\(str::to_owned\);/);
+        expect(out).toMatch(/let mut nonce: Option<i64> = self\.incrementingNonce\(\)\.as_i64\(\);/);
+        expect(out).toMatch(/let mut first: Option<String> = parts\.get\(0\)\.and_then\(Value::as_str\)\.map\(str::to_owned\);/);
+        expect(out).toContain('if (timeframe.is_none()) {');
+        expect(out).toContain('first.as_deref() == Some("a")');
+    });
+    test('a local with only Value hand-offs keeps its Value box', () => {
+        expect(out).toMatch(/let mut boxedOnly: Value = self\.findTimeframe\(/);
+        expect(out).toMatch(/let mut key: Value = /);
+    });
+});
+
 describe('scalar locals from base safe readers and literals', () => {
     let out: string;
     beforeAll(() => {
@@ -5144,7 +5166,7 @@ ${body}
     });
     test('a dynamic index read on an Arr-only local is native', () => {
         const out = rs("        const parts = s.split ('-');\n        parts.push ('x');\n        for (let i = 0; i < parts.length; i++) {\n            const v = parts[i];\n            if (v !== undefined) { return v; }\n        }\n        return undefined;", 's: string');
-        expect(out).toContain('parts.as_array().map(Vec::as_slice).unwrap_or_default().get(i as usize).cloned().unwrap_or(Value::Null)');
+        expect(out).toContain('parts.as_array().map(Vec::as_slice).unwrap_or_default().get(i as usize)');
         expect(out).not.toContain('get_value(&parts');
     });
     test('negative: a string receiver or a dict keeps the helper', () => {

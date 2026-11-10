@@ -54194,10 +54194,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     if (isPropertyAccessExpression3(node))
       return isIdentifier3(node.name) && node.name.text === "length" && isIdentifier3(node.expression);
+    if (isElementAccessExpression4(node))
+      return isIdentifier3(node.expression);
     if (!isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
-    const name = String(node.expression.name.text);
-    return _RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name) || _RustTranspiler.RUST_SCALAR_INT_HELPERS[name] !== void 0 || _RustTranspiler.RUST_SCALAR_NUM_HELPERS[name] !== void 0 || _RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name] !== void 0 || _RustTranspiler.RUST_BASE_SCALAR_RETURNS[name] !== void 0;
+    return true;
   }
   rustScalarLocalKindUncached(declaration) {
     if (!this.rustScalarInitShape(declaration.initializer))
@@ -54224,6 +54225,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const widened = kind !== seeded || this.rustScalarExpressionKind(declaration.initializer) !== void 0;
     const boxed = [];
     let expressionUses = false;
+    let nativeUses = 0;
     const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return n.parent?.kind !== SyntaxKind7.ShorthandPropertyAssignment;
@@ -54231,13 +54233,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return false;
       const form = this.rustScalarUseForm(n, kind);
       this.rustScalarUseForms.set(n, form);
+      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ")
+        nativeUses++;
       if (form === "box" || form === "xbox" || form === "err")
         boxed.push(n);
       if (form === "xbox" || form === "native" || form === "targ" || form === "err")
         expressionUses = true;
       return form !== void 0;
     });
-    const accepted = ok && !((widened || expressionUses) && this.rustScalarBoxesOverflow(declaration, boxed, kind));
+    const accepted = ok && !((widened || expressionUses) && this.rustScalarBoxesOverflow(declaration, boxed, kind)) && (nativeUses > 0 || !this.rustScalarNeedsNativeUse(declaration.initializer));
     return accepted ? kind : void 0;
   }
   /** Integer literal text (`5`, `-5`) that fits an `i64`, else undefined. */
@@ -54286,6 +54290,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return expressionKind;
     if (fresh && isBinaryExpression5(node) && node.operatorToken.kind === SyntaxKind7.PlusToken && this.rustScalarFormatText(node) !== void 0)
       return "str";
+    if (this.rustElementReadScalarKind(node) !== void 0)
+      return this.rustElementReadScalarKind(node);
     if (!isCallExpression6(node))
       return void 0;
     const callee = node.expression;
@@ -54319,7 +54325,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return void 0;
   }
   rustBaseReturnScalarKind(call, name) {
-    const kind = _RustTranspiler.RUST_BASE_SCALAR_RETURNS[name];
+    const kind = _RustTranspiler.RUST_BASE_SCALAR_RETURNS[name] ?? this.rustDerivedScalarKind(call);
     if (kind === void 0 || this.rustNativeStrCalleeKind(call) === "str")
       return void 0;
     const member = this.getChecker().getSymbolAtLocation(call.expression.name)?.valueDeclaration;
@@ -54328,6 +54334,46 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const want = kind === "ostr" ? "string" : "number";
     return this.primitiveKindOfType(this.typeOfNodeIfAny(call)) === want ? kind : void 0;
+  }
+  // Any other callee: a base one whose checker return is a string, or one declaring `string`/`Str`/`int`/`Int`
+  // (a bare `number` may hold a float, which `as_i64` would drop).
+  rustDerivedScalarKind(call) {
+    if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return void 0;
+    const name = String(call.expression.name.text);
+    if (_RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name) || _RustTranspiler.RUST_SCALAR_INT_HELPERS[name] !== void 0 || _RustTranspiler.RUST_SCALAR_NUM_HELPERS[name] !== void 0 || _RustTranspiler.RUST_SCALAR_BOOL_HELPERS[name] !== void 0)
+      return void 0;
+    const declaration = this.rustScalarCallee(call);
+    if (declaration === void 0)
+      return void 0;
+    const declared = declaration.type;
+    const typeName = declared?.kind === SyntaxKind7.TypeReference && isIdentifier3(declared.typeName) ? String(declared.typeName.text) : void 0;
+    if (typeName === "int" || typeName === "Int")
+      return "oint";
+    if (declared?.kind === SyntaxKind7.StringKeyword || typeName === "Str")
+      return "ostr";
+    const base = _RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? ""));
+    return base && this.primitiveKindOfType(this.typeOfNodeIfAny(call)) === "string" ? "ostr" : void 0;
+  }
+  // `xs[i]` over a local string list (`string[]`, `split`, `Object.keys`): `Option<String>` from the element.
+  rustElementReadScalarKind(node) {
+    if (!isElementAccessExpression4(node) || !isIdentifier3(node.expression) || this.checkerOrUndefined() === void 0)
+      return void 0;
+    if (!isVariableDeclaration3(this.rustDeclaredNode(node.expression)))
+      return void 0;
+    const listType = this.typeOfNodeIfAny(node.expression);
+    if (listType === void 0 || !this.getChecker().isArrayType(listType))
+      return void 0;
+    return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string" ? "ostr" : void 0;
+  }
+  /** True for the derived sources above, which must earn a native use (not only `Value` boxes). */
+  rustScalarNeedsNativeUse(init) {
+    const node = this.unwrapParens(init);
+    if (this.rustElementReadScalarKind(node) !== void 0)
+      return true;
+    if (!isCallExpression6(node) || !isPropertyAccessExpression3(node.expression))
+      return false;
+    return _RustTranspiler.RUST_BASE_SCALAR_RETURNS[String(node.expression.name.text)] === void 0 && this.rustDerivedScalarKind(node) !== void 0;
   }
   rustScalarCallee(call) {
     let declaration = this.rustCallDeclarations.get(call);
@@ -54533,6 +54579,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (base === "str" && isBinaryExpression5(node)) {
       const format = this.rustScalarFormatText(node);
       return format === void 0 ? void 0 : wrap(format);
+    }
+    if (kind === "ostr" && this.rustElementReadScalarKind(node) !== void 0) {
+      const read = this.printNode(node, 0).trim();
+      const tail = ".cloned().unwrap_or(Value::Null)";
+      return read.endsWith(tail) ? `${read.slice(0, -tail.length)}.and_then(Value::as_str).map(str::to_owned)` : void 0;
     }
     if (!isCallExpression6(node))
       return void 0;
