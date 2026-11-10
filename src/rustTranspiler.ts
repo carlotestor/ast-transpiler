@@ -1850,8 +1850,8 @@ export class RustTranspiler extends BaseTranspiler {
             const head = nativeList
                 ? `let ${tmpName}: Vec<Value> = ${rhs}.as_array().cloned().unwrap_or_default()`
                 : `let ${tmpName} = ${rhs}`;
-            const assignments = left.elements.map((e, idx) => `${this.printNode(e, 0)} = ${nativeList
-                ? this.printTypedVecElementRead(tmpName, idx) : `get_value(&${tmpName}, &Value::Int(${idx}))`}`).join('; ');
+            const slotRead = (idx: number) => (nativeList ? this.printTypedVecElementRead(tmpName, idx) : `get_value(&${tmpName}, &Value::Int(${idx}))`);
+            const assignments = left.elements.map((e, idx) => this.printRustNilSlotWrite(e, slotRead(idx)) ?? `${this.printNode(e, 0)} = ${slotRead(idx)}`).join('; ');
             return `{ ${head}; ${assignments}; }`;
         }
         const marketWrite = isAssign ? this.printTypedMarketWrite(left, right) : undefined;
@@ -2311,10 +2311,18 @@ export class RustTranspiler extends BaseTranspiler {
         if (scope === undefined || isSourceFile(scope) || this.rustNativeStrReturnKind(scope) === 'str') return undefined;
         const name = String(declaration.name.text);
         let joined: string | undefined = 'null';
+        let writes = 0;
         for (const n of this.rustScopeNameNodes(scope, name) as any[]) {
+            if (isIdentifier(n) && this.rustNilSlotWrite(n) && this.rustDeclaredNode(n) === declaration) {
+                if (this.primitiveKindOfType(this.typeOfNodeIfAny(n)) !== 'string') return undefined;
+                joined = this.rustScalarJoinKinds(joined, 'ostr');
+                writes++;
+                continue;
+            }
             const parent: any = n.parent;
             if (!isIdentifier(n) || !isBinaryExpression(parent) || parent.left !== n || parent.operatorToken.kind !== SyntaxKind.EqualsToken) continue;
             if (this.rustDeclaredNode(n) !== declaration) continue;
+            writes++;
             const rhs: any = this.unwrapParens(parent.right);
             const write = isIdentifier(rhs) && this.literalKindOfNode(rhs) !== 'null' ? this.rustScalarIdentifierKind(rhs) : this.rustScalarValueKind(rhs, true);
             joined = this.rustScalarJoinKinds(joined, write);
@@ -2329,13 +2337,28 @@ export class RustTranspiler extends BaseTranspiler {
         const ok = this.rustLocalUsesAll(declaration, name, false, (n) => {
             if (this.rustIdentifierIsPropertyName(n)) return n.parent?.kind !== SyntaxKind.ShorthandPropertyAssignment;
             if (this.rustEnclosingFunction(n) !== scope) return false;
-            const form = this.rustScalarUseForm(n, kind);
+            const form = this.rustNilSlotWrite(n) ? 'slot' : this.rustScalarUseForm(n, kind);
             this.rustScalarUseForms.set(n, form);
             if (form === 'box' || form === 'xbox' || form === 'err') boxed.push(n);
             if (RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form)) native++;
             return form !== undefined;
         });
-        return ok && native > 0 && !this.rustScalarBoxesOverflow(declaration, boxed, kind) ? kind : undefined;
+        // a single write boxed straight back stays `Value`
+        return ok && (native > 0 || writes > 1) && !this.rustScalarBoxesOverflow(declaration, boxed, kind) ? kind : undefined;
+    }
+
+    /** `[ x, .. ] = <list>` as its own statement: `x` is written from a tuple slot. */
+    rustNilSlotWrite(n): boolean {
+        const list: any = n.parent;
+        const write: any = list?.parent;
+        return list !== undefined && isArrayLiteralExpression(list) && write !== undefined && isBinaryExpression(write) && write.left === list
+            && write.operatorToken.kind === SyntaxKind.EqualsToken && write.parent?.kind === SyntaxKind.ExpressionStatement;
+    }
+
+    /** Slot hook: an `Option<String>` local takes the slot's string. */
+    printRustNilSlotWrite(element, read: string): string | undefined {
+        if (!isIdentifier(element) || this.rustScalarLocalOf(element)?.kind !== 'ostr' || this.rustScalarUseForms.get(element) !== 'slot') return undefined;
+        return `${super.printIdentifier(element)} = ${read}.as_str().map(str::to_owned)`;
     }
 
     /** Declaration hook: `let mut x: Option<..> = None` for an empty scalar local. */

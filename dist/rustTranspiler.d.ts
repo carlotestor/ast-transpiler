@@ -287,6 +287,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_NIL_SCALAR_NATIVE_FORMS;
     /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
     rustNilScalarKind(declaration: any): string | undefined;
+    /** `[ x, .. ] = <list>` as its own statement: `x` is written from a tuple slot. */
+    rustNilSlotWrite(n: any): boolean;
+    /** Slot hook: an `Option<String>` local takes the slot's string. */
+    printRustNilSlotWrite(element: any, read: string): string | undefined;
     /** Declaration hook: `let mut x: Option<..> = None` for an empty scalar local. */
     printRustNilScalarDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** Assignment hook: `x = <rhs>` with the right-hand side unwrapped to the local's payload. */

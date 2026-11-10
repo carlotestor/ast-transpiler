@@ -1296,6 +1296,29 @@ ${body}
             expect(out).toContain('if (n.is_none()) {');
         });
 
+        test('a tuple-slot write of a string joins Option<String>', () => {
+            const out = transpiler.transpileRust(`class A {
+    handleMarketTypeAndParams(m: string, x: any, p: any): [ string, any ] { return [ m, p ]; }
+    run(params: any) {
+        let marketType: string = undefined;
+        let rest = undefined;
+        [ marketType, rest ] = this.handleMarketTypeAndParams('f', undefined, params);
+        if (marketType === 'spot') { return 1; }
+        return rest;
+    }
+}`).content;
+            expect(out).toContain('let mut marketType: Option<String> = None;');
+            expect(out).toContain('marketType = __destr_tmp.get(0).cloned().unwrap_or(Value::Null).as_str().map(str::to_owned);');
+            expect(out).toContain('marketType.as_deref() == Some("spot")');
+        });
+
+        test('a single write boxed straight back keeps the Value box', () => {
+            const out = transpiler.transpileRust(cls(`        let p = undefined;
+        p = (kind === 'a') ? 'x' : 'y';
+        return this.hold(p);`)).content;
+            expect(out).toContain('let mut p: Value = Value::Null;');
+        });
+
         test('a read outside the proven sinks keeps the Value box', () => {
             const out = transpiler.transpileRust(cls(`        let s = undefined;
         s = 'x';
