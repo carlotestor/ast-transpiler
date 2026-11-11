@@ -51406,7 +51406,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustBorrowedKinds = /* @__PURE__ */ new WeakMap();
     // ── generated readers taking their container by reference ───────────────
     // A generated base `safe*` reader whose first parameter is only handed on as the container of by-reference
-    // readers declares it `impl crate::value::KeyRead`: a `Value` argument still passes by value, a dict or list
+    // readers declares it `impl KeyRead`: a `Value` argument still passes by value, a dict or list
     // local is lent as `&x`, and the reader never copies or re-boxes it.
     this.rustByRefParamDecisions = /* @__PURE__ */ new WeakMap();
     this.rustHandedDictDecisions = /* @__PURE__ */ new WeakMap();
@@ -53614,7 +53614,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (this.rustParamPrintsStrVec(param))
       return "Vec<String>";
     if (this.rustParamReadsByReference(param))
-      return "impl crate::value::KeyRead";
+      return "impl KeyRead";
     return "Value";
   }
   // A read of a native-`bool` parameter that still compiles: a condition slot,

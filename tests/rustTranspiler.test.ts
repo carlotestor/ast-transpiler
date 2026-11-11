@@ -5514,9 +5514,9 @@ describe('generated readers lend their container', () => {
 
     test('a generated reader that only hands its container to by-reference readers takes it by reference', () => {
         const b = base();
-        expect(b).toMatch(/fn safeDict\(&self, dictionaryOrList: impl crate::value::KeyRead, key: Value/);
-        expect(b).toMatch(/fn safeList2\(&self, dictionaryOrList: impl crate::value::KeyRead, key1: Value/);
-        expect(b).toMatch(/fn safeList\(&self, dictionaryOrList: impl crate::value::KeyRead, key: Value/);
+        expect(b).toMatch(/fn safeDict\(&self, dictionaryOrList: impl KeyRead, key: Value/);
+        expect(b).toMatch(/fn safeList2\(&self, dictionaryOrList: impl KeyRead, key1: Value/);
+        expect(b).toMatch(/fn safeList\(&self, dictionaryOrList: impl KeyRead, key: Value/);
     });
 
     test('list and dict locals read by those readers hold the shared container and lend it', () => {

@@ -2731,7 +2731,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustParamPrintsBool(param)) return 'bool';
         if (this.rustParamPrintsMap(param)) return '&mut indexmap::IndexMap<String, Value>';
         if (this.rustParamPrintsStrVec(param)) return 'Vec<String>';
-        if (this.rustParamReadsByReference(param)) return 'impl crate::value::KeyRead';
+        if (this.rustParamReadsByReference(param)) return 'impl KeyRead';
         return 'Value';
     }
 
@@ -10328,7 +10328,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     // ── generated readers taking their container by reference ───────────────
     // A generated base `safe*` reader whose first parameter is only handed on as the container of by-reference
-    // readers declares it `impl crate::value::KeyRead`: a `Value` argument still passes by value, a dict or list
+    // readers declares it `impl KeyRead`: a `Value` argument still passes by value, a dict or list
     // local is lent as `&x`, and the reader never copies or re-boxes it.
 
     private rustByRefParamDecisions = new WeakMap<any, boolean>();
