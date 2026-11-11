@@ -1282,6 +1282,17 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustContainerBoxForm(n: any, neverNull: boolean): 'clone' | 'move' | undefined;
     /** `Value::Map(x.clone())` / `Value::from(x.clone())` at an admitted boxing use, else undefined. */
     printRustContainerLocalBox(node: any, text: string): string | undefined;
+    private static readonly RUST_BORROWED_DICT_READERS;
+    private static readonly RUST_BORROWED_DICT_SOURCES;
+    private rustBorrowedDictDecisions;
+    rustBorrowedDictLocal(declaration: any): boolean;
+    rustBorrowedDictLocalUncached(declaration: any): boolean;
+    /** A base `safeDict*` / `extend` / `omit` call, or an implicit-API endpoint call. */
+    rustBorrowedDictSource(call: any): boolean;
+    /** Rust `_k` reader name of a base `this.safeX(obj, 'literal'[, default])` call, else undefined. */
+    rustBorrowedDictReader(call: any): string | undefined;
+    /** `self.safe_X_k(&x, "k", &[..])` when `x` is a borrowed dict local or a typed container map local. */
+    printBorrowedDictRead(node: any, identation: number): string | undefined;
     /** One element read rooted at the bearer: a plain read the native op serves. */
     rustReadBearerElementUse(access: any, kind: 'list' | 'map'): boolean;
     /** Key a read-only bearer serves natively: a literal string for a map, a
