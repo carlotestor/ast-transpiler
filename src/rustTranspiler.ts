@@ -3507,7 +3507,8 @@ export class RustTranspiler extends BaseTranspiler {
         const seeded = kind;
         kind = this.rustScalarWidenedKind(declaration, kind);
         const widened = kind !== seeded || this.rustScalarExpressionKind(declaration.initializer) !== undefined;
-        let boxed = false;
+        let boxed = 0;
+        let nativeUses = 0;
         let expressionUses = false;
         // uses that read the local itself (`.length`, compares) see the candidate kind
         if (this.rustScalarSeeding) return kind;
@@ -3518,14 +3519,17 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustEnclosingFunction(n) !== scope) return false;
             const form = this.rustScalarUseForm(n, kind);
             this.rustScalarUseForms.set(n, form);
-            if (form === 'box' || form === 'xbox' || form === 'err') boxed = true;
+            if (form === 'box' || form === 'xbox' || form === 'err') boxed++;
+            else if (form !== undefined && !this.rustIdentifierIsPropertyName(n)) nativeUses++;
             if (form === 'xbox' || form === 'native' || form === 'targ' || form === 'err') expressionUses = true;
             return form !== undefined;
         });
         this.rustScalarDecisions.set(declaration, previous);
         // boxed uses of the expression shapes are checked against the printed method lines
-        const guarded = (widened || expressionUses) && boxed;
-        if (!ok || (guarded && scope.kind !== SyntaxKind.MethodDeclaration)) return undefined;
+        const guarded = (widened || expressionUses) && boxed > 0;
+        // an expression-shape local stored once and boxed straight back buys nothing
+        const storeOnly = guarded && nativeUses === 0 && boxed === 1;
+        if (!ok || storeOnly || (guarded && scope.kind !== SyntaxKind.MethodDeclaration)) return undefined;
         if (guarded) this.rustScalarGuarded.add(declaration);
         return kind;
     }
@@ -4251,6 +4255,9 @@ export class RustTranspiler extends BaseTranspiler {
             const op = parent.operatorToken.kind;
             if (op === SyntaxKind.PlusEqualsToken || op === SyntaxKind.MinusEqualsToken) return this.rustScalarCompoundText(parent, true) !== undefined ? 'native' : undefined;
             if (op === SyntaxKind.EqualsToken && parent.right === n && parent.parent?.kind === SyntaxKind.ExpressionStatement) {
+                // a typed target prints the write itself, from this local's native value
+                const target = isIdentifier(parent.left) ? this.rustScalarLocalOf(parent.left)?.kind : undefined;
+                if (target !== undefined) return target === kind || target === `o${kind}` ? 'native' : undefined;
                 return this.rustScalarPlainValueTarget(parent.left) ? 'xbox' : undefined;
             }
             if (RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) && this.rustScalarExpressionKind(parent) !== undefined) return 'native';

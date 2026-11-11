@@ -54280,7 +54280,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const seeded = kind;
     kind = this.rustScalarWidenedKind(declaration, kind);
     const widened = kind !== seeded || this.rustScalarExpressionKind(declaration.initializer) !== void 0;
-    let boxed = false;
+    let boxed = 0;
+    let nativeUses = 0;
     let expressionUses = false;
     if (this.rustScalarSeeding)
       return kind;
@@ -54294,14 +54295,17 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const form = this.rustScalarUseForm(n, kind);
       this.rustScalarUseForms.set(n, form);
       if (form === "box" || form === "xbox" || form === "err")
-        boxed = true;
+        boxed++;
+      else if (form !== void 0 && !this.rustIdentifierIsPropertyName(n))
+        nativeUses++;
       if (form === "xbox" || form === "native" || form === "targ" || form === "err")
         expressionUses = true;
       return form !== void 0;
     });
     this.rustScalarDecisions.set(declaration, previous);
-    const guarded = (widened || expressionUses) && boxed;
-    if (!ok || guarded && scope.kind !== SyntaxKind7.MethodDeclaration)
+    const guarded = (widened || expressionUses) && boxed > 0;
+    const storeOnly = guarded && nativeUses === 0 && boxed === 1;
+    if (!ok || storeOnly || guarded && scope.kind !== SyntaxKind7.MethodDeclaration)
       return void 0;
     if (guarded)
       this.rustScalarGuarded.add(declaration);
@@ -55120,6 +55124,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (op === SyntaxKind7.PlusEqualsToken || op === SyntaxKind7.MinusEqualsToken)
         return this.rustScalarCompoundText(parent, true) !== void 0 ? "native" : void 0;
       if (op === SyntaxKind7.EqualsToken && parent.right === n && parent.parent?.kind === SyntaxKind7.ExpressionStatement) {
+        const target = isIdentifier3(parent.left) ? this.rustScalarLocalOf(parent.left)?.kind : void 0;
+        if (target !== void 0)
+          return target === kind || target === `o${kind}` ? "native" : void 0;
         return this.rustScalarPlainValueTarget(parent.left) ? "xbox" : void 0;
       }
       if (_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) && this.rustScalarExpressionKind(parent) !== void 0)
