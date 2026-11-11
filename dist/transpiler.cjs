@@ -63375,7 +63375,20 @@ ${iden}}`;
     const form = this.rustLentListBoxes.get(node);
     if (form === void 0)
       return void 0;
+    if (form === "lend")
+      return `&${text}`;
     return form === "move" ? `Value::Arr(${text})` : `Value::Arr(${text}.clone())`;
+  }
+  // ── watch hash lists (rustWatchHashListSlot) ──
+  // The hand-written `watch_multiple` takes its message hashes as `impl Into<Value>`, so a built hash list is lent
+  // there (`&x`); the same list as the optional subscribe hashes passes its shared handle, never its elements.
+  rustWatchHashListSlot(call, n) {
+    if (!_is.isCallExpression.call(void 0, call) || call.expression === n || !this.rustWsWatchSlot(call, 0))
+      return void 0;
+    if (String(call.expression.name.text) !== "watchMultiple")
+      return void 0;
+    const at = Array.from(call.arguments).indexOf(n);
+    return at === 1 ? "lend" : at === 3 ? "clone" : void 0;
   }
   rustBuiltListLocal(declaration) {
     if (_optionalChain([declaration, 'access', _9230 => _9230.name, 'optionalAccess', _9231 => _9231.kind]) !== _ast.SyntaxKind.Identifier)
@@ -63434,6 +63447,11 @@ ${iden}}`;
       }
       if (_is.isReturnStatement.call(void 0, up) && up.expression === n) {
         boxes.push([n, "move"]);
+        return true;
+      }
+      const hashSlot = this.rustWatchHashListSlot(up, n);
+      if (hashSlot !== void 0) {
+        boxes.push([n, hashSlot]);
         return true;
       }
       if (_is.isCallExpression.call(void 0, up) && up.expression !== n && up.arguments.some((a) => a === n)) {
@@ -67359,7 +67377,7 @@ _RustTranspiler.RUST_OPT_LIST_SOURCES = /* @__PURE__ */ new Set(["marketSymbols"
 _RustTranspiler.RUST_HANDED_DICT_SOURCES = /* @__PURE__ */ new Set(["extend", "omit", "indexBy", "groupBy"]);
 _RustTranspiler.RUST_HANDED_DICT_OMIT = /* @__PURE__ */ new Set(["omit"]);
 _RustTranspiler.RUST_HANDED_DICT_EXTEND = /* @__PURE__ */ new Set(["extend", "deepExtend"]);
-_RustTranspiler.RUST_EXTEND_HEAD_CALLS = /* @__PURE__ */ new Set(["extend"]);
+_RustTranspiler.RUST_EXTEND_HEAD_CALLS = /* @__PURE__ */ new Set(["extend", "deepExtend"]);
 _RustTranspiler.RUST_LENT_LIST_TYPES = /* @__PURE__ */ new Set(["List", "NullableList"]);
 // Plain-dict sources from base `safeDict*` reads of unshared dicts and same-file
 // sync request builders; native truthiness / bool equality on operands proven `Value::Bool`
