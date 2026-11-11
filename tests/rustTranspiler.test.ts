@@ -69,6 +69,10 @@ const rustInlineFixtures: Record<string, Record<string, string>> = {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o; }\n    safeDict (o: any, k: any, d: Dict = undefined): Dict { return o; }\n    extend (...args: any[]): any { return args[0]; }\n    hold (x: any): any { return x; }\n}\n",
   "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseThing (resp: Dict, params: Dict) {\n        const data = this.safeDict (resp, 'data');\n        const id = this.safeString (data, 'id');\n        const n = this.safeInteger (data, 'n', 1);\n        const merged = this.extend (resp, params);\n        const s = this.safeString (merged, 's');\n        const kept = this.safeDict (resp, 'kept');\n        const k = this.safeString (kept, 'k');\n        return this.hold ([ id, n, s, k, kept ]);\n    }\n}\n"
  },
+ "by-ref-generated-readers": {
+    "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n    safeValue2 (o: any, k1: any, k2: any, d: any = undefined): any { return o; }\n    safeDict (dictionaryOrList: any, key: any, defaultValue: Dict = undefined): Dict | undefined {\n        const value = this.safeValue (dictionaryOrList, key, defaultValue);\n        return (typeof value === 'object') ? value : defaultValue;\n    }\n    safeList2 (dictionaryOrList: any, key1: any, key2: any, defaultValue: any[] = undefined): any[] {\n        const value = this.safeValue (dictionaryOrList, key1);\n        const value2 = this.safeValue (dictionaryOrList, key2);\n        return Array.isArray (value) ? value : value2;\n    }\n    safeList (dictionaryOrList: any, key: any, defaultValue: any[] = undefined): any[] { return this.safeValue (dictionaryOrList, key, defaultValue); }\n    safeKept (dictionaryOrList: any, key: any): any {\n        const value = this.safeValue (dictionaryOrList, key);\n        return [ value, dictionaryOrList ];\n    }\n    hold (x: any): any { return x; }\n}\n",
+    "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseThing (resp: any, key: string) {\n        const rows = this.safeList (resp, 'rows');\n        const out = [];\n        for (let i = 0; i < rows.length; i++) {\n            const row = this.safeDict (rows, i);\n            out.push (this.safeString (row, key));\n        }\n        const data = this.safeDict (resp, 'data');\n        const inner = this.safeList2 (data, key, 'b');\n        const id = this.safeString (data, key);\n        const pair = this.safeList (resp, 'pair');\n        const p0 = this.safeDict (pair, 0);\n        const p1 = this.safeDict (pair, 1);\n        const kept = this.safeList (resp, 'kept');\n        const k = this.safeKept (kept, 0);\n        return this.hold ([ out, inner, id, k, p0, p1 ]);\n    }\n}\n"
+  },
  "borrowed-any-key": {
     "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o; }\n    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n    safeString2 (o: any, k1: any, k2: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: Dict = undefined): Dict { return o; }\n    safeList (o: any, k: any, d: any[] = undefined): any[] { return o; }\n    hold (x: any): any { return x; }\n}\n",
     "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseThing (resp: Dict, key: string) {\n        const data = this.safeDict (resp, 'data');\n        const id = this.safeString (data, key);\n        const n = this.safeInteger (data, 'n', 1);\n        const rows = this.safeList (resp, 'rows');\n        const r0 = this.safeString (rows, key);\n        const lst = this.safeList (resp, 'lst');\n        const l0 = this.safeValue (lst, 0);\n        const l1 = this.safeString2 (lst, 1, 2);\n        const vs = this.safeList (resp, 'vs', []);\n        const v0 = this.safeString (vs, key);\n        const v1 = vs[1];\n        const out = [];\n        for (let i = 0; i < rows.length; i++) {\n            out.push (this.safeString (rows, i));\n        }\n        const first = this.safeValue (rows, 0);\n        const kept = this.safeList (resp, 'kept');\n        const k = this.safeDict (kept, 0);\n        return this.hold ([ id, n, out, first, k, kept, v0, v1, r0, l0, l1 ]);\n    }\n}\n"
@@ -5500,6 +5504,38 @@ describe('borrowed dict locals', () => {
         const out = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'borrowed-dict', 'ts/src/venue.ts')).content;
         expect(out).toContain('let mut kept: Value = ');
         expect(out).not.toContain('safe_string_k(&kept');
+    });
+});
+
+describe('generated readers lend their container', () => {
+    const out = () => transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'by-ref-generated-readers', 'ts/src/venue.ts')).content;
+    // its own transpiler: printing a base class records method signatures that later files would see
+    const base = () => new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath(path.join (rustFixtureRoot, 'by-ref-generated-readers', 'ts/src/base/Exchange.ts')).content;
+
+    test('a generated reader that only hands its container to by-reference readers takes it by reference', () => {
+        const b = base();
+        expect(b).toMatch(/fn safeDict\(&self, dictionaryOrList: impl crate::value::KeyRead, key: Value/);
+        expect(b).toMatch(/fn safeList2\(&self, dictionaryOrList: impl crate::value::KeyRead, key1: Value/);
+        expect(b).toMatch(/fn safeList\(&self, dictionaryOrList: impl crate::value::KeyRead, key: Value/);
+    });
+
+    test('list and dict locals read by those readers hold the shared container and lend it', () => {
+        const o = out();
+        expect(o).toContain('let mut pair: crate::value::List = ');
+        expect(o).toContain('self.safeDict(&pair, Value::Int(0)');
+        expect(o).toContain('self.safeDict(&rows, ');
+        expect(o).not.toContain('pair: Value');
+        expect(o).toContain('let mut data: crate::value::Dict = ');
+        expect(o).toContain('self.safeList2(&data, ');
+        expect(o).not.toContain('rows: Value');
+        expect(o).not.toContain('data: Value');
+    });
+
+    test('negative: a container parameter that escapes stays a Value, and so does its caller local', () => {
+        expect(base()).toMatch(/fn safeKept\(&self, dictionaryOrList: Value/);
+        const o = out();
+        expect(o).toContain('let mut kept: Value = ');
+        expect(o).not.toContain('&kept');
     });
 });
 

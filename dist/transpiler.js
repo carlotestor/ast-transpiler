@@ -51405,6 +51405,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustContainerBoxUses = /* @__PURE__ */ new WeakMap();
     this.rustBorrowedDictDecisions = /* @__PURE__ */ new WeakMap();
     this.rustBorrowedKinds = /* @__PURE__ */ new WeakMap();
+    // ── generated readers taking their container by reference ───────────────
+    // A generated base `safe*` reader whose first parameter is only handed on as the container of by-reference
+    // readers declares it `impl crate::value::KeyRead`: a `Value` argument still passes by value, a dict or list
+    // local is lent as `&x`, and the reader never copies or re-boxes it.
+    this.rustByRefParamDecisions = /* @__PURE__ */ new WeakMap();
     this.rustHandedDictDecisions = /* @__PURE__ */ new WeakMap();
     // Two-level dict bearers: an object literal whose every value is an object literal is declared
     // `IndexMap<String, IndexMap<String, Value>>`, so `x[k1][k2] = v` is one `entry(k1)..insert(k2, v)` and
@@ -53609,6 +53614,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "&mut indexmap::IndexMap<String, Value>";
     if (this.rustParamPrintsStrVec(param))
       return "Vec<String>";
+    if (this.rustParamReadsByReference(param))
+      return "impl crate::value::KeyRead";
     return "Value";
   }
   // A read of a native-`bool` parameter that still compiles: a condition slot,
@@ -60656,10 +60663,63 @@ ${iden}}`;
     const callee = call.expression;
     if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
-    if (!_RustTranspiler.RUST_BORROWED_ANY_KEY_READERS.test(String(callee.name.text)) || (call.arguments?.length ?? 0) < 2)
+    if ((call.arguments?.length ?? 0) < 2)
       return false;
+    if (!_RustTranspiler.RUST_BORROWED_ANY_KEY_READERS.test(String(callee.name.text)))
+      return this.rustReaderTakesContainerByReference(call);
     const declaration = this.rustScalarCallee(call);
     return declaration !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName));
+  }
+  rustParamReadsByReference(param) {
+    if (param?.kind !== SyntaxKind7.Parameter)
+      return false;
+    let decision = this.rustByRefParamDecisions.get(param);
+    if (decision === void 0) {
+      this.rustByRefParamDecisions.set(param, false);
+      try {
+        decision = this.rustParamReadsByReferenceUncached(param);
+      } catch (e) {
+        decision = false;
+      }
+      this.rustByRefParamDecisions.set(param, decision);
+    }
+    return decision;
+  }
+  rustParamReadsByReferenceUncached(param) {
+    const method = param.parent;
+    if (!isMethodDeclaration5(method) || method.body === void 0 || method.parameters[0] !== param)
+      return false;
+    if (param.name?.kind !== SyntaxKind7.Identifier || param.dotDotDotToken !== void 0 || param.initializer !== void 0 || param.questionToken !== void 0)
+      return false;
+    if ((method.modifiers ?? []).some((m) => m.kind === SyntaxKind7.StaticKeyword))
+      return false;
+    if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(String(param.getSourceFile().fileName)))
+      return false;
+    const name = String(method.name?.text ?? "");
+    if (!/^safe[A-Z]/.test(name) || _RustTranspiler.RUST_BORROWED_ANY_KEY_READERS.test(name))
+      return false;
+    if (this.rustMethodReferencedAsValue(method))
+      return false;
+    let reads = 0;
+    const ok = this.rustLocalUsesAll(param, String(param.name.text), true, (n) => {
+      const call = n.parent;
+      if (!isCallExpression6(call) || call.arguments[0] !== n || !this.rustBorrowedAnyKeyReader(call))
+        return false;
+      reads++;
+      return true;
+    });
+    return ok && reads > 0;
+  }
+  /** A call to a generated base reader (any overload) whose container parameter prints by reference. */
+  rustReaderTakesContainerByReference(call) {
+    let declaration = this.rustScalarCallee(call);
+    if (declaration === void 0 || !isMethodDeclaration5(declaration))
+      return false;
+    if (declaration.body === void 0) {
+      const name = String(declaration.name?.text ?? "");
+      declaration = (declaration.parent?.members ?? []).find((m) => isMethodDeclaration5(m) && m.body !== void 0 && String(m.name?.text ?? "") === name);
+    }
+    return declaration !== void 0 && this.rustParamReadsByReference(declaration.parameters?.[0]);
   }
   /** `'dict' | 'list' | 'api'` for a container source the local may hold by reference. */
   rustBorrowedSourceKind(call) {

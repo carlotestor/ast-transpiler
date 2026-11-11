@@ -1350,6 +1350,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBorrowedListUse(node: any): boolean;
     /** A base hand-written reader (`safeString`, `safeValue2`, `safeIntegerN`, ..) with any key. */
     rustBorrowedAnyKeyReader(call: any): boolean;
+    private rustByRefParamDecisions;
+    rustParamReadsByReference(param: any): boolean;
+    rustParamReadsByReferenceUncached(param: any): boolean;
+    /** A call to a generated base reader (any overload) whose container parameter prints by reference. */
+    rustReaderTakesContainerByReference(call: any): boolean;
     /** `'dict' | 'list' | 'api'` for a container source the local may hold by reference. */
     rustBorrowedSourceKind(call: any): 'dict' | 'list' | 'api' | undefined;
     /** `&x` for a borrowed local (or a typed container local) passed to a hand-written any-key reader. */
