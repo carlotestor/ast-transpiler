@@ -1291,7 +1291,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBorrowedDictSource(call: any): boolean;
     /** Rust `_k` reader name of a base `this.safeX(obj, 'literal'[, default])` call, else undefined. */
     rustBorrowedDictReader(call: any): string | undefined;
-    /** `self.safe_X_k(&x, "k", &[..])` when `x` is a borrowed dict local or a typed container map local. */
+    /** `self.safe_X_k(&x, "k", &[..])` when `x` is a borrowed dict local or a typed container local. */
     printBorrowedDictRead(node: any, identation: number): string | undefined;
     /** One element read rooted at the bearer: a plain read the native op serves. */
     rustReadBearerElementUse(access: any, kind: 'list' | 'map'): boolean;

@@ -60210,7 +60210,7 @@ ${iden}}`;
     const declaration = this.rustScalarCallee(call);
     return declaration !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName)) ? rust : void 0;
   }
-  /** `self.safe_X_k(&x, "k", &[..])` when `x` is a borrowed dict local or a typed container map local. */
+  /** `self.safe_X_k(&x, "k", &[..])` when `x` is a borrowed dict local or a typed container local. */
   printBorrowedDictRead(node, identation) {
     if (!_is.isCallExpression.call(void 0, node))
       return void 0;
@@ -60220,7 +60220,7 @@ ${iden}}`;
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(recv);
     const owned = declaration !== void 0 && declaration !== recv && this.rustBorrowedDictLocal(declaration);
-    if (!owned && !(this.rustContainerBoxUses.get(recv) !== void 0 && this.rustReadBearerKind(recv) === "map"))
+    if (!owned && !(this.rustContainerBoxUses.get(recv) !== void 0 && this.rustReadBearerKind(recv) !== void 0))
       return void 0;
     const key = this.rustSkipWrappers(node.arguments[1]);
     const dflt = node.arguments.length === 3 ? this.printNode(node.arguments[2], identation).trim() : "";
