@@ -9918,7 +9918,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (!owned && !(this.rustContainerBoxUses.get(recv) !== undefined && this.rustReadBearerKind(recv) === 'map')) return undefined;
         const key: any = this.rustSkipWrappers(node.arguments[1]);
         const dflt = node.arguments.length === 3 ? this.printNode(node.arguments[2], identation).trim() : '';
-        return `self.${rust}(&${super.printIdentifier(recv)}, ${this.quotedStringLiteral(String(key.text))}, &[${dflt}])`;
+        const text = String(recv.text);
+        const name = super.transformIdentifier(recv, this.ReservedKeywordsReplacements[text] ?? text);
+        return `self.${rust}(&${name}, ${this.quotedStringLiteral(String(key.text))}, &[${dflt}])`;
     }
 
     /** One element read rooted at the bearer: a plain read the native op serves. */
