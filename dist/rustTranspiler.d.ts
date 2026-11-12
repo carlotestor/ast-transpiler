@@ -547,7 +547,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsSettleCall(call: any): boolean;
     /** `client.future|reusableFuture(hash)` on a ws handle: the hand-written method takes `hash: impl Into<Value>`. */
     rustWsFlightCall(call: any): boolean;
-    /** `this.watch(url, hash, ..)` / `this.watchMultiple(url, ..)`: the runtime takes `url` and the single hash as `impl Into<Value>`. */
+    /** `this.watch(url, hash, message, subscribeHash, ..)` / `this.watchMultiple(url, ..)`: url and hashes are `impl Into<Option<&str>>`. */
     rustWsWatchSlot(call: any, at: number): boolean;
     /** A string local read as a ws hash or key slot: the settle hash, a handle `in` test or a handle keyed read. */
     rustWsKeyUse(n: any): boolean;
@@ -1717,6 +1717,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     printWsUrlLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** A `watch` url / hash slot takes `impl Into<Option<&str>>`: a string local or literal as `&str`, anything else lent as `&Value`. */
     rustWsWatchSlotText(arg: any, printed: string): string;
+    printWsWatchCall(node: any, receiver: string, methodName: string, identation: number): string | undefined;
+    /** A numeric or boolean hash argument: the runtime keys by its text, as `stringify_param` did. */
+    rustWsNumberSlot(arg: any): boolean;
+    rustWsNumberSlotText(arg: any, printed: string): string;
+    /** The message and subscription slots take `impl Into<Value>`: a dict local is lent there as its shared handle. */
+    rustWsWatchDictSlot(call: any, at: number): boolean;
+    /** `client.subscriptions[k] = x`: the handle stores the boxed value, no nested container write. */
+    rustWsSubscriptionWriteValue(n: any): boolean;
     private rustBuiltLists;
     rustBuiltListLocal(declaration: any): boolean;
     /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */

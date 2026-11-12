@@ -55419,6 +55419,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if ((kind === "str" || kind === "ostr") && this.rustWsKeyUse(n))
       return "targ";
+    if ((kind === "str" || kind === "ostr") && this.rustWsSubscriptionWriteValue(n))
+      return "box";
     if (this.rustScalarInNestedWrite(n))
       return void 0;
     if (kind === "str" && this.rustScalarInsertKeyUse(n))
@@ -55542,13 +55544,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const name = String(callee.name.text);
     return (name === "future" || name === "reusableFuture") && call.arguments[0]?.kind !== SyntaxKind7.SpreadElement && this.rustCallsRuntimeHandle(call);
   }
-  /** `this.watch(url, hash, ..)` / `this.watchMultiple(url, ..)`: the runtime takes `url` and the single hash as `impl Into<Value>`. */
+  /** `this.watch(url, hash, message, subscribeHash, ..)` / `this.watchMultiple(url, ..)`: url and hashes are `impl Into<Option<&str>>`. */
   rustWsWatchSlot(call, at) {
     const callee = call.expression;
     if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || call.arguments.some((a) => a.kind === SyntaxKind7.SpreadElement))
       return false;
     const name = String(callee.name.text);
-    if (!(at === 0 || at === 1 && name === "watch") || name !== "watch" && name !== "watchMultiple" || call.arguments.length < 2)
+    if (!(at === 0 || (at === 1 || at === 3) && name === "watch") || name !== "watch" && name !== "watchMultiple" || call.arguments.length < 2)
       return false;
     return this.rustCalleeIsRuntimeBase(call);
   }
@@ -58389,6 +58391,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       const methodName = expr.name.text;
       const sig = this.methodSignatures[methodName];
       if (sig) {
+        const watchCall = this.printWsWatchCall(node, "self", methodName, identation);
+        if (watchCall !== void 0)
+          return watchCall;
         const calleeParams = this.rustCalleeParams(node);
         const printArg = (a, at) => this.rustVenueStrSlot(calleeParams, at) !== void 0 ? this.rustVenueStrArgText(a, this.rustVenueStrSlot(calleeParams, at), 0) : this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
         const printArgs = (list, from = 0) => list.map((a, i) => this.rustWsWatchSlot(node, from + i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, from + i)).join(", ");
@@ -58418,6 +58423,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   }
   // `receiver.m(a0..a{fixed-1}, &[rest])`; bare locals are cloned so a local reused by a later call is not moved.
   printOptionalArgsSliceCall(node, receiver, methodName, fixed, identation) {
+    const watchCall = this.printWsWatchCall(node, receiver, methodName, identation);
+    if (watchCall !== void 0)
+      return watchCall;
     const args = this.rustPrintedArgs(node, identation);
     if (args.length < fixed || args.length > 0 && args[args.length - 1].startsWith("&["))
       return void 0;
@@ -63646,8 +63654,7 @@ ${iden}}`;
     return form === "move" ? `Value::Arr(${text})` : `Value::Arr(${text}.clone())`;
   }
   // ── watch hash lists (rustWatchHashListSlot) ──
-  // `watch_multiple` takes its message hashes as `impl Into<Value>`, so a built hash list is lent there (`&x`);
-  // as the optional subscribe hashes it passes its shared handle, never its elements.
+  // `watch_multiple` takes its message and subscribe hashes as `impl Into<Value>`, so a built hash list is lent there (`&x`).
   rustWatchHashListSlot(call, n) {
     if (!isCallExpression6(call) || call.expression === n || !this.rustWsWatchSlot(call, 0))
       return void 0;
@@ -63655,7 +63662,7 @@ ${iden}}`;
     if (!isPropertyAccessExpression3(callee) || String(callee.name.text) !== "watchMultiple")
       return void 0;
     const at = Array.from(call.arguments).indexOf(n);
-    return at === 1 ? "lend" : at === 3 ? "clone" : void 0;
+    return at === 1 || at === 3 ? "lend" : void 0;
   }
   rustWsUrlLocal(declaration) {
     if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
@@ -63732,6 +63739,55 @@ ${iden}}`;
     if (kind === "str")
       return `${super.printIdentifier(inner)}.as_str()`;
     return /^[A-Za-z_][A-Za-z0-9_]*$/.test(printed) ? `&${printed}` : `&(${printed})`;
+  }
+  // ── watch positionals (printWsWatchCall / rustWsWatchDictSlot / rustWsSubscriptionWriteValue) ──
+  // `watch(url, hash, message, subscribe_hash, subscription)` and `watch_multiple(url, hashes, message, subscribe_hashes,
+  // subscription)` take every parameter by position: an omitted one is `Value::Null`, an omitted subscribe hash `None`.
+  printWsWatchCall(node, receiver, methodName, identation) {
+    if (receiver !== "self" || methodName !== "watch" && methodName !== "watchMultiple" || node.arguments.length > 5 || !this.rustWsWatchSlot(node, 0))
+      return void 0;
+    const printed = this.rustPrintedArgs(node, identation);
+    const single = methodName === "watch";
+    const slots = [0, 1, 2, 3, 4].map((at) => {
+      const arg = node.arguments[at];
+      if (arg === void 0)
+        return at === 3 && single ? "None::<&str>" : "Value::Null";
+      if (!this.rustWsWatchSlot(node, at))
+        return this.rustSliceArgText(printed[at]);
+      return at > 0 && this.rustWsNumberSlot(arg) ? this.rustWsNumberSlotText(arg, printed[at]) : this.rustWsWatchSlotText(arg, printed[at]);
+    });
+    return `self.${methodName}(${slots.join(", ")})`;
+  }
+  /** A numeric or boolean hash argument: the runtime keys by its text, as `stringify_param` did. */
+  rustWsNumberSlot(arg) {
+    const type = this.typeOfNodeIfAny(arg);
+    const kind = type === void 0 ? void 0 : this.primitiveKindOfType(type);
+    return kind === "number" || kind === "boolean";
+  }
+  rustWsNumberSlotText(arg, printed) {
+    const inner = this.unwrapParens(arg);
+    if (isNumericLiteral4(inner) && /^\d+$/.test(String(inner.text)))
+      return `"${inner.text}"`;
+    if (inner.kind === SyntaxKind7.TrueKeyword || inner.kind === SyntaxKind7.FalseKeyword)
+      return `"${inner.kind === SyntaxKind7.TrueKeyword}"`;
+    const kind = isIdentifier3(inner) ? this.rustScalarIdentifierKind(inner) : void 0;
+    if (kind !== void 0 && kind.startsWith("o"))
+      return `Value::from(${printed}).to_string().as_str()`;
+    return `${/^[A-Za-z_][A-Za-z0-9_]*$/.test(printed) ? printed : `(${printed})`}.to_string().as_str()`;
+  }
+  /** The message and subscription slots take `impl Into<Value>`: a dict local is lent there as its shared handle. */
+  rustWsWatchDictSlot(call, at) {
+    if (at !== 2 && at !== 4)
+      return false;
+    const name = String(call.expression?.name?.text ?? "");
+    return (name === "watch" || name === "watchMultiple") && this.rustWsWatchSlot(call, 0);
+  }
+  /** `client.subscriptions[k] = x`: the handle stores the boxed value, no nested container write. */
+  rustWsSubscriptionWriteValue(n) {
+    const write = n.parent;
+    if (!isBinaryExpression5(write) || write.right !== n || write.operatorToken.kind !== SyntaxKind7.EqualsToken || !isElementAccessExpression4(write.left))
+      return false;
+    return write.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustClientHandleAccess(write.left.expression)?.key === "subscriptions";
   }
   rustBuiltListLocal(declaration) {
     if (declaration.name?.kind !== SyntaxKind7.Identifier)
@@ -64766,6 +64822,8 @@ ${iden}}`;
     const at = Array.from(call.arguments ?? []).indexOf(arg);
     if (at < 0)
       return false;
+    if (this.rustWsWatchDictSlot(call, at))
+      return true;
     const params = this.rustTranspiledCalleeParams(call, String(call.expression.name.text));
     return params !== void 0 && at < params.length && this.rustParamIsLentDict(params[at]);
   }
