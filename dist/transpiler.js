@@ -58007,14 +58007,25 @@ ${i1}}`;
     const name = String(callee.name.text);
     if (!_RustTranspiler.RUST_MARKET_SAFE_READERS.has(name) || !isStringLiteralLikeNode4(call.arguments[1]))
       return void 0;
-    if (call.parent?.kind === SyntaxKind7.VariableDeclaration || isParenthesizedExpression3(call.parent))
+    let top = call.parent;
+    while (top !== void 0 && isParenthesizedExpression3(top))
+      top = top.parent;
+    if (top?.kind === SyntaxKind7.VariableDeclaration)
       return void 0;
     const key = String(call.arguments[1].text);
-    if (name === "safeString" && call.arguments.length === 2 && (_RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== void 0 || _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS.has(key)))
+    const strField = _RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== void 0 || _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS[key] !== void 0;
+    if (name === "safeString" && call.arguments.length === 2 && strField)
+      return key;
+    if (name === "safeString" && this.rustMarketEmptyDefaultRead(call) && key !== "type" && strField)
       return key;
     if (name === "safeBool" && (_RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key) || _RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key)) && (call.arguments.length === 2 || call.arguments.length === 3 && call.arguments[2].kind === SyntaxKind7.FalseKeyword))
       return key;
     return void 0;
+  }
+  /** `this.safeString (m, 'k', '')`: three arguments, the last an empty string literal. */
+  rustMarketEmptyDefaultRead(call) {
+    const def = call.arguments[2];
+    return call.arguments.length === 3 && def !== void 0 && isStringLiteralLikeNode4(def) && String(def.text) === "";
   }
   /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
   rustMarketValueUse(n) {
@@ -58096,8 +58107,10 @@ ${i1}}`;
         return this.rustIsNullTestOf(n) || this.rustMarketValueUse(n);
       const key = this.rustMarketReadKey(n);
       if (key !== void 0) {
-        if (_RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== void 0 || _RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key) || _RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key) || _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS.has(key))
-          fieldReads++;
+        if (_RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== void 0 || _RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key) || _RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key) || _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS[key] !== void 0) {
+          if (!isCallExpression6(n.parent) || !this.rustMarketEmptyDefaultRead(n.parent))
+            fieldReads++;
+        }
         return true;
       }
       return this.rustMarketValueUse(n);
@@ -58209,10 +58222,17 @@ ${i1}}`;
     if (asBool)
       return void 0;
     const field = _RustTranspiler.RUST_MARKET_STR_FIELDS[key];
+    const optField = _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS[key];
+    if (isCallExpression6(node) && this.rustMarketEmptyDefaultRead(node)) {
+      if (field !== void 0)
+        return `Value::from(${recv}.${field}.as_str())`;
+      if (optField !== void 0)
+        return `Value::from(${recv}.${optField}.as_deref().unwrap_or(""))`;
+    }
     if (field !== void 0)
       return `Value::from(${recv}.${field}.clone())`;
-    if (_RustTranspiler.RUST_MARKET_OPT_STR_FIELDS.has(key))
-      return `Value::from(${recv}.${key}.as_deref())`;
+    if (optField !== void 0)
+      return `Value::from(${recv}.${optField}.as_deref())`;
     if (_RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key) && !isCallExpression6(node) && node.parent?.kind !== SyntaxKind7.VariableDeclaration) {
       return `${recv}.${key}.map(Value::Bool).unwrap_or_default()`;
     }
@@ -67936,20 +67956,18 @@ _RustTranspiler.RUST_TYPED_RETURNS = {
 // `const market = this.market (symbol)` whose every use is a literal-key read or a whole-value hand-off
 // stays a `crate::types::Market`: listed fields read natively, other keys and hand-offs use its `raw`.
 _RustTranspiler.RUST_MARKET_STR_FIELDS = {
-  id: "id",
   symbol: "symbol",
   base: "base",
   quote: "quote",
-  baseId: "base_id",
-  quoteId: "quote_id",
   type: "market_type"
 };
 // fields every loaded market carries (`from_value` defaults only a missing key, which a market never lacks)
-_RustTranspiler.RUST_MARKET_BOOL_FIELDS = /* @__PURE__ */ new Set(["spot", "margin", "swap", "future", "option", "contract"]);
+_RustTranspiler.RUST_MARKET_BOOL_FIELDS = /* @__PURE__ */ new Set(["spot", "swap", "future", "option", "contract"]);
 // nullable flags (`Option<bool>`): only a truthiness test reads them natively
-_RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS = /* @__PURE__ */ new Set(["linear", "inverse"]);
+_RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS = /* @__PURE__ */ new Set(["linear", "inverse", "margin"]);
 _RustTranspiler.RUST_MARKET_SAFE_READERS = /* @__PURE__ */ new Set(["safeString", "safeBool"]);
-_RustTranspiler.RUST_MARKET_OPT_STR_FIELDS = /* @__PURE__ */ new Set(["settle"]);
+// `Str` keys of `MarketInterface` (`Option<String>` fields)
+_RustTranspiler.RUST_MARKET_OPT_STR_FIELDS = { settle: "settle", id: "id", baseId: "base_id", quoteId: "quote_id" };
 // `MarketInterface` keys typed `Bool`: a raw read of one holds a Bool or Null.
 _RustTranspiler.RUST_MARKET_FLAG_KEYS = /* @__PURE__ */ new Set(["spot", "margin", "swap", "future", "option", "index", "stock", "prediction", "contract", "linear", "inverse", "quanto"]);
 // Hand-written runtime methods (`exchange_stubs.rs`, `exchange.rs`, the ws `Client`/`Future` handles) take a
