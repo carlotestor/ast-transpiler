@@ -64,6 +64,36 @@ interface RustScopeIndex {
     end: number[];
     byName: Map<string, number[]> | undefined;
 }
+export type RustDispatchParamKind = 'value' | 'slice' | 'map' | 'strvec' | 'flag' | 'str' | 'optstr' | 'f64' | 'optf64' | 'opti64' | 'i64' | 'optstrvec' | 'strvecvec' | 'params' | 'orderreqs' | 'other';
+export type RustDispatchReturnKind = 'value' | 'void' | 'typed' | 'ostr' | 'other';
+export interface RustMethodSignature {
+    file: any;
+    name: string;
+    params: Array<{
+        name: string;
+        kind: RustDispatchParamKind;
+        type: string;
+    }>;
+    ret: RustDispatchReturnKind;
+    returns: string;
+}
+export declare const rustDispatch: {
+    isTyped: (kind: string) => boolean;
+    /** Tail of a dynamic-dispatch `args` list as a slice: the whole list, or the tail past index `i`. */
+    sliceArg: (i: number) => string;
+    /** An owned map copy for a native-map parameter, built on the arm's own line (400-char line budget). */
+    mapArg: (i: number) => string;
+    /** `args[i]` lowered to the parameter kind of a by-name dispatch arm. */
+    arg(kind: string, i: number): string;
+    /** `args[i]` for a sync ws handler slot (`Value` / `bool` / list / map / slice), else undefined. */
+    wsArg(kind: string, i: number): string | undefined;
+    /** The typed parameter `kind` read from the boxed `Value` expression `v` (a `DerivedExchange` slot argument). */
+    fromValue(kind: string, v: string): string;
+    /** Every `args[i]` of a by-name dispatch arm, one conversion per parameter kind. */
+    args: (kinds: string[]) => string[];
+    /** A typed method's `Result<T>` boxed back to the dispatcher's `Value`. */
+    result(call: string, isTyped: boolean | undefined): string;
+};
 export declare class RustTranspiler extends BaseTranspiler {
     private rustScopeIndexes;
     rustScopeIndex(scope: Node): RustScopeIndex;
@@ -85,6 +115,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustProHandlerShadowParam: ParameterDeclaration | undefined;
     /** Unified methods printed with a typed public signature (`config.typedUnified`, TS names). */
     rustTypedUnified: Set<string>;
+    /** Base methods dispatched to the derived exchange first (snake name -> the `DerivedExchange` slot names). */
+    rustVirtualDispatch: Record<string, string[]>;
+    /** Virtual base methods whose overrides call `super.X()`: the base body prints as `X_non_virtual`. */
+    rustNonVirtualShims: Set<string>;
     constructor(config?: {});
     initConfig(): void;
     quotedStringLiteral(text: string): string;
@@ -875,6 +909,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     printNewMethod(node: any, identation: any): string;
     printClass(node: any, identation: any): string;
     printMethodDefinition(node: any, identation: any): string;
+    rustSignatureTable: Map<any, RustMethodSignature>;
+    private static readonly RUST_DISPATCH_PARAM_KINDS;
+    rustRecordSignature(node: any, name: string, params: Array<{
+        name: string;
+        rustType: string;
+    }>, returnType: string): void;
+    rustVirtualDispatchMethod(node: any, methodDef: string, body: string): string;
     private static rustTypedParam;
     private static readonly RUST_TYPED_STR_PARAMS;
     private static readonly RUST_TYPED_RETURNS;
