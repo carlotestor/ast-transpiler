@@ -51307,7 +51307,8 @@ function rustScopeNameTable(index) {
   index.byName = byName;
   return byName;
 }
-var RUST_DISPATCH_TYPED_KINDS = /* @__PURE__ */ new Set(["str", "optstr", "f64", "optf64", "opti64", "i64", "optstrvec", "strvecvec", "orderreqs", "params", "flag"]);
+var RUST_DISPATCH_TYPED_KINDS = /* @__PURE__ */ new Set(["str", "optstr", "f64", "optf64", "opti64", "i64", "optstrvec", "strvecvec", "orderreqs", "params", "flag", "dict", "list", "optdict", "optlist"]);
+var RUST_DISPATCH_NATIVE_RETURNS = /* @__PURE__ */ new Set(["int", "string", "bool", "dict", "list", "optdict", "struct"]);
 var rustDispatch = {
   isTyped: (kind) => RUST_DISPATCH_TYPED_KINDS.has(kind),
   /** Tail of a dynamic-dispatch `args` list as a slice: the whole list, or the tail past index `i`. */
@@ -51347,6 +51348,14 @@ var rustDispatch = {
         return `crate::types::FromRaw::from_raw(${arg})`;
       case "flag":
         return `args.get(${i}).is_some_and(crate::Value::is_truthy)`;
+      case "dict":
+        return `${arg}.into_dict()`;
+      case "list":
+        return `${arg}.into_list()`;
+      case "optdict":
+        return `${arg}.into_opt_dict()`;
+      case "optlist":
+        return `${arg}.into_opt_list()`;
       default:
         return arg;
     }
@@ -51377,15 +51386,42 @@ var rustDispatch = {
         return `${v}.as_str()`;
       case "flag":
         return `${v}.is_truthy()`;
+      case "dict":
+      case "list":
+      case "optdict":
+      case "optlist":
+        return `${v}.into_${kind.replace("opt", "opt_")}()`;
+      case "orderreqs":
+        return `crate::types::FromRaw::from_raw(${v})`;
       default:
         return v;
     }
   },
+  /** A sync method with a native return still gets a by-name arm (it boxes back inside the arm). */
+  isNativeReturn: (ret) => RUST_DISPATCH_NATIVE_RETURNS.has(ret),
   /** Every `args[i]` of a by-name dispatch arm, one conversion per parameter kind. */
   args: (kinds) => kinds.map((kind, i) => rustDispatch.arg(kind, i)),
   /** A typed method's `Result<T>` boxed back to the dispatcher's `Value`. */
   result(call, isTyped) {
-    return isTyped ? `crate::types::IntoRaw::into_raw(${call})` : call;
+    const ret = isTyped === true ? "typed" : isTyped === false || isTyped === void 0 ? "value" : isTyped;
+    switch (ret) {
+      case "typed":
+      case "ostr":
+      case "struct":
+        return `crate::types::IntoRaw::into_raw(${call})`;
+      case "int":
+      case "string":
+      case "bool":
+        return `crate::Value::from(${call})`;
+      case "dict":
+        return `crate::Value::Dict(${call})`;
+      case "list":
+        return `crate::Value::Arr(${call})`;
+      case "optdict":
+        return `${call}.map_or(crate::Value::Null, crate::Value::Dict)`;
+      default:
+        return call;
+    }
   }
 };
 var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
@@ -57886,7 +57922,7 @@ ${classMethods}
     return `${this.getIden(identation + 1)}pub fn ${name}(${parsedArgs})${retStr}`;
   }
   rustRecordSignature(node, name, params, returnType) {
-    const ret = returnType === "" ? "void" : returnType === "Value" ? "value" : returnType === "Option<String>" ? "ostr" : returnType.startsWith("crate::Result<") ? "typed" : "other";
+    const ret = _nullishCoalesce(_RustTranspiler.RUST_DISPATCH_RETURN_KINDS[returnType], () => ( (returnType.startsWith("crate::Result<") ? "typed" : "other")));
     this.rustSignatureTable.set(node, {
       file: _optionalChain([node, 'access', _8878 => _8878.getSourceFile, 'optionalCall', _8879 => _8879()]),
       name: this.toSnakeCaseName(name),
@@ -67822,7 +67858,25 @@ _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "i64": "i64",
   "Option<Vec<String>>": "optstrvec",
   "Vec<Vec<String>>": "strvecvec",
-  "impl Into<crate::Params> + Send": "params"
+  "impl Into<crate::Params> + Send": "params",
+  "crate::value::Dict": "dict",
+  "crate::value::List": "list",
+  "Option<crate::value::Dict>": "optdict",
+  "Option<crate::value::List>": "optlist"
+};
+_RustTranspiler.RUST_DISPATCH_RETURN_KINDS = {
+  "": "void",
+  "Value": "value",
+  "crate::Value": "value",
+  "Option<String>": "ostr",
+  "i64": "int",
+  "String": "string",
+  "bool": "bool",
+  "crate::value::Dict": "dict",
+  "crate::value::List": "list",
+  "Option<crate::value::Dict>": "optdict",
+  "crate::types::Market": "struct",
+  "crate::types::Currency": "struct"
 };
 // Unified methods whose `Str` parameter is a required base-spec `string` (`market (symbol: Str)` keeps `Str`
 // so its callers may pass one; the typed signature takes the symbol itself).

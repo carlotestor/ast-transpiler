@@ -202,8 +202,9 @@ function rustScopeNameTable(index: RustScopeIndex): Map<string, number[]> {
 
 // A by-name dispatch parameter kind (one conversion each) and return kind, from the printer's type decisions.
 export type RustDispatchParamKind = 'value' | 'slice' | 'map' | 'strvec' | 'flag' | 'str' | 'optstr' | 'f64' | 'optf64'
-    | 'opti64' | 'i64' | 'optstrvec' | 'strvecvec' | 'params' | 'orderreqs' | 'other';
-export type RustDispatchReturnKind = 'value' | 'void' | 'typed' | 'ostr' | 'other';
+    | 'opti64' | 'i64' | 'optstrvec' | 'strvecvec' | 'params' | 'orderreqs' | 'dict' | 'list' | 'optdict' | 'optlist' | 'other';
+// `ostr` .. `struct` are the native returns of sync methods; each boxes back to `Value` once, inside the arm
+export type RustDispatchReturnKind = 'value' | 'void' | 'typed' | 'ostr' | 'int' | 'string' | 'bool' | 'dict' | 'list' | 'optdict' | 'struct' | 'other';
 export interface RustMethodSignature {
     file: any;
     name: string;
@@ -213,7 +214,9 @@ export interface RustMethodSignature {
 }
 
 // The typed parameter kinds a dispatch arm decodes from `args[i]` and a forwarder from its `Value` slot.
-const RUST_DISPATCH_TYPED_KINDS = new Set<string>([ 'str', 'optstr', 'f64', 'optf64', 'opti64', 'i64', 'optstrvec', 'strvecvec', 'orderreqs', 'params', 'flag' ]);
+const RUST_DISPATCH_TYPED_KINDS = new Set<string>([ 'str', 'optstr', 'f64', 'optf64', 'opti64', 'i64', 'optstrvec', 'strvecvec', 'orderreqs', 'params', 'flag', 'dict', 'list', 'optdict', 'optlist' ]);
+// a native return a by-name arm boxes back to `Value`
+const RUST_DISPATCH_NATIVE_RETURNS = new Set<string>([ 'int', 'string', 'bool', 'dict', 'list', 'optdict', 'struct' ]);
 
 export const rustDispatch = {
     isTyped: (kind: string): boolean => RUST_DISPATCH_TYPED_KINDS.has(kind),
@@ -239,6 +242,10 @@ export const rustDispatch = {
         case 'strvecvec': return `${arg}.to_str_vec_vec()`;
         case 'orderreqs': return `crate::types::FromRaw::from_raw(${arg})`;
         case 'flag': return `args.get(${i}).is_some_and(crate::Value::is_truthy)`;
+        case 'dict': return `${arg}.into_dict()`;
+        case 'list': return `${arg}.into_list()`;
+        case 'optdict': return `${arg}.into_opt_dict()`;
+        case 'optlist': return `${arg}.into_opt_list()`;
         default: return arg;
         }
     },
@@ -259,14 +266,26 @@ export const rustDispatch = {
         case 'str': return `${v}.as_str().unwrap_or_default()`;
         case 'optstr': return `${v}.as_str()`;
         case 'flag': return `${v}.is_truthy()`;
+        case 'dict': case 'list': case 'optdict': case 'optlist': return `${v}.into_${kind.replace('opt', 'opt_')}()`;
+        case 'orderreqs': return `crate::types::FromRaw::from_raw(${v})`;
         default: return v;
         }
     },
+    /** A sync method with a native return still gets a by-name arm (it boxes back inside the arm). */
+    isNativeReturn: (ret: string): boolean => RUST_DISPATCH_NATIVE_RETURNS.has(ret),
     /** Every `args[i]` of a by-name dispatch arm, one conversion per parameter kind. */
     args: (kinds: string[]): string[] => kinds.map((kind, i) => rustDispatch.arg(kind, i)),
     /** A typed method's `Result<T>` boxed back to the dispatcher's `Value`. */
-    result(call: string, isTyped: boolean | undefined): string {
-        return isTyped ? `crate::types::IntoRaw::into_raw(${call})` : call;
+    result(call: string, isTyped: boolean | string | undefined): string {
+        const ret = isTyped === true ? 'typed' : isTyped === false || isTyped === undefined ? 'value' : isTyped;
+        switch (ret) {
+        case 'typed': case 'ostr': case 'struct': return `crate::types::IntoRaw::into_raw(${call})`;
+        case 'int': case 'string': case 'bool': return `crate::Value::from(${call})`;
+        case 'dict': return `crate::Value::Dict(${call})`;
+        case 'list': return `crate::Value::Arr(${call})`;
+        case 'optdict': return `${call}.map_or(crate::Value::Null, crate::Value::Dict)`;
+        default: return call;
+        }
     },
 };
 
@@ -6775,12 +6794,18 @@ export class RustTranspiler extends BaseTranspiler {
         'Value': 'value', 'impl Into<crate::Value>': 'value', '&[Value]': 'slice', '&mut indexmap::IndexMap<String, Value>': 'map',
         'Vec<String>': 'strvec', 'bool': 'flag', '&str': 'str', 'Option<&str>': 'optstr', 'f64': 'f64',
         'Option<f64>': 'optf64', 'Option<i64>': 'opti64', 'i64': 'i64', 'Option<Vec<String>>': 'optstrvec', 'Vec<Vec<String>>': 'strvecvec',
-        'impl Into<crate::Params> + Send': 'params',
+        'impl Into<crate::Params> + Send': 'params', 'crate::value::Dict': 'dict', 'crate::value::List': 'list',
+        'Option<crate::value::Dict>': 'optdict', 'Option<crate::value::List>': 'optlist',
+    };
+
+    private static readonly RUST_DISPATCH_RETURN_KINDS: Record<string, RustDispatchReturnKind> = {
+        '': 'void', 'Value': 'value', 'crate::Value': 'value', 'Option<String>': 'ostr', 'i64': 'int', 'String': 'string', 'bool': 'bool',
+        'crate::value::Dict': 'dict', 'crate::value::List': 'list', 'Option<crate::value::Dict>': 'optdict',
+        'crate::types::Market': 'struct', 'crate::types::Currency': 'struct',
     };
 
     rustRecordSignature(node: any, name: string, params: Array<{ name: string, rustType: string }>, returnType: string): void {
-        const ret: RustDispatchReturnKind = returnType === '' ? 'void' : returnType === 'Value' ? 'value'
-            : returnType === 'Option<String>' ? 'ostr' : returnType.startsWith('crate::Result<') ? 'typed' : 'other';
+        const ret: RustDispatchReturnKind = RustTranspiler.RUST_DISPATCH_RETURN_KINDS[returnType] ?? (returnType.startsWith('crate::Result<') ? 'typed' : 'other');
         this.rustSignatureTable.set(node, {
             file: node.getSourceFile?.(),
             name: this.toSnakeCaseName(name),
