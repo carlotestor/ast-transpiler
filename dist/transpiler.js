@@ -55057,8 +55057,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** A local seeded from such a call is not appended onto another local (that write would retype the other one). */
   rustStrRuntimeLocalCostly(declaration) {
-    if (!this.rustStrRuntimeCall(this.unwrapParens(declaration.initializer)))
+    const init = this.unwrapParens(declaration.initializer);
+    if (!this.rustStrRuntimeCall(init))
       return false;
+    if (!_RustTranspiler.RUST_STR_RUNTIME_APPEND_VETO.has(String(init.expression.name.text)))
+      return this.rustStrReturnedLocal(declaration, this.rustEnclosingFunction(declaration));
     let appended = false;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       let top = n;
@@ -68301,7 +68304,19 @@ _RustTranspiler.RUST_BASE_SCALAR_RETURNS = {
 };
 // ── hand-written `-> String` runtime methods (rustStrRuntimeCall / printRustStrRuntimeCall) ──
 // Base methods the runtime implements by hand with the TS `string` return as a Rust `String`.
-_RustTranspiler.RUST_STR_RUNTIME_METHODS = /* @__PURE__ */ new Set(["implodeParams", "intToBase16"]);
+_RustTranspiler.RUST_STR_RUNTIME_METHODS = /* @__PURE__ */ new Set([
+  "implodeParams",
+  "intToBase16",
+  "hmac",
+  "uuid",
+  "uuid16",
+  "uuid22",
+  "urlencode",
+  "rawencode",
+  "urlencodeNested",
+  "urlencodeWithArrayRepeat"
+]);
+_RustTranspiler.RUST_STR_RUNTIME_APPEND_VETO = /* @__PURE__ */ new Set(["implodeParams", "intToBase16"]);
 // rustWsClientCallArg: `client.resolve|reject|future|reusableFuture|send(.., x)` on a ws `Client`
 // receiver takes its arguments as plain `Value`s, so a string local boxes there.
 _RustTranspiler.RUST_WS_CLIENT_VALUE_METHODS = /* @__PURE__ */ new Set(["resolve", "reject", "future", "reusableFuture", "send"]);

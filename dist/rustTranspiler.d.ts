@@ -498,6 +498,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_BASE_SCALAR_RETURNS;
     rustBaseReturnScalarKind(call: any, name: string): string | undefined;
     private static readonly RUST_STR_RUNTIME_METHODS;
+    private static readonly RUST_STR_RUNTIME_APPEND_VETO;
     private rustStrRuntimeBare;
     /** `this.implodeParams(..)` / `this.intToBase16(..)` resolved to the base tier with a non-null `string` return. */
     rustStrRuntimeCall(node: any): boolean;
