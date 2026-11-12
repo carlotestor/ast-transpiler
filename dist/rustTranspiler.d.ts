@@ -1788,6 +1788,37 @@ export declare class RustTranspiler extends BaseTranspiler {
     printWsFlightLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** A flight handle stays typed where it is awaited, a statement, or a `Flight` local's initializer; elsewhere it is boxed. */
     rustWsFlightBox(node: any, text: string): string;
+    private static readonly RUST_CACHE_TYPE;
+    private static readonly RUST_CACHE_METHODS;
+    private rustWsCacheFields;
+    private rustWsCacheLocals;
+    private rustWsCacheUses;
+    /** `this.F` for a base field declared `ArrayCache | undefined`. */
+    rustWsCacheField(node: any): boolean;
+    /** `new ArrayCache*(..)` of a class declared in `base/ws/Cache.ts`. */
+    rustWsCacheCtor(node: any): boolean;
+    rustWsCacheUndefined(node: any): boolean;
+    /** The receiver of a cache method (`x.append(v)` statement, `x.getLimit(..)`, `x.clear()`, a `x.hashmap` read). */
+    rustWsCacheMethodReceiver(n: any): boolean;
+    /** A read that boxes the handle once: a call argument, a return, an element / length read, a dict-write value. */
+    rustWsCacheBoxUse(n: any): boolean;
+    /** `x = new ArrayCache*(..)` / `x = undefined` (an optional local) as a statement. */
+    rustWsCacheLocalWrite(n: any, optional: boolean): boolean;
+    /** `this.F = x` for a typed cache field. */
+    rustWsCacheFieldWriteBack(n: any): boolean;
+    /** 'opt' for a local bound to a typed field, 'cache' for one bound to a constructor; undefined when it stays `Value`. */
+    rustWsCacheLocal(declaration: any): 'opt' | 'cache' | undefined;
+    printWsCacheLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
+    /** A use of a typed cache local: the handle itself, or boxed once at a `Value` hand-off. */
+    printWsCacheLocalUse(node: any): string | undefined;
+    /** `x === undefined` on an optional cache local or a typed field. */
+    printWsCacheNullTest(left: any, right: any, op: any): string | undefined;
+    /** A read of a typed field: the slot itself for a cache method or a write, else boxed once. */
+    printWsCacheFieldRead(node: any): string | undefined;
+    /** Writes of a typed field (`Some(ctor)`, `None`, a cache local) and of a cache local (a constructor). */
+    printWsCacheWrite(left: any, right: any): string | undefined;
+    /** A constructor stays a `Cache` where a cache slot takes it (a typed field / local write, a cache local's initializer); elsewhere it is boxed. */
+    rustWsCacheCtorBox(node: any, text: string): string;
     printWsWatchCall(node: any, receiver: string, methodName: string, identation: number): string | undefined;
     /** A numeric or boolean hash argument: the runtime keys by its text, as `stringify_param` did. */
     rustWsNumberSlot(arg: any): boolean;
