@@ -1717,6 +1717,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     printWsUrlLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** A `watch` url / hash slot takes `impl Into<Option<&str>>`: a string local or literal as `&str`, anything else lent as `&Value`. */
     rustWsWatchSlotText(arg: any, printed: string): string;
+    private static readonly RUST_FLIGHT_TYPE;
+    private rustWsFlightLocals;
+    rustWsFlightSource(init: any): boolean;
+    rustWsFlightLocal(declaration: any): boolean;
+    printWsFlightLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
+    /** A flight handle stays typed where it is awaited, a statement, or a `Flight` local's initializer; elsewhere it is boxed. */
+    rustWsFlightBox(node: any, text: string): string;
     printWsWatchCall(node: any, receiver: string, methodName: string, identation: number): string | undefined;
     /** A numeric or boolean hash argument: the runtime keys by its text, as `stringify_param` did. */
     rustWsNumberSlot(arg: any): boolean;

@@ -51455,6 +51455,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // `watch` / `watch_multiple` take the url as `impl Into<Option<&str>>`: a `this.urls[..]` read whose every use
     // is that slot is held as `Option<String>` and lent there.
     this.rustWsUrlLocals = /* @__PURE__ */ new Map();
+    this.rustWsFlightLocals = /* @__PURE__ */ new WeakMap();
     // ── built lists (rustBuiltListLocal / rustBuiltListWriteSource / printBuiltListDeclaration / printBuiltListWrite / printBuiltListPush) ──
     // A local built from an array literal, reassigned only from list producers (array literals, base `toArray` /
     // `arrayConcat`, a `[]`-defaulted `safeList*`) holds the shared list: pushes, length and index reads are native.
@@ -53022,7 +53023,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!declaration.initializer) {
       return `${indent}let mut ${varName}: Value = Value::Null`;
     }
-    const scalarDecl = node.declarations.length === 1 ? this.printRustScalarLocalDeclaration(declaration, varName, indent) ?? this.printWsUrlLocalDeclaration(declaration, varName, indent) : void 0;
+    const scalarDecl = node.declarations.length === 1 ? this.printRustScalarLocalDeclaration(declaration, varName, indent) ?? this.printWsUrlLocalDeclaration(declaration, varName, indent) ?? this.printWsFlightLocalDeclaration(declaration, varName, indent) : void 0;
     if (scalarDecl !== void 0)
       return scalarDecl;
     const parsedValue = this.printNode(declaration.initializer, identation).trim();
@@ -55613,7 +55614,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   printWsFlightCall(node, receiver, identation) {
     const arg = node.arguments[0];
     const hash = arg === void 0 ? "Value::Null" : this.rustWsStrKey(arg) ? this.rustWsKeyText(arg) : this.rustSliceArgText(this.printNode(arg, identation).trim());
-    return `${receiver}.${this.toSnakeCaseName(String(node.expression.name.text))}(${hash})`;
+    return this.rustWsFlightBox(node, `${receiver}.${this.toSnakeCaseName(String(node.expression.name.text))}(${hash})`);
   }
   /** Line of a node's first token (statements print one per line, so this orders reads and writes). */
   rustClientHandleLine(node) {
@@ -55819,12 +55820,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const name = access === void 0 || access.write ? void 0 : _RustTranspiler.RUST_CLIENT_HANDLE_NAMES[access.key];
     if (name === void 0 || this.isNativeWriteTargetBase(node))
       return void 0;
+    const box = (text) => name === "future" ? this.rustWsFlightBox(node, text) : text;
     if (this.rustWsStrKey(node.argumentExpression))
-      return `${this.rustClientHandleReceiver(access.plan, false)}.get_${name}(${this.rustWsKeyText(node.argumentExpression)})`;
+      return box(`${this.rustClientHandleReceiver(access.plan, false)}.get_${name}(${this.rustWsKeyText(node.argumentExpression)})`);
     const key = this.printNode(node.argumentExpression, 0).trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key))
       return void 0;
-    return `${this.rustClientHandleReceiver(access.plan, false)}.get_${name}(&${key})`;
+    return box(`${this.rustClientHandleReceiver(access.plan, false)}.get_${name}(&${key})`);
   }
   /** `Object.keys(client.subscriptions|futures)` bound to a key list: the handle's key list. */
   printClientHandleKeys(init) {
@@ -63740,6 +63742,54 @@ ${iden}}`;
       return `${super.printIdentifier(inner)}.as_str()`;
     return /^[A-Za-z_][A-Za-z0-9_]*$/.test(printed) ? `&${printed}` : `&(${printed})`;
   }
+  rustWsFlightSource(init) {
+    const node = init === void 0 ? void 0 : this.unwrapParens(init);
+    if (node === void 0)
+      return false;
+    if (isCallExpression6(node))
+      return isPropertyAccessExpression3(node.expression) && isIdentifier3(node.expression.expression) && this.rustWsFlightCall(node);
+    if (!isElementAccessExpression4(node) || this.isNativeWriteTargetBase(node))
+      return false;
+    const access = this.rustClientHandleAccess(node.expression);
+    return access !== void 0 && !access.write && access.key === "futures" && isIdentifier3(node.argumentExpression);
+  }
+  rustWsFlightLocal(declaration) {
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    let known = this.rustWsFlightLocals.get(declaration);
+    if (known === void 0) {
+      known = false;
+      const list = declaration.parent;
+      if (list?.kind === SyntaxKind7.VariableDeclarationList && list.declarations.length === 1 && this.rustWsFlightSource(declaration.initializer)) {
+        let uses = 0;
+        known = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
+          const p = n.parent;
+          const settle = isPropertyAccessExpression3(p) && p.expression === n && isCallExpression6(p.parent) && p.parent.expression === p && (p.name.text === "resolve" || p.name.text === "reject");
+          uses++;
+          return p?.kind === SyntaxKind7.AwaitExpression && p.expression === n || settle;
+        }) && uses > 0;
+      }
+      this.rustWsFlightLocals.set(declaration, known);
+    }
+    return known;
+  }
+  printWsFlightLocalDeclaration(declaration, varName, indent) {
+    if (!this.rustWsFlightLocal(declaration))
+      return void 0;
+    return `${indent}let mut ${varName}: ${_RustTranspiler.RUST_FLIGHT_TYPE} = ${this.printNode(declaration.initializer, 0).trim()}`;
+  }
+  /** A flight handle stays typed where it is awaited, a statement, or a `Flight` local's initializer; elsewhere it is boxed. */
+  rustWsFlightBox(node, text) {
+    let up = node;
+    while (isParenthesizedExpression3(up.parent))
+      up = up.parent;
+    const p = up.parent;
+    if (p?.kind === SyntaxKind7.AwaitExpression || p?.kind === SyntaxKind7.ExpressionStatement)
+      return text;
+    if (p !== void 0 && isVariableDeclaration3(p) && p.initializer === up && this.rustWsFlightLocal(p))
+      return text;
+    return `Value::from(${text})`;
+  }
   // ── watch positionals (printWsWatchCall / rustWsWatchDictSlot / rustWsSubscriptionWriteValue) ──
   // `watch(url, hash, message, subscribe_hash, subscription)` and `watch_multiple(url, hashes, message, subscribe_hashes,
   // subscription)` take every parameter by position: an omitted one is `Value::Null`, an omitted subscribe hash `None`.
@@ -68281,6 +68331,10 @@ _RustTranspiler.RUST_BY_REF_GENERATED_READERS = /^safe(?:Dict|List|Bool|Number)(
 // ── rustRecordLookupSource: base record lookups (market / outcome resolvers) held as a shared map ──
 // Each returns a cached record map (or nothing); read only by key, the map form reads the same.
 _RustTranspiler.RUST_RECORD_LOOKUP_SOURCES = /* @__PURE__ */ new Set(["outcome", "safeOutcome", "loadOutcome", "getMarketFromSymbols", "safeMarket", "market"]);
+// ── ws flight locals (rustWsFlightLocal / printWsFlightLocalDeclaration / rustWsFlightBox) ──
+// `client.future|reusableFuture(h)` and a `client.futures[k]` read give the runtime's typed `Flight` handle. A local
+// bound to one is a `Flight` when every use awaits it or calls its `resolve` / `reject`; elsewhere the handle is boxed.
+_RustTranspiler.RUST_FLIGHT_TYPE = "crate::pro::ws_client::Flight";
 // ── optional list locals ─────────────────────────────────────────────────
 // A list local whose source may yield `undefined` (the permissive `marketSymbols`, `marketIds`, a `safeList*`
 // with no default) holds `Option<crate::value::List>` (`into_opt_list` moves the shared list out of the box).
