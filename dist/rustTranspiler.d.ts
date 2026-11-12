@@ -1685,6 +1685,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustReaderTakesContainerByReference(call: any): boolean;
     /** `'dict' | 'list' | 'api'` for a container source the local may hold by reference. */
     rustBorrowedSourceKind(call: any): 'dict' | 'list' | 'api' | undefined;
+    rustDeclaredEndpointKind(call: any): 'dict' | 'list' | undefined;
     /** `&x` for a borrowed local (or a typed container local) passed to a hand-written any-key reader. */
     printBorrowedReaderArg(node: any, text: string): string | undefined;
     /** A base `safeDict*` / `extend` / `omit` call, or an implicit-API endpoint call. */

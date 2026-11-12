@@ -62905,6 +62905,9 @@ ${iden}}`;
       init = this.rustSkipWrappers(init.expression);
     const nilDeclared = (init === void 0 || this.literalKindOfNode(init) === "null") && (list.flags & NodeFlags4.Const) === 0 && list.parent?.kind === SyntaxKind7.VariableStatement;
     let from = init !== void 0 && isCallExpression6(init) ? this.rustBorrowedSourceKind(init) : this.rustDictElementSource(init) ? "dict" : void 0;
+    const endpoint = from === "api";
+    if (endpoint)
+      from = this.rustDeclaredEndpointKind(init) ?? "api";
     if (from === void 0 && !nilDeclared)
       return void 0;
     const name = String(declaration.name.text);
@@ -62985,7 +62988,7 @@ ${iden}}`;
       reads++;
       return true;
     };
-    const safe = from === "api" && !nilDeclared ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
+    const safe = endpoint && !nilDeclared ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
     if (!safe || reads === 0 && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))
       return void 0;
     if ((keyReads > 0 || init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init)) && !this.rustDictKeyReadLineOk(declaration, name))
@@ -63434,6 +63437,23 @@ ${iden}}`;
     }
     const file = String(this.rustScalarCallee(call)?.getSourceFile?.()?.fileName ?? "");
     return /ts[\\/]src[\\/]abstract[\\/]/.test(file) ? "api" : "dict";
+  }
+  // ── rustDeclaredEndpointKind: an implicit endpoint whose api leaf spells `Endpoint<Dict>` / `Endpoint<List>` ──
+  // The generated abstract method then declares exactly `Promise<Dict>` / `Promise<List>` (a leaf that spells no
+  // shape gets the `Dict | List` default and stays 'api'). Invariant: the documented answer is that container, so
+  // `into_dict()` / `into_list()` moves the shared handle; a non-matching answer reads as the empty container.
+  rustDeclaredEndpointKind(call) {
+    const declaration = this.rustScalarCallee(call);
+    if (declaration?.kind !== SyntaxKind7.MethodDeclaration || !/ts[\\/]src[\\/]abstract[\\/]/.test(String(declaration.getSourceFile?.()?.fileName ?? "")))
+      return void 0;
+    const ret = declaration.type;
+    if (ret === void 0 || ret.kind !== SyntaxKind7.TypeReference || !isIdentifier3(ret.typeName) || String(ret.typeName.text) !== "Promise" || ret.typeArguments?.length !== 1)
+      return void 0;
+    const arg = ret.typeArguments[0];
+    if (arg?.kind !== SyntaxKind7.TypeReference || !isIdentifier3(arg.typeName) || arg.typeArguments !== void 0)
+      return void 0;
+    const name = String(arg.typeName.text);
+    return name === "Dict" ? "dict" : name === "List" ? "list" : void 0;
   }
   /** `&x` for a borrowed local (or a typed container local) passed to a hand-written any-key reader. */
   printBorrowedReaderArg(node, text) {
