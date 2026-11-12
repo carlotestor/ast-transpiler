@@ -54649,12 +54649,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     });
     this.rustScalarDecisions.set(declaration, previous);
     const guarded = (widened || expressionUses || this.rustOptListParamInit(declaration.initializer)) && boxed > 0;
-    const storeOnly = guarded && nativeUses === 0 && boxed === 1;
-    const unused = typedUses === 0 && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
+    const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !(kind === "str" || kind === "ostr")) && !this.rustStrReturnedLocal(declaration, scope);
+    const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
+    const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
     if (!ok || unused || storeOnly || clientOnce || guarded && scope.kind !== SyntaxKind7.MethodDeclaration || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration))
       return void 0;
-    if (this.rustVenueScalarSource(declaration.initializer) && (boxed > 0 || this.rustVenueLocalHandedOn(declaration)))
+    if (handOff && isConditionalExpression4(this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === void 0)
+      return void 0;
+    if (this.rustVenueScalarSource(declaration.initializer) && (boxed > 0 && !handOff || this.rustVenueLocalHandedOn(declaration)))
       return void 0;
     if (this.rustVenueTypedCostly(declaration, kind, copied))
       return void 0;
@@ -54685,9 +54688,29 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (this.rustScalarOptKeyCostly(declaration, kind) === false && kind === "ostr" && this.rustScalarOptKeyCount(declaration) > 0)
       this.rustScalarGuarded.add(declaration);
-    if (guarded || this.rustStrMethodRecvLocal(declaration))
+    if (guarded || handOff || this.rustStrMethodRecvLocal(declaration))
       this.rustScalarGuarded.add(declaration);
     return kind;
+  }
+  /** A local some `return` of a method with a declared string return hands back as-is. */
+  rustStrReturnedLocal(declaration, scope) {
+    if (scope?.kind !== SyntaxKind7.MethodDeclaration || scope.type === void 0)
+      return false;
+    let declared;
+    try {
+      declared = this.getChecker().getTypeFromTypeNode(scope.type);
+    } catch (e) {
+      return false;
+    }
+    if (this.primitiveKindOfType(declared) !== "string")
+      return false;
+    let returned = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      if (isReturnStatement4(n.parent) && n.parent.expression === n)
+        returned = true;
+      return true;
+    });
+    return returned;
   }
   // A local initialised as a plain alias of a typed optional `i64`/`f64` parameter takes the
   // parameter's kind (`p.as_i64()` is a copy, the `Value` is never cloned); it must earn a native use.
@@ -59039,15 +59062,19 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (kind !== "string" && kind !== "boolean")
       return void 0;
     let nativeUses = 0;
+    let copies = 0;
     const safe = this.rustLocalUsesAll(element, name, true, (n) => {
       if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn)
         return false;
       const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) : this.rustIdentifierUseIsCondition(n);
       if (ok)
         nativeUses++;
-      return ok || kind === "string" && this.rustStrSlotBoxUse(n) && (isCallExpression6(n.parent) || isReturnStatement4(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustSlotUseOutsideLoop(n, element));
+      const box = !ok && kind === "string" && this.rustStrSlotBoxUse(n) && (isCallExpression6(n.parent) || isReturnStatement4(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustSlotUseOutsideLoop(n, element));
+      if (box && !(isReturnStatement4(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustStrSlotLastUse(n, element)))
+        copies++;
+      return ok || box;
     });
-    return safe && nativeUses > 0 ? kind === "string" ? "str" : "bool" : void 0;
+    return safe && (nativeUses > 0 || kind === "string" && copies === 0) ? kind === "string" ? "str" : "bool" : void 0;
   }
   // ── optional params slots ────────────────────────────────────────────────
   // A literal-tested `Option<String>` tuple slot may also hand itself to a plain `Value` slot (a `this.`/`super.`
@@ -59186,6 +59213,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       return void 0;
     const kind = loose ? "onum" : want === "int" ? "oint" : "obool";
     let nativeUses = 0;
+    let boxes = 0;
     this.rustExactSlotDecisions.set(element, kind);
     let ok = false;
     try {
@@ -59208,12 +59236,14 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
           return false;
         if (form !== "box")
           nativeUses++;
+        else
+          boxes++;
         return true;
       });
     } finally {
       this.rustExactSlotDecisions.set(element, null);
     }
-    return ok && nativeUses > 0 ? kind : void 0;
+    return ok && (nativeUses > 0 || boxes > 0) ? kind : void 0;
   }
   /** The callee builds slot `at` from an exact Int-or-null (`int`) / Bool-or-null (`bool`) producer on every return. */
   rustExactSlotCallee(init, at, want) {
@@ -64881,6 +64911,7 @@ ${iden}}`;
     if (this.rustTestTierSource(element))
       return void 0;
     let nativeUses = 0;
+    let copies = 0;
     this.rustExactSlotDecisions.set(element, "ostr");
     let ok = false;
     try {
@@ -64907,12 +64938,14 @@ ${iden}}`;
           return false;
         if (_RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form) || form === "write")
           nativeUses++;
+        else if ((form === "box" || form === "xbox") && !(isReturnStatement4(n.parent) || this.rustLocalLastUse(n, element)))
+          copies++;
         return true;
       });
     } finally {
       this.rustExactSlotDecisions.set(element, null);
     }
-    return ok && nativeUses > 0 ? "ostr" : void 0;
+    return ok && (nativeUses > 0 || copies === 0) ? "ostr" : void 0;
   }
   // ── declared dict slots ──────────────────────────────────────────────────
   // A transpiled venue method declaring a `[.., Dict, ..]` (or `Promise<[..]>`) return builds that tuple on every

@@ -445,6 +445,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `this`, or in a test source an identifier typed as the base `Exchange` class (it resolves to the base readers). */
     rustScalarReceiver(node: any): boolean;
     rustScalarLocalKindUncached(declaration: any): string | undefined;
+    /** A local some `return` of a method with a declared string return hands back as-is. */
+    rustStrReturnedLocal(declaration: any, scope: any): boolean;
     rustParamAliasSeedKind(declaration: any): string | undefined;
     rustLimitCall(expr: any): boolean;
     rustLimitArgUse(n: any, kind: string): boolean;
