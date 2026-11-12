@@ -1636,8 +1636,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsFieldGetText(init: any, optional: boolean): string | undefined;
     /** `Value::Arr(x)` (moved) / `Value::Arr(x.clone())` at a list hand-off; dict hand-offs print through `printDictElementBox`. */
     printWsFieldBox(node: any, text: string): string | undefined;
-    /** `Value::Dict(x)` at the last use (moved), else `Value::from(&x)` (the Arc bump the copied `Value` paid). */
+    /** `Value::Dict(x)` / `Value::Arr(x)` at the last use (moved), else `Value::from(&x)` (the Arc bump the copied `Value` paid). */
     printDictElementBox(node: any, text: string): string | undefined;
+    rustDefaultedContainerBoxUse(n: any, init: any): boolean;
     rustBorrowedKeySetUse(n: any): boolean;
     /** The key operand of `k in m`: a literal as `"k"`, else the boxed key text `bearerInOp` tests. */
     rustBorrowedInOpKey(key: any): {

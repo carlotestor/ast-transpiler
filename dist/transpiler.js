@@ -62925,6 +62925,7 @@ ${iden}}`;
     let extendHeads = 0;
     let lentResponses = 0;
     let mixed = false;
+    let defaultedBoxes = 0;
     const boxedElementUses = [];
     const accept = (n) => {
       if (this.rustIdentifierIsPropertyName(n))
@@ -62970,7 +62971,7 @@ ${iden}}`;
       }
       if (this.rustExtendHeadUse(n))
         return ++extendHeads > 0 && ++reads > 0;
-      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init)) && boxedElementUses.push(n) > 0;
+      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0) && boxedElementUses.push(n) > 0;
       if (this.rustLentResponseSlot(up, n) && this.rustLentResponseSource(init))
         return ++lentResponses > 0 && ++reads > 0;
       if (!isCallExpression6(up) || up.arguments[0] !== n)
@@ -62995,7 +62996,7 @@ ${iden}}`;
       return void 0;
     if (extendHeads > 0 && (optional || from !== "dict" && from !== "api"))
       return void 0;
-    if (optional && boxedElementUses.length > 0 && this.rustWsFieldRead(init) !== void 0)
+    if (optional && boxedElementUses.length > 0 && (this.rustWsFieldRead(init) !== void 0 || defaultedBoxes > 0))
       return void 0;
     if (keySets > 0 && (from !== "dict" || optional || init !== void 0 && this.rustInitReadsTaggedStore(init)))
       return void 0;
@@ -63130,10 +63131,36 @@ ${iden}}`;
       return void 0;
     return form === "move" ? `Value::Arr(${text})` : `Value::Arr(${text}.clone())`;
   }
-  /** `Value::Dict(x)` at the last use (moved), else `Value::from(&x)` (the Arc bump the copied `Value` paid). */
+  /** `Value::Dict(x)` / `Value::Arr(x)` at the last use (moved), else `Value::from(&x)` (the Arc bump the copied `Value` paid). */
   printDictElementBox(node, text) {
     const form = this.rustDictElementBoxes.get(node);
-    return form === void 0 ? void 0 : form === "move" ? `Value::Dict(${text})` : `Value::from(&${text})`;
+    if (form === void 0)
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    const list = declaration !== void 0 && this.rustBorrowedLocalKind(declaration) === "list";
+    return form === "move" ? `Value::${list ? "Arr" : "Dict"}(${text})` : `Value::from(&${text})`;
+  }
+  // ── rustDefaultedContainerBoxUse: a `safeDict*` / `safeList*` read with an empty literal default handed on whole ──
+  // The local always holds the container, so a plain `Value` slot of a `this.` method or an object literal value
+  // takes the shared handle (moved at the last use, else the Arc bump the boxed local's copy paid).
+  rustDefaultedContainerBoxUse(n, init) {
+    const up = n.parent;
+    if (init === void 0 || !isCallExpression6(init) || up === void 0 || this.rustScalarInNestedWrite(n))
+      return false;
+    const from = this.rustBorrowedSourceKind(init);
+    if (from !== "dict" && from !== "list" || !/^safe(?:Dict|List)(?:2|N)?$/.test(String(init.expression.name?.text ?? "")) || !this.rustContainerInitNeverNull(init, from === "list" ? "list" : "map") || this.rustContainerInitReadsStore(init))
+      return false;
+    if (up.kind === SyntaxKind7.PropertyAssignment)
+      return up.initializer === n;
+    if (isReturnStatement4(up) && up.expression === n)
+      return true;
+    if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const callee = String(up.expression.name.text);
+    if (_RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || _RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee))
+      return false;
+    const at = Array.from(up.arguments).indexOf(n);
+    return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && this.rustNilBoxSlotOk(up, at);
   }
   // ── rustBorrowedKeySetUse / printBorrowedKeys / printBorrowedInOp: key sets of a shared dict local ──
   // `Object.keys/values(m)` lists the map's own entries (`Value::from` per key, no closure) and `k in m` is
