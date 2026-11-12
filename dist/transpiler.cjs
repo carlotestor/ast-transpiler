@@ -64217,6 +64217,8 @@ ${iden}}`;
     const n = this.unwrapParens(node);
     if (_optionalChain([n, 'optionalAccess', _9285 => _9285.kind]) !== _ast.SyntaxKind.NewExpression || !_is.isIdentifier.call(void 0, n.expression) || !_RustTranspiler.RUST_CACHE_CTORS.has(String(n.expression.text)))
       return false;
+    if (/ts[\\/]src[\\/]test[\\/]/.test(String(n.getSourceFile().fileName)))
+      return false;
     const declaration = this.rustScalarCallee(n);
     return declaration !== void 0 && /ts[\\/]src[\\/]base[\\/]ws[\\/]Cache\.ts$/.test(String(_nullishCoalesce(_optionalChain([declaration, 'access', _9286 => _9286.getSourceFile, 'optionalCall', _9287 => _9287(), 'optionalAccess', _9288 => _9288.fileName]), () => ( ""))));
   }
@@ -64231,7 +64233,7 @@ ${iden}}`;
       return false;
     const name = String(p.name.text);
     if (name === "hashmap")
-      return !this.isNativeWriteTargetBase(p) && !(_is.isCallExpression.call(void 0, p.parent) && p.parent.expression === p);
+      return !this.isTestSource(n) && !this.isNativeWriteTargetBase(p) && !(_is.isCallExpression.call(void 0, p.parent) && p.parent.expression === p);
     if (!_is.isCallExpression.call(void 0, p.parent) || p.parent.expression !== p)
       return false;
     if (name === "getLimit")
@@ -64404,7 +64406,7 @@ ${iden}}`;
     const p = up.parent;
     if (_optionalChain([p, 'optionalAccess', _9298 => _9298.kind]) === _ast.SyntaxKind.ExpressionStatement)
       return text;
-    if (p !== void 0 && _is.isVariableDeclaration.call(void 0, p) && p.initializer === up && this.rustWsCacheLocal(p) === "cache")
+    if (p !== void 0 && _is.isVariableDeclaration.call(void 0, p) && p.initializer === up)
       return text;
     if (_is.isBinaryExpression.call(void 0, p) && p.right === up && p.operatorToken.kind === _ast.SyntaxKind.EqualsToken && (this.rustWsCacheField(p.left) || _is.isIdentifier.call(void 0, p.left) && this.rustWsCacheUses.get(p.left) === "bare"))
       return text;

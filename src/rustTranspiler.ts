@@ -13483,6 +13483,8 @@ export class RustTranspiler extends BaseTranspiler {
     rustWsCacheCtor(node: any): boolean {
         const n: any = this.unwrapParens(node);
         if (n?.kind !== SyntaxKind.NewExpression || !isIdentifier(n.expression) || !RustTranspiler.RUST_CACHE_CTORS.has(String(n.expression.text))) return false;
+        // the REST base tests build their caches from the test crate's own `Value` stubs
+        if (/ts[\\/]src[\\/]test[\\/]/.test(String(n.getSourceFile().fileName))) return false;
         const declaration: any = this.rustScalarCallee(n);
         return declaration !== undefined && /ts[\\/]src[\\/]base[\\/]ws[\\/]Cache\.ts$/.test(String(declaration.getSourceFile?.()?.fileName ?? ''));
     }
@@ -13497,7 +13499,7 @@ export class RustTranspiler extends BaseTranspiler {
         const p: any = n.parent;
         if (!isPropertyAccessExpression(p) || p.expression !== n || !RustTranspiler.RUST_CACHE_METHODS.has(String(p.name.text))) return false;
         const name = String(p.name.text);
-        if (name === 'hashmap') return !this.isNativeWriteTargetBase(p) && !(isCallExpression(p.parent) && p.parent.expression === p);
+        if (name === 'hashmap') return !this.isTestSource(n) && !this.isNativeWriteTargetBase(p) && !(isCallExpression(p.parent) && p.parent.expression === p);
         if (!isCallExpression(p.parent) || p.parent.expression !== p) return false;
         if (name === 'getLimit') return this.rustLimitCall(p.parent);
         return p.parent.parent?.kind === SyntaxKind.ExpressionStatement && (name === 'clear' ? p.parent.arguments.length === 0 : p.parent.arguments.length === 1);
@@ -13634,7 +13636,8 @@ export class RustTranspiler extends BaseTranspiler {
         while (isParenthesizedExpression(up.parent)) up = up.parent;
         const p: any = up.parent;
         if (p?.kind === SyntaxKind.ExpressionStatement) return text;
-        if (p !== undefined && isVariableDeclaration(p) && p.initializer === up && this.rustWsCacheLocal(p) === 'cache') return text;
+        // a local initializer keeps the bare constructor: a `Cache` local takes it, an untyped `let x = ..` infers it
+        if (p !== undefined && isVariableDeclaration(p) && p.initializer === up) return text;
         if (isBinaryExpression(p) && p.right === up && p.operatorToken.kind === SyntaxKind.EqualsToken
             && (this.rustWsCacheField(p.left) || (isIdentifier(p.left) && this.rustWsCacheUses.get(p.left) === 'bare'))) return text;
         return `Value::from(${text})`;

@@ -64218,6 +64218,8 @@ ${iden}}`;
     const n = this.unwrapParens(node);
     if (n?.kind !== SyntaxKind7.NewExpression || !isIdentifier3(n.expression) || !_RustTranspiler.RUST_CACHE_CTORS.has(String(n.expression.text)))
       return false;
+    if (/ts[\\/]src[\\/]test[\\/]/.test(String(n.getSourceFile().fileName)))
+      return false;
     const declaration = this.rustScalarCallee(n);
     return declaration !== void 0 && /ts[\\/]src[\\/]base[\\/]ws[\\/]Cache\.ts$/.test(String(declaration.getSourceFile?.()?.fileName ?? ""));
   }
@@ -64232,7 +64234,7 @@ ${iden}}`;
       return false;
     const name = String(p.name.text);
     if (name === "hashmap")
-      return !this.isNativeWriteTargetBase(p) && !(isCallExpression6(p.parent) && p.parent.expression === p);
+      return !this.isTestSource(n) && !this.isNativeWriteTargetBase(p) && !(isCallExpression6(p.parent) && p.parent.expression === p);
     if (!isCallExpression6(p.parent) || p.parent.expression !== p)
       return false;
     if (name === "getLimit")
@@ -64405,7 +64407,7 @@ ${iden}}`;
     const p = up.parent;
     if (p?.kind === SyntaxKind7.ExpressionStatement)
       return text;
-    if (p !== void 0 && isVariableDeclaration3(p) && p.initializer === up && this.rustWsCacheLocal(p) === "cache")
+    if (p !== void 0 && isVariableDeclaration3(p) && p.initializer === up)
       return text;
     if (isBinaryExpression5(p) && p.right === up && p.operatorToken.kind === SyntaxKind7.EqualsToken && (this.rustWsCacheField(p.left) || isIdentifier3(p.left) && this.rustWsCacheUses.get(p.left) === "bare"))
       return text;
