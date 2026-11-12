@@ -51593,6 +51593,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // An override of a singular base `parse*` method whose response the base declares a dict takes it as
     // `impl Into<crate::Value>`; a caller in the same class lends a local that always holds a map (`&x`).
     this.rustLentResponseDecisions = /* @__PURE__ */ new WeakMap();
+    // Borrowed locals whose declaration printed the typed container (an earlier declaration form may keep the box).
+    this.rustPrintedBorrowed = /* @__PURE__ */ new WeakSet();
     this.rustTypedFilterDecisions = /* @__PURE__ */ new WeakMap();
     // ── lent params dicts ────────────────────────────────────────────────────
     // A base `handle*` method whose required `params` dict is only read (key reads, omit, handed on, returned)
@@ -53191,6 +53193,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (node.declarations.length === 1 && this.rustLentListLocal(declaration))
       return this.printBuiltListDeclaration(declaration, indent, varName) ?? `${indent}let mut ${varName}: crate::value::List = ${this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? parsedValue}.into_list()`;
     if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration)) {
+      this.rustPrintedBorrowed.add(declaration);
       const read = this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? parsedValue;
       return this.rustBorrowedLocalKind(declaration) === "list" ? `${indent}let mut ${varName}: crate::value::List = ${read}.into_list()` : `${indent}let mut ${varName}: crate::value::Dict = ${read}.into_dict()`;
     }
@@ -64694,7 +64697,7 @@ ${iden}}`;
     const first = node.arguments[0];
     const lentDict = (n) => {
       const d = this.rustDeclarationOfIdentifier(n);
-      return this.rustHandedDictLocal(d) || d !== void 0 && d !== n && d.name !== n && this.rustBorrowedLocalKind(d) === "dict" && !this.rustOptContainerLocals.has(d);
+      return this.rustHandedDictLocal(d) || d !== void 0 && d !== n && d.name !== n && this.rustBorrowedLocalKind(d) === "dict" && this.rustPrintedBorrowed.has(d) && !this.rustOptContainerLocals.has(d);
     };
     if (node.arguments.length === 2 && isIdentifier3(first) && this.rustBaseCallNamed(node, _RustTranspiler.RUST_HANDED_DICT_OMIT) && lentDict(first)) {
       return `self.omit(${lent(first)}, ${this.printNode(node.arguments[1], identation).trim()}, &[])`;
@@ -64885,7 +64888,7 @@ ${iden}}`;
     const declaration = this.rustDeclarationOfIdentifier(node);
     if (declaration === void 0 || declaration === node || declaration.name === node)
       return void 0;
-    if (!this.rustLentListLocal(declaration) && !(this.rustBorrowedLocalKind(declaration) !== void 0 && !this.rustOptContainerLocals.has(declaration)))
+    if (!this.rustLentListLocal(declaration) && !(this.rustBorrowedLocalKind(declaration) !== void 0 && this.rustPrintedBorrowed.has(declaration) && !this.rustOptContainerLocals.has(declaration)))
       return void 0;
     return `&${text}`;
   }
@@ -64985,7 +64988,7 @@ ${iden}}`;
     if (declaration === void 0 || declaration === node || declaration.name === node || this.rustOptContainerLocals.has(declaration))
       return void 0;
     const kind = this.rustBorrowedLocalKind(declaration);
-    return kind !== void 0 && this.rustLentHelperSlot(node.parent, node, kind) ? `&${text}` : void 0;
+    return kind !== void 0 && this.rustPrintedBorrowed.has(declaration) && this.rustLentHelperSlot(node.parent, node, kind) ? `&${text}` : void 0;
   }
   /** A base `safeDict*` / `safeList*` read with an empty literal default: a container on every path. */
   rustLentContainerSource(init) {
@@ -65011,7 +65014,7 @@ ${iden}}`;
     const declaration = this.rustDeclarationOfIdentifier(node);
     if (declaration === void 0 || declaration === node || declaration.name === node)
       return void 0;
-    if (this.rustBorrowedLocalKind(declaration) === "dict" && !this.rustOptContainerLocals.has(declaration))
+    if (this.rustBorrowedLocalKind(declaration) === "dict" && this.rustPrintedBorrowed.has(declaration) && !this.rustOptContainerLocals.has(declaration))
       return `&${text}`;
     const form = this.rustContainerBoxUses.get(node);
     const kind = form === void 0 ? void 0 : this.rustReadBearerKind(node);

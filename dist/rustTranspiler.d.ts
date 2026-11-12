@@ -1890,6 +1890,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_LENT_HELPER_SLOTS;
     /** A whole dict / list local handed to a lent operand of a hand-written base helper. */
     rustLentHelperSlot(call: any, arg: any, kind: 'dict' | 'list'): boolean;
+    private rustPrintedBorrowed;
     /** `&x` for a non-optional borrowed local lent to a hand-written helper operand. */
     printLentHelperArg(node: any, text: string): string | undefined;
     /** A base `safeDict*` / `safeList*` read with an empty literal default: a container on every path. */
