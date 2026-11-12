@@ -1868,6 +1868,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustParamIsLentList(param: any): boolean;
     private static readonly RUST_LENT_LIST_TYPES;
     rustParamIsLentListUncached(param: any): boolean;
+    /** `object`, `Dict` or `any`, optionally `| undefined`: the parser reads its input as a `Value` of any shape. */
+    rustLentRecordTypeNode(type: any): boolean;
     /** `Dict[]` / `object[]`, optionally `| undefined`: a list of rows, the same Value list a `List` holds. */
     rustRowListTypeNode(type: any): boolean;
     /** A call argument landing in a lent list parameter of the callee. */
@@ -1882,6 +1884,18 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustLentResponseSlot(call: any, arg: any): boolean;
     /** A base `extend` / `deepExtend`, or a `safeDict*` with an empty-map default: the local always holds a map. */
     rustLentResponseSource(init: any): boolean;
+    /** A declared endpoint response (`Promise<Dict>` / `Promise<List>`) handed whole to a parameter that is lent
+     *  `impl Into<crate::Value>`: the shared map or list is lent as `&x`, the callee binds the `Value` once. */
+    rustLentEndpointSlot(call: any, arg: any, kind: 'dict' | 'list' | 'api' | undefined): boolean;
+    private static readonly RUST_LENT_HELPER_SLOTS;
+    /** A whole dict / list local handed to a lent operand of a hand-written base helper. */
+    rustLentHelperSlot(call: any, arg: any, kind: 'dict' | 'list'): boolean;
+    /** `&x` for a non-optional borrowed local lent to a hand-written helper operand. */
+    printLentHelperArg(node: any, text: string): string | undefined;
+    /** A base `safeDict*` / `safeList*` read with an empty literal default: a container on every path. */
+    rustLentContainerSource(init: any): boolean;
+    /** A lent first parameter not declared a list (`any` / `object` / `Dict`): a dict lends there as well. */
+    rustLentAnyShapeSlot(call: any): boolean;
     /** `&x` for a shared dict local lent to a lent response slot; a container local boxes explicitly there (no `.into()`). */
     printLentResponseArg(node: any, text: string): string | undefined;
     private static readonly RUST_TYPED_FILTER_METHODS;

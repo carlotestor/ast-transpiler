@@ -57983,7 +57983,7 @@ ${classMethods}
     const sliceAt = sig.params.findIndex((p) => p.type === "&[Value]");
     const callArgs = slots.map((_slot, i) => {
       const p = sig.params[i];
-      if (p !== void 0 && /^Value\b/.test(p.type))
+      if (p !== void 0 && (/^Value\b/.test(p.type) || p.type === "impl Into<crate::Value>"))
         return `${p.name}.clone()`;
       if (p !== void 0 && p.type === "&str")
         return `crate::Value::from(${p.name})`;
@@ -57995,7 +57995,14 @@ ${classMethods}
         // virtual-dispatch (static: DerivedExchange::${sig.name}(self, ...))
         { let __v = crate::exchange::DerivedExchange::${sig.name}(self, ${callArgs.join(", ")}); if !matches!(__v, crate::Value::Null) { return ${sig.ret === "typed" ? "Ok(crate::types::FromRaw::from_raw(__v))" : "__v"}; } }
 `;
-    const open = body.indexOf("{") + 1;
+    let open = body.indexOf("{") + 1;
+    for (const p of sig.params.filter((q) => q.type === "impl Into<crate::Value>")) {
+      const binding = `let mut ${p.name}: Value = ${p.name}.into();
+`;
+      const at = body.indexOf(binding, open);
+      if (at >= 0)
+        open = at + binding.length;
+    }
     if (!this.rustNonVirtualShims.has(sig.name))
       return methodDef + body.slice(0, open) + preamble + body.slice(open);
     const nonVirtual = `${sig.name}_non_virtual`;
@@ -62182,7 +62189,7 @@ ${iden}}`;
     const optList = this.printOptListIdentifier(node, text);
     if (optList !== void 0)
       return optList;
-    const borrowedArg = this.printExtendHeadArg(node, text) ?? this.printBorrowedReaderArg(node, text) ?? this.printLentParamsArg(node, text) ?? this.printLentListArg(node, text) ?? this.printLentResponseArg(node, text) ?? this.printOptionalParamsArg(node, text) ?? this.printWsFieldBox(node, text) ?? this.printDictElementBox(node, text) ?? this.printHandedSlotBox(node, text);
+    const borrowedArg = this.printExtendHeadArg(node, text) ?? this.printBorrowedReaderArg(node, text) ?? this.printLentParamsArg(node, text) ?? this.printLentListArg(node, text) ?? this.printLentResponseArg(node, text) ?? this.printLentHelperArg(node, text) ?? this.printOptionalParamsArg(node, text) ?? this.printWsFieldBox(node, text) ?? this.printDictElementBox(node, text) ?? this.printHandedSlotBox(node, text);
     if (borrowedArg !== void 0)
       return borrowedArg;
     const containerBox = this.printRustContainerLocalBox(node, text);
@@ -63293,6 +63300,10 @@ ${iden}}`;
         return ++extendHeads > 0 && ++reads > 0;
       const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0) && boxedElementUses.push(n) > 0;
       if (this.rustLentResponseSlot(up, n) && this.rustLentResponseSource(init))
+        return ++lentResponses > 0 && ++reads > 0;
+      if ((endpoint || this.rustLentContainerSource(init)) && this.rustLentEndpointSlot(up, n, from))
+        return ++lentResponses > 0 && ++reads > 0;
+      if ((from === "dict" || from === "list") && this.rustLentHelperSlot(up, n, from))
         return ++lentResponses > 0 && ++reads > 0;
       if (!isCallExpression6(up) || up.arguments[0] !== n)
         return handed();
@@ -64681,11 +64692,15 @@ ${iden}}`;
       return "&" + super.transformIdentifier(n, this.ReservedKeywordsReplacements[text] ?? text);
     };
     const first = node.arguments[0];
-    if (node.arguments.length === 2 && isIdentifier3(first) && this.rustBaseCallNamed(node, _RustTranspiler.RUST_HANDED_DICT_OMIT) && this.rustHandedDictLocal(this.rustDeclarationOfIdentifier(first))) {
+    const lentDict = (n) => {
+      const d = this.rustDeclarationOfIdentifier(n);
+      return this.rustHandedDictLocal(d) || d !== void 0 && d !== n && d.name !== n && this.rustBorrowedLocalKind(d) === "dict" && !this.rustOptContainerLocals.has(d);
+    };
+    if (node.arguments.length === 2 && isIdentifier3(first) && this.rustBaseCallNamed(node, _RustTranspiler.RUST_HANDED_DICT_OMIT) && lentDict(first)) {
       return `self.omit(${lent(first)}, ${this.printNode(node.arguments[1], identation).trim()}, &[])`;
     }
     const operand = this.rustHandedDictExtendOperand(node);
-    if (operand === void 0 || !this.rustHandedDictLocal(this.rustDeclarationOfIdentifier(operand)))
+    if (operand === void 0 || !lentDict(operand))
       return void 0;
     const head = this.printNode(first, identation).trim();
     const method = this.toSnakeCaseName(String(node.expression.name.text));
@@ -64809,7 +64824,8 @@ ${iden}}`;
     if (!isMethodDeclaration5(method) || method.body === void 0 || !isIdentifier3(method.name) || method.parameters?.[0] !== param)
       return false;
     const name = String(method.name.text);
-    if (!/^parse[A-Z]\w*s$/.test(name) || param.name?.kind !== SyntaxKind7.Identifier || param.initializer !== void 0 || param.questionToken !== void 0)
+    const record = name === "parseOrderBook";
+    if (!(/^parse[A-Z]\w*s$/.test(name) || record) || param.name?.kind !== SyntaxKind7.Identifier || param.initializer !== void 0 || param.questionToken !== void 0)
       return false;
     if (!isClassDeclaration4(method.parent) || (method.modifiers ?? []).some((m) => m.kind === SyntaxKind7.StaticKeyword))
       return false;
@@ -64829,7 +64845,18 @@ ${iden}}`;
       return false;
     const type = param.type;
     const typeName = type?.kind === SyntaxKind7.TypeReference && isIdentifier3(type.typeName) && type.typeArguments === void 0 ? String(type.typeName.text) : "";
-    return _RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type);
+    if (record)
+      return this.rustLentRecordTypeNode(type);
+    return _RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || type?.kind === SyntaxKind7.AnyKeyword || type?.kind === SyntaxKind7.ObjectKeyword;
+  }
+  /** `object`, `Dict` or `any`, optionally `| undefined`: the parser reads its input as a `Value` of any shape. */
+  rustLentRecordTypeNode(type) {
+    const members = type?.kind === SyntaxKind7.UnionType ? Array.from(type.types) : [type];
+    const rest = members.filter((t2) => t2?.kind !== SyntaxKind7.UndefinedKeyword);
+    if (rest.length !== 1)
+      return false;
+    const t = rest[0];
+    return t?.kind === SyntaxKind7.ObjectKeyword || t?.kind === SyntaxKind7.AnyKeyword || t?.kind === SyntaxKind7.TypeReference && isIdentifier3(t.typeName) && t.typeArguments === void 0 && String(t.typeName.text) === "Dict";
   }
   /** `Dict[]` / `object[]`, optionally `| undefined`: a list of rows, the same Value list a `List` holds. */
   rustRowListTypeNode(type) {
@@ -64856,7 +64883,9 @@ ${iden}}`;
     if (!isIdentifier3(node) || !this.rustLentListSlot(node.parent, node))
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(node);
-    if (declaration === void 0 || declaration === node || declaration.name === node || !this.rustLentListLocal(declaration))
+    if (declaration === void 0 || declaration === node || declaration.name === node)
+      return void 0;
+    if (!this.rustLentListLocal(declaration) && !(this.rustBorrowedLocalKind(declaration) !== void 0 && !this.rustOptContainerLocals.has(declaration)))
       return void 0;
     return `&${text}`;
   }
@@ -64927,6 +64956,53 @@ ${iden}}`;
       return false;
     const name = String(init.expression.name.text);
     return name === "extend" || name === "deepExtend" || /^safeDict(?:2|N)?$/.test(name) && this.rustContainerInitNeverNull(init, "map");
+  }
+  /** A declared endpoint response (`Promise<Dict>` / `Promise<List>`) handed whole to a parameter that is lent
+   *  `impl Into<crate::Value>`: the shared map or list is lent as `&x`, the callee binds the `Value` once. */
+  rustLentEndpointSlot(call, arg, kind) {
+    if (this.rustLentListSlot(call, arg) && !this.rustTypedFilterLentSlot(call, arg))
+      return kind === "list" || this.rustLentAnyShapeSlot(call);
+    return kind === "dict" && this.rustLentResponseSlot(call, arg);
+  }
+  /** A whole dict / list local handed to a lent operand of a hand-written base helper. */
+  rustLentHelperSlot(call, arg, kind) {
+    if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(arg))
+      return false;
+    const name = String(call.expression.name.text);
+    const at = Array.from(call.arguments).indexOf(arg);
+    if (name === "extend" || name === "deepExtend")
+      return kind === "dict" && this.rustHandedDictExtendOperand(call) === arg;
+    const slot = _RustTranspiler.RUST_LENT_HELPER_SLOTS[name];
+    if (slot === void 0 || !slot.at.includes(at) || !slot.kinds.includes(kind) || !this.rustCalleeIsRuntimeBase(call))
+      return false;
+    return name !== "omit" || call.arguments.length === 2;
+  }
+  /** `&x` for a non-optional borrowed local lent to a hand-written helper operand. */
+  printLentHelperArg(node, text) {
+    if (!isIdentifier3(node) || !isCallExpression6(node.parent))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration === void 0 || declaration === node || declaration.name === node || this.rustOptContainerLocals.has(declaration))
+      return void 0;
+    const kind = this.rustBorrowedLocalKind(declaration);
+    return kind !== void 0 && this.rustLentHelperSlot(node.parent, node, kind) ? `&${text}` : void 0;
+  }
+  /** A base `safeDict*` / `safeList*` read with an empty literal default: a container on every path. */
+  rustLentContainerSource(init) {
+    if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression))
+      return false;
+    const name = String(init.expression.name.text);
+    const kind = /^safeDict(?:2|N)?$/.test(name) ? "map" : /^safeList(?:2|N)?$/.test(name) ? "list" : void 0;
+    return kind !== void 0 && this.rustContainerInitNeverNull(init, kind) && this.rustBorrowedSourceKind(init) === (kind === "map" ? "dict" : "list");
+  }
+  /** A lent first parameter not declared a list (`any` / `object` / `Dict`): a dict lends there as well. */
+  rustLentAnyShapeSlot(call) {
+    const param = this.rustTranspiledCalleeParams(call, String(call.expression.name.text))?.[0];
+    let base = param?.parent;
+    for (let hops = 0; base !== void 0 && hops < 8 && !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(base.getSourceFile().fileName)); hops++)
+      base = this.getMethodOverride(base);
+    const type = base?.parameters?.[0]?.type;
+    return type !== void 0 && (this.rustLentRecordTypeNode(type) || type.kind === SyntaxKind7.ObjectKeyword);
   }
   /** `&x` for a shared dict local lent to a lent response slot; a container local boxes explicitly there (no `.into()`). */
   printLentResponseArg(node, text) {
@@ -68960,6 +69036,13 @@ _RustTranspiler.RUST_HANDED_DICT_EXTEND = /* @__PURE__ */ new Set(["extend", "de
 _RustTranspiler.RUST_EXTEND_HEAD_CALLS = /* @__PURE__ */ new Set(["extend", "deepExtend"]);
 _RustTranspiler.RUST_LENT_LIST_TYPES = /* @__PURE__ */ new Set(["List", "NullableList"]);
 _RustTranspiler.RUST_LENT_RESPONSE_TYPES = /* @__PURE__ */ new Set(["Dict", "NullableDict"]);
+// Hand-written base helpers whose operand is lent (`impl Into<crate::Value>`, `OmitSource`, `MergeOperands`).
+_RustTranspiler.RUST_LENT_HELPER_SLOTS = {
+  toArray: { at: [0], kinds: ["dict", "list"] },
+  json: { at: [0], kinds: ["dict", "list"] },
+  arrayConcat: { at: [0, 1], kinds: ["list"] },
+  omit: { at: [0], kinds: ["dict"] }
+};
 // ── typed filter parameters (rustTypedFilterParams / printTypedFilterSignature / printTypedFilterCall) ──
 // The base `filterBy*` helpers take their optional `Int` / `Str` parameters as positional `Option<i64>` /
 // `Option<&str>` (with any optional parameter before them as a positional `Value`); the rest stay in the slice.
