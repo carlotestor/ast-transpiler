@@ -52905,7 +52905,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         baseExpr = baseExpr.expression;
       }
       let acc = `&mut ${this.printNode(baseExpr, 0)}`;
-      const keyStrs = keys.map((k) => this.printNode(k, 0));
+      const keyStrs = keys.map((k, at) => (at < keys.length - 1 ? this.rustI64HelperKeyText(k) : void 0) ?? this.printNode(k, 0));
       for (const key of keyStrs.slice(0, -1))
         acc = `get_value_mut(${acc}, &${key})`;
       const rhs = this.printNode(right, 0);
@@ -53471,6 +53471,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** Slot hook: an `Option<String>` local takes the slot's string. */
   printRustNilSlotWrite(element, read) {
+    if (isIdentifier3(element) && this.rustScalarUseForms.get(element) === "bslot" && this.rustScalarLocalOf(element)?.kind === "bool")
+      return `${super.printIdentifier(element)} = ${read}.as_bool() == Some(true)`;
     if (isIdentifier3(element) && this.rustNilLocalOfIdentifier(element)?.kind === "bool")
       return `${super.printIdentifier(element)} = ${read}.as_bool()`;
     if (!isIdentifier3(element) || this.rustScalarLocalOf(element)?.kind !== "ostr" || this.rustScalarUseForms.get(element) !== "slot")
@@ -54648,6 +54650,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return form !== void 0;
     });
     this.rustScalarDecisions.set(declaration, previous);
+    if (ok && kind === "bool" && !this.rustBoolSlotUsesOk(declaration))
+      return void 0;
     const guarded = (widened || expressionUses || this.rustOptListParamInit(declaration.initializer)) && boxed > 0;
     const storeOnly = guarded && nativeUses === 0 && boxed === 1;
     const unused = typedUses === 0 && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
@@ -55400,6 +55404,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const parent = n.parent;
     if (parent === void 0)
       return void 0;
+    if (kind === "bool" && this.rustBoolSlotWrite(n))
+      return "bslot";
     if (isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.EqualsToken) {
       if (parent.parent?.kind !== SyntaxKind7.ExpressionStatement)
         return void 0;
@@ -59389,7 +59395,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       const place = this.printNode(keyNode, 0).trim();
       if (!place || place.startsWith("&"))
         return void 0;
-      return `${receiverText}.get((${place}).as_i64().unwrap_or(-1) as usize).cloned().unwrap_or(Value::Null)`;
+      return `${receiverText}.get(${this.rustI64IndexText(keyNode, place)}).cloned().unwrap_or(Value::Null)`;
     }
     if (!this.isRustValueIndexKey(keyNode))
       return void 0;
@@ -60747,7 +60753,7 @@ ${ind}let ${view}: &${map} = &${arc};
     for (const { expression: receiver, argumentExpression: key } of chain) {
       const native = nativeAllowed ? this.printNativeContainerAccess(acc, receiver, key) : this.rustDictReadInNativeInsert(acc, receiver, key, node) ?? this.rustFieldLengthRead(acc, receiver, key, node);
       const staticKey = native === void 0 && !keepGetValue ? this.staticKeyLookup(key, receiver) : void 0;
-      acc = native ?? (staticKey !== void 0 ? `crate::value::get_value_k(&${acc}, ${staticKey})` : `get_value(&${acc}, &${this.printNode(key, 0)})`);
+      acc = native ?? (staticKey !== void 0 ? `crate::value::get_value_k(&${acc}, ${staticKey})` : `get_value(&${acc}, &${this.rustI64HelperKeyText(key, node) ?? this.printNode(key, 0)})`);
     }
     return acc;
   }
@@ -60876,6 +60882,52 @@ ${idn}}`;
       return callee.kind === SyntaxKind7.PropertyAccessExpression && callee.expression.kind === SyntaxKind7.ThisKeyword && up.arguments.some((a) => a === id);
     }
     return isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.right === id && (isElementAccessExpression4(up.left) || isPropertyAccessExpression3(up.left));
+  }
+  // ── boolean locals rewritten from a tuple slot (rustBoolSlotWrite) ──
+  // `[flag, params] = this.handle..AndParams (..)` into a `boolean` local whose every other use is a condition
+  // or a same-kind write: the condition reads `is_true`, which is `as_bool() == Some(true)` on a bool-or-null slot.
+  rustBoolSlotWrite(n) {
+    if (!isIdentifier3(n) || !this.rustNilSlotWrite(n))
+      return false;
+    const write = n.parent.parent;
+    return this.rustNativeListSource(write.right) && this.primitiveKindOfType(this.typeOfNodeIfAny(n)) === "boolean";
+  }
+  rustBoolSlotUsesOk(declaration) {
+    let slots = 0;
+    let others = true;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
+      const form = this.rustScalarUseForms.get(n);
+      if (form === "bslot") {
+        slots++;
+        if (this.rustBoolSlotLineLong(n))
+          others = false;
+      } else if (form !== "cond" && form !== "write")
+        others = false;
+      return true;
+    });
+    return slots === 0 || others;
+  }
+  /** The destructuring statement keeps the 400-char line budget with the slot's `== Some(true)` read. */
+  rustBoolSlotLineLong(n) {
+    const write = n.parent.parent;
+    let depth = 0;
+    for (let up = write.parent; up !== void 0; up = up.parent)
+      if (isBlock4(up))
+        depth++;
+    const slots = write.left.elements.reduce((sum, e) => sum + e.getText().length + 48, 0);
+    return depth * 4 + 72 + this.printNode(write.right, 0).trim().length + slots + 24 > 380;
+  }
+  // ── typed list index by an `i64` counter (rustI64IndexText) ──
+  /** The `usize` index text of a `Value` list read: a registered `i64` counter indexes directly. */
+  rustI64IndexText(keyNode, place) {
+    return this.rustI64CounterUse(this.rustSkipWrappers(keyNode)) ? `${place} as usize` : `(${place}).as_i64().unwrap_or(-1) as usize`;
+  }
+  /** A registered `i64` counter as a helper key (`Value::Int(i)`); a read the ccxt write-back binds keeps the counter `Value`. */
+  rustI64HelperKeyText(keyNode, read) {
+    const key = this.rustSkipWrappers(keyNode);
+    if (this.rustI64CounterOf(key) === void 0 || read !== void 0 && this.isWriteBackBindRead(read))
+      return void 0;
+    return this.rustI64CounterUse(key) ? `Value::Int(${String(key.text)})` : void 0;
   }
   /** The registered counter's symbol when `node` is a use of it, else undefined. */
   rustI64CounterOf(node) {
@@ -65759,7 +65811,7 @@ ${this.getIden(identation)}}`;
       return super.printElementAccessExpressionExceptionIfAny(node);
     const name = this.printNode(receiver, 0).trim();
     const key = this.rustStripWrappers(node.argumentExpression);
-    const index = isNumericLiteral4(key) ? String(Number(key.text)) : `(${this.printNode(node.argumentExpression, 0).trim()}).as_i64().unwrap_or(-1) as usize`;
+    const index = isNumericLiteral4(key) ? String(Number(key.text)) : this.rustI64IndexText(node.argumentExpression, this.printNode(node.argumentExpression, 0).trim());
     return `${name}.get(${index}).cloned().unwrap_or(Value::Null)`;
   }
   // An expression that always holds a `Value::Arr`: a runtime-split / array-literal-returning call,

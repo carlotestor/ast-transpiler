@@ -1311,6 +1311,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     } | undefined;
     /** A bare counter use that is an argument of a `this.m(..)` call or the value of an `x[k] = i` write. */
     rustI64BoxedUse(id: any): boolean;
+    rustBoolSlotWrite(n: any): boolean;
+    rustBoolSlotUsesOk(declaration: any): boolean;
+    /** The destructuring statement keeps the 400-char line budget with the slot's `== Some(true)` read. */
+    rustBoolSlotLineLong(n: any): boolean;
+    /** The `usize` index text of a `Value` list read: a registered `i64` counter indexes directly. */
+    rustI64IndexText(keyNode: any, place: string): string;
+    /** A registered `i64` counter as a helper key (`Value::Int(i)`); a read the ccxt write-back binds keeps the counter `Value`. */
+    rustI64HelperKeyText(keyNode: any, read?: any): string | undefined;
     /** The registered counter's symbol when `node` is a use of it, else undefined. */
     rustI64CounterOf(node: any): any;
     private rustI64ClosedUses;
