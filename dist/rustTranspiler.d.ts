@@ -332,6 +332,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_NIL_SCALAR_NATIVE_FORMS;
     /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
     rustNilScalarKind(declaration: any): string | undefined;
+    rustNilScalarHandOff(declaration: any, scope: any, kind: string, boxed: any[]): boolean;
     rustNilOptStrConcatUse(n: any): boolean;
     /** A write that decodes a `Value` result (a call, or a ternary over one). */
     rustNilDecodedWrite(rhs: any): boolean;

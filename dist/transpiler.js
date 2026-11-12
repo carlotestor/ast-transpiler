@@ -53560,11 +53560,38 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         native++;
       return form !== void 0;
     });
-    if (!ok || native === 0 && writes <= 1 || boxed.length > 0 && scope.kind !== SyntaxKind7.MethodDeclaration)
+    if (!ok || native === 0 && writes <= 1 && !this.rustNilScalarHandOff(declaration, scope, kind, boxed) || boxed.length > 0 && scope.kind !== SyntaxKind7.MethodDeclaration)
       return void 0;
     if (boxed.length > 0)
       this.rustScalarGuarded.add(declaration);
     return kind;
+  }
+  // ── nil scalar hand-off (rustNilScalarHandOff) ──
+  // An empty local written from known scalar sources and only boxed back keeps that type: each box
+  // converts once; a string box must move it (return or last use), so no string is copied.
+  rustNilScalarHandOff(declaration, scope, kind, boxed) {
+    if (boxed.length === 0 || this.rustStrReturnedLocal(declaration, scope))
+      return false;
+    let ok = true;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const form = this.rustScalarUseForms.get(n);
+      if (form === "slot" || form === "test")
+        return true;
+      const parent = n.parent;
+      if (isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.EqualsToken) {
+        if (isIdentifier3(this.unwrapParens(parent.right)))
+          ok = false;
+        return true;
+      }
+      if (kind !== "ostr")
+        return true;
+      if (parent?.kind === SyntaxKind7.VariableDeclaration || isBinaryExpression5(parent) && parent.right === n)
+        ok = false;
+      if (!((form === "box" || form === "xbox") && this.rustScalarBoxMoves(n, form, declaration)))
+        ok = false;
+      return true;
+    });
+    return ok;
   }
   // An optional string joins a `format!` concat whose other operand is always a string: the
   // operand prints as `as_deref().unwrap_or("null")`, the text `Display` gives the boxed form.
