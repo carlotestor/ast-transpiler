@@ -65,7 +65,7 @@ interface RustScopeIndex {
     byName: Map<string, number[]> | undefined;
 }
 export type RustDispatchParamKind = 'value' | 'slice' | 'map' | 'strvec' | 'flag' | 'str' | 'optstr' | 'f64' | 'optf64' | 'opti64' | 'i64' | 'optstrvec' | 'strvecvec' | 'params' | 'orderreqs' | 'dict' | 'list' | 'optdict' | 'optlist' | 'other';
-export type RustDispatchReturnKind = 'value' | 'void' | 'typed' | 'ostr' | 'int' | 'string' | 'bool' | 'dict' | 'list' | 'optdict' | 'struct' | 'other';
+export type RustDispatchReturnKind = 'value' | 'void' | 'typed' | 'ostr' | 'baseostr' | 'int' | 'string' | 'bool' | 'dict' | 'list' | 'optdict' | 'struct' | 'other';
 export interface RustMethodSignature {
     file: any;
     name: string;
@@ -821,6 +821,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustAncestorMethodTables;
     getMethodOverride(node: Node): Node;
     private rustNativeStrReturnDecisionUncached;
+    private static readonly RUST_BASE_NATIVE_STR_METHODS;
+    private rustBaseNativeStrBare;
+    /** A call resolving to a `-> Option<String>` base method of the table (or an override of one). */
+    rustBaseNativeStrCall(node: any): boolean;
+    /** The call's own `Option<String>`, unboxed. */
+    rustBaseNativeStrBareText(node: any): string;
+    /** A `: Str` method of the table declared in the base tier, or an override of one. */
+    rustBaseNativeStrMethod(node: any): boolean;
     /** Every `return` of the method's own body converts, and the body's last
      *  statement is one of them (so Rust sees no `()`-valued tail the
      *  `-> Value` post-passes would have patched with `Value::Null`). */

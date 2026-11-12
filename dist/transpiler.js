@@ -51309,7 +51309,7 @@ function rustScopeNameTable(index) {
   return byName;
 }
 var RUST_DISPATCH_TYPED_KINDS = /* @__PURE__ */ new Set(["str", "optstr", "f64", "optf64", "opti64", "i64", "optstrvec", "strvecvec", "orderreqs", "params", "flag", "dict", "list", "optdict", "optlist"]);
-var RUST_DISPATCH_NATIVE_RETURNS = /* @__PURE__ */ new Set(["int", "string", "bool", "dict", "list", "optdict", "struct"]);
+var RUST_DISPATCH_NATIVE_RETURNS = /* @__PURE__ */ new Set(["int", "string", "bool", "baseostr", "dict", "list", "optdict", "struct"]);
 var rustDispatch = {
   isTyped: (kind) => RUST_DISPATCH_TYPED_KINDS.has(kind),
   /** Tail of a dynamic-dispatch `args` list as a slice: the whole list, or the tail past index `i`. */
@@ -51413,6 +51413,7 @@ var rustDispatch = {
       case "int":
       case "string":
       case "bool":
+      case "baseostr":
         return `crate::Value::from(${call})`;
       case "dict":
         return `crate::Value::Dict(${call})`;
@@ -51492,6 +51493,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustNativeStrReturnDecisions = /* @__PURE__ */ new WeakMap();
     this.rustMethodOverrides = /* @__PURE__ */ new WeakMap();
     this.rustClassAncestorTables = /* @__PURE__ */ new WeakMap();
+    this.rustBaseNativeStrBare = /* @__PURE__ */ new Set();
     /** The callee declaration behind `self.<method>(..)` when it is emitted
      *  `-> Option<String>`; undefined otherwise (no proof → keep the box). */
     // call node -> resolved signature's declaration (null: none); a handle resolve per call is JS-heavy
@@ -55009,11 +55011,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   rustBaseReturnScalarKind(call, name) {
     const kind = _RustTranspiler.RUST_BASE_SCALAR_RETURNS[name] ?? this.rustDerivedScalarKind(call);
-    if (kind === void 0 || this.rustNativeStrCalleeKind(call) === "str")
+    if (kind === void 0 || this.rustNativeStrCalleeKind(call) === "str" && !this.rustBaseNativeStrCall(call))
       return void 0;
     const member = this.getChecker().getSymbolAtLocation(call.expression.name)?.valueDeclaration;
     const owner = member?.resolve?.() ?? member;
-    if (owner === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(owner.getSourceFile?.()?.fileName ?? "")))
+    if (owner === void 0 || !(_RustTranspiler.RUST_BASE_TIER_FILE.test(String(owner.getSourceFile?.()?.fileName ?? "")) || this.rustBaseNativeStrMethod(owner)))
       return void 0;
     const want = kind === "ostr" ? "string" : "number";
     return this.primitiveKindOfType(this.typeOfNodeIfAny(call)) === want ? kind : void 0;
@@ -55362,7 +55364,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return declaration === null ? void 0 : declaration.resolve?.() ?? declaration;
   }
   rustVenueStrCall(node) {
-    if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword || this.rustNativeStrCalleeKind(node) !== "str")
+    if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword || this.rustNativeStrCalleeKind(node) !== "str" || this.rustBaseNativeStrCall(node))
       return false;
     const file = String(this.rustScalarCallee(node)?.getSourceFile?.()?.fileName ?? "");
     const at = file.search(/[/\\]ts[/\\]src[/\\]/);
@@ -56380,6 +56382,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `${text}.as_i64().unwrap_or(${this.rustScalarIntLiteral(fallback)})`;
     if (kind === "ostr" && this.rustVenueStrCall(node))
       return this.rustVenueStrCallText(node);
+    if (kind === "ostr" && this.rustBaseNativeStrCall(node))
+      return this.rustBaseNativeStrBareText(node);
     if (kind === "ostr")
       return `${text}.as_str().map(str::to_owned)`;
     if (kind === "oint")
@@ -57509,7 +57513,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     return method;
   }
   rustNativeStrReturnDecisionUncached(node) {
-    if (node.type === void 0 || this.isAsyncFunction(node) || this.getMethodOverride(node) !== void 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(node.getSourceFile().fileName)) {
+    if (node.type === void 0 || this.isAsyncFunction(node))
+      return false;
+    if (!this.rustBaseNativeStrMethod(node) && (this.getMethodOverride(node) !== void 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(node.getSourceFile().fileName))) {
       return false;
     }
     let type;
@@ -57519,6 +57525,33 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     }
     return this.primitiveKindOfType(type) === "string" && this.rustStrReturnPathsConvert(node.body);
+  }
+  /** A call resolving to a `-> Option<String>` base method of the table (or an override of one). */
+  rustBaseNativeStrCall(node) {
+    if (node === void 0 || !isCallExpression6(node) || this.rustNativeStrCalleeKind(node) !== "str")
+      return false;
+    const declaration = this.rustCallDeclarations.get(node);
+    return declaration !== void 0 && declaration !== null && this.rustBaseNativeStrMethod(declaration);
+  }
+  /** The call's own `Option<String>`, unboxed. */
+  rustBaseNativeStrBareText(node) {
+    this.rustBaseNativeStrBare.add(node);
+    try {
+      return this.printNode(node, 0).trim();
+    } finally {
+      this.rustBaseNativeStrBare.delete(node);
+    }
+  }
+  /** A `: Str` method of the table declared in the base tier, or an override of one. */
+  rustBaseNativeStrMethod(node) {
+    if (node?.kind !== SyntaxKind7.MethodDeclaration || !isIdentifier3(node.name) || !_RustTranspiler.RUST_BASE_NATIVE_STR_METHODS.has(String(node.name.text)))
+      return false;
+    if (String(node.type?.getText?.() ?? "").trim() !== "Str")
+      return false;
+    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(String(node.getSourceFile?.()?.fileName ?? "")))
+      return true;
+    const hidden = this.getMethodOverride(node);
+    return hidden !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile?.()?.fileName ?? ""));
   }
   /** Every `return` of the method's own body converts, and the body's last
    *  statement is one of them (so Rust sees no `()`-valued tail the
@@ -57555,6 +57588,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return true;
     }
     if (this.rustVenueStrReturnLocal(inner) !== void 0 && this.rustVenueStrParamLocal(inner))
+      return true;
+    if (isIdentifier3(inner) && this.rustBaseNativeStrMethod(findAncestor(inner, isFunctionLike)) && ((this.getCheckedTypeOf(inner)?.flags ?? 0) & ~(TypeFlags6.Undefined | TypeFlags6.Null)) === 0)
       return true;
     return this.printsValueExpression(inner) && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === "string";
   }
@@ -57618,7 +57653,7 @@ ${binding(plan.indent)}` : ""), head: "" };
   /** Wrap a call text when the callee returns a native `Option<String>`
    *  and the position still needs a `Value`. */
   rustBoxNativeStrCallIfNeeded(node, text) {
-    return this.rustNativeStrCalleeKind(node) === "str" && this.rustNativeStrCallNeedsBox(node) ? this.rustNativeStrValueBox(text) : text;
+    return this.rustNativeStrCalleeKind(node) === "str" && !this.rustBaseNativeStrBare.has(node) && this.rustNativeStrCallNeedsBox(node) ? this.rustNativeStrValueBox(text) : text;
   }
   /** All `let x: Value = <dict-proven initialiser>` declarations of the current
    *  source file, keyed by local name in declaration order. */
@@ -57962,7 +57997,9 @@ ${classMethods}
     return `${this.getIden(identation + 1)}pub fn ${name}(${parsedArgs})${retStr}`;
   }
   rustRecordSignature(node, name, params, returnType) {
-    const ret = _RustTranspiler.RUST_DISPATCH_RETURN_KINDS[returnType] ?? (returnType.startsWith("crate::Result<") ? "typed" : "other");
+    let ret = _RustTranspiler.RUST_DISPATCH_RETURN_KINDS[returnType] ?? (returnType.startsWith("crate::Result<") ? "typed" : "other");
+    if (ret === "ostr" && this.rustBaseNativeStrMethod(node))
+      ret = "baseostr";
     this.rustSignatureTable.set(node, {
       file: node.getSourceFile?.(),
       name: this.toSnakeCaseName(name),
@@ -68352,6 +68389,9 @@ _RustTranspiler.RUST_CACHE_CTORS = /* @__PURE__ */ new Set(["ArrayCache", "Array
 // `ts/src/base/**` — the shared `Exchange` / `PredictionExchange` classes
 // (the transpiler synthesises variants like `.__ExchangeNoOverloads.ts`).
 _RustTranspiler.RUST_BASE_TIER_FILE = /ts[\\/]src[\\/]base[\\/]/;
+// Base methods printed `-> Option<String>` in the base tier and in every override (their only hand-written
+// caller, kraken's `super_safe_currency_code` shim, returns the same type); the by-name arm boxes back once.
+_RustTranspiler.RUST_BASE_NATIVE_STR_METHODS = /* @__PURE__ */ new Set(["safeCurrencyCode"]);
 _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "Value": "value",
   "impl Into<crate::Value>": "value",

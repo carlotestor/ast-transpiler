@@ -5321,7 +5321,8 @@ describe('scalar locals from base methods with a concrete return', () => {
         out = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'base-scalar-returns', 'ts/src/venue.ts')).content;
     });
     test('a Str / number base return is an Option local, tested and re-boxed natively', () => {
-        expect(out).toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\(.*\)\.as_str\(\)\.map\(str::to_owned\);/);
+        expect(out).toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\([^;]*\);/);
+        expect(out).not.toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\([^;]*\.as_str\(\)\.map\(str::to_owned\);/);
         expect(out).toContain('let mut now: i64 = self.milliseconds().as_i64().unwrap_or_default();');
         expect(out).toContain('if (code.is_none()) {');
         expect(out).toContain('m.insert("code".to_string(), code.map(Value::from).unwrap_or(Value::Null));');
@@ -5331,7 +5332,7 @@ describe('scalar locals from base methods with a concrete return', () => {
         expect(out).toMatch(/let mut kept: Value = self\.safeCurrencyCode\(/);
     });
     test('an optional string used as a dynamic map key is typed and keys the insert with its string or "null"', () => {
-        expect(out).toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\(entry[^;]*\)\.as_str\(\)\.map\(str::to_owned\);/);
+        expect(out).toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\(entry[^;]*\);/);
         expect(out).toContain('code.as_deref().unwrap_or("null").to_string()');
         expect(out).not.toContain('stringify_param(&code)');
     });
@@ -8971,5 +8972,58 @@ describe('typed list fields', () => {
         expect(out).not.toContain('let mut symbols: Value');
         const base = transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts')).content;
         expect(base).toContain('self.symbols = keys.into_list()');
+    });
+});
+
+describe('rust base safeCurrencyCode returns Option<String>', () => {
+    const fixture = (rel: string, text: string): string => {
+        const out = path.join(rustFixtureRoot, 'base-currency-code', rel);
+        fs.mkdirSync(path.dirname(out), { recursive: true });
+        fs.writeFileSync(out, text);
+        return out;
+    };
+    let base = '';
+    let venue = '';
+    beforeAll(() => {
+        const baseFile = fixture('ts/src/base/Exchange.ts', 'type Str = string | undefined;\n'
+            + 'export default class Exchange {\n'
+            + '    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n'
+            + '    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n'
+            + '    safeCurrency (currencyId: Str, currency: any = undefined): { code: Str } { return { \'code\': currencyId }; }\n'
+            + '    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str {\n'
+            + '        const currencyResolved = this.safeCurrency (currencyId, currency);\n'
+            + "        return currencyResolved['code'];\n"
+            + '    }\n'
+            + '}\n');
+        base = transpiler.transpileRustByPath(baseFile).content;
+        const file = fixture('ts/src/venue.ts', "import Exchange from './base/Exchange.js';\n"
+            + 'type Str = string | undefined;\n'
+            + 'export default class venue extends Exchange {\n'
+            + '    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str {\n'
+            + '        if (currencyId === undefined) {\n'
+            + '            return currencyId;\n'
+            + '        }\n'
+            + '        return super.safeCurrencyCode (currencyId, currency);\n'
+            + '    }\n'
+            + '    parseIt (o: any): any {\n'
+            + "        const code = this.safeCurrencyCode (this.safeString (o, 'c'));\n"
+            + '        if (code === undefined) {\n'
+            + '            return undefined;\n'
+            + '        }\n'
+            + "        return { 'code': code };\n"
+            + '    }\n'
+            + '}\n');
+        venue = transpiler.transpileRustByPath(file).content;
+    });
+    test('the base method prints the native return and converts its result once', () => {
+        expect(base).toContain('fn safeCurrencyCode(&self, currencyId: Value, optional_args: &[Value]) -> Option<String>');
+    });
+    test('the override follows the base signature; a narrowed-undefined parameter returns None', () => {
+        expect(venue).toContain('fn safeCurrencyCode(&self, currencyId: Value, optional_args: &[Value]) -> Option<String>');
+        expect(venue).toContain('return currencyId.as_str().map(str::to_owned);');
+    });
+    test('a caller local takes the Option<String> without re-reading a Value', () => {
+        expect(venue).toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\([^;]*\);/);
+        expect(venue).not.toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\([^;]*\.as_str\(\)\.map\(str::to_owned\);/);
     });
 });
