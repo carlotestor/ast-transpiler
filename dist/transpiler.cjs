@@ -55014,7 +55014,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const member = _optionalChain([this, 'access', _8646 => _8646.getChecker, 'call', _8647 => _8647(), 'access', _8648 => _8648.getSymbolAtLocation, 'call', _8649 => _8649(call.expression.name), 'optionalAccess', _8650 => _8650.valueDeclaration]);
     const owner = _nullishCoalesce(_optionalChain([member, 'optionalAccess', _8651 => _8651.resolve, 'optionalCall', _8652 => _8652()]), () => ( member));
-    if (owner === void 0 || !(_RustTranspiler.RUST_BASE_TIER_FILE.test(String(_nullishCoalesce(_optionalChain([owner, 'access', _8653 => _8653.getSourceFile, 'optionalCall', _8654 => _8654(), 'optionalAccess', _8655 => _8655.fileName]), () => ( "")))) || this.rustBaseNativeStrMethod(owner)))
+    if (owner === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(_nullishCoalesce(_optionalChain([owner, 'access', _8653 => _8653.getSourceFile, 'optionalCall', _8654 => _8654(), 'optionalAccess', _8655 => _8655.fileName]), () => ( "")))))
       return void 0;
     const want = kind === "ostr" ? "string" : "number";
     return this.primitiveKindOfType(this.typeOfNodeIfAny(call)) === want ? kind : void 0;

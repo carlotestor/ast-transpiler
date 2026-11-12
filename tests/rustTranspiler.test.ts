@@ -8984,6 +8984,7 @@ describe('rust base safeCurrencyCode returns Option<String>', () => {
     };
     let base = '';
     let venue = '';
+    let caller = '';
     beforeAll(() => {
         const baseFile = fixture('ts/src/base/Exchange.ts', 'type Str = string | undefined;\n'
             + 'export default class Exchange {\n'
@@ -9005,6 +9006,10 @@ describe('rust base safeCurrencyCode returns Option<String>', () => {
             + '        }\n'
             + '        return super.safeCurrencyCode (currencyId, currency);\n'
             + '    }\n'
+            + '}\n');
+        venue = transpiler.transpileRustByPath(file).content;
+        const other = fixture('ts/src/other.ts', "import Exchange from './base/Exchange.js';\n"
+            + 'export default class other extends Exchange {\n'
             + '    parseIt (o: any): any {\n'
             + "        const code = this.safeCurrencyCode (this.safeString (o, 'c'));\n"
             + '        if (code === undefined) {\n'
@@ -9013,7 +9018,7 @@ describe('rust base safeCurrencyCode returns Option<String>', () => {
             + "        return { 'code': code };\n"
             + '    }\n'
             + '}\n');
-        venue = transpiler.transpileRustByPath(file).content;
+        caller = transpiler.transpileRustByPath(other).content;
     });
     test('the base method prints the native return and converts its result once', () => {
         expect(base).toContain('fn safeCurrencyCode(&self, currencyId: Value, optional_args: &[Value]) -> Option<String>');
@@ -9023,7 +9028,7 @@ describe('rust base safeCurrencyCode returns Option<String>', () => {
         expect(venue).toContain('return currencyId.as_str().map(str::to_owned);');
     });
     test('a caller local takes the Option<String> without re-reading a Value', () => {
-        expect(venue).toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\([^;]*\);/);
-        expect(venue).not.toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\([^;]*\.as_str\(\)\.map\(str::to_owned\);/);
+        expect(caller).toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\([^;]*\);/);
+        expect(caller).not.toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\([^;]*\.as_str\(\)\.map\(str::to_owned\);/);
     });
 });

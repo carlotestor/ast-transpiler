@@ -55015,7 +55015,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const member = this.getChecker().getSymbolAtLocation(call.expression.name)?.valueDeclaration;
     const owner = member?.resolve?.() ?? member;
-    if (owner === void 0 || !(_RustTranspiler.RUST_BASE_TIER_FILE.test(String(owner.getSourceFile?.()?.fileName ?? "")) || this.rustBaseNativeStrMethod(owner)))
+    if (owner === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(owner.getSourceFile?.()?.fileName ?? "")))
       return void 0;
     const want = kind === "ostr" ? "string" : "number";
     return this.primitiveKindOfType(this.typeOfNodeIfAny(call)) === want ? kind : void 0;
