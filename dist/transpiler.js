@@ -69039,7 +69039,6 @@ _RustTranspiler.RUST_LENT_RESPONSE_TYPES = /* @__PURE__ */ new Set(["Dict", "Nul
 // Hand-written base helpers whose operand is lent (`impl Into<crate::Value>`, `OmitSource`, `MergeOperands`).
 _RustTranspiler.RUST_LENT_HELPER_SLOTS = {
   toArray: { at: [0], kinds: ["dict", "list"] },
-  json: { at: [0], kinds: ["dict", "list"] },
   arrayConcat: { at: [0, 1], kinds: ["list"] },
   omit: { at: [0], kinds: ["dict"] }
 };

@@ -14223,7 +14223,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     // Hand-written base helpers whose operand is lent (`impl Into<crate::Value>`, `OmitSource`, `MergeOperands`).
     private static readonly RUST_LENT_HELPER_SLOTS: Record<string, { at: number[], kinds: string[] }> = {
-        toArray: { at: [ 0 ], kinds: [ 'dict', 'list' ] }, json: { at: [ 0 ], kinds: [ 'dict', 'list' ] },
+        toArray: { at: [ 0 ], kinds: [ 'dict', 'list' ] },
         arrayConcat: { at: [ 0, 1 ], kinds: [ 'list' ] }, omit: { at: [ 0 ], kinds: [ 'dict' ] },
     };
 
