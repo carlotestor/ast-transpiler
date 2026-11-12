@@ -59061,7 +59061,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     return `crate::value::get_value_k(&${receiverText}, ${this.quotedStringLiteral(member)})`;
   }
   printPropertyAccessExpression(node, identation) {
-    const cacheField = this.printWsCacheFieldRead(node);
+    const cacheField = this.printWsCacheHashmapRead(node) ?? this.printWsCacheFieldRead(node);
     if (cacheField !== void 0)
       return cacheField;
     const listField = this.printTypedListFieldRead(node);
@@ -64234,7 +64234,7 @@ ${iden}}`;
       return false;
     const name = String(p.name.text);
     if (name === "hashmap")
-      return !this.isTestSource(n) && !this.isNativeWriteTargetBase(p) && !(isCallExpression6(p.parent) && p.parent.expression === p);
+      return !this.isNativeWriteTargetBase(p) && !(isCallExpression6(p.parent) && p.parent.expression === p);
     if (!isCallExpression6(p.parent) || p.parent.expression !== p)
       return false;
     if (name === "getLimit")
@@ -64360,6 +64360,15 @@ ${iden}}`;
       return void 0;
     const equal = op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken;
     return `${place}.${equal ? "is_none" : "is_some"}()`;
+  }
+  /** `x.hashmap` on a cache handle is the handle's own `hashmap()` snapshot. */
+  printWsCacheHashmapRead(node) {
+    if (!isPropertyAccessExpression3(node) || String(node.name.text) !== "hashmap" || !this.rustWsCacheMethodReceiver(node.expression))
+      return void 0;
+    const recv = node.expression;
+    if (this.rustWsCacheField(recv))
+      return `self.${String(recv.name.text)}.hashmap()`;
+    return isIdentifier3(recv) && this.rustWsCacheUses.get(recv) === "bare" ? `${super.printIdentifier(recv)}.hashmap()` : void 0;
   }
   /** A read of a typed field: the slot itself for a cache method or a write, else boxed once. */
   printWsCacheFieldRead(node) {

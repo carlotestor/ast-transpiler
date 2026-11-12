@@ -1813,6 +1813,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     printWsCacheLocalUse(node: any): string | undefined;
     /** `x === undefined` on an optional cache local or a typed field. */
     printWsCacheNullTest(left: any, right: any, op: any): string | undefined;
+    /** `x.hashmap` on a cache handle is the handle's own `hashmap()` snapshot. */
+    printWsCacheHashmapRead(node: any): string | undefined;
     /** A read of a typed field: the slot itself for a cache method or a write, else boxed once. */
     printWsCacheFieldRead(node: any): string | undefined;
     /** Writes of a typed field (`Some(ctor)`, `None`, a cache local) and of a cache local (a constructor). */

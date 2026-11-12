@@ -8233,7 +8233,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printPropertyAccessExpression(node, identation) {
-        const cacheField = this.printWsCacheFieldRead(node); if (cacheField !== undefined) return cacheField;
+        const cacheField = this.printWsCacheHashmapRead(node) ?? this.printWsCacheFieldRead(node); if (cacheField !== undefined) return cacheField;
         const listField = this.printTypedListFieldRead(node); if (listField !== undefined) return listField;
         const dictKeyRead = this.printDictKeyRead(node); if (dictKeyRead !== undefined) return dictKeyRead;
         const handleField = this.printClientHandleField(node, true); if (handleField !== undefined) return handleField;
@@ -13499,7 +13499,7 @@ export class RustTranspiler extends BaseTranspiler {
         const p: any = n.parent;
         if (!isPropertyAccessExpression(p) || p.expression !== n || !RustTranspiler.RUST_CACHE_METHODS.has(String(p.name.text))) return false;
         const name = String(p.name.text);
-        if (name === 'hashmap') return !this.isTestSource(n) && !this.isNativeWriteTargetBase(p) && !(isCallExpression(p.parent) && p.parent.expression === p);
+        if (name === 'hashmap') return !this.isNativeWriteTargetBase(p) && !(isCallExpression(p.parent) && p.parent.expression === p);
         if (!isCallExpression(p.parent) || p.parent.expression !== p) return false;
         if (name === 'getLimit') return this.rustLimitCall(p.parent);
         return p.parent.parent?.kind === SyntaxKind.ExpressionStatement && (name === 'clear' ? p.parent.arguments.length === 0 : p.parent.arguments.length === 1);
@@ -13598,6 +13598,14 @@ export class RustTranspiler extends BaseTranspiler {
         if (place === undefined) return undefined;
         const equal = op === SyntaxKind.EqualsEqualsToken || op === SyntaxKind.EqualsEqualsEqualsToken;
         return `${place}.${equal ? 'is_none' : 'is_some'}()`;
+    }
+
+    /** `x.hashmap` on a cache handle is the handle's own `hashmap()` snapshot. */
+    printWsCacheHashmapRead(node: any): string | undefined {
+        if (!isPropertyAccessExpression(node) || String(node.name.text) !== 'hashmap' || !this.rustWsCacheMethodReceiver(node.expression)) return undefined;
+        const recv: any = node.expression;
+        if (this.rustWsCacheField(recv)) return `self.${String(recv.name.text)}.hashmap()`;
+        return isIdentifier(recv) && this.rustWsCacheUses.get(recv) === 'bare' ? `${super.printIdentifier(recv)}.hashmap()` : undefined;
     }
 
     /** A read of a typed field: the slot itself for a cache method or a write, else boxed once. */
