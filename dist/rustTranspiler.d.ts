@@ -1703,6 +1703,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A base `safeList*` read with an empty `[]` default: a list on every path. */
     rustDefaultedListRead(init: any): boolean;
     rustLentListLocalUncached(declaration: any): boolean;
+    private static readonly RUST_TYPED_LIST_FIELDS;
+    rustTypedListField(node: any): boolean;
+    printTypedListFieldRead(node: any): string | undefined;
     rustLentListUse(node: any): boolean;
     /** `Value::Arr(x.clone())` (the shared handle) or `Value::Arr(x)` at a hand-off of a lent list. */
     printRustLentListBox(node: any, text: string): string | undefined;

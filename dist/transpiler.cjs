@@ -52881,6 +52881,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const marketWrite = isAssign ? this.printTypedMarketWrite(left, right) : void 0;
     if (marketWrite !== void 0)
       return marketWrite;
+    if (isAssign && this.rustTypedListField(left))
+      return `${this.printNode(left, 0)} = ${this.printNode(right, 0).trim()}.into_list()`;
     const optContainerWrite = isAssign && _is.isIdentifier.call(void 0, left) ? _nullishCoalesce(this.printOptContainerWrite(left, right), () => ( this.printOptListWrite(left, right))) : void 0;
     if (optContainerWrite !== void 0)
       return optContainerWrite;
@@ -53059,6 +53061,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const block = this.rustObjectLiteralBlock(this.rustSkipWrappers(declaration.initializer), identation);
       return `${indent}let mut ${varName}: indexmap::IndexMap<String, Value> = (${block})`;
     }
+    if (node.declarations.length === 1 && this.rustLentListLocal(declaration) && this.rustTypedListField(declaration.initializer))
+      return `${indent}let mut ${varName}: crate::value::List = self.${String(this.rustSkipWrappers(declaration.initializer).name.text)}.clone()`;
     if (node.declarations.length === 1 && this.rustLentListLocal(declaration))
       return _nullishCoalesce(this.printBuiltListDeclaration(declaration, indent, varName), () => ( `${indent}let mut ${varName}: crate::value::List = ${_nullishCoalesce(this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false), () => ( parsedValue))}.into_list()`));
     if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration)) {
@@ -58790,6 +58794,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     return `crate::value::get_value_k(&${receiverText}, ${this.quotedStringLiteral(member)})`;
   }
   printPropertyAccessExpression(node, identation) {
+    const listField = this.printTypedListFieldRead(node);
+    if (listField !== void 0)
+      return listField;
     const dictKeyRead = this.printDictKeyRead(node);
     if (dictKeyRead !== void 0)
       return dictKeyRead;
@@ -63511,6 +63518,8 @@ ${iden}}`;
   }
   /** A call that yields a string list on every path (never `undefined`). */
   rustLentListSource(init) {
+    if (this.rustTypedListField(init))
+      return true;
     if (!_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression))
       return false;
     const callee = init.expression;
@@ -63625,6 +63634,28 @@ ${iden}}`;
     for (const [n, form] of boxes)
       this.rustLentListBoxes.set(n, form);
     return true;
+  }
+  rustTypedListField(node) {
+    node = this.rustSkipWrappers(node);
+    if (node === void 0 || !_is.isPropertyAccessExpression.call(void 0, node) || node.expression.kind !== _ast.SyntaxKind.ThisKeyword || !_is.isIdentifier.call(void 0, node.name))
+      return false;
+    if (!_RustTranspiler.RUST_TYPED_LIST_FIELDS.has(String(node.name.text)) || this.checkerOrUndefined() === void 0)
+      return false;
+    const declarations = _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, this.getChecker().getSymbolAtLocation(node.name));
+    return declarations.length > 0 && declarations.every((d) => d.kind === _ast.SyntaxKind.PropertyDeclaration && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(d.getSourceFile().fileName)) && this.getChecker().isArrayType(this.typeOfNodeIfAny(d.name)));
+  }
+  printTypedListFieldRead(node) {
+    if (!this.rustTypedListField(node))
+      return void 0;
+    const place = `self.${String(node.name.text)}`;
+    const up = node.parent;
+    if (_is.isPropertyAccessExpression.call(void 0, up) && up.expression === node && String(up.name.text) === "length")
+      return place;
+    if (_is.isBinaryExpression.call(void 0, up) && up.left === node && rustIsAssignmentOperator(up.operatorToken.kind))
+      return place;
+    if (_is.isCallExpression.call(void 0, up) && up.arguments[0] === node && this.rustBorrowedAnyKeyReader(up))
+      return `&${place}`;
+    return `Value::Arr(${place}.clone())`;
   }
   rustLentListUse(node) {
     node = this.rustSkipWrappers(node);
@@ -68222,6 +68253,10 @@ _RustTranspiler.RUST_BY_REF_GENERATED_READERS = /^safe(?:Dict|List|Bool|Number)(
 // ── rustRecordLookupSource: base record lookups (market / outcome resolvers) held as a shared map ──
 // Each returns a cached record map (or nothing); read only by key, the map form reads the same.
 _RustTranspiler.RUST_RECORD_LOOKUP_SOURCES = /* @__PURE__ */ new Set(["outcome", "safeOutcome", "loadOutcome", "getMarketFromSymbols", "safeMarket", "market"]);
+// ── typed list fields (rustTypedListField / printTypedListFieldRead) ──
+// Base `Exchange` fields declared `string[]` are held as `crate::value::List`: a write converts once
+// (`into_list`), `.length` reads the list, and every other read hands out the shared handle (an Arc bump).
+_RustTranspiler.RUST_TYPED_LIST_FIELDS = /* @__PURE__ */ new Set(["symbols"]);
 // ── optional list locals ─────────────────────────────────────────────────
 // A list local whose source may yield `undefined` (the permissive `marketSymbols`, `marketIds`, a `safeList*`
 // with no default) holds `Option<crate::value::List>` (`into_opt_list` moves the shared list out of the box).
