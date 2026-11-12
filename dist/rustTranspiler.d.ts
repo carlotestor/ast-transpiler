@@ -2138,6 +2138,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustVenueStrCallers;
     rustVenueStrParamType(param: any): string | undefined;
     rustVenueStrParamTypeUncached(param: any): string | undefined;
+    /** Rust type of a scalar TS parameter type: string -> `&str`, `number` / `Num` -> `f64`, `int` / `Int` -> `i64`,
+     *  boolean -> `bool`; a nullable part makes it an `Option` (never for `bool`). */
+    rustVenueScalarTypeOf(type: any, typeNode: any): string | undefined;
+    /** A caller argument that converts to a numeric / boolean slot without changing its value, decided on the
+     *  source alone: `null` only for an `Option`, and an `i64` slot takes an integer literal or a value declared
+     *  `int` / `Int` (a `number` could carry a fraction). */
+    rustVenueScalarArgExact(arg: any, rustType: string): boolean;
     /** `this.<m>(..)` / `super.<m>(..)` calls in the method's own file that resolve to it. */
     rustVenueStrCallSites(method: any): any[];
     /** Scalar-local kind of a per-venue string parameter read through its `Value` binding. */
@@ -2158,5 +2165,27 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVenueStrArgSlot(arg: any): boolean;
     /** Argument text for a per-venue string slot: a typed local or literal natively, any other value read once. */
     rustVenueStrArgText(arg: any, type: string, identation: number): string;
+    /** Argument text for a numeric / boolean per-venue slot: literals natively, a typed parameter read back once,
+     *  any other value read once from its `Value`. */
+    rustVenueScalarArgText(arg: any, type: string, identation: number): string;
+    /** An `f64` rebinding turns an integer argument into a `Float`: admit it only when every body read is blind to
+     *  that variant (a null / truthiness test, an ordered comparison, or `numberToString` / `parseToInt`). */
+    rustVenueFloatUsesStayInside(method: any, param: any): boolean;
+    rustVenueArithmeticArg(arg: any): boolean;
+    /** `!x` over a simple operand: a `bool` slot reads it once as a native negation. */
+    rustVenueNegatedArg(arg: any): boolean;
+    /** Base `parseToInt(p)` over a required numeric per-venue parameter: an `Int` for every number (`parse_int` of
+     *  the float text), read once as an `i64`. */
+    rustVenueParseToInt(node: any): boolean;
+    /** An optional parameter may print positionally when its default is absent and every optional parameter before
+     *  it does too (they form the positional prefix of the optional tail). */
+    rustVenueOptionalSlotOpen(method: any, param: any): boolean;
+    /** An optional per-venue parameter that prints as a typed positional `Option`. */
+    rustVenuePositional(param: any): boolean;
+    /** `None` for each positional optional slot a call leaves out. */
+    rustVenuePads(params: any[] | undefined, given: number, fixed: number): string[];
+    /** A checker-`boolean` argument for a `bool` slot: native where it already is one, an `Option<bool>` local or a
+     *  `Value` compared with `Some(true)` (its variant is `Bool` or `Null`), else its truthiness. */
+    rustVenueBoolArgText(arg: any, identation: number): string;
 }
 export {};

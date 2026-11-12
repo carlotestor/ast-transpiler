@@ -54819,6 +54819,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const baseReturn = this.rustBaseReturnScalarKind(node, name);
     if (baseReturn !== void 0)
       return baseReturn;
+    if (this.rustVenueParseToInt(node))
+      return "int";
     if (this.rustVenueInitializer(node) && this.rustVenueStrCall(node))
       return "ostr";
     if (fresh && this.rustVenueInitializer(node) && this.rustVenueIntCall(node))
@@ -55186,7 +55188,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** True for the derived sources above, which must earn a native use (not only `Value` boxes). */
   rustScalarNeedsNativeUse(init) {
     const node = this.unwrapParens(init);
-    if (this.rustElementReadScalarKind(node) !== void 0 || this.rustListLengthInit(node) || this.rustVenueIntCall(node) || this.rustVenueTypedCall(node) !== void 0 || this.rustVenueStrCall(node) || this.rustSumShape(node) || this.rustStrCastCall(node) !== void 0 || this.rustClockString(node) || this.rustStrRuntimeCall(node))
+    if (this.rustElementReadScalarKind(node) !== void 0 || this.rustListLengthInit(node) || this.rustVenueIntCall(node) || this.rustVenueParseToInt(node) || this.rustVenueTypedCall(node) !== void 0 || this.rustVenueStrCall(node) || this.rustSumShape(node) || this.rustStrCastCall(node) !== void 0 || this.rustClockString(node) || this.rustStrRuntimeCall(node))
       return true;
     if (!isCallExpression6(node) || !isPropertyAccessExpression3(node.expression))
       return false;
@@ -56210,7 +56212,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return wrap(`format!("{}", ${this.rustScalarNativeText("int", clock)})`);
     const fallback = node.arguments[node.arguments.length - 1];
     const defaulted = this.rustScalarValueKind(node, true) === base;
-    if (kind === "int" && this.rustVenueIntCall(node))
+    if (kind === "int" && (this.rustVenueIntCall(node) || this.rustVenueParseToInt(node)))
       return `${text}.as_i64().unwrap_or_default()`;
     if (kind === "str" && defaulted)
       return `${text}.as_str().unwrap_or(${this.quotedStringLiteral(fallback.text)}).to_string()`;
@@ -57762,7 +57764,7 @@ ${this.getIden(identation + 1)}}
     this.className = node.name.text;
     const methods = node.members.filter((m) => m.kind === SyntaxKind7.MethodDeclaration);
     methods.forEach((method) => {
-      const requiredCount = method.parameters.filter((p) => !p.initializer && !p.questionToken).length;
+      const requiredCount = method.parameters.filter((p) => !p.initializer && !p.questionToken || this.rustVenuePositional(p)).length;
       if (requiredCount < method.parameters.length) {
         this.methodSignatures[method.name.text] = { requiredCount };
       } else if (method.body !== void 0) {
@@ -57788,7 +57790,7 @@ ${classMethods}
       return `${this.getIden(identation + 1)}pub fn ${name}(${args}) -> crate::Result<${typed.ret}>`;
     }
     const params = node.parameters;
-    const requiredParams = params.filter((p) => !p.initializer && !p.questionToken);
+    const requiredParams = params.filter((p) => !p.initializer && !p.questionToken || this.rustVenuePositional(p));
     let parsedArgs = ["&self", ...requiredParams.map((p) => `${this.printNode(p.name, 0)}: ${this.rustParamType(p)}`)].join(", ");
     if (requiredParams.length < params.length) {
       parsedArgs += ", optional_args: &[Value]";
@@ -58290,7 +58292,7 @@ ${i1}}`;
   printMethodDeclaration(node, identation) {
     const methodDef = this.printMethodDefinition(node, identation);
     const params = node.parameters;
-    const optionalParams = params.filter((p) => (p.initializer !== void 0 || p.questionToken !== void 0) && !this.rustTypedFilterPositional(p));
+    const optionalParams = params.filter((p) => (p.initializer !== void 0 || p.questionToken !== void 0) && !this.rustTypedFilterPositional(p) && !this.rustVenuePositional(p));
     const optionalInits = optionalParams.map((p, idx) => {
       const defaultVal = p.initializer ? this.printNode(p.initializer, 0) : "Value::Null";
       const name = this.printNode(p.name, 0);
@@ -58392,7 +58394,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         const calleeParams = this.rustCalleeParams(node);
         const printArg = (a, at) => this.rustVenueStrSlot(calleeParams, at) !== void 0 ? this.rustVenueStrArgText(a, this.rustVenueStrSlot(calleeParams, at), 0) : this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
         const printArgs = (list, from = 0) => list.map((a, i) => this.rustWsWatchSlot(node, from + i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, from + i)).join(", ");
-        const requiredArgs = printArgs(args.slice(0, sig.requiredCount));
+        const requiredArgs = [printArgs(args.slice(0, sig.requiredCount)), ...this.rustVenuePads(calleeParams, args.length, sig.requiredCount)].filter((a) => a !== "").join(", ");
         const reqPart = requiredArgs ? `${requiredArgs}, ` : "";
         return `self.${methodName}(${reqPart}&[${printArgs(args.slice(sig.requiredCount), sig.requiredCount)}])`;
       }
@@ -58421,7 +58423,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const args = this.rustPrintedArgs(node, identation);
     if (args.length < fixed || args.length > 0 && args[args.length - 1].startsWith("&["))
       return void 0;
-    const cloned = args.map((a, at) => this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== void 0 ? a : this.rustSliceArgText(a));
+    const params = this.rustCalleeParams(node);
+    const cloned = args.map((a, at) => at >= node.arguments.length || this.rustVenueStrSlot(params, at) !== void 0 ? a : this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== void 0 ? a : this.rustSliceArgText(a));
     return `${receiver}.${methodName}(${cloned.slice(0, fixed).join(", ")}${fixed > 0 ? ", " : ""}&[${cloned.slice(fixed).join(", ")}])`;
   }
   rustSliceArgText(a) {
@@ -58495,7 +58498,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const params = this.rustTranspiledCalleeParams(node, methodName);
     if (params === void 0 || params.some((p) => p.dotDotDotToken !== void 0))
       return void 0;
-    const required = params.filter((p) => !p.initializer && !p.questionToken).length;
+    const required = params.filter((p) => !p.initializer && !p.questionToken || this.rustVenuePositional(p)).length;
     return required === params.length ? void 0 : this.printOptionalArgsSliceCall(node, receiver, methodName, required, identation);
   }
   // Parameters of the method body a call binds to (the implementation behind an overload), when that
@@ -58538,7 +58541,10 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   rustPrintedArgs(node, identation, params = this.rustCalleeParams(node)) {
     if (params === void 0)
       return Array.from(node.arguments).map((a) => this.printNode(a, identation).trim());
-    return Array.from(node.arguments).map((arg, at) => {
+    const pads = [];
+    for (let at = node.arguments.length; at < params.length && this.rustVenuePositional(params[at]); at++)
+      pads.push("None");
+    return [...Array.from(node.arguments).map((arg, at) => {
       const venueStr = this.rustVenueStrSlot(params, at);
       if (venueStr !== void 0)
         return this.rustVenueStrArgText(arg, venueStr, identation);
@@ -58549,7 +58555,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         return this.rustStrVecArgumentText(arg, identation);
       }
       return this.rustNativeBoolArgumentSlot(params, at) ? this.rustBoolArgumentText(arg, identation) : this.printNode(arg, identation).trim();
-    });
+    }), ...pads];
   }
   printRustNamespaceCall(node, identation) {
     const callee = node.expression;
@@ -67144,7 +67150,10 @@ ${this.getIden(identation)}}`;
     const method = param.parent;
     if (!isMethodDeclaration5(method) || method.body === void 0 || !isIdentifier3(method.name) || !isClassDeclaration4(method.parent))
       return void 0;
-    if (!isIdentifier3(param.name) || param.initializer !== void 0 || param.questionToken !== void 0 || param.dotDotDotToken !== void 0 || param.type === void 0)
+    if (!isIdentifier3(param.name) || param.dotDotDotToken !== void 0 || param.type === void 0)
+      return void 0;
+    const optional = param.initializer !== void 0 || param.questionToken !== void 0;
+    if (optional && !this.rustVenueOptionalSlotOpen(method, param))
       return void 0;
     const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
     if (file.search(/(?:^|\/)ts\/src\/(?:pro\/|prediction\/)?[^/]+\.ts$/) < 0)
@@ -67163,28 +67172,86 @@ ${this.getIden(identation)}}`;
     const type = this.typeOfNodeIfAny(param.name);
     if (type === void 0)
       return void 0;
-    let text = 0;
-    let nil = 0;
-    for (const part of typeParts(type) ?? [type]) {
-      if ((part.flags & (TypeFlags6.String | TypeFlags6.StringLiteral)) !== 0)
-        text++;
-      else if ((part.flags & (TypeFlags6.Undefined | TypeFlags6.Null)) !== 0)
-        nil++;
-      else
-        return void 0;
-    }
-    if (text === 0)
+    const declared = this.rustVenueScalarTypeOf(type, param.type);
+    if (declared === void 0 || optional && declared === "bool")
+      return void 0;
+    const rustType = optional && !declared.startsWith("Option<") ? `Option<${declared}>` : declared;
+    if (rustType.includes("f64") && !this.rustVenueFloatUsesStayInside(method, param))
       return void 0;
     const at = Array.from(method.parameters).indexOf(param);
     for (const call of this.rustVenueStrCallSites(method)) {
       const args = Array.from(call.arguments);
       if (args.some((a) => a.kind === SyntaxKind7.SpreadElement))
         return void 0;
+      if (optional && args[at] === void 0)
+        continue;
       const argType = args[at] === void 0 ? void 0 : this.typeOfNodeIfAny(args[at]);
-      if (argType === void 0 || (argType.flags & (TypeFlags6.Any | TypeFlags6.Unknown)) !== 0 || !this.rustVenueStrSimpleArg(args[at]))
+      if (argType === void 0 || (argType.flags & (TypeFlags6.Any | TypeFlags6.Unknown)) !== 0)
+        return void 0;
+      if (!this.rustVenueStrSimpleArg(args[at]) && !(rustType === "bool" && this.rustVenueNegatedArg(args[at])))
+        return void 0;
+      if (!this.rustVenueScalarArgExact(args[at], rustType))
+        return void 0;
+      if (!rustType.includes("str") && args.some((a) => this.rustVenueArithmeticArg(a)))
         return void 0;
     }
-    return nil > 0 ? "Option<&str>" : "&str";
+    return rustType;
+  }
+  /** Rust type of a scalar TS parameter type: string -> `&str`, `number` / `Num` -> `f64`, `int` / `Int` -> `i64`,
+   *  boolean -> `bool`; a nullable part makes it an `Option` (never for `bool`). */
+  rustVenueScalarTypeOf(type, typeNode) {
+    let text = 0;
+    let num = 0;
+    let flag = 0;
+    let nil = 0;
+    const parts = typeParts(type) ?? [type];
+    for (const part of parts) {
+      if ((part.flags & (TypeFlags6.String | TypeFlags6.StringLiteral)) !== 0)
+        text++;
+      else if ((part.flags & (TypeFlags6.Number | TypeFlags6.NumberLiteral)) !== 0)
+        num++;
+      else if ((part.flags & (TypeFlags6.Boolean | TypeFlags6.BooleanLiteral)) !== 0)
+        flag++;
+      else if ((part.flags & (TypeFlags6.Undefined | TypeFlags6.Null)) !== 0)
+        nil++;
+      else
+        return void 0;
+    }
+    if ([text, num, flag].filter((c) => c > 0).length !== 1)
+      return void 0;
+    if (text > 0)
+      return nil > 0 ? "Option<&str>" : "&str";
+    if (flag > 0)
+      return nil > 0 ? void 0 : "bool";
+    const alias = typeNode?.kind === SyntaxKind7.TypeReference && isIdentifier3(typeNode.typeName) ? String(typeNode.typeName.text) : "";
+    const scalar = alias === "int" || alias === "Int" ? "i64" : "f64";
+    return nil > 0 ? `Option<${scalar}>` : scalar;
+  }
+  /** A caller argument that converts to a numeric / boolean slot without changing its value, decided on the
+   *  source alone: `null` only for an `Option`, and an `i64` slot takes an integer literal or a value declared
+   *  `int` / `Int` (a `number` could carry a fraction). */
+  rustVenueScalarArgExact(arg, rustType) {
+    if (rustType === "&str" || rustType === "Option<&str>")
+      return true;
+    const inner = this.unwrapParens(arg);
+    if (this.literalKindOfNode(inner) === "null")
+      return rustType.startsWith("Option<");
+    if (!rustType.includes("i64"))
+      return true;
+    if (this.rustScalarIntLiteral(inner) !== void 0)
+      return true;
+    const source = isIdentifier3(inner) ? this.rustDeclaredNode(inner) : inner;
+    const init = source !== inner && source !== void 0 && isVariableDeclaration3(source) && (source.parent.flags & NodeFlags4.Const) !== 0 ? this.unwrapParens(source.initializer) : source === inner ? inner : void 0;
+    const callee = init !== void 0 && isCallExpression6(init) && isPropertyAccessExpression3(init.expression) ? init.expression : void 0;
+    if (callee !== void 0 && callee.expression.kind === SyntaxKind7.ThisKeyword && _RustTranspiler.RUST_EXACT_INT_PRODUCERS.has(String(callee.name.text)) && this.rustCalleeIsRuntimeBase(init)) {
+      return rustType === "Option<i64>" || String(callee.name.text) === "parseToInt";
+    }
+    if (isIdentifier3(inner) && ["int", "oint"].includes(this.rustOptParamKind(inner) ?? ""))
+      return this.rustOptParamKind(inner) === "int" || rustType === "Option<i64>";
+    const declaration = isIdentifier3(inner) ? this.rustDeclaredNode(inner) : void 0;
+    const typeNode = declaration?.type;
+    const alias = typeNode?.kind === SyntaxKind7.TypeReference && isIdentifier3(typeNode.typeName) ? String(typeNode.typeName.text) : "";
+    return alias === "int" || alias === "Int" && rustType === "Option<i64>";
   }
   /** `this.<m>(..)` / `super.<m>(..)` calls in the method's own file that resolve to it. */
   rustVenueStrCallSites(method) {
@@ -67211,7 +67278,7 @@ ${this.getIden(identation)}}`;
   /** Scalar-local kind of a per-venue string parameter read through its `Value` binding. */
   rustVenueStrParamKind(param) {
     const type = this.rustVenueStrParamType(param);
-    return type === "&str" ? "str" : type === "Option<&str>" ? "ostr" : void 0;
+    return type === void 0 ? void 0 : { "&str": "str", "Option<&str>": "ostr", "f64": "num", "Option<f64>": "onum", "i64": "int", "Option<i64>": "oint", "bool": "bool" }[type];
   }
   /** The per-venue string type of the callee parameter at `at`. */
   rustVenueStrSlot(params, at) {
@@ -67290,6 +67357,8 @@ ${this.getIden(identation)}}`;
     if (local !== void 0)
       return local;
     const inner = this.unwrapParens(arg);
+    if (type !== "&str" && type !== "Option<&str>")
+      return this.rustVenueScalarArgText(arg, type, identation);
     const slot = isIdentifier3(inner) ? this.rustDeclaredNode(inner) : void 0;
     const optional = isIdentifier3(inner) ? this.rustScalarIdentifierKind(inner) === "ostr" || slot?.kind === SyntaxKind7.BindingElement && slot.name !== inner && this.rustTupleSlotKind(slot) === "str" : isCallExpression6(inner) && this.rustNativeStrCalleeKind(inner) === "str";
     if (optional) {
@@ -67304,6 +67373,125 @@ ${this.getIden(identation)}}`;
     const printed = this.printNode(arg, identation).trim();
     const recv = /^[A-Za-z_][A-Za-z0-9_]*$/.test(printed) ? printed : `(${printed})`;
     return type === "&str" ? `${recv}.as_str().unwrap_or_default()` : `${recv}.as_str()`;
+  }
+  /** Argument text for a numeric / boolean per-venue slot: literals natively, a typed parameter read back once,
+   *  any other value read once from its `Value`. */
+  rustVenueScalarArgText(arg, type, identation) {
+    const inner = this.unwrapParens(arg);
+    const optional = type.startsWith("Option<");
+    if (type === "bool" && this.rustVenueNegatedArg(inner))
+      return `!${this.rustVenueScalarArgText(inner.operand, type, identation)}`;
+    if (type === "bool")
+      return this.rustVenueBoolArgText(arg, identation);
+    if (this.literalKindOfNode(inner) === "null")
+      return "None";
+    const integer = this.rustScalarIntLiteral(inner);
+    const literal2 = integer ?? (isNumericLiteral4(inner) ? String(inner.text) : void 0);
+    if (literal2 !== void 0) {
+      const text = type.includes("f64") && integer !== void 0 ? `${literal2}.0` : literal2;
+      return optional ? `Some(${text})` : text;
+    }
+    const read = type.includes("i64") ? "as_i64()" : "as_f64()";
+    const local = isIdentifier3(inner) ? this.rustScalarLocalOf(inner) : void 0;
+    if (local !== void 0 && local.kind === "onum" && type === "f64")
+      return `${super.printIdentifier(inner)}.unwrap_or_default()`;
+    if (local !== void 0 && local.kind === "int" && type.includes("f64"))
+      return optional ? `Some(${super.printIdentifier(inner)} as f64)` : `(${super.printIdentifier(inner)} as f64)`;
+    if (local !== void 0)
+      return `Value::from(${super.printIdentifier(inner)}).${read}${optional ? "" : ".unwrap_or_default()"}`;
+    const printed = this.printNode(arg, identation).trim();
+    const recv = isIdentifier3(inner) ? printed : `(${printed})`;
+    return optional ? `${recv}.${read}` : `${recv}.${read}.unwrap_or_default()`;
+  }
+  /** An `f64` rebinding turns an integer argument into a `Float`: admit it only when every body read is blind to
+   *  that variant (a null / truthiness test, an ordered comparison, or `numberToString` / `parseToInt`). */
+  rustVenueFloatUsesStayInside(method, param) {
+    const uses = this.rustScopeNameNodes(method, String(param.name.text));
+    for (const n of uses) {
+      if (n === param.name || !isIdentifier3(n) || this.rustDeclaredNode(n) !== param)
+        continue;
+      let up = n.parent;
+      let at = n;
+      while (isParenthesizedExpression3(up)) {
+        at = up;
+        up = up.parent;
+      }
+      if (this.rustIdentifierUseIsCondition(n))
+        continue;
+      if (isBinaryExpression5(up)) {
+        const op = up.operatorToken.kind;
+        const other = up.left === at ? up.right : up.left;
+        if (op === SyntaxKind7.LessThanToken || op === SyntaxKind7.GreaterThanToken || op === SyntaxKind7.LessThanEqualsToken || op === SyntaxKind7.GreaterThanEqualsToken)
+          continue;
+        if (this.isEqualityOp(op) && this.literalKindOfNode(this.unwrapParens(other)) === "null")
+          continue;
+        return false;
+      }
+      const callee = isCallExpression6(up) && up.arguments.length === 1 && up.arguments[0] === at ? up.expression : void 0;
+      if (callee !== void 0 && isPropertyAccessExpression3(callee) && callee.expression.kind === SyntaxKind7.ThisKeyword && (callee.name.text === "numberToString" || callee.name.text === "parseToInt") && this.rustCalleeIsRuntimeBase(up))
+        continue;
+      return false;
+    }
+    return true;
+  }
+  rustVenueArithmeticArg(arg) {
+    const inner = this.unwrapParens(arg);
+    if (!isBinaryExpression5(inner))
+      return false;
+    const op = inner.operatorToken.kind;
+    return op === SyntaxKind7.PlusToken || op === SyntaxKind7.MinusToken || op === SyntaxKind7.AsteriskToken || op === SyntaxKind7.SlashToken || op === SyntaxKind7.PercentToken;
+  }
+  /** `!x` over a simple operand: a `bool` slot reads it once as a native negation. */
+  rustVenueNegatedArg(arg) {
+    const inner = this.unwrapParens(arg);
+    return isPrefixUnaryExpression3(inner) && inner.operator === SyntaxKind7.ExclamationToken && this.rustVenueStrSimpleArg(inner.operand);
+  }
+  /** Base `parseToInt(p)` over a required numeric per-venue parameter: an `Int` for every number (`parse_int` of
+   *  the float text), read once as an `i64`. */
+  rustVenueParseToInt(node) {
+    if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    if (String(node.expression.name.text) !== "parseToInt" || node.arguments.length !== 1 || !this.rustCalleeIsRuntimeBase(node))
+      return false;
+    const arg = this.unwrapParens(node.arguments[0]);
+    if (!isIdentifier3(arg))
+      return false;
+    const param = this.rustDeclaredNode(arg);
+    return param?.kind === SyntaxKind7.Parameter && ["f64", "i64"].includes(this.rustVenueStrParamType(param) ?? "");
+  }
+  /** An optional parameter may print positionally when its default is absent and every optional parameter before
+   *  it does too (they form the positional prefix of the optional tail). */
+  rustVenueOptionalSlotOpen(method, param) {
+    if (param.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(param.initializer)) !== "null")
+      return false;
+    const params = Array.from(method.parameters);
+    const before = params.slice(0, params.indexOf(param));
+    return before.every((p) => p.initializer === void 0 && p.questionToken === void 0 || this.rustVenueStrParamType(p) !== void 0);
+  }
+  /** An optional per-venue parameter that prints as a typed positional `Option`. */
+  rustVenuePositional(param) {
+    return param?.kind === SyntaxKind7.Parameter && (param.initializer !== void 0 || param.questionToken !== void 0) && this.rustVenueStrParamType(param) !== void 0;
+  }
+  /** `None` for each positional optional slot a call leaves out. */
+  rustVenuePads(params, given, fixed) {
+    if (params === void 0 || given >= fixed)
+      return [];
+    return params.slice(given, fixed).map(() => "None");
+  }
+  /** A checker-`boolean` argument for a `bool` slot: native where it already is one, an `Option<bool>` local or a
+   *  `Value` compared with `Some(true)` (its variant is `Bool` or `Null`), else its truthiness. */
+  rustVenueBoolArgText(arg, identation) {
+    const inner = this.unwrapParens(arg);
+    if (this.rustNativeBoolArgumentText(arg) !== void 0)
+      return this.rustBoolArgumentText(arg, identation);
+    const local = isIdentifier3(inner) ? this.rustScalarLocalOf(inner) : void 0;
+    if (local?.kind === "bool")
+      return super.printIdentifier(inner);
+    if (local?.kind === "obool")
+      return `(${super.printIdentifier(inner)} == Some(true))`;
+    if (local === void 0 && isIdentifier3(inner) && this.primitiveKindOfType(this.typeOfNodeIfAny(inner)) === "boolean")
+      return `(${this.printNode(arg, identation).trim()}.as_bool() == Some(true))`;
+    return this.rustBoolArgumentText(arg, identation);
   }
 };
 // node kinds the printer types that the core per-file prefetch leaves to single round trips
@@ -67666,7 +67854,8 @@ _RustTranspiler.RUST_PARAM_READ = {
   ostr: "as_str().map(str::to_owned)",
   str: "as_str().unwrap_or_default().to_string()",
   int: "as_i64().unwrap_or_default()",
-  num: "as_f64().unwrap_or_default()"
+  num: "as_f64().unwrap_or_default()",
+  bool: "as_bool().unwrap_or_default()"
 };
 /** The ws cache classes whose hand-written `::new` takes `impl Into<Value>`. */
 _RustTranspiler.RUST_CACHE_CTORS = /* @__PURE__ */ new Set(["ArrayCache", "ArrayCacheByTimestamp", "ArrayCacheBySymbolById", "ArrayCacheBySymbolBySide", "ArrayCacheByOutcomeById"]);
