@@ -58084,6 +58084,8 @@ ${i1}}`;
     const scope = this.rustEnclosingFunction(declaration);
     let fieldReads = 0;
     let writes = 0;
+    let keyReads = 0;
+    let handOffs = 0;
     const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
       if (this.rustEnclosingFunction(n) !== scope)
         return false;
@@ -58091,6 +58093,13 @@ ${i1}}`;
         writes++;
         return true;
       }
+      if (empty && this.rustOptMarketKeyRead(n)) {
+        if (this.rustDictKeyReadUse(n))
+          keyReads++;
+        return true;
+      }
+      if (empty && this.rustMarketValueUse(n))
+        handOffs++;
       if (empty)
         return this.rustIsNullTestOf(n) || this.rustMarketValueUse(n);
       const key = this.rustMarketReadKey(n);
@@ -58104,8 +58113,24 @@ ${i1}}`;
     if (!ok)
       return false;
     if (empty)
-      return writes > 0 ? "opt" : false;
+      return writes > 0 && (keyReads === 0 || handOffs === 0) ? "opt" : false;
     return fieldReads > 0 ? "struct" : false;
+  }
+  // ── rustOptMarketKeyRead / printOptMarketKeyRead: literal-key reads on an `Option<Market>` local ──
+  // `KeyRead` for `&Option<Market>` reads the market's own map (Null when empty), as the boxed local did.
+  rustOptMarketKeyRead(n) {
+    if (this.rustDictKeyReadUse(n))
+      return true;
+    const call = n.parent;
+    return call !== void 0 && _is.isCallExpression.call(void 0, call) && call.arguments[0] === n && this.rustBorrowedDictReader(call) !== void 0;
+  }
+  /** `crate::value::KeyRead::key_read(&&m, "k")` for a direct read on an `Option<Market>` local. */
+  printOptMarketKeyRead(node) {
+    const recv = node.expression;
+    if (recv === void 0 || !_is.isIdentifier.call(void 0, recv) || !this.rustDictKeyReadUse(recv) || this.rustOptMarketLocalOf(recv) === void 0)
+      return void 0;
+    const key = _is.isElementAccessExpression.call(void 0, node) ? String(this.rustSkipWrappers(node.argumentExpression).text) : String(node.name.text);
+    return `crate::value::KeyRead::key_read(&&${super.printIdentifier(recv)}, "${this.escapeRustStringLiteral(key)}")`;
   }
   /** The Rust result type of an awaited typed core call other than `market` that decodes into a struct. */
   rustTypedCallResultType(init) {
@@ -63225,6 +63250,9 @@ ${iden}}`;
     const recv = node.expression;
     if (recv === void 0 || !_is.isIdentifier.call(void 0, recv) || !this.rustDictKeyReadUse(recv))
       return void 0;
+    const optMarket = this.printOptMarketKeyRead(node);
+    if (optMarket !== void 0)
+      return optMarket;
     const declaration = this.rustDeclarationOfIdentifier(recv);
     if (declaration === void 0 || declaration === recv || declaration.name === recv || this.rustBorrowedLocalKind(declaration) !== "dict" && !this.rustMutableDictSlot(declaration))
       return void 0;
@@ -63485,7 +63513,7 @@ ${iden}}`;
     if (recv === void 0 || !_is.isIdentifier.call(void 0, recv))
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(recv);
-    const owned = declaration !== void 0 && declaration !== recv && (this.rustBorrowedDictLocal(declaration) || this.rustHandedDictLocal(declaration));
+    const owned = declaration !== void 0 && declaration !== recv && (this.rustBorrowedDictLocal(declaration) || this.rustHandedDictLocal(declaration) || this.rustOptMarketLocalOf(recv) !== void 0);
     if (!owned && !(this.rustContainerBoxUses.get(recv) !== void 0 && this.rustReadBearerKind(recv) !== void 0))
       return void 0;
     const key = this.rustSkipWrappers(node.arguments[1]);

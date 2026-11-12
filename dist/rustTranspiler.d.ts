@@ -912,6 +912,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `m === undefined` / `m !== undefined` (either side). */
     rustIsNullTestOf(n: any): boolean;
     rustMarketLocalIsTypedUncached(declaration: any): false | 'struct' | 'opt' | 'call';
+    rustOptMarketKeyRead(n: any): boolean;
+    /** `crate::value::KeyRead::key_read(&&m, "k")` for a direct read on an `Option<Market>` local. */
+    printOptMarketKeyRead(node: any): string | undefined;
     /** The Rust result type of an awaited typed core call other than `market` that decodes into a struct. */
     rustTypedCallResultType(init: any): string | undefined;
     rustCallLocalOf(node: any): any;
