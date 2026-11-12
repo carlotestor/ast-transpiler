@@ -480,7 +480,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustTestTierSource(node: any): boolean;
     /** `this`, or in a test source an identifier typed as the base `Exchange` class (it resolves to the base readers). */
     rustScalarReceiver(node: any): boolean;
+    /** String hand-off locals boxed more than once: each box before the last lends the string. */
+    private rustStrLentLocals;
     rustScalarLocalKindUncached(declaration: any): string | undefined;
+    private rustStrNoLend;
+    rustStrLendOnly(declaration: any): boolean;
+    /** Every box of the string sits where the `Value` form cloned it (a `this.` / `super.` argument) or is its
+     *  moving last use, and no use reads it by reference: lending there costs the one copy the clone made. */
+    rustStrLendSites(declaration: any): boolean;
     /** A local some `return` of a method with a declared string return hands back as-is. */
     rustStrReturnedLocal(declaration: any, scope: any): boolean;
     rustParamAliasSeedKind(declaration: any): string | undefined;
@@ -1842,6 +1849,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `this.m (..)` resolved to the base tier, `m` in `names`. */
     rustBaseCallNamed(call: any, names: Set<string>): boolean;
     rustHandedDictLocalUncached(declaration: any): boolean;
+    /** `[a, b] = this.m (.., n)`: printed as one `__destr_tmp` block line, kept within the line budget by the bare box. */
+    rustInDestructureWrite(n: any): boolean;
     private static readonly RUST_HANDED_DICT_OMIT;
     private static readonly RUST_HANDED_DICT_EXTEND;
     /** The sole extra operand of a base `this.extend (a, x)` / `this.deepExtend (a, x)` when it is a bare identifier. */

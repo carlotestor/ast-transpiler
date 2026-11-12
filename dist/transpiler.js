@@ -51475,6 +51475,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustScalarSeeding = false;
     this.rustScalarVetoed = /* @__PURE__ */ new WeakSet();
     this.rustScalarGuarded = /* @__PURE__ */ new WeakSet();
+    /** String hand-off locals boxed more than once: each box before the last lends the string. */
+    this.rustStrLentLocals = /* @__PURE__ */ new WeakSet();
+    this.rustStrNoLend = false;
     this.rustStrRuntimeBare = /* @__PURE__ */ new Set();
     // ── venue string-method results (rustVenueStrCall / rustVenueReturnTypes) ──
     // A call to a venue method already printed `-> Option<String>` is an optional-string source as it
@@ -54781,7 +54784,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (ok && kind === "bool" && !this.rustBoolSlotUsesOk(declaration))
       return void 0;
     const guarded = (widened || expressionUses || this.rustOptListParamInit(declaration.initializer)) && boxed > 0;
-    const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !(kind === "str" || kind === "ostr")) && !this.rustStrReturnedLocal(declaration, scope);
+    const strKind = kind === "str" || kind === "ostr";
+    const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !strKind || !this.rustStrNoLend && this.rustStrLendSites(declaration)) && !this.rustStrReturnedLocal(declaration, scope);
     const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
     const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
@@ -54822,7 +54826,32 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       this.rustScalarGuarded.add(declaration);
     if (guarded || handOff || this.rustStrMethodRecvLocal(declaration))
       this.rustScalarGuarded.add(declaration);
+    if (handOff && copied > 0 && strKind && this.rustStrLendOnly(declaration))
+      this.rustStrLentLocals.add(declaration);
     return kind;
+  }
+  rustStrLendOnly(declaration) {
+    this.rustStrNoLend = true;
+    try {
+      return this.rustScalarLocalKindUncached(declaration) === void 0;
+    } finally {
+      this.rustStrNoLend = false;
+    }
+  }
+  /** Every box of the string sits where the `Value` form cloned it (a `this.` / `super.` argument) or is its
+   *  moving last use, and no use reads it by reference: lending there costs the one copy the clone made. */
+  rustStrLendSites(declaration) {
+    let ok = true;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const up = n.parent;
+      const selfArg = isCallExpression6(up) && up.expression !== n && isPropertyAccessExpression3(up.expression) && (up.expression.expression.kind === SyntaxKind7.ThisKeyword || up.expression.expression.kind === SyntaxKind7.SuperKeyword);
+      if (isCallExpression6(up) && up.expression !== n && !selfArg || up?.kind === SyntaxKind7.NewExpression)
+        ok = false;
+      else if (!selfArg && !isReturnStatement4(up) && !this.rustLocalLastUse(n, declaration))
+        ok = false;
+      return true;
+    });
+    return ok;
   }
   /** A local some `return` of a method with a declared string return hands back as-is. */
   rustStrReturnedLocal(declaration, scope) {
@@ -56292,11 +56321,13 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (form !== "box" && form !== "xbox")
       return void 0;
     const name = super.printIdentifier(node);
-    const moved = isReturnStatement4(node.parent) || this.rustWsClientLastUse(node, local.declaration) || this.rustLocalLastUse(node, local.declaration) ? name : `${name}.clone()`;
+    const last = isReturnStatement4(node.parent) || this.rustWsClientLastUse(node, local.declaration) || this.rustLocalLastUse(node, local.declaration);
+    const moved = last ? name : `${name}.clone()`;
+    const lent = !last && this.rustStrLentLocals.has(local.declaration);
     if (local.kind === "ostr")
-      return `${moved}.map(Value::from).unwrap_or(Value::Null)`;
+      return lent ? `Value::from(${name}.as_deref())` : `${moved}.map(Value::from).unwrap_or(Value::Null)`;
     if (local.kind === "str")
-      return `Value::from(${moved})`;
+      return lent ? `Value::from(${name}.as_str())` : `Value::from(${moved})`;
     if (local.kind === "obool")
       return `${name}.map_or(Value::Null, Value::Bool)`;
     return local.kind === "bool" ? `Value::Bool(${name})` : `Value::from(${name})`;
@@ -64648,6 +64679,8 @@ ${iden}}`;
     if (fn === void 0 || isSourceFile5(fn) || this.rustLocalIsReassigned(declaration, name))
       return false;
     let uses = 0;
+    let boxes = 0;
+    let longBox = false;
     const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
@@ -64657,14 +64690,32 @@ ${iden}}`;
       const mutable = isCallExpression6(call) ? void 0 : this.rustMutableSlotUse(n, declaration);
       if (mutable === "native")
         uses++;
-      if (!isCallExpression6(call))
+      if (!isCallExpression6(call)) {
+        if (mutable === "box" || mutable === void 0 && this.rustHandedSlotBoxUse(n, declaration))
+          boxes++;
         return mutable !== void 0 || this.rustHandedSlotBoxUse(n, declaration);
+      }
       const ok = call.arguments[0] === n && this.rustBorrowedDictReader(call) !== void 0 || call.arguments[0] === n && call.arguments.length === 2 && this.rustBaseCallNamed(call, _RustTranspiler.RUST_HANDED_DICT_OMIT) || this.rustHandedDictExtendOperand(call) === n || this.rustLentParamsSlot(call, n) || this.rustExtendHeadUse(n);
       if (ok)
         uses++;
-      return ok || this.rustOptionalParamsSlot(call, n) || this.rustHandedSlotBoxUse(n, declaration);
+      const boxed = this.rustOptionalParamsSlot(call, n) || this.rustHandedSlotBoxUse(n, declaration);
+      if (boxed)
+        boxes++;
+      if (boxed && uses === 0 && this.rustInDestructureWrite(n))
+        longBox = true;
+      return ok || boxed;
     });
-    return safe && uses > 0;
+    return safe && (uses > 0 || declaration.kind === SyntaxKind7.BindingElement && boxes > 0 && !longBox);
+  }
+  /** `[a, b] = this.m (.., n)`: printed as one `__destr_tmp` block line, kept within the line budget by the bare box. */
+  rustInDestructureWrite(n) {
+    let up = n.parent;
+    while (up !== void 0 && !isStatement(up)) {
+      if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && isArrayLiteralExpression4(up.left))
+        return true;
+      up = up.parent;
+    }
+    return false;
   }
   /** The sole extra operand of a base `this.extend (a, x)` / `this.deepExtend (a, x)` when it is a bare identifier. */
   rustHandedDictExtendOperand(call) {
