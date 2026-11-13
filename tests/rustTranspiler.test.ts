@@ -8990,7 +8990,30 @@ describe('typed safeMarket and market slots', () => {
         expect(out).toContain('let mut resolved: crate::types::Market = self.safeMarket(');
         expect(out).toContain('crate::value::KeyRead::key_read(&&resolved, "symbol")');
         expect(out).toContain('Some(&resolved))');
-        expect(out).toContain('<Option<crate::types::Market> as crate::types::FromRaw>::from_raw(market.clone()).as_ref())');
+        expect(out).toContain('return self.safeTrade(trade, market);');
         expect(out).not.toContain('resolved.as_map()');
+    });
+});
+
+describe('typed market slots of the singular parsers', () => {
+    test('parseX (x, market) lends the market, callers convert once and the slot forwards it', () => {
+        const dir = path.join (rustFixtureRoot, 'typed-parse-market');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    markets_by_id: Dict = undefined;\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n    market (symbol: string): MarketInterface { return undefined; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseTicker (ticker: Dict, market: Market = undefined): Dict {\n        return ticker;\n    }\n    parseTickers (tickers: any[], market: Market = undefined): Dict[] {\n        return [ this.parseTicker (tickers[0], market) ];\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Market } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseTicker (ticker: Dict, market: Market = undefined): Dict {\n        const symbol = this.safeString (market, 'symbol');\n        const id = (market !== undefined) ? market['id'] : undefined;\n        return { 'symbol': symbol, 'id': id, 'market': this.hold (market) };\n    }\n    hold (m: any): any {\n        return m;\n    }\n    async fetchTicker (symbol: string): Promise<Dict> {\n        const market = this.market (symbol);\n        const id = this.safeString (market, 'id');\n        return this.parseTicker ({ 'id': id }, market);\n    }\n}\n");
+        const base = transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts')).content;
+        expect(base).toContain('ticker: Value, market: Option<&crate::types::Market>) -> Value');
+        expect(base).toContain('self.parseTicker(tickers.get(0).cloned().unwrap_or(Value::Null), market)');
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('market: Option<&crate::types::Market>) -> Value');
+        expect(out).toContain('self.safe_string_k(&market, \"symbol\"');
+        expect(out).toContain('market.is_some()');
+        expect(out).toContain('crate::value::KeyRead::key_read(&market, \"id\")');
+        expect(out).toContain('self.hold(crate::Value::from(market))');
+        // a `Value` market local converts once at the call
+        expect(out).toContain('<Option<crate::types::Market> as crate::types::FromRaw>::from_raw(market.clone()).as_ref())');
+        expect(out).not.toContain('get_arg(optional_args, 0');
+        expect(rustDispatch.slotParams([ 'ticker', 'market' ])).toBe('ticker: crate::Value, market: Option<&crate::types::Market>');
+        expect(rustDispatch.fromValue('optmarket', 'market')).toBe('market');
     });
 });

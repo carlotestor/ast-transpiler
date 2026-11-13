@@ -89,6 +89,11 @@ export declare const rustDispatch: {
     wsArg(kind: string, i: number): string | undefined;
     /** The typed parameter `kind` read from the boxed `Value` expression `v` (a `DerivedExchange` slot argument). */
     fromValue(kind: string, v: string): string;
+    /** Parameter list of a `DerivedExchange` slot: its `market` argument (never the first) is a lent market. */
+    slotParams: (args: string[]) => string;
+    isSlotMarket: (arg: string, i: number) => boolean;
+    /** A `DerivedExchange` slot argument handed on in a `&[Value]` tail. */
+    slotValue: (arg: string, i: number) => string;
     /** A sync method with a native return still gets a by-name arm (it boxes back inside the arm). */
     isNativeReturn: (ret: string) => boolean;
     /** Every `args[i]` of a by-name dispatch arm, one conversion per parameter kind. */
@@ -999,6 +1004,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_TEST_VARIADIC_ARITY;
     printRuntimeVariadicCall(node: any, receiver: string, methodName: string, identation: number, testCrate?: boolean, handleProven?: boolean): string | undefined;
     printOptionalArgsSliceCall(node: any, receiver: string, methodName: string, fixed: number, identation: number): string | undefined;
+    /** A ws `super.parseX (x, market)` to a fixed-arity parser with a lent market slot: by-value locals are cloned
+     *  as on the slice path (the parent call takes them by value). */
+    printSuperMarketSlotCall(node: any, methodName: string, identation: number): string | undefined;
     rustSliceArgText(a: string): string;
     rustCalleeIsRuntimeBase(node: any): boolean;
     rustCallsTestExchange(node: any): boolean;
@@ -2270,12 +2278,20 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The `market` parameter of a base market-slot reader, read only by key readers, null tests or `Value` hand-offs. */
     rustMarketSlotParam(param: any): boolean;
     rustMarketSlotParamUncached(param: any): boolean;
+    /** `n` is the container of a base key reader, which borrows the record (`KeyRead` for `&Market`). */
+    rustMarketReaderArg(n: any): boolean;
+    /** `n` is an argument in a lent market slot of its call. */
+    rustMarketSlotUse(n: any): boolean;
     /** The callee parameter at `at` is a lent market slot. */
     rustMarketSlot(params: any[] | undefined, at: number): boolean;
     /** A use (never the declaration) of a lent market parameter. */
     rustMarketSlotParamOf(node: any): any;
-    /** A lent market parameter handed to a `Value` slot: its record, boxed once. */
+    /** A lent market parameter handed to a `Value` place: its record, boxed once. */
     printMarketSlotParamValue(node: any): string | undefined;
+    /** The `market: Market = undefined` second parameter of a singular `parseX (x, market)` parser (base, venue,
+     *  ws or prediction): it prints as a lent `Option<&crate::types::Market>`; every use is a key read, a null
+     *  test, a market slot or a `Value` hand-off (boxed once), and the parameter is never written. */
+    rustParseMarketParam(method: any, param: any): boolean;
     /** `this.safeMarket (..)` / `super.safeMarket (..)` resolving to a method that returns the typed market. */
     rustIsSafeMarketCall(init: any): boolean;
     /** `const m = this.safeMarket (..)` whose every use reads a key, lends the record, or rewrites it from `safeMarket`. */
