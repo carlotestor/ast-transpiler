@@ -64645,15 +64645,14 @@ ${iden}}`;
       return void 0;
     return `Value::Bool(${this.rustWsCacheMapPlace(map)}.has(&${this.rustWsCacheMapKey(key)}))`;
   }
-  /** `delete this.F[k]`. Printed with the field as the method receiver: a `&mut self.F` argument is
-   *  what the ccxt `self.F` auto-clone rule rewrites to `&mut self.F.clone()` in non-`pub` base fns,
-   *  so the delete would hit a copy. */
+  /** `delete this.F[k]`. */
   printWsCacheMapDelete(node) {
     const target = this.unwrapParens(node.expression);
+    const base = _RustTranspiler.RUST_BASE_TIER_FILE.test(String(node.getSourceFile().fileName));
     if (this.rustWsCacheShelfEntry(target)) {
       const key2 = this.rustWsCacheMapKey(target.argumentExpression);
       const field2 = String(this.unwrapParens(target.expression).name.text);
-      return /\bself\b/.test(key2) ? `{ let __ck = ${key2}; self.${field2}.forget(&__ck); }` : `self.${field2}.forget(&${key2})`;
+      return this.rustWsCacheForget(base, "CacheShelves", field2, [key2]);
     }
     if (!this.rustWsCacheMapEntry(target))
       return void 0;
@@ -64662,14 +64661,25 @@ ${iden}}`;
     if (this.rustWsCacheShelfEntry(inner)) {
       const outer = this.rustWsCacheMapKey(inner.argumentExpression);
       const shelf = String(this.unwrapParens(inner.expression).name.text);
-      if (/\bself\b/.test(outer + key))
-        return `{ let __ck = ${outer}; let __cj = ${key}; self.${shelf}.forget2(&__ck, &__cj); }`;
-      return `self.${shelf}.forget2(&${outer}, &${key})`;
+      return this.rustWsCacheForget(base, "CacheShelves", shelf, [outer, key]);
     }
     if (!this.rustWsCacheMapField(inner))
       throw new Error("ws cache map: delete on an unproven map");
     const field = String(this.unwrapParens(target.expression).name.text);
-    return /\bself\b/.test(key) ? `{ let __ck = ${key}; self.${field}.forget(&__ck); }` : `self.${field}.forget(&${key})`;
+    return this.rustWsCacheForget(base, "CacheStore", field, [key]);
+  }
+  /** One forget/forget2 call. In the base tier the field is the method receiver (`self.F.forget(&k)`): a `&mut self.F`
+   *  argument there gets `.clone()` from the ccxt self-field rule (the base fns are not `pub`, so its strip pass skips
+   *  them) and the delete hit a copy. Pro handlers keep the `&mut self.F` argument, which is what promotes them to
+   *  `&mut self` in ccxt. Keys mentioning `self` are bound first so the field borrow does not overlap them. */
+  rustWsCacheForget(base, trait, field, keys) {
+    const op = keys.length === 2 ? "forget2" : "forget";
+    const bound = /\bself\b/.test(keys.join(" "));
+    const names = bound ? keys.map((_, i) => i === 0 ? "__ck" : "__cj") : keys;
+    const call = base ? `self.${field}.${op}(${names.map((k) => "&" + k).join(", ")})` : `${trait}::${op}(&mut self.${field}, ${names.map((k) => "&" + k).join(", ")})`;
+    if (!bound)
+      return call;
+    return `{ ${keys.map((k, i) => `let ${names[i]} = ${k};`).join(" ")} ${call}; }`;
   }
   /** The value of `this.F[k] = x` for a cache local `x` (or a constructor). */
   rustWsCacheMapWriteValue(n) {

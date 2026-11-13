@@ -1860,10 +1860,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     printWsCacheMapNullTest(left: any, right: any, op: any): string | undefined;
     /** `k in this.F`. */
     printWsCacheMapHas(key: any, obj: any): string | undefined;
-    /** `delete this.F[k]`. Printed with the field as the method receiver: a `&mut self.F` argument is
-     *  what the ccxt `self.F` auto-clone rule rewrites to `&mut self.F.clone()` in non-`pub` base fns,
-     *  so the delete would hit a copy. */
+    /** `delete this.F[k]`. */
     printWsCacheMapDelete(node: any): string | undefined;
+    /** One forget/forget2 call. In the base tier the field is the method receiver (`self.F.forget(&k)`): a `&mut self.F`
+     *  argument there gets `.clone()` from the ccxt self-field rule (the base fns are not `pub`, so its strip pass skips
+     *  them) and the delete hit a copy. Pro handlers keep the `&mut self.F` argument, which is what promotes them to
+     *  `&mut self` in ccxt. Keys mentioning `self` are bound first so the field borrow does not overlap them. */
+    rustWsCacheForget(base: boolean, trait: string, field: string, keys: string[]): string;
     /** The value of `this.F[k] = x` for a cache local `x` (or a constructor). */
     rustWsCacheMapWriteValue(n: any): boolean;
     /** `this.F[k] = cache` and `this.F = {}` / `this.F = this.createSafeDictionary (..)`. */
