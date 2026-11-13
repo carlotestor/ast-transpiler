@@ -57354,6 +57354,10 @@ ${binding(plan.indent)}` : ""), head: "" };
       shape = "replace";
     else if (method === "indexOf" && args.length === 1 && this.rustStrFindNeedle(args[0], true) !== void 0)
       shape = "find";
+    else if ((method === "padStart" || method === "padEnd") && this.rustStrPadArgs(args) !== void 0)
+      shape = "pad";
+    else if (method === "slice" && this.rustStrSliceBounds(args) !== void 0)
+      shape = "slice";
     if (shape === void 0)
       return void 0;
     if (syntactic)
@@ -57367,9 +57371,45 @@ ${binding(plan.indent)}` : ""), head: "" };
       return { recv, recvKind, method, kind: "bool" };
     if (shape === "find")
       return this.rustStrFindNeedle(args[0], false) === void 0 ? void 0 : { recv, recvKind, method, kind: "int" };
-    if (recvKind === "ostr" && shape !== "case" && shape !== "replace")
+    if ((shape === "pad" || shape === "slice") && this.rustScalarIdentifierKind(recv) === void 0)
+      return void 0;
+    if (recvKind === "ostr" && shape !== "case" && shape !== "replace" && shape !== "pad" && shape !== "slice")
       return void 0;
     return { recv, recvKind, method, kind: recvKind };
+  }
+  /** `padStart(N, "c")` / `padEnd(N, "c")`: a literal width (0..4096) and a one-char alphanumeric / space pad, the
+   *  helper's one-char arm, which `format!` width (counted in chars, never truncating) reproduces. */
+  rustStrPadArgs(args) {
+    if (args.length !== 2)
+      return void 0;
+    const width = this.rustSliceLiteralBound(args[0]);
+    const pad = args[1];
+    if (width === void 0 || width < 0 || width > 4096)
+      return void 0;
+    if (!isStringLiteral3(pad) && !isNoSubstitutionTemplateLiteral(pad) || !/^[A-Za-z0-9 ]$/.test(pad.text))
+      return void 0;
+    return { width, pad: pad.text };
+  }
+  /** Literal `slice(a)` / `slice(a, b)` bounds the closure-free char form handles: `b >= 0` and `a >= 0` when `b` is given. */
+  rustStrSliceBounds(args) {
+    if (args.length === 0 || args.length > 2)
+      return void 0;
+    const start = this.rustSliceLiteralBound(args[0]);
+    const end = args.length === 2 ? this.rustSliceLiteralBound(args[1]) : void 0;
+    if (start === void 0 || args.length === 2 && (end === void 0 || end < 0 || start < 0))
+      return void 0;
+    return { start, end };
+  }
+  /** Native `String` text of a pad / slice over the `&str` `s`. */
+  rustStrPadSliceText(method, args, s) {
+    if (method === "slice") {
+      const { start, end } = this.rustStrSliceBounds(args);
+      const skip = start >= 0 ? `${start}` : `${s}.chars().count().saturating_sub(${-start})`;
+      const take = end === void 0 ? "" : `.take(${Math.max(end - start, 0)})`;
+      return `${s}.chars().skip(${skip})${take}.collect::<String>()`;
+    }
+    const { width, pad } = this.rustStrPadArgs(args);
+    return `format!("{:${pad}${method === "padStart" ? ">" : "<"}${width}}", ${s})`;
   }
   /** `indexOf` needle as an `Option<&str>`: a non-empty literal, a typed string local, or a string-typed `Value` expression. */
   rustStrFindNeedle(node, syntactic) {
@@ -57995,6 +58035,11 @@ ${binding(plan.indent)}` : ""), head: "" };
       }
       if (method.method === "indexOf")
         return wrap(this.rustStrFindText(method.recvKind, name, args[0]));
+      if (method.method === "padStart" || method.method === "padEnd" || method.method === "slice") {
+        if (method.recvKind === "ostr")
+          return wrap(`(if let Some(__s) = ${name}.as_deref() { Some(${this.rustStrPadSliceText(method.method, args, "__s")}) } else { None })`);
+        return wrap(this.rustStrPadSliceText(method.method, args, name));
+      }
       if (method.method === "replace" || method.method === "replaceAll") {
         if (method.recvKind === "ostr")
           return wrap(`(if let Some(__s) = ${name}.as_deref() { Some(__s.replace("${arg(0)}", "${arg(1)}")) } else { None })`);
@@ -63126,7 +63171,7 @@ ${this.getIden(identation)}}`;
     return this.printTrim(node, name) ?? `trim(&${name})`;
   }
   printJoinCall(node, identation, name = void 0, parsedArg = void 0) {
-    return this.printOptListJoin(node) ?? this.printStrVecParamJoin(node) ?? this.printVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? `join(&${name}, &${parsedArg})`;
+    return this.printOptListJoin(node) ?? this.printLentListJoin(node) ?? this.printStrVecParamJoin(node) ?? this.printVecJoin(node) ?? this.printNativeStringJoin(node, name) ?? `join(&${name}, &${parsedArg})`;
   }
   printSplitCall(node, identation, name = void 0, parsedArg = void 0) {
     return this.rustStrLocalSplitText(node) ?? this.printNativeStringSplit(node, name) ?? this.printRustSplit(node, name) ?? `split(&${name}, &${parsedArg})`;
@@ -66267,6 +66312,10 @@ ${iden}}`;
         boxes.push([n, "clone"]);
         return true;
       }
+      if (at === n && this.rustOptListExtraUse(n, declaration) === "join") {
+        natives++;
+        return true;
+      }
       return false;
     });
     if (!safe || natives === 0 || defaulted && indexed === 0 && boxes.some(([, form]) => form === "clone"))
@@ -66303,6 +66352,17 @@ ${iden}}`;
       return false;
     const declaration = this.rustDeclarationOfIdentifier(node);
     return declaration !== void 0 && declaration !== node && declaration.name !== node && this.rustLentListLocal(declaration);
+  }
+  /** `x.join("lit")` on a lent `string[]` list: each element's `Display` text (the helper's `stringify_simple` for
+   *  `Str` / `Int` / `Float` / `Bool` / `Null`) joined by the literal, with no copy of the list. */
+  printLentListJoin(node) {
+    const access = node?.expression;
+    if (!isPropertyAccessExpression3(access) || !isIdentifier3(access.expression) || !this.rustLentListUse(access.expression))
+      return void 0;
+    const literal2 = this.rustNativeStringLiteralArg(node.arguments?.[0]);
+    if (literal2 === void 0 || node.arguments.length !== 1)
+      return void 0;
+    return `Value::Str(${this.printNode(access.expression, 0).trim()}.iter().map(Value::to_string).collect::<Vec<String>>().join("${literal2}").into())`;
   }
   /** `Value::Arr(x.clone())` (the shared handle) or `Value::Arr(x)` at a hand-off of a lent list. */
   printRustLentListBox(node, text) {

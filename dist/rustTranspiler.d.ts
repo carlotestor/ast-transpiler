@@ -816,6 +816,19 @@ export declare class RustTranspiler extends BaseTranspiler {
         method: string;
         kind: string;
     } | undefined;
+    /** `padStart(N, "c")` / `padEnd(N, "c")`: a literal width (0..4096) and a one-char alphanumeric / space pad, the
+     *  helper's one-char arm, which `format!` width (counted in chars, never truncating) reproduces. */
+    rustStrPadArgs(args: any[]): {
+        width: number;
+        pad: string;
+    } | undefined;
+    /** Literal `slice(a)` / `slice(a, b)` bounds the closure-free char form handles: `b >= 0` and `a >= 0` when `b` is given. */
+    rustStrSliceBounds(args: any[]): {
+        start: number;
+        end: number | undefined;
+    } | undefined;
+    /** Native `String` text of a pad / slice over the `&str` `s`. */
+    rustStrPadSliceText(method: string, args: any[], s: string): string;
     /** `indexOf` needle as an `Option<&str>`: a non-empty literal, a typed string local, or a string-typed `Value` expression. */
     rustStrFindNeedle(node: any, syntactic: boolean): string | undefined;
     /** `s.indexOf(n)` on a typed string local: `str::find` (byte index), `-1` when absent or either side is null, as the helper. */
@@ -1588,7 +1601,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -2060,6 +2073,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustTypedListField(node: any): boolean;
     printTypedListFieldRead(node: any): string | undefined;
     rustLentListUse(node: any): boolean;
+    /** `x.join("lit")` on a lent `string[]` list: each element's `Display` text (the helper's `stringify_simple` for
+     *  `Str` / `Int` / `Float` / `Bool` / `Null`) joined by the literal, with no copy of the list. */
+    printLentListJoin(node: any): string | undefined;
     /** `Value::Arr(x.clone())` (the shared handle) or `Value::Arr(x)` at a hand-off of a lent list. */
     printRustLentListBox(node: any, text: string): string | undefined;
     rustWatchHashListSlot(call: any, n: any): 'clone' | 'lend' | undefined;
