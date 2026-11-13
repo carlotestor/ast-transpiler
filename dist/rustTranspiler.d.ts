@@ -1943,6 +1943,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltKeyWriteLineOk(n: any): boolean;
     rustNullTestedDictLocal(init: any, nullTests: number, writes: number): boolean;
     rustDictElementSource(init: any): boolean;
+    /** lf: a local spelled `Dictionary<Dict>` (`const d: Dictionary<Dict> = …`): its string-keyed values are maps. */
+    rustDictOfDictsLocal(node: any): boolean;
     rustListElementSource(init: any): boolean;
     private rustDictElementBoxes;
     /** A whole-value hand-off of a map element local: a plain `Value` argument of a `this.` method or an object literal value. */
@@ -2028,6 +2030,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  proven map, or the `params` of a typed unified method. The runtime then merges map into map on every path. */
     rustDeepExtendOfMaps(call: any): boolean;
     /** Every other `let`/`const` of `name` in the enclosing function is initialised by a call of the same `this.` method. */
+    /** lf: every same-named binding in the function is itself a `const`/`let` element read of a typed `Dict[]` (or
+     *  list-of-lists) local: each block-scoped binding converts to the same Rust type (`Dict` / `List`), so ccxt
+     *  passes that key on the name read the same declared type for every sibling. */
+    rustElementSiblingsAlike(declaration: any, name: string, init: any): boolean;
     rustSiblingBindingsAlike(declaration: any, name: string, init: any): boolean;
     /** The `params` of a typed unified method, never reassigned: it arrives through `impl Into<crate::Params>` and is
      *  rebound by `get_arg(.., Value::Map({}))`, so it is always a map (`From<Value> for Params` drops a non-map, and

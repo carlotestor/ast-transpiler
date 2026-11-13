@@ -59816,12 +59816,24 @@ ${i1}}`;
       top = top.parent;
     if (!isVariableDeclaration3(top.parent) || top.parent.initializer !== top)
       return void 0;
+    const currency = this.rustCurrencyLocalOf(node.expression);
+    if (currency !== void 0) {
+      if (this.rustCurrencyLocalKind(currency) !== "cstruct" || this.rustCurrencyKeyReadKey(node.expression) !== "code")
+        return void 0;
+      return { kind: "ostr", text: `crate::value::KeyRead::key_read(&&${this.printNode(currency.name, 0)}, "code").as_str().map(str::to_owned)` };
+    }
     const declaration = this.rustTypedMarketLocalOf(node.expression);
-    if (declaration === void 0 || this.rustMarketLocalKind(declaration) !== "struct")
+    const localKind = declaration === void 0 ? false : this.rustMarketLocalKind(declaration);
+    if (localKind !== "struct" && localKind !== "smkt")
       return void 0;
     const key = this.rustMarketReadKey(node.expression);
     if (key === void 0)
       return void 0;
+    if (localKind === "smkt") {
+      if (_RustTranspiler.RUST_MARKET_STR_FIELDS[key] === void 0 && key !== "settle")
+        return void 0;
+      return { kind: "ostr", text: `crate::value::KeyRead::key_read(&&${this.printNode(declaration.name, 0)}, ${JSON.stringify(key)}).as_str().map(str::to_owned)` };
+    }
     const recv = `(${this.printNode(declaration.name, 0)})`;
     const field = _RustTranspiler.RUST_MARKET_STR_FIELDS[key];
     if (field !== void 0)
@@ -64903,7 +64915,7 @@ ${iden}}`;
       return true;
     };
     const recordLookup = init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init);
-    const blockScoped = !nilDeclared && (endpoint || init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0 || !recordLookup && this.rustSiblingBindingsAlike(declaration, name, init));
+    const blockScoped = !nilDeclared && (endpoint || init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0 || !recordLookup && this.rustSiblingBindingsAlike(declaration, name, init) || !recordLookup && this.rustElementSiblingsAlike(declaration, name, init));
     const safe = blockScoped ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
     const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || defaultedBoxes === boxedElementUses.length && optionalBoxes === 0 && paramsBoxes === 0 && this.rustDefaultedContainerBoxUse(boxedElementUses[0], init) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init));
     const boxOnly = reads === 0 && boxedElementUses.length > 0 && (this.rustDictElementSource(init) || this.rustListElementSource(init)) && nullTests === 0 && writes === 0;
@@ -65303,15 +65315,33 @@ ${iden}}`;
     if (init === void 0 || !isElementAccessExpression4(init) || !isIdentifier3(init.expression) || this.checkerOrUndefined() === void 0)
       return false;
     const key = this.rustSkipWrappers(init.argumentExpression);
-    if (key === void 0 || !isNumericLiteral4(key) && this.primitiveKindOfType(this.typeOfNodeIfAny(key)) !== "number")
+    if (key === void 0)
       return false;
     const listType = this.typeOfNodeIfAny(init.expression);
-    if (listType === void 0 || !this.getChecker().isArrayType(listType))
+    if (listType === void 0)
+      return false;
+    if (!isNumericLiteral4(key) && this.primitiveKindOfType(this.typeOfNodeIfAny(key)) !== "number") {
+      if (!isIdentifier3(key) || this.primitiveKindOfType(this.typeOfNodeIfAny(key)) !== "string" || !this.rustDictOfDictsLocal(init.expression))
+        return false;
+    } else if (!this.getChecker().isArrayType(listType))
       return false;
     const element = this.typeOfNodeIfAny(init);
     if (element === void 0 || (element.flags & (TypeFlags6.Any | TypeFlags6.Unknown | TypeFlags6.Union)) !== 0)
       return false;
     return this.primitiveKindOfType(element) === void 0 && this.getChecker().getIndexTypeOfType(element, IndexKind4.String) !== void 0 && !this.getChecker().isArrayType(element);
+  }
+  /** lf: a local spelled `Dictionary<Dict>` (`const d: Dictionary<Dict> = …`): its string-keyed values are maps. */
+  rustDictOfDictsLocal(node) {
+    const owner = this.rustDeclaredNode(node);
+    if (owner === void 0 || !isVariableDeclaration3(owner) || owner.type === void 0)
+      return false;
+    const t = this.typeOfNodeIfAny(node);
+    if (t === void 0 || this.getChecker().isArrayType(t))
+      return false;
+    const value = this.getChecker().getIndexTypeOfType(t, IndexKind4.String);
+    if (value === void 0 || (value.flags & (TypeFlags6.Any | TypeFlags6.Unknown | TypeFlags6.Union)) !== 0)
+      return false;
+    return this.primitiveKindOfType(value) === void 0 && this.getChecker().getIndexTypeOfType(value, IndexKind4.String) !== void 0 && !this.getChecker().isArrayType(value);
   }
   // ── rustListElementSource: `rows[i]` over a list declared as a list of lists (`string[][]`, `any[][]`) ──
   // The row leaves its copied box as the shared list (the same Arc bump). A missing row reads as an empty list,
@@ -66006,6 +66036,25 @@ ${iden}}`;
     });
   }
   /** Every other `let`/`const` of `name` in the enclosing function is initialised by a call of the same `this.` method. */
+  /** lf: every same-named binding in the function is itself a `const`/`let` element read of a typed `Dict[]` (or
+   *  list-of-lists) local: each block-scoped binding converts to the same Rust type (`Dict` / `List`), so ccxt
+   *  passes that key on the name read the same declared type for every sibling. */
+  rustElementSiblingsAlike(declaration, name, init) {
+    const scope = this.rustEnclosingFunction(declaration);
+    if (scope === void 0 || init === void 0)
+      return false;
+    const dict = this.rustDictElementSource(init);
+    if (!dict && !this.rustListElementSource(init))
+      return false;
+    return this.rustScopeNameNodes(scope, name).every((n) => {
+      if (n === declaration || !this.rustBindsName(n, name))
+        return true;
+      if (!isVariableDeclaration3(n))
+        return false;
+      const other = this.unwrapParens(n.initializer);
+      return dict ? this.rustDictElementSource(other) : this.rustListElementSource(other);
+    });
+  }
   rustSiblingBindingsAlike(declaration, name, init) {
     const scope = this.rustEnclosingFunction(declaration);
     if (scope === void 0 || init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression))
