@@ -51399,11 +51399,16 @@ var rustDispatch = {
       case "orderreqs":
         return `crate::types::FromRaw::from_raw(${v})`;
       case "optcurrency":
-        return `<Option<crate::types::Currency> as crate::types::FromRaw>::from_raw(${v}).as_ref()`;
+        return v;
       default:
         return v;
     }
   },
+  /** Parameter list of a `DerivedExchange` slot: its currency arguments (never the first) are lent currencies. */
+  slotParams: (args) => args.map((a, i) => `${a}: ${rustDispatch.isSlotCurrency(a, i) ? "Option<&crate::types::Currency>" : "crate::Value"}`).join(", "),
+  isSlotCurrency: (arg, i) => i > 0 && /^(?:currency|from_currency|to_currency)$/.test(arg),
+  /** A `DerivedExchange` slot argument handed on in a `&[Value]` tail. */
+  slotValue: (arg, i) => rustDispatch.isSlotCurrency(arg, i) ? `crate::Value::from(${arg})` : `${arg}.clone()`,
   /** A sync method with a native return still gets a by-name arm (it boxes back inside the arm). */
   isNativeReturn: (ret) => RUST_DISPATCH_NATIVE_RETURNS.has(ret),
   /** Every `args[i]` of a by-name dispatch arm, one conversion per parameter kind. */
@@ -58039,6 +58044,8 @@ ${classMethods}
         return `${p.name}.clone()`;
       if (p !== void 0 && p.type === "&str")
         return `crate::Value::from(${p.name})`;
+      if (p !== void 0 && p.type === "Option<&crate::types::Currency>")
+        return p.name;
       if (sliceAt >= 0 && i >= sliceAt)
         return `crate::runtime::get_arg(${sig.params[sliceAt].name}, ${i - sliceAt}, crate::Value::Null)`;
       return "crate::Value::Null";
@@ -63630,6 +63637,10 @@ ${iden}}`;
     const optMarket = this.printOptMarketKeyRead(node);
     if (optMarket !== void 0)
       return optMarket;
+    if (this.rustCurrencySlotParamOf(recv) !== void 0) {
+      const k = isElementAccessExpression4(node) ? String(this.rustSkipWrappers(node.argumentExpression).text) : String(node.name.text);
+      return `crate::value::KeyRead::key_read(&${super.printIdentifier(recv)}, "${this.escapeRustStringLiteral(k)}")`;
+    }
     const declaration = this.rustDeclarationOfIdentifier(recv);
     if (declaration === void 0 || declaration === recv || declaration.name === recv || this.rustBorrowedLocalKind(declaration) !== "dict" && !this.rustMutableDictSlot(declaration))
       return void 0;
@@ -63864,7 +63875,7 @@ ${iden}}`;
     const declaration = this.rustDeclarationOfIdentifier(node);
     if (declaration === void 0 || declaration === node || declaration.name === node)
       return void 0;
-    if (this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustLentListLocal(declaration) || this.rustReaderTables.has(declaration))
+    if (this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustLentListLocal(declaration) || this.rustReaderTables.has(declaration) || this.rustCurrencySlotParamOf(node) !== void 0)
       return `&${text}`;
     return this.rustContainerBoxUses.get(node) !== void 0 && this.rustReadBearerKind(node) !== void 0 ? `&${text}` : void 0;
   }
@@ -63907,7 +63918,7 @@ ${iden}}`;
     if (recv === void 0 || !isIdentifier3(recv))
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(recv);
-    const owned = declaration !== void 0 && declaration !== recv && (this.rustBorrowedDictLocal(declaration) || this.rustHandedDictLocal(declaration) || this.rustOptMarketLocalOf(recv) !== void 0);
+    const owned = declaration !== void 0 && declaration !== recv && (this.rustBorrowedDictLocal(declaration) || this.rustHandedDictLocal(declaration) || this.rustOptMarketLocalOf(recv) !== void 0 || this.rustCurrencySlotParamOf(recv) !== void 0);
     if (!owned && !(this.rustContainerBoxUses.get(recv) !== void 0 && this.rustReadBearerKind(recv) !== void 0))
       return void 0;
     const key = this.rustSkipWrappers(node.arguments[1]);
@@ -68039,7 +68050,7 @@ ${this.getIden(identation)}}`;
     if (!isMethodDeclaration5(method) || method.body === void 0 || !isIdentifier3(method.name) || !isClassDeclaration4(method.parent))
       return false;
     if (!_RustTranspiler.RUST_CURRENCY_SLOT_METHODS.has(String(method.name.text)))
-      return false;
+      return this.rustParseCurrencyParam(method, param);
     if ((method.modifiers ?? []).some((m) => m.kind === SyntaxKind7.StaticKeyword))
       return false;
     const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
@@ -68058,6 +68069,34 @@ ${this.getIden(identation)}}`;
       return false;
     const type = param.type;
     if (type?.kind !== SyntaxKind7.TypeReference || !isIdentifier3(type.typeName) || String(type.typeName.text) !== "Currency")
+      return false;
+    const name = String(param.name.text);
+    if (this.rustMethodReferencedAsValue(method) || this.rustLocalIsReassigned(param, name))
+      return false;
+    return this.rustLocalUsesAll(param, name, true, (n) => this.rustEnclosingFunction(n) === method && !this.isNativeWriteTargetBase(n) && !isDeleteExpression2(n.parent?.parent));
+  }
+  /** A `Currency = undefined` parameter of a listed currency parser: every parameter before it required (or itself a lent
+   *  currency), never written. */
+  rustParseCurrencyParam(method, param) {
+    if (!_RustTranspiler.RUST_CURRENCY_PARSE_METHODS.has(String(method.name.text)))
+      return false;
+    if ((method.modifiers ?? []).some((m) => m.kind === SyntaxKind7.StaticKeyword))
+      return false;
+    const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
+    if (!/(?:^|\/)ts\/src\//.test(file) || /ts\/src\/(?:pro\/)?test\//.test(file))
+      return false;
+    if (!isIdentifier3(param.name) || param.dotDotDotToken !== void 0 || param.questionToken !== void 0)
+      return false;
+    if (param.initializer === void 0 || this.literalKindOfNode(this.unwrapParens(param.initializer)) !== "null")
+      return false;
+    const type = param.type;
+    if (type?.kind !== SyntaxKind7.TypeReference || !isIdentifier3(type.typeName) || String(type.typeName.text) !== "Currency")
+      return false;
+    const params = Array.from(method.parameters);
+    const at = params.indexOf(param);
+    if (at < 1)
+      return false;
+    if (params.slice(0, at).some((p) => p.dotDotDotToken !== void 0 || (p.initializer !== void 0 || p.questionToken !== void 0) && !this.rustCurrencySlotParam(p)))
       return false;
     const name = String(param.name.text);
     if (this.rustMethodReferencedAsValue(method) || this.rustLocalIsReassigned(param, name))
@@ -68084,7 +68123,9 @@ ${this.getIden(identation)}}`;
       const at = Array.from(call.arguments).indexOf(node);
       if (at >= 0 && this.rustCurrencySlot(this.rustCalleeParams(call), at))
         return void 0;
-    } else if (this.rustIsNullTestOf(node))
+    } else if (this.rustIsNullTestOf(node) || this.rustDictKeyReadUse(node))
+      return void 0;
+    if (isCallExpression6(call) && call.arguments[0] === node && (this.rustBorrowedDictReader(call) !== void 0 || this.rustBorrowedAnyKeyReader(call)))
       return void 0;
     return `crate::Value::from(${super.printIdentifier(node)})`;
   }
@@ -69154,6 +69195,23 @@ _RustTranspiler.PARAMS_SLOT_ARG = {
 // It prints as a lent `Option<&crate::types::Currency>`; a caller passes `None`, a slot parameter as is, or
 // decodes a `Value` currency once (until its producer is typed).
 _RustTranspiler.RUST_CURRENCY_SLOT_METHODS = /* @__PURE__ */ new Set(["safeCurrency", "safeCurrencyCode"]);
+// Currency parsers (the `DerivedExchange` currency slots and their list helpers): every `currency: Currency = undefined`
+// parameter prints as a lent `Option<&crate::types::Currency>` (base, venue, ws or prediction tier).
+_RustTranspiler.RUST_CURRENCY_PARSE_METHODS = /* @__PURE__ */ new Set([
+  "parseTransaction",
+  "parseTransfer",
+  "parseLedgerEntry",
+  "parseDepositAddress",
+  "parseDepositWithdrawFee",
+  "parseConversion",
+  "parseBorrowRate",
+  "parseMarginLoan",
+  "parseOption",
+  "parseTransactions",
+  "parseTransfers",
+  "parseLedger",
+  "safeLedgerEntry"
+]);
 var RustTranspiler = _RustTranspiler;
 
 // src/cppTranspiler.ts

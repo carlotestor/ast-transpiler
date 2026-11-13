@@ -9103,3 +9103,45 @@ describe('rust base safeCurrency / safeCurrencyCode take a lent Option<&Currency
         expect(caller).not.toContain('&[currency');
     });
 });
+
+describe('rust currency parsers take a lent Option<&Currency> slot', () => {
+    const fixture = (rel: string, text: string): string => {
+        const out = path.join(rustFixtureRoot, 'parse-currency-slot', rel);
+        fs.mkdirSync(path.dirname(out), { recursive: true });
+        fs.writeFileSync(out, text);
+        return out;
+    };
+    let venue = '';
+    beforeAll(() => {
+        const file = fixture('ts/src/venue.ts', 'type Currency = any;\n'
+            + 'type Dict = any;\n'
+            + 'export default class venue {\n'
+            + '    safeString (o: any, k: string): any { return o[k]; }\n'
+            + '    safeCurrencyCode (currencyId: any, currency: Currency = undefined): any { return currencyId; }\n'
+            + '    parseTransaction (transaction: Dict, currency: Currency = undefined): any {\n'
+            + "        const code = this.safeCurrencyCode (this.safeString (transaction, 'coin'), currency);\n"
+            + '        if (currency === undefined) {\n'
+            + "            return { 'code': code };\n"
+            + '        }\n'
+            + "        return { 'code': code, 'id': currency['id'] };\n"
+            + '    }\n'
+            + '    parseConversion (conversion: Dict, fromCurrency: Currency = undefined, toCurrency: Currency = undefined): any {\n'
+            + "        return { 'from': this.safeCurrencyCode (this.safeString (conversion, 'f'), fromCurrency), 'to': this.safeCurrencyCode (this.safeString (conversion, 't'), toCurrency) };\n"
+            + '    }\n'
+            + '    fetchIt (r: Dict): any {\n'
+            + '        return this.parseTransaction (r);\n'
+            + '    }\n'
+            + '}\n');
+        venue = transpiler.transpileRustByPath(file).content;
+    });
+    test('the parsers print the lent currency slots positionally', () => {
+        expect(venue).toContain('fn parseTransaction(&self, transaction: Value, currency: Option<&crate::types::Currency>)');
+        expect(venue).toContain('fromCurrency: Option<&crate::types::Currency>, toCurrency: Option<&crate::types::Currency>)');
+    });
+    test('slot args pass the parameter itself, null tests are native, key reads go through KeyRead', () => {
+        expect(venue).not.toContain('from_raw(currency');
+        expect(venue).toContain('currency.is_none()');
+        expect(venue).toContain('crate::value::KeyRead::key_read(&currency, "id")');
+        expect(venue).toMatch(/self\.parseTransaction\(r[^;]*, None\)/);
+    });
+});

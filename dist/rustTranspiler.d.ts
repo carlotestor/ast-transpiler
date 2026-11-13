@@ -89,6 +89,11 @@ export declare const rustDispatch: {
     wsArg(kind: string, i: number): string | undefined;
     /** The typed parameter `kind` read from the boxed `Value` expression `v` (a `DerivedExchange` slot argument). */
     fromValue(kind: string, v: string): string;
+    /** Parameter list of a `DerivedExchange` slot: its currency arguments (never the first) are lent currencies. */
+    slotParams: (args: string[]) => string;
+    isSlotCurrency: (arg: string, i: number) => boolean;
+    /** A `DerivedExchange` slot argument handed on in a `&[Value]` tail. */
+    slotValue: (arg: string, i: number) => string;
     /** A sync method with a native return still gets a by-name arm (it boxes back inside the arm). */
     isNativeReturn: (ret: string) => boolean;
     /** Every `args[i]` of a by-name dispatch arm, one conversion per parameter kind. */
@@ -2274,6 +2279,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustCurrencySlotParam(param: any): boolean;
     /** `currency: Currency = undefined`, the second parameter of a listed base method (or of an override of one), never written. */
     rustCurrencySlotParamUncached(param: any): boolean;
+    private static readonly RUST_CURRENCY_PARSE_METHODS;
+    /** A `Currency = undefined` parameter of a listed currency parser: every parameter before it required (or itself a lent
+     *  currency), never written. */
+    rustParseCurrencyParam(method: any, param: any): boolean;
     /** The callee parameter at `at` is a lent currency slot. */
     rustCurrencySlot(params: any[] | undefined, at: number): boolean;
     /** A use (never the declaration) of a lent currency parameter. */
