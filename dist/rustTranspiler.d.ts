@@ -483,6 +483,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `this`, or in a test source an identifier typed as the base `Exchange` class (it resolves to the base readers). */
     rustScalarReceiver(node: any): boolean;
     rustScalarLocalKindUncached(declaration: any): string | undefined;
+    /** The key reads a local declared with a non-null initializer (nil-declared locals and slots keep their own rules). */
+    rustInitKeyLocal(n: any): boolean;
+    /** Some use of the local is a native map-key read (`okey`) or `in` test (`kin`). */
+    rustScalarKeyedLocal(declaration: any): boolean;
     /** A local some `return` of a method with a declared string return hands back as-is. */
     rustStrReturnedLocal(declaration: any, scope: any): boolean;
     rustParamAliasSeedKind(declaration: any): string | undefined;
@@ -765,7 +769,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Native `bool` text of a comparison proven native, `!x`, a bool local, or `&&`/`||` over those. */
     rustBoolNativeText(expr: any): string | undefined;
     /** Native text of an ordered/equality comparison over typed operands (`dry`: shape check only). */
-    rustScalarCompareText(node: any, dry: boolean): string | undefined;
+    rustScalarCompareText(node: any, dry: boolean, literalKind?: string): string | undefined;
     rustScalarCompareKind(node: any): string | undefined;
     /** `s.indexOf("lit") >= 0` / `> -1` / `!== -1` (contains) and `< 0` / `=== -1` (absent) on a typed string. */
     rustScalarContainsTest(node: any, dry: boolean): string | undefined;

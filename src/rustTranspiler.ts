@@ -3881,10 +3881,30 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustStrRuntimeLocalCostly(declaration)) return undefined;
         // a local typed for its string-method reads must not copy where the `Value` moved
         if (copied > 0 && (kind === 'str' || kind === 'ostr') && this.rustStrMethodRecvLocal(declaration)) return undefined;
+        // a non-element local admitted by a map-key read or `in` test must not copy where the `Value` moved
+        if (copied > 0 && kind === 'ostr' && !this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) && this.rustScalarKeyedLocal(declaration)) return undefined;
         // a key-admitted local converts once at its declaration: that line keeps the 400-char budget
         if (this.rustScalarOptKeyCostly(declaration, kind) === false && kind === 'ostr' && this.rustScalarOptKeyCount(declaration) > 0) this.rustScalarGuarded.add(declaration);
         if (guarded || handOff || this.rustStrMethodRecvLocal(declaration)) this.rustScalarGuarded.add(declaration);
         return kind;
+    }
+
+    /** The key reads a local declared with a non-null initializer (nil-declared locals and slots keep their own rules). */
+    rustInitKeyLocal(n: any): boolean {
+        const declaration: any = this.rustDeclaredNode(n);
+        return declaration !== undefined && isVariableDeclaration(declaration) && declaration.initializer !== undefined
+            && this.literalKindOfNode(declaration.initializer) !== 'null';
+    }
+
+    /** Some use of the local is a native map-key read (`okey`) or `in` test (`kin`). */
+    rustScalarKeyedLocal(declaration): boolean {
+        let keyed = false;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+            const form = this.rustScalarUseForms.get(n);
+            if (form === 'okey' || form === 'kin') keyed = true;
+            return true;
+        });
+        return keyed;
     }
 
     /** A local some `return` of a method with a declared string return hands back as-is. */
@@ -4686,8 +4706,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustScalarInNestedWrite(n)) return undefined;
         if (kind === 'str' && this.rustScalarInsertKeyUse(n)) return 'key';
         if (kind === 'ostr' && this.rustScalarOptKeyUse(n)) return 'key';
-        if (kind === 'ostr' && this.rustOkeyLocal(n) && this.rustOkeyReadUse(n)) return 'okey';
-        if (kind === 'ostr' && this.rustOkeyLocal(n) && this.rustElemKeyInUse(n)) return 'kin';
+        // an optional-string local keys a proven map read or an `in` test natively (a `None` key misses, as the `Null` did)
+        if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n)) return 'okey';
+        if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n)) return 'kin';
         if (isCallExpression(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== undefined) return 'native';
         if (this.rustVenueStrLocalArg(n)) return 'targ';
         if (this.rustLimitArgUse(n, kind)) return 'targ';
@@ -5302,7 +5323,8 @@ export class RustTranspiler extends BaseTranspiler {
         const node: any = this.unwrapParens(other);
         const literal = this.literalKindOfNode(node);
         const optional = kind.startsWith('o');
-        if (literal === 'null') return optional ? 'null' : undefined;
+        // a non-optional local (a literal-defaulted reader, a literal) is never `Null`: its null test is a constant
+        if (literal === 'null') return optional ? 'null' : 'never';
         const base = optional ? kind.slice(1) : kind;
         let text: string | undefined;
         if (base === 'str' && literal === 'string' && !(node.text in this.StringLiteralReplacements)) text = this.quotedStringLiteral(node.text);
@@ -5325,6 +5347,7 @@ export class RustTranspiler extends BaseTranspiler {
         const name = super.printIdentifier(self);
         const equal = op === SyntaxKind.EqualsEqualsToken || op === SyntaxKind.EqualsEqualsEqualsToken;
         if (test === 'null') return `${name}.${equal ? 'is_none' : 'is_some'}()`;
+        if (test === 'never') return equal ? 'false' : 'true';
         return `${local.kind === 'ostr' ? `${name}.as_deref()` : name} ${equal ? '==' : '!='} ${test}`;
     }
 
@@ -5828,7 +5851,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** Native text of an ordered/equality comparison over typed operands (`dry`: shape check only). */
-    rustScalarCompareText(node, dry: boolean): string | undefined {
+    rustScalarCompareText(node, dry: boolean, literalKind?: string): string | undefined {
         const op = node.operatorToken.kind;
         const symbol = RustTranspiler.NATIVE_COMPARISON_OPERATORS[op];
         const equality = this.isEqualityOp(op);
@@ -5840,8 +5863,9 @@ export class RustTranspiler extends BaseTranspiler {
         const left: any = this.unwrapParens(node.left);
         const right: any = this.unwrapParens(node.right);
         const text = (k: string, n) => dry ? '_' : this.rustScalarOperandText(k, n);
-        const lk = this.rustScalarCompareKind(left);
-        const rk = this.rustScalarCompareKind(right);
+        const literal = (n) => literalKind !== undefined && this.rustScalarIntLiteral(n) !== undefined ? literalKind : undefined;
+        const lk = literal(left) ?? this.rustScalarCompareKind(left);
+        const rk = literal(right) ?? this.rustScalarCompareKind(right);
         if (lk === undefined || rk === undefined) return undefined;
         const sign = equality ? (op === SyntaxKind.EqualsEqualsToken || op === SyntaxKind.EqualsEqualsEqualsToken ? '==' : '!=') : symbol;
         if (equality && (lk === 'slit' || rk === 'slit')) {
@@ -5860,8 +5884,17 @@ export class RustTranspiler extends BaseTranspiler {
         if (lk === 'bool' || rk === 'bool' || base(lk) === 'str' || base(rk) === 'str') return undefined;
         const lo = lk.startsWith('o');
         const ro = rk.startsWith('o');
-        if (lo && ro) return undefined;
+        if (lo && ro) {
+            // two optional numbers of one kind: JS orders only two numbers (`undefined` compares false), and
+            // `Option` orders `Some` by its value once both are present (locals only: each is read twice)
+            if (equality || base(lk) !== base(rk) || !isIdentifier(left) || !isIdentifier(right)) return undefined;
+            return `(${text(lk, left)}.is_some() && ${text(rk, right)}.is_some() && ${text(lk, left)} ${sign} ${text(rk, right)})`;
+        }
         if (lo || ro) {
+            // an integer literal against an optional float compares as that float (`Some(5.0)`)
+            const intLit = (k: string, n) => k === 'int' && this.rustScalarIntLiteral(n) !== undefined;
+            if (base(lk) === 'num' && intLit(rk, right)) return this.rustScalarCompareText(node, dry, 'num');
+            if (base(rk) === 'num' && intLit(lk, left)) return this.rustScalarCompareText(node, dry, 'num');
             if (base(lk) !== base(rk)) return undefined;
             // `None` orders below every `Some`; a JS compare with `undefined` is false, so the
             // smaller side of an ordering is tested with `is_some()` first (locals only: read twice)

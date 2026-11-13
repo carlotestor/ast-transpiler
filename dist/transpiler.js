@@ -54826,11 +54826,29 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustStrMethodRecvLocal(declaration))
       return void 0;
+    if (copied > 0 && kind === "ostr" && !this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) && this.rustScalarKeyedLocal(declaration))
+      return void 0;
     if (this.rustScalarOptKeyCostly(declaration, kind) === false && kind === "ostr" && this.rustScalarOptKeyCount(declaration) > 0)
       this.rustScalarGuarded.add(declaration);
     if (guarded || handOff || this.rustStrMethodRecvLocal(declaration))
       this.rustScalarGuarded.add(declaration);
     return kind;
+  }
+  /** The key reads a local declared with a non-null initializer (nil-declared locals and slots keep their own rules). */
+  rustInitKeyLocal(n) {
+    const declaration = this.rustDeclaredNode(n);
+    return declaration !== void 0 && isVariableDeclaration3(declaration) && declaration.initializer !== void 0 && this.literalKindOfNode(declaration.initializer) !== "null";
+  }
+  /** Some use of the local is a native map-key read (`okey`) or `in` test (`kin`). */
+  rustScalarKeyedLocal(declaration) {
+    let keyed = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const form = this.rustScalarUseForms.get(n);
+      if (form === "okey" || form === "kin")
+        keyed = true;
+      return true;
+    });
+    return keyed;
   }
   /** A local some `return` of a method with a declared string return hands back as-is. */
   rustStrReturnedLocal(declaration, scope) {
@@ -55688,9 +55706,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "key";
     if (kind === "ostr" && this.rustScalarOptKeyUse(n))
       return "key";
-    if (kind === "ostr" && this.rustOkeyLocal(n) && this.rustOkeyReadUse(n))
+    if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
-    if (kind === "ostr" && this.rustOkeyLocal(n) && this.rustElemKeyInUse(n))
+    if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n))
       return "kin";
     if (isCallExpression6(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== void 0)
       return "native";
@@ -56340,7 +56358,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const literal2 = this.literalKindOfNode(node);
     const optional = kind.startsWith("o");
     if (literal2 === "null")
-      return optional ? "null" : void 0;
+      return optional ? "null" : "never";
     const base = optional ? kind.slice(1) : kind;
     let text;
     if (base === "str" && literal2 === "string" && !(node.text in this.StringLiteralReplacements))
@@ -56370,6 +56388,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const equal = op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken;
     if (test === "null")
       return `${name}.${equal ? "is_none" : "is_some"}()`;
+    if (test === "never")
+      return equal ? "false" : "true";
     return `${local.kind === "ostr" ? `${name}.as_deref()` : name} ${equal ? "==" : "!="} ${test}`;
   }
   /** Condition hook: a `bool` scalar local is its own condition. */
@@ -56955,7 +56975,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     return compare === void 0 ? void 0 : `(${compare})`;
   }
   /** Native text of an ordered/equality comparison over typed operands (`dry`: shape check only). */
-  rustScalarCompareText(node, dry) {
+  rustScalarCompareText(node, dry, literalKind) {
     const op = node.operatorToken.kind;
     const symbol = _RustTranspiler.NATIVE_COMPARISON_OPERATORS[op];
     const equality = this.isEqualityOp(op);
@@ -56969,8 +56989,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     const left = this.unwrapParens(node.left);
     const right = this.unwrapParens(node.right);
     const text = (k, n) => dry ? "_" : this.rustScalarOperandText(k, n);
-    const lk = this.rustScalarCompareKind(left);
-    const rk = this.rustScalarCompareKind(right);
+    const literal2 = (n) => literalKind !== void 0 && this.rustScalarIntLiteral(n) !== void 0 ? literalKind : void 0;
+    const lk = literal2(left) ?? this.rustScalarCompareKind(left);
+    const rk = literal2(right) ?? this.rustScalarCompareKind(right);
     if (lk === void 0 || rk === void 0)
       return void 0;
     const sign = equality ? op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken ? "==" : "!=" : symbol;
@@ -56994,9 +57015,17 @@ ${binding(plan.indent)}` : ""), head: "" };
       return void 0;
     const lo = lk.startsWith("o");
     const ro = rk.startsWith("o");
-    if (lo && ro)
-      return void 0;
+    if (lo && ro) {
+      if (equality || base(lk) !== base(rk) || !isIdentifier3(left) || !isIdentifier3(right))
+        return void 0;
+      return `(${text(lk, left)}.is_some() && ${text(rk, right)}.is_some() && ${text(lk, left)} ${sign} ${text(rk, right)})`;
+    }
     if (lo || ro) {
+      const intLit = (k, n) => k === "int" && this.rustScalarIntLiteral(n) !== void 0;
+      if (base(lk) === "num" && intLit(rk, right))
+        return this.rustScalarCompareText(node, dry, "num");
+      if (base(rk) === "num" && intLit(lk, left))
+        return this.rustScalarCompareText(node, dry, "num");
       if (base(lk) !== base(rk))
         return void 0;
       const greater = op === SyntaxKind7.GreaterThanToken || op === SyntaxKind7.GreaterThanEqualsToken ? lo : equality ? true : ro;
