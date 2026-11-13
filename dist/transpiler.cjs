@@ -57244,7 +57244,7 @@ ${binding(plan.indent)}` : ""), head: "" };
         return narrowed;
       const a = _nullishCoalesce(this.rustScalarValueKind(node.whenTrue, true), () => ( this.rustOptParamKind(node.whenTrue)));
       const b = _nullishCoalesce(this.rustScalarValueKind(node.whenFalse, true), () => ( this.rustOptParamKind(node.whenFalse)));
-      const joined = this.rustScalarJoinKinds(a, b);
+      const joined = this.rustScalarJoinKinds(a, b, true);
       return joined === "null" ? void 0 : joined;
     }
     if (_is.isBinaryExpression.call(void 0, node)) {
@@ -57351,12 +57351,12 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `((${text}) as f64)`;
     return kind === own ? text : `Some(${text})`;
   }
-  rustScalarJoinKinds(a, b) {
+  rustScalarJoinKinds(a, b, arms = false) {
     if (a === void 0 || b === void 0)
       return void 0;
     if (a === b)
       return a;
-    const optional = (k) => k === "str" || k === "int" || k === "num" || k === "bool" ? `o${k}` : k.startsWith("o") ? k : void 0;
+    const optional = (k) => k === "str" || k === "int" || k === "num" || arms && k === "bool" ? `o${k}` : k.startsWith("o") ? k : void 0;
     if (a === "null")
       return optional(b);
     if (b === "null")

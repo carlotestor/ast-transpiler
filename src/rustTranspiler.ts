@@ -6053,7 +6053,7 @@ export class RustTranspiler extends BaseTranspiler {
             const narrowed = this.rustOptParamDefault(node)?.kind; if (narrowed !== undefined) return narrowed;
             const a = this.rustScalarValueKind(node.whenTrue, true) ?? this.rustOptParamKind(node.whenTrue);
             const b = this.rustScalarValueKind(node.whenFalse, true) ?? this.rustOptParamKind(node.whenFalse);
-            const joined = this.rustScalarJoinKinds(a, b);
+            const joined = this.rustScalarJoinKinds(a, b, true);
             return joined === 'null' ? undefined : joined;
         }
         if (isBinaryExpression(node)) {
@@ -6153,10 +6153,11 @@ export class RustTranspiler extends BaseTranspiler {
         return kind === own ? text : `Some(${text})`;
     }
 
-    rustScalarJoinKinds(a: string | undefined, b: string | undefined): string | undefined {
+    rustScalarJoinKinds(a: string | undefined, b: string | undefined, arms = false): string | undefined {
         if (a === undefined || b === undefined) return undefined;
         if (a === b) return a;
-        const optional = (k: string) => (k === 'str' || k === 'int' || k === 'num' || k === 'bool') ? `o${k}` : (k.startsWith('o') ? k : undefined);
+        // a ternary's own arms may join `bool` with `undefined` (later null writes keep their existing rules)
+        const optional = (k: string) => (k === 'str' || k === 'int' || k === 'num' || (arms && k === 'bool')) ? `o${k}` : (k.startsWith('o') ? k : undefined);
         if (a === 'null') return optional(b);
         if (b === 'null') return optional(a);
         if (optional(a) === b) return b;

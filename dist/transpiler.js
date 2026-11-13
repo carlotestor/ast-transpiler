@@ -57245,7 +57245,7 @@ ${binding(plan.indent)}` : ""), head: "" };
         return narrowed;
       const a = this.rustScalarValueKind(node.whenTrue, true) ?? this.rustOptParamKind(node.whenTrue);
       const b = this.rustScalarValueKind(node.whenFalse, true) ?? this.rustOptParamKind(node.whenFalse);
-      const joined = this.rustScalarJoinKinds(a, b);
+      const joined = this.rustScalarJoinKinds(a, b, true);
       return joined === "null" ? void 0 : joined;
     }
     if (isBinaryExpression5(node)) {
@@ -57352,12 +57352,12 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `((${text}) as f64)`;
     return kind === own ? text : `Some(${text})`;
   }
-  rustScalarJoinKinds(a, b) {
+  rustScalarJoinKinds(a, b, arms = false) {
     if (a === void 0 || b === void 0)
       return void 0;
     if (a === b)
       return a;
-    const optional = (k) => k === "str" || k === "int" || k === "num" || k === "bool" ? `o${k}` : k.startsWith("o") ? k : void 0;
+    const optional = (k) => k === "str" || k === "int" || k === "num" || arms && k === "bool" ? `o${k}` : k.startsWith("o") ? k : void 0;
     if (a === "null")
       return optional(b);
     if (b === "null")

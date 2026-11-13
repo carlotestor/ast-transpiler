@@ -824,7 +824,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `this.sum(..)` / `Math.min|max(a, b)`: a call whose own kind comes from its operands. */
     rustArithCombinator(node: any): boolean;
     rustArithCallText(kind: string, expr: any): string | undefined;
-    rustScalarJoinKinds(a: string | undefined, b: string | undefined): string | undefined;
+    rustScalarJoinKinds(a: string | undefined, b: string | undefined, arms?: boolean): string | undefined;
     /** Joins the initializer kind with every `x = <rhs>` write: a nullish write makes the local optional. */
     rustScalarWidenedKind(declaration: any, kind: string): string;
     rustOptParamKind(expr: any): string | undefined;
