@@ -54826,7 +54826,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustStrMethodRecvLocal(declaration))
       return void 0;
-    if (this.rustListParamElement(declaration.initializer) && (copied > 0 || boxed > 0 && typedUses === 0))
+    if (this.rustListParamElement(declaration.initializer) && (copied > 0 || boxed > 0 && typedUses === 0 || this.rustScalarFeedsWrite(declaration)))
       return void 0;
     if (this.rustListParamElement(declaration.initializer) && boxed > 0)
       this.rustScalarGuarded.add(declaration);
@@ -55296,6 +55296,34 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const owner = this.rustDeclaredNode(node.expression);
     return owner !== void 0 && isParameterDeclaration3(owner) && !this.rustOptListParamRead(node) && this.rustElementReadScalarKind(node) !== void 0;
+  }
+  /** The local's last use is the whole right side of a statement `y = x;`: the boxed local moves there,
+   *  a typed one keeps the clone ccxt adds to that write. */
+  rustScalarBareLastWrite(node) {
+    const declaration = isIdentifier3(node) ? this.rustDeclaredNode(node) : void 0;
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    let moved = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustLocalLastUse(n, declaration))
+        moved = true;
+      return true;
+    });
+    return moved;
+  }
+  /** Some use of the local is the source of an assignment or of another declaration. */
+  rustScalarFeedsWrite(declaration) {
+    let feeds = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      let up = n.parent;
+      while (up !== void 0 && (isParenthesizedExpression3(up) || up.kind === SyntaxKind7.AsExpression || isConditionalExpression4(up)))
+        up = up.parent;
+      if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.left !== n || isVariableDeclaration3(up) && up.initializer !== void 0)
+        feeds = true;
+      return true;
+    });
+    return feeds;
   }
   /** Some statement of the parameter's function assigns the parameter itself. */
   rustParamWritten(param) {
@@ -57044,6 +57072,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const ro = rk.startsWith("o");
     if (lo && ro) {
       if (equality || base(lk) !== base(rk) || !isIdentifier3(left) || !isIdentifier3(right))
+        return void 0;
+      if (/ts[\\/]src[\\/]base[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? "")) && (this.rustScalarBareLastWrite(left) || this.rustScalarBareLastWrite(right)))
         return void 0;
       return `(${text(lk, left)}.is_some() && ${text(rk, right)}.is_some() && ${text(lk, left)} ${sign} ${text(rk, right)})`;
     }

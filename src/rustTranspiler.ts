@@ -3882,7 +3882,8 @@ export class RustTranspiler extends BaseTranspiler {
         // a local typed for its string-method reads must not copy where the `Value` moved
         if (copied > 0 && (kind === 'str' || kind === 'ostr') && this.rustStrMethodRecvLocal(declaration)) return undefined;
         // an element of a typed list parameter keeps the 400-char guard and never copies at a box
-        if (this.rustListParamElement(declaration.initializer) && (copied > 0 || (boxed > 0 && typedUses === 0))) return undefined;
+        // and never feeds another local's write (typing it flips that local's own decision and its method's return)
+        if (this.rustListParamElement(declaration.initializer) && (copied > 0 || (boxed > 0 && typedUses === 0) || this.rustScalarFeedsWrite(declaration))) return undefined;
         if (this.rustListParamElement(declaration.initializer) && boxed > 0) this.rustScalarGuarded.add(declaration);
         // a non-element local admitted by a map-key read or `in` test must not copy where the `Value` moved
         if (copied > 0 && kind === 'ostr' && !this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) && this.rustScalarKeyedLocal(declaration)) return undefined;
@@ -4323,6 +4324,33 @@ export class RustTranspiler extends BaseTranspiler {
         if (node === undefined || !isElementAccessExpression(node) || !isIdentifier(node.expression)) return false;
         const owner: any = this.rustDeclaredNode(node.expression);
         return owner !== undefined && isParameterDeclaration(owner) && !this.rustOptListParamRead(node) && this.rustElementReadScalarKind(node) !== undefined;
+    }
+
+    /** The local's last use is the whole right side of a statement `y = x;`: the boxed local moves there,
+     *  a typed one keeps the clone ccxt adds to that write. */
+    rustScalarBareLastWrite(node: any): boolean {
+        const declaration: any = isIdentifier(node) ? this.rustDeclaredNode(node) : undefined;
+        if (declaration === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name)) return false;
+        let moved = false;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+            const up: any = n.parent;
+            if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(up.left)
+                && up.parent?.kind === SyntaxKind.ExpressionStatement && this.rustLocalLastUse(n, declaration)) moved = true;
+            return true;
+        });
+        return moved;
+    }
+
+    /** Some use of the local is the source of an assignment or of another declaration. */
+    rustScalarFeedsWrite(declaration: any): boolean {
+        let feeds = false;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+            let up: any = n.parent;
+            while (up !== undefined && (isParenthesizedExpression(up) || up.kind === SyntaxKind.AsExpression || isConditionalExpression(up))) up = up.parent;
+            if ((isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.EqualsToken && up.left !== n) || (isVariableDeclaration(up) && up.initializer !== undefined)) feeds = true;
+            return true;
+        });
+        return feeds;
     }
 
     /** Some statement of the parameter's function assigns the parameter itself. */
@@ -5914,6 +5942,8 @@ export class RustTranspiler extends BaseTranspiler {
             // two optional numbers of one kind: JS orders only two numbers (`undefined` compares false), and
             // `Option` orders `Some` by its value once both are present (locals only: each is read twice)
             if (equality || base(lk) !== base(rk) || !isIdentifier(left) || !isIdentifier(right)) return undefined;
+            // base tier: the moved `Value` at a bare last-use write `y = x;` becomes a ccxt-added clone of the typed local
+            if (/ts[\\/]src[\\/]base[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? '')) && (this.rustScalarBareLastWrite(left) || this.rustScalarBareLastWrite(right))) return undefined;
             return `(${text(lk, left)}.is_some() && ${text(rk, right)}.is_some() && ${text(lk, left)} ${sign} ${text(rk, right)})`;
         }
         if (lo || ro) {

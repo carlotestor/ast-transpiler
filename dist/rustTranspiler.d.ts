@@ -545,6 +545,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustElementReadScalarKind(node: any): string | undefined;
     /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
     rustListParamElement(init: any): boolean;
+    /** The local's last use is the whole right side of a statement `y = x;`: the boxed local moves there,
+     *  a typed one keeps the clone ccxt adds to that write. */
+    rustScalarBareLastWrite(node: any): boolean;
+    /** Some use of the local is the source of an assignment or of another declaration. */
+    rustScalarFeedsWrite(declaration: any): boolean;
     /** Some statement of the parameter's function assigns the parameter itself. */
     rustParamWritten(param: any): boolean;
     rustReaderDefaultKind(name: string, args: any[], fresh: boolean): string | undefined;
