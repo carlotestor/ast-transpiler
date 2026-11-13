@@ -1802,6 +1802,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A whole hand-off of a nullable container local (a base `safeDict*` / `safeList*` with no or a nullish default,
      *  or a `let` filled by such writes) to a lent `impl Into<crate::Value>` slot. */
     rustLentOptionalHandOff(call: any, arg: any, init: any, from: 'dict' | 'list' | 'api' | undefined, nilDeclared: boolean): boolean;
+    private static readonly RUST_LENT_ENCODER_SLOTS;
     private static readonly RUST_LENT_OPTIONAL_HELPERS;
     /** `this.parseX (x as Dict, ..)`: the assertion only retypes the TS side, the argument lands in the same lent slot. */
     rustLentAsHandOff(asArg: any, init: any, from: 'dict' | 'list' | 'api' | undefined, endpoint: boolean, nilDeclared: boolean): boolean;
@@ -1890,7 +1891,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_BUILT_BOX_RECEIVER_METHODS;
     private static readonly RUST_BUILT_HELPER_RETURNS;
     rustBuiltReturnBoxUse(n: any, init: any): boolean;
-    /** A base `this.omit (x, keys)` whose `x` the checker types as a `Dict` (`params`): it answers that map minus the keys. */
+    /** A base `this.omit (x, keys)` whose head always holds a map: a literal, a built map (`extend`, ..) or a local that
+     *  prints the shared map. A `Dict`-typed parameter is not enough: a list body (`Array.isArray (params)` in `sign`)
+     *  passes `omit` unchanged, and `into_dict()` would turn it into an empty map. */
     rustOmitOfDict(init: any): boolean;
     /** The `params` slot of a typed unified call (`impl Into<crate::Params> + Send`): `From<Value> for Params` takes the
      *  boxed map exactly as it took the `Value` local, so a dict local boxes there once (moved at the last use). */

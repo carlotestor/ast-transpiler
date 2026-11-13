@@ -13387,7 +13387,9 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustLentResponseSlot(up, n) && this.rustLentResponseSource(init)) return ++lentResponses > 0 && ++reads > 0;
             if ((endpoint || this.rustLentContainerSource(init)) && this.rustLentEndpointSlot(up, n, from)) return ++lentResponses > 0 && ++reads > 0;
             // `json` tells Null from an empty container: only a never-null source lends there as the plain container
-            if ((from === 'dict' || from === 'list') && this.rustLentHelperSlot(up, n, from) && (String(up.expression.name.text) !== 'json' || endpoint || this.rustLentContainerSource(init))) return ++lentResponses > 0 && ++reads > 0;
+            // `omit` hands a list through unchanged: its result reaches the encoder slots only when its head is a proven map
+            if ((from === 'dict' || from === 'list') && this.rustLentHelperSlot(up, n, from) && (String(up.expression.name.text) !== 'json' || endpoint || this.rustLentContainerSource(init))
+                && !(RustTranspiler.RUST_LENT_ENCODER_SLOTS.has(String(up.expression.name.text)) && this.rustBaseCallNamed(init, RustTranspiler.RUST_HANDED_DICT_OMIT) && !this.rustOmitOfDict(init))) return ++lentResponses > 0 && ++reads > 0;
             if (this.rustLentOptionalHandOff(up, n, init, from, nilDeclared)) return ++lentNullable > 0 && ++reads > 0;
             // a lent params slot (`watch` message, a lent `params`) takes the built map by reference, as the handed rule lends it
             if (from === 'dict' && isCallExpression(up) && this.rustLentParamsSlot(up, n) && init !== undefined && isCallExpression(init) && this.rustBuiltReturnSourceKind(init) === 'dict') return ++reads > 0;
@@ -13449,10 +13451,13 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustLentResponseSlot(call, arg)) return from === 'dict';
         if (this.rustLentEndpointSlot(call, arg, from)) return true;
         if (this.rustLentWsSettleSlot(call, arg)) return true;
+        if (RustTranspiler.RUST_LENT_ENCODER_SLOTS.has(String(call.expression?.name?.text ?? '')) && init !== undefined && this.rustBaseCallNamed(init, RustTranspiler.RUST_HANDED_DICT_OMIT) && !this.rustOmitOfDict(init)) return false;
         return this.rustLentHelperSlot(call, arg, from) && RustTranspiler.RUST_LENT_OPTIONAL_HELPERS.has(String(call.expression.name.text));
     }
 
     // hand-written helpers whose operand is `impl Into<crate::Value>` / `impl JsonText` (the optional form lends there too)
+    private static readonly RUST_LENT_ENCODER_SLOTS = new Set([ 'urlencode', 'rawencode', 'urlencodeNested', 'urlencodeWithArrayRepeat', 'isEmpty' ]);
+
     private static readonly RUST_LENT_OPTIONAL_HELPERS = new Set([ 'toArray', 'arrayConcat', 'json', 'urlencode', 'rawencode', 'urlencodeNested', 'urlencodeWithArrayRepeat', 'isEmpty' ]);
 
     /** `this.parseX (x as Dict, ..)`: the assertion only retypes the TS side, the argument lands in the same lent slot. */
@@ -14112,12 +14117,19 @@ export class RustTranspiler extends BaseTranspiler {
         return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && this.rustNilBoxSlotOk(up, at);
     }
 
-    /** A base `this.omit (x, keys)` whose `x` the checker types as a `Dict` (`params`): it answers that map minus the keys. */
+    /** A base `this.omit (x, keys)` whose head always holds a map: a literal, a built map (`extend`, ..) or a local that
+     *  prints the shared map. A `Dict`-typed parameter is not enough: a list body (`Array.isArray (params)` in `sign`)
+     *  passes `omit` unchanged, and `into_dict()` would turn it into an empty map. */
     rustOmitOfDict(init: any): boolean {
         if (!this.rustBaseCallNamed(init, RustTranspiler.RUST_HANDED_DICT_OMIT) || init.arguments.length !== 2) return false;
         const head: any = this.rustSkipWrappers(init.arguments[0]);
-        const type: any = head === undefined ? undefined : this.typeOfNodeIfAny(head);
-        return type !== undefined && (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) === 0 && this.isProvenMapType(type);
+        if (head === undefined) return false;
+        if (isObjectLiteralExpression(head)) return true;
+        if (isCallExpression(head)) return this.rustBuiltReturnSourceKind(head) === 'dict' || this.rustOmitOfDict(head);
+        if (!isIdentifier(head)) return false;
+        const d: any = this.rustDeclarationOfIdentifier(head);
+        if (d === undefined || d === head || d.name === head) return false;
+        return this.rustHandedDictLocal(d) || (this.rustBorrowedLocalKind(d) === 'dict' && !this.rustOptContainerLocals.has(d));
     }
 
     /** The `params` slot of a typed unified call (`impl Into<crate::Params> + Send`): `From<Value> for Params` takes the
