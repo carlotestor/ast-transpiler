@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -55604,9 +55604,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** A cast, clock-string or `sum` local must earn a native use, and a string one never copies where the `Value` moved. */
   rustNewShapeCostly(init, typedUses, copied) {
     const node = this.unwrapParens(init);
-    if (this.rustStrCastCall(node) === void 0 && !this.rustClockString(node) && !this.rustSumShape(node))
+    if (this.rustStrCastCall(node) === void 0 && !this.rustClockString(node) && !this.rustSumShape(node) && !this.rustIntToStringShape(node))
       return false;
     return typedUses === 0 || copied > 0;
+  }
+  /** `n.toString()` of an `i64` scalar local. */
+  rustIntToStringShape(node) {
+    const method = node !== void 0 ? this.rustScalarStrMethod(node, false, true) : void 0;
+    return method !== void 0 && method.recvKind === "int";
   }
   rustStrCastCall(node) {
     if (node === void 0 || !isAsExpression3(node) || node.type?.kind !== SyntaxKind7.StringKeyword)
@@ -57009,6 +57014,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (syntactic)
       return { recv, recvKind: "", method, kind: "" };
     const recvKind = this.rustScalarIdentifierKind(recv) ?? (params ? this.rustScalarParamRead(recv)?.kind : void 0);
+    if (recvKind === "int" && method === "toString")
+      return { recv, recvKind, method, kind: "str" };
     if (recvKind !== "str" && recvKind !== "ostr")
       return void 0;
     if (shape === "affix")
@@ -57605,6 +57612,8 @@ ${binding(plan.indent)}` : ""), head: "" };
         return wrap(`${name}.as_deref().map(str::${fn})`);
       if (method.method === "trim")
         return wrap(`${name}.trim().to_string()`);
+      if (method.method === "toString" && method.recvKind === "int")
+        return wrap(`format!("{}", ${name})`);
       if (method.method === "toString") {
         const local = this.rustScalarLocalOf(method.recv);
         let up = node.parent;
@@ -58013,7 +58022,7 @@ ${binding(plan.indent)}` : ""), head: "" };
   /** Call hook: a string method of a typed string local, boxed back to `Value`. */
   printRustScalarMethodCall(node) {
     const method = this.rustScalarStrMethod(node);
-    if (method === void 0 || this.rustScalarLocalOf(method.recv) === void 0)
+    if (method === void 0 || method.recvKind === "int" || this.rustScalarLocalOf(method.recv) === void 0)
       return void 0;
     const text = this.rustScalarExpressionText(method.kind, node);
     if (text !== void 0 && method.kind === "bool")
@@ -65028,7 +65037,7 @@ ${iden}}`;
     const method = String(callee.name.text);
     if (isIdentifier3(callee.expression) && callee.expression.text === "Object")
       return method === "keys" || method === "values";
-    if (method === "split" && this.rustStrLocalSplitText(init) !== void 0)
+    if (method === "split" && (this.rustStrLocalSplitText(init) !== void 0 || this.rustCallPrintsRuntimeSplit(init)))
       return true;
     if (callee.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
@@ -65084,7 +65093,6 @@ ${iden}}`;
       return false;
     const boxes = [];
     let natives = 0;
-    let filterLent = 0;
     const usesAll = (accept) => defaulted ? this.rustScalarUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
     const safe = usesAll((n) => {
       if (this.rustIdentifierIsPropertyName(n))
@@ -65116,8 +65124,6 @@ ${iden}}`;
       }
       if (at === n && this.rustLentListSlot(up, n)) {
         natives++;
-        if (this.rustTypedFilterLentSlot(up, n))
-          filterLent++;
         return true;
       }
       if (isCallExpression6(up) && up.expression !== n && up.arguments.some((a) => a === n)) {
@@ -65130,8 +65136,6 @@ ${iden}}`;
       return false;
     });
     if (!safe || natives === 0 || defaulted && indexed === 0 && boxes.some(([, form]) => form === "clone"))
-      return false;
-    if (this.rustCallPrintsRuntimeSplit(init) && filterLent === 0)
       return false;
     for (const [n, form] of boxes)
       this.rustLentListBoxes.set(n, form);
