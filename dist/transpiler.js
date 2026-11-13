@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -51616,6 +51616,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustDictBearerDecisions = /* @__PURE__ */ new WeakMap();
     /** Bearers whose escapes all box a clone (the prediction-tier multi-escape rule). */
     this.rustDictBearerCloned = /* @__PURE__ */ new WeakSet();
+    /** The single move of a literal bearer into a list element / a ws settle or send value (`rustLiteralMoveSlot`). */
+    this.rustLiteralMoves = /* @__PURE__ */ new WeakSet();
     // ── rustReaderTableLocal: lookup tables lent to the any-key readers ──
     // `const statuses = { '0': 'open', .. }; return this.safeString (statuses, status, status);` — a literal
     // table whose only uses are arg 0 of a base any-key reader. The reader on `&IndexMap` runs
@@ -63698,6 +63700,8 @@ ${iden}}`;
       return `Value::Map(${text}.clone())`;
     }
     const bearer = this.rustDictBearerDeclaration(node);
+    if (bearer !== void 0 && this.rustLiteralMoves.has(node))
+      return `Value::Map(${text})`;
     if (bearer !== void 0 && parent !== void 0 && (isReturnStatement4(parent) && parent.expression === node || this.rustCastReturnOperand(node) || isCallExpression6(parent) && parent.arguments.some((a) => a === node) || this.rustDictWriteValue(node) || this.rustBearerLiteralMove(node))) {
       const moved = this.rustReturnOperand(node) || this.rustVecIsFinalUse(node, String(node.text));
       return `Value::Map(${text}${!this.rustDictBearerCloned.has(bearer) && moved ? "" : ".clone()"})`;
@@ -63799,6 +63803,31 @@ ${iden}}`;
       return void 0;
     return `crate::runtime::stringify_param(&${text})`;
   }
+  /** `xs.push (m)` on an array-typed local, an element of an array literal (not a destructure target), or the
+   *  value of a ws `client.resolve|reject|send (m, ..)`: each takes the boxed `Value` by value, so the map's last
+   *  use moves into `Value::Map(m)`, exactly the shared map the boxed local handed over. */
+  rustLiteralMoveSlot(n) {
+    const up = n.parent;
+    if (up === void 0)
+      return false;
+    if (isArrayLiteralExpression4(up))
+      return !this.rustInDestructureWrite(n) && !(isBinaryExpression5(up.parent) && up.parent.left === up);
+    if (!isCallExpression6(up) || up.arguments.length === 0 || up.arguments[0] !== n || !isPropertyAccessExpression3(up.expression))
+      return false;
+    const recv = up.expression.expression;
+    const method = String(up.expression.name.text);
+    if (method === "push") {
+      if (up.arguments.length !== 1 || !isIdentifier3(recv))
+        return false;
+      const type = this.typeOfNodeIfAny(recv);
+      return type !== void 0 && this.getChecker().isArrayType(type);
+    }
+    if (!isIdentifier3(recv))
+      return false;
+    if (method === "send")
+      return up.arguments.length === 1 && this.rustCallsRuntimeHandle(up);
+    return (method === "resolve" || method === "reject") && this.rustWsSettleCall(up);
+  }
   /** The declaration behind `node` when it is a local typed as a dict bearer. */
   rustDictBearerDeclaration(node) {
     if (!isIdentifier3(node))
@@ -63856,6 +63885,8 @@ ${iden}}`;
     const source = declaration.getSourceFile?.()?.fileName;
     const prediction = typeof source === "string" && _RustTranspiler.RUST_PREDICTION_VENUE_FILE.test(source.replace(/\\/g, "/"));
     const escapes = [];
+    const moveEscapes = [];
+    let rebuilds = 0;
     let elementUses = 0;
     let enumUses = 0;
     const outerWidened = this.literalKeyHits;
@@ -63904,10 +63935,14 @@ ${iden}}`;
       if (isBinaryExpression5(parent) && parent.operatorToken.kind === SyntaxKind7.InKeyword && parent.right === n)
         return this.bearerInOpKeyText(parent.left) !== void 0 || this.literalKeyWidened(this.rustLiteralBearerKeyArg(n, parent.left));
       if (this.rustBearerRebuild(n))
-        return true;
+        return ++rebuilds > 0;
       const reuse = this.rustProducerReuse(n);
       if (reuse)
+        return ++rebuilds > 0;
+      if (!produced && this.rustLiteralMoveSlot(n)) {
+        moveEscapes.push(n);
         return true;
+      }
       return false;
     });
     const siblings = this.literalSiblingBindings;
@@ -63918,6 +63953,11 @@ ${iden}}`;
       return false;
     if (siblings > 0 && elementUses === 0)
       return false;
+    if (moveEscapes.length > 0) {
+      if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 || widened || enumUses > 0 || prediction || !this.rustLocalLastUse(moveEscapes[0], declaration) || !this.rustBoxLineOk(moveEscapes[0]))
+        return false;
+      this.rustLiteralMoves.add(moveEscapes[0]);
+    }
     if (widened && (enumUses > 0 || !escapes.every((e) => this.rustReturnOperand(e) || this.rustVecIsFinalUse(e, name) && !this.loopBetween(e))))
       return false;
     if (produced && escapes.length > 0 && elementUses === 0)
