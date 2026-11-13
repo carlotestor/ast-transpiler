@@ -64933,7 +64933,7 @@ ${iden}}`;
     if (_is.isReturnStatement.call(void 0, up))
       return up.expression === n;
     if (_is.isArrayLiteralExpression.call(void 0, up))
-      return true;
+      return !(_is.isBinaryExpression.call(void 0, up.parent) && up.parent.left === up);
     if (!_is.isCallExpression.call(void 0, up) || up.expression === n || !_is.isPropertyAccessExpression.call(void 0, up.expression))
       return false;
     const callee = String(up.expression.name.text);

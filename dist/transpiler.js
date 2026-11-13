@@ -64934,7 +64934,7 @@ ${iden}}`;
     if (isReturnStatement4(up))
       return up.expression === n;
     if (isArrayLiteralExpression4(up))
-      return true;
+      return !(isBinaryExpression5(up.parent) && up.parent.left === up);
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression))
       return false;
     const callee = String(up.expression.name.text);

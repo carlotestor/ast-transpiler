@@ -14100,7 +14100,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (init === undefined || !isCallExpression(init) || up === undefined || this.rustBuiltReturnSourceKind(init) === undefined || this.rustScalarInNestedWrite(n)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
         if (isReturnStatement(up)) return up.expression === n;
-        if (isArrayLiteralExpression(up)) return true;
+        // an element of a destructuring target `[a, x] = ..` is a write, not a box
+        if (isArrayLiteralExpression(up)) return !(isBinaryExpression(up.parent) && up.parent.left === up);
         if (!isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression)) return false;
         const callee = String(up.expression.name.text);
         const at = Array.from(up.arguments).indexOf(n);
