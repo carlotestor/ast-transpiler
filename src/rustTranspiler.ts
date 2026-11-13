@@ -19084,7 +19084,7 @@ export class RustTranspiler extends BaseTranspiler {
         return !this.rustVenueMethodNames(file.slice(0, file.indexOf('ts/src/', root)) + 'ts/src').has(name);
     }
 
-    rustMethodImpl(call: any): any {
+    rustMethodImpl(call: any, baseOnly = false): any {
         const checker: any = this.checkerOrUndefined();
         const callee: any = call?.expression;
         if (checker === undefined || !isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword) {
@@ -19099,7 +19099,7 @@ export class RustTranspiler extends BaseTranspiler {
         }
         // a base-tier caller may dispatch to any venue override
         const callerFile = String(call.getSourceFile().fileName).replace(/\\/g, '/');
-        if (declarations.length !== 1 || (RustTranspiler.RUST_BASE_TIER_FILE.test(callerFile) && !this.rustBaseOnlyCallee(declarations[0], String(callee.name.text)))) return undefined;
+        if (declarations.length !== 1 || (RustTranspiler.RUST_BASE_TIER_FILE.test(callerFile) && !(baseOnly && this.rustBaseOnlyCallee(declarations[0], String(callee.name.text))))) return undefined;
         const file = String(declarations[0].getSourceFile().fileName).replace(/\\/g, '/');
         return declarations[0].getSourceFile() === call.getSourceFile() || RustTranspiler.RUST_BASE_TIER_FILE.test(file)
             ? declarations[0] : undefined;
@@ -19151,7 +19151,8 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     rustEveryReturn(call: any, depth: number, ok: (e: any) => boolean): boolean {
-        const method: any = this.rustMethodImpl(call);
+        // a return proof may read a base-only callee from the base tier (no venue body can answer instead)
+        const method: any = this.rustMethodImpl(call, true);
         if (method === undefined || this.rustVisiting.has(method)) return false;
         this.rustVisiting.add(method);
         let proven = true;

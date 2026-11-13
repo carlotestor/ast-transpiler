@@ -2577,7 +2577,7 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  overload set), in the calling file or the base tier. */
     /** A sync base method no venue source declares and outside virtual dispatch: a base-tier `self.m()` runs this body. */
     rustBaseOnlyCallee(declaration: any, name: string): boolean;
-    rustMethodImpl(call: any): any;
+    rustMethodImpl(call: any, baseOnly?: boolean): any;
     /** The expression's Rust value is always `Value::Bool(_)` or `Value::Null`. */
     rustBoolValue(expr: any, depth?: number): boolean;
     /** A base `safeBool*` with a bool default, `checkOptionBool`, or a method (calling file or

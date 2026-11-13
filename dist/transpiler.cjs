@@ -70226,7 +70226,7 @@ ${this.getIden(identation)}}`;
       return false;
     return !this.rustVenueMethodNames(file.slice(0, file.indexOf("ts/src/", root)) + "ts/src").has(name);
   }
-  rustMethodImpl(call) {
+  rustMethodImpl(call, baseOnly = false) {
     const checker = this.checkerOrUndefined();
     const callee = _optionalChain([call, 'optionalAccess', _9854 => _9854.expression]);
     if (checker === void 0 || !_is.isPropertyAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword) {
@@ -70239,7 +70239,7 @@ ${this.getIden(identation)}}`;
       return void 0;
     }
     const callerFile = String(call.getSourceFile().fileName).replace(/\\/g, "/");
-    if (declarations.length !== 1 || _RustTranspiler.RUST_BASE_TIER_FILE.test(callerFile) && !this.rustBaseOnlyCallee(declarations[0], String(callee.name.text)))
+    if (declarations.length !== 1 || _RustTranspiler.RUST_BASE_TIER_FILE.test(callerFile) && !(baseOnly && this.rustBaseOnlyCallee(declarations[0], String(callee.name.text))))
       return void 0;
     const file = String(declarations[0].getSourceFile().fileName).replace(/\\/g, "/");
     return declarations[0].getSourceFile() === call.getSourceFile() || _RustTranspiler.RUST_BASE_TIER_FILE.test(file) ? declarations[0] : void 0;
@@ -70290,7 +70290,7 @@ ${this.getIden(identation)}}`;
     }) && sawBool;
   }
   rustEveryReturn(call, depth, ok) {
-    const method = this.rustMethodImpl(call);
+    const method = this.rustMethodImpl(call, true);
     if (method === void 0 || this.rustVisiting.has(method))
       return false;
     this.rustVisiting.add(method);
