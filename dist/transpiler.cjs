@@ -51307,7 +51307,7 @@ function rustScopeNameTable(index) {
   index.byName = byName;
   return byName;
 }
-var RUST_DISPATCH_TYPED_KINDS = /* @__PURE__ */ new Set(["str", "optstr", "f64", "optf64", "opti64", "i64", "optstrvec", "strvecvec", "orderreqs", "params", "flag", "dict", "list", "optdict", "optlist"]);
+var RUST_DISPATCH_TYPED_KINDS = /* @__PURE__ */ new Set(["str", "optstr", "f64", "optf64", "opti64", "i64", "optstrvec", "strvecvec", "orderreqs", "params", "flag", "dict", "list", "optdict", "optlist", "optcurrency"]);
 var RUST_DISPATCH_NATIVE_RETURNS = /* @__PURE__ */ new Set(["int", "string", "bool", "baseostr", "dict", "list", "optdict", "struct"]);
 var rustDispatch = {
   isTyped: (kind) => RUST_DISPATCH_TYPED_KINDS.has(kind),
@@ -51356,6 +51356,8 @@ var rustDispatch = {
         return `${arg}.into_opt_dict()`;
       case "optlist":
         return `${arg}.into_opt_list()`;
+      case "optcurrency":
+        return `<Option<crate::types::Currency> as crate::types::FromRaw>::from_raw(${arg}).as_ref()`;
       default:
         return arg;
     }
@@ -51373,6 +51375,8 @@ var rustDispatch = {
         return rustDispatch.mapArg(i);
       case "value":
         return `args.get(${i}).cloned().unwrap_or(crate::Value::Null)`;
+      case "optcurrency":
+        return rustDispatch.arg(kind, i);
       default:
         return void 0;
     }
@@ -51393,6 +51397,8 @@ var rustDispatch = {
         return `${v}.into_${kind.replace("opt", "opt_")}()`;
       case "orderreqs":
         return `crate::types::FromRaw::from_raw(${v})`;
+      case "optcurrency":
+        return `<Option<crate::types::Currency> as crate::types::FromRaw>::from_raw(${v}).as_ref()`;
       default:
         return v;
     }
@@ -51627,6 +51633,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // declared `Str` prints `Option<&str>`; callers convert once, the body binds the `Value` once.
     this.rustVenueStrDecisions = /* @__PURE__ */ new WeakMap();
     this.rustVenueStrCallers = /* @__PURE__ */ new WeakMap();
+    this.rustCurrencySlotDecisions = /* @__PURE__ */ new WeakMap();
     this.rustTypedUnified = new Set(_nullishCoalesce(config["typedUnified"], () => ( [])));
     this.rustVirtualDispatch = _nullishCoalesce(config["virtualDispatch"], () => ( {}));
     this.rustNonVirtualShims = new Set(_nullishCoalesce(config["nonVirtualShims"], () => ( [])));
@@ -51756,6 +51763,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   printIdentifier(node) {
     const name = String(node.text);
+    const currencySlot = this.printCurrencySlotParamValue(node);
+    if (currencySlot !== void 0)
+      return currencySlot;
     const marketValue = this.printTypedMarketValueUse(node);
     if (marketValue !== void 0)
       return marketValue;
@@ -52075,6 +52085,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const optMarket = this.printOptMarketNullTest(left, right, op);
     if (optMarket !== void 0)
       return optMarket;
+    const currencySlot = this.printCurrencySlotNullTest(left, right, op);
+    if (currencySlot !== void 0)
+      return currencySlot;
     const scalarLocal = this.printRustScalarLocalEquality(left, right, op);
     if (scalarLocal !== void 0)
       return scalarLocal;
@@ -53911,6 +53924,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** Native type text of a parameter in the emitted signature. */
   rustParamType(param) {
+    if (this.rustCurrencySlotParam(param))
+      return "Option<&crate::types::Currency>";
     if (this.rustParamPrintsBool(param))
       return "bool";
     if (this.rustParamIsLentDict(param) || this.rustParamIsLentList(param))
@@ -58680,7 +58695,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         if (watchCall !== void 0)
           return watchCall;
         const calleeParams = this.rustCalleeParams(node);
-        const printArg = (a, at) => this.rustVenueStrSlot(calleeParams, at) !== void 0 ? this.rustVenueStrArgText(a, this.rustVenueStrSlot(calleeParams, at), 0) : this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
+        const printArg = (a, at) => this.rustCurrencySlot(calleeParams, at) ? this.rustCurrencySlotArgText(a, 0) : this.rustVenueStrSlot(calleeParams, at) !== void 0 ? this.rustVenueStrArgText(a, this.rustVenueStrSlot(calleeParams, at), 0) : this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
         const printArgs = (list, from = 0) => list.map((a, i) => this.rustWsWatchSlot(node, from + i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, from + i)).join(", ");
         const requiredArgs = [printArgs(args.slice(0, sig.requiredCount)), ...this.rustVenuePads(calleeParams, args.length, sig.requiredCount)].filter((a) => a !== "").join(", ");
         const reqPart = requiredArgs ? `${requiredArgs}, ` : "";
@@ -58715,7 +58730,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (args.length < fixed || args.length > 0 && args[args.length - 1].startsWith("&["))
       return void 0;
     const params = this.rustCalleeParams(node);
-    const cloned = args.map((a, at) => at >= node.arguments.length || this.rustVenueStrSlot(params, at) !== void 0 ? a : this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== void 0 ? a : this.rustSliceArgText(a));
+    const cloned = args.map((a, at) => at >= node.arguments.length || this.rustVenueStrSlot(params, at) !== void 0 || this.rustCurrencySlot(params, at) ? a : this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== void 0 ? a : this.rustSliceArgText(a));
     return `${receiver}.${methodName}(${cloned.slice(0, fixed).join(", ")}${fixed > 0 ? ", " : ""}&[${cloned.slice(fixed).join(", ")}])`;
   }
   rustSliceArgText(a) {
@@ -58839,6 +58854,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       const venueStr = this.rustVenueStrSlot(params, at);
       if (venueStr !== void 0)
         return this.rustVenueStrArgText(arg, venueStr, identation);
+      if (this.rustCurrencySlot(params, at))
+        return this.rustCurrencySlotArgText(arg, identation);
       if (this.rustNativeMapArgumentSlot(params, at) !== void 0) {
         return this.rustMapArgumentText(arg, identation);
       }
@@ -59951,7 +59968,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       const name = String(param.name.text);
       if (name === "optional_args")
         continue;
-      if (param.type === void 0)
+      if (param.type === void 0 || this.rustCurrencySlotParam(param))
         continue;
       const type = this.getCheckedTypeOf(param.type);
       if (type === void 0)
@@ -67996,7 +68013,99 @@ ${this.getIden(identation)}}`;
   }
   /** An optional per-venue parameter that prints as a typed positional `Option`. */
   rustVenuePositional(param) {
+    if (this.rustCurrencySlotParam(param))
+      return true;
     return _optionalChain([param, 'optionalAccess', _9666 => _9666.kind]) === _ast.SyntaxKind.Parameter && (param.initializer !== void 0 || param.questionToken !== void 0) && this.rustVenueStrParamType(param) !== void 0;
+  }
+  rustCurrencySlotParam(param) {
+    if (_optionalChain([param, 'optionalAccess', _9667 => _9667.kind]) !== _ast.SyntaxKind.Parameter)
+      return false;
+    let decision = this.rustCurrencySlotDecisions.get(param);
+    if (decision === void 0) {
+      this.rustCurrencySlotDecisions.set(param, false);
+      try {
+        decision = this.rustCurrencySlotParamUncached(param);
+      } catch (e) {
+        decision = false;
+      }
+      this.rustCurrencySlotDecisions.set(param, decision);
+    }
+    return decision;
+  }
+  /** `currency: Currency = undefined`, the second parameter of a listed base method (or of an override of one), never written. */
+  rustCurrencySlotParamUncached(param) {
+    const method = param.parent;
+    if (!_is.isMethodDeclaration.call(void 0, method) || method.body === void 0 || !_is.isIdentifier.call(void 0, method.name) || !_is.isClassDeclaration.call(void 0, method.parent))
+      return false;
+    if (!_RustTranspiler.RUST_CURRENCY_SLOT_METHODS.has(String(method.name.text)))
+      return false;
+    if ((_nullishCoalesce(method.modifiers, () => ( []))).some((m) => m.kind === _ast.SyntaxKind.StaticKeyword))
+      return false;
+    const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
+    if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(file)) {
+      const hidden = this.getMethodOverride(method);
+      if (hidden === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(_nullishCoalesce(_optionalChain([hidden, 'access', _9668 => _9668.getSourceFile, 'optionalCall', _9669 => _9669(), 'optionalAccess', _9670 => _9670.fileName]), () => ( "")))))
+        return false;
+    }
+    const params = Array.from(method.parameters);
+    if (params.length !== 2 || params[1] !== param || !_is.isIdentifier.call(void 0, param.name) || param.dotDotDotToken !== void 0)
+      return false;
+    const first = params[0];
+    if (first.initializer !== void 0 || first.questionToken !== void 0 || first.dotDotDotToken !== void 0)
+      return false;
+    if (param.initializer === void 0 || this.literalKindOfNode(this.unwrapParens(param.initializer)) !== "null")
+      return false;
+    const type = param.type;
+    if (_optionalChain([type, 'optionalAccess', _9671 => _9671.kind]) !== _ast.SyntaxKind.TypeReference || !_is.isIdentifier.call(void 0, type.typeName) || String(type.typeName.text) !== "Currency")
+      return false;
+    const name = String(param.name.text);
+    if (this.rustMethodReferencedAsValue(method) || this.rustLocalIsReassigned(param, name))
+      return false;
+    return this.rustLocalUsesAll(param, name, true, (n) => this.rustEnclosingFunction(n) === method && !this.isNativeWriteTargetBase(n) && !_is.isDeleteExpression.call(void 0, _optionalChain([n, 'access', _9672 => _9672.parent, 'optionalAccess', _9673 => _9673.parent])));
+  }
+  /** The callee parameter at `at` is a lent currency slot. */
+  rustCurrencySlot(params, at) {
+    return params !== void 0 && at < params.length && this.rustCurrencySlotParam(params[at]);
+  }
+  /** A use (never the declaration) of a lent currency parameter. */
+  rustCurrencySlotParamOf(node) {
+    if (node === void 0 || !_is.isIdentifier.call(void 0, node))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    return declaration !== void 0 && declaration.name !== node && this.rustCurrencySlotParam(declaration) ? declaration : void 0;
+  }
+  /** A lent currency parameter in a `Value` place: its record, boxed once. */
+  printCurrencySlotParamValue(node) {
+    if (this.rustCurrencySlotParamOf(node) === void 0)
+      return void 0;
+    const call = node.parent;
+    if (_is.isCallExpression.call(void 0, call) && call.expression !== node) {
+      const at = Array.from(call.arguments).indexOf(node);
+      if (at >= 0 && this.rustCurrencySlot(this.rustCalleeParams(call), at))
+        return void 0;
+    } else if (this.rustIsNullTestOf(node))
+      return void 0;
+    return `crate::Value::from(${super.printIdentifier(node)})`;
+  }
+  /** `currency === undefined` on a lent currency parameter. */
+  printCurrencySlotNullTest(left, right, op) {
+    const l = this.unwrapParens(left);
+    const r = this.unwrapParens(right);
+    const self = this.rustCurrencySlotParamOf(l) !== void 0 ? l : this.rustCurrencySlotParamOf(r) !== void 0 ? r : void 0;
+    if (self === void 0 || !this.rustIsNullTestOf(self))
+      return void 0;
+    const equal = op === _ast.SyntaxKind.EqualsEqualsToken || op === _ast.SyntaxKind.EqualsEqualsEqualsToken;
+    return `${super.printIdentifier(self)}.${equal ? "is_none" : "is_some"}()`;
+  }
+  /** Argument text for a lent currency slot: `None`, a slot parameter as is, any other value decoded once. */
+  rustCurrencySlotArgText(arg, identation) {
+    const inner = this.unwrapParens(arg);
+    if (this.literalKindOfNode(inner) === "null")
+      return "None";
+    if (_is.isIdentifier.call(void 0, inner) && this.rustCurrencySlotParamOf(inner) !== void 0)
+      return super.printIdentifier(inner);
+    const printed = this.printNode(arg, identation).trim();
+    return `<Option<crate::types::Currency> as crate::types::FromRaw>::from_raw(${_RustTranspiler.cloneIfBareLocal(printed)}).as_ref()`;
   }
   /** `None` for each positional optional slot a call leaves out. */
   rustVenuePads(params, given, fixed) {
@@ -68011,9 +68120,9 @@ ${this.getIden(identation)}}`;
     if (this.rustNativeBoolArgumentText(arg) !== void 0)
       return this.rustBoolArgumentText(arg, identation);
     const local = _is.isIdentifier.call(void 0, inner) ? this.rustScalarLocalOf(inner) : void 0;
-    if (_optionalChain([local, 'optionalAccess', _9667 => _9667.kind]) === "bool")
+    if (_optionalChain([local, 'optionalAccess', _9674 => _9674.kind]) === "bool")
       return super.printIdentifier(inner);
-    if (_optionalChain([local, 'optionalAccess', _9668 => _9668.kind]) === "obool")
+    if (_optionalChain([local, 'optionalAccess', _9675 => _9675.kind]) === "obool")
       return `(${super.printIdentifier(inner)} == Some(true))`;
     if (local === void 0 && _is.isIdentifier.call(void 0, inner) && this.primitiveKindOfType(this.typeOfNodeIfAny(inner)) === "boolean")
       return `(${this.printNode(arg, identation).trim()}.as_bool() == Some(true))`;
@@ -68410,7 +68519,8 @@ _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "crate::value::Dict": "dict",
   "crate::value::List": "list",
   "Option<crate::value::Dict>": "optdict",
-  "Option<crate::value::List>": "optlist"
+  "Option<crate::value::List>": "optlist",
+  "Option<&crate::types::Currency>": "optcurrency"
 };
 _RustTranspiler.RUST_DISPATCH_RETURN_KINDS = {
   "": "void",
@@ -68708,7 +68818,7 @@ _RustTranspiler.RUST_MARKET_FLAG_KEYS = /* @__PURE__ */ new Set(["spot", "margin
 // above-marker bodies) do not carry that arity, so it is listed here by Rust name.
 _RustTranspiler.RUST_RUNTIME_VARIADIC_ARITY = new Map([
   [0, "sum is_json_encoded_object uuid uuid16 uuid22 safe_market create_safe_dictionary create_safe_list parse_precision network_id_to_code fetch_balance fetch_positions fetch_ledger fetch_last_prices fetch_withdrawals fetch_transactions fetch_trading_fees sign_in load_markets fetch_tickers fetch_status fetch_orders fetch_open_orders fetch_order_books client spawn order_book indexed_order_book counted_order_book safe_order_tracker market_symbols future call resolve reject check_required_credentials send lock_id unlock_id lock_last_nonce unlock_last_nonce extend_exchange_options on_error on_close on_pong crc32 load_order_book load_accounts market_ids decode_proto_msg get_market_from_symbols "],
-  [1, "remove_repeated_elements_from_array string_to_base64 base16_to_binary base58_to_binary base64_to_binary binary_to_base58 binary_to_base16 binary_to_base64 binary_to_string binary_length number_to_be parse_date is_binary_message string_to_binary urlencode_base64 urlencode_nested strip sort eth_get_address_from_private_key int_to_base16 packb yymmdd yyyymmdd ymd ymdhms rawencode safe_currency_code safe_currency safe_symbol safe_trade safe_order safe_order2 safe_ticker urlencode network_code_to_id handle_market_type_and_params handle_sub_type_and_params handle_margin_mode_and_params binary_concat totp extend deep_extend keysort parse_number create_orders fetch_ticker fetch fetch_trading_fee fetch_trades fetch_order_book delay un_watch fetch_rest_order_book_safe parse_ticker parse_ohlcv parse_funding_rate parse_position find_timeframe exception_message is_linear is_inverse filter_by_since_limit filter_by_symbol_since_limit filter_by_symbols_since_limit parse_balance_custom parse_orders parse_trades parse_ohlc_vs parse_order parse_trade parse_position_risk safe_liquidation "],
+  [1, "remove_repeated_elements_from_array string_to_base64 base16_to_binary base58_to_binary base64_to_binary binary_to_base58 binary_to_base16 binary_to_base64 binary_to_string binary_length number_to_be parse_date is_binary_message string_to_binary urlencode_base64 urlencode_nested strip sort eth_get_address_from_private_key int_to_base16 packb yymmdd yyyymmdd ymd ymdhms rawencode safe_symbol safe_trade safe_order safe_order2 safe_ticker urlencode network_code_to_id handle_market_type_and_params handle_sub_type_and_params handle_margin_mode_and_params binary_concat totp extend deep_extend keysort parse_number create_orders fetch_ticker fetch fetch_trading_fee fetch_trades fetch_order_book delay un_watch fetch_rest_order_book_safe parse_ticker parse_ohlcv parse_funding_rate parse_position find_timeframe exception_message is_linear is_inverse filter_by_since_limit filter_by_symbol_since_limit filter_by_symbols_since_limit parse_balance_custom parse_orders parse_trades parse_ohlc_vs parse_order parse_trade parse_position_risk safe_liquidation "],
   [2, "safe_value safe_value_n safe_string safe_string_n safe_string_upper safe_string_lower safe_string_lower_n safe_string_upper_n safe_integer safe_integer_n safe_float safe_timestamp safe_timestamp_n safe_float_n safe_bool safe_bool_n safe_dict safe_list safe_list_n safe_dict_n safe_integer_omit_zero safe_number_omit_zero safe_number safe_number_n hash omit sort_by group_by array_slice watch watch_multiple handle_user_data_stream_subscribe handle_option handle_param_string filter_by_array filter_by_array_positions filter_by_array_tickers filter_by_array_adl_ranks currency_to_precision parse_order_book "],
   [3, "safe_value2 safe_string2 safe_string_upper2 safe_string_lower2 safe_integer2 safe_timestamp2 safe_integer_product safe_integer_product_n safe_float2 safe_bool2 safe_dict2 safe_list2 safe_number2 handle_request_network handle_option_and_params handle_option_string_and_params handle_option_bool_and_params handle_option_integer_and_params hmac ecdsa eddsa jwt rsa sort_by2 filter_by decimal_to_precision clean_unsubscription handle_param_string2 "],
   [4, "safe_integer_product2 handle_option_and_params2 handle_option_string_and_params2 handle_option_bool_and_params2 handle_option_integer_and_params2 create_order "]
@@ -69039,6 +69149,10 @@ _RustTranspiler.PARAMS_SLOT_ARG = {
   handleSubTypeAndParams: 2,
   handleMaxEntriesPerRequestAndParams: 2
 };
+// ── typed currencies: the `currency` slot of base `safeCurrency` / `safeCurrencyCode` (and overrides) ──
+// It prints as a lent `Option<&crate::types::Currency>`; a caller passes `None`, a slot parameter as is, or
+// decodes a `Value` currency once (until its producer is typed).
+_RustTranspiler.RUST_CURRENCY_SLOT_METHODS = /* @__PURE__ */ new Set(["safeCurrency", "safeCurrencyCode"]);
 var RustTranspiler = _RustTranspiler;
 
 // src/cppTranspiler.ts
@@ -69197,7 +69311,7 @@ var CppTranspiler = class extends BaseTranspiler {
     const constructorBody = this.printFunctionBody(node, identation);
     let superCallParams = "";
     let hasSuperCall = false;
-    _optionalChain([node, 'access', _9669 => _9669.body, 'optionalAccess', _9670 => _9670.statements, 'access', _9671 => _9671.forEach, 'call', _9672 => _9672((statement) => {
+    _optionalChain([node, 'access', _9676 => _9676.body, 'optionalAccess', _9677 => _9677.statements, 'access', _9678 => _9678.forEach, 'call', _9679 => _9679((statement) => {
       if (_is.isExpressionStatement.call(void 0, statement)) {
         const expression = statement.expression;
         if (_is.isCallExpression.call(void 0, expression)) {
@@ -69358,7 +69472,7 @@ var CppTranspiler = class extends BaseTranspiler {
   }
   printVariableDeclarationList(node, identation) {
     const declaration = node.declarations[0];
-    if (_optionalChain([declaration, 'optionalAccess', _9673 => _9673.name, 'access', _9674 => _9674.kind]) === _ast.SyntaxKind.ArrayBindingPattern) {
+    if (_optionalChain([declaration, 'optionalAccess', _9680 => _9680.name, 'access', _9681 => _9681.kind]) === _ast.SyntaxKind.ArrayBindingPattern) {
       const arrayBindingPattern = declaration.name;
       const arrayBindingPatternElements = arrayBindingPattern.elements;
       const parsedArrayBindingElements = arrayBindingPatternElements.map((e) => this.printNode(e.name, 0));
@@ -69611,14 +69725,14 @@ var CppTranspiler = class extends BaseTranspiler {
     }
     if (node.expression.kind === _ast.SyntaxKind.NewExpression) {
       const expression = node.expression;
-      const argumentsExp = _nullishCoalesce(_optionalChain([expression, 'optionalAccess', _9675 => _9675.arguments]), () => ( []));
+      const argumentsExp = _nullishCoalesce(_optionalChain([expression, 'optionalAccess', _9682 => _9682.arguments]), () => ( []));
       const parsedArg = _nullishCoalesce(argumentsExp.map((n) => this.printNode(n, 0)).join(", "), () => ( ""));
       const newExpression = this.printNode(expression.expression, 0);
       if (expression.expression.kind === _ast.SyntaxKind.Identifier) {
         const id = expression.expression;
         const symbol = this.getChecker().getSymbolAtLocation(expression.expression);
         if (symbol) {
-          const declarations = (_nullishCoalesce(_optionalChain([this, 'access', _9676 => _9676.getChecker, 'call', _9677 => _9677(), 'access', _9678 => _9678.getDeclaredTypeOfSymbol, 'call', _9679 => _9679(symbol), 'access', _9680 => _9680.getSymbol, 'call', _9681 => _9681(), 'optionalAccess', _9682 => _9682.declarations]), () => ( []))).map((d) => d.resolve());
+          const declarations = (_nullishCoalesce(_optionalChain([this, 'access', _9683 => _9683.getChecker, 'call', _9684 => _9684(), 'access', _9685 => _9685.getDeclaredTypeOfSymbol, 'call', _9686 => _9686(symbol), 'access', _9687 => _9687.getSymbol, 'call', _9688 => _9688(), 'optionalAccess', _9689 => _9689.declarations]), () => ( []))).map((d) => d.resolve());
           const isClassDeclaration5 = declarations.find((l) => l.kind === _ast.SyntaxKind.InterfaceDeclaration || l.kind === _ast.SyntaxKind.ClassDeclaration);
           if (isClassDeclaration5) {
             return this.getIden(identation) + `${this.THROW_TOKEN} ${id.text}(toString(${parsedArg}))${this.LINE_TERMINATOR}`;
@@ -69733,7 +69847,7 @@ function memoizePairMethod(owner, name) {
     if (args.length !== 2 || a === null || typeof a !== "object" || b === null || typeof b !== "object") {
       return original.apply(owner, args);
     }
-    const cached = _optionalChain([cache, 'access', _9683 => _9683.get, 'call', _9684 => _9684(a), 'optionalAccess', _9685 => _9685.get, 'call', _9686 => _9686(b)]);
+    const cached = _optionalChain([cache, 'access', _9690 => _9690.get, 'call', _9691 => _9691(a), 'optionalAccess', _9692 => _9692.get, 'call', _9693 => _9693(b)]);
     if (cached !== void 0) {
       return cached === UNDEFINED_SENTINEL ? void 0 : cached;
     }
@@ -69773,7 +69887,7 @@ function memoizeUnaryMethod(owner, name) {
 }
 function memoizeBinaryKindMethod(owner, name) {
   const unary = owner[name];
-  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _9687 => _9687.original]), () => ( unary));
+  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _9694 => _9694.original]), () => ( unary));
   if (typeof original !== "function") {
     return;
   }
@@ -69823,17 +69937,17 @@ function prefetchChecker(checker, root, options = {}) {
   const typeNodes = [], symbolNodes = [], callNodes = [];
   const visit = (node) => {
     const kind = node.kind;
-    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _9688 => _9688.has, 'optionalCall', _9689 => _9689(node)]))
+    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _9695 => _9695.has, 'optionalCall', _9696 => _9696(node)]))
       typeNodes.push(node);
-    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _9690 => _9690.has, 'optionalCall', _9691 => _9691(node)]))
+    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _9697 => _9697.has, 'optionalCall', _9698 => _9698(node)]))
       symbolNodes.push(node);
-    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _9692 => _9692.has, 'optionalCall', _9693 => _9693(node)]))
+    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _9699 => _9699.has, 'optionalCall', _9700 => _9700(node)]))
       callNodes.push(node);
     node.forEachChild(visit);
   };
   visit(root);
   const run = (nodes, fn) => {
-    if (_optionalChain([fn, 'optionalAccess', _9694 => _9694.seed]) === void 0 || fn.original === void 0)
+    if (_optionalChain([fn, 'optionalAccess', _9701 => _9701.seed]) === void 0 || fn.original === void 0)
       return;
     for (let i = 0; i < nodes.length; i += PREFETCH_BATCH) {
       const chunk = nodes.slice(i, i + PREFETCH_BATCH);
@@ -69849,7 +69963,7 @@ function prefetchChecker(checker, root, options = {}) {
   run(typeNodes, getType);
   run(symbolNodes, getSymbol);
   const api = checker.__astTranspilerApi;
-  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _9695 => _9695.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _9696 => _9696.original, 'optionalAccess', _9697 => _9697.gen]) !== void 0) {
+  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _9702 => _9702.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _9703 => _9703.original, 'optionalAccess', _9704 => _9704.gen]) !== void 0) {
     for (let i = 0; i < callNodes.length; i += PREFETCH_BATCH) {
       const chunk = callNodes.slice(i, i + PREFETCH_BATCH);
       const gens = chunk.map((n) => {
@@ -69876,7 +69990,7 @@ function prefetchChecker(checker, root, options = {}) {
 function prefetchDeclarationSignatures(checker, api, root) {
   const getSigDecl = checker.getSignatureFromDeclaration;
   const getTypeOfSymbolAtLocation = checker.getTypeOfSymbolAtLocation;
-  if (_optionalChain([getSigDecl, 'optionalAccess', _9698 => _9698.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _9699 => _9699.original, 'optionalAccess', _9700 => _9700.gen]) === void 0)
+  if (_optionalChain([getSigDecl, 'optionalAccess', _9705 => _9705.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _9706 => _9706.original, 'optionalAccess', _9707 => _9707.gen]) === void 0)
     return;
   const decls = [];
   const visit = (node) => {
@@ -69902,9 +70016,9 @@ function prefetchDeclarationSignatures(checker, api, root) {
     }())));
     api.batch(...chunk.map((decl) => safe(function* () {
       const type = checker.getTypeAtLocation(decl);
-      const symbol = _optionalChain([type, 'optionalAccess', _9701 => _9701.getSymbol, 'optionalAccess', _9702 => _9702.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
-      const location = _optionalChain([symbol, 'optionalAccess', _9703 => _9703.valueDeclaration, 'optionalAccess', _9704 => _9704.resolve, 'call', _9705 => _9705()]);
-      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _9706 => _9706.seed2]) === void 0)
+      const symbol = _optionalChain([type, 'optionalAccess', _9708 => _9708.getSymbol, 'optionalAccess', _9709 => _9709.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
+      const location = _optionalChain([symbol, 'optionalAccess', _9710 => _9710.valueDeclaration, 'optionalAccess', _9711 => _9711.resolve, 'call', _9712 => _9712()]);
+      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _9713 => _9713.seed2]) === void 0)
         return;
       const symbolType = yield* getTypeOfSymbolAtLocation.original.gen(symbol, location);
       getTypeOfSymbolAtLocation.seed2(symbol, location, symbolType);
@@ -69996,7 +70110,7 @@ var Transpiler = class _Transpiler {
     const src = _nullishCoalesce(program.getSourceFile(fileName), () => ( program.getSourceFile(path3.resolve(fileName))));
     const previous = this.snapshot;
     this.snapshot = snapshot;
-    _optionalChain([previous, 'optionalAccess', _9707 => _9707.dispose, 'call', _9708 => _9708()]);
+    _optionalChain([previous, 'optionalAccess', _9714 => _9714.dispose, 'call', _9715 => _9715()]);
     return this.setContext({ src, checker, program });
   }
   createProgramInMemoryAndSetContext(content) {
@@ -70020,7 +70134,7 @@ var Transpiler = class _Transpiler {
   // long as the file's text on disk still equals the snapshot's. Replaces any
   // previous shared program; pass [] to drop it.
   setSharedProgram(paths) {
-    _optionalChain([this, 'access', _9709 => _9709.programCache, 'access', _9710 => _9710.shared, 'optionalAccess', _9711 => _9711.snapshot, 'access', _9712 => _9712.dispose, 'call', _9713 => _9713()]);
+    _optionalChain([this, 'access', _9716 => _9716.programCache, 'access', _9717 => _9717.shared, 'optionalAccess', _9718 => _9718.snapshot, 'access', _9719 => _9719.dispose, 'call', _9720 => _9720()]);
     this.programCache.shared = void 0;
     if (paths.length === 0) {
       return;

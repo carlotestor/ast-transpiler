@@ -64,7 +64,7 @@ interface RustScopeIndex {
     end: number[];
     byName: Map<string, number[]> | undefined;
 }
-export type RustDispatchParamKind = 'value' | 'slice' | 'map' | 'strvec' | 'flag' | 'str' | 'optstr' | 'f64' | 'optf64' | 'opti64' | 'i64' | 'optstrvec' | 'strvecvec' | 'params' | 'orderreqs' | 'dict' | 'list' | 'optdict' | 'optlist' | 'other';
+export type RustDispatchParamKind = 'value' | 'slice' | 'map' | 'strvec' | 'flag' | 'str' | 'optstr' | 'f64' | 'optf64' | 'opti64' | 'i64' | 'optstrvec' | 'strvecvec' | 'params' | 'orderreqs' | 'dict' | 'list' | 'optdict' | 'optlist' | 'optcurrency' | 'other';
 export type RustDispatchReturnKind = 'value' | 'void' | 'typed' | 'ostr' | 'baseostr' | 'int' | 'string' | 'bool' | 'dict' | 'list' | 'optdict' | 'struct' | 'other';
 export interface RustMethodSignature {
     file: any;
@@ -2269,6 +2269,21 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVenueOptionalSlotOpen(method: any, param: any): boolean;
     /** An optional per-venue parameter that prints as a typed positional `Option`. */
     rustVenuePositional(param: any): boolean;
+    private static readonly RUST_CURRENCY_SLOT_METHODS;
+    private rustCurrencySlotDecisions;
+    rustCurrencySlotParam(param: any): boolean;
+    /** `currency: Currency = undefined`, the second parameter of a listed base method (or of an override of one), never written. */
+    rustCurrencySlotParamUncached(param: any): boolean;
+    /** The callee parameter at `at` is a lent currency slot. */
+    rustCurrencySlot(params: any[] | undefined, at: number): boolean;
+    /** A use (never the declaration) of a lent currency parameter. */
+    rustCurrencySlotParamOf(node: any): any;
+    /** A lent currency parameter in a `Value` place: its record, boxed once. */
+    printCurrencySlotParamValue(node: any): string | undefined;
+    /** `currency === undefined` on a lent currency parameter. */
+    printCurrencySlotNullTest(left: any, right: any, op: any): string | undefined;
+    /** Argument text for a lent currency slot: `None`, a slot parameter as is, any other value decoded once. */
+    rustCurrencySlotArgText(arg: any, identation: number): string;
     /** `None` for each positional optional slot a call leaves out. */
     rustVenuePads(params: any[] | undefined, given: number, fixed: number): string[];
     /** A checker-`boolean` argument for a `bool` slot: native where it already is one, an `Option<bool>` local or a

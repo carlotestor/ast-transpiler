@@ -202,7 +202,7 @@ function rustScopeNameTable(index: RustScopeIndex): Map<string, number[]> {
 
 // A by-name dispatch parameter kind (one conversion each) and return kind, from the printer's type decisions.
 export type RustDispatchParamKind = 'value' | 'slice' | 'map' | 'strvec' | 'flag' | 'str' | 'optstr' | 'f64' | 'optf64'
-    | 'opti64' | 'i64' | 'optstrvec' | 'strvecvec' | 'params' | 'orderreqs' | 'dict' | 'list' | 'optdict' | 'optlist' | 'other';
+    | 'opti64' | 'i64' | 'optstrvec' | 'strvecvec' | 'params' | 'orderreqs' | 'dict' | 'list' | 'optdict' | 'optlist' | 'optcurrency' | 'other';
 // `ostr` .. `struct` are the native returns of sync methods; each boxes back to `Value` once, inside the arm
 export type RustDispatchReturnKind = 'value' | 'void' | 'typed' | 'ostr' | 'baseostr' | 'int' | 'string' | 'bool' | 'dict' | 'list' | 'optdict' | 'struct' | 'other';
 export interface RustMethodSignature {
@@ -214,7 +214,7 @@ export interface RustMethodSignature {
 }
 
 // The typed parameter kinds a dispatch arm decodes from `args[i]` and a forwarder from its `Value` slot.
-const RUST_DISPATCH_TYPED_KINDS = new Set<string>([ 'str', 'optstr', 'f64', 'optf64', 'opti64', 'i64', 'optstrvec', 'strvecvec', 'orderreqs', 'params', 'flag', 'dict', 'list', 'optdict', 'optlist' ]);
+const RUST_DISPATCH_TYPED_KINDS = new Set<string>([ 'str', 'optstr', 'f64', 'optf64', 'opti64', 'i64', 'optstrvec', 'strvecvec', 'orderreqs', 'params', 'flag', 'dict', 'list', 'optdict', 'optlist', 'optcurrency' ]);
 // a native return a by-name arm boxes back to `Value`
 // (`baseostr`: a base method's `Option<String>`, which keeps the arm its `-> Value` form had)
 const RUST_DISPATCH_NATIVE_RETURNS = new Set<string>([ 'int', 'string', 'bool', 'baseostr', 'dict', 'list', 'optdict', 'struct' ]);
@@ -247,6 +247,7 @@ export const rustDispatch = {
         case 'list': return `${arg}.into_list()`;
         case 'optdict': return `${arg}.into_opt_dict()`;
         case 'optlist': return `${arg}.into_opt_list()`;
+        case 'optcurrency': return `<Option<crate::types::Currency> as crate::types::FromRaw>::from_raw(${arg}).as_ref()`;
         default: return arg;
         }
     },
@@ -258,6 +259,7 @@ export const rustDispatch = {
         case 'flag': return `args.get(${i}).map(|v| v.is_truthy()).unwrap_or(false)`;
         case 'map': return rustDispatch.mapArg(i);
         case 'value': return `args.get(${i}).cloned().unwrap_or(crate::Value::Null)`;
+        case 'optcurrency': return rustDispatch.arg(kind, i);
         default: return undefined;
         }
     },
@@ -269,6 +271,7 @@ export const rustDispatch = {
         case 'flag': return `${v}.is_truthy()`;
         case 'dict': case 'list': case 'optdict': case 'optlist': return `${v}.into_${kind.replace('opt', 'opt_')}()`;
         case 'orderreqs': return `crate::types::FromRaw::from_raw(${v})`;
+        case 'optcurrency': return `<Option<crate::types::Currency> as crate::types::FromRaw>::from_raw(${v}).as_ref()`;
         default: return v;
         }
     },
@@ -477,6 +480,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     printIdentifier(node) {
         const name = String(node.text);
+        const currencySlot = this.printCurrencySlotParamValue(node); if (currencySlot !== undefined) return currencySlot;
         const marketValue = this.printTypedMarketValueUse(node);
         if (marketValue !== undefined) return marketValue;
         if (RustTranspiler.RUST_NAME_VALUE_IMPORTS.has(name) && this.rustIsImportedValueName(node)) {
@@ -896,6 +900,7 @@ export class RustTranspiler extends BaseTranspiler {
         const nilLocal = this.printRustNilLocalEquality(left, right, op); if (nilLocal !== undefined) return nilLocal;
         const optContainer = this.printOptContainerNullTest(left, right, op) ?? this.printOptListNullTest(left, right, op); if (optContainer !== undefined) return optContainer;
         const optMarket = this.printOptMarketNullTest(left, right, op); if (optMarket !== undefined) return optMarket;
+        const currencySlot = this.printCurrencySlotNullTest(left, right, op); if (currencySlot !== undefined) return currencySlot;
         const scalarLocal = this.printRustScalarLocalEquality(left, right, op); if (scalarLocal !== undefined) return scalarLocal;
         const nativeIntResult = this.rustLengthEquality(left, right, op); if (nativeIntResult !== undefined) return nativeIntResult;
         const r12 = this.rustNativeBoolEquality(left, right, op); if (r12 !== undefined) return r12;
@@ -2906,6 +2911,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** Native type text of a parameter in the emitted signature. */
     rustParamType(param): string {
+        if (this.rustCurrencySlotParam(param)) return 'Option<&crate::types::Currency>';
         if (this.rustParamPrintsBool(param)) return 'bool';
         if (this.rustParamIsLentDict(param) || this.rustParamIsLentList(param)) return 'impl Into<crate::Value>';
         if (this.rustParamPrintsMap(param)) return '&mut indexmap::IndexMap<String, Value>';
@@ -6863,6 +6869,7 @@ export class RustTranspiler extends BaseTranspiler {
         'Option<f64>': 'optf64', 'Option<i64>': 'opti64', 'i64': 'i64', 'Option<Vec<String>>': 'optstrvec', 'Vec<Vec<String>>': 'strvecvec',
         'impl Into<crate::Params> + Send': 'params', 'crate::value::Dict': 'dict', 'crate::value::List': 'list',
         'Option<crate::value::Dict>': 'optdict', 'Option<crate::value::List>': 'optlist',
+        'Option<&crate::types::Currency>': 'optcurrency',
     };
 
     private static readonly RUST_DISPATCH_RETURN_KINDS: Record<string, RustDispatchReturnKind> = {
@@ -7777,7 +7784,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (sig) {
                 const watchCall = this.printWsWatchCall(node, 'self', methodName, identation); if (watchCall !== undefined) return watchCall;
                 const calleeParams = this.rustCalleeParams(node);
-                const printArg = (a, at) => this.rustVenueStrSlot(calleeParams, at) !== undefined ? this.rustVenueStrArgText(a, this.rustVenueStrSlot(calleeParams, at), 0) : this.rustNativeMapArgumentSlot(calleeParams, at) !== undefined
+                const printArg = (a, at) => this.rustCurrencySlot(calleeParams, at) ? this.rustCurrencySlotArgText(a, 0) : this.rustVenueStrSlot(calleeParams, at) !== undefined ? this.rustVenueStrArgText(a, this.rustVenueStrSlot(calleeParams, at), 0) : this.rustNativeMapArgumentSlot(calleeParams, at) !== undefined
                     ? this.rustMapArgumentText(a, 0)
                     : this.rustNativeStrVecArgumentSlot(calleeParams, at)
                         ? this.rustStrVecArgumentText(a, 0)
@@ -7820,7 +7827,7 @@ export class RustTranspiler extends BaseTranspiler {
             'binary_to_base58 binary_to_base16 binary_to_base64 binary_to_string binary_length number_to_be ' +
             'parse_date is_binary_message string_to_binary urlencode_base64 urlencode_nested strip sort ' +
             'eth_get_address_from_private_key int_to_base16 packb yymmdd yyyymmdd ymd ymdhms rawencode ' +
-            'safe_currency_code safe_currency safe_symbol safe_trade safe_order safe_order2 safe_ticker urlencode ' +
+            'safe_symbol safe_trade safe_order safe_order2 safe_ticker urlencode ' +
             'network_code_to_id handle_market_type_and_params handle_sub_type_and_params ' +
             'handle_margin_mode_and_params binary_concat totp extend deep_extend keysort parse_number create_orders ' +
             'fetch_ticker fetch fetch_trading_fee fetch_trades fetch_order_book delay un_watch ' +
@@ -7864,7 +7871,7 @@ export class RustTranspiler extends BaseTranspiler {
         const args = this.rustPrintedArgs(node, identation);
         if (args.length < fixed || (args.length > 0 && args[args.length - 1].startsWith('&['))) return undefined;
         const params = this.rustCalleeParams(node);
-        const cloned = args.map((a, at) => at >= node.arguments.length || this.rustVenueStrSlot(params, at) !== undefined ? a : this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : (at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== undefined ? a : this.rustSliceArgText(a)));
+        const cloned = args.map((a, at) => at >= node.arguments.length || this.rustVenueStrSlot(params, at) !== undefined || this.rustCurrencySlot(params, at) ? a : this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : (at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== undefined ? a : this.rustSliceArgText(a)));
         return `${receiver}.${methodName}(${cloned.slice(0, fixed).join(', ')}${fixed > 0 ? ', ' : ''}&[${cloned.slice(fixed).join(', ')}])`;
     }
 
@@ -7985,6 +7992,7 @@ export class RustTranspiler extends BaseTranspiler {
         for (let at = node.arguments.length; at < params.length && this.rustVenuePositional(params[at]); at++) pads.push('None');
         return [ ...Array.from(node.arguments).map((arg, at) => {
             const venueStr = this.rustVenueStrSlot(params, at); if (venueStr !== undefined) return this.rustVenueStrArgText(arg, venueStr, identation);
+            if (this.rustCurrencySlot(params, at)) return this.rustCurrencySlotArgText(arg, identation);
             if (this.rustNativeMapArgumentSlot(params, at) !== undefined) {
                 return this.rustMapArgumentText(arg, identation);
             }
@@ -9132,7 +9140,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (!isParameterDeclaration(param) || !isIdentifier(param.name)) continue;
             const name = String(param.name.text);
             if (name === 'optional_args') continue;
-            if (param.type === undefined) continue;
+            if (param.type === undefined || this.rustCurrencySlotParam(param)) continue;
             const type = this.getCheckedTypeOf(param.type);
             if (type === undefined) continue;
             // A ws order-book parameter is a `Value::Dict` in the port, but its TS class
@@ -17138,7 +17146,97 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** An optional per-venue parameter that prints as a typed positional `Option`. */
     rustVenuePositional(param: any): boolean {
+        if (this.rustCurrencySlotParam(param)) return true;
         return param?.kind === SyntaxKind.Parameter && (param.initializer !== undefined || param.questionToken !== undefined) && this.rustVenueStrParamType(param) !== undefined;
+    }
+
+    // ── typed currencies: the `currency` slot of base `safeCurrency` / `safeCurrencyCode` (and overrides) ──
+    // It prints as a lent `Option<&crate::types::Currency>`; a caller passes `None`, a slot parameter as is, or
+    // decodes a `Value` currency once (until its producer is typed).
+
+    private static readonly RUST_CURRENCY_SLOT_METHODS = new Set([ 'safeCurrency', 'safeCurrencyCode' ]);
+
+    private rustCurrencySlotDecisions = new WeakMap<any, boolean>();
+
+    rustCurrencySlotParam(param: any): boolean {
+        if (param?.kind !== SyntaxKind.Parameter) return false;
+        let decision = this.rustCurrencySlotDecisions.get(param);
+        if (decision === undefined) {
+            this.rustCurrencySlotDecisions.set(param, false); // re-entrancy guard
+            try {
+                decision = this.rustCurrencySlotParamUncached(param);
+            } catch (e) {
+                decision = false;
+            }
+            this.rustCurrencySlotDecisions.set(param, decision);
+        }
+        return decision;
+    }
+
+    /** `currency: Currency = undefined`, the second parameter of a listed base method (or of an override of one), never written. */
+    rustCurrencySlotParamUncached(param: any): boolean {
+        const method: any = param.parent;
+        if (!isMethodDeclaration(method) || method.body === undefined || !isIdentifier(method.name) || !isClassDeclaration(method.parent)) return false;
+        if (!RustTranspiler.RUST_CURRENCY_SLOT_METHODS.has(String(method.name.text))) return false;
+        if ((method.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.StaticKeyword)) return false;
+        const file = String(method.getSourceFile().fileName).replace(/\\/g, '/');
+        if (!RustTranspiler.RUST_BASE_TIER_FILE.test(file)) {
+            const hidden: any = this.getMethodOverride(method);
+            if (hidden === undefined || !RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile?.()?.fileName ?? ''))) return false;
+        }
+        const params: any[] = Array.from(method.parameters);
+        if (params.length !== 2 || params[1] !== param || !isIdentifier(param.name) || param.dotDotDotToken !== undefined) return false;
+        const first: any = params[0];
+        if (first.initializer !== undefined || first.questionToken !== undefined || first.dotDotDotToken !== undefined) return false;
+        if (param.initializer === undefined || this.literalKindOfNode(this.unwrapParens(param.initializer)) !== 'null') return false;
+        const type: any = param.type;
+        if (type?.kind !== SyntaxKind.TypeReference || !isIdentifier(type.typeName) || String(type.typeName.text) !== 'Currency') return false;
+        const name = String(param.name.text);
+        if (this.rustMethodReferencedAsValue(method) || this.rustLocalIsReassigned(param, name)) return false;
+        return this.rustLocalUsesAll(param, name, true, (n: any) => this.rustEnclosingFunction(n) === method
+            && !this.isNativeWriteTargetBase(n) && !isDeleteExpression(n.parent?.parent));
+    }
+
+    /** The callee parameter at `at` is a lent currency slot. */
+    rustCurrencySlot(params: any[] | undefined, at: number): boolean {
+        return params !== undefined && at < params.length && this.rustCurrencySlotParam(params[at]);
+    }
+
+    /** A use (never the declaration) of a lent currency parameter. */
+    rustCurrencySlotParamOf(node: any): any {
+        if (node === undefined || !isIdentifier(node)) return undefined;
+        const declaration: any = this.rustDeclarationOfIdentifier(node);
+        return declaration !== undefined && declaration.name !== node && this.rustCurrencySlotParam(declaration) ? declaration : undefined;
+    }
+
+    /** A lent currency parameter in a `Value` place: its record, boxed once. */
+    printCurrencySlotParamValue(node: any): string | undefined {
+        if (this.rustCurrencySlotParamOf(node) === undefined) return undefined;
+        const call: any = node.parent;
+        if (isCallExpression(call) && call.expression !== node) {
+            const at = Array.from(call.arguments).indexOf(node);
+            if (at >= 0 && this.rustCurrencySlot(this.rustCalleeParams(call), at)) return undefined;
+        } else if (this.rustIsNullTestOf(node)) return undefined;
+        return `crate::Value::from(${super.printIdentifier(node)})`;
+    }
+
+    /** `currency === undefined` on a lent currency parameter. */
+    printCurrencySlotNullTest(left: any, right: any, op: any): string | undefined {
+        const l = this.unwrapParens(left);
+        const r = this.unwrapParens(right);
+        const self = this.rustCurrencySlotParamOf(l) !== undefined ? l : (this.rustCurrencySlotParamOf(r) !== undefined ? r : undefined);
+        if (self === undefined || !this.rustIsNullTestOf(self)) return undefined;
+        const equal = op === SyntaxKind.EqualsEqualsToken || op === SyntaxKind.EqualsEqualsEqualsToken;
+        return `${super.printIdentifier(self)}.${equal ? 'is_none' : 'is_some'}()`;
+    }
+
+    /** Argument text for a lent currency slot: `None`, a slot parameter as is, any other value decoded once. */
+    rustCurrencySlotArgText(arg: any, identation: number): string {
+        const inner: any = this.unwrapParens(arg);
+        if (this.literalKindOfNode(inner) === 'null') return 'None';
+        if (isIdentifier(inner) && this.rustCurrencySlotParamOf(inner) !== undefined) return super.printIdentifier(inner);
+        const printed = this.printNode(arg, identation).trim();
+        return `<Option<crate::types::Currency> as crate::types::FromRaw>::from_raw(${RustTranspiler.cloneIfBareLocal(printed)}).as_ref()`;
     }
 
     /** `None` for each positional optional slot a call leaves out. */

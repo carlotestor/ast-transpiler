@@ -9032,3 +9032,74 @@ describe('rust base safeCurrencyCode returns Option<String>', () => {
         expect(caller).not.toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\([^;]*\.as_str\(\)\.map\(str::to_owned\);/);
     });
 });
+
+describe('rust base safeCurrency / safeCurrencyCode take a lent Option<&Currency>', () => {
+    const fixture = (rel: string, text: string): string => {
+        const out = path.join(rustFixtureRoot, 'base-currency-slot', rel);
+        fs.mkdirSync(path.dirname(out), { recursive: true });
+        fs.writeFileSync(out, text);
+        return out;
+    };
+    let base = '';
+    let venue = '';
+    let caller = '';
+    beforeAll(() => {
+        const baseFile = fixture('ts/src/base/Exchange.ts', 'type Str = string | undefined;\n'
+            + 'type Currency = any;\n'
+            + 'export default class Exchange {\n'
+            + '    currencies_by_id: any = undefined;\n'
+            + '    safeCurrency (currencyId: Str, currency: Currency = undefined): any {\n'
+            + '        if ((currencyId === undefined) && (currency !== undefined)) {\n'
+            + '            return currency;\n'
+            + '        }\n'
+            + "        return { 'id': currencyId, 'code': currencyId };\n"
+            + '    }\n'
+            + '    safeCurrencyCode (currencyId: Str, currency: Currency = undefined): Str {\n'
+            + '        const currencyResolved = this.safeCurrency (currencyId, currency);\n'
+            + "        return currencyResolved['code'];\n"
+            + '    }\n'
+            + '}\n');
+        base = transpiler.transpileRustByPath(baseFile).content;
+        const file = fixture('ts/src/venue.ts', "import Exchange from './base/Exchange.js';\n"
+            + 'type Str = string | undefined;\n'
+            + 'type Currency = any;\n'
+            + 'export default class venue extends Exchange {\n'
+            + '    safeCurrencyCode (currencyId: Str, currency: Currency = undefined): Str {\n'
+            + '        if (currencyId === undefined) {\n'
+            + '            return currencyId;\n'
+            + '        }\n'
+            + '        return super.safeCurrencyCode (currencyId, currency);\n'
+            + '    }\n'
+            + '}\n');
+        venue = transpiler.transpileRustByPath(file).content;
+        const other = fixture('ts/src/other.ts', "import Exchange from './base/Exchange.js';\n"
+            + 'type Currency = any;\n'
+            + 'export default class other extends Exchange {\n'
+            + '    parseIt (o: any, currency: Currency = undefined): any {\n'
+            + "        const code = this.safeCurrencyCode (this.safeString (o, 'c'), currency);\n"
+            + "        const bare = this.safeCurrencyCode (this.safeString (o, 'd'));\n"
+            + "        return { 'code': code, 'bare': bare };\n"
+            + '    }\n'
+            + '    safeString (o: any, k: string): any {\n'
+            + '        return o[k];\n'
+            + '    }\n'
+            + '}\n');
+        caller = transpiler.transpileRustByPath(other).content;
+    });
+    test('the base methods print the lent currency slot positionally', () => {
+        expect(base).toContain('fn safeCurrency(&self, currencyId: Value, currency: Option<&crate::types::Currency>) -> Value');
+        expect(base).toContain('fn safeCurrencyCode(&self, currencyId: Value, currency: Option<&crate::types::Currency>) ->');
+        expect(base).toContain('(currency.is_some())');
+        expect(base).toContain('return crate::Value::from(currency);');
+        expect(base).toContain('self.safeCurrency(currencyId, currency)');
+    });
+    test('the override follows the base signature and hands its slot to super as is', () => {
+        expect(venue).toContain('fn safeCurrencyCode(&self, currencyId: Value, currency: Option<&crate::types::Currency>) ->');
+        expect(venue).toContain('super.safeCurrencyCode(currencyId, currency)');
+    });
+    test('a caller converts once: absent is None, a Value currency decodes once', () => {
+        expect(caller).toContain('<Option<crate::types::Currency> as crate::types::FromRaw>::from_raw(currency.clone()).as_ref())');
+        expect(caller).toMatch(/self\.safeCurrencyCode\([^;]*'?d'?[^;]*, None\)/);
+        expect(caller).not.toContain('&[currency');
+    });
+});
