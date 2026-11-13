@@ -55001,6 +55001,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (this.rustStrRuntimeLocalCostly(declaration))
       return void 0;
+    if (copied > 0 && this.rustValueCaseInit(declaration.initializer))
+      return void 0;
     if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustStrMethodRecvLocal(declaration))
       return void 0;
     if (this.rustListParamElement(declaration.initializer) && (copied > 0 || boxed > 0 && typedUses === 0 || this.rustScalarFeedsWrite(declaration)))
@@ -55190,12 +55192,19 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "str";
     if (this.rustElementReadScalarKind(node) !== void 0)
       return this.rustElementReadScalarKind(node);
+    if (fresh) {
+      const field = this.rustMarketArmStrKind(node);
+      if (field !== void 0)
+        return field;
+    }
     if (fresh && this.rustListLengthInit(node))
       return "int";
     if (!isCallExpression6(node))
       return void 0;
     if (isIdentifier3(node.expression) && this.rustStrRuntimeCall(node))
       return "str";
+    if (fresh && this.rustDeclInitPosition(node) && this.rustValueCaseRecv(node) !== void 0)
+      return "ostr";
     const callee = node.expression;
     if (!isPropertyAccessExpression3(callee) || !this.rustScalarReceiver(callee.expression))
       return void 0;
@@ -55227,6 +55236,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const readerKind = this.rustReaderDefaultKind(name, args, fresh);
     if (readerKind !== void 0)
       return readerKind;
+    if (this.rustParseNumberOfString(node) && this.rustTernaryArm(node))
+      return "onum";
     if (_RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(name)) {
       const base = name.endsWith("2") ? 3 : 2;
       if (args.length === base)
@@ -55245,6 +55256,70 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (fresh && boolBase !== void 0)
       return args.length === boolBase + 1 && this.literalKindOfNode(args[boolBase]) === "boolean" ? "bool" : void 0;
     return void 0;
+  }
+  /** Base `parseNumber(s)` with no default over a string (literal, string local, `Precise.string*`): the
+   *  runtime parses a `Str` to `Float` and answers `Null` otherwise, so the result is exactly an `Option<f64>`. */
+  rustParseNumberOfString(call) {
+    if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    if (String(call.expression.name.text) !== "parseNumber" || call.arguments.length !== 1)
+      return false;
+    const declaration = this.rustScalarCallee(call);
+    if (declaration === void 0 || !/ts[\\/]src[\\/]base[\\/]/.test(String(declaration.getSourceFile().fileName)))
+      return false;
+    const arg = this.unwrapParens(call.arguments[0]);
+    if (this.rustScalarPreciseCall(arg))
+      return true;
+    const kind = isIdentifier3(arg) ? this.rustScalarLocalOf(arg)?.kind : this.rustScalarValueKind(arg, true);
+    return kind === "str" || kind === "ostr";
+  }
+  /** True when `node` (through parens) is the `whenTrue`/`whenFalse` arm of a ternary that initialises a declaration. */
+  rustTernaryArm(node) {
+    let child = node;
+    let up = node.parent;
+    while (up !== void 0 && isParenthesizedExpression3(up)) {
+      child = up;
+      up = up.parent;
+    }
+    return up !== void 0 && isConditionalExpression4(up) && up.condition !== child && this.rustDeclInitPosition(up);
+  }
+  /** `node` (through parens and ternary arms) is a variable declaration's initializer. */
+  rustDeclInitPosition(node) {
+    let child = node;
+    let up = node.parent;
+    while (up !== void 0 && (isParenthesizedExpression3(up) || isConditionalExpression4(up) && up.condition !== child)) {
+      child = up;
+      up = up.parent;
+    }
+    return up !== void 0 && isVariableDeclaration3(up) && up.initializer === child;
+  }
+  /** `x.toUpperCase()` / `x.toLowerCase()` on a `Value` place the checker types `string`: the helper converts a `Str`
+   *  and answers `Null` for anything else, which is exactly `x.as_str().map(str::to_uppercase)` as an `Option<String>`.
+   *  Returns the printed receiver place, else undefined. */
+  rustValueCaseRecv(call) {
+    if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || (call.arguments?.length ?? 0) !== 0)
+      return void 0;
+    const method = String(call.expression.name.text);
+    if (method !== "toUpperCase" && method !== "toLowerCase")
+      return void 0;
+    const recv = this.rustStripWrappers(call.expression.expression);
+    if (recv === void 0 || !isIdentifier3(recv) && !(isPropertyAccessExpression3(recv) && recv.expression.kind === SyntaxKind7.ThisKeyword))
+      return void 0;
+    if (isIdentifier3(recv) && (this.rustScalarLocalOf(recv) !== void 0 || this.rustOptParamKind(recv) !== void 0))
+      return void 0;
+    if (this.primitiveKindOfType(this.typeOfNodeIfAny(call)) !== "string" || !this.printsValueExpression(recv))
+      return void 0;
+    const text = this.printNode(recv, 0).trim();
+    return RUST_PLAIN_PLACE.test(text) ? text : void 0;
+  }
+  /** The initializer, or one of its ternary arms, is a `rustValueCaseRecv` conversion. */
+  rustValueCaseInit(init) {
+    const node = this.unwrapParens(init);
+    if (node === void 0)
+      return false;
+    if (isConditionalExpression4(node))
+      return this.rustValueCaseInit(node.whenTrue) || this.rustValueCaseInit(node.whenFalse);
+    return this.rustValueCaseRecv(node) !== void 0;
   }
   rustBaseReturnScalarKind(call, name) {
     const kind = _RustTranspiler.RUST_BASE_SCALAR_RETURNS[name] ?? this.rustDerivedScalarKind(call);
@@ -56873,6 +56948,14 @@ ${binding(plan.indent)}` : ""), head: "" };
       return paramText;
     if (kind === "oint" && this.rustLimitCall(node))
       return this.rustLimitCallText(node);
+    const marketField = base === "str" ? this.rustMarketArmStrText(kind, node) : void 0;
+    if (marketField !== void 0)
+      return marketField;
+    if (base === "num" && this.rustParseNumberOfString(node)) {
+      const lit = this.unwrapParens(node.arguments[0]);
+      if (this.literalKindOfNode(lit) === "string" && /^-?\d+(\.\d+)?$/.test(String(lit.text)))
+        return optional ? `Some(${String(lit.text)}_f64)` : void 0;
+    }
     if (isConditionalExpression4(node)) {
       const whenTrue = this.rustScalarNativeText(kind, node.whenTrue);
       const whenFalse = this.rustScalarNativeText(kind, node.whenFalse);
@@ -56923,6 +57006,10 @@ ${binding(plan.indent)}` : ""), head: "" };
       return this.rustArithCallText(kind, node);
     if (base === "str" && this.rustStrRuntimeCall(node))
       return wrap(this.rustStrRuntimeBareText(node));
+    const caseRecv = kind === "ostr" ? this.rustValueCaseRecv(node) : void 0;
+    const caseCallee = node.expression;
+    if (caseRecv !== void 0)
+      return `${caseRecv}.as_str().map(str::${String(caseCallee.name.text) === "toUpperCase" ? "to_uppercase" : "to_lowercase"})`;
     const text = this.printNode(node, 0).trim();
     if (this.rustClockCall(node))
       return kind === "int" || kind === "oint" ? wrap(`${text}.as_i64().unwrap_or_default()`) : void 0;
@@ -57270,7 +57357,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return void 0;
     if (a === b)
       return a;
-    const optional = (k) => k === "str" || k === "int" || k === "num" ? `o${k}` : k.startsWith("o") ? k : void 0;
+    const optional = (k) => k === "str" || k === "int" || k === "num" || k === "bool" ? `o${k}` : k.startsWith("o") ? k : void 0;
     if (a === "null")
       return optional(b);
     if (b === "null")
@@ -57362,15 +57449,41 @@ ${binding(plan.indent)}` : ""), head: "" };
     const param = this.unwrapParens(tested);
     const own = this.rustOptParamKind(param);
     const kind = own === "oint" || own === "onum" ? own : void 0;
+    const d = this.unwrapParens(fallback);
+    const capped = kind === "oint" ? this.rustOptParamCapped(kind, param, present, d) : void 0;
+    if (capped !== void 0)
+      return capped;
     const same = this.unwrapParens(present);
     if (kind === void 0 || !isIdentifier3(same) || this.rustDeclaredNode(same) !== this.rustDeclaredNode(param))
       return void 0;
-    const d = this.unwrapParens(fallback);
     const dk = this.rustScalarIntLiteral(d) !== void 0 ? "int" : this.rustScalarFloatLiteral(d) !== void 0 ? "num" : isIdentifier3(d) ? this.rustScalarLocalOf(d)?.kind : void 0;
     const base = kind.slice(1);
     if (dk !== base && !(base === "num" && dk === "int"))
       return void 0;
     return { kind: base, text: `${super.printIdentifier(param)}.${kind === "oint" ? "as_i64" : "as_f64"}().unwrap_or(${this.rustScalarOperandText(base, d)})` };
+  }
+  rustOptParamCapped(kind, param, present, d) {
+    const call = this.unwrapParens(present);
+    if (!isCallExpression6(call) || !this.rustArithCombinator(call) || call.arguments.length !== 2)
+      return void 0;
+    const callee = call.expression;
+    const name = String(callee.name.text);
+    if (name === "sum")
+      return void 0;
+    const [a, b] = Array.from(call.arguments).map((x) => this.unwrapParens(x));
+    const sameParam = (x) => isIdentifier3(x) && this.rustDeclaredNode(x) === this.rustDeclaredNode(param);
+    const cap = sameParam(a) ? b : sameParam(b) ? a : void 0;
+    const base = kind.slice(1);
+    const lit = (x) => x === void 0 ? void 0 : base === "int" ? this.rustScalarIntLiteral(x) : this.rustScalarFloatLiteral(x) ?? this.rustScalarIntLiteral(x);
+    const capText = lit(cap);
+    const dText = lit(d);
+    if (capText === void 0 || dText === void 0)
+      return void 0;
+    if (name === "min" ? Number(dText) > Number(capText) : Number(dText) < Number(capText))
+      return void 0;
+    const ty = base === "int" ? "i64" : "f64";
+    const reader = base === "int" ? "as_i64" : "as_f64";
+    return { kind: base, text: `${ty}::${name}(${super.printIdentifier(param)}.${reader}().unwrap_or(${this.rustScalarOperandText(base, d)}), ${this.rustScalarOperandText(base, cap)})` };
   }
   rustOptParamWriteOk(kind, node) {
     if (isConditionalExpression4(node)) {
@@ -59194,6 +59307,34 @@ ${i1}}`;
       return void 0;
     const equal = op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken;
     return `${super.printIdentifier(self)}.${equal ? "is_none" : "is_some"}()`;
+  }
+  /** A ternary arm reading a string field off a typed (non-`smkt`) market struct local: `str` for a
+   *  `String` field, `ostr` for an `Option<String>` one, else undefined. */
+  rustMarketArmStrKind(node) {
+    if (!this.rustTernaryArm(node) || !(isElementAccessExpression4(node) || isPropertyAccessExpression3(node)))
+      return void 0;
+    const declaration = this.rustTypedMarketLocalOf(node.expression);
+    if (declaration === void 0 || this.rustMarketLocalKind(declaration) !== "struct")
+      return void 0;
+    const key = this.rustMarketReadKey(node.expression);
+    if (key === void 0)
+      return void 0;
+    if (_RustTranspiler.RUST_MARKET_STR_FIELDS[key] !== void 0)
+      return "str";
+    return _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS[key] !== void 0 ? "ostr" : void 0;
+  }
+  /** The native text of a `rustMarketArmStrKind` read for a local of `kind`. */
+  rustMarketArmStrText(kind, node) {
+    const own = this.rustMarketArmStrKind(node);
+    if (own === void 0 || kind !== own && kind !== `o${own}`)
+      return void 0;
+    const declaration = this.rustTypedMarketLocalOf(node.expression);
+    const key = this.rustMarketReadKey(node.expression);
+    const recv = `(${this.printNode(declaration.name, 0)})`;
+    if (own === "ostr")
+      return `${recv}.${_RustTranspiler.RUST_MARKET_OPT_STR_FIELDS[key]}.clone()`;
+    const text = `${recv}.${_RustTranspiler.RUST_MARKET_STR_FIELDS[key]}.clone()`;
+    return kind === "ostr" ? `Some(${text})` : text;
   }
   /** The struct local behind an identifier use (never the declaration name). */
   rustTypedMarketLocalOf(node) {

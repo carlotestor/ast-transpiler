@@ -522,6 +522,19 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  non-null literal kinds (`str|int|num|bool`) a declaration may seed. */
     rustScalarValueKind(expr: any, fresh: boolean): string | undefined;
     private static readonly RUST_BASE_SCALAR_RETURNS;
+    /** Base `parseNumber(s)` with no default over a string (literal, string local, `Precise.string*`): the
+     *  runtime parses a `Str` to `Float` and answers `Null` otherwise, so the result is exactly an `Option<f64>`. */
+    rustParseNumberOfString(call: any): boolean;
+    /** True when `node` (through parens) is the `whenTrue`/`whenFalse` arm of a ternary that initialises a declaration. */
+    rustTernaryArm(node: any): boolean;
+    /** `node` (through parens and ternary arms) is a variable declaration's initializer. */
+    rustDeclInitPosition(node: any): boolean;
+    /** `x.toUpperCase()` / `x.toLowerCase()` on a `Value` place the checker types `string`: the helper converts a `Str`
+     *  and answers `Null` for anything else, which is exactly `x.as_str().map(str::to_uppercase)` as an `Option<String>`.
+     *  Returns the printed receiver place, else undefined. */
+    rustValueCaseRecv(call: any): string | undefined;
+    /** The initializer, or one of its ternary arms, is a `rustValueCaseRecv` conversion. */
+    rustValueCaseInit(init: any): boolean;
     rustBaseReturnScalarKind(call: any, name: string): string | undefined;
     private static readonly RUST_STR_RUNTIME_METHODS;
     private static readonly RUST_STR_RUNTIME_APPEND_VETO;
@@ -829,6 +842,10 @@ export declare class RustTranspiler extends BaseTranspiler {
         kind: string;
         text: string;
     } | undefined;
+    rustOptParamCapped(kind: string, param: any, present: any, d: any): {
+        kind: string;
+        text: string;
+    } | undefined;
     rustOptParamWriteOk(kind: string, node: any): boolean;
     /** Native `bool` text of a comparison proven native, `!x`, a bool local, or `&&`/`||` over those. */
     rustBoolNativeText(expr: any): string | undefined;
@@ -1083,6 +1100,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNullTestIsCondition(n: any): boolean;
     /** `m === undefined` on an `Option<Market>` local. */
     printOptMarketNullTest(left: any, right: any, op: any): string | undefined;
+    /** A ternary arm reading a string field off a typed (non-`smkt`) market struct local: `str` for a
+     *  `String` field, `ostr` for an `Option<String>` one, else undefined. */
+    rustMarketArmStrKind(node: any): string | undefined;
+    /** The native text of a `rustMarketArmStrKind` read for a local of `kind`. */
+    rustMarketArmStrText(kind: string, node: any): string | undefined;
     /** The struct local behind an identifier use (never the declaration name). */
     rustTypedMarketLocalOf(node: any): any;
     /** `let mut market: crate::types::Market = …` — the typed call, its `Err` re-raised as the untyped call did. */
