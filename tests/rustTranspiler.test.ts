@@ -9750,6 +9750,14 @@ describe('ral-ie: split results and integer toString locals', () => {
         expect(out).toContain('(&parts, Value::Int(0)');
         expect(out).toContain('(&rawParts, Value::Int(1)');
     });
+    test('negative: a split handed to arraySlice keeps its box (ccxt proves the slice elements from it)', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-ie-split-slice');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export default class Exchange {\n    arraySlice (a: any, s: any, e: any = undefined): any { return a; }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    series (ticker: string, raw: any) {\n        const parts = (ticker + raw['x']).split ('-');\n        const n = parts.length;\n        const head = this.arraySlice (parts, 0, n - 1);\n        return this.hold (head.join ('-'));\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut parts: Value = ');
+    });
     test('n.toString() of an i64 local declares a String', () => {
         const dir = path.join (rustFixtureRoot, 'ral-ie-int-tostring');
         fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });

@@ -65130,6 +65130,8 @@ ${iden}}`;
         const callee = up.expression;
         if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n)))
           return false;
+        if (this.rustCallPrintsRuntimeSplit(init) && String(callee.name.text) === "arraySlice")
+          return false;
         boxes.push([n, "clone"]);
         return true;
       }

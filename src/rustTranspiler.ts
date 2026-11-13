@@ -14287,6 +14287,9 @@ export class RustTranspiler extends BaseTranspiler {
                 const callee: any = up.expression;
                 if (!isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword
                     || !this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n)) ) return false;
+                // ccxt's string-native pass proves an `array_slice` result's string elements from the boxed split
+                // local it slices (`elemKind`): a runtime split handed there keeps that box
+                if (this.rustCallPrintsRuntimeSplit(init) && String(callee.name.text) === 'arraySlice') return false;
                 boxes.push([n, 'clone']);
                 return true;
             }
