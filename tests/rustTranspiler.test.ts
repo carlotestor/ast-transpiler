@@ -9357,4 +9357,12 @@ describe('safe scalar locals: optional arithmetic, bool logicals, lent reader st
         expect(out).toContain('let mut code: Option<String> = ');
         expect(out).toContain('result.insert(code.as_deref().unwrap_or("null").to_string(), ');
     });
+    test('a String local compared with its own toString() borrows instead of copying', () => {
+        const dir = path.join (rustFixtureRoot, 'scalar-opt-arith');
+        fs.writeFileSync (path.join (dir, 'ts/src/venue2.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue2 extends Exchange {\n    same (a: any) {\n        const id = this.safeString (a, 'id', 'x');\n        return (id.toString () === id) && (id.length === 36);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue2.ts')).content;
+        expect(out).toContain('let mut id: String = ');
+        expect(out).toContain('Value::Bool((id == id) && ');
+        expect(out).not.toContain('id.clone()');
+    });
 });
