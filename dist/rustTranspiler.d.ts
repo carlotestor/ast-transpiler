@@ -748,6 +748,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `m[k] = v` as a statement: the element key of a native insert. */
     rustElemInsertKey(n: any): boolean;
     printElemKeyInOp(key: any, obj: any): string | undefined;
+    rustThisFieldLiteralWrite(n: any): boolean;
     rustScalarInNestedWrite(n: any): boolean;
     /** A write source the local's type holds exactly: a same-kind value, a typed scalar local of the
      *  same kind, or a ternary of those (its condition printed as a bool). */
@@ -1675,6 +1676,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Builders that hand back one of their own arguments: the container kind is
      *  the argument's (they only add fields to it). */
     private static readonly RUST_BUILDER_PASSTHROUGH;
+    private static readonly RUST_LIST_PASSTHROUGH;
+    /** `x` read as the list argument of a base pass-through (`filterBy* (x, ..)` / `sortBy* (x, ..)`). */
+    rustListPassthroughArg(node: any): boolean;
+    rustListPassthroughCall(call: any): boolean;
     /** `this.<m>(…)` whose every return is a fresh untagged
      *  container of `kind` — the method's own body, no venue override (the
      *  checker resolves the most derived declaration for `this`). */
@@ -1824,6 +1829,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     printNilMapNullTest(left: any, right: any, op: any): string | undefined;
     /** The `Value` hand-off: the map moved at the last use, else the Arc bump; `None` is `Value::Null`. */
     printNilMapBox(node: any, text: string): string | undefined;
+    private rustMutableBuiltLocals;
+    /** The source statement of a box (`Value::Dict(x)`, +13 chars) leaves the printed line within 400 chars. */
+    rustBoxLineOk(n: any): boolean;
+    /** The copy-on-write insert line (indent + `Arc::make_mut(&mut x).insert(..)`) stays within the 400-char budget. */
+    rustBuiltKeyWriteLineOk(n: any): boolean;
     rustNullTestedDictLocal(init: any, nullTests: number, writes: number): boolean;
     rustDictElementSource(init: any): boolean;
     private rustDictElementBoxes;
