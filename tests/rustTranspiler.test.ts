@@ -9005,7 +9005,16 @@ describe('rust ws cache maps', () => {
         expect(out).toContain('let mut cache: Option<crate::pro::cache::Cache> = self.trades.at(&symbol);');
         expect(out).toContain('Value::from(self.trades.at(&symbol))');
         expect(base).toContain('self.trades = crate::pro::cache::CacheMap::new();');
-        expect(base).toContain('CacheStore::forget(&mut self.trades, &symbol)');
+        expect(base).toContain('self.trades.forget(&symbol)');
+    });
+    test('a delete names the field as its receiver, so the ccxt self-field auto-clone leaves it alone', () => {
+        // ccxt build/rustTranspiler.ts getRustRegexes: bare `self.F` not followed by `.`, `(`, `[` or `=` gets `.clone()`.
+        const autoClone = (t: string) => t.replace(/(?<!&)\bself\.([a-zA-Z_][a-zA-Z0-9_]*)\b(?![.\(\[]|\s*=[^=])/g, (_: string, n: string) => `self.${n}.clone()`);
+        const line = base.split('\n').find((l) => l.includes('.forget(')) as string;
+        expect(line).toBeDefined();
+        expect(line).not.toContain('&mut self.trades');
+        expect(autoClone(line)).toBe(line);
+        expect(autoClone('CacheStore::forget(&mut self.trades, &symbol)')).toContain('self.trades.clone()');
     });
     test('negative: any other read of the map is its boxed snapshot', () => {
         expect(out).toContain('Value::from(&self.trades)');
@@ -9045,7 +9054,8 @@ describe('rust ws cache shelves', () => {
         expect(out).toContain('self.ohlcvs.shelf(&symbol).has(&timeframe)');
         expect(out).toContain('let mut ohlcv: Option<crate::pro::cache::Cache> = self.ohlcvs.shelf(&symbol).at(&timeframe);');
         expect(base).toContain('self.ohlcvs = crate::pro::cache::CacheShelf::new();');
-        expect(base).toContain('CacheShelves::forget2(&mut self.ohlcvs, &symbol, &timeframe)');
+        expect(base).toContain('self.ohlcvs.forget2(&symbol, &timeframe)');
+        expect(base).not.toContain('&mut self.ohlcvs, &symbol, &timeframe');
     });
     test('negative: any other read of an inner map is its boxed snapshot', () => {
         expect(out).toContain('Value::from(self.ohlcvs.shelf(&symbol))');

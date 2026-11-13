@@ -1860,7 +1860,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     printWsCacheMapNullTest(left: any, right: any, op: any): string | undefined;
     /** `k in this.F`. */
     printWsCacheMapHas(key: any, obj: any): string | undefined;
-    /** `delete this.F[k]`. */
+    /** `delete this.F[k]`. Printed with the field as the method receiver: a `&mut self.F` argument is
+     *  what the ccxt `self.F` auto-clone rule rewrites to `&mut self.F.clone()` in non-`pub` base fns,
+     *  so the delete would hit a copy. */
     printWsCacheMapDelete(node: any): string | undefined;
     /** The value of `this.F[k] = x` for a cache local `x` (or a constructor). */
     rustWsCacheMapWriteValue(n: any): boolean;

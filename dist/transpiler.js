@@ -64646,13 +64646,15 @@ ${iden}}`;
       return void 0;
     return `Value::Bool(${this.rustWsCacheMapPlace(map)}.has(&${this.rustWsCacheMapKey(key)}))`;
   }
-  /** `delete this.F[k]`. */
+  /** `delete this.F[k]`. Printed with the field as the method receiver: a `&mut self.F` argument is
+   *  what the ccxt `self.F` auto-clone rule rewrites to `&mut self.F.clone()` in non-`pub` base fns,
+   *  so the delete would hit a copy. */
   printWsCacheMapDelete(node) {
     const target = this.unwrapParens(node.expression);
     if (this.rustWsCacheShelfEntry(target)) {
       const key2 = this.rustWsCacheMapKey(target.argumentExpression);
       const field2 = String(this.unwrapParens(target.expression).name.text);
-      return /\bself\b/.test(key2) ? `{ let __ck = ${key2}; CacheShelves::forget(&mut self.${field2}, &__ck); }` : `CacheShelves::forget(&mut self.${field2}, &${key2})`;
+      return /\bself\b/.test(key2) ? `{ let __ck = ${key2}; self.${field2}.forget(&__ck); }` : `self.${field2}.forget(&${key2})`;
     }
     if (!this.rustWsCacheMapEntry(target))
       return void 0;
@@ -64662,13 +64664,13 @@ ${iden}}`;
       const outer = this.rustWsCacheMapKey(inner.argumentExpression);
       const shelf = String(this.unwrapParens(inner.expression).name.text);
       if (/\bself\b/.test(outer + key))
-        return `{ let __ck = ${outer}; let __cj = ${key}; CacheShelves::forget2(&mut self.${shelf}, &__ck, &__cj); }`;
-      return `CacheShelves::forget2(&mut self.${shelf}, &${outer}, &${key})`;
+        return `{ let __ck = ${outer}; let __cj = ${key}; self.${shelf}.forget2(&__ck, &__cj); }`;
+      return `self.${shelf}.forget2(&${outer}, &${key})`;
     }
     if (!this.rustWsCacheMapField(inner))
       throw new Error("ws cache map: delete on an unproven map");
     const field = String(this.unwrapParens(target.expression).name.text);
-    return /\bself\b/.test(key) ? `{ let __ck = ${key}; CacheStore::forget(&mut self.${field}, &__ck); }` : `CacheStore::forget(&mut self.${field}, &${key})`;
+    return /\bself\b/.test(key) ? `{ let __ck = ${key}; self.${field}.forget(&__ck); }` : `self.${field}.forget(&${key})`;
   }
   /** The value of `this.F[k] = x` for a cache local `x` (or a constructor). */
   rustWsCacheMapWriteValue(n) {
