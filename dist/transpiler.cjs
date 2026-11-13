@@ -52174,7 +52174,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return (type.flags & (_sync.TypeFlags.Undefined | _sync.TypeFlags.Null | _sync.TypeFlags.Void)) !== 0 || this.getChecker().isArrayType(type) || this.getChecker().isTupleType(type) || this.isStringType(type.flags);
   }
   printArrayLength(node, identation, leftExpr = void 0) {
-    const scalarLength = _nullishCoalesce(this.rustScalarLengthText(node, true), () => ( this.printOptListLength(node)));
+    const scalarLength = _nullishCoalesce(_nullishCoalesce(this.rustScalarLengthText(node, true), () => ( this.printOptListLength(node))), () => ( this.printWsCacheLength(node)));
     if (scalarLength !== void 0)
       return scalarLength;
     const receiver = _nullishCoalesce(leftExpr, () => ( this.printNode(node.expression, 0)));
@@ -64327,6 +64327,10 @@ ${iden}}`;
             forms.set(n, "bare");
             return true;
           }
+          if (kind === "opt" && this.rustWsCacheLengthRead(n)) {
+            forms.set(n, "len");
+            return true;
+          }
           if (this.rustWsCacheBoxUse(n)) {
             forms.set(n, "box");
             return true;
@@ -64343,6 +64347,17 @@ ${iden}}`;
     }
     return _nullishCoalesce(known, () => ( void 0));
   }
+  /** `x.length` read on an optional cache local: the slot's own `size()`. */
+  rustWsCacheLengthRead(n) {
+    const p = n.parent;
+    return _is.isPropertyAccessExpression.call(void 0, p) && p.expression === n && String(p.name.text) === "length" && !this.isNativeWriteTargetBase(p);
+  }
+  printWsCacheLength(node) {
+    const recv = node.expression;
+    if (!_is.isIdentifier.call(void 0, recv) || this.rustWsCacheUses.get(recv) !== "len")
+      return void 0;
+    return `Value::Int(CacheSlot::size(&${super.printIdentifier(recv)}))`;
+  }
   printWsCacheLocalDeclaration(declaration, varName, indent) {
     const kind = this.rustWsCacheLocal(declaration);
     if (kind === void 0)
@@ -64356,7 +64371,7 @@ ${iden}}`;
   /** A use of a typed cache local: the handle itself, or boxed once at a `Value` hand-off. */
   printWsCacheLocalUse(node) {
     const form = this.rustWsCacheUses.get(node);
-    if (form === void 0 || form === "test")
+    if (form === void 0 || form === "test" || form === "len")
       return void 0;
     const name = super.printIdentifier(node);
     if (form === "bare")

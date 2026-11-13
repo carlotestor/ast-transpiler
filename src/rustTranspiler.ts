@@ -977,7 +977,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printArrayLength(node, identation, leftExpr = undefined) {
-        const scalarLength = this.rustScalarLengthText(node, true) ?? this.printOptListLength(node); if (scalarLength !== undefined) return scalarLength;
+        const scalarLength = this.rustScalarLengthText(node, true) ?? this.printOptListLength(node) ?? this.printWsCacheLength(node); if (scalarLength !== undefined) return scalarLength;
         const receiver = leftExpr ?? this.printNode(node.expression, 0);
         if (!this.rustIsOrderBookSide(node.expression) && this.isValueLengthType(this.typeOfNodeIfAny(node.expression))) return this.printNativeLength(node, receiver);
         // A read-only list bearer is a `Vec<Value>`; `len()` is the helper's answer.
@@ -13451,7 +13451,7 @@ export class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_CACHE_METHODS = new Set([ 'append', 'getLimit', 'clear', 'hashmap' ]);
     private rustWsCacheFields = new WeakMap<Node, boolean>();
     private rustWsCacheLocals = new WeakMap<Node, 'opt' | 'cache' | null>();
-    private rustWsCacheUses = new WeakMap<Node, 'bare' | 'box' | 'test'>();
+    private rustWsCacheUses = new WeakMap<Node, 'bare' | 'box' | 'test' | 'len'>();
 
     /** `this.F` for a base field declared `ArrayCache | undefined`. */
     rustWsCacheField(node: any): boolean {
@@ -13551,7 +13551,7 @@ export class RustTranspiler extends BaseTranspiler {
             const init: any = this.unwrapParens(declaration.initializer);
             const kind = init === undefined ? undefined : (this.rustWsCacheField(init) || this.rustWsCacheOptSource(init, false) ? 'opt' : (this.rustWsCacheCtor(init) ? 'cache' : undefined));
             if (kind !== undefined && list?.kind === SyntaxKind.VariableDeclarationList && list.declarations.length === 1) {
-                const forms = new Map<Node, 'bare' | 'box' | 'test'>();
+                const forms = new Map<Node, 'bare' | 'box' | 'test' | 'len'>();
                 const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
                     const p: any = n.parent;
                     if ((isPropertyAccessExpression(p) || p?.kind === SyntaxKind.PropertyAssignment) && p.name === n) return true;
@@ -13559,6 +13559,7 @@ export class RustTranspiler extends BaseTranspiler {
                     if (this.rustWsCacheMethodReceiver(n) || this.rustWsCacheLocalWrite(n, kind === 'opt')) { forms.set(n, 'bare'); return true; }
                     if (this.rustWsCacheFieldWriteBack(n)) { forms.set(n, kind === 'opt' ? 'bare' : 'box'); return true; }
                     if (this.rustWsCacheMapWriteValue(n)) { forms.set(n, 'bare'); return true; }
+                    if (kind === 'opt' && this.rustWsCacheLengthRead(n)) { forms.set(n, 'len'); return true; }
                     if (this.rustWsCacheBoxUse(n)) { forms.set(n, 'box'); return true; }
                     return false;
                 });
@@ -13570,6 +13571,18 @@ export class RustTranspiler extends BaseTranspiler {
             this.rustWsCacheLocals.set(declaration, known);
         }
         return known ?? undefined;
+    }
+
+    /** `x.length` read on an optional cache local: the slot's own `size()`. */
+    rustWsCacheLengthRead(n: any): boolean {
+        const p: any = n.parent;
+        return isPropertyAccessExpression(p) && p.expression === n && String(p.name.text) === 'length' && !this.isNativeWriteTargetBase(p);
+    }
+
+    printWsCacheLength(node: any): string | undefined {
+        const recv: any = node.expression;
+        if (!isIdentifier(recv) || this.rustWsCacheUses.get(recv) !== 'len') return undefined;
+        return `Value::Int(CacheSlot::size(&${super.printIdentifier(recv)}))`;
     }
 
     printWsCacheLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined {
@@ -13586,7 +13599,7 @@ export class RustTranspiler extends BaseTranspiler {
     /** A use of a typed cache local: the handle itself, or boxed once at a `Value` hand-off. */
     printWsCacheLocalUse(node: any): string | undefined {
         const form = this.rustWsCacheUses.get(node);
-        if (form === undefined || form === 'test') return undefined;
+        if (form === undefined || form === 'test' || form === 'len') return undefined;
         const name = super.printIdentifier(node);
         if (form === 'bare') return name;
         return `Value::from(&${name})`;
