@@ -1798,6 +1798,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_BORROWED_ANY_KEY_READERS;
     private rustBorrowedDictDecisions;
     rustBorrowedDictLocal(declaration: any): boolean;
+    private rustBorrowedPending;
     rustBorrowedDictLocalUncached(declaration: any): boolean;
     /** `'dict' | 'list'` for a local that holds the shared container and lends it to every read, else undefined. */
     rustBorrowedLocalKind(declaration: any): 'dict' | 'list' | undefined;

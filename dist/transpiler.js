@@ -51595,6 +51595,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // `IndexMap`, reads stay native and each `Value` slot boxes a clone (a move at `return x`).
     this.rustContainerBoxUses = /* @__PURE__ */ new WeakMap();
     this.rustBorrowedDictDecisions = /* @__PURE__ */ new WeakMap();
+    this.rustBorrowedPending = /* @__PURE__ */ new WeakSet();
     this.rustBorrowedKinds = /* @__PURE__ */ new WeakMap();
     this.rustOptContainerLocals = /* @__PURE__ */ new WeakSet();
     // Optional container locals whose declaration printed `Option<..>` (an earlier declaration form may keep the box).
@@ -64108,7 +64109,10 @@ ${iden}}`;
       } catch (e) {
         decision = false;
       }
-      this.rustBorrowedDictDecisions.set(declaration, decision);
+      if (this.rustBorrowedPending.has(declaration))
+        this.rustBorrowedDictDecisions.delete(declaration);
+      else
+        this.rustBorrowedDictDecisions.set(declaration, decision);
     }
     return decision;
   }
@@ -64121,11 +64125,14 @@ ${iden}}`;
       return void 0;
     if (!this.rustBorrowedKinds.has(declaration)) {
       this.rustBorrowedKinds.set(declaration, void 0);
+      this.rustBorrowedPending.add(declaration);
       let kind;
       try {
         kind = this.rustBorrowedLocalKindUncached(declaration);
       } catch (e) {
         kind = void 0;
+      } finally {
+        this.rustBorrowedPending.delete(declaration);
       }
       this.rustBorrowedKinds.set(declaration, kind);
     }

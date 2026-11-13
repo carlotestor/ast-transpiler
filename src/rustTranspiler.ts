@@ -13331,10 +13331,14 @@ export class RustTranspiler extends BaseTranspiler {
             } catch (e) {
                 decision = false;
             }
-            this.rustBorrowedDictDecisions.set(declaration, decision);
+            // asked while the kind decision is still pending (a box-line print inside it): answer, do not cache the guard
+            if (this.rustBorrowedPending.has(declaration)) this.rustBorrowedDictDecisions.delete(declaration);
+            else this.rustBorrowedDictDecisions.set(declaration, decision);
         }
         return decision;
     }
+
+    private rustBorrowedPending = new WeakSet<any>();
 
     rustBorrowedDictLocalUncached(declaration: any): boolean {
         return this.rustBorrowedLocalKind(declaration) !== undefined;
@@ -13345,11 +13349,14 @@ export class RustTranspiler extends BaseTranspiler {
         if (declaration?.kind !== SyntaxKind.VariableDeclaration || this.rustCurrencyLocalKind(declaration) !== false) return undefined;
         if (!this.rustBorrowedKinds.has(declaration)) {
             this.rustBorrowedKinds.set(declaration, undefined); // re-entrancy guard
+            this.rustBorrowedPending.add(declaration);
             let kind: 'dict' | 'list' | undefined;
             try {
                 kind = this.rustBorrowedLocalKindUncached(declaration);
             } catch (e) {
                 kind = undefined;
+            } finally {
+                this.rustBorrowedPending.delete(declaration);
             }
             this.rustBorrowedKinds.set(declaration, kind);
         }
