@@ -57493,10 +57493,10 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     return this.primitiveKindOfType(this.getChecker().getTypeFromTypeNode(fn.type)) === "string";
   }
-  /** `split`, `replaceAll`, an optional receiver's `replace`, or an `indexOf` outside a literal contains test. */
+  /** `split`, `replaceAll`, `slice`, `padStart` / `padEnd`, an optional receiver's `replace`, or an `indexOf` outside a literal contains test. */
   rustStrMethodNewUse(call) {
     const method = String(call.expression.name.text);
-    if (method === "split" || method === "replaceAll")
+    if (method === "split" || method === "replaceAll" || method === "slice" || method === "padStart" || method === "padEnd")
       return true;
     if (method === "replace")
       return _optionalChain([this, 'access', _8866 => _8866.rustScalarLocalOf, 'call', _8867 => _8867(call.expression.expression), 'optionalAccess', _8868 => _8868.kind]) !== "str";

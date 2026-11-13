@@ -6241,10 +6241,11 @@ export class RustTranspiler extends BaseTranspiler {
         return this.primitiveKindOfType(this.getChecker().getTypeFromTypeNode(fn.type)) === 'string';
     }
 
-    /** `split`, `replaceAll`, an optional receiver's `replace`, or an `indexOf` outside a literal contains test. */
+    /** `split`, `replaceAll`, `slice`, `padStart` / `padEnd`, an optional receiver's `replace`, or an `indexOf` outside a literal contains test. */
     rustStrMethodNewUse(call): boolean {
         const method = String(call.expression.name.text);
-        if (method === 'split' || method === 'replaceAll') return true;
+        // a pad / slice builds a new string from the receiver, like split (and its return keeps the method's ABI)
+        if (method === 'split' || method === 'replaceAll' || method === 'slice' || method === 'padStart' || method === 'padEnd') return true;
         if (method === 'replace') return this.rustScalarLocalOf(call.expression.expression)?.kind !== 'str';
         if (method !== 'indexOf') return false;
         let top: any = call;

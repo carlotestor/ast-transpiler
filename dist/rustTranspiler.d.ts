@@ -841,7 +841,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrPushValueText(target: any, right: any, dry: boolean): string | undefined;
     /** A string-method local returned from a method whose signature alone could print `-> Option<String>`: typing it would flip that ABI. */
     rustStrReturnSignature(fn: any, n: any): boolean;
-    /** `split`, `replaceAll`, an optional receiver's `replace`, or an `indexOf` outside a literal contains test. */
+    /** `split`, `replaceAll`, `slice`, `padStart` / `padEnd`, an optional receiver's `replace`, or an `indexOf` outside a literal contains test. */
     rustStrMethodNewUse(call: any): boolean;
     /** `Precise.string<Add|Sub|..>(..)`: a `string | undefined` result. */
     rustScalarPreciseCall(node: any): boolean;

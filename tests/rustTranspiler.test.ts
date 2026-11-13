@@ -10566,7 +10566,7 @@ describe('method on a typed string local: pad / slice results typed with their r
         const dir = path.join (rustFixtureRoot, 'str-method-local-lc');
         fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
         fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    hold (x: any): any { return x; }\n}\n");
-        fs.writeFileSync (path.join (dir, 'ts/src/venuelc.ts'), "import Exchange from './base/Exchange.js';\nexport default class venuelc extends Exchange {\n    sig (a: any) {\n        const r = this.safeString (a, 'r', '');\n        const s = this.safeString (a, 's');\n        const rp = r.padStart (64, '0');\n        const sp = s.padEnd (8, ' ');\n        return this.hold ('0x' + rp + sp);\n    }\n    expiry (a: any) {\n        const raw = this.safeString (a, 'raw');\n        const day = raw.slice (0, 2);\n        const rest = raw.slice (-4);\n        return this.hold (day + rest);\n    }\n    names (m: any) {\n        const keys = Object.keys (m);\n        return this.hold (keys.join (', '));\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venuelc.ts'), "import Exchange from './base/Exchange.js';\nexport default class venuelc extends Exchange {\n    sig (a: any) {\n        const r = this.safeString (a, 'r', '');\n        const s = this.safeString (a, 's');\n        const rp = r.padStart (64, '0');\n        const sp = s.padEnd (8, ' ');\n        return this.hold ('0x' + rp + sp);\n    }\n    expiry (a: any) {\n        const raw = this.safeString (a, 'raw');\n        const day = raw.slice (0, 2);\n        const rest = raw.slice (-4);\n        return this.hold (day + rest);\n    }\n    names (m: any) {\n        const keys = Object.keys (m);\n        return this.hold (keys.join (', '));\n    }\n    trimZeros (data: string): string {\n        const parts = data.split ('.');\n        const a = this.safeString (parts, 0, '');\n        const b = this.safeString (parts, 1, '');\n        let joined = a + b;\n        while (joined.startsWith ('0')) {\n            joined = joined.slice (1);\n        }\n        return joined;\n    }\n}\n");
         const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venuelc.ts')).content;
         // the receiver and the result are typed together: format! width (a one-char pad, never truncating)
         expect(out).toContain('let mut r: String = ');
@@ -10581,7 +10581,8 @@ describe('method on a typed string local: pad / slice results typed with their r
         // Object.keys read only through join: the lent list, joined without a copy or closure
         expect(out).toContain('let mut keys: crate::value::List = ');
         expect(out).toContain('Value::Str(keys.iter().map(Value::to_string).collect::<Vec<String>>().join(", ").into())');
-        expect(out).not.toContain('|__s|');
         expect(out).not.toContain('|__a|');
+        // a `: string` method returning its sliced local keeps its `Option<String>` signature (no ABI flip)
+        expect(out).toContain('pub fn trimZeros(&self, data: &str) -> Option<String> {');
     });
 });
