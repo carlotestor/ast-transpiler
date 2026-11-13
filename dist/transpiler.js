@@ -53126,6 +53126,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (nativeEquality)
         return `Value::Bool(${nativeEquality})`;
     }
+    const boolLogical = this.isBooleanPosition(node) ? void 0 : this.rustScalarBoolLogicalText(node);
+    if (boolLogical !== void 0)
+      return `Value::Bool(${boolLogical})`;
     if ((op === SyntaxKind7.AmpersandAmpersandToken || op === SyntaxKind7.BarBarToken) && (this.hasNativeComparisonOperand(left) || this.hasNativeComparisonOperand(right))) {
       return `Value::Bool(${this.printLogicalInBooleanContext(node)})`;
     }
@@ -54874,16 +54877,22 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if ((boxed > 0 || expressionUses) && this.rustReaderIntDefaultNum(declaration.initializer))
       return void 0;
     const readerTouched = this.rustReaderDefaultTouched(declaration);
-    if (readerTouched && (kind === "ostr" || kind === "str") && (boxed > 0 && copied > 0 || this.rustReaderStrHandedOn(declaration)))
+    const readerLent = readerTouched && strKind && boxed > 0 && copied > 0 && !this.rustStrNoLend && this.rustReaderLendBoxes(declaration);
+    if (readerTouched && strKind && (boxed > 0 && copied > 0 && !readerLent || this.rustReaderStrHandedOn(declaration)))
       return void 0;
+    if (readerLent)
+      this.rustStrLentLocals.add(declaration);
     if (readerTouched && boxed > 0)
       this.rustScalarGuarded.add(declaration);
     if (readerTouched && this.rustReaderDeclTooLong(declaration, kind))
       return void 0;
     if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustTestTierSource(declaration))
       return void 0;
-    if (this.rustScalarOptKeyCostly(declaration, kind))
+    const keyLent = !this.rustStrNoLend && this.rustScalarOptKeyCostly(declaration, kind) && this.rustReaderLendBoxes(declaration, true);
+    if (this.rustScalarOptKeyCostly(declaration, kind) && !keyLent)
       return void 0;
+    if (keyLent)
+      this.rustStrLentLocals.add(declaration);
     if (this.rustNewShapeCostly(declaration.initializer, typedUses, kind === "str" || kind === "ostr" ? copied : 0))
       return void 0;
     if (this.rustFieldKeyCostly(declaration))
@@ -54924,6 +54933,27 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (isCallExpression6(up) && up.expression !== n && !selfArg || up?.kind === SyntaxKind7.NewExpression)
         ok = false;
       else if (!selfArg && !isReturnStatement4(up) && !this.rustLocalLastUse(n, declaration))
+        ok = false;
+      return true;
+    });
+    return ok;
+  }
+  /** Every non-moving box of the string is a slot where the `Value` form cloned it (a `this.`/`super.` argument,
+   *  an object-literal value, a dict write or an array element), so lending there adds no copy. */
+  rustReaderLendBoxes(declaration, nativeKeys = false) {
+    let ok = true;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const form = this.rustScalarUseForms.get(n);
+      if (form === "err" || form === "key" && !(nativeKeys && this.rustScalarInsertKeyUse(n)))
+        ok = false;
+      if (form !== "box" && form !== "xbox")
+        return true;
+      const up = n.parent;
+      if (isReturnStatement4(up) || this.rustLocalLastUse(n, declaration))
+        return true;
+      const selfArg = isCallExpression6(up) && up.expression !== n && isPropertyAccessExpression3(up.expression) && (up.expression.expression.kind === SyntaxKind7.ThisKeyword || up.expression.expression.kind === SyntaxKind7.SuperKeyword);
+      const slot = selfArg || up.kind === SyntaxKind7.PropertyAssignment && up.initializer === n || this.rustDictWriteValue(n) || isArrayLiteralExpression4(up) && !(isBinaryExpression5(up.parent) && up.parent.left === up);
+      if (!slot)
         ok = false;
       return true;
     });
@@ -55839,6 +55869,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return "test";
     }
     if ((kind === "bool" || kind === "obool") && this.rustIdentifierUseIsCondition(n))
+      return "cond";
+    if (kind === "bool" && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== void 0)
       return "cond";
     if (kind === "str" || kind === "ostr") {
       const fieldForm = this.rustFieldKeyUseForm(n);
@@ -56879,17 +56911,21 @@ ${binding(plan.indent)}` : ""), head: "" };
     }
     if (isBinaryExpression5(node)) {
       const op = node.operatorToken.kind;
+      const numeric = (k) => k === "int" || k === "num" || k === "oint" || k === "onum";
       if (op === SyntaxKind7.PlusToken || op === SyntaxKind7.MinusToken || op === SyntaxKind7.AsteriskToken) {
         const a = this.rustScalarNumericKind(node.left);
         const b = this.rustScalarNumericKind(node.right);
-        if (a !== "int" && a !== "num" || b !== "int" && b !== "num")
+        if (!numeric(a) || !numeric(b))
           return void 0;
-        return a === "int" && b === "int" ? "int" : "num";
+        const kind = a.endsWith("int") && b.endsWith("int") ? "int" : "num";
+        return a.startsWith("o") || b.startsWith("o") ? `o${kind}` : kind;
       }
       if (op === SyntaxKind7.SlashToken) {
         const a = this.rustScalarNumericKind(node.left);
         const divisor = this.rustScalarFloatLiteral(node.right);
-        return (a === "int" || a === "num") && divisor !== void 0 && Number(divisor) !== 0 ? "num" : void 0;
+        if (!numeric(a) || divisor === void 0 || Number(divisor) === 0)
+          return void 0;
+        return a.startsWith("o") ? "onum" : "num";
       }
       return this.rustScalarCompareText(node, true) !== void 0 ? "bool" : void 0;
     }
@@ -57098,6 +57134,22 @@ ${binding(plan.indent)}` : ""), head: "" };
       return true;
     return kind === "bool" && this.rustBoolNativeText(node) !== void 0;
   }
+  /** `a || b` / `a && b` whose every leaf is a native `bool` and one is a `bool` scalar local: JS returns an
+   *  operand, which is then a boolean, so the Rust `||` / `&&` value is the same. */
+  rustScalarBoolLogicalText(expr) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0 || !isBinaryExpression5(node) || !this.isLogicalOp(node.operatorToken.kind))
+      return void 0;
+    const owns = (n) => {
+      const inner = this.unwrapParens(n);
+      if (isIdentifier3(inner))
+        return this.rustScalarLocalOf(inner)?.kind === "bool";
+      if (isPrefixUnaryExpression3(inner))
+        return owns(inner.operand);
+      return isBinaryExpression5(inner) && this.isLogicalOp(inner.operatorToken.kind) && (owns(inner.left) || owns(inner.right));
+    };
+    return owns(node) ? this.rustBoolNativeText(node) : void 0;
+  }
   /** Native `bool` text of a comparison proven native, `!x`, a bool local, or `&&`/`||` over those. */
   rustBoolNativeText(expr) {
     const node = this.unwrapParens(expr);
@@ -57292,6 +57344,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       if (own === "bool")
         return wrap(this.rustScalarCompareText(node, false));
       const sign = op === SyntaxKind7.PlusToken ? "+" : op === SyntaxKind7.MinusToken ? "-" : op === SyntaxKind7.AsteriskToken ? "*" : "/";
+      if (own === "oint" || own === "onum")
+        return own === kind ? this.rustScalarOptArithText(own.slice(1), node, sign) : void 0;
       const text = `(${this.rustScalarOperandText(own, node.left)} ${sign} ${this.rustScalarOperandText(own, node.right)})`;
       return kind === "num" && own === "int" ? `(${text} as f64)` : wrap(text);
     }
@@ -57332,6 +57386,20 @@ ${binding(plan.indent)}` : ""), head: "" };
       return wrap(`${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`);
     return void 0;
   }
+  /** `a OP b` with an optional operand: `Some(..)` only when every optional side is present, as the helpers
+   *  (`add`/`subtract`/`multiply`/`divide` by a non-zero literal) answer `Null` when either operand is `Null`. */
+  rustScalarOptArithText(base, node, sign) {
+    const sides = [node.left, node.right].map((n, i) => {
+      const k = this.rustScalarNumericKind(n);
+      if (k !== "oint" && k !== "onum")
+        return { use: this.rustScalarOperandText(base, n) };
+      const v = i === 0 ? "__l" : "__r";
+      return { bind: v, src: this.rustScalarOperandText(k, n), use: base === "num" && k === "oint" ? `(${v} as f64)` : v };
+    });
+    const bound = sides.filter((p) => p.bind !== void 0);
+    const pattern = bound.length === 2 ? `(Some(__l), Some(__r)) = (${bound[0].src}, ${bound[1].src})` : `Some(${bound[0].bind}) = ${bound[0].src}`;
+    return `(if let ${pattern} { Some(${sides[0].use} ${sign} ${sides[1].use}) } else { None })`;
+  }
   /** The `Value` box of a native scalar text. */
   rustScalarBoxText(kind, text, node) {
     if (kind === "ostr")
@@ -57354,7 +57422,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (!this.rustScalarOwnsOperand(node.left) && !this.rustScalarOwnsOperand(node.right))
       return void 0;
     const kind = this.rustScalarExpressionKind(node);
-    if (kind !== "int" && kind !== "num" && kind !== "bool")
+    if (kind !== "int" && kind !== "num" && kind !== "bool" && kind !== "oint" && kind !== "onum")
       return void 0;
     const text = this.rustScalarExpressionText(kind, node);
     return text === void 0 ? void 0 : this.rustScalarBoxText(kind, text, node);
@@ -57473,8 +57541,9 @@ ${binding(plan.indent)}` : ""), head: "" };
   }
   /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
   rustScalarInsertKeyUse(n) {
-    const access = n.parent;
-    if (!isElementAccessExpression4(access) || access.argumentExpression !== n || !isIdentifier3(access.expression))
+    const keyNode = this.rustKeyWrapped(n);
+    const access = keyNode.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== keyNode || !isIdentifier3(access.expression))
       return false;
     const write = access.parent;
     if (!isBinaryExpression5(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
@@ -57484,6 +57553,13 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (new RegExp(`\\b${key}\\b`).test(String(write.right.getText())))
       return false;
     return (this.rustBearerDictInsert(base, n, key, "x") ?? this.rustMapParamDictInsert(base, n, key, "x") ?? this.printNativeDictInsert(base, n, key, "x") ?? this.rustNativeDictInsert(base, n, key, "x")) !== void 0;
+  }
+  /** A key written `m[k as string]` / `m[(k)]`: the cast and parens print nothing, so the key is `k` itself. */
+  rustKeyWrapped(n) {
+    let up = n;
+    while ((up.parent?.kind === SyntaxKind7.AsExpression || isParenthesizedExpression3(up.parent)) && up.parent.expression === up)
+      up = up.parent;
+    return up;
   }
   /** The insert key of a `String` scalar local, else undefined. */
   rustScalarInsertKeyArg(keyNode) {
@@ -57503,8 +57579,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     const local = this.rustDeclaredNode(n);
     if (local === void 0 || !isVariableDeclaration3(local) || local.initializer === void 0 || this.literalKindOfNode(local.initializer) === "null")
       return false;
-    const access = n.parent;
-    if (!isElementAccessExpression4(access) || access.argumentExpression !== n || !isIdentifier3(access.expression))
+    const keyNode = this.rustKeyWrapped(n);
+    const access = keyNode.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== keyNode || !isIdentifier3(access.expression))
       return false;
     const declaration = this.rustDeclarationOfIdentifier(access.expression);
     const init = declaration !== void 0 && isVariableDeclaration3(declaration) && declaration.initializer !== void 0 ? this.rustSkipWrappers(declaration.initializer) : void 0;

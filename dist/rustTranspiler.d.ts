@@ -496,6 +496,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Every box of the string sits where the `Value` form cloned it (a `this.` / `super.` argument) or is its
      *  moving last use, and no use reads it by reference: lending there costs the one copy the clone made. */
     rustStrLendSites(declaration: any): boolean;
+    /** Every non-moving box of the string is a slot where the `Value` form cloned it (a `this.`/`super.` argument,
+     *  an object-literal value, a dict write or an array element), so lending there adds no copy. */
+    rustReaderLendBoxes(declaration: any, nativeKeys?: boolean): boolean;
     /** The key reads a local declared with a non-null initializer (nil-declared locals and slots keep their own rules). */
     rustInitKeyLocal(n: any): boolean;
     /** Some use of the local is a native map-key read (`okey`) or `in` test (`kin`). */
@@ -789,6 +792,9 @@ export declare class RustTranspiler extends BaseTranspiler {
         text: string;
     } | undefined;
     rustOptParamWriteOk(kind: string, node: any): boolean;
+    /** `a || b` / `a && b` whose every leaf is a native `bool` and one is a `bool` scalar local: JS returns an
+     *  operand, which is then a boolean, so the Rust `||` / `&&` value is the same. */
+    rustScalarBoolLogicalText(expr: any): string | undefined;
     /** Native `bool` text of a comparison proven native, `!x`, a bool local, or `&&`/`||` over those. */
     rustBoolNativeText(expr: any): string | undefined;
     /** Native text of an ordered/equality comparison over typed operands (`dry`: shape check only). */
@@ -803,6 +809,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarOperandText(kind: string, node: any): string;
     /** Native text of an expression shape for a local of `kind`, else undefined. */
     rustScalarExpressionText(kind: string, node: any): string | undefined;
+    /** `a OP b` with an optional operand: `Some(..)` only when every optional side is present, as the helpers
+     *  (`add`/`subtract`/`multiply`/`divide` by a non-zero literal) answer `Null` when either operand is `Null`. */
+    rustScalarOptArithText(base: string, node: any, sign: string): string;
     /** The `Value` box of a native scalar text. */
     rustScalarBoxText(kind: string, text: string, node: any): string;
     /** Binary hook: arithmetic/ordered comparisons over typed operands, and `+=`/`-=` on a typed local. */
@@ -823,6 +832,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustScalarGuardedBody(method: any, print: () => string): string;
     /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
     rustScalarInsertKeyUse(n: any): boolean;
+    /** A key written `m[k as string]` / `m[(k)]`: the cast and parens print nothing, so the key is `k` itself. */
+    rustKeyWrapped(n: any): any;
     /** The insert key of a `String` scalar local, else undefined. */
     rustScalarInsertKeyArg(keyNode: any): string | undefined;
     rustScalarOptKeyUse(n: any): boolean;

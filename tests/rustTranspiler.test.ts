@@ -8900,7 +8900,8 @@ describe('elements of typed list parameters', () => {
         expect(fed).toMatch(/pub fn pick\(&self, [^)]*\) -> Option<String> \{/);
         expect(fed).toMatch(/let mut sub: Value = /);
         const copy = transpiler.transpileRust("class X {\n    hold (x: any): any { return x; }\n    copy (section: string[]) {\n        const head = section[0];\n        this.hold (head);\n        return this.hold (head);\n    }\n}\n").content;
-        expect(copy).toMatch(/let mut head: Value = /);
+        // with string lending (fd) the copying box lends instead of cloning, so the element types without a new copy
+        expect(copy).toContain('self.hold(Value::from(head.as_deref()));');
     });
 });
 
@@ -9327,5 +9328,33 @@ describe('rust base safeCurrencyCode returns Option<String>', () => {
     test('a caller local takes the Option<String> without re-reading a Value', () => {
         expect(caller).toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\([^;]*\);/);
         expect(caller).not.toMatch(/let mut code: Option<String> = self\.safeCurrencyCode\([^;]*\.as_str\(\)\.map\(str::to_owned\);/);
+    });
+});
+
+describe('safe scalar locals: optional arithmetic, bool logicals, lent reader strings, cast keys', () => {
+    // invariant: an Option<i64>/Option<f64> operand makes the result None exactly where add/subtract/multiply/divide answer Null
+    test('each operator over optional numbers prints the Null-propagating if-let form', () => {
+        const dir = path.join (rustFixtureRoot, 'scalar-opt-arith');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export type Str = string | undefined;\nexport type Int = number | undefined;\nexport type Num = number | undefined;\nexport type Bool = boolean | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k]; }\n    safeNumber (o: any, k: any, d: Num = undefined): Num { return o[k]; }\n    safeBool (o: any, k: any, d: Bool = undefined): Bool { return o[k]; }\n    safeCurrencyCode (id: Str): Str { return id; }\n    milliseconds (): number { return 0; }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    ages (a: any) {\n        const t = this.safeInteger (a, 't');\n        const n = this.safeNumber (a, 'n');\n        const w = this.safeInteger (a, 'w');\n        return [ this.milliseconds () - t, t * 1000, n / 1000, t + w, n - 2 ];\n    }\n    flags (a: any) {\n        const x = this.safeBool (a, 'x', false);\n        const y = this.safeBool (a, 'y', false);\n        return { 'any': x || y, 'all': x && (y === true) };\n    }\n    copied (a: any) {\n        const alt = this.safeString (a, 'alt');\n        const last = this.safeString (a, 'last', alt);\n        return { 'close': last, 'last': last };\n    }\n    keyed (rows: any) {\n        const result: any = {};\n        for (let i = 0; i < rows.length; i++) {\n            const code = this.safeCurrencyCode (this.safeString (rows[i], 'id'));\n            result[code as string] = rows[i];\n        }\n        return result;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut t: Option<i64> = ');
+        expect(out).toContain('let mut n: Option<f64> = ');
+        expect(out).toContain('(if let Some(__r) = t { Some((self.milliseconds().as_i64().unwrap_or_default()) - __r) } else { None })');
+        expect(out).toContain('(if let Some(__l) = t { Some(__l * 1000) } else { None })');
+        expect(out).toContain('(if let Some(__l) = n { Some(__l / 1000.0) } else { None })');
+        expect(out).toContain('(if let (Some(__l), Some(__r)) = (t, w) { Some(__l + __r) } else { None })');
+        expect(out).toContain('(if let Some(__l) = n { Some(__l - 2.0) } else { None })');
+        // `||` / `&&` over bool locals: JS returns an operand, which is a boolean here
+        expect(out).toContain('let mut x: bool = ');
+        expect(out).toContain('Value::Bool((x || y))');
+        expect(out).toContain('Value::Bool((x && (y == true)))');
+        // a reader-defaulted string boxed twice is lent at the first box (the copy the Value clone made)
+        expect(out).toContain('let mut last: Option<String> = ');
+        expect(out).toContain('m.insert("close".to_string(), Value::from(last.as_deref()));');
+        // `result[code as string] = ..` keys a native insert with the optional currency code
+        expect(out).toContain('let mut code: Option<String> = ');
+        expect(out).toContain('result.insert(code.as_deref().unwrap_or("null").to_string(), ');
     });
 });

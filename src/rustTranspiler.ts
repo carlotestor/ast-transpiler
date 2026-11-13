@@ -2077,6 +2077,9 @@ export class RustTranspiler extends BaseTranspiler {
             const nativeEquality = this.printNativeEqualityComparison(left, right, op);
             if (nativeEquality) return `Value::Bool(${nativeEquality})`;
         }
+        // a condition already prints its logical natively; a value slot takes the typed operand-returning form
+        const boolLogical = this.isBooleanPosition(node) ? undefined : this.rustScalarBoolLogicalText(node);
+        if (boolLogical !== undefined) return `Value::Bool(${boolLogical})`;
         // A logical expression with a native-compare operand no longer starts with a bool helper: box it.
         if ((op === SyntaxKind.AmpersandAmpersandToken || op === SyntaxKind.BarBarToken)
             && (this.hasNativeComparisonOperand(left) || this.hasNativeComparisonOperand(right))) {
@@ -3913,13 +3916,19 @@ export class RustTranspiler extends BaseTranspiler {
         if ((boxed > 0 || expressionUses) && this.rustReaderIntDefaultNum(declaration.initializer)) return undefined;
         // a reader-default string re-boxed anywhere but a moving `return` would copy where the `Value` moved
         const readerTouched = this.rustReaderDefaultTouched(declaration);
-        if (readerTouched && (kind === 'ostr' || kind === 'str') && ((boxed > 0 && copied > 0) || this.rustReaderStrHandedOn(declaration))) return undefined;
+        // a reader string copied at a box is lent there (`Value::from(x.as_deref())`: the copy the `Value` clone made)
+        const readerLent = readerTouched && strKind && boxed > 0 && copied > 0 && !this.rustStrNoLend && this.rustReaderLendBoxes(declaration);
+        if (readerTouched && strKind && ((boxed > 0 && copied > 0 && !readerLent) || this.rustReaderStrHandedOn(declaration))) return undefined;
+        if (readerLent) this.rustStrLentLocals.add(declaration);
         if (readerTouched && boxed > 0) this.rustScalarGuarded.add(declaration);
         // the converted declaration keeps the 400-char line budget (headroom for the later snake_case renames)
         if (readerTouched && this.rustReaderDeclTooLong(declaration, kind)) return undefined;
         // a test string re-boxed anywhere but its moving `return` copies where the `Value` was lent
         if (copied > 0 && (kind === 'str' || kind === 'ostr') && this.rustTestTierSource(declaration)) return undefined;
-        if (this.rustScalarOptKeyCostly(declaration, kind)) return undefined;
+        // a keyed optional string whose copying boxes all sit where the `Value` cloned is lent there instead
+        const keyLent = !this.rustStrNoLend && this.rustScalarOptKeyCostly(declaration, kind) && this.rustReaderLendBoxes(declaration, true);
+        if (this.rustScalarOptKeyCostly(declaration, kind) && !keyLent) return undefined;
+        if (keyLent) this.rustStrLentLocals.add(declaration);
         if (this.rustNewShapeCostly(declaration.initializer, typedUses, kind === 'str' || kind === 'ostr' ? copied : 0)) return undefined;
         if (this.rustFieldKeyCostly(declaration)) return undefined;
         if (this.rustStrRuntimeLocalCostly(declaration)) return undefined;
@@ -3960,6 +3969,27 @@ export class RustTranspiler extends BaseTranspiler {
                 && (up.expression.expression.kind === SyntaxKind.ThisKeyword || up.expression.expression.kind === SyntaxKind.SuperKeyword);
             if ((isCallExpression(up) && up.expression !== n && !selfArg) || up?.kind === SyntaxKind.NewExpression) ok = false;
             else if (!selfArg && !isReturnStatement(up) && !this.rustLocalLastUse(n, declaration)) ok = false;
+            return true;
+        });
+        return ok;
+    }
+
+    /** Every non-moving box of the string is a slot where the `Value` form cloned it (a `this.`/`super.` argument,
+     *  an object-literal value, a dict write or an array element), so lending there adds no copy. */
+    rustReaderLendBoxes(declaration, nativeKeys = false): boolean {
+        let ok = true;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
+            const form = this.rustScalarUseForms.get(n);
+            // a native insert key borrows the local (`as_deref`); a helper-write key would copy it
+            if (form === 'err' || (form === 'key' && !(nativeKeys && this.rustScalarInsertKeyUse(n)))) ok = false;
+            if (form !== 'box' && form !== 'xbox') return true;
+            const up: any = n.parent;
+            if (isReturnStatement(up) || this.rustLocalLastUse(n, declaration)) return true;
+            const selfArg = isCallExpression(up) && up.expression !== n && isPropertyAccessExpression(up.expression)
+                && (up.expression.expression.kind === SyntaxKind.ThisKeyword || up.expression.expression.kind === SyntaxKind.SuperKeyword);
+            const slot = selfArg || (up.kind === SyntaxKind.PropertyAssignment && up.initializer === n) || this.rustDictWriteValue(n)
+                || (isArrayLiteralExpression(up) && !(isBinaryExpression(up.parent) && up.parent.left === up));
+            if (!slot) ok = false;
             return true;
         });
         return ok;
@@ -4830,6 +4860,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustScalarLiteralTest(kind, other) !== undefined) return 'test';
         }
         if ((kind === 'bool' || kind === 'obool') && this.rustIdentifierUseIsCondition(n)) return 'cond';
+        if (kind === 'bool' && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== undefined) return 'cond';
         if (kind === 'str' || kind === 'ostr') { const fieldForm = this.rustFieldKeyUseForm(n); if (fieldForm !== undefined) return fieldForm; }
         if ((kind === 'str' || kind === 'ostr') && this.rustWsKeyUse(n)) return 'targ';
         if ((kind === 'str' || kind === 'ostr') && this.rustWsSubscriptionWriteValue(n)) return 'box';
@@ -5756,16 +5787,20 @@ export class RustTranspiler extends BaseTranspiler {
         }
         if (isBinaryExpression(node)) {
             const op = node.operatorToken.kind;
+            // an optional operand gives an optional result: the helpers answer `Null` when either side is `Null`
+            const numeric = (k: string) => k === 'int' || k === 'num' || k === 'oint' || k === 'onum';
             if (op === SyntaxKind.PlusToken || op === SyntaxKind.MinusToken || op === SyntaxKind.AsteriskToken) {
                 const a = this.rustScalarNumericKind(node.left);
                 const b = this.rustScalarNumericKind(node.right);
-                if ((a !== 'int' && a !== 'num') || (b !== 'int' && b !== 'num')) return undefined;
-                return a === 'int' && b === 'int' ? 'int' : 'num';
+                if (!numeric(a) || !numeric(b)) return undefined;
+                const kind = a.endsWith('int') && b.endsWith('int') ? 'int' : 'num';
+                return a.startsWith('o') || b.startsWith('o') ? `o${kind}` : kind;
             }
             if (op === SyntaxKind.SlashToken) {
                 const a = this.rustScalarNumericKind(node.left);
                 const divisor = this.rustScalarFloatLiteral(node.right);
-                return (a === 'int' || a === 'num') && divisor !== undefined && Number(divisor) !== 0 ? 'num' : undefined;
+                if (!numeric(a) || divisor === undefined || Number(divisor) === 0) return undefined;
+                return a.startsWith('o') ? 'onum' : 'num';
             }
             return this.rustScalarCompareText(node, true) !== undefined ? 'bool' : undefined;
         }
@@ -5961,6 +5996,20 @@ export class RustTranspiler extends BaseTranspiler {
         return kind === 'bool' && this.rustBoolNativeText(node) !== undefined;
     }
 
+    /** `a || b` / `a && b` whose every leaf is a native `bool` and one is a `bool` scalar local: JS returns an
+     *  operand, which is then a boolean, so the Rust `||` / `&&` value is the same. */
+    rustScalarBoolLogicalText(expr): string | undefined {
+        const node: any = this.unwrapParens(expr);
+        if (node === undefined || !isBinaryExpression(node) || !this.isLogicalOp(node.operatorToken.kind)) return undefined;
+        const owns = (n): boolean => {
+            const inner: any = this.unwrapParens(n);
+            if (isIdentifier(inner)) return this.rustScalarLocalOf(inner)?.kind === 'bool';
+            if (isPrefixUnaryExpression(inner)) return owns(inner.operand);
+            return isBinaryExpression(inner) && this.isLogicalOp(inner.operatorToken.kind) && (owns(inner.left) || owns(inner.right));
+        };
+        return owns(node) ? this.rustBoolNativeText(node) : undefined;
+    }
+
     /** Native `bool` text of a comparison proven native, `!x`, a bool local, or `&&`/`||` over those. */
     rustBoolNativeText(expr): string | undefined {
         const node: any = this.unwrapParens(expr);
@@ -6127,6 +6176,7 @@ export class RustTranspiler extends BaseTranspiler {
             const op = node.operatorToken.kind;
             if (own === 'bool') return wrap(this.rustScalarCompareText(node, false));
             const sign = op === SyntaxKind.PlusToken ? '+' : (op === SyntaxKind.MinusToken ? '-' : (op === SyntaxKind.AsteriskToken ? '*' : '/'));
+            if (own === 'oint' || own === 'onum') return own === kind ? this.rustScalarOptArithText(own.slice(1), node, sign) : undefined;
             const text = `(${this.rustScalarOperandText(own, node.left)} ${sign} ${this.rustScalarOperandText(own, node.right)})`;
             return kind === 'num' && own === 'int' ? `(${text} as f64)` : wrap(text);
         }
@@ -6163,6 +6213,20 @@ export class RustTranspiler extends BaseTranspiler {
         return undefined;
     }
 
+    /** `a OP b` with an optional operand: `Some(..)` only when every optional side is present, as the helpers
+     *  (`add`/`subtract`/`multiply`/`divide` by a non-zero literal) answer `Null` when either operand is `Null`. */
+    rustScalarOptArithText(base: string, node, sign: string): string {
+        const sides = [ node.left, node.right ].map((n, i) => {
+            const k = this.rustScalarNumericKind(n);
+            if (k !== 'oint' && k !== 'onum') return { use: this.rustScalarOperandText(base, n) };
+            const v = i === 0 ? '__l' : '__r';
+            return { bind: v, src: this.rustScalarOperandText(k, n), use: base === 'num' && k === 'oint' ? `(${v} as f64)` : v };
+        });
+        const bound = sides.filter((p) => p.bind !== undefined);
+        const pattern = bound.length === 2 ? `(Some(__l), Some(__r)) = (${bound[0].src}, ${bound[1].src})` : `Some(${bound[0].bind}) = ${bound[0].src}`;
+        return `(if let ${pattern} { Some(${sides[0].use} ${sign} ${sides[1].use}) } else { None })`;
+    }
+
     /** The `Value` box of a native scalar text. */
     rustScalarBoxText(kind: string, text: string, node): string {
         if (kind === 'ostr') return `${text}.map(Value::from).unwrap_or(Value::Null)`;
@@ -6179,7 +6243,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (!RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) || this.isEqualityOp(op)) return undefined;
         if (!this.rustScalarOwnsOperand(node.left) && !this.rustScalarOwnsOperand(node.right)) return undefined;
         const kind = this.rustScalarExpressionKind(node);
-        if (kind !== 'int' && kind !== 'num' && kind !== 'bool') return undefined;
+        if (kind !== 'int' && kind !== 'num' && kind !== 'bool' && kind !== 'oint' && kind !== 'onum') return undefined;
         const text = this.rustScalarExpressionText(kind, node);
         return text === undefined ? undefined : this.rustScalarBoxText(kind, text, node);
     }
@@ -6286,8 +6350,9 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
     rustScalarInsertKeyUse(n): boolean {
-        const access: any = n.parent;
-        if (!isElementAccessExpression(access) || access.argumentExpression !== n || !isIdentifier(access.expression)) return false;
+        const keyNode = this.rustKeyWrapped(n);
+        const access: any = keyNode.parent;
+        if (!isElementAccessExpression(access) || access.argumentExpression !== keyNode || !isIdentifier(access.expression)) return false;
         const write: any = access.parent;
         if (!isBinaryExpression(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind.EqualsToken || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
         const base: any = access.expression;
@@ -6295,6 +6360,13 @@ export class RustTranspiler extends BaseTranspiler {
         if (new RegExp(`\\b${key}\\b`).test(String(write.right.getText()))) return false;
         return (this.rustBearerDictInsert(base, n, key, 'x') ?? this.rustMapParamDictInsert(base, n, key, 'x')
             ?? this.printNativeDictInsert(base, n, key, 'x') ?? this.rustNativeDictInsert(base, n, key, 'x')) !== undefined;
+    }
+
+    /** A key written `m[k as string]` / `m[(k)]`: the cast and parens print nothing, so the key is `k` itself. */
+    rustKeyWrapped(n): any {
+        let up: any = n;
+        while ((up.parent?.kind === SyntaxKind.AsExpression || isParenthesizedExpression(up.parent)) && up.parent.expression === up) up = up.parent;
+        return up;
     }
 
     /** The insert key of a `String` scalar local, else undefined. */
@@ -6314,8 +6386,9 @@ export class RustTranspiler extends BaseTranspiler {
     rustScalarOptKeyUse(n): boolean {
         const local: any = this.rustDeclaredNode(n);
         if (local === undefined || !isVariableDeclaration(local) || local.initializer === undefined || this.literalKindOfNode(local.initializer) === 'null') return false;
-        const access: any = n.parent;
-        if (!isElementAccessExpression(access) || access.argumentExpression !== n || !isIdentifier(access.expression)) return false;
+        const keyNode = this.rustKeyWrapped(n);
+        const access: any = keyNode.parent;
+        if (!isElementAccessExpression(access) || access.argumentExpression !== keyNode || !isIdentifier(access.expression)) return false;
         const declaration: any = this.rustDeclarationOfIdentifier(access.expression);
         const init: any = declaration !== undefined && isVariableDeclaration(declaration) && declaration.initializer !== undefined ? this.rustSkipWrappers(declaration.initializer) : undefined;
         if (declaration === undefined) return false;
