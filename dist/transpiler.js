@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -54892,6 +54892,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustStrMethodRecvLocal(declaration))
       return void 0;
+    if (this.rustListParamElement(declaration.initializer) && (copied > 0 || boxed > 0 && typedUses === 0 || this.rustScalarFeedsWrite(declaration)))
+      return void 0;
+    if (this.rustListParamElement(declaration.initializer) && boxed > 0)
+      this.rustScalarGuarded.add(declaration);
+    if (copied > 0 && kind === "ostr" && !this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) && this.rustScalarKeyedLocal(declaration))
+      return void 0;
     if (this.rustScalarOptKeyCostly(declaration, kind) === false && kind === "ostr" && this.rustScalarOptKeyCount(declaration) > 0)
       this.rustScalarGuarded.add(declaration);
     if (guarded || handOff || this.rustStrMethodRecvLocal(declaration))
@@ -54922,6 +54928,22 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     });
     return ok;
+  }
+  /** The key reads a local declared with a non-null initializer (nil-declared locals and slots keep their own rules). */
+  rustInitKeyLocal(n) {
+    const declaration = this.rustDeclaredNode(n);
+    return declaration !== void 0 && isVariableDeclaration3(declaration) && declaration.initializer !== void 0 && this.literalKindOfNode(declaration.initializer) !== "null";
+  }
+  /** Some use of the local is a native map-key read (`okey`) or `in` test (`kin`). */
+  rustScalarKeyedLocal(declaration) {
+    let keyed = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const form = this.rustScalarUseForms.get(n);
+      if (form === "okey" || form === "kin")
+        keyed = true;
+      return true;
+    });
+    return keyed;
   }
   /** A local some `return` of a method with a declared string return hands back as-is. */
   rustStrReturnedLocal(declaration, scope) {
@@ -55352,12 +55374,63 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustElementReadScalarKind(node) {
     if (!isElementAccessExpression4(node) || !isIdentifier3(node.expression) || this.checkerOrUndefined() === void 0)
       return void 0;
-    if (!isVariableDeclaration3(this.rustDeclaredNode(node.expression)) && !this.rustOptListParamRead(node))
+    const owner = this.rustDeclaredNode(node.expression);
+    const listParam = owner !== void 0 && isParameterDeclaration3(owner) && owner.type !== void 0 && !this.rustParamWritten(owner);
+    if (!isVariableDeclaration3(owner) && !listParam && !this.rustOptListParamRead(node))
       return void 0;
     const listType = this.typeOfNodeIfAny(node.expression);
     if (listType === void 0 || !this.getChecker().isArrayType(listType))
       return void 0;
     return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string" ? "ostr" : void 0;
+  }
+  /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
+  rustListParamElement(init) {
+    const node = this.unwrapParens(init);
+    if (node === void 0 || !isElementAccessExpression4(node) || !isIdentifier3(node.expression))
+      return false;
+    const owner = this.rustDeclaredNode(node.expression);
+    return owner !== void 0 && isParameterDeclaration3(owner) && !this.rustOptListParamRead(node) && this.rustElementReadScalarKind(node) !== void 0;
+  }
+  /** The local's last use is the whole right side of a statement `y = x;`: the boxed local moves there,
+   *  a typed one keeps the clone ccxt adds to that write. */
+  rustScalarBareLastWrite(node) {
+    const declaration = isIdentifier3(node) ? this.rustDeclaredNode(node) : void 0;
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    let moved = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustLocalLastUse(n, declaration))
+        moved = true;
+      return true;
+    });
+    return moved;
+  }
+  /** Some use of the local is the source of an assignment or of another declaration. */
+  rustScalarFeedsWrite(declaration) {
+    let feeds = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      let up = n.parent;
+      while (up !== void 0 && (isParenthesizedExpression3(up) || up.kind === SyntaxKind7.AsExpression || isConditionalExpression4(up)))
+        up = up.parent;
+      if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.left !== n || isVariableDeclaration3(up) && up.initializer !== void 0)
+        feeds = true;
+      return true;
+    });
+    return feeds;
+  }
+  /** Some statement of the parameter's function assigns the parameter itself. */
+  rustParamWritten(param) {
+    if (!isIdentifier3(param.name))
+      return true;
+    let written = false;
+    this.rustLocalUsesAll(param, String(param.name.text), false, (n) => {
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind))
+        written = true;
+      return true;
+    });
+    return written;
   }
   // ── reader defaults (rustReaderDefaultKind / rustReaderIntDefaultNum) ──
   // A base scalar reader returns its parsed value or its default, so its result has one scalar kind
@@ -55782,9 +55855,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "key";
     if (kind === "ostr" && this.rustScalarOptKeyUse(n))
       return "key";
-    if (kind === "ostr" && this.rustOkeyLocal(n) && this.rustOkeyReadUse(n))
+    if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
-    if (kind === "ostr" && this.rustOkeyLocal(n) && this.rustElemKeyInUse(n))
+    if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n))
       return "kin";
     if (isCallExpression6(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== void 0)
       return "native";
@@ -56434,7 +56507,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const literal2 = this.literalKindOfNode(node);
     const optional = kind.startsWith("o");
     if (literal2 === "null")
-      return optional ? "null" : void 0;
+      return optional ? "null" : "never";
     const base = optional ? kind.slice(1) : kind;
     let text;
     if (base === "str" && literal2 === "string" && !(node.text in this.StringLiteralReplacements))
@@ -56464,6 +56537,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const equal = op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken;
     if (test === "null")
       return `${name}.${equal ? "is_none" : "is_some"}()`;
+    if (test === "never")
+      return equal ? "false" : "true";
     return `${local.kind === "ostr" ? `${name}.as_deref()` : name} ${equal ? "==" : "!="} ${test}`;
   }
   /** Condition hook: a `bool` scalar local is its own condition. */
@@ -57053,7 +57128,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     return compare === void 0 ? void 0 : `(${compare})`;
   }
   /** Native text of an ordered/equality comparison over typed operands (`dry`: shape check only). */
-  rustScalarCompareText(node, dry) {
+  rustScalarCompareText(node, dry, literalKind) {
     const op = node.operatorToken.kind;
     const symbol = _RustTranspiler.NATIVE_COMPARISON_OPERATORS[op];
     const equality = this.isEqualityOp(op);
@@ -57067,8 +57142,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     const left = this.unwrapParens(node.left);
     const right = this.unwrapParens(node.right);
     const text = (k, n) => dry ? "_" : this.rustScalarOperandText(k, n);
-    const lk = this.rustScalarCompareKind(left);
-    const rk = this.rustScalarCompareKind(right);
+    const literal2 = (n) => literalKind !== void 0 && this.rustScalarIntLiteral(n) !== void 0 ? literalKind : void 0;
+    const lk = literal2(left) ?? this.rustScalarCompareKind(left);
+    const rk = literal2(right) ?? this.rustScalarCompareKind(right);
     if (lk === void 0 || rk === void 0)
       return void 0;
     const sign = equality ? op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken ? "==" : "!=" : symbol;
@@ -57092,9 +57168,19 @@ ${binding(plan.indent)}` : ""), head: "" };
       return void 0;
     const lo = lk.startsWith("o");
     const ro = rk.startsWith("o");
-    if (lo && ro)
-      return void 0;
+    if (lo && ro) {
+      if (equality || base(lk) !== base(rk) || !isIdentifier3(left) || !isIdentifier3(right))
+        return void 0;
+      if (/ts[\\/]src[\\/]base[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? "")) && (this.rustScalarBareLastWrite(left) || this.rustScalarBareLastWrite(right)))
+        return void 0;
+      return `(${text(lk, left)}.is_some() && ${text(rk, right)}.is_some() && ${text(lk, left)} ${sign} ${text(rk, right)})`;
+    }
     if (lo || ro) {
+      const intLit = (k, n) => k === "int" && this.rustScalarIntLiteral(n) !== void 0;
+      if (base(lk) === "num" && intLit(rk, right))
+        return this.rustScalarCompareText(node, dry, "num");
+      if (base(rk) === "num" && intLit(lk, left))
+        return this.rustScalarCompareText(node, dry, "num");
       if (base(lk) !== base(rk))
         return void 0;
       const greater = op === SyntaxKind7.GreaterThanToken || op === SyntaxKind7.GreaterThanEqualsToken ? lo : equality ? true : ro;
