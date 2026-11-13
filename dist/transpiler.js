@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -56052,7 +56052,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (push !== void 0 && isCallExpression6(push))
         return false;
       const write = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken);
-      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration))
+      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write))
         return false;
     }
     return true;
@@ -56067,6 +56067,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (this.rustScalarUseForms.get(n) === "concat")
       return true;
     return write.right === n && isElementAccessExpression4(write.left) && isIdentifier3(write.left.expression);
+  }
+  /** A scalar read anywhere inside the source of an element write `m[k] = ..` (one level, any key): the written
+   *  place is a `Value` slot of a map, so no other local's decision reads this one's type; the use itself was
+   *  already accepted with its own form (box / native / arg). */
+  rustScalarFeedsElementWrite(n, write) {
+    const left = write.left;
+    if (!isElementAccessExpression4(left))
+      return false;
+    const recv = this.unwrapParens(left.expression);
+    if (!isIdentifier3(recv) && !(isPropertyAccessExpression3(recv) && recv.expression.kind === SyntaxKind7.ThisKeyword))
+      return false;
+    return !this.isNodeInsideNode(n, left);
   }
   // ── scalar loop counters (rustScalarCounterCond) ──
   // `i < n` over an `Int`-literal counter whose bound is any other numeric operand (one that the
@@ -56338,7 +56350,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "targ";
     if ((kind === "str" || kind === "ostr") && this.rustWsSubscriptionWriteValue(n))
       return "box";
-    if ((kind === "int" || kind === "num") && this.rustThisFieldLiteralWrite(n))
+    if ((kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustThisFieldLiteralWrite(n))
+      return "box";
+    if ((kind === "str" || kind === "ostr") && this.rustThisFieldLiteralWrite(n) && this.rustLocalLastUse(n, this.rustDeclaredNode(n)))
       return "box";
     if (this.rustScalarInNestedWrite(n))
       return void 0;
@@ -57291,7 +57305,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const call = this.unwrapParens(node);
     if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.name.text !== "split")
       return void 0;
-    const recv = call.expression.expression;
+    const recv = this.rustStripWrappers(call.expression.expression);
     if (!isIdentifier3(recv) || call.arguments.length !== 1)
       return void 0;
     const recvKind = this.rustScalarLocalOf(recv)?.kind;
@@ -57307,12 +57321,39 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `Value::Array(${name}.split(${sep}).map(Value::from).collect())`;
     return `Value::Array(if let Some(__s) = ${name}.as_deref() { __s.split(${sep}).map(Value::from).collect() } else { Vec::new() })`;
   }
+  /** `s.slice(a)` / `s.slice(a, b)` on a typed string local with literal bounds (a non-negative end): the runtime's
+   *  char-indexed slice without a closure. A start past the end clamps to an empty `skip`, `b < a` takes nothing (the
+   *  helper's `i <= j` arm), a negative start counts from the char length floored at 0; a `None` receiver is `Null`. */
+  rustStrLocalSliceText(node) {
+    const call = this.unwrapParens(node);
+    if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.name.text !== "slice")
+      return void 0;
+    const recv = this.rustStripWrappers(call.expression.expression);
+    const args = Array.from(call.arguments ?? []);
+    if (!isIdentifier3(recv) || args.length === 0 || args.length > 2)
+      return void 0;
+    const recvKind = this.rustScalarLocalOf(recv)?.kind;
+    if (recvKind !== "str" && recvKind !== "ostr")
+      return void 0;
+    const start = this.rustSliceLiteralBound(args[0]);
+    const end = args.length === 2 ? this.rustSliceLiteralBound(args[1]) : void 0;
+    if (start === void 0 || args.length === 2 && (end === void 0 || end < 0 || start < 0))
+      return void 0;
+    const s = recvKind === "str" ? super.printIdentifier(recv) : "__s";
+    const skip = start >= 0 ? `${start}` : `${s}.chars().count().saturating_sub(${-start})`;
+    const take = end === void 0 ? "" : `.take(${Math.max(end - start, 0)})`;
+    const text = `Value::from(${s}.chars().skip(${skip})${take}.collect::<String>())`;
+    return recvKind === "str" ? text : `(if let Some(__s) = ${super.printIdentifier(recv)}.as_deref() { ${text} } else { Value::Null })`;
+  }
   /** A string local read by `split` / `indexOf` / `replace` or appended a string `Value`: its printed lines keep the 400-char budget. */
   rustStrMethodRecvLocal(declaration) {
     let hit = false;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
-      const call = isPropertyAccessExpression3(n.parent) && n.parent.expression === n ? n.parent.parent : void 0;
-      if (call !== void 0 && isCallExpression6(call) && call.expression === n.parent && this.rustStrMethodNewUse(call))
+      let recv = n;
+      while (isParenthesizedExpression3(recv.parent) || recv.parent?.kind === SyntaxKind7.AsExpression)
+        recv = recv.parent;
+      const call = isPropertyAccessExpression3(recv.parent) && recv.parent.expression === recv ? recv.parent.parent : void 0;
+      if (call !== void 0 && isCallExpression6(call) && call.expression === recv.parent && this.rustStrMethodNewUse(call))
         hit = true;
       const append = n.parent;
       if (isBinaryExpression5(append) && append.left === n && append.operatorToken.kind === SyntaxKind7.PlusEqualsToken && this.rustStrPushValueText(n, this.unwrapParens(append.right), true) !== void 0)
@@ -57346,7 +57387,7 @@ ${binding(plan.indent)}` : ""), head: "" };
   /** `split`, `replaceAll`, an optional receiver's `replace`, or an `indexOf` outside a literal contains test. */
   rustStrMethodNewUse(call) {
     const method = String(call.expression.name.text);
-    if (method === "split" || method === "replaceAll")
+    if (method === "split" || method === "replaceAll" || method === "slice")
       return true;
     if (method === "replace")
       return this.rustScalarLocalOf(call.expression.expression)?.kind !== "str";
@@ -58239,7 +58280,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const parent = n.parent;
     if (isParenthesizedExpression3(parent) || parent.kind === SyntaxKind7.AsExpression) {
       const outer = this.rustScalarUseForm(parent, kind);
-      return outer === "box" || outer === "xbox" || outer === "native" && isParenthesizedExpression3(parent) ? outer : void 0;
+      return outer === "box" || outer === "xbox" || outer === "native" && (isParenthesizedExpression3(parent) || this.rustCastSplitRecv(parent)) ? outer : void 0;
     }
     if (isBinaryExpression5(parent)) {
       const op = parent.operatorToken.kind;
@@ -58262,7 +58303,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       if (kind === "int" && this.rustVenueIntToString(call, parent))
         return "native";
       if (isCallExpression6(call) && call.expression === parent) {
-        if (this.rustScalarStrMethod(call) !== void 0 || this.rustStrLocalSplitText(call) !== void 0)
+        if (this.rustScalarStrMethod(call) !== void 0 || this.rustStrLocalSplitText(call) !== void 0 || this.rustStrLocalSliceText(call) !== void 0)
           return "native";
         let top = call;
         while (isParenthesizedExpression3(top.parent))
@@ -58292,6 +58333,14 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (isVariableDeclaration3(parent) && parent.initializer === n && isIdentifier3(parent.name) && kind !== "bool")
       return "xbox";
     return void 0;
+  }
+  /** `(x as string).split(..)` on a string local: the split prints from the local itself (`rustStrLocalSplitText`). */
+  rustCastSplitRecv(cast) {
+    let top = cast;
+    while (isParenthesizedExpression3(top.parent) || top.parent?.kind === SyntaxKind7.AsExpression)
+      top = top.parent;
+    const access = top.parent;
+    return isPropertyAccessExpression3(access) && access.expression === top && isCallExpression6(access.parent) && access.parent.expression === access && (this.rustStrLocalSplitText(access.parent) ?? this.rustStrLocalSliceText(access.parent)) !== void 0;
   }
   /** An integer local as the size argument of `new ArrayCache*(limit)`: passed natively (`i64` / `Option<i64>` into `impl Into<Value>`). */
   rustCacheCtorLimitArg(n, kind) {
@@ -63017,7 +63066,7 @@ ${this.getIden(identation)}}`;
     return `pop(${name}.clone())`;
   }
   printSliceCall(node, identation, name = void 0, parsedArg = void 0, parsedArg2 = void 0) {
-    return this.printNativeStringSlice(node, name) ?? this.looseSlice(name, parsedArg, parsedArg2 ?? "Value::Null");
+    return this.rustStrLocalSliceText(node) ?? this.printNativeStringSlice(node, name) ?? this.looseSlice(name, parsedArg, parsedArg2 ?? "Value::Null");
   }
   printReplaceCall(node, identation, name = void 0, parsedArg = void 0, parsedArg2 = void 0) {
     return this.printNativeStringReplace(node, name) ?? this.printRustReplace(node, name) ?? this.printReplace(node, name) ?? `replace_str(&${name}, &${parsedArg}, &${parsedArg2})`;

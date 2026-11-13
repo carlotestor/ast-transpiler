@@ -648,6 +648,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A String-helper result boxed as an object-literal value or as a one-level element write: the written
      *  place is a `Value` either way, so no other local's decision reads this one's type. */
     rustScalarBoxedField(n: any, write: any, declaration: any): boolean;
+    /** A scalar read anywhere inside the source of an element write `m[k] = ..` (one level, any key): the written
+     *  place is a `Value` slot of a map, so no other local's decision reads this one's type; the use itself was
+     *  already accepted with its own form (box / native / arg). */
+    rustScalarFeedsElementWrite(n: any, write: any): boolean;
     rustScalarCounterCond(node: any, name: string): string | undefined;
     rustScalarCounterPlan(node: any, name: string): {
         cond: string;
@@ -811,6 +815,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrFindText(recvKind: string, name: string, needle: any): string;
     /** `s.split(d)` on a typed string local with a literal or `String` delimiter: the helper's array of parts, empty for null. */
     rustStrLocalSplitText(node: any): string | undefined;
+    /** `s.slice(a)` / `s.slice(a, b)` on a typed string local with literal bounds (a non-negative end): the runtime's
+     *  char-indexed slice without a closure. A start past the end clamps to an empty `skip`, `b < a` takes nothing (the
+     *  helper's `i <= j` arm), a negative start counts from the char length floored at 0; a `None` receiver is `Null`. */
+    rustStrLocalSliceText(node: any): string | undefined;
     /** A string local read by `split` / `indexOf` / `replace` or appended a string `Value`: its printed lines keep the 400-char budget. */
     rustStrMethodRecvLocal(declaration: any): boolean;
     /** `s += v` with `v` a string-typed `Value` (not a `+` chain): `Display` is the text the `add` helper concatenates. */
@@ -924,6 +932,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
      *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */
     rustScalarExpressionUseForm(n: any, kind: string): string | undefined;
+    /** `(x as string).split(..)` on a string local: the split prints from the local itself (`rustStrLocalSplitText`). */
+    rustCastSplitRecv(cast: any): boolean;
     /** The ws cache classes whose hand-written `::new` takes `impl Into<Value>`. */
     private static readonly RUST_CACHE_CTORS;
     /** An integer local as the size argument of `new ArrayCache*(limit)`: passed natively (`i64` / `Option<i64>` into `impl Into<Value>`). */
