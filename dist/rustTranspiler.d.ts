@@ -502,6 +502,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustStrRuntimeBare;
     /** `this.implodeParams(..)` / `this.intToBase16(..)` resolved to the base tier with a non-null `string` return. */
     rustStrRuntimeCall(node: any): boolean;
+    /** A base `Exchange` property bound to an imported encoder (`binaryToBase16 = binaryToBase16`, `@scure/base` underneath). */
+    rustBaseBoundHelper(node: any): boolean;
+    /** A test helper's `exchange.m(..)` on an untyped receiver: the test crate hands it a concrete `Exchange`
+     *  (or the `ExchangeOps` shim on `Value`), whose `m` returns the same `String`, so the call boxes once. */
+    rustStrRuntimeTestCall(node: any): boolean;
     /** The bare `String` call text (no box), for typed string locals and `format!` operands. */
     rustStrRuntimeBareText(node: any, identation?: number): string;
     /** A `+` / `+=` operand the printer joins with `format!` (or a typed `String` push), where `Display` takes the `String` as-is. */

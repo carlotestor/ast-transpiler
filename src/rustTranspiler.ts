@@ -4051,7 +4051,7 @@ export class RustTranspiler extends BaseTranspiler {
     // ── hand-written `-> String` runtime methods (rustStrRuntimeCall / printRustStrRuntimeCall) ──
     // Base methods the runtime implements by hand with the TS `string` return as a Rust `String`.
     private static readonly RUST_STR_RUNTIME_METHODS = new Set([ 'implodeParams', 'intToBase16', 'hmac', 'uuid', 'uuid16', 'uuid22', 'urlencode', 'rawencode',
-        'urlencodeNested', 'urlencodeWithArrayRepeat' ]);
+        'urlencodeNested', 'urlencodeWithArrayRepeat', 'stringToBase64', 'binaryToBase16', 'binaryToBase64', 'binaryToBase58', 'binaryToString' ]);
     private static readonly RUST_STR_RUNTIME_APPEND_VETO = new Set([ 'implodeParams', 'intToBase16' ]);
     private rustStrRuntimeBare = new Set<Node>();
 
@@ -4060,9 +4060,29 @@ export class RustTranspiler extends BaseTranspiler {
         if (node === undefined || !isCallExpression(node) || !isPropertyAccessExpression(node.expression)
             || !RustTranspiler.RUST_STR_RUNTIME_METHODS.has(String(node.expression.name.text)) || !this.rustScalarReceiver(node.expression.expression)) return false;
         const declaration: any = this.rustScalarCallee(node);
-        if (declaration === undefined || !RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? ''))) return false;
+        if (declaration === undefined || (!RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? '')) && !this.rustBaseBoundHelper(node))) return false;
         const type: any = this.typeOfNodeIfAny(node);
         return type !== undefined && this.isStringLikeType(type);
+    }
+
+    /** A base `Exchange` property bound to an imported encoder (`binaryToBase16 = binaryToBase16`, `@scure/base` underneath). */
+    rustBaseBoundHelper(node): boolean {
+        let symbol: any;
+        try {
+            symbol = (this.getChecker() as any).getSymbolAtLocation(node.expression.name);
+        } catch (e) {
+            return false;
+        }
+        return symbolDeclarations(symbol).some((d: any) => d.kind === SyntaxKind.PropertyDeclaration && RustTranspiler.RUST_BASE_TIER_FILE.test(String(d.getSourceFile?.()?.fileName ?? '')));
+    }
+
+    /** A test helper's `exchange.m(..)` on an untyped receiver: the test crate hands it a concrete `Exchange`
+     *  (or the `ExchangeOps` shim on `Value`), whose `m` returns the same `String`, so the call boxes once. */
+    rustStrRuntimeTestCall(node): boolean {
+        if (node === undefined || !isCallExpression(node) || !isPropertyAccessExpression(node.expression) || !isIdentifier(node.expression.expression)
+            || !RustTranspiler.RUST_STR_RUNTIME_METHODS.has(String(node.expression.name.text)) || !this.rustTestTierSource(node)) return false;
+        const type: any = this.typeOfNodeIfAny(node.expression.expression);
+        return type !== undefined && (type.flags & TypeFlags.Any) !== 0;
     }
 
     /** The bare `String` call text (no box), for typed string locals and `format!` operands. */
@@ -4111,6 +4131,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** Call hook: the `String` result is boxed once (`Value::from`) wherever a `Value` is expected. */
     printRustStrRuntimeCall(node, identation): string | undefined {
+        if (!this.rustStrRuntimeBare.has(node) && this.rustStrRuntimeTestCall(node)) return `Value::from(${this.rustStrRuntimeBareText(node, identation)})`;
         if (this.rustStrRuntimeBare.has(node) || !this.rustStrRuntimeCall(node)) return undefined;
         const text = this.rustStrRuntimeBareText(node, identation);
         return this.rustStrRuntimeFormatOperand(node) ? text : `Value::from(${text})`;
@@ -4360,8 +4381,9 @@ export class RustTranspiler extends BaseTranspiler {
     /** True for the derived sources above, which must earn a native use (not only `Value` boxes). */
     rustScalarNeedsNativeUse(init): boolean {
         const node: any = this.unwrapParens(init);
-        if (this.rustElementReadScalarKind(node) !== undefined || this.rustListLengthInit(node) || this.rustVenueIntCall(node) || this.rustVenueParseToInt(node) || this.rustVenueTypedCall(node) !== undefined || this.rustVenueStrCall(node) || this.rustSumShape(node) || this.rustStrCastCall(node) !== undefined || this.rustClockString(node) || this.rustStrRuntimeCall(node)) return true;
-        if (!isCallExpression(node) || !isPropertyAccessExpression(node.expression)) return false;
+        if (this.rustElementReadScalarKind(node) !== undefined || this.rustListLengthInit(node) || this.rustVenueIntCall(node) || this.rustVenueParseToInt(node) || this.rustVenueTypedCall(node) !== undefined || this.rustVenueStrCall(node) || this.rustSumShape(node) || this.rustStrCastCall(node) !== undefined || this.rustClockString(node)) return true;
+        // a hand-written `-> String` helper result is a `String` already: storing and boxing it back costs no conversion
+        if (!isCallExpression(node) || !isPropertyAccessExpression(node.expression) || this.rustStrRuntimeCall(node)) return false;
         return RustTranspiler.RUST_BASE_SCALAR_RETURNS[String(node.expression.name.text)] === undefined && this.rustDerivedScalarKind(node) !== undefined;
     }
 

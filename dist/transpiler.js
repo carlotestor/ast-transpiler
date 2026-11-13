@@ -55023,10 +55023,28 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || !_RustTranspiler.RUST_STR_RUNTIME_METHODS.has(String(node.expression.name.text)) || !this.rustScalarReceiver(node.expression.expression))
       return false;
     const declaration = this.rustScalarCallee(node);
-    if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? "")))
+    if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? "")) && !this.rustBaseBoundHelper(node))
       return false;
     const type = this.typeOfNodeIfAny(node);
     return type !== void 0 && this.isStringLikeType(type);
+  }
+  /** A base `Exchange` property bound to an imported encoder (`binaryToBase16 = binaryToBase16`, `@scure/base` underneath). */
+  rustBaseBoundHelper(node) {
+    let symbol;
+    try {
+      symbol = this.getChecker().getSymbolAtLocation(node.expression.name);
+    } catch (e) {
+      return false;
+    }
+    return symbolDeclarations(symbol).some((d) => d.kind === SyntaxKind7.PropertyDeclaration && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(d.getSourceFile?.()?.fileName ?? "")));
+  }
+  /** A test helper's `exchange.m(..)` on an untyped receiver: the test crate hands it a concrete `Exchange`
+   *  (or the `ExchangeOps` shim on `Value`), whose `m` returns the same `String`, so the call boxes once. */
+  rustStrRuntimeTestCall(node) {
+    if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || !isIdentifier3(node.expression.expression) || !_RustTranspiler.RUST_STR_RUNTIME_METHODS.has(String(node.expression.name.text)) || !this.rustTestTierSource(node))
+      return false;
+    const type = this.typeOfNodeIfAny(node.expression.expression);
+    return type !== void 0 && (type.flags & TypeFlags6.Any) !== 0;
   }
   /** The bare `String` call text (no box), for typed string locals and `format!` operands. */
   rustStrRuntimeBareText(node, identation = 0) {
@@ -55076,6 +55094,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** Call hook: the `String` result is boxed once (`Value::from`) wherever a `Value` is expected. */
   printRustStrRuntimeCall(node, identation) {
+    if (!this.rustStrRuntimeBare.has(node) && this.rustStrRuntimeTestCall(node))
+      return `Value::from(${this.rustStrRuntimeBareText(node, identation)})`;
     if (this.rustStrRuntimeBare.has(node) || !this.rustStrRuntimeCall(node))
       return void 0;
     const text = this.rustStrRuntimeBareText(node, identation);
@@ -55346,9 +55366,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** True for the derived sources above, which must earn a native use (not only `Value` boxes). */
   rustScalarNeedsNativeUse(init) {
     const node = this.unwrapParens(init);
-    if (this.rustElementReadScalarKind(node) !== void 0 || this.rustListLengthInit(node) || this.rustVenueIntCall(node) || this.rustVenueParseToInt(node) || this.rustVenueTypedCall(node) !== void 0 || this.rustVenueStrCall(node) || this.rustSumShape(node) || this.rustStrCastCall(node) !== void 0 || this.rustClockString(node) || this.rustStrRuntimeCall(node))
+    if (this.rustElementReadScalarKind(node) !== void 0 || this.rustListLengthInit(node) || this.rustVenueIntCall(node) || this.rustVenueParseToInt(node) || this.rustVenueTypedCall(node) !== void 0 || this.rustVenueStrCall(node) || this.rustSumShape(node) || this.rustStrCastCall(node) !== void 0 || this.rustClockString(node))
       return true;
-    if (!isCallExpression6(node) || !isPropertyAccessExpression3(node.expression))
+    if (!isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || this.rustStrRuntimeCall(node))
       return false;
     return _RustTranspiler.RUST_BASE_SCALAR_RETURNS[String(node.expression.name.text)] === void 0 && this.rustDerivedScalarKind(node) !== void 0;
   }
@@ -68314,7 +68334,12 @@ _RustTranspiler.RUST_STR_RUNTIME_METHODS = /* @__PURE__ */ new Set([
   "urlencode",
   "rawencode",
   "urlencodeNested",
-  "urlencodeWithArrayRepeat"
+  "urlencodeWithArrayRepeat",
+  "stringToBase64",
+  "binaryToBase16",
+  "binaryToBase64",
+  "binaryToBase58",
+  "binaryToString"
 ]);
 _RustTranspiler.RUST_STR_RUNTIME_APPEND_VETO = /* @__PURE__ */ new Set(["implodeParams", "intToBase16"]);
 // rustWsClientCallArg: `client.resolve|reject|future|reusableFuture|send(.., x)` on a ws `Client`
