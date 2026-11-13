@@ -1799,6 +1799,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustBorrowedKinds;
     rustBorrowedLocalKindUncached(declaration: any): 'dict' | 'list' | undefined;
     private rustOptContainerLocals;
+    private rustBuiltKeyWriteLocals;
+    rustBuiltMapKeyWriteOk(n: any, init: any): boolean;
+    rustUntaggedMapOperand(arg: any): boolean;
     /** A whole hand-off of a nullable container local (a base `safeDict*` / `safeList*` with no or a nullish default,
      *  or a `let` filled by such writes) to a lent `impl Into<crate::Value>` slot. */
     rustLentOptionalHandOff(call: any, arg: any, init: any, from: 'dict' | 'list' | 'api' | undefined, nilDeclared: boolean): boolean;
@@ -1895,6 +1898,13 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  prints the shared map. A `Dict`-typed parameter is not enough: a list body (`Array.isArray (params)` in `sign`)
      *  passes `omit` unchanged, and `into_dict()` would turn it into an empty map. */
     rustOmitOfDict(init: any): boolean;
+    /** `this.deepExtend (m, p, ..)` whose every operand is a proven map: a tag-free literal, a built map, an omit of a
+     *  proven map, or the `params` of a typed unified method. The runtime then merges map into map on every path. */
+    rustDeepExtendOfMaps(call: any): boolean;
+    /** The `params` of a typed unified method, never reassigned: it arrives through `impl Into<crate::Params>` and is
+     *  rebound by `get_arg(.., Value::Map({}))`, so it is always a map (`From<Value> for Params` drops a non-map, and
+     *  the empty set's `Value::Null` takes the `{}` default). A list body only reaches untyped `sign` / `request`. */
+    rustTypedParamsParam(d: any): boolean;
     /** The `params` slot of a typed unified call (`impl Into<crate::Params> + Send`): `From<Value> for Params` takes the
      *  boxed map exactly as it took the `Value` local, so a dict local boxes there once (moved at the last use). */
     rustTypedParamsSlot(call: any, at: number): boolean;
