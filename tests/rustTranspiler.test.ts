@@ -8834,11 +8834,16 @@ describe('scalar reader locals in compares, map keys and null tests', () => {
 });
 
 describe('elements of typed list parameters', () => {
-    test('an element of an unwritten string[] parameter compared natively is Option<String>; one boxed by copy stays Value', () => {
-        const out = transpiler.transpileRust("class X {\n    hold (x: any): any { return x; }\n    route (section: string[]) {\n        const version = section[1];\n        if (version === 'v3') {\n            return 1;\n        }\n        return 0;\n    }\n    copy (section: string[]) {\n        const head = section[0];\n        this.hold (head);\n        return this.hold (head);\n    }\n}\n").content;
-        expect(out).toContain('let mut version: Option<String> = ');
-        expect(out).toContain('version.as_deref() == Some(\"v3\")');
-        expect(out).toMatch(/let mut head: Value = /);
+    test('an element of an unwritten Strings parameter compared natively is Option<String>; one boxed by copy stays Value', () => {
+        const dir = path.join (rustFixtureRoot, 'list-param-elements');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), 'export default class Exchange {\n    hold (x: any): any { return x; }\n}\n');
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport type Strings = string[] | undefined;\nexport default class venue extends Exchange {\n    route (symbols: Strings = undefined) {\n        const ids = [];\n        if (symbols !== undefined) {\n            for (let i = 0; i < symbols.length; i++) {\n                const symbol = symbols[i];\n                if (symbol === 'BTC') {\n                    ids.push (symbol);\n                }\n            }\n        }\n        return ids;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut symbol: Option<String> = ');
+        expect(out).toContain('symbol.as_deref() == Some(\"BTC\")');
+        const copy = transpiler.transpileRust("class X {\n    hold (x: any): any { return x; }\n    copy (section: string[]) {\n        const head = section[0];\n        this.hold (head);\n        return this.hold (head);\n    }\n}\n").content;
+        expect(copy).toMatch(/let mut head: Value = /);
     });
 });
 
