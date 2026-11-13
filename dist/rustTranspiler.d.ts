@@ -1588,7 +1588,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -2038,6 +2038,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `'dict' | 'list' | 'api'` for a container source the local may hold by reference. */
     rustBorrowedSourceKind(call: any): 'dict' | 'list' | 'api' | undefined;
     rustDeclaredEndpointKind(call: any): 'dict' | 'list' | undefined;
+    private static readonly RUST_TEST_KEYREAD_READERS;
+    printTestReaderArg(node: any, text: string): string | undefined;
     /** `&x` for a borrowed local (or a typed container local) passed to a hand-written any-key reader. */
     printBorrowedReaderArg(node: any, text: string): string | undefined;
     /** A base `safeDict*` / `extend` / `omit` call, or an implicit-API endpoint call. */
@@ -2573,6 +2575,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustPlainReturn(expr: any, depth: number): boolean;
     /** The single bodied method declaration `this.m (…)` resolves to (implementation of an
      *  overload set), in the calling file or the base tier. */
+    /** A sync base method no venue source declares and outside virtual dispatch: a base-tier `self.m()` runs this body. */
+    rustBaseOnlyCallee(declaration: any, name: string): boolean;
     rustMethodImpl(call: any): any;
     /** The expression's Rust value is always `Value::Bool(_)` or `Value::Null`. */
     rustBoolValue(expr: any, depth?: number): boolean;
