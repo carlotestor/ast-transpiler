@@ -58321,6 +58321,26 @@ ${i1}}`;
     const parent = n.parent;
     return parent !== void 0 && isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.EqualsToken && parent.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustIsTypedMarketCall(parent.right);
   }
+  /** `rustLocalUsesAll` (property names skipped) for a market local; a same-named `let`/`const` in a sibling block
+   *  is another Rust binding, so its uses are left to its own decision. */
+  rustMarketLocalUsesAll(declaration, name, acceptUse) {
+    const scope = this.rustEnclosingFunction(declaration);
+    const rebound = scope !== void 0 && this.rustScopeNameNodes(scope, name).some((n) => n !== declaration && this.rustBindsName(n, name));
+    if (!rebound)
+      return this.rustLocalUsesAll(declaration, name, true, acceptUse);
+    return this.rustBlockLocalUsesAll(declaration, name, (n) => this.rustIdentifierIsPropertyName(n) || acceptUse(n));
+  }
+  /** `x[m['k']]` / `this.f[m['k']] = v` with a listed string field `k`: the key read of a market struct. */
+  rustMarketKeyOfLookup(n) {
+    const up = n.parent;
+    if (up === void 0 || !isElementAccessExpression4(up) || up.expression !== n || !isStringLiteralLikeNode4(up.argumentExpression))
+      return false;
+    const key = String(up.argumentExpression.text);
+    if (_RustTranspiler.RUST_MARKET_STR_FIELDS[key] === void 0)
+      return false;
+    const use = up.parent;
+    return use !== void 0 && isElementAccessExpression4(use) && use.argumentExpression === up;
+  }
   /** `m === undefined` / `m !== undefined` (either side). */
   rustIsNullTestOf(n) {
     const parent = n.parent;
@@ -58360,7 +58380,7 @@ ${i1}}`;
     let slotUses = 0;
     let valueUses = 0;
     let keyReads = 0;
-    const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
+    const ok = this.rustMarketLocalUsesAll(declaration, String(declaration.name.text), (n) => {
       if (this.rustEnclosingFunction(n) !== scope)
         return false;
       if (this.rustIsTypedMarketWrite(n)) {
@@ -63181,7 +63201,7 @@ ${iden}}`;
     if (key.kind === SyntaxKind7.ArrowFunction || key.kind === SyntaxKind7.FunctionExpression || key.kind === SyntaxKind7.AwaitExpression) {
       return false;
     }
-    if (/^(?:Value::|\(match |\(if |get_value|crate::value::get_value_k)|unwrap_or\(Value::Null\)/.test(text)) {
+    if (/^(?:Value::|\(match |\(if |get_value|crate::value::get_value_k|crate::value::KeyRead::key_read\()|unwrap_or\(Value::Null\)/.test(text)) {
       return true;
     }
     return this.keyPrintsAsValue(this.typeOfNodeIfAny(key));
@@ -63851,6 +63871,9 @@ ${iden}}`;
   /** `crate::value::KeyRead::key_read(&&m, "k")` for a direct read on a dict-typed local, else undefined. */
   printDictKeyRead(node) {
     const recv = node.expression;
+    if (recv !== void 0 && isIdentifier3(recv) && this.rustMarketKeyOfLookup(recv) && this.rustSafeMarketLocalOf(recv) !== void 0) {
+      return `crate::value::KeyRead::key_read(&&${super.printIdentifier(recv)}, "${this.escapeRustStringLiteral(String(node.argumentExpression.text))}")`;
+    }
     if (recv === void 0 || !isIdentifier3(recv) || !this.rustDictKeyReadUse(recv))
       return void 0;
     const optMarket = this.printOptMarketKeyRead(node);
@@ -68410,6 +68433,8 @@ ${this.getIden(identation)}}`;
   }
   /** A `Market` type reference (or `MarketInterface` when `iface` is set). */
   rustIsMarketTypeNode(type, iface) {
+    if (iface && type?.kind === SyntaxKind7.UnionType && type.types.length === 2 && type.types[1].kind === SyntaxKind7.UndefinedKeyword)
+      type = type.types[0];
     if (type?.kind !== SyntaxKind7.TypeReference || !isIdentifier3(type.typeName))
       return false;
     const name = String(type.typeName.text);
@@ -68481,15 +68506,42 @@ ${this.getIden(identation)}}`;
     });
     if (!ok || forwards === 0 && (reads === 0 || others > 0))
       return false;
-    if (this.rustCalledFromWsSibling(method))
+    const sibling = this.rustWsSiblingCallSites(method);
+    if (sibling === void 0)
       return false;
-    const calls = this.rustVenueStrCallSites(method);
+    const calls = [...this.rustVenueStrCallSites(method), ...sibling];
     return calls.length > 0 && calls.every((call) => {
       const args = Array.from(call.arguments);
       if (args.some((a) => a.kind === SyntaxKind7.SpreadElement))
         return false;
       return args[at] === void 0 ? param.initializer !== void 0 : this.rustMarketArgLends(args[at]);
     });
+  }
+  /** The calls of REST method `m` from `ts/src/pro/<id>.ts` (checker-resolved to `m`): none when the ws class does
+   *  not call it, undefined when it does but this program does not load the ws file. */
+  rustWsSiblingCallSites(method) {
+    if (!this.rustCalledFromWsSibling(method))
+      return [];
+    const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
+    const m = file.match(/^(.*(?:^|\/)ts\/src\/)([^/]+\.ts)$/);
+    const program = this.getProgram();
+    const sibling = m === null ? void 0 : program.getSourceFile?.(m[1] + "pro/" + m[2]) ?? Array.from(program.getSourceFileNames?.() ?? []).map((n) => String(n).replace(/\\/g, "/")).filter((n) => n.endsWith("/ts/src/pro/" + m[2])).map((n) => program.getSourceFile(n))[0];
+    if (sibling === void 0)
+      return void 0;
+    const calls = [];
+    let unresolved = false;
+    for (const n of this.rustScopeIndex(sibling).nodes) {
+      if (!isCallExpression6(n) || !isPropertyAccessExpression3(n.expression) || String(n.expression.name.text) !== String(method.name.text))
+        continue;
+      const recv = n.expression.expression.kind;
+      if (recv !== SyntaxKind7.ThisKeyword && recv !== SyntaxKind7.SuperKeyword)
+        continue;
+      if (this.rustScalarCallee(n) === method)
+        calls.push(n);
+      else
+        unresolved = true;
+    }
+    return unresolved || calls.length === 0 ? void 0 : calls;
   }
   /** `ts/src/<id>.ts`'s method `m` is called as `this.m (` / `super.m (` in `ts/src/pro/<id>.ts`. */
   rustCalledFromWsSibling(method) {
@@ -68559,7 +68611,7 @@ ${this.getIden(identation)}}`;
     const scope = this.rustEnclosingFunction(declaration);
     if (scope === void 0 || isSourceFile5(scope) || !this.rustDictKeyReadLineOk(declaration, name))
       return false;
-    return this.rustLocalUsesAll(declaration, name, true, (n) => {
+    return this.rustMarketLocalUsesAll(declaration, name, (n) => {
       if (this.rustEnclosingFunction(n) !== scope)
         return false;
       const up = n.parent;
@@ -68567,6 +68619,8 @@ ${this.getIden(identation)}}`;
         return up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustIsSafeMarketCall(up.right);
       }
       if (this.rustDictKeyReadUse(n))
+        return true;
+      if (this.rustMarketKeyOfLookup(n))
         return true;
       if (this.rustIsNullTestOf(n) && this.rustNullTestIsCondition(n))
         return true;
@@ -70706,6 +70760,14 @@ function createSnapshotProgram(cache, rootFiles, files) {
   checker.__astTranspilerApi = getApi(cache);
   return [snapshot, program, checker];
 }
+function wsSiblingRoots(file) {
+  const m = String(file).replace(/\\/g, "/").match(/^(.*(?:^|\/)ts\/src\/)([^/]+\.ts)$/);
+  if (m === null) {
+    return [];
+  }
+  const sibling = m[1] + "pro/" + m[2];
+  return fs4.existsSync(sibling) ? [sibling] : [];
+}
 var Transpiler = class _Transpiler {
   // batch pre-resolve for callers that query the checker themselves (build hooks):
   // one round trip per method for every relevant node under `root`
@@ -70774,12 +70836,12 @@ var Transpiler = class _Transpiler {
     });
     return this.setSnapshotContext(snapshot, program, checker, inMemoryFilePath);
   }
-  createProgramByPathAndSetContext(filePath) {
-    const shared = this.findSharedProgramFile(filePath);
+  createProgramByPathAndSetContext(filePath, extraRoots = []) {
+    const shared = extraRoots.length === 0 ? this.findSharedProgramFile(filePath) : void 0;
     if (shared !== void 0) {
       return this.setContext(shared);
     }
-    const [snapshot, program, checker] = createSnapshotProgram(this.programCache, [filePath, globalsShimPath], { [globalsShimPath]: globalsShim });
+    const [snapshot, program, checker] = createSnapshotProgram(this.programCache, [filePath, ...extraRoots, globalsShimPath], { [globalsShimPath]: globalsShim });
     return this.setSnapshotContext(snapshot, program, checker, filePath);
   }
   // One snapshot/program for a whole run: later ByPath transpiles of any root (or
@@ -70858,7 +70920,7 @@ var Transpiler = class _Transpiler {
   transpile(lang, mode, file, sync = false, createContext = true, handleImports = true) {
     if (createContext) {
       if (mode === 0 /* ByPath */) {
-        this.createProgramByPathAndSetContext(file);
+        this.createProgramByPathAndSetContext(file, lang === 5 /* Rust */ ? wsSiblingRoots(file) : []);
       } else {
         this.createProgramInMemoryAndSetContext(file);
       }

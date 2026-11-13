@@ -962,6 +962,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustMarketLocalIsTyped(declaration: any): boolean;
     /** `m = this.market (x)` / `m = this.safeMarket (..)` as its own statement: a later write of the same struct. */
     rustIsTypedMarketWrite(n: any): boolean;
+    /** `rustLocalUsesAll` (property names skipped) for a market local; a same-named `let`/`const` in a sibling block
+     *  is another Rust binding, so its uses are left to its own decision. */
+    rustMarketLocalUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean): boolean;
+    /** `x[m['k']]` / `this.f[m['k']] = v` with a listed string field `k`: the key read of a market struct. */
+    rustMarketKeyOfLookup(n: any): boolean;
     /** `m === undefined` / `m !== undefined` (either side). */
     rustIsNullTestOf(n: any): boolean;
     rustMarketLocalIsTypedUncached(declaration: any): false | 'struct' | 'opt' | 'call' | 'smkt';
@@ -2331,6 +2336,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A per-venue helper's `market: Market` parameter that it forwards to a lent market slot: lent itself when every
      *  caller in its file lends a typed market (or passes `undefined`), so no caller decodes. */
     rustVenueMarketParam(method: any, param: any): boolean;
+    /** The calls of REST method `m` from `ts/src/pro/<id>.ts` (checker-resolved to `m`): none when the ws class does
+     *  not call it, undefined when it does but this program does not load the ws file. */
+    rustWsSiblingCallSites(method: any): any[] | undefined;
     /** `ts/src/<id>.ts`'s method `m` is called as `this.m (` / `super.m (` in `ts/src/pro/<id>.ts`. */
     rustCalledFromWsSibling(method: any): boolean;
     /** A market slot argument that lends without a decode (`rustMarketSlotArgText` takes no `FromRaw` path). */
