@@ -9060,6 +9060,21 @@ describe('typed market slots of read-only venue helpers', () => {
     });
 });
 
+describe('typed outcome fallback slot', () => {
+    test('safeOutcome takes its market fallback as a lent market slot', () => {
+        const dir = path.join (rustFixtureRoot, 'typed-outcome-market');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    market (symbol: string): MarketInterface { return undefined; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    safeOutcome (outcomeIdOrSymbol: Str, market: Market = undefined): MarketInterface {\n        if (market !== undefined) {\n            return market;\n        }\n        const stub: any = { 'outcome': outcomeIdOrSymbol };\n        return stub;\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Market, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseTicker (ticker: Dict, market: Market = undefined): Dict {\n        const outcomeObj = this.safeOutcome (this.safeString (ticker, 'id'), market);\n        return { 'outcome': this.safeString (outcomeObj, 'outcome'), 'info': ticker };\n    }\n}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const base = typed.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts')).content;
+        expect(base).toContain('outcomeIdOrSymbol: Value, market: Option<&crate::types::Market>) -> Value');
+        const out = typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).not.toContain('FromRaw>::from_raw(market');
+        expect(out).not.toContain('crate::Value::from(market)');
+    });
+});
+
 describe('typed market slots of required / plural parse methods', () => {
     test('a required parse market, a list parse market, a ternary market local and a market alias lend without a decode', () => {
         const dir = path.join (rustFixtureRoot, 'typed-required-market');

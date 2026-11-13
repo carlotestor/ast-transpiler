@@ -17560,7 +17560,7 @@ export class RustTranspiler extends BaseTranspiler {
     // positional `Value` before it (callers pad `Value::Null`).
     private static readonly RUST_LIST_MARKET_METHODS = new Set([
         'parseTrades', 'parseWsTrades', 'parseTradesHelper', 'parseOrders', 'handleMarketTypeAndParams', 'handleSubTypeAndParams', 'safeMarket', 'safeOpenInterest',
-        'parseOHLCVs', 'parseTradingViewOHLCV', 'parseOpenInterestsHistory', 'parseLiquidations',
+        'parseOHLCVs', 'parseTradingViewOHLCV', 'parseOpenInterestsHistory', 'parseLiquidations', 'safeOutcome',
     ]);
 
     /** The `market: Market = undefined` parameter of a listed helper: read-only, every parameter before it required

@@ -69857,7 +69857,8 @@ _RustTranspiler.RUST_LIST_MARKET_METHODS = /* @__PURE__ */ new Set([
   "parseOHLCVs",
   "parseTradingViewOHLCV",
   "parseOpenInterestsHistory",
-  "parseLiquidations"
+  "parseLiquidations",
+  "safeOutcome"
 ]);
 var RustTranspiler = _RustTranspiler;
 
