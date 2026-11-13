@@ -342,6 +342,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNilScalarKind(declaration: any): string | undefined;
     rustNilScalarHandOff(declaration: any, scope: any, kind: string, boxed: any[]): boolean;
     private rustNilStrLentLocals;
+    /** ral-ld: `m[k] = x` / `m.k = x` as a statement on a plain identifier receiver (not `x` itself), one level deep. */
+    rustNilStrStoreBox(n: any): boolean;
     private rustNilAliasMoves;
     rustNilAliasMove(rhs: any, kind: string): boolean;
     /** Every box before the last sits at a `this.` / `super.` argument (where the `Value` form was cloned); no free-function,
@@ -2020,6 +2022,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltReturnSourceKind(call: any): 'dict' | 'list' | undefined;
     private static readonly RUST_BUILT_BOX_RECEIVER_METHODS;
     private static readonly RUST_BUILT_HELPER_RETURNS;
+    rustDeclaredEndpointBoxUse(n: any): boolean;
     rustBuiltReturnBoxUse(n: any, init: any): boolean;
     /** A base `this.omit (x, keys)` whose head always holds a map: a literal, a built map (`extend`, ..) or a local that
      *  prints the shared map. A `Dict`-typed parameter is not enough: a list body (`Array.isArray (params)` in `sign`)

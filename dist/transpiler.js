@@ -53770,7 +53770,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       }
       if (kind !== "ostr")
         return true;
-      if (parent?.kind === SyntaxKind7.VariableDeclaration || isBinaryExpression5(parent) && parent.right === n)
+      if (parent?.kind === SyntaxKind7.VariableDeclaration || isBinaryExpression5(parent) && parent.right === n && !this.rustNilStrStoreBox(n))
         ok = false;
       if (form !== "box" && form !== "xbox")
         ok = false;
@@ -53786,6 +53786,23 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     this.rustNilStrLentLocals.add(declaration);
     return true;
+  }
+  /** ral-ld: `m[k] = x` / `m.k = x` as a statement on a plain identifier receiver (not `x` itself), one level deep. */
+  rustNilStrStoreBox(n) {
+    const up = n.parent;
+    if (!isBinaryExpression5(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const left = up.left;
+    if (!isElementAccessExpression4(left) && !isPropertyAccessExpression3(left))
+      return false;
+    if (!isIdentifier3(left.expression) || this.rustScalarInNestedWrite(n))
+      return false;
+    const own = this.rustDeclarationOfIdentifier(n);
+    if (this.rustIdentifierRefersToDeclaration(left.expression, own))
+      return false;
+    if (!isElementAccessExpression4(left) || isStringLiteralLikeNode4(this.rustSkipWrappers(left.argumentExpression)))
+      return true;
+    return !new RegExp(`\\b${String(n.text)}\\b`).test(String(left.argumentExpression.getText()));
   }
   rustNilAliasMove(rhs, kind) {
     if (kind !== "ostr" && kind !== "oint" && kind !== "onum")
@@ -64830,6 +64847,8 @@ ${iden}}`;
     let optionalBoxes = 0;
     let paramsBoxes = 0;
     let declaredEndpointWrites = 0;
+    let nullWrites = 0;
+    let endpointBoxes = 0;
     const boxedElementUses = [];
     const accept = (n) => {
       if (this.rustIdentifierIsPropertyName(n))
@@ -64849,7 +64868,7 @@ ${iden}}`;
         const rhs = this.rustSkipWrappers(up.right);
         writes++;
         if (this.literalKindOfNode(rhs) === "null")
-          return true;
+          return ++nullWrites > 0;
         const kind = this.rustNilResponseWriteKind(rhs, nilDeclared, declaration);
         const declaredWrite = nilDeclared && this.rustDeclaredEndpointWrite(rhs);
         if (declaredWrite)
@@ -64880,7 +64899,7 @@ ${iden}}`;
         return ++extendHeads > 0 && ++reads > 0;
       if (this.rustUntilHeadKeyWrite(n) !== void 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) === "dict" || this.rustBuiltMapKeyWriteOk(n, init)))
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
-      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0) && boxedElementUses.push(n) > 0;
+      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0) && boxedElementUses.push(n) > 0;
       const asArg = isAsExpression3(up) && up.expression === n && isCallExpression6(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : void 0;
       if (asArg !== void 0 && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared))
         return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
@@ -64911,7 +64930,10 @@ ${iden}}`;
     const safe = blockScoped ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
     const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || defaultedBoxes === boxedElementUses.length && optionalBoxes === 0 && paramsBoxes === 0 && this.rustDefaultedContainerBoxUse(boxedElementUses[0], init) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init));
     const boxOnly = reads === 0 && boxedElementUses.length > 0 && this.rustDictElementSource(init) && nullTests === 0 && writes === 0;
-    if (!safe || reads === 0 && !builtBoxOnly && !boxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))
+    const endpointBoxOnly = endpointBoxes > 0 && nullTests === 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration) && boxedElementUses.every((u) => this.rustBoxLineOk(u));
+    if (endpointBoxes > 0 && !endpointBoxOnly)
+      return void 0;
+    if (!safe || reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))
       return void 0;
     if (declaredEndpointWrites > 0 && nullTests > 0)
       return void 0;
@@ -64925,6 +64947,8 @@ ${iden}}`;
     if (extendHeads > 0 && (optional || from !== "dict" && from !== "api"))
       return void 0;
     if (optional && boxedElementUses.length > 0 && (this.rustWsFieldRead(init) !== void 0 || defaultedBoxes > 0))
+      return void 0;
+    if (endpointBoxes > 0 && endpointBoxes !== boxedElementUses.length)
       return void 0;
     if (optionalBoxes > 0 && (boxedElementUses.length !== optionalBoxes || nilDeclared || writes > 0 || from !== "dict"))
       return void 0;
@@ -65423,7 +65447,8 @@ ${iden}}`;
     if (declaration !== void 0 && this.rustOptContainerLocals.has(declaration)) {
       if (!this.rustPrintedOptional.has(declaration))
         return void 0;
-      return form === "move" ? `${text}.map_or(Value::Null, Value::Dict)` : `${text}.clone().map_or(Value::Null, Value::Dict)`;
+      const variant = this.rustBorrowedLocalKind(declaration) === "list" ? "Arr" : "Dict";
+      return form === "move" ? `${text}.map_or(Value::Null, Value::${variant})` : `${text}.clone().map_or(Value::Null, Value::${variant})`;
     }
     const list = declaration !== void 0 && this.rustBorrowedLocalKind(declaration) === "list";
     return form === "move" ? `Value::${list ? "Arr" : "Dict"}(${text})` : `Value::from(&${text})`;
@@ -65921,6 +65946,19 @@ ${iden}}`;
       this.rustFreshWide = wide;
     }
     return this.rustCallBuildsContainer(call, "list", 0) ? "list" : void 0;
+  }
+  // ── rustDeclaredEndpointBoxUse (ral-ld): a declared-endpoint optional container handed on whole ──
+  // `{ 'info': response }` / `return response`: the box `x.map_or(Value::Null, Value::Dict|Arr)` gives back the
+  // answer of the declared shape, Null for an unset local.
+  rustDeclaredEndpointBoxUse(n) {
+    const up = n.parent;
+    if (up === void 0 || this.rustScalarInNestedWrite(n))
+      return false;
+    if (up.kind === SyntaxKind7.PropertyAssignment)
+      return up.initializer === n && isObjectLiteralExpression4(up.parent) && !this.rustInDestructureWrite(n);
+    if (isReturnStatement4(up))
+      return up.expression === n;
+    return isAsExpression3(up) && up.expression === n && isReturnStatement4(up.parent);
   }
   rustBuiltReturnBoxUse(n, init) {
     const up = n.parent;
