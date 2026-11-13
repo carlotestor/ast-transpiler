@@ -64204,7 +64204,7 @@ ${iden}}`;
       return true;
     };
     const safe = endpoint && !nilDeclared ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
-    const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0;
+    const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && (isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0 || this.rustDictElementSource(init));
     if (!safe || reads === 0 && !builtBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))
       return void 0;
     if (this.rustNilResponseLocals.has(declaration) && (lentResponses > 0 || lentNullable > 0))
@@ -64451,6 +64451,10 @@ ${iden}}`;
       return false;
     if (up.kind === SyntaxKind7.PropertyAssignment)
       return up.initializer === n;
+    if (isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "push")
+      return !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n));
+    if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement)
+      return !this.rustIdentifierRefersToDeclaration(this.rustSkipWrappers(up.left.expression), this.rustDeclarationOfIdentifier(n));
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     const callee = String(up.expression.name.text);

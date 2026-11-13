@@ -13420,7 +13420,10 @@ export class RustTranspiler extends BaseTranspiler {
         // an endpoint response may share its name with a `let`/`const` in a sibling block (another Rust binding)
         const safe = endpoint && !nilDeclared ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
         // a fresh built container handed on whole (D11): every use is a box, the declaration converts once
-        const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== undefined && isCallExpression(init) && this.rustBuiltReturnSourceKind(init) !== undefined;
+        // an element of a typed `Dict[]` list handed on whole only (parse* / push): the element converts once at the
+        // declaration and each hand-off moves (last use) or bumps the Arc the copied `Value` paid (D11)
+        const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== undefined
+            && (isCallExpression(init) && this.rustBuiltReturnSourceKind(init) !== undefined || this.rustDictElementSource(init));
         if (!safe || (reads === 0 && !builtBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes)) || mixed || from === undefined
             || ((this.rustNilResponseLocals.has(declaration) || from === 'api' || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))) return undefined;
         // an endpoint written into an empty `let` may answer a list: `into_opt_dict` keeps only maps, so it is never lent whole
@@ -13656,6 +13659,12 @@ export class RustTranspiler extends BaseTranspiler {
         const up: any = n.parent;
         if (!this.rustDictElementSource(init) || up === undefined || this.rustScalarInNestedWrite(n)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
+        // `rows.push (row)` into another local list: the list keeps its own type, the element enters as the shared map
+        if (isCallExpression(up) && isPropertyAccessExpression(up.expression) && isIdentifier(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n
+            && String(up.expression.name.text) === 'push') return !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n));
+        // `m[k] = el` stores the shared map into another container (the value slot of the write)
+        if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && isElementAccessExpression(up.left)
+            && up.parent?.kind === SyntaxKind.ExpressionStatement) return !this.rustIdentifierRefersToDeclaration(this.rustSkipWrappers(up.left.expression), this.rustDeclarationOfIdentifier(n));
         if (!isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression) || up.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const callee = String(up.expression.name.text);
         if (RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee)) return false;

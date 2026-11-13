@@ -9780,3 +9780,17 @@ describe('ral-jf: element-read string locals lent to this. arguments', () => {
         expect(out).toContain(', key.map(Value::from).unwrap_or(Value::Null), &[])');
     });
 });
+
+describe('ral-kf: elements of typed Dict[] lists handed on whole', () => {
+    test('a Dict[] element handed whole to a this. method, pushed into a local list or stored at m[k] is a crate::value::Dict', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-kf-dict-elem');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export type Dict = { [key: string]: any };\nexport default class Exchange {\n    safeString (o: any, k: any, d: any = undefined): string { return o; }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseRows (data: Dict[]) {\n        const rows: Dict[] = [];\n        const byId: Dict = {};\n        for (let i = 0; i < data.length; i++) {\n            const row = data[i];\n            this.hold (row);\n        }\n        for (let i = 0; i < data.length; i++) {\n            const entry = data[i];\n            if (this.safeString (entry, 'id') !== undefined) {\n                rows.push (entry);\n            }\n        }\n        for (let i = 0; i < data.length; i++) {\n            const item = data[i];\n            const id = this.safeString (item, 'id');\n            byId[id] = item;\n        }\n        return [ rows, byId ];\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut row: crate::value::Dict = data.get(i as usize).cloned().unwrap_or(Value::Null).into_dict();');
+        expect(out).toContain('let mut entry: crate::value::Dict = ');
+        expect(out).toContain('let mut item: crate::value::Dict = ');
+        expect(out).not.toContain('append_to_array');
+    });
+});
