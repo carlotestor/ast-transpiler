@@ -338,7 +338,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `[ x, .. ] = <list>` as its own statement: `x` is written from a tuple slot. */
     rustNilSlotWrite(n: any): boolean;
     /** Slot hook: an `Option<String>` local takes the slot's string. */
-    printRustNilSlotWrite(element: any, read: string): string | undefined;
+    printRustNilSlotWrite(element: any, read: string, strRead?: string): string | undefined;
     /** Declaration hook: `let mut x: Option<..> = None` for an empty scalar local. */
     printRustNilScalarDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** Assignment hook: `x = <rhs>` with the right-hand side unwrapped to the local's payload. */
@@ -1875,6 +1875,27 @@ export declare class RustTranspiler extends BaseTranspiler {
     printWsCacheMapWrite(left: any, right: any): string | undefined;
     /** Any other read of the map field is its dict snapshot (each entry an Arc bump); a write is unproven. */
     printWsCacheMapField(node: any): string | undefined;
+    private rustWsResolveTables;
+    private rustWsWatchKinds;
+    /** The hash patterns of `n`: segments are literal text or `null` (any text). */
+    rustWsHashPatterns(n: any, depth: number, seen: Set<Node>): Array<Array<string | null>>;
+    static rustWsPatternNorm(p: Array<string | null>): Array<string | null>;
+    /** Whether some string matches both patterns (a sound over-approximation: prefix and suffix agree). */
+    static rustWsPatternsMeet(a0: Array<string | null>, b0: Array<string | null>): boolean;
+    /** The typed kind a resolved value passes as, or undefined. */
+    rustWsResolvedKind(x: any): 'book' | 'cache' | undefined;
+    /** Any write of the local after its declaration (an assignment or an update). */
+    rustLocalReassigned(declaration: any): boolean;
+    /** Every resolve of the ws class with its hash patterns and kind; null when the class has ws relatives. */
+    rustWsResolveTable(cls: any): Array<{
+        pats: Array<Array<string | null>>;
+        kind: string;
+    }> | null;
+    private rustWsWsParents;
+    /** A pro venue that extends (through its abstract shim) another pro venue, or that another pro venue extends. */
+    rustWsHasWsRelatives(file: string, at: number): boolean;
+    /** The proven kind of an `await this.watch|watchMultiple (..)` initializer, else undefined. */
+    rustWsWatchResultKind(init: any): 'book' | 'cache' | undefined;
     private static readonly RUST_BOOK_TYPE;
     private static readonly RUST_BOOK_MAP_TYPE;
     private static readonly RUST_BOOK_CTORS;
@@ -1908,6 +1929,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsBookOptText(node: any): string;
     /** `x.limit()` / `x.reset(..)` as a statement. */
     rustWsBookMethodReceiver(n: any): boolean;
+    /** `return x.limit ()` on an optional book: the slot's `limit()` trims and hands the book back boxed. */
+    rustWsBookLimitReturn(n: any): boolean;
     /** The literal key of a side / meta access on `x` (`x['bids']`, `x.nonce`), else undefined. */
     rustWsBookFieldKey(n: any): string | undefined;
     /** A hand-off that boxes the handle once: a call argument, a return, a non-literal element read, a literal value. */
