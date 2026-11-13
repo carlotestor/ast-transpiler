@@ -1668,6 +1668,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** How a non-read use boxes: an argument of a plain `Value` slot of a `this.` method, the value of an object
      *  literal property or array element, or `return x`; a nullable local only feeds base `safe*` readers. */
     rustContainerBoxForm(n: any, neverNull: boolean): 'clone' | 'move' | undefined;
+    /** The sole argument of a base `this.json (x)` (printed `json_stringify(&x)`, not a `self.` field). */
+    rustIsJsonOperand(node: any): boolean;
     /** `Value::Map(x.clone())` / `Value::from(x.clone())` at an admitted boxing use, else undefined. */
     printRustContainerLocalBox(node: any, text: string): string | undefined;
     private static readonly RUST_BORROWED_DICT_READERS;
@@ -1686,10 +1688,15 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  or a `let` filled by such writes) to a lent `impl Into<crate::Value>` slot. */
     rustLentOptionalHandOff(call: any, arg: any, init: any, from: 'dict' | 'list' | 'api' | undefined, nilDeclared: boolean): boolean;
     private static readonly RUST_LENT_OPTIONAL_HELPERS;
+    /** `this.parseX (x as Dict, ..)`: the assertion only retypes the TS side, the argument lands in the same lent slot. */
+    rustLentAsHandOff(asArg: any, init: any, from: 'dict' | 'list' | 'api' | undefined, endpoint: boolean, nilDeclared: boolean): boolean;
+    rustLentAsNullable(init: any, nilDeclared: boolean, endpoint: boolean): boolean;
     /** Every never-null lent use of an optional local lands in a slot that also takes the optional form. */
     rustLentOptionalOk(declaration: any, name: string, fn: any, init: any, from: 'dict' | 'list' | 'api' | undefined): boolean;
     /** `&x` for an optional container local lent whole to an `impl Into<crate::Value>` slot (`None` arrives as Null). */
     printLentOptionalArg(node: any, text: string): string | undefined;
+    /** `&x` for a container local lent through `x as T` to a lent parse slot (plain or optional form). */
+    printLentAsArg(node: any, text: string): string | undefined;
     private rustPrintedOptional;
     /** The value argument of `client.resolve|reject(value, hash)` on a ws handle: the hand-written method takes `impl Into<Value>`. */
     rustLentWsSettleSlot(call: any, arg: any): boolean;

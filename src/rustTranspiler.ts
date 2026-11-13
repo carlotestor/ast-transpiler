@@ -11463,6 +11463,7 @@ export class RustTranspiler extends BaseTranspiler {
     transformIdentifier(node, identifier) {
         const text = super.transformIdentifier(node, identifier);
         const optList = this.printOptListIdentifier(node, text); if (optList !== undefined) return optList;
+        const asLent = this.printLentAsArg(node, text); if (asLent !== undefined) return asLent;
         const borrowedArg = this.printExtendHeadArg(node, text) ?? this.printLentOptionalArg(node, text) ?? this.printBorrowedReaderArg(node, text) ?? this.printLentParamsArg(node, text) ?? this.printLentListArg(node, text) ?? this.printLentResponseArg(node, text) ?? this.printLentHelperArg(node, text) ?? this.printOptionalParamsArg(node, text) ?? this.printWsFieldBox(node, text) ?? this.printDictElementBox(node, text) ?? this.printHandedSlotBox(node, text); if (borrowedArg !== undefined) return borrowedArg;
         const containerBox = this.printRustContainerLocalBox(node, text);
         if (containerBox !== undefined) return containerBox;
@@ -12465,6 +12466,13 @@ export class RustTranspiler extends BaseTranspiler {
         return undefined;
     }
 
+    /** The sole argument of a base `this.json (x)` (printed `json_stringify(&x)`, not a `self.` field). */
+    rustIsJsonOperand(node: any): boolean {
+        const call: any = node?.parent;
+        return isIdentifier(node) && isCallExpression(call) && call.arguments.length === 1 && call.arguments[0] === node
+            && isPropertyAccessExpression(call.expression) && call.expression.expression.kind === SyntaxKind.ThisKeyword && String(call.expression.name.text) === 'json';
+    }
+
     /** `Value::Map(x.clone())` / `Value::from(x.clone())` at an admitted boxing use, else undefined. */
     printRustContainerLocalBox(node: any, text: string): string | undefined {
         const form = this.rustContainerBoxUses.get(node);
@@ -12474,6 +12482,8 @@ export class RustTranspiler extends BaseTranspiler {
         const value = form === 'move' ? text : `${text}.clone()`;
         const listDecl: any = kind === 'list' ? this.rustDeclarationOfIdentifier(node) : undefined;
         if (listDecl !== undefined && (this.rustAlwaysListProducer(this.rustSkipWrappers(listDecl.initializer)) || this.rustDefaultedListRead(this.rustSkipWrappers(listDecl.initializer)))) return `Value::Arr(${value})`;
+        // `this.json (x)` prints `json_stringify(&x)` (`impl JsonOperand` takes `&Vec<Value>`): the typed list is lent as itself
+        if (this.rustIsJsonOperand(node) && kind === 'list') return text;
         // A call argument boxes through `Into` so ccxt's literal-key reader rewrite still parses the argument.
         if (isCallExpression(node.parent) && !(kind === 'map' && this.rustExtendHeadUse(node))) return `${value}.into()`;
         return kind === 'map' ? `Value::Map(${value})` : `Value::from(${value})`;
@@ -12609,6 +12619,8 @@ export class RustTranspiler extends BaseTranspiler {
             }
             if (this.rustExtendHeadUse(n)) return ++extendHeads > 0 && ++reads > 0;
             const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0) && boxedElementUses.push(n) > 0;
+            const asArg: any = isAsExpression(up) && up.expression === n && isCallExpression(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : undefined;
+            if (asArg !== undefined && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared)) return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
             if (this.rustLentResponseSlot(up, n) && this.rustLentResponseSource(init)) return ++lentResponses > 0 && ++reads > 0;
             if ((endpoint || this.rustLentContainerSource(init)) && this.rustLentEndpointSlot(up, n, from)) return ++lentResponses > 0 && ++reads > 0;
             // `json` tells Null from an empty container: only a never-null source lends there as the plain container
@@ -12667,12 +12679,26 @@ export class RustTranspiler extends BaseTranspiler {
     // hand-written helpers whose operand is `impl Into<crate::Value>` / `impl JsonText` (the optional form lends there too)
     private static readonly RUST_LENT_OPTIONAL_HELPERS = new Set([ 'toArray', 'arrayConcat', 'json' ]);
 
+    /** `this.parseX (x as Dict, ..)`: the assertion only retypes the TS side, the argument lands in the same lent slot. */
+    rustLentAsHandOff(asArg: any, init: any, from: 'dict' | 'list' | 'api' | undefined, endpoint: boolean, nilDeclared: boolean): boolean {
+        const call: any = asArg.parent;
+        if (from !== 'dict' && from !== 'list') return false;
+        if (!this.rustLentResponseSlot(call, asArg) && !(this.rustLentListSlot(call, asArg) && !this.rustTypedFilterLentSlot(call, asArg) && (from === 'list' || this.rustLentAnyShapeSlot(call)))) return false;
+        if (this.rustLentResponseSlot(call, asArg) && from !== 'dict') return false;
+        return endpoint || this.rustLentContainerSource(init) || this.rustLentResponseSource(init) || nilDeclared || (init !== undefined && isCallExpression(init) && this.rustOptContainerSourceOk(init, from));
+    }
+
+    rustLentAsNullable(init: any, nilDeclared: boolean, endpoint: boolean): boolean {
+        return !endpoint && (nilDeclared || !(this.rustLentContainerSource(init) || this.rustLentResponseSource(init)));
+    }
+
     /** Every never-null lent use of an optional local lands in a slot that also takes the optional form. */
     rustLentOptionalOk(declaration: any, name: string, fn: any, init: any, from: 'dict' | 'list' | 'api' | undefined): boolean {
         if (from !== 'dict' && from !== 'list') return false;
         return this.rustLocalUsesAll(declaration, name, false, (n: any) => {
             if (this.rustIdentifierIsPropertyName(n) || !this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn) return true;
             const up: any = n.parent;
+            if (isAsExpression(up)) return true;
             if (!isCallExpression(up) || !Array.from(up.arguments).includes(n)) return true;
             if (this.rustLentResponseSlot(up, n) || this.rustLentEndpointSlot(up, n, from) || this.rustLentWsSettleSlot(up, n)) return true;
             return !this.rustLentHelperSlot(up, n, from) || RustTranspiler.RUST_LENT_OPTIONAL_HELPERS.has(String(up.expression.name.text));
@@ -12688,6 +12714,21 @@ export class RustTranspiler extends BaseTranspiler {
         const ok = this.rustLentResponseSlot(call, node) ? local.kind === 'dict' : (this.rustLentEndpointSlot(call, node, local.kind) || this.rustLentWsSettleSlot(call, node)
             || (this.rustLentHelperSlot(call, node, local.kind) && RustTranspiler.RUST_LENT_OPTIONAL_HELPERS.has(String(call.expression.name.text))));
         return ok ? `&${text}` : undefined;
+    }
+
+    /** `&x` for a container local lent through `x as T` to a lent parse slot (plain or optional form). */
+    printLentAsArg(node: any, text: string): string | undefined {
+        const asArg: any = node?.parent;
+        if (!isIdentifier(node) || !isAsExpression(asArg) || asArg.expression !== node || !isCallExpression(asArg.parent)) return undefined;
+        const call: any = asArg.parent;
+        const declaration: any = this.rustDeclarationOfIdentifier(node);
+        if (declaration === undefined || declaration === node || declaration.name === node) return undefined;
+        const kind = this.rustBorrowedLocalKind(declaration);
+        if (kind === undefined) return undefined;
+        const printed = this.rustOptContainerLocals.has(declaration) ? this.rustPrintedOptional.has(declaration) : this.rustPrintedBorrowed.has(declaration);
+        if (!printed) return undefined;
+        const slot = this.rustLentResponseSlot(call, asArg) ? kind === 'dict' : (this.rustLentListSlot(call, asArg) && !this.rustTypedFilterLentSlot(call, asArg) && (kind === 'list' || this.rustLentAnyShapeSlot(call)));
+        return slot ? `&${text}` : undefined;
     }
 
     // Optional container locals whose declaration printed `Option<..>` (an earlier declaration form may keep the box).

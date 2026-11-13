@@ -62194,6 +62194,9 @@ ${iden}}`;
     const optList = this.printOptListIdentifier(node, text);
     if (optList !== void 0)
       return optList;
+    const asLent = this.printLentAsArg(node, text);
+    if (asLent !== void 0)
+      return asLent;
     const borrowedArg = this.printExtendHeadArg(node, text) ?? this.printLentOptionalArg(node, text) ?? this.printBorrowedReaderArg(node, text) ?? this.printLentParamsArg(node, text) ?? this.printLentListArg(node, text) ?? this.printLentResponseArg(node, text) ?? this.printLentHelperArg(node, text) ?? this.printOptionalParamsArg(node, text) ?? this.printWsFieldBox(node, text) ?? this.printDictElementBox(node, text) ?? this.printHandedSlotBox(node, text);
     if (borrowedArg !== void 0)
       return borrowedArg;
@@ -63170,6 +63173,11 @@ ${iden}}`;
       return "clone";
     return void 0;
   }
+  /** The sole argument of a base `this.json (x)` (printed `json_stringify(&x)`, not a `self.` field). */
+  rustIsJsonOperand(node) {
+    const call = node?.parent;
+    return isIdentifier3(node) && isCallExpression6(call) && call.arguments.length === 1 && call.arguments[0] === node && isPropertyAccessExpression3(call.expression) && call.expression.expression.kind === SyntaxKind7.ThisKeyword && String(call.expression.name.text) === "json";
+  }
   /** `Value::Map(x.clone())` / `Value::from(x.clone())` at an admitted boxing use, else undefined. */
   printRustContainerLocalBox(node, text) {
     const form = this.rustContainerBoxUses.get(node);
@@ -63182,6 +63190,8 @@ ${iden}}`;
     const listDecl = kind === "list" ? this.rustDeclarationOfIdentifier(node) : void 0;
     if (listDecl !== void 0 && (this.rustAlwaysListProducer(this.rustSkipWrappers(listDecl.initializer)) || this.rustDefaultedListRead(this.rustSkipWrappers(listDecl.initializer))))
       return `Value::Arr(${value})`;
+    if (this.rustIsJsonOperand(node) && kind === "list")
+      return text;
     if (isCallExpression6(node.parent) && !(kind === "map" && this.rustExtendHeadUse(node)))
       return `${value}.into()`;
     return kind === "map" ? `Value::Map(${value})` : `Value::from(${value})`;
@@ -63305,6 +63315,9 @@ ${iden}}`;
       if (this.rustExtendHeadUse(n))
         return ++extendHeads > 0 && ++reads > 0;
       const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0) && boxedElementUses.push(n) > 0;
+      const asArg = isAsExpression3(up) && up.expression === n && isCallExpression6(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : void 0;
+      if (asArg !== void 0 && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared))
+        return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
       if (this.rustLentResponseSlot(up, n) && this.rustLentResponseSource(init))
         return ++lentResponses > 0 && ++reads > 0;
       if ((endpoint || this.rustLentContainerSource(init)) && this.rustLentEndpointSlot(up, n, from))
@@ -63369,6 +63382,20 @@ ${iden}}`;
       return true;
     return this.rustLentHelperSlot(call, arg, from) && _RustTranspiler.RUST_LENT_OPTIONAL_HELPERS.has(String(call.expression.name.text));
   }
+  /** `this.parseX (x as Dict, ..)`: the assertion only retypes the TS side, the argument lands in the same lent slot. */
+  rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared) {
+    const call = asArg.parent;
+    if (from !== "dict" && from !== "list")
+      return false;
+    if (!this.rustLentResponseSlot(call, asArg) && !(this.rustLentListSlot(call, asArg) && !this.rustTypedFilterLentSlot(call, asArg) && (from === "list" || this.rustLentAnyShapeSlot(call))))
+      return false;
+    if (this.rustLentResponseSlot(call, asArg) && from !== "dict")
+      return false;
+    return endpoint || this.rustLentContainerSource(init) || this.rustLentResponseSource(init) || nilDeclared || init !== void 0 && isCallExpression6(init) && this.rustOptContainerSourceOk(init, from);
+  }
+  rustLentAsNullable(init, nilDeclared, endpoint) {
+    return !endpoint && (nilDeclared || !(this.rustLentContainerSource(init) || this.rustLentResponseSource(init)));
+  }
   /** Every never-null lent use of an optional local lands in a slot that also takes the optional form. */
   rustLentOptionalOk(declaration, name, fn, init, from) {
     if (from !== "dict" && from !== "list")
@@ -63377,6 +63404,8 @@ ${iden}}`;
       if (this.rustIdentifierIsPropertyName(n) || !this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn)
         return true;
       const up = n.parent;
+      if (isAsExpression3(up))
+        return true;
       if (!isCallExpression6(up) || !Array.from(up.arguments).includes(n))
         return true;
       if (this.rustLentResponseSlot(up, n) || this.rustLentEndpointSlot(up, n, from) || this.rustLentWsSettleSlot(up, n))
@@ -63394,6 +63423,24 @@ ${iden}}`;
     const call = node.parent;
     const ok = this.rustLentResponseSlot(call, node) ? local.kind === "dict" : this.rustLentEndpointSlot(call, node, local.kind) || this.rustLentWsSettleSlot(call, node) || this.rustLentHelperSlot(call, node, local.kind) && _RustTranspiler.RUST_LENT_OPTIONAL_HELPERS.has(String(call.expression.name.text));
     return ok ? `&${text}` : void 0;
+  }
+  /** `&x` for a container local lent through `x as T` to a lent parse slot (plain or optional form). */
+  printLentAsArg(node, text) {
+    const asArg = node?.parent;
+    if (!isIdentifier3(node) || !isAsExpression3(asArg) || asArg.expression !== node || !isCallExpression6(asArg.parent))
+      return void 0;
+    const call = asArg.parent;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration === void 0 || declaration === node || declaration.name === node)
+      return void 0;
+    const kind = this.rustBorrowedLocalKind(declaration);
+    if (kind === void 0)
+      return void 0;
+    const printed = this.rustOptContainerLocals.has(declaration) ? this.rustPrintedOptional.has(declaration) : this.rustPrintedBorrowed.has(declaration);
+    if (!printed)
+      return void 0;
+    const slot = this.rustLentResponseSlot(call, asArg) ? kind === "dict" : this.rustLentListSlot(call, asArg) && !this.rustTypedFilterLentSlot(call, asArg) && (kind === "list" || this.rustLentAnyShapeSlot(call));
+    return slot ? `&${text}` : void 0;
   }
   /** The value argument of `client.resolve|reject(value, hash)` on a ws handle: the hand-written method takes `impl Into<Value>`. */
   rustLentWsSettleSlot(call, arg) {
