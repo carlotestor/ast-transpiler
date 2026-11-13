@@ -1750,6 +1750,18 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustNilMapDecisions;
     rustNilMapLocal(declaration: any): boolean;
     rustNilMapLocalUncached(declaration: any): boolean;
+    private rustNilListLocals;
+    /** A list literal with no spread or bare-local element whose elements print natively (`vec![..]`). */
+    rustNilListLiteralOk(rhs: any): boolean;
+    /** Hand-offs past the object-literal value and return: another (untyped) local's initializer, or an argument of
+     *  `this.extend` / `this.watch*`, which take `Value`. */
+    rustNilMapExtraBox(n: any): boolean;
+    /** `x['k'] = v` at a literal key on the map local, as a statement, whose value does not read `x`. */
+    rustNilMapKeyWrite(n: any, declaration: any): boolean;
+    rustNilMapLetBoundAlias(declaration: any): boolean;
+    rustNilMapHasKeyWrite(declaration: any): boolean;
+    /** `if let Some(__d) = &mut x { Arc::make_mut(__d).insert("k".to_string(), v); }`: a `None` map drops the write as the boxed `Null` did. */
+    printNilMapKeyWrite(left: any, right: any, valueText: string): string | undefined;
     rustNilMapOf(node: any): any;
     /** `x = None` / `x = Some(crate::value::Dict::new({ .. }))`: the literal is built once behind the shared handle. */
     printNilMapWrite(left: any, right: any, identation: any): string | undefined;

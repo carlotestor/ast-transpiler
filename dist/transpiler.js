@@ -51593,6 +51593,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // once behind the shared handle, a hand-off moves it at the last use (else the Arc bump the boxed copy
     // paid) and `None` boxes back to `Value::Null`, the value the boxed local held.
     this.rustNilMapDecisions = /* @__PURE__ */ new Map();
+    this.rustNilListLocals = /* @__PURE__ */ new WeakSet();
     this.rustDictElementBoxes = /* @__PURE__ */ new WeakMap();
     // ── empty-declared endpoint responses (`let response = undefined; response = await this.<endpoint> (..)`) ──
     // An endpoint may answer a list, a map or a scalar. Read only through literal-key readers, every variant
@@ -53089,7 +53090,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       for (const key of keyStrs.slice(0, -1))
         acc = `get_value_mut(${acc}, &${key})`;
       const rhs = this.printNode(right, 0);
-      const untilWrite = keyStrs.length === 1 ? this.printUntilHeadKeyWrite(left, right, rhs) : void 0;
+      const untilWrite = keyStrs.length === 1 ? this.printUntilHeadKeyWrite(left, right, rhs) ?? this.printNilMapKeyWrite(left, right, rhs) : void 0;
       if (untilWrite !== void 0)
         return untilWrite;
       const helperCall = `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${rhs})`;
@@ -53203,7 +53204,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (nilScalar !== void 0)
       return nilScalar;
     if (node.declarations.length === 1 && this.rustNilMapLocal(declaration))
-      return `${indent}let mut ${varName}: Option<crate::value::Dict> = None`;
+      return `${indent}let mut ${varName}: Option<crate::value::${this.rustNilListLocals.has(declaration) ? "List" : "Dict"}> = None`;
     if (!declaration.initializer) {
       return `${indent}let mut ${varName}: Value = Value::Null`;
     }
@@ -63877,6 +63878,7 @@ ${iden}}`;
       return false;
     let writes = 0;
     let boxes = 0;
+    let kind;
     const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return n.parent?.kind !== SyntaxKind7.ShorthandPropertyAssignment;
@@ -63889,9 +63891,16 @@ ${iden}}`;
         const rhs = this.unwrapParens(parent.right);
         if (this.literalKindOfNode(rhs) === "null")
           return true;
-        if (!isObjectLiteralExpression4(rhs) || rhs.properties.some((p) => p.kind !== SyntaxKind7.PropertyAssignment))
+        const k = isObjectLiteralExpression4(rhs) && !rhs.properties.some((p) => p.kind !== SyntaxKind7.PropertyAssignment) ? "dict" : isArrayLiteralExpression4(rhs) && this.rustNilListLiteralOk(rhs) ? "list" : void 0;
+        if (k === void 0 || kind !== void 0 && kind !== k)
           return false;
+        kind = k;
         writes++;
+        return true;
+      }
+      if (this.rustNilMapKeyWrite(n, declaration) || this.rustNilMapExtraBox(n)) {
+        if (!this.rustNilMapKeyWrite(n, declaration))
+          boxes++;
         return true;
       }
       if (isBinaryExpression5(parent) && this.isEqualityOp(parent.operatorToken.kind)) {
@@ -63903,7 +63912,78 @@ ${iden}}`;
       }
       return false;
     });
-    return ok && writes > 0 && boxes > 0;
+    if (!ok || writes === 0 || boxes === 0 || kind === void 0)
+      return false;
+    if (kind === "list" && (this.rustNilMapHasKeyWrite(declaration) || declaration.type !== void 0 && /Dict/.test(String(declaration.type.getText()))))
+      return false;
+    if (kind === "list")
+      this.rustNilListLocals.add(declaration);
+    if (kind === "dict" && this.rustNilMapHasKeyWrite(declaration) && this.rustNilMapLetBoundAlias(declaration))
+      return false;
+    return true;
+  }
+  /** A list literal with no spread or bare-local element whose elements print natively (`vec![..]`). */
+  rustNilListLiteralOk(rhs) {
+    return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement || isIdentifier3(this.unwrapParens(e))) && this.rustVecNativeLiteral({ initializer: rhs }) !== void 0;
+  }
+  /** Hand-offs past the object-literal value and return: another (untyped) local's initializer, or an argument of
+   *  `this.extend` / `this.watch*`, which take `Value`. */
+  rustNilMapExtraBox(n) {
+    const parent = n.parent;
+    if (parent?.kind === SyntaxKind7.VariableDeclaration && parent.initializer === n) {
+      const alias = parent;
+      return this.rustNilLocalKind(alias) === void 0 && this.rustScalarLocalKind(alias) === void 0 && this.rustBorrowedLocalKind(alias) === void 0 && !this.rustDictLocalIsTyped(alias) && !this.rustVecLocalIsTyped(alias) && this.rustMarketLocalKind(alias) === false && !this.rustOptListLocal(alias);
+    }
+    if (isCallExpression6(parent) && parent.expression !== n && isPropertyAccessExpression3(parent.expression) && parent.expression.expression.kind === SyntaxKind7.ThisKeyword) {
+      return /^(?:extend|watch|watchMultiple)$/.test(String(parent.expression.name.text));
+    }
+    return false;
+  }
+  /** `x['k'] = v` at a literal key on the map local, as a statement, whose value does not read `x`. */
+  rustNilMapKeyWrite(n, declaration) {
+    const access = n.parent;
+    if (!isElementAccessExpression4(access) || access.expression !== n)
+      return false;
+    const assign = access.parent;
+    if (!isBinaryExpression5(assign) || assign.left !== access || assign.operatorToken.kind !== SyntaxKind7.EqualsToken || assign.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const key = this.unwrapParens(access.argumentExpression);
+    if (!isStringLiteralLikeNode4(key) || String(key.text) in this.StringLiteralReplacements)
+      return false;
+    const name = String(declaration.name.text);
+    const reads = (m) => isIdentifier3(m) && m.text === name || (m.forEachChild(reads) ?? false);
+    return !reads(assign.right);
+  }
+  rustNilMapLetBoundAlias(declaration) {
+    let found = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const parent = n.parent;
+      if (parent?.kind === SyntaxKind7.PropertyAssignment && parent.initializer === n && parent.parent?.parent?.kind === SyntaxKind7.VariableDeclaration)
+        found = true;
+      return true;
+    });
+    return found;
+  }
+  rustNilMapHasKeyWrite(declaration) {
+    let found = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      if (this.rustNilMapKeyWrite(n, declaration))
+        found = true;
+      return true;
+    });
+    return found;
+  }
+  /** `if let Some(__d) = &mut x { Arc::make_mut(__d).insert("k".to_string(), v); }`: a `None` map drops the write as the boxed `Null` did. */
+  printNilMapKeyWrite(left, right, valueText) {
+    const recv = isElementAccessExpression4(left) ? left.expression : void 0;
+    const declaration = recv === void 0 ? void 0 : this.rustNilMapOf(recv);
+    if (declaration === void 0 || this.rustNilListLocals.has(declaration) || !this.rustNilMapKeyWrite(recv, declaration))
+      return void 0;
+    const name = super.transformIdentifier(recv, this.ReservedKeywordsReplacements[recv.text] ?? recv.text);
+    const key = String(this.unwrapParens(left.argumentExpression).text);
+    const raw = this.rustNodeIsBoolExpression(right) && this.literalKindOfNode(this.unwrapParens(right)) !== "boolean" ? `Value::Bool(${valueText})` : valueText.trim();
+    const value = isIdentifier3(this.unwrapParens(right)) ? _RustTranspiler.cloneIfBareLocal(raw) : raw;
+    return `if let Some(__d) = &mut ${name} { std::sync::Arc::make_mut(__d).insert(${this.quotedStringLiteral(key)}.to_string(), ${value}); }`;
   }
   rustNilMapOf(node) {
     if (node === void 0 || !isIdentifier3(node))
@@ -63921,6 +64001,8 @@ ${iden}}`;
     const rhs = this.unwrapParens(right);
     if (this.literalKindOfNode(rhs) === "null")
       return `${name} = None`;
+    if (isArrayLiteralExpression4(rhs))
+      return `${name} = Some(${this.printBuiltListLiteral(rhs)})`;
     return `${name} = Some(crate::value::Dict::new(${this.rustObjectLiteralBlock(rhs, identation)}))`;
   }
   printNilMapNullTest(left, right, op) {
@@ -63936,13 +64018,13 @@ ${iden}}`;
   /** The `Value` hand-off: the map moved at the last use, else the Arc bump; `None` is `Value::Null`. */
   printNilMapBox(node, text) {
     const parent = node?.parent;
-    if (parent === void 0 || !(parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === node || isReturnStatement4(parent) && parent.expression === node))
+    if (parent === void 0 || !(parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === node || isReturnStatement4(parent) && parent.expression === node || this.rustNilMapExtraBox(node)))
       return void 0;
     const declaration = this.rustNilMapOf(node);
     if (declaration === void 0)
       return void 0;
     const moves = isReturnStatement4(parent) || this.rustLocalLastUse(node, declaration);
-    return `${text}${moves ? "" : ".clone()"}.map_or(Value::Null, Value::Dict)`;
+    return `${text}${moves ? "" : ".clone()"}.map_or(Value::Null, Value::${this.rustNilListLocals.has(declaration) ? "Arr" : "Dict"})`;
   }
   // ── rustNullTestedDictLocal: a base `safeDict*` result that is only tested against null ──
   // The optional map answers the test natively (`is_some()` / `is_none()`); a non-map reads as `None`, as the reader does.
