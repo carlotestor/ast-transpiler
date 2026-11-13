@@ -59241,7 +59241,20 @@ ${i1}}`;
       return false;
     if (this.primitiveKindOfType(this.typeOfNodeIfAny(top.parent.name)) !== "boolean")
       return false;
-    return this.rustBoolNativeText(node) !== void 0;
+    let readsLocal = false;
+    const visit = (n) => {
+      if (readsLocal)
+        return;
+      if (_is.isIdentifier.call(void 0, n) && !this.rustIdentifierIsPropertyName(n)) {
+        const d = this.rustDeclaredNode(n);
+        if (d !== void 0 && !_is.isParameterDeclaration.call(void 0, d))
+          readsLocal = true;
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    visit(node);
+    return !readsLocal && this.rustBoolNativeText(node) !== void 0;
   }
   // ── string fields of a typed market local as scalar seeds (rustMarketFieldScalar) ──
   /** `m['symbol']` / `m.id` off a loaded `crate::types::Market` local: the field's own `String` / `Option<String>`

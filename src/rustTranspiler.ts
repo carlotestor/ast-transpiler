@@ -8256,7 +8256,19 @@ export class RustTranspiler extends BaseTranspiler {
         while (top.parent !== undefined && isParenthesizedExpression(top.parent)) top = top.parent;
         if (!isVariableDeclaration(top.parent) || top.parent.initializer !== top || !isIdentifier(top.parent.name)) return false;
         if (this.primitiveKindOfType(this.typeOfNodeIfAny(top.parent.name)) !== 'boolean') return false;
-        return this.rustBoolNativeText(node) !== undefined;
+        // printing an operand that reads another local would decide that local while this one is open: params and members only
+        let readsLocal = false;
+        const visit = (n: any) => {
+            if (readsLocal) return;
+            if (isIdentifier(n) && !this.rustIdentifierIsPropertyName(n)) {
+                const d: any = this.rustDeclaredNode(n);
+                if (d !== undefined && !isParameterDeclaration(d)) readsLocal = true;
+                return;
+            }
+            n.forEachChild(visit);
+        };
+        visit(node);
+        return !readsLocal && this.rustBoolNativeText(node) !== undefined;
     }
 
     // ── string fields of a typed market local as scalar seeds (rustMarketFieldScalar) ──
