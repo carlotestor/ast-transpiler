@@ -1821,6 +1821,38 @@ export declare class RustTranspiler extends BaseTranspiler {
     printWsCacheWrite(left: any, right: any): string | undefined;
     /** A constructor stays a `Cache` where a cache slot takes it (a typed field / local write, a cache local's initializer); elsewhere it is boxed. */
     rustWsCacheCtorBox(node: any, text: string): string;
+    private static readonly RUST_CACHE_MAP_TYPE;
+    private rustWsCacheMapFields;
+    /** `this.F` for a base field declared `Dictionary<ArrayCache>`. */
+    rustWsCacheMapField(node: any): boolean;
+    /** The key of a cache-map access (`m[k]`, `k in m`, `safeValue (m, k)`): printed by reference. */
+    rustWsCacheMapKeyUse(n: any): boolean;
+    /** `this.F[k]` on a cache map. */
+    rustWsCacheMapEntry(node: any): boolean;
+    /** `this.safeValue|safeDict (this.F, k)` on a cache map. */
+    rustWsCacheMapLookup(node: any): boolean;
+    /** A source an optional cache local takes as `Option<Cache>`: a map read, `undefined` (with `orUndefined`), a typed
+     *  cache field, or a ternary of those with at least one map read or field. */
+    rustWsCacheOptSource(node: any, orUndefined: boolean): boolean;
+    /** The `Option<Cache>` text of an optional source. */
+    rustWsCacheOptText(node: any): string;
+    /** The borrowed key of a map access: a typed string local by reference, else the printed `Value`. */
+    rustWsCacheMapKey(keyNode: any): string;
+    rustWsCacheMapReadText(n: any): string;
+    /** A map read outside an optional-local slot (those print through `rustWsCacheOptText`): boxed once. */
+    printWsCacheMapRead(node: any): string | undefined;
+    /** `x === undefined` on a map read, and the always-false test of the map field itself. */
+    printWsCacheMapNullTest(left: any, right: any, op: any): string | undefined;
+    /** `k in this.F`. */
+    printWsCacheMapHas(key: any, obj: any): string | undefined;
+    /** `delete this.F[k]`. */
+    printWsCacheMapDelete(node: any): string | undefined;
+    /** The value of `this.F[k] = x` for a cache local `x` (or a constructor). */
+    rustWsCacheMapWriteValue(n: any): boolean;
+    /** `this.F[k] = cache` and `this.F = {}` / `this.F = this.createSafeDictionary (..)`. */
+    printWsCacheMapWrite(left: any, right: any): string | undefined;
+    /** Any other read of the map field is its dict snapshot (each entry an Arc bump); a write is unproven. */
+    printWsCacheMapField(node: any): string | undefined;
     printWsWatchCall(node: any, receiver: string, methodName: string, identation: number): string | undefined;
     /** A numeric or boolean hash argument: the runtime keys by its text, as `stringify_param` did. */
     rustWsNumberSlot(arg: any): boolean;
