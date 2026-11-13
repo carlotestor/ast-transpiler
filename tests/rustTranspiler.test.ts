@@ -9794,3 +9794,16 @@ describe('ral-kf: elements of typed Dict[] lists handed on whole', () => {
         expect(out).not.toContain('append_to_array');
     });
 });
+
+describe('ral-kf: rows of a list declared as a list of lists', () => {
+    test('a row of a string[][] list read positionally and pushed is a crate::value::List lent to the readers', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-kf-list-rows');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export default class Exchange {\n    safeString (o: any, k: any, d: any = undefined): string { return o; }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    pick (raw: any) {\n        const levels: string[][] = this.hold (raw);\n        const kept = [];\n        for (let i = 0; i < levels.length; i++) {\n            const level = levels[i];\n            if (this.safeString (level, 1) !== undefined) {\n                kept.push (level);\n            }\n        }\n        return kept;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut level: crate::value::List = ');
+        expect(out).toContain('(&level, Value::Int(1), &[])');
+        expect(out).toContain('kept.push(Value::Arr(level))');
+    });
+});

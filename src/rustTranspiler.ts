@@ -13335,7 +13335,7 @@ export class RustTranspiler extends BaseTranspiler {
         // A `let` declared empty is filled later by container writes only (the optional form).
         const nilDeclared = (init === undefined || this.literalKindOfNode(init) === 'null') && (list.flags & NodeFlags.Const) === 0
             && list.parent?.kind === SyntaxKind.VariableStatement;
-        let from: 'dict' | 'list' | 'api' | undefined = init !== undefined && isCallExpression(init) ? (this.rustEcdsaCall(init) ? 'dict' : this.rustBorrowedSourceKind(init) ?? this.rustBuiltReturnSourceKind(init)) : (this.rustDictElementSource(init) ? 'dict' : undefined);
+        let from: 'dict' | 'list' | 'api' | undefined = init !== undefined && isCallExpression(init) ? (this.rustEcdsaCall(init) ? 'dict' : this.rustBorrowedSourceKind(init) ?? this.rustBuiltReturnSourceKind(init)) : (this.rustDictElementSource(init) ? 'dict' : (this.rustListElementSource(init) ? 'list' : undefined));
         const endpoint = from === 'api';
         if (endpoint) from = this.rustDeclaredEndpointKind(init) ?? 'api';
         if (from === undefined && !nilDeclared) return undefined;
@@ -13423,9 +13423,10 @@ export class RustTranspiler extends BaseTranspiler {
         // an element of a typed `Dict[]` list handed on whole only (parse* / push): the element converts once at the
         // declaration and each hand-off moves (last use) or bumps the Arc the copied `Value` paid (D11)
         const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== undefined
-            && (isCallExpression(init) && this.rustBuiltReturnSourceKind(init) !== undefined || this.rustDictElementSource(init));
+            && (isCallExpression(init) && this.rustBuiltReturnSourceKind(init) !== undefined || this.rustDictElementSource(init) || this.rustListElementSource(init));
         if (!safe || (reads === 0 && !builtBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes)) || mixed || from === undefined
-            || ((this.rustNilResponseLocals.has(declaration) || from === 'api' || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))) return undefined;
+            || ((this.rustNilResponseLocals.has(declaration) || from === 'api' || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))
+            || (this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))) return undefined;
         // an endpoint written into an empty `let` may answer a list: `into_opt_dict` keeps only maps, so it is never lent whole
         if (this.rustNilResponseLocals.has(declaration) && (lentResponses > 0 || lentNullable > 0)) return undefined;
         // the `ecdsa(..)` declaration adds no `.into_dict()` suffix: its line keeps the boxed length plus the type name
@@ -13652,12 +13653,26 @@ export class RustTranspiler extends BaseTranspiler {
             && !this.getChecker().isArrayType(element);
     }
 
+    // ── rustListElementSource: `rows[i]` over a list declared as a list of lists (`string[][]`, `any[][]`) ──
+    // The row leaves its copied box as the shared list (the same Arc bump). A missing row reads as an empty list,
+    // where a positional read answers undefined exactly as on Null; length and null tests keep the box.
+    rustListElementSource(init: any): boolean {
+        if (init === undefined || !isElementAccessExpression(init) || !isIdentifier(init.expression) || this.checkerOrUndefined() === undefined) return false;
+        const key: any = this.rustSkipWrappers(init.argumentExpression);
+        if (key === undefined || (!isNumericLiteral(key) && this.primitiveKindOfType(this.typeOfNodeIfAny(key)) !== 'number')) return false;
+        const listType: any = this.typeOfNodeIfAny(init.expression);
+        if (listType === undefined || !this.getChecker().isArrayType(listType)) return false;
+        const element: any = this.typeOfNodeIfAny(init);
+        if (element === undefined || (element.flags & (TypeFlags.Any | TypeFlags.Unknown | TypeFlags.Union)) !== 0) return false;
+        return this.getChecker().isArrayType(element);
+    }
+
     private rustDictElementBoxes = new WeakMap<any, 'move' | 'share'>();
 
     /** A whole-value hand-off of a map element local: a plain `Value` argument of a `this.` method or an object literal value. */
     rustDictElementBoxUse(n: any, init: any): boolean {
         const up: any = n.parent;
-        if (!this.rustDictElementSource(init) || up === undefined || this.rustScalarInNestedWrite(n)) return false;
+        if (!this.rustDictElementSource(init) && !this.rustListElementSource(init) || up === undefined || this.rustScalarInNestedWrite(n)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
         // `rows.push (row)` into another local list: the list keeps its own type, the element enters as the shared map
         if (isCallExpression(up) && isPropertyAccessExpression(up.expression) && isIdentifier(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n

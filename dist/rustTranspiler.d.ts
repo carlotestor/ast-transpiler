@@ -1831,6 +1831,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     printNilMapBox(node: any, text: string): string | undefined;
     rustNullTestedDictLocal(init: any, nullTests: number, writes: number): boolean;
     rustDictElementSource(init: any): boolean;
+    rustListElementSource(init: any): boolean;
     private rustDictElementBoxes;
     /** A whole-value hand-off of a map element local: a plain `Value` argument of a `this.` method or an object literal value. */
     rustDictElementBoxUse(n: any, init: any): boolean;

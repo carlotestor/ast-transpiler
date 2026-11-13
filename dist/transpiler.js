@@ -64108,7 +64108,7 @@ ${iden}}`;
     if (init?.kind === SyntaxKind7.AwaitExpression)
       init = this.rustSkipWrappers(init.expression);
     const nilDeclared = (init === void 0 || this.literalKindOfNode(init) === "null") && (list.flags & NodeFlags4.Const) === 0 && list.parent?.kind === SyntaxKind7.VariableStatement;
-    let from = init !== void 0 && isCallExpression6(init) ? this.rustEcdsaCall(init) ? "dict" : this.rustBorrowedSourceKind(init) ?? this.rustBuiltReturnSourceKind(init) : this.rustDictElementSource(init) ? "dict" : void 0;
+    let from = init !== void 0 && isCallExpression6(init) ? this.rustEcdsaCall(init) ? "dict" : this.rustBorrowedSourceKind(init) ?? this.rustBuiltReturnSourceKind(init) : this.rustDictElementSource(init) ? "dict" : this.rustListElementSource(init) ? "list" : void 0;
     const endpoint = from === "api";
     if (endpoint)
       from = this.rustDeclaredEndpointKind(init) ?? "api";
@@ -64204,8 +64204,8 @@ ${iden}}`;
       return true;
     };
     const safe = endpoint && !nilDeclared ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
-    const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && (isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0 || this.rustDictElementSource(init));
-    if (!safe || reads === 0 && !builtBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))
+    const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && (isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0 || this.rustDictElementSource(init) || this.rustListElementSource(init));
+    if (!safe || reads === 0 && !builtBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0) || this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))
       return void 0;
     if (this.rustNilResponseLocals.has(declaration) && (lentResponses > 0 || lentNullable > 0))
       return void 0;
@@ -64444,10 +64444,27 @@ ${iden}}`;
       return false;
     return this.primitiveKindOfType(element) === void 0 && this.getChecker().getIndexTypeOfType(element, IndexKind4.String) !== void 0 && !this.getChecker().isArrayType(element);
   }
+  // ── rustListElementSource: `rows[i]` over a list declared as a list of lists (`string[][]`, `any[][]`) ──
+  // The row leaves its copied box as the shared list (the same Arc bump). A missing row reads as an empty list,
+  // where a positional read answers undefined exactly as on Null; length and null tests keep the box.
+  rustListElementSource(init) {
+    if (init === void 0 || !isElementAccessExpression4(init) || !isIdentifier3(init.expression) || this.checkerOrUndefined() === void 0)
+      return false;
+    const key = this.rustSkipWrappers(init.argumentExpression);
+    if (key === void 0 || !isNumericLiteral4(key) && this.primitiveKindOfType(this.typeOfNodeIfAny(key)) !== "number")
+      return false;
+    const listType = this.typeOfNodeIfAny(init.expression);
+    if (listType === void 0 || !this.getChecker().isArrayType(listType))
+      return false;
+    const element = this.typeOfNodeIfAny(init);
+    if (element === void 0 || (element.flags & (TypeFlags6.Any | TypeFlags6.Unknown | TypeFlags6.Union)) !== 0)
+      return false;
+    return this.getChecker().isArrayType(element);
+  }
   /** A whole-value hand-off of a map element local: a plain `Value` argument of a `this.` method or an object literal value. */
   rustDictElementBoxUse(n, init) {
     const up = n.parent;
-    if (!this.rustDictElementSource(init) || up === void 0 || this.rustScalarInNestedWrite(n))
+    if (!this.rustDictElementSource(init) && !this.rustListElementSource(init) || up === void 0 || this.rustScalarInNestedWrite(n))
       return false;
     if (up.kind === SyntaxKind7.PropertyAssignment)
       return up.initializer === n;
