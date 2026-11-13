@@ -498,6 +498,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** String hand-off locals boxed more than once: each box before the last lends the string. */
     private rustStrLentLocals;
     rustScalarLocalKindUncached(declaration: any): string | undefined;
+    rustAnyBoolTestedLocal(declaration: any): boolean;
     private rustStrNoLend;
     rustStrLendOnly(declaration: any): boolean;
     /** Every box of the string sits where the `Value` form cloned it (a `this.` / `super.` argument) or is its
@@ -741,6 +742,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarBoxMoves(n: any, form: string, declaration: any): boolean;
     /** A local keyed on a field and re-boxed anywhere but a moving use would copy where the `Value` moved. */
     rustFieldKeyCostly(declaration: any): boolean;
+    /** A loop (or closure) lies between the declaration and `n`: a box there repeats. */
+    rustLoopAfterDeclaration(n: any, declaration: any): boolean;
+    /** The statement holding `n` reads the local again. */
+    rustStatementReadsTwice(n: any, declaration: any): boolean;
+    /** `n` is an argument of a `this.m(..)` / `super.m(..)` call. */
+    rustSelfCallArg(n: any): boolean;
     printFieldKeyInOp(key: any, obj: any): string | undefined;
     rustElemKeyInUse(n: any): boolean;
     /** An `in`-keyed element local stays `Value` when a boxed use would copy where the `Value` moved or was lent. */
@@ -1508,7 +1515,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): any;
+    printLogicalInBooleanContext(node: any): string;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -1676,6 +1683,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Builders that hand back one of their own arguments: the container kind is
      *  the argument's (they only add fields to it). */
     private static readonly RUST_BUILDER_PASSTHROUGH;
+    /** Same pass-through builders (they write fields into their argument and return it), admitted only while the
+     *  Arc-moving returned-container rule asks (`rustFreshWide`): the copying `IndexMap` bearer rules keep the old set. */
+    private static readonly RUST_BUILDER_PASSTHROUGH_WIDE;
+    private rustFreshWide;
+    rustBuilderPassthrough(method: string): boolean;
     private static readonly RUST_LIST_PASSTHROUGH;
     /** `x` read as the list argument of a base pass-through (`filterBy* (x, ..)` / `sortBy* (x, ..)`). */
     rustListPassthroughArg(node: any): boolean;
@@ -1684,6 +1696,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  container of `kind` — the method's own body, no venue override (the
      *  checker resolves the most derived declaration for `this`). */
     rustCallBuildsContainer(call: any, kind: 'map' | 'list', depth?: number): boolean;
+    /** A store write's value that can never be a container: a scalar literal, or a checker-primitive
+     *  (`string`/`number`/`boolean`) expression. Writing it into a `this.` store tags no returned container.
+     *  Maps only: a list proof would type `Vec<Value>` locals that copy the array out (`.as_array().cloned()`). */
+    rustScalarStoreValue(value: any): boolean;
     /** A call operand that hands back a live-store map: `x.hashmap()` (the ws
      *  order/subscription cache) or a `.subscriptions` / `.futures` read. The
      *  runtime tags those dicts, so a write must reach the store. */
