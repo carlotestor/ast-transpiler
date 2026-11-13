@@ -9243,6 +9243,12 @@ describe('rust ws watch results typed by a resolve proof', () => {
         expect(out).toMatch(/let mut orderbook: Option<crate::pro::order_book::Book> = self\.watch\([\s\S]*?\)\.await\.into\(\);/);
         expect(out).toContain('return orderbook.limit();');
     });
+    test('a watch whose every matching resolve passes a cache is an optional cache lent to getLimit and the rows slot', () => {
+        expect(out).toMatch(/let mut trades: Option<crate::pro::cache::Cache> = self\.watch\([\s\S]*?\)\.await\.into\(\);/);
+        expect(out).toMatch(/trades\.getLimit\(/);
+        // the rows slot lends it (`&trades`) once the base signature table is loaded; alone it is boxed once
+        expect(out).toMatch(/self\.filterBySinceLimit\((&trades|Value::from\(&trades\)), /);
+    });
     test('negative: a hash resolved with two kinds (a dict and a book) stays a Value', () => {
         expect(out).toMatch(/let mut ticker: Value = self\.watch\(/);
     });

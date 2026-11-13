@@ -64381,7 +64381,7 @@ ${iden}}`;
       known = null;
       const list = declaration.parent;
       const init = this.unwrapParens(declaration.initializer);
-      const kind = init === void 0 ? void 0 : this.rustWsCacheField(init) || this.rustWsCacheOptSource(init, false) ? "opt" : this.rustWsCacheCtor(init) ? "cache" : void 0;
+      const kind = init === void 0 ? void 0 : this.rustWsCacheField(init) || this.rustWsCacheOptSource(init, false) || this.rustWsWatchResultKind(init) === "cache" ? "opt" : this.rustWsCacheCtor(init) ? "cache" : void 0;
       if (kind !== void 0 && list?.kind === SyntaxKind7.VariableDeclarationList && list.declarations.length === 1) {
         const forms = /* @__PURE__ */ new Map();
         const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
@@ -64665,6 +64665,8 @@ ${iden}}`;
     const n = this.unwrapParens(node);
     if (this.rustWsCacheUndefined(n))
       return "None";
+    if (this.rustWsWatchResultKind(n) === "cache")
+      return `${this.printNode(n, 0).trim()}.into()`;
     if (this.rustWsCacheField(n))
       return `self.${String(n.name.text)}.clone()`;
     if (this.rustWsCacheMapEntry(n) || this.rustWsCacheMapLookup(n))

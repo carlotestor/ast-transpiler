@@ -13560,7 +13560,7 @@ export class RustTranspiler extends BaseTranspiler {
             known = null;
             const list: any = declaration.parent;
             const init: any = this.unwrapParens(declaration.initializer);
-            const kind = init === undefined ? undefined : (this.rustWsCacheField(init) || this.rustWsCacheOptSource(init, false) ? 'opt' : (this.rustWsCacheCtor(init) ? 'cache' : undefined));
+            const kind = init === undefined ? undefined : (this.rustWsCacheField(init) || this.rustWsCacheOptSource(init, false) || this.rustWsWatchResultKind(init) === 'cache' ? 'opt' : (this.rustWsCacheCtor(init) ? 'cache' : undefined));
             if (kind !== undefined && list?.kind === SyntaxKind.VariableDeclarationList && list.declarations.length === 1) {
                 const forms = new Map<Node, 'bare' | 'box' | 'test' | 'len'>();
                 const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
@@ -13828,6 +13828,8 @@ export class RustTranspiler extends BaseTranspiler {
     rustWsCacheOptText(node: any): string {
         const n: any = this.unwrapParens(node);
         if (this.rustWsCacheUndefined(n)) return 'None';
+        // a proven watch result: the runtime's marker test converts the resolved value once
+        if (this.rustWsWatchResultKind(n) === 'cache') return `${this.printNode(n, 0).trim()}.into()`;
         if (this.rustWsCacheField(n)) return `self.${String(n.name.text)}.clone()`;
         if (this.rustWsCacheMapEntry(n) || this.rustWsCacheMapLookup(n)) return this.rustWsCacheMapReadText(n);
         if (isConditionalExpression(n)) {
