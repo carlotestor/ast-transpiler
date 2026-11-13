@@ -55855,7 +55855,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         continue;
       const trial = this.rustScalarDecisions.get(declaration);
       const form = this.rustScalarUseForms.get(n);
-      if ((trial === "str" || trial === "ostr") && (form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration))
+      if ((trial === "str" || trial === "ostr") && (form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration) && !(form === "box" && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== void 0 && this.rustScalarSelfArgBox(n)))
         return false;
       const push = _chunkQYYT7MP4cjs.findAncestor.call(void 0, n, (m) => _is.isStatement.call(void 0, m) || _is.isCallExpression.call(void 0, m) && _is.isPropertyAccessExpression.call(void 0, m.expression) && m.expression.name.text === "push");
       if (push !== void 0 && _is.isCallExpression.call(void 0, push))
@@ -56669,6 +56669,12 @@ ${binding(plan.indent)}` : ""), head: "" };
   /** A boxed use that takes the local by move (a `return`, or its last use); `err` always copies. */
   rustScalarBoxMoves(n, form, declaration) {
     return form !== "err" && (_is.isReturnStatement.call(void 0, n.parent) || this.rustLocalLastUse(n, declaration));
+  }
+  /** A bare argument of a `this.` / `super.` call: ccxt's arg pass clones the `Value` local there, so a typed
+   *  string re-boxed at that slot pays the same one copy (`Value::from(x.as_deref())` / `x.clone().map(..)`). */
+  rustScalarSelfArgBox(n) {
+    const up = n.parent;
+    return _is.isCallExpression.call(void 0, up) && up.expression !== n && Array.from(up.arguments).includes(n) && _is.isPropertyAccessExpression.call(void 0, up.expression) && (up.expression.expression.kind === _ast.SyntaxKind.ThisKeyword || up.expression.expression.kind === _ast.SyntaxKind.SuperKeyword);
   }
   /** A local keyed on a field and re-boxed anywhere but a moving use would copy where the `Value` moved. */
   rustFieldKeyCostly(declaration) {
