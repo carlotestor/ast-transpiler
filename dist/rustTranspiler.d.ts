@@ -499,6 +499,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBaseReturnScalarKind(call: any, name: string): string | undefined;
     private static readonly RUST_STR_RUNTIME_METHODS;
     private static readonly RUST_STR_RUNTIME_APPEND_VETO;
+    private static readonly RUST_STR_RUNTIME_FREE;
+    /** A call of an imported base function (`ts/src/base/functions/`) named in `names`. */
+    rustFreeSignerCall(node: any, names: Set<string>): boolean;
     private rustStrRuntimeBare;
     /** `this.implodeParams(..)` / `this.intToBase16(..)` resolved to the base tier with a non-null `string` return. */
     rustStrRuntimeCall(node: any): boolean;
@@ -515,6 +518,32 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrRuntimeLocalCostly(declaration: any): boolean;
     /** Call hook: the `String` result is boxed once (`Value::from`) wherever a `Value` is expected. */
     printRustStrRuntimeCall(node: any, identation: any): string | undefined;
+    private static readonly RUST_BYTES_PRODUCERS;
+    private static readonly RUST_BYTES_SLOTS;
+    private static readonly RUST_BYTES_FREE_SLOTS;
+    private rustBytesBare;
+    private rustBytesDecisions;
+    private rustBytesUseForms;
+    /** `this.encode(..)` & co. resolved to the base tier, or such a call on a test's untyped `exchange`. */
+    rustBytesProducer(node: any): boolean;
+    /** A call of the imported base `functions/` export `name`. */
+    rustBaseFunctionCall(node: any, name: string): boolean;
+    /** An argument in a byte parameter (`impl Into<Value>`) of a hand-written consumer, outside the test crate. */
+    rustBytesSlot(node: any): boolean;
+    rustBytesBareText(node: any, identation?: number): string;
+    /** Call hook: a producer call is the `Bytes` itself in a byte slot, boxed once anywhere else. */
+    printRustBytesCall(node: any, identation: any): string | undefined;
+    /** A local whose every write is a producer call and whose every read is a byte slot or a `Value` hand-off. */
+    rustBytesLocal(declaration: any): boolean;
+    rustBytesLocalUncached(declaration: any): boolean;
+    rustBytesLocalOf(node: any): any;
+    /** Identifier hook: a byte slot borrows the handle, a `Value` slot shares or moves its list. */
+    printRustBytesLocalRead(node: any): string | undefined;
+    /** Assignment hook: `x = <producer>` keeps the handle. */
+    printRustBytesLocalWrite(left: any, right: any): string | undefined;
+    /** `ecdsa(..)` from `base/functions/crypto.ts`: the runtime returns its `{ r, s, v }` record as a `crate::value::Dict`. */
+    rustEcdsaCall(node: any): boolean;
+    printRustEcdsaCall(node: any, identation: any): string | undefined;
     rustClockCall(node: any): boolean;
     rustVenueReturnTypesHas(node: any, name: string): boolean;
     /** `this.milliseconds().toString()`: the decimal text of the `i64`, as `to_string_val` prints an `Int`. */
@@ -1016,6 +1045,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustPrintedArgs(node: any, identation: any, params?: any[]): string[];
     private static readonly RUST_PRECISE_TRIMMED;
     printRustNamespaceCall(node: any, identation: any): string | undefined;
+    /** `eddsa` / `jwt` / `rsa` return a `String`: boxed once at a `Value` slot, bare for typed locals and `format!` operands. */
+    printRustSignerCallBoxed(node: any, identation: any): string | undefined;
     printRustSignerCall(node: any, identation: any): string | undefined;
     printCallExpression(node: any, identation: any): string;
     printFreeFnDefaultArgsCall(node: any, identation: any): string | undefined;
