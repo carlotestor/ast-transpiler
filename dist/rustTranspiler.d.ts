@@ -1875,6 +1875,71 @@ export declare class RustTranspiler extends BaseTranspiler {
     printWsCacheMapWrite(left: any, right: any): string | undefined;
     /** Any other read of the map field is its dict snapshot (each entry an Arc bump); a write is unproven. */
     printWsCacheMapField(node: any): string | undefined;
+    private static readonly RUST_BOOK_TYPE;
+    private static readonly RUST_BOOK_MAP_TYPE;
+    private static readonly RUST_BOOK_CTORS;
+    private static readonly RUST_BOOK_SIDE_FIELDS;
+    private static readonly RUST_BOOK_META_WRITES;
+    private rustWsBookMapFields;
+    private rustWsBookLocals;
+    private rustWsBookUses;
+    private rustWsBookCtorPrinting;
+    private rustWsBookCtorBare;
+    /** `this.F` for a base field declared `Dictionary<WsOrderBook>`. */
+    rustWsBookMapField(node: any): boolean;
+    /** `this.orderBook|indexedOrderBook|countedOrderBook (..)` resolved to the base declaration. */
+    rustWsBookCtor(node: any): boolean;
+    /** A constructor, or a ternary whose arms are both book constructors. */
+    rustWsBookCtorLike(node: any): boolean;
+    /** `this.F[k]` on the book map. */
+    rustWsBookMapEntry(node: any): boolean;
+    /** `this.safeValue|safeDict (this.F, k)` on the book map. */
+    rustWsBookMapLookup(node: any): boolean;
+    rustWsBookMapRead(node: any): boolean;
+    /** The `Option<Book>` text of a map read. */
+    rustWsBookMapReadText(node: any): string;
+    /** The key of a book-map access: printed by reference (the cache-map key form). */
+    rustWsBookMapKeyUse(up: any): boolean;
+    /** A source an optional book local takes: a map read, `undefined` (with `orUndefined`), a constructor (boxed as
+     *  `Some`), or a ternary of those with at least one map read. */
+    rustWsBookOptSource(node: any, orUndefined: boolean): boolean;
+    rustWsBookOptText(node: any): string;
+    /** `x.limit()` / `x.reset(..)` as a statement. */
+    rustWsBookMethodReceiver(n: any): boolean;
+    /** The literal key of a side / meta access on `x` (`x['bids']`, `x.nonce`), else undefined. */
+    rustWsBookFieldKey(n: any): string | undefined;
+    /** A hand-off that boxes the handle once: a call argument, a return, a non-literal element read, a literal value. */
+    rustWsBookBoxUse(n: any): boolean;
+    /** `this.F[k] = x` for a book local `x`. */
+    rustWsBookMapWriteValue(n: any): boolean;
+    /** 'opt' for a local bound to a map read, 'book' for one bound to a constructor; undefined when it stays `Value`. */
+    rustWsBookLocal(declaration: any): 'opt' | 'book' | undefined;
+    rustWsBookLocalOf(node: any): 'opt' | 'book' | undefined;
+    rustWsBookPath(node: any, type: string): string;
+    printWsBookLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
+    /** A use of a typed book local: the handle itself, or boxed once at a `Value` hand-off. */
+    printWsBookLocalUse(node: any): string | undefined;
+    /** `x['bids']` / `x.nonce` on a book local: the shared-store read. */
+    printWsBookFieldRead(node: any): string | undefined;
+    /** `x['nonce'] = v` on a book local, and `this.F[k]['symbol'] = v` on a map entry: the shared-store write. */
+    printWsBookMetaWrite(left: any, right: any): string | undefined;
+    /** A write of a book local: a map read, `undefined` or a constructor. */
+    printWsBookLocalWrite(left: any, right: any): string | undefined;
+    /** A constructor stays a `Book` where a book slot takes it (a book local, a map write, a discarded statement); elsewhere it is boxed. */
+    printWsBookCtorCall(node: any, identation: number): string | undefined;
+    rustWsBookCtorSlot(node: any): boolean;
+    /** A map read outside an optional-local slot: boxed once. */
+    printWsBookMapRead(node: any): string | undefined;
+    /** `x === undefined` on an optional book local or a map read, and the always-false test of the map field. */
+    printWsBookNullTest(left: any, right: any, op: any): string | undefined;
+    /** `k in this.F`. */
+    printWsBookMapHas(key: any, obj: any): string | undefined;
+    /** `delete this.F[k]`. */
+    printWsBookMapDelete(node: any): string | undefined;
+    /** `this.F[k] = book` and `this.F = {}` / `this.F = this.createSafeDictionary (..)`. */
+    printWsBookMapWrite(left: any, right: any): string | undefined;
+    /** Any other read of the map field is its dict snapshot (each entry an Arc bump); a write is unproven. */
+    printWsBookMapField(node: any): string | undefined;
     printWsWatchCall(node: any, receiver: string, methodName: string, identation: number): string | undefined;
     /** A numeric or boolean hash argument: the runtime keys by its text, as `stringify_param` did. */
     rustWsNumberSlot(arg: any): boolean;

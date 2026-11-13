@@ -51582,6 +51582,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustWsCacheUses = /* @__PURE__ */ new WeakMap();
     this.rustWsCacheMapFields = /* @__PURE__ */ new WeakMap();
     this.rustWsCacheShelfFields = /* @__PURE__ */ new WeakMap();
+    this.rustWsBookMapFields = /* @__PURE__ */ new WeakMap();
+    this.rustWsBookLocals = /* @__PURE__ */ new WeakMap();
+    this.rustWsBookUses = /* @__PURE__ */ new WeakMap();
+    this.rustWsBookCtorPrinting = /* @__PURE__ */ new WeakSet();
+    this.rustWsBookCtorBare = /* @__PURE__ */ new WeakSet();
     // ── built lists (rustBuiltListLocal / rustBuiltListWriteSource / printBuiltListDeclaration / printBuiltListWrite / printBuiltListPush) ──
     // A local built from an array literal, reassigned only from list producers (array literals, base `toArray` /
     // `arrayConcat`, a `[]`-defaulted `safeList*`) holds the shared list: pushes, length and index reads are native.
@@ -51769,7 +51774,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (_RustTranspiler.RUST_NUMBER_CONSTANT_IMPORTS.has(name) && this.rustIsImportedValueName(node)) {
       return `Value::Int(crate::runtime::${name})`;
     }
-    return this.printWsCacheLocalUse(node) ?? this.printClientHandleUse(node) ?? this.printTypedFilterParamRead(node) ?? this.printRustNilLocalRead(node) ?? this.printRustScalarLocalRead(node) ?? this.printRustStrSlotBox(node) ?? super.printIdentifier(node);
+    return this.printWsBookLocalUse(node) ?? this.printWsCacheLocalUse(node) ?? this.printClientHandleUse(node) ?? this.printTypedFilterParamRead(node) ?? this.printRustNilLocalRead(node) ?? this.printRustScalarLocalRead(node) ?? this.printRustStrSlotBox(node) ?? super.printIdentifier(node);
   }
   /** A bare read of an imported (or top-level destructured) binding: never a callee, member, key or `new` target. */
   rustIsImportedValueName(node) {
@@ -52073,6 +52078,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const nilLocal = this.printRustNilLocalEquality(left, right, op);
     if (nilLocal !== void 0)
       return nilLocal;
+    const bookTest = this.printWsBookNullTest(left, right, op);
+    if (bookTest !== void 0)
+      return bookTest;
     const mapTest = this.printWsCacheMapNullTest(left, right, op);
     if (mapTest !== void 0)
       return mapTest;
@@ -53011,6 +53019,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const assignments = left.elements.map((e, idx) => this.printRustNilSlotWrite(e, slotRead(idx)) ?? `${this.printNode(e, 0)} = ${slotRead(idx)}`).join("; ");
       return `{ ${head}; ${assignments}; }`;
     }
+    const bookWrite = isAssign ? this.printWsBookMetaWrite(left, right) ?? this.printWsBookMapWrite(left, right) ?? this.printWsBookLocalWrite(left, right) : void 0;
+    if (bookWrite !== void 0)
+      return bookWrite;
     const mapWrite = isAssign ? this.printWsCacheMapWrite(left, right) : void 0;
     if (mapWrite !== void 0)
       return mapWrite;
@@ -53090,7 +53101,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (op === SyntaxKind7.InKeyword) {
       const shadow = this.rustParamShadowOf(right);
-      return this.printWsCacheMapHas(left, right) ?? this.printBorrowedInOp(left, right) ?? this.printFieldKeyInOp(left, right) ?? this.printElemKeyInOp(left, right) ?? this.printClientHandleInOp(left, right, false) ?? (shadow !== void 0 ? this.printShadowInOperator(shadow, left) : void 0) ?? this.bearerInOp(left, right) ?? this.printNativeInOperator(left, right) ?? this.literalInOp(left, right) ?? this.provenDictFieldInOp(left, right) ?? this.rustDictInOp(left, right) ?? `Value::Bool(in_op(&${this.printNode(right, 0)}, &${this.printNode(left, 0)}))`;
+      return this.printWsBookMapHas(left, right) ?? this.printWsCacheMapHas(left, right) ?? this.printBorrowedInOp(left, right) ?? this.printFieldKeyInOp(left, right) ?? this.printElemKeyInOp(left, right) ?? this.printClientHandleInOp(left, right, false) ?? (shadow !== void 0 ? this.printShadowInOperator(shadow, left) : void 0) ?? this.bearerInOp(left, right) ?? this.printNativeInOperator(left, right) ?? this.literalInOp(left, right) ?? this.provenDictFieldInOp(left, right) ?? this.rustDictInOp(left, right) ?? `Value::Bool(in_op(&${this.printNode(right, 0)}, &${this.printNode(left, 0)}))`;
     }
     if ((op === SyntaxKind7.PlusEqualsToken || op === SyntaxKind7.MinusEqualsToken) && left.kind !== SyntaxKind7.ElementAccessExpression) {
       const isPlus = op === SyntaxKind7.PlusEqualsToken;
@@ -53137,6 +53148,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return handleDecl;
     const declaration = node.declarations[0];
     const indent = this.getIden(identation);
+    const bookDecl = node.declarations.length === 1 && declaration?.name.kind === SyntaxKind7.Identifier ? this.printWsBookLocalDeclaration(declaration, this.printNode(declaration.name, 0), indent) : void 0;
+    if (bookDecl !== void 0)
+      return bookDecl;
     if (declaration?.name.kind === SyntaxKind7.ArrayBindingPattern) {
       const parsedElements = declaration.name.elements.map((e) => this.printNode(e.name, 0));
       const syntheticName = parsedElements.join("") + "Variable";
@@ -58866,6 +58880,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   }
   printCallExpression(node, identation) {
     const expression = node.expression;
+    const bookCall = this.printWsBookMapRead(node) ?? this.printWsBookCtorCall(node, identation);
+    if (bookCall !== void 0)
+      return bookCall;
     const mapLookup = this.printWsCacheMapRead(node);
     if (mapLookup !== void 0)
       return mapLookup;
@@ -59074,6 +59091,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     return `crate::value::get_value_k(&${receiverText}, ${this.quotedStringLiteral(member)})`;
   }
   printPropertyAccessExpression(node, identation) {
+    const bookField = this.printWsBookFieldRead(node) ?? this.printWsBookMapField(node);
+    if (bookField !== void 0)
+      return bookField;
     const cacheField = this.printWsCacheHashmapRead(node) ?? this.printWsCacheFieldRead(node) ?? this.printWsCacheMapField(node);
     if (cacheField !== void 0)
       return cacheField;
@@ -59103,9 +59123,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       return this.printArrayLength(node, 0, leftExpr);
     }
     if (isIdentifier3(node.name) && isIdentifier3(node.expression) && !this.isCastOrParenOperand(node) && this.isNativeAccessPositionSafe(node) && !this.isNativeWriteTargetBase(node)) {
-      const bookField = this.printNativeBookFieldRead(leftExpr, node.expression, rightSide, true);
-      if (bookField !== void 0)
-        return bookField;
+      const bookField2 = this.printNativeBookFieldRead(leftExpr, node.expression, rightSide, true);
+      if (bookField2 !== void 0)
+        return bookField2;
     }
     if (isIdentifier3(node.name) && this.isShallowValueReceiver(node.expression) && this.isNativeAccessPositionSafe(node) && !this.isNativeWriteTargetBase(node)) {
       const native = this.printNativeMapAccess(leftExpr, node.expression, String(rightSide));
@@ -61004,6 +61024,9 @@ ${ind}let ${view}: &${map} = &${arc};
     return this.quotedStringLiteral(text);
   }
   printElementAccessExpression(node, identation) {
+    const bookRead = this.printWsBookMapRead(node) ?? this.printWsBookFieldRead(node);
+    if (bookRead !== void 0)
+      return bookRead;
     const mapRead = this.printWsCacheMapRead(node);
     if (mapRead !== void 0)
       return mapRead;
@@ -61496,7 +61519,7 @@ ${this.getIden(identation)}}`;
     return `Value::from(vec![${node.elements.map((e) => this.printNode(e, 0)).join(", ")}])`;
   }
   printDeleteExpression(node, identation) {
-    return this.printWsCacheMapDelete(node) ?? this.printClientHandleDelete(node) ?? this.provenDictFieldDelete(node) ?? `remove(&mut ${this.printNode(node.expression.expression, 0)}, &${this.printNode(node.expression.argumentExpression, 0)})`;
+    return this.printWsBookMapDelete(node) ?? this.printWsCacheMapDelete(node) ?? this.printClientHandleDelete(node) ?? this.provenDictFieldDelete(node) ?? `remove(&mut ${this.printNode(node.expression.expression, 0)}, &${this.printNode(node.expression.argumentExpression, 0)})`;
   }
   printInstanceOfExpression(node, identation) {
     return `${this.getIden(identation)}is_instance(&${this.printNode(node.left, 0)}, &${this.printNode(node.right, 0)})`;
@@ -64546,6 +64569,8 @@ ${iden}}`;
     const p = up.parent;
     if (p === void 0)
       return false;
+    if (this.rustWsBookMapKeyUse(up))
+      return true;
     if (isElementAccessExpression4(p))
       return p.argumentExpression === up && (this.rustWsCacheMapLike(p.expression) || this.rustWsCacheShelfField(p.expression));
     if (isBinaryExpression5(p) && p.operatorToken.kind === SyntaxKind7.InKeyword)
@@ -64762,6 +64787,447 @@ ${iden}}`;
     if (this.isNativeWriteTargetBase(node))
       throw new Error(`ws cache map ${String(node.name.text)} written outside a proven form`);
     return `Value::from(&self.${String(node.name.text)})`;
+  }
+  /** `this.F` for a base field declared `Dictionary<WsOrderBook>`. */
+  rustWsBookMapField(node) {
+    const n = this.rustStripWrappers(node);
+    if (n === void 0 || !isPropertyAccessExpression3(n) || n.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(n.name) || String(n.name.text) !== "orderbooks")
+      return false;
+    let declaration;
+    try {
+      declaration = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(n.name));
+    } catch (e) {
+      return false;
+    }
+    if (declaration === void 0)
+      return false;
+    let known = this.rustWsBookMapFields.get(declaration);
+    if (known === void 0) {
+      known = false;
+      try {
+        const type = declaration.type;
+        const leaf = type?.kind === SyntaxKind7.TypeReference && isIdentifier3(type.typeName) && type.typeName.text === "Dictionary" && type.typeArguments?.length === 1 ? type.typeArguments[0] : void 0;
+        known = declaration.kind === SyntaxKind7.PropertyDeclaration && /ts[\\/]src[\\/]base[\\/](?:\.__ExchangeNoOverloads|Exchange)\.ts$/.test(String(declaration.getSourceFile().fileName)) && leaf?.kind === SyntaxKind7.TypeReference && isIdentifier3(leaf.typeName) && leaf.typeName.text === "WsOrderBook" && leaf.typeArguments === void 0;
+      } catch (e) {
+        known = false;
+      }
+      this.rustWsBookMapFields.set(declaration, known);
+    }
+    return known;
+  }
+  /** `this.orderBook|indexedOrderBook|countedOrderBook (..)` resolved to the base declaration. */
+  rustWsBookCtor(node) {
+    const n = this.unwrapParens(node);
+    if (n === void 0 || !isCallExpression6(n) || !isPropertyAccessExpression3(n.expression) || n.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    if (!_RustTranspiler.RUST_BOOK_CTORS.has(String(n.expression.name.text)) || n.arguments.some((a) => a.kind === SyntaxKind7.SpreadElement))
+      return false;
+    const declaration = this.rustScalarCallee(n);
+    return declaration !== void 0 && /ts[\\/]src[\\/]base[\\/](?:\.__ExchangeNoOverloads|Exchange)\.ts$/.test(String(declaration.getSourceFile?.()?.fileName ?? ""));
+  }
+  /** A constructor, or a ternary whose arms are both book constructors. */
+  rustWsBookCtorLike(node) {
+    const n = this.unwrapParens(node);
+    if (n !== void 0 && isConditionalExpression4(n))
+      return this.rustWsBookCtorLike(n.whenTrue) && this.rustWsBookCtorLike(n.whenFalse);
+    return this.rustWsBookCtor(n);
+  }
+  /** `this.F[k]` on the book map. */
+  rustWsBookMapEntry(node) {
+    const n = this.rustStripWrappers(node);
+    return n !== void 0 && isElementAccessExpression4(n) && this.rustWsBookMapField(n.expression);
+  }
+  /** `this.safeValue|safeDict (this.F, k)` on the book map. */
+  rustWsBookMapLookup(node) {
+    const n = this.rustStripWrappers(node);
+    if (n === void 0 || !isCallExpression6(n) || !isPropertyAccessExpression3(n.expression) || n.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const name = String(n.expression.name.text);
+    if (name !== "safeValue" && name !== "safeDict")
+      return false;
+    return this.rustWsBookMapField(n.arguments[0]) && (n.arguments.length === 2 || n.arguments.length === 3 && this.rustWsBookCtor(n.arguments[2]));
+  }
+  rustWsBookMapRead(node) {
+    return this.rustWsBookMapEntry(node) || this.rustWsBookMapLookup(node);
+  }
+  /** The `Option<Book>` text of a map read. */
+  rustWsBookMapReadText(node) {
+    const n = this.rustStripWrappers(node);
+    if (isElementAccessExpression4(n))
+      return `self.orderbooks.at(&${this.rustWsCacheMapKey(n.argumentExpression)})`;
+    if (n.arguments.length === 3) {
+      this.rustWsBookCtorBare.add(this.unwrapParens(n.arguments[2]));
+      try {
+        return `Some(self.orderbooks.lookup_or(&${this.rustWsCacheMapKey(n.arguments[1])}, ${this.printNode(n.arguments[2], 0).trim()}))`;
+      } finally {
+        this.rustWsBookCtorBare.delete(this.unwrapParens(n.arguments[2]));
+      }
+    }
+    return `self.orderbooks.lookup(&${this.rustWsCacheMapKey(n.arguments[1])})`;
+  }
+  /** The key of a book-map access: printed by reference (the cache-map key form). */
+  rustWsBookMapKeyUse(up) {
+    const p = up.parent;
+    if (p === void 0)
+      return false;
+    if (isElementAccessExpression4(p))
+      return p.argumentExpression === up && this.rustWsBookMapField(p.expression);
+    if (isBinaryExpression5(p) && p.operatorToken.kind === SyntaxKind7.InKeyword)
+      return p.left === up && this.rustWsBookMapField(p.right);
+    return isCallExpression6(p) && p.arguments[1] === up && this.rustWsBookMapLookup(p);
+  }
+  /** A source an optional book local takes: a map read, `undefined` (with `orUndefined`), a constructor (boxed as
+   *  `Some`), or a ternary of those with at least one map read. */
+  rustWsBookOptSource(node, orUndefined) {
+    const n = this.rustStripWrappers(node);
+    if (n === void 0)
+      return false;
+    if (this.rustWsBookMapRead(n))
+      return true;
+    if (orUndefined && (this.rustWsCacheUndefined(n) || this.rustWsBookCtor(n)))
+      return true;
+    if (isConditionalExpression4(n)) {
+      return this.rustWsBookOptSource(n.whenTrue, true) && this.rustWsBookOptSource(n.whenFalse, true) && (this.rustWsBookOptSource(n.whenTrue, false) || this.rustWsBookOptSource(n.whenFalse, false));
+    }
+    return false;
+  }
+  rustWsBookOptText(node) {
+    const n = this.rustStripWrappers(node);
+    if (this.rustWsCacheUndefined(n))
+      return "None";
+    if (this.rustWsBookMapRead(n))
+      return this.rustWsBookMapReadText(n);
+    if (this.rustWsBookCtor(n)) {
+      this.rustWsBookCtorBare.add(n);
+      try {
+        return `Some(${this.printNode(n, 0).trim()})`;
+      } finally {
+        this.rustWsBookCtorBare.delete(n);
+      }
+    }
+    if (isConditionalExpression4(n))
+      return `(if ${this.printCondition(n.condition, 0).trim()} { ${this.rustWsBookOptText(n.whenTrue)} } else { ${this.rustWsBookOptText(n.whenFalse)} })`;
+    throw new Error("ws order book: not an optional book source");
+  }
+  /** `x.limit()` / `x.reset(..)` as a statement. */
+  rustWsBookMethodReceiver(n) {
+    const p = n.parent;
+    if (!isPropertyAccessExpression3(p) || p.expression !== n || !isCallExpression6(p.parent) || p.parent.expression !== p)
+      return false;
+    if (p.parent.parent?.kind !== SyntaxKind7.ExpressionStatement || p.parent.arguments.some((a) => a.kind === SyntaxKind7.SpreadElement))
+      return false;
+    const name = String(p.name.text);
+    return name === "limit" && p.parent.arguments.length === 0 || name === "reset" && p.parent.arguments.length <= 1;
+  }
+  /** The literal key of a side / meta access on `x` (`x['bids']`, `x.nonce`), else undefined. */
+  rustWsBookFieldKey(n) {
+    const p = n.parent;
+    if (isPropertyAccessExpression3(p) && p.expression === n && isIdentifier3(p.name))
+      return String(p.name.text);
+    if (isElementAccessExpression4(p) && p.expression === n && isStringLiteralLikeNode4(p.argumentExpression))
+      return String(p.argumentExpression.text);
+    return void 0;
+  }
+  /** A hand-off that boxes the handle once: a call argument, a return, a non-literal element read, a literal value. */
+  rustWsBookBoxUse(n) {
+    let up = n;
+    while (isParenthesizedExpression3(up.parent) || isAsExpression3(up.parent) || isNonNullExpression2(up.parent))
+      up = up.parent;
+    const p = up.parent;
+    if (p === void 0)
+      return false;
+    if (isCallExpression6(p))
+      return p.expression !== up && p.arguments.indexOf(up) >= 0;
+    if (isReturnStatement4(p))
+      return p.expression === up;
+    if (isElementAccessExpression4(p))
+      return p.expression === up && !isStringLiteralLikeNode4(p.argumentExpression) && !this.isNativeWriteTargetBase(p) && !isDeleteExpression2(p.parent);
+    if (p.kind === SyntaxKind7.PropertyAssignment)
+      return p.initializer === up;
+    if (isConditionalExpression4(p))
+      return p.condition !== up;
+    return isArrayLiteralExpression4(p) && !this.isNativeWriteTargetBase(p) && !(isBinaryExpression5(p.parent) && p.parent.left === p);
+  }
+  /** `this.F[k] = x` for a book local `x`. */
+  rustWsBookMapWriteValue(n) {
+    let up = n;
+    while (isParenthesizedExpression3(up.parent) || isAsExpression3(up.parent))
+      up = up.parent;
+    const p = up.parent;
+    return isBinaryExpression5(p) && p.right === up && p.operatorToken.kind === SyntaxKind7.EqualsToken && this.rustWsBookMapEntry(p.left) && p.parent?.kind === SyntaxKind7.ExpressionStatement;
+  }
+  /** 'opt' for a local bound to a map read, 'book' for one bound to a constructor; undefined when it stays `Value`. */
+  rustWsBookLocal(declaration) {
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return void 0;
+    let known = this.rustWsBookLocals.get(declaration);
+    if (known === void 0) {
+      known = null;
+      this.rustWsBookLocals.set(declaration, null);
+      const list = declaration.parent;
+      const init = this.rustStripWrappers(declaration.initializer);
+      const kind = init === void 0 || this.isTestSource(declaration) ? void 0 : this.rustWsBookOptSource(init, false) || this.rustWsCacheUndefined(init) ? "opt" : this.rustWsBookCtorLike(init) ? "book" : void 0;
+      if (kind !== void 0 && list?.kind === SyntaxKind7.VariableDeclarationList && list.declarations.length === 1) {
+        const forms = /* @__PURE__ */ new Map();
+        let reads = 0;
+        let sourced = !this.rustWsCacheUndefined(init);
+        const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+          const p = n.parent;
+          if ((isPropertyAccessExpression3(p) || p?.kind === SyntaxKind7.PropertyAssignment) && p.name === n)
+            return true;
+          if (kind === "opt" && isBinaryExpression5(p) && this.isEqualityOp(p.operatorToken.kind) && this.rustWsCacheUndefined(p.left === n ? p.right : p.left)) {
+            forms.set(n, "test");
+            return true;
+          }
+          if (this.rustWsBookMethodReceiver(n)) {
+            forms.set(n, "bare");
+            reads++;
+            return true;
+          }
+          const key = this.rustWsBookFieldKey(n);
+          if (key !== void 0 && _RustTranspiler.RUST_BOOK_SIDE_FIELDS.has(key)) {
+            const access = p;
+            const write = access.parent;
+            if (isBinaryExpression5(write) && write.left === access && write.operatorToken.kind === SyntaxKind7.EqualsToken) {
+              if (!_RustTranspiler.RUST_BOOK_META_WRITES.has(key) || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+                return false;
+              forms.set(n, "meta");
+              reads++;
+              return true;
+            }
+            if (this.isNativeWriteTargetBase(access) || isDeleteExpression2(write) || isCallExpression6(write) && write.expression === access)
+              return false;
+            let outer = access;
+            while (isParenthesizedExpression3(outer.parent) || isAsExpression3(outer.parent))
+              outer = outer.parent;
+            if (isPropertyAccessExpression3(outer.parent) && outer.parent.expression === outer && (String(outer.parent.name.text) !== "length" || this.isNativeWriteTargetBase(outer.parent)))
+              return false;
+            forms.set(n, "field");
+            reads++;
+            return true;
+          }
+          if (key !== void 0 && isPropertyAccessExpression3(p))
+            return false;
+          if (isBinaryExpression5(p) && p.left === n && p.operatorToken.kind === SyntaxKind7.EqualsToken) {
+            if (p.parent?.kind !== SyntaxKind7.ExpressionStatement)
+              return false;
+            const ok2 = kind === "opt" ? this.rustWsBookOptSource(p.right, true) : this.rustWsBookCtorLike(p.right);
+            if (ok2)
+              forms.set(n, "bare");
+            if (ok2 && !this.rustWsCacheUndefined(p.right))
+              sourced = true;
+            return ok2;
+          }
+          if (this.rustWsBookMapWriteValue(n)) {
+            forms.set(n, "bare");
+            return true;
+          }
+          if (this.rustWsBookBoxUse(n)) {
+            forms.set(n, "box");
+            reads++;
+            return true;
+          }
+          return false;
+        });
+        if (ok && sourced) {
+          known = kind;
+          for (const [n, form] of forms)
+            this.rustWsBookUses.set(n, form);
+        }
+      }
+      this.rustWsBookLocals.set(declaration, known);
+    }
+    return known ?? void 0;
+  }
+  rustWsBookLocalOf(node) {
+    if (!isIdentifier3(node) || this.rustWsBookUses.get(node) === void 0)
+      return void 0;
+    return this.rustWsBookLocal(this.rustDeclarationOfIdentifier(node));
+  }
+  rustWsBookPath(node, type) {
+    return `${this.isTestSource(node) ? "ccxt" : "crate"}::${type}`;
+  }
+  printWsBookLocalDeclaration(declaration, varName, indent) {
+    const kind = this.rustWsBookLocal(declaration);
+    if (kind === void 0)
+      return void 0;
+    const init = this.rustStripWrappers(declaration.initializer);
+    const path4 = this.rustWsBookPath(declaration, _RustTranspiler.RUST_BOOK_TYPE);
+    if (kind === "opt")
+      return `${indent}let mut ${varName}: Option<${path4}> = ${this.rustWsBookOptText(init)}`;
+    return `${indent}let mut ${varName}: ${path4} = ${this.printNode(init, 0).trim()}`;
+  }
+  /** A use of a typed book local: the handle itself, or boxed once at a `Value` hand-off. */
+  printWsBookLocalUse(node) {
+    const form = this.rustWsBookUses.get(node);
+    if (form !== "bare" && form !== "box")
+      return void 0;
+    if (this.rustWsBookLocalOf(node) === void 0)
+      return void 0;
+    const name = super.printIdentifier(node);
+    return form === "bare" ? name : `Value::from(&${name})`;
+  }
+  /** `x['bids']` / `x.nonce` on a book local: the shared-store read. */
+  printWsBookFieldRead(node) {
+    const recv = node.expression;
+    if (!isIdentifier3(recv) || this.rustWsBookUses.get(recv) !== "field" || this.rustWsBookLocalOf(recv) === void 0)
+      return void 0;
+    return `${super.printIdentifier(recv)}.book_field("${this.rustWsBookFieldKey(recv)}")`;
+  }
+  /** `x['nonce'] = v` on a book local, and `this.F[k]['symbol'] = v` on a map entry: the shared-store write. */
+  printWsBookMetaWrite(left, right) {
+    const access = this.unwrapParens(left);
+    if (!isElementAccessExpression4(access) && !isPropertyAccessExpression3(access))
+      return void 0;
+    const recv = this.rustStripWrappers(access.expression);
+    let receiver;
+    let entry = false;
+    if (isIdentifier3(recv) && this.rustWsBookUses.get(recv) === "meta" && this.rustWsBookLocalOf(recv) !== void 0)
+      receiver = super.printIdentifier(recv);
+    else if (this.rustWsBookMapEntry(recv)) {
+      receiver = "__b";
+      entry = true;
+    }
+    if (receiver === void 0)
+      return void 0;
+    const key = isPropertyAccessExpression3(access) ? String(access.name.text) : isStringLiteralLikeNode4(access.argumentExpression) ? String(access.argumentExpression.text) : void 0;
+    if (key === void 0 || !_RustTranspiler.RUST_BOOK_META_WRITES.has(key) || entry && key === "cache") {
+      if (entry)
+        throw new Error("ws order book map: an entry written outside a proven form");
+      return void 0;
+    }
+    let value = this.printNode(right, 0).trim();
+    if (this.rustPrintedBoolArg(value))
+      value = `Value::Bool(${value})`;
+    if (entry)
+      return `{ let mut __b = ${this.rustWsBookMapReadText(recv)}; __b.set_book_meta("${key}", ${_RustTranspiler.cloneIfBareLocal(value)}); }`;
+    if (new RegExp(`\\b${receiver}\\b`).test(value))
+      return `{ let __be_tmp = ${value}; ${receiver}.set_book_meta("${key}", __be_tmp); }`;
+    return `${receiver}.set_book_meta("${key}", ${_RustTranspiler.cloneIfBareLocal(value)})`;
+  }
+  /** A write of a book local: a map read, `undefined` or a constructor. */
+  printWsBookLocalWrite(left, right) {
+    if (!isIdentifier3(left) || this.rustWsBookUses.get(left) !== "bare")
+      return void 0;
+    const kind = this.rustWsBookLocalOf(left);
+    if (kind === void 0)
+      return void 0;
+    const name = super.printIdentifier(left);
+    return kind === "opt" ? `${name} = ${this.rustWsBookOptText(right)}` : `${name} = ${this.printNode(this.unwrapParens(right), 0).trim()}`;
+  }
+  /** A constructor stays a `Book` where a book slot takes it (a book local, a map write, a discarded statement); elsewhere it is boxed. */
+  printWsBookCtorCall(node, identation) {
+    if (this.rustWsBookCtorPrinting.has(node) || !this.rustWsBookCtor(node))
+      return void 0;
+    this.rustWsBookCtorPrinting.add(node);
+    let text;
+    try {
+      text = this.printCallExpression(node, identation);
+    } finally {
+      this.rustWsBookCtorPrinting.delete(node);
+    }
+    return this.rustWsBookCtorBare.has(node) || this.rustWsBookCtorSlot(node) ? text : `Value::from(${text})`;
+  }
+  rustWsBookCtorSlot(node) {
+    let up = node;
+    while (isParenthesizedExpression3(up.parent) || isConditionalExpression4(up.parent) && up.parent.condition !== up)
+      up = up.parent;
+    const p = up.parent;
+    if (p === void 0)
+      return false;
+    if (p.kind === SyntaxKind7.ExpressionStatement)
+      return true;
+    if (isConditionalExpression4(up) && !this.rustWsBookCtorLike(up))
+      return false;
+    if (isVariableDeclaration3(p) && p.initializer === up)
+      return this.rustWsBookLocal(p) !== void 0;
+    if (isBinaryExpression5(p) && p.right === up && p.operatorToken.kind === SyntaxKind7.EqualsToken) {
+      if (this.rustWsBookMapEntry(p.left))
+        return true;
+      return isIdentifier3(p.left) && this.rustWsBookUses.get(p.left) === "bare" && this.rustWsBookLocalOf(p.left) !== void 0;
+    }
+    return false;
+  }
+  /** A map read outside an optional-local slot: boxed once. */
+  printWsBookMapRead(node) {
+    if (!this.rustWsBookMapRead(node))
+      return void 0;
+    if (isElementAccessExpression4(node) && (this.isNativeWriteTargetBase(node) || isDeleteExpression2(node.parent)))
+      throw new Error("ws order book map: an entry write reached the read path");
+    return `Value::from(${this.rustWsBookMapReadText(node)})`;
+  }
+  /** `x === undefined` on an optional book local or a map read, and the always-false test of the map field. */
+  printWsBookNullTest(left, right, op) {
+    const l = this.rustStripWrappers(left);
+    const r = this.rustStripWrappers(right);
+    const subject = this.rustWsCacheUndefined(r) ? l : this.rustWsCacheUndefined(l) ? r : void 0;
+    if (subject === void 0)
+      return void 0;
+    const equal = op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken;
+    if (this.rustWsBookMapField(subject))
+      return equal ? "false" : "true";
+    let place;
+    if (this.rustWsBookMapRead(subject))
+      place = this.rustWsBookMapReadText(subject);
+    else if (isIdentifier3(subject) && this.rustWsBookUses.get(subject) === "test" && this.rustWsBookLocalOf(subject) === "opt")
+      place = super.printIdentifier(subject);
+    if (place === void 0)
+      return void 0;
+    return `${place}.${equal ? "is_none" : "is_some"}()`;
+  }
+  /** `k in this.F`. */
+  printWsBookMapHas(key, obj) {
+    if (!this.rustWsBookMapField(obj))
+      return void 0;
+    return `Value::Bool(self.orderbooks.has(&${this.rustWsCacheMapKey(key)}))`;
+  }
+  /** `delete this.F[k]`. */
+  printWsBookMapDelete(node) {
+    const target = this.rustStripWrappers(node.expression);
+    if (!this.rustWsBookMapEntry(target))
+      return void 0;
+    const base = _RustTranspiler.RUST_BASE_TIER_FILE.test(String(node.getSourceFile().fileName));
+    return this.rustWsCacheForget(base, "CacheStore", "orderbooks", [this.rustWsCacheMapKey(target.argumentExpression)]);
+  }
+  /** `this.F[k] = book` and `this.F = {}` / `this.F = this.createSafeDictionary (..)`. */
+  printWsBookMapWrite(left, right) {
+    const rhs = this.rustStripWrappers(right);
+    if (this.rustWsBookMapField(left)) {
+      const fresh = isObjectLiteralExpression4(rhs) && rhs.properties.length === 0 || isCallExpression6(rhs) && isPropertyAccessExpression3(rhs.expression) && rhs.expression.expression.kind === SyntaxKind7.ThisKeyword && String(rhs.expression.name.text) === "createSafeDictionary";
+      if (!fresh)
+        throw new Error("ws order book map written from an unproven value");
+      return `self.orderbooks = ${this.rustWsBookPath(left, _RustTranspiler.RUST_BOOK_MAP_TYPE)}::new()`;
+    }
+    if (!this.rustWsBookMapEntry(left))
+      return void 0;
+    const entry = this.rustStripWrappers(left);
+    let value;
+    if (this.rustWsBookCtorLike(rhs))
+      value = this.printNode(rhs, 0).trim();
+    else if (isIdentifier3(rhs) && this.rustWsBookUses.get(rhs) === "bare" && this.rustWsBookLocalOf(rhs) !== void 0) {
+      value = `${super.printIdentifier(rhs)}${this.rustLocalLastUse(rhs, this.rustDeclarationOfIdentifier(rhs)) ? "" : ".clone()"}`;
+    } else {
+      const declaration = isIdentifier3(rhs) ? this.rustDeclarationOfIdentifier(rhs) : void 0;
+      value = this.printNode(rhs, 0).trim();
+      if (declaration !== void 0 && isVariableDeclaration3(declaration) && /^[A-Za-z_]\w*$/.test(value) && !this.rustLocalLastUse(rhs, declaration))
+        value += ".clone()";
+    }
+    const key = this.rustWsCacheMapKey(entry.argumentExpression);
+    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(String(entry.getSourceFile().fileName)))
+      return `{ let __ck = ${key}; let __cv = ${value}; self.orderbooks.put(&__ck, __cv); }`;
+    if (/\bself\b/.test(key))
+      return `{ let __ck = ${key}; let __cv = ${value}; CacheStore::put(&mut self.orderbooks, &__ck, __cv); }`;
+    if (/\bself\b/.test(value))
+      return `{ let __cv = ${value}; CacheStore::put(&mut self.orderbooks, &${key}, __cv); }`;
+    return `CacheStore::put(&mut self.orderbooks, &${key}, ${value})`;
+  }
+  /** Any other read of the map field is its dict snapshot (each entry an Arc bump); a write is unproven. */
+  printWsBookMapField(node) {
+    if (!this.rustWsBookMapField(node))
+      return void 0;
+    if (this.isNativeWriteTargetBase(node))
+      throw new Error("ws order book map written outside a proven form");
+    return "Value::from(&self.orderbooks)";
   }
   // ── watch positionals (printWsWatchCall / rustWsWatchDictSlot / rustWsSubscriptionWriteValue) ──
   // `watch(url, hash, message, subscribe_hash, subscription)` and `watch_multiple(url, hashes, message, subscribe_hashes,
@@ -69553,6 +70019,19 @@ _RustTranspiler.RUST_CACHE_MAP_TYPE = "pro::cache::CacheMap";
 // Its inner map `this.F[k]` / `this.safeDict (this.F, k)` is read like a cache map; `this.F[k] = {}` resets and
 // `this.F[k] = this.safeDict|safeValue (this.F, k, {})` ensures an entry. Any other write throws.
 _RustTranspiler.RUST_CACHE_SHELF_TYPE = "pro::cache::CacheShelf";
+// ── ws order books (rustWsBookMapField / rustWsBookLocal / printWsBook*) ──
+// The base field `orderbooks: Dictionary<WsOrderBook>` is a `BookMap` (`IndexMap<String, Book>`) and the base
+// `orderBook / indexedOrderBook / countedOrderBook` return the runtime's typed `Book`. Every use of the field is
+// proven here with the cache-map key rules (`has` / `at` / `lookup` / `put` / `forget`); any other write throws.
+// A local bound to a map read is an `Option<Book>`, one bound to a constructor a `Book`, when every use is a null
+// test, a side / meta read (`book_field`), a meta write (`set_book_meta`), `limit()` / `reset(..)` as a statement,
+// a write from a book source, a write back into the map, or a hand-off that boxes it once (`Value::from(&x)`).
+_RustTranspiler.RUST_BOOK_TYPE = "pro::order_book::Book";
+_RustTranspiler.RUST_BOOK_MAP_TYPE = "pro::order_book::BookMap";
+_RustTranspiler.RUST_BOOK_CTORS = /* @__PURE__ */ new Set(["orderBook", "indexedOrderBook", "countedOrderBook"]);
+_RustTranspiler.RUST_BOOK_SIDE_FIELDS = /* @__PURE__ */ new Set(["bids", "asks", "timestamp", "datetime", "nonce", "symbol", "cache"]);
+// `set_book_meta` writes these to the shared store (`cache` replaces the shared delta buffer)
+_RustTranspiler.RUST_BOOK_META_WRITES = /* @__PURE__ */ new Set(["timestamp", "datetime", "nonce", "symbol", "cache"]);
 // ── optional list locals ─────────────────────────────────────────────────
 // A list local whose source may yield `undefined` (the permissive `marketSymbols`, `marketIds`, a `safeList*`
 // with no default) holds `Option<crate::value::List>` (`into_opt_list` moves the shared list out of the box).

@@ -9022,6 +9022,50 @@ describe('rust ws cache maps', () => {
     });
 });
 
+describe('rust ws order books', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/ws/OrderBook.ts": "export class WsOrderBook {\\n    cache: any[] = [];\\n    constructor (snapshot: any = {}, depth: any = undefined) {}\\n    limit () { return this; }\\n    reset (snapshot: any = {}) {}\\n}\\nexport class CountedOrderBook extends WsOrderBook {}\\n",
+        "ts/src/base/ws/Client.ts": "export default class Client {\\n    resolve (result: any, messageHash: string): any { return result; }\\n}\\n",
+        "ts/src/base/Exchange.ts": "import { WsOrderBook, CountedOrderBook } from './ws/OrderBook.js';\nexport interface Dictionary<T> { [key: string]: T }\nexport default class Exchange {\n    orderbooks: Dictionary<WsOrderBook> = {};\n    safeValue (obj: any, key: any, defaultValue: any = undefined): any { return obj[key]; }\n    safeString (obj: any, key: any, defaultValue: string = undefined): string { return obj[key]; }\n    safeInteger (obj: any, key: any, defaultValue: number = undefined): number { return obj[key]; }\n    createSafeDictionary (isWs: boolean = false) { return {}; }\n    orderBook (snapshot = {}, depth = 100): WsOrderBook { return new WsOrderBook (snapshot, depth); }\n    countedOrderBook (snapshot = {}, depth = 100): CountedOrderBook { return new CountedOrderBook (snapshot, depth); }\n    reset () {\n        this.orderbooks = this.createSafeDictionary (true);\n    }\n    drop (symbol: string) {\n        if (symbol in this.orderbooks) {\n            delete this.orderbooks[symbol];\n        }\n    }\n}\n",
+        "ts/src/pro/venue.ts": "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nexport default class venue extends Exchange {\n    handleOrderBook (client: Client, message: any) {\n        const symbol = this.safeString (message, 's');\n        if (!(symbol in this.orderbooks)) {\n            this.orderbooks[symbol] = this.orderBook ({}, 10);\n        }\n        const orderbook = this.orderbooks[symbol];\n        orderbook.reset (message);\n        orderbook['nonce'] = this.safeInteger (message, 'u');\n        const bids = orderbook['bids'];\n        client.resolve (orderbook, 'orderbook:' + symbol);\n        return bids;\n    }\n    handleSnapshot (client: Client, message: any) {\n        const symbol = this.safeString (message, 's');\n        const ob = this.countedOrderBook (message);\n        this.orderbooks[symbol] = ob;\n        if (this.safeValue (this.orderbooks, symbol) === undefined) {\n            return;\n        }\n        client.resolve (ob, symbol);\n    }\n    handleLoose (client: Client, message: any) {\n        const symbol = this.safeString (message, 's');\n        const stored = this.orderbooks[symbol];\n        stored.cache.push (message);\n        this.orderbooks[symbol] = stored;\n    }\n}\n",
+    };
+    let out: string;
+    let base: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-books-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        base = transpiler.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('the book map field is tested, written, read and deleted as a typed BookMap', () => {
+        expect(out).toContain('self.orderbooks.has(&symbol)');
+        expect(out).toMatch(/CacheStore::put\(&mut self\.orderbooks, &symbol, (__cv|self\.orderBook\()/);
+        expect(out).toContain('self.orderbooks.lookup(&symbol).is_none()');
+        expect(base).toContain('self.orderbooks = crate::pro::order_book::BookMap::new();');
+        expect(base).toContain('self.orderbooks.forget(&symbol)');
+    });
+    test('a local bound to a map read is an optional book with native side and meta access', () => {
+        expect(out).toContain('let mut orderbook: Option<crate::pro::order_book::Book> = self.orderbooks.at(&symbol);');
+        expect(out).toContain('orderbook.reset(');
+        expect(out).toContain('orderbook.set_book_meta("nonce", ');
+        expect(out).toContain('orderbook.book_field("bids")');
+        expect(out).toContain('client.resolve(Value::from(&orderbook)');
+    });
+    test('a constructor-initialised local is a book and is stored without a box', () => {
+        expect(out).toContain('let mut ob: crate::pro::order_book::Book = self.countedOrderBook(');
+        expect(out).toMatch(/CacheStore::put\(&mut self\.orderbooks, &symbol, ob(\.clone\(\))?\)/);
+        expect(out).toContain('client.resolve(Value::from(&ob)');
+    });
+    test('negative: a local whose cache buffer is pushed stays a boxed Value and is stored through the marker test', () => {
+        expect(out).toContain('let mut stored: Value = Value::from(self.orderbooks.at(&symbol));');
+        expect(out).not.toContain('Value::Dict(__d) = &mut self.orderbooks');
+    });
+});
+
 describe('rust ws cache shelves', () => {
     const files: Record<string, string> = {
         "ts/src/base/ws/Cache.ts": "export class ArrayCache {\n    constructor (maxSize: any = undefined) {}\n    append (item: any) {}\n}\nexport class ArrayCacheByTimestamp extends ArrayCache {}\n",
