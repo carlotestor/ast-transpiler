@@ -9117,6 +9117,79 @@ export class RustTranspiler extends BaseTranspiler {
         return `jwt(${fixed.join(', ')})`;
     }
 
+    // By-value callees (`self.m(..)`, the test-harness helpers, the signers) take their `Value` arguments by move:
+    // a bare local argument is printed `x.clone()` so the local stays usable after the call.
+    private static readonly RUST_BY_VALUE_CALLEE = /(?:\b(?:self|super)\.[a-zA-Z_][a-zA-Z0-9_]*|\bexchange\d*\.[a-zA-Z_][a-zA-Z0-9_]*|\brsa|\beddsa|\becdsa|\bjwt|\btotp|\bhelper[A-Z][a-zA-Z0-9_]*|\bprecise[A-Z][a-zA-Z0-9_]*|\btest[A-Z][a-zA-Z0-9_]*|\b[a-z][a-zA-Z0-9_]*(?:Helper(?:Test)?|Test)|\bassert[A-Z][a-zA-Z0-9_]*|\b(?:equals|deepEqual|assert|dump|callMethod|callMethodSync|callExchangeMethodDynamically|callExchangeMethodDynamicallySync|getExchangeProp|setExchangeProp|setFetchResponse|setFetchResponseByUrl|initExchange|close|jsonStringify|jsonParse|exceptionMessage|convertAscii|isNullValue|ioFileExists|ioFileRead|ioDirRead|setupWsMockTransport|getWsSentMessages|injectWsMessage|wsClientHasPendingFutures|markWsTestCompleted|isWsTestCompleted|rejectPendingWsFutures|preloadWsMessages|wsHasQueuedMessages))\(/;
+
+
+    /** `x = y;` / `let mut x: Value = y;` on its own line moves `y`: the source is cloned so it stays usable. */
+    static cloneAliasSources(text: string): string {
+        const keep = (rhs: string) => rhs === 'self' || rhs === 'true' || rhs === 'false';
+        return text
+            .replace(/^(\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*;/gm, (whole: string, indent: string, lhs: string, rhs: string) => (keep(rhs) ? whole : `${indent}${lhs} = ${rhs}.clone();`))
+            .replace(/^(\s*)let\s+mut\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*Value\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*;$/gm, (whole: string, indent: string, lhs: string, rhs: string) => (keep(rhs) ? whole : `${indent}let mut ${lhs}: Value = ${rhs}.clone();`))
+            .replace(/(let\s+mut\s+\w+\s*:\s*Value\s*=\s*)([a-zA-Z_]\w*)(;)/g, '$1$2.clone()$3');
+    }
+
+    /** Clone every bare-local argument of each by-value call in `text` (an argument already `x.clone()` is left). */
+    static cloneByValueCallArgs(text: string): string {
+        let i = 0;
+        let out = '';
+        while (i < text.length) {
+            const rest = text.slice(i);
+            const m = rest.match(RustTranspiler.RUST_BY_VALUE_CALLEE);
+            if (!m || m.index === undefined) { out += rest; break; }
+            out += rest.slice(0, m.index);
+            const absStart = i + m.index;
+            const callStart = absStart + m[0].length;
+            const j = RustTranspiler.rustBalancedClose(text, callStart);
+            if (j >= text.length) { out += text.slice(absStart); break; }
+            const inside = RustTranspiler.cloneByValueCallArgs(text.slice(callStart, j));
+            const args = RustTranspiler.rustSplitTopLevel(inside);
+            const cloned = args === undefined ? inside : args.map((a) => {
+                const t = a.trim();
+                return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(t) && !['self', 'None', 'true', 'false'].includes(t) ? `${t}.clone()` : a;
+            }).join(', ');
+            out += text.slice(absStart, callStart) + cloned + ')';
+            i = j + 1;
+        }
+        return out;
+    }
+
+    private static rustBalancedClose(text: string, from: number): number {
+        let depth = 1, inStr = false, escape = false;
+        for (let j = from; j < text.length; j++) {
+            const c = text[j];
+            if (escape) { escape = false; continue; }
+            if (c === '\\') { escape = true; continue; }
+            if (c === '"') { inStr = !inStr; continue; }
+            if (inStr) continue;
+            if (c === '(' || c === '[' || c === '{') depth++;
+            else if (c === ')' || c === ']' || c === '}') depth--;
+            if (depth === 0) return j;
+        }
+        return text.length;
+    }
+
+    private static rustSplitTopLevel(s: string): string[] | undefined {
+        const out: string[] = [];
+        let depth = 0, start = 0, inStr = false, escape = false;
+        for (let i = 0; i < s.length; i++) {
+            const c = s[i];
+            if (escape) { escape = false; continue; }
+            if (c === '\\') { escape = true; continue; }
+            if (c === '"') { inStr = !inStr; continue; }
+            if (inStr) continue;
+            if (c === '(' || c === '[' || c === '{') depth++;
+            else if (c === ')' || c === ']' || c === '}') depth--;
+            else if (c === ',' && depth === 0) { out.push(s.slice(start, i).trim()); start = i + 1; }
+            if (depth < 0) return undefined;
+        }
+        const tail = s.slice(start).trim();
+        if (tail.length > 0) out.push(tail);
+        return depth === 0 ? out : undefined;
+    }
+
     printCallExpression(node, identation) {
         const expression = node.expression;
         const bookCall = this.printWsBookMapRead(node) ?? this.printWsBookCtorCall(node, identation); if (bookCall !== undefined) return bookCall;
@@ -10951,6 +11024,12 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printNode(node, identation = 0): string {
+        // the by-value argument clones go on the finished file text: every line-budget guard measures the uncloned print
+        if (isSourceFile(node)) return RustTranspiler.cloneByValueCallArgs(RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation)));
+        return this.printNodeUncloned(node, identation);
+    }
+
+    private printNodeUncloned(node, identation: number): string {
         if (this.rustDictOwnerDepth > 0 || !this.rustDictIsOwner(node)) return super.printNode(node, identation);
         this.rustDictOwnerDepth++;
         try {
