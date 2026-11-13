@@ -1767,6 +1767,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  Arc-moving returned-container rule asks (`rustFreshWide`): the copying `IndexMap` bearer rules keep the old set. */
     private static readonly RUST_BUILDER_PASSTHROUGH_WIDE;
     private rustFreshWide;
+    /** A pass-through builder's own object-literal argument (`safeTicker ({ .. })`, the venue parse* shape) is a leaf:
+     *  `rustPlainDictLiteral` proves it without recursing, so it costs no proof depth (Arc-moving rule only, as the
+     *  literal-initializer leaf). A `parseWsX -> parseX -> safeX ({..})` chain then fits the depth budget. */
+    rustPassthroughLiteralLeaf(arg: any): boolean;
     rustBuilderPassthrough(method: string): boolean;
     private static readonly RUST_LIST_PASSTHROUGH;
     /** `x` read as the list argument of a base pass-through (`filterBy* (x, ..)` / `sortBy* (x, ..)`). */
@@ -2025,6 +2029,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltReturnSourceKind(call: any): 'dict' | 'list' | undefined;
     private static readonly RUST_BUILT_BOX_RECEIVER_METHODS;
     private static readonly RUST_BUILT_HELPER_RETURNS;
+    /** `this.F` for a checker dict-shaped field (`fundingRates: Dictionary<FundingRate>`) the native insert writes
+     *  (`printNativeDictInsert`: `rustFieldStaysDict`). The insert stores whatever handle it is given, so a built map
+     *  boxes there as the field-key rule's plain fields do. */
+    rustDictShapedFieldInsert(expr: any): boolean;
     rustBuiltReturnBoxUse(n: any, init: any): boolean;
     /** A base `this.omit (x, keys)` whose head always holds a map: a literal, a built map (`extend`, ..) or a local that
      *  prints the shared map. A `Dict`-typed parameter is not enough: a list body (`Array.isArray (params)` in `sign`)

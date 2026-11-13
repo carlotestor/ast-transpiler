@@ -64114,6 +64114,13 @@ ${iden}}`;
       return false;
     return parent.operatorToken.kind === SyntaxKind7.EqualsToken && this.rustDictProducer(parent.right);
   }
+  /** A pass-through builder's own object-literal argument (`safeTicker ({ .. })`, the venue parse* shape) is a leaf:
+   *  `rustPlainDictLiteral` proves it without recursing, so it costs no proof depth (Arc-moving rule only, as the
+   *  literal-initializer leaf). A `parseWsX -> parseX -> safeX ({..})` chain then fits the depth budget. */
+  rustPassthroughLiteralLeaf(arg) {
+    const literal2 = this.rustSkipWrappers(arg);
+    return this.rustFreshWide && literal2 !== void 0 && isObjectLiteralExpression4(literal2) && this.rustPlainDictLiteral(literal2);
+  }
   rustBuilderPassthrough(method) {
     return _RustTranspiler.RUST_BUILDER_PASSTHROUGH.has(method) || this.rustFreshWide && _RustTranspiler.RUST_BUILDER_PASSTHROUGH_WIDE.has(method);
   }
@@ -64149,7 +64156,7 @@ ${iden}}`;
       const passArgs = call.arguments ?? [];
       if (passArgs.length === 0)
         return false;
-      return this.rustBuiltContainerKind(passArgs[0], depth + 1) === kind;
+      return this.rustBuiltContainerKind(passArgs[0], this.rustPassthroughLiteralLeaf(passArgs[0]) ? depth : depth + 1) === kind;
     }
     let declaration;
     try {
@@ -64273,7 +64280,7 @@ ${iden}}`;
     const args = expr.arguments ?? [];
     if (owner.kind === SyntaxKind7.ThisKeyword) {
       if (this.rustBuilderPassthrough(method) && args.length > 0) {
-        return this.rustBuiltContainerKind(args[0], depth + 1);
+        return this.rustBuiltContainerKind(args[0], this.rustPassthroughLiteralLeaf(args[0]) ? depth : depth + 1);
       }
       if (this.rustListPassthroughCall(expr))
         return this.rustBuiltContainerKind(args[0], depth) === "list" ? "list" : void 0;
@@ -65987,11 +65994,20 @@ ${iden}}`;
     }
     return this.rustCallBuildsContainer(call, "list", 0) ? "list" : void 0;
   }
+  /** `this.F` for a checker dict-shaped field (`fundingRates: Dictionary<FundingRate>`) the native insert writes
+   *  (`printNativeDictInsert`: `rustFieldStaysDict`). The insert stores whatever handle it is given, so a built map
+   *  boxes there as the field-key rule's plain fields do. */
+  rustDictShapedFieldInsert(expr) {
+    if (!isPropertyAccessExpression3(expr) || expr.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(expr.name))
+      return false;
+    const name = String(expr.name.text);
+    return !_RustTranspiler.RUST_TAGGED_HANDLE_FIELDS.has(name) && this.rustWriteDictShape(this.typeOfNodeIfAny(expr)) && this.rustFieldStaysDict(expr, name);
+  }
   rustBuiltReturnBoxUse(n, init) {
     const up = n.parent;
     if (init === void 0 || !isCallExpression6(init) || up === void 0 || this.rustBuiltReturnSourceKind(init) === void 0)
       return false;
-    if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustFieldKeyReceiver(up.left.expression) !== void 0) {
+    if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustFieldKeyReceiver(up.left.expression) !== void 0 || this.rustDictShapedFieldInsert(up.left.expression))) {
       return !new RegExp(`\\b${String(n.text)}\\b`).test(String(up.left.argumentExpression.getText()));
     }
     if (this.rustScalarInNestedWrite(n))
@@ -66011,6 +66027,8 @@ ${iden}}`;
     const at = Array.from(up.arguments).indexOf(n);
     if (isIdentifier3(up.expression.expression))
       return at === 0 && _RustTranspiler.RUST_BUILT_BOX_RECEIVER_METHODS.has(callee) && !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n));
+    if (callee === "append" && at === 0 && up.arguments.length === 1 && up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustWsCacheField(up.expression.expression))
+      return true;
     if (up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     if (_RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || _RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee))
