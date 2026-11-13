@@ -51581,6 +51581,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustWsCacheLocals = /* @__PURE__ */ new WeakMap();
     this.rustWsCacheUses = /* @__PURE__ */ new WeakMap();
     this.rustWsCacheMapFields = /* @__PURE__ */ new WeakMap();
+    this.rustWsCacheShelfFields = /* @__PURE__ */ new WeakMap();
     // ── built lists (rustBuiltListLocal / rustBuiltListWriteSource / printBuiltListDeclaration / printBuiltListWrite / printBuiltListPush) ──
     // A local built from an array literal, reassigned only from list producers (array literals, base `toArray` /
     // `arrayConcat`, a `[]`-defaulted `safeList*`) holds the shared list: pushes, length and index reads are native.
@@ -64467,6 +64468,61 @@ ${iden}}`;
     }
     return known;
   }
+  /** `this.F` for a base field declared `Dictionary<Dictionary<ArrayCache*>>`. */
+  rustWsCacheShelfField(node) {
+    const n = this.unwrapParens(node);
+    if (n === void 0 || !isPropertyAccessExpression3(n) || n.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(n.name) || String(n.name.text) !== "ohlcvs")
+      return false;
+    let declaration;
+    try {
+      declaration = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(n.name));
+    } catch (e) {
+      return false;
+    }
+    if (declaration === void 0)
+      return false;
+    let known = this.rustWsCacheShelfFields.get(declaration);
+    if (known === void 0) {
+      known = false;
+      try {
+        const dict = (t) => t?.kind === SyntaxKind7.TypeReference && isIdentifier3(t.typeName) && t.typeName.text === "Dictionary" && t.typeArguments?.length === 1;
+        const type = declaration.type;
+        const inner = dict(type) ? type.typeArguments[0] : void 0;
+        const leaf = dict(inner) ? inner.typeArguments[0] : void 0;
+        known = declaration.kind === SyntaxKind7.PropertyDeclaration && /ts[\\/]src[\\/]base[\\/](?:\.__ExchangeNoOverloads|Exchange)\.ts$/.test(String(declaration.getSourceFile().fileName)) && leaf?.kind === SyntaxKind7.TypeReference && isIdentifier3(leaf.typeName) && _RustTranspiler.RUST_CACHE_CTORS.has(String(leaf.typeName.text));
+      } catch (e) {
+        known = false;
+      }
+      this.rustWsCacheShelfFields.set(declaration, known);
+    }
+    return known;
+  }
+  /** `this.F[k]` on a cache shelf. */
+  rustWsCacheShelfEntry(node) {
+    const n = this.unwrapParens(node);
+    return n !== void 0 && isElementAccessExpression4(n) && this.rustWsCacheShelfField(n.expression);
+  }
+  /** `this.safeDict (this.F, k)` on a cache shelf. */
+  rustWsCacheShelfLookup(node) {
+    const n = this.unwrapParens(node);
+    if (n === void 0 || !isCallExpression6(n) || !isPropertyAccessExpression3(n.expression) || n.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    return String(n.expression.name.text) === "safeDict" && n.arguments.length === 2 && this.rustWsCacheShelfField(n.arguments[0]);
+  }
+  /** A cache map: the map field itself or an inner map of a shelf. */
+  rustWsCacheMapLike(node) {
+    const n = this.rustStripWrappers(node);
+    return this.rustWsCacheMapField(n) || this.rustWsCacheShelfEntry(n) || this.rustWsCacheShelfLookup(n);
+  }
+  /** The place text of a cache map (`self.F`, `self.F.shelf(&k)`, `self.F.shelf_text(&k)`). */
+  rustWsCacheMapPlace(node) {
+    const n = this.rustStripWrappers(node);
+    if (this.rustWsCacheMapField(n))
+      return `self.${String(n.name.text)}`;
+    if (this.rustWsCacheShelfEntry(n))
+      return `self.${String(this.unwrapParens(n.expression).name.text)}.shelf(&${this.rustWsCacheMapKey(n.argumentExpression)})`;
+    return `self.${String(this.unwrapParens(n.arguments[0]).name.text)}.shelf_text(&${this.rustWsCacheMapKey(n.arguments[1])})`;
+  }
   /** The key of a cache-map access (`m[k]`, `k in m`, `safeValue (m, k)`): printed by reference. */
   rustWsCacheMapKeyUse(n) {
     let up = n;
@@ -64476,15 +64532,15 @@ ${iden}}`;
     if (p === void 0)
       return false;
     if (isElementAccessExpression4(p))
-      return p.argumentExpression === up && this.rustWsCacheMapField(p.expression);
+      return p.argumentExpression === up && (this.rustWsCacheMapLike(p.expression) || this.rustWsCacheShelfField(p.expression));
     if (isBinaryExpression5(p) && p.operatorToken.kind === SyntaxKind7.InKeyword)
-      return p.left === up && this.rustWsCacheMapField(this.rustStripWrappers(p.right));
-    return isCallExpression6(p) && p.arguments[1] === up && this.rustWsCacheMapLookup(p);
+      return p.left === up && (this.rustWsCacheMapLike(p.right) || this.rustWsCacheShelfField(this.rustStripWrappers(p.right)));
+    return isCallExpression6(p) && p.arguments[1] === up && (this.rustWsCacheMapLookup(p) || this.rustWsCacheShelfLookup(p) || this.rustWsCacheShelfEnsure(p));
   }
   /** `this.F[k]` on a cache map. */
   rustWsCacheMapEntry(node) {
     const n = this.unwrapParens(node);
-    return n !== void 0 && isElementAccessExpression4(n) && this.rustWsCacheMapField(n.expression);
+    return n !== void 0 && isElementAccessExpression4(n) && this.rustWsCacheMapLike(n.expression);
   }
   /** `this.safeValue|safeDict (this.F, k)` on a cache map. */
   rustWsCacheMapLookup(node) {
@@ -64492,7 +64548,7 @@ ${iden}}`;
     if (n === void 0 || !isCallExpression6(n) || !isPropertyAccessExpression3(n.expression) || n.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     const name = String(n.expression.name.text);
-    return (name === "safeValue" || name === "safeDict") && n.arguments.length === 2 && this.rustWsCacheMapField(n.arguments[0]);
+    return (name === "safeValue" || name === "safeDict") && n.arguments.length === 2 && this.rustWsCacheMapLike(n.arguments[0]);
   }
   /** A source an optional cache local takes as `Option<Cache>`: a map read, `undefined` (with `orUndefined`), a typed
    *  cache field, or a ternary of those with at least one map read or field. */
@@ -64535,12 +64591,16 @@ ${iden}}`;
     return /^[A-Za-z_][A-Za-z0-9_]*$/.test(text) ? text : `(${text})`;
   }
   rustWsCacheMapReadText(n) {
-    const field = isElementAccessExpression4(n) ? n.expression : n.arguments[0];
-    const place = `self.${String(this.unwrapParens(field).name.text)}`;
+    const place = this.rustWsCacheMapPlace(isElementAccessExpression4(n) ? n.expression : n.arguments[0]);
     return isElementAccessExpression4(n) ? `${place}.at(&${this.rustWsCacheMapKey(n.argumentExpression)})` : `${place}.lookup(&${this.rustWsCacheMapKey(n.arguments[1])})`;
   }
   /** A map read outside an optional-local slot (those print through `rustWsCacheOptText`): boxed once. */
   printWsCacheMapRead(node) {
+    if (this.rustWsCacheShelfEntry(node) || this.rustWsCacheShelfLookup(node)) {
+      if (isElementAccessExpression4(node) && (this.isNativeWriteTargetBase(node) || isDeleteExpression2(node.parent)))
+        throw new Error("ws cache shelf: an entry write reached the read path");
+      return `Value::from(${this.rustWsCacheMapPlace(node)})`;
+    }
     if (!this.rustWsCacheMapEntry(node) && !this.rustWsCacheMapLookup(node))
       return void 0;
     if (isElementAccessExpression4(node) && (this.isNativeWriteTargetBase(node) || isDeleteExpression2(node.parent))) {
@@ -64556,7 +64616,7 @@ ${iden}}`;
     if (subject === void 0)
       return void 0;
     const equal = op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken;
-    if (this.rustWsCacheMapField(subject))
+    if (this.rustWsCacheMapField(subject) || this.rustWsCacheShelfField(subject))
       return equal ? "false" : "true";
     if (!this.rustWsCacheMapEntry(subject) && !this.rustWsCacheMapLookup(subject))
       return void 0;
@@ -64564,17 +64624,34 @@ ${iden}}`;
   }
   /** `k in this.F`. */
   printWsCacheMapHas(key, obj) {
-    if (!this.rustWsCacheMapField(this.rustStripWrappers(obj)))
+    const map = this.rustStripWrappers(obj);
+    if (this.rustWsCacheShelfField(map))
+      return `Value::Bool(CacheShelves::has(&self.${String(map.name.text)}, &${this.rustWsCacheMapKey(key)}))`;
+    if (!this.rustWsCacheMapLike(map))
       return void 0;
-    const field = String(this.rustStripWrappers(obj).name.text);
-    return `Value::Bool(self.${field}.has(&${this.rustWsCacheMapKey(key)}))`;
+    return `Value::Bool(${this.rustWsCacheMapPlace(map)}.has(&${this.rustWsCacheMapKey(key)}))`;
   }
   /** `delete this.F[k]`. */
   printWsCacheMapDelete(node) {
-    const target = node.expression;
+    const target = this.unwrapParens(node.expression);
+    if (this.rustWsCacheShelfEntry(target)) {
+      const key2 = this.rustWsCacheMapKey(target.argumentExpression);
+      const field2 = String(this.unwrapParens(target.expression).name.text);
+      return /\bself\b/.test(key2) ? `{ let __ck = ${key2}; CacheShelves::forget(&mut self.${field2}, &__ck); }` : `CacheShelves::forget(&mut self.${field2}, &${key2})`;
+    }
     if (!this.rustWsCacheMapEntry(target))
       return void 0;
     const key = this.rustWsCacheMapKey(target.argumentExpression);
+    const inner = this.rustStripWrappers(target.expression);
+    if (this.rustWsCacheShelfEntry(inner)) {
+      const outer = this.rustWsCacheMapKey(inner.argumentExpression);
+      const shelf = String(this.unwrapParens(inner.expression).name.text);
+      if (/\bself\b/.test(outer + key))
+        return `{ let __ck = ${outer}; let __cj = ${key}; CacheShelves::forget2(&mut self.${shelf}, &__ck, &__cj); }`;
+      return `CacheShelves::forget2(&mut self.${shelf}, &${outer}, &${key})`;
+    }
+    if (!this.rustWsCacheMapField(inner))
+      throw new Error("ws cache map: delete on an unproven map");
     const field = String(this.unwrapParens(target.expression).name.text);
     return /\bself\b/.test(key) ? `{ let __ck = ${key}; CacheStore::forget(&mut self.${field}, &__ck); }` : `CacheStore::forget(&mut self.${field}, &${key})`;
   }
@@ -64587,8 +64664,37 @@ ${iden}}`;
     return isBinaryExpression5(p) && p.right === up && p.operatorToken.kind === SyntaxKind7.EqualsToken && this.rustWsCacheMapEntry(p.left) && p.parent?.kind === SyntaxKind7.ExpressionStatement;
   }
   /** `this.F[k] = cache` and `this.F = {}` / `this.F = this.createSafeDictionary (..)`. */
+  /** `this.safeDict|safeValue (this.F, k, {})` on a shelf: the ensure source of `this.F[k] = ..`. */
+  rustWsCacheShelfEnsure(node) {
+    const n = this.unwrapParens(node);
+    if (n === void 0 || !isCallExpression6(n) || !isPropertyAccessExpression3(n.expression) || n.expression.expression.kind !== SyntaxKind7.ThisKeyword || n.arguments.length !== 3)
+      return false;
+    const name = String(n.expression.name.text);
+    const dflt = this.unwrapParens(n.arguments[2]);
+    return (name === "safeDict" || name === "safeValue") && this.rustWsCacheShelfField(n.arguments[0]) && isObjectLiteralExpression4(dflt) && dflt.properties.length === 0;
+  }
   printWsCacheMapWrite(left, right) {
     const rhs = this.unwrapParens(right);
+    const shelfPath = `${this.isTestSource(left) ? "ccxt" : "crate"}::${_RustTranspiler.RUST_CACHE_SHELF_TYPE}`;
+    if (this.rustWsCacheShelfField(left)) {
+      const fresh = isObjectLiteralExpression4(rhs) && rhs.properties.length === 0 || isCallExpression6(rhs) && isPropertyAccessExpression3(rhs.expression) && rhs.expression.expression.kind === SyntaxKind7.ThisKeyword && String(rhs.expression.name.text) === "createSafeDictionary";
+      if (!fresh)
+        throw new Error("ws cache shelf field written from an unproven value");
+      return `self.${String(this.unwrapParens(left).name.text)} = ${shelfPath}::new()`;
+    }
+    if (this.rustWsCacheShelfEntry(left)) {
+      const entry2 = this.unwrapParens(left);
+      const shelf = String(this.unwrapParens(entry2.expression).name.text);
+      const key2 = this.rustWsCacheMapKey(entry2.argumentExpression);
+      let op;
+      if (isObjectLiteralExpression4(rhs) && rhs.properties.length === 0)
+        op = "reset";
+      else if (this.rustWsCacheShelfEntry(left) && this.rustWsCacheShelfEnsure(rhs) && this.rustWsCacheMapKey(rhs.arguments[1]) === key2)
+        op = "ensure";
+      else
+        throw new Error(`ws cache shelf ${shelf} entry written from an unproven value`);
+      return /\bself\b/.test(key2) ? `{ let __ck = ${key2}; CacheShelves::${op}(&mut self.${shelf}, &__ck); }` : `CacheShelves::${op}(&mut self.${shelf}, &${key2})`;
+    }
     if (this.rustWsCacheMapField(left)) {
       const fresh = isObjectLiteralExpression4(rhs) && rhs.properties.length === 0 || isCallExpression6(rhs) && isPropertyAccessExpression3(rhs.expression) && rhs.expression.expression.kind === SyntaxKind7.ThisKeyword && String(rhs.expression.name.text) === "createSafeDictionary";
       if (!fresh)
@@ -64599,7 +64705,10 @@ ${iden}}`;
     if (!this.rustWsCacheMapEntry(left))
       return void 0;
     const entry = this.unwrapParens(left);
-    const field = String(this.unwrapParens(entry.expression).name.text);
+    const inner = this.rustStripWrappers(entry.expression);
+    if (!this.rustWsCacheMapField(inner) && !this.rustWsCacheShelfEntry(inner))
+      throw new Error("ws cache map: write into an unproven map");
+    const field = String(this.unwrapParens(this.rustWsCacheShelfEntry(inner) ? inner.expression : entry.expression).name.text);
     let value;
     if (this.rustWsCacheCtor(rhs))
       value = this.printNode(rhs, 0).trim();
@@ -64609,13 +64718,19 @@ ${iden}}`;
     } else
       throw new Error(`ws cache map ${field} written from an unproven value`);
     const key = this.rustWsCacheMapKey(entry.argumentExpression);
+    if (this.rustWsCacheShelfEntry(inner)) {
+      const outer = this.rustWsCacheMapKey(inner.argumentExpression);
+      if (/\bself\b/.test(outer + key + value))
+        return `{ let __ck = ${outer}; let __cj = ${key}; let __cv = ${value}; CacheShelves::put2(&mut self.${field}, &__ck, &__cj, __cv); }`;
+      return `CacheShelves::put2(&mut self.${field}, &${outer}, &${key}, ${value})`;
+    }
     if (/\bself\b/.test(key) || /\bself\b/.test(value))
       return `{ let __ck = ${key}; let __cv = ${value}; CacheStore::put(&mut self.${field}, &__ck, __cv); }`;
     return `CacheStore::put(&mut self.${field}, &${key}, ${value})`;
   }
   /** Any other read of the map field is its dict snapshot (each entry an Arc bump); a write is unproven. */
   printWsCacheMapField(node) {
-    if (!this.rustWsCacheMapField(node))
+    if (!this.rustWsCacheMapField(node) && !this.rustWsCacheShelfField(node))
       return void 0;
     if (this.isNativeWriteTargetBase(node))
       throw new Error(`ws cache map ${String(node.name.text)} written outside a proven form`);
@@ -69407,6 +69522,10 @@ _RustTranspiler.RUST_CACHE_METHODS = /* @__PURE__ */ new Set(["append", "getLimi
 // always sets it). A read is the `Option<Cache>` an optional cache local takes, else it is boxed once. Any other use
 // of the field throws, so an unproven site fails loudly.
 _RustTranspiler.RUST_CACHE_MAP_TYPE = "pro::cache::CacheMap";
+// The base field `ohlcvs: Dictionary<Dictionary<ArrayCacheByTimestamp>>` is a `CacheShelf` (`IndexMap<String, CacheMap>`).
+// Its inner map `this.F[k]` / `this.safeDict (this.F, k)` is read like a cache map; `this.F[k] = {}` resets and
+// `this.F[k] = this.safeDict|safeValue (this.F, k, {})` ensures an entry. Any other write throws.
+_RustTranspiler.RUST_CACHE_SHELF_TYPE = "pro::cache::CacheShelf";
 // ── optional list locals ─────────────────────────────────────────────────
 // A list local whose source may yield `undefined` (the permissive `marketSymbols`, `marketIds`, a `safeList*`
 // with no default) holds `Option<crate::value::List>` (`into_opt_list` moves the shared list out of the box).

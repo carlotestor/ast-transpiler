@@ -1825,6 +1825,18 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustWsCacheMapFields;
     /** `this.F` for a base field declared `Dictionary<ArrayCache>`. */
     rustWsCacheMapField(node: any): boolean;
+    private static readonly RUST_CACHE_SHELF_TYPE;
+    private rustWsCacheShelfFields;
+    /** `this.F` for a base field declared `Dictionary<Dictionary<ArrayCache*>>`. */
+    rustWsCacheShelfField(node: any): boolean;
+    /** `this.F[k]` on a cache shelf. */
+    rustWsCacheShelfEntry(node: any): boolean;
+    /** `this.safeDict (this.F, k)` on a cache shelf. */
+    rustWsCacheShelfLookup(node: any): boolean;
+    /** A cache map: the map field itself or an inner map of a shelf. */
+    rustWsCacheMapLike(node: any): boolean;
+    /** The place text of a cache map (`self.F`, `self.F.shelf(&k)`, `self.F.shelf_text(&k)`). */
+    rustWsCacheMapPlace(node: any): string;
     /** The key of a cache-map access (`m[k]`, `k in m`, `safeValue (m, k)`): printed by reference. */
     rustWsCacheMapKeyUse(n: any): boolean;
     /** `this.F[k]` on a cache map. */
@@ -1850,6 +1862,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The value of `this.F[k] = x` for a cache local `x` (or a constructor). */
     rustWsCacheMapWriteValue(n: any): boolean;
     /** `this.F[k] = cache` and `this.F = {}` / `this.F = this.createSafeDictionary (..)`. */
+    /** `this.safeDict|safeValue (this.F, k, {})` on a shelf: the ensure source of `this.F[k] = ..`. */
+    rustWsCacheShelfEnsure(node: any): boolean;
     printWsCacheMapWrite(left: any, right: any): string | undefined;
     /** Any other read of the map field is its dict snapshot (each entry an Arc bump); a write is unproven. */
     printWsCacheMapField(node: any): string | undefined;
