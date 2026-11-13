@@ -55247,6 +55247,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const baseReturn = this.rustBaseReturnScalarKind(node, name);
     if (baseReturn !== void 0)
       return baseReturn;
+    if (this.rustParseNumberStrCall(node))
+      return "onum";
     if (this.rustVenueParseToInt(node))
       return "int";
     if (this.rustVenueInitializer(node) && this.rustVenueStrCall(node))
@@ -55670,6 +55672,21 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!isCallExpression6(inner) || !isPropertyAccessExpression3(inner.expression) || !this.rustScalarReceiver(inner.expression.expression))
       return void 0;
     return _RustTranspiler.RUST_BASE_SCALAR_RETURNS[String(inner.expression.name.text)] === "ostr" ? inner : void 0;
+  }
+  // ── parseNumber of a string (rustParseNumberStrCall) ──
+  // The runtime `parse_number` answers `Float` for a parsable `Str` and its default (`Null` when none is
+  // passed) for every other `Str` or `Null`, so a one-argument call whose argument the checker proves a
+  // string (or nullish string) is exactly an `Option<f64>`. `Int` passes through unchanged, so a numeric
+  // or `any` argument stays a `Value`.
+  rustParseNumberStrCall(call) {
+    if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(call.expression.name.text) !== "parseNumber" || call.arguments.length !== 1)
+      return false;
+    const declaration = this.rustScalarCallee(call);
+    if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? "")))
+      return false;
+    const arg = this.unwrapParens(call.arguments[0]);
+    const kind = isIdentifier3(arg) ? this.rustScalarIdentifierKind(arg) : this.rustScalarValueKind(arg, true);
+    return kind === "str" || kind === "ostr";
   }
   // Any other callee: a base one whose checker return is a string, or one declaring `string`/`Str`/`int`/`Int`
   // (a bare `number` may hold a float, which `as_i64` would drop).

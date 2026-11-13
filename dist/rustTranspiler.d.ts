@@ -602,6 +602,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A cast, clock-string or `sum` local must earn a native use, and a string one never copies where the `Value` moved. */
     rustNewShapeCostly(init: any, typedUses: number, copied: number): boolean;
     rustStrCastCall(node: any): any;
+    rustParseNumberStrCall(call: any): boolean;
     rustDerivedScalarKind(call: any): string | undefined;
     rustListLengthInit(node: any): boolean;
     rustListLengthText(node: any): string;
