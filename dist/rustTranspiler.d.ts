@@ -1877,8 +1877,19 @@ export declare class RustTranspiler extends BaseTranspiler {
     printWsCacheMapField(node: any): string | undefined;
     private rustWsResolveTables;
     private rustWsWatchKinds;
+    private rustWsHashEnv;
+    private rustWsFollowed;
     /** The hash patterns of `n`: segments are literal text or `null` (any text). */
     rustWsHashPatterns(n: any, depth: number, seen: Set<Node>): Array<Array<string | null>>;
+    /** `this.safeString (sub, 'k')` reads field k; `this.safeString (list, i)` / `list[i]` over `const list = this.safeList (sub, 'k', ..)`
+     *  reads an element of field k. Undefined for any other shape. */
+    rustWsSubscriptionKeyRead(init: any): {
+        key: string;
+        element: boolean;
+    } | undefined;
+    /** Patterns of every value the class writes under subscription key `key` (`{ 'key': v }`, `x['key'] = v`); a list
+     *  field takes the elements of its array literals. Any other write of the key is an unknown hash. */
+    rustWsSubscriptionKeyPatterns(at: any, key: string, element: boolean, depth: number, seen: Set<Node>): Array<Array<string | null>>;
     static rustWsPatternNorm(p: Array<string | null>): Array<string | null>;
     /** Whether some string matches both patterns (a sound over-approximation: prefix and suffix agree). */
     static rustWsPatternsMeet(a0: Array<string | null>, b0: Array<string | null>): boolean;
@@ -1896,6 +1907,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsHasWsRelatives(file: string, at: number): boolean;
     /** The proven kind of an `await this.watch|watchMultiple (..)` initializer, else undefined. */
     rustWsWatchResultKind(init: any): 'book' | 'cache' | undefined;
+    /** The hash patterns a `this.watch|watchMultiple (..)` call (or a venue wrapper whose every return is one) awaits;
+     *  undefined when the call is anything else. Runs with `rustWsHashEnv` binding the wrapper parameters. */
+    rustWsAwaitedHashes(call: any, cls: any, depth: number): Array<Array<string | null>> | undefined;
+    /** The patterns of a watchMultiple hash list: an array literal, a wrapper parameter bound to one, or a list local
+     *  initialised from a literal that only grows by `x.push (h)` statements and is read only as a watch argument. */
+    rustWsHashListPatterns(harg: any, depth: number): Array<Array<string | null>> | undefined;
     private static readonly RUST_BOOK_TYPE;
     private static readonly RUST_BOOK_MAP_TYPE;
     private static readonly RUST_BOOK_CTORS;
