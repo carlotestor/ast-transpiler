@@ -1682,6 +1682,17 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustBorrowedKinds;
     rustBorrowedLocalKindUncached(declaration: any): 'dict' | 'list' | undefined;
     private rustOptContainerLocals;
+    /** A whole hand-off of a nullable container local (a base `safeDict*` / `safeList*` with no or a nullish default,
+     *  or a `let` filled by such writes) to a lent `impl Into<crate::Value>` slot. */
+    rustLentOptionalHandOff(call: any, arg: any, init: any, from: 'dict' | 'list' | 'api' | undefined, nilDeclared: boolean): boolean;
+    private static readonly RUST_LENT_OPTIONAL_HELPERS;
+    /** Every never-null lent use of an optional local lands in a slot that also takes the optional form. */
+    rustLentOptionalOk(declaration: any, name: string, fn: any, init: any, from: 'dict' | 'list' | 'api' | undefined): boolean;
+    /** `&x` for an optional container local lent whole to an `impl Into<crate::Value>` slot (`None` arrives as Null). */
+    printLentOptionalArg(node: any, text: string): string | undefined;
+    private rustPrintedOptional;
+    /** The value argument of `client.resolve|reject(value, hash)` on a ws handle: the hand-written method takes `impl Into<Value>`. */
+    rustLentWsSettleSlot(call: any, arg: any): boolean;
     rustNullTestedDictLocal(init: any, nullTests: number, writes: number): boolean;
     rustDictElementSource(init: any): boolean;
     private rustDictElementBoxes;
