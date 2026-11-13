@@ -13410,7 +13410,9 @@ export class RustTranspiler extends BaseTranspiler {
         // a local may share its name with a `let`/`const` in a sibling block: Rust scopes each binding to its own block
         // (market / currency record lookups keep the single-binding rule: that lane owns them)
         const recordLookup = init !== undefined && isCallExpression(init) && this.rustRecordLookupSource(init);
-        const safe = !nilDeclared && !recordLookup ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
+        // (siblings must come from the same producer: a differently sourced sibling keeps its own `Value` decision, and
+        //  ccxt's native-push pass proves a `Value` list only when every same-named binding in the fn stays boxed)
+        const safe = !nilDeclared && !recordLookup && this.rustSiblingBindingsAlike(declaration, name, init) ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
         // a fresh built container handed on whole (D11): every use is a box, the declaration converts once
         const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== undefined && isCallExpression(init) && (this.rustBuiltReturnSourceKind(init) !== undefined
             || (paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init))
@@ -14203,6 +14205,29 @@ export class RustTranspiler extends BaseTranspiler {
             const init: any = this.rustSkipWrappers(d.initializer);
             return init !== undefined && isObjectLiteralExpression(init) && this.rustPlainDictLiteral(init) && init.properties.every((p: any) => p.kind === SyntaxKind.PropertyAssignment)
                 && !this.rustLocalIsReassigned(d, String(d.name.text));
+        });
+    }
+
+    /** Every other `let`/`const` of `name` in the enclosing function is initialised by a call of the same `this.` method. */
+    rustSiblingBindingsAlike(declaration: any, name: string, init: any): boolean {
+        const scope: any = this.rustEnclosingFunction(declaration);
+        if (scope === undefined || init === undefined || !isCallExpression(init) || !isPropertyAccessExpression(init.expression)) return false;
+        const method = String(init.expression.name.text);
+        return (this.rustScopeNameNodes(scope, name) as any[]).every((n: any) => {
+            if (n === declaration || !this.rustBindsName(n, name)) return true;
+            if (!isVariableDeclaration(n)) return false;
+            const other: any = this.rustSkipWrappers(n.initializer);
+            if (other !== undefined && isCallExpression(other) && isPropertyAccessExpression(other.expression) && String(other.expression.name.text) === method) return true;
+            // a differently sourced sibling matters only for a list local, when that sibling is pushed to or length-read
+            // (ccxt's native-push proof reads every same-named `Value` declaration of the fn)
+            if (!/^safeList/.test(method)) return true;
+            let listOps = false;
+            this.rustLocalUsesAll(n, name, false, (u: any) => {
+                const up: any = u.parent;
+                if (isPropertyAccessExpression(up) && up.expression === u && (String(up.name.text) === 'push' || String(up.name.text) === 'length')) listOps = true;
+                return true;
+            });
+            return !listOps;
         });
     }
 

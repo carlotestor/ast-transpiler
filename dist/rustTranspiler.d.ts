@@ -1901,6 +1901,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `this.deepExtend (m, p, ..)` whose every operand is a proven map: a tag-free literal, a built map, an omit of a
      *  proven map, or the `params` of a typed unified method. The runtime then merges map into map on every path. */
     rustDeepExtendOfMaps(call: any): boolean;
+    /** Every other `let`/`const` of `name` in the enclosing function is initialised by a call of the same `this.` method. */
+    rustSiblingBindingsAlike(declaration: any, name: string, init: any): boolean;
     /** The `params` of a typed unified method, never reassigned: it arrives through `impl Into<crate::Params>` and is
      *  rebound by `get_arg(.., Value::Map({}))`, so it is always a map (`From<Value> for Params` drops a non-map, and
      *  the empty set's `Value::Null` takes the `{}` default). A list body only reaches untyped `sign` / `request`. */

@@ -64201,7 +64201,7 @@ ${iden}}`;
       return true;
     };
     const recordLookup = init !== void 0 && _is.isCallExpression.call(void 0, init) && this.rustRecordLookupSource(init);
-    const safe = !nilDeclared && !recordLookup ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
+    const safe = !nilDeclared && !recordLookup && this.rustSiblingBindingsAlike(declaration, name, init) ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
     const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && _is.isCallExpression.call(void 0, init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || defaultedBoxes === boxedElementUses.length && optionalBoxes === 0 && paramsBoxes === 0 && this.rustDefaultedContainerBoxUse(boxedElementUses[0], init) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init));
     if (!safe || reads === 0 && !builtBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))
       return void 0;
@@ -65052,6 +65052,32 @@ ${iden}}`;
         return false;
       const init = this.rustSkipWrappers(d.initializer);
       return init !== void 0 && _is.isObjectLiteralExpression.call(void 0, init) && this.rustPlainDictLiteral(init) && init.properties.every((p) => p.kind === _ast.SyntaxKind.PropertyAssignment) && !this.rustLocalIsReassigned(d, String(d.name.text));
+    });
+  }
+  /** Every other `let`/`const` of `name` in the enclosing function is initialised by a call of the same `this.` method. */
+  rustSiblingBindingsAlike(declaration, name, init) {
+    const scope = this.rustEnclosingFunction(declaration);
+    if (scope === void 0 || init === void 0 || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression))
+      return false;
+    const method = String(init.expression.name.text);
+    return this.rustScopeNameNodes(scope, name).every((n) => {
+      if (n === declaration || !this.rustBindsName(n, name))
+        return true;
+      if (!_is.isVariableDeclaration.call(void 0, n))
+        return false;
+      const other = this.rustSkipWrappers(n.initializer);
+      if (other !== void 0 && _is.isCallExpression.call(void 0, other) && _is.isPropertyAccessExpression.call(void 0, other.expression) && String(other.expression.name.text) === method)
+        return true;
+      if (!/^safeList/.test(method))
+        return true;
+      let listOps = false;
+      this.rustLocalUsesAll(n, name, false, (u) => {
+        const up = u.parent;
+        if (_is.isPropertyAccessExpression.call(void 0, up) && up.expression === u && (String(up.name.text) === "push" || String(up.name.text) === "length"))
+          listOps = true;
+        return true;
+      });
+      return !listOps;
     });
   }
   /** The `params` of a typed unified method, never reassigned: it arrives through `impl Into<crate::Params>` and is
