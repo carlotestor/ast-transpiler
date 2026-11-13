@@ -486,7 +486,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     printIdentifier(node) {
         const name = String(node.text);
-        const currencySlot = this.printCurrencySlotParamValue(node); if (currencySlot !== undefined) return currencySlot;
+        const currencySlot = this.printCurrencySlotParamValue(node) ?? this.printCurrencyLocalValue(node); if (currencySlot !== undefined) return currencySlot;
         const marketValue = this.printTypedMarketValueUse(node);
         if (marketValue !== undefined) return marketValue;
         if (RustTranspiler.RUST_NAME_VALUE_IMPORTS.has(name) && this.rustIsImportedValueName(node)) {
@@ -906,7 +906,7 @@ export class RustTranspiler extends BaseTranspiler {
         const nilLocal = this.printRustNilLocalEquality(left, right, op); if (nilLocal !== undefined) return nilLocal;
         const optContainer = this.printOptContainerNullTest(left, right, op) ?? this.printOptListNullTest(left, right, op); if (optContainer !== undefined) return optContainer;
         const optMarket = this.printOptMarketNullTest(left, right, op); if (optMarket !== undefined) return optMarket;
-        const currencySlot = this.printCurrencySlotNullTest(left, right, op); if (currencySlot !== undefined) return currencySlot;
+        const currencySlot = this.printCurrencySlotNullTest(left, right, op) ?? this.printCurrencyLocalNullTest(left, right, op); if (currencySlot !== undefined) return currencySlot;
         const scalarLocal = this.printRustScalarLocalEquality(left, right, op); if (scalarLocal !== undefined) return scalarLocal;
         const nativeIntResult = this.rustLengthEquality(left, right, op); if (nativeIntResult !== undefined) return nativeIntResult;
         const r12 = this.rustNativeBoolEquality(left, right, op); if (r12 !== undefined) return r12;
@@ -1981,6 +1981,7 @@ export class RustTranspiler extends BaseTranspiler {
             return `{ ${head}; ${assignments}; }`;
         }
         const builtListWrite = isAssign && isIdentifier(left) ? this.printBuiltListWrite(left, right) : undefined; if (builtListWrite !== undefined) return builtListWrite;
+        const currencyWrite = isAssign ? this.printCurrencyLocalWrite(left, right) : undefined; if (currencyWrite !== undefined) return currencyWrite;
         const marketWrite = isAssign ? this.printTypedMarketWrite(left, right) : undefined;
         if (marketWrite !== undefined) return marketWrite;
         if (isAssign && this.rustTypedListField(left)) return `${this.printNode(left, 0)} = ${this.printNode(right, 0).trim()}.into_list()`;
@@ -2126,6 +2127,8 @@ export class RustTranspiler extends BaseTranspiler {
             return head + lines.join(';\n');
         }
         const varName = this.printNode(declaration.name, 0);
+        const currencyLocal = node.declarations.length === 1 ? this.printCurrencyLocalDeclaration(declaration, indent, varName) : undefined;
+        if (currencyLocal !== undefined) return currencyLocal;
         const nilKind = node.declarations.length === 1 ? this.rustNilLocalKind(declaration) : undefined;
         if (nilKind !== undefined) {
             return `${indent}let mut ${varName}: Option<${nilKind === 'str' ? 'String' : (nilKind === 'int' ? 'i64' : 'bool')}> = None`;
@@ -2216,7 +2219,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** `'str' | 'int' | 'bool'` when the nil-declared local prints `Option<..>`, else undefined. */
     rustNilLocalKind(declaration): string | undefined {
-        if (declaration === undefined || !isVariableDeclaration(declaration)) return undefined;
+        if (declaration === undefined || !isVariableDeclaration(declaration) || this.rustCurrencyLocalKind(declaration) !== false) return undefined;
         let kind = this.rustNilLocalDecisions.get(declaration);
         if (kind === undefined) {
             this.rustNilLocalDecisions.set(declaration, null); // re-entrancy guard
@@ -7665,6 +7668,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printRustFunctionType(node): string {
+        if (this.rustReturnsCurrency(node)) return 'crate::types::Currency';
         // An internal `: Str` method that proves the conversion prints the
         // native `Option<String>` (its returns run the conversion; callers
         // box back where a `Value` is still needed).
@@ -8054,6 +8058,7 @@ export class RustTranspiler extends BaseTranspiler {
         const arithCall = this.printRustArithCall(node); if (arithCall !== undefined) return arithCall;
         const marketRead = this.printTypedMarketRead(node);
         if (marketRead !== undefined) return marketRead;
+        const currencyBox = this.printCurrencyCallBox(node, identation); if (currencyBox !== undefined) return currencyBox;
 
         // `this.safeString(<shadowed param>, 'k')` — the read inlined against
         // the parameter shadow. Ahead of the optional-arg dispatch below,
@@ -11038,6 +11043,7 @@ export class RustTranspiler extends BaseTranspiler {
         // expression is still the `Value` box, so convert it back to the
         // native payload (a nullish literal is the `None` arm).
         const fn: any = findAncestor(node.parent, isFunctionLike);
+        if (this.rustReturnsCurrency(fn)) return `${idn}return ${this.printCurrencyReturnValue(exp)};`;
         if (this.rustNativeStrReturnKind(fn) === 'str' && this.rustStrReturnValueConverts(exp)) {
             if (this.literalKindOfNode(this.unwrapParensNode(exp)) === 'null') return `${idn}return None;`;
             const local = this.rustVenueStrReturnLocal(this.unwrapParensNode(exp));
@@ -12356,7 +12362,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     rustReadBearerKindOfDeclaration(declaration: any): 'list' | 'map' | false {
-        if (declaration?.kind !== SyntaxKind.VariableDeclaration) return false;
+        if (declaration?.kind !== SyntaxKind.VariableDeclaration || this.rustCurrencyLocalKind(declaration) !== false) return false;
         let decision = this.rustReadBearerDecisions.get(declaration);
         if (decision === undefined) {
             this.rustReadBearerDecisions.set(declaration, false); // re-entrancy guard
@@ -12567,7 +12573,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** `'dict' | 'list'` for a local that holds the shared container and lends it to every read, else undefined. */
     rustBorrowedLocalKind(declaration: any): 'dict' | 'list' | undefined {
-        if (declaration?.kind !== SyntaxKind.VariableDeclaration) return undefined;
+        if (declaration?.kind !== SyntaxKind.VariableDeclaration || this.rustCurrencyLocalKind(declaration) !== false) return undefined;
         if (!this.rustBorrowedKinds.has(declaration)) {
             this.rustBorrowedKinds.set(declaration, undefined); // re-entrancy guard
             let kind: 'dict' | 'list' | undefined;
@@ -12903,6 +12909,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** `crate::value::KeyRead::key_read(&&m, "k")` for a direct read on a dict-typed local, else undefined. */
     printDictKeyRead(node: any): string | undefined {
+        const currencyRead = this.printCurrencyKeyRead(node); if (currencyRead !== undefined) return currencyRead;
         const recv: any = node.expression;
         if (recv === undefined || !isIdentifier(recv) || !this.rustDictKeyReadUse(recv)) return undefined;
         const optMarket = this.printOptMarketKeyRead(node); if (optMarket !== undefined) return optMarket;
@@ -13133,7 +13140,7 @@ export class RustTranspiler extends BaseTranspiler {
         const declaration: any = this.rustDeclarationOfIdentifier(node);
         if (declaration === undefined || declaration === node || declaration.name === node) return undefined;
         if (this.rustBorrowedLocalKind(declaration) !== undefined || this.rustLentListLocal(declaration) || this.rustReaderTables.has(declaration)
-            || this.rustCurrencySlotParamOf(node) !== undefined) return `&${text}`;
+            || this.rustCurrencySlotParamOf(node) !== undefined || this.rustCurrencyLocalOf(node) !== undefined) return `&${text}`;
         return this.rustContainerBoxUses.get(node) !== undefined && this.rustReadBearerKind(node) !== undefined ? `&${text}` : undefined;
     }
 
@@ -13174,10 +13181,14 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isCallExpression(node)) return undefined;
         const rust = this.rustBorrowedDictReader(node);
         const recv: any = rust === undefined ? undefined : node.arguments[0];
+        if (recv !== undefined && this.rustIsTypedCurrencyCall(recv)) {
+            const dfltText = node.arguments.length === 3 ? this.printNode(node.arguments[2], identation).trim() : '';
+            return `self.${rust}(&${this.printCurrencyCallRaw(recv, identation).trim()}, ${this.quotedStringLiteral(String(this.rustSkipWrappers(node.arguments[1]).text))}, &[${dfltText}])`;
+        }
         if (recv === undefined || !isIdentifier(recv)) return undefined;
         const declaration: any = this.rustDeclarationOfIdentifier(recv);
         const owned = declaration !== undefined && declaration !== recv && (this.rustBorrowedDictLocal(declaration) || this.rustHandedDictLocal(declaration)
-            || this.rustOptMarketLocalOf(recv) !== undefined || this.rustCurrencySlotParamOf(recv) !== undefined);
+            || this.rustOptMarketLocalOf(recv) !== undefined || this.rustCurrencySlotParamOf(recv) !== undefined || this.rustCurrencyLocalOf(recv) !== undefined);
         if (!owned && !(this.rustContainerBoxUses.get(recv) !== undefined && this.rustReadBearerKind(recv) !== undefined)) return undefined;
         const key: any = this.rustSkipWrappers(node.arguments[1]);
         const dflt = node.arguments.length === 3 ? this.printNode(node.arguments[2], identation).trim() : '';
@@ -17276,8 +17287,283 @@ export class RustTranspiler extends BaseTranspiler {
         const inner: any = this.unwrapParens(arg);
         if (this.literalKindOfNode(inner) === 'null') return 'None';
         if (isIdentifier(inner) && this.rustCurrencySlotParamOf(inner) !== undefined) return super.printIdentifier(inner);
+        if (isIdentifier(inner) && this.rustCurrencyLocalOf(inner) !== undefined) {
+            return this.rustCurrencyLocalKind(this.rustCurrencyLocalOf(inner)) === 'copt' ? `${super.printIdentifier(inner)}.as_ref()` : `Some(&${super.printIdentifier(inner)})`;
+        }
+        if (this.rustIsTypedCurrencyCall(inner)) return `Some(&${this.printCurrencyCallRaw(inner, identation)})`;
         const printed = this.printNode(arg, identation).trim();
         return `<Option<crate::types::Currency> as crate::types::FromRaw>::from_raw(${RustTranspiler.cloneIfBareLocal(printed)}).as_ref()`;
+    }
+
+    // ── typed currencies (S3): base `currency (code)` / `safeCurrency` return `crate::types::Currency` ──
+    // Their returns read the typed stores (`currencies_by_code_typed` / `currencies_by_id_typed`), a lent slot copies
+    // its record out, a built structure decodes once. A local bound to one of them is a `Currency` (`cstruct`), or an
+    // `Option<Currency>` when declared empty and written only from them (`copt`): key reads go through `KeyRead`, slot
+    // arguments lend `Some(&c)` / `c.as_ref()`, any other `Value` place takes the stored record (one shared handle).
+
+    private static readonly RUST_CURRENCY_RETURN_METHODS = new Set([ 'currency', 'safeCurrency' ]);
+
+    /** Base `currency (code)` / `safeCurrency (..)` declared `: CurrencyInterface` with a body. */
+    rustReturnsCurrency(node: any): boolean {
+        if (node === undefined || node.kind !== SyntaxKind.MethodDeclaration || node.body === undefined || !isIdentifier(node.name)) return false;
+        if (!RustTranspiler.RUST_CURRENCY_RETURN_METHODS.has(String(node.name.text)) || !isClassDeclaration(node.parent)) return false;
+        if ((node.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.StaticKeyword)) return false;
+        if (!RustTranspiler.RUST_BASE_TIER_FILE.test(String(node.getSourceFile?.()?.fileName ?? ''))) return false;
+        const ret: any = node.type;
+        return ret?.kind === SyntaxKind.TypeReference && isIdentifier(ret.typeName) && String(ret.typeName.text) === 'CurrencyInterface';
+    }
+
+    /** `this.currency (..)` / `this.safeCurrency (..)` resolving to a typed producer. */
+    rustIsTypedCurrencyCall(init: any): boolean {
+        const call: any = this.rustSkipWrappers(init);
+        if (call === undefined || !isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const name = String(call.expression.name.text);
+        if (!RustTranspiler.RUST_CURRENCY_RETURN_METHODS.has(name)) return false;
+        let declaration: any = this.rustScalarCallee(call);
+        if (declaration !== undefined && isMethodDeclaration(declaration) && declaration.body === undefined && isClassDeclaration(declaration.parent)) {
+            declaration = Array.from(declaration.parent.members).find((m: any) => isMethodDeclaration(m) && m.body !== undefined && isIdentifier(m.name) && String(m.name.text) === name);
+        }
+        return this.rustReturnsCurrency(declaration);
+    }
+
+    private rustCurrencyBoxing = new Set<any>();
+
+    /** The typed call as printed, never boxed. */
+    printCurrencyCallRaw(node: any, identation: number): string {
+        const call: any = this.rustSkipWrappers(node);
+        this.rustCurrencyBoxing.add(call);
+        try {
+            return this.printCallExpression(call, identation);
+        } finally {
+            this.rustCurrencyBoxing.delete(call);
+        }
+    }
+
+    /** A typed currency call that lands where the struct goes as is. */
+    rustCurrencyCallNative(node: any): boolean {
+        let current: any = node;
+        while (current.parent !== undefined && (isParenthesizedExpression(current.parent) || isAsExpression(current.parent))) current = current.parent;
+        const up: any = current.parent;
+        if (up === undefined) return false;
+        if (up.kind === SyntaxKind.VariableDeclaration && up.initializer === current) return this.rustCurrencyLocalKind(up) === 'cstruct';
+        if (isBinaryExpression(up) && up.right === current && up.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(up.left)) {
+            return this.rustCurrencyLocalOf(up.left) !== undefined;
+        }
+        if (isReturnStatement(up)) return this.rustReturnsCurrency(findAncestor(up.parent, isFunctionLike));
+        if (isCallExpression(up) && up.expression !== current) {
+            const at = Array.from(up.arguments).indexOf(current);
+            return at >= 0 && this.rustCurrencySlot(this.rustCalleeParams(up), at);
+        }
+        return false;
+    }
+
+    /** A typed currency call in a `Value` place: its record boxed once. */
+    printCurrencyCallBox(node: any, identation: number): string | undefined {
+        if (this.rustCurrencyBoxing.has(node) || !this.rustIsTypedCurrencyCall(node) || this.rustCurrencyCallNative(node)) return undefined;
+        // `this.currency (c)['k']`: the read goes through the record's own map
+        if (this.rustCurrencyKeyReadKey(node) !== undefined) return undefined;
+        return `crate::types::IntoRaw::into_raw(${this.printCurrencyCallRaw(node, identation)})`;
+    }
+
+    private rustCurrencyLocalDecisions = new Map<any, false | 'cstruct' | 'copt'>();
+
+    rustCurrencyLocalKind(declaration: any): false | 'cstruct' | 'copt' {
+        if (declaration?.kind !== SyntaxKind.VariableDeclaration) return false;
+        let decision = this.rustCurrencyLocalDecisions.get(declaration);
+        if (decision === undefined) {
+            this.rustCurrencyLocalDecisions.set(declaration, false); // re-entrancy guard
+            try {
+                decision = this.rustCurrencyLocalKindUncached(declaration);
+            } catch (e) {
+                decision = false;
+            }
+            this.rustCurrencyLocalDecisions.set(declaration, decision);
+        }
+        return decision;
+    }
+
+    /** `c = <typed currency call>` / `c = undefined` as its own statement. */
+    rustCurrencyWriteOf(n: any): 'call' | 'null' | undefined {
+        const up: any = n.parent;
+        if (up === undefined || !isBinaryExpression(up) || up.left !== n || up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement) return undefined;
+        if (this.rustIsTypedCurrencyCall(up.right)) return 'call';
+        return this.literalKindOfNode(this.unwrapParens(up.right)) === 'null' ? 'null' : undefined;
+    }
+
+    /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
+    rustCurrencyValueUse(n: any): boolean {
+        const parent: any = n.parent;
+        if (parent === undefined) return false;
+        if (isCallExpression(parent)) return parent.expression !== n && Array.from(parent.arguments).includes(n);
+        if (isArrayLiteralExpression(parent)) return true;
+        if (parent.kind === SyntaxKind.PropertyAssignment) return parent.initializer === n;
+        return isReturnStatement(parent);
+    }
+
+    rustCurrencyLocalKindUncached(declaration: any): false | 'cstruct' | 'copt' {
+        if (!isIdentifier(declaration.name) || declaration.parent?.declarations?.length !== 1) return false;
+        const file = String(declaration.getSourceFile?.()?.fileName ?? '');
+        if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file)) return false;
+        // `let c = currency` over a lent slot parameter starts an `Option<Currency>` from its record
+        const fromSlot = isIdentifier(this.rustSkipWrappers(declaration.initializer)) && this.rustCurrencySlotParamOf(this.rustSkipWrappers(declaration.initializer)) !== undefined;
+        const empty = declaration.initializer === undefined || this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === 'null' || fromSlot;
+        if (!empty && !this.rustIsTypedCurrencyCall(declaration.initializer)) return false;
+        if (empty && (declaration.parent.flags & NodeFlags.Const) !== 0) return false;
+        const name = String(declaration.name.text);
+        const scope = this.rustEnclosingFunction(declaration);
+        if (scope === undefined || isSourceFile(scope)) return false;
+        let writes = 0;
+        // a same-named binding in a sibling block is another local (Rust scopes it to its block too)
+        const ok = this.rustBlockLocalUsesAll(declaration, name, (n: any) => {
+            if (this.rustIdentifierIsPropertyName(n) && n.parent?.kind !== SyntaxKind.ShorthandPropertyAssignment) return true;
+            if (this.rustEnclosingFunction(n) !== scope) return false; // a closure capture keeps the box
+            const write = this.rustCurrencyWriteOf(n);
+            if (write === 'call') {
+                writes++;
+                return true;
+            }
+            if (write === 'null') return empty;
+            if (this.isNativeWriteTargetBase(n) || isDeleteExpression(n.parent?.parent)) return false;
+            if (this.rustCurrencyKeyReadKey(n) !== undefined) return true;
+            const up: any = n.parent;
+            if (isCallExpression(up) && up.expression !== n) {
+                const at = Array.from(up.arguments).indexOf(n);
+                if (at === 0 && (this.rustBorrowedDictReader(up) !== undefined || this.rustBorrowedAnyKeyReader(up))) return true;
+                if (at >= 0 && this.rustCurrencySlot(this.rustCalleeParams(up), at)) return true;
+            }
+            if (this.rustIsNullTestOf(n)) return empty || this.rustCurrencyNullTestIsCondition(n);
+            return this.rustCurrencyValueUse(n);
+        });
+        if (!ok) return false;
+        if (empty) return writes > 0 ? 'copt' : false;
+        return 'cstruct';
+    }
+
+    /** The literal key of a read-only `c['k']` / `c.k` (never written, deleted or stepped): it reads the record's map. */
+    rustCurrencyKeyReadKey(n: any): string | undefined {
+        const up: any = n.parent;
+        let key: string | undefined;
+        if (isElementAccessExpression(up) && up.expression === n) {
+            const arg: any = this.rustSkipWrappers(up.argumentExpression);
+            if (arg === undefined || !isStringLiteralLikeNode(arg)) return undefined;
+            key = String(arg.text);
+        } else if (isPropertyAccessExpression(up) && up.expression === n && isIdentifier(up.name)) key = String(up.name.text);
+        if (key === undefined || key === 'length' || /^\d+$/.test(key) || key in this.StringLiteralReplacements) return undefined;
+        const use: any = up.parent;
+        if (use === undefined || isDeleteExpression(use) || use.kind === SyntaxKind.PrefixUnaryExpression || use.kind === SyntaxKind.PostfixUnaryExpression) return undefined;
+        if (isBinaryExpression(use) && use.left === up && rustIsAssignmentOperator(use.operatorToken.kind)) return undefined;
+        if (isCallExpression(use) && use.expression === up) return undefined;
+        return key;
+    }
+
+    /** `crate::value::KeyRead::key_read(&&c, "k")` for a read off a typed currency local. */
+    printCurrencyKeyRead(node: any): string | undefined {
+        const recv: any = node.expression;
+        if (recv !== undefined && this.rustIsTypedCurrencyCall(recv) && !this.rustCurrencyBoxing.has(recv)) {
+            const callKey = this.rustCurrencyKeyReadKey(recv);
+            if (callKey !== undefined) return `crate::value::KeyRead::key_read(&&${this.printCurrencyCallRaw(recv, 0).trim()}, "${this.escapeRustStringLiteral(callKey)}")`;
+        }
+        if (recv === undefined || !isIdentifier(recv) || this.rustCurrencyLocalOf(recv) === undefined) return undefined;
+        const key = this.rustCurrencyKeyReadKey(recv);
+        return key === undefined ? undefined : `crate::value::KeyRead::key_read(&&${super.printIdentifier(recv)}, "${this.escapeRustStringLiteral(key)}")`;
+    }
+
+    /** The null test sits in a `bool` place (a condition, a `!` / `&&` / `||` operand of one, or a ternary test). */
+    rustCurrencyNullTestIsCondition(n: any): boolean {
+        let current: any = n.parent;
+        while (current.parent !== undefined && (isParenthesizedExpression(current.parent)
+            || (isBinaryExpression(current.parent) && [ SyntaxKind.AmpersandAmpersandToken, SyntaxKind.BarBarToken ].includes(current.parent.operatorToken.kind))
+            || (current.parent.kind === SyntaxKind.PrefixUnaryExpression && current.parent.operator === SyntaxKind.ExclamationToken))) current = current.parent;
+        const up: any = current.parent;
+        if (up === undefined) return false;
+        if ((up.kind === SyntaxKind.IfStatement || up.kind === SyntaxKind.WhileStatement) && up.expression === current) return true;
+        return up.kind === SyntaxKind.ConditionalExpression && up.condition === current;
+    }
+
+    /** The typed currency local behind a use (never the declaration name). */
+    rustCurrencyLocalOf(node: any): any {
+        if (node === undefined || !isIdentifier(node)) return undefined;
+        const declaration: any = this.rustDeclarationOfIdentifier(node);
+        return declaration !== undefined && declaration.name !== node && this.rustCurrencyLocalKind(declaration) !== false ? declaration : undefined;
+    }
+
+    printCurrencyLocalDeclaration(declaration: any, indent: string, varName: string): string | undefined {
+        const kind = this.rustCurrencyLocalKind(declaration);
+        if (kind === 'copt') {
+            const init: any = this.rustSkipWrappers(declaration.initializer);
+            const start = init !== undefined && isIdentifier(init) && this.rustCurrencySlotParamOf(init) !== undefined ? `${super.printIdentifier(init)}.cloned()` : 'None';
+            return `${indent}let mut ${varName}: Option<crate::types::Currency> = ${start}`;
+        }
+        if (kind !== 'cstruct') return undefined;
+        return `${indent}let mut ${varName}: crate::types::Currency = ${this.printCurrencyCallRaw(declaration.initializer, 0).trim()}`;
+    }
+
+    printCurrencyLocalWrite(left: any, right: any): string | undefined {
+        if (!isIdentifier(left)) return undefined;
+        const declaration = this.rustCurrencyLocalOf(left);
+        const write = declaration === undefined ? undefined : this.rustCurrencyWriteOf(left);
+        if (write === undefined) return undefined;
+        const name = super.printIdentifier(left);
+        const kind = this.rustCurrencyLocalKind(declaration);
+        if (write === 'null') return `${name} = None`;
+        const value = this.printCurrencyCallRaw(right, 0).trim();
+        return kind === 'copt' ? `${name} = Some(${value})` : `${name} = ${value}`;
+    }
+
+    /** `c === undefined`: `is_none` on an `Option<Currency>`, constant on a `Currency` (a producer always answers a record). */
+    printCurrencyLocalNullTest(left: any, right: any, op: any): string | undefined {
+        const l = this.unwrapParens(left);
+        const r = this.unwrapParens(right);
+        const self = this.rustCurrencyLocalOf(l) !== undefined ? l : (this.rustCurrencyLocalOf(r) !== undefined ? r : undefined);
+        if (self === undefined || !this.rustIsNullTestOf(self)) return undefined;
+        const equal = op === SyntaxKind.EqualsEqualsToken || op === SyntaxKind.EqualsEqualsEqualsToken;
+        if (this.rustCurrencyLocalKind(this.rustCurrencyLocalOf(self)) === 'cstruct') return equal ? 'false' : 'true';
+        return `${super.printIdentifier(self)}.${equal ? 'is_none' : 'is_some'}()`;
+    }
+
+    /** A typed currency local in a `Value` place: the stored record (one shared handle, as the boxed local's copy). */
+    printCurrencyLocalValue(node: any): string | undefined {
+        const declaration = this.rustCurrencyLocalOf(node);
+        if (declaration === undefined || this.rustCurrencyKeyReadKey(node) !== undefined || this.rustIsNullTestOf(node) || this.rustCurrencyWriteOf(node) !== undefined) return undefined;
+        const up: any = node.parent;
+        if (isCallExpression(up) && up.expression !== node) {
+            const at = Array.from(up.arguments).indexOf(node);
+            if (at === 0 && (this.rustBorrowedDictReader(up) !== undefined || this.rustBorrowedAnyKeyReader(up))) return undefined;
+            if (at >= 0 && this.rustCurrencySlot(this.rustCalleeParams(up), at)) return undefined;
+        }
+        const name = super.printIdentifier(node);
+        if (this.rustCurrencyLocalKind(declaration) === 'copt') return `crate::Value::from(${name}.as_ref())`;
+        if (isReturnStatement(up) && this.rustReturnsCurrency(findAncestor(up.parent, isFunctionLike))) return undefined;
+        return `crate::Value::from(Some(&${name}))`;
+    }
+
+    /** `this.currencies` / `this.currencies_by_id`, directly or through a const alias. */
+    rustCurrencyStoreOf(node: any): string | undefined {
+        let n: any = this.rustSkipWrappers(node);
+        if (n !== undefined && isIdentifier(n)) {
+            const d: any = this.rustDeclarationOfIdentifier(n);
+            if (d?.kind !== SyntaxKind.VariableDeclaration || d.name === n || (d.parent.flags & NodeFlags.Const) === 0) return undefined;
+            n = this.rustSkipWrappers(d.initializer);
+        }
+        if (n === undefined || !isPropertyAccessExpression(n) || n.expression.kind !== SyntaxKind.ThisKeyword) return undefined;
+        const field = String(n.name.text);
+        return field === 'currencies' ? 'currencies_by_code_typed' : (field === 'currencies_by_id' ? 'currencies_by_id_typed' : undefined);
+    }
+
+    /** The `crate::types::Currency` a currency-returning method hands back for `return <exp>`. */
+    printCurrencyReturnValue(exp: any): string {
+        const inner: any = this.rustSkipWrappers(exp);
+        // a stored record under its key: copied out of the typed store
+        if (isElementAccessExpression(inner) && this.rustCurrencyStoreOf(inner.expression) !== undefined) {
+            const key = this.printNode(inner.argumentExpression, 0).trim();
+            return `self.${this.rustCurrencyStoreOf(inner.expression)}().records_by_id(${key}.as_str().unwrap_or_default()).unwrap_or_default().first().cloned().unwrap_or_default()`;
+        }
+        // a lent currency parameter (tested present before) copies its record out
+        if (isIdentifier(inner) && this.rustCurrencySlotParamOf(inner) !== undefined) return `${super.printIdentifier(inner)}.cloned().unwrap_or_default()`;
+        if (this.rustIsTypedCurrencyCall(inner)) return this.printCurrencyCallRaw(inner, 0).trim();
+        if (isIdentifier(inner) && this.rustCurrencyLocalKind(this.rustCurrencyLocalOf(inner)) === 'cstruct') return super.printIdentifier(inner);
+        // a built structure decodes once
+        return `<crate::types::Currency as crate::types::FromRaw>::from_raw(${this.printNode(exp, 0).trim()})`;
     }
 
     /** `None` for each positional optional slot a call leaves out. */

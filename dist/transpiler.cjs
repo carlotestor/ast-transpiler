@@ -51639,6 +51639,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustVenueStrDecisions = /* @__PURE__ */ new WeakMap();
     this.rustVenueStrCallers = /* @__PURE__ */ new WeakMap();
     this.rustCurrencySlotDecisions = /* @__PURE__ */ new WeakMap();
+    this.rustCurrencyBoxing = /* @__PURE__ */ new Set();
+    this.rustCurrencyLocalDecisions = /* @__PURE__ */ new Map();
     this.rustTypedUnified = new Set(_nullishCoalesce(config["typedUnified"], () => ( [])));
     this.rustVirtualDispatch = _nullishCoalesce(config["virtualDispatch"], () => ( {}));
     this.rustNonVirtualShims = new Set(_nullishCoalesce(config["nonVirtualShims"], () => ( [])));
@@ -51768,7 +51770,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   printIdentifier(node) {
     const name = String(node.text);
-    const currencySlot = this.printCurrencySlotParamValue(node);
+    const currencySlot = _nullishCoalesce(this.printCurrencySlotParamValue(node), () => ( this.printCurrencyLocalValue(node)));
     if (currencySlot !== void 0)
       return currencySlot;
     const marketValue = this.printTypedMarketValueUse(node);
@@ -52090,7 +52092,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const optMarket = this.printOptMarketNullTest(left, right, op);
     if (optMarket !== void 0)
       return optMarket;
-    const currencySlot = this.printCurrencySlotNullTest(left, right, op);
+    const currencySlot = _nullishCoalesce(this.printCurrencySlotNullTest(left, right, op), () => ( this.printCurrencyLocalNullTest(left, right, op)));
     if (currencySlot !== void 0)
       return currencySlot;
     const scalarLocal = this.printRustScalarLocalEquality(left, right, op);
@@ -53022,6 +53024,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const builtListWrite = isAssign && _is.isIdentifier.call(void 0, left) ? this.printBuiltListWrite(left, right) : void 0;
     if (builtListWrite !== void 0)
       return builtListWrite;
+    const currencyWrite = isAssign ? this.printCurrencyLocalWrite(left, right) : void 0;
+    if (currencyWrite !== void 0)
+      return currencyWrite;
     const marketWrite = isAssign ? this.printTypedMarketWrite(left, right) : void 0;
     if (marketWrite !== void 0)
       return marketWrite;
@@ -53151,6 +53156,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return head + lines.join(";\n");
     }
     const varName = this.printNode(declaration.name, 0);
+    const currencyLocal = node.declarations.length === 1 ? this.printCurrencyLocalDeclaration(declaration, indent, varName) : void 0;
+    if (currencyLocal !== void 0)
+      return currencyLocal;
     const nilKind = node.declarations.length === 1 ? this.rustNilLocalKind(declaration) : void 0;
     if (nilKind !== void 0) {
       return `${indent}let mut ${varName}: Option<${nilKind === "str" ? "String" : nilKind === "int" ? "i64" : "bool"}> = None`;
@@ -53236,7 +53244,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** `'str' | 'int' | 'bool'` when the nil-declared local prints `Option<..>`, else undefined. */
   rustNilLocalKind(declaration) {
-    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration))
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || this.rustCurrencyLocalKind(declaration) !== false)
       return void 0;
     let kind = this.rustNilLocalDecisions.get(declaration);
     if (kind === void 0) {
@@ -58588,6 +58596,8 @@ ${i1}}`;
     return void 0;
   }
   printRustFunctionType(node) {
+    if (this.rustReturnsCurrency(node))
+      return "crate::types::Currency";
     if (this.rustNativeStrReturnKind(node) === "str") {
       return "Option<String>";
     }
@@ -58928,6 +58938,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const marketRead = this.printTypedMarketRead(node);
     if (marketRead !== void 0)
       return marketRead;
+    const currencyBox = this.printCurrencyCallBox(node, identation);
+    if (currencyBox !== void 0)
+      return currencyBox;
     const shadowSafeRead = this.printShadowSafeReadCall(node);
     if (shadowSafeRead !== void 0)
       return shadowSafeRead;
@@ -61786,6 +61799,8 @@ ${iden}}`;
     if (exp.kind === _ast.SyntaxKind.ThisKeyword)
       return `${idn}return Value::Null;`;
     const fn = _chunkQYYT7MP4cjs.findAncestor.call(void 0, node.parent, _chunkQYYT7MP4cjs.isFunctionLike);
+    if (this.rustReturnsCurrency(fn))
+      return `${idn}return ${this.printCurrencyReturnValue(exp)};`;
     if (this.rustNativeStrReturnKind(fn) === "str" && this.rustStrReturnValueConverts(exp)) {
       if (this.literalKindOfNode(this.unwrapParensNode(exp)) === "null")
         return `${idn}return None;`;
@@ -63054,7 +63069,7 @@ ${iden}}`;
     return kind === false ? void 0 : kind;
   }
   rustReadBearerKindOfDeclaration(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _9198 => _9198.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _9198 => _9198.kind]) !== _ast.SyntaxKind.VariableDeclaration || this.rustCurrencyLocalKind(declaration) !== false)
       return false;
     let decision = this.rustReadBearerDecisions.get(declaration);
     if (decision === void 0) {
@@ -63254,7 +63269,7 @@ ${iden}}`;
   }
   /** `'dict' | 'list'` for a local that holds the shared container and lends it to every read, else undefined. */
   rustBorrowedLocalKind(declaration) {
-    if (_optionalChain([declaration, 'optionalAccess', _9221 => _9221.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+    if (_optionalChain([declaration, 'optionalAccess', _9221 => _9221.kind]) !== _ast.SyntaxKind.VariableDeclaration || this.rustCurrencyLocalKind(declaration) !== false)
       return void 0;
     if (!this.rustBorrowedKinds.has(declaration)) {
       this.rustBorrowedKinds.set(declaration, void 0);
@@ -63630,6 +63645,9 @@ ${iden}}`;
   }
   /** `crate::value::KeyRead::key_read(&&m, "k")` for a direct read on a dict-typed local, else undefined. */
   printDictKeyRead(node) {
+    const currencyRead = this.printCurrencyKeyRead(node);
+    if (currencyRead !== void 0)
+      return currencyRead;
     const recv = node.expression;
     if (recv === void 0 || !_is.isIdentifier.call(void 0, recv) || !this.rustDictKeyReadUse(recv))
       return void 0;
@@ -63874,7 +63892,7 @@ ${iden}}`;
     const declaration = this.rustDeclarationOfIdentifier(node);
     if (declaration === void 0 || declaration === node || declaration.name === node)
       return void 0;
-    if (this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustLentListLocal(declaration) || this.rustReaderTables.has(declaration) || this.rustCurrencySlotParamOf(node) !== void 0)
+    if (this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustLentListLocal(declaration) || this.rustReaderTables.has(declaration) || this.rustCurrencySlotParamOf(node) !== void 0 || this.rustCurrencyLocalOf(node) !== void 0)
       return `&${text}`;
     return this.rustContainerBoxUses.get(node) !== void 0 && this.rustReadBearerKind(node) !== void 0 ? `&${text}` : void 0;
   }
@@ -63914,10 +63932,14 @@ ${iden}}`;
       return void 0;
     const rust = this.rustBorrowedDictReader(node);
     const recv = rust === void 0 ? void 0 : node.arguments[0];
+    if (recv !== void 0 && this.rustIsTypedCurrencyCall(recv)) {
+      const dfltText = node.arguments.length === 3 ? this.printNode(node.arguments[2], identation).trim() : "";
+      return `self.${rust}(&${this.printCurrencyCallRaw(recv, identation).trim()}, ${this.quotedStringLiteral(String(this.rustSkipWrappers(node.arguments[1]).text))}, &[${dfltText}])`;
+    }
     if (recv === void 0 || !_is.isIdentifier.call(void 0, recv))
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(recv);
-    const owned = declaration !== void 0 && declaration !== recv && (this.rustBorrowedDictLocal(declaration) || this.rustHandedDictLocal(declaration) || this.rustOptMarketLocalOf(recv) !== void 0 || this.rustCurrencySlotParamOf(recv) !== void 0);
+    const owned = declaration !== void 0 && declaration !== recv && (this.rustBorrowedDictLocal(declaration) || this.rustHandedDictLocal(declaration) || this.rustOptMarketLocalOf(recv) !== void 0 || this.rustCurrencySlotParamOf(recv) !== void 0 || this.rustCurrencyLocalOf(recv) !== void 0);
     if (!owned && !(this.rustContainerBoxUses.get(recv) !== void 0 && this.rustReadBearerKind(recv) !== void 0))
       return void 0;
     const key = this.rustSkipWrappers(node.arguments[1]);
@@ -68145,8 +68167,307 @@ ${this.getIden(identation)}}`;
       return "None";
     if (_is.isIdentifier.call(void 0, inner) && this.rustCurrencySlotParamOf(inner) !== void 0)
       return super.printIdentifier(inner);
+    if (_is.isIdentifier.call(void 0, inner) && this.rustCurrencyLocalOf(inner) !== void 0) {
+      return this.rustCurrencyLocalKind(this.rustCurrencyLocalOf(inner)) === "copt" ? `${super.printIdentifier(inner)}.as_ref()` : `Some(&${super.printIdentifier(inner)})`;
+    }
+    if (this.rustIsTypedCurrencyCall(inner))
+      return `Some(&${this.printCurrencyCallRaw(inner, identation)})`;
     const printed = this.printNode(arg, identation).trim();
     return `<Option<crate::types::Currency> as crate::types::FromRaw>::from_raw(${_RustTranspiler.cloneIfBareLocal(printed)}).as_ref()`;
+  }
+  /** Base `currency (code)` / `safeCurrency (..)` declared `: CurrencyInterface` with a body. */
+  rustReturnsCurrency(node) {
+    if (node === void 0 || node.kind !== _ast.SyntaxKind.MethodDeclaration || node.body === void 0 || !_is.isIdentifier.call(void 0, node.name))
+      return false;
+    if (!_RustTranspiler.RUST_CURRENCY_RETURN_METHODS.has(String(node.name.text)) || !_is.isClassDeclaration.call(void 0, node.parent))
+      return false;
+    if ((_nullishCoalesce(node.modifiers, () => ( []))).some((m) => m.kind === _ast.SyntaxKind.StaticKeyword))
+      return false;
+    if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(String(_nullishCoalesce(_optionalChain([node, 'access', _9677 => _9677.getSourceFile, 'optionalCall', _9678 => _9678(), 'optionalAccess', _9679 => _9679.fileName]), () => ( "")))))
+      return false;
+    const ret = node.type;
+    return _optionalChain([ret, 'optionalAccess', _9680 => _9680.kind]) === _ast.SyntaxKind.TypeReference && _is.isIdentifier.call(void 0, ret.typeName) && String(ret.typeName.text) === "CurrencyInterface";
+  }
+  /** `this.currency (..)` / `this.safeCurrency (..)` resolving to a typed producer. */
+  rustIsTypedCurrencyCall(init) {
+    const call = this.rustSkipWrappers(init);
+    if (call === void 0 || !_is.isCallExpression.call(void 0, call) || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword)
+      return false;
+    const name = String(call.expression.name.text);
+    if (!_RustTranspiler.RUST_CURRENCY_RETURN_METHODS.has(name))
+      return false;
+    let declaration = this.rustScalarCallee(call);
+    if (declaration !== void 0 && _is.isMethodDeclaration.call(void 0, declaration) && declaration.body === void 0 && _is.isClassDeclaration.call(void 0, declaration.parent)) {
+      declaration = Array.from(declaration.parent.members).find((m) => _is.isMethodDeclaration.call(void 0, m) && m.body !== void 0 && _is.isIdentifier.call(void 0, m.name) && String(m.name.text) === name);
+    }
+    return this.rustReturnsCurrency(declaration);
+  }
+  /** The typed call as printed, never boxed. */
+  printCurrencyCallRaw(node, identation) {
+    const call = this.rustSkipWrappers(node);
+    this.rustCurrencyBoxing.add(call);
+    try {
+      return this.printCallExpression(call, identation);
+    } finally {
+      this.rustCurrencyBoxing.delete(call);
+    }
+  }
+  /** A typed currency call that lands where the struct goes as is. */
+  rustCurrencyCallNative(node) {
+    let current = node;
+    while (current.parent !== void 0 && (_is.isParenthesizedExpression.call(void 0, current.parent) || _is.isAsExpression.call(void 0, current.parent)))
+      current = current.parent;
+    const up = current.parent;
+    if (up === void 0)
+      return false;
+    if (up.kind === _ast.SyntaxKind.VariableDeclaration && up.initializer === current)
+      return this.rustCurrencyLocalKind(up) === "cstruct";
+    if (_is.isBinaryExpression.call(void 0, up) && up.right === current && up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _is.isIdentifier.call(void 0, up.left)) {
+      return this.rustCurrencyLocalOf(up.left) !== void 0;
+    }
+    if (_is.isReturnStatement.call(void 0, up))
+      return this.rustReturnsCurrency(_chunkQYYT7MP4cjs.findAncestor.call(void 0, up.parent, _chunkQYYT7MP4cjs.isFunctionLike));
+    if (_is.isCallExpression.call(void 0, up) && up.expression !== current) {
+      const at = Array.from(up.arguments).indexOf(current);
+      return at >= 0 && this.rustCurrencySlot(this.rustCalleeParams(up), at);
+    }
+    return false;
+  }
+  /** A typed currency call in a `Value` place: its record boxed once. */
+  printCurrencyCallBox(node, identation) {
+    if (this.rustCurrencyBoxing.has(node) || !this.rustIsTypedCurrencyCall(node) || this.rustCurrencyCallNative(node))
+      return void 0;
+    if (this.rustCurrencyKeyReadKey(node) !== void 0)
+      return void 0;
+    return `crate::types::IntoRaw::into_raw(${this.printCurrencyCallRaw(node, identation)})`;
+  }
+  rustCurrencyLocalKind(declaration) {
+    if (_optionalChain([declaration, 'optionalAccess', _9681 => _9681.kind]) !== _ast.SyntaxKind.VariableDeclaration)
+      return false;
+    let decision = this.rustCurrencyLocalDecisions.get(declaration);
+    if (decision === void 0) {
+      this.rustCurrencyLocalDecisions.set(declaration, false);
+      try {
+        decision = this.rustCurrencyLocalKindUncached(declaration);
+      } catch (e) {
+        decision = false;
+      }
+      this.rustCurrencyLocalDecisions.set(declaration, decision);
+    }
+    return decision;
+  }
+  /** `c = <typed currency call>` / `c = undefined` as its own statement. */
+  rustCurrencyWriteOf(n) {
+    const up = n.parent;
+    if (up === void 0 || !_is.isBinaryExpression.call(void 0, up) || up.left !== n || up.operatorToken.kind !== _ast.SyntaxKind.EqualsToken || _optionalChain([up, 'access', _9682 => _9682.parent, 'optionalAccess', _9683 => _9683.kind]) !== _ast.SyntaxKind.ExpressionStatement)
+      return void 0;
+    if (this.rustIsTypedCurrencyCall(up.right))
+      return "call";
+    return this.literalKindOfNode(this.unwrapParens(up.right)) === "null" ? "null" : void 0;
+  }
+  /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
+  rustCurrencyValueUse(n) {
+    const parent = n.parent;
+    if (parent === void 0)
+      return false;
+    if (_is.isCallExpression.call(void 0, parent))
+      return parent.expression !== n && Array.from(parent.arguments).includes(n);
+    if (_is.isArrayLiteralExpression.call(void 0, parent))
+      return true;
+    if (parent.kind === _ast.SyntaxKind.PropertyAssignment)
+      return parent.initializer === n;
+    return _is.isReturnStatement.call(void 0, parent);
+  }
+  rustCurrencyLocalKindUncached(declaration) {
+    if (!_is.isIdentifier.call(void 0, declaration.name) || _optionalChain([declaration, 'access', _9684 => _9684.parent, 'optionalAccess', _9685 => _9685.declarations, 'optionalAccess', _9686 => _9686.length]) !== 1)
+      return false;
+    const file = String(_nullishCoalesce(_optionalChain([declaration, 'access', _9687 => _9687.getSourceFile, 'optionalCall', _9688 => _9688(), 'optionalAccess', _9689 => _9689.fileName]), () => ( "")));
+    if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file))
+      return false;
+    const fromSlot = _is.isIdentifier.call(void 0, this.rustSkipWrappers(declaration.initializer)) && this.rustCurrencySlotParamOf(this.rustSkipWrappers(declaration.initializer)) !== void 0;
+    const empty = declaration.initializer === void 0 || this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === "null" || fromSlot;
+    if (!empty && !this.rustIsTypedCurrencyCall(declaration.initializer))
+      return false;
+    if (empty && (declaration.parent.flags & _ast.NodeFlags.Const) !== 0)
+      return false;
+    const name = String(declaration.name.text);
+    const scope = this.rustEnclosingFunction(declaration);
+    if (scope === void 0 || _is.isSourceFile.call(void 0, scope))
+      return false;
+    let writes = 0;
+    const ok = this.rustBlockLocalUsesAll(declaration, name, (n) => {
+      if (this.rustIdentifierIsPropertyName(n) && _optionalChain([n, 'access', _9690 => _9690.parent, 'optionalAccess', _9691 => _9691.kind]) !== _ast.SyntaxKind.ShorthandPropertyAssignment)
+        return true;
+      if (this.rustEnclosingFunction(n) !== scope)
+        return false;
+      const write = this.rustCurrencyWriteOf(n);
+      if (write === "call") {
+        writes++;
+        return true;
+      }
+      if (write === "null")
+        return empty;
+      if (this.isNativeWriteTargetBase(n) || _is.isDeleteExpression.call(void 0, _optionalChain([n, 'access', _9692 => _9692.parent, 'optionalAccess', _9693 => _9693.parent])))
+        return false;
+      if (this.rustCurrencyKeyReadKey(n) !== void 0)
+        return true;
+      const up = n.parent;
+      if (_is.isCallExpression.call(void 0, up) && up.expression !== n) {
+        const at = Array.from(up.arguments).indexOf(n);
+        if (at === 0 && (this.rustBorrowedDictReader(up) !== void 0 || this.rustBorrowedAnyKeyReader(up)))
+          return true;
+        if (at >= 0 && this.rustCurrencySlot(this.rustCalleeParams(up), at))
+          return true;
+      }
+      if (this.rustIsNullTestOf(n))
+        return empty || this.rustCurrencyNullTestIsCondition(n);
+      return this.rustCurrencyValueUse(n);
+    });
+    if (!ok)
+      return false;
+    if (empty)
+      return writes > 0 ? "copt" : false;
+    return "cstruct";
+  }
+  /** The literal key of a read-only `c['k']` / `c.k` (never written, deleted or stepped): it reads the record's map. */
+  rustCurrencyKeyReadKey(n) {
+    const up = n.parent;
+    let key;
+    if (_is.isElementAccessExpression.call(void 0, up) && up.expression === n) {
+      const arg = this.rustSkipWrappers(up.argumentExpression);
+      if (arg === void 0 || !_is.isStringLiteralLikeNode.call(void 0, arg))
+        return void 0;
+      key = String(arg.text);
+    } else if (_is.isPropertyAccessExpression.call(void 0, up) && up.expression === n && _is.isIdentifier.call(void 0, up.name))
+      key = String(up.name.text);
+    if (key === void 0 || key === "length" || /^\d+$/.test(key) || key in this.StringLiteralReplacements)
+      return void 0;
+    const use = up.parent;
+    if (use === void 0 || _is.isDeleteExpression.call(void 0, use) || use.kind === _ast.SyntaxKind.PrefixUnaryExpression || use.kind === _ast.SyntaxKind.PostfixUnaryExpression)
+      return void 0;
+    if (_is.isBinaryExpression.call(void 0, use) && use.left === up && rustIsAssignmentOperator(use.operatorToken.kind))
+      return void 0;
+    if (_is.isCallExpression.call(void 0, use) && use.expression === up)
+      return void 0;
+    return key;
+  }
+  /** `crate::value::KeyRead::key_read(&&c, "k")` for a read off a typed currency local. */
+  printCurrencyKeyRead(node) {
+    const recv = node.expression;
+    if (recv !== void 0 && this.rustIsTypedCurrencyCall(recv) && !this.rustCurrencyBoxing.has(recv)) {
+      const callKey = this.rustCurrencyKeyReadKey(recv);
+      if (callKey !== void 0)
+        return `crate::value::KeyRead::key_read(&&${this.printCurrencyCallRaw(recv, 0).trim()}, "${this.escapeRustStringLiteral(callKey)}")`;
+    }
+    if (recv === void 0 || !_is.isIdentifier.call(void 0, recv) || this.rustCurrencyLocalOf(recv) === void 0)
+      return void 0;
+    const key = this.rustCurrencyKeyReadKey(recv);
+    return key === void 0 ? void 0 : `crate::value::KeyRead::key_read(&&${super.printIdentifier(recv)}, "${this.escapeRustStringLiteral(key)}")`;
+  }
+  /** The null test sits in a `bool` place (a condition, a `!` / `&&` / `||` operand of one, or a ternary test). */
+  rustCurrencyNullTestIsCondition(n) {
+    let current = n.parent;
+    while (current.parent !== void 0 && (_is.isParenthesizedExpression.call(void 0, current.parent) || _is.isBinaryExpression.call(void 0, current.parent) && [_ast.SyntaxKind.AmpersandAmpersandToken, _ast.SyntaxKind.BarBarToken].includes(current.parent.operatorToken.kind) || current.parent.kind === _ast.SyntaxKind.PrefixUnaryExpression && current.parent.operator === _ast.SyntaxKind.ExclamationToken))
+      current = current.parent;
+    const up = current.parent;
+    if (up === void 0)
+      return false;
+    if ((up.kind === _ast.SyntaxKind.IfStatement || up.kind === _ast.SyntaxKind.WhileStatement) && up.expression === current)
+      return true;
+    return up.kind === _ast.SyntaxKind.ConditionalExpression && up.condition === current;
+  }
+  /** The typed currency local behind a use (never the declaration name). */
+  rustCurrencyLocalOf(node) {
+    if (node === void 0 || !_is.isIdentifier.call(void 0, node))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    return declaration !== void 0 && declaration.name !== node && this.rustCurrencyLocalKind(declaration) !== false ? declaration : void 0;
+  }
+  printCurrencyLocalDeclaration(declaration, indent, varName) {
+    const kind = this.rustCurrencyLocalKind(declaration);
+    if (kind === "copt") {
+      const init = this.rustSkipWrappers(declaration.initializer);
+      const start = init !== void 0 && _is.isIdentifier.call(void 0, init) && this.rustCurrencySlotParamOf(init) !== void 0 ? `${super.printIdentifier(init)}.cloned()` : "None";
+      return `${indent}let mut ${varName}: Option<crate::types::Currency> = ${start}`;
+    }
+    if (kind !== "cstruct")
+      return void 0;
+    return `${indent}let mut ${varName}: crate::types::Currency = ${this.printCurrencyCallRaw(declaration.initializer, 0).trim()}`;
+  }
+  printCurrencyLocalWrite(left, right) {
+    if (!_is.isIdentifier.call(void 0, left))
+      return void 0;
+    const declaration = this.rustCurrencyLocalOf(left);
+    const write = declaration === void 0 ? void 0 : this.rustCurrencyWriteOf(left);
+    if (write === void 0)
+      return void 0;
+    const name = super.printIdentifier(left);
+    const kind = this.rustCurrencyLocalKind(declaration);
+    if (write === "null")
+      return `${name} = None`;
+    const value = this.printCurrencyCallRaw(right, 0).trim();
+    return kind === "copt" ? `${name} = Some(${value})` : `${name} = ${value}`;
+  }
+  /** `c === undefined`: `is_none` on an `Option<Currency>`, constant on a `Currency` (a producer always answers a record). */
+  printCurrencyLocalNullTest(left, right, op) {
+    const l = this.unwrapParens(left);
+    const r = this.unwrapParens(right);
+    const self = this.rustCurrencyLocalOf(l) !== void 0 ? l : this.rustCurrencyLocalOf(r) !== void 0 ? r : void 0;
+    if (self === void 0 || !this.rustIsNullTestOf(self))
+      return void 0;
+    const equal = op === _ast.SyntaxKind.EqualsEqualsToken || op === _ast.SyntaxKind.EqualsEqualsEqualsToken;
+    if (this.rustCurrencyLocalKind(this.rustCurrencyLocalOf(self)) === "cstruct")
+      return equal ? "false" : "true";
+    return `${super.printIdentifier(self)}.${equal ? "is_none" : "is_some"}()`;
+  }
+  /** A typed currency local in a `Value` place: the stored record (one shared handle, as the boxed local's copy). */
+  printCurrencyLocalValue(node) {
+    const declaration = this.rustCurrencyLocalOf(node);
+    if (declaration === void 0 || this.rustCurrencyKeyReadKey(node) !== void 0 || this.rustIsNullTestOf(node) || this.rustCurrencyWriteOf(node) !== void 0)
+      return void 0;
+    const up = node.parent;
+    if (_is.isCallExpression.call(void 0, up) && up.expression !== node) {
+      const at = Array.from(up.arguments).indexOf(node);
+      if (at === 0 && (this.rustBorrowedDictReader(up) !== void 0 || this.rustBorrowedAnyKeyReader(up)))
+        return void 0;
+      if (at >= 0 && this.rustCurrencySlot(this.rustCalleeParams(up), at))
+        return void 0;
+    }
+    const name = super.printIdentifier(node);
+    if (this.rustCurrencyLocalKind(declaration) === "copt")
+      return `crate::Value::from(${name}.as_ref())`;
+    if (_is.isReturnStatement.call(void 0, up) && this.rustReturnsCurrency(_chunkQYYT7MP4cjs.findAncestor.call(void 0, up.parent, _chunkQYYT7MP4cjs.isFunctionLike)))
+      return void 0;
+    return `crate::Value::from(Some(&${name}))`;
+  }
+  /** `this.currencies` / `this.currencies_by_id`, directly or through a const alias. */
+  rustCurrencyStoreOf(node) {
+    let n = this.rustSkipWrappers(node);
+    if (n !== void 0 && _is.isIdentifier.call(void 0, n)) {
+      const d = this.rustDeclarationOfIdentifier(n);
+      if (_optionalChain([d, 'optionalAccess', _9694 => _9694.kind]) !== _ast.SyntaxKind.VariableDeclaration || d.name === n || (d.parent.flags & _ast.NodeFlags.Const) === 0)
+        return void 0;
+      n = this.rustSkipWrappers(d.initializer);
+    }
+    if (n === void 0 || !_is.isPropertyAccessExpression.call(void 0, n) || n.expression.kind !== _ast.SyntaxKind.ThisKeyword)
+      return void 0;
+    const field = String(n.name.text);
+    return field === "currencies" ? "currencies_by_code_typed" : field === "currencies_by_id" ? "currencies_by_id_typed" : void 0;
+  }
+  /** The `crate::types::Currency` a currency-returning method hands back for `return <exp>`. */
+  printCurrencyReturnValue(exp) {
+    const inner = this.rustSkipWrappers(exp);
+    if (_is.isElementAccessExpression.call(void 0, inner) && this.rustCurrencyStoreOf(inner.expression) !== void 0) {
+      const key = this.printNode(inner.argumentExpression, 0).trim();
+      return `self.${this.rustCurrencyStoreOf(inner.expression)}().records_by_id(${key}.as_str().unwrap_or_default()).unwrap_or_default().first().cloned().unwrap_or_default()`;
+    }
+    if (_is.isIdentifier.call(void 0, inner) && this.rustCurrencySlotParamOf(inner) !== void 0)
+      return `${super.printIdentifier(inner)}.cloned().unwrap_or_default()`;
+    if (this.rustIsTypedCurrencyCall(inner))
+      return this.printCurrencyCallRaw(inner, 0).trim();
+    if (_is.isIdentifier.call(void 0, inner) && this.rustCurrencyLocalKind(this.rustCurrencyLocalOf(inner)) === "cstruct")
+      return super.printIdentifier(inner);
+    return `<crate::types::Currency as crate::types::FromRaw>::from_raw(${this.printNode(exp, 0).trim()})`;
   }
   /** `None` for each positional optional slot a call leaves out. */
   rustVenuePads(params, given, fixed) {
@@ -68161,9 +68482,9 @@ ${this.getIden(identation)}}`;
     if (this.rustNativeBoolArgumentText(arg) !== void 0)
       return this.rustBoolArgumentText(arg, identation);
     const local = _is.isIdentifier.call(void 0, inner) ? this.rustScalarLocalOf(inner) : void 0;
-    if (_optionalChain([local, 'optionalAccess', _9677 => _9677.kind]) === "bool")
+    if (_optionalChain([local, 'optionalAccess', _9695 => _9695.kind]) === "bool")
       return super.printIdentifier(inner);
-    if (_optionalChain([local, 'optionalAccess', _9678 => _9678.kind]) === "obool")
+    if (_optionalChain([local, 'optionalAccess', _9696 => _9696.kind]) === "obool")
       return `(${super.printIdentifier(inner)} == Some(true))`;
     if (local === void 0 && _is.isIdentifier.call(void 0, inner) && this.primitiveKindOfType(this.typeOfNodeIfAny(inner)) === "boolean")
       return `(${this.printNode(arg, identation).trim()}.as_bool() == Some(true))`;
@@ -69211,6 +69532,12 @@ _RustTranspiler.RUST_CURRENCY_PARSE_METHODS = /* @__PURE__ */ new Set([
   "parseLedger",
   "safeLedgerEntry"
 ]);
+// ── typed currencies (S3): base `currency (code)` / `safeCurrency` return `crate::types::Currency` ──
+// Their returns read the typed stores (`currencies_by_code_typed` / `currencies_by_id_typed`), a lent slot copies
+// its record out, a built structure decodes once. A local bound to one of them is a `Currency` (`cstruct`), or an
+// `Option<Currency>` when declared empty and written only from them (`copt`): key reads go through `KeyRead`, slot
+// arguments lend `Some(&c)` / `c.as_ref()`, any other `Value` place takes the stored record (one shared handle).
+_RustTranspiler.RUST_CURRENCY_RETURN_METHODS = /* @__PURE__ */ new Set(["currency", "safeCurrency"]);
 var RustTranspiler = _RustTranspiler;
 
 // src/cppTranspiler.ts
@@ -69369,7 +69696,7 @@ var CppTranspiler = class extends BaseTranspiler {
     const constructorBody = this.printFunctionBody(node, identation);
     let superCallParams = "";
     let hasSuperCall = false;
-    _optionalChain([node, 'access', _9679 => _9679.body, 'optionalAccess', _9680 => _9680.statements, 'access', _9681 => _9681.forEach, 'call', _9682 => _9682((statement) => {
+    _optionalChain([node, 'access', _9697 => _9697.body, 'optionalAccess', _9698 => _9698.statements, 'access', _9699 => _9699.forEach, 'call', _9700 => _9700((statement) => {
       if (_is.isExpressionStatement.call(void 0, statement)) {
         const expression = statement.expression;
         if (_is.isCallExpression.call(void 0, expression)) {
@@ -69530,7 +69857,7 @@ var CppTranspiler = class extends BaseTranspiler {
   }
   printVariableDeclarationList(node, identation) {
     const declaration = node.declarations[0];
-    if (_optionalChain([declaration, 'optionalAccess', _9683 => _9683.name, 'access', _9684 => _9684.kind]) === _ast.SyntaxKind.ArrayBindingPattern) {
+    if (_optionalChain([declaration, 'optionalAccess', _9701 => _9701.name, 'access', _9702 => _9702.kind]) === _ast.SyntaxKind.ArrayBindingPattern) {
       const arrayBindingPattern = declaration.name;
       const arrayBindingPatternElements = arrayBindingPattern.elements;
       const parsedArrayBindingElements = arrayBindingPatternElements.map((e) => this.printNode(e.name, 0));
@@ -69783,14 +70110,14 @@ var CppTranspiler = class extends BaseTranspiler {
     }
     if (node.expression.kind === _ast.SyntaxKind.NewExpression) {
       const expression = node.expression;
-      const argumentsExp = _nullishCoalesce(_optionalChain([expression, 'optionalAccess', _9685 => _9685.arguments]), () => ( []));
+      const argumentsExp = _nullishCoalesce(_optionalChain([expression, 'optionalAccess', _9703 => _9703.arguments]), () => ( []));
       const parsedArg = _nullishCoalesce(argumentsExp.map((n) => this.printNode(n, 0)).join(", "), () => ( ""));
       const newExpression = this.printNode(expression.expression, 0);
       if (expression.expression.kind === _ast.SyntaxKind.Identifier) {
         const id = expression.expression;
         const symbol = this.getChecker().getSymbolAtLocation(expression.expression);
         if (symbol) {
-          const declarations = (_nullishCoalesce(_optionalChain([this, 'access', _9686 => _9686.getChecker, 'call', _9687 => _9687(), 'access', _9688 => _9688.getDeclaredTypeOfSymbol, 'call', _9689 => _9689(symbol), 'access', _9690 => _9690.getSymbol, 'call', _9691 => _9691(), 'optionalAccess', _9692 => _9692.declarations]), () => ( []))).map((d) => d.resolve());
+          const declarations = (_nullishCoalesce(_optionalChain([this, 'access', _9704 => _9704.getChecker, 'call', _9705 => _9705(), 'access', _9706 => _9706.getDeclaredTypeOfSymbol, 'call', _9707 => _9707(symbol), 'access', _9708 => _9708.getSymbol, 'call', _9709 => _9709(), 'optionalAccess', _9710 => _9710.declarations]), () => ( []))).map((d) => d.resolve());
           const isClassDeclaration5 = declarations.find((l) => l.kind === _ast.SyntaxKind.InterfaceDeclaration || l.kind === _ast.SyntaxKind.ClassDeclaration);
           if (isClassDeclaration5) {
             return this.getIden(identation) + `${this.THROW_TOKEN} ${id.text}(toString(${parsedArg}))${this.LINE_TERMINATOR}`;
@@ -69905,7 +70232,7 @@ function memoizePairMethod(owner, name) {
     if (args.length !== 2 || a === null || typeof a !== "object" || b === null || typeof b !== "object") {
       return original.apply(owner, args);
     }
-    const cached = _optionalChain([cache, 'access', _9693 => _9693.get, 'call', _9694 => _9694(a), 'optionalAccess', _9695 => _9695.get, 'call', _9696 => _9696(b)]);
+    const cached = _optionalChain([cache, 'access', _9711 => _9711.get, 'call', _9712 => _9712(a), 'optionalAccess', _9713 => _9713.get, 'call', _9714 => _9714(b)]);
     if (cached !== void 0) {
       return cached === UNDEFINED_SENTINEL ? void 0 : cached;
     }
@@ -69945,7 +70272,7 @@ function memoizeUnaryMethod(owner, name) {
 }
 function memoizeBinaryKindMethod(owner, name) {
   const unary = owner[name];
-  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _9697 => _9697.original]), () => ( unary));
+  const original = _nullishCoalesce(_optionalChain([unary, 'optionalAccess', _9715 => _9715.original]), () => ( unary));
   if (typeof original !== "function") {
     return;
   }
@@ -69995,17 +70322,17 @@ function prefetchChecker(checker, root, options = {}) {
   const typeNodes = [], symbolNodes = [], callNodes = [];
   const visit = (node) => {
     const kind = node.kind;
-    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _9698 => _9698.has, 'optionalCall', _9699 => _9699(node)]))
+    if (wantTypes && PREFETCH_TYPE_KINDS.has(kind) && !_optionalChain([getType, 'access', _9716 => _9716.has, 'optionalCall', _9717 => _9717(node)]))
       typeNodes.push(node);
-    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _9700 => _9700.has, 'optionalCall', _9701 => _9701(node)]))
+    if (wantSymbols && kind === _ast.SyntaxKind.Identifier && !_optionalChain([getSymbol, 'access', _9718 => _9718.has, 'optionalCall', _9719 => _9719(node)]))
       symbolNodes.push(node);
-    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _9702 => _9702.has, 'optionalCall', _9703 => _9703(node)]))
+    if (wantSignatures && kind === _ast.SyntaxKind.CallExpression && !_optionalChain([getSig, 'access', _9720 => _9720.has, 'optionalCall', _9721 => _9721(node)]))
       callNodes.push(node);
     node.forEachChild(visit);
   };
   visit(root);
   const run = (nodes, fn) => {
-    if (_optionalChain([fn, 'optionalAccess', _9704 => _9704.seed]) === void 0 || fn.original === void 0)
+    if (_optionalChain([fn, 'optionalAccess', _9722 => _9722.seed]) === void 0 || fn.original === void 0)
       return;
     for (let i = 0; i < nodes.length; i += PREFETCH_BATCH) {
       const chunk = nodes.slice(i, i + PREFETCH_BATCH);
@@ -70021,7 +70348,7 @@ function prefetchChecker(checker, root, options = {}) {
   run(typeNodes, getType);
   run(symbolNodes, getSymbol);
   const api = checker.__astTranspilerApi;
-  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _9705 => _9705.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _9706 => _9706.original, 'optionalAccess', _9707 => _9707.gen]) !== void 0) {
+  if (callNodes.length > 0 && _optionalChain([getSig, 'optionalAccess', _9723 => _9723.seed]) !== void 0 && api !== void 0 && _optionalChain([getSig, 'access', _9724 => _9724.original, 'optionalAccess', _9725 => _9725.gen]) !== void 0) {
     for (let i = 0; i < callNodes.length; i += PREFETCH_BATCH) {
       const chunk = callNodes.slice(i, i + PREFETCH_BATCH);
       const gens = chunk.map((n) => {
@@ -70048,7 +70375,7 @@ function prefetchChecker(checker, root, options = {}) {
 function prefetchDeclarationSignatures(checker, api, root) {
   const getSigDecl = checker.getSignatureFromDeclaration;
   const getTypeOfSymbolAtLocation = checker.getTypeOfSymbolAtLocation;
-  if (_optionalChain([getSigDecl, 'optionalAccess', _9708 => _9708.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _9709 => _9709.original, 'optionalAccess', _9710 => _9710.gen]) === void 0)
+  if (_optionalChain([getSigDecl, 'optionalAccess', _9726 => _9726.seed]) === void 0 || _optionalChain([getSigDecl, 'access', _9727 => _9727.original, 'optionalAccess', _9728 => _9728.gen]) === void 0)
     return;
   const decls = [];
   const visit = (node) => {
@@ -70074,9 +70401,9 @@ function prefetchDeclarationSignatures(checker, api, root) {
     }())));
     api.batch(...chunk.map((decl) => safe(function* () {
       const type = checker.getTypeAtLocation(decl);
-      const symbol = _optionalChain([type, 'optionalAccess', _9711 => _9711.getSymbol, 'optionalAccess', _9712 => _9712.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
-      const location = _optionalChain([symbol, 'optionalAccess', _9713 => _9713.valueDeclaration, 'optionalAccess', _9714 => _9714.resolve, 'call', _9715 => _9715()]);
-      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _9716 => _9716.seed2]) === void 0)
+      const symbol = _optionalChain([type, 'optionalAccess', _9729 => _9729.getSymbol, 'optionalAccess', _9730 => _9730.gen]) !== void 0 ? yield* type.getSymbol.gen() : void 0;
+      const location = _optionalChain([symbol, 'optionalAccess', _9731 => _9731.valueDeclaration, 'optionalAccess', _9732 => _9732.resolve, 'call', _9733 => _9733()]);
+      if (location === void 0 || _optionalChain([getTypeOfSymbolAtLocation, 'optionalAccess', _9734 => _9734.seed2]) === void 0)
         return;
       const symbolType = yield* getTypeOfSymbolAtLocation.original.gen(symbol, location);
       getTypeOfSymbolAtLocation.seed2(symbol, location, symbolType);
@@ -70168,7 +70495,7 @@ var Transpiler = class _Transpiler {
     const src = _nullishCoalesce(program.getSourceFile(fileName), () => ( program.getSourceFile(path3.resolve(fileName))));
     const previous = this.snapshot;
     this.snapshot = snapshot;
-    _optionalChain([previous, 'optionalAccess', _9717 => _9717.dispose, 'call', _9718 => _9718()]);
+    _optionalChain([previous, 'optionalAccess', _9735 => _9735.dispose, 'call', _9736 => _9736()]);
     return this.setContext({ src, checker, program });
   }
   createProgramInMemoryAndSetContext(content) {
@@ -70192,7 +70519,7 @@ var Transpiler = class _Transpiler {
   // long as the file's text on disk still equals the snapshot's. Replaces any
   // previous shared program; pass [] to drop it.
   setSharedProgram(paths) {
-    _optionalChain([this, 'access', _9719 => _9719.programCache, 'access', _9720 => _9720.shared, 'optionalAccess', _9721 => _9721.snapshot, 'access', _9722 => _9722.dispose, 'call', _9723 => _9723()]);
+    _optionalChain([this, 'access', _9737 => _9737.programCache, 'access', _9738 => _9738.shared, 'optionalAccess', _9739 => _9739.snapshot, 'access', _9740 => _9740.dispose, 'call', _9741 => _9741()]);
     this.programCache.shared = void 0;
     if (paths.length === 0) {
       return;

@@ -2293,6 +2293,43 @@ export declare class RustTranspiler extends BaseTranspiler {
     printCurrencySlotNullTest(left: any, right: any, op: any): string | undefined;
     /** Argument text for a lent currency slot: `None`, a slot parameter as is, any other value decoded once. */
     rustCurrencySlotArgText(arg: any, identation: number): string;
+    private static readonly RUST_CURRENCY_RETURN_METHODS;
+    /** Base `currency (code)` / `safeCurrency (..)` declared `: CurrencyInterface` with a body. */
+    rustReturnsCurrency(node: any): boolean;
+    /** `this.currency (..)` / `this.safeCurrency (..)` resolving to a typed producer. */
+    rustIsTypedCurrencyCall(init: any): boolean;
+    private rustCurrencyBoxing;
+    /** The typed call as printed, never boxed. */
+    printCurrencyCallRaw(node: any, identation: number): string;
+    /** A typed currency call that lands where the struct goes as is. */
+    rustCurrencyCallNative(node: any): boolean;
+    /** A typed currency call in a `Value` place: its record boxed once. */
+    printCurrencyCallBox(node: any, identation: number): string | undefined;
+    private rustCurrencyLocalDecisions;
+    rustCurrencyLocalKind(declaration: any): false | 'cstruct' | 'copt';
+    /** `c = <typed currency call>` / `c = undefined` as its own statement. */
+    rustCurrencyWriteOf(n: any): 'call' | 'null' | undefined;
+    /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
+    rustCurrencyValueUse(n: any): boolean;
+    rustCurrencyLocalKindUncached(declaration: any): false | 'cstruct' | 'copt';
+    /** The literal key of a read-only `c['k']` / `c.k` (never written, deleted or stepped): it reads the record's map. */
+    rustCurrencyKeyReadKey(n: any): string | undefined;
+    /** `crate::value::KeyRead::key_read(&&c, "k")` for a read off a typed currency local. */
+    printCurrencyKeyRead(node: any): string | undefined;
+    /** The null test sits in a `bool` place (a condition, a `!` / `&&` / `||` operand of one, or a ternary test). */
+    rustCurrencyNullTestIsCondition(n: any): boolean;
+    /** The typed currency local behind a use (never the declaration name). */
+    rustCurrencyLocalOf(node: any): any;
+    printCurrencyLocalDeclaration(declaration: any, indent: string, varName: string): string | undefined;
+    printCurrencyLocalWrite(left: any, right: any): string | undefined;
+    /** `c === undefined`: `is_none` on an `Option<Currency>`, constant on a `Currency` (a producer always answers a record). */
+    printCurrencyLocalNullTest(left: any, right: any, op: any): string | undefined;
+    /** A typed currency local in a `Value` place: the stored record (one shared handle, as the boxed local's copy). */
+    printCurrencyLocalValue(node: any): string | undefined;
+    /** `this.currencies` / `this.currencies_by_id`, directly or through a const alias. */
+    rustCurrencyStoreOf(node: any): string | undefined;
+    /** The `crate::types::Currency` a currency-returning method hands back for `return <exp>`. */
+    printCurrencyReturnValue(exp: any): string;
     /** `None` for each positional optional slot a call leaves out. */
     rustVenuePads(params: any[] | undefined, given: number, fixed: number): string[];
     /** A checker-`boolean` argument for a `bool` slot: native where it already is one, an `Option<bool>` local or a
