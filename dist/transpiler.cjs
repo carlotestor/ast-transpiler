@@ -60085,7 +60085,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       if (venueStr !== void 0)
         return this.rustVenueStrArgText(arg, venueStr, identation);
       if (this.rustMarketSlot(params, at))
-        return this.rustMarketSlotArgText(arg, identation);
+        return _RustTranspiler.rustLentMark(this.rustMarketSlotArgText(arg, identation));
       if (this.rustCurrencySlot(params, at))
         return this.rustCurrencySlotArgText(arg, identation);
       if (this.rustNativeMapArgumentSlot(params, at) !== void 0) {
@@ -60144,6 +60144,11 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   static cloneAliasSources(text, commented = true) {
     const keep = (rhs) => rhs === "self" || rhs === "true" || rhs === "false";
     return text.replace(/^(\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*;/gm, (whole, indent, lhs, rhs) => keep(rhs) ? whole : `${indent}${lhs} = ${rhs}.clone();`).replace(/^(\s*)let\s+mut\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*Value\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*;$/gm, (whole, indent, lhs, rhs) => keep(rhs) ? whole : `${indent}let mut ${lhs}: Value = ${rhs}.clone();`).replace(/(let\s+mut\s+\w+\s*:\s*Value\s*=\s*)([a-zA-Z_]\w*)(;)/g, (whole, head, rhs, end) => commented ? `${head}${rhs}.clone()${end}` : whole);
+  }
+  /** Clone every bare-local argument of each by-value call in `text` (an argument already `x.clone()` is left). */
+  /** `\u0004` before a bare lent argument: not a bare local to `cloneByValueCallArgs`, stripped from the file text. */
+  static rustLentMark(text) {
+    return _RustTranspiler.isBareLocal(text) ? `${text}` : text;
   }
   static cloneByValueCallArgs(text, superCalls = true) {
     let i = 0;
@@ -62046,7 +62051,7 @@ ${ind}let ${view}: &${map} = &${arc};
       const file = String(_nullishCoalesce(node.fileName, () => ( "")));
       const test = /ts[/]src[/](?:pro[/])?test[/]/.test(file);
       const ws = /ts[/]src[/]pro[/]/.test(file);
-      return _RustTranspiler.cloneByValueCallArgs(_RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws);
+      return _RustTranspiler.cloneByValueCallArgs(_RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws).replaceAll("", "");
     }
     return this.printNodeUncloned(node, identation);
   }
@@ -72941,7 +72946,6 @@ _RustTranspiler.RUST_PRECISE_TRIMMED = /^string(?:Div|Mul|Add|Sub|Mod|Eq|Gt|Ge|L
 // By-value callees (`self.m(..)`, the test-harness helpers, the signers) take their `Value` arguments by move:
 // a bare local argument is printed `x.clone()` so the local stays usable after the call.
 _RustTranspiler.RUST_BY_VALUE_CALLEE = /(?:\b(?:self|super)\.[a-zA-Z_][a-zA-Z0-9_]*|\bexchange\d*\.[a-zA-Z_][a-zA-Z0-9_]*|\brsa|\beddsa|\becdsa|\bjwt|\btotp|\bhelper[A-Z][a-zA-Z0-9_]*|\bprecise[A-Z][a-zA-Z0-9_]*|\btest[A-Z][a-zA-Z0-9_]*|\b[a-z][a-zA-Z0-9_]*(?:Helper(?:Test)?|Test)|\bassert[A-Z][a-zA-Z0-9_]*|\b(?:equals|deepEqual|assert|dump|callMethod|callMethodSync|callExchangeMethodDynamically|callExchangeMethodDynamicallySync|getExchangeProp|setExchangeProp|setFetchResponse|setFetchResponseByUrl|initExchange|close|jsonStringify|jsonParse|exceptionMessage|convertAscii|isNullValue|ioFileExists|ioFileRead|ioDirRead|setupWsMockTransport|getWsSentMessages|injectWsMessage|wsClientHasPendingFutures|markWsTestCompleted|isWsTestCompleted|rejectPendingWsFutures|preloadWsMessages|wsHasQueuedMessages))\(/;
-/** Clone every bare-local argument of each by-value call in `text` (an argument already `x.clone()` is left). */
 _RustTranspiler.RUST_BY_VALUE_CALLEE_NO_SUPER = new RegExp(_RustTranspiler.RUST_BY_VALUE_CALLEE.source.replace("(?:self|super)", "self"));
 // Native string args to the runtime error constructors, audited against
 // rust/ccxt-base/src/exchange_errors.rs: `msg` is `impl ToErrorMessage` (`&str`/`String`/`Value`
@@ -73386,7 +73390,8 @@ _RustTranspiler.RUST_LIST_MARKET_METHODS = /* @__PURE__ */ new Set([
   "parseOHLCVs",
   "parseTradingViewOHLCV",
   "parseOpenInterestsHistory",
-  "parseLiquidations"
+  "parseLiquidations",
+  "safeOutcome"
 ]);
 var RustTranspiler = _RustTranspiler;
 

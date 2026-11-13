@@ -1196,6 +1196,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `x = y;` / `let mut x: Value = y;` on its own line moves `y`: the source is cloned so it stays usable. */
     static cloneAliasSources(text: string, commented?: boolean): string;
     /** Clone every bare-local argument of each by-value call in `text` (an argument already `x.clone()` is left). */
+    /** `\u0004` before a bare lent argument: not a bare local to `cloneByValueCallArgs`, stripped from the file text. */
+    static rustLentMark(text: string): string;
     private static readonly RUST_BY_VALUE_CALLEE_NO_SUPER;
     static cloneByValueCallArgs(text: string, superCalls?: boolean): string;
     private static rustBalancedClose;
