@@ -12641,6 +12641,8 @@ export class RustTranspiler extends BaseTranspiler {
         const safe = endpoint && !nilDeclared ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
         if (!safe || (reads === 0 && !this.rustNullTestedDictLocal(init, nullTests, writes)) || mixed || from === undefined
             || ((this.rustNilResponseLocals.has(declaration) || from === 'api' || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))) return undefined;
+        // an endpoint written into an empty `let` may answer a list: `into_opt_dict` keeps only maps, so it is never lent whole
+        if (this.rustNilResponseLocals.has(declaration) && (lentResponses > 0 || lentNullable > 0)) return undefined;
         if ((keyReads > 0 || (init !== undefined && isCallExpression(init) && this.rustRecordLookupSource(init))) && !this.rustDictKeyReadLineOk(declaration, name)) return undefined;
         // a nullable source lent whole keeps Null apart from an empty container: the optional form
         const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0;
@@ -14185,13 +14187,15 @@ export class RustTranspiler extends BaseTranspiler {
 
     private static readonly RUST_LENT_LIST_TYPES = new Set([ 'List', 'NullableList' ]);
 
+    private static readonly RUST_LENT_RESPONSE_READERS = new Set([ 'parseLedger', 'parseOpenInterestsHistory', 'parseBorrowRateHistory', 'convertTradingViewToOHLCV' ]);
+
     rustParamIsLentListUncached(param: any): boolean {
         const method: any = param.parent;
         if (!isMethodDeclaration(method) || method.body === undefined || !isIdentifier(method.name) || method.parameters?.[0] !== param) return false;
         const name = String(method.name.text);
         const record = name === 'parseOrderBook';
-        // `parseLedger` reads its rows through `toArray` like the plural parsers
-        if (!(/^parse[A-Z]\w*s$/.test(name) || name === 'parseLedger' || record) || param.name?.kind !== SyntaxKind.Identifier || param.initializer !== undefined || param.questionToken !== undefined) return false;
+        // these read their response whole (`toArray`, index / length, readers) like the plural parsers
+        if (!(/^parse[A-Z]\w*s$/.test(name) || RustTranspiler.RUST_LENT_RESPONSE_READERS.has(name) || record) || param.name?.kind !== SyntaxKind.Identifier || param.initializer !== undefined || param.questionToken !== undefined) return false;
         if (!isClassDeclaration(method.parent) || (method.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.StaticKeyword)) return false;
         if (this.rustTypedSignature(method) !== undefined || this.rustMethodReferencedAsValue(method)) return false;
         const file = String(method.getSourceFile().fileName).replace(/\\/g, '/');
@@ -14207,7 +14211,8 @@ export class RustTranspiler extends BaseTranspiler {
         const type: any = param.type;
         const typeName = type?.kind === SyntaxKind.TypeReference && isIdentifier(type.typeName) && type.typeArguments === undefined ? String(type.typeName.text) : '';
         if (record) return this.rustLentRecordTypeNode(type);
-        return RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || type?.kind === SyntaxKind.AnyKeyword || type?.kind === SyntaxKind.ObjectKeyword;
+        return RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || type?.kind === SyntaxKind.AnyKeyword || type?.kind === SyntaxKind.ObjectKeyword
+            || (name === 'convertTradingViewToOHLCV' && typeName === 'NullableDict');
     }
 
     /** `object`, `Dict` or `any`, optionally `| undefined`: the parser reads its input as a `Value` of any shape. */
@@ -14216,7 +14221,7 @@ export class RustTranspiler extends BaseTranspiler {
         const rest = members.filter((t: any) => t?.kind !== SyntaxKind.UndefinedKeyword);
         if (rest.length !== 1) return false;
         const t: any = rest[0];
-        return t?.kind === SyntaxKind.ObjectKeyword || t?.kind === SyntaxKind.AnyKeyword || (t?.kind === SyntaxKind.TypeReference && isIdentifier(t.typeName) && t.typeArguments === undefined && String(t.typeName.text) === 'Dict');
+        return t?.kind === SyntaxKind.ObjectKeyword || t?.kind === SyntaxKind.AnyKeyword || (t?.kind === SyntaxKind.TypeReference && isIdentifier(t.typeName) && t.typeArguments === undefined && (String(t.typeName.text) === 'Dict' || String(t.typeName.text) === 'NullableDict'));
     }
 
     /** `Dict[]` / `object[]`, optionally `| undefined`: a list of rows, the same Value list a `List` holds. */

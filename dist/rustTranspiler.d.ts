@@ -1885,6 +1885,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustLentListParamDecisions;
     rustParamIsLentList(param: any): boolean;
     private static readonly RUST_LENT_LIST_TYPES;
+    private static readonly RUST_LENT_RESPONSE_READERS;
     rustParamIsLentListUncached(param: any): boolean;
     /** `object`, `Dict` or `any`, optionally `| undefined`: the parser reads its input as a `Value` of any shape. */
     rustLentRecordTypeNode(type: any): boolean;
