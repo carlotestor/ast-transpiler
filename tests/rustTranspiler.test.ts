@@ -8833,6 +8833,15 @@ describe('scalar reader locals in compares, map keys and null tests', () => {
     });
 });
 
+describe('elements of typed list parameters', () => {
+    test('an element of an unwritten string[] parameter compared natively is Option<String>; one boxed by copy stays Value', () => {
+        const out = transpiler.transpileRust("class X {\n    hold (x: any): any { return x; }\n    route (section: string[]) {\n        const version = section[1];\n        if (version === 'v3') {\n            return 1;\n        }\n        return 0;\n    }\n    copy (section: string[]) {\n        const head = section[0];\n        this.hold (head);\n        return this.hold (head);\n    }\n}\n").content;
+        expect(out).toContain('let mut version: Option<String> = ');
+        expect(out).toContain('version.as_deref() == Some(\"v3\")');
+        expect(out).toMatch(/let mut head: Value = /);
+    });
+});
+
 describe('locals returned from a string method', () => {
     test('a local only handed to the return of a declared string method keeps the method signature', () => {
         const dir = path.join (rustFixtureRoot, 'str-return-handoff');

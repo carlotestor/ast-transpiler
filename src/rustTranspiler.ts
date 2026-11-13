@@ -3881,6 +3881,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustStrRuntimeLocalCostly(declaration)) return undefined;
         // a local typed for its string-method reads must not copy where the `Value` moved
         if (copied > 0 && (kind === 'str' || kind === 'ostr') && this.rustStrMethodRecvLocal(declaration)) return undefined;
+        // an element of a typed list parameter keeps the 400-char guard and never copies at a box
+        if (this.rustListParamElement(declaration.initializer) && (copied > 0 || (boxed > 0 && typedUses === 0))) return undefined;
+        if (this.rustListParamElement(declaration.initializer) && boxed > 0) this.rustScalarGuarded.add(declaration);
         // a non-element local admitted by a map-key read or `in` test must not copy where the `Value` moved
         if (copied > 0 && kind === 'ostr' && !this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) && this.rustScalarKeyedLocal(declaration)) return undefined;
         // a key-admitted local converts once at its declaration: that line keeps the 400-char budget
@@ -4305,10 +4308,33 @@ export class RustTranspiler extends BaseTranspiler {
     // `xs[i]` over a local string list (`string[]`, `split`, `Object.keys`): `Option<String>` from the element.
     rustElementReadScalarKind(node): string | undefined {
         if (!isElementAccessExpression(node) || !isIdentifier(node.expression) || this.checkerOrUndefined() === undefined) return undefined;
-        if (!isVariableDeclaration(this.rustDeclaredNode(node.expression)) && !this.rustOptListParamRead(node)) return undefined;
+        const owner: any = this.rustDeclaredNode(node.expression);
+        // a parameter spelled `string[]` / `Strings` (never written in the body) holds the caller's string list
+        const listParam = owner !== undefined && isParameterDeclaration(owner) && owner.type !== undefined && !this.rustParamWritten(owner);
+        if (!isVariableDeclaration(owner) && !listParam && !this.rustOptListParamRead(node)) return undefined;
         const listType: any = this.typeOfNodeIfAny(node.expression);
         if (listType === undefined || !this.getChecker().isArrayType(listType)) return undefined;
         return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === 'string' ? 'ostr' : undefined;
+    }
+
+    /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
+    rustListParamElement(init: any): boolean {
+        const node: any = this.unwrapParens(init);
+        if (node === undefined || !isElementAccessExpression(node) || !isIdentifier(node.expression)) return false;
+        const owner: any = this.rustDeclaredNode(node.expression);
+        return owner !== undefined && isParameterDeclaration(owner) && !this.rustOptListParamRead(node) && this.rustElementReadScalarKind(node) !== undefined;
+    }
+
+    /** Some statement of the parameter's function assigns the parameter itself. */
+    rustParamWritten(param: any): boolean {
+        if (!isIdentifier(param.name)) return true;
+        let written = false;
+        this.rustLocalUsesAll(param, String(param.name.text), false, (n) => {
+            const up: any = n.parent;
+            if (isBinaryExpression(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind)) written = true;
+            return true;
+        });
+        return written;
     }
 
     // ── reader defaults (rustReaderDefaultKind / rustReaderIntDefaultNum) ──

@@ -543,6 +543,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustListLengthInit(node: any): boolean;
     rustListLengthText(node: any): string;
     rustElementReadScalarKind(node: any): string | undefined;
+    /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
+    rustListParamElement(init: any): boolean;
+    /** Some statement of the parameter's function assigns the parameter itself. */
+    rustParamWritten(param: any): boolean;
     rustReaderDefaultKind(name: string, args: any[], fresh: boolean): string | undefined;
     rustReaderFallbackKind(fallback: any): string | undefined;
     /** The checker scalar of a default that is a field, parameter or local (never a call: its `Value` may differ). */

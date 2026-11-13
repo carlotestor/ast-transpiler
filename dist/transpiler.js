@@ -54826,6 +54826,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustStrMethodRecvLocal(declaration))
       return void 0;
+    if (this.rustListParamElement(declaration.initializer) && (copied > 0 || boxed > 0 && typedUses === 0))
+      return void 0;
+    if (this.rustListParamElement(declaration.initializer) && boxed > 0)
+      this.rustScalarGuarded.add(declaration);
     if (copied > 0 && kind === "ostr" && !this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) && this.rustScalarKeyedLocal(declaration))
       return void 0;
     if (this.rustScalarOptKeyCostly(declaration, kind) === false && kind === "ostr" && this.rustScalarOptKeyCount(declaration) > 0)
@@ -55276,12 +55280,35 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustElementReadScalarKind(node) {
     if (!isElementAccessExpression4(node) || !isIdentifier3(node.expression) || this.checkerOrUndefined() === void 0)
       return void 0;
-    if (!isVariableDeclaration3(this.rustDeclaredNode(node.expression)) && !this.rustOptListParamRead(node))
+    const owner = this.rustDeclaredNode(node.expression);
+    const listParam = owner !== void 0 && isParameterDeclaration3(owner) && owner.type !== void 0 && !this.rustParamWritten(owner);
+    if (!isVariableDeclaration3(owner) && !listParam && !this.rustOptListParamRead(node))
       return void 0;
     const listType = this.typeOfNodeIfAny(node.expression);
     if (listType === void 0 || !this.getChecker().isArrayType(listType))
       return void 0;
     return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string" ? "ostr" : void 0;
+  }
+  /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
+  rustListParamElement(init) {
+    const node = this.unwrapParens(init);
+    if (node === void 0 || !isElementAccessExpression4(node) || !isIdentifier3(node.expression))
+      return false;
+    const owner = this.rustDeclaredNode(node.expression);
+    return owner !== void 0 && isParameterDeclaration3(owner) && !this.rustOptListParamRead(node) && this.rustElementReadScalarKind(node) !== void 0;
+  }
+  /** Some statement of the parameter's function assigns the parameter itself. */
+  rustParamWritten(param) {
+    if (!isIdentifier3(param.name))
+      return true;
+    let written = false;
+    this.rustLocalUsesAll(param, String(param.name.text), false, (n) => {
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind))
+        written = true;
+      return true;
+    });
+    return written;
   }
   // ── reader defaults (rustReaderDefaultKind / rustReaderIntDefaultNum) ──
   // A base scalar reader returns its parsed value or its default, so its result has one scalar kind
