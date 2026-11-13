@@ -9742,6 +9742,11 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     const localType = isNew ? "var" : this.getCSharpLocalType(declaration);
     const declaredType = localType === this.VAR_TOKEN && node.declarations.length === 1 ? this.csharpOmitMemberLocalType(declaration) ?? this.csharpMemberAliasLocalType(declaration) ?? localType : localType;
+    const cacheEntryType = !isNew && declaredType === this.VAR_TOKEN && node.declarations.length === 1 ? this.csharpWsCacheMapEntryLocalType(declaration) : void 0;
+    if (cacheEntryType !== void 0) {
+      this.csharpTypedLocals.set(declaration, cacheEntryType);
+      return this.getIden(identation) + cacheEntryType + " " + this.printNode(declaration.name) + " = ((" + cacheEntryType + ")" + parsedValue + ")";
+    }
     if (!isNew && declaredType === this.VAR_TOKEN && node.declarations.length === 1) {
       const rowType = this.csharpElementRowLocalType(declaration);
       if (rowType !== void 0) {
@@ -9769,6 +9774,33 @@ var CSharpTranspiler = class extends BaseTranspiler {
     }
     const member = this.csharpMemberReceiver(this.csharpUnwrapAssertion(call.arguments[0]));
     return member !== void 0 && member.kind === "dict" && member.declared ? "Dictionary<string, object>" : void 0;
+  }
+  // `const x = this.F[k]` / `const x = this.safeValue (this.F, k)` where the base field F is declared
+  // `Dictionary<ArrayCache>` (ts/src/base/Exchange.ts): every entry is an ArrayCache-family box or absent,
+  // so the const local names the cache class and its `append` binds natively; a miss reads null either way.
+  csharpWsCacheMapEntryLocalType(declaration) {
+    if (declaration?.name?.kind !== SyntaxKind4.Identifier || (declaration.parent?.flags & NodeFlags.Const) === 0) {
+      return void 0;
+    }
+    const init = this.csharpUnwrapAssertion(declaration.initializer);
+    let field = void 0;
+    if (init?.kind === SyntaxKind4.ElementAccessExpression) {
+      field = init.expression;
+    } else if (init?.kind === SyntaxKind4.CallExpression && init.arguments?.length === 2 && isPropertyAccessExpression(init.expression) && init.expression.expression?.kind === SyntaxKind4.ThisKeyword && init.expression.name?.text === "safeValue") {
+      field = init.arguments[0];
+    }
+    if (field === void 0 || !isPropertyAccessExpression(field) || field.expression?.kind !== SyntaxKind4.ThisKeyword) {
+      return void 0;
+    }
+    let declared;
+    try {
+      declared = this.getChecker().getSymbolAtLocation(field.name)?.valueDeclaration?.resolve();
+    } catch (e) {
+      return void 0;
+    }
+    const type = declared?.type;
+    const ok = declared?.kind === SyntaxKind4.PropertyDeclaration && /(^|[\\/])ts[\\/]src[\\/]base[\\/]Exchange\.ts$/.test(String(declared.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/")) && type?.kind === SyntaxKind4.TypeReference && type.typeName?.text === "Dictionary" && type.typeArguments?.length === 1 && type.typeArguments[0].kind === SyntaxKind4.TypeReference && type.typeArguments[0].typeName?.text === "ArrayCache";
+    return ok ? "ccxt.pro.ArrayCache" : void 0;
   }
   // `const x = this.<member>` over a member DECLARED a string-keyed dictionary (Exchange.Options.cs): the const
   // local is never rewritten, so its declaration names the member's own type and every later read is native.
@@ -41072,6 +41104,7 @@ var JAVA_MAP_WRITE_FIELDS = /* @__PURE__ */ new Set([
   "quoteCurrencies",
   "tickers",
   "trades",
+  "positionsByType",
   "transformedApi",
   "urls",
   "userAgents"
@@ -41092,6 +41125,7 @@ var JAVA_PLAIN_MAP_FIELDS = /* @__PURE__ */ new Set([
   "tickers",
   "timeframes",
   "trades",
+  "positionsByType",
   "transformedApi"
 ]);
 var JAVA_BOX_CAST = /\((?:final\s+)?(?:[A-Z][\w.]*|(?:java|io|com)\.[\w.]+)(?:<[^()]*>)?\)/;
@@ -41109,6 +41143,7 @@ var JAVA_DECLARED_MAP_FIELD_NAMES = /* @__PURE__ */ new Set([
   "trades",
   "orderbooks",
   "ohlcvs",
+  "positionsByType",
   "commonCurrencies",
   "networkAliases"
 ]);
@@ -41478,6 +41513,7 @@ var JAVA_HASH_MAP_FIELDS = {
   "tickers": true,
   "bidsasks": true,
   "trades": true,
+  "positionsByType": true,
   "fees": true,
   "urls": true,
   "markets_by_id": true
@@ -64230,7 +64266,7 @@ ${iden}}`;
     if (n === void 0 || !isPropertyAccessExpression3(n) || n.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(n.name))
       return false;
     const name = String(n.name.text);
-    if (name !== "orders" && name !== "myTrades" && name !== "liquidations" && name !== "myLiquidations")
+    if (name !== "orders" && name !== "myTrades" && name !== "liquidations" && name !== "myLiquidations" && name !== "positions")
       return false;
     let declaration;
     try {
@@ -64485,7 +64521,7 @@ ${iden}}`;
   /** `this.F` for a base field declared `Dictionary<ArrayCache>`. */
   rustWsCacheMapField(node) {
     const n = this.unwrapParens(node);
-    if (n === void 0 || !isPropertyAccessExpression3(n) || n.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(n.name) || String(n.name.text) !== "trades")
+    if (n === void 0 || !isPropertyAccessExpression3(n) || n.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(n.name) || String(n.name.text) !== "trades" && String(n.name.text) !== "positionsByType")
       return false;
     let declaration;
     try {

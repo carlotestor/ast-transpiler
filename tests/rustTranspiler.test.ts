@@ -9107,12 +9107,46 @@ describe('rust ws cache shelves', () => {
     });
 });
 
+describe('rust ws positions caches', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/ws/Cache.ts": "export class ArrayCache {\n    constructor (maxSize: any = undefined) {}\n    append (item: any) {}\n}\nexport class ArrayCacheBySymbolBySide extends ArrayCache {}\n",
+        "ts/src/base/ws/Client.ts": "export default class Client {\n    resolve (result: any, messageHash: string): any { return result; }\n}\n",
+        "ts/src/base/Exchange.ts": "import { ArrayCache } from './ws/Cache.js';\nexport interface Dictionary<T> { [key: string]: T }\nexport default class Exchange {\n    positions: ArrayCache | undefined = undefined;\n    positionsByType: Dictionary<ArrayCache> = {};\n    safeValue (obj: any, key: any, defaultValue: any = undefined): any { return obj[key]; }\n    safeString (obj: any, key: any, defaultValue: string = undefined): string { return obj[key]; }\n    reset () {\n        this.positions = undefined;\n        this.positionsByType = {};\n    }\n}\n",
+        "ts/src/pro/venue.ts": "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nimport { ArrayCacheBySymbolBySide } from '../base/ws/Cache.js';\nexport default class venue extends Exchange {\n    handlePositions (client: Client, message: any) {\n        if (this.positions === undefined) {\n            this.positions = new ArrayCacheBySymbolBySide ();\n        }\n        const cache = this.positions;\n        cache.append (message);\n        client.resolve (cache, 'positions');\n    }\n    handleTypedPositions (client: Client, message: any) {\n        const type = this.safeString (message, 't');\n        if (!(type in this.positionsByType)) {\n            this.positionsByType[type] = new ArrayCacheBySymbolBySide ();\n        }\n        const cache = this.positionsByType[type];\n        cache.append (message);\n        client.resolve (cache, type + ':positions');\n        return this.safeValue (this.positionsByType, type);\n    }\n}\n",
+    };
+    let out: string;
+    let base: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-positions-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        base = transpiler.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('the single positions field is an optional cache handle and its local is typed', () => {
+        expect(out).toContain('if (self.positions.is_none()) {');
+        expect(out).toContain('self.positions = Some(ArrayCacheBySymbolBySide::new(');
+        expect(out).toContain('let mut cache: Option<crate::pro::cache::Cache> = self.positions.clone();');
+        expect(base).toContain('self.positions = None;');
+    });
+    test('the per-type positions field is a cache map', () => {
+        expect(out).toContain('self.positionsByType.has(&type_var)');
+        expect(out).toContain('CacheStore::put(&mut self.positionsByType, &type_var, ArrayCacheBySymbolBySide::new())');
+        expect(out).toContain('let mut cache: Option<crate::pro::cache::Cache> = self.positionsByType.at(&type_var);');
+        expect(out).toContain('Value::from(self.positionsByType.lookup(&type_var))');
+        expect(base).toContain('self.positionsByType = crate::pro::cache::CacheMap::new();');
+    });
+});
+
 describe('rust ws cache handles', () => {
     const files: Record<string, string> = {
         "ts/src/base/ws/Cache.ts": "export class ArrayCache {\n    constructor (maxSize: any = undefined) {}\n    append (item: any) {}\n    getLimit (symbol: string | undefined, limit: number | undefined): number | undefined { return limit; }\n}\nexport class ArrayCacheBySymbolById extends ArrayCache {}\n",
         "ts/src/base/ws/Client.ts": "export default class Client {\n    resolve (result: any, messageHash: string): any { return result; }\n}\n",
-        "ts/src/base/Exchange.ts": "import { ArrayCache } from './ws/Cache.js';\nexport interface Dict { [key: string]: any }\nexport default class Exchange {\n    options: Dict = {};\n    orders: ArrayCache | undefined = undefined;\n    myTrades: ArrayCache | undefined;\n    positions: any = undefined;\n    safeInteger (obj: any, key: string, defaultValue: number = undefined): number { return obj[key]; }\n    filterBySinceLimit (a: any, since: number = undefined, limit: number = undefined): any { return a; }\n    reset () {\n        this.orders = undefined;\n    }\n}\n",
-        "ts/src/pro/venue.ts": "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nimport { ArrayCache, ArrayCacheBySymbolById } from '../base/ws/Cache.js';\nexport default class venue extends Exchange {\n    handleOrder (client: Client, message: any) {\n        if (this.orders === undefined) {\n            const limit = this.safeInteger (this.options, 'ordersLimit', 1000);\n            this.orders = new ArrayCacheBySymbolById (limit);\n        }\n        const cachedOrders = this.orders;\n        cachedOrders.append (message);\n        client.resolve (cachedOrders, 'orders');\n        client.resolve (this.orders, 'orders:all');\n    }\n    handleMyTrade (client: Client, message: any) {\n        let trades = this.myTrades;\n        if (trades === undefined) {\n            trades = new ArrayCache (10);\n            this.myTrades = trades;\n        }\n        trades.append (message);\n        return this.filterBySinceLimit (trades);\n    }\n    handlePosition (message: any) {\n        const stored = new ArrayCache (5);\n        stored.append (message);\n        this.positions = new ArrayCacheBySymbolById ();\n        const loose = this.orders;\n        const copy = loose;\n        return [ stored, copy ];\n    }\n}\n",
+        "ts/src/base/Exchange.ts": "import { ArrayCache } from './ws/Cache.js';\nexport interface Dict { [key: string]: any }\nexport default class Exchange {\n    options: Dict = {};\n    orders: ArrayCache | undefined = undefined;\n    myTrades: ArrayCache | undefined;\n    loosePositions: any = undefined;\n    safeInteger (obj: any, key: string, defaultValue: number = undefined): number { return obj[key]; }\n    filterBySinceLimit (a: any, since: number = undefined, limit: number = undefined): any { return a; }\n    reset () {\n        this.orders = undefined;\n    }\n}\n",
+        "ts/src/pro/venue.ts": "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nimport { ArrayCache, ArrayCacheBySymbolById } from '../base/ws/Cache.js';\nexport default class venue extends Exchange {\n    handleOrder (client: Client, message: any) {\n        if (this.orders === undefined) {\n            const limit = this.safeInteger (this.options, 'ordersLimit', 1000);\n            this.orders = new ArrayCacheBySymbolById (limit);\n        }\n        const cachedOrders = this.orders;\n        cachedOrders.append (message);\n        client.resolve (cachedOrders, 'orders');\n        client.resolve (this.orders, 'orders:all');\n    }\n    handleMyTrade (client: Client, message: any) {\n        let trades = this.myTrades;\n        if (trades === undefined) {\n            trades = new ArrayCache (10);\n            this.myTrades = trades;\n        }\n        trades.append (message);\n        return this.filterBySinceLimit (trades);\n    }\n    handlePosition (message: any) {\n        const stored = new ArrayCache (5);\n        stored.append (message);\n        this.loosePositions = new ArrayCacheBySymbolById ();\n        const loose = this.orders;\n        const copy = loose;\n        return [ stored, copy ];\n    }\n}\n",
     };
     let out: string;
     let base: string;
@@ -9145,7 +9179,7 @@ describe('rust ws cache handles', () => {
         expect(out).toContain('Value::from(&stored)');
     });
     test('negative: a constructor stored in an untyped field is boxed and an aliased field local stays Value', () => {
-        expect(out).toContain('self.positions = Value::from(ArrayCacheBySymbolById::new(');
+        expect(out).toContain('self.loosePositions = Value::from(ArrayCacheBySymbolById::new(');
         expect(out).toContain('let mut loose: Value = ');
     });
 });

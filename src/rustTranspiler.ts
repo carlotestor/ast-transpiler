@@ -13466,7 +13466,7 @@ export class RustTranspiler extends BaseTranspiler {
         const n: any = this.unwrapParens(node);
         if (n === undefined || !isPropertyAccessExpression(n) || n.expression.kind !== SyntaxKind.ThisKeyword || !isIdentifier(n.name)) return false;
         const name = String(n.name.text);
-        if (name !== 'orders' && name !== 'myTrades' && name !== 'liquidations' && name !== 'myLiquidations') return false;
+        if (name !== 'orders' && name !== 'myTrades' && name !== 'liquidations' && name !== 'myLiquidations' && name !== 'positions') return false;
         let declaration: any;
         try {
             declaration = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(n.name));
@@ -13691,7 +13691,7 @@ export class RustTranspiler extends BaseTranspiler {
     /** `this.F` for a base field declared `Dictionary<ArrayCache>`. */
     rustWsCacheMapField(node: any): boolean {
         const n: any = this.unwrapParens(node);
-        if (n === undefined || !isPropertyAccessExpression(n) || n.expression.kind !== SyntaxKind.ThisKeyword || !isIdentifier(n.name) || String(n.name.text) !== 'trades') return false;
+        if (n === undefined || !isPropertyAccessExpression(n) || n.expression.kind !== SyntaxKind.ThisKeyword || !isIdentifier(n.name) || (String(n.name.text) !== 'trades' && String(n.name.text) !== 'positionsByType')) return false;
         let declaration: any;
         try {
             declaration = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(n.name));
