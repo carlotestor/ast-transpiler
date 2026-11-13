@@ -1840,6 +1840,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `Value::Dict(x)` / `Value::Arr(x)` at the last use (moved), else `Value::from(&x)` (the Arc bump the copied `Value` paid). */
     printDictElementBox(node: any, text: string): string | undefined;
     rustDefaultedContainerBoxUse(n: any, init: any): boolean;
+    rustOptReaderBoxUse(n: any, init: any): boolean;
     rustBorrowedKeySetUse(n: any): boolean;
     /** The key operand of `k in m`: a literal as `"k"`, else the boxed key text `bearerInOp` tests. */
     rustBorrowedInOpKey(key: any): {
@@ -1887,7 +1888,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustReaderTakesContainerByReference(call: any): boolean;
     rustBuiltReturnSourceKind(call: any): 'dict' | 'list' | undefined;
     private static readonly RUST_BUILT_BOX_RECEIVER_METHODS;
+    private static readonly RUST_BUILT_HELPER_RETURNS;
     rustBuiltReturnBoxUse(n: any, init: any): boolean;
+    /** A base `this.omit (x, keys)` whose `x` the checker types as a `Dict` (`params`): it answers that map minus the keys. */
+    rustOmitOfDict(init: any): boolean;
+    /** The `params` slot of a typed unified call (`impl Into<crate::Params> + Send`): `From<Value> for Params` takes the
+     *  boxed map exactly as it took the `Value` local, so a dict local boxes there once (moved at the last use). */
+    rustTypedParamsSlot(call: any, at: number): boolean;
     /** `'dict' | 'list' | 'api'` for a container source the local may hold by reference. */
     rustBorrowedSourceKind(call: any): 'dict' | 'list' | 'api' | undefined;
     rustDeclaredEndpointKind(call: any): 'dict' | 'list' | undefined;

@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -64119,6 +64119,8 @@ ${iden}}`;
     let lentNullable = 0;
     let mixed = false;
     let defaultedBoxes = 0;
+    let optionalBoxes = 0;
+    let paramsBoxes = 0;
     const boxedElementUses = [];
     const accept = (n) => {
       if (this.rustIdentifierIsPropertyName(n))
@@ -64164,7 +64166,7 @@ ${iden}}`;
       }
       if (this.rustExtendHeadUse(n))
         return ++extendHeads > 0 && ++reads > 0;
-      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init) && ++defaultedBoxes > 0) && boxedElementUses.push(n) > 0;
+      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0) && boxedElementUses.push(n) > 0;
       const asArg = isAsExpression3(up) && up.expression === n && isCallExpression6(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : void 0;
       if (asArg !== void 0 && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared))
         return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
@@ -64176,6 +64178,8 @@ ${iden}}`;
         return ++lentResponses > 0 && ++reads > 0;
       if (this.rustLentOptionalHandOff(up, n, init, from, nilDeclared))
         return ++lentNullable > 0 && ++reads > 0;
+      if (from === "dict" && isCallExpression6(up) && this.rustLentParamsSlot(up, n) && init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) === "dict")
+        return ++reads > 0;
       if (!isCallExpression6(up) || up.arguments[0] !== n)
         return handed();
       const keyArgs = up.arguments.slice(1, isPropertyAccessExpression3(up.expression) && /2$/.test(String(up.expression.name.text)) ? 3 : 2).map((a) => this.rustSkipWrappers(a));
@@ -64189,19 +64193,23 @@ ${iden}}`;
       return true;
     };
     const safe = endpoint && !nilDeclared ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
-    const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0;
+    const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init));
     if (!safe || reads === 0 && !builtBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))
       return void 0;
     if (this.rustNilResponseLocals.has(declaration) && (lentResponses > 0 || lentNullable > 0))
       return void 0;
     if ((keyReads > 0 || init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init)) && !this.rustEcdsaCall(init) && !this.rustDictKeyReadLineOk(declaration, name))
       return void 0;
-    const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0;
+    const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0;
     if (lentResponses > 0 && optional && !this.rustLentOptionalOk(declaration, name, fn, init, from))
       return void 0;
     if (extendHeads > 0 && (optional || from !== "dict" && from !== "api"))
       return void 0;
     if (optional && boxedElementUses.length > 0 && (this.rustWsFieldRead(init) !== void 0 || defaultedBoxes > 0))
+      return void 0;
+    if (optionalBoxes > 0 && (boxedElementUses.length !== optionalBoxes || nilDeclared || writes > 0 || from !== "dict"))
+      return void 0;
+    if (paramsBoxes > 0 && (optional || from !== "dict"))
       return void 0;
     if (keySets > 0 && (from !== "dict" || optional || init !== void 0 && this.rustInitReadsTaggedStore(init)))
       return void 0;
@@ -64530,6 +64538,11 @@ ${iden}}`;
     if (form === void 0)
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration !== void 0 && this.rustOptContainerLocals.has(declaration)) {
+      if (!this.rustPrintedOptional.has(declaration))
+        return void 0;
+      return form === "move" ? `${text}.map_or(Value::Null, Value::Dict)` : `${text}.clone().map_or(Value::Null, Value::Dict)`;
+    }
     const list = declaration !== void 0 && this.rustBorrowedLocalKind(declaration) === "list";
     return form === "move" ? `Value::${list ? "Arr" : "Dict"}(${text})` : `Value::from(&${text})`;
   }
@@ -64554,6 +64567,29 @@ ${iden}}`;
       return false;
     const at = Array.from(up.arguments).indexOf(n);
     return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && this.rustNilBoxSlotOk(up, at);
+  }
+  // ── rustOptReaderBoxUse: a nullable base `safeDict*` read handed on whole ──
+  // `Option<Dict>` keeps Null apart from the map, so `x.map_or(Value::Null, Value::Dict)` gives back exactly the
+  // `Value` the reader answered (moved at the last use, else the Arc bump the boxed local's copy paid).
+  rustOptReaderBoxUse(n, init) {
+    const up = n.parent;
+    if (init === void 0 || !isCallExpression6(init) || up === void 0 || this.rustScalarInNestedWrite(n))
+      return false;
+    if (this.rustBorrowedSourceKind(init) !== "dict" || !/^safeDict(?:2|N)?$/.test(String(init.expression.name?.text ?? "")) || !this.rustOptContainerSourceOk(init, "dict") || this.rustContainerInitNeverNull(init, "map") || this.rustContainerInitReadsStore(init) || this.rustWsFieldRead(init) !== void 0 || this.rustInitReadsTaggedStore(init))
+      return false;
+    if (up.kind === SyntaxKind7.PropertyAssignment)
+      return up.initializer === n;
+    if (isReturnStatement4(up))
+      return up.expression === n;
+    if (isAsExpression3(up) && up.expression === n && isReturnStatement4(up.parent))
+      return true;
+    if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const callee = String(up.expression.name.text);
+    if (_RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || _RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee))
+      return false;
+    const at = Array.from(up.arguments).indexOf(n);
+    return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && !this.rustLentHelperSlot(up, n, "dict") && this.rustNilBoxSlotOk(up, at);
   }
   // ── rustBorrowedKeySetUse / printBorrowedKeys / printBorrowedInOp: key sets of a shared dict local ──
   // `Object.keys/values(m)` lists the map's own entries (`Value::from` per key, no closure) and `k in m` is
@@ -64871,6 +64907,11 @@ ${iden}}`;
     if (!isCallExpression6(call) || !isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(callee.name))
       return void 0;
     const method = String(callee.name.text);
+    const helper = _RustTranspiler.RUST_BUILT_HELPER_RETURNS[method];
+    if (helper !== void 0)
+      return this.rustCalleeIsRuntimeBase(call) && !this.rustTestTierSource(call) ? helper : void 0;
+    if (method === "sortBy" || method === "sortBy2")
+      return !this.rustTestTierSource(call) && this.extraArrSource(call) ? "list" : void 0;
     if (/^(?:safe|handle[A-Z]|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method))
       return void 0;
     if (this.rustTestTierSource(call) || this.rustTypedUnified.has(method))
@@ -64904,7 +64945,35 @@ ${iden}}`;
       return false;
     if (_RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || _RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee))
       return false;
+    if (this.rustTypedParamsSlot(up, at))
+      return _RustTranspiler.RUST_BUILT_HELPER_RETURNS[String(init.expression.name.text)] === "dict";
     return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && this.rustNilBoxSlotOk(up, at);
+  }
+  /** A base `this.omit (x, keys)` whose `x` the checker types as a `Dict` (`params`): it answers that map minus the keys. */
+  rustOmitOfDict(init) {
+    if (!this.rustBaseCallNamed(init, _RustTranspiler.RUST_HANDED_DICT_OMIT) || init.arguments.length !== 2)
+      return false;
+    const head = this.rustSkipWrappers(init.arguments[0]);
+    const type = head === void 0 ? void 0 : this.typeOfNodeIfAny(head);
+    return type !== void 0 && (type.flags & (TypeFlags6.Any | TypeFlags6.Unknown)) === 0 && this.isProvenMapType(type);
+  }
+  /** The `params` slot of a typed unified call (`impl Into<crate::Params> + Send`): `From<Value> for Params` takes the
+   *  boxed map exactly as it took the `Value` local, so a dict local boxes there once (moved at the last use). */
+  rustTypedParamsSlot(call, at) {
+    const callee = call.expression;
+    if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !this.rustTypedUnified.has(String(callee.name.text)))
+      return false;
+    let decl;
+    try {
+      decl = signatureDeclaration(this.getChecker().getResolvedSignature(call));
+    } catch (e) {
+      return false;
+    }
+    decl = decl?.resolve?.() ?? decl;
+    if (decl !== void 0 && decl.body === void 0)
+      decl = decl.parent?.members?.find((m) => m.kind === SyntaxKind7.MethodDeclaration && m.body !== void 0 && m.name?.text === callee.name.text);
+    const typed = this.rustTypedSignature(decl);
+    return typed !== void 0 && typed.params[at]?.rustType === "impl Into<crate::Params> + Send";
   }
   /** `'dict' | 'list' | 'api'` for a container source the local may hold by reference. */
   rustBorrowedSourceKind(call) {
@@ -66922,7 +66991,9 @@ ${iden}}`;
     if (!isIdentifier3(node) || !this.rustLentParamsSlot(node.parent, node))
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(node);
-    if (declaration === void 0 || declaration === node || declaration.name === node || !this.rustHandedDictLocal(declaration))
+    if (declaration === void 0 || declaration === node || declaration.name === node)
+      return void 0;
+    if (!this.rustHandedDictLocal(declaration) && !(this.rustBorrowedLocalKind(declaration) === "dict" && this.rustPrintedBorrowed.has(declaration) && !this.rustOptContainerLocals.has(declaration)))
       return void 0;
     return `&${text}`;
   }
@@ -71552,7 +71623,7 @@ _RustTranspiler.RUST_BORROWED_LIST_SOURCES = /* @__PURE__ */ new Set(["safeList"
 // Hand-written readers whose container argument takes a map or list by reference, any key.
 _RustTranspiler.RUST_BORROWED_ANY_KEY_READERS = /^safe(?:Value|String(?:Lower|Upper)?|Integer|Float|Timestamp|IntegerProduct)(?:2|N)?$/;
 // hand-written helpers whose operand is `impl Into<crate::Value>` / `impl JsonText` (the optional form lends there too)
-_RustTranspiler.RUST_LENT_OPTIONAL_HELPERS = /* @__PURE__ */ new Set(["toArray", "arrayConcat", "json"]);
+_RustTranspiler.RUST_LENT_OPTIONAL_HELPERS = /* @__PURE__ */ new Set(["toArray", "arrayConcat", "json", "urlencode", "rawencode", "urlencodeNested", "urlencodeWithArrayRepeat", "isEmpty"]);
 // ── rustParamReadsByReference / rustReaderTakesContainerByReference: generated readers lend their container ──
 // A generated base reader whose container parameter is only handed to by-reference readers declares it
 // `impl KeyRead`: a `Value` argument still passes by value, and a dict or list local is lent as `&x`.
@@ -71561,6 +71632,17 @@ _RustTranspiler.RUST_BY_REF_GENERATED_READERS = /^safe(?:Dict|List|Bool|Number)(
 // value, an array literal element, or the value argument of a `Value` receiver's `push` / `append` / `reset` /
 // ws `resolve` (moved at the last use, else the Arc bump the boxed local's copy paid).
 _RustTranspiler.RUST_BUILT_BOX_RECEIVER_METHODS = /* @__PURE__ */ new Set(["push", "append", "reset", "resolve"]);
+// Hand-written base helpers that build a fresh container on every path (exchange_stubs.rs): `extend` / `indexBy` /
+// `groupBy` always answer `Value::Map`, `toArray` / `arrayConcat` / `filterBy` always `Value::Array` (a ws cache
+// is snapshotted into a new list). `omit` / `keysort` / `deepExtend` / `sortBy*` pass a non-container input through.
+_RustTranspiler.RUST_BUILT_HELPER_RETURNS = {
+  extend: "dict",
+  indexBy: "dict",
+  groupBy: "dict",
+  toArray: "list",
+  arrayConcat: "list",
+  filterBy: "list"
+};
 // ── rustRecordLookupSource: base record lookups (market / outcome resolvers) held as a shared map ──
 // Each returns a cached record map (or nothing); read only by key, the map form reads the same.
 _RustTranspiler.RUST_RECORD_LOOKUP_SOURCES = /* @__PURE__ */ new Set(["outcome", "safeOutcome", "loadOutcome", "getMarketFromSymbols", "safeMarket", "market"]);
@@ -71609,7 +71691,12 @@ _RustTranspiler.RUST_LENT_HELPER_SLOTS = {
   toArray: { at: [0], kinds: ["dict", "list"] },
   json: { at: [0], kinds: ["dict", "list"] },
   arrayConcat: { at: [0, 1], kinds: ["list"] },
-  omit: { at: [0], kinds: ["dict"] }
+  omit: { at: [0], kinds: ["dict"] },
+  urlencode: { at: [0], kinds: ["dict"] },
+  rawencode: { at: [0], kinds: ["dict"] },
+  urlencodeNested: { at: [0], kinds: ["dict"] },
+  urlencodeWithArrayRepeat: { at: [0], kinds: ["dict"] },
+  isEmpty: { at: [0], kinds: ["dict", "list"] }
 };
 // ── typed filter parameters (rustTypedFilterParams / printTypedFilterSignature / printTypedFilterCall) ──
 // The base `filterBy*` helpers take their optional `Int` / `Str` parameters as positional `Option<i64>` /
