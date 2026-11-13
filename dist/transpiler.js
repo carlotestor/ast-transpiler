@@ -56152,6 +56152,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     let boxed = false;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       const form = this.rustScalarUseForms.get(n);
+      if (form === "fin" && this.rustWsBookKeyOf(n) && isCallExpression6(this.rustWsBookKeyParent(n)))
+        return true;
       if (form === "fin" || form === "frd" || form === "key" && this.rustFieldKeyReceiver(n.parent?.expression) !== void 0)
         field = true;
       else if ((form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration))
@@ -64875,6 +64877,18 @@ ${iden}}`;
     if (isBinaryExpression5(p) && p.operatorToken.kind === SyntaxKind7.InKeyword)
       return p.left === up && this.rustWsBookMapField(p.right);
     return isCallExpression6(p) && p.arguments[1] === up && this.rustWsBookMapLookup(p);
+  }
+  rustWsBookKeyParent(n) {
+    let up = n;
+    while (isParenthesizedExpression3(up.parent) || isAsExpression3(up.parent) || isNonNullExpression2(up.parent))
+      up = up.parent;
+    return up.parent;
+  }
+  rustWsBookKeyOf(n) {
+    let up = n;
+    while (isParenthesizedExpression3(up.parent) || isAsExpression3(up.parent) || isNonNullExpression2(up.parent))
+      up = up.parent;
+    return this.rustWsBookMapKeyUse(up);
   }
   /** A source an optional book local takes: a map read, `undefined` (with `orUndefined`), a constructor (boxed as
    *  `Some`), or a ternary of those with at least one map read. */

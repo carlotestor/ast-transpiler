@@ -5099,6 +5099,8 @@ export class RustTranspiler extends BaseTranspiler {
         let boxed = false;
         this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
             const form = this.rustScalarUseForms.get(n);
+            // a `safeValue (this.orderbooks, k)` key was a by-value reader argument before the map was typed, never a field key
+            if (form === 'fin' && this.rustWsBookKeyOf(n) && isCallExpression(this.rustWsBookKeyParent(n))) return true;
             if (form === 'fin' || form === 'frd' || (form === 'key' && this.rustFieldKeyReceiver(n.parent?.expression) !== undefined)) field = true;
             else if ((form === 'box' || form === 'xbox' || form === 'err' || form === 'key') && !this.rustScalarBoxMoves(n, form, declaration)) boxed = true;
             return true;
@@ -14091,6 +14093,18 @@ export class RustTranspiler extends BaseTranspiler {
         if (isElementAccessExpression(p)) return p.argumentExpression === up && this.rustWsBookMapField(p.expression);
         if (isBinaryExpression(p) && p.operatorToken.kind === SyntaxKind.InKeyword) return p.left === up && this.rustWsBookMapField(p.right);
         return isCallExpression(p) && p.arguments[1] === up && this.rustWsBookMapLookup(p);
+    }
+
+    rustWsBookKeyParent(n: any): any {
+        let up: any = n;
+        while (isParenthesizedExpression(up.parent) || isAsExpression(up.parent) || isNonNullExpression(up.parent)) up = up.parent;
+        return up.parent;
+    }
+
+    rustWsBookKeyOf(n: any): boolean {
+        let up: any = n;
+        while (isParenthesizedExpression(up.parent) || isAsExpression(up.parent) || isNonNullExpression(up.parent)) up = up.parent;
+        return this.rustWsBookMapKeyUse(up);
     }
 
     /** A source an optional book local takes: a map read, `undefined` (with `orUndefined`), a constructor (boxed as

@@ -1900,6 +1900,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsBookMapReadText(node: any): string;
     /** The key of a book-map access: printed by reference (the cache-map key form). */
     rustWsBookMapKeyUse(up: any): boolean;
+    rustWsBookKeyParent(n: any): any;
+    rustWsBookKeyOf(n: any): boolean;
     /** A source an optional book local takes: a map read, `undefined` (with `orUndefined`), a constructor (boxed as
      *  `Some`), or a ternary of those with at least one map read. */
     rustWsBookOptSource(node: any, orUndefined: boolean): boolean;
