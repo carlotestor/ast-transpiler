@@ -340,6 +340,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
     rustNilScalarKind(declaration: any): string | undefined;
     rustNilScalarHandOff(declaration: any, scope: any, kind: string, boxed: any[]): boolean;
+    private rustNilStrLentLocals;
+    private rustNilAliasMoves;
+    rustNilAliasMove(rhs: any, kind: string): boolean;
+    /** Every box before the last sits at a `this.` / `super.` argument (where the `Value` form was cloned); no free-function,
+     *  `Precise`, `Math` or `new` operand, which read `&Value` and would take a copy only because of the lending. */
+    rustNilStrLendSites(declaration: any): boolean;
     rustNilOptStrConcatUse(n: any): boolean;
     /** A write that decodes a `Value` result (a call, or a ternary over one). */
     rustNilDecodedWrite(rhs: any): boolean;
@@ -1741,6 +1747,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustBorrowedKinds;
     rustBorrowedLocalKindUncached(declaration: any): 'dict' | 'list' | undefined;
     private rustOptContainerLocals;
+    private rustNilMapDecisions;
+    rustNilMapLocal(declaration: any): boolean;
+    rustNilMapLocalUncached(declaration: any): boolean;
+    rustNilMapOf(node: any): any;
+    /** `x = None` / `x = Some(crate::value::Dict::new({ .. }))`: the literal is built once behind the shared handle. */
+    printNilMapWrite(left: any, right: any, identation: any): string | undefined;
+    printNilMapNullTest(left: any, right: any, op: any): string | undefined;
+    /** The `Value` hand-off: the map moved at the last use, else the Arc bump; `None` is `Value::Null`. */
+    printNilMapBox(node: any, text: string): string | undefined;
     rustNullTestedDictLocal(init: any, nullTests: number, writes: number): boolean;
     rustDictElementSource(init: any): boolean;
     private rustDictElementBoxes;
