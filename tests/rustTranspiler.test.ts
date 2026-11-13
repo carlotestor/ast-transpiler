@@ -8842,6 +8842,10 @@ describe('elements of typed list parameters', () => {
         const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
         expect(out).toContain('let mut symbol: Option<String> = ');
         expect(out).toContain('symbol.as_deref() == Some(\"BTC\")');
+        fs.writeFileSync (path.join (dir, 'ts/src/venue2.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue2 extends Exchange {\n    pick (subs: string[]): string {\n        let found = '';\n        for (let i = 0; i < subs.length; i++) {\n            const sub = subs[i];\n            if (sub === 'spot') {\n                found = sub;\n                break;\n            }\n        }\n        return found;\n    }\n}\n");
+        const fed = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue2.ts')).content;
+        expect(fed).toMatch(/pub fn pick\(&self, [^)]*\) -> Option<String> \{/);
+        expect(fed).toMatch(/let mut sub: Value = /);
         const copy = transpiler.transpileRust("class X {\n    hold (x: any): any { return x; }\n    copy (section: string[]) {\n        const head = section[0];\n        this.hold (head);\n        return this.hold (head);\n    }\n}\n").content;
         expect(copy).toMatch(/let mut head: Value = /);
     });
