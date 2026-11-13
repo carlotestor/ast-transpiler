@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -58345,7 +58345,7 @@ ${i1}}`;
       const callScope = this.rustEnclosingFunction(declaration);
       return this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => this.rustEnclosingFunction(n) === callScope && this.rustMarketValueUse(n)) ? "call" : false;
     }
-    const fromOpt = this.rustIsOptMarketCall(declaration.initializer);
+    const fromOpt = this.rustIsOptMarketCall(declaration.initializer) || this.rustOptMarketTernary(declaration.initializer) !== void 0;
     const empty = declaration.initializer === void 0 || this.literalKindOfNode(declaration.initializer) === "null" || fromOpt;
     if (!empty && !this.rustIsTypedMarketCall(declaration.initializer))
       return false;
@@ -58369,7 +58369,7 @@ ${i1}}`;
       }
       if (empty && this.rustIsNullWriteOf(n))
         return true;
-      if (empty && (this.rustIsSafeMarketWriteOf(n) || this.rustIsOptMarketWriteOf(n))) {
+      if (empty && (this.rustIsSafeMarketWriteOf(n) || this.rustIsOptMarketWriteOf(n) || this.rustMarketAliasWriteSource(n) !== void 0)) {
         writes++;
         return true;
       }
@@ -58390,7 +58390,7 @@ ${i1}}`;
         keyReads++;
         return true;
       }
-      if (this.rustMarketSlotUse(n) || this.rustMarketReaderArg(n) || isReturnStatement4(n.parent) && this.rustReturnsOptMarket(findAncestor(n.parent.parent, isFunctionLike))) {
+      if (this.rustMarketSlotUse(n) || this.rustMarketReaderArg(n) || isReturnStatement4(n.parent) && this.rustReturnsOptMarket(findAncestor(n.parent.parent, isFunctionLike)) || this.rustMarketAliasTargetOf(n) !== void 0) {
         slotUses++;
         return true;
       }
@@ -58505,6 +58505,30 @@ ${i1}}`;
     }
     return this.rustReturnsOptMarket(declaration);
   }
+  /** `c ? undefined : this.market (s)` (either arm order): the `this.market` arm. */
+  rustOptMarketTernary(init) {
+    const cond = init === void 0 ? void 0 : this.unwrapParens(init);
+    if (cond === void 0 || cond.kind !== SyntaxKind7.ConditionalExpression)
+      return void 0;
+    const t = this.unwrapParens(cond.whenTrue);
+    const f = this.unwrapParens(cond.whenFalse);
+    if (this.literalKindOfNode(t) === "null" && this.rustIsTypedMarketCall(f))
+      return f;
+    if (this.literalKindOfNode(f) === "null" && this.rustIsTypedMarketCall(t))
+      return t;
+    return void 0;
+  }
+  /** `(if c { None } else { Some(market) })` for an `Option<Market>` ternary initializer. */
+  printOptMarketTernary(init) {
+    const arm = this.rustOptMarketTernary(init);
+    const value = arm === void 0 ? void 0 : this.printTypedMarketValue(arm);
+    if (value === void 0)
+      return void 0;
+    const cond = this.unwrapParens(init);
+    const some = `Some${value}`;
+    const armTrue = this.unwrapParens(cond.whenTrue) === arm;
+    return `(if ${this.printCondition(cond.condition, 0)} { ${armTrue ? some : "None"} } else { ${armTrue ? "None" : some} })`;
+  }
   /** `return x` in an `Option<Market>` method. */
   printOptMarketReturnValue(exp) {
     const inner = this.unwrapParens(exp);
@@ -58540,6 +58564,37 @@ ${i1}}`;
       this.rustOptMarketBoxing.delete(node);
     }
   }
+  /** `m = s` as its own statement, `s` a `const s = this.market (..)` read only by key reads, null tests and
+   *  this write (syntactic, so the two decisions never wait on each other): the alias source `s`. */
+  rustMarketAliasWriteSource(n) {
+    const up = n.parent;
+    if (up === void 0 || !isBinaryExpression5(up) || up.left !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !isIdentifier3(up.right))
+      return void 0;
+    const src = this.rustDeclarationOfIdentifier(up.right);
+    if (src?.kind !== SyntaxKind7.VariableDeclaration || src.name === up.right || !isIdentifier3(src.name) || (src.parent.flags & NodeFlags4.Const) === 0 || src.parent.declarations.length !== 1 || !this.rustIsTypedMarketCall(src.initializer))
+      return void 0;
+    const scope = this.rustEnclosingFunction(src);
+    if (this.rustEnclosingFunction(n) !== scope)
+      return void 0;
+    let aliases = 0;
+    const ok = this.rustLocalUsesAll(src, String(src.name.text), true, (u) => {
+      if (this.rustEnclosingFunction(u) !== scope)
+        return false;
+      if (u === up.right) {
+        aliases++;
+        return true;
+      }
+      return this.rustMarketReadKey(u) !== void 0 || this.rustIsNullTestOf(u) && this.rustNullTestIsCondition(u);
+    });
+    return ok && aliases === 1 ? src : void 0;
+  }
+  /** The `Option<Market>` local an alias write `m = s` stores the struct local `s` into. */
+  rustMarketAliasTargetOf(n) {
+    const up = n.parent;
+    if (up === void 0 || !isBinaryExpression5(up) || up.right !== n || !isIdentifier3(up.left) || this.rustMarketAliasWriteSource(up.left) === void 0)
+      return void 0;
+    return this.rustOptMarketLocalOf(up.left);
+  }
   /** `m = undefined` as its own statement. */
   rustIsNullWriteOf(n) {
     const up = n.parent;
@@ -58553,6 +58608,8 @@ ${i1}}`;
       return `${super.printIdentifier(left)} = Some(${this.printNode(right, 0).trim()})`;
     if (isIdentifier3(left) && this.rustIsOptMarketWriteOf(left) && this.rustOptMarketLocalOf(left) !== void 0)
       return `${super.printIdentifier(left)} = ${this.printNode(right, 0).trim()}`;
+    if (isIdentifier3(left) && this.rustMarketAliasWriteSource(left) !== void 0 && this.rustOptMarketLocalOf(left) !== void 0 && this.rustTypedMarketLocalOf(right) !== void 0)
+      return `${super.printIdentifier(left)} = Some(crate::types::Market::clone(&${super.printIdentifier(right)}))`;
     if (!isIdentifier3(left) || !this.rustIsTypedMarketWrite(left))
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(left);
@@ -58609,7 +58666,7 @@ ${i1}}`;
   printTypedMarketLocal(declaration, indent, varName) {
     const kind = this.rustMarketLocalKind(declaration);
     if (kind === "opt") {
-      const init = this.rustIsOptMarketCall(declaration.initializer) ? this.printNode(declaration.initializer, 0).trim() : "None";
+      const init = this.rustIsOptMarketCall(declaration.initializer) ? this.printNode(declaration.initializer, 0).trim() : this.printOptMarketTernary(declaration.initializer) ?? "None";
       return `${indent}let mut ${varName}: Option<crate::types::Market> = ${init}`;
     }
     if (kind === "call") {
@@ -68341,14 +68398,22 @@ ${this.getIden(identation)}}`;
     const first = params[0];
     if (first.initializer !== void 0 || first.questionToken !== void 0 || first.dotDotDotToken !== void 0)
       return false;
-    if (param.initializer === void 0 || this.literalKindOfNode(this.unwrapParens(param.initializer)) !== "null")
+    if (param.questionToken !== void 0)
       return false;
-    const type = param.type;
-    if (type?.kind !== SyntaxKind7.TypeReference || !isIdentifier3(type.typeName) || String(type.typeName.text) !== "Market")
+    if (param.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(param.initializer)) !== "null")
+      return false;
+    if (!this.rustIsMarketTypeNode(param.type, param.initializer === void 0))
       return false;
     if (this.rustMethodReferencedAsValue(method) || this.rustLocalIsReassigned(param, String(param.name.text)))
       return false;
     return this.rustLocalUsesAll(param, String(param.name.text), true, (n) => !this.isNativeWriteTargetBase(n) && !isDeleteExpression2(n.parent?.parent));
+  }
+  /** A `Market` type reference (or `MarketInterface` when `iface` is set). */
+  rustIsMarketTypeNode(type, iface) {
+    if (type?.kind !== SyntaxKind7.TypeReference || !isIdentifier3(type.typeName))
+      return false;
+    const name = String(type.typeName.text);
+    return name === "Market" || iface && name === "MarketInterface";
   }
   /** The `market: Market = undefined` parameter of a listed helper: read-only, every parameter before it required
    *  (or `safeMarket`'s positional `marketId`). */
@@ -68386,8 +68451,7 @@ ${this.getIden(identation)}}`;
       return false;
     if (param.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(param.initializer)) !== "null")
       return false;
-    const type = param.type;
-    if (type?.kind !== SyntaxKind7.TypeReference || !isIdentifier3(type.typeName) || String(type.typeName.text) !== "Market")
+    if (!this.rustIsMarketTypeNode(param.type, param.initializer === void 0))
       return false;
     const hidden = this.getMethodOverride(method);
     if (hidden !== void 0)
@@ -68409,7 +68473,7 @@ ${this.getIden(identation)}}`;
         return false;
       if (this.rustMarketSlotUse(n))
         forwards++;
-      else if (this.rustMarketReaderArg(n) || this.rustIsNullTestOf(n))
+      else if (this.rustMarketReaderArg(n) || this.rustIsNullTestOf(n) || this.rustDictKeyReadUse(n))
         reads++;
       else
         others++;
@@ -69736,7 +69800,11 @@ _RustTranspiler.RUST_LIST_MARKET_METHODS = /* @__PURE__ */ new Set([
   "handleMarketTypeAndParams",
   "handleSubTypeAndParams",
   "safeMarket",
-  "safeOpenInterest"
+  "safeOpenInterest",
+  "parseOHLCVs",
+  "parseTradingViewOHLCV",
+  "parseOpenInterestsHistory",
+  "parseLiquidations"
 ]);
 var RustTranspiler = _RustTranspiler;
 

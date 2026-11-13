@@ -982,11 +982,20 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustReturnsOptMarket(node: any): boolean;
     /** `this.getMarketFromSymbols (..)` resolving to the typed base method. */
     rustIsOptMarketCall(init: any): boolean;
+    /** `c ? undefined : this.market (s)` (either arm order): the `this.market` arm. */
+    rustOptMarketTernary(init: any): any;
+    /** `(if c { None } else { Some(market) })` for an `Option<Market>` ternary initializer. */
+    printOptMarketTernary(init: any): string | undefined;
     /** `return x` in an `Option<Market>` method. */
     printOptMarketReturnValue(exp: any): string;
     private rustOptMarketBoxing;
     /** An `Option<Market>` call in a `Value` place: boxed once (its record's `raw`). */
     printOptMarketCallBox(node: any, identation: number): string | undefined;
+    /** `m = s` as its own statement, `s` a `const s = this.market (..)` read only by key reads, null tests and
+     *  this write (syntactic, so the two decisions never wait on each other): the alias source `s`. */
+    rustMarketAliasWriteSource(n: any): any;
+    /** The `Option<Market>` local an alias write `m = s` stores the struct local `s` into. */
+    rustMarketAliasTargetOf(n: any): any;
     /** `m = undefined` as its own statement. */
     rustIsNullWriteOf(n: any): boolean;
     /** A later `m = this.market (y)` on a struct local (`Some(..)` on an `Option<Market>` one). */
@@ -2313,6 +2322,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  ws or prediction): it prints as a lent `Option<&crate::types::Market>`; every use is a key read, a null
      *  test, a market slot or a `Value` hand-off (boxed once), and the parameter is never written. */
     rustParseMarketParam(method: any, param: any): boolean;
+    /** A `Market` type reference (or `MarketInterface` when `iface` is set). */
+    rustIsMarketTypeNode(type: any, iface: boolean): boolean;
     private static readonly RUST_LIST_MARKET_METHODS;
     /** The `market: Market = undefined` parameter of a listed helper: read-only, every parameter before it required
      *  (or `safeMarket`'s positional `marketId`). */
