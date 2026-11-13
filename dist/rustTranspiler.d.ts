@@ -919,6 +919,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustOkeyReadUse(n: any): boolean;
     /** Element-access hook: the native read of an `okey` use. */
     printOkeyRead(node: any): string | undefined;
+    private static readonly RUST_SCALAR_VALUE_OPERAND_OPS;
+    /** A number local as one operand of `+ - * /` whose other operand prints as a `Value` (ordered compares keep their own native form). */
+    rustScalarValueOperandUse(parent: any, n: any, kind: string): boolean;
+    rustScalarExprHasForCounter(node: any): boolean;
     /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
      *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */
     rustScalarExpressionUseForm(n: any, kind: string): string | undefined;
@@ -1931,6 +1935,18 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** An arm that is always a map: a base `extend`/`deepExtend`/`omit` call, or a local / `params = {}`
      *  parameter whose initializer and every write are such calls. */
     rustDictTernaryArm(arm: any): boolean;
+    /** A local as one arm of a ternary that initialises another `let`, with no loop or closure in between. */
+    rustDictTernaryArmPlace(node: any, declaration: any): boolean;
+    /** The arm is the local's last read: every other read precedes the declaring statement or sits in the
+     *  other arm (only one arm runs), so the arm moves the map. */
+    rustDictTernaryArmMoves(node: any, declaration: any): boolean;
+    /** A `let x = c ? <map> : <map>` local: like a params slot, it may also go whole into a plain `Value` argument. */
+    rustHandedTernaryLocal(declaration: any): boolean;
+    /** A typed dict local (handed slot / handed local / printed borrowed map) as such an arm: it goes in as the map. */
+    rustDictTernarySlotArm(node: any, declaration: any): boolean;
+    /** `let x: crate::value::Dict = if c { a } else { b }` with each arm native: a base `extend`/`omit` result unboxed
+     *  once, a moved handed slot as is. Only when an arm is such a slot; other ternaries keep the boxed if-expression. */
+    printDictTernaryArms(init: any, identation: number): string | undefined;
     rustDictTernaryCall(call: any): boolean;
     private rustNilResponseLocals;
     /** The container kind of a write to a borrowed local; an endpoint write to an empty `let` counts as a map. */

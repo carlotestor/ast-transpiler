@@ -53309,8 +53309,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const read = this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? parsedValue;
       return this.rustBorrowedLocalKind(declaration) === "list" ? `${indent}let mut ${varName}: crate::value::List = ${read}.into_list()` : `${indent}let mut ${varName}: crate::value::Dict = ${read}.into_dict()`;
     }
-    if (node.declarations.length === 1 && this.rustHandedDictLocal(declaration))
-      return `${indent}let mut ${varName}: crate::value::Dict = ${parsedValue}.into_dict()`;
+    if (node.declarations.length === 1 && this.rustHandedDictLocal(declaration)) {
+      const arms = this.printDictTernaryArms(declaration.initializer, identation);
+      return `${indent}let mut ${varName}: crate::value::Dict = ${arms ?? parsedValue + ".into_dict()"}`;
+    }
     const boolValue = this.getRustBoolLocalInitializer(declaration, parsedValue);
     if (boolValue !== void 0) {
       this.rustBoolDeclaredLocals.add(declaration);
@@ -58157,6 +58159,32 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `${recv}.get(${name}.as_deref().unwrap_or("")).cloned().unwrap_or(Value::Null)`;
     return `(if let (Some(__m), Some(__k)) = (${recv}.as_map(), ${name}.as_deref()) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null })`;
   }
+  /** A number local as one operand of `+ - * /` whose other operand prints as a `Value` (ordered compares keep their own native form). */
+  rustScalarValueOperandUse(parent, n, kind) {
+    if (kind !== "int" && kind !== "num" && kind !== "oint" && kind !== "onum")
+      return false;
+    if (!_RustTranspiler.RUST_SCALAR_VALUE_OPERAND_OPS.has(parent.operatorToken.kind))
+      return false;
+    const other = this.unwrapParens(parent.left === n ? parent.right : parent.left);
+    if (other === void 0 || this.literalKindOfNode(other) === "string")
+      return false;
+    const counter = isIdentifier3(other) ? this.rustDeclaredNode(other) : void 0;
+    if (counter !== void 0 && isVariableDeclaration3(counter) && counter.parent?.parent?.kind === SyntaxKind7.ForStatement)
+      return false;
+    if (this.rustScalarExprHasForCounter(other))
+      return false;
+    return this.primitiveKindOfType(this.typeOfNodeIfAny(parent.left === n ? parent.right : parent.left)) === "number";
+  }
+  rustScalarExprHasForCounter(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0)
+      return false;
+    if (isIdentifier3(inner)) {
+      const d = this.rustDeclaredNode(inner);
+      return d !== void 0 && isVariableDeclaration3(d) && d.parent?.parent?.kind === SyntaxKind7.ForStatement;
+    }
+    return isBinaryExpression5(inner) && (this.rustScalarExprHasForCounter(inner.left) || this.rustScalarExprHasForCounter(inner.right));
+  }
   /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
    *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */
   rustScalarExpressionUseForm(n, kind) {
@@ -58177,6 +58205,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       }
       if (_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) && this.rustScalarExpressionKind(parent) !== void 0)
         return "native";
+      if (this.rustScalarValueOperandUse(parent, n, kind))
+        return "xbox";
       return void 0;
     }
     if (isPropertyAccessExpression3(parent) && parent.expression === n) {
@@ -65182,6 +65212,8 @@ ${iden}}`;
     const declaration = this.rustDeclarationOfIdentifier(node);
     if (declaration === void 0 || declaration.name === node || !isIdentifier3(declaration.name))
       return false;
+    if (this.rustDictTernarySlotArm(node, declaration))
+      return true;
     if (isParameterDeclaration3(declaration)) {
       const dflt = this.rustSkipWrappers(declaration.initializer);
       if (dflt === void 0 || !isObjectLiteralExpression4(dflt) || dflt.properties.length !== 0)
@@ -65204,6 +65236,92 @@ ${iden}}`;
         return false;
     }
     return true;
+  }
+  /** A local as one arm of a ternary that initialises another `let`, with no loop or closure in between. */
+  rustDictTernaryArmPlace(node, declaration) {
+    if (declaration?.kind !== SyntaxKind7.BindingElement && !isVariableDeclaration3(declaration))
+      return false;
+    let arm = node;
+    let up = node.parent;
+    while (up !== void 0 && up.kind === SyntaxKind7.ParenthesizedExpression) {
+      arm = up;
+      up = up.parent;
+    }
+    if (!isConditionalExpression4(up) || up.condition === arm || !isVariableDeclaration3(up.parent) || up.parent.initializer !== up || !isIdentifier3(up.parent.name))
+      return false;
+    for (let p = up.parent; p !== void 0 && !(p.pos <= declaration.pos && declaration.end <= p.end); p = p.parent) {
+      if (isFunctionLike(p) || p.kind === SyntaxKind7.ForStatement || p.kind === SyntaxKind7.ForOfStatement || p.kind === SyntaxKind7.ForInStatement || p.kind === SyntaxKind7.WhileStatement || p.kind === SyntaxKind7.DoStatement)
+        return false;
+    }
+    return true;
+  }
+  /** The arm is the local's last read: every other read precedes the declaring statement or sits in the
+   *  other arm (only one arm runs), so the arm moves the map. */
+  rustDictTernaryArmMoves(node, declaration) {
+    if (!this.rustDictTernaryArmPlace(node, declaration))
+      return false;
+    let arm = node;
+    while (arm.parent?.kind === SyntaxKind7.ParenthesizedExpression)
+      arm = arm.parent;
+    const cond = arm.parent;
+    const sibling = cond.whenTrue === arm ? cond.whenFalse : cond.whenTrue;
+    const statement = cond.parent?.parent?.parent;
+    const scope = this.rustEnclosingFunction(declaration);
+    if (scope === void 0 || statement === void 0 || !isStatement(statement))
+      return false;
+    for (const n of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
+      if (n === node || n === declaration.name || !isIdentifier3(n) || this.rustIdentifierIsPropertyName(n) || !this.rustIdentifierRefersToDeclaration(n, declaration))
+        continue;
+      if (n.pos >= sibling.pos && n.end <= sibling.end)
+        continue;
+      if (n.end > statement.pos)
+        return false;
+    }
+    return true;
+  }
+  /** A `let x = c ? <map> : <map>` local: like a params slot, it may also go whole into a plain `Value` argument. */
+  rustHandedTernaryLocal(declaration) {
+    return declaration !== void 0 && isVariableDeclaration3(declaration) && this.rustDictTernaryInit(declaration.initializer);
+  }
+  /** A typed dict local (handed slot / handed local / printed borrowed map) as such an arm: it goes in as the map. */
+  rustDictTernarySlotArm(node, declaration) {
+    if (!this.rustDictTernaryArmPlace(node, declaration))
+      return false;
+    if (this.rustHandedDictLocal(declaration))
+      return true;
+    return this.rustBorrowedLocalKind(declaration) === "dict" && this.rustPrintedBorrowed.has(declaration) && !this.rustOptContainerLocals.has(declaration);
+  }
+  /** `let x: crate::value::Dict = if c { a } else { b }` with each arm native: a base `extend`/`omit` result unboxed
+   *  once, a moved handed slot as is. Only when an arm is such a slot; other ternaries keep the boxed if-expression. */
+  printDictTernaryArms(init, identation) {
+    const node = this.rustSkipWrappers(init);
+    if (node === void 0 || !isConditionalExpression4(node))
+      return void 0;
+    const slot = (arm2) => {
+      const a = this.rustSkipWrappers(arm2);
+      if (!isIdentifier3(a))
+        return false;
+      const d = this.rustDeclarationOfIdentifier(a);
+      return d !== void 0 && this.rustDictTernarySlotArm(a, d);
+    };
+    if (!slot(node.whenTrue) && !slot(node.whenFalse))
+      return void 0;
+    const arm = (n) => {
+      const a = this.rustSkipWrappers(n);
+      if (slot(a)) {
+        const text = String(a.text);
+        const name = super.transformIdentifier(a, this.ReservedKeywordsReplacements[text] ?? text);
+        return this.rustDictTernaryArmMoves(a, this.rustDeclarationOfIdentifier(a)) ? name : `${name}.clone()`;
+      }
+      if (!isCallExpression6(a))
+        return void 0;
+      return `${this.printNode(a, identation).trim()}.into_dict()`;
+    };
+    const t = arm(node.whenTrue);
+    const f = arm(node.whenFalse);
+    if (t === void 0 || f === void 0)
+      return void 0;
+    return `(if ${this.printCondition(node.condition, 0)} { ${t} } else { ${f} })`;
   }
   rustDictTernaryCall(call) {
     const callee = call.expression;
@@ -66846,6 +66964,10 @@ ${iden}}`;
       if (mutable === "native")
         uses++;
       if (!isCallExpression6(call)) {
+        if (mutable === void 0 && isVariableDeclaration3(declaration) && this.rustDictTernaryArmPlace(n, declaration)) {
+          boxes++;
+          return true;
+        }
         if (mutable === "box" || mutable === void 0 && this.rustHandedSlotBoxUse(n, declaration))
           boxes++;
         return mutable !== void 0 || this.rustHandedSlotBoxUse(n, declaration);
@@ -66860,7 +66982,7 @@ ${iden}}`;
         longBox = true;
       return ok || boxed;
     });
-    return safe && (uses > 0 || declaration.kind === SyntaxKind7.BindingElement && boxes > 0 && !longBox);
+    return safe && (uses > 0 || (declaration.kind === SyntaxKind7.BindingElement || this.rustHandedTernaryLocal(declaration)) && boxes > 0 && !longBox);
   }
   /** `[a, b] = this.m (.., n)`: printed as one `__destr_tmp` block line, kept within the line budget by the bare box. */
   rustInDestructureWrite(n) {
@@ -67581,7 +67703,7 @@ ${iden}}`;
   }
   rustHandedSlotBoxUse(n, declaration) {
     const up = n.parent;
-    if (declaration?.kind !== SyntaxKind7.BindingElement || up === void 0 || this.rustScalarInNestedWrite(n))
+    if (declaration?.kind !== SyntaxKind7.BindingElement && !this.rustHandedTernaryLocal(declaration) || up === void 0 || this.rustScalarInNestedWrite(n))
       return false;
     if (up.kind === SyntaxKind7.PropertyAssignment)
       return up.initializer === n;
@@ -67608,7 +67730,10 @@ ${iden}}`;
     if (!isIdentifier3(node))
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(node);
-    if (declaration?.kind !== SyntaxKind7.BindingElement || declaration.name === node || !(this.rustHandedSlotBoxUse(node, declaration) || this.rustMutableSlotUse(node, declaration) === "box") || !this.rustHandedDictLocal(declaration))
+    const local = declaration !== void 0 && isVariableDeclaration3(declaration) && declaration.name !== node && (this.rustDictTernaryArmPlace(node, declaration) || this.rustHandedTernaryLocal(declaration) && this.rustHandedSlotBoxUse(node, declaration));
+    if (!local && (declaration?.kind !== SyntaxKind7.BindingElement || declaration.name === node || !(this.rustHandedSlotBoxUse(node, declaration) || this.rustMutableSlotUse(node, declaration) === "box")))
+      return void 0;
+    if (!this.rustHandedDictLocal(declaration))
       return void 0;
     return this.rustLocalLastUse(node, declaration) ? `Value::Dict(${text})` : `Value::from(&${text})`;
   }
@@ -71598,6 +71723,12 @@ _RustTranspiler.RUST_PARAM_READ = {
   num: "as_f64().unwrap_or_default()",
   bool: "as_bool().unwrap_or_default()"
 };
+_RustTranspiler.RUST_SCALAR_VALUE_OPERAND_OPS = /* @__PURE__ */ new Set([
+  SyntaxKind7.PlusToken,
+  SyntaxKind7.MinusToken,
+  SyntaxKind7.AsteriskToken,
+  SyntaxKind7.SlashToken
+]);
 /** The ws cache classes whose hand-written `::new` takes `impl Into<Value>`. */
 _RustTranspiler.RUST_CACHE_CTORS = /* @__PURE__ */ new Set(["ArrayCache", "ArrayCacheByTimestamp", "ArrayCacheBySymbolById", "ArrayCacheBySymbolBySide", "ArrayCacheByOutcomeById"]);
 // `ts/src/base/**` — the shared `Exchange` / `PredictionExchange` classes
