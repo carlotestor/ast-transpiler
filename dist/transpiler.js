@@ -53155,7 +53155,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${indent}let mut ${varName}: Value = Value::Null`;
     }
     if (node.declarations.length === 1 && this.rustBytesLocal(declaration))
-      return `${indent}let mut ${varName}: crate::value::Bytes = ${this.rustBytesBareText(this.unwrapParens(declaration.initializer), identation)}`;
+      return `${indent}let mut ${varName}: ${this.rustTestTierSource(declaration) ? "ccxt" : "crate"}::value::Bytes = ${this.rustBytesBareText(this.unwrapParens(declaration.initializer), identation)}`;
     const scalarDecl = node.declarations.length === 1 ? this.printRustScalarLocalDeclaration(declaration, varName, indent) ?? this.printWsUrlLocalDeclaration(declaration, varName, indent) ?? this.printWsFlightLocalDeclaration(declaration, varName, indent) : void 0;
     if (scalarDecl !== void 0)
       return scalarDecl;
@@ -55049,6 +55049,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const declaration = this.rustScalarCallee(node);
     if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? "")) && !this.rustBaseBoundHelper(node))
       return false;
+    if (String(node.expression.name.text) === "hash")
+      return node.arguments.length === 2 || node.arguments.length === 3 && this.rustLiteralDigest(node.arguments[2]) !== void 0 && this.rustLiteralDigest(node.arguments[2]) !== "binary";
     const type = this.typeOfNodeIfAny(node);
     return type !== void 0 && this.isStringLikeType(type);
   }
@@ -55118,7 +55120,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** Call hook: the `String` result is boxed once (`Value::from`) wherever a `Value` is expected. */
   printRustStrRuntimeCall(node, identation) {
-    if (!this.rustStrRuntimeBare.has(node) && this.rustStrRuntimeTestCall(node))
+    if (!this.rustStrRuntimeBare.has(node) && (this.rustStrRuntimeTestCall(node) || this.rustHashOpenDigestCall(node)))
       return `Value::from(${this.rustStrRuntimeBareText(node, identation)})`;
     if (this.rustStrRuntimeBare.has(node) || !this.rustStrRuntimeCall(node))
       return void 0;
@@ -55127,6 +55129,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** `this.encode(..)` & co. resolved to the base tier, or such a call on a test's untyped `exchange`. */
   rustBytesProducer(node) {
+    if (this.rustHashBinaryCall(node))
+      return true;
     if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || !_RustTranspiler.RUST_BYTES_PRODUCERS.has(String(node.expression.name.text)))
       return false;
     const recv = node.expression.expression;
@@ -55136,6 +55140,20 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const type = this.typeOfNodeIfAny(recv);
     return type !== void 0 && (type.flags & TypeFlags6.Any) !== 0;
+  }
+  /** `this.hash(data, algo, 'binary')`: the TS overload for a literal `'binary'` digest returns the bytes (`hash_binary`). */
+  rustHashBinaryCall(node) {
+    if (node === void 0 || !isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(node.expression.name.text) !== "hash" || node.arguments.length !== 3)
+      return false;
+    return this.rustLiteralDigest(node.arguments[2]) === "binary" && this.rustCalleeIsRuntimeBase(node);
+  }
+  /** `this.hash(.., digest)` with a non-literal digest: the runtime `hash` returns the text digest, boxed at once. */
+  rustHashOpenDigestCall(node) {
+    return isCallExpression6(node) && isPropertyAccessExpression3(node.expression) && node.expression.expression.kind === SyntaxKind7.ThisKeyword && String(node.expression.name.text) === "hash" && node.arguments.length === 3 && this.rustLiteralDigest(node.arguments[2]) === void 0 && this.rustCalleeIsRuntimeBase(node);
+  }
+  rustLiteralDigest(arg) {
+    const digest = this.unwrapParens(arg);
+    return isStringLiteralLikeNode4(digest) && ["hex", "base64", "binary"].includes(digest.text) ? digest.text : void 0;
   }
   /** A call of the imported base `functions/` export `name`. */
   rustBaseFunctionCall(node, name) {
@@ -55150,17 +55168,19 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     while (isParenthesizedExpression3(current.parent))
       current = current.parent;
     const call = current.parent;
-    if (call === void 0 || !isCallExpression6(call) || call.expression === current || this.rustTestTierSource(call))
+    if (call === void 0 || !isCallExpression6(call) || call.expression === current)
       return false;
     const at = call.arguments.indexOf(current);
     const callee = call.expression;
     if (isIdentifier3(callee))
-      return (_RustTranspiler.RUST_BYTES_FREE_SLOTS[String(callee.text)] ?? []).includes(at) && this.rustBaseFunctionCall(call, String(callee.text));
-    if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword)
+      return !this.rustTestTierSource(call) && (_RustTranspiler.RUST_BYTES_FREE_SLOTS[String(callee.text)] ?? []).includes(at) && this.rustBaseFunctionCall(call, String(callee.text));
+    if (!isPropertyAccessExpression3(callee) || !this.rustScalarReceiver(callee.expression))
       return false;
     return (_RustTranspiler.RUST_BYTES_SLOTS[String(callee.name.text)] ?? []).includes(at) && this.rustCalleeIsRuntimeBase(call);
   }
   rustBytesBareText(node, identation = 0) {
+    if (this.rustHashBinaryCall(node))
+      return `self.hash_binary(${this.rustPrintedArgs(node, identation).slice(0, 2).map((a) => this.rustSliceArgText(a.trim())).join(", ")})`;
     this.rustBytesBare.add(node);
     try {
       return this.printNode(node, identation).trim();
@@ -55193,9 +55213,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   rustBytesLocalUncached(declaration) {
     const list = declaration.parent;
-    if (!isIdentifier3(declaration.name) || list?.declarations?.length !== 1 || list.parent?.kind !== SyntaxKind7.VariableStatement || this.rustTestTierSource(declaration))
+    if (!isIdentifier3(declaration.name) || list?.declarations?.length !== 1 || list.parent?.kind !== SyntaxKind7.VariableStatement)
       return false;
-    if (!this.rustBytesProducer(this.unwrapParens(declaration.initializer)))
+    const init = this.unwrapParens(declaration.initializer);
+    if (!this.rustBytesProducer(init) || this.rustTestTierSource(declaration) && !this.rustScalarReceiver(init.expression.expression))
       return false;
     const fn = this.rustEnclosingFunction(declaration);
     if (fn === void 0 || isSourceFile5(fn))
@@ -55492,10 +55513,21 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (push !== void 0 && isCallExpression6(push))
         return false;
       const write = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken);
-      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right))
+      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration))
         return false;
     }
     return true;
+  }
+  /** A String-helper result boxed as an object-literal value or as a one-level element write: the written
+   *  place is a `Value` either way, so no other local's decision reads this one's type. */
+  rustScalarBoxedField(n, write, declaration) {
+    if (!this.rustStrRuntimeCall(this.unwrapParens(declaration.initializer)))
+      return false;
+    if (n.parent?.kind === SyntaxKind7.PropertyAssignment && n.parent.initializer === n && isObjectLiteralExpression4(n.parent.parent))
+      return true;
+    if (this.rustScalarUseForms.get(n) === "concat")
+      return true;
+    return write.right === n && isElementAccessExpression4(write.left) && isIdentifier3(write.left.expression);
   }
   // ── scalar loop counters (rustScalarCounterCond) ──
   // `i < n` over an `Int`-literal counter whose bound is any other numeric operand (one that the
@@ -59173,6 +59205,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (isStringLiteral3(node) && !(node.text in this.StringLiteralReplacements)) {
       return this.quotedStringLiteral(node.text);
     }
+    if (kind === "msg" && this.rustStrRuntimeCall(this.unwrapParens(node)))
+      return this.rustStrRuntimeBareText(this.unwrapParens(node), identation);
     const printed = this.printNode(node, identation).trim();
     if (kind !== "msg" || !this.rustTypeIsString(node)) {
       return printed;
@@ -61928,6 +61962,8 @@ ${iden}}`;
       const local = this.rustVenueStrReturnLocal(this.unwrapParensNode(exp));
       if (local !== void 0)
         return `${idn}return ${local};`;
+      if (this.rustStrRuntimeCall(this.unwrapParens(exp)))
+        return `${idn}return Some(${this.rustStrRuntimeBareText(this.unwrapParens(exp))});`;
       const suffix = this.rustStrNativeExpression(exp) ? "" : ".as_str().map(str::to_owned)";
       return `${idn}return ${this.printNode(exp, 0).trim()}${suffix};`;
     }
@@ -68056,6 +68092,8 @@ ${this.getIden(identation)}}`;
     }
     if (type === "Option<&str>" && this.literalKindOfNode(inner) === "null")
       return "None";
+    if (this.rustStrRuntimeCall(inner))
+      return type === "&str" ? `${this.rustStrRuntimeBareText(inner, identation)}.as_str()` : `Some(${this.rustStrRuntimeBareText(inner, identation)}.as_str())`;
     const printed = this.printNode(arg, identation).trim();
     const recv = /^[A-Za-z_][A-Za-z0-9_]*$/.test(printed) ? printed : `(${printed})`;
     return type === "&str" ? `${recv}.as_str().unwrap_or_default()` : `${recv}.as_str()`;
@@ -68512,11 +68550,12 @@ _RustTranspiler.RUST_STR_RUNTIME_METHODS = /* @__PURE__ */ new Set([
   "binaryToBase16",
   "binaryToBase64",
   "binaryToBase58",
-  "binaryToString"
+  "binaryToString",
+  "hash"
 ]);
 _RustTranspiler.RUST_STR_RUNTIME_APPEND_VETO = /* @__PURE__ */ new Set(["implodeParams", "intToBase16"]);
 // The runtime's free signers with a TS `string` return (`base/functions/crypto.ts`, `rsa.ts`).
-_RustTranspiler.RUST_STR_RUNTIME_FREE = /* @__PURE__ */ new Set(["eddsa", "jwt", "rsa"]);
+_RustTranspiler.RUST_STR_RUNTIME_FREE = /* @__PURE__ */ new Set(["eddsa", "jwt", "rsa", "hash"]);
 // ── byte buffers (rustBytesProducer / rustBytesSlot / rustBytesLocal) ──
 // The hand-written producers of a TS `Uint8Array` return `crate::value::Bytes` (the `Value::Arr` of byte
 // ints behind a typed handle) and the byte parameters of the hand-written consumers take `impl Into<Value>`.
@@ -68526,6 +68565,8 @@ _RustTranspiler.RUST_BYTES_PRODUCERS = /* @__PURE__ */ new Set(["encode", "base1
 _RustTranspiler.RUST_BYTES_SLOTS = {
   hmac: [0, 1],
   hash: [0],
+  isBinaryMessage: [0],
+  decode: [0],
   binaryToBase16: [0],
   binaryToBase64: [0],
   binaryToBase58: [0],

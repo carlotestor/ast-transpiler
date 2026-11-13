@@ -526,6 +526,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustBytesUseForms;
     /** `this.encode(..)` & co. resolved to the base tier, or such a call on a test's untyped `exchange`. */
     rustBytesProducer(node: any): boolean;
+    /** `this.hash(data, algo, 'binary')`: the TS overload for a literal `'binary'` digest returns the bytes (`hash_binary`). */
+    rustHashBinaryCall(node: any): boolean;
+    /** `this.hash(.., digest)` with a non-literal digest: the runtime `hash` returns the text digest, boxed at once. */
+    rustHashOpenDigestCall(node: any): boolean;
+    rustLiteralDigest(arg: any): string | undefined;
     /** A call of the imported base `functions/` export `name`. */
     rustBaseFunctionCall(node: any, name: string): boolean;
     /** An argument in a byte parameter (`impl Into<Value>`) of a hand-written consumer, outside the test crate. */
@@ -572,6 +577,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustReaderIntDefaultNum(init: any): boolean;
     rustScalarUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean): boolean;
     rustBlockLocalUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean, scalar?: boolean): boolean;
+    /** A String-helper result boxed as an object-literal value or as a one-level element write: the written
+     *  place is a `Value` either way, so no other local's decision reads this one's type. */
+    rustScalarBoxedField(n: any, write: any, declaration: any): boolean;
     rustScalarCounterCond(node: any, name: string): string | undefined;
     rustScalarCounterPlan(node: any, name: string): {
         cond: string;
