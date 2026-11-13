@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -64671,6 +64671,7 @@ ${iden}}`;
     let defaultedBoxes = 0;
     let optionalBoxes = 0;
     let paramsBoxes = 0;
+    let declaredEndpointWrites = 0;
     const boxedElementUses = [];
     const accept = (n) => {
       if (this.rustIdentifierIsPropertyName(n))
@@ -64692,7 +64693,10 @@ ${iden}}`;
         if (this.literalKindOfNode(rhs) === "null")
           return true;
         const kind = this.rustNilResponseWriteKind(rhs, nilDeclared, declaration);
-        if (kind === void 0 || kind === "api" || !this.rustOptContainerSourceOk(rhs, kind) && !this.rustNilResponseLocals.has(declaration))
+        const declaredWrite = nilDeclared && this.rustDeclaredEndpointWrite(rhs);
+        if (declaredWrite)
+          declaredEndpointWrites++;
+        if (kind === void 0 || kind === "api" || !this.rustOptContainerSourceOk(rhs, kind) && !this.rustNilResponseLocals.has(declaration) && !declaredWrite)
           return false;
         if (from !== void 0 && from !== kind)
           mixed = true;
@@ -64749,6 +64753,8 @@ ${iden}}`;
     const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init));
     const boxOnly = reads === 0 && boxedElementUses.length > 0 && this.rustDictElementSource(init) && nullTests === 0 && writes === 0;
     if (!safe || reads === 0 && !builtBoxOnly && !boxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))
+      return void 0;
+    if (declaredEndpointWrites > 0 && nullTests > 0)
       return void 0;
     if (this.rustNilResponseLocals.has(declaration) && (lentResponses > 0 || lentNullable > 0))
       return void 0;
@@ -65448,8 +65454,18 @@ ${iden}}`;
     const kind = isCallExpression6(call) ? this.rustBorrowedSourceKind(call) : void 0;
     if (kind !== "api" || !nilDeclared)
       return kind;
+    const declared = this.rustDeclaredEndpointKind(call);
+    if (declared !== void 0)
+      return declared;
     this.rustNilResponseLocals.add(declaration);
     return "dict";
+  }
+  /** ral-kc: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<Dict>` / `Promise<List>`. */
+  rustDeclaredEndpointWrite(rhs) {
+    let call = rhs;
+    if (call?.kind === SyntaxKind7.AwaitExpression)
+      call = this.rustSkipWrappers(call.expression);
+    return call !== void 0 && isCallExpression6(call) && this.rustBorrowedSourceKind(call) === "api" && this.rustDeclaredEndpointKind(call) !== void 0;
   }
   /** A base `safeDict*` / `safeList*` call (default absent, nullish or an empty literal of its kind), or a base `extend`/`omit`. */
   rustOptContainerSourceOk(call, kind) {
