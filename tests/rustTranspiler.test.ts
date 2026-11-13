@@ -7388,7 +7388,7 @@ describe('rust typed Market locals', () => {
         expect(output).toContain('let mut market: crate::types::Market = (match self.market(');
         expect(output).toContain('Value::from((market).id.as_deref())');
         expect(output).toContain('(market).swap || (market.linear == Some(true))'.replace('market.linear', '(market).linear'));
-        expect(output).toContain('(market).raw.as_map().and_then(|__m| __m.get("info"))');
+        expect(output).toContain('crate::value::KeyRead::key_read(&&market, "info")');
         expect(output).toContain('Value::from((market).symbol.clone())');
         expect(output).toContain('self.hold((market).raw.clone())');
     });
@@ -7399,7 +7399,7 @@ describe('rust typed Market locals', () => {
     });
 
     test('flag reads off a market struct print plain bools, never is_true', () => {
-        expect(output).toContain('let mut isStock: Value = (market).raw.as_map().and_then(|__m| __m.get("stock"))');
+        expect(output).toContain('let mut isStock: Value = crate::value::KeyRead::key_read(&&market, "stock")');
         expect(output).toContain('isStock.as_bool() == Some(true) && ((market).spot)');
         expect(output).toContain('!(market).spot');
         expect(output).not.toContain('is_true(&isStock)');
@@ -8971,5 +8971,26 @@ describe('typed list fields', () => {
         expect(out).not.toContain('let mut symbols: Value');
         const base = transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts')).content;
         expect(base).toContain('self.symbols = keys.into_list()');
+    });
+});
+
+describe('typed safeMarket and market slots', () => {
+    test('safeMarket returns the typed market from the by-id store and lends it to market slots', () => {
+        const dir = path.join (rustFixtureRoot, 'typed-safe-market');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    markets_by_id: Dict = undefined;\n    safeList (o: any, k: any, d: any = undefined): any[] { return o; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeBool (o: any, k: any, d: boolean = undefined): boolean { return o; }\n    safeMarketStructure (m: Dict = undefined): MarketInterface { return m as any; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    safeTrade (trade: Dict, market: Market = undefined): Dict {\n        const inverse = this.safeBool (market, 'inverse', false);\n        trade['inverse'] = inverse;\n        return trade;\n    }\n    safeMarket (marketId: Str = undefined, market: Market = undefined, delimiter: Str = undefined, marketType: Str = undefined): MarketInterface {\n        if (marketId !== undefined) {\n            const markets = this.safeList (this.markets_by_id, marketId, []);\n            if (markets.length === 1) {\n                return markets[0];\n            }\n        }\n        if (market !== undefined) {\n            return market;\n        }\n        return this.safeMarketStructure ({ 'symbol': marketId });\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Market } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseTrade (trade: Dict, market: Market = undefined): Dict {\n        const marketId = this.safeString (trade, 's');\n        const resolved = this.safeMarket (marketId, market);\n        const symbol = resolved['symbol'];\n        const quote = this.safeString (resolved, 'quote');\n        return this.safeTrade ({ 'symbol': symbol, 'quote': quote }, resolved);\n    }\n    parseOther (trade: Dict, market: Market = undefined): Dict {\n        return this.safeTrade (trade, market);\n    }\n}\n");
+        const base = transpiler.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts')).content;
+        expect(base).toContain('-> crate::types::Market {');
+        expect(base).toContain('let mut markets: &[crate::types::Market] = __marketsById.records_by_id(');
+        expect(base).toContain('return markets[0].clone();');
+        expect(base).toContain('market: Option<&crate::types::Market>');
+        expect(base).toContain('self.safe_bool_k(&market, "inverse"');
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut resolved: crate::types::Market = self.safeMarket(');
+        expect(out).toContain('crate::value::KeyRead::key_read(&&resolved, "symbol")');
+        expect(out).toContain('Some(&resolved))');
+        expect(out).toContain('<Option<crate::types::Market> as crate::types::FromRaw>::from_raw(market.clone()).as_ref())');
+        expect(out).not.toContain('resolved.as_map()');
     });
 });

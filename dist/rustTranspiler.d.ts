@@ -64,7 +64,7 @@ interface RustScopeIndex {
     end: number[];
     byName: Map<string, number[]> | undefined;
 }
-export type RustDispatchParamKind = 'value' | 'slice' | 'map' | 'strvec' | 'flag' | 'str' | 'optstr' | 'f64' | 'optf64' | 'opti64' | 'i64' | 'optstrvec' | 'strvecvec' | 'params' | 'orderreqs' | 'dict' | 'list' | 'optdict' | 'optlist' | 'other';
+export type RustDispatchParamKind = 'value' | 'slice' | 'map' | 'strvec' | 'flag' | 'str' | 'optstr' | 'f64' | 'optf64' | 'opti64' | 'i64' | 'optstrvec' | 'strvecvec' | 'params' | 'orderreqs' | 'dict' | 'list' | 'optdict' | 'optlist' | 'optmarket' | 'other';
 export type RustDispatchReturnKind = 'value' | 'void' | 'typed' | 'ostr' | 'int' | 'string' | 'bool' | 'dict' | 'list' | 'optdict' | 'struct' | 'other';
 export interface RustMethodSignature {
     file: any;
@@ -953,13 +953,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustMarketEmptyDefaultRead(call: any): boolean;
     /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
     rustMarketValueUse(n: any): boolean;
-    rustMarketLocalKind(declaration: any): false | 'struct' | 'opt' | 'call';
+    rustMarketLocalKind(declaration: any): false | 'struct' | 'opt' | 'call' | 'smkt';
     rustMarketLocalIsTyped(declaration: any): boolean;
-    /** `m = this.market (x)` as its own statement: a later write of the same struct. */
+    /** `m = this.market (x)` / `m = this.safeMarket (..)` as its own statement: a later write of the same struct. */
     rustIsTypedMarketWrite(n: any): boolean;
     /** `m === undefined` / `m !== undefined` (either side). */
     rustIsNullTestOf(n: any): boolean;
-    rustMarketLocalIsTypedUncached(declaration: any): false | 'struct' | 'opt' | 'call';
+    rustMarketLocalIsTypedUncached(declaration: any): false | 'struct' | 'opt' | 'call' | 'smkt';
     rustOptMarketKeyRead(n: any): boolean;
     /** `crate::value::KeyRead::key_read(&&m, "k")` for a direct read on an `Option<Market>` local. */
     printOptMarketKeyRead(node: any): string | undefined;
@@ -2263,6 +2263,44 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVenuePositional(param: any): boolean;
     /** `None` for each positional optional slot a call leaves out. */
     rustVenuePads(params: any[] | undefined, given: number, fixed: number): string[];
+    private static readonly RUST_MARKET_SLOT_METHODS;
+    private rustMarketSlotDecisions;
+    /** A method declared `safeMarket (..): MarketInterface` with a body in `ts/src` (base or venue). */
+    rustReturnsMarket(node: any): boolean;
+    /** The `market` parameter of a base market-slot reader, read only by key readers, null tests or `Value` hand-offs. */
+    rustMarketSlotParam(param: any): boolean;
+    rustMarketSlotParamUncached(param: any): boolean;
+    /** The callee parameter at `at` is a lent market slot. */
+    rustMarketSlot(params: any[] | undefined, at: number): boolean;
+    /** A use (never the declaration) of a lent market parameter. */
+    rustMarketSlotParamOf(node: any): any;
+    /** A lent market parameter handed to a `Value` slot: its record, boxed once. */
+    printMarketSlotParamValue(node: any): string | undefined;
+    /** `this.safeMarket (..)` / `super.safeMarket (..)` resolving to a method that returns the typed market. */
+    rustIsSafeMarketCall(init: any): boolean;
+    /** `const m = this.safeMarket (..)` whose every use reads a key, lends the record, or rewrites it from `safeMarket`. */
+    rustSafeMarketLocalOk(declaration: any): boolean;
+    /** A use of a `safeMarket` struct local. */
+    rustSafeMarketLocalOf(node: any): any;
+    /** Argument text for a lent market slot: a typed market lends itself, any other value decodes once. */
+    rustMarketSlotArgText(arg: any, identation: number): string;
+    /** `crate::types` in the library crates, `ccxt::types` in the test crate. */
+    rustTypesPath(node: any): string;
+    private rustSafeMarketBoxing;
+    /** A `safeMarket` call that lands where the struct goes as is (a struct local, a market return, a lent slot). */
+    rustSafeMarketCallNative(node: any): boolean;
+    /** A `safeMarket` call whose result goes to a `Value` place: the typed result boxed once. */
+    printSafeMarketCallBox(node: any, identation: number): string | undefined;
+    rustMarketStoreLocal(declaration: any): boolean;
+    /** `const m = markets[i]` over a store local: read by key readers and returned. */
+    rustMarketStoreElement(declaration: any): boolean;
+    rustMarketStoreOf(node: any): any;
+    rustMarketStoreElementOf(node: any): any;
+    printMarketStoreDeclaration(declaration: any, indent: string, varName: string): string | undefined;
+    rustMarketStoreElementDecl(declaration: any): boolean;
+    rustStoreIndexText(keyNode: any): string;
+    /** The `crate::types::Market` a market-returning method hands back for `return <exp>`. */
+    printMarketReturnValue(exp: any): string;
     /** A checker-`boolean` argument for a `bool` slot: native where it already is one, an `Option<bool>` local or a
      *  `Value` compared with `Some(true)` (its variant is `Bool` or `Null`), else its truthiness. */
     rustVenueBoolArgText(arg: any, identation: number): string;
