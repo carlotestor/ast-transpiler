@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -54069,13 +54069,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   // Visits every in-scope use of the local `name` declared by `declaration`: false as soon as the
   // name is re-bound in scope or `acceptUse(identifier)` rejects a use. `skipPropertyNames` leaves
   // `x.foo` / `{ foo }` names out of the uses.
-  rustLocalUsesAll(declaration, name, skipPropertyNames, acceptUse) {
+  rustLocalUsesAll(declaration, name, skipPropertyNames, acceptUse, skipScopeName = false) {
     const scope = this.rustEnclosingFunction(declaration);
     if (scope === void 0 || name === void 0) {
       return false;
     }
     let safe = true;
     for (const n of this.rustScopeNameNodes(scope, name)) {
+      if (skipScopeName && n === scope.name)
+        continue;
       if (n !== declaration && this.rustBindsName(n, name)) {
         safe = false;
         break;
@@ -55599,9 +55601,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     member = member?.resolve?.() ?? member;
     if (member === void 0)
       return void 0;
-    if (member.kind === SyntaxKind7.MethodDeclaration)
-      return this.rustMethodTypedReturnKind(member);
     const base = _RustTranspiler.RUST_BASE_TIER_FILE.test(String(member.getSourceFile?.()?.fileName ?? ""));
+    if (member.kind === SyntaxKind7.MethodDeclaration)
+      return this.rustMethodTypedReturnKind(member) ?? (base && _RustTranspiler.RUST_BASE_TYPED_HAND_METHODS.has(name) ? _RustTranspiler.RUST_BASE_TYPED_RUNTIME[name] : void 0);
     return base && member.kind === SyntaxKind7.PropertyDeclaration ? _RustTranspiler.RUST_BASE_TYPED_RUNTIME[name] : void 0;
   }
   /** The unboxed call text. */
@@ -56087,11 +56089,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const own = this.rustSymbolOf(declaration.name);
     const scope = this.rustEnclosingFunction(declaration);
     if (own === void 0 || scope === void 0 || (declaration.parent?.flags & (NodeFlags4.Let | NodeFlags4.Const)) === 0)
-      return this.rustLocalUsesAll(declaration, name, false, acceptUse);
+      return this.rustLocalUsesAll(declaration, name, false, acceptUse, scalar);
     const nodes = this.rustScopeNameNodes(scope, name);
     const siblings = nodes.filter((n) => n !== declaration && this.rustBindsName(n, name));
     if (siblings.length === 0)
-      return this.rustLocalUsesAll(declaration, name, false, acceptUse);
+      return this.rustLocalUsesAll(declaration, name, false, acceptUse, scalar);
     for (const n of siblings) {
       if (!isVariableDeclaration3(n) || (n.parent?.flags & (NodeFlags4.Let | NodeFlags4.Const)) === 0 || this.rustEnclosingFunction(n) !== scope || this.isNodeInsideNode(declaration, n.parent?.parent ?? n) || this.isNodeInsideNode(n, declaration.parent?.parent ?? declaration))
         return false;
@@ -56304,9 +56306,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const file = String(declaration.getSourceFile().fileName);
     if (declaration.type === void 0 || declaration.body === void 0 || !/ts[\\/]src[\\/]/.test(file) || /ts[\\/]src[\\/]test[\\/]/.test(file))
       return void 0;
-    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(file) || this.getMethodOverride(declaration) !== void 0 || this.rustTypedSignature(declaration) !== void 0)
+    const hidden = this.getMethodOverride(declaration);
+    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(file) || hidden !== void 0 && !this.rustVenueOverrideAgrees(declaration, hidden))
       return void 0;
-    if (this.rustNativeStrReturnKind(declaration) === "str")
+    if (hidden === void 0 && (this.rustTypedSignature(declaration) !== void 0 || this.rustNativeStrReturnKind(declaration) === "str"))
       return void 0;
     let declared = declaration.type;
     if (this.isAsyncFunction(declaration)) {
@@ -56335,6 +56338,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     };
     declaration.body.forEachChild(visit);
     return ok ? kind : void 0;
+  }
+  /** An override whose hidden base method and every venue declaration of the name declare its own return type. */
+  rustVenueOverrideAgrees(declaration, hidden) {
+    const own = String(declaration.type?.getText?.() ?? "").replace(/\s+/g, "");
+    if (own === "" || String(hidden.type?.getText?.() ?? "").replace(/\s+/g, "") !== own)
+      return false;
+    if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile?.()?.fileName ?? "")) || this.rustMethodTypedReturnKind(hidden) !== void 0 || this.rustBaseNativeStrMethod(declaration))
+      return false;
+    const file = String(declaration.getSourceFile().fileName);
+    const at = file.search(/[/\\]ts[/\\]src[/\\]/);
+    const types = at < 0 ? void 0 : this.rustVenueReturnTypes(file.slice(0, at) + "/ts/src").get(String(declaration.name.text));
+    return types !== void 0 && [...types].every((t) => t.replace(/\s+/g, "") === own);
   }
   /** The once-converted native text of a venue typed call (the method keeps `-> Value` and its dispatch arm). */
   rustVenueTypedText(kind, expr) {
@@ -62749,7 +62764,7 @@ ${idn}}`;
     const scalarCondition = this.printRustScalarLocalCondition(node);
     if (scalarCondition !== void 0)
       return idn + scalarCondition;
-    if (this.rustCallPrintsBool(node))
+    if (this.rustCallPrintsBool(node) || this.rustBaseTypedReturnKind(node) === "bool")
       return idn + this.printNode(node, 0);
     const nativeTruthiness = this.printNativeTruthiness(node);
     if (nativeTruthiness !== void 0)
@@ -66053,6 +66068,8 @@ ${iden}}`;
       const callee = call.expression;
       if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword)
         return void 0;
+      if (this.rustStoreDictReturnCall(call))
+        return "dict";
       if (!_RustTranspiler.RUST_BORROWED_LIST_SOURCES.has(String(callee.name.text)))
         return void 0;
       const declaration = this.rustScalarCallee(call);
@@ -66060,6 +66077,40 @@ ${iden}}`;
     }
     const file = String(this.rustScalarCallee(call)?.getSourceFile?.()?.fileName ?? "");
     return /ts[\\/]src[\\/]abstract[\\/]/.test(file) ? "api" : "dict";
+  }
+  /** `this.m(..)` of a venue method (no override, every venue declaration of the name returning `Dict`) whose every
+   *  return is `this.safeDict (this.<field>, '<key>', {})`: the shared handle of a typed store entry, a map on every path. */
+  rustStoreDictReturnCall(call) {
+    const declaration = this.rustScalarCallee(call);
+    if (declaration?.kind !== SyntaxKind7.MethodDeclaration || declaration.body === void 0 || !isIdentifier3(declaration.name) || /^(?:fetch|load|parse|handle|watch)/.test(String(declaration.name.text)))
+      return false;
+    const file = String(declaration.getSourceFile?.()?.fileName ?? "");
+    const at = file.search(/[/\\]ts[/\\]src[/\\]/);
+    if (at < 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(file) || /ts[\\/]src[\\/]test[\\/]/.test(file) || this.getMethodOverride(declaration) !== void 0)
+      return false;
+    const own = String(declaration.type?.getText?.() ?? "").replace(/\s+/g, "");
+    if (own !== (this.isAsyncFunction(declaration) ? "Promise<Dict>" : "Dict"))
+      return false;
+    const types = this.rustVenueReturnTypes(file.slice(0, at) + "/ts/src").get(String(declaration.name.text));
+    if (types === void 0 || ![...types].every((t) => t.replace(/\s+/g, "") === own))
+      return false;
+    let returns = 0;
+    let ok = true;
+    const visit = (n) => {
+      if (!ok || n !== declaration.body && isFunctionLike(n))
+        return;
+      if (isReturnStatement4(n)) {
+        const v = this.unwrapParens(n.expression);
+        const args = v !== void 0 && isCallExpression6(v) ? Array.from(v.arguments) : [];
+        if (args.length !== 3 || !isPropertyAccessExpression3(v.expression) || v.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(v.expression.name.text) !== "safeDict" || !this.rustCalleeIsRuntimeBase(v) || !isPropertyAccessExpression3(args[0]) || args[0].expression.kind !== SyntaxKind7.ThisKeyword || this.literalKindOfNode(args[1]) !== "string" || args[2].kind !== SyntaxKind7.ObjectLiteralExpression || args[2].properties.length !== 0)
+          ok = false;
+        else
+          returns++;
+      }
+      n.forEachChild(visit);
+    };
+    declaration.body.forEachChild(visit);
+    return ok && returns > 0;
   }
   // ── rustDeclaredEndpointKind: an implicit endpoint whose api leaf spells `Endpoint<Dict>` / `Endpoint<List>` ──
   // The generated abstract method then declares exactly `Promise<Dict>` / `Promise<List>` (a leaf that spells no
@@ -73104,8 +73155,16 @@ _RustTranspiler.RUST_BASE_TYPED_RUNTIME = {
   parse8601: "oint",
   numberToString: "ostr",
   omitZero: "ostr",
-  parseTimeframe: "int"
+  parseTimeframe: "int",
+  inArray: "bool",
+  valueIsDefined: "bool",
+  isJsonEncodedObject: "bool",
+  seconds: "int",
+  randNumber: "int",
+  precisionFromString: "int"
 };
+// base methods with a TS body that the runtime implements by hand (`exchange_stubs.rs`), typed like the runtime table
+_RustTranspiler.RUST_BASE_TYPED_HAND_METHODS = /* @__PURE__ */ new Set(["valueIsDefined", "randNumber"]);
 // ── byte buffers (rustBytesProducer / rustBytesSlot / rustBytesLocal) ──
 // The hand-written producers of a TS `Uint8Array` return `crate::value::Bytes` (the `Value::Arr` of byte
 // ints behind a typed handle) and the byte parameters of the hand-written consumers take `impl Into<Value>`.

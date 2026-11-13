@@ -563,6 +563,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustStrRuntimeCall(node: any, identation: any): string | undefined;
     private static readonly RUST_BASE_TYPED_METHODS;
     private static readonly RUST_BASE_TYPED_RUNTIME;
+    private static readonly RUST_BASE_TYPED_HAND_METHODS;
     private rustBaseTypedBare;
     /** The native kind a method declaration returns under the table, else undefined. */
     rustMethodTypedReturnKind(node: any): string | undefined;
@@ -681,6 +682,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustVenueTypedDecisions;
     rustVenueTypedCall(expr: any): string | undefined;
     rustVenueTypedKindUncached(declaration: any): string | undefined;
+    /** An override whose hidden base method and every venue declaration of the name declare its own return type. */
+    rustVenueOverrideAgrees(declaration: any, hidden: any): boolean;
     /** The once-converted native text of a venue typed call (the method keeps `-> Value` and its dispatch arm). */
     rustVenueTypedText(kind: string, expr: any): string | undefined;
     /** A venue typed string is copied out of the `Value` once: a box short of a moving last use, or a hand-on, would copy it again. */
@@ -1588,7 +1591,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -2037,6 +2040,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustTypedParamsSlot(call: any, at: number): boolean;
     /** `'dict' | 'list' | 'api'` for a container source the local may hold by reference. */
     rustBorrowedSourceKind(call: any): 'dict' | 'list' | 'api' | undefined;
+    /** `this.m(..)` of a venue method (no override, every venue declaration of the name returning `Dict`) whose every
+     *  return is `this.safeDict (this.<field>, '<key>', {})`: the shared handle of a typed store entry, a map on every path. */
+    rustStoreDictReturnCall(call: any): boolean;
     rustDeclaredEndpointKind(call: any): 'dict' | 'list' | undefined;
     /** `&x` for a borrowed local (or a typed container local) passed to a hand-written any-key reader. */
     printBorrowedReaderArg(node: any, text: string): string | undefined;
