@@ -64909,7 +64909,23 @@ ${iden}}`;
       for (const r of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
         const p = r.parent;
         if (isIdentifier3(r) && isBinaryExpression5(p) && p.left === r && rustIsAssignmentOperator(p.operatorToken.kind)) {
-          if (p.operatorToken.kind !== SyntaxKind7.EqualsToken || this.rustDeclarationOfIdentifier(r) !== declaration)
+          if (this.rustDeclarationOfIdentifier(r) !== declaration)
+            return any;
+          if (p.operatorToken.kind === SyntaxKind7.PlusEqualsToken) {
+            for (let a = p.parent; a !== void 0 && a !== scope; a = a.parent) {
+              if (a.kind === SyntaxKind7.ForStatement || a.kind === SyntaxKind7.WhileStatement || a.kind === SyntaxKind7.DoStatement || isForInStatement2(a) || isForOfStatement2(a))
+                return any;
+            }
+            const tail = this.rustWsHashPatterns(p.right, depth + 1, seen);
+            const grown = [];
+            for (const x of out)
+              for (const y of tail)
+                if (grown.length < 16)
+                  grown.push([...x, ...y]);
+            out.push(...grown);
+            continue;
+          }
+          if (p.operatorToken.kind !== SyntaxKind7.EqualsToken)
             return any;
           out.push(...this.rustWsHashPatterns(p.right, depth + 1, seen));
         }

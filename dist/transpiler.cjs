@@ -64908,7 +64908,23 @@ ${iden}}`;
       for (const r of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
         const p = r.parent;
         if (_is.isIdentifier.call(void 0, r) && _is.isBinaryExpression.call(void 0, p) && p.left === r && rustIsAssignmentOperator(p.operatorToken.kind)) {
-          if (p.operatorToken.kind !== _ast.SyntaxKind.EqualsToken || this.rustDeclarationOfIdentifier(r) !== declaration)
+          if (this.rustDeclarationOfIdentifier(r) !== declaration)
+            return any;
+          if (p.operatorToken.kind === _ast.SyntaxKind.PlusEqualsToken) {
+            for (let a = p.parent; a !== void 0 && a !== scope; a = a.parent) {
+              if (a.kind === _ast.SyntaxKind.ForStatement || a.kind === _ast.SyntaxKind.WhileStatement || a.kind === _ast.SyntaxKind.DoStatement || _is.isForInStatement.call(void 0, a) || _is.isForOfStatement.call(void 0, a))
+                return any;
+            }
+            const tail = this.rustWsHashPatterns(p.right, depth + 1, seen);
+            const grown = [];
+            for (const x of out)
+              for (const y of tail)
+                if (grown.length < 16)
+                  grown.push([...x, ...y]);
+            out.push(...grown);
+            continue;
+          }
+          if (p.operatorToken.kind !== _ast.SyntaxKind.EqualsToken)
             return any;
           out.push(...this.rustWsHashPatterns(p.right, depth + 1, seen));
         }

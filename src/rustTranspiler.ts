@@ -14063,7 +14063,19 @@ export class RustTranspiler extends BaseTranspiler {
             for (const r of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
                 const p: any = (r as any).parent;
                 if (isIdentifier(r) && isBinaryExpression(p) && p.left === r && rustIsAssignmentOperator(p.operatorToken.kind)) {
-                    if (p.operatorToken.kind !== SyntaxKind.EqualsToken || this.rustDeclarationOfIdentifier(r) !== declaration) return any;
+                    if (this.rustDeclarationOfIdentifier(r) !== declaration) return any;
+                    if (p.operatorToken.kind === SyntaxKind.PlusEqualsToken) {
+                        // `x += s` outside a loop appends s to every value the local can hold at that point (writes in order)
+                        for (let a: any = p.parent; a !== undefined && a !== scope; a = a.parent) {
+                            if (a.kind === SyntaxKind.ForStatement || a.kind === SyntaxKind.WhileStatement || a.kind === SyntaxKind.DoStatement || isForInStatement(a) || isForOfStatement(a)) return any;
+                        }
+                        const tail = this.rustWsHashPatterns(p.right, depth + 1, seen);
+                        const grown: Array<Array<string | null>> = [];
+                        for (const x of out) for (const y of tail) if (grown.length < 16) grown.push([ ...x, ...y ]);
+                        out.push(...grown);
+                        continue;
+                    }
+                    if (p.operatorToken.kind !== SyntaxKind.EqualsToken) return any;
                     out.push(...this.rustWsHashPatterns(p.right, depth + 1, seen));
                 }
             }
