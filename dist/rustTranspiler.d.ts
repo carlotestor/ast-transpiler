@@ -2070,6 +2070,21 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustTypedFilterArgText(arg: any, rustType: string, identation: number): string;
     /** `self.m(array, <positional typed / Value args>, &[rest])` for a call of a typed filter method. */
     printTypedFilterCall(node: any, identation: number): string | undefined;
+    private static readonly RUST_FILTER_ROWS;
+    private static readonly RUST_LOOP_KINDS;
+    private rustFilterRowsDecisions;
+    rustFilterRowsParamOk(param: any): boolean;
+    /** `object[]`, `Dict[]` or a union of those with `Dictionary<..>` / `undefined` (never `any`). */
+    rustFilterRowsTypeNode(type: any): boolean;
+    rustFilterRowsParamOkUncached(param: any): boolean;
+    /** The rows parameter a read refers to inside its own filter method, else undefined. */
+    rustFilterRowsParamOf(node: any): any;
+    /** A rows slot argument: an own rows parameter moves on, a typed cache field / local or a lent list is lent. */
+    rustFilterRowsArgText(node: any): string | undefined;
+    /** `Rows::rows(x)` where the rows parameter is handed to a `Value` slot. */
+    printFilterRowsParamRead(node: any): string | undefined;
+    /** `x === undefined` on a rows parameter. */
+    printFilterRowsNullTest(left: any, right: any, op: any): string | undefined;
     private rustLentParamDecisions;
     private rustLentOverrideNames;
     rustParamIsLentDict(param: any): boolean;

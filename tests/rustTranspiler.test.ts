@@ -8700,7 +8700,7 @@ describe('rust watch takes message and subscribe hash as positional parameters',
 describe('rust filter helpers take their optional scalars as typed positional parameters', () => {
     test('the base helpers print Option<i64> / Option<&str> slots and keep the rest in the slice', () => {
         const base = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'typed-filter-params', 'ts/src/base/Exchange.ts')).content;
-        expect(base).toContain('fn filterBySinceLimit(&self, array: Value, since: Option<i64>, limit: Option<i64>, optional_args: &[Value])');
+        expect(base).toContain('fn filterBySinceLimit(&self, array: impl Rows, since: Option<i64>, limit: Option<i64>, optional_args: &[Value])');
         expect(base).toContain('fn filterBySymbolSinceLimit(&self, array: Value, symbol: Option<&str>, since: Option<i64>, limit: Option<i64>, optional_args: &[Value])');
         expect(base).toContain('let key = get_arg(optional_args, 0, Value::Str("timestamp".into()));');
         expect(base).toMatch(/return self\.filterBySinceLimit\(array, since, limit, &\[Value::Str\("timestamp"\.into\(\)\), tail(\.clone\(\))?\]\);/);
@@ -9063,6 +9063,43 @@ describe('rust ws order books', () => {
     test('negative: a local whose cache buffer is pushed stays a boxed Value and is stored through the marker test', () => {
         expect(out).toContain('let mut stored: Value = Value::from(self.orderbooks.at(&symbol));');
         expect(out).not.toContain('Value::Dict(__d) = &mut self.orderbooks');
+    });
+});
+
+describe('rust filter rows', () => {
+    const files: Record<string, string> = {
+        "ts/src/base/ws/Cache.ts": "export class ArrayCache {\n    constructor (maxSize: any = undefined) {}\n    append (item: any) {}\n}\n",
+        "ts/src/base/ws/Client.ts": "export default class Client {\n    resolve (result: any, messageHash: string): any { return result; }\n}\n",
+        "ts/src/base/Exchange.ts": "import { ArrayCache } from './ws/Cache.js';\nexport type Int = number | undefined;\nexport type Str = string | undefined;\nexport type Strings = string[] | undefined;\nexport interface Dictionary<T> { [key: string]: T }\nexport default class Exchange {\n    orders: ArrayCache | undefined = undefined;\n    toArray (x: any): any[] { return Object.values (x); }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    filterBySinceLimit (array: object[] | undefined, since: Int = undefined, limit: Int = undefined, tail = false): any[] {\n        if (array === undefined) {\n            return [];\n        }\n        const parsedArray: any[] = this.toArray (array);\n        return parsedArray;\n    }\n    filterBySymbolSinceLimit (array: object[] | undefined, symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, tail = false): any[] {\n        return this.filterBySinceLimit (array, since, limit, tail);\n    }\n    filterBySymbolsSinceLimit (array: any, symbols: Strings = undefined, since: Int = undefined, limit: Int = undefined, tail = false): any[] {\n        return this.filterBySinceLimit (array, since, limit, tail);\n    }\n}\n",
+        "ts/src/pro/venue.ts": "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nimport { ArrayCache } from '../base/ws/Cache.js';\nexport default class venue extends Exchange {\n    watchOrders (symbol: string = undefined, since: number = undefined, limit: number = undefined) {\n        return this.filterBySymbolSinceLimit (this.orders, symbol, since, limit, true);\n    }\n    handleOrders (client: Client, message: any) {\n        const cache = new ArrayCache (10);\n        cache.append (message);\n        client.resolve (cache, 'orders');\n        return this.filterBySinceLimit (cache, undefined, undefined);\n    }\n    rows (message: any) {\n        return this.filterBySinceLimit (message, undefined, 5);\n    }\n}\n",
+    };
+    let out: string;
+    let base: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-rows-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        base = transpiler.transpileRustByPath(path.join (root, 'ts/src/base/Exchange.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('a rows parameter declared object[] takes impl Rows, with no body binding', () => {
+        expect(base).toContain('array: impl Rows, since: Option<i64>');
+        expect(base).toContain('if (Rows::absent(&array))');
+        expect(base).toContain('self.toArray(Rows::rows(array))');
+        expect(base).not.toMatch(/let mut array: Value = array\.into\(\);/);
+        // an own rows parameter moves on to the next rows slot
+        expect(base).toMatch(/self\.filterBySinceLimit\(array, since, limit/);
+    });
+    test('a typed cache field or cache local is lent, a Value passes as before', () => {
+        expect(out).toContain('self.filterBySymbolSinceLimit(&self.orders, ');
+        expect(out).toContain('self.filterBySinceLimit(&cache, None, None');
+        expect(out).toMatch(/self\.filterBySinceLimit\(message, None, Some\(5\)/);
+    });
+    test('negative: an `any` rows parameter stays Value', () => {
+        expect(base).toMatch(/filterBySymbolsSinceLimit\(&self, (mut )?array: Value/);
     });
 });
 

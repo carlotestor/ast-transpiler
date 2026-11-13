@@ -51640,6 +51640,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // `impl Into<crate::Value>`; a caller in the same class lends a local that always holds a map (`&x`).
     this.rustLentResponseDecisions = /* @__PURE__ */ new WeakMap();
     this.rustTypedFilterDecisions = /* @__PURE__ */ new WeakMap();
+    this.rustFilterRowsDecisions = /* @__PURE__ */ new WeakMap();
     // ── lent params dicts ────────────────────────────────────────────────────
     // A base `handle*` method whose required `params` dict is only read (key reads, omit, handed on, returned)
     // and never overridden takes it as `impl Into<crate::Value>`: a `Value` still passes (the by-name dispatch arms
@@ -52120,7 +52121,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const mapTest = this.printWsCacheMapNullTest(left, right, op);
     if (mapTest !== void 0)
       return mapTest;
-    const cacheTest = this.printWsCacheNullTest(left, right, op);
+    const cacheTest = this.printWsCacheNullTest(left, right, op) ?? this.printFilterRowsNullTest(left, right, op);
     if (cacheTest !== void 0)
       return cacheTest;
     const optContainer = this.printOptContainerNullTest(left, right, op) ?? this.printOptListNullTest(left, right, op);
@@ -66092,7 +66093,11 @@ ${iden}}`;
     if (params.some((p) => p.dotDotDotToken !== void 0 || !isIdentifier3(p.name)))
       return void 0;
     const typed = /* @__PURE__ */ new Map();
+    if (this.rustFilterRowsParamOk(params[0]))
+      typed.set(0, _RustTranspiler.RUST_FILTER_ROWS);
     params.forEach((p, i) => {
+      if (typed.has(i))
+        return;
       const optional = p.initializer !== void 0 || p.questionToken !== void 0;
       const declared = p.type?.kind === SyntaxKind7.TypeReference && isIdentifier3(p.type.typeName) && p.type.typeArguments === void 0 ? String(p.type.typeName.text) : "";
       const rustType = _RustTranspiler.RUST_TYPED_FILTER_TYPES[declared];
@@ -66102,7 +66107,7 @@ ${iden}}`;
       else if (optional && absent && (declared === "Strings" || p.type?.kind === SyntaxKind7.AnyKeyword))
         typed.set(i, lent);
     });
-    if (![...typed.values()].some((t) => t !== lent)) {
+    if (![...typed.values()].some((t) => t !== lent && t !== _RustTranspiler.RUST_FILTER_ROWS)) {
       if (typed.size === 0 || String(method.name.text) !== "filterByArray")
         return void 0;
     }
@@ -66121,7 +66126,7 @@ ${iden}}`;
     const sig = this.rustTypedFilterParams(node);
     if (sig === void 0)
       return "";
-    return Array.from(node.parameters).filter((p, i) => sig.typed.get(i)?.startsWith("impl")).map((p) => {
+    return Array.from(node.parameters).filter((p, i) => sig.typed.get(i) === "impl Into<crate::Value>").map((p) => {
       const name = this.printNode(p.name, 0);
       return `${this.getIden(identation + 2)}let mut ${name}: Value = ${name}.into();
 `;
@@ -66160,6 +66165,9 @@ ${iden}}`;
   }
   /** A read of a typed filter parameter in a `Value` position boxes it (both types are `Copy`). */
   printTypedFilterParamRead(node) {
+    const rows = this.printFilterRowsParamRead(node);
+    if (rows !== void 0)
+      return rows;
     return this.rustTypedFilterParamOf(node) === void 0 ? void 0 : `Value::from(${super.printIdentifier(node)})`;
   }
   /** The Rust type of a typed slot of a `this.filterBy*` call, else undefined. */
@@ -66174,6 +66182,9 @@ ${iden}}`;
   }
   rustTypedFilterArgText(arg, rustType, identation) {
     const node = this.unwrapParens(arg);
+    if (rustType === _RustTranspiler.RUST_FILTER_ROWS && arg !== void 0) {
+      return this.rustFilterRowsArgText(node) ?? this.printNode(arg, identation).trim();
+    }
     if (rustType.startsWith("impl"))
       return arg === void 0 ? "Value::Null" : this.rustSliceArgText(this.printNode(arg, identation).trim());
     if (node === void 0 || this.literalKindOfNode(node) === "null")
@@ -66207,6 +66218,104 @@ ${iden}}`;
     const rest = args.slice(sig.positional).map((a) => this.rustSliceArgText(this.printNode(a, identation).trim()));
     const tail = params.length > sig.positional ? `, &[${rest.join(", ")}]` : "";
     return `self.${callee.name.text}(${printed.join(", ")}${tail})`;
+  }
+  rustFilterRowsParamOk(param) {
+    if (param?.kind !== SyntaxKind7.Parameter)
+      return false;
+    let decision = this.rustFilterRowsDecisions.get(param);
+    if (decision === void 0) {
+      this.rustFilterRowsDecisions.set(param, false);
+      try {
+        decision = this.rustFilterRowsParamOkUncached(param);
+      } catch (e) {
+        decision = false;
+      }
+      this.rustFilterRowsDecisions.set(param, decision);
+    }
+    return decision;
+  }
+  /** `object[]`, `Dict[]` or a union of those with `Dictionary<..>` / `undefined` (never `any`). */
+  rustFilterRowsTypeNode(type) {
+    const members = type?.kind === SyntaxKind7.UnionType ? Array.from(type.types) : [type];
+    let rows = 0;
+    for (const t of members) {
+      if (t?.kind === SyntaxKind7.UndefinedKeyword)
+        continue;
+      if (t?.kind === SyntaxKind7.ArrayType && (t.elementType?.kind === SyntaxKind7.ObjectKeyword || this.rustRowListTypeNode(t))) {
+        rows++;
+        continue;
+      }
+      if (t?.kind === SyntaxKind7.TypeReference && isIdentifier3(t.typeName) && String(t.typeName.text) === "Dictionary")
+        continue;
+      return false;
+    }
+    return rows > 0;
+  }
+  rustFilterRowsParamOkUncached(param) {
+    const method = param.parent;
+    if (!isMethodDeclaration5(method) || method.body === void 0 || method.parameters?.[0] !== param || !isIdentifier3(param.name))
+      return false;
+    if (param.initializer !== void 0 || param.questionToken !== void 0 || param.dotDotDotToken !== void 0)
+      return false;
+    if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(String(method.getSourceFile().fileName)) || !this.rustFilterRowsTypeNode(param.type))
+      return false;
+    let handoffs = 0;
+    const ok = this.rustLocalUsesAll(param, String(param.name.text), true, (n) => {
+      if (this.rustIdentifierIsPropertyName(n))
+        return false;
+      const up = n.parent;
+      if (isBinaryExpression5(up) && this.isEqualityOp(up.operatorToken.kind)) {
+        return handoffs === 0 && this.rustWsCacheUndefined(up.left === n ? up.right : up.left);
+      }
+      if (!isCallExpression6(up) || up.expression === n || !up.arguments.some((a) => a === n))
+        return false;
+      const callee = up.expression;
+      if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword)
+        return false;
+      return ++handoffs === 1 && findAncestor(up, (a) => _RustTranspiler.RUST_LOOP_KINDS.has(a.kind) || isFunctionLike(a)) === method;
+    });
+    return ok && handoffs === 1;
+  }
+  /** The rows parameter a read refers to inside its own filter method, else undefined. */
+  rustFilterRowsParamOf(node) {
+    if (!isIdentifier3(node))
+      return void 0;
+    const param = this.rustDeclaredNode(node);
+    if (param === void 0 || !isParameterDeclaration3(param) || param.name === node)
+      return void 0;
+    const sig = this.rustTypedFilterParams(param.parent);
+    return sig?.typed.get(Array.from(param.parent.parameters).indexOf(param)) === _RustTranspiler.RUST_FILTER_ROWS ? param : void 0;
+  }
+  /** A rows slot argument: an own rows parameter moves on, a typed cache field / local or a lent list is lent. */
+  rustFilterRowsArgText(node) {
+    if (node === void 0)
+      return void 0;
+    if (this.rustFilterRowsParamOf(node) !== void 0)
+      return super.printIdentifier(node);
+    if (this.rustWsCacheField(node))
+      return `&self.${String(node.name.text)}`;
+    if (isIdentifier3(node) && this.rustWsCacheUses.get(node) === "box")
+      return `&${super.printIdentifier(node)}`;
+    return void 0;
+  }
+  /** `Rows::rows(x)` where the rows parameter is handed to a `Value` slot. */
+  printFilterRowsParamRead(node) {
+    if (this.rustFilterRowsParamOf(node) === void 0)
+      return void 0;
+    const up = node.parent;
+    if (isBinaryExpression5(up))
+      return void 0;
+    return `Rows::rows(${super.printIdentifier(node)})`;
+  }
+  /** `x === undefined` on a rows parameter. */
+  printFilterRowsNullTest(left, right, op) {
+    const l = this.unwrapParens(left);
+    const r = this.unwrapParens(right);
+    const subject = this.rustWsCacheUndefined(r) ? l : this.rustWsCacheUndefined(l) ? r : void 0;
+    if (subject === void 0 || this.rustFilterRowsParamOf(subject) === void 0)
+      return void 0;
+    const equal = op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken;
+    return `${equal ? "" : "!"}Rows::absent(&${super.printIdentifier(subject)})`;
   }
   rustParamIsLentDict(param) {
     if (param?.kind !== SyntaxKind7.Parameter)
@@ -69463,6 +69572,7 @@ _RustTranspiler.RUST_BASE_TIER_FILE = /ts[\\/]src[\\/]base[\\/]/;
 _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "Value": "value",
   "impl Into<crate::Value>": "value",
+  "impl Rows": "value",
   "&[Value]": "slice",
   "&mut indexmap::IndexMap<String, Value>": "map",
   "Vec<String>": "strvec",
@@ -70104,6 +70214,13 @@ _RustTranspiler.RUST_LENT_RESPONSE_TYPES = /* @__PURE__ */ new Set(["Dict", "Nul
 // `Option<&str>` (with any optional parameter before them as a positional `Value`); the rest stay in the slice.
 _RustTranspiler.RUST_TYPED_FILTER_METHODS = /* @__PURE__ */ new Set(["filterBySinceLimit", "filterBySymbolSinceLimit", "filterBySymbolsSinceLimit", "filterByArray"]);
 _RustTranspiler.RUST_TYPED_FILTER_TYPES = { Int: "Option<i64>", Str: "Option<&str>" };
+// ── filter rows (rustFilterRowsParamOk / rustFilterRowsArgText / printFilterRows*) ──
+// The rows argument of a typed base `filterBy*` method declared `object[]` (or a map/list union, never `any`)
+// takes `impl Rows` (re-exported by the runtime prelude): a `Value` still passes by value, and a shared list / ws cache handle is lent as
+// `&x` (the same Arc bump its `Value::from(&x)` box paid). The body never binds it: its only uses are the
+// `=== undefined` test (`Rows::absent`) and ONE hand-off, to a rows slot (moved) or a `Value` slot (`Rows::rows`).
+_RustTranspiler.RUST_FILTER_ROWS = "impl Rows";
+_RustTranspiler.RUST_LOOP_KINDS = /* @__PURE__ */ new Set([SyntaxKind7.ForStatement, SyntaxKind7.ForInStatement, SyntaxKind7.ForOfStatement, SyntaxKind7.WhileStatement, SyntaxKind7.DoStatement]);
 // Plain-dict sources from base `safeDict*` reads of unshared dicts and same-file
 // sync request builders; native truthiness / bool equality on operands proven `Value::Bool`
 // or `Value::Null` at runtime (bool tuple elements, bool-returning exchange methods).
