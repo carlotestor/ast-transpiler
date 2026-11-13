@@ -1066,6 +1066,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     printOptMarketKeyRead(node: any): string | undefined;
     /** The Rust result type of an awaited typed core call other than `market` that decodes into a struct. */
     rustTypedCallResultType(init: any): string | undefined;
+    private static readonly RUST_RAW_RECORD_TYPES;
+    /** `'vec'` for a `Vec<record>` typed result, `'map'` for `Tickers` (`HashMap<String, Ticker>`). */
+    rustTypedResultElemKind(init: any): 'vec' | 'map' | undefined;
+    /** `xs.length`, `xs[i]` (int literal / int-literal counter) on a Vec result, `xs[k]` (a `Value` key) on a map result. */
+    rustTypedResultElemUse(n: any, elem: 'vec' | 'map'): boolean;
+    /** Element-access hook: the native read of a typed result element, boxed through its shared record handle. */
+    printTypedResultElemRead(node: any): string | undefined;
     rustCallLocalOf(node: any): any;
     rustOptMarketLocalOf(node: any): any;
     /** The typed `this.market (x)` call, unboxed; its `Err` re-raises as the untyped call did. */
@@ -1515,7 +1522,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): string;
+    printLogicalInBooleanContext(node: any): any;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;

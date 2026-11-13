@@ -59030,7 +59030,23 @@ ${i1}}`;
       if (!/ts[/]src[/]/.test(callFile) || /ts[/]src[/](pro[/])?test[/]/.test(callFile))
         return false;
       const callScope = this.rustEnclosingFunction(declaration);
-      return this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => this.rustEnclosingFunction(n) === callScope && this.rustMarketValueUse(n)) ? "call" : false;
+      const elem = this.rustTypedResultElemKind(declaration.initializer);
+      let valueUses2 = 0;
+      let elemUses = 0;
+      const ok2 = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
+        if (this.rustEnclosingFunction(n) !== callScope)
+          return false;
+        if (this.rustMarketValueUse(n)) {
+          valueUses2++;
+          return true;
+        }
+        if (elem !== void 0 && this.rustTypedResultElemUse(n, elem)) {
+          elemUses++;
+          return true;
+        }
+        return false;
+      });
+      return ok2 && (valueUses2 === 0 || elemUses === 0) ? "call" : false;
     }
     const fromOpt = this.rustIsOptMarketCall(declaration.initializer);
     const empty = declaration.initializer === void 0 || this.literalKindOfNode(declaration.initializer) === "null" || fromOpt;
@@ -59119,6 +59135,67 @@ ${i1}}`;
     if (ret === void 0 || !/^(Vec<)?crate::types::/.test(ret) || ret === "crate::types::Market")
       return void 0;
     return this.printTypedUnifiedCall(call) === void 0 ? void 0 : ret;
+  }
+  /** `'vec'` for a `Vec<record>` typed result, `'map'` for `Tickers` (`HashMap<String, Ticker>`). */
+  rustTypedResultElemKind(init) {
+    const ret = this.rustTypedCallResultType(init);
+    if (ret === "crate::types::Tickers")
+      return "map";
+    const m = ret === void 0 ? null : /^Vec<crate::types::(\w+)>$/.exec(ret);
+    return m !== null && _RustTranspiler.RUST_RAW_RECORD_TYPES.has(m[1]) ? "vec" : void 0;
+  }
+  /** `xs.length`, `xs[i]` (int literal / int-literal counter) on a Vec result, `xs[k]` (a `Value` key) on a map result. */
+  rustTypedResultElemUse(n, elem) {
+    const parent = n.parent;
+    if (parent === void 0)
+      return false;
+    const up = parent.parent;
+    const readOnly = up !== void 0 && !(_is.isBinaryExpression.call(void 0, up) && up.left === parent && rustIsAssignmentOperator(up.operatorToken.kind)) && up.kind !== _ast.SyntaxKind.DeleteExpression && !_is.isPrefixUnaryExpression.call(void 0, up) && up.kind !== _ast.SyntaxKind.PostfixUnaryExpression && !(_is.isCallExpression.call(void 0, up) && up.expression === parent);
+    if (elem === "vec" && _is.isPropertyAccessExpression.call(void 0, parent) && parent.expression === n && _is.isIdentifier.call(void 0, parent.name) && parent.name.text === "length") {
+      return readOnly && this.isValueLengthType(this.typeOfNodeIfAny(n));
+    }
+    if (!_is.isElementAccessExpression.call(void 0, parent) || parent.expression !== n || !readOnly)
+      return false;
+    if (_is.isElementAccessExpression.call(void 0, up) && up.expression === parent)
+      return false;
+    if (_is.isPropertyAccessExpression.call(void 0, up) && up.expression === parent)
+      return false;
+    const key = this.rustSkipWrappers(parent.argumentExpression);
+    if (key === void 0)
+      return false;
+    if (elem === "vec") {
+      if (_is.isNumericLiteral.call(void 0, key))
+        return Number.isInteger(Number(key.text)) && Number(key.text) >= 0;
+      return this.isRustValueIndexKey(key);
+    }
+    if (!_is.isIdentifier.call(void 0, key))
+      return false;
+    const keyDecl = this.rustDeclaredNode(key);
+    if (keyDecl === void 0 || !(_is.isVariableDeclaration.call(void 0, keyDecl) || _is.isParameterDeclaration.call(void 0, keyDecl)))
+      return false;
+    return this.rustScalarLocalOf(key) === void 0;
+  }
+  /** Element-access hook: the native read of a typed result element, boxed through its shared record handle. */
+  printTypedResultElemRead(node) {
+    const recv = node.expression;
+    const declaration = recv !== void 0 && _is.isIdentifier.call(void 0, recv) ? this.rustCallLocalOf(recv) : void 0;
+    if (declaration === void 0)
+      return void 0;
+    const elem = this.rustTypedResultElemKind(declaration.initializer);
+    if (elem === void 0 || !this.rustTypedResultElemUse(recv, elem))
+      return void 0;
+    const name = super.printIdentifier(recv);
+    const key = this.rustSkipWrappers(node.argumentExpression);
+    if (elem === "map")
+      return `crate::value::KeyRead::read(&&${name}, &${this.printNode(key, 0).trim()})`;
+    let index;
+    if (_is.isNumericLiteral.call(void 0, key))
+      index = String(Number(key.text));
+    else if (this.rustI64CounterUse(key))
+      index = `${super.printIdentifier(key)} as usize`;
+    else
+      index = `${this.printNode(key, 0).trim()}.as_i64().unwrap_or(-1) as usize`;
+    return `${name}.get(${index}).map(crate::Value::from).unwrap_or_default()`;
   }
   rustCallLocalOf(node) {
     if (node === void 0 || !_is.isIdentifier.call(void 0, node))
@@ -59382,8 +59459,9 @@ ${i1}}`;
   }
   /** A whole-value hand-off of a struct local: the `Value` the untyped local held. */
   printTypedMarketValueUse(node) {
-    if (this.rustCallLocalOf(node) !== void 0)
-      return `crate::types::IntoRaw::into_raw(${super.printIdentifier(node)}.clone())`;
+    if (this.rustCallLocalOf(node) !== void 0) {
+      return this.rustMarketValueUse(node) ? `crate::types::IntoRaw::into_raw(${super.printIdentifier(node)}.clone())` : super.printIdentifier(node);
+    }
     if (this.rustOptMarketLocalOf(node) !== void 0 && this.rustMarketValueUse(node)) {
       return `crate::Value::from(${super.printIdentifier(node)}.as_ref())`;
     }
@@ -61917,6 +61995,9 @@ ${ind}let ${view}: &${map} = &${arc};
     return this.quotedStringLiteral(text);
   }
   printElementAccessExpression(node, identation) {
+    const typedElem = this.printTypedResultElemRead(node);
+    if (typedElem !== void 0)
+      return typedElem;
     const mapRead = this.printWsCacheMapRead(node);
     if (mapRead !== void 0)
       return mapRead;
@@ -71495,6 +71576,41 @@ _RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS = /* @__PURE__ */ new Set(["linear",
 _RustTranspiler.RUST_MARKET_SAFE_READERS = /* @__PURE__ */ new Set(["safeString", "safeBool"]);
 // `Str` keys of `MarketInterface` (`Option<String>` fields)
 _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS = { settle: "settle", id: "id", baseId: "base_id", quoteId: "quote_id" };
+// Unified records whose `IntoRaw` hands back the decoded row itself (`raw`); `From<&T> for Value` shares it.
+_RustTranspiler.RUST_RAW_RECORD_TYPES = /* @__PURE__ */ new Set([
+  "Ticker",
+  "Trade",
+  "Order",
+  "Position",
+  "Transaction",
+  "DepositAddress",
+  "Transfer",
+  "LedgerEntry",
+  "TradingFee",
+  "DepositWithdrawFee",
+  "FundingRate",
+  "FundingRateHistory",
+  "FundingHistory",
+  "Leverage",
+  "MarginMode",
+  "MarginModification",
+  "OpenInterest",
+  "Liquidation",
+  "LeverageTier",
+  "Greeks",
+  "OptionContract",
+  "LastPrice",
+  "PredictionEvent",
+  "PredictionSettlement",
+  "Account",
+  "BorrowRate",
+  "IsolatedBorrowRate",
+  "MarginLoan",
+  "Conversion",
+  "ADL",
+  "LongShortRatio",
+  "BorrowInterest"
+]);
 // Base methods declared `: Market` whose every return is `undefined` or a loaded market: `Option<crate::types::Market>`.
 _RustTranspiler.RUST_OPT_MARKET_RETURNS = /* @__PURE__ */ new Set(["getMarketFromSymbols"]);
 // `MarketInterface` keys typed `Bool`: a raw read of one holds a Bool or Null.
