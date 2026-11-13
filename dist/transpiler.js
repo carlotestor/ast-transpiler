@@ -64965,9 +64965,11 @@ ${iden}}`;
     if (!isCallExpression6(call) || !isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(callee.name))
       return void 0;
     const method = String(callee.name.text);
-    if (/^(?:safe|handle[A-Z]|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method))
+    if (/^(?:safe|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method))
       return void 0;
     if (this.rustTestTierSource(call) || this.rustTypedUnified.has(method))
+      return void 0;
+    if (/^handle[A-Z]/.test(method) && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(this.rustScalarCallee(call)?.getSourceFile?.()?.fileName ?? "ts/src/base/")))
       return void 0;
     if (_RustTranspiler.RUST_BASE_TIER_FILE.test(String(call.getSourceFile?.()?.fileName ?? "")) && this.rustVirtualDispatch[this.toSnakeCaseName(method)] !== void 0)
       return void 0;
@@ -64980,7 +64982,12 @@ ${iden}}`;
   }
   rustBuiltReturnBoxUse(n, init) {
     const up = n.parent;
-    if (init === void 0 || !isCallExpression6(init) || up === void 0 || this.rustBuiltReturnSourceKind(init) === void 0 || this.rustScalarInNestedWrite(n))
+    if (init === void 0 || !isCallExpression6(init) || up === void 0 || this.rustBuiltReturnSourceKind(init) === void 0)
+      return false;
+    if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustFieldKeyReceiver(up.left.expression) !== void 0) {
+      return !new RegExp(`\\b${String(n.text)}\\b`).test(String(up.left.argumentExpression.getText()));
+    }
+    if (this.rustScalarInNestedWrite(n))
       return false;
     if (up.kind === SyntaxKind7.PropertyAssignment)
       return up.initializer === n;
@@ -71671,8 +71678,8 @@ _RustTranspiler.RUST_LENT_OPTIONAL_HELPERS = /* @__PURE__ */ new Set(["toArray",
 _RustTranspiler.RUST_BY_REF_GENERATED_READERS = /^safe(?:Dict|List|Bool|Number)(?:2|N)?$|^safe(?:NumberOmitZero|IntegerOmitZero|LedgerEntry)$/;
 // The box that hands such a local on whole: a plain `Value` slot of a `this.` method, `return x`, an object literal
 // value, an array literal element, or the value argument of a `Value` receiver's `push` / `append` / `reset` /
-// ws `resolve` (moved at the last use, else the Arc bump the boxed local's copy paid).
-_RustTranspiler.RUST_BUILT_BOX_RECEIVER_METHODS = /* @__PURE__ */ new Set(["push", "append", "reset", "resolve"]);
+// ws `resolve` / order-book side `storeArray` (moved at the last use, else the Arc bump the boxed local's copy paid).
+_RustTranspiler.RUST_BUILT_BOX_RECEIVER_METHODS = /* @__PURE__ */ new Set(["push", "append", "reset", "resolve", "storeArray"]);
 // ── rustRecordLookupSource: base record lookups (market / outcome resolvers) held as a shared map ──
 // Each returns a cached record map (or nothing); read only by key, the map form reads the same.
 _RustTranspiler.RUST_RECORD_LOOKUP_SOURCES = /* @__PURE__ */ new Set(["outcome", "safeOutcome", "loadOutcome", "getMarketFromSymbols", "safeMarket", "market"]);

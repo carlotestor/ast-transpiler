@@ -14127,8 +14127,10 @@ export class RustTranspiler extends BaseTranspiler {
         const callee: any = call?.expression;
         if (!isCallExpression(call) || !isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword || !isIdentifier(callee.name)) return undefined;
         const method = String(callee.name.text);
-        if (/^(?:safe|handle[A-Z]|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method)) return undefined;
+        if (/^(?:safe|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method)) return undefined;
         if (this.rustTestTierSource(call) || this.rustTypedUnified.has(method)) return undefined;
+        // base `handle*` tuples have their own slot rules; a venue `handle*` whose body builds its tuple list is a fresh list
+        if (/^handle[A-Z]/.test(method) && RustTranspiler.RUST_BASE_TIER_FILE.test(String(this.rustScalarCallee(call)?.getSourceFile?.()?.fileName ?? 'ts/src/base/'))) return undefined;
         if (RustTranspiler.RUST_BASE_TIER_FILE.test(String(call.getSourceFile?.()?.fileName ?? '')) && this.rustVirtualDispatch[this.toSnakeCaseName(method)] !== undefined) return undefined;
         // an async base method may answer through `dispatch_to_derived` (a venue override the checker cannot see here)
         const callee0: any = this.rustScalarCallee(call);
@@ -14139,12 +14141,18 @@ export class RustTranspiler extends BaseTranspiler {
 
     // The box that hands such a local on whole: a plain `Value` slot of a `this.` method, `return x`, an object literal
     // value, an array literal element, or the value argument of a `Value` receiver's `push` / `append` / `reset` /
-    // ws `resolve` (moved at the last use, else the Arc bump the boxed local's copy paid).
-    private static readonly RUST_BUILT_BOX_RECEIVER_METHODS = new Set([ 'push', 'append', 'reset', 'resolve' ]);
+    // ws `resolve` / order-book side `storeArray` (moved at the last use, else the Arc bump the boxed local's copy paid).
+    private static readonly RUST_BUILT_BOX_RECEIVER_METHODS = new Set([ 'push', 'append', 'reset', 'resolve', 'storeArray' ]);
 
     rustBuiltReturnBoxUse(n: any, init: any): boolean {
         const up: any = n.parent;
-        if (init === undefined || !isCallExpression(init) || up === undefined || this.rustBuiltReturnSourceKind(init) === undefined || this.rustScalarInNestedWrite(n)) return false;
+        if (init === undefined || !isCallExpression(init) || up === undefined || this.rustBuiltReturnSourceKind(init) === undefined) return false;
+        // `this.tickers[k] = x` (a plain base cache field, one key, statement): the field insert stores the handle
+        if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && isElementAccessExpression(up.left)
+            && up.parent?.kind === SyntaxKind.ExpressionStatement && this.rustFieldKeyReceiver(up.left.expression) !== undefined) {
+            return !new RegExp(`\\b${String(n.text)}\\b`).test(String(up.left.argumentExpression.getText()));
+        }
+        if (this.rustScalarInNestedWrite(n)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
         if (isReturnStatement(up)) return up.expression === n;
         if (isArrayLiteralExpression(up)) return true;
