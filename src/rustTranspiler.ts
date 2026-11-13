@@ -13021,7 +13021,8 @@ export class RustTranspiler extends BaseTranspiler {
         };
         // an endpoint response may share its name with a `let`/`const` in a sibling block (another Rust binding)
         const safe = endpoint && !nilDeclared ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
-        if (!safe || (reads === 0 && !this.rustNullTestedDictLocal(init, nullTests, writes)) || mixed || from === undefined
+        const boxOnly = reads === 0 && boxedElementUses.length > 0 && this.rustDictElementSource(init) && nullTests === 0 && writes === 0;
+        if (!safe || (reads === 0 && !boxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes)) || mixed || from === undefined
             || ((this.rustNilResponseLocals.has(declaration) || from === 'api' || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))) return undefined;
         if ((keyReads > 0 || (init !== undefined && isCallExpression(init) && this.rustRecordLookupSource(init))) && !this.rustDictKeyReadLineOk(declaration, name)) return undefined;
         const optional = nilDeclared || nullTests > 0 || writes > 0;
