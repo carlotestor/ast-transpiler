@@ -1194,9 +1194,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustSignerCall(node: any, identation: any): string | undefined;
     private static readonly RUST_BY_VALUE_CALLEE;
     /** `x = y;` / `let mut x: Value = y;` on its own line moves `y`: the source is cloned so it stays usable. */
-    static cloneAliasSources(text: string): string;
+    static cloneAliasSources(text: string, commented?: boolean): string;
     /** Clone every bare-local argument of each by-value call in `text` (an argument already `x.clone()` is left). */
-    static cloneByValueCallArgs(text: string): string;
+    private static readonly RUST_BY_VALUE_CALLEE_NO_SUPER;
+    static cloneByValueCallArgs(text: string, superCalls?: boolean): string;
     private static rustBalancedClose;
     private static rustSplitTopLevel;
     printCallExpression(node: any, identation: any): string;

@@ -9123,28 +9123,30 @@ export class RustTranspiler extends BaseTranspiler {
 
 
     /** `x = y;` / `let mut x: Value = y;` on its own line moves `y`: the source is cloned so it stays usable. */
-    static cloneAliasSources(text: string): string {
+    static cloneAliasSources(text: string, commented = true): string {
         const keep = (rhs: string) => rhs === 'self' || rhs === 'true' || rhs === 'false';
         return text
             .replace(/^(\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*;/gm, (whole: string, indent: string, lhs: string, rhs: string) => (keep(rhs) ? whole : `${indent}${lhs} = ${rhs}.clone();`))
             .replace(/^(\s*)let\s+mut\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*Value\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*;$/gm, (whole: string, indent: string, lhs: string, rhs: string) => (keep(rhs) ? whole : `${indent}let mut ${lhs}: Value = ${rhs}.clone();`))
-            .replace(/(let\s+mut\s+\w+\s*:\s*Value\s*=\s*)([a-zA-Z_]\w*)(;)/g, '$1$2.clone()$3');
+            .replace(/(let\s+mut\s+\w+\s*:\s*Value\s*=\s*)([a-zA-Z_]\w*)(;)/g, (whole: string, head: string, rhs: string, end: string) => (commented ? `${head}${rhs}.clone()${end}` : whole));
     }
 
     /** Clone every bare-local argument of each by-value call in `text` (an argument already `x.clone()` is left). */
-    static cloneByValueCallArgs(text: string): string {
+    private static readonly RUST_BY_VALUE_CALLEE_NO_SUPER = new RegExp(RustTranspiler.RUST_BY_VALUE_CALLEE.source.replace('(?:self|super)', 'self'));
+
+    static cloneByValueCallArgs(text: string, superCalls = true): string {
         let i = 0;
         let out = '';
         while (i < text.length) {
             const rest = text.slice(i);
-            const m = rest.match(RustTranspiler.RUST_BY_VALUE_CALLEE);
+            const m = rest.match(superCalls ? RustTranspiler.RUST_BY_VALUE_CALLEE : RustTranspiler.RUST_BY_VALUE_CALLEE_NO_SUPER);
             if (!m || m.index === undefined) { out += rest; break; }
             out += rest.slice(0, m.index);
             const absStart = i + m.index;
             const callStart = absStart + m[0].length;
             const j = RustTranspiler.rustBalancedClose(text, callStart);
             if (j >= text.length) { out += text.slice(absStart); break; }
-            const inside = RustTranspiler.cloneByValueCallArgs(text.slice(callStart, j));
+            const inside = RustTranspiler.cloneByValueCallArgs(text.slice(callStart, j), superCalls);
             const args = RustTranspiler.rustSplitTopLevel(inside);
             const cloned = args === undefined ? inside : args.map((a) => {
                 const t = a.trim();
@@ -11025,7 +11027,14 @@ export class RustTranspiler extends BaseTranspiler {
 
     printNode(node, identation = 0): string {
         // the by-value argument clones go on the finished file text: every line-budget guard measures the uncloned print
-        if (isSourceFile(node)) return RustTranspiler.cloneByValueCallArgs(RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation)));
+        if (isSourceFile(node)) {
+            // ws `super.X(` reaches the REST parent as `self.parent.X(` (not a cloned callee); a trailing-comment alias
+            // is cloned in exchange files only
+            const file = String((node as any).fileName ?? '');
+            const test = /ts[/]src[/](?:pro[/])?test[/]/.test(file);
+            const ws = /ts[/]src[/]pro[/]/.test(file);
+            return RustTranspiler.cloneByValueCallArgs(RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws);
+        }
         return this.printNodeUncloned(node, identation);
     }
 
