@@ -7441,9 +7441,9 @@ describe('rust optional market locals read by key', () => {
         expect(output).toContain('self.safe_string_k(&market, "symbol", &[])');
     });
 
-    test('a market local both read by key and handed on whole stays boxed', () => {
-        expect(output).toContain('let mut market: Value = Value::Null');
-        expect(output.match(/Option<crate::types::Market>/g)?.length).toBe(1);
+    test('a market local both read by key and handed on whole is an Option<Market> boxed once at the hand-off', () => {
+        expect(output.match(/let mut market: Option<crate::types::Market> = None/g)?.length).toBe(2);
+        expect(output).toContain('crate::Value::from(market.as_ref())');
     });
 });
 
@@ -7462,7 +7462,7 @@ describe('rust typed core call results', () => {
     test('an empty local written only by this.market is an Option<Market>', () => {
         expect(output).toContain('let mut market: Option<crate::types::Market> = None');
         expect(output).toContain('market = Some(match self.market(');
-        expect(output).toContain('market.clone().map(crate::types::IntoRaw::into_raw).unwrap_or_default()');
+        expect(output).toContain('crate::Value::from(market.as_ref())');
     });
 
     test('a reassigned market local stays a struct and reads declared keys as fields', () => {
@@ -9015,5 +9015,29 @@ describe('typed market slots of the singular parsers', () => {
         expect(out).not.toContain('get_arg(optional_args, 0');
         expect(rustDispatch.slotParams([ 'ticker', 'market' ])).toBe('ticker: crate::Value, market: Option<&crate::types::Market>');
         expect(rustDispatch.fromValue('optmarket', 'market')).toBe('market');
+    });
+});
+
+describe('typed market slots of the list helpers', () => {
+    test('safeMarket / parseTrades / handleMarketTypeAndParams lend the market, Option<Market> locals lend it as is', () => {
+        const dir = path.join (rustFixtureRoot, 'typed-list-market');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Strings = string[] | undefined;\nexport interface MarketInterface { symbol: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    markets_by_id: Dict = undefined;\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    market (symbol: string): MarketInterface { return undefined; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseTrade (trade: Dict, market: Market = undefined): Dict {\n        return trade;\n    }\n    parseTrades (trades: any[], market: Market = undefined, since: number = undefined, params: Dict = {}): Dict[] {\n        return [ this.parseTrade (trades[0], market) ];\n    }\n    safeMarket (marketId: Str = undefined, market: Market = undefined, delimiter: Str = undefined): MarketInterface {\n        if (market !== undefined) {\n            return market;\n        }\n        return this.market (marketId);\n    }\n    handleMarketTypeAndParams (methodName: string, market: Market = undefined, params: Dict = {}): [string, Dict] {\n        if (market !== undefined) {\n            return [ market['type'], params ];\n        }\n        return [ 'spot', params ];\n    }\n    getMarketFromSymbols (symbols: Strings = undefined): Market {\n        if (symbols === undefined) {\n            return undefined;\n        }\n        const market = this.market (symbols[0]);\n        return market;\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Market, Str, Strings } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async fetchMyTrades (symbol: Str = undefined, params: Dict = {}): Promise<Dict[]> {\n        let market: Market = undefined;\n        if (symbol !== undefined) {\n            market = this.market (symbol);\n        }\n        const [ type, query ] = this.handleMarketTypeAndParams ('fetchMyTrades', market, params);\n        const resolved = this.safeMarket (this.safeString (query, 'id'), market);\n        return this.parseTrades ([ { 'type': type, 's': resolved['symbol'] } ], market);\n    }\n    async fetchTickers (symbols: Strings = undefined, params: Dict = {}): Promise<Dict> {\n        const market = this.getMarketFromSymbols (symbols);\n        const [ type, query ] = this.handleMarketTypeAndParams ('fetchTickers', market, params);\n        return { 'type': type, 'query': query };\n    }\n}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const base = typed.transpileRustByPath (path.join (dir, 'ts/src/base/Exchange.ts')).content;
+        expect(base).toContain('marketId: Value, market: Option<&crate::types::Market>, optional_args: &[Value]) -> crate::types::Market');
+        expect(base).toContain('return market.cloned().unwrap_or_default();');
+        expect(base).toContain('trades: Value, market: Option<&crate::types::Market>, optional_args: &[Value]) -> Value');
+        expect(base).toContain('methodName: Value, market: Option<&crate::types::Market>, optional_args: &[Value]) -> Value');
+        expect(base).toContain('-> Option<crate::types::Market>');
+        expect(base).toContain('return Some(market);');
+        const out = typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut market: Option<crate::types::Market> = None');
+        expect(out).toContain('self.handleMarketTypeAndParams(Value::Str(\"fetchMyTrades\".into()), market.as_ref(), &[');
+        expect(out).toContain('market.as_ref(), &[]);');
+        expect(out).toContain('let mut market: Option<crate::types::Market> = self.getMarketFromSymbols(');
+        expect(out).not.toContain('FromRaw>::from_raw(market');
+        expect(out).not.toContain('crate::Value::from(market)');
     });
 });

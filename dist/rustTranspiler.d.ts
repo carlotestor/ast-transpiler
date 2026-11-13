@@ -974,8 +974,25 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustOptMarketLocalOf(node: any): any;
     /** The typed `this.market (x)` call, unboxed; its `Err` re-raises as the untyped call did. */
     printTypedMarketValue(call: any): string | undefined;
+    /** `m = this.safeMarket (..)` as its own statement. */
+    rustIsSafeMarketWriteOf(n: any): boolean;
+    /** `m = this.getMarketFromSymbols (..)` as its own statement. */
+    rustIsOptMarketWriteOf(n: any): boolean;
+    private static readonly RUST_OPT_MARKET_RETURNS;
+    rustReturnsOptMarket(node: any): boolean;
+    /** `this.getMarketFromSymbols (..)` resolving to the typed base method. */
+    rustIsOptMarketCall(init: any): boolean;
+    /** `return x` in an `Option<Market>` method. */
+    printOptMarketReturnValue(exp: any): string;
+    private rustOptMarketBoxing;
+    /** An `Option<Market>` call in a `Value` place: boxed once (its record's `raw`). */
+    printOptMarketCallBox(node: any, identation: number): string | undefined;
+    /** `m = undefined` as its own statement. */
+    rustIsNullWriteOf(n: any): boolean;
     /** A later `m = this.market (y)` on a struct local (`Some(..)` on an `Option<Market>` one). */
     printTypedMarketWrite(left: any, right: any): string | undefined;
+    /** The null test sits in a `bool` place (a condition, a `!` / `&&` / `||` operand of one, or a ternary test). */
+    rustNullTestIsCondition(n: any): boolean;
     /** `m === undefined` on an `Option<Market>` local. */
     printOptMarketNullTest(left: any, right: any, op: any): string | undefined;
     /** The struct local behind an identifier use (never the declaration name). */
@@ -2292,6 +2309,19 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  ws or prediction): it prints as a lent `Option<&crate::types::Market>`; every use is a key read, a null
      *  test, a market slot or a `Value` hand-off (boxed once), and the parameter is never written. */
     rustParseMarketParam(method: any, param: any): boolean;
+    private static readonly RUST_LIST_MARKET_METHODS;
+    /** The `market: Market = undefined` parameter of a listed helper: read-only, every parameter before it required
+     *  (or `safeMarket`'s positional `marketId`). */
+    rustListMarketParam(method: any, param: any): boolean;
+    /** A per-venue helper's `market: Market` parameter that it forwards to a lent market slot: lent itself when every
+     *  caller in its file lends a typed market (or passes `undefined`), so no caller decodes. */
+    rustVenueMarketParam(method: any, param: any): boolean;
+    /** A market slot argument that lends without a decode (`rustMarketSlotArgText` takes no `FromRaw` path). */
+    rustMarketArgLends(arg: any): boolean;
+    /** `safeMarket`'s first parameter `marketId: Str = undefined`: a positional `Value` (padded with `Value::Null`). */
+    rustPositionalValueParam(param: any): boolean;
+    /** The text a call leaves in an omitted positional slot. */
+    rustPositionalPad(param: any): string;
     /** `this.safeMarket (..)` / `super.safeMarket (..)` resolving to a method that returns the typed market. */
     rustIsSafeMarketCall(init: any): boolean;
     /** `const m = this.safeMarket (..)` whose every use reads a key, lends the record, or rewrites it from `safeMarket`. */
