@@ -1087,6 +1087,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustTypedMarketLocalOf(node: any): any;
     /** `let mut market: crate::types::Market = …` — the typed call, its `Err` re-raised as the untyped call did. */
     printTypedMarketLocal(declaration: any, indent: string, varName: string): string | undefined;
+    /** A `const x = <comparison>` initializer whose native text exists and whose local's checker type is `boolean`. */
+    rustBoolCompareSeed(node: any): boolean;
+    /** `m['symbol']` / `m.id` off a loaded `crate::types::Market` local: the field's own `String` / `Option<String>`
+     *  (the boxed read cloned the same field), so a local initialised from it is a typed string. */
+    rustMarketFieldScalar(node: any): {
+        kind: string;
+        text: string;
+    } | undefined;
     /** A read off a struct local: a listed field natively, any other key off `raw`; `asBool` for a condition slot. */
     printTypedMarketRead(node: any, asBool?: boolean): string | undefined;
     private static readonly RUST_MARKET_FLAG_KEYS;

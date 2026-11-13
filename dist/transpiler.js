@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -54995,6 +54995,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (this.rustScalarOptKeyCostly(declaration, kind))
       return void 0;
+    if (strKind && copied > 0 && this.rustMarketFieldScalar(this.unwrapParens(declaration.initializer)) !== void 0)
+      return void 0;
     if (this.rustNewShapeCostly(declaration.initializer, typedUses, kind === "str" || kind === "ostr" ? copied : 0))
       return void 0;
     if (this.rustFieldKeyCostly(declaration))
@@ -55179,6 +55181,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const expressionKind = this.rustScalarExpressionKind(node);
     if (expressionKind !== void 0)
       return expressionKind;
+    const marketField = fresh ? this.rustMarketFieldScalar(node) : void 0;
+    if (marketField !== void 0)
+      return marketField.kind;
+    if (fresh && isBinaryExpression5(node) && _RustTranspiler.COMPARISON_OPS.has(node.operatorToken.kind) && this.rustBoolCompareSeed(node))
+      return "bool";
     const cast = this.rustStrCastCall(node);
     if (cast !== void 0)
       return this.rustScalarValueKind(cast, fresh) === "ostr" ? "ostr" : void 0;
@@ -56887,6 +56894,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     const expressionText = this.rustScalarExpressionText(kind, node);
     if (expressionText !== void 0)
       return expressionText;
+    const marketField = this.rustMarketFieldScalar(node);
+    if (marketField !== void 0)
+      return marketField.kind === kind ? marketField.text : void 0;
     const boolText = kind === "bool" && this.literalKindOfNode(node) !== "boolean" ? this.rustBoolNativeText(node) : void 0;
     if (boolText !== void 0)
       return boolText;
@@ -59223,6 +59233,41 @@ ${i1}}`;
     const value = this.printTypedMarketValue(declaration.initializer);
     return value === void 0 ? void 0 : `${indent}let mut ${varName}: crate::types::Market = ${value}`;
   }
+  /** A `const x = <comparison>` initializer whose native text exists and whose local's checker type is `boolean`. */
+  rustBoolCompareSeed(node) {
+    let top = node;
+    while (top.parent !== void 0 && isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    if (!isVariableDeclaration3(top.parent) || top.parent.initializer !== top || !isIdentifier3(top.parent.name))
+      return false;
+    if (this.primitiveKindOfType(this.typeOfNodeIfAny(top.parent.name)) !== "boolean")
+      return false;
+    return this.rustBoolNativeText(node) !== void 0;
+  }
+  // ── string fields of a typed market local as scalar seeds (rustMarketFieldScalar) ──
+  /** `m['symbol']` / `m.id` off a loaded `crate::types::Market` local: the field's own `String` / `Option<String>`
+   *  (the boxed read cloned the same field), so a local initialised from it is a typed string. */
+  rustMarketFieldScalar(node) {
+    if (node === void 0 || !(isElementAccessExpression4(node) || isPropertyAccessExpression3(node)))
+      return void 0;
+    let top = node;
+    while (top.parent !== void 0 && (isParenthesizedExpression3(top.parent) || top.parent.kind === SyntaxKind7.AsExpression))
+      top = top.parent;
+    if (!isVariableDeclaration3(top.parent) || top.parent.initializer !== top)
+      return void 0;
+    const declaration = this.rustTypedMarketLocalOf(node.expression);
+    if (declaration === void 0 || this.rustMarketLocalKind(declaration) !== "struct")
+      return void 0;
+    const key = this.rustMarketReadKey(node.expression);
+    if (key === void 0)
+      return void 0;
+    const recv = `(${this.printNode(declaration.name, 0)})`;
+    const field = _RustTranspiler.RUST_MARKET_STR_FIELDS[key];
+    if (field !== void 0)
+      return { kind: "str", text: `${recv}.${field}.clone()` };
+    const optField = _RustTranspiler.RUST_MARKET_OPT_STR_FIELDS[key];
+    return optField !== void 0 ? { kind: "ostr", text: `${recv}.${optField}.as_deref().map(str::to_owned)` } : void 0;
+  }
   /** A read off a struct local: a listed field natively, any other key off `raw`; `asBool` for a condition slot. */
   printTypedMarketRead(node, asBool = false) {
     const receiver = isElementAccessExpression4(node) || isPropertyAccessExpression3(node) ? node.expression : node !== void 0 && isCallExpression6(node) && this.rustMarketSafeReadField(node) !== void 0 ? node.arguments[0] : void 0;
@@ -60405,6 +60450,13 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const declaration = this.rustDeclaredNode(node);
     if (declaration === void 0 || this.rustEnclosingFunction(declaration) !== method)
       return false;
+    if (declaration.kind === SyntaxKind7.BindingElement) {
+      const pattern = declaration.parent;
+      const owner = pattern?.parent;
+      if (pattern?.kind !== SyntaxKind7.ArrayBindingPattern || !isVariableDeclaration3(owner) || owner.initializer === void 0 || (owner.parent.flags & NodeFlags4.Const) === 0 || declaration.initializer !== void 0 || declaration.dotDotDotToken !== void 0)
+        return false;
+      return this.rustExactSlotCallee(owner.initializer, pattern.elements.indexOf(declaration), want);
+    }
     if (isParameterDeclaration3(declaration)) {
       const type = declaration.type;
       const keyword = want === "bool" ? SyntaxKind7.BooleanKeyword : SyntaxKind7.NumberKeyword;
