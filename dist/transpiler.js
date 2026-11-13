@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -51639,6 +51639,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustVenueStrDecisions = /* @__PURE__ */ new WeakMap();
     this.rustVenueStrCallers = /* @__PURE__ */ new WeakMap();
     this.rustMarketSlotDecisions = /* @__PURE__ */ new WeakMap();
+    // Market slot / market local decisions call each other (a helper's slot is typed when its callers lend; a
+    // caller's local is typed when its uses are typed slots). A decision taken while a cycle member was still
+    // pending (its guard answered `false`) is provisional: it is dropped again unless it is the outermost one.
+    this.rustMarketDepth = 0;
+    this.rustMarketGuardHits = 0;
+    this.rustMarketPending = /* @__PURE__ */ new Set();
     this.rustSafeMarketBoxing = /* @__PURE__ */ new Set();
     this.rustTypedUnified = new Set(config["typedUnified"] ?? []);
     this.rustVirtualDispatch = config["virtualDispatch"] ?? {};
@@ -58279,13 +58285,26 @@ ${i1}}`;
     let decision = this.rustMarketLocalDecisions.get(declaration);
     if (decision === void 0) {
       this.rustMarketLocalDecisions.set(declaration, false);
+      this.rustMarketPending.add(declaration);
+      const hits = this.rustMarketGuardHits;
+      this.rustMarketDepth++;
       try {
         decision = this.rustMarketLocalIsTypedUncached(declaration);
+        for (let round = 0; round < 3 && this.rustMarketDepth === 1 && this.rustMarketGuardHits > hits; round++) {
+          const again = this.rustMarketGuardHits;
+          const next = this.rustMarketLocalIsTypedUncached(declaration);
+          if (next === decision && this.rustMarketGuardHits === again)
+            break;
+          decision = next;
+        }
       } catch (e) {
         decision = false;
+      } finally {
+        this.rustMarketDepth--;
       }
-      this.rustMarketLocalDecisions.set(declaration, decision);
-    }
+      this.rustMarketSettle(this.rustMarketLocalDecisions, declaration, decision, hits);
+    } else if (this.rustMarketPending.has(declaration))
+      this.rustMarketGuardHits++;
     return decision;
   }
   rustMarketLocalIsTyped(declaration) {
@@ -58340,6 +58359,7 @@ ${i1}}`;
     let writes = 0;
     let slotUses = 0;
     let valueUses = 0;
+    let keyReads = 0;
     const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
       if (this.rustEnclosingFunction(n) !== scope)
         return false;
@@ -58367,6 +58387,7 @@ ${i1}}`;
           if (!isCallExpression6(n.parent) || !this.rustMarketEmptyDefaultRead(n.parent))
             fieldReads++;
         }
+        keyReads++;
         return true;
       }
       if (this.rustMarketSlotUse(n) || this.rustMarketReaderArg(n) || isReturnStatement4(n.parent) && this.rustReturnsOptMarket(findAncestor(n.parent.parent, isFunctionLike))) {
@@ -58381,7 +58402,7 @@ ${i1}}`;
       return false;
     if (empty)
       return writes > 0 || fromOpt ? "opt" : false;
-    return fieldReads > 0 || slotUses > 0 && valueUses === 0 ? "struct" : false;
+    return fieldReads > 0 || (slotUses > 0 || keyReads > 0) && valueUses === 0 ? "struct" : false;
   }
   // ── rustOptMarketKeyRead / printOptMarketKeyRead: literal-key reads on an `Option<Market>` local ──
   // `KeyRead` for `&Option<Market>` reads the market's own map (Null when empty), as the boxed local did.
@@ -68201,14 +68222,37 @@ ${this.getIden(identation)}}`;
     let decision = this.rustMarketSlotDecisions.get(param);
     if (decision === void 0) {
       this.rustMarketSlotDecisions.set(param, false);
+      this.rustMarketPending.add(param);
+      const hits = this.rustMarketGuardHits;
+      this.rustMarketDepth++;
       try {
         decision = this.rustMarketSlotParamUncached(param);
+        for (let round = 0; round < 3 && this.rustMarketDepth === 1 && this.rustMarketGuardHits > hits; round++) {
+          const again = this.rustMarketGuardHits;
+          const next = this.rustMarketSlotParamUncached(param);
+          if (next === decision && this.rustMarketGuardHits === again)
+            break;
+          decision = next;
+        }
       } catch (e) {
         decision = false;
+      } finally {
+        this.rustMarketDepth--;
       }
-      this.rustMarketSlotDecisions.set(param, decision);
+      this.rustMarketSettle(this.rustMarketSlotDecisions, param, decision, hits);
+    } else if (this.rustMarketPending.has(param)) {
+      this.rustMarketGuardHits++;
+      return true;
     }
     return decision;
+  }
+  rustMarketSettle(map, key, decision, hitsBefore) {
+    this.rustMarketPending.delete(key);
+    if (this.rustMarketGuardHits > hitsBefore && this.rustMarketDepth > 0) {
+      map.delete(key);
+      return;
+    }
+    map.set(key, decision);
   }
   rustMarketSlotParamUncached(param) {
     const method = param.parent;
@@ -68358,14 +68402,22 @@ ${this.getIden(identation)}}`;
     if (this.rustLocalIsReassigned(param, name))
       return false;
     let forwards = 0;
+    let reads = 0;
+    let others = 0;
     const ok = this.rustLocalUsesAll(param, name, true, (n) => {
       if (this.isNativeWriteTargetBase(n) || isDeleteExpression2(n.parent?.parent))
         return false;
       if (this.rustMarketSlotUse(n))
         forwards++;
+      else if (this.rustMarketReaderArg(n) || this.rustIsNullTestOf(n))
+        reads++;
+      else
+        others++;
       return true;
     });
-    if (!ok || forwards === 0)
+    if (!ok || forwards === 0 && (reads === 0 || others > 0))
+      return false;
+    if (this.rustCalledFromWsSibling(method))
       return false;
     const calls = this.rustVenueStrCallSites(method);
     return calls.length > 0 && calls.every((call) => {
@@ -68375,12 +68427,34 @@ ${this.getIden(identation)}}`;
       return args[at] === void 0 ? param.initializer !== void 0 : this.rustMarketArgLends(args[at]);
     });
   }
+  /** `ts/src/<id>.ts`'s method `m` is called as `this.m (` / `super.m (` in `ts/src/pro/<id>.ts`. */
+  rustCalledFromWsSibling(method) {
+    const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
+    const m = file.match(/^(.*(?:^|\/)ts\/src\/)([^/]+\.ts)$/);
+    if (m === null)
+      return false;
+    const fs5 = globalThis.process?.getBuiltinModule?.("fs");
+    if (fs5 === void 0)
+      return true;
+    let text;
+    try {
+      text = fs5.readFileSync(m[1] + "pro/" + m[2], "utf8");
+    } catch (e) {
+      return false;
+    }
+    return new RegExp("\\b(?:this|super)\\." + String(method.name.text) + "\\s*\\(").test(text);
+  }
   /** A market slot argument that lends without a decode (`rustMarketSlotArgText` takes no `FromRaw` path). */
   rustMarketArgLends(arg) {
     const inner = this.unwrapParens(arg);
     if (this.literalKindOfNode(inner) === "null")
       return true;
     if (isIdentifier3(inner)) {
+      const pending = this.rustDeclarationOfIdentifier(inner);
+      if (pending !== void 0 && pending.name !== inner && this.rustMarketPending.has(pending) && pending.kind === SyntaxKind7.VariableDeclaration) {
+        this.rustMarketGuardHits++;
+        return true;
+      }
       return this.rustMarketSlotParamOf(inner) !== void 0 || this.rustSafeMarketLocalOf(inner) !== void 0 || this.rustTypedMarketLocalOf(inner) !== void 0 || this.rustOptMarketLocalOf(inner) !== void 0;
     }
     return this.rustIsSafeMarketCall(inner) || this.rustIsOptMarketCall(inner) || this.rustIsTypedMarketCall(inner);
@@ -69661,7 +69735,8 @@ _RustTranspiler.RUST_LIST_MARKET_METHODS = /* @__PURE__ */ new Set([
   "parseOrders",
   "handleMarketTypeAndParams",
   "handleSubTypeAndParams",
-  "safeMarket"
+  "safeMarket",
+  "safeOpenInterest"
 ]);
 var RustTranspiler = _RustTranspiler;
 

@@ -2294,6 +2294,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustReturnsMarket(node: any): boolean;
     /** The `market` parameter of a base market-slot reader, read only by key readers, null tests or `Value` hand-offs. */
     rustMarketSlotParam(param: any): boolean;
+    private rustMarketDepth;
+    private rustMarketGuardHits;
+    private rustMarketPending;
+    rustMarketSettle(map: any, key: any, decision: any, hitsBefore: number): void;
     rustMarketSlotParamUncached(param: any): boolean;
     /** `n` is the container of a base key reader, which borrows the record (`KeyRead` for `&Market`). */
     rustMarketReaderArg(n: any): boolean;
@@ -2316,6 +2320,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A per-venue helper's `market: Market` parameter that it forwards to a lent market slot: lent itself when every
      *  caller in its file lends a typed market (or passes `undefined`), so no caller decodes. */
     rustVenueMarketParam(method: any, param: any): boolean;
+    /** `ts/src/<id>.ts`'s method `m` is called as `this.m (` / `super.m (` in `ts/src/pro/<id>.ts`. */
+    rustCalledFromWsSibling(method: any): boolean;
     /** A market slot argument that lends without a decode (`rustMarketSlotArgText` takes no `FromRaw` path). */
     rustMarketArgLends(arg: any): boolean;
     /** `safeMarket`'s first parameter `marketId: Str = undefined`: a positional `Value` (padded with `Value::Null`). */
