@@ -1451,7 +1451,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): any;
+    printLogicalInBooleanContext(node: any): string;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -1802,6 +1802,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustParamReadsByReferenceUncached(param: any): boolean;
     /** A call to a generated base reader (any overload) whose container parameter prints `impl KeyRead`. */
     rustReaderTakesContainerByReference(call: any): boolean;
+    rustBuiltReturnSourceKind(call: any): 'dict' | 'list' | undefined;
+    private static readonly RUST_BUILT_BOX_RECEIVER_METHODS;
+    rustBuiltReturnBoxUse(n: any, init: any): boolean;
     /** `'dict' | 'list' | 'api'` for a container source the local may hold by reference. */
     rustBorrowedSourceKind(call: any): 'dict' | 'list' | 'api' | undefined;
     rustDeclaredEndpointKind(call: any): 'dict' | 'list' | undefined;

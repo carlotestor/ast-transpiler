@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -63664,7 +63664,7 @@ ${iden}}`;
     if (init?.kind === SyntaxKind7.AwaitExpression)
       init = this.rustSkipWrappers(init.expression);
     const nilDeclared = (init === void 0 || this.literalKindOfNode(init) === "null") && (list.flags & NodeFlags4.Const) === 0 && list.parent?.kind === SyntaxKind7.VariableStatement;
-    let from = init !== void 0 && isCallExpression6(init) ? this.rustBorrowedSourceKind(init) : this.rustDictElementSource(init) ? "dict" : void 0;
+    let from = init !== void 0 && isCallExpression6(init) ? this.rustBorrowedSourceKind(init) ?? this.rustBuiltReturnSourceKind(init) : this.rustDictElementSource(init) ? "dict" : void 0;
     const endpoint = from === "api";
     if (endpoint)
       from = this.rustDeclaredEndpointKind(init) ?? "api";
@@ -63734,7 +63734,7 @@ ${iden}}`;
       }
       if (this.rustExtendHeadUse(n))
         return ++extendHeads > 0 && ++reads > 0;
-      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0) && boxedElementUses.push(n) > 0;
+      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init) && ++defaultedBoxes > 0) && boxedElementUses.push(n) > 0;
       if (this.rustLentResponseSlot(up, n) && this.rustLentResponseSource(init))
         return ++lentResponses > 0 && ++reads > 0;
       if ((endpoint || this.rustLentContainerSource(init)) && this.rustLentEndpointSlot(up, n, from))
@@ -63754,7 +63754,8 @@ ${iden}}`;
       return true;
     };
     const safe = endpoint && !nilDeclared ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
-    if (!safe || reads === 0 && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))
+    const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0;
+    if (!safe || reads === 0 && !builtBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0))
       return void 0;
     if ((keyReads > 0 || init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init)) && !this.rustDictKeyReadLineOk(declaration, name))
       return void 0;
@@ -64225,6 +64226,52 @@ ${iden}}`;
       declaration = (owner !== void 0 && isClassDeclaration4(owner) ? Array.from(owner.members) : []).find((m) => isMethodDeclaration5(m) && m.body !== void 0 && isIdentifier3(m.name) && String(m.name.text) === name);
     }
     return declaration !== void 0 && this.rustParamReadsByReference(declaration.parameters?.[0]);
+  }
+  // ── rustBuiltReturnSourceKind / rustBuiltReturnBoxUse: results of methods whose every return builds a fresh container ──
+  // `this.m (..)` whose resolved body returns a fresh, untagged map (list) on every path (`rustCallBuildsContainer`, the
+  // proof the dict producers already use) always answers `Value::Dict` (`Value::Arr`), so `into_dict()` / `into_list()`
+  // moves the handle out of the box exactly. A base-tier call of a trait-dispatched method may run a venue override
+  // whose body the proof never saw: rejected. Readers, `handle*` tuples, watch/subscribe futures and market /
+  // currency lookups have their own rules.
+  rustBuiltReturnSourceKind(call) {
+    const callee = call?.expression;
+    if (!isCallExpression6(call) || !isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(callee.name))
+      return void 0;
+    const method = String(callee.name.text);
+    if (/^(?:safe|handle[A-Z]|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method))
+      return void 0;
+    if (this.rustTestTierSource(call) || this.rustTypedUnified.has(method))
+      return void 0;
+    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(String(call.getSourceFile?.()?.fileName ?? "")) && this.rustVirtualDispatch[this.toSnakeCaseName(method)] !== void 0)
+      return void 0;
+    const callee0 = this.rustScalarCallee(call);
+    if (callee0 === void 0 || this.isAsyncFunction(callee0) && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(callee0.getSourceFile?.()?.fileName ?? "")))
+      return void 0;
+    if (this.rustCallBuildsContainer(call, "map", 0))
+      return "dict";
+    return this.rustCallBuildsContainer(call, "list", 0) ? "list" : void 0;
+  }
+  rustBuiltReturnBoxUse(n, init) {
+    const up = n.parent;
+    if (init === void 0 || !isCallExpression6(init) || up === void 0 || this.rustBuiltReturnSourceKind(init) === void 0 || this.rustScalarInNestedWrite(n))
+      return false;
+    if (up.kind === SyntaxKind7.PropertyAssignment)
+      return up.initializer === n;
+    if (isReturnStatement4(up))
+      return up.expression === n;
+    if (isArrayLiteralExpression4(up))
+      return true;
+    if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression))
+      return false;
+    const callee = String(up.expression.name.text);
+    const at = Array.from(up.arguments).indexOf(n);
+    if (isIdentifier3(up.expression.expression))
+      return at === 0 && _RustTranspiler.RUST_BUILT_BOX_RECEIVER_METHODS.has(callee) && !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n));
+    if (up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    if (_RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || _RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee))
+      return false;
+    return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && this.rustNilBoxSlotOk(up, at);
   }
   /** `'dict' | 'list' | 'api'` for a container source the local may hold by reference. */
   rustBorrowedSourceKind(call) {
@@ -70181,6 +70228,10 @@ _RustTranspiler.RUST_BORROWED_ANY_KEY_READERS = /^safe(?:Value|String(?:Lower|Up
 // A generated base reader whose container parameter is only handed to by-reference readers declares it
 // `impl KeyRead`: a `Value` argument still passes by value, and a dict or list local is lent as `&x`.
 _RustTranspiler.RUST_BY_REF_GENERATED_READERS = /^safe(?:Dict|List|Bool|Number)(?:2|N)?$|^safe(?:NumberOmitZero|IntegerOmitZero|LedgerEntry)$/;
+// The box that hands such a local on whole: a plain `Value` slot of a `this.` method, `return x`, an object literal
+// value, an array literal element, or the value argument of a `Value` receiver's `push` / `append` / `reset` /
+// ws `resolve` (moved at the last use, else the Arc bump the boxed local's copy paid).
+_RustTranspiler.RUST_BUILT_BOX_RECEIVER_METHODS = /* @__PURE__ */ new Set(["push", "append", "reset", "resolve"]);
 // ── rustRecordLookupSource: base record lookups (market / outcome resolvers) held as a shared map ──
 // Each returns a cached record map (or nothing); read only by key, the map form reads the same.
 _RustTranspiler.RUST_RECORD_LOOKUP_SOURCES = /* @__PURE__ */ new Set(["outcome", "safeOutcome", "loadOutcome", "getMarketFromSymbols", "safeMarket", "market"]);
