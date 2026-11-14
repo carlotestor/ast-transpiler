@@ -12319,7 +12319,8 @@ describe('ral-sf: a literal map written at string-local keys and enumerated by O
         fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    collect (rows: any[]) {\n        const symbols: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const parsed = this.parseOrder (rows[i]);\n            const symbol = parsed['symbol'];\n            symbols[symbol] = true;\n        }\n        const keys = Object.keys (symbols);\n        for (let i = 0; i < keys.length; i++) {\n            this.hold (keys[i]);\n        }\n    }\n}\n");
         const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
         expect(out).toContain('let mut symbols: indexmap::IndexMap<String, Value> = ');
-        expect(out).toContain('symbols.insert(crate::runtime::stringify_param(&symbol), Value::Bool(true));');
+        // ral-yg: the element key borrows for the insert (None keys as "null", exactly stringify_param(&Null))
+        expect(out).toContain('symbols.insert(symbol.as_deref().unwrap_or("null").to_string(), Value::Bool(true));');
         expect(out).toContain('Value::Array(symbols.keys().cloned().map(Value::from).collect())');
         expect(out).not.toContain('object_keys(&symbols)');
     });
@@ -13644,5 +13645,29 @@ describe('ral-xg: an element of an untyped local list filled only by string push
     test('negative: a push of a non-string (a Dict) keeps the element Value', () => {
         const out = mk(body('rows[i]'));
         expect(out).toMatch(/let mut slug: Value = slugs\.get\(i as usize\)/);
+    });
+});
+
+describe('ral-yg: a typed string element keying a local map literal that is only enumerated afterwards reads as Option<String>', () => {
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-yg-s73-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport interface Trade { symbol: string | undefined; [key: string]: any }\nexport default class Exchange {\n    parseTrade (t: Dict): Trade { return t as Trade; }\n    resolve (k: any): void { }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    const body = (extra: string) => "    pick (rows: Dict[]) {\n        const symbols: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const parsed = this.parseTrade (rows[i]);\n            const symbol = parsed['symbol'];\n            symbols[symbol as string] = true;\n        }\n" + extra + "        const keys = Object.keys (symbols);\n        for (let i = 0; i < keys.length; i++) {\n            this.resolve (keys[i]);\n        }\n    }";
+    test('the key borrows for the insert (None keys as \"null\", as stringify_param(&Null) did)', () => {
+        const out = mk(body(''));
+        expect(out).toContain('let mut symbol: Option<String> = ');
+        expect(out).toContain('symbols.insert(symbol.as_deref().unwrap_or("null").to_string(), Value::Bool(true));');
+        expect(out).not.toContain('stringify_param(&symbol)');
+    });
+    test('negative: a map also read by key keeps the boxed element', () => {
+        const out = mk(body("        this.resolve (symbols['x']);\n"));
+        expect(out).toContain('let mut symbol: Value = ');
     });
 });

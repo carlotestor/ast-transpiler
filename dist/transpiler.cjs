@@ -60341,13 +60341,16 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (init !== void 0 && _is.isObjectLiteralExpression.call(void 0, init)) {
       const name = String(access.expression.text);
       let enumerated = false;
+      let keyRead = false;
       this.rustLocalUsesAll(declaration, name, false, (u) => {
         if (this.bearerEnumArg(u.parent) === u || this.bearerEnumArg(_optionalChain([u, 'access', _9091 => _9091.parent, 'optionalAccess', _9092 => _9092.parent])) === u)
           enumerated = true;
+        else if (_is.isElementAccessExpression.call(void 0, u.parent) && u.parent.expression === u && !(_is.isBinaryExpression.call(void 0, u.parent.parent) && u.parent.parent.left === u.parent))
+          keyRead = true;
         return true;
       });
       if (enumerated)
-        return false;
+        return !keyRead && _is.isElementAccessExpression.call(void 0, this.rustSkipWrappers(local.initializer)) && this.rustScalarInsertKeyUse(n);
       return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);
     }
     return this.rustScalarInsertKeyUse(n);

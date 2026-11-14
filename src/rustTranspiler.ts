@@ -8915,11 +8915,16 @@ export class RustTranspiler extends BaseTranspiler {
             // the map's own key iterators print a closure; keep those bearers on their `Value` key
             const name = String(access.expression.text);
             let enumerated = false;
+            let keyRead = false;
             this.rustLocalUsesAll(declaration, name, false, (u) => {
                 if (this.bearerEnumArg(u.parent) === u || this.bearerEnumArg(u.parent?.parent) === u) enumerated = true;
+                else if (isElementAccessExpression(u.parent) && u.parent.expression === u && !(isBinaryExpression(u.parent.parent) && u.parent.parent.left === u.parent)) keyRead = true;
                 return true;
             });
-            if (enumerated) return false;
+            // ral-yg: an element-read key (`const k = parsed['symbol']`, S73) inserted into a plain literal map that is only
+            // enumerated afterwards: the insert takes the key text (`None` keys as "null", exactly `stringify_param(&Null)`)
+            // and the map's own key iterator reads the same keys (a map also read by key keeps the boxed key: its bearer rule leans on it)
+            if (enumerated) return !keyRead && isElementAccessExpression(this.rustSkipWrappers(local.initializer)) && this.rustScalarInsertKeyUse(n);
             return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);
         }
         return this.rustScalarInsertKeyUse(n);

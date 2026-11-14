@@ -60342,13 +60342,16 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (init !== void 0 && isObjectLiteralExpression4(init)) {
       const name = String(access.expression.text);
       let enumerated = false;
+      let keyRead = false;
       this.rustLocalUsesAll(declaration, name, false, (u) => {
         if (this.bearerEnumArg(u.parent) === u || this.bearerEnumArg(u.parent?.parent) === u)
           enumerated = true;
+        else if (isElementAccessExpression4(u.parent) && u.parent.expression === u && !(isBinaryExpression5(u.parent.parent) && u.parent.parent.left === u.parent))
+          keyRead = true;
         return true;
       });
       if (enumerated)
-        return false;
+        return !keyRead && isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) && this.rustScalarInsertKeyUse(n);
       return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);
     }
     return this.rustScalarInsertKeyUse(n);
