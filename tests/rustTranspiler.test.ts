@@ -12057,6 +12057,28 @@ describe('ral-tf: hash / topic list slots and guarded nullable list aliases', ()
     });
 });
 
+describe('ral-tf: map literals settled whole and list literals with moved bare elements', () => {
+    let out = '';
+    let ws = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-tf-moves');
+        fs.mkdirSync (path.join (dir, 'ts/src/base/ws'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseOrders (rows: Dict[], market: any = undefined): any[] {\n        return rows;\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/base/ws/Client.ts'), "export default class Client {\n    resolve (v: any, h: string | undefined = undefined): void {}\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    wrapOne (response: Dict) {\n        const orders = [ response ];\n        return this.parseOrders (orders);\n    }\n    wrapRead (response: Dict) {\n        const orders = [ response ];\n        this.hold (response);\n        return this.parseOrders (orders);\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange';\nimport type { Dict } from '../base/Exchange';\nimport Client from '../base/ws/Client';\nexport default class venue extends Exchange {\n    handleBidAsk (client: Client, symbol: string, row: Dict): void {\n        const fresh: Dict = {};\n        fresh[symbol] = row;\n        client.resolve (fresh, 'bidask:' + symbol);\n    }\n}\n");
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        ws = transpiler.transpileRustByPath (path.join (dir, 'ts/src/pro/venue.ts')).content;
+    });
+    test('a list literal whose bare element moves there at its last use is a built list (no element copy)', () => {
+        expect(out).toMatch(/fn wrapOne[\s\S]*?let mut orders: crate::value::List = std::sync::Arc::new\(vec!\[response\]\);/);
+    });
+    test('negative: an element read again later keeps the Value literal', () => {
+        expect(out).toMatch(/fn wrapRead[\s\S]*?let mut orders: Value = /);
+    });
+});
+
 describe('safe scalar locals, seventh pass: nested balance / options writes', () => {
     test('a typed string key of a nested this.balance / this.options write prints the r05 insert with its own key text', () => {
         const dir = path.join (rustFixtureRoot, 'scalar-pf');

@@ -2652,6 +2652,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `y.into_list()` moves exactly that list (no copy, no other variant to lose). */
     rustArrayGuardedMove(write: any): boolean;
     rustBuiltListOf(node: any): any;
+    /** ral-tf: a bare element local read nowhere after the literal (no loop or closure between): it moves into the element slot. */
+    rustBuiltListMovedElement(e: any): boolean;
+    /** ral-tf: the element list of a literal with moved bare elements, exactly as its `Value` box printed it (no added copy). */
+    rustBuiltListMovedLiteral(node: any): string | undefined;
     printBuiltListLiteral(node: any): string;
     printBuiltListDeclaration(declaration: any, indent: string, varName: string): string | undefined;
     rustOptListGuardedMove(write: any): any;

@@ -19319,8 +19319,9 @@ export class RustTranspiler extends BaseTranspiler {
     rustBuiltListWriteSource(right: any): boolean {
         const rhs: any = this.rustSkipWrappers(right);
         if (rhs === undefined) return false;
-        // a bare local element would be copied into the native literal
-        if (isArrayLiteralExpression(rhs)) return !rhs.elements.some((e: any) => e.kind === SyntaxKind.SpreadElement || isIdentifier(this.rustSkipWrappers(e)));
+        // a bare local element would be copied into the native literal, unless it moves there at its last use (ral-tf)
+        if (isArrayLiteralExpression(rhs)) return !rhs.elements.some((e: any) => e.kind === SyntaxKind.SpreadElement || (isIdentifier(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)))
+            && (!rhs.elements.some((e: any) => isIdentifier(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== undefined);
         return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs);
     }
 
@@ -19360,7 +19361,28 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustBuiltLists.has(declaration) ? declaration : undefined;
     }
 
+    /** ral-tf: a bare element local read nowhere after the literal (no loop or closure between): it moves into the element slot. */
+    rustBuiltListMovedElement(e: any): boolean {
+        const id: any = this.rustSkipWrappers(e);
+        if (id !== e || !isIdentifier(id)) return false;
+        const declaration: any = this.rustDeclarationOfIdentifier(id);
+        if (declaration === undefined || declaration.name === id || !(isVariableDeclaration(declaration) || isParameterDeclaration(declaration))) return false;
+        return this.rustEnclosingFunction(declaration) === this.rustEnclosingFunction(id) && this.rustLocalLastUse(id, declaration);
+    }
+
+    /** ral-tf: the element list of a literal with moved bare elements, exactly as its `Value` box printed it (no added copy). */
+    rustBuiltListMovedLiteral(node: any): string | undefined {
+        const boxed = this.printNode(node, 0).trim();
+        const m = /^Value::from\(vec!\[([\s\S]*)\]\)$/.exec(boxed);
+        if (m === null || m[1].includes('.clone()')) return undefined;
+        return `vec![${m[1]}]`;
+    }
+
     printBuiltListLiteral(node: any): string {
+        if (node.elements?.some((e: any) => isIdentifier(this.rustSkipWrappers(e)))) {
+            const moved = this.rustBuiltListMovedLiteral(node);
+            if (moved !== undefined) return `std::sync::Arc::new(${moved})`;
+        }
         const native = this.rustVecNativeLiteral({ initializer: node });
         return `std::sync::Arc::new(${native ?? 'Vec::new()'})`;
     }

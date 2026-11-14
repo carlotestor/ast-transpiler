@@ -70512,7 +70512,7 @@ ${iden}}`;
     if (rhs === void 0)
       return false;
     if (isArrayLiteralExpression4(rhs))
-      return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement || isIdentifier3(this.rustSkipWrappers(e)));
+      return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement || isIdentifier3(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)) && (!rhs.elements.some((e) => isIdentifier3(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== void 0);
     return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs);
   }
   /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
@@ -70559,7 +70559,30 @@ ${iden}}`;
       return void 0;
     return this.rustBuiltLists.has(declaration) ? declaration : void 0;
   }
+  /** ral-tf: a bare element local read nowhere after the literal (no loop or closure between): it moves into the element slot. */
+  rustBuiltListMovedElement(e) {
+    const id = this.rustSkipWrappers(e);
+    if (id !== e || !isIdentifier3(id))
+      return false;
+    const declaration = this.rustDeclarationOfIdentifier(id);
+    if (declaration === void 0 || declaration.name === id || !(isVariableDeclaration3(declaration) || isParameterDeclaration3(declaration)))
+      return false;
+    return this.rustEnclosingFunction(declaration) === this.rustEnclosingFunction(id) && this.rustLocalLastUse(id, declaration);
+  }
+  /** ral-tf: the element list of a literal with moved bare elements, exactly as its `Value` box printed it (no added copy). */
+  rustBuiltListMovedLiteral(node) {
+    const boxed = this.printNode(node, 0).trim();
+    const m = /^Value::from\(vec!\[([\s\S]*)\]\)$/.exec(boxed);
+    if (m === null || m[1].includes(".clone()"))
+      return void 0;
+    return `vec![${m[1]}]`;
+  }
   printBuiltListLiteral(node) {
+    if (node.elements?.some((e) => isIdentifier3(this.rustSkipWrappers(e)))) {
+      const moved = this.rustBuiltListMovedLiteral(node);
+      if (moved !== void 0)
+        return `std::sync::Arc::new(${moved})`;
+    }
     const native = this.rustVecNativeLiteral({ initializer: node });
     return `std::sync::Arc::new(${native ?? "Vec::new()"})`;
   }
