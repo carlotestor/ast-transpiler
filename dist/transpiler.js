@@ -58060,8 +58060,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       }
       if (method.method === "padStart" || method.method === "padEnd") {
         const spec = this.rustScalarPadSpec(args[0], args[1]);
-        const fmt = `format!("{:${spec.pad}${method.method === "padStart" ? ">" : "<"}${spec.width}}", __s)`;
-        return wrap(method.recvKind === "ostr" ? `(if let Some(__s) = ${name}.as_deref() { Some(${fmt}) } else { None })` : `{ let __s = ${name}.as_str(); ${fmt} }`);
+        const spec2 = `{:${spec.pad}${method.method === "padStart" ? ">" : "<"}${spec.width}}`;
+        return wrap(method.recvKind === "ostr" ? `(if let Some(__s) = ${name}.as_deref() { Some(format!("${spec2}", __s)) } else { None })` : `format!("${spec2}", ${name})`);
       }
       const fn = method.method === "toLowerCase" ? "to_lowercase" : "to_uppercase";
       if (method.recvKind === "ostr")

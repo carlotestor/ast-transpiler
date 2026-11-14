@@ -10660,7 +10660,7 @@ describe('ral-ne: market flags, unified-row string fields and padded strings', (
         expect(out).toContain('let mut isLinear: Option<bool> = (market).linear;');
         expect(out).toContain('let mut symbol: Option<String> = ticker.get("symbol").and_then(Value::as_str).map(str::to_owned);');
         expect(out).not.toContain('let mut symbol: Value = ticker');
-        expect(out).toContain('format!("{:0>64}", __s)');
+        expect(out).toContain('let mut rp: String = format!("{:0>64}", r);');
         expect(out).toContain('format!("{: <8}", __s)');
         expect(out).not.toContain('let mut r: Value');
         expect(out).not.toContain('let mut s: Value');
