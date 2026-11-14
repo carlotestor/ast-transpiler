@@ -74815,6 +74815,10 @@ ${iden}}`;
           nativeUses++;
           return true;
         }
+        if (joined && this.rustStrSlotTernaryArmJoined(n, element)) {
+          nativeUses++;
+          return true;
+        }
         const feeds = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(m.left) || isVariableDeclaration3(m));
         if (feeds !== void 0 && !isStatement(feeds) && (form === "box" || form === "xbox"))
           return false;
@@ -74836,6 +74840,28 @@ ${iden}}`;
     this.rustStrLentLocals.add(element);
     return "ostr";
   }
+  /** zi: `n` is an arm of `c ? a : b`, the whole initializer of a local the joint solve currently types `Option<String>`
+   *  (or `String`), and the other arm prints as that kind too: the target is decided with the slot, never left `Value`. */
+  rustStrSlotTernaryArmJoined(n, element) {
+    let top = n;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    const ternary = top.parent;
+    if (!isConditionalExpression4(ternary) || ternary.condition === top || !this.rustStrTernaryArmSolved(ternary, element))
+      return false;
+    let up = ternary;
+    while (isParenthesizedExpression3(up.parent))
+      up = up.parent;
+    const target = up.parent;
+    const kind = this.rustScalarDecisions.get(target);
+    if (kind !== "ostr" && kind !== "str")
+      return false;
+    const other = this.unwrapParens(ternary.whenTrue === top ? ternary.whenFalse : ternary.whenTrue);
+    const lit = this.literalKindOfNode(other);
+    if (lit !== "string" && lit !== "null")
+      return false;
+    return this.rustLocalLastUse(n, element) || this.rustSlotUseOutsideLoop(n, element);
+  }
   /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
    *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
   rustSlotJoinsSolve(element) {
@@ -74856,6 +74882,8 @@ ${iden}}`;
         top = top.parent;
       const up = top.parent;
       if (isVariableDeclaration3(up) && up.initializer === top && isIdentifier3(up.name) || isBinaryExpression5(up) && up.right === top && up.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement)
+        alias = true;
+      if (isConditionalExpression4(up) && up.condition !== top && this.rustStrTernaryArmSolved(up, element))
         alias = true;
       return true;
     });

@@ -23435,6 +23435,9 @@ export class RustTranspiler extends BaseTranspiler {
                 if (joined && this.rustScalarAliasMove(n, 'ostr', element)) { nativeUses++; return true; }
                 // wi: a whole alias read again later copies once, where the `Value` alias printed `x.clone()` (no added copy)
                 if (joined && this.rustScalarAliasCopy(n, 'ostr', element)) { nativeUses++; return true; }
+                // zi: an arm of a ternary initialising a local the joint solve types `Option<String>`: the arm moves (last use) or
+                // copies where the boxed arm printed `x.clone()`
+                if (joined && this.rustStrSlotTernaryArmJoined(n, element)) { nativeUses++; return true; }
                 // a box feeding another local's write or initializer would make that local's own typing depend on this slot
                 const feeds: any = findAncestor(n, (m: any) => isStatement(m) || (isBinaryExpression(m) && m.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(m.left)) || isVariableDeclaration(m));
                 if (feeds !== undefined && !isStatement(feeds) && (form === 'box' || form === 'xbox')) return false;
@@ -23455,6 +23458,25 @@ export class RustTranspiler extends BaseTranspiler {
         return 'ostr';
     }
 
+    /** zi: `n` is an arm of `c ? a : b`, the whole initializer of a local the joint solve currently types `Option<String>`
+     *  (or `String`), and the other arm prints as that kind too: the target is decided with the slot, never left `Value`. */
+    rustStrSlotTernaryArmJoined(n: any, element: any): boolean {
+        let top: any = n;
+        while (isParenthesizedExpression(top.parent)) top = top.parent;
+        const ternary: any = top.parent;
+        if (!isConditionalExpression(ternary) || ternary.condition === top || !this.rustStrTernaryArmSolved(ternary, element)) return false;
+        let up: any = ternary;
+        while (isParenthesizedExpression(up.parent)) up = up.parent;
+        const target: any = up.parent;
+        const kind = this.rustScalarDecisions.get(target);
+        if (kind !== 'ostr' && kind !== 'str') return false;
+        // the other arm is a string literal or null: an identifier arm prints `x.clone()` where its `Value` box moved
+        const other: any = this.unwrapParens(ternary.whenTrue === top ? ternary.whenFalse : ternary.whenTrue);
+        const lit = this.literalKindOfNode(other);
+        if (lit !== 'string' && lit !== 'null') return false;
+        return this.rustLocalLastUse(n, element) || this.rustSlotUseOutsideLoop(n, element);
+    }
+
     /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
      *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
     rustSlotJoinsSolve(element: any): boolean {
@@ -23471,6 +23493,8 @@ export class RustTranspiler extends BaseTranspiler {
             const up: any = top.parent;
             if ((isVariableDeclaration(up) && up.initializer === top && isIdentifier(up.name))
                 || (isBinaryExpression(up) && up.right === top && up.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(up.left) && up.parent?.kind === SyntaxKind.ExpressionStatement)) alias = true;
+            // zi: an arm of a ternary that is the whole initializer of another local joins that local's solve too
+            if (isConditionalExpression(up) && up.condition !== top && this.rustStrTernaryArmSolved(up, element)) alias = true;
             return true;
         });
         return alias;

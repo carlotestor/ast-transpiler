@@ -14076,4 +14076,13 @@ describe('zi: tuple slots fifth pass', () => {
         // negative: an arm whose callee does not declare slot 0 `Dict` keeps the box
         expect(out).toContain('let mut loose: Value = ');
     });
+    test('zi: a string-option slot feeding a ternary arm types the TARGET local Option<String> (literal other arm)', () => {
+        const b2 = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    handleOptionStringAndParams (params: object, methodName: string, optionName: string, defaultValue: Str = undefined): [Str, Dict] {\n        const value = this.safeString (params, optionName, defaultValue);\n        return [ value, params as Dict ];\n    }\n}\n";
+        const file = fx ('zi-ternary-target', b2, "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    watchThing (fut: boolean, params: Dict = {}) {\n        const [ spotMethod, rest ] = this.handleOptionStringAndParams (params, 'watchThing', 'spotMethod', '/m');\n        const method = (fut === true) ? '/f' : spotMethod;\n        const topic = method + ':x';\n        return this.hold ([ topic, rest ]);\n    }\n    watchOther (fut: boolean, params: Dict = {}) {\n        const [ spotOther, rest ] = this.handleOptionStringAndParams (params, 'watchOther', 'spotMethod', '/m');\n        const fallback = fut ? 'a' : 'b';\n        const pick = (spotOther === undefined) ? fallback : spotOther;\n        return this.hold ({ 'p': pick, 'r': rest, 'f': fallback });\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        expect(out).toContain('let mut spotMethod: Option<String> = ');
+        expect(out).toContain('let mut method: Option<String> = ');
+        // negative: the other arm is a typed local (its copy would be an added clone): the target stays Value
+        expect(out).toContain('let mut spotOther: Value = ');
+    });
 });
