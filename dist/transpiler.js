@@ -59302,8 +59302,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       const op = node.operatorToken.kind;
       const numeric = (k) => k === "int" || k === "num" || k === "oint" || k === "onum";
       if (op === SyntaxKind7.PlusToken || op === SyntaxKind7.MinusToken || op === SyntaxKind7.AsteriskToken) {
-        const a = this.rustScalarNumericKind(node.left);
-        const b = this.rustScalarNumericKind(node.right);
+        const a = this.rustArithSideKind(node.left);
+        const b = this.rustArithSideKind(node.right);
         if (!numeric(a) || !numeric(b))
           return void 0;
         const kind = a.endsWith("int") && b.endsWith("int") ? "int" : "num";
@@ -59387,6 +59387,11 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (param !== void 0)
       return param;
     return isCallExpression6(inner) && this.rustScalarValueKind(inner, true) === "int" && this.rustScalarNativeText("int", inner) !== void 0 ? "int" : void 0;
+  }
+  /** zb: an arithmetic side's kind: a typed scalar shape, else a typed-signature numeric parameter read
+   *  (`now - limit * duration`: `limit` holds only `Int` or `Null`, so the Option arm equals the helper's). */
+  rustArithSideKind(node) {
+    return this.rustScalarNumericKind(node) ?? this.rustArithParamKind(node);
   }
   /** zb: the numeric kind of an unwritten typed-signature parameter read (`oint` / `onum` / `int` / `num`), else undefined. */
   rustArithParamKind(node) {
@@ -60166,7 +60171,7 @@ ${binding(plan.indent)}` : ""), head: "" };
    *  (`add`/`subtract`/`multiply`/`divide` by a non-zero literal) answer `Null` when either operand is `Null`. */
   rustScalarOptArithText(base, node, sign) {
     const sides = [node.left, node.right].map((n, i) => {
-      const k = this.rustScalarNumericKind(n);
+      const k = this.rustArithSideKind(n);
       if (k !== "oint" && k !== "onum")
         return { use: this.rustScalarOperandText(base, n) };
       const v = i === 0 ? "__l" : "__r";

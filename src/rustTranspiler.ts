@@ -7963,8 +7963,8 @@ export class RustTranspiler extends BaseTranspiler {
             // an optional operand gives an optional result: the helpers answer `Null` when either side is `Null`
             const numeric = (k: string) => k === 'int' || k === 'num' || k === 'oint' || k === 'onum';
             if (op === SyntaxKind.PlusToken || op === SyntaxKind.MinusToken || op === SyntaxKind.AsteriskToken) {
-                const a = this.rustScalarNumericKind(node.left);
-                const b = this.rustScalarNumericKind(node.right);
+                const a = this.rustArithSideKind(node.left);
+                const b = this.rustArithSideKind(node.right);
                 if (!numeric(a) || !numeric(b)) return undefined;
                 const kind = a.endsWith('int') && b.endsWith('int') ? 'int' : 'num';
                 return a.startsWith('o') || b.startsWith('o') ? `o${kind}` : kind;
@@ -8046,6 +8046,12 @@ export class RustTranspiler extends BaseTranspiler {
         // so `Math.min|max (limit, n)` / `this.sum (since, d)` over it is the helper's own Int / Null arm exactly
         const param = this.rustArithParamKind(inner); if (param !== undefined) return param;
         return isCallExpression(inner) && this.rustScalarValueKind(inner, true) === 'int' && this.rustScalarNativeText('int', inner) !== undefined ? 'int' : undefined;
+    }
+
+    /** zb: an arithmetic side's kind: a typed scalar shape, else a typed-signature numeric parameter read
+     *  (`now - limit * duration`: `limit` holds only `Int` or `Null`, so the Option arm equals the helper's). */
+    rustArithSideKind(node): string | undefined {
+        return this.rustScalarNumericKind(node) ?? this.rustArithParamKind(node);
     }
 
     /** zb: the numeric kind of an unwritten typed-signature parameter read (`oint` / `onum` / `int` / `num`), else undefined. */
@@ -8755,7 +8761,7 @@ export class RustTranspiler extends BaseTranspiler {
      *  (`add`/`subtract`/`multiply`/`divide` by a non-zero literal) answer `Null` when either operand is `Null`. */
     rustScalarOptArithText(base: string, node, sign: string): string {
         const sides = [ node.left, node.right ].map((n, i) => {
-            const k = this.rustScalarNumericKind(n);
+            const k = this.rustArithSideKind(n);
             if (k !== 'oint' && k !== 'onum') return { use: this.rustScalarOperandText(base, n) };
             const v = i === 0 ? '__l' : '__r';
             return { bind: v, src: this.rustScalarOperandText(k, n), use: base === 'num' && k === 'oint' ? `(${v} as f64)` : v };
