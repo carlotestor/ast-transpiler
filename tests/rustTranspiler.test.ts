@@ -5017,8 +5017,9 @@ describe('native IndexMap ops on proven dict receivers', () => {
 
     test('delete on a dict field / literal-built local is shift_remove', () => {
         expect(rest).toContain('if let (Value::Dict(__d), Value::Str(__k)) = (&mut self.balance, &code) { std::sync::Arc::make_mut(__d).shift_remove(__k.as_ref()); }');
-        expect(rest).toContain('if let Value::Dict(__d) = &mut request { std::sync::Arc::make_mut(__d).shift_remove("a"); }');
-        expect(ws).toContain('if let Value::Dict(__d) = &mut plain { std::sync::Arc::make_mut(__d).shift_remove("k"); }');
+        // ral-yf: the literal-built local is a typed IndexMap now, so the delete is its own shift_remove
+        expect(rest).toContain('request.shift_remove("a");');
+        expect(ws).toContain('plain.shift_remove("k");');
     });
 
     test('Object.keys / Object.values on REST dicts and untagged fields are native', () => {
@@ -13753,5 +13754,32 @@ describe('ral-yf: a built list reassigned from a Promise<List> endpoint or a bas
     test('negative: an endpoint that does not declare Promise<List> keeps the box', () => {
         const body = out.slice (out.indexOf ('fn fetchUntyped'), out.indexOf ('fn handleRows'));
         expect(body).toMatch(/let mut response: Value = /);
+    });
+});
+
+describe('ral-yf: delete m[k] on a map literal is the IndexMap shift_remove (runtime remove: missing key a no-op)', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-yf-delete');
+        const files: Record<string, string> = {"ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    extend (...args: any[]): Dict { return args[0]; }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    trades (id: string, old: boolean, params: Dict = {}) {\n        const request: Dict = {\n            'instrument_name': id,\n            'include_old': true,\n        };\n        if (old) {\n            delete request['include_old'];\n        }\n        return this.hold (this.extend (request, params));\n    }\n    dropKey (row: Dict, params: Dict = {}) {\n        const key = this.safeString (row, 'k');\n        const request: Dict = {\n            'a': 1,\n        };\n        delete request[key];\n        return this.hold (this.extend (request, params));\n    }\n    producedDelete (params: Dict = {}) {\n        const request: Dict = this.hold ({});\n        delete request['include_old'];\n        return this.hold (request);\n    }\n}\n"};
+        for (const [ rel, text ] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (dir, rel)), { recursive: true });
+            fs.writeFileSync (path.join (dir, rel), text);
+        }
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('literal key: request.shift_remove("k")', () => {
+        const body = out.slice (out.indexOf ('fn trades'), out.indexOf ('fn dropKey'));
+        expect(body).toMatch(/let mut request: indexmap::IndexMap<String, Value> = /);
+        expect(body).toContain('request.shift_remove("include_old");');
+        expect(body).not.toContain('remove(&mut request');
+    });
+    test('negative: a non-literal key keeps the box', () => {
+        const body = out.slice (out.indexOf ('fn dropKey'), out.indexOf ('fn producedDelete'));
+        expect(body).toMatch(/let mut request: Value = /);
+    });
+    test('negative: a produced map keeps the box', () => {
+        const body = out.slice (out.indexOf ('fn producedDelete'));
+        expect(body).toMatch(/let mut request: Value = /);
     });
 });

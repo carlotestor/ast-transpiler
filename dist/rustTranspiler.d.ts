@@ -2261,6 +2261,12 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  identifier key: the printer's native read (`m.get(k.as_str().unwrap_or("")).cloned()..`) is a form ccxt's
      *  write-back pass (`writeBackIndexedMutations`) and push pass (`rustVecPushInline`) read as the same get. */
     rustLiteralWriteBackBindOk(access: any): boolean;
+    /** ral-yf: the key text of `delete m[k]` as an expression statement on a map-literal local `m`, `k` a literal bearer key
+     *  or a proven-string key place, else undefined. runtime `remove` on (Dict, Str) is `try_ws_subs_remove` (a literal
+     *  holds no ws marker, so it is dead) then `shift_remove`; a missing key is a no-op in both. */
+    rustBearerDeleteKey(del: any): string | undefined;
+    /** ral-yf: `delete m[k]` on a typed map-literal local. */
+    printBearerDelete(node: any): string | undefined;
     /** ral-xf: the `m[k]` receiver of a statement `m[k].push (v)` (one argument, no spread), else undefined. */
     rustBearerElementPushCall(call: any): any;
     /** ral-xf: `m[k].push (v)` on a map-literal local whose every stored value (literal properties and `m[k] = v` writes)

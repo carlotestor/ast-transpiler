@@ -65975,7 +65975,7 @@ ${this.getIden(identation)}}`;
     return `Value::from(vec![${node.elements.map(element).join(", ")}])`;
   }
   printDeleteExpression(node, identation) {
-    return this.printWsBookMapDelete(node) ?? this.printWsCacheMapDelete(node) ?? this.printClientHandleDelete(node) ?? this.provenDictFieldDelete(node) ?? `remove(&mut ${this.printNode(node.expression.expression, 0)}, &${this.printNode(node.expression.argumentExpression, 0)})`;
+    return this.printBearerDelete(node) ?? this.printWsBookMapDelete(node) ?? this.printWsCacheMapDelete(node) ?? this.printClientHandleDelete(node) ?? this.provenDictFieldDelete(node) ?? `remove(&mut ${this.printNode(node.expression.expression, 0)}, &${this.printNode(node.expression.argumentExpression, 0)})`;
   }
   printInstanceOfExpression(node, identation) {
     return `${this.getIden(identation)}is_instance(&${this.printNode(node.left, 0)}, &${this.printNode(node.right, 0)})`;
@@ -67410,6 +67410,8 @@ ${iden}}`;
     }
     if (up !== void 0 && root === access && this.rustBearerElementPushCall(up.parent) !== void 0)
       return this.rustBearerElementPushText(up.parent, "v") !== void 0;
+    if (up !== void 0 && isDeleteExpression2(up) && root === access)
+      return this.rustBearerDeleteKey(up) !== void 0;
     if (up !== void 0 && (isDeleteExpression2(up) || isCallExpression6(up) && up.expression === root || up.kind === SyntaxKind7.PrefixUnaryExpression || up.kind === SyntaxKind7.PostfixUnaryExpression))
       return false;
     if (!this.isNativeAccessPositionSafe(root) && !isStringLiteralLikeNode4(this.rustSkipWrappers(access.argumentExpression)) && this.isNativeAccessPositionSafe(root, this.rustBearerSelfWriteHost(root, name)))
@@ -67435,6 +67437,32 @@ ${iden}}`;
     if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0)
       return false;
     return isObjectLiteralExpression4(this.rustSkipWrappers(declaration.initializer));
+  }
+  /** ral-yf: the key text of `delete m[k]` as an expression statement on a map-literal local `m`, `k` a literal bearer key
+   *  or a proven-string key place, else undefined. runtime `remove` on (Dict, Str) is `try_ws_subs_remove` (a literal
+   *  holds no ws marker, so it is dead) then `shift_remove`; a missing key is a no-op in both. */
+  rustBearerDeleteKey(del) {
+    const target = del?.expression;
+    if (target === void 0 || !isElementAccessExpression4(target) || !isIdentifier3(target.expression) || del.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(target.expression);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0 || !isObjectLiteralExpression4(this.rustSkipWrappers(declaration.initializer)))
+      return void 0;
+    const key = this.rustSkipWrappers(target.argumentExpression);
+    if (key === void 0 || !isStringLiteralLikeNode4(key) || !this.rustDictBearerKeyOk(key))
+      return void 0;
+    return JSON.stringify(String(key.text));
+  }
+  /** ral-yf: `delete m[k]` on a typed map-literal local. */
+  printBearerDelete(node) {
+    const target = node?.expression;
+    if (target === void 0 || !isElementAccessExpression4(target) || !isIdentifier3(target.expression))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(target.expression);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !this.rustDictLocalIsTyped(declaration))
+      return void 0;
+    const key = this.rustBearerDeleteKey(node);
+    return key === void 0 ? void 0 : `${String(target.expression.text)}.shift_remove(${key})`;
   }
   /** ral-xf: the `m[k]` receiver of a statement `m[k].push (v)` (one argument, no spread), else undefined. */
   rustBearerElementPushCall(call) {
