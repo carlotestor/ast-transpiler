@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -51555,6 +51555,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustStrNoLend = false;
     this.rustStrRuntimeBare = /* @__PURE__ */ new Set();
     this.rustBaseTypedBare = /* @__PURE__ */ new Set();
+    this.rustDeepPreciseChainMemo = /* @__PURE__ */ new WeakMap();
     this.rustBytesBare = /* @__PURE__ */ new Set();
     this.rustBytesDecisions = /* @__PURE__ */ new Map();
     this.rustBytesUseForms = /* @__PURE__ */ new WeakMap();
@@ -55445,7 +55446,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
           copied++;
       } else if (form !== void 0 && !this.rustIdentifierIsPropertyName(n))
         nativeUses++;
-      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))
+      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey" || form === "parg" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))
         typedUses++;
       if (form === "xbox" || form === "native" || form === "targ" || form === "err")
         expressionUses = true;
@@ -56111,6 +56112,50 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     });
     return written;
   }
+  /** vd: only a local declared with a value (nil-declared locals keep their own box rules). */
+  rustPreciseLendLocal(n) {
+    const declaration = this.rustDeclaredNode(n);
+    return declaration !== void 0 && isVariableDeclaration3(declaration) && declaration.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== "null";
+  }
+  /** vd: `n` is a direct string operand (one of the first two, the third of `stringDiv` is the precision) of a lent
+   *  `Precise.<op>(..)` call. */
+  rustPreciseLentOperand(n) {
+    let top = n;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    const call = top.parent;
+    if (!isCallExpression6(call) || call.expression === top || !isPropertyAccessExpression3(call.expression))
+      return false;
+    const callee = call.expression;
+    if (!isIdentifier3(callee.expression) || String(callee.expression.text) !== "Precise" || !_RustTranspiler.RUST_PRECISE_LENT.has(String(callee.name.text)))
+      return false;
+    const at = Array.from(call.arguments).indexOf(top);
+    if (at < 0 || at >= (String(callee.name.text) === "stringAbs" || String(callee.name.text) === "stringNeg" ? 1 : 2))
+      return false;
+    let ret = call;
+    while (isParenthesizedExpression3(ret.parent))
+      ret = ret.parent;
+    if (isReturnStatement4(ret.parent))
+      return false;
+    return !this.rustDeepPreciseChainIn(this.rustEnclosingFunction(call));
+  }
+  rustDeepPreciseChainIn(scope) {
+    if (scope === void 0)
+      return false;
+    let hit = this.rustDeepPreciseChainMemo.get(scope);
+    if (hit !== void 0)
+      return hit;
+    const depthOf = (node) => {
+      let best = 0;
+      node.forEachChild((child) => {
+        best = Math.max(best, depthOf(child));
+      });
+      return this.rustScalarPreciseCall(node) && isCallExpression6(node) ? best + 1 : best;
+    };
+    hit = depthOf(scope) >= 4;
+    this.rustDeepPreciseChainMemo.set(scope, hit);
+    return hit;
+  }
   /** pg: some use of the local is an argument of a `Precise.<op>(..)` call. */
   rustPreciseOperandLocal(declaration) {
     let found = false;
@@ -56588,7 +56633,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const fallback = this.unwrapParens(args[base]);
     if (this.literalKindOfNode(fallback) !== void 0 || this.rustScalarIntLiteral(fallback) !== void 0 || this.rustScalarFloatLiteral(fallback) !== void 0) {
-      return numBase !== void 0 && this.rustScalarIntLiteral(fallback) !== void 0 ? "onum" : void 0;
+      if (numBase !== void 0 && this.rustScalarIntLiteral(fallback) !== void 0)
+        return "onum";
+      if (numBase !== void 0 && this.rustScalarFloatLiteral(fallback) !== void 0 && !isCallExpression6(fallback))
+        return "onum";
+      if (this.literalKindOfNode(fallback) === "null")
+        return strBase !== void 0 ? "ostr" : intBase !== void 0 ? "oint" : numBase !== void 0 ? "onum" : void 0;
+      return void 0;
     }
     const kind = this.rustReaderFallbackKind(fallback);
     if (strBase !== void 0)
@@ -57258,6 +57309,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if ((kind === "bool" || kind === "obool") && this.rustIdentifierUseIsCondition(n))
       return "cond";
+    if ((kind === "str" || kind === "ostr") && this.rustPreciseLentOperand(n) && this.rustPreciseLendLocal(n))
+      return "parg";
     if ((kind === "str" || kind === "ostr") && this.rustWsCacheMapKeyUse(n))
       return "fin";
     if (kind === "bool" && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== void 0)
@@ -58174,7 +58227,9 @@ ${binding(plan.indent)}` : ""), head: "" };
       return source === kind || optional && source === kind.slice(1);
     }
     const value = this.rustScalarValueKind(node, true);
-    return value === kind || optional && (value === "null" || value === kind.slice(1));
+    if (value === kind || optional && (value === "null" || value === kind.slice(1)))
+      return true;
+    return kind === "ostr" && value === void 0 && this.rustVenueStrCall(node);
   }
   /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */
   rustNilBoxSlotOk(call, at) {
@@ -58265,7 +58320,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `${super.printIdentifier(node)}.as_deref().unwrap_or("null")`;
     if (form === "targ" && (local.kind === "str" || local.kind === "ostr") && this.rustWsKeyUse(node))
       return this.rustWsKeyText(node);
-    if (form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "key" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey")
+    if (form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "key" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey" || form === "parg")
       return super.printIdentifier(node);
     if (form === "err")
       return this.rustErrMsgMoves(node, local.declaration) ? super.printIdentifier(node) : `${super.printIdentifier(node)}.clone()`;
@@ -58304,6 +58359,9 @@ ${binding(plan.indent)}` : ""), head: "" };
       return paramText;
     if (kind === "oint" && this.rustLimitCall(node))
       return this.rustLimitCallText(node);
+    const shadowRead = this.rustProShadowScalarText(kind, node);
+    if (shadowRead !== void 0)
+      return shadowRead;
     const marketField = base === "str" ? this.rustMarketArmStrText(kind, node) : void 0;
     if (marketField !== void 0)
       return marketField;
@@ -63767,8 +63825,11 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         return wrap(`match ${get} { Some(Value::Str(__s)) if !__s.is_empty() => Value::Str(__s.clone()), Some(Value::Int(__n)) => Value::Str(__n.to_string().into()), Some(Value::Float(__f)) => Value::Str(__f.to_string().into()), _ => ${fallback} }`);
       case "safeInteger":
         return wrap(`match ${get} { Some(Value::Int(__n)) => Value::Int(*__n), Some(Value::Float(__f)) => Value::Int(*__f as i64), Some(Value::Str(__s)) => match __s.parse::<i64>() { Ok(__n) => Value::Int(__n), Err(_) => match __s.parse::<f64>() { Ok(__f) if __f.is_finite() => Value::Int(__f as i64), _ => ${fallback} } }, _ => ${fallback} }`);
-      case "safeNumber":
-        return wrap(`match ${get} { Some(Value::Float(__f)) => Value::Float(*__f), Some(Value::Int(__n)) => Value::Float(*__n as f64), Some(Value::Str(__s)) => match __s.parse::<f64>() { Ok(__n) => Value::Float(__n), Err(_) => ${fallback} }, _ => ${fallback} }`);
+      case "safeNumber": {
+        const plain = args.length === 2 || isIdentifier3(args[2]) || this.literalKindOfNode(args[2]) !== void 0;
+        const str = plain ? `__s.parse::<f64>().map_or(${fallback}, Value::Float)` : `match __s.parse::<f64>() { Ok(__n) => Value::Float(__n), Err(_) => ${fallback} }`;
+        return wrap(`match ${get} { Some(Value::Float(__f)) => Value::Float(*__f), Some(Value::Int(__n)) => Value::Float(*__n as f64), Some(Value::Str(__s)) => ${str}, _ => ${fallback} }`);
+      }
       case "safeBool":
         return wrap(`match ${get} { Some(Value::Bool(__b)) => Value::Bool(*__b), _ => ${fallback} }`);
       case "safeDict":
@@ -63902,6 +63963,25 @@ ${ind}let ${view}: &${map} = &${arc};
   /** A miss-arm default the match can hold: absent (`Value::Null`) or a
    *  literal; a computed default keeps the helper (its Value is not
    *  re-printable inside an arm without re-evaluating it twice). */
+  /** vd: a no-default `safeInteger` / `safeString` / `safeNumber` read of the WS-handler shadow, printed
+   *  straight into an `Option<i64>` / `Option<String>` / `Option<f64>` local. Same arms as
+   *  `rustProHandlerShadowReadText` (so the same Null / wrong-kind answers as the `_k` runtime helper:
+   *  a missing key, `Null`, an empty string, an unparsable string or any other kind is `None`), without the
+   *  `Value` round trip and its `.cloned()` (the old line exceeded 400 chars and vetoed the typed local). */
+  rustProShadowScalarText(kind, node) {
+    const want = kind === "oint" ? "integer" : kind === "ostr" ? "string" : kind === "onum" ? "float" : void 0;
+    if (want === void 0 || !isCallExpression6(node) || this.printProHandlerShadowRead(node, true) === void 0)
+      return void 0;
+    const callee = node.expression;
+    if (_RustTranspiler.PRO_HANDLER_SHADOW_SAFE_READS[String(callee.name?.text ?? "")] !== want || node.arguments.length !== 2)
+      return void 0;
+    const at = `match ${_RustTranspiler.PRO_HANDLER_SHADOW_NAME}.get("${this.escapeRustStringLiteral(node.arguments[1].text)}")`;
+    if (want === "integer")
+      return `(${at} { Some(Value::Int(__n)) => Some(*__n), Some(Value::Float(__f)) => Some(*__f as i64), Some(Value::Str(__s)) if !__s.is_empty() => match __s.parse::<i64>() { Ok(__n) => Some(__n), Err(_) => match __s.parse::<f64>() { Ok(__f) if __f.is_finite() => Some(__f as i64), _ => None } }, _ => None })`;
+    if (want === "string")
+      return `(${at} { Some(Value::Str(__s)) if !__s.is_empty() => Some(__s.to_string()), Some(Value::Int(__n)) => Some(__n.to_string()), Some(Value::Float(__f)) => Some(__f.to_string()), _ => None })`;
+    return `(${at} { Some(Value::Float(__f)) => Some(*__f), Some(Value::Int(__n)) => Some(*__n as f64), Some(Value::Str(__s)) if !__s.is_empty() => __s.parse::<f64>().ok(), _ => None })`;
+  }
   rustProHandlerShadowDefaultShape(node) {
     return node.kind === SyntaxKind7.StringLiteral || node.kind === SyntaxKind7.NumericLiteral || node.kind === SyntaxKind7.TrueKeyword || node.kind === SyntaxKind7.FalseKeyword || node.kind === SyntaxKind7.NullKeyword || node.kind === SyntaxKind7.ArrayLiteralExpression || node.kind === SyntaxKind7.ObjectLiteralExpression || isIdentifier3(node) && node.text === "undefined";
   }
@@ -77352,6 +77432,9 @@ _RustTranspiler.RUST_BASE_TYPED_RUNTIME = {
 };
 // base methods with a TS body that the runtime implements by hand (`exchange_stubs.rs`), typed like the runtime table
 _RustTranspiler.RUST_BASE_TYPED_HAND_METHODS = /* @__PURE__ */ new Set(["valueIsDefined", "randNumber", "binaryLength"]);
+/** Runtime `Precise::string*` entry points whose string operands take `&impl PreciseArg` (precise.rs). The
+ *  comparators keep `&Value` (a ccxt build/ pass reads their exact signature text). */
+_RustTranspiler.RUST_PRECISE_LENT = /* @__PURE__ */ new Set(["stringAdd", "stringSub", "stringMul", "stringDiv", "stringMod", "stringAbs", "stringNeg", "stringMin", "stringMax"]);
 // ── byte buffers (rustBytesProducer / rustBytesSlot / rustBytesLocal) ──
 // The hand-written producers of a TS `Uint8Array` return `crate::value::Bytes` (the `Value::Arr` of byte
 // ints behind a typed handle) and the byte parameters of the hand-written consumers take `impl Into<Value>`.

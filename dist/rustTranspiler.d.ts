@@ -635,6 +635,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustPrecisionTouched(declaration: any, scope: any): boolean;
     /** pg: a later whole write of the local is a precision-formatter call (the 400-char guard watches such locals). */
     rustPrecisionWritten(declaration: any): boolean;
+    /** Runtime `Precise::string*` entry points whose string operands take `&impl PreciseArg` (precise.rs). The
+     *  comparators keep `&Value` (a ccxt build/ pass reads their exact signature text). */
+    private static readonly RUST_PRECISE_LENT;
+    /** vd: only a local declared with a value (nil-declared locals keep their own box rules). */
+    rustPreciseLendLocal(n: any): boolean;
+    /** vd: `n` is a direct string operand (one of the first two, the third of `stringDiv` is the precision) of a lent
+     *  `Precise.<op>(..)` call. */
+    rustPreciseLentOperand(n: any): boolean;
+    private rustDeepPreciseChainMemo;
+    rustDeepPreciseChainIn(scope: any): boolean;
     /** pg: some use of the local is an argument of a `Precise.<op>(..)` call. */
     rustPreciseOperandLocal(declaration: any): boolean;
     /** The unboxed call text. */
@@ -1737,6 +1747,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A miss-arm default the match can hold: absent (`Value::Null`) or a
      *  literal; a computed default keeps the helper (its Value is not
      *  re-printable inside an arm without re-evaluating it twice). */
+    /** vd: a no-default `safeInteger` / `safeString` / `safeNumber` read of the WS-handler shadow, printed
+     *  straight into an `Option<i64>` / `Option<String>` / `Option<f64>` local. Same arms as
+     *  `rustProHandlerShadowReadText` (so the same Null / wrong-kind answers as the `_k` runtime helper:
+     *  a missing key, `Null`, an empty string, an unparsable string or any other kind is `None`), without the
+     *  `Value` round trip and its `.cloned()` (the old line exceeded 400 chars and vetoed the typed local). */
+    rustProShadowScalarText(kind: string, node: Node): string | undefined;
     rustProHandlerShadowDefaultShape(node: Node): boolean;
     rustProHandlerShadowDefault(node: Node): string | undefined;
     /** Exact native form of the runtime `_k` helper: same value kinds, same
