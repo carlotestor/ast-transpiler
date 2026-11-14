@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -65985,6 +65985,9 @@ ${iden}}`;
     const extendReuse = from === void 0 && init !== void 0 && this.rustExtendReuseLiteral(declaration, init);
     if (extendReuse)
       from = "dict";
+    const keyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && this.rustSafeValueKeyReadSource(init);
+    if (keyReadOnly)
+      from = "dict";
     if (from === void 0 && !nilDeclared)
       return void 0;
     const name = String(declaration.name.text);
@@ -66016,6 +66019,7 @@ ${iden}}`;
     let declaredEndpointWrites = 0;
     let nullWrites = 0;
     let endpointBoxes = 0;
+    let plainReads = 0;
     const boxedElementUses = [];
     const accept = (n) => {
       if (this.rustIdentifierIsPropertyName(n))
@@ -66057,8 +66061,11 @@ ${iden}}`;
       if (this.rustDictKeyReadUse(n)) {
         keyReads++;
         reads++;
+        plainReads++;
         return true;
       }
+      if (keyReadOnly)
+        return this.rustSafeValueKeyReaderUse(n) && ++plainReads > 0 && ++reads > 0;
       if (this.rustBorrowedKeySetUse(n)) {
         keyReads++;
         keySets++;
@@ -66107,6 +66114,8 @@ ${iden}}`;
     const boxOnly = reads === 0 && boxedElementUses.length > 0 && (this.rustDictElementSource(init) || this.rustListElementSource(init)) && nullTests === 0 && writes === 0;
     const endpointBoxOnly = endpointBoxes > 0 && nullTests === 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration) && boxedElementUses.every((u) => this.rustBoxLineOk(u));
     if (endpointBoxes > 0 && !endpointBoxOnly)
+      return void 0;
+    if (keyReadOnly && (!safe || plainReads === 0 || plainReads !== reads || nullTests + writes + lengths + indexLikeReads + boxedElementUses.length + lentResponses + lentNullable + keySets + keyWrites + extendHeads + jwtLends > 0))
       return void 0;
     if (!safe || reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0) || this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))
       return void 0;
@@ -67556,6 +67565,26 @@ ${iden}}`;
     }
     const file = String(this.rustScalarCallee(call)?.getSourceFile?.()?.fileName ?? "");
     return /ts[\\/]src[\\/]abstract[\\/]/.test(file) ? "api" : "dict";
+  }
+  rustSafeValueKeyReadSource(call) {
+    if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    if (!_RustTranspiler.RUST_SAFE_VALUE_KEY_SOURCES.has(String(call.expression.name.text)) || call.arguments.length < 2)
+      return false;
+    const declaration = this.rustScalarCallee(call);
+    if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName)))
+      return false;
+    if (this.rustWsCacheMapLike(call.arguments[0]) || this.rustRecordLookupSource(call))
+      return false;
+    const names = (x) => isPropertyAccessExpression3(x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text)) || (x.forEachChild(names) ?? false);
+    return !names(call.arguments[0]);
+  }
+  /** `this.safeX (o, '<k>'[, d])`: a base by-reference reader whose container is `o`, at a literal non-index string key. */
+  rustSafeValueKeyReaderUse(n) {
+    const up = n.parent;
+    if (!isCallExpression6(up) || up.arguments[0] !== n || this.rustScalarInNestedWrite(n))
+      return false;
+    return this.rustBorrowedDictReader(up) !== void 0 && !/^\d+$/.test(String(this.rustSkipWrappers(up.arguments[1]).text));
   }
   /** `this.m(..)` of a venue method (no override, every venue declaration of the name returning `Dict`) whose every
    *  return is `this.safeDict (this.<field>, '<key>', {})`: the shared handle of a typed store entry, a map on every path. */
@@ -75963,6 +75992,12 @@ _RustTranspiler.RUST_BASE_FILTER_LISTS = /* @__PURE__ */ new Set([
   "filterByCurrencySinceLimit",
   "filterBySymbolsSinceLimit"
 ]);
+// ── ral-qa: rustSafeValueKeyReadSource / rustSafeValueKeyReaderUse ──
+// `const o = this.safeValue (r, k[, d])` (base hand-written reader) whose every use is a base reader at a literal
+// string key (`this.safeX (o, 'k')`) or a `o.k` / `o['k']` read. Invariant: a string-key read of any non-map Value
+// (Null, list, scalar) answers Null, exactly what the same read of the empty map `into_dict()` leaves answers, so the
+// typed local is observably identical. Market / currency records, ws client / cache maps keep their own lanes.
+_RustTranspiler.RUST_SAFE_VALUE_KEY_SOURCES = /* @__PURE__ */ new Set(["safeValue", "safeValue2", "safeValueN"]);
 // Test-tier readers: the harness `ExchangeOps` readers take `impl KeyRead` like the base ones, so a test's
 // `Value` container argument is lent (`&x`) where the call cloned it.
 _RustTranspiler.RUST_TEST_KEYREAD_READERS = /^safe(?:Value|String|Bool|Dict|List|Number|Integer)$|^safeStringN$/;

@@ -2258,6 +2258,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustTypedParamsSlot(call: any, at: number): boolean;
     /** `'dict' | 'list' | 'api'` for a container source the local may hold by reference. */
     rustBorrowedSourceKind(call: any): 'dict' | 'list' | 'api' | undefined;
+    private static readonly RUST_SAFE_VALUE_KEY_SOURCES;
+    rustSafeValueKeyReadSource(call: any): boolean;
+    /** `this.safeX (o, '<k>'[, d])`: a base by-reference reader whose container is `o`, at a literal non-index string key. */
+    rustSafeValueKeyReaderUse(n: any): boolean;
     /** `this.m(..)` of a venue method (no override, every venue declaration of the name returning `Dict`) whose every
      *  return is `this.safeDict (this.<field>, '<key>', {})`: the shared handle of a typed store entry, a map on every path. */
     rustStoreDictReturnCall(call: any): boolean;
