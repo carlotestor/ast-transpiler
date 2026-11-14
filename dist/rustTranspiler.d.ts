@@ -2466,6 +2466,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsSubscriptionWriteValue(n: any): boolean;
     private rustBuiltLists;
     rustBuiltListLocal(declaration: any): boolean;
+    /** `this.inArray (needle, x)` (haystack), `this.arrayConcat (a, b)` (either operand) on the base helpers, or the row of a
+     *  `stored.append (x)` statement on a ws cache local: hand-written slots taking `impl Into<Value>`. */
+    rustBuiltListLentHelperSlot(call: any, n: any): 'inArray' | 'arrayConcat' | 'append' | undefined;
     /** `Promise.all(x)` with `x` its only argument (printed `promise_all(&x)`). */
     rustBuiltListPromiseAllOperand(call: any, n: any): boolean;
     /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */

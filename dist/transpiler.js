@@ -69323,6 +69323,13 @@ ${iden}}`;
         handOffs++;
         return true;
       }
+      const lentSlot = this.rustBuiltListLentHelperSlot(up, n);
+      if (lentSlot !== void 0) {
+        const move = lentSlot !== "inArray" && (this.rustLocalLastUse(n, declaration) || lentSlot === "arrayConcat" && this.rustBuiltListSelfWriteArg(n, name));
+        boxes.push([n, move ? "move" : "lend"]);
+        handOffs++;
+        return true;
+      }
       if (this.rustBuiltListPromiseAllOperand(up, n)) {
         if (!this.rustLocalLastUse(n, declaration) || !short(n))
           return false;
@@ -69339,12 +69346,33 @@ ${iden}}`;
       }
       return false;
     });
-    if (!safe || natives === 0 && (handOffs === 0 || handOffs !== boxes.length || boxes.some(([, form]) => form === "clone")))
+    if (!safe || natives === 0 && (handOffs === 0 || handOffs + boxes.filter(([b]) => isReturnStatement4(b.parent)).length !== boxes.length || boxes.some(([, form]) => form === "clone")))
       return false;
     for (const [n, form] of boxes)
       this.rustLentListBoxes.set(n, form);
     this.rustBuiltLists.add(declaration);
     return true;
+  }
+  /** `this.inArray (needle, x)` (haystack), `this.arrayConcat (a, b)` (either operand) on the base helpers, or the row of a
+   *  `stored.append (x)` statement on a ws cache local: hand-written slots taking `impl Into<Value>`. */
+  rustBuiltListLentHelperSlot(call, n) {
+    if (!isCallExpression6(call) || call.expression === n || !isPropertyAccessExpression3(call.expression) || this.rustTestTierSource(call))
+      return void 0;
+    const callee = call.expression;
+    const method = String(callee.name.text);
+    const at = Array.from(call.arguments).indexOf(n);
+    if (call.arguments.some((a) => a.kind === SyntaxKind7.SpreadElement))
+      return void 0;
+    if (callee.expression.kind === SyntaxKind7.ThisKeyword) {
+      if (method === "inArray" && at === 1 && call.arguments.length === 2 && this.rustCalleeIsRuntimeBase(call))
+        return "inArray";
+      if (method === "arrayConcat" && (at === 0 || at === 1) && call.arguments.length === 2 && this.rustAlwaysListProducer(call))
+        return "arrayConcat";
+      return void 0;
+    }
+    if (method === "append" && at === 0 && call.arguments.length === 1 && call.parent?.kind === SyntaxKind7.ExpressionStatement && isIdentifier3(callee.expression) && this.rustWsCacheMethodReceiver(callee.expression))
+      return "append";
+    return void 0;
   }
   /** `Promise.all(x)` with `x` its only argument (printed `promise_all(&x)`). */
   rustBuiltListPromiseAllOperand(call, n) {
