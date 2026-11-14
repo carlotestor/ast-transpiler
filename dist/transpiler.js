@@ -51627,6 +51627,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // `const [a, b] = this.handleXAndParams (..)` over a proven `Vec<Value>`: a `string` slot used only in
     // null / literal compares is `Option<String>`; a `boolean` slot used only as a condition is `bool`.
     this.rustTupleSlotDecisions = /* @__PURE__ */ new WeakMap();
+    /** wi: a `format!` concat operand (other side always a string) reads the slot in place with the text the
+     *  boxed `Value::Null` displays (`null`), within the 400-char line budget. */
+    this.rustStrSlotConcatUses = /* @__PURE__ */ new WeakSet();
     // ── exact integer / boolean tuple slots ──────────────────────────────────
     // A `number` / `boolean` slot whose callee builds that slot from an Int-or-null (Bool-or-null) producer on every
     // path is `Option<i64>` / `Option<bool>`; its uses go through the scalar-local forms (native tests, conditions,
@@ -51978,7 +51981,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (_RustTranspiler.RUST_NUMBER_CONSTANT_IMPORTS.has(name) && this.rustIsImportedValueName(node)) {
       return `Value::Int(crate::runtime::${name})`;
     }
-    return this.rustOwnedUseMark(node, this.printRustBytesLocalRead(node) ?? this.printWsBookLocalUse(node) ?? this.printWsCacheLocalUse(node) ?? this.printClientHandleUse(node) ?? this.printTypedFilterParamRead(node) ?? this.printRustNilLocalRead(node) ?? this.printRustScalarLocalRead(node) ?? this.printRustStrSlotBox(node) ?? super.printIdentifier(node));
+    return this.rustOwnedUseMark(node, this.printRustBytesLocalRead(node) ?? this.printWsBookLocalUse(node) ?? this.printWsCacheLocalUse(node) ?? this.printClientHandleUse(node) ?? this.printTypedFilterParamRead(node) ?? this.printRustNilLocalRead(node) ?? this.printRustScalarLocalRead(node) ?? this.printRustStrSlotConcat(node) ?? this.printRustStrSlotBox(node) ?? super.printIdentifier(node));
   }
   rustOwnedUseMark(node, text) {
     if (!_RustTranspiler.isBareLocal(text))
@@ -54156,6 +54159,24 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (targetKind !== kind && targetKind !== `o${kind}`)
       return false;
     return this.rustLocalLastUse(n, declaration);
+  }
+  /** wi: `n` is the whole source of `let t = n` / `t = n;` with `t` a local the joint solve types `kind`, outside a loop or
+   *  closure since the destructure, and `n` is read again: the typed alias clones `n` where the boxed one did. */
+  rustScalarAliasCopy(n, kind, declaration) {
+    let top = n;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    const parent = top.parent;
+    let target;
+    if (isVariableDeclaration3(parent) && parent.initializer === top && isIdentifier3(parent.name))
+      target = parent;
+    else if (isBinaryExpression5(parent) && parent.right === top && parent.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(parent.left) && parent.parent?.kind === SyntaxKind7.ExpressionStatement)
+      target = this.rustDeclaredNode(parent.left);
+    if (target === void 0 || target === declaration || !isVariableDeclaration3(target) || this.rustEnclosingFunction(target) !== this.rustEnclosingFunction(n))
+      return false;
+    if (this.rustScalarDecisions.get(target) !== kind || this.rustLocalLastUse(n, declaration))
+      return false;
+    return this.rustSlotUseOutsideLoop(n, declaration);
   }
   /** nc: a string slot unwrap (`.as_str().map(str::to_owned)`) would take its destructure line from within to over 400 chars. */
   rustNilSlotLineOverBudget(n) {
@@ -60198,6 +60219,13 @@ ${binding(plan.indent)}` : ""), head: "" };
     const init = declaration === void 0 || !isVariableDeclaration3(declaration) ? void 0 : this.unwrapParens(declaration.initializer);
     return init !== void 0 && isCallExpression6(init) && isPropertyAccessExpression3(init.expression) && init.expression.expression.kind === SyntaxKind7.ThisKeyword && String(init.expression.name.text) === "parseToInt";
   }
+  /** wi: a tuple slot whose producer builds an exact Int-or-null on every return (`checkOptionInteger`): an `i64` bound too. */
+  rustTbExactIntSlot(declaration) {
+    if (declaration === void 0 || !isBindingElement(declaration) || declaration.parent?.kind !== SyntaxKind7.ArrayBindingPattern)
+      return false;
+    const owner = declaration.parent.parent;
+    return owner !== void 0 && isVariableDeclaration3(owner) && owner.initializer !== void 0 && this.rustExactSlotCallee(owner.initializer, declaration.parent.elements.indexOf(declaration), "int");
+  }
   /** ub: a `this.parseToInt(..)` call printed as its boxed `Int` / `Null` (`Value::from(self.parse_to_int(..))`). */
   rustUbPtiCall(node) {
     const inner = this.unwrapParens(node);
@@ -60248,7 +60276,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return void 0;
     if (_RustTranspiler.NATIVE_COMPARISON_OPERATORS[cond.operatorToken.kind] === void 0 || this.isEqualityOp(cond.operatorToken.kind))
       return void 0;
-    if (!isIdentifier3(n) || !this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond))
+    if (!isIdentifier3(n) || !(this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbExactIntSlot(this.rustDeclaredNode(n))) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond))
       return void 0;
     const counter = cond.left;
     if (!isIdentifier3(counter))
@@ -63208,10 +63236,16 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       return void 0;
     let nativeUses = 0;
     let copies = 0;
+    let concats = 0;
     const safe = this.rustLocalUsesAll(element, name, true, (n) => {
       if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn)
         return false;
-      const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n);
+      if (kind === "string" && !this.rustStringLocalUseIsNative(n) && !this.rustVenueStrArgSlot(n) && this.rustStrSlotConcatUse(n, element)) {
+        nativeUses++;
+        concats++;
+        return true;
+      }
+      const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n) || this.rustBoolSlotLogicalUse(n);
       if (ok)
         nativeUses++;
       const box = !ok && kind === "string" && this.rustStrSlotBoxUse(n) && (isCallExpression6(n.parent) || isReturnStatement4(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustSlotUseOutsideLoop(n, element));
@@ -63219,7 +63253,53 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         copies++;
       return ok || box;
     });
+    if (safe && concats > 0 && (this.rustStrSlotExactRouteTakes(element, fn) || !this.rustStrSlotBoxesFit(element, fn))) {
+      this.rustScalarSolved.delete(fn);
+      return void 0;
+    }
+    if (!safe && concats > 0)
+      this.rustScalarSolved.delete(fn);
     return safe && (nativeUses > 0 || kind === "string" && copies === 0) ? kind === "string" ? "str" : "bool" : void 0;
+  }
+  /** Every boxed read of the slot keeps its statement within the 400-char line budget once the box text is added
+   *  (a longer line would make the line guard veto other typed locals on it). */
+  rustStrSlotBoxesFit(element, fn) {
+    const grow = ".map(Value::from).unwrap_or(Value::Null)".length;
+    let fits = true;
+    this.rustLocalUsesAll(element, String(element.name.text), true, (n) => {
+      if (this.rustStrSlotConcatUses.has(n) || !this.rustStrSlotBoxUse(n) || this.rustEnclosingFunction(n) !== fn)
+        return true;
+      const statement = findAncestor(n.parent, (a) => isStatement(a));
+      if (statement === void 0 || isBlock4(statement))
+        return true;
+      const column = statement.getStart() - String(statement.getSourceFile().text).lastIndexOf("\n", statement.getStart()) - 1;
+      const longest = Math.max(...this.printNode(statement, 0).split("\n").map((l) => l.trim().length));
+      if (column + longest + grow > 400)
+        fits = false;
+      return true;
+    });
+    return fits;
+  }
+  /** Trial of the exact-slot route for a slot whose tuple decision is pending; its cache entry is restored after. */
+  rustStrSlotExactRouteTakes(element, fn) {
+    if (fn.kind !== SyntaxKind7.MethodDeclaration || this.rustSlotJoinsSolve(element))
+      return true;
+    const previous = this.rustExactSlotDecisions.get(element);
+    try {
+      return this.rustStrSlotKind(element, fn) !== void 0;
+    } catch (e) {
+      return false;
+    } finally {
+      if (previous === void 0)
+        this.rustExactSlotDecisions.delete(element);
+      else
+        this.rustExactSlotDecisions.set(element, previous);
+    }
+  }
+  /** wi: a bare read under `!` / `&&` / `||` whose whole logical sits in a slot the printer already prints `bool`
+   *  (a condition, `Value::Bool(..)`, a `bool` local): the slot's truthiness, `None` (Null) false as `is_true`. */
+  rustBoolSlotLogicalUse(n) {
+    return this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n);
   }
   /** qe: `x === true` / `x !== true` on a bool tuple slot: the slot reads `as_bool() == Some(true)`, so the native
    *  bool answers the strict test exactly (Null and a non-bool are `false` on both sides). Never `=== false`. */
@@ -63261,6 +63341,35 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     while (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.PlusToken)
       up = up.parent;
     return up?.kind === SyntaxKind7.NewExpression && up.parent?.kind === SyntaxKind7.ThrowStatement;
+  }
+  rustStrSlotConcatUse(n, element) {
+    const pending = this.rustTupleSlotDecisions.get(element);
+    const exact = this.rustExactSlotDecisions.get(element);
+    if (pending === null)
+      this.rustTupleSlotDecisions.set(element, "str");
+    let ok = false;
+    try {
+      ok = !this.rustStrSlotThrownConcat(n) && this.rustNilOptStrConcatUse(n) && this.printNode(n.parent, 0).trim().startsWith("Value::Str(format!(");
+    } finally {
+      if (pending === null)
+        this.rustTupleSlotDecisions.set(element, null);
+      if (exact === void 0)
+        this.rustExactSlotDecisions.delete(element);
+      else
+        this.rustExactSlotDecisions.set(element, exact);
+    }
+    if (ok)
+      this.rustStrSlotConcatUses.add(n);
+    return ok;
+  }
+  /** Read hook: a concat use recorded by the slot decision (no re-print here, the decision already measured it). */
+  printRustStrSlotConcat(node) {
+    if (!isIdentifier3(node) || !this.rustStrSlotConcatUses.has(node))
+      return void 0;
+    const declaration = this.rustDeclaredNode(node);
+    if (declaration?.kind !== SyntaxKind7.BindingElement || this.rustTupleSlotKind(declaration) !== "str")
+      return void 0;
+    return `${super.printIdentifier(node)}.as_deref().unwrap_or("null")`;
   }
   /** `x.clone().map(Value::from).unwrap_or(Value::Null)` at a boxed use of a typed string slot. */
   printRustStrSlotBox(node) {
@@ -73528,6 +73637,8 @@ ${iden}}`;
       return up.initializer === n;
     if (isArrayLiteralExpression4(up) && isReturnStatement4(up.parent) && this.rustNilSlotDictCandidate(declaration))
       return true;
+    if (isArrayLiteralExpression4(up) && isReturnStatement4(up.parent) && declaration?.kind === SyntaxKind7.BindingElement && declaration.parent?.elements?.indexOf(declaration) === 1)
+      return true;
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword && up.expression.expression.kind !== SyntaxKind7.SuperKeyword)
       return false;
     const callee = String(up.expression.name.text);
@@ -73628,6 +73739,10 @@ ${iden}}`;
         if ((form === "box" || form === "xbox") && !this.rustSlotUseOutsideLoop(n, element))
           return false;
         if (joined && this.rustScalarAliasMove(n, "ostr", element)) {
+          nativeUses++;
+          return true;
+        }
+        if (joined && this.rustScalarAliasCopy(n, "ostr", element)) {
           nativeUses++;
           return true;
         }

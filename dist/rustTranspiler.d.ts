@@ -382,6 +382,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** nc: `n` is the whole source of `let t = n` / `t = n;` (a statement), `t` a typed scalar local of `kind`, and this is
      *  the source's last use (no loop or closure between): the typed target takes the value by move. */
     rustScalarAliasMove(n: any, kind: string, declaration: any): boolean;
+    /** wi: `n` is the whole source of `let t = n` / `t = n;` with `t` a local the joint solve types `kind`, outside a loop or
+     *  closure since the destructure, and `n` is read again: the typed alias clones `n` where the boxed one did. */
+    rustScalarAliasCopy(n: any, kind: string, declaration: any): boolean;
     /** nc: a string slot unwrap (`.as_str().map(str::to_owned)`) would take its destructure line from within to over 400 chars. */
     rustNilSlotLineOverBudget(n: any): boolean;
     /** nc: the whole source of a `let t = n` / `t = n;` statement at the source's last use. */
@@ -1223,6 +1226,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustValueIntCounter(node: any): boolean;
     /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */
     rustTbParseToIntInit(declaration: any): boolean;
+    /** wi: a tuple slot whose producer builds an exact Int-or-null on every return (`checkOptionInteger`): an `i64` bound too. */
+    rustTbExactIntSlot(declaration: any): boolean;
     /** ub: a `this.parseToInt(..)` call printed as its boxed `Int` / `Null` (`Value::from(self.parse_to_int(..))`). */
     rustUbPtiCall(node: any): boolean;
     /** ub: a compare partner that is not another group's local: a literal, call, element / property read, parameter,
@@ -1634,12 +1639,26 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustTupleSlotDecisions;
     rustTupleSlotKind(element: any): string | undefined;
     private rustTupleSlotKindUncached;
+    /** Every boxed read of the slot keeps its statement within the 400-char line budget once the box text is added
+     *  (a longer line would make the line guard veto other typed locals on it). */
+    rustStrSlotBoxesFit(element: any, fn: any): boolean;
+    /** Trial of the exact-slot route for a slot whose tuple decision is pending; its cache entry is restored after. */
+    rustStrSlotExactRouteTakes(element: any, fn: any): boolean;
+    /** wi: a bare read under `!` / `&&` / `||` whose whole logical sits in a slot the printer already prints `bool`
+     *  (a condition, `Value::Bool(..)`, a `bool` local): the slot's truthiness, `None` (Null) false as `is_true`. */
+    rustBoolSlotLogicalUse(n: any): boolean;
     /** qe: `x === true` / `x !== true` on a bool tuple slot: the slot reads `as_bool() == Some(true)`, so the native
      *  bool answers the strict test exactly (Null and a non-bool are `false` on both sides). Never `=== false`. */
     rustBoolSlotTrueTest(n: any): boolean;
     rustStrSlotBoxUse(n: any): boolean;
     /** A `+` operand of a thrown error message: the statement diverges, so the slot moves into its `format!`. */
     rustStrSlotThrownConcat(n: any): boolean;
+    /** wi: a `format!` concat operand (other side always a string) reads the slot in place with the text the
+     *  boxed `Value::Null` displays (`null`), within the 400-char line budget. */
+    private rustStrSlotConcatUses;
+    rustStrSlotConcatUse(n: any, element: any): boolean;
+    /** Read hook: a concat use recorded by the slot decision (no re-print here, the decision already measured it). */
+    printRustStrSlotConcat(node: any): string | undefined;
     /** `x.clone().map(Value::from).unwrap_or(Value::Null)` at a boxed use of a typed string slot. */
     printRustStrSlotBox(node: any): string | undefined;
     /** The slot's final read: no later use, no other use in its statement, no loop or closure since the destructure. */
