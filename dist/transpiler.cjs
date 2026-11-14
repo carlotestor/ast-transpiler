@@ -70774,7 +70774,8 @@ ${iden}}`;
       return false;
     const boxes = [];
     let natives = 0;
-    const usesAll = (accept) => defaulted ? this.rustScalarUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
+    const objectList = _is.isCallExpression.call(void 0, init) && _is.isPropertyAccessExpression.call(void 0, init.expression) && _is.isIdentifier.call(void 0, init.expression.expression) && init.expression.expression.text === "Object";
+    const usesAll = (accept) => defaulted ? this.rustScalarUsesAll(declaration, name, accept) : objectList ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
     const safe = usesAll((n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return !(_optionalChain([n, 'access', _9824 => _9824.parent, 'optionalAccess', _9825 => _9825.kind]) === _ast.SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);

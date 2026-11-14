@@ -14105,3 +14105,15 @@ describe('ral-zh: sign params of a venue whose every request-path caller hands a
         expect(out).not.toContain('let mut query: crate::value::Dict = ');
     });
 });
+
+describe('ral-zh: an Object.keys key list with a same-named twin in a sibling block holds the list', () => {
+    test('two throwing branches each list Object.keys (m): both lists are crate::value::List, joined natively', () => {
+        const dir = path.join (rustFixtureRoot, 'zhkeys');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeString (x: any, k: any, d: any = undefined): any { return x; }\n    safeDict (x: any, k: any, d: any = undefined): any { return x; }\n    options: any = {};\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (a: string, b: string) {\n        const accounts = this.safeDict (this.options, 'accountsByType', {});\n        const fromId = this.safeString (accounts, a);\n        if (fromId === undefined) {\n            const keys = Object.keys (accounts);\n            throw new Error ('from must be one of ' + keys.join (', '));\n        }\n        const toId = this.safeString (accounts, b);\n        if (toId === undefined) {\n            const keys = Object.keys (accounts);\n            throw new Error ('to must be one of ' + keys.join (', '));\n        }\n        return [ fromId, toId ];\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out.match(/let mut keys: crate::value::List = /g)?.length).toBe(2);
+        expect(out).not.toContain('let mut keys: Value = ');
+    });
+});

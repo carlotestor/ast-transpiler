@@ -19569,7 +19569,10 @@ export class RustTranspiler extends BaseTranspiler {
         const boxes: [any, 'clone' | 'move'][] = [];
         let natives = 0;
         // a same-named `let`/`const` in a sibling block is another binding
-        const usesAll = (accept: (n: any) => boolean): boolean => (defaulted ? this.rustScalarUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept));
+        // a same-named `const` key list in a sibling block (`Object.keys (m)` in two throwing branches) is another binding
+        const objectList = isCallExpression(init) && isPropertyAccessExpression(init.expression) && isIdentifier(init.expression.expression) && init.expression.expression.text === 'Object';
+        const usesAll = (accept: (n: any) => boolean): boolean => (defaulted ? this.rustScalarUsesAll(declaration, name, accept)
+            : (objectList ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept)));
         const safe = usesAll((n: any) => {
             if (this.rustIdentifierIsPropertyName(n)) return !(n.parent?.kind === SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
             if (!this.rustIdentifierRefersToDeclaration(n, declaration) || this.rustEnclosingFunction(n) !== fn) return false;
