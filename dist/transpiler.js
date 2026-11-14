@@ -53320,6 +53320,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       for (const key of keyStrs.slice(0, -1))
         acc = `get_value_mut(${acc}, &${key})`;
       const rhs = this.printNode(right, 0);
+      const nestedKeyWrite = keyStrs.length > 1 ? this.printNestedFieldKeyWrite(left, acc, this.rustOwnedArgText(right, rhs.trim())) : void 0;
+      if (nestedKeyWrite !== void 0)
+        return nestedKeyWrite;
       const untilWrite = keyStrs.length === 1 ? this.printUntilHeadKeyWrite(left, right, rhs) ?? this.printNilMapKeyWrite(left, right, rhs) : void 0;
       if (untilWrite !== void 0)
         return untilWrite;
@@ -55257,7 +55260,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
           copied++;
       } else if (form !== void 0 && !this.rustIdentifierIsPropertyName(n))
         nativeUses++;
-      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))
+      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))
         typedUses++;
       if (form === "xbox" || form === "native" || form === "targ" || form === "err")
         expressionUses = true;
@@ -56352,11 +56355,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       let top = n;
       while (isParenthesizedExpression3(top.parent) || isConditionalExpression4(top.parent))
         top = top.parent;
-      if (isBinaryExpression5(top.parent) && top.parent.right === top && top.parent.operatorToken.kind === SyntaxKind7.EqualsToken && !isElementAccessExpression4(this.unwrapParens(top.parent.left)) && !isPropertyAccessExpression3(this.unwrapParens(top.parent.left)))
+      const target = isVariableDeclaration3(top.parent) ? top.parent : isBinaryExpression5(top.parent) && isIdentifier3(top.parent.left) ? this.rustDeclaredNode(top.parent.left) : void 0;
+      const moved = top === n && this.rustLocalLastUse(n, declaration) && target !== void 0 && isVariableDeclaration3(target) && target.initializer !== void 0 && this.literalKindOfNode(target.initializer) !== "null";
+      if (isBinaryExpression5(top.parent) && top.parent.right === top && top.parent.operatorToken.kind === SyntaxKind7.EqualsToken && !isElementAccessExpression4(this.unwrapParens(top.parent.left)) && !isPropertyAccessExpression3(this.unwrapParens(top.parent.left)) && !moved)
         handed = true;
-      if (isVariableDeclaration3(top.parent) && top.parent.initializer === top)
+      if (isVariableDeclaration3(top.parent) && top.parent.initializer === top && !moved)
         handed = true;
-      if (isReturnStatement4(top.parent))
+      if (isReturnStatement4(top.parent) && !(top === n && this.rustMethodTypedReturnKind(findAncestor(top.parent.parent, isFunctionLike)) !== void 0))
         handed = true;
       return true;
     });
@@ -56760,6 +56765,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if ((kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustThisFieldLiteralWrite(n))
       return "box";
     if ((kind === "str" || kind === "ostr") && this.rustThisFieldLiteralWrite(n) && this.rustLocalLastUse(n, this.rustDeclaredNode(n)))
+      return "box";
+    if ((kind === "str" || kind === "ostr") && this.rustNestedFieldKeyUse(n))
+      return "nkey";
+    if ((kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustNestedFieldValueUse(n))
       return "box";
     if (this.rustScalarInNestedWrite(n))
       return void 0;
@@ -57492,6 +57501,59 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     return !(this.rustThisFieldTarget(write.left.expression) && this.rustInsideCallArgument(n, write.right));
   }
+  // ── nested plain-field writes (rustNestedFieldKeyUse / printNestedFieldKeyWrite) ──
+  // `this.balance[t][code] = v` prints `add_element_to_object(get_value_mut(&mut self.balance, &t), &code, v)`,
+  // which ccxt's r05 pass turns into `if let Value::Dict(__r05d) = get_value_mut(..) { make_mut(__r05d).insert(
+  // stringify_param(&code), v); }` (balance / options never carry book, subscription or cache tags). A typed key
+  // prints that insert directly with its own key text: `stringify_param` of the boxed local is the string, or
+  // `"null"` for `Null`, which `as_deref().unwrap_or("null")` gives. A missing intermediate map is `Null` from
+  // `get_value_mut`'s `or_insert`, so neither form writes.
+  /** `this.balance|options[..][..]` with at least one hop below the field (the r05 receiver chain). */
+  rustNestedFieldChain(access) {
+    let base = access;
+    let hops = 0;
+    while (isElementAccessExpression4(base)) {
+      base = base.expression;
+      hops++;
+    }
+    return hops >= 2 && isPropertyAccessExpression3(base) && base.expression.kind === SyntaxKind7.ThisKeyword && ["balance", "options"].includes(String(base.name.text)) && this.rustDictField(base) !== void 0 && !this.isTestSource(access);
+  }
+  /** The statement write `this.F[..][n] = v` whose last key is `n` and whose other operands never name `n` or `this`
+   *  (the r05 insert keeps the helper for a value reading `self`). */
+  rustNestedFieldKeyUse(n) {
+    const keyNode = this.rustKeyWrapped(n);
+    const access = keyNode.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== keyNode || !this.rustNestedFieldChain(access))
+      return false;
+    const write = access.parent;
+    if (!isBinaryExpression5(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const name = new RegExp(`\\b(?:${String(n.text)}|this)\\b`);
+    return !name.test(String(write.right.getText())) && !name.test(String(access.expression.getText()).replace(/^this\./, ""));
+  }
+  /** `this.F[..]['lit'] = n` (statement): the value slot of a nested plain-field insert. */
+  rustNestedFieldValueUse(n) {
+    const write = n.parent;
+    if (!isBinaryExpression5(write) || write.right !== n || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const access = write.left;
+    return isElementAccessExpression4(access) && isStringLiteral3(access.argumentExpression) && this.rustNestedFieldChain(access) && !/\bthis\b/.test(String(access.expression.getText()).replace(/^this\./, ""));
+  }
+  /** Assignment hook: the r05 insert of a nested plain-field write keyed by a typed string local. */
+  printNestedFieldKeyWrite(left, acc, value) {
+    const key = this.rustSkipWrappers(left.argumentExpression);
+    if (!isIdentifier3(key) || this.rustScalarUseForms.get(key) !== "nkey")
+      return void 0;
+    const kind = this.rustScalarLocalOf(key)?.kind;
+    const name = super.printIdentifier(key);
+    const keyText = kind === "str" ? `${name}.to_string()` : kind === "ostr" ? `${name}.as_deref().unwrap_or("null").to_string()` : void 0;
+    if (keyText === void 0)
+      return void 0;
+    const insert = `if let Value::Dict(__r05d) = ${acc} { std::sync::Arc::make_mut(__r05d).insert(${keyText}, ${value}); }`;
+    if (insert.length + 40 > 400 || value.includes("\n"))
+      return `add_element_to_object(${acc}, &Value::from(${name}${kind === "str" ? ".as_str()" : ".as_deref()"}), ${value})`;
+    return insert;
+  }
   /** `this.f` (one level, no element read in between). */
   rustThisFieldTarget(node) {
     return isPropertyAccessExpression3(node) && node.expression.kind === SyntaxKind7.ThisKeyword;
@@ -57613,7 +57675,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `${super.printIdentifier(node)}.as_deref().unwrap_or("null")`;
     if (form === "targ" && (local.kind === "str" || local.kind === "ostr") && this.rustWsKeyUse(node))
       return this.rustWsKeyText(node);
-    if (form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "key" || form === "okey" || form === "fin" || form === "frd" || form === "kin")
+    if (form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "key" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey")
       return super.printIdentifier(node);
     if (form === "err")
       return `${super.printIdentifier(node)}.clone()`;

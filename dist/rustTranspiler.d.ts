@@ -846,6 +846,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     printElemKeyInOp(key: any, obj: any): string | undefined;
     rustThisFieldLiteralWrite(n: any): boolean;
     rustScalarInNestedWrite(n: any): boolean;
+    /** `this.balance|options[..][..]` with at least one hop below the field (the r05 receiver chain). */
+    rustNestedFieldChain(access: any): boolean;
+    /** The statement write `this.F[..][n] = v` whose last key is `n` and whose other operands never name `n` or `this`
+     *  (the r05 insert keeps the helper for a value reading `self`). */
+    rustNestedFieldKeyUse(n: any): boolean;
+    /** `this.F[..]['lit'] = n` (statement): the value slot of a nested plain-field insert. */
+    rustNestedFieldValueUse(n: any): boolean;
+    /** Assignment hook: the r05 insert of a nested plain-field write keyed by a typed string local. */
+    printNestedFieldKeyWrite(left: any, acc: string, value: string): string | undefined;
     /** `this.f` (one level, no element read in between). */
     rustThisFieldTarget(node: any): boolean;
     /** `n` is (inside) an argument of a call that lies within `root`, the call itself not being `n`. */
