@@ -14520,3 +14520,28 @@ describe('ral-40h: container aliases decided in two phases (the source settles f
         expect(out).not.toContain('Value::Dict(data)');
     });
 });
+
+describe('ral-40h: deepExtend of proven maps beyond the json hand-off (omit-of-map operand, reassigned plain literal operand)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    omit (o: any, k: any): any { return o; }\n    deepExtend (...args: any[]): any { return args[0]; }\n    safeString (o: any, k: any, d: any = undefined): any { return o[k]; }\n    keep (a: any): any { return a; }\n    async watch (url: string, messageHash: string, message: any = undefined, subscribeHash: any = undefined, subscription: any = undefined): Promise<any> { return undefined; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n";
+    const run = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['watchTicker'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        return typed.transpileRustByPath (path.join (dir, 'ts/src/pro/venue.ts')).content;
+    };
+    test('a const omit of a typed params map is a map operand', () => {
+        const out = run ('r40h-dx-omit', "    async watchTicker (symbol: string, params: Dict = {}): Promise<any> {\n        const paramsOmitted: Dict = this.omit (params, 'interval');\n        const message: Dict = { 'method': 'subscribe' };\n        const request = this.deepExtend (message, paramsOmitted);\n        return await this.watch ('u', 'h', request, 'h');\n    }\n");
+        expect(out).toContain('let mut request: crate::value::Dict = ');
+    });
+    test('a let literal rewritten only by plain literals is a map operand', () => {
+        const out = run ('r40h-dx-let', "    async watchTicker (symbol: string, params: Dict = {}): Promise<any> {\n        let message: Dict = { 'e': 'subscribe' };\n        if (symbol === 'x') {\n            message = { 'e': 'ticker' };\n        }\n        const request = this.deepExtend (message, params);\n        return await this.watch ('u', 'h', request, 'h');\n    }\n");
+        expect(out).toContain('let mut request: crate::value::Dict = ');
+    });
+    test('a let literal rewritten from an unproven value keeps the box', () => {
+        const out = run ('r40h-dx-unproven', "    async watchTicker (symbol: string, params: Dict = {}): Promise<any> {\n        const other = this.keep (symbol);\n        return await this.watchIt2 (symbol, params, other);\n    }\n    async watchIt2 (symbol: string, params: Dict = {}, other: any = undefined): Promise<any> {\n        let message: Dict = { 'e': 'subscribe' };\n        if (symbol === 'x') {\n            message = other;\n        }\n        const request = this.deepExtend (message, params);\n        return await this.watch ('u', 'h', request, 'h');\n    }\n");
+        expect(out).not.toContain('let mut request: crate::value::Dict = ');
+    });
+});

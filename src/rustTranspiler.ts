@@ -19362,10 +19362,24 @@ export class RustTranspiler extends BaseTranspiler {
             const d: any = this.rustDeclarationOfIdentifier(node);
             if (d === undefined || d === node || d.name === node) return false;
             if (this.rustTypedParamsParam(d)) return true;
-            if (d.kind !== SyntaxKind.VariableDeclaration || d.name?.kind !== SyntaxKind.Identifier || (d.parent?.flags & NodeFlags.Const) === 0) return false;
+            if (d.kind !== SyntaxKind.VariableDeclaration || d.name?.kind !== SyntaxKind.Identifier) return false;
             const init: any = this.rustSkipWrappers(d.initializer);
-            return init !== undefined && isObjectLiteralExpression(init) && this.rustPlainDictLiteral(init) && init.properties.every((p: any) => p.kind === SyntaxKind.PropertyAssignment)
-                && !this.rustLocalIsReassigned(d, String(d.name.text));
+            const plainLiteral = (e: any): boolean => e !== undefined && isObjectLiteralExpression(e) && this.rustPlainDictLiteral(e) && e.properties.every((p: any) => p.kind === SyntaxKind.PropertyAssignment);
+            // ral-40h: a `const x = this.omit (m, ..)` of a proven map, or a built map, is a map on every path too
+            const mapCall = (e: any): boolean => e !== undefined && isCallExpression(e) && (this.rustOmitOfDict(e) || this.rustBuiltReturnSourceKind(e) === 'dict');
+            if ((d.parent?.flags & NodeFlags.Const) !== 0) return (plainLiteral(init) || mapCall(init)) && !this.rustLocalIsReassigned(d, String(d.name.text));
+            // ral-40h: a `let x = {..}` whose every whole write is another plain literal (statement writes only)
+            if (!plainLiteral(init)) return false;
+            const fn: any = this.rustEnclosingFunction(d);
+            return (this.rustScopeNameNodes(fn, String(d.name.text)) as any[]).every((n: any) => {
+                if (!isIdentifier(n) || n === d.name || this.rustDeclaredNode(n) !== d) return true;
+                const up: any = n.parent;
+                if (isBinaryExpression(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind)) return up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement && plainLiteral(this.rustSkipWrappers(up.right));
+                if (isArrayLiteralExpression(up) && isBinaryExpression(up.parent) && up.parent.left === up) return false;
+                // a key write would change the map the merge reads only through this local: reads are fine
+                return !(isElementAccessExpression(up) && up.expression === n && isBinaryExpression(up.parent) && up.parent.left === up)
+                    && !(isPropertyAccessExpression(up) && up.expression === n && isBinaryExpression(up.parent) && up.parent.left === up);
+            });
         });
     }
 

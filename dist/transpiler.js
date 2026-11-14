@@ -70561,10 +70561,26 @@ ${iden}}`;
         return false;
       if (this.rustTypedParamsParam(d))
         return true;
-      if (d.kind !== SyntaxKind7.VariableDeclaration || d.name?.kind !== SyntaxKind7.Identifier || (d.parent?.flags & NodeFlags4.Const) === 0)
+      if (d.kind !== SyntaxKind7.VariableDeclaration || d.name?.kind !== SyntaxKind7.Identifier)
         return false;
       const init = this.rustSkipWrappers(d.initializer);
-      return init !== void 0 && isObjectLiteralExpression4(init) && this.rustPlainDictLiteral(init) && init.properties.every((p) => p.kind === SyntaxKind7.PropertyAssignment) && !this.rustLocalIsReassigned(d, String(d.name.text));
+      const plainLiteral = (e) => e !== void 0 && isObjectLiteralExpression4(e) && this.rustPlainDictLiteral(e) && e.properties.every((p) => p.kind === SyntaxKind7.PropertyAssignment);
+      const mapCall = (e) => e !== void 0 && isCallExpression6(e) && (this.rustOmitOfDict(e) || this.rustBuiltReturnSourceKind(e) === "dict");
+      if ((d.parent?.flags & NodeFlags4.Const) !== 0)
+        return (plainLiteral(init) || mapCall(init)) && !this.rustLocalIsReassigned(d, String(d.name.text));
+      if (!plainLiteral(init))
+        return false;
+      const fn = this.rustEnclosingFunction(d);
+      return this.rustScopeNameNodes(fn, String(d.name.text)).every((n) => {
+        if (!isIdentifier3(n) || n === d.name || this.rustDeclaredNode(n) !== d)
+          return true;
+        const up = n.parent;
+        if (isBinaryExpression5(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind))
+          return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && plainLiteral(this.rustSkipWrappers(up.right));
+        if (isArrayLiteralExpression4(up) && isBinaryExpression5(up.parent) && up.parent.left === up)
+          return false;
+        return !(isElementAccessExpression4(up) && up.expression === n && isBinaryExpression5(up.parent) && up.parent.left === up) && !(isPropertyAccessExpression3(up) && up.expression === n && isBinaryExpression5(up.parent) && up.parent.left === up);
+      });
     });
   }
   /** Every other `let`/`const` of `name` in the enclosing function is initialised by a call of the same `this.` method. */
