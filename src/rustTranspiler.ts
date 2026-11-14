@@ -545,6 +545,15 @@ export class RustTranspiler extends BaseTranspiler {
         return count === 1;
     }
 
+    // ccxt `hoistSelfArgFromMutCall` binds the `self.X(..)` arguments of a call ahead of the statement
+    // the pass fires on a statement whose text names one of these (as a whole word) and has a nested self call
+    private static readonly RUST_HOISTING_WORDS = /\b(?:watch|watchMultiple|fetchOrderBookSnapshot|unWatch|client|spawn|delay|fetchTickers|extend|fetch|sendEvmTransaction)\b/;
+
+    rustUnderHoistedCall(node): boolean {
+        const statement: any = findAncestor(node, (a: any) => isStatement(a));
+        return statement === undefined || RustTranspiler.RUST_HOISTING_WORDS.test(String(statement.getText()));
+    }
+
     /** A by-value argument of a call (the box is handed over whole). */
     rustOwnedHandOff(node): boolean {
         const call: any = node.parent;
@@ -5381,6 +5390,12 @@ export class RustTranspiler extends BaseTranspiler {
         const scope = this.rustEnclosingFunction(declaration);
         if (own === undefined || scope === undefined || this.rustEnclosingFunction(node) !== scope) return false;
         const settled = (n: any): boolean => {
+            // a read in an earlier property of the same object literal: each property is its own ordered insert,
+            // unless an enclosing call is one whose `self.X(..)` arguments ccxt hoists ahead of the statement
+            const prop: any = findAncestor(node, (a: any) => a.kind === SyntaxKind.PropertyAssignment || isStatement(a));
+            if (prop?.kind === SyntaxKind.PropertyAssignment && isObjectLiteralExpression(prop.parent) && n.end <= prop.pos && n.pos >= prop.parent.pos
+                && findAncestor(n, (a: any) => a.kind === SyntaxKind.PropertyAssignment || isStatement(a))?.parent === prop.parent
+                && !this.rustUnderHoistedCall(prop.parent)) return true;
             for (let up: any = node.parent; up !== undefined && up !== statement.parent; up = up.parent) {
                 // ccxt hoists `self.X(..)` arguments of an enclosing call ahead of the statement: a ternary under a call is not ordered
                 if (isConditionalExpression(up) && up.condition.pos <= n.pos && n.end <= up.condition.end && up.condition.end <= node.pos
@@ -8972,7 +8987,9 @@ export class RustTranspiler extends BaseTranspiler {
                             ? this.rustBoolArgumentText(a, 0)
                             : this.printNode(a, 0));
                 const printArgs = (list, from = 0) => list.map((a, i) => this.rustWsWatchSlot(node, from + i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, from + i)).join(', ');
-                const requiredArgs = [ printArgs(args.slice(0, sig.requiredCount)), ...this.rustVenuePads(calleeParams, args.length, sig.requiredCount) ].filter((a) => a !== '').join(', ');
+                // a required positional argument is a by-value hand-off: an owned one is marked (the slice tail keeps its clones)
+                const ownedArgs = (list) => list.map((a, i) => this.rustOwnedArgText(a, this.rustWsWatchSlot(node, i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, i))).join(', ');
+                const requiredArgs = [ ownedArgs(args.slice(0, sig.requiredCount)), ...this.rustVenuePads(calleeParams, args.length, sig.requiredCount) ].filter((a) => a !== '').join(', ');
                 const reqPart = requiredArgs ? `${requiredArgs}, ` : '';
                 return `self.${methodName}(${reqPart}&[${printArgs(args.slice(sig.requiredCount), sig.requiredCount)}])`;
             }

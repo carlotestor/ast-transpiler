@@ -283,6 +283,26 @@ describe('rust transpiling tests', () => {
         expect(out).toContain('self.m(p.clone())');
     });
 
+    test('a required argument of a defaulted transpiled method and a later object-literal property move at their last use', () => {
+        const ts = [
+            'class A {',
+            '    parseNumber (x: any, d: any = undefined) { return x; }',
+            '    hold (x: any) { return x; }',
+            '    run (position: any, s: any) {',
+            '        const n = this.hold (s);',
+            '        position[\'n\'] = this.parseNumber (n);',
+            '        const v = this.hold (s);',
+            '        const r = { \'a\': this.hold (v), \'b\': this.parseNumber (v) };',
+            '        return r;',
+            '    }',
+            '}',
+        ].join('\n');
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).toContain('self.parseNumber(n, &[])');
+        expect(out).toContain('self.hold(v.clone())');
+        expect(out).toContain('self.parseNumber(v, &[])');
+    });
+
     test('a for-loop counter handed off by value is cloned (the next pass reads it again)', () => {
         const ts = [
             'class A {',
@@ -1454,7 +1474,7 @@ ${body}
         return this.hold(side);`)).content;
             expect(out).toContain('let mut side: Option<String> = None;');
             expect(out).toContain('side = Some("buy".to_string());');
-            expect(out).toContain('side = self.safeString(o.clone(), Value::Str("side".into()), &[]).as_str().map(str::to_owned);');
+            expect(out).toContain('side = self.safeString(o, Value::Str("side".into()), &[]).as_str().map(str::to_owned);');
             expect(out).toContain('side.as_deref() == Some("buy")');
             expect(out).toContain('self.hold(side.map(Value::from).unwrap_or(Value::Null))');
             expect(out).not.toContain('side: Value');
@@ -1471,7 +1491,7 @@ ${body}
             expect(out).toContain('flag = Some(true);');
             expect(out).toContain('if (flag == Some(true)) {');
             expect(out).toContain('let mut n: Option<i64> = None;');
-            expect(out).toContain('n = self.safeInteger(o.clone(), Value::Str("n".into()), &[]).as_i64();');
+            expect(out).toContain('n = self.safeInteger(o, Value::Str("n".into()), &[]).as_i64();');
             expect(out).toContain('if (n.is_none()) {');
             expect(out).toContain('m.insert("n".to_string(), Value::from(n));');
             expect(out).toContain('m.insert("flag".to_string(), flag.map(Value::from).unwrap_or(Value::Null));');
@@ -8868,7 +8888,7 @@ describe('lent response dicts', () => {
     test('negative: an optional map or an any-typed base response keeps the Value hand-off', () => {
         const out = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'lent-response-dicts', 'ts/src/venue.ts')).content;
         expect(out).toMatch(/fn parseLoose\(&self, (mut )?thing: Value, optional_args/);
-        expect(out).toContain('return self.parseLoose(data.clone(), &[]);');
+        expect(out).toContain('return self.parseLoose(data, &[]);');
         expect(out).not.toContain('let mut data: crate::value::Dict = resp.get(\"data\").cloned().unwrap_or_default().into_dict();\n        return self.parseLoose');
         // a nullable safeDict is lent in its optional form now (Null stays Null)
         expect(out).toMatch(/let mut data: Option<crate::value::Dict> = [^;]*;\n\s*return self\.parseThing\(&data, &\[\]\);/);

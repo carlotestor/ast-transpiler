@@ -51919,6 +51919,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     return count === 1;
   }
+  rustUnderHoistedCall(node) {
+    const statement = findAncestor(node, (a) => isStatement(a));
+    return statement === void 0 || _RustTranspiler.RUST_HOISTING_WORDS.test(String(statement.getText()));
+  }
   /** A by-value argument of a call (the box is handed over whole). */
   rustOwnedHandOff(node) {
     const call = node.parent;
@@ -56531,6 +56535,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (own === void 0 || scope === void 0 || this.rustEnclosingFunction(node) !== scope)
       return false;
     const settled = (n) => {
+      const prop = findAncestor(node, (a) => a.kind === SyntaxKind7.PropertyAssignment || isStatement(a));
+      if (prop?.kind === SyntaxKind7.PropertyAssignment && isObjectLiteralExpression4(prop.parent) && n.end <= prop.pos && n.pos >= prop.parent.pos && findAncestor(n, (a) => a.kind === SyntaxKind7.PropertyAssignment || isStatement(a))?.parent === prop.parent && !this.rustUnderHoistedCall(prop.parent))
+        return true;
       for (let up = node.parent; up !== void 0 && up !== statement.parent; up = up.parent) {
         if (isConditionalExpression4(up) && up.condition.pos <= n.pos && n.end <= up.condition.end && up.condition.end <= node.pos && findAncestor(up.parent, (a) => isCallExpression6(a) || isStatement(a))?.kind !== SyntaxKind7.CallExpression)
           return true;
@@ -60047,7 +60054,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         const calleeParams = this.rustCalleeParams(node);
         const printArg = (a, at) => this.rustMarketSlot(calleeParams, at) ? this.rustMarketSlotArgText(a, 0) : this.rustCurrencySlot(calleeParams, at) ? this.rustCurrencySlotArgText(a, 0) : this.rustVenueStrSlot(calleeParams, at) !== void 0 ? this.rustVenueStrArgText(a, this.rustVenueStrSlot(calleeParams, at), 0) : this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
         const printArgs = (list, from = 0) => list.map((a, i) => this.rustWsWatchSlot(node, from + i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, from + i)).join(", ");
-        const requiredArgs = [printArgs(args.slice(0, sig.requiredCount)), ...this.rustVenuePads(calleeParams, args.length, sig.requiredCount)].filter((a) => a !== "").join(", ");
+        const ownedArgs = (list) => list.map((a, i) => this.rustOwnedArgText(a, this.rustWsWatchSlot(node, i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, i))).join(", ");
+        const requiredArgs = [ownedArgs(args.slice(0, sig.requiredCount)), ...this.rustVenuePads(calleeParams, args.length, sig.requiredCount)].filter((a) => a !== "").join(", ");
         const reqPart = requiredArgs ? `${requiredArgs}, ` : "";
         return `self.${methodName}(${reqPart}&[${printArgs(args.slice(sig.requiredCount), sig.requiredCount)}])`;
       }
@@ -72398,6 +72406,9 @@ _RustTranspiler.RUST_NUMBER_CONSTANT_IMPORTS = /* @__PURE__ */ new Set([
 // closure below the declaration, never read again): the value moves. Such a use is marked `\u0004` (an owned
 // use, never cloned by the by-value step) and the mark is stripped from the file text.
 _RustTranspiler.RUST_COPY_SCALAR_KINDS = /* @__PURE__ */ new Set(["int", "num", "bool", "oint", "onum", "obool"]);
+// ccxt `hoistSelfArgFromMutCall` binds the `self.X(..)` arguments of a call ahead of the statement
+// the pass fires on a statement whose text names one of these (as a whole word) and has a nested self call
+_RustTranspiler.RUST_HOISTING_WORDS = /\b(?:watch|watchMultiple|fetchOrderBookSnapshot|unWatch|client|spawn|delay|fetchTickers|extend|fetch|sendEvmTransaction)\b/;
 // ── native equality emission ────────────────────────────────────────────
 // When the checker proves both operands hold the same primitive payload
 // (string / number / boolean, or one side is a matching literal) the

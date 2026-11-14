@@ -140,6 +140,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `x = f(.., x, ..)` as a statement, `x` named once on the right side and not captured: the old value is dead
      *  after the call (the write replaces it before any later read, in a loop too). */
     rustOwnedSelfWrite(node: any): boolean;
+    private static readonly RUST_HOISTING_WORDS;
+    rustUnderHoistedCall(node: any): boolean;
     /** A by-value argument of a call (the box is handed over whole). */
     rustOwnedHandOff(node: any): boolean;
     /** The use sits inside the receiver of a member access (`f(x).replace(..)`): native receiver forms print the
