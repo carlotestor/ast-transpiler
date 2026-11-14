@@ -67512,17 +67512,21 @@ ${iden}}`;
    *  copy-on-write insert equals `add_element_to_object` (which differs only on a tagged map). */
   rustExtendReuseKeyWriteOk(n, declaration) {
     const key = this.rustUntilHeadKeyWrite(n);
-    if (key === void 0 || key.startsWith("__") || _RustTranspiler.RUST_BOOK_META_KEYS.has(key))
+    if (key === void 0 || key.startsWith("__"))
       return false;
     let ok = true;
+    let producerWrites = 0;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (u) => {
       if (this.rustSelfExtendWrite(u, declaration) && !this.rustExtendReuseOperandUntagged(this.rustSkipWrappers(u.parent.right).arguments[1]))
         ok = false;
-      else if (!this.rustSelfExtendWrite(u, declaration) && this.rustReuseMapProducerWrite(u) && !this.rustReuseProducerUntagged(u, this.rustSkipWrappers(u.parent.right)))
-        ok = false;
+      else if (!this.rustSelfExtendWrite(u, declaration) && this.rustReuseMapProducerWrite(u)) {
+        producerWrites++;
+        if (!this.rustReuseProducerUntagged(u, this.rustSkipWrappers(u.parent.right)))
+          ok = false;
+      }
       return true;
     });
-    return ok;
+    return ok && (producerWrites === 0 || !_RustTranspiler.RUST_BOOK_META_KEYS.has(key));
   }
   /** The head of `x = this.extend (x, y)` on a reuse local: moved (the statement writes `x` back). */
   rustSelfExtendHead(node, declaration) {
@@ -72092,7 +72096,8 @@ ${iden}}`;
     const statement = list?.parent;
     if (!isIdentifier3(declaration.name) || list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations.length !== 1 || (list.flags & NodeFlags4.Const) !== 0 || statement?.kind !== SyntaxKind7.VariableStatement)
       return false;
-    if (declaration.initializer !== void 0 && this.literalKindOfNode(declaration.initializer) !== "null")
+    const deadEmpty = declaration.initializer !== void 0 && isObjectLiteralExpression4(this.rustSkipWrappers(declaration.initializer)) && this.rustSkipWrappers(declaration.initializer).properties.length === 0;
+    if (declaration.initializer !== void 0 && this.literalKindOfNode(declaration.initializer) !== "null" && !deadEmpty)
       return false;
     const source = declaration.getSourceFile?.()?.fileName;
     if (typeof source === "string" && /[\\/]test[\\/]/.test(source))

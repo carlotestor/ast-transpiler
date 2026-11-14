@@ -12917,3 +12917,32 @@ describe('ral-vf: a built list stored at a key of another local map at its last 
         expect(body).toMatch(/let mut args: Value = /);
     });
 });
+
+describe('ral-wf: tuple-slot map literals hold the shared Dict', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-wf-tuple');
+        const files: Record<string, string> = {"ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Bool = boolean | undefined;\nconst extend = (...args: any[]) => Object.assign ({}, ...args);\nexport default class Exchange {\n    extend = extend;\n    hold (x: any): any { return x; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeBool (o: any, k: any, d: Bool = undefined): Bool { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    handleUntilOption (key: string, request: Dict, params: Dict, multiplier: number = 1): [Dict, Dict] {\n        const until = this.safeString (params, 'until');\n        if (until !== undefined) {\n            request[key] = until;\n        }\n        return [ request, params ];\n    }\n    handleOptionBoolAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: Bool = undefined): [Bool, Dict] {\n        return [ this.safeBool (params, optionName, defaultValue), params ];\n    }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async fetchFills (symbol: Str = undefined, since: number = undefined, params: Dict = {}) {\n        let request: Dict = {};\n        if (symbol !== undefined) {\n            request['symbol'] = symbol;\n        }\n        let rest: Dict = params;\n        [ request, rest ] = this.handleUntilOption ('endAt', request, rest);\n        if (since !== undefined) {\n            request['startAt'] = since;\n        }\n        return this.hold (this.extend (request, rest));\n    }\n    async fetchPage (params: Dict = {}) {\n        let paginate = false;\n        let paramsPaginate: Dict = {};\n        [ paginate, paramsPaginate ] = this.handleOptionBoolAndParams (params, 'fetchPage', 'paginate', false);\n        if (paginate) {\n            return this.hold (paramsPaginate);\n        }\n        return this.hold (this.extend ({}, paramsPaginate));\n    }\n    async readFirst (params: Dict = {}) {\n        let paginate = false;\n        let paramsRead: Dict = {};\n        const before = this.hold (paramsRead);\n        [ paginate, paramsRead ] = this.handleOptionBoolAndParams (params, 'readFirst', 'paginate', false);\n        return this.hold (this.extend (before, paramsRead));\n    }\n}\n"};
+        for (const [ rel, text ] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (dir, rel)), { recursive: true });
+            fs.writeFileSync (path.join (dir, rel), text);
+        }
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('a reuse literal written at a book-meta key moves through handleUntilOption and takes slot 0 back (no copy)', () => {
+        const body = out.slice (out.indexOf ('fn fetchFills'), out.indexOf ('fn fetchPage'));
+        expect(body).toMatch(/let mut request: crate::value::Dict = /);
+        expect(body).toContain('Arc::make_mut(&mut request).insert("symbol".into()');
+        expect(body).toMatch(/handleUntilOption\(Value::Str\("endAt"\.into\(\)\), Value::Dict\(request\), [\s\S]*?request = __destr_tmp\.get\(0\)\.cloned\(\)\.unwrap_or\(Value::Null\)\.into_dict\(\)/);
+        expect(body).not.toContain('request.clone()');
+    });
+    test('an empty literal overwritten by a params slot before any read is the slot map', () => {
+        const body = out.slice (out.indexOf ('fn fetchPage'), out.indexOf ('fn readFirst'));
+        expect(body).toContain('let mut paramsPaginate: crate::value::Dict = Default::default();');
+        expect(body).toMatch(/paramsPaginate = __destr_tmp\.get\(1\)[^;]*\.into_dict\(\)/);
+    });
+    test('negative: an empty literal read before the slot write keeps its own declaration', () => {
+        const body = out.slice (out.indexOf ('fn readFirst'));
+        expect(body).not.toContain('let mut paramsRead: crate::value::Dict = Default::default();');
+    });
+});

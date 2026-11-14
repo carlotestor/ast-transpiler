@@ -16551,15 +16551,18 @@ export class RustTranspiler extends BaseTranspiler {
      *  copy-on-write insert equals `add_element_to_object` (which differs only on a tagged map). */
     rustExtendReuseKeyWriteOk(n: any, declaration: any): boolean {
         const key = this.rustUntilHeadKeyWrite(n);
-        if (key === undefined || key.startsWith('__') || RustTranspiler.RUST_BOOK_META_KEYS.has(key)) return false;
+        if (key === undefined || key.startsWith('__')) return false;
         let ok = true;
+        let producerWrites = 0;
         this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (u: any) => {
             if (this.rustSelfExtendWrite(u, declaration) && !this.rustExtendReuseOperandUntagged(this.rustSkipWrappers(u.parent.right).arguments[1])) ok = false;
             // ral-vf: a producer write must carry no runtime tag either (a native insert skips the helper's tagged routes)
-            else if (!this.rustSelfExtendWrite(u, declaration) && this.rustReuseMapProducerWrite(u) && !this.rustReuseProducerUntagged(u, this.rustSkipWrappers(u.parent.right))) ok = false;
+            else if (!this.rustSelfExtendWrite(u, declaration) && this.rustReuseMapProducerWrite(u)) { producerWrites++; if (!this.rustReuseProducerUntagged(u, this.rustSkipWrappers(u.parent.right))) ok = false; }
             return true;
         });
-        return ok;
+        // ral-wf: the helper's book-meta route needs a `__book_id` key, which a literal merged only with untagged maps (and moved
+        // through `handleUntilOption`) never holds; a producer-written local keeps the helper on those keys
+        return ok && (producerWrites === 0 || !RustTranspiler.RUST_BOOK_META_KEYS.has(key));
     }
 
     /** The head of `x = this.extend (x, y)` on a reuse local: moved (the statement writes `x` back). */
@@ -20854,7 +20857,10 @@ export class RustTranspiler extends BaseTranspiler {
         const statement: any = list?.parent;
         if (!isIdentifier(declaration.name) || list?.kind !== SyntaxKind.VariableDeclarationList || list.declarations.length !== 1
             || (list.flags & NodeFlags.Const) !== 0 || statement?.kind !== SyntaxKind.VariableStatement) return false;
-        if (declaration.initializer !== undefined && this.literalKindOfNode(declaration.initializer) !== 'null') return false;
+        // ral-wf: an empty `{}` overwritten by the destructure before any read is dead like `undefined` (the slot map replaces it)
+        const deadEmpty = declaration.initializer !== undefined && isObjectLiteralExpression(this.rustSkipWrappers(declaration.initializer))
+            && this.rustSkipWrappers(declaration.initializer).properties.length === 0;
+        if (declaration.initializer !== undefined && this.literalKindOfNode(declaration.initializer) !== 'null' && !deadEmpty) return false;
         const source: any = declaration.getSourceFile?.()?.fileName;
         if (typeof source === 'string' && /[\\/]test[\\/]/.test(source)) return false;
         if (declaration.type !== undefined) {
