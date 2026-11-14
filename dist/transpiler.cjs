@@ -51936,14 +51936,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     return false;
   }
-  rustOwnedUseIsFree(node) {
+  rustOwnedUseIsFree(node, element = false) {
     if (node.text === "undefined")
       return true;
     if (this.rustOwnedInReceiverChain(node))
       return false;
     if (/ts[/]src[/](?:pro[/])?test[/]/.test(String(node.getSourceFile().fileName)) && /^(?:exchange\d*|[A-Za-z_]\w*Exchange\d*)$/.test(String(node.text)))
       return false;
-    if (_chunkC7C726CWcjs.findAncestor.call(void 0, node, (a) => _is.isArrayLiteralExpression.call(void 0, a) || _is.isStatement.call(void 0, a)) !== void 0 && _is.isArrayLiteralExpression.call(void 0, _chunkC7C726CWcjs.findAncestor.call(void 0, node, (a) => _is.isArrayLiteralExpression.call(void 0, a) || _is.isStatement.call(void 0, a))))
+    if (!element && _chunkC7C726CWcjs.findAncestor.call(void 0, node, (a) => _is.isArrayLiteralExpression.call(void 0, a) || _is.isStatement.call(void 0, a)) !== void 0 && _is.isArrayLiteralExpression.call(void 0, _chunkC7C726CWcjs.findAncestor.call(void 0, node, (a) => _is.isArrayLiteralExpression.call(void 0, a) || _is.isStatement.call(void 0, a))))
       return false;
     const scalar = _optionalChain([this, 'access', _8505 => _8505.rustScalarLocalOf, 'call', _8506 => _8506(node), 'optionalAccess', _8507 => _8507.kind]);
     if (scalar !== void 0)
@@ -60319,7 +60319,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     }
     return out;
   }
-  /** A bare local element of a `&[..]` argument slice is moved into the
+  /** A bare local element of a `&[..]` argument slice or a `Value::from(vec![..])` list literal is moved into the
    *  temporary: it is cloned unless the printer marked it owned (`\u0004`: a `Copy` local or its last use). */
   static cloneSliceElements(text) {
     const elements = (inside) => {
@@ -60328,7 +60328,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     };
     let out = "";
     let i = 0;
-    const re = /[,(]\s*&\[/g;
+    const re = /(?:[,(]\s*&\[|Value::from\(vec!\[)/g;
     while (i < text.length) {
       re.lastIndex = i;
       const m = re.exec(text);
@@ -60342,7 +60342,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         out += text.slice(i);
         break;
       }
-      const head = `${m[0][0]}${m[0][0] === "(" ? "" : " "}&[`;
+      const head = m[0].startsWith("V") ? m[0] : `${m[0][0]}${m[0][0] === "(" ? "" : " "}&[`;
       out += text.slice(i, m.index) + head + elements(_RustTranspiler.cloneSliceElements(text.slice(open, j))) + "]";
       i = j + 1;
     }
@@ -63084,7 +63084,11 @@ ${body}${idn1}m
 ${this.getIden(identation)}}`;
   }
   printArrayLiteralExpression(node, identation) {
-    return `Value::from(vec![${node.elements.map((e) => this.printNode(e, 0)).join(", ")}])`;
+    const element = (e) => {
+      const text = this.printNode(e, 0);
+      return _is.isIdentifier.call(void 0, e) && _RustTranspiler.isBareLocal(text.trim()) && this.rustOwnedUseIsFree(e, true) ? `${text.trim()}` : text;
+    };
+    return `Value::from(vec![${node.elements.map(element).join(", ")}])`;
   }
   printDeleteExpression(node, identation) {
     return _nullishCoalesce(_nullishCoalesce(_nullishCoalesce(_nullishCoalesce(this.printWsBookMapDelete(node), () => ( this.printWsCacheMapDelete(node))), () => ( this.printClientHandleDelete(node))), () => ( this.provenDictFieldDelete(node))), () => ( `remove(&mut ${this.printNode(node.expression.expression, 0)}, &${this.printNode(node.expression.argumentExpression, 0)})`));

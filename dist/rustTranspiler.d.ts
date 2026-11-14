@@ -147,7 +147,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The use sits inside the receiver of a member access (`f(x).replace(..)`): native receiver forms print the
      *  receiver text twice (`.unwrap_or_else(|| recv.clone())`), so the argument is read twice. */
     rustOwnedInReceiverChain(node: any): boolean;
-    rustOwnedUseIsFree(node: any): boolean;
+    rustOwnedUseIsFree(node: any, element?: boolean): boolean;
     /** A bare read of an imported (or top-level destructured) binding: never a callee, member, key or `new` target. */
     rustIsImportedValueName(node: any): boolean;
     printStringLiteral(node: any): any;
@@ -1218,7 +1218,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     static rustLentMark(text: string): string;
     private static readonly RUST_BY_VALUE_CALLEE_NO_SUPER;
     static cloneByValueCallArgs(text: string, superCalls?: boolean): string;
-    /** A bare local element of a `&[..]` argument slice is moved into the
+    /** A bare local element of a `&[..]` argument slice or a `Value::from(vec![..])` list literal is moved into the
      *  temporary: it is cloned unless the printer marked it owned (`\u0004`: a `Copy` local or its last use). */
     static cloneSliceElements(text: string): string;
     private static rustBalancedClose;

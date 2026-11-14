@@ -571,14 +571,15 @@ export class RustTranspiler extends BaseTranspiler {
         return false;
     }
 
-    rustOwnedUseIsFree(node): boolean {
+    rustOwnedUseIsFree(node, element = false): boolean {
         if (node.text === 'undefined') return true;
         if (this.rustOwnedInReceiverChain(node)) return false;
         // the test tier's exchange handles become the typed `Exchange` (or `&mut` it) after printing, by their name
         if (/ts[/]src[/](?:pro[/])?test[/]/.test(String(node.getSourceFile().fileName)) && /^(?:exchange\d*|[A-Za-z_]\w*Exchange\d*)$/.test(String(node.text))) return false;
         // a call inside an array literal may be a `Promise.all` operand, reshaped after printing (ccxt re-runs a
         // static ws watch until its queue drains), so its argument is not a last use
-        if (findAncestor(node, (a: any) => isArrayLiteralExpression(a) || isStatement(a)) !== undefined
+        // (an element of the literal itself is moved into the new list, never a call argument)
+        if (!element && findAncestor(node, (a: any) => isArrayLiteralExpression(a) || isStatement(a)) !== undefined
             && isArrayLiteralExpression(findAncestor(node, (a: any) => isArrayLiteralExpression(a) || isStatement(a)))) return false;
         const scalar = this.rustScalarLocalOf(node)?.kind;
         if (scalar !== undefined) return RustTranspiler.RUST_COPY_SCALAR_KINDS.has(scalar);
@@ -9305,7 +9306,7 @@ export class RustTranspiler extends BaseTranspiler {
         return out;
     }
 
-    /** A bare local element of a `&[..]` argument slice is moved into the
+    /** A bare local element of a `&[..]` argument slice or a `Value::from(vec![..])` list literal is moved into the
      *  temporary: it is cloned unless the printer marked it owned (`\u0004`: a `Copy` local or its last use). */
     static cloneSliceElements(text: string): string {
         const elements = (inside: string) => {
@@ -9314,7 +9315,7 @@ export class RustTranspiler extends BaseTranspiler {
         };
         let out = '';
         let i = 0;
-        const re = /[,(]\s*&\[/g;
+        const re = /(?:[,(]\s*&\[|Value::from\(vec!\[)/g;
         while (i < text.length) {
             re.lastIndex = i;
             const m = re.exec(text);
@@ -9322,7 +9323,7 @@ export class RustTranspiler extends BaseTranspiler {
             const open = m.index + m[0].length;
             const j = RustTranspiler.rustBalancedClose(text, open);
             if (j >= text.length) { out += text.slice(i); break; }
-            const head = `${m[0][0]}${m[0][0] === '(' ? '' : ' '}&[`;
+            const head = m[0].startsWith('V') ? m[0] : `${m[0][0]}${m[0][0] === '(' ? '' : ' '}&[`;
             out += text.slice(i, m.index) + head + elements(RustTranspiler.cloneSliceElements(text.slice(open, j))) + ']';
             i = j + 1;
         }
@@ -12090,7 +12091,12 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printArrayLiteralExpression(node, identation) {
-        return `Value::from(vec![${node.elements.map(e => this.printNode(e, 0)).join(', ')}])`;
+        // a bare local element is moved into the list: owned (`\u0004`, left uncloned) when `Copy` or at its last use
+        const element = (e: any) => {
+            const text = this.printNode(e, 0);
+            return isIdentifier(e) && RustTranspiler.isBareLocal(text.trim()) && this.rustOwnedUseIsFree(e, true) ? `\u0004${text.trim()}` : text;
+        };
+        return `Value::from(vec![${node.elements.map(element).join(', ')}])`;
     }
 
     printDeleteExpression(node, identation) {

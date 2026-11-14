@@ -334,6 +334,20 @@ describe('rust transpiling tests', () => {
         expect(out).toContain('self.opt(&[y])');
     });
 
+    test('a list-literal element clones a local read again and moves one at its last use', () => {
+        const ts = [
+            'class A {',
+            '    run (x: any, y: any) {',
+            '        const a = [ x, y ];',
+            '        return [ a, x ];',
+            '    }',
+            '}',
+        ].join('\n');
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).toContain('Value::from(vec![x.clone(), y])');
+        expect(out).toContain('Value::from(vec![a, x])');
+    });
+
     test('a for-loop counter handed off by value is cloned (the next pass reads it again)', () => {
         const ts = [
             'class A {',
@@ -6643,7 +6657,7 @@ describe('rust typed unified-method signatures', () => {
     });
 
     test('an intra-core call to a typed method lowers its arguments and boxes the result', () => {
-        expect(output).toContain('crate::types::IntoRaw::into_raw(self.fetch_tickers((Value::from(vec![symbol])).to_opt_str_vec(), params.clone()).await)');
+        expect(output).toContain('crate::types::IntoRaw::into_raw(self.fetch_tickers((Value::from(vec![symbol.clone()])).to_opt_str_vec(), params.clone()).await)');
     });
 
     test('an optional string parameter prints Option<&str> and lowers to Null when absent', () => {
@@ -6666,7 +6680,7 @@ describe('rust typed unified-method signatures', () => {
     test('an OrderRequest[] parameter prints the typed request list and decodes at intra-core calls', () => {
         expect(output).toContain('pub fn createOrders(&self, orders: Vec<crate::types::OrderRequest>, params: impl Into<crate::Params> + Send) -> crate::Result<Vec<crate::types::Order>>');
         expect(output).toContain('crate::types::IntoRaw::into_raw(orders)');
-        expect(output).toContain('self.create_orders(crate::types::FromRaw::from_raw(Value::from(vec![order])), params.clone()).await');
+        expect(output).toContain('self.create_orders(crate::types::FromRaw::from_raw(Value::from(vec![order.clone()])), params.clone()).await');
     });
 
     test('literal arguments of a typed call print in the native parameter type', () => {
@@ -7250,7 +7264,7 @@ describe ('rustBearerBoxedKeyWrites', () => {
                 + '        return result;\n'
                 + '    }\n');
             expect(out).toContain('let mut result: indexmap::IndexMap<String, Value> = (');
-            expect(out).toContain('result.insert(crate::runtime::stringify_param(&(crate::value::get_value_k(&value, "id"))), Value::from(vec![value]));');
+            expect(out).toContain('result.insert(crate::runtime::stringify_param(&(crate::value::get_value_k(&value, "id"))), Value::from(vec![value.clone()]));');
             expect(out).not.toContain('add_element_to_object(&mut result');
             expect(out).not.toContain('if let Value::Dict(__d) = &mut result');
         });
