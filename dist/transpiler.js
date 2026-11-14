@@ -59383,7 +59383,18 @@ ${binding(plan.indent)}` : ""), head: "" };
     const kind = this.rustScalarNumericKind(inner);
     if (kind !== void 0)
       return kind;
+    const param = this.rustArithParamKind(inner);
+    if (param !== void 0)
+      return param;
     return isCallExpression6(inner) && this.rustScalarValueKind(inner, true) === "int" && this.rustScalarNativeText("int", inner) !== void 0 ? "int" : void 0;
+  }
+  /** zb: the numeric kind of an unwritten typed-signature parameter read (`oint` / `onum` / `int` / `num`), else undefined. */
+  rustArithParamKind(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0 || !isIdentifier3(inner))
+      return void 0;
+    const kind = this.rustScalarParamRead(inner)?.kind;
+    return kind === "oint" || kind === "onum" || kind === "int" || kind === "num" ? kind : void 0;
   }
   /** A combinator over a typed operand prints native and boxes its result once. */
   printRustArithCall(node) {

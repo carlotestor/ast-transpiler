@@ -11262,7 +11262,8 @@ describe('rust ternary-initialised scalar locals', () => {
             "        request['limit'] = Math.min (limit, maxLimit);\n        const capped = (limit === undefined) ? maxLimit : Math.min (limit, maxLimit);\n" +
             "        return [ request, capped ];\n");
         expect(out).toContain('let mut maxLimit: i64 = (if ');
-        expect(out).toContain('crate::runtime::Math::min(&limit, &Value::from(maxLimit))');
+        // zb: a typed-signature `limit` makes the cap native (`Option<i64>` min, the helper's Null arm)
+        expect(out).toContain('(if let Some(__m0) = limit.as_i64() { Some(i64::min(__m0, maxLimit)) } else { None })');
         expect(out).not.toContain('maxLimit.clone()');
         expect(out).not.toContain('let mut maxLimit: Value');
     });
@@ -14078,4 +14079,38 @@ describe('ral-yb: !x of a bool local in a value slot (round 38)', () => {
         expect(out).toContain('m.insert("contract".to_string(), Value::Bool(!swap));');
         expect(out).not.toContain('!is_true(&swap)');
     });
+});
+
+describe('ral-zb: Math.min / max and sum over a typed-signature numeric parameter (round 39)', () => {
+    const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['fetchTrades'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+    let n = 0;
+    const run = (body: string) => {
+        const file = path.join (rustFixtureRoot, 'zb-arith-param', String (n++), 'ts/src/venue.ts');
+        fs.mkdirSync (path.dirname (file), { recursive: true });
+        fs.writeFileSync (file, "type Int = number;\ntype Trade = any;\ninterface Dict { [key: string]: any }\nclass C {\n" +
+            "    async fetchTrades (symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Trade[]> {\n" +
+            body + "    }\n    g (x: any): any { return x; }\n}\n");
+        return typed.transpileRustByPath (file).content;
+    };
+    // [ case, body, expected substrings, forbidden substrings ]
+    const cases: [ string, string, string[], string[] ][] = [
+        [ 'Math.min of an Int parameter and an i64 local: the first assignment decides the local Option<i64>',
+            "        const maxLimit = 1500;\n        let limitValue: Int = 500;\n        if (limit !== undefined) {\n            limitValue = Math.min (limit, maxLimit);\n        }\n        return this.g ({ 'limit': limitValue });\n",
+            [ 'let mut maxLimit: i64 = 1500;', 'let mut limitValue: Option<i64> = Some(500);', 'limitValue = (if let Some(__m0) = limit.as_i64() { Some(i64::min(__m0, maxLimit)) } else { None });' ],
+            [ 'let mut limitValue: Value', 'Math::min(&limit' ] ],
+        [ 'Math.max of an Int parameter and an int literal: Option<i64> with the helper Null arm',
+            "        let start: Int = 0;\n        if (since !== undefined) {\n            start = Math.max (since, 1000);\n        }\n        return this.g ({ 'start': start });\n",
+            [ 'let mut start: Option<i64> = Some(0);', 'start = (if let Some(__m0) = since.as_i64() { Some(i64::max(__m0, 1000)) } else { None });' ],
+            [ 'let mut start: Value', 'Math::max(&since' ] ],
+        [ 'a Value operand (an any-typed param read) keeps the helper',
+            "        const p = this.g (params);\n        const capped = Math.min (p, 10);\n        return this.g ({ 'c': capped });\n",
+            [ 'Math::min(&' ], [ 'let mut capped: Option<i64>', 'let mut capped: i64' ] ],
+    ];
+    for (const [ name, body, yes, no ] of cases) {
+        test(name, () => {
+            const out = run(body);
+            for (const y of yes) expect(out).toContain(y);
+            for (const x of no) expect(out).not.toContain(x);
+        });
+    }
 });

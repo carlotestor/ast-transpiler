@@ -1124,6 +1124,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustArithBaseCallee(node: any, name: string): boolean;
     /** An operand's numeric kind; a never-null integer call (e.g. a literal-defaulted reader) prints natively too. */
     rustArithOperandKind(node: any): string | undefined;
+    /** zb: the numeric kind of an unwritten typed-signature parameter read (`oint` / `onum` / `int` / `num`), else undefined. */
+    rustArithParamKind(node: any): string | undefined;
     /** A combinator over a typed operand prints native and boxes its result once. */
     printRustArithCall(node: any): string | undefined;
     /** qb: a local whose initializer prints as an inline `if` / `match` (a ternary, or runtime arithmetic): the

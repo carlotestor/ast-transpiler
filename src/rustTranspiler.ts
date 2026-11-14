@@ -8042,7 +8042,18 @@ export class RustTranspiler extends BaseTranspiler {
         const inner: any = this.unwrapParens(node);
         if (inner === undefined || inner.kind === SyntaxKind.SpreadElement) return undefined;
         const kind = this.rustScalarNumericKind(inner); if (kind !== undefined) return kind;
+        // zb: a typed-signature numeric parameter (`limit: Int` -> `Option<i64>`) holds only that variant or `Null`,
+        // so `Math.min|max (limit, n)` / `this.sum (since, d)` over it is the helper's own Int / Null arm exactly
+        const param = this.rustArithParamKind(inner); if (param !== undefined) return param;
         return isCallExpression(inner) && this.rustScalarValueKind(inner, true) === 'int' && this.rustScalarNativeText('int', inner) !== undefined ? 'int' : undefined;
+    }
+
+    /** zb: the numeric kind of an unwritten typed-signature parameter read (`oint` / `onum` / `int` / `num`), else undefined. */
+    rustArithParamKind(node): string | undefined {
+        const inner: any = this.unwrapParens(node);
+        if (inner === undefined || !isIdentifier(inner)) return undefined;
+        const kind = this.rustScalarParamRead(inner)?.kind;
+        return kind === 'oint' || kind === 'onum' || kind === 'int' || kind === 'num' ? kind : undefined;
     }
 
     /** A combinator over a typed operand prints native and boxes its result once. */
