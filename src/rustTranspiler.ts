@@ -283,11 +283,15 @@ export const rustDispatch = {
         }
     },
     /** Parameter list of a `DerivedExchange` slot: its `market` and currency arguments (never the first) are lent structs. */
-    slotParams: (args: string[]): string => args.map((a, i) => `${a}: ${rustDispatch.isSlotMarket(a, i) ? 'Option<&crate::types::Market>' : rustDispatch.isSlotCurrency(a, i) ? 'Option<&crate::types::Currency>' : 'crate::Value'}`).join(', '),
+    slotParams: (args: string[]): string => args.map((a, i) => `${a}: ${rustDispatch.isSlotMarket(a, i) ? 'Option<&crate::types::Market>' : rustDispatch.isSlotCurrency(a, i) ? 'Option<&crate::types::Currency>' : rustDispatch.isSlotStr(a, i) ? '&str' : 'crate::Value'}`).join(', '),
+    /** The `sign` slot's `path` (every declaration of the override group spells `path: string`) is a lent `&str`. */
+    isSlotStr: (arg: string, i: number): boolean => arg === 'path' && i === 0,
+    /** A forwarder's argument for an inherent parameter of `kind`: a slot already of that type passes by name. */
+    slotArg: (kind: string, arg: string, i: number): string => (kind === 'str' && rustDispatch.isSlotStr(arg, i) ? arg : rustDispatch.fromValue(kind, arg)),
     isSlotMarket: (arg: string, i: number): boolean => arg === 'market' && i > 0,
     isSlotCurrency: (arg: string, i: number): boolean => i > 0 && /^(?:currency|from_currency|to_currency)$/.test(arg),
     /** A `DerivedExchange` slot argument handed on in a `&[Value]` tail. */
-    slotValue: (arg: string, i: number): string => (rustDispatch.isSlotMarket(arg, i) || rustDispatch.isSlotCurrency(arg, i) ? `crate::Value::from(${arg})` : `${arg}.clone()`),
+    slotValue: (arg: string, i: number): string => (rustDispatch.isSlotMarket(arg, i) || rustDispatch.isSlotCurrency(arg, i) || rustDispatch.isSlotStr(arg, i) ? `crate::Value::from(${arg})` : `${arg}.clone()`),
     /** A sync method with a native return still gets a by-name arm (it boxes back inside the arm). */
     isNativeReturn: (ret: string): boolean => RUST_DISPATCH_NATIVE_RETURNS.has(ret),
     /** A typed-return base method (or override): it keeps every arm it had as `-> Value`, sync ws handler arms too. */
@@ -8605,7 +8609,7 @@ export class RustTranspiler extends BaseTranspiler {
         const callArgs = slots.map((_slot, i) => {
             const p = sig.params[i];
             if (p !== undefined && (/^Value\b/.test(p.type) || p.type === 'impl Into<crate::Value>')) return `${p.name}.clone()`;
-            if (p !== undefined && p.type === '&str') return `crate::Value::from(${p.name})`;
+            if (p !== undefined && p.type === '&str') return rustDispatch.isSlotStr(_slot, i) ? p.name : `crate::Value::from(${p.name})`;
             if (p !== undefined && p.type === 'Option<&crate::types::Market>') return p.name;
             if (p !== undefined && p.type === 'Option<&crate::types::Currency>') return p.name;
             if (sliceAt >= 0 && i >= sliceAt) return `crate::runtime::get_arg(${sig.params[sliceAt].name}, ${i - sliceAt}, crate::Value::Null)`;
@@ -22335,12 +22339,14 @@ export class RustTranspiler extends BaseTranspiler {
         if (optional && !this.rustVenueOptionalSlotOpen(method, param)) return undefined;
         const file = String(method.getSourceFile().fileName).replace(/\\/g, '/');
         // a base method no venue redeclares and no trait slot dispatches has one declaration: its parameter types alone
-        if (file.search(/(?:^|\/)ts\/src\/(?:pro\/|prediction\/)?[^/]+\.ts$/) < 0 && !this.rustBaseOnlyMethod(method, file)) return undefined;
+        // a trait-slot override group whose every declaration spells the parameter alike types together (slot + forwarders)
+        const group = this.rustOverrideGroupParam(method, param, file);
+        if (!group && file.search(/(?:^|\/)ts\/src\/(?:pro\/|prediction\/)?[^/]+\.ts$/) < 0 && !this.rustBaseOnlyMethod(method, file)) return undefined;
         if ((method.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.StaticKeyword)) return undefined;
         // a ws core's sync by-name handler table takes only `Value` / `bool` slots
-        if (/(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method)) return undefined;
+        if (!group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method)) return undefined;
         const hidden: any = this.getMethodOverride(method);
-        if (hidden !== undefined && RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile().fileName))) return undefined;
+        if (!group && hidden !== undefined && RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile().fileName))) return undefined;
         if (this.rustTypedSignature(method) !== undefined || this.rustMethodReferencedAsValue(method)) return undefined;
         if (this.rustParamPrintsBool(param) || this.rustParamIsLentDict(param) || this.rustParamIsLentList(param) || this.rustParamPrintsMap(param)
             || this.rustParamPrintsStrVec(param) || this.rustParamReadsByReference(param)) return undefined;
@@ -22369,6 +22375,47 @@ export class RustTranspiler extends BaseTranspiler {
     // Base methods whose scalar parameters print typed (measured one by one: each frees more locals than it adds
     // conversions at its callers); a method listed here must have no venue override and no hand-written body.
     private static readonly RUST_BASE_SCALAR_PARAM_METHODS: string[] = [ 'convertExpireDate', 'convertExpireDateToMarketIdDate', 'convertMarketIdExpireDate' ];
+
+    // Trait-slot override groups typed together: method -> its first parameter, printed `&str` by the base, every
+    // override, the `DerivedExchange` slot (rustDispatch.isSlotStr) and every forwarder.
+    private static readonly RUST_OVERRIDE_GROUP_STR_PARAMS: Record<string, string> = { 'sign': 'path' };
+
+    private rustOverrideGroupAgreeByRoot = new Map<string, boolean>();
+
+    /** The first parameter of a listed override group when ALL declarations (base, prediction base, every venue,
+     *  pro and prediction override) spell it `<name>: string`; one disagreeing declaration keeps the whole group `Value`. */
+    rustOverrideGroupParam(method: any, param: any, file: string): boolean {
+        const name = String(method.name.text);
+        const pname = RustTranspiler.RUST_OVERRIDE_GROUP_STR_PARAMS[name];
+        if (pname === undefined || Array.from(method.parameters).indexOf(param) !== 0 || String(param.name.text) !== pname) return false;
+        if (!(this.toSnakeCaseName(name) in (this.rustVirtualDispatch ?? {})) || this.rustNonVirtualShims?.has(this.toSnakeCaseName(name))) return false;
+        const at = file.indexOf('ts/src/');
+        if (at < 0 || /(?:^|\/)ts\/src\/test\//.test(file)) return false;
+        const root = file.slice(0, at) + 'ts/src';
+        let agree = this.rustOverrideGroupAgreeByRoot.get(root + '#' + name);
+        if (agree === undefined) {
+            agree = true;
+            let seen = 0;
+            const header = new RegExp(`^\\s+(?:(?:override|async|public|protected)\\s+)*${name}\\s*\\(\\s*([^,)]*)`, 'gm');
+            for (const dir of [ '', '/pro', '/prediction', '/base' ]) {
+                let entries: string[] = [];
+                try {
+                    entries = fs.readdirSync(root + dir).filter((f) => f.endsWith('.ts') && (dir !== '/base' || f === 'Exchange.ts' || f === 'PredictionExchange.ts'));
+                } catch (e) {
+                    continue;
+                }
+                for (const f of entries) {
+                    for (const m of fs.readFileSync(`${root}${dir}/${f}`, 'utf8').matchAll(header)) {
+                        seen++;
+                        if (m[1].replace(/\s+/g, '') !== `${pname}:string`) agree = false;
+                    }
+                }
+            }
+            agree = agree && seen > 0;
+            this.rustOverrideGroupAgreeByRoot.set(root + '#' + name, agree);
+        }
+        return agree;
+    }
 
     /** A sync method of the base `Exchange` class with no override in any venue file, no trait slot and no typed
      *  signature: every call resolves to this one body, so typing its parameter changes no other declaration. */

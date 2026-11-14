@@ -91,6 +91,10 @@ export declare const rustDispatch: {
     fromValue(kind: string, v: string): string;
     /** Parameter list of a `DerivedExchange` slot: its `market` and currency arguments (never the first) are lent structs. */
     slotParams: (args: string[]) => string;
+    /** The `sign` slot's `path` (every declaration of the override group spells `path: string`) is a lent `&str`. */
+    isSlotStr: (arg: string, i: number) => boolean;
+    /** A forwarder's argument for an inherent parameter of `kind`: a slot already of that type passes by name. */
+    slotArg: (kind: string, arg: string, i: number) => string;
     isSlotMarket: (arg: string, i: number) => boolean;
     isSlotCurrency: (arg: string, i: number) => boolean;
     /** A `DerivedExchange` slot argument handed on in a `&[Value]` tail. */
@@ -3010,6 +3014,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVenueStrParamType(param: any): string | undefined;
     rustVenueStrParamTypeUncached(param: any): string | undefined;
     private static readonly RUST_BASE_SCALAR_PARAM_METHODS;
+    private static readonly RUST_OVERRIDE_GROUP_STR_PARAMS;
+    private rustOverrideGroupAgreeByRoot;
+    /** The first parameter of a listed override group when ALL declarations (base, prediction base, every venue,
+     *  pro and prediction override) spell it `<name>: string`; one disagreeing declaration keeps the whole group `Value`. */
+    rustOverrideGroupParam(method: any, param: any, file: string): boolean;
     /** A sync method of the base `Exchange` class with no override in any venue file, no trait slot and no typed
      *  signature: every call resolves to this one body, so typing its parameter changes no other declaration. */
     rustBaseOnlyMethod(method: any, file: string): boolean;

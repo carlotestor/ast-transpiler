@@ -51448,11 +51448,15 @@ var rustDispatch = {
     }
   },
   /** Parameter list of a `DerivedExchange` slot: its `market` and currency arguments (never the first) are lent structs. */
-  slotParams: (args) => args.map((a, i) => `${a}: ${rustDispatch.isSlotMarket(a, i) ? "Option<&crate::types::Market>" : rustDispatch.isSlotCurrency(a, i) ? "Option<&crate::types::Currency>" : "crate::Value"}`).join(", "),
+  slotParams: (args) => args.map((a, i) => `${a}: ${rustDispatch.isSlotMarket(a, i) ? "Option<&crate::types::Market>" : rustDispatch.isSlotCurrency(a, i) ? "Option<&crate::types::Currency>" : rustDispatch.isSlotStr(a, i) ? "&str" : "crate::Value"}`).join(", "),
+  /** The `sign` slot's `path` (every declaration of the override group spells `path: string`) is a lent `&str`. */
+  isSlotStr: (arg, i) => arg === "path" && i === 0,
+  /** A forwarder's argument for an inherent parameter of `kind`: a slot already of that type passes by name. */
+  slotArg: (kind, arg, i) => kind === "str" && rustDispatch.isSlotStr(arg, i) ? arg : rustDispatch.fromValue(kind, arg),
   isSlotMarket: (arg, i) => arg === "market" && i > 0,
   isSlotCurrency: (arg, i) => i > 0 && /^(?:currency|from_currency|to_currency)$/.test(arg),
   /** A `DerivedExchange` slot argument handed on in a `&[Value]` tail. */
-  slotValue: (arg, i) => rustDispatch.isSlotMarket(arg, i) || rustDispatch.isSlotCurrency(arg, i) ? `crate::Value::from(${arg})` : `${arg}.clone()`,
+  slotValue: (arg, i) => rustDispatch.isSlotMarket(arg, i) || rustDispatch.isSlotCurrency(arg, i) || rustDispatch.isSlotStr(arg, i) ? `crate::Value::from(${arg})` : `${arg}.clone()`,
   /** A sync method with a native return still gets a by-name arm (it boxes back inside the arm). */
   isNativeReturn: (ret) => RUST_DISPATCH_NATIVE_RETURNS.has(ret),
   /** A typed-return base method (or override): it keeps every arm it had as `-> Value`, sync ws handler arms too. */
@@ -51763,6 +51767,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // declared `Str` prints `Option<&str>`; callers convert once, the body binds the `Value` once.
     this.rustVenueStrDecisions = /* @__PURE__ */ new WeakMap();
     this.rustVenueStrCallers = /* @__PURE__ */ new WeakMap();
+    this.rustOverrideGroupAgreeByRoot = /* @__PURE__ */ new Map();
     this.rustCurrencySlotDecisions = /* @__PURE__ */ new WeakMap();
     this.rustCurrencyBoxing = /* @__PURE__ */ new Set();
     this.rustCurrencyLocalDecisions = /* @__PURE__ */ new Map();
@@ -59917,7 +59922,7 @@ ${classMethods}
       if (p !== void 0 && (/^Value\b/.test(p.type) || p.type === "impl Into<crate::Value>"))
         return `${p.name}.clone()`;
       if (p !== void 0 && p.type === "&str")
-        return `crate::Value::from(${p.name})`;
+        return rustDispatch.isSlotStr(_slot, i) ? p.name : `crate::Value::from(${p.name})`;
       if (p !== void 0 && p.type === "Option<&crate::types::Market>")
         return p.name;
       if (p !== void 0 && p.type === "Option<&crate::types::Currency>")
@@ -73597,14 +73602,15 @@ ${this.getIden(identation)}}`;
     if (optional && !this.rustVenueOptionalSlotOpen(method, param))
       return void 0;
     const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
-    if (file.search(/(?:^|\/)ts\/src\/(?:pro\/|prediction\/)?[^/]+\.ts$/) < 0 && !this.rustBaseOnlyMethod(method, file))
+    const group = this.rustOverrideGroupParam(method, param, file);
+    if (!group && file.search(/(?:^|\/)ts\/src\/(?:pro\/|prediction\/)?[^/]+\.ts$/) < 0 && !this.rustBaseOnlyMethod(method, file))
       return void 0;
     if ((method.modifiers ?? []).some((m) => m.kind === SyntaxKind7.StaticKeyword))
       return void 0;
-    if (/(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method))
+    if (!group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method))
       return void 0;
     const hidden = this.getMethodOverride(method);
-    if (hidden !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile().fileName)))
+    if (!group && hidden !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile().fileName)))
       return void 0;
     if (this.rustTypedSignature(method) !== void 0 || this.rustMethodReferencedAsValue(method))
       return void 0;
@@ -73637,6 +73643,44 @@ ${this.getIden(identation)}}`;
         return void 0;
     }
     return rustType;
+  }
+  /** The first parameter of a listed override group when ALL declarations (base, prediction base, every venue,
+   *  pro and prediction override) spell it `<name>: string`; one disagreeing declaration keeps the whole group `Value`. */
+  rustOverrideGroupParam(method, param, file) {
+    const name = String(method.name.text);
+    const pname = _RustTranspiler.RUST_OVERRIDE_GROUP_STR_PARAMS[name];
+    if (pname === void 0 || Array.from(method.parameters).indexOf(param) !== 0 || String(param.name.text) !== pname)
+      return false;
+    if (!(this.toSnakeCaseName(name) in (this.rustVirtualDispatch ?? {})) || this.rustNonVirtualShims?.has(this.toSnakeCaseName(name)))
+      return false;
+    const at = file.indexOf("ts/src/");
+    if (at < 0 || /(?:^|\/)ts\/src\/test\//.test(file))
+      return false;
+    const root = file.slice(0, at) + "ts/src";
+    let agree = this.rustOverrideGroupAgreeByRoot.get(root + "#" + name);
+    if (agree === void 0) {
+      agree = true;
+      let seen = 0;
+      const header = new RegExp(`^\\s+(?:(?:override|async|public|protected)\\s+)*${name}\\s*\\(\\s*([^,)]*)`, "gm");
+      for (const dir of ["", "/pro", "/prediction", "/base"]) {
+        let entries = [];
+        try {
+          entries = fs3.readdirSync(root + dir).filter((f) => f.endsWith(".ts") && (dir !== "/base" || f === "Exchange.ts" || f === "PredictionExchange.ts"));
+        } catch (e) {
+          continue;
+        }
+        for (const f of entries) {
+          for (const m of fs3.readFileSync(`${root}${dir}/${f}`, "utf8").matchAll(header)) {
+            seen++;
+            if (m[1].replace(/\s+/g, "") !== `${pname}:string`)
+              agree = false;
+          }
+        }
+      }
+      agree = agree && seen > 0;
+      this.rustOverrideGroupAgreeByRoot.set(root + "#" + name, agree);
+    }
+    return agree;
   }
   /** A sync method of the base `Exchange` class with no override in any venue file, no trait slot and no typed
    *  signature: every call resolves to this one body, so typing its parameter changes no other declaration. */
@@ -76169,6 +76213,9 @@ _RustTranspiler.PARAMS_SLOT_ARG = {
 // Base methods whose scalar parameters print typed (measured one by one: each frees more locals than it adds
 // conversions at its callers); a method listed here must have no venue override and no hand-written body.
 _RustTranspiler.RUST_BASE_SCALAR_PARAM_METHODS = ["convertExpireDate", "convertExpireDateToMarketIdDate", "convertMarketIdExpireDate"];
+// Trait-slot override groups typed together: method -> its first parameter, printed `&str` by the base, every
+// override, the `DerivedExchange` slot (rustDispatch.isSlotStr) and every forwarder.
+_RustTranspiler.RUST_OVERRIDE_GROUP_STR_PARAMS = { "sign": "path" };
 // ── typed currencies: the `currency` slot of base `safeCurrency` / `safeCurrencyCode` (and overrides) ──
 // It prints as a lent `Option<&crate::types::Currency>`; a caller passes `None`, a slot parameter as is, or
 // decodes a `Value` currency once (until its producer is typed).

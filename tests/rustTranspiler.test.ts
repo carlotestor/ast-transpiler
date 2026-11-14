@@ -11558,3 +11558,32 @@ describe('ral-oe: ecdsa r / s and row string fields of plain Value rows', () => 
         expect(out).not.toContain('let mut symbol: Value');
     });
 });
+
+describe('ral-qf: the sign override group types its path parameter together', () => {
+    const mk = (tag: string, venueHead: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), `astfx-qf-${tag}-`));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    sign (path: string, api: string[] = [ 'public' ], method: string = 'GET', params: Dict = {}): Dict {\n        return { 'url': path };\n    }\n    u (p: Dict): string { return ''; }\n    fetch2 (path: string, api: string[] = [ 'public' ], method: string = 'GET', params: Dict = {}): any {\n        const request = this.sign (path, api, method, params);\n        return request;\n    }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueHead + " {\n        let requestPath: string = path;\n        if (method === 'GET') {\n            const q: string = this.u (params);\n            requestPath = path + '?' + q;\n        }\n        const url: string = 'https://x/' + requestPath;\n        return { 'url': url };\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'virtualDispatch': { sign: [ 'path', 'api', 'method', 'params', 'headers', 'body' ] }, 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        return { base: t.transpileRustByPath(path.join(root, 'ts/src/base/Exchange.ts')).content, venue: t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content };
+    };
+    test('every declaration spells path: string: base, override and the trait slot take &str; a copy of path is a String', () => {
+        const { base, venue } = mk('ok', "    sign (path: string, api: string[] = [ 'public' ], method: string = 'GET', params: Dict = {}): Dict");
+        expect(base).toMatch(/pub fn sign\(&self, path: &str, optional_args: &\[Value\]\) -> Value \{/);
+        // the slot argument is the lent &str itself (no box)
+        expect(base).toContain('crate::exchange::DerivedExchange::sign(self, path, crate::runtime::get_arg(optional_args, 0, crate::Value::Null)');
+        expect(base).toContain('self.sign(path');
+        expect(venue).toMatch(/pub fn sign\(&self, path: &str, optional_args: &\[Value\]\) -> Value \{/);
+        expect(venue).toMatch(/let mut requestPath: String = /);
+        expect(rustDispatch.slotParams([ 'path', 'api' ])).toBe('path: &str, api: crate::Value');
+        expect(rustDispatch.slotArg('str', 'path', 0)).toBe('path');
+        expect(rustDispatch.slotValue('path', 0)).toBe('crate::Value::from(path)');
+    });
+    test('negative: one declaration spelling path differently keeps the whole group Value', () => {
+        const { base, venue } = mk('no', "    sign (path, api: string[] = [ 'public' ], method: string = 'GET', params: Dict = {}): Dict");
+        expect(base).toMatch(/pub fn sign\(&self, (mut )?path: Value, optional_args/);
+        expect(venue).toMatch(/pub fn sign\(&self, (mut )?path: Value, optional_args/);
+        expect(venue).toMatch(/let mut requestPath: Value = /);
+    });
+});
