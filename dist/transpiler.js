@@ -66763,10 +66763,13 @@ ${iden}}`;
     const helper = _RustTranspiler.RUST_BUILT_HELPER_RETURNS[method];
     if (helper !== void 0)
       return this.rustCalleeIsRuntimeBase(call) && !this.rustTestTierSource(call) ? helper : void 0;
+    const filtered = this.rustBaseFilterReturnKind(call, method);
+    if (filtered !== null)
+      return filtered;
     if (method === "deepExtend")
       return this.rustDeepExtendOfMaps(call) ? "dict" : void 0;
     if (method === "sortBy" || method === "sortBy2")
-      return !this.rustTestTierSource(call) && this.extraArrSource(call) ? "list" : void 0;
+      return !this.rustTestTierSource(call) && (this.extraArrSource(call) || this.rustSortOfTypedList(call)) ? "list" : void 0;
     if (/^(?:safe|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method))
       return void 0;
     if (this.rustTestTierSource(call) || this.rustTypedUnified.has(method))
@@ -66787,6 +66790,38 @@ ${iden}}`;
       this.rustFreshWide = wide;
     }
     return this.rustCallBuildsContainer(call, "list", 0) ? "list" : void 0;
+  }
+  /** The container a base list filter answers, `undefined` when it is unproven, `null` when `method` is none of them. */
+  rustBaseFilterReturnKind(call, method) {
+    if (!_RustTranspiler.RUST_BASE_FILTER_LISTS.has(method) && method !== "filterByArray")
+      return null;
+    if (this.rustTestTierSource(call) || !this.rustListPassthroughCallee(call, method))
+      return void 0;
+    if (method !== "filterByArray")
+      return "list";
+    const indexed = call.arguments.length > 3 ? this.unwrapParens(call.arguments[3]) : void 0;
+    if (indexed === void 0 || indexed.kind === SyntaxKind7.TrueKeyword)
+      return "dict";
+    return indexed.kind === SyntaxKind7.FalseKeyword ? "list" : void 0;
+  }
+  /** A base `sortBy*` over a local that already holds a list (`crate::value::List` / `Vec<Value>`): the runtime sorts
+   *  the items of a `Value::Arr` and answers a new `Value::Arr`, so the result is a list exactly. */
+  rustSortOfTypedList(call) {
+    const first = this.rustStripWrappers(call.arguments?.[0]);
+    if (first === void 0 || !isIdentifier3(first) || !this.rustListPassthroughCallee(call, String(call.expression.name.text)))
+      return false;
+    const d = this.rustDeclarationOfIdentifier(first);
+    if (d === void 0 || !isVariableDeclaration3(d) || d.name === first)
+      return false;
+    const init = this.rustSkipWrappers(d.initializer);
+    if ((d.parent?.flags & NodeFlags4.Const) !== 0 && init !== void 0 && (isArrayLiteralExpression4(init) || isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) === "list"))
+      return true;
+    return !this.rustBorrowedPending.has(d) && this.rustBorrowedLocalKind(d) === "list" && !this.rustOptContainerLocals.has(d);
+  }
+  /** `this.m (..)` resolves to the base declaration and no venue redeclares `m`. */
+  rustListPassthroughCallee(call, method) {
+    const member = this.rustScalarCallee(call);
+    return member !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(member.getSourceFile?.()?.fileName ?? "")) && !this.rustVenueReturnTypesHas(call, method);
   }
   // ── rustDeclaredEndpointBoxUse (ral-ld): a declared-endpoint optional container handed on whole ──
   // `{ 'info': response }` / `return response`: the box `x.map_or(Value::Null, Value::Dict|Arr)` gives back the
@@ -75083,6 +75118,17 @@ _RustTranspiler.RUST_BUILT_HELPER_RETURNS = {
   arrayConcat: "list",
   filterBy: "list"
 };
+// Generated base list filters that answer a fresh list on every path: a missing input is `[]`, every other one goes
+// through `toArray` (a ws cache is snapshotted) and then `arraySlice` / `filterByLimit` of that list, both of which
+// answer `Value::Arr`. `filterByArray` builds its result list, then hands it to `indexBy` unless `indexed` is false.
+// `filterByLimit` hands its input back unchanged, so it stays out. No venue redeclares any of them.
+_RustTranspiler.RUST_BASE_FILTER_LISTS = /* @__PURE__ */ new Set([
+  "filterBySinceLimit",
+  "filterByValueSinceLimit",
+  "filterBySymbolSinceLimit",
+  "filterByCurrencySinceLimit",
+  "filterBySymbolsSinceLimit"
+]);
 // Test-tier readers: the harness `ExchangeOps` readers take `impl KeyRead` like the base ones, so a test's
 // `Value` container argument is lent (`&x`) where the call cloned it.
 _RustTranspiler.RUST_TEST_KEYREAD_READERS = /^safe(?:Value|String|Bool|Dict|List|Number|Integer)$|^safeStringN$/;

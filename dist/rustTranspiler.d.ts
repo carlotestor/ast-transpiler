@@ -2145,6 +2145,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltReturnSourceKind(call: any): 'dict' | 'list' | undefined;
     private static readonly RUST_BUILT_BOX_RECEIVER_METHODS;
     private static readonly RUST_BUILT_HELPER_RETURNS;
+    private static readonly RUST_BASE_FILTER_LISTS;
+    /** The container a base list filter answers, `undefined` when it is unproven, `null` when `method` is none of them. */
+    rustBaseFilterReturnKind(call: any, method: string): 'dict' | 'list' | undefined | null;
+    /** A base `sortBy*` over a local that already holds a list (`crate::value::List` / `Vec<Value>`): the runtime sorts
+     *  the items of a `Value::Arr` and answers a new `Value::Arr`, so the result is a list exactly. */
+    rustSortOfTypedList(call: any): boolean;
+    /** `this.m (..)` resolves to the base declaration and no venue redeclares `m`. */
+    rustListPassthroughCallee(call: any, method: string): boolean;
     rustDeclaredEndpointBoxUse(n: any): boolean;
     /** `this.F` for a checker dict-shaped field (`fundingRates: Dictionary<FundingRate>`) the native insert writes
      *  (`printNativeDictInsert`: `rustFieldStaysDict`). The insert stores whatever handle it is given, so a built map
