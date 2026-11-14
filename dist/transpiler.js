@@ -60241,7 +60241,7 @@ ${binding(plan.indent)}` : ""), head: "" };
    *  operand into a let-bound typed temp on the line before (a move or a borrow, never a copy). Exact shapes only:
    *  `let x: T = self.f(..(Value::from(vec![..])));` (the list moves: `Vec<Value>`), `let x: T = (match R.get("k") {..` (the
    *  lookup borrows: `Option<&Value>`), `let x: T = (match (&(Value::from(self.parseToInt(..))), ..` (`Option<i64>`, moved into the box). */
-  rustSplitLongLine(line, nth) {
+  rustSplitLongLine(line, nth, after = "") {
     const head = /^(\s*)(?:let mut \w+: [^=]+ = |return |\w+\.push\()/.exec(line);
     if (head === null || !line.endsWith(";"))
       return void 0;
@@ -60293,6 +60293,9 @@ ${binding(plan.indent)}` : ""), head: "" };
 ` + parts.map((e) => `${ind}    ${e},`).join("\n") + `
 ${ind}];`;
     }
+    if (decl === "Vec<Value>") {
+      hoisted = hoisted.replace(/(\[|, |\n\s+)([A-Za-z_]\w*)(?=,|\])/g, (m, pre, id) => new RegExp(`\\b${id}\\b`).test(after) ? `${pre}${id}.clone()` : m);
+    }
     if (hoisted.split("\n").some((l) => l.length > 400) || rest.length > 400)
       return void 0;
     return hoisted + "\n" + rest;
@@ -60301,10 +60304,11 @@ ${ind}];`;
     if (!text.split("\n").some((l) => l.length > 400))
       return text;
     let nth = 0;
-    return text.split("\n").map((l) => {
+    const lines = text.split("\n");
+    return lines.map((l, k) => {
       if (l.length <= 400 || !names.some((n) => new RegExp(`\\b${n}\\b`).test(l)))
         return l;
-      return this.rustSplitLongLine(l, nth++) ?? l;
+      return this.rustSplitLongLine(l, nth++, lines.slice(k + 1).join("\n")) ?? l;
     }).join("\n");
   }
   /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */

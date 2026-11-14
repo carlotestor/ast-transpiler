@@ -8826,7 +8826,7 @@ export class RustTranspiler extends BaseTranspiler {
      *  operand into a let-bound typed temp on the line before (a move or a borrow, never a copy). Exact shapes only:
      *  `let x: T = self.f(..(Value::from(vec![..])));` (the list moves: `Vec<Value>`), `let x: T = (match R.get("k") {..` (the
      *  lookup borrows: `Option<&Value>`), `let x: T = (match (&(Value::from(self.parseToInt(..))), ..` (`Option<i64>`, moved into the box). */
-    rustSplitLongLine(line: string, nth: number): string | undefined {
+    rustSplitLongLine(line: string, nth: number, after = ''): string | undefined {
         const head = /^(\s*)(?:let mut \w+: [^=]+ = |return |\w+\.push\()/.exec(line);
         if (head === null || !line.endsWith(';')) return undefined;
         const isLet = head[0].trimStart().startsWith('let ');
@@ -8863,6 +8863,12 @@ export class RustTranspiler extends BaseTranspiler {
             }
             hoisted = `${ind}let ${tmp}: ${decl} = vec![\n` + parts.map((e) => `${ind}    ${e},`).join('\n') + `\n${ind}];`;
         }
+        if (decl === 'Vec<Value>') {
+            // a bare local element was a call argument before (ccxt clones it there unless it is its last use): keep that
+            // exact copy for a local read again later in the method, move it otherwise
+            hoisted = hoisted.replace(/(\[|, |\n\s+)([A-Za-z_]\w*)(?=,|\])/g, (m, pre, id) =>
+                (new RegExp(`\\b${id}\\b`).test(after) ? `${pre}${id}.clone()` : m));
+        }
         if (hoisted.split('\n').some((l) => l.length > 400) || rest.length > 400) return undefined;
         return hoisted + '\n' + rest;
     }
@@ -8870,9 +8876,10 @@ export class RustTranspiler extends BaseTranspiler {
     rustSplitLongLines(text: string, names: string[]): string {
         if (!text.split('\n').some((l) => l.length > 400)) return text;
         let nth = 0;
-        return text.split('\n').map((l) => {
+        const lines = text.split('\n');
+        return lines.map((l, k) => {
             if (l.length <= 400 || !names.some((n) => new RegExp(`\\b${n}\\b`).test(l))) return l;
-            return this.rustSplitLongLine(l, nth++) ?? l;
+            return this.rustSplitLongLine(l, nth++, lines.slice(k + 1).join('\n')) ?? l;
         }).join('\n');
     }
 

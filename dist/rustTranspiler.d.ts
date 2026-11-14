@@ -1226,7 +1226,7 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  operand into a let-bound typed temp on the line before (a move or a borrow, never a copy). Exact shapes only:
      *  `let x: T = self.f(..(Value::from(vec![..])));` (the list moves: `Vec<Value>`), `let x: T = (match R.get("k") {..` (the
      *  lookup borrows: `Option<&Value>`), `let x: T = (match (&(Value::from(self.parseToInt(..))), ..` (`Option<i64>`, moved into the box). */
-    rustSplitLongLine(line: string, nth: number): string | undefined;
+    rustSplitLongLine(line: string, nth: number, after?: string): string | undefined;
     rustSplitLongLines(text: string, names: string[]): string;
     /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
     rustScalarInsertKeyUse(n: any): boolean;
