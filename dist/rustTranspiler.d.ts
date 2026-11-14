@@ -2250,6 +2250,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustBorrowedKinds;
     rustBorrowedLocalKindUncached(declaration: any): 'dict' | 'list' | undefined;
     private rustOptContainerLocals;
+    private rustBorrowedIndexReads;
+    /** `x[k]`, read only (no write, call, property or nested element target), with a numeric literal key or a key local
+     *  that prints as a `Value` (a literal-initialised counter, or an untyped `let`/`const` of number / string type). */
+    rustBorrowedIndexReadUse(n: any): boolean;
     private rustExtendReuseLocals;
     /** A plain map literal (outside the test tier): every `x = ..` write must be `x = this.extend (x, y)`; the
      *  existing borrowed-dict use rules decide the rest. The `IndexMap` bearer rule claims its locals first. */

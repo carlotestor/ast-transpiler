@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -51666,6 +51666,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustBorrowedPending = /* @__PURE__ */ new WeakSet();
     this.rustBorrowedKinds = /* @__PURE__ */ new WeakMap();
     this.rustOptContainerLocals = /* @__PURE__ */ new WeakSet();
+    // ── ral-wh: index / variable-key reads on held Dict / List locals (rustBorrowedIndexReadUse) ──
+    // `KeyRead::read(&&x, &k)` is `get_map_value` / `get_list_value`, the arm `get_value` takes for that variant.
+    this.rustBorrowedIndexReads = /* @__PURE__ */ new WeakSet();
     // ── ral-oc: map literals rebuilt by `x = this.extend (x, y)` (rustExtendReuseLiteral / printExtendReuseWrite) ──
     this.rustExtendReuseLocals = /* @__PURE__ */ new WeakSet();
     /** sb: `y = self.omit(&x, ..).into_dict()` for a shared-map alias (`omit` of a proven map answers `Value::Map`: the Arc moves back). */
@@ -64678,7 +64681,12 @@ ${ind}let ${view}: &${map} = &${arc};
         return nested;
     }
     let acc = this.printNode(current, 0);
-    for (const { expression: receiver, argumentExpression: key } of chain) {
+    for (const link of chain) {
+      const { expression: receiver, argumentExpression: key } = link;
+      if (link === chain[0] && this.rustBorrowedIndexReads.has(link) && isIdentifier3(receiver)) {
+        acc = `crate::value::KeyRead::read(&&${super.printIdentifier(receiver)}, &${this.rustI64HelperKeyText(key, node) ?? this.printNode(key, 0)})`;
+        continue;
+      }
       const native = nativeAllowed ? this.printNativeContainerAccess(acc, receiver, key) : this.rustDictReadInNativeInsert(acc, receiver, key, node) ?? this.rustFieldLengthRead(acc, receiver, key, node);
       const staticKey = native === void 0 && !keepGetValue ? this.staticKeyLookup(key, receiver) : void 0;
       acc = native ?? (staticKey !== void 0 ? `crate::value::get_value_k(&${acc}, ${staticKey})` : `get_value(&${acc}, &${this.rustI64HelperKeyText(key, node) ?? this.printNode(key, 0)})`);
@@ -67202,6 +67210,7 @@ ${iden}}`;
     let endpointBoxes = 0;
     let plainReads = 0;
     const boxedElementUses = [];
+    const indexReadUses = [];
     const accept = (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
@@ -67260,6 +67269,8 @@ ${iden}}`;
       }
       if (keyReadOnly)
         return this.rustSafeValueKeyReaderUse(n) && ++plainReads > 0 && ++reads > 0;
+      if ((from === "dict" || from === "list") && !extendReuse && !sbAlias && init !== void 0 && isCallExpression6(init) && this.rustBorrowedIndexReadUse(n))
+        return indexReadUses.push(n) > 0 && ++reads > 0;
       if (this.rustBorrowedKeySetUse(n)) {
         keyReads++;
         keySets++;
@@ -67364,6 +67375,10 @@ ${iden}}`;
       return void 0;
     if (lengths > 0 && (from !== "list" || optional && !declaredListOnly))
       return void 0;
+    if (indexReadUses.length > 0 && (optional || from === "api" || indexReadUses.some((n) => !this.rustBoxLineOk(n.parent))))
+      return void 0;
+    for (const n of indexReadUses)
+      this.rustBorrowedIndexReads.add(n.parent);
     if (optional) {
       if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !this.rustOptContainerSourceOk(init, from))
         return void 0;
@@ -67374,6 +67389,40 @@ ${iden}}`;
     if (extendReuse)
       this.rustExtendReuseLocals.add(declaration);
     return from === "list" ? "list" : "dict";
+  }
+  /** `x[k]`, read only (no write, call, property or nested element target), with a numeric literal key or a key local
+   *  that prints as a `Value` (a literal-initialised counter, or an untyped `let`/`const` of number / string type). */
+  rustBorrowedIndexReadUse(n) {
+    const up = n.parent;
+    if (!isElementAccessExpression4(up) || up.expression !== n)
+      return false;
+    const use = up.parent;
+    if (use === void 0 || isDeleteExpression2(use) || (isPropertyAccessExpression3(use) || isCallExpression6(use) || isElementAccessExpression4(use)) && use.expression === up)
+      return false;
+    if (isBinaryExpression5(use) && use.left === up && rustIsAssignmentOperator(use.operatorToken.kind) || use.kind === SyntaxKind7.PrefixUnaryExpression || use.kind === SyntaxKind7.PostfixUnaryExpression)
+      return false;
+    if (isElementAccessExpression4(use) && use.argumentExpression === up)
+      return false;
+    if (isVariableDeclaration3(use) && use.initializer === up && this.primitiveKindOfType(this.typeOfNodeIfAny(use.name)) !== void 0)
+      return false;
+    if (this.isWriteBackBindRead(up) || !this.isNativeAccessPositionSafe(up))
+      return false;
+    const key = this.rustSkipWrappers(up.argumentExpression);
+    if (key === void 0 || isStringLiteralLikeNode4(key))
+      return false;
+    if (isNumericLiteral4(key))
+      return Number.isInteger(Number(key.text)) && Number(key.text) >= 0;
+    if (!isIdentifier3(key))
+      return false;
+    if (this.isRustValueIndexKey(key))
+      return true;
+    const keyDecl = this.rustDeclarationOfIdentifier(key);
+    if (keyDecl === void 0 || !isVariableDeclaration3(keyDecl) || !isIdentifier3(keyDecl.name) || keyDecl.name === key)
+      return false;
+    const prim = this.primitiveKindOfType(this.typeOfNodeIfAny(key));
+    if (prim !== "number" && prim !== "string")
+      return false;
+    return this.rustScalarLocalOf(key) === void 0 && this.rustNilLocalKind(keyDecl) === void 0 && !this.rustWsUrlLocal(keyDecl) && this.rustBorrowedLocalKind(keyDecl) === void 0 && !this.rustLentListLocal(keyDecl);
   }
   /** A plain map literal (outside the test tier): every `x = ..` write must be `x = this.extend (x, y)`; the
    *  existing borrowed-dict use rules decide the rest. The `IndexMap` bearer rule claims its locals first. */
