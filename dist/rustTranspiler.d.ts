@@ -770,6 +770,26 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** How a use of a scalar local prints: `test` (literal/null compare), `cond` (bool condition),
      *  `write` (same-kind assignment statement), `concat` (a `format!` operand) or `box` (a by-value `Value` slot). */
     rustScalarUseForm(n: any, kind: string): string | undefined;
+    /** sb: a Copy number local (`i64` / `f64` / `Option<..>`) initialised from a typed base call that the `Value` local only boxed
+     *  (`Value::from(self.parse_to_int(..))`) keeps the typed value and boxes it at any plain read no other rule prints natively:
+     *  `Value::from(x)` is the Int / Float / Null the `Value` local held (the same conversion the initialiser did), and a Copy
+     *  value boxes with no clone. Writes, nested-write operands, element keys and receivers keep their own rules. */
+    rustSbCopyBoxUse(n: any, kind: string): boolean;
+    /** sb: `const x = this.m(..)` where `m` is a typed base method / runtime call (no `safe*` / `handle*` reader). */
+    rustSbTypedCallInit(declaration: any): boolean;
+    private rustSbPartnerMemo;
+    /** sb: typing this local could flip another local's decision (it meets another identifier in a compare / arithmetic /
+     *  `Math.*` / ternary, or initialises / is written into another local): those partners belong to other groups. */
+    rustSbHasPartner(declaration: any): boolean;
+    private rustSbJoinMemo;
+    /** sb: `xs.join(sep)` as a local's initializer: every printed join form is `Value::Str(<String>.into())` (a non-list
+     *  receiver joins to `""`, never `Null`), so the local is that `String`. Only at a declaration initializer. */
+    rustSbJoinShape(node: any): boolean;
+    /** The `String` inside the printed join, printed at emission only (a print inside a decision perturbs other locals);
+     *  any other printed form reads its `Str` back (`join` always answers a `Str`). */
+    rustSbJoinText(node: any): string;
+    rustAssignmentOpKind(op: any): boolean;
+    rustScalarUseFormOwn(n: any, kind: string): string | undefined;
     private static readonly RUST_WS_CLIENT_VALUE_METHODS;
     rustWsClientCallArg(call: any, kind: string): boolean;
     rustWsClientOnlyUse(declaration: any): boolean;
