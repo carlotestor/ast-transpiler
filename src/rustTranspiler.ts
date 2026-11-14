@@ -4831,7 +4831,21 @@ export class RustTranspiler extends BaseTranspiler {
     /** `this.milliseconds().toString()`: the decimal text of the `i64`, as `to_string_val` prints an `Int`. */
     rustClockString(node): boolean {
         if (!isCallExpression(node) || node.arguments.length !== 0 || !isPropertyAccessExpression(node.expression) || node.expression.name.text !== 'toString') return false;
-        return this.rustClockCall(this.unwrapParens(node.expression.expression));
+        const clock: any = this.unwrapParens(node.expression.expression);
+        return this.rustClockCall(clock) || this.rustNonceCall(clock);
+    }
+
+    /** `this.nonce()` where every declaration of the name (base and each override) declares `int`: the trait slot
+     *  answers a `Value` holding that `Int`, and `format!("{}", ..)` of it is the decimal text `to_string_val` gives. */
+    rustNonceCall(node): boolean {
+        if (!isCallExpression(node) || node.arguments.length !== 0 || !isPropertyAccessExpression(node.expression) || node.expression.expression.kind !== SyntaxKind.ThisKeyword
+            || node.expression.name.text !== 'nonce' || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== 'number') return false;
+        const declaration: any = this.rustScalarCallee(node);
+        const file = String(declaration?.getSourceFile?.()?.fileName ?? '');
+        const at = file.search(/[/\\]ts[/\\]src[/\\]/);
+        if (declaration === undefined || at < 0 || String(declaration.type?.getText?.() ?? '').trim() !== 'int') return false;
+        const types = this.rustVenueReturnTypes(file.slice(0, at) + '/ts/src').get('nonce');
+        return types === undefined || [ ...types ].every((t) => t.trim() === 'int');
     }
 
     /** A base `sum(a, b, ..)` call shape; whether it is native is decided by rustArithCallKind. */
@@ -6162,6 +6176,14 @@ export class RustTranspiler extends BaseTranspiler {
         return kind === 'bool' ? super.printIdentifier(inner) : (kind === 'obool' ? `(${super.printIdentifier(inner)} == Some(true))` : undefined);
     }
 
+    /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl Into<Value>, ..)`
+     *  takes an optional string lent as `&x` (`From<&Option<String>>`: `None` is Null, `Some(s)` a `Str`, as the box gave). */
+    rustInArrayNeedle(node): boolean {
+        const call: any = node?.parent;
+        return !this.rustTestTierSource(node) && isCallExpression(call) && call.arguments[0] === node && isPropertyAccessExpression(call.expression)
+            && String(call.expression.name.text) === 'inArray' && this.rustBaseTypedReturnKind(call) === 'bool';
+    }
+
     /** Identifier hook: a `box` use converts with the standard `From` impls (scalars are `Copy`). */
     printRustScalarLocalRead(node): string | undefined {
         const local = this.rustScalarLocalOf(node);
@@ -6180,6 +6202,7 @@ export class RustTranspiler extends BaseTranspiler {
         const moved = last ? name : `${name}.clone()`;
         // a string boxed more than once is lent before its last box (`From<&str>`: the one copy the `Value` clone made)
         const lent = !last && (this.rustStrLentLocals.has(local.declaration) || local.kind === 'ostr' && this.rustNilStrLentLocals.has(local.declaration));
+        if (local.kind === 'ostr' && this.rustInArrayNeedle(node)) return `&${name}`;
         if (local.kind === 'ostr') return lent ? `Value::from(${name}.as_deref())` : `${moved}.map(Value::from).unwrap_or(Value::Null)`;
         if (local.kind === 'str') return lent ? `Value::from(${name}.as_str())` : `Value::from(${moved})`;
         if (local.kind === 'obool') return `${name}.map_or(Value::Null, Value::Bool)`;
@@ -6243,6 +6266,7 @@ export class RustTranspiler extends BaseTranspiler {
         const text = this.printNode(node, 0).trim();
         if (this.rustClockCall(node)) return kind === 'int' || kind === 'oint' ? wrap(`${text}.as_i64().unwrap_or_default()`) : undefined;
         const clock: any = base === 'str' && this.rustClockString(node) && isPropertyAccessExpression(node.expression) ? node.expression.expression : undefined;
+        if (clock !== undefined && this.rustNonceCall(this.unwrapParens(clock))) return wrap(`format!("{}", ${this.printNode(this.unwrapParens(clock), 0).trim()})`);
         if (clock !== undefined) return wrap(`format!("{}", ${this.rustScalarNativeText('int', clock)})`);
         const fallback: any = node.arguments[node.arguments.length - 1];
         const defaulted = this.rustScalarValueKind(node, true) === base;
@@ -7093,9 +7117,22 @@ export class RustTranspiler extends BaseTranspiler {
             return print();
         };
         for (const n of held) this.rustScalarVetoed.add(n);
-        const boxed = redo();
-        if (long(boxed).length < lines.length) return boxed;
-        for (const n of held) this.rustScalarVetoed.delete(n);
+        let boxed = redo();
+        if (long(boxed).length >= lines.length) {
+            for (const n of held) this.rustScalarVetoed.delete(n);
+            return redo();
+        }
+        // a held local whose own typing keeps every line under the limit is released again, one at a time
+        if (held.length < 2) return boxed;
+        let best = long(boxed).length;
+        for (const n of held) {
+            this.rustScalarVetoed.delete(n);
+            const trial = redo();
+            if (long(trial).length <= best) {
+                boxed = trial;
+                best = long(trial).length;
+            } else this.rustScalarVetoed.add(n);
+        }
         return redo();
     }
 

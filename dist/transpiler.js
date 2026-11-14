@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -55954,7 +55954,21 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustClockString(node) {
     if (!isCallExpression6(node) || node.arguments.length !== 0 || !isPropertyAccessExpression3(node.expression) || node.expression.name.text !== "toString")
       return false;
-    return this.rustClockCall(this.unwrapParens(node.expression.expression));
+    const clock = this.unwrapParens(node.expression.expression);
+    return this.rustClockCall(clock) || this.rustNonceCall(clock);
+  }
+  /** `this.nonce()` where every declaration of the name (base and each override) declares `int`: the trait slot
+   *  answers a `Value` holding that `Int`, and `format!("{}", ..)` of it is the decimal text `to_string_val` gives. */
+  rustNonceCall(node) {
+    if (!isCallExpression6(node) || node.arguments.length !== 0 || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword || node.expression.name.text !== "nonce" || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "number")
+      return false;
+    const declaration = this.rustScalarCallee(node);
+    const file = String(declaration?.getSourceFile?.()?.fileName ?? "");
+    const at = file.search(/[/\\]ts[/\\]src[/\\]/);
+    if (declaration === void 0 || at < 0 || String(declaration.type?.getText?.() ?? "").trim() !== "int")
+      return false;
+    const types = this.rustVenueReturnTypes(file.slice(0, at) + "/ts/src").get("nonce");
+    return types === void 0 || [...types].every((t) => t.trim() === "int");
   }
   /** A base `sum(a, b, ..)` call shape; whether it is native is decided by rustArithCallKind. */
   rustSumShape(node) {
@@ -57350,6 +57364,12 @@ ${binding(plan.indent)}` : ""), head: "" };
     const kind = this.rustScalarLocalOf(inner)?.kind;
     return kind === "bool" ? super.printIdentifier(inner) : kind === "obool" ? `(${super.printIdentifier(inner)} == Some(true))` : void 0;
   }
+  /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl Into<Value>, ..)`
+   *  takes an optional string lent as `&x` (`From<&Option<String>>`: `None` is Null, `Some(s)` a `Str`, as the box gave). */
+  rustInArrayNeedle(node) {
+    const call = node?.parent;
+    return !this.rustTestTierSource(node) && isCallExpression6(call) && call.arguments[0] === node && isPropertyAccessExpression3(call.expression) && String(call.expression.name.text) === "inArray" && this.rustBaseTypedReturnKind(call) === "bool";
+  }
   /** Identifier hook: a `box` use converts with the standard `From` impls (scalars are `Copy`). */
   printRustScalarLocalRead(node) {
     const local = this.rustScalarLocalOf(node);
@@ -57372,6 +57392,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const last = isReturnStatement4(node.parent) || this.rustWsClientLastUse(node, local.declaration) || this.rustLocalLastUse(node, local.declaration) || form === "box" && this.rustOwnedHandOff(node) && this.rustOwnedLastUse(node, local.declaration);
     const moved = last ? name : `${name}.clone()`;
     const lent = !last && (this.rustStrLentLocals.has(local.declaration) || local.kind === "ostr" && this.rustNilStrLentLocals.has(local.declaration));
+    if (local.kind === "ostr" && this.rustInArrayNeedle(node))
+      return `&${name}`;
     if (local.kind === "ostr")
       return lent ? `Value::from(${name}.as_deref())` : `${moved}.map(Value::from).unwrap_or(Value::Null)`;
     if (local.kind === "str")
@@ -57464,6 +57486,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (this.rustClockCall(node))
       return kind === "int" || kind === "oint" ? wrap(`${text}.as_i64().unwrap_or_default()`) : void 0;
     const clock = base === "str" && this.rustClockString(node) && isPropertyAccessExpression3(node.expression) ? node.expression.expression : void 0;
+    if (clock !== void 0 && this.rustNonceCall(this.unwrapParens(clock)))
+      return wrap(`format!("{}", ${this.printNode(this.unwrapParens(clock), 0).trim()})`);
     if (clock !== void 0)
       return wrap(`format!("{}", ${this.rustScalarNativeText("int", clock)})`);
     const fallback = node.arguments[node.arguments.length - 1];
@@ -58427,11 +58451,24 @@ ${binding(plan.indent)}` : ""), head: "" };
     };
     for (const n of held)
       this.rustScalarVetoed.add(n);
-    const boxed = redo();
-    if (long(boxed).length < lines.length)
+    let boxed = redo();
+    if (long(boxed).length >= lines.length) {
+      for (const n of held)
+        this.rustScalarVetoed.delete(n);
+      return redo();
+    }
+    if (held.length < 2)
       return boxed;
-    for (const n of held)
+    let best = long(boxed).length;
+    for (const n of held) {
       this.rustScalarVetoed.delete(n);
+      const trial = redo();
+      if (long(trial).length <= best) {
+        boxed = trial;
+        best = long(trial).length;
+      } else
+        this.rustScalarVetoed.add(n);
+    }
     return redo();
   }
   /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
