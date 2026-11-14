@@ -12632,3 +12632,28 @@ describe('ue: an optional string key written into a safeDict of a this. field', 
         expect(out).toContain('insert(key.as_deref().unwrap_or("null").to_string(), Value::Bool(true))');
     });
 });
+
+describe('ve: a sync ws method url parameter filled from this.urls prints &str', () => {
+    // every caller hands a `this.urls[..]` read: the parameter prints `&str`, the url local stays `Option<String>`
+    // and the by-name arm decodes the slot once
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-ve-url-'));
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    urls: any;\n    options: any;\n    client (url: Str): any { return {}; }\n    safeInteger (o: any, k: any, d: any = undefined): any { return o[k]; }\n    async watch (url: string, messageHash: string, message: any = undefined, subscribeHash: any = undefined, subscription: any = undefined): Promise<any> { return undefined; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        return t.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+    };
+    const body = "    requestId (url: string): number {\n        const prev = this.safeInteger (this.options, url, 0);\n        return prev;\n    }\n    async watchX () {\n        const url = this.urls['api']['ws'];\n        const id = this.requestId (url);\n        return await this.watch (url, 'x' + id);\n    }";
+    test('the url parameter is &str and the url local an Option<String> lent to it', () => {
+        const out = mk(body);
+        expect(out).toMatch(/fn requestId\(&self, url: &str\)/);
+        expect(out).toContain('let mut url: Option<String> = ');
+        expect(out).toContain('self.requestId(url.as_deref().unwrap_or_default())');
+    });
+    test('a caller passing anything else keeps the Value parameter', () => {
+        const out = mk(body + "\n    async watchY (u: string) {\n        return this.requestId (u);\n    }");
+        expect(out).toMatch(/fn requestId\(&self, url: Value\)/);
+    });
+});

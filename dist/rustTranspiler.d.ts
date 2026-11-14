@@ -2494,6 +2494,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustWsUrlLocals;
     rustWsUrlLocal(declaration: any): boolean;
     rustWsUrlLocalUncached(declaration: any): boolean;
+    /** ral-ve: the url local lands in a per-venue string slot (`&str` / `Option<&str>`). */
+    rustWsUrlVenueSlot(n: any): boolean;
     /** `this.urls[k1][k2]..` (through parens / `as` casts) with literal keys: a url string, or Null when absent. */
     rustWsUrlRead(init: any): boolean;
     rustWsUrlDeclTooLong(declaration: any): boolean;
@@ -3275,6 +3277,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVenueScalarArgExact(arg: any, rustType: string): boolean;
     /** `this.<m>(..)` / `super.<m>(..)` calls in the method's own file that resolve to it. */
     rustVenueStrCallSites(method: any): any[];
+    /** ral-ve: an identifier bound once (`const`) to a `this.urls[..]` literal-key read: a url string or Null. */
+    rustWsUrlReadIdent(arg: any): boolean;
+    /** ral-ve: a required `string` parameter of a per-venue ws method that every caller in its file fills with a
+     *  `this.urls[..]` read: the url of a ws client (requestId / subscriptionExistsForHash / waitForPendingUnsubscribe). */
+    rustVenueUrlParam(method: any, param: any): boolean;
     /** Scalar-local kind of a per-venue string parameter read through its `Value` binding. */
     rustVenueStrParamKind(param: any): string | undefined;
     /** The per-venue string type of the callee parameter at `at`. */

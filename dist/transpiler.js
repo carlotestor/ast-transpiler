@@ -51419,6 +51419,10 @@ var rustDispatch = {
         return rustDispatch.arg(kind, i);
       case "optcurrency":
         return rustDispatch.arg(kind, i);
+      case "str":
+        return rustDispatch.arg(kind, i);
+      case "optstr":
+        return rustDispatch.arg(kind, i);
       default:
         return void 0;
     }
@@ -69189,6 +69193,7 @@ ${iden}}`;
     let known = this.rustWsUrlLocals.get(declaration);
     if (known === void 0) {
       known = false;
+      this.rustWsUrlLocals.set(declaration, false);
       try {
         known = this.rustWsUrlLocalUncached(declaration);
       } catch (e) {
@@ -69210,12 +69215,21 @@ ${iden}}`;
     let uses = 0;
     const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       const call = n.parent;
-      if (this.rustEnclosingFunction(n) !== scope || !isCallExpression6(call) || call.expression === n || call.arguments[0] !== n || !this.rustWsWatchSlot(call, 0))
+      if (this.rustEnclosingFunction(n) !== scope || !isCallExpression6(call) || call.expression === n)
+        return false;
+      if (!(call.arguments[0] === n && this.rustWsWatchSlot(call, 0)) && !this.rustWsUrlVenueSlot(n))
         return false;
       uses++;
       return true;
     });
     return ok && uses > 0 && !this.rustWsUrlDeclTooLong(declaration);
+  }
+  /** ral-ve: the url local lands in a per-venue string slot (`&str` / `Option<&str>`). */
+  rustWsUrlVenueSlot(n) {
+    const call = n.parent;
+    const at = Array.from(call.arguments).indexOf(n);
+    const type = at < 0 ? void 0 : this.rustVenueStrSlot(this.rustCalleeParams(call), at);
+    return type === "&str" || type === "Option<&str>";
   }
   /** `this.urls[k1][k2]..` (through parens / `as` casts) with literal keys: a url string, or Null when absent. */
   rustWsUrlRead(init) {
@@ -75346,7 +75360,8 @@ ${this.getIden(identation)}}`;
       return void 0;
     if ((method.modifiers ?? []).some((m) => m.kind === SyntaxKind7.StaticKeyword))
       return void 0;
-    if (!group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method))
+    const urlOnly = this.rustVenueUrlParam(method, param);
+    if (!group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly)
       return void 0;
     const hidden = this.getMethodOverride(method);
     if (!group && hidden !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile().fileName)))
@@ -75372,7 +75387,7 @@ ${this.getIden(identation)}}`;
       if (optional && args[at] === void 0)
         continue;
       const argType = args[at] === void 0 ? void 0 : this.typeOfNodeIfAny(args[at]);
-      if (argType === void 0 || (argType.flags & (TypeFlags6.Any | TypeFlags6.Unknown)) !== 0)
+      if ((argType === void 0 || (argType.flags & (TypeFlags6.Any | TypeFlags6.Unknown)) !== 0) && !this.rustWsUrlReadIdent(args[at]))
         return void 0;
       if (!this.rustVenueStrSimpleArg(args[at]) && !(rustType === "bool" && this.rustVenueNegatedArg(args[at])))
         return void 0;
@@ -75518,6 +75533,26 @@ ${this.getIden(identation)}}`;
       return decl === method;
     });
   }
+  /** ral-ve: an identifier bound once (`const`) to a `this.urls[..]` literal-key read: a url string or Null. */
+  rustWsUrlReadIdent(arg) {
+    const inner = arg === void 0 ? void 0 : this.unwrapParens(arg);
+    if (inner === void 0 || !isIdentifier3(inner))
+      return false;
+    const declaration = this.rustDeclaredNode(inner);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.name === inner || !isIdentifier3(declaration.name))
+      return false;
+    const list = declaration.parent;
+    return list?.kind === SyntaxKind7.VariableDeclarationList && list.declarations.length === 1 && (list.flags & NodeFlags4.Const) !== 0 && this.rustWsUrlRead(declaration.initializer);
+  }
+  /** ral-ve: a required `string` parameter of a per-venue ws method that every caller in its file fills with a
+   *  `this.urls[..]` read: the url of a ws client (requestId / subscriptionExistsForHash / waitForPendingUnsubscribe). */
+  rustVenueUrlParam(method, param) {
+    if (param.initializer !== void 0 || param.questionToken !== void 0 || param.type?.kind !== SyntaxKind7.StringKeyword)
+      return false;
+    const at = Array.from(method.parameters).indexOf(param);
+    const calls = this.rustVenueStrCallSites(method);
+    return calls.length > 0 && calls.every((call) => this.rustWsUrlReadIdent(call.arguments[at]));
+  }
   /** Scalar-local kind of a per-venue string parameter read through its `Value` binding. */
   rustVenueStrParamKind(param) {
     const type = this.rustVenueStrParamType(param);
@@ -75602,6 +75637,8 @@ ${this.getIden(identation)}}`;
     const inner = this.unwrapParens(arg);
     if (type !== "&str" && type !== "Option<&str>")
       return this.rustVenueScalarArgText(arg, type, identation);
+    if (isIdentifier3(inner) && this.rustWsUrlLocalOf(inner))
+      return type === "&str" ? `${super.printIdentifier(inner)}.as_deref().unwrap_or_default()` : `${super.printIdentifier(inner)}.as_deref()`;
     const slot = isIdentifier3(inner) ? this.rustDeclaredNode(inner) : void 0;
     const optional = isIdentifier3(inner) ? this.rustScalarIdentifierKind(inner) === "ostr" || slot?.kind === SyntaxKind7.BindingElement && slot.name !== inner && this.rustTupleSlotKind(slot) === "str" : isCallExpression6(inner) && this.rustNativeStrCalleeKind(inner) === "str";
     if (optional) {

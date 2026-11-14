@@ -264,6 +264,9 @@ export const rustDispatch = {
         case 'value': return `args.get(${i}).cloned().unwrap_or(crate::Value::Null)`;
         case 'optmarket': return rustDispatch.arg(kind, i);
         case 'optcurrency': return rustDispatch.arg(kind, i);
+        // ral-ve: a venue url slot (`&str` / `Option<&str>`) is decoded once inside the arm
+        case 'str': return rustDispatch.arg(kind, i);
+        case 'optstr': return rustDispatch.arg(kind, i);
         default: return undefined;
         }
     },
@@ -18097,6 +18100,7 @@ export class RustTranspiler extends BaseTranspiler {
         let known = this.rustWsUrlLocals.get(declaration);
         if (known === undefined) {
             known = false;
+            this.rustWsUrlLocals.set(declaration, false); // re-entrancy guard
             try {
                 known = this.rustWsUrlLocalUncached(declaration);
             } catch (e) {
@@ -18116,11 +18120,21 @@ export class RustTranspiler extends BaseTranspiler {
         let uses = 0;
         const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
             const call: any = n.parent;
-            if (this.rustEnclosingFunction(n) !== scope || !isCallExpression(call) || call.expression === n || call.arguments[0] !== n || !this.rustWsWatchSlot(call, 0)) return false;
+            if (this.rustEnclosingFunction(n) !== scope || !isCallExpression(call) || call.expression === n) return false;
+            // ral-ve: a per-venue `url: string` slot lends the text as the watch url slot does
+            if (!(call.arguments[0] === n && this.rustWsWatchSlot(call, 0)) && !this.rustWsUrlVenueSlot(n)) return false;
             uses++;
             return true;
         });
         return ok && uses > 0 && !this.rustWsUrlDeclTooLong(declaration);
+    }
+
+    /** ral-ve: the url local lands in a per-venue string slot (`&str` / `Option<&str>`). */
+    rustWsUrlVenueSlot(n: any): boolean {
+        const call: any = n.parent;
+        const at = Array.from(call.arguments).indexOf(n);
+        const type = at < 0 ? undefined : this.rustVenueStrSlot(this.rustCalleeParams(call), at);
+        return type === '&str' || type === 'Option<&str>';
     }
 
     /** `this.urls[k1][k2]..` (through parens / `as` casts) with literal keys: a url string, or Null when absent. */
@@ -23997,7 +24011,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (!group && file.search(/(?:^|\/)ts\/src\/(?:pro\/|prediction\/)?[^/]+\.ts$/) < 0 && !this.rustBaseOnlyMethod(method, file)) return undefined;
         if ((method.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.StaticKeyword)) return undefined;
         // a ws core's sync by-name handler table takes only `Value` / `bool` slots
-        if (!group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method)) return undefined;
+        // ral-ve: except a `url: string` parameter every caller fills with a `this.urls[..]` read (the arm decodes it once)
+        const urlOnly = this.rustVenueUrlParam(method, param);
+        if (!group && /(?:^|\/)ts\/src\/pro\//.test(file) && !this.isAsyncFunction(method) && !urlOnly) return undefined;
         const hidden: any = this.getMethodOverride(method);
         if (!group && hidden !== undefined && RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile().fileName))) return undefined;
         if (this.rustTypedSignature(method) !== undefined || this.rustMethodReferencedAsValue(method)) return undefined;
@@ -24016,7 +24032,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (args.some((a: any) => a.kind === SyntaxKind.SpreadElement)) return undefined;
             if (optional && args[at] === undefined) continue;
             const argType: any = args[at] === undefined ? undefined : this.typeOfNodeIfAny(args[at]);
-            if (argType === undefined || (argType.flags & (TypeFlags.Any | TypeFlags.Unknown)) !== 0) return undefined;
+            if ((argType === undefined || (argType.flags & (TypeFlags.Any | TypeFlags.Unknown)) !== 0) && !this.rustWsUrlReadIdent(args[at])) return undefined;
             if (!this.rustVenueStrSimpleArg(args[at]) && !(rustType === 'bool' && this.rustVenueNegatedArg(args[at]))) return undefined;
             if (!this.rustVenueScalarArgExact(args[at], rustType)) return undefined;
             // an arithmetic operand in the same call prints a long numeric match: keep its line short
@@ -24153,6 +24169,25 @@ export class RustTranspiler extends BaseTranspiler {
         });
     }
 
+    /** ral-ve: an identifier bound once (`const`) to a `this.urls[..]` literal-key read: a url string or Null. */
+    rustWsUrlReadIdent(arg: any): boolean {
+        const inner: any = arg === undefined ? undefined : this.unwrapParens(arg);
+        if (inner === undefined || !isIdentifier(inner)) return false;
+        const declaration: any = this.rustDeclaredNode(inner);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.name === inner || !isIdentifier(declaration.name)) return false;
+        const list: any = declaration.parent;
+        return list?.kind === SyntaxKind.VariableDeclarationList && list.declarations.length === 1 && (list.flags & NodeFlags.Const) !== 0 && this.rustWsUrlRead(declaration.initializer);
+    }
+
+    /** ral-ve: a required `string` parameter of a per-venue ws method that every caller in its file fills with a
+     *  `this.urls[..]` read: the url of a ws client (requestId / subscriptionExistsForHash / waitForPendingUnsubscribe). */
+    rustVenueUrlParam(method: any, param: any): boolean {
+        if (param.initializer !== undefined || param.questionToken !== undefined || param.type?.kind !== SyntaxKind.StringKeyword) return false;
+        const at = Array.from(method.parameters).indexOf(param);
+        const calls = this.rustVenueStrCallSites(method);
+        return calls.length > 0 && calls.every((call: any) => this.rustWsUrlReadIdent(call.arguments[at]));
+    }
+
     /** Scalar-local kind of a per-venue string parameter read through its `Value` binding. */
     rustVenueStrParamKind(param: any): string | undefined {
         const type = this.rustVenueStrParamType(param);
@@ -24230,6 +24265,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (local !== undefined) return local;
         const inner: any = this.unwrapParens(arg);
         if (type !== '&str' && type !== 'Option<&str>') return this.rustVenueScalarArgText(arg, type, identation);
+        // ral-ve: an `Option<String>` ws url local lends its text
+        if (isIdentifier(inner) && this.rustWsUrlLocalOf(inner)) return type === '&str' ? `${super.printIdentifier(inner)}.as_deref().unwrap_or_default()` : `${super.printIdentifier(inner)}.as_deref()`;
         // an `Option<String>` string local, or a call returning one, lends its text
         const slot: any = isIdentifier(inner) ? this.rustDeclaredNode(inner) : undefined;
         const optional = isIdentifier(inner) ? this.rustScalarIdentifierKind(inner) === 'ostr' || (slot?.kind === SyntaxKind.BindingElement && slot.name !== inner && this.rustTupleSlotKind(slot) === 'str')
