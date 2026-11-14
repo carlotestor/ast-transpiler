@@ -56654,7 +56654,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       while (isParenthesizedExpression3(top.parent))
         top = top.parent;
       const parent = top.parent;
-      if (isBinaryExpression5(parent) && parent.right === top && parent.operatorToken.kind === SyntaxKind7.EqualsToken || isVariableDeclaration3(parent) && parent.initializer === top || isConditionalExpression4(parent))
+      if (isBinaryExpression5(parent) && parent.right === top && parent.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(this.unwrapParens(parent.left)) || isVariableDeclaration3(parent) && parent.initializer === top || isConditionalExpression4(parent))
         handed = true;
       return true;
     });

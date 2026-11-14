@@ -56653,7 +56653,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       while (_is.isParenthesizedExpression.call(void 0, top.parent))
         top = top.parent;
       const parent = top.parent;
-      if (_is.isBinaryExpression.call(void 0, parent) && parent.right === top && parent.operatorToken.kind === _ast.SyntaxKind.EqualsToken || _is.isVariableDeclaration.call(void 0, parent) && parent.initializer === top || _is.isConditionalExpression.call(void 0, parent))
+      if (_is.isBinaryExpression.call(void 0, parent) && parent.right === top && parent.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _is.isIdentifier.call(void 0, this.unwrapParens(parent.left)) || _is.isVariableDeclaration.call(void 0, parent) && parent.initializer === top || _is.isConditionalExpression.call(void 0, parent))
         handed = true;
       return true;
     });
