@@ -56521,11 +56521,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         top = top.parent;
       const target = isVariableDeclaration3(top.parent) ? top.parent : isBinaryExpression5(top.parent) && isIdentifier3(top.parent.left) ? this.rustDeclaredNode(top.parent.left) : void 0;
       const moved = top === n && this.rustLocalLastUse(n, declaration) && target !== void 0 && isVariableDeclaration3(target) && target.initializer !== void 0 && this.literalKindOfNode(target.initializer) !== "null";
-      if (isBinaryExpression5(top.parent) && top.parent.right === top && top.parent.operatorToken.kind === SyntaxKind7.EqualsToken && !isElementAccessExpression4(this.unwrapParens(top.parent.left)) && !isPropertyAccessExpression3(this.unwrapParens(top.parent.left)) && !moved)
+      const solved = !moved && top === n && target !== void 0 && isVariableDeclaration3(target) && target !== declaration && target.initializer !== void 0 && this.literalKindOfNode(target.initializer) !== "null" && this.rustScalarInitShape(target.initializer) && this.rustEnclosingFunction(target) === this.rustEnclosingFunction(declaration);
+      if (isBinaryExpression5(top.parent) && top.parent.right === top && top.parent.operatorToken.kind === SyntaxKind7.EqualsToken && !isElementAccessExpression4(this.unwrapParens(top.parent.left)) && !isPropertyAccessExpression3(this.unwrapParens(top.parent.left)) && !moved && !solved)
         handed = true;
-      if (isVariableDeclaration3(top.parent) && top.parent.initializer === top && !moved)
+      if (isVariableDeclaration3(top.parent) && top.parent.initializer === top && !moved && !solved)
         handed = true;
-      if (isReturnStatement4(top.parent) && !(top === n && this.rustMethodTypedReturnKind(findAncestor(top.parent.parent, isFunctionLike)) !== void 0))
+      if (isReturnStatement4(top.parent) && !(top === n && (this.rustMethodTypedReturnKind(findAncestor(top.parent.parent, isFunctionLike)) !== void 0 || this.rustVenueKeptStrArm(findAncestor(top.parent.parent, isFunctionLike)))))
         handed = true;
       return true;
     });
@@ -58772,8 +58773,10 @@ ${binding(plan.indent)}` : ""), head: "" };
     const lo = lk.startsWith("o");
     const ro = rk.startsWith("o");
     if (lo && ro) {
-      if (equality || base(lk) !== base(rk) || !isIdentifier3(left) || !isIdentifier3(right))
+      if (equality || base(lk) !== base(rk))
         return void 0;
+      if (!isIdentifier3(left) || !isIdentifier3(right))
+        return `matches!((${text(lk, left)}, ${text(rk, right)}), (Some(__l), Some(__r)) if (__l as f64) ${sign} (__r as f64))`;
       if (/ts[\\/]src[\\/]base[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? "")) && (this.rustScalarBareLastWrite(left) || this.rustScalarBareLastWrite(right)))
         return void 0;
       return `(${text(lk, left)}.is_some() && ${text(rk, right)}.is_some() && ${text(lk, left)} ${sign} ${text(rk, right)})`;
@@ -59332,7 +59335,16 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     const base = access.expression;
     const key = String(n.text);
-    if (new RegExp(`\\b${key}\\b`).test(String(write.right.getText())))
+    let rewrites = false;
+    const visit = (m) => {
+      if (rewrites)
+        return;
+      if (isIdentifier3(m) && String(m.text) === key && (isBinaryExpression5(m.parent) && m.parent.left === m && m.parent.operatorToken.kind >= SyntaxKind7.FirstAssignment && m.parent.operatorToken.kind <= SyntaxKind7.LastAssignment || (isPrefixUnaryExpression3(m.parent) || m.parent?.kind === SyntaxKind7.PostfixUnaryExpression) && (m.parent.operator === SyntaxKind7.PlusPlusToken || m.parent.operator === SyntaxKind7.MinusMinusToken)))
+        rewrites = true;
+      m.forEachChild?.(visit);
+    };
+    visit(write.right);
+    if (rewrites)
       return false;
     return (this.rustBearerDictInsert(base, n, key, "x") ?? this.rustMapParamDictInsert(base, n, key, "x") ?? this.printNativeDictInsert(base, n, key, "x") ?? this.rustNativeDictInsert(base, n, key, "x")) !== void 0;
   }
@@ -76317,7 +76329,7 @@ _RustTranspiler.RUST_PRO_TIER_FILE = /ts[\\/]src[\\/]pro[\\/]/;
 _RustTranspiler.RUST_BASE_NATIVE_STR_METHODS = /* @__PURE__ */ new Set(["safeCurrencyCode"]);
 // Venue methods (class -> method names) whose `: Str` return was spelled after their by-name arm existed: the arm
 // stays (it boxes the `Option<String>` once), so the dispatch-arm name set is unchanged.
-_RustTranspiler.RUST_VENUE_KEPT_STR_ARMS = { coinbaseinternational: ["parseTimeInForce"] };
+_RustTranspiler.RUST_VENUE_KEPT_STR_ARMS = { coinbaseinternational: ["parseTimeInForce"], bitfinex: ["convertDerivativesId"], blofin: ["networkCodeToChainId"] };
 _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "Value": "value",
   "impl Into<crate::Value>": "value",
