@@ -21270,8 +21270,27 @@ export class RustTranspiler extends BaseTranspiler {
         if (isArrayLiteralExpression(rhs)) return (!rhs.elements.some((e: any) => e.kind === SyntaxKind.SpreadElement || (isIdentifier(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)))
             && (!rhs.elements.some((e: any) => isIdentifier(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== undefined))
             || this.rustBuiltListBoxedLiteral(rhs) !== undefined;
-        return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs);
+        return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs) || this.rustDeclaredListProducer(rhs);
     }
+
+    /** ral-yf: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<List>` (a non-list answer reads as the
+     *  empty list, the landed ral-kc `into_list()` behaviour), or `this.parse<X> (..)` whose declaration returns `T[]`
+     *  (every override must return a list too): `.into_list()` moves exactly the list out of the box. */
+    rustDeclaredListProducer(rhs: any): boolean {
+        if (rhs?.kind === SyntaxKind.AwaitExpression) {
+            const call: any = this.rustSkipWrappers(rhs.expression);
+            return call !== undefined && isCallExpression(call) && !this.rustTestTierSource(call) && this.rustDeclaredEndpointKind(call) === 'list';
+        }
+        if (!isCallExpression(rhs) || !isPropertyAccessExpression(rhs.expression) || rhs.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const method = String(rhs.expression.name.text);
+        if (!RustTranspiler.RUST_LIST_PARSERS.has(method) || this.rustTestTierSource(rhs) || this.rustVirtualDispatch[this.toSnakeCaseName(method)] !== undefined) return false;
+        const declaration: any = this.rustScalarCallee(rhs);
+        return declaration?.kind === SyntaxKind.MethodDeclaration && declaration.type?.kind === SyntaxKind.ArrayType && this.rustListPassthroughCallee(rhs, method);
+    }
+
+    // Base plural parsers (no venue redeclares them) whose every return is `[]`, a self call, or a base
+    // `filterBy*SinceLimit` list: the runtime answers a `Value::Arr` on every path.
+    private static readonly RUST_LIST_PARSERS = new Set([ 'parseTrades', 'parseWsTrades', 'parseTradesHelper', 'parseOrders' ]);
 
     /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
      *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so

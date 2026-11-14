@@ -13727,3 +13727,31 @@ describe('ral-xf: a list literal with a bare local element read only by index is
         expect(body).toMatch(/let mut ids: Value = /);
     });
 });
+
+describe('ral-yf: a built list reassigned from a Promise<List> endpoint or a base list parser stays a native list', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-yf-endpointlist');
+        const files: Record<string, string> = {"ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport type Str = string | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseOrder (o: Dict): Dict { return o; }\n    parseOrders (orders: List, market: any = undefined): Dict[] {\n        if (orders === undefined) {\n            return [];\n        }\n        const out: Dict[] = [];\n        for (let i = 0; i < orders.length; i++) {\n            out.push (this.parseOrder (orders[i]));\n        }\n        return out;\n    }\n}\n", "ts/src/abstract/venue.ts": "import Exchange from '../base/Exchange.js';\nimport type { Dict, List } from '../base/Exchange.js';\nexport default abstract class venueApi extends Exchange {\n    privateGetOpen (params = {}): Promise<List> { return this.hold (params); }\n    privateGetHistory (params = {}): Promise<List> { return this.hold (params); }\n    privateGetEither (params = {}): Promise<Dict | List> { return this.hold (params); }\n}\n", "ts/src/venue.ts": "import venueApi from './abstract/venue.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends venueApi {\n    async fetchRows (method: string, params: Dict = {}) {\n        let response: List = [];\n        if (method === 'open') {\n            response = await this.privateGetOpen (params);\n        } else {\n            response = await this.privateGetHistory (params);\n        }\n        const first = response[0];\n        return this.hold ([ response.length, first ]);\n    }\n    async fetchUntyped (method: string, params: Dict = {}) {\n        let response: List = [];\n        if (method === 'open') {\n            response = (await this.privateGetEither (params)) as List;\n        }\n        const first = response[0];\n        return this.hold ([ response.length, first ]);\n    }\n    handleRows (data: List) {\n        let orders: Dict[] = [];\n        if (data.length > 0) {\n            orders = this.parseOrders (data);\n        }\n        return this.hold ([ orders.length, orders[0] ]);\n    }\n}\n"};
+        for (const [ rel, text ] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (dir, rel)), { recursive: true });
+            fs.writeFileSync (path.join (dir, rel), text);
+        }
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('x = await this.<Promise<List> endpoint> (..): .into_list() on the awaited answer', () => {
+        const body = out.slice (out.indexOf ('fn fetchRows'), out.indexOf ('fn fetchUntyped'));
+        expect(body).toMatch(/let mut response: crate::value::List = /);
+        expect(body).toMatch(/response = self\.private_get_open\(&\[[^\n]*\]\)\.await\.into_list\(\);/);
+        expect(body).not.toContain('response.clone()');
+    });
+    test('x = this.parseOrders (..) (base list parser, no override): .into_list()', () => {
+        const body = out.slice (out.indexOf ('fn handleRows'));
+        expect(body).toMatch(/let mut orders: crate::value::List = /);
+        expect(body).toMatch(/orders = self\.parseOrders\([^\n]*\)\.into_list\(\);/);
+    });
+    test('negative: an endpoint that does not declare Promise<List> keeps the box', () => {
+        const body = out.slice (out.indexOf ('fn fetchUntyped'), out.indexOf ('fn handleRows'));
+        expect(body).toMatch(/let mut response: Value = /);
+    });
+});

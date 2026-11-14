@@ -72591,7 +72591,23 @@ ${iden}}`;
       return false;
     if (isArrayLiteralExpression4(rhs))
       return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement || isIdentifier3(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)) && (!rhs.elements.some((e) => isIdentifier3(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== void 0) || this.rustBuiltListBoxedLiteral(rhs) !== void 0;
-    return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs);
+    return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs) || this.rustDeclaredListProducer(rhs);
+  }
+  /** ral-yf: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<List>` (a non-list answer reads as the
+   *  empty list, the landed ral-kc `into_list()` behaviour), or `this.parse<X> (..)` whose declaration returns `T[]`
+   *  (every override must return a list too): `.into_list()` moves exactly the list out of the box. */
+  rustDeclaredListProducer(rhs) {
+    if (rhs?.kind === SyntaxKind7.AwaitExpression) {
+      const call = this.rustSkipWrappers(rhs.expression);
+      return call !== void 0 && isCallExpression6(call) && !this.rustTestTierSource(call) && this.rustDeclaredEndpointKind(call) === "list";
+    }
+    if (!isCallExpression6(rhs) || !isPropertyAccessExpression3(rhs.expression) || rhs.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const method = String(rhs.expression.name.text);
+    if (!_RustTranspiler.RUST_LIST_PARSERS.has(method) || this.rustTestTierSource(rhs) || this.rustVirtualDispatch[this.toSnakeCaseName(method)] !== void 0)
+      return false;
+    const declaration = this.rustScalarCallee(rhs);
+    return declaration?.kind === SyntaxKind7.MethodDeclaration && declaration.type?.kind === SyntaxKind7.ArrayType && this.rustListPassthroughCallee(rhs, method);
   }
   /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
    *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so
@@ -79487,6 +79503,9 @@ _RustTranspiler.RUST_BOOK_CTORS = /* @__PURE__ */ new Set(["orderBook", "indexed
 _RustTranspiler.RUST_BOOK_SIDE_FIELDS = /* @__PURE__ */ new Set(["bids", "asks", "timestamp", "datetime", "nonce", "symbol", "cache"]);
 // `set_book_meta` writes these to the shared store (`cache` replaces the shared delta buffer)
 _RustTranspiler.RUST_BOOK_META_WRITES = /* @__PURE__ */ new Set(["timestamp", "datetime", "nonce", "symbol", "cache"]);
+// Base plural parsers (no venue redeclares them) whose every return is `[]`, a self call, or a base
+// `filterBy*SinceLimit` list: the runtime answers a `Value::Arr` on every path.
+_RustTranspiler.RUST_LIST_PARSERS = /* @__PURE__ */ new Set(["parseTrades", "parseWsTrades", "parseTradesHelper", "parseOrders"]);
 // ── optional list locals ─────────────────────────────────────────────────
 // A list local whose source may yield `undefined` (the permissive `marketSymbols`, `marketIds`, a `safeList*`
 // with no default) holds `Option<crate::value::List>` (`into_opt_list` moves the shared list out of the box).

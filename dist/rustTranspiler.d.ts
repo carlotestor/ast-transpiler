@@ -2936,6 +2936,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListSelfWriteArg(n: any, name: string): boolean;
     /** A right-hand side that answers a `Value::Arr` on every path. */
     rustBuiltListWriteSource(right: any): boolean;
+    /** ral-yf: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<List>` (a non-list answer reads as the
+     *  empty list, the landed ral-kc `into_list()` behaviour), or `this.parse<X> (..)` whose declaration returns `T[]`
+     *  (every override must return a list too): `.into_list()` moves exactly the list out of the box. */
+    rustDeclaredListProducer(rhs: any): boolean;
+    private static readonly RUST_LIST_PARSERS;
     /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
      *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so
      *  `y.into_list()` moves exactly that list (no copy, no other variant to lose). */
