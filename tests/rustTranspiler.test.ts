@@ -12657,3 +12657,28 @@ describe('ve: a sync ws method url parameter filled from this.urls prints &str',
         expect(out).toMatch(/fn requestId\(&self, url: Value\)/);
     });
 });
+
+describe('ve: an order-book side parameter of a venue handler prints the Side handle', () => {
+    // a sync venue method whose `any` parameter is only stored into / read as a side takes `Side`; a side local
+    // handed to it stays a `Side`, any other argument is wrapped once
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-ve-side-'));
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/base/ws'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/ws/OrderBookSide.ts'), "export class OrderBookSide extends Array<any> {\n    store (price: any, size: any) { }\n    storeArray (delta: any) { }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "import { OrderBookSide } from './ws/OrderBookSide.js';\nexport interface Dict { [key: string]: any }\nexport interface OrderBook { bids: OrderBookSide; asks: OrderBookSide; [key: string]: any }\nexport default class Exchange {\n    parseOrderBookBidAsk (x: any): any { return x; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { OrderBook } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        return t.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+    };
+    const handler = "    handleBidAsks (bookSide: any, bidAsks: any[]) {\n        for (let i = 0; i < bidAsks.length; i++) {\n            bookSide.storeArray (this.parseOrderBookBidAsk (bidAsks[i]));\n        }\n    }";
+    test('the side parameter and the side local handed to it are Side', () => {
+        const out = mk(handler + "\n    handleBook (orderbook: OrderBook, bids: any[]) {\n        const storedBids = orderbook['bids'];\n        this.handleBidAsks (storedBids, bids);\n    }");
+        expect(out).toMatch(/fn handleBidAsks\(&self, mut bookSide: crate::pro::order_book::Side, /);
+        expect(out).toContain('let mut storedBids: crate::pro::order_book::Side = crate::pro::order_book::Side::of(');
+    });
+    test('a parameter read any other way keeps Value', () => {
+        const out = mk("    handleBidAsks (bookSide: any, bidAsks: any[]) {\n        bookSide.storeArray (bidAsks);\n        return bookSide.foo;\n    }\n    handleBook (orderbook: OrderBook, bids: any[]) {\n        this.handleBidAsks (orderbook['bids'], bids);\n    }");
+        expect(out).toMatch(/fn handleBidAsks\(&self, bookSide: Value, /);
+    });
+});

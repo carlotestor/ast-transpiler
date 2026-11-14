@@ -51398,6 +51398,8 @@ var rustDispatch = {
         return `<Option<crate::types::Market> as crate::types::FromRaw>::from_raw(${arg}).as_ref()`;
       case "optcurrency":
         return `<Option<crate::types::Currency> as crate::types::FromRaw>::from_raw(${arg}).as_ref()`;
+      case "side":
+        return `crate::pro::order_book::Side::of(args.get(${i}).cloned().unwrap_or(crate::Value::Null))`;
       default:
         return arg;
     }
@@ -51422,6 +51424,8 @@ var rustDispatch = {
       case "str":
         return rustDispatch.arg(kind, i);
       case "optstr":
+        return rustDispatch.arg(kind, i);
+      case "side":
         return rustDispatch.arg(kind, i);
       default:
         return void 0;
@@ -51604,6 +51608,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // operation is the marker's own (`Value::store` / `store_array`, `get_array_length`, `get_value`), so a Null or
     // wrong-kind side behaves as before. Any hand-on keeps the boxed marker.
     this.rustBookSideDecisions = /* @__PURE__ */ new WeakMap();
+    // ── ral-ve: order-book side parameters (rustBookSideParam / rustBookSideArgSlot / printBookSideArg) ──
+    // A required `any` parameter of a sync per-venue ws method (no base / trait counterpart, never referenced as a
+    // value) whose every body use is a side operation (`p.store (..)` / `p.storeArray (..)` statement, `p.length`,
+    // a read `p[i]`) or a hand-on to another side slot prints the `Side` handle. `Side` only forwards to the boxed
+    // marker's own operations, so wrapping any caller value (`Side::of(v)`, once, in the caller or the by-name arm)
+    // keeps behaviour; a caller's side local is handed whole.
+    this.rustBookSideParams = /* @__PURE__ */ new WeakMap();
     this.rustOptMarketBoxing = /* @__PURE__ */ new Set();
     // `const [a, b] = this.handleXAndParams (..)` over a proven `Vec<Value>`: a `string` slot used only in
     // null / literal compares is `Option<String>`; a `boolean` slot used only as a condition is `bool`.
@@ -54551,6 +54562,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "impl KeyRead";
     if (this.rustParamIsLentResponse(param) || this.rustParamIsLentVenue(param))
       return "impl Into<crate::Value>";
+    if (this.rustBookSideParam(param))
+      return this.rustWsBookPath(param, "pro::order_book::Side");
     return this.rustVenueStrParamType(param) ?? "Value";
   }
   // A read of a native-`bool` parameter that still compiles: a condition slot,
@@ -60588,7 +60601,7 @@ ${classMethods}
     }
     const params = node.parameters;
     const requiredParams = params.filter((p) => !p.initializer && !p.questionToken || this.rustVenuePositional(p));
-    const printedParams = requiredParams.map((p) => ({ name: this.printNode(p.name, 0), rustType: this.rustParamType(p) }));
+    const printedParams = requiredParams.map((p) => ({ name: (this.rustBookSideParam(p) ? "mut " : "") + this.printNode(p.name, 0), rustType: this.rustParamType(p) }));
     if (requiredParams.length < params.length)
       printedParams.push({ name: "optional_args", rustType: "&[Value]" });
     const returnType = this.printRustFunctionType(node);
@@ -61229,9 +61242,12 @@ ${i1}}`;
     if (init === void 0 || !isElementAccessExpression4(init))
       return false;
     const symbol = this.typeOfNodeIfAny(declaration.name)?.getSymbol?.();
-    if (symbol === void 0 || !/^(Indexed|Counted)?OrderBookSide$/.test(String(symbol.name)))
-      return false;
     const scope = this.rustEnclosingFunction(declaration);
+    if (symbol === void 0 || !/^(Indexed|Counted)?OrderBookSide$/.test(String(symbol.name))) {
+      let slots = 0;
+      const handed = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => this.rustEnclosingFunction(n) === scope && this.rustBookSideArgSlot(n) && ++slots > 0);
+      return handed && slots > 0;
+    }
     let uses = 0;
     const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
       if (this.rustEnclosingFunction(n) !== scope)
@@ -61248,7 +61264,7 @@ ${i1}}`;
         const w = up.parent;
         return !(isBinaryExpression5(w) && w.left === up) && !((isPropertyAccessExpression3(w) || isCallExpression6(w) || isElementAccessExpression4(w)) && w.expression === up);
       }
-      return false;
+      return this.rustBookSideArgSlot(n);
     });
     return ok && uses > 0;
   }
@@ -61256,7 +61272,93 @@ ${i1}}`;
     if (node === void 0 || !isIdentifier3(node))
       return false;
     const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration?.kind === SyntaxKind7.Parameter)
+      return declaration.name !== node && this.rustBookSideParam(declaration);
     return declaration !== void 0 && declaration.name !== node && this.rustBookSideLocal(declaration);
+  }
+  rustBookSideParam(param) {
+    if (param?.kind !== SyntaxKind7.Parameter)
+      return false;
+    let decision = this.rustBookSideParams.get(param);
+    if (decision === void 0) {
+      this.rustBookSideParams.set(param, false);
+      try {
+        decision = this.rustBookSideParamUncached(param);
+      } catch (e) {
+        decision = false;
+      }
+      this.rustBookSideParams.set(param, decision);
+    }
+    return decision;
+  }
+  rustBookSideParamUncached(param) {
+    const method = param.parent;
+    if (!isMethodDeclaration5(method) || method.body === void 0 || !isIdentifier3(method.name) || !isClassDeclaration4(method.parent))
+      return false;
+    if (!isIdentifier3(param.name) || param.dotDotDotToken !== void 0 || param.initializer !== void 0 || param.questionToken !== void 0 || param.type?.kind !== SyntaxKind7.AnyKeyword)
+      return false;
+    const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
+    if (!/(?:^|\/)ts\/src\/pro\/[^/]+\.ts$/.test(file) || this.isAsyncFunction(method))
+      return false;
+    if ((method.modifiers ?? []).some((m) => m.kind === SyntaxKind7.StaticKeyword || m.kind === SyntaxKind7.OverrideKeyword))
+      return false;
+    if (this.getMethodOverride(method) !== void 0 || this.toSnakeCaseName(String(method.name.text)) in (this.rustVirtualDispatch ?? {}))
+      return false;
+    if (this.rustTypedSignature(method) !== void 0 || this.rustMethodReferencedAsValue(method))
+      return false;
+    if (this.rustVenueStrCallSites(method).length === 0)
+      return false;
+    const name = String(param.name.text);
+    let uses = 0;
+    for (const n of this.rustScopeNameNodes(method, name)) {
+      if (n === param || n === param.name || isPropertyAccessExpression3(n.parent) && n.parent.name === n)
+        continue;
+      if (n !== param && this.rustBindsName(n, name))
+        return false;
+      if (!isIdentifier3(n) || this.rustDeclaredNode(n) !== param)
+        return false;
+      uses++;
+      const up = n.parent;
+      if (isPropertyAccessExpression3(up) && up.expression === n) {
+        const op = String(up.name.text);
+        if (op === "length") {
+          if (isBinaryExpression5(up.parent) && up.parent.left === up)
+            return false;
+          continue;
+        }
+        if ((op === "store" || op === "storeArray") && isCallExpression6(up.parent) && up.parent.expression === up && up.parent.parent?.kind === SyntaxKind7.ExpressionStatement)
+          continue;
+        return false;
+      }
+      if (isElementAccessExpression4(up) && up.expression === n) {
+        const w = up.parent;
+        if (isBinaryExpression5(w) && w.left === up || (isPropertyAccessExpression3(w) || isCallExpression6(w) || isElementAccessExpression4(w)) && w.expression === up)
+          return false;
+        continue;
+      }
+      if (!this.rustBookSideArgSlot(n))
+        return false;
+    }
+    return uses > 0;
+  }
+  /** The argument lands in a side parameter slot of a `this.<m>(..)` call. */
+  rustBookSideArgSlot(n) {
+    const call = n?.parent;
+    if (!isCallExpression6(call) || call.expression === n || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    if (call.arguments.some((a) => a.kind === SyntaxKind7.SpreadElement))
+      return false;
+    const at = Array.from(call.arguments).indexOf(n);
+    const params = this.rustCalleeParams(call);
+    return at >= 0 && params !== void 0 && at < params.length && this.rustBookSideParam(params[at]);
+  }
+  /** Argument text for a side slot: a side handle passes whole, anything else is wrapped once. */
+  printBookSideArg(arg, identation) {
+    const inner = this.unwrapParens(arg);
+    const path4 = this.rustWsBookPath(arg, "pro::order_book::Side");
+    if (isIdentifier3(inner) && this.rustBookSideLocalOf(inner))
+      return this.rustOwnedArgText(inner, super.printIdentifier(inner));
+    return `${path4}::of(${this.printNode(arg, identation).trim()})`;
   }
   printBookSideLocal(declaration, indent, varName) {
     if (!this.rustBookSideLocal(declaration))
@@ -61855,7 +61957,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         if (watchCall !== void 0)
           return watchCall;
         const calleeParams = this.rustCalleeParams(node);
-        const printArg = (a, at) => this.rustMarketSlot(calleeParams, at) ? this.rustMarketSlotArgText(a, 0) : this.rustCurrencySlot(calleeParams, at) ? this.rustCurrencySlotArgText(a, 0) : this.rustVenueStrSlot(calleeParams, at) !== void 0 ? this.rustVenueStrArgText(a, this.rustVenueStrSlot(calleeParams, at), 0) : this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
+        const printArg = (a, at) => calleeParams !== void 0 && at < calleeParams.length && this.rustBookSideParam(calleeParams[at]) ? this.printBookSideArg(a, 0) : this.rustMarketSlot(calleeParams, at) ? this.rustMarketSlotArgText(a, 0) : this.rustCurrencySlot(calleeParams, at) ? this.rustCurrencySlotArgText(a, 0) : this.rustVenueStrSlot(calleeParams, at) !== void 0 ? this.rustVenueStrArgText(a, this.rustVenueStrSlot(calleeParams, at), 0) : this.rustNativeMapArgumentSlot(calleeParams, at) !== void 0 ? this.rustMapArgumentText(a, 0) : this.rustNativeStrVecArgumentSlot(calleeParams, at) ? this.rustStrVecArgumentText(a, 0) : this.rustNativeBoolArgumentSlot(calleeParams, at) ? this.rustBoolArgumentText(a, 0) : this.printNode(a, 0);
         const printArgs = (list, from = 0) => list.map((a, i) => this.rustWsWatchSlot(node, from + i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, from + i)).join(", ");
         const ownedArgs = (list) => list.map((a, i) => this.rustOwnedArgText(a, this.rustWsWatchSlot(node, i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, i))).join(", ");
         const requiredArgs = [ownedArgs(args.slice(0, sig.requiredCount)), ...this.rustVenuePads(calleeParams, args.length, sig.requiredCount)].filter((a) => a !== "").join(", ");
@@ -62028,6 +62130,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       const venueStr = this.rustVenueStrSlot(params, at);
       if (venueStr !== void 0)
         return this.rustVenueStrArgText(arg, venueStr, identation);
+      if (at < params.length && this.rustBookSideParam(params[at]))
+        return this.printBookSideArg(arg, identation);
       if (this.rustMarketSlot(params, at))
         return _RustTranspiler.rustLentMark(this.rustMarketSlotArgText(arg, identation));
       if (this.rustCurrencySlot(params, at))
@@ -77226,7 +77330,9 @@ _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "Option<crate::value::Dict>": "optdict",
   "Option<crate::value::List>": "optlist",
   "Option<&crate::types::Market>": "optmarket",
-  "Option<&crate::types::Currency>": "optcurrency"
+  "Option<&crate::types::Currency>": "optcurrency",
+  "crate::pro::order_book::Side": "side",
+  "ccxt::pro::order_book::Side": "side"
 };
 _RustTranspiler.RUST_DISPATCH_RETURN_KINDS = {
   "": "void",
