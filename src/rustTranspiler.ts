@@ -2869,6 +2869,21 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustLocalLastUse(n, declaration);
     }
 
+    /** wi: `n` is the whole source of `let t = n` / `t = n;` with `t` a local the joint solve types `kind`, outside a loop or
+     *  closure since the destructure, and `n` is read again: the typed alias clones `n` where the boxed one did. */
+    rustScalarAliasCopy(n: any, kind: string, declaration: any): boolean {
+        let top: any = n;
+        while (isParenthesizedExpression(top.parent)) top = top.parent;
+        const parent: any = top.parent;
+        let target: any;
+        if (isVariableDeclaration(parent) && parent.initializer === top && isIdentifier(parent.name)) target = parent;
+        else if (isBinaryExpression(parent) && parent.right === top && parent.operatorToken.kind === SyntaxKind.EqualsToken
+            && isIdentifier(parent.left) && parent.parent?.kind === SyntaxKind.ExpressionStatement) target = this.rustDeclaredNode(parent.left);
+        if (target === undefined || target === declaration || !isVariableDeclaration(target) || this.rustEnclosingFunction(target) !== this.rustEnclosingFunction(n)) return false;
+        if (this.rustScalarDecisions.get(target) !== kind || this.rustLocalLastUse(n, declaration)) return false;
+        return this.rustSlotUseOutsideLoop(n, declaration);
+    }
+
     /** nc: a string slot unwrap (`.as_str().map(str::to_owned)`) would take its destructure line from within to over 400 chars. */
     rustNilSlotLineOverBudget(n: any): boolean {
         const statement: any = findAncestor(n, (a: any) => isStatement(a));
@@ -22084,6 +22099,8 @@ export class RustTranspiler extends BaseTranspiler {
                 if ((form === 'box' || form === 'xbox') && !this.rustSlotUseOutsideLoop(n, element)) return false;
                 // pb: a whole alias into a local the joint solve types `Option<String>`, at the slot's last use, moves the string
                 if (joined && this.rustScalarAliasMove(n, 'ostr', element)) { nativeUses++; return true; }
+                // wi: a whole alias read again later copies once, where the `Value` alias printed `x.clone()` (no added copy)
+                if (joined && this.rustScalarAliasCopy(n, 'ostr', element)) { nativeUses++; return true; }
                 // a box feeding another local's write or initializer would make that local's own typing depend on this slot
                 const feeds: any = findAncestor(n, (m: any) => isStatement(m) || (isBinaryExpression(m) && m.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(m.left)) || isVariableDeclaration(m));
                 if (feeds !== undefined && !isStatement(feeds) && (form === 'box' || form === 'xbox')) return false;

@@ -54136,6 +54136,24 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     return this.rustLocalLastUse(n, declaration);
   }
+  /** wi: `n` is the whole source of `let t = n` / `t = n;` with `t` a local the joint solve types `kind`, outside a loop or
+   *  closure since the destructure, and `n` is read again: the typed alias clones `n` where the boxed one did. */
+  rustScalarAliasCopy(n, kind, declaration) {
+    let top = n;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    const parent = top.parent;
+    let target;
+    if (isVariableDeclaration3(parent) && parent.initializer === top && isIdentifier3(parent.name))
+      target = parent;
+    else if (isBinaryExpression5(parent) && parent.right === top && parent.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(parent.left) && parent.parent?.kind === SyntaxKind7.ExpressionStatement)
+      target = this.rustDeclaredNode(parent.left);
+    if (target === void 0 || target === declaration || !isVariableDeclaration3(target) || this.rustEnclosingFunction(target) !== this.rustEnclosingFunction(n))
+      return false;
+    if (this.rustScalarDecisions.get(target) !== kind || this.rustLocalLastUse(n, declaration))
+      return false;
+    return this.rustSlotUseOutsideLoop(n, declaration);
+  }
   /** nc: a string slot unwrap (`.as_str().map(str::to_owned)`) would take its destructure line from within to over 400 chars. */
   rustNilSlotLineOverBudget(n) {
     const statement = findAncestor(n, (a) => isStatement(a));
@@ -73364,6 +73382,10 @@ ${iden}}`;
         if ((form === "box" || form === "xbox") && !this.rustSlotUseOutsideLoop(n, element))
           return false;
         if (joined && this.rustScalarAliasMove(n, "ostr", element)) {
+          nativeUses++;
+          return true;
+        }
+        if (joined && this.rustScalarAliasCopy(n, "ostr", element)) {
           nativeUses++;
           return true;
         }

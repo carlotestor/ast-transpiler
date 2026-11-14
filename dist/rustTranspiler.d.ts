@@ -382,6 +382,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** nc: `n` is the whole source of `let t = n` / `t = n;` (a statement), `t` a typed scalar local of `kind`, and this is
      *  the source's last use (no loop or closure between): the typed target takes the value by move. */
     rustScalarAliasMove(n: any, kind: string, declaration: any): boolean;
+    /** wi: `n` is the whole source of `let t = n` / `t = n;` with `t` a local the joint solve types `kind`, outside a loop or
+     *  closure since the destructure, and `n` is read again: the typed alias clones `n` where the boxed one did. */
+    rustScalarAliasCopy(n: any, kind: string, declaration: any): boolean;
     /** nc: a string slot unwrap (`.as_str().map(str::to_owned)`) would take its destructure line from within to over 400 chars. */
     rustNilSlotLineOverBudget(n: any): boolean;
     /** nc: the whole source of a `let t = n` / `t = n;` statement at the source's last use. */
