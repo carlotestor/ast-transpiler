@@ -22523,7 +22523,7 @@ export class RustTranspiler extends BaseTranspiler {
     // The base `filterBy*` helpers take their optional `Int` / `Str` parameters as positional `Option<i64>` /
     // `Option<&str>` (with any optional parameter before them as a positional `Value`); the rest stay in the slice.
 
-    private static readonly RUST_TYPED_FILTER_METHODS = new Set([ 'filterBySinceLimit', 'filterBySymbolSinceLimit', 'filterBySymbolsSinceLimit', 'filterByArray' ]);
+    private static readonly RUST_TYPED_FILTER_METHODS = new Set([ 'filterBySinceLimit', 'filterBySymbolSinceLimit', 'filterBySymbolsSinceLimit', 'filterByArray', 'filterByValueSinceLimit' ]);
 
     private static readonly RUST_TYPED_FILTER_TYPES: Record<string, string> = { Int: 'Option<i64>', Str: 'Option<&str>' };
 
@@ -22572,7 +22572,9 @@ export class RustTranspiler extends BaseTranspiler {
             const absent = p.initializer === undefined || this.literalKindOfNode(this.unwrapParens(p.initializer)) === 'null';
             if (optional && rustType !== undefined && absent) typed.set(i, rustType);
             // a symbol-list (`Strings`, or an untyped list of values) is lent: a `Value` still passes
-            else if (optional && absent && (declared === 'Strings' || p.type?.kind === SyntaxKind.AnyKeyword)) typed.set(i, lent);
+            // yd: filterByValueSinceLimit's `value: any` stays a positional `Value` (every caller already passes a `Value`; lending it
+            // would add a `let mut value: Value = value.into();` self-binding for no freed local)
+            else if (optional && absent && (declared === 'Strings' || (p.type?.kind === SyntaxKind.AnyKeyword && String(method.name.text) !== 'filterByValueSinceLimit'))) typed.set(i, lent);
             // the objects `filterByArray` reads (`toArray (objects)`) are lent as well: a dict or list local passes as `&x`
             else if (i === 0 && !optional && p.type?.kind === SyntaxKind.AnyKeyword && String(method.name.text) === 'filterByArray') typed.set(i, lent);
         });
