@@ -687,6 +687,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustListLengthInit(node: any): boolean;
     rustListLengthText(node: any): string;
     rustElementReadScalarKind(node: any): string | undefined;
+    /** ral-ug: `t[i]` (a literal index) of a never-written `const t = this.m (..)` whose every return puts an exact
+     *  Bool-or-Null at slot i (`handleOptionBoolAndParams[2]`: `checkOptionBool`): `Option<bool>`, as the slot rule. */
+    rustExactBoolTupleRead(node: any, owner: any): string | undefined;
     /** ne: `row['k']` (a literal key) off a local printed as a typed map (`Dict` / `IndexMap`) whose checker type
      *  declares `k` a string (a unified `Ticker` / `Trade` / `Order` row): the `Option<String>` the boxed read held
      *  (a non-string slot reads as `None`, like the lf / md market-field rule), only as a `const`/`let` initializer. */

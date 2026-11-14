@@ -11189,6 +11189,14 @@ describe('literal and boxed-field locals typed at the declaration', () => {
         // negative: a slot fed by an `any` producer keeps its box
         expect(out).toContain('let mut loose: Value = ');
     });
+    test('ral-ug: an index read of an exact Bool slot off a never-written tuple local is Option<bool>', () => {
+        const file = fx ('ug-exact-tuple-read', "export interface Dict { [key: string]: any }\nexport type Bool = boolean | undefined;\nexport default class Exchange {\n    safeValue (d: any, k: any, dflt: any = undefined): any { return d[k]; }\n    checkOptionBool (methodName: string, optionName: string, value: any): Bool {\n        if (value === undefined) {\n            return undefined;\n        }\n        return value === true;\n    }\n    handleOptionBoolAndParams (params: Dict, methodName: string, optionName: string, defaultValue: Bool = undefined): [Bool, Dict] {\n        const value = this.safeValue (params, optionName, defaultValue);\n        return [ this.checkOptionBool (methodName, optionName, value), params ];\n    }\n    handleOptionAndParams (params: Dict, methodName: string, optionName: string, defaultValue: any = undefined): [any, Dict] {\n        return [ this.safeValue (params, optionName, defaultValue), params ];\n    }\n    hold (x: any): any { return x; }\n}\n", "import Exchange from './base/Exchange.js';\nimport type { Dict, Bool } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (params: Dict) {\n        const values = this.handleOptionBoolAndParams (params, 'm', 'uta', false);\n        const uta: Bool = values[0];\n        if (uta) {\n            return this.hold (values[1]);\n        }\n        return this.hold (uta);\n    }\n    n (params: Dict) {\n        const loose = this.handleOptionAndParams (params, 'n', 'x', false);\n        const x: Bool = loose[0];\n        if (x) {\n            return 1;\n        }\n        return 0;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        expect(out).toContain('let mut uta: Option<bool> = values.get(0).and_then(Value::as_bool);');
+        expect(out).toContain('if (uta == Some(true))');
+        // negative: slot 0 of handleOptionAndParams is any
+        expect(out).toContain('let mut x: Value = ');
+    });
 });
 
 describe('rust ws watch results typed by a resolve proof', () => {

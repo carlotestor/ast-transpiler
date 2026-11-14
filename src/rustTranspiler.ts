@@ -5226,9 +5226,26 @@ export class RustTranspiler extends BaseTranspiler {
         // a parameter spelled `string[]` / `Strings` (never written in the body) holds the caller's string list
         const listParam = owner !== undefined && isParameterDeclaration(owner) && owner.type !== undefined && !this.rustParamWritten(owner);
         if (!isVariableDeclaration(owner) && !listParam && !this.rustOptListParamRead(node)) return undefined;
+        const tupleBool = this.rustExactBoolTupleRead(node, owner); if (tupleBool !== undefined) return tupleBool;
         const listType: any = this.typeOfNodeIfAny(node.expression);
         if (listType === undefined || !this.getChecker().isArrayType(listType)) return undefined;
         return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === 'string' ? 'ostr' : undefined;
+    }
+
+    /** ral-ug: `t[i]` (a literal index) of a never-written `const t = this.m (..)` whose every return puts an exact
+     *  Bool-or-Null at slot i (`handleOptionBoolAndParams[2]`: `checkOptionBool`): `Option<bool>`, as the slot rule. */
+    rustExactBoolTupleRead(node: any, owner: any): string | undefined {
+        if (!isNumericLiteral(node.argumentExpression) || owner === undefined || !isVariableDeclaration(owner) || owner.initializer === undefined
+            || (owner.parent?.flags & NodeFlags.Const) === 0 || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== 'boolean') return undefined;
+        const at = Number(node.argumentExpression.text);
+        if (!Number.isInteger(at) || this.rustTestTierSource(node) || !this.rustExactSlotCallee(owner.initializer, at, 'bool')) return undefined;
+        const name = String(owner.name.text);
+        const intact = this.rustLocalUsesAll(owner, name, true, (n: any) => {
+            const up: any = n.parent;
+            return up !== undefined && isElementAccessExpression(up) && up.expression === n && isNumericLiteral(up.argumentExpression)
+                && !(isBinaryExpression(up.parent) && up.parent.left === up && up.parent.operatorToken.kind === SyntaxKind.EqualsToken);
+        });
+        return intact ? 'obool' : undefined;
     }
 
     /** ne: `row['k']` (a literal key) off a local printed as a typed map (`Dict` / `IndexMap`) whose checker type
@@ -6933,6 +6950,11 @@ export class RustTranspiler extends BaseTranspiler {
             const read = this.printNode(node, 0).trim();
             const tail = '.cloned().unwrap_or(Value::Null)';
             return read.endsWith(tail) ? `${read.slice(0, -tail.length)}.and_then(Value::as_str).map(str::to_owned)` : undefined;
+        }
+        if (kind === 'obool' && this.rustElementReadScalarKind(node) === 'obool') {
+            const read = this.printNode(node, 0).trim();
+            const tail = '.cloned().unwrap_or(Value::Null)';
+            return read.endsWith(tail) ? `${read.slice(0, -tail.length)}.and_then(Value::as_bool)` : undefined;
         }
         const cast = this.rustStrCastCall(node); if (cast !== undefined) return kind === 'ostr' ? this.rustScalarNativeText(kind, cast) : undefined;
         const venueTyped = this.rustVenueTypedText(kind, node); if (venueTyped !== undefined) return venueTyped;

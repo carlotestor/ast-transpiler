@@ -56382,10 +56382,28 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const listParam = owner !== void 0 && isParameterDeclaration3(owner) && owner.type !== void 0 && !this.rustParamWritten(owner);
     if (!isVariableDeclaration3(owner) && !listParam && !this.rustOptListParamRead(node))
       return void 0;
+    const tupleBool = this.rustExactBoolTupleRead(node, owner);
+    if (tupleBool !== void 0)
+      return tupleBool;
     const listType = this.typeOfNodeIfAny(node.expression);
     if (listType === void 0 || !this.getChecker().isArrayType(listType))
       return void 0;
     return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string" ? "ostr" : void 0;
+  }
+  /** ral-ug: `t[i]` (a literal index) of a never-written `const t = this.m (..)` whose every return puts an exact
+   *  Bool-or-Null at slot i (`handleOptionBoolAndParams[2]`: `checkOptionBool`): `Option<bool>`, as the slot rule. */
+  rustExactBoolTupleRead(node, owner) {
+    if (!isNumericLiteral4(node.argumentExpression) || owner === void 0 || !isVariableDeclaration3(owner) || owner.initializer === void 0 || (owner.parent?.flags & NodeFlags4.Const) === 0 || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "boolean")
+      return void 0;
+    const at = Number(node.argumentExpression.text);
+    if (!Number.isInteger(at) || this.rustTestTierSource(node) || !this.rustExactSlotCallee(owner.initializer, at, "bool"))
+      return void 0;
+    const name = String(owner.name.text);
+    const intact = this.rustLocalUsesAll(owner, name, true, (n) => {
+      const up = n.parent;
+      return up !== void 0 && isElementAccessExpression4(up) && up.expression === n && isNumericLiteral4(up.argumentExpression) && !(isBinaryExpression5(up.parent) && up.parent.left === up && up.parent.operatorToken.kind === SyntaxKind7.EqualsToken);
+    });
+    return intact ? "obool" : void 0;
   }
   /** ne: `row['k']` (a literal key) off a local printed as a typed map (`Dict` / `IndexMap`) whose checker type
    *  declares `k` a string (a unified `Ticker` / `Trade` / `Order` row): the `Option<String>` the boxed read held
@@ -58170,6 +58188,11 @@ ${binding(plan.indent)}` : ""), head: "" };
       const read = this.printNode(node, 0).trim();
       const tail = ".cloned().unwrap_or(Value::Null)";
       return read.endsWith(tail) ? `${read.slice(0, -tail.length)}.and_then(Value::as_str).map(str::to_owned)` : void 0;
+    }
+    if (kind === "obool" && this.rustElementReadScalarKind(node) === "obool") {
+      const read = this.printNode(node, 0).trim();
+      const tail = ".cloned().unwrap_or(Value::Null)";
+      return read.endsWith(tail) ? `${read.slice(0, -tail.length)}.and_then(Value::as_bool)` : void 0;
     }
     const cast = this.rustStrCastCall(node);
     if (cast !== void 0)
