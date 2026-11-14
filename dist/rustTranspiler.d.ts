@@ -2727,6 +2727,14 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so
      *  `y.into_list()` moves exactly that list (no copy, no other variant to lose). */
     rustArrayGuardedMove(write: any): boolean;
+    /** ral-uf: every later read of `node`'s local lies in the else branch of `guard` (a path disjoint from the move) and
+     *  nothing reads it after the if statement; no loop or closure sits between the move and the declaration. */
+    rustGuardedBranchLastUse(node: any, declaration: any, guard: any): boolean;
+    /** ral-uf: `x = y`, y a never-written `[]`-defaulted `safeList*` local still printed as the plain `Value` binding, at its
+     *  last use (or read again only in the else branch of the if whose then-branch holds the write): y is always an Arr. */
+    /** Every write to the local (`x = ..`) sits at or before `write` in source order. */
+    rustWritesAllBefore(declaration: any, write: any): boolean;
+    rustDefaultedAliasMove(write: any): any;
     rustBuiltListOf(node: any): any;
     /** ral-tf: a bare element local read nowhere after the literal (no loop or closure between): it moves into the element slot. */
     rustBuiltListMovedElement(e: any): boolean;
