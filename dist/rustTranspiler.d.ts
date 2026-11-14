@@ -1117,6 +1117,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustScalarGuardedBody(method: any, print: () => string): string;
     /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
     rustScalarInsertKeyUse(n: any): boolean;
+    /** tb: a `networkIdToCode` result keyed into a map whose written value only READS it (`networks[k] = { 'network': k }`):
+     *  JS evaluates the key before the value, and so does the printed `insert(key, value)`, so the key text is taken before
+     *  any box in the value. Scoped to that initialiser (other key locals keep their own rules). */
+    rustTbKeyReadOnlyInValue(n: any, value: any): boolean;
+    /** tb: `this.networkIdToCode (..)` (the base typed `Str` reader of a network id). */
+    rustTbNetworkCodeInit(init: any): boolean;
     /** A key written `m[k as string]` / `m[(k)]`: the cast and parens print nothing, so the key is `k` itself. */
     rustKeyWrapped(n: any): any;
     /** The insert key of a `String` scalar local, else undefined. */
@@ -1145,6 +1151,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustConcatWithNilLocal(declaration: any): boolean;
     /** rd: a `for (let i = <int>; ..; i++)` counter read in its own loop whose only write is the step: always an `Int`. */
     rustValueIntCounter(node: any): boolean;
+    /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */
+    rustTbParseToIntInit(declaration: any): boolean;
+    /** tb: `i OP b` as the condition of `for (let i = <int>; ..; i++)` (the step is the counter's only write, so it is always
+     *  an `Int`), `b` a parseToInt `i64` / `Option<i64>` local: the counter operand, else undefined. */
+    rustTbCounterBound(cond: any, n: any, kind: string): any;
+    /** tb: a use of the bound outside that for-condition meets another local (an operand, a write, another local's initializer or
+     *  assignment source): those partners are other groups' decisions, so the bound keeps its `Value`. */
+    rustTbBoundHasPartner(declaration: any, cond: any): boolean;
+    /** tb: the for-condition of a `Value` `Int` counter (its i64 plan declined) against a typed parseToInt bound. */
+    printTbCounterBound(node: any): string | undefined;
     rustScalarExprHasForCounter(node: any): boolean;
     /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
      *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */

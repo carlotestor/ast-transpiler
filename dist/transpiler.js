@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -56656,6 +56656,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${name} ${operator} ${super.printIdentifier(bound)}`;
     if (boundKind === "num")
       return `(${name} as f64) ${operator} ${super.printIdentifier(bound)}`;
+    if (boundKind === "oint" && this.rustTbCounterBound(cond, bound, "oint") !== void 0)
+      return `matches!(${super.printIdentifier(bound)}, Some(__b) if (${name} as f64) ${operator} (__b as f64))`;
     const refs = (n) => isIdentifier3(n) && n.text === name || (n.forEachChild(refs) ?? false);
     if (refs(right) || !this.printsValueExpression(left) || !this.printsValueExpression(this.orderedComparisonOperand(right)))
       return void 0;
@@ -59333,6 +59335,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     const counterCompare = this.printI64CounterCompare(node);
     if (counterCompare !== void 0)
       return counterCompare;
+    const tbBound = this.printTbCounterBound(node);
+    if (tbBound !== void 0)
+      return tbBound;
     const op = node.operatorToken.kind;
     if (op === SyntaxKind7.PlusEqualsToken || op === SyntaxKind7.MinusEqualsToken)
       return this.rustScalarCompoundText(node, false);
@@ -59502,9 +59507,39 @@ ${binding(plan.indent)}` : ""), head: "" };
       m.forEachChild?.(visit);
     };
     visit(write.right);
-    if (rewrites)
+    if (rewrites && !this.rustTbKeyReadOnlyInValue(n, write.right))
       return false;
     return (this.rustBearerDictInsert(base, n, key, "x") ?? this.rustMapParamDictInsert(base, n, key, "x") ?? this.printNativeDictInsert(base, n, key, "x") ?? this.rustNativeDictInsert(base, n, key, "x")) !== void 0;
+  }
+  /** tb: a `networkIdToCode` result keyed into a map whose written value only READS it (`networks[k] = { 'network': k }`):
+   *  JS evaluates the key before the value, and so does the printed `insert(key, value)`, so the key text is taken before
+   *  any box in the value. Scoped to that initialiser (other key locals keep their own rules). */
+  rustTbKeyReadOnlyInValue(n, value) {
+    const declaration = this.rustDeclaredNode(n);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !this.rustTbNetworkCodeInit(declaration.initializer))
+      return false;
+    const symbol = this.rustSymbolOf(n);
+    let written = false;
+    const visit = (m) => {
+      if (written || m === void 0)
+        return;
+      if (isIdentifier3(m) && this.rustSymbolOf(m) === symbol && this.rustIdentifierIsWritten(m)) {
+        written = true;
+        return;
+      }
+      if (isFunctionLike(m)) {
+        written = true;
+        return;
+      }
+      m.forEachChild?.(visit);
+    };
+    visit(value);
+    return !written;
+  }
+  /** tb: `this.networkIdToCode (..)` (the base typed `Str` reader of a network id). */
+  rustTbNetworkCodeInit(init) {
+    const call = init === void 0 ? void 0 : this.unwrapParens(init);
+    return call !== void 0 && isCallExpression6(call) && isPropertyAccessExpression3(call.expression) && call.expression.expression.kind === SyntaxKind7.ThisKeyword && String(call.expression.name.text) === "networkIdToCode";
   }
   /** A key written `m[k as string]` / `m[(k)]`: the cast and parens print nothing, so the key is `k` itself. */
   rustKeyWrapped(n) {
@@ -59723,6 +59758,61 @@ ${binding(plan.indent)}` : ""), head: "" };
     }
     return (incr.kind === SyntaxKind7.PostfixUnaryExpression || incr.kind === SyntaxKind7.PrefixUnaryExpression) && (incr.operator === SyntaxKind7.PlusPlusToken || incr.operator === SyntaxKind7.MinusMinusToken) && isIdentifier3(incr.operand) && this.rustSymbolOf(incr.operand) === symbol;
   }
+  /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */
+  rustTbParseToIntInit(declaration) {
+    const init = declaration === void 0 || !isVariableDeclaration3(declaration) ? void 0 : this.unwrapParens(declaration.initializer);
+    return init !== void 0 && isCallExpression6(init) && isPropertyAccessExpression3(init.expression) && init.expression.expression.kind === SyntaxKind7.ThisKeyword && String(init.expression.name.text) === "parseToInt";
+  }
+  /** tb: `i OP b` as the condition of `for (let i = <int>; ..; i++)` (the step is the counter's only write, so it is always
+   *  an `Int`), `b` a parseToInt `i64` / `Option<i64>` local: the counter operand, else undefined. */
+  rustTbCounterBound(cond, n, kind) {
+    if (kind !== "int" && kind !== "oint" || !isBinaryExpression5(cond) || this.unwrapParens(cond.right) !== n && cond.right !== n)
+      return void 0;
+    if (_RustTranspiler.NATIVE_COMPARISON_OPERATORS[cond.operatorToken.kind] === void 0 || this.isEqualityOp(cond.operatorToken.kind))
+      return void 0;
+    if (!isIdentifier3(n) || !this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond))
+      return void 0;
+    const counter = cond.left;
+    if (!isIdentifier3(counter))
+      return void 0;
+    const d = this.rustDeclaredNode(counter);
+    const loop = d?.parent?.parent;
+    if (d === void 0 || !isVariableDeclaration3(d) || loop?.kind !== SyntaxKind7.ForStatement || loop.condition !== cond)
+      return void 0;
+    return this.rustValueIntCounter(counter) ? counter : void 0;
+  }
+  /** tb: a use of the bound outside that for-condition meets another local (an operand, a write, another local's initializer or
+   *  assignment source): those partners are other groups' decisions, so the bound keeps its `Value`. */
+  rustTbBoundHasPartner(declaration, cond) {
+    let partner = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (u) => {
+      if (this.isNodeInsideNode(u, cond))
+        return true;
+      let top = u;
+      while (isParenthesizedExpression3(top.parent) || top.parent?.kind === SyntaxKind7.AsExpression)
+        top = top.parent;
+      const up = top.parent;
+      if (this.rustIdentifierIsWritten(u) || isBinaryExpression5(up) || up?.kind === SyntaxKind7.ConditionalExpression || up?.kind === SyntaxKind7.PrefixUnaryExpression || isVariableDeclaration3(up) && up.initializer === top)
+        partner = true;
+      return true;
+    });
+    return partner;
+  }
+  /** tb: the for-condition of a `Value` `Int` counter (its i64 plan declined) against a typed parseToInt bound. */
+  printTbCounterBound(node) {
+    if (!isBinaryExpression5(node) || !isIdentifier3(node.right))
+      return void 0;
+    const kind = this.rustScalarLocalOf(node.right)?.kind;
+    if (kind !== "int" && kind !== "oint" || this.rustTbCounterBound(node, node.right, kind) === void 0)
+      return void 0;
+    if (this.rustI64CounterOf(node.left) !== void 0)
+      return void 0;
+    const op = _RustTranspiler.NATIVE_COMPARISON_OPERATORS[node.operatorToken.kind];
+    const i = `${super.printIdentifier(node.left)}.as_f64().unwrap_or(f64::NAN)`;
+    const b = super.printIdentifier(node.right);
+    const text = kind === "int" ? `${i} ${op} (${b} as f64)` : `matches!(${b}, Some(__b) if ${i} ${op} (__b as f64))`;
+    return this.isBooleanPosition(node) ? text : `Value::Bool(${text})`;
+  }
   rustScalarExprHasForCounter(node) {
     const inner = this.unwrapParens(node);
     if (inner === void 0)
@@ -59752,6 +59842,8 @@ ${binding(plan.indent)}` : ""), head: "" };
         return this.rustScalarPlainValueTarget(parent.left) ? "xbox" : void 0;
       }
       if (_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) && this.rustScalarExpressionKind(parent) !== void 0)
+        return "native";
+      if (this.rustTbCounterBound(parent, n, kind) !== void 0)
         return "native";
       if (this.rustScalarValueOperandUse(parent, n, kind))
         return "xbox";
