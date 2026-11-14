@@ -9607,10 +9607,8 @@ export class RustTranspiler extends BaseTranspiler {
         // Classes the ccxt post-pass routes to the same constructors — their
         // message argument is audited too; every other `X::new(..)` prints as
         // before.
-        // a ws cache / order-book constructor takes its arguments by move: an owned one (`Copy`, last use) is marked
-        const owned = (a: any, text: string) => (typeof expression === 'string' && /^(?:(?:Indexed|Counted)?OrderBook|ArrayCache\w*)$/.test(expression) ? this.rustOwnedArgText(a, text.trim()) : text);
         const args = typeof expression === 'string'
-            ? node.arguments.map((a, index) => owned(a, this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation))).join(', ')
+            ? node.arguments.map((a, index) => this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation)).join(', ')
             : node.arguments.map(a => this.printNode(a, identation)).join(', ');
         return this.rustWsCacheCtorBox(node, `${expression}::new(${args})`);
     }

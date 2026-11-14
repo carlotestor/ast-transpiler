@@ -60621,8 +60621,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       const built = `crate::exchange_errors::create_error(&crate::runtime::stringify_param(&(${dynamicClass})), &crate::runtime::stringify_param(&(${args2})))`;
       return node.parent?.kind === SyntaxKind7.ThrowStatement ? built : `Value::from(${built})`;
     }
-    const owned = (a, text) => typeof expression === "string" && /^(?:(?:Indexed|Counted)?OrderBook|ArrayCache\w*)$/.test(expression) ? this.rustOwnedArgText(a, text.trim()) : text;
-    const args = typeof expression === "string" ? node.arguments.map((a, index) => owned(a, this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation))).join(", ") : node.arguments.map((a) => this.printNode(a, identation)).join(", ");
+    const args = typeof expression === "string" ? node.arguments.map((a, index) => this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation)).join(", ") : node.arguments.map((a) => this.printNode(a, identation)).join(", ");
     return this.rustWsCacheCtorBox(node, `${expression}::new(${args})`);
   }
   /** Printed class expression of a `new` whose class is a runtime value, else undefined. */

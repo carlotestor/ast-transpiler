@@ -8299,11 +8299,12 @@ describe('rust string locals moved at their last use', () => {
 describe('rust ws cache size locals', () => {
     test('an integer size local passes natively to the cache constructor', () => {
         const out = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'cache-ctor-limit', 'ts/src/pro/venue.ts')).content;
-        expect(out).toContain('ArrayCache::new(limit)');
+        // the bare size argument is cloned on the file text like any by-value cache constructor argument
+        expect(out).toContain('ArrayCache::new(limit.clone())');
         expect(out).toContain('let mut limit: i64 = ');
         expect(out).toContain('let mut ordersLimit: Option<i64> = ');
         expect(out).toContain('ArrayCacheBySymbolById::new(Value::from(ordersLimit))');
-        expect(out).toContain('ArrayCacheBySymbolById::new(ordersLimit));');
+        expect(out).toContain('ArrayCacheBySymbolById::new(ordersLimit.clone()));');
         expect(out).not.toMatch(/let mut limit: Value/);
         expect(out).not.toMatch(/let mut ordersLimit: Value/);
     });
