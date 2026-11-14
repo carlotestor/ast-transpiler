@@ -57550,7 +57550,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (keyText === void 0)
       return void 0;
     const insert = `if let Value::Dict(__r05d) = ${acc} { std::sync::Arc::make_mut(__r05d).insert(${keyText}, ${value}); }`;
-    if (insert.length + 40 > 400 || value.includes("\n"))
+    if (insert.split("\n")[0].length + 40 > 400)
       return `add_element_to_object(${acc}, &Value::from(${name}${kind === "str" ? ".as_str()" : ".as_deref()"}), ${value})`;
     return insert;
   }

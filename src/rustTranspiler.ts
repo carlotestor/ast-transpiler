@@ -6359,7 +6359,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (keyText === undefined) return undefined;
         const insert = `if let Value::Dict(__r05d) = ${acc} { std::sync::Arc::make_mut(__r05d).insert(${keyText}, ${value}); }`;
         // over the line budget ccxt's r05 keeps the helper: lend the key to it (`From<Option<&str>>`, the one allocation)
-        if (insert.length + 40 > 400 || value.includes('\n')) return `add_element_to_object(${acc}, &Value::from(${name}${kind === 'str' ? '.as_str()' : '.as_deref()'}), ${value})`;
+        if (insert.split('\n')[0].length + 40 > 400) return `add_element_to_object(${acc}, &Value::from(${name}${kind === 'str' ? '.as_str()' : '.as_deref()'}), ${value})`;
         return insert;
     }
 
