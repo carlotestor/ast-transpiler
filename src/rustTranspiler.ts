@@ -19570,7 +19570,9 @@ export class RustTranspiler extends BaseTranspiler {
         let natives = 0;
         // a same-named `let`/`const` in a sibling block is another binding
         // a same-named `const` key list in a sibling block (`Object.keys (m)` in two throwing branches) is another binding
-        const objectList = isCallExpression(init) && isPropertyAccessExpression(init.expression) && isIdentifier(init.expression.expression) && init.expression.expression.text === 'Object';
+        // (never a ws store / field key list: the receiver is a plain local or parameter)
+        const objectList = isCallExpression(init) && isPropertyAccessExpression(init.expression) && isIdentifier(init.expression.expression) && init.expression.expression.text === 'Object'
+            && init.arguments.length === 1 && isIdentifier(this.rustSkipWrappers(init.arguments[0]));
         const usesAll = (accept: (n: any) => boolean): boolean => (defaulted ? this.rustScalarUsesAll(declaration, name, accept)
             : (objectList ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept)));
         const safe = usesAll((n: any) => {

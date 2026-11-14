@@ -14116,4 +14116,12 @@ describe('ral-zh: an Object.keys key list with a same-named twin in a sibling bl
         expect(out.match(/let mut keys: crate::value::List = /g)?.length).toBe(2);
         expect(out).not.toContain('let mut keys: Value = ');
     });
+    test('negative: twin key lists of a this.<field> store (ws cache) keep their box', () => {
+        const dir = path.join (rustFixtureRoot, 'zhkeysn');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    tickers: any = {};\n    bidsasks: any = {};\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (t: boolean) {\n        const out = [];\n        if (t) {\n            const symbols = Object.keys (this.tickers);\n            for (let i = 0; i < symbols.length; i++) {\n                out.push (symbols[i]);\n            }\n        } else {\n            const symbols = Object.keys (this.bidsasks);\n            for (let i = 0; i < symbols.length; i++) {\n                out.push (symbols[i]);\n            }\n        }\n        return out;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).not.toContain('let mut symbols: crate::value::List = ');
+    });
 });
