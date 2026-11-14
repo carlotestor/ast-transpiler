@@ -8054,7 +8054,10 @@ export class RustTranspiler extends BaseTranspiler {
     /** zb: an arithmetic side's kind: a typed scalar shape, else a typed-signature numeric parameter read
      *  (`now - limit * duration`: `limit` holds only `Int` or `Null`, so the Option arm equals the helper's). */
     rustArithSideKind(node): string | undefined {
-        return this.rustScalarNumericKind(node) ?? this.rustArithParamKind(node);
+        const own = this.rustScalarNumericKind(node); if (own !== undefined) return own;
+        // integer parameters only: an `f64` side re-prints value writes a ccxt build/ pass keys on (kalshi `filled`: cow_guard +1)
+        const param = this.rustArithParamKind(node);
+        return param === 'int' || param === 'oint' ? param : undefined;
     }
 
     /** zb: the numeric kind of an unwritten typed-signature parameter read (`oint` / `onum` / `int` / `num`), else undefined. */

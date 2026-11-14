@@ -59391,7 +59391,11 @@ ${binding(plan.indent)}` : ""), head: "" };
   /** zb: an arithmetic side's kind: a typed scalar shape, else a typed-signature numeric parameter read
    *  (`now - limit * duration`: `limit` holds only `Int` or `Null`, so the Option arm equals the helper's). */
   rustArithSideKind(node) {
-    return _nullishCoalesce(this.rustScalarNumericKind(node), () => ( this.rustArithParamKind(node)));
+    const own = this.rustScalarNumericKind(node);
+    if (own !== void 0)
+      return own;
+    const param = this.rustArithParamKind(node);
+    return param === "int" || param === "oint" ? param : void 0;
   }
   /** zb: the numeric kind of an unwritten typed-signature parameter read (`oint` / `onum` / `int` / `num`), else undefined. */
   rustArithParamKind(node) {
