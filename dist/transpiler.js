@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -57513,6 +57513,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "parg";
     if ((kind === "str" || kind === "ostr" || kind === "int" || kind === "oint") && this.rustInArrayNeedle(n) && this.rustPreciseLendLocal(n))
       return "parg";
+    if ((kind === "int" || kind === "oint" || kind === "num" || kind === "onum") && this.rustIso8601Arg(n))
+      return "parg";
     if ((kind === "str" || kind === "ostr") && this.rustWsCacheMapKeyUse(n))
       return "fin";
     if (kind === "bool" && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== void 0)
@@ -58718,6 +58720,11 @@ ${binding(plan.indent)}` : ""), head: "" };
     const call = node?.parent;
     return !this.rustTestTierSource(node) && isCallExpression6(call) && call.arguments[0] === node && isPropertyAccessExpression3(call.expression) && String(call.expression.name.text) === "inArray" && this.rustBaseTypedReturnKind(call) === "bool";
   }
+  /** xd: `n` is the only argument of `this.iso8601 (n)` outside the test crate (hand-written `iso8601(ts: impl Into<Value>)`). */
+  rustIso8601Arg(n) {
+    const call = n?.parent;
+    return !this.rustTestTierSource(n) && isCallExpression6(call) && call.arguments.length === 1 && call.arguments[0] === n && isPropertyAccessExpression3(call.expression) && call.expression.expression.kind === SyntaxKind7.ThisKeyword && String(call.expression.name.text) === "iso8601";
+  }
   /** Identifier hook: a `box` use converts with the standard `From` impls (scalars are `Copy`). */
   printRustScalarLocalRead(node) {
     const local = this.rustScalarLocalOf(node);
@@ -59445,6 +59452,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const inner = this.unwrapParens(node);
     if (inner === void 0 || !isIdentifier3(inner) || this.rustScalarIdentifierKind(inner) !== void 0)
       return void 0;
+    if (this.rustTypedFilterParamOf(inner)?.rustType === "Option<i64>")
+      return { kind: "oint", text: super.printIdentifier(inner) };
     const kind = this.rustOptParamKind(inner);
     return kind === void 0 ? void 0 : { kind, text: `${super.printIdentifier(inner)}.${_RustTranspiler.RUST_PARAM_READ[kind]}` };
   }
