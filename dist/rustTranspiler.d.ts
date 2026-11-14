@@ -2588,6 +2588,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** pb: `x['k'] = v` (statement, literal non-meta key) on a local initialised from a base `safeDict*` read of a REST-tier
      *  (`ts/src/<venue>.ts`) local or response: no ws subscription, cache or book store, so the map carries no runtime tag. */
     rustSafeDictKeyWriteOk(n: any, init: any): boolean;
+    /** ral-40g: `row['k'] = v` (statement, literal non-meta key) on a row of a typed `Dict[]` list local (`rows[i]`, the checker
+     *  proves a map element) in a REST or prediction venue file: the list comes from a parsed response (no ws subscription,
+     *  cache or book tag), and the row's copy is written exactly as the boxed copy was (the list is never written back). */
+    rustElementKeyWriteOk(n: any, init: any): boolean;
     rustBuiltKeyWriteLineOk(n: any, extra?: number): boolean;
     rustNullTestedDictLocal(init: any, nullTests: number, writes: number): boolean;
     rustDictElementSource(init: any): boolean;

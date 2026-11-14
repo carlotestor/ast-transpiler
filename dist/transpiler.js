@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -68827,6 +68827,7 @@ ${iden}}`;
     let keySets = 0;
     let keyWrites = 0;
     let safeDictKeyWrites = 0;
+    let elementKeyWrites = 0;
     const keyWriteUses = [];
     let extendHeads = 0;
     let extendWrites = 0;
@@ -68930,6 +68931,8 @@ ${iden}}`;
         return ++reads > 0;
       if (!extendReuse && this.rustSafeDictKeyWriteOk(n, init))
         return keyWriteUses.push(n) > 0 && ++safeDictKeyWrites > 0 && ++keyWrites > 0 && ++reads > 0;
+      if (!extendReuse && this.rustElementKeyWriteOk(n, init))
+        return keyWriteUses.push(n) > 0 && ++elementKeyWrites > 0 && ++safeDictKeyWrites > 0 && ++keyWrites > 0 && ++reads > 0;
       if (this.rustUntilHeadKeyWrite(n) !== void 0 && (extendReuse ? this.rustExtendReuseKeyWriteOk(n, declaration) : init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) === "dict" || this.rustBuiltMapKeyWriteOk(n, init))))
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
       if (extendReuse && this.rustReuseDynamicKeyWrite(n, declaration))
@@ -68992,7 +68995,7 @@ ${iden}}`;
     if ((keyReads > 0 || init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init)) && !this.rustEcdsaCall(init) && !this.rustDictKeyReadLineOk(declaration, name))
       return void 0;
     const zgRow = this.rustZgSiblingRows.has(declaration) && boxedElementUses.length > 0;
-    const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow;
+    const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0;
     if (jwtLends > 0 && optional)
       return void 0;
     if (lentResponses > 0 && optional && !this.rustLentOptionalOk(declaration, name, fn, init, from))
@@ -69028,7 +69031,7 @@ ${iden}}`;
     for (const n of indexReadUses)
       this.rustBorrowedIndexReads.add(n.parent);
     if (optional) {
-      if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !(zgRow && this.rustDictElementSource(init)) && !this.rustOptContainerSourceOk(init, from))
+      if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !((zgRow || elementKeyWrites > 0) && this.rustDictElementSource(init)) && !this.rustOptContainerSourceOk(init, from))
         return void 0;
       this.rustOptContainerLocals.add(declaration);
     }
@@ -69712,6 +69715,25 @@ ${iden}}`;
     if (isElementAccessExpression4(head))
       return isIdentifier3(head.expression);
     return isIdentifier3(head);
+  }
+  /** ral-40g: `row['k'] = v` (statement, literal non-meta key) on a row of a typed `Dict[]` list local (`rows[i]`, the checker
+   *  proves a map element) in a REST or prediction venue file: the list comes from a parsed response (no ws subscription,
+   *  cache or book tag), and the row's copy is written exactly as the boxed copy was (the list is never written back). */
+  rustElementKeyWriteOk(n, init) {
+    const key = this.rustUntilHeadKeyWrite(n);
+    if (key === void 0 || key.startsWith("__") || init === void 0 || !isElementAccessExpression4(init) || this.rustUrlsMapEntry(init))
+      return false;
+    if (!this.rustDictElementSource(init) || !this.getChecker().isArrayType(this.typeOfNodeIfAny(init.expression)))
+      return false;
+    if (!/(?:^|[\\/])ts[\\/]src[\\/](?:prediction[\\/])?[^\\/]+\.ts$/.test(String(n.getSourceFile?.()?.fileName ?? "")))
+      return false;
+    const list = this.rustDeclarationOfIdentifier(init.expression);
+    if (list === void 0 || !isVariableDeclaration3(list))
+      return false;
+    const source = this.rustSkipWrappers(list.initializer);
+    if (source === void 0 || this.rustInitReadsTaggedStore(source))
+      return false;
+    return isNumericLiteral4(this.rustSkipWrappers(init.argumentExpression)) || this.rustReadBearerKindOfDeclaration(list) === "list" || this.rustBorrowedLocalKind(list) === "list" || this.rustVecLocalIsTyped(list);
   }
   rustBuiltKeyWriteLineOk(n, extra = 0) {
     const write = n.parent.parent;
