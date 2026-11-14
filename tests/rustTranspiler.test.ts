@@ -4527,14 +4527,14 @@ describe('rust native Option<String> returns for `: Str` methods', () => {
         expect(output).not.toContain('Option<String>');
     });
 
-    test('an override keeps the boxed signature', () => {
+    test('an override of a venue method printed -> Option<String> joins its group (xd)', () => {
         const ts = HEAD +
             "class A {\n    parseStatus (status: any): Str { return 'x'; }\n}\n" +
             "class E extends A {\n    override parseStatus (status: any): Str { return 'y'; }\n}";
         const output = transpiler.transpileRust(ts).content;
         const overridden = output.split('class E')[1] ?? output;
         expect(output).toContain('pub fn parseStatus(&self, status: Value) -> Option<String>');
-        expect(output.match(/pub fn parseStatus\(&self, status: Value\) -> Value \{/g)?.length).toBe(1);
+        expect(output.match(/pub fn parseStatus\(&self, status: Value\) -> Option<String> \{/g)?.length).toBe(2);
         expect(overridden.length).toBeGreaterThan(0);
     });
 
@@ -13653,5 +13653,23 @@ describe('xd: an Int parameter of a typed base filter signature (Option<i64>) is
         const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/base/Exchange.ts')).content;
         expect(out).toMatch(/let mut value: Option<i64> = /);
         expect(out).toContain('value.is_some() && since.is_some() && value >= since');
+    });
+});
+
+describe('yd: pro phemex fromEn joins venue fromEn -> Option<String> and keeps its by-name arm (lift C done right)', () => {
+    const mk = () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-yd-vgrp-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k] ?? d; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/phemex.ts'), "import Exchange from './base/Exchange.js';\nimport type { Str, Int } from './base/Exchange.js';\nexport default class phemex extends Exchange {\n    fromEn (en: Str, scale: Int): Str {\n        if (en === undefined || scale === undefined) {\n            return undefined;\n        }\n        return en + 'x';\n    }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/pro/phemex.ts'), "import phemexRest from '../phemex.js';\nimport type { Dict, Str } from '../base/Exchange.js';\nexport default class phemex extends phemexRest {\n    fromEn (en: any, scale: any): Str {\n        if (en === undefined) {\n            return undefined;\n        }\n        return en + 'y';\n    }\n    m (balance: Dict) {\n        let used = this.safeString (balance, 'u');\n        if (used === undefined) {\n            used = this.fromEn (this.safeString (balance, 'e'), 8);\n        }\n        return this.hold (used);\n    }\n}\n");
+        return transpiler.transpileRustByPath(path.join(root, 'ts/src/pro/phemex.ts'));
+    };
+    test('the override prints -> Option<String>, its reassigned reader local stays Option<String>, and the from_en arm is kept', () => {
+        const r = mk();
+        expect(r.content).toMatch(/fn fromEn\([^)]*\) -> Option<String>/);
+        expect(r.content).toMatch(/let mut used: Option<String> = /);
+        expect((r.rustSignatures ?? []).find((s: any) => s.name === 'from_en')?.ret).toBe('keptostr');
     });
 });

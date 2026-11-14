@@ -9370,7 +9370,12 @@ export class RustTranspiler extends BaseTranspiler {
         // whole tree: their methods are called from ~every derived file (and the hand-written runtime),
         // where the boxed `Value` ABI is load-bearing. Only per-exchange
         if (node.type === undefined || this.isAsyncFunction(node)) return false;
-        if (!this.rustBaseNativeStrMethod(node) && (this.getMethodOverride(node) !== undefined
+        // xd: an override of a VENUE method that itself prints `-> Option<String>` (pro phemex fromEn over phemex fromEn)
+        // joins its group: every caller already reads the venue copy natively, so the pair stays one signature kind
+        const hidden: any = this.getMethodOverride(node);
+        const venueGroup = hidden !== undefined && hidden !== node && !RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile().fileName))
+            && !RustTranspiler.RUST_BASE_TIER_FILE.test(String(node.getSourceFile().fileName)) && this.rustNativeStrReturnKind(hidden) === 'str';
+        if (!venueGroup && !this.rustBaseNativeStrMethod(node) && (hidden !== undefined
             || RustTranspiler.RUST_BASE_TIER_FILE.test(node.getSourceFile().fileName))) {
             return false;
         }
@@ -9412,6 +9417,8 @@ export class RustTranspiler extends BaseTranspiler {
         'coinbaseinternational.ts#coinbaseinternational': [ 'parseTimeInForce' ], 'bitfinex.ts#bitfinex': [ 'convertDerivativesId' ],
         'blofin.ts#blofin': [ 'networkCodeToChainId' ], 'dydx.ts#dydx': [ 'hashMessage' ], 'modetrade.ts#modetrade': [ 'hashMessage' ],
         'polymarket.ts#polymarket': [ 'hashMessage', 'signMessage' ],
+        // yd: pro phemex fromEn joins venue phemex fromEn's `-> Option<String>` group; its by-name `from_en` arm stays
+        'pro/phemex.ts#phemex': [ 'fromEn' ],
     };
 
     rustVenueKeptStrArm(node: any): boolean {

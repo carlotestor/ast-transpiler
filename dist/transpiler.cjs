@@ -60794,7 +60794,9 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustNativeStrReturnDecisionUncached(node) {
     if (node.type === void 0 || this.isAsyncFunction(node))
       return false;
-    if (!this.rustBaseNativeStrMethod(node) && (this.getMethodOverride(node) !== void 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(node.getSourceFile().fileName))) {
+    const hidden = this.getMethodOverride(node);
+    const venueGroup = hidden !== void 0 && hidden !== node && !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile().fileName)) && !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(node.getSourceFile().fileName)) && this.rustNativeStrReturnKind(hidden) === "str";
+    if (!venueGroup && !this.rustBaseNativeStrMethod(node) && (hidden !== void 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(node.getSourceFile().fileName))) {
       return false;
     }
     let type;
@@ -78561,7 +78563,9 @@ _RustTranspiler.RUST_VENUE_KEPT_STR_ARMS = {
   "blofin.ts#blofin": ["networkCodeToChainId"],
   "dydx.ts#dydx": ["hashMessage"],
   "modetrade.ts#modetrade": ["hashMessage"],
-  "polymarket.ts#polymarket": ["hashMessage", "signMessage"]
+  "polymarket.ts#polymarket": ["hashMessage", "signMessage"],
+  // yd: pro phemex fromEn joins venue phemex fromEn's `-> Option<String>` group; its by-name `from_en` arm stays
+  "pro/phemex.ts#phemex": ["fromEn"]
 };
 _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "Value": "value",
