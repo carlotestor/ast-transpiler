@@ -56522,7 +56522,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const fallback = this.unwrapParens(args[base]);
     if (this.literalKindOfNode(fallback) !== void 0 || this.rustScalarIntLiteral(fallback) !== void 0 || this.rustScalarFloatLiteral(fallback) !== void 0) {
-      return numBase !== void 0 && this.rustScalarIntLiteral(fallback) !== void 0 ? "onum" : void 0;
+      if (numBase !== void 0 && this.rustScalarIntLiteral(fallback) !== void 0)
+        return "onum";
+      if (numBase !== void 0 && this.rustScalarFloatLiteral(fallback) !== void 0 && !isCallExpression6(fallback))
+        return "onum";
+      if (this.literalKindOfNode(fallback) === "null")
+        return strBase !== void 0 ? "ostr" : intBase !== void 0 ? "oint" : numBase !== void 0 ? "onum" : void 0;
+      return void 0;
     }
     const kind = this.rustReaderFallbackKind(fallback);
     if (strBase !== void 0)

@@ -5370,7 +5370,13 @@ export class RustTranspiler extends BaseTranspiler {
         const fallback: any = this.unwrapParens(args[base]);
         if (this.literalKindOfNode(fallback) !== undefined || this.rustScalarIntLiteral(fallback) !== undefined || this.rustScalarFloatLiteral(fallback) !== undefined) {
             // literal defaults are the existing rule's, except an `Int` literal on a number reader
-            return numBase !== undefined && this.rustScalarIntLiteral(fallback) !== undefined ? 'onum' : undefined;
+            if (numBase !== undefined && this.rustScalarIntLiteral(fallback) !== undefined) return 'onum';
+            // vd: a `Float` literal default on a number reader: every arm of the runtime helper answers a `Float`
+            // (parsed, widened `Int`, or the default itself), so `.as_f64()` never misses
+            if (numBase !== undefined && this.rustScalarFloatLiteral(fallback) !== undefined && !isCallExpression(fallback)) return 'onum';
+            // vd: an explicit `undefined` default is the helper's own `Null` default: the no-default kind
+            if (this.literalKindOfNode(fallback) === 'null') return strBase !== undefined ? 'ostr' : (intBase !== undefined ? 'oint' : (numBase !== undefined ? 'onum' : undefined));
+            return undefined;
         }
         const kind = this.rustReaderFallbackKind(fallback);
         if (strBase !== undefined) return kind === 'str' || kind === 'ostr' || (kind === undefined && this.rustReaderFallbackChecked(fallback) === 'string') ? 'ostr' : undefined;

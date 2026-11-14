@@ -12661,3 +12661,16 @@ describe('vd: a reader string later overwritten by a venue string method stays O
         expect(output).toContain('m.insert("status".to_string(), status.map(Value::from).unwrap_or(Value::Null));');
     });
 });
+
+describe('vd: a reader whose default is an explicit undefined takes the no-default kind', () => {
+    test('safeString (params, k, undefined) is an Option<String> local (the helper default is Null either way)', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-vd-undef-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport class Client { resolve (v: any, h: any = undefined): void {} }\nexport default class Exchange {\n    id: string = 'x';\n    options: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k]; }\n    hold (a: any): any { return a; }\n    safeDict (o: any, k: any, d: any = undefined): any { return o[k]; }\n    safeNumber (o: any, k: any, d: any = undefined): any { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue4.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue4 extends Exchange {\n    m (market: Dict, params: Dict) {\n        const qty = this.safeString (params, 'cost', undefined);\n        if (qty === undefined) {\n            return this.hold (params);\n        }\n        return { 'qty': qty };\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false });
+        const output = t.transpileRustByPath(path.join(root, 'ts/src/venue4.ts')).content;
+        expect(output).toContain('let mut qty: Option<String> = self.safeString(params.clone(), Value::Str("cost".into()), &[Value::Null]).as_str().map(str::to_owned);');
+        expect(output).toContain('if (qty.is_none()) {');
+    });
+});
