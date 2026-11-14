@@ -2258,6 +2258,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltKeyWriteLineOk(n: any, extra?: number): boolean;
     rustNullTestedDictLocal(init: any, nullTests: number, writes: number): boolean;
     rustDictElementSource(init: any): boolean;
+    /** te: `this.urls['<lit>']` where the base `Exchange` declaration types that entry as a string-keyed map
+     *  (`urls!: { api: Dict, .. }`). The read leaves its box as the shared map (the same Arc bump the copy paid);
+     *  a missing or non-map entry reads Null at every string key, exactly as the empty map `into_dict()` leaves. */
+    rustUrlsMapEntry(init: any): boolean;
     /** lf: a local spelled `Dictionary<Dict>` (`const d: Dictionary<Dict> = …`): its string-keyed values are maps. */
     rustDictOfDictsLocal(node: any): boolean;
     rustListElementSource(init: any): boolean;
