@@ -19778,6 +19778,14 @@ export class RustTranspiler extends BaseTranspiler {
                 handOffs++;
                 return true;
             }
+            // ral-vf: stored whole at a literal key of another local map (`m['k'] = x`, statement) at the list's provable last
+            // use: JS stores the reference and nothing reads or pushes `x` afterwards, so `Value::Arr(x)` moves it (one box)
+            if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
+                && (isElementAccessExpression(up.left) || isPropertyAccessExpression(up.left)) && this.rustLocalKeyPlace(up.left, n) && short(n)) {
+                boxes.push([n, 'move']);
+                handOffs++;
+                return true;
+            }
             // ral-tf: a one-kind push accumulator boxed into an object-literal value before its last hand-off shares the
             // list there (`Value::Arr(x.clone())`, an Arc bump where the Value box was `x.clone()`); nothing mutates it afterwards
             if (up?.kind === SyntaxKind.PropertyAssignment && up.initializer === n && short(n) && this.rustBuiltListFrozenAfter(n, declaration, name)) {

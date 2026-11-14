@@ -12635,3 +12635,24 @@ describe('ral-vf: same-named literal maps in sibling loops pushed whole at their
         expect(body).toMatch(/let mut row: Value = /);
     });
 });
+
+describe('ral-vf: a built list stored at a key of another local map at its last use', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-vf-list-store');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    stored (ids: string[]) {\n        const request: Dict = {};\n        const idList: string[] = [];\n        for (let i = 0; i < ids.length; i++) {\n            idList.push (ids[i]);\n        }\n        request['ids'] = idList;\n        return this.hold (request);\n    }\n    pushedAfter (ids: string[]) {\n        const request: Dict = {};\n        const args: string[] = [];\n        request['args'] = args;\n        for (let i = 0; i < ids.length; i++) {\n            args.push (ids[i]);\n        }\n        return this.hold (request);\n    }\n}\n");
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('the list moves into the map at its last use (one box, no clone)', () => {
+        const body = out.slice (out.indexOf ('fn stored'), out.indexOf ('fn pushedAfter'));
+        expect(body).toMatch(/let mut idList: crate::value::List = /);
+        expect(body).toContain('Value::Arr(idList)');
+        expect(body).not.toContain('idList.clone()');
+    });
+    test('negative: a list pushed to after it was stored (the stored handle is shared) keeps the box', () => {
+        const body = out.slice (out.indexOf ('fn pushedAfter'));
+        expect(body).toMatch(/let mut args: Value = /);
+    });
+});

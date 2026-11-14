@@ -70986,6 +70986,11 @@ ${iden}}`;
         handOffs++;
         return true;
       }
+      if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (isElementAccessExpression4(up.left) || isPropertyAccessExpression3(up.left)) && this.rustLocalKeyPlace(up.left, n) && short(n)) {
+        boxes.push([n, "move"]);
+        handOffs++;
+        return true;
+      }
       if (up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n && short(n) && this.rustBuiltListFrozenAfter(n, declaration, name)) {
         boxes.push([n, "clone"]);
         handOffs++;
