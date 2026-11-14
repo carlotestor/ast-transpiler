@@ -80,6 +80,7 @@ const rustInlineFixtures: Record<string, Record<string, string>> = {
  },
  "na-self-calls": {"ts/src/base/functions/generic.ts": "// @ts-nocheck\nconst inArray = (needle: any, haystack: any[]): boolean => haystack.includes (needle);\nexport { inArray };\n", "ts/src/base/Exchange.ts": "import { inArray } from './functions/generic.js';\nexport interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type int = number;\nexport default class Exchange {\n    inArray = inArray;\n    hold (x: any): any { return x; }\n    implodeHostname (url: string): string { return url; }\n    nonce (): int {\n        return 1;\n    }\n    safeString (o: any, k: string, d: Str = undefined): Str { return o[k] ?? d; }\n    safeNumber (o: any, k: string, d: any = undefined): any { return o[k] ?? d; }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, int } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    override nonce (): int {\n        return 2;\n    }\n    async urlFor (isPrivate: boolean): Promise<string> {\n        let url = this.hold (isPrivate);\n        url = this.implodeHostname (url);\n        return url;\n    }\n    async watchIt () {\n        const url = await this.urlFor (false);\n        return this.hold (url.length);\n    }\n    sign (path: string) {\n        const nonce = this.nonce ().toString ();\n        return this.hold (nonce + path);\n    }\n    parsePair (market: Dict, feeTier: Dict, stablePairs: string[]) {\n        const id = this.safeString (market, 'product_id');\n        const defaultTakerFee = this.safeNumber (market, 'taker');\n        const takerFee = this.inArray (id, stablePairs) ? 0.00001 : this.safeNumber (feeTier, 'taker_fee_rate_with_a_long_enough_key_name_to_push_the_line_over_the_limit_of_four_hundred_characters_xxxxxxxxxxxxxxxxxxxxxxxxx', defaultTakerFee);\n        return this.hold ({ 'id': id, 'taker': takerFee });\n    }\n}\n"},
  "na-self-calls-mixed": {"ts/src/base/functions/generic.ts": "// @ts-nocheck\nconst inArray = (needle: any, haystack: any[]): boolean => haystack.includes (needle);\nexport { inArray };\n", "ts/src/base/Exchange.ts": "import { inArray } from './functions/generic.js';\nexport interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type int = number;\nexport default class Exchange {\n    inArray = inArray;\n    hold (x: any): any { return x; }\n    implodeHostname (url: string): string { return url; }\n    nonce (): int {\n        return 1;\n    }\n    safeString (o: any, k: string, d: Str = undefined): Str { return o[k] ?? d; }\n    safeNumber (o: any, k: string, d: any = undefined): any { return o[k] ?? d; }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nexport default class other extends Exchange {\n    override nonce (): any {\n        return 'x';\n    }\n    sign (path: string) {\n        const nonce = this.nonce ().toString ();\n        return this.hold (nonce + path);\n    }\n}\n"},
+ "od-self-calls": {"ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Bool = boolean | undefined;\nexport type Int = number | undefined;\nexport type int = number;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    keep (x: any, y: any): any { return x; }\n    safeString (o: any, k: string, d: Str = undefined): Str { return o[k] ?? d; }\n    safeBool (o: any, k: string, d: Bool = undefined): Bool { return o[k] ?? d; }\n    safeInteger (o: any, k: string, d: Int = undefined): Int { return o[k] ?? d; }\n    sum (...args: any[]): any { return args[0] + args[1]; }\n    binaryLength (binary: Uint8Array): number {\n        return binary.length;\n    }\n    isPostOnly (isMarketOrder: boolean, exchangeSpecificParam: Bool, params: Dict = {}): boolean {\n        const p = this.safeBool (params, 'postOnly', false);\n        if (p) {\n            return true;\n        } else {\n            return false;\n        }\n    }\n    handleOptionBoolAndParams (params: Dict, methodName: Str, optionName: string, defaultValue: Bool = undefined): [Bool, Dict] {\n        return [ this.safeBool (params, optionName, defaultValue), params ];\n    }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async isUnified (): Promise<boolean> {\n        return this.safeBool (this.hold ({}), 'u', false) === true;\n    }\n    wsUrl (): string {\n        return this.safeString (this.hold ({}), 'ws', '');\n    }\n    createOrderRequest (type: string, params: Dict = {}) {\n        const postOnly = this.isPostOnly (type === 'market', undefined, params);\n        if (postOnly) {\n            return this.hold (1);\n        }\n        return this.hold (2);\n    }\n    hashIt (m: Uint8Array) {\n        const n = this.binaryLength (m);\n        return this.hold (n + 1);\n    }\n    async fetchIt (params: Dict = {}) {\n        let uta = await this.isUnified ();\n        let rest: Dict = undefined;\n        [ uta, rest ] = this.handleOptionBoolAndParams (params, 'fetchIt', 'uta', uta);\n        if (uta) {\n            return this.hold (rest);\n        }\n        return this.hold (undefined);\n    }\n    window (params: Dict = {}) {\n        const start = this.safeInteger (params, 'start');\n        const end = this.sum (start, 60);\n        if (end !== undefined) {\n            return this.hold (end);\n        }\n        return this.hold (undefined);\n    }\n    pickDex (h: string): Str {\n        const dex = this.wsUrl ();\n        if (h === 'x') {\n            return dex;\n        }\n        this.keep (dex, h);\n        return dex;\n    }\n    watchIt (h: string) {\n        const url = this.wsUrl ();\n        this.keep (url, h);\n        return this.keep (url, h);\n    }\n}\n"},
  "clock-bound-function": {
   "ts/src/base/functions/time.ts": "// @ts-nocheck\nconst now = Date.now;\nconst milliseconds = now;\nconst seconds = () => Math.floor (now () / 1000);\nexport { milliseconds, seconds };\n",
   "ts/src/base/Exchange.ts": "import { milliseconds, seconds } from './functions/time.js';\nexport default class Exchange {\n    milliseconds = milliseconds;\n    seconds = seconds;\n    hold (x: any): any { return x; }\n}\n",
@@ -1740,8 +1741,27 @@ ${body}
         const resolved = headers;
         return this.hold(resolved);`)).content;
             expect(out).toContain('let mut headers: Option<crate::value::Dict> = None;');
+            expect(out).toContain('let mut resolved: Value = headers.map_or(Value::Null, Value::Dict);');
             expect(out).toContain('if let Some(__d) = &mut headers { std::sync::Arc::make_mut(__d).insert("Content-Type".to_string(), Value::Str("application/json".into())); }');
-            expect(out).toContain('headers.map_or(Value::Null, Value::Dict)');
+            // og: a whole alias boxed only as a literal value / return takes the shared handle (moved: the source is dead after it)
+            const alias = transpiler.transpileRust(listCls(`        let headers = undefined;
+        if (kind === 'a') { headers = { 'K': 'v' }; }
+        const resolved = headers;
+        return { 'h': resolved };`)).content;
+            expect(alias).toContain('let mut resolved: Option<crate::value::Dict> = headers;');
+            expect(alias).toContain('resolved.map_or(Value::Null, Value::Dict)');
+            expect(alias).not.toContain('headers.clone()');
+            const live = transpiler.transpileRust(listCls(`        let headers = undefined;
+        if (kind === 'a') { headers = { 'K': 'v' }; }
+        const resolved = headers;
+        return { 'a': resolved, 'b': headers };`)).content;
+            expect(live).toContain('let mut resolved: Option<crate::value::Dict> = headers.clone();');
+            const reset = transpiler.transpileRust(listCls(`        let headers = undefined;
+        if (kind === 'a') { headers = { 'K': 'v' }; } else { headers = undefined; }
+        const resolved = headers;
+        return { 'h': resolved };`)).content;
+            expect(reset).toContain('headers = None;');
+            expect(reset).not.toContain('None.clone()');
             const ext = transpiler.transpileRust(listCls(`        let request = undefined;
         if (kind === 'a') { request = { 'op': 'sub' }; } else { request = { 'op': 'unsub' }; }
         return this.extend(request, {});`)).content;
@@ -1794,6 +1814,26 @@ ${body}
             expect(out).toContain('let mut body: Option<String> = None;');
             expect(out).toContain('let mut result: Option<String> = body;');
             expect(out).toContain('m.insert("body".to_string(), result.map(Value::from).unwrap_or(Value::Null));');
+        });
+
+        test('og: a nil string local whose name is bound again in a sibling block is typed when its boxes move', () => {
+            const out = transpiler.transpileRust(listCls(`        if (kind === 'a') {
+            const base = parts[0];
+            return { 'base': base };
+        }
+        let base = undefined;
+        if (kind === 'b') { base = 'x'; }
+        return { 'base': base };`)).content;
+            expect(out).toContain('let mut base: Option<String> = None;');
+            // a box before the last use would copy where the Value moved: stays boxed
+            const kept = transpiler.transpileRust(listCls(`        if (kind === 'a') {
+            const base = parts[0];
+            return { 'base': base };
+        }
+        let base = undefined;
+        if (kind === 'b') { base = 'x'; }
+        return { 'base': base, 'b2': base };`)).content;
+            expect(kept).toContain('let mut base: Value = Value::Null;');
         });
 
         test('ral-gf: a nil string boxed before its last use lends at this. arguments', () => {
@@ -3132,8 +3172,10 @@ describe('rust is_true over a proven boolean Value', () => {
             '    }\n' +
             '}';
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('let mut uta: Value = Value::Bool(true);');
-        expect(output).toContain('if uta.as_bool() == Some(true) {');
+        // od: the bool box inside its own first slot write reads the initializer, so the local is a native bool
+        expect(output).toContain('let mut uta: bool = true;');
+        expect(output).toContain('&[Value::Bool(uta)]');
+        expect(output).toContain('if uta {');
         expect(output).not.toContain('is_true(&uta)');
     });
 
@@ -6046,7 +6088,8 @@ describe('native `bool` parameters', () => {
 
     test('the base tier and base overrides keep the `Value` ABI', () => {
         expect(base).toContain('pub fn setSandboxMode(&self, enabled: Value)');
-        expect(base).toContain('pub fn isPostOnly(&self, isMarketOrder: Value, optional_args: &[Value]) -> Value {');
+        // od: the parameters keep the `Value` ABI; the return is the typed-return table's `bool`
+        expect(base).toContain('pub fn isPostOnly(&self, isMarketOrder: Value, optional_args: &[Value]) -> bool {');
         // native truthiness of a boolean-typed `Value` as the `as_bool()` compare,
         // so the boxed ABI still shows (no bare `if enabled {`)
         expect(base).toContain('if enabled.as_bool() == Some(true) {');
@@ -9018,11 +9061,13 @@ describe('rust boolean members read as conditions', () => {
         expect(out).not.toContain('isTestnet.as_bool()');
     });
     test('a boolean method result read only as a condition is a bool local', () => {
-        expect(out).toMatch(/let mut postOnly: bool = self\.isPostOnly\(.*\)\.as_bool\(\) == Some\(true\);/);
+        // od: the base isPostOnly returns a native bool, so no decode is printed
+        expect(out).toMatch(/let mut postOnly: bool = self\.isPostOnly\([^\n]*\);/);
+        expect(out).not.toMatch(/self\.isPostOnly\([^\n]*\.as_bool\(\)/);
         expect(out).not.toContain('postOnly.as_bool()');
     });
-    test('negative: a boolean result handed to another method keeps its box', () => {
-        expect(out).toMatch(/let mut postOnly: Value = self\.isPostOnly\(/);
+    test('a boolean result handed to another method boxes the Copy bool once', () => {
+        expect(out).toContain('self.hold(Value::Bool(postOnly))');
     });
 });
 
@@ -10724,6 +10769,32 @@ describe('safe scalar locals, fifth pass: literal concat operands, in-tested ins
     });
 });
 
+describe('safe scalar locals, sixth pass: equality partners held as Value', () => {
+    test('a typed reader local compares in place against a Str|Null or Int|Null Value partner', () => {
+        const dir = path.join (rustFixtureRoot, 'scalar-of');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k]; }\n    safeCurrencyCode (c: Str, x: any = undefined): string { return c; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue6.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue6 extends Exchange {\n    bal (rows: any[]) {\n        const result: any = {};\n        for (let i = 0; i < rows.length; i++) {\n            const raw = rows[i];\n            const currencyId = this.safeString (raw, 'product_id');\n            let code = this.safeCurrencyCode (currencyId);\n            if (code === '0') {\n                code = 'USDT0';\n            } else if (code === currencyId) {\n                code = this.safeString (raw, 'base', code);\n            }\n            if (code !== undefined) {\n                result[code] = raw;\n            }\n        }\n        return result;\n    }\n    seq (msg: any, prev: any) {\n        let nonce = this.safeInteger (prev, 'u');\n        nonce = this.safeInteger (prev, 'U');\n        prev['n'] = parseInt (nonce);\n        const pu = this.safeInteger (msg, 'pu');\n        if (pu === undefined) { return false; }\n        return pu === nonce;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue6.ts')).content;
+        // is_equal over Str|Null operands is the variant compare: Option<&str> == Value::as_str (Null == None)
+        expect(out).toContain('let mut currencyId: Option<String> = ');
+        expect(out).toContain('(currencyId.as_deref() == code.as_str())');
+        // Int|Null partner: Option<i64> == Value::as_i64
+        expect(out).toContain('let mut pu: Option<i64> = ');
+        expect(out).toContain('(pu == nonce.as_i64())');
+        expect(out).not.toContain('is_equal(&pu');
+    });
+    test('an equality partner also tested `in` a this-field map stays Value (its typed key would copy at that box)', () => {
+        const dir = path.join (rustFixtureRoot, 'scalar-of2');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    markets_by_id: any = undefined;\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue7.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue7 extends Exchange {\n    fees (rows: any[]) {\n        const out: any = {};\n        for (let i = 0; i < rows.length; i++) {\n            const entry = rows[i];\n            const marketId = this.safeString (entry, 'symbol');\n            if ((marketId === undefined) || !(marketId in this.markets_by_id)) {\n                continue;\n            }\n            const sym = this.safeString (entry, 'sym');\n            if ((sym === undefined) || (sym === marketId)) {\n                continue;\n            }\n            out[sym] = entry;\n        }\n        return out;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue7.ts')).content;
+        expect(out).toContain('let mut marketId: Value = ');
+        expect(out).not.toContain('marketId.clone().map(Value::from)');
+    });
+});
+
 describe('typed market locals across sibling blocks, lookup keys and ws callers', () => {
     test('a safeMarket local next to a same-named sibling binding, read as a lookup key, lends to a REST helper the ws class calls too', () => {
         const dir = path.join (rustFixtureRoot, 'typed-market-ia');
@@ -11436,5 +11507,68 @@ describe('rust map literal written back through handleUntilOption (ral-pb)', () 
         expect(output).toMatch(/self\.handleUntilOption\(Value::Str\("end"\.into\(\)\), Value::Dict\(request\), /);
         expect(output).toContain('request = __destr_tmp.get(0).cloned().unwrap_or(Value::Null).into_dict()');
         expect(output).toContain('std::sync::Arc::make_mut(&mut request).insert("since".into()');
+    });
+});
+
+describe('rust built lists handed to ws settle / Promise.all', () => {
+    const src = (body: string) => transpiler.transpileRust(`class T {\n    async g (x: any) { return x; }\n    async f (client: any, a: any, b: any) {\n${body}\n    }\n}`).content;
+    test('a pushed list resolved at its last use moves', () => {
+        const out = src("        const rows: any[] = [];\n        rows.push (a);\n        client.resolve (rows, 'h');");
+        expect(out).toMatch(/let mut rows: crate::value::List = /);
+        expect(out).toMatch(/client\.resolve\(Value::Arr\(rows\), "h"\)/);
+    });
+    test('a Promise.all operand list moves into the box', () => {
+        const out = src('        const ps = [ this.g (a), this.g (b) ];\n        const r = await Promise.all (ps);\n        return r;');
+        expect(out).toMatch(/let mut ps: crate::value::List = /);
+        expect(out).toMatch(/promise_all\(&Value::Arr\(ps\)\)/);
+    });
+    test('a list only boxed to an unproven slot keeps its box', () => {
+        const out = src('        const ps = [ a, b ];\n        a.consume (ps);');
+        expect(out).toMatch(/let mut ps: Value = /);
+    });
+});
+
+describe('od: typed results of other self method calls (third pass)', () => {
+    let out: string;
+    beforeAll(() => {
+        out = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'od-self-calls', 'ts/src/venue.ts')).content;
+    });
+    test('base isPostOnly answers a bool: its local is a bool', () => {
+        expect(out).toMatch(/let mut postOnly: bool = self\.isPostOnly\(/);
+    });
+    test('the hand-written binaryLength answers an i64: its local is an i64', () => {
+        expect(out).toMatch(/let mut n: i64 = self\.binaryLength\(/);
+    });
+    test('a bool boxed only inside its own first slot write keeps its bool type', () => {
+        expect(out).toMatch(/let mut uta: bool = self\.isUnified\(/);
+        expect(out).toContain('&[Value::Bool(uta)]');
+    });
+    test('sum with an optional integer operand prints the native Option<i64> sum (Null when an operand is missing)', () => {
+        expect(out).toContain('Value::from((if let Some(__m0) = start { Some((__m0 + 60)) } else { None }))');
+        expect(out).not.toContain('self.sum(');
+    });
+    test('negative: a string local the method returns keeps the method\'s typed return', () => {
+        expect(out).toMatch(/pub fn pickDex\(&self, h: &str\) -> Option<String> \{/);
+    });
+    test('a venue string copied at a self-call slot is lent there', () => {
+        expect(out).toMatch(/let mut url: Option<String> = self\.wsUrl\(/);
+        expect(out).toContain('Value::from(url.as_deref())');
+    });
+});
+
+describe('ral-oe: ecdsa r / s and row string fields of plain Value rows', () => {
+    test('an ecdsa r / s read is Option<String> through KeyRead; a Value row field reads through KeyRead, not a closure', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-oe-elements');
+        fs.mkdirSync (path.join (dir, 'ts/src/base/functions'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; id: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    markets: Dict = undefined;\n    safeMarket (id: Str, market: Market = undefined): MarketInterface { return market; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/base/functions/crypto.ts'), "export function ecdsa (request: any, secret: any, curve: any, prehash: any = null) { return { 'r': '', 's': '', 'v': 0 }; }\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nimport { ecdsa } from './base/functions/crypto.js';\nexport default class venue extends Exchange {\n    signHash (hash: string, key: string): string {\n        const signature = ecdsa (hash, key, 'secp256k1', undefined);\n        const r = signature['r'];\n        const s = signature['s'];\n        return '0x' + r.padStart (64, '0') + s.padStart (64, '0');\n    }\n    parseRow (row: Dict) {\n        let marketResolved = this.safeMarket (this.safeString (row, 'id'));\n        const symbol = marketResolved['symbol'];\n        if (symbol !== undefined) {\n            marketResolved = this.hold (symbol);\n        }\n        return { 'symbol': symbol, 'm': marketResolved };\n    }\n}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut r: Option<String> = crate::value::KeyRead::key_read(&&signature, "r").as_str().map(str::to_owned);');
+        expect(out).toContain('let mut s: Option<String> = crate::value::KeyRead::key_read(&&signature, "s").as_str().map(str::to_owned);');
+        expect(out).not.toContain('let mut r: Value');
+        expect(out).toContain('let mut symbol: Option<String> = crate::value::KeyRead::key_read(&&marketResolved, "symbol").as_str().map(str::to_owned);');
+        expect(out).not.toContain('let mut symbol: Value');
     });
 });
