@@ -3843,7 +3843,8 @@ export class RustTranspiler extends BaseTranspiler {
         const method = String(callee.name.text);
         let text: string | undefined;
         if (method === 'capitalize' && callee.expression.kind === SyntaxKind.ThisKeyword && init.arguments.length === 1) {
-            text = `${this.printNode(init, 0).trim()}.to_string()`;
+            // tc: the runtime answers a `String` (rustStrRuntimeCall), so the bare call is the native value
+            text = this.rustStrRuntimeCall(init) ? this.rustStrRuntimeBareText(init) : `${this.printNode(init, 0).trim()}.to_string()`;
         } else if ((method === 'toUpperCase' || method === 'toLowerCase') && init.arguments.length === 0
             && callee.expression.kind !== SyntaxKind.ThisKeyword && isIdentifier(callee.expression)
             && this.rustParamShadowOf(callee.expression) === undefined) {
@@ -4327,6 +4328,8 @@ export class RustTranspiler extends BaseTranspiler {
         const clockLent = kind === 'str' && this.rustClockString(clockInit) && !this.rustStrNoLend && (copied > 0 ? this.rustReaderLendBoxes(declaration) : handOff)
             && !this.rustConcatWithNilLocal(declaration);
         if (clockLent && copied > 0) this.rustStrLentLocals.add(declaration);
+        // tc: a `randomBytes` string (it was an `Option<String>` lent at its copying boxes) keeps lending there instead of cloning
+        if (kind === 'str' && copied > 0 && this.rustRandomBytesCall(clockInit) && !this.rustStrNoLend && this.rustReaderLendBoxes(declaration)) this.rustStrLentLocals.add(declaration);
         if (!numericSum && !clockLent && this.rustNewShapeCostly(declaration.initializer, typedUses, kind === 'str' || kind === 'ostr' ? copied : 0)) return undefined;
         if (this.rustFieldKeyCostly(declaration)) return undefined;
         if (this.rustStrRuntimeLocalCostly(declaration)) return undefined;
@@ -4707,7 +4710,11 @@ export class RustTranspiler extends BaseTranspiler {
     // ── hand-written `-> String` runtime methods (rustStrRuntimeCall / printRustStrRuntimeCall) ──
     // Base methods the runtime implements by hand with the TS `string` return as a Rust `String`.
     private static readonly RUST_STR_RUNTIME_METHODS = new Set([ 'implodeParams', 'intToBase16', 'hmac', 'uuid', 'uuid16', 'uuid22', 'urlencode', 'rawencode',
-        'urlencodeNested', 'urlencodeWithArrayRepeat', 'stringToBase64', 'binaryToBase16', 'binaryToBase64', 'binaryToBase58', 'binaryToString', 'hash' ]);
+        'urlencodeNested', 'urlencodeWithArrayRepeat', 'stringToBase64', 'binaryToBase16', 'binaryToBase64', 'binaryToBase58', 'binaryToString', 'hash',
+        // tc: hand-written `random_bytes -> String` (TS `randomBytes (length: number): string`, always a hex string)
+        'randomBytes',
+        // tc: hand-written `capitalize -> String` (TS `capitalize (s: string | undefined): string`, always a string)
+        'capitalize' ]);
     private static readonly RUST_STR_RUNTIME_APPEND_VETO = new Set([ 'implodeParams', 'intToBase16' ]);
     // The runtime's free signers with a TS `string` return (`base/functions/crypto.ts`, `rsa.ts`).
     private static readonly RUST_STR_RUNTIME_FREE = new Set([ 'eddsa', 'jwt', 'rsa', 'hash' ]);
@@ -4822,6 +4829,8 @@ export class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_BASE_TYPED_RUNTIME: { [name: string]: string } = {
         milliseconds: 'int', parse8601: 'oint', numberToString: 'ostr', omitZero: 'ostr', parseTimeframe: 'int',
         inArray: 'bool', valueIsDefined: 'bool', isJsonEncodedObject: 'bool', seconds: 'int', randNumber: 'int', precisionFromString: 'int', binaryLength: 'int',
+        // tc: hand-written `microseconds -> i64` (TS `() => now () * 1000`, always an integer)
+        microseconds: 'int',
     };
 
     // base methods with a TS body that the runtime implements by hand (`exchange_stubs.rs`), typed like the runtime table
@@ -5111,7 +5120,7 @@ export class RustTranspiler extends BaseTranspiler {
     rustClockCall(node): boolean {
         if (!isCallExpression(node) || node.arguments.length !== 0 || !isPropertyAccessExpression(node.expression)) return false;
         const name = String(node.expression.name.text);
-        return (name === 'milliseconds' || name === 'seconds') && this.rustArithCallKind(node) === 'int';
+        return (name === 'milliseconds' || name === 'seconds' || name === 'microseconds') && this.rustArithCallKind(node) === 'int';
     }
 
     rustVenueReturnTypesHas(node, name: string): boolean {
@@ -5119,6 +5128,11 @@ export class RustTranspiler extends BaseTranspiler {
         const at = file.lastIndexOf('/ts/src/');
         if (at < 0) return false;
         return this.rustVenueReturnTypes(file.slice(0, at) + '/ts/src').has(name);
+    }
+
+    /** tc: `this.randomBytes(n)` resolved to the hand-written `-> String` runtime method */
+    rustRandomBytesCall(node): boolean {
+        return isCallExpression(node) && isPropertyAccessExpression(node.expression) && node.expression.name.text === 'randomBytes' && this.rustStrRuntimeCall(node);
     }
 
     /** `this.milliseconds().toString()`: the decimal text of the `i64`, as `to_string_val` prints an `Int`. */
@@ -7237,7 +7251,7 @@ export class RustTranspiler extends BaseTranspiler {
     // Base calls whose runtime always answers `Int` (milliseconds, seconds, parseTimeframe), a literal-defaulted
     // integer reader, and `this.sum` / two-operand `Math.min|max` over int/num operands: the native i64 / f64 result
     // equals the helper's (Int with Int stays Int, any Float operand gives Float).
-    private static readonly RUST_ALWAYS_INT_CALLS = new Set([ 'milliseconds', 'seconds', 'parseTimeframe' ]);
+    private static readonly RUST_ALWAYS_INT_CALLS = new Set([ 'milliseconds', 'seconds', 'microseconds', 'parseTimeframe' ]);
 
     rustArithCallKind(expr): string | undefined {
         const node: any = this.unwrapParens(expr);
@@ -7275,7 +7289,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** The clock is a base property bound to `Date.now`, so its signature resolves outside the base tier. */
     rustArithBaseCallee(node, name: string): boolean {
-        if ((name === 'milliseconds' || name === 'seconds') && node.arguments.length === 0) return true;
+        if ((name === 'milliseconds' || name === 'seconds' || name === 'microseconds') && node.arguments.length === 0) return true;
         const declaration: any = this.rustScalarCallee(node);
         return declaration !== undefined && RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? ''));
     }
