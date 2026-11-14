@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -54844,7 +54844,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const declarations = symbolDeclarations(this.checkerOrUndefined()?.getSymbolAtLocation(access.name));
     const wanted = isCallExpression6(node) ? SyntaxKind7.MethodDeclaration : SyntaxKind7.PropertyDeclaration;
-    if (declarations.length === 0 || !declarations.every((d) => d.kind === wanted && d.type?.kind === SyntaxKind7.BooleanKeyword))
+    const predicate = (d) => d.type?.kind === SyntaxKind7.TypePredicate && d.type.assertsModifier === void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(node.getSourceFile?.()?.fileName ?? ""));
+    if (declarations.length === 0 || !declarations.every((d) => d.kind === wanted && (d.type?.kind === SyntaxKind7.BooleanKeyword || predicate(d))))
       return false;
     return !isCallExpression6(node) || this.rustBoolValue(node);
   }
@@ -55054,8 +55055,6 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (this.rustVenueScalarSource(declaration.initializer) && (boxed > 0 && !handOff || this.rustVenueLocalHandedOn(declaration)))
       return void 0;
     if (this.rustVenueTypedCostly(declaration, kind, copied))
-      return void 0;
-    if (typedUses === 0 && this.rustTestTierSource(declaration))
       return void 0;
     if (typedUses === 0 && this.rustParamAliasSeedKind(declaration) !== void 0)
       return void 0;
@@ -66177,8 +66176,30 @@ ${iden}}`;
     const name = String(arg.typeName.text);
     return name === "Dict" ? "dict" : name === "List" ? "list" : void 0;
   }
+  printTestReaderArg(node, text) {
+    const call = node.parent;
+    if (call === void 0 || !isCallExpression6(call) || call.arguments[0] !== node || !isIdentifier3(node) || !/^\w+$/.test(text))
+      return void 0;
+    const callee = call.expression;
+    if (!isPropertyAccessExpression3(callee) || !_RustTranspiler.RUST_TEST_KEYREAD_READERS.test(String(callee.name.text)))
+      return void 0;
+    if (!this.rustTestTierSource(call) || !this.rustScalarReceiver(callee.expression) || call.arguments.length < 2)
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration === void 0 || declaration === node || declaration.name === node)
+      return void 0;
+    if (declaration.kind === SyntaxKind7.Parameter)
+      return `&${text}`;
+    if (!isVariableDeclaration3(declaration) || this.rustScalarLocalOf(node) !== void 0 || this.rustBytesLocal(declaration))
+      return void 0;
+    const init = this.unwrapParens(declaration.initializer);
+    return init !== void 0 && init.kind === SyntaxKind7.NewExpression ? void 0 : `&${text}`;
+  }
   /** `&x` for a borrowed local (or a typed container local) passed to a hand-written any-key reader. */
   printBorrowedReaderArg(node, text) {
+    const testLent = this.printTestReaderArg(node, text);
+    if (testLent !== void 0)
+      return testLent;
     const call = node.parent;
     if (call === void 0 || !isCallExpression6(call) || call.arguments[0] !== node || !this.rustBorrowedAnyKeyReader(call))
       return void 0;
@@ -70293,7 +70314,19 @@ ${this.getIden(identation)}}`;
   }
   /** The single bodied method declaration `this.m (…)` resolves to (implementation of an
    *  overload set), in the calling file or the base tier. */
-  rustMethodImpl(call) {
+  /** A sync base method no venue source declares and outside virtual dispatch: a base-tier `self.m()` runs this body. */
+  rustBaseOnlyCallee(declaration, name) {
+    const file = String(declaration.getSourceFile().fileName).replace(/\\/g, "/");
+    if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(file) || this.isAsyncFunction(declaration))
+      return false;
+    if (this.rustVirtualDispatch[this.toSnakeCaseName(name)] !== void 0)
+      return false;
+    const root = file.search(/(?:^|\/)ts\/src\//);
+    if (root < 0)
+      return false;
+    return !this.rustVenueMethodNames(file.slice(0, file.indexOf("ts/src/", root)) + "ts/src").has(name);
+  }
+  rustMethodImpl(call, baseOnly = false) {
     const checker = this.checkerOrUndefined();
     const callee = call?.expression;
     if (checker === void 0 || !isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword) {
@@ -70306,7 +70339,7 @@ ${this.getIden(identation)}}`;
       return void 0;
     }
     const callerFile = String(call.getSourceFile().fileName).replace(/\\/g, "/");
-    if (declarations.length !== 1 || _RustTranspiler.RUST_BASE_TIER_FILE.test(callerFile))
+    if (declarations.length !== 1 || _RustTranspiler.RUST_BASE_TIER_FILE.test(callerFile) && !(baseOnly && this.rustBaseOnlyCallee(declarations[0], String(callee.name.text))))
       return void 0;
     const file = String(declarations[0].getSourceFile().fileName).replace(/\\/g, "/");
     return declarations[0].getSourceFile() === call.getSourceFile() || _RustTranspiler.RUST_BASE_TIER_FILE.test(file) ? declarations[0] : void 0;
@@ -70357,7 +70390,7 @@ ${this.getIden(identation)}}`;
     }) && sawBool;
   }
   rustEveryReturn(call, depth, ok) {
-    const method = this.rustMethodImpl(call);
+    const method = this.rustMethodImpl(call, true);
     if (method === void 0 || this.rustVisiting.has(method))
       return false;
     this.rustVisiting.add(method);
@@ -73938,6 +73971,9 @@ _RustTranspiler.RUST_BUILT_HELPER_RETURNS = {
   arrayConcat: "list",
   filterBy: "list"
 };
+// Test-tier readers: the harness `ExchangeOps` readers take `impl KeyRead` like the base ones, so a test's
+// `Value` container argument is lent (`&x`) where the call cloned it.
+_RustTranspiler.RUST_TEST_KEYREAD_READERS = /^safe(?:Value|String|Bool|Dict|List|Number|Integer)$|^safeStringN$/;
 // ── rustRecordLookupSource: base record lookups (market / outcome resolvers) held as a shared map ──
 // Each returns a cached record map (or nothing); read only by key, the map form reads the same.
 _RustTranspiler.RUST_RECORD_LOOKUP_SOURCES = /* @__PURE__ */ new Set(["outcome", "safeOutcome", "loadOutcome", "getMarketFromSymbols", "safeMarket", "market"]);
