@@ -12614,3 +12614,24 @@ describe('ral-vf: a reuse map literal overwritten from a map producer holds the 
         expect(out).toMatch(/fn noDefault[\s\S]*?let mut kept: Value = /);
     });
 });
+
+describe('ral-vf: same-named literal maps in sibling loops pushed whole at their last use', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-vf-sibling-push');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    build (ids: string[], cloids: string[]) {\n        const actions: Dict[] = [];\n        for (let i = 0; i < ids.length; i++) {\n            const action: Dict = {\n                'type': 'Cancel',\n                'data': ids[i],\n            };\n            actions.push (action);\n        }\n        for (let i = 0; i < cloids.length; i++) {\n            const action: Dict = {\n                'type': 'Cancel',\n                'data': cloids[i],\n            };\n            actions.push (action);\n        }\n        return this.hold (actions);\n    }\n    kept (ids: string[]) {\n        const rows: Dict[] = [];\n        for (let i = 0; i < ids.length; i++) {\n            const row: Dict = { 'id': ids[i] };\n            rows.push (row);\n            this.hold (row);\n        }\n        for (let i = 0; i < ids.length; i++) {\n            const row: Dict = { 'id': ids[i] };\n            rows.push (row);\n        }\n        return rows;\n    }\n}\n");
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('each sibling binding is a native map moved into the list at its push (no clone)', () => {
+        const body = out.slice (out.indexOf ('fn build'), out.indexOf ('fn kept'));
+        expect(body.match(/let mut action: indexmap::IndexMap<String, Value> = /g)?.length).toBe(2);
+        expect(body.match(/actions\.push\(Value::Map\(action\)\);/g)?.length).toBe(2);
+        expect(body).not.toContain('action.clone()');
+    });
+    test('negative: a sibling still used after the push keeps the box', () => {
+        const body = out.slice (out.indexOf ('fn kept'));
+        expect(body).toMatch(/let mut row: Value = /);
+    });
+});

@@ -65892,15 +65892,17 @@ ${iden}}`;
       return false;
     });
     const siblings = this.literalSiblingBindings;
+    const keyHits = this.literalKeyHits;
     const widened = this.literalKeyHits > 0 || siblings > 0 || escapes.some((e) => this.rustCastReturnOperand(e));
     this.literalKeyHits = outerWidened;
     this.literalSiblingBindings = outerSiblings;
     if (!safe)
       return false;
-    if (siblings > 0 && elementUses === 0)
+    const siblingMove = siblings > 0 && moveEscapes.length === 1 && escapes.length === 0 && rebuilds === 0 && enumUses === 0 && keyHits === 0;
+    if (siblings > 0 && elementUses === 0 && !siblingMove)
       return false;
     if (moveEscapes.length > 0) {
-      if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 || widened && !this.rustWsSettleMove(moveEscapes[0]) || enumUses > 0 || prediction || !this.rustLocalLastUse(moveEscapes[0], declaration) || !this.rustBoxLineOk(moveEscapes[0]))
+      if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 || widened && !siblingMove && !this.rustWsSettleMove(moveEscapes[0]) || enumUses > 0 || prediction || !this.rustLocalLastUse(moveEscapes[0], declaration) || !this.rustBoxLineOk(moveEscapes[0]))
         return false;
       this.rustLiteralMoves.add(moveEscapes[0]);
     }

@@ -14919,17 +14919,21 @@ export class RustTranspiler extends BaseTranspiler {
             return false;
         });
         const siblings = this.literalSiblingBindings;
+        const keyHits = this.literalKeyHits;
         const widened = this.literalKeyHits > 0 || siblings > 0 || escapes.some((e: any) => this.rustCastReturnOperand(e));
         this.literalKeyHits = outerWidened;
         this.literalSiblingBindings = outerSiblings;
         if (!safe) return false;
         // Built once and handed straight back stays boxed.
-        if (siblings > 0 && elementUses === 0) return false;
+        // ral-vf: except a single move at the last use (a list push / ws settle): each sibling `let` is its own Rust block,
+        // and the move is the box the helper form made (D11: stored and boxed back is typed)
+        const siblingMove = siblings > 0 && moveEscapes.length === 1 && escapes.length === 0 && rebuilds === 0 && enumUses === 0 && keyHits === 0;
+        if (siblings > 0 && elementUses === 0 && !siblingMove) return false;
         // a list-element / settle hand-off moves the map: only its single last use, with no other escape, may take it
         if (moveEscapes.length > 0) {
             // ral-tf: a map widened by string-local keys (written at `m[k] = v`) still moves whole into a ws settle value at
             // its last use: that is its only escape, so the move is the box the helper form made (no copy)
-            if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 || (widened && !this.rustWsSettleMove(moveEscapes[0])) || enumUses > 0 || prediction
+            if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 || (widened && !siblingMove && !this.rustWsSettleMove(moveEscapes[0])) || enumUses > 0 || prediction
                 || !this.rustLocalLastUse(moveEscapes[0], declaration) || !this.rustBoxLineOk(moveEscapes[0])) return false;
             this.rustLiteralMoves.add(moveEscapes[0]);
         }
