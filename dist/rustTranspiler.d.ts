@@ -957,6 +957,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  one scalar family or `Null` (`Str|Null` / `Int|Null`): `is_equal` on those operands is exactly the
      *  variant compare (`Null == Null`, `Str == Str` by text, `Int == Int`, else false), so the typed side
      *  compares its own `Option` against `p.as_str()` / `p.as_i64()`. Both read in place, no copy. */
+    /** A use that boxes the local outside a call argument and before its last use (an `in` key, a field / element value). */
+    rustScalarBorrowedBox(declaration: any): boolean;
+    /** The local is one side of `x === y` / `x !== y` against a `Value` partner (`rustScalarValuePartnerTest`). */
+    rustScalarHasPairEquality(declaration: any): boolean;
     rustScalarValuePartnerTest(typed: any, other: any, kind: string, sign: string, dry: boolean): string | undefined;
     /** `'str'` / `'int'` when `p` is a plain `Value` local (no typed-local rule claims it) whose initializer and every
      *  write is a fresh `str|ostr|null` (`int|oint|null`) producer, written only by whole `p = ..` statements. */

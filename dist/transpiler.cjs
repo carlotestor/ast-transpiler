@@ -55207,6 +55207,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
     if (!ok || unused || storeOnly || clientOnce || guarded && scope.kind !== _ast.SyntaxKind.MethodDeclaration || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration))
       return void 0;
+    if (strKind && copied > 0 && this.rustScalarHasPairEquality(declaration) && this.rustScalarBorrowedBox(declaration))
+      return void 0;
     if (handOff && _is.isConditionalExpression.call(void 0, this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === void 0)
       return void 0;
     if (this.rustVenueScalarSource(declaration.initializer) && (boxed > 0 && !handOff || this.rustVenueLocalHandedOn(declaration)))
@@ -58312,6 +58314,38 @@ ${binding(plan.indent)}` : ""), head: "" };
    *  one scalar family or `Null` (`Str|Null` / `Int|Null`): `is_equal` on those operands is exactly the
    *  variant compare (`Null == Null`, `Str == Str` by text, `Int == Int`, else false), so the typed side
    *  compares its own `Option` against `p.as_str()` / `p.as_i64()`. Both read in place, no copy. */
+  /** A use that boxes the local outside a call argument and before its last use (an `in` key, a field / element value). */
+  rustScalarBorrowedBox(declaration) {
+    let borrowed = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const form = this.rustScalarUseForms.get(n);
+      if (form !== "box" && form !== "xbox")
+        return true;
+      if (_is.isReturnStatement.call(void 0, n.parent) || this.rustLocalLastUse(n, declaration))
+        return true;
+      if (!(_is.isCallExpression.call(void 0, n.parent) && n.parent.expression !== n))
+        borrowed = true;
+      return true;
+    });
+    return borrowed;
+  }
+  /** The local is one side of `x === y` / `x !== y` against a `Value` partner (`rustScalarValuePartnerTest`). */
+  rustScalarHasPairEquality(declaration) {
+    let pair = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      let top = n;
+      while (_is.isParenthesizedExpression.call(void 0, top.parent))
+        top = top.parent;
+      const up = top.parent;
+      if (_is.isBinaryExpression.call(void 0, up) && this.isEqualityOp(up.operatorToken.kind)) {
+        const other = this.unwrapParens(up.left === top ? up.right : up.left);
+        if (other !== void 0 && _is.isIdentifier.call(void 0, other) && other.text !== "undefined" && this.rustScalarIdentifierKind(other) === void 0 && this.rustScalarValuePartnerKind(other) !== void 0)
+          pair = true;
+      }
+      return true;
+    });
+    return pair;
+  }
   rustScalarValuePartnerTest(typed, other, kind, sign, dry) {
     const self = this.unwrapParens(typed);
     const partner = this.unwrapParens(other);

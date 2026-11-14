@@ -4127,6 +4127,9 @@ export class RustTranspiler extends BaseTranspiler {
         // a string handed once to a ws client call and nothing else stays a `Value`
         const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
         if (!ok || unused || storeOnly || clientOnce || (guarded && scope.kind !== SyntaxKind.MethodDeclaration) || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration)) return undefined;
+        // of: a string compared against another local must not copy at a box where the `Value` was lent
+        // (a call argument already copied the `Value`; an `in` key or other borrowed slot did not)
+        if (strKind && copied > 0 && this.rustScalarHasPairEquality(declaration) && this.rustScalarBorrowedBox(declaration)) return undefined;
         // a hand-off ternary whose arms print only as a `Value` keeps the box its uses would read
         if (handOff && isConditionalExpression(this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === undefined) return undefined;
         if (this.rustVenueScalarSource(declaration.initializer) && ((boxed > 0 && !handOff) || this.rustVenueLocalHandedOn(declaration))) return undefined;
@@ -7029,6 +7032,36 @@ export class RustTranspiler extends BaseTranspiler {
      *  one scalar family or `Null` (`Str|Null` / `Int|Null`): `is_equal` on those operands is exactly the
      *  variant compare (`Null == Null`, `Str == Str` by text, `Int == Int`, else false), so the typed side
      *  compares its own `Option` against `p.as_str()` / `p.as_i64()`. Both read in place, no copy. */
+    /** A use that boxes the local outside a call argument and before its last use (an `in` key, a field / element value). */
+    rustScalarBorrowedBox(declaration): boolean {
+        let borrowed = false;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+            const form = this.rustScalarUseForms.get(n);
+            if (form !== 'box' && form !== 'xbox') return true;
+            if (isReturnStatement(n.parent) || this.rustLocalLastUse(n, declaration)) return true;
+            if (!(isCallExpression(n.parent) && n.parent.expression !== n)) borrowed = true;
+            return true;
+        });
+        return borrowed;
+    }
+
+    /** The local is one side of `x === y` / `x !== y` against a `Value` partner (`rustScalarValuePartnerTest`). */
+    rustScalarHasPairEquality(declaration): boolean {
+        let pair = false;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+            let top: any = n;
+            while (isParenthesizedExpression(top.parent)) top = top.parent;
+            const up: any = top.parent;
+            if (isBinaryExpression(up) && this.isEqualityOp(up.operatorToken.kind)) {
+                const other: any = this.unwrapParens(up.left === top ? up.right : up.left);
+                if (other !== undefined && isIdentifier(other) && other.text !== 'undefined' && this.rustScalarIdentifierKind(other) === undefined
+                    && this.rustScalarValuePartnerKind(other) !== undefined) pair = true;
+            }
+            return true;
+        });
+        return pair;
+    }
+
     rustScalarValuePartnerTest(typed, other, kind: string, sign: string, dry: boolean): string | undefined {
         const self: any = this.unwrapParens(typed);
         const partner: any = this.unwrapParens(other);
