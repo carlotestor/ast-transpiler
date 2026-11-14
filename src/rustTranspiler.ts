@@ -501,6 +501,7 @@ export class RustTranspiler extends BaseTranspiler {
         const name = String(node.text);
         const slotValue = this.printMarketSlotParamValue(node); if (slotValue !== undefined) return slotValue;
         const currencySlot = this.printCurrencySlotParamValue(node) ?? this.printCurrencyLocalValue(node); if (currencySlot !== undefined) return currencySlot;
+        const recordBox = this.printRecordElemBox(node); if (recordBox !== undefined) return recordBox;
         const marketValue = this.printTypedMarketValueUse(node);
         if (marketValue !== undefined) return marketValue;
         if (RustTranspiler.RUST_NAME_VALUE_IMPORTS.has(name) && this.rustIsImportedValueName(node)) {
@@ -9884,10 +9885,11 @@ export class RustTranspiler extends BaseTranspiler {
         const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
             if (this.rustEnclosingFunction(n) !== scope) return false;
             const up: any = n.parent;
+            if (up !== undefined && up.kind === SyntaxKind.ReturnStatement && up.expression === n) { uses++; return true; }
             if (up === undefined || !isCallExpression(up)) return false;
             uses++;
             if (up.arguments[0] === n && this.rustBorrowedDictReader(up) !== undefined) return true;
-            return up.arguments.length === 1 && up.arguments[0] === n && isPropertyAccessExpression(up.expression) && String(up.expression.name.text) === 'append'
+            return up.arguments.length === 1 && up.arguments[0] === n && isPropertyAccessExpression(up.expression) && [ 'append', 'push' ].includes(String(up.expression.name.text))
                 && up.parent?.kind === SyntaxKind.ExpressionStatement;
         });
         return ok && uses > 0 ? m[1] : undefined;
@@ -9897,6 +9899,14 @@ export class RustTranspiler extends BaseTranspiler {
         if (node === undefined || !isIdentifier(node)) return undefined;
         const declaration: any = this.rustDeclarationOfIdentifier(node);
         return declaration !== undefined && declaration.name !== node && this.rustRecordElemLocal(declaration) !== undefined ? declaration : undefined;
+    }
+
+    /** A record element handle handed on whole (`list.push (r)`, `return r`) boxes the row's shared handle there. */
+    printRecordElemBox(node: any): string | undefined {
+        const up: any = node.parent;
+        if (up === undefined || this.rustRecordElemLocalOf(node) === undefined) return undefined;
+        const push = isCallExpression(up) && isPropertyAccessExpression(up.expression) && String(up.expression.name.text) === 'push';
+        return push || up.kind === SyntaxKind.ReturnStatement ? `Value::from(${super.printIdentifier(node)})` : undefined;
     }
 
     /** `let mut r: Option<&crate::types::T> = rows.get(i)` for a record element handle. */

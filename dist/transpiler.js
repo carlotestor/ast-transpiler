@@ -51932,6 +51932,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const currencySlot = this.printCurrencySlotParamValue(node) ?? this.printCurrencyLocalValue(node);
     if (currencySlot !== void 0)
       return currencySlot;
+    const recordBox = this.printRecordElemBox(node);
+    if (recordBox !== void 0)
+      return recordBox;
     const marketValue = this.printTypedMarketValueUse(node);
     if (marketValue !== void 0)
       return marketValue;
@@ -61003,12 +61006,16 @@ ${i1}}`;
       if (this.rustEnclosingFunction(n) !== scope)
         return false;
       const up = n.parent;
+      if (up !== void 0 && up.kind === SyntaxKind7.ReturnStatement && up.expression === n) {
+        uses++;
+        return true;
+      }
       if (up === void 0 || !isCallExpression6(up))
         return false;
       uses++;
       if (up.arguments[0] === n && this.rustBorrowedDictReader(up) !== void 0)
         return true;
-      return up.arguments.length === 1 && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && String(up.expression.name.text) === "append" && up.parent?.kind === SyntaxKind7.ExpressionStatement;
+      return up.arguments.length === 1 && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && ["append", "push"].includes(String(up.expression.name.text)) && up.parent?.kind === SyntaxKind7.ExpressionStatement;
     });
     return ok && uses > 0 ? m[1] : void 0;
   }
@@ -61017,6 +61024,14 @@ ${i1}}`;
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(node);
     return declaration !== void 0 && declaration.name !== node && this.rustRecordElemLocal(declaration) !== void 0 ? declaration : void 0;
+  }
+  /** A record element handle handed on whole (`list.push (r)`, `return r`) boxes the row's shared handle there. */
+  printRecordElemBox(node) {
+    const up = node.parent;
+    if (up === void 0 || this.rustRecordElemLocalOf(node) === void 0)
+      return void 0;
+    const push = isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && String(up.expression.name.text) === "push";
+    return push || up.kind === SyntaxKind7.ReturnStatement ? `Value::from(${super.printIdentifier(node)})` : void 0;
   }
   /** `let mut r: Option<&crate::types::T> = rows.get(i)` for a record element handle. */
   printRecordElemLocal(declaration, indent, varName) {

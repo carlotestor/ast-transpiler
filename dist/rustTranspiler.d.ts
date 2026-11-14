@@ -1344,6 +1344,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustRecordElemLocal(declaration: any): string | undefined;
     rustRecordElemLocalUncached(declaration: any): string | undefined;
     rustRecordElemLocalOf(node: any): any;
+    /** A record element handle handed on whole (`list.push (r)`, `return r`) boxes the row's shared handle there. */
+    printRecordElemBox(node: any): string | undefined;
     /** `let mut r: Option<&crate::types::T> = rows.get(i)` for a record element handle. */
     printRecordElemLocal(declaration: any, indent: string, varName: string): string | undefined;
     rustCallLocalOf(node: any): any;
