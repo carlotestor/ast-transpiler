@@ -51366,9 +51366,9 @@ var rustDispatch = {
       case "slice":
         return rustDispatch.sliceArg(i);
       case "str":
-        return `args.get(${i}).and_then(crate::Value::as_str).unwrap_or_default()`;
+        return `args.get(${i}).and_then(crate::Value::as_text).as_deref().unwrap_or_default()`;
       case "optstr":
-        return `args.get(${i}).and_then(crate::Value::as_str)`;
+        return `args.get(${i}).and_then(crate::Value::as_text).as_deref()`;
       case "f64":
         return `args.get(${i}).and_then(crate::Value::as_f64).unwrap_or_default()`;
       case "optf64":
