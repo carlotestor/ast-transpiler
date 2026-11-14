@@ -717,6 +717,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustReaderIntDefaultNum(init: any): boolean;
     rustScalarUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean): boolean;
     rustBlockLocalUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean, scalar?: boolean): boolean;
+    /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole
+     *  write (`x = Precise.stringDiv (Precise.stringMul (local, y), ..)`): the written text is a `Precise` call either
+     *  way (the `&Value` operand takes the moved string), so the receiver's decision does not read this local's type. */
+    rustScalarPreciseFeed(n: any, write: any, declaration: any): boolean;
+    /** `Precise.<op> (..)`: the hand-written `crate::precise::Precise` string math (a string or undefined). */
+    rustPreciseStringCall(node: any): boolean;
     /** A String-helper result boxed as an object-literal value or as a one-level element write: the written
      *  place is a `Value` either way, so no other local's decision reads this one's type. */
     rustScalarBoxedField(n: any, write: any, declaration: any): boolean;
