@@ -59760,14 +59760,20 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (held.length < 2)
       return boxed;
     let best = long(boxed).length;
-    for (const n of held) {
-      this.rustScalarVetoed.delete(n);
-      const trial = redo();
-      if (long(trial).length <= best) {
-        boxed = trial;
-        best = long(trial).length;
-      } else
-        this.rustScalarVetoed.add(n);
+    for (let round = 0, released = true; round < 2 && released; round++) {
+      released = false;
+      for (const n of held) {
+        if (!this.rustScalarVetoed.has(n))
+          continue;
+        this.rustScalarVetoed.delete(n);
+        const trial = redo();
+        if (long(trial).length <= best) {
+          boxed = trial;
+          best = long(trial).length;
+          released = true;
+        } else
+          this.rustScalarVetoed.add(n);
+      }
     }
     return redo();
   }

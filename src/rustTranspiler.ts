@@ -8387,13 +8387,19 @@ export class RustTranspiler extends BaseTranspiler {
         // a held local whose own typing keeps every line under the limit is released again, one at a time
         if (held.length < 2) return boxed;
         let best = long(boxed).length;
-        for (const n of held) {
-            this.rustScalarVetoed.delete(n);
-            const trial = redo();
-            if (long(trial).length <= best) {
-                boxed = trial;
-                best = long(trial).length;
-            } else this.rustScalarVetoed.add(n);
+        // wd: a second round releases a local whose first trial was held only by a local released after it
+        for (let round = 0, released = true; round < 2 && released; round++) {
+            released = false;
+            for (const n of held) {
+                if (!this.rustScalarVetoed.has(n)) continue;
+                this.rustScalarVetoed.delete(n);
+                const trial = redo();
+                if (long(trial).length <= best) {
+                    boxed = trial;
+                    best = long(trial).length;
+                    released = true;
+                } else this.rustScalarVetoed.add(n);
+            }
         }
         return redo();
     }
