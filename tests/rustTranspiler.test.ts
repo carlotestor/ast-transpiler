@@ -10043,9 +10043,9 @@ describe('rust built helper results', () => {
         expect(slice(out(), 'fn buildG', 'fn signI')).toMatch(/let mut request: Value = /);
     });
 
-    test('negative: an omit of a params dict (a list body passes through omit) keeps its box', () => {
+    test('an omit of a params dict used only by urlencode holds the Dict (ral-xh: urlencode answers "" for a list body as for the empty map)', () => {
         const text = slice(out(), 'fn signI', 'fn buildH');
-        expect(text).toMatch(/let mut query: Value = /);
+        expect(text).toMatch(/let mut query: crate::value::Dict = /);
     });
 
     test('negative: an extend result rewritten by a destructuring assignment keeps its box', () => {
