@@ -18939,12 +18939,13 @@ export class RustTranspiler extends BaseTranspiler {
                 || (owner.parent as any)?.declarations?.length !== 1) return false;
             // slot 1 is the params dict; any other slot only where the callee's own tuple type declares it `Dict`
             const at = pattern.elements.indexOf(declaration);
-            if (at !== 1 && !(at >= 0 && this.rustDeclaredDictSlot(declaration))) return false;
+            const allSlot = at >= 0 && this.rustPromiseAllDictSlot(declaration);
+            if (at !== 1 && !allSlot && !(at >= 0 && this.rustDeclaredDictSlot(declaration))) return false;
             if (declaration.dotDotDotToken !== undefined || declaration.initializer !== undefined || this.rustTupleSlotKind(declaration) !== undefined) return false;
             const init: any = this.rustAwaitedCall(owner.initializer);
             const callee: any = init?.expression;
-            if (!isCallExpression(init) || !isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword
-                || !/^handle\w*AndParams\d*$/.test(String(callee.name.text)) && !this.rustLentSlotSource(init, declaration) && !this.rustDeclaredDictSlot(declaration)) return false;
+            if (!allSlot && (!isCallExpression(init) || !isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword
+                || !/^handle\w*AndParams\d*$/.test(String(callee.name.text)) && !this.rustLentSlotSource(init, declaration) && !this.rustDeclaredDictSlot(declaration))) return false;
         } else {
             const list: any = declaration.parent;
             if (list?.kind !== SyntaxKind.VariableDeclarationList || list.declarations?.length !== 1) return false;
@@ -20220,6 +20221,24 @@ export class RustTranspiler extends BaseTranspiler {
     // ── declared dict slots ──────────────────────────────────────────────────
     // A transpiled venue method declaring a `[.., Dict, ..]` (or `Promise<[..]>`) return builds that tuple on every
     // path (`rustNativeListSource`): the `Dict` slot holds the params map, handed on like a `handle*AndParams` one.
+
+    /** qe: slot `i` of `await Promise.all ([ .., x, .. ])` whose operand `x` is a local printed `crate::value::Dict`
+     *  (never the optional form): `promise_all` hands each operand back as it came, so the slot is that map. */
+    rustPromiseAllDictSlot(element: any): boolean {
+        const owner: any = element?.parent?.parent;
+        const awaited: any = this.rustSkipWrappers(owner?.initializer);
+        if (awaited?.kind !== SyntaxKind.AwaitExpression) return false;
+        const call: any = this.rustSkipWrappers(awaited.expression);
+        if (!isCallExpression(call) || call.arguments.length !== 1 || !isPropertyAccessExpression(call.expression)
+            || !isIdentifier(call.expression.expression) || call.expression.expression.text !== 'Promise' || String(call.expression.name.text) !== 'all') return false;
+        const list: any = this.rustSkipWrappers(call.arguments[0]);
+        if (!isArrayLiteralExpression(list)) return false;
+        const operand: any = this.rustSkipWrappers(list.elements[element.parent.elements.indexOf(element)]);
+        if (operand === undefined || !isIdentifier(operand)) return false;
+        const d: any = this.rustDeclarationOfIdentifier(operand);
+        if (d === undefined || !isVariableDeclaration(d) || d.name === operand) return false;
+        return this.rustBorrowedLocalKind(d) === 'dict' && !this.rustOptContainerLocals.has(d);
+    }
 
     rustDeclaredDictSlot(element: any): boolean {
         const owner: any = element?.parent?.parent;
