@@ -7857,8 +7857,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (local?.kind === 'ostr' && isIdentifier(alias) && this.rustScalarIdentifierKind(alias) === undefined && this.rustNilValueStrAlias(alias)) return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.into_opt_string()`;
         const text = local === undefined ? undefined : this.rustScalarNativeText(local.kind, right);
         // nc: a bare `Copy` source (`i64` / `f64` / `bool` or its `Option`) is owned: the alias-source pass must not clone it
-        const owned = text !== undefined && isIdentifier(alias) && text === super.printIdentifier(alias) && RustTranspiler.RUST_COPY_SCALAR_KINDS.has(local.kind);
-        return text === undefined ? undefined : `${super.printIdentifier(left)} = ${owned ? '\u0004' : ''}${text}`;
+        const owned = text !== undefined && isIdentifier(alias) && text === super.printIdentifier(alias) && RustTranspiler.RUST_COPY_SCALAR_KINDS.has(local.kind)
+            // 40b: the `None` of an `obool` local's `= undefined` write (lift C) is a value, never cloned
+            && !(local.kind === 'obool' && text === 'None');
+        const ownedNone = local?.kind === 'obool' && text === 'None';
+        return text === undefined ? undefined : `${super.printIdentifier(left)} = ${owned || ownedNone ? '\u0004' : ''}${text}`;
     }
 
     // Expression-shaped scalar locals: aliases, ternaries, arithmetic/comparisons over typed operands,
@@ -8338,7 +8341,8 @@ export class RustTranspiler extends BaseTranspiler {
             const src: any = this.rustScalarAsWrite(parent.right) ?? parent.right;
             const write = isIdentifier(this.unwrapParens(src)) && this.literalKindOfNode(this.unwrapParens(src)) !== 'null'
                 ? this.rustScalarIdentifierKind(this.unwrapParens(src)) ?? this.rustOptParamKind(src) : this.rustScalarValueKind(src, true);
-            const next = write === undefined ? undefined : this.rustScalarJoinKinds(joined, write);
+            // 40b: a `bool` local with a later `x = undefined` write is an `Option<bool>` (`None` is the `Null` it held)
+            const next = write === undefined ? undefined : this.rustScalarJoinKinds(joined, write, joined === 'bool' && write === 'null');
             if (next !== undefined && (next === joined || next === `o${joined}`)) joined = next;
         }
         return joined;

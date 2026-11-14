@@ -59167,8 +59167,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (local?.kind === "ostr" && isIdentifier3(alias) && this.rustScalarIdentifierKind(alias) === void 0 && this.rustNilValueStrAlias(alias))
       return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.into_opt_string()`;
     const text = local === void 0 ? void 0 : this.rustScalarNativeText(local.kind, right);
-    const owned = text !== void 0 && isIdentifier3(alias) && text === super.printIdentifier(alias) && _RustTranspiler.RUST_COPY_SCALAR_KINDS.has(local.kind);
-    return text === void 0 ? void 0 : `${super.printIdentifier(left)} = ${owned ? "" : ""}${text}`;
+    const owned = text !== void 0 && isIdentifier3(alias) && text === super.printIdentifier(alias) && _RustTranspiler.RUST_COPY_SCALAR_KINDS.has(local.kind) && !(local.kind === "obool" && text === "None");
+    const ownedNone = local?.kind === "obool" && text === "None";
+    return text === void 0 ? void 0 : `${super.printIdentifier(left)} = ${owned || ownedNone ? "" : ""}${text}`;
   }
   /** Kind of a typed local an identifier reads: a scalar local, or a typed `Option<String>|Option<i64>` of another rule. */
   rustScalarIdentifierKind(node) {
@@ -59685,7 +59686,7 @@ ${binding(plan.indent)}` : ""), head: "" };
         continue;
       const src = this.rustScalarAsWrite(parent.right) ?? parent.right;
       const write = isIdentifier3(this.unwrapParens(src)) && this.literalKindOfNode(this.unwrapParens(src)) !== "null" ? this.rustScalarIdentifierKind(this.unwrapParens(src)) ?? this.rustOptParamKind(src) : this.rustScalarValueKind(src, true);
-      const next = write === void 0 ? void 0 : this.rustScalarJoinKinds(joined, write);
+      const next = write === void 0 ? void 0 : this.rustScalarJoinKinds(joined, write, joined === "bool" && write === "null");
       if (next !== void 0 && (next === joined || next === `o${joined}`))
         joined = next;
     }

@@ -14583,3 +14583,17 @@ describe('ral-40b lift B: a String key local reads a base `this.<dict field>` by
         expect(out).not.toContain('let mut legacy: String');
     });
 });
+
+describe('ral-40b lift C: a bool local with a later `x = undefined` write is an Option<bool>', () => {
+    test('literal-seeded flag reset to undefined prints Option<bool> with a bare None write', () => {
+        const out = transpiler.transpileRust("class X {\n    a (m: any) {\n        let hedged = false;\n        if (m['t'] === 'x') {\n            hedged = undefined;\n        }\n        return { 'hedged': hedged };\n    }\n}").content;
+        expect(out).toContain('let mut hedged: Option<bool> = Some(false);');
+        expect(out).toContain('hedged = None;');
+        expect(out).not.toContain('None.clone()');
+        expect(out).toContain('hedged.map_or(Value::Null, Value::Bool)');
+    });
+    test('negative: a string write keeps the flag a Value (mixed kinds)', () => {
+        const out = transpiler.transpileRust("class X {\n    a (m: any) {\n        let hedged: any = false;\n        if (m['t'] === 'x') {\n            hedged = 'yes';\n        }\n        return { 'hedged': hedged };\n    }\n}").content;
+        expect(out).not.toContain('let mut hedged: Option<bool>');
+    });
+});
