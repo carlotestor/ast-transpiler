@@ -51567,6 +51567,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustBytesBare = /* @__PURE__ */ new Set();
     this.rustBytesDecisions = /* @__PURE__ */ new Map();
     this.rustBytesUseForms = /* @__PURE__ */ new WeakMap();
+    /** zd: `this.options['k']` as a reader default, where every write of key `k` over the venue family (describe()
+     *  literals `'k': v` anywhere in the family's files, incl. request literals, and `this.options['k'] = v`) is a string
+     *  literal or `undefined`: a string-or-Null default. Any other value, a dynamic options key write, an options
+     *  reassignment or the base Exchange writing `k` poisons it. */
+    this.rustOptionsElemKinds = /* @__PURE__ */ new Map();
     /** ud: reader strings admitted only through the lending-slot exemption of `rustBlockLocalUsesAll`. */
     this.rustUdLent = /* @__PURE__ */ new WeakSet();
     // ── venue string-method results (rustVenueStrCall / rustVenueReturnTypes) ──
@@ -56815,12 +56820,67 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const kind = this.rustReaderFallbackKind(fallback);
     if (strBase !== void 0)
-      return kind === "str" || kind === "ostr" || kind === void 0 && (this.rustReaderFallbackChecked(fallback) === "string" || this.rustVenueStrCall(fallback)) ? "ostr" : void 0;
+      return kind === "str" || kind === "ostr" || kind === void 0 && (this.rustReaderFallbackChecked(fallback) === "string" || this.rustVenueStrCall(fallback) || this.rustOptionsElemKind(fallback) === "ostr") ? "ostr" : void 0;
     if (intBase !== void 0)
       return kind === "int" || kind === "oint" ? "oint" : void 0;
     if (numBase !== void 0)
       return kind !== void 0 || this.rustReaderFallbackChecked(fallback) === "number" ? "onum" : void 0;
     return fresh && (kind === "bool" || kind === "obool" || kind === void 0 && this.rustReaderFallbackChecked(fallback) === "boolean") ? "obool" : void 0;
+  }
+  rustOptionsElemKind(fallback) {
+    const node = this.unwrapParens(fallback);
+    if (!isElementAccessExpression4(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword || node.expression.name.text !== "options" || !isStringLiteral3(this.unwrapParens(node.argumentExpression)))
+      return void 0;
+    const key = String(this.unwrapParens(node.argumentExpression).text);
+    const file = String(node.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    const at = file.lastIndexOf("/ts/src/");
+    if (at < 0 || !/^[A-Za-z_]\w*$/.test(key))
+      return void 0;
+    const root = file.slice(0, at) + "/ts/src";
+    const rel = file.slice(at + "/ts/src/".length);
+    if (rel.startsWith("base/") || rel.startsWith("test/"))
+      return void 0;
+    const cacheKey = `${root}|${rel}|${key}`;
+    if (this.rustOptionsElemKinds.has(cacheKey))
+      return this.rustOptionsElemKinds.get(cacheKey) ?? void 0;
+    const { familyOf } = this.rustVenueFamilies(root);
+    const family = familyOf.get(rel);
+    let kind = null;
+    if (family !== void 0) {
+      const files = [...familyOf.entries()].filter(([, f]) => f === family).map(([r]) => r);
+      let ok = true;
+      let writes = 0;
+      const base = (() => {
+        try {
+          return fs3.readFileSync(`${root}/base/Exchange.ts`, "utf8");
+        } catch (e) {
+          return void 0;
+        }
+      })();
+      if (base === void 0 || new RegExp(`['"]${key}['"]\\s*:`).test(base) || new RegExp(`options\\[['"]${key}['"]\\]\\s*=(?!=)`).test(base))
+        ok = false;
+      for (const r of files) {
+        if (!ok)
+          break;
+        const text = fs3.readFileSync(`${root}/${r}`, "utf8");
+        if (/this\.options\s*=(?!=)/.test(text) || /this\.options\[\s*[^'"\s\]]/.test(text.replace(/this\.options\[\s*[^'"\s\]][^\]]*\]\s*(?![=\[])/g, ""))) {
+          ok = false;
+          break;
+        }
+        for (const m of text.matchAll(new RegExp(`(?:['"]${key}['"]\\s*:|options\\[['"]${key}['"]\\]\\s*=(?!=))\\s*([^,}\\n]*)`, "g"))) {
+          writes++;
+          const v = m[1].trim().replace(/\s*\/\/.*$/, "").replace(/[;,]\s*$/, "");
+          if (!(v === "undefined" || /^'[^'\\]*'$/.test(v) || /^"[^"\\]*"$/.test(v))) {
+            ok = false;
+            break;
+          }
+        }
+      }
+      if (ok && writes > 0)
+        kind = "ostr";
+    }
+    this.rustOptionsElemKinds.set(cacheKey, kind);
+    return kind ?? void 0;
   }
   rustReaderFallbackKind(fallback) {
     if (isIdentifier3(fallback))
@@ -57011,7 +57071,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (right?.kind !== SyntaxKind7.NewExpression || right.arguments?.length !== 1 || this.unwrapParens(right.arguments[0]) !== n)
       return false;
     const kind = this.rustScalarDecisions.get(this.rustDeclaredNode(n));
-    return this.rustCacheCtorLimitArg(n, kind) && this.rustScalarUseForms.get(n) === "targ";
+    const form = this.rustScalarUseForms.get(n);
+    return this.rustCacheCtorLimitArg(n, kind) && (form === "targ" || form === "box");
   }
   /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole
    *  write (`x = Precise.stringDiv (Precise.stringMul (local, y), ..)`): the written text is a `Precise` call either
@@ -58865,6 +58926,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return this.rustWsKeyText(node);
     if (form === "parg" && this.rustInArrayNeedle(node))
       return `&${super.printIdentifier(node)}`;
+    if ((form === "box" || form === "targ") && (local.kind === "int" || local.kind === "oint") && this.rustCacheCtorLimitArg(node, local.kind))
+      return `Value::from(${super.printIdentifier(node)})`;
     if (form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "key" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey" || form === "parg")
       return super.printIdentifier(node);
     if (form === "err")

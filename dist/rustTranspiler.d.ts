@@ -740,6 +740,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Some statement of the parameter's function assigns the parameter itself. */
     rustParamWritten(param: any): boolean;
     rustReaderDefaultKind(name: string, args: any[], fresh: boolean): string | undefined;
+    /** zd: `this.options['k']` as a reader default, where every write of key `k` over the venue family (describe()
+     *  literals `'k': v` anywhere in the family's files, incl. request literals, and `this.options['k'] = v`) is a string
+     *  literal or `undefined`: a string-or-Null default. Any other value, a dynamic options key write, an options
+     *  reassignment or the base Exchange writing `k` poisons it. */
+    private rustOptionsElemKinds;
+    rustOptionsElemKind(fallback: any): string | undefined;
     rustReaderFallbackKind(fallback: any): string | undefined;
     /** The checker scalar of a default that is a field, parameter or local (never a call: its `Value` may differ). */
     rustReaderFallbackChecked(fallback: any): string | undefined;
