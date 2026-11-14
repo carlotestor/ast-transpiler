@@ -627,6 +627,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustPrecisionTouched(declaration: any, scope: any): boolean;
     /** pg: a later whole write of the local is a precision-formatter call (the 400-char guard watches such locals). */
     rustPrecisionWritten(declaration: any): boolean;
+    /** Runtime `Precise::string*` entry points whose string operands take `&impl PreciseArg` (precise.rs). The
+     *  comparators keep `&Value` (a ccxt build/ pass reads their exact signature text). */
+    private static readonly RUST_PRECISE_LENT;
+    /** vd: only a local declared with a value (nil-declared locals keep their own box rules). */
+    rustPreciseLendLocal(n: any): boolean;
+    /** vd: `n` is a direct string operand (one of the first two, the third of `stringDiv` is the precision) of a lent
+     *  `Precise.<op>(..)` call. */
+    rustPreciseLentOperand(n: any): boolean;
+    private rustDeepPreciseChainMemo;
+    rustDeepPreciseChainIn(scope: any): boolean;
     /** pg: some use of the local is an argument of a `Precise.<op>(..)` call. */
     rustPreciseOperandLocal(declaration: any): boolean;
     /** The unboxed call text. */

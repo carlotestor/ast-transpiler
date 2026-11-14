@@ -8461,9 +8461,11 @@ describe('rust test-source string locals', () => {
     test('a string re-boxed before its last read stays boxed; one re-boxed only at its last read moves', () => {
         const fresh = new Transpiler({ verbose: false, rust: {} } as any);
         const out = fresh.transpileRustByPath(path.join (rustFixtureRoot, 'test-tier-strings', 'ts/src/test/Exchange/test.strings.ts')).content;
-        expect(out).toContain('let mut lent: Value = ');
+        // vd: a Precise operand is lent to the `&impl PreciseArg` entry point, so the re-read string is typed too
+        expect(out).toMatch(/let mut lent: Option<String> = /);
+        expect(out).toContain('Precise::stringAbs(&lent)');
         expect(out).toMatch(/let mut moved: Option<String> = /);
-        expect(out).toContain('moved.map(Value::from)');
+        expect(out).toContain('Precise::stringAbs(&moved)');
         expect(out).not.toContain('.clone().map(Value::from)');
         expect(out).not.toContain('id.clone()');
         expect(out).not.toMatch(/let mut keys: Vec<Value>/);
@@ -12199,8 +12201,9 @@ describe('pg: precision formatters answer Option<String> (results of other self 
         expect(out).toMatch(/let mut px: Option<String> = self\.priceToPrecision\(/);
         expect(out).toContain('Value::from(self.amountToPrecision(');
     });
-    test('negative: a precision string read again as a Precise operand stays a Value (no copy at the &Value reader)', () => {
-        expect(out).toMatch(/let mut q: Value = /);
+    test('a precision string read again as a Precise operand is lent to it (vd: the entry point takes &impl PreciseArg, no copy)', () => {
+        expect(out).toMatch(/let mut q: Option<String> = self\.amountToPrecision\(/);
+        expect(out).toContain('Precise::stringMul(&q, ');
     });
 });
 
@@ -12672,5 +12675,20 @@ describe('vd: a reader whose default is an explicit undefined takes the no-defau
         const output = t.transpileRustByPath(path.join(root, 'ts/src/venue4.ts')).content;
         expect(output).toContain('let mut qty: Option<String> = self.safeString(params.clone(), Value::Str("cost".into()), &[Value::Null]).as_str().map(str::to_owned);');
         expect(output).toContain('if (qty.is_none()) {');
+    });
+});
+
+describe('vd: a typed string operand of a Precise arithmetic entry point is lent (impl PreciseArg)', () => {
+    test('Precise.stringMul (amount, price) passes &amount / &price, no clone and no box', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-vd-precise-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport class Client { resolve (v: any, h: any = undefined): void {} }\nexport default class Exchange {\n    id: string = 'x';\n    options: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k]; }\n    hold (a: any): any { return a; }\n    safeDict (o: any, k: any, d: any = undefined): any { return o[k]; }\n    safeNumber (o: any, k: any, d: any = undefined): any { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/Precise.ts'), "export class Precise {\n    static stringMul (a: string | undefined, b: string | undefined): string | undefined { return a; }\n    static stringAbs (a: string | undefined): string | undefined { return a; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue5.ts'), "import Exchange from './base/Exchange.js';\nimport { Precise } from './base/Precise.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue5 extends Exchange {\n    m (trade: Dict) {\n        const amount = this.safeString (trade, 'amount');\n        const price = this.safeString (trade, 'price');\n        const cost = Precise.stringMul (amount, price);\n        const abs = Precise.stringAbs (amount);\n        return this.hold ([ cost, abs, amount, price ]);\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false });
+        const output = t.transpileRustByPath(path.join(root, 'ts/src/venue5.ts')).content;
+        expect(output).toContain('let mut cost: Option<String> = crate::precise::Precise::stringMul(&amount, &price).as_str().map(str::to_owned);');
+        expect(output).toContain('crate::precise::Precise::stringAbs(&amount)');
+        expect(output).not.toContain('amount.clone()');
     });
 });

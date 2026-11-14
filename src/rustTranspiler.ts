@@ -4270,7 +4270,7 @@ export class RustTranspiler extends BaseTranspiler {
                 boxed++;
                 if (form === 'err' ? !this.rustErrMsgMoves(n, declaration) : !(isReturnStatement(n.parent) || this.rustLocalLastUse(n, declaration))) copied++;
             } else if (form !== undefined && !this.rustIdentifierIsPropertyName(n)) nativeUses++;
-            if (form === 'test' || form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'lwrite' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'kin' || form === 'nkey' || (form === 'key' && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))) typedUses++;
+            if (form === 'test' || form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'lwrite' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'kin' || form === 'nkey' || form === 'parg' || (form === 'key' && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))) typedUses++;
             if (form === 'xbox' || form === 'native' || form === 'targ' || form === 'err') expressionUses = true;
             return form !== undefined;
         });
@@ -4922,6 +4922,49 @@ export class RustTranspiler extends BaseTranspiler {
             return true;
         });
         return written;
+    }
+
+    /** Runtime `Precise::string*` entry points whose string operands take `&impl PreciseArg` (precise.rs). The
+     *  comparators keep `&Value` (a ccxt build/ pass reads their exact signature text). */
+    private static readonly RUST_PRECISE_LENT = new Set([ 'stringAdd', 'stringSub', 'stringMul', 'stringDiv', 'stringMod', 'stringAbs', 'stringNeg', 'stringMin', 'stringMax' ]);
+
+    /** vd: only a local declared with a value (nil-declared locals keep their own box rules). */
+    rustPreciseLendLocal(n): boolean {
+        const declaration: any = this.rustDeclaredNode(n);
+        return declaration !== undefined && isVariableDeclaration(declaration) && declaration.initializer !== undefined
+            && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== 'null';
+    }
+
+    /** vd: `n` is a direct string operand (one of the first two, the third of `stringDiv` is the precision) of a lent
+     *  `Precise.<op>(..)` call. */
+    rustPreciseLentOperand(n): boolean {
+        let top: any = n;
+        while (isParenthesizedExpression(top.parent)) top = top.parent;
+        const call: any = top.parent;
+        if (!isCallExpression(call) || call.expression === top || !isPropertyAccessExpression(call.expression)) return false;
+        const callee: any = call.expression;
+        if (!isIdentifier(callee.expression) || String(callee.expression.text) !== 'Precise' || !RustTranspiler.RUST_PRECISE_LENT.has(String(callee.name.text))) return false;
+        const at = Array.from(call.arguments).indexOf(top);
+        if (at < 0 || at >= (String(callee.name.text) === 'stringAbs' || String(callee.name.text) === 'stringNeg' ? 1 : 2)) return false;
+        // a function holding a chain of four nested Precise calls keeps its boxed operands: lending its other operands
+        // shortens their lines, and the 400-char guard then prefers boxing the chain's own locals (hibachi orderMessage)
+        return !this.rustDeepPreciseChainIn(this.rustEnclosingFunction(call));
+    }
+
+    private rustDeepPreciseChainMemo = new WeakMap<Node, boolean>();
+
+    rustDeepPreciseChainIn(scope): boolean {
+        if (scope === undefined) return false;
+        let hit = this.rustDeepPreciseChainMemo.get(scope);
+        if (hit !== undefined) return hit;
+        const depthOf = (node: any): number => {
+            let best = 0;
+            node.forEachChild((child: any) => { best = Math.max(best, depthOf(child)); });
+            return this.rustScalarPreciseCall(node) && isCallExpression(node) ? best + 1 : best;
+        };
+        hit = depthOf(scope) >= 4;
+        this.rustDeepPreciseChainMemo.set(scope, hit);
+        return hit;
     }
 
     /** pg: some use of the local is an argument of a `Precise.<op>(..)` call. */
@@ -6019,6 +6062,9 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustScalarLiteralTest(kind, other) !== undefined) return 'test';
         }
         if ((kind === 'bool' || kind === 'obool') && this.rustIdentifierUseIsCondition(n)) return 'cond';
+        // vd: a string operand of a `Precise.string<Add|Sub|..>` arithmetic entry point is lent as is (the runtime takes
+        // `&impl PreciseArg`: `None` reads as the `Null` box, a string as its `Str`); no box, no copy
+        if ((kind === 'str' || kind === 'ostr') && this.rustPreciseLentOperand(n) && this.rustPreciseLendLocal(n)) return 'parg';
         if ((kind === 'str' || kind === 'ostr') && this.rustWsCacheMapKeyUse(n)) return 'fin';
         if (kind === 'bool' && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== undefined) return 'cond';
         if (kind === 'str' || kind === 'ostr') { const fieldForm = this.rustFieldKeyUseForm(n); if (fieldForm !== undefined) return fieldForm; }
@@ -6976,7 +7022,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (form === 'cond' && local.kind === 'obool') return `(${super.printIdentifier(node)} == Some(true))`;
         if (form === 'concat' && local.kind === 'ostr') return `${super.printIdentifier(node)}.as_deref().unwrap_or("null")`;
         if (form === 'targ' && (local.kind === 'str' || local.kind === 'ostr') && this.rustWsKeyUse(node)) return this.rustWsKeyText(node);
-        if (form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'key' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'kin' || form === 'nkey') return super.printIdentifier(node);
+        if (form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'key' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'kin' || form === 'nkey' || form === 'parg') return super.printIdentifier(node);
         if (form === 'err') return this.rustErrMsgMoves(node, local.declaration) ? super.printIdentifier(node) : `${super.printIdentifier(node)}.clone()`;
         if (form === 'inbox') return local.kind === 'ostr' ? `Value::from(&${super.printIdentifier(node)})` : `Value::from(${super.printIdentifier(node)}.as_str())`;
         if (form !== 'box' && form !== 'xbox') return undefined;

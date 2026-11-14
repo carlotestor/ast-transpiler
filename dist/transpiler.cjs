@@ -51553,6 +51553,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustStrNoLend = false;
     this.rustStrRuntimeBare = /* @__PURE__ */ new Set();
     this.rustBaseTypedBare = /* @__PURE__ */ new Set();
+    this.rustDeepPreciseChainMemo = /* @__PURE__ */ new WeakMap();
     this.rustBytesBare = /* @__PURE__ */ new Set();
     this.rustBytesDecisions = /* @__PURE__ */ new Map();
     this.rustBytesUseForms = /* @__PURE__ */ new WeakMap();
@@ -55400,7 +55401,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
           copied++;
       } else if (form !== void 0 && !this.rustIdentifierIsPropertyName(n))
         nativeUses++;
-      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))
+      if (form === "test" || form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "lwrite" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey" || form === "parg" || form === "key" && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))
         typedUses++;
       if (form === "xbox" || form === "native" || form === "targ" || form === "err")
         expressionUses = true;
@@ -56061,6 +56062,45 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     });
     return written;
+  }
+  /** vd: only a local declared with a value (nil-declared locals keep their own box rules). */
+  rustPreciseLendLocal(n) {
+    const declaration = this.rustDeclaredNode(n);
+    return declaration !== void 0 && _is.isVariableDeclaration.call(void 0, declaration) && declaration.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== "null";
+  }
+  /** vd: `n` is a direct string operand (one of the first two, the third of `stringDiv` is the precision) of a lent
+   *  `Precise.<op>(..)` call. */
+  rustPreciseLentOperand(n) {
+    let top = n;
+    while (_is.isParenthesizedExpression.call(void 0, top.parent))
+      top = top.parent;
+    const call = top.parent;
+    if (!_is.isCallExpression.call(void 0, call) || call.expression === top || !_is.isPropertyAccessExpression.call(void 0, call.expression))
+      return false;
+    const callee = call.expression;
+    if (!_is.isIdentifier.call(void 0, callee.expression) || String(callee.expression.text) !== "Precise" || !_RustTranspiler.RUST_PRECISE_LENT.has(String(callee.name.text)))
+      return false;
+    const at = Array.from(call.arguments).indexOf(top);
+    if (at < 0 || at >= (String(callee.name.text) === "stringAbs" || String(callee.name.text) === "stringNeg" ? 1 : 2))
+      return false;
+    return !this.rustDeepPreciseChainIn(this.rustEnclosingFunction(call));
+  }
+  rustDeepPreciseChainIn(scope) {
+    if (scope === void 0)
+      return false;
+    let hit = this.rustDeepPreciseChainMemo.get(scope);
+    if (hit !== void 0)
+      return hit;
+    const depthOf = (node) => {
+      let best = 0;
+      node.forEachChild((child) => {
+        best = Math.max(best, depthOf(child));
+      });
+      return this.rustScalarPreciseCall(node) && _is.isCallExpression.call(void 0, node) ? best + 1 : best;
+    };
+    hit = depthOf(scope) >= 4;
+    this.rustDeepPreciseChainMemo.set(scope, hit);
+    return hit;
   }
   /** pg: some use of the local is an argument of a `Precise.<op>(..)` call. */
   rustPreciseOperandLocal(declaration) {
@@ -57176,6 +57216,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if ((kind === "bool" || kind === "obool") && this.rustIdentifierUseIsCondition(n))
       return "cond";
+    if ((kind === "str" || kind === "ostr") && this.rustPreciseLentOperand(n) && this.rustPreciseLendLocal(n))
+      return "parg";
     if ((kind === "str" || kind === "ostr") && this.rustWsCacheMapKeyUse(n))
       return "fin";
     if (kind === "bool" && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== void 0)
@@ -58166,7 +58208,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `${super.printIdentifier(node)}.as_deref().unwrap_or("null")`;
     if (form === "targ" && (local.kind === "str" || local.kind === "ostr") && this.rustWsKeyUse(node))
       return this.rustWsKeyText(node);
-    if (form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "key" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey")
+    if (form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "key" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey" || form === "parg")
       return super.printIdentifier(node);
     if (form === "err")
       return this.rustErrMsgMoves(node, local.declaration) ? super.printIdentifier(node) : `${super.printIdentifier(node)}.clone()`;
@@ -77029,6 +77071,9 @@ _RustTranspiler.RUST_BASE_TYPED_RUNTIME = {
 };
 // base methods with a TS body that the runtime implements by hand (`exchange_stubs.rs`), typed like the runtime table
 _RustTranspiler.RUST_BASE_TYPED_HAND_METHODS = /* @__PURE__ */ new Set(["valueIsDefined", "randNumber", "binaryLength"]);
+/** Runtime `Precise::string*` entry points whose string operands take `&impl PreciseArg` (precise.rs). The
+ *  comparators keep `&Value` (a ccxt build/ pass reads their exact signature text). */
+_RustTranspiler.RUST_PRECISE_LENT = /* @__PURE__ */ new Set(["stringAdd", "stringSub", "stringMul", "stringDiv", "stringMod", "stringAbs", "stringNeg", "stringMin", "stringMax"]);
 // ── byte buffers (rustBytesProducer / rustBytesSlot / rustBytesLocal) ──
 // The hand-written producers of a TS `Uint8Array` return `crate::value::Bytes` (the `Value::Arr` of byte
 // ints behind a typed handle) and the byte parameters of the hand-written consumers take `impl Into<Value>`.
