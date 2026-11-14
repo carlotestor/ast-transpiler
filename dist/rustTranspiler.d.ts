@@ -346,6 +346,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** How a read of a typed nil local prints: `'test'` (null / literal compare), `'cond'` (bool
      *  condition slot) or `'box'` (a `Value` argument, field, element, return or plain copy). */
     rustNilReadForm(n: any, kind: string): string | undefined;
+    /** rb: `y = !x;` as a whole statement, where `y` is another nil local typed `Option<bool>` (decided first; a cycle stays boxed). */
+    rustNilNegatedBoolWrite(n: any): boolean;
     /** Box reads go only into plain `Value` slots: no `&mut` receivers, no native-typed callee slots. */
     rustNilBoxCallOk(call: any, at: number): boolean;
     /** Native text of `x == <literal>` for a typed nil local of `kind`; undefined when not exact. */
