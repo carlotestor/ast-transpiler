@@ -885,8 +885,38 @@ export class RustTranspiler extends BaseTranspiler {
             return false;
         }
         return this.rustNodeIsBoolExpression(declaration.initializer) &&
-            this.rustTypeIsBoolean(declaration.initializer) &&
-            this.rustLocalUsesAcceptBool(declaration, String(declaration.name.text));
+            (this.rustTypeIsBoolean(declaration.initializer) && this.rustLocalUsesAcceptBool(declaration, String(declaration.name.text)) || this.rustOptBoolChainLocal(declaration));
+    }
+
+    private rustOptBoolChainPending = new Set<any>();
+
+    /** ral-ua: a local initialised by an optional-bool chain whose every read is a condition / bool-printed slot is `bool`. */
+    rustOptBoolChainLocal(declaration): boolean {
+        const init: any = declaration?.initializer;
+        return init !== undefined && isIdentifier(declaration.name) && this.rustNodeIsBoolExpression(init) && isBinaryExpression(this.unwrapParens(init))
+            && this.isLogicalOp(this.unwrapParens(init).operatorToken.kind) && this.rustOptBoolChain(init) && this.rustOptBoolChainUsesOk(declaration);
+    }
+
+    /** ral-ua: every read of an optional-bool chain local is a condition or sits in another bool-printed slot. */
+    rustOptBoolChainUsesOk(declaration): boolean {
+        if (this.rustOptBoolChainPending.has(declaration)) return false;
+        this.rustOptBoolChainPending.add(declaration);
+        try {
+            return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) =>
+                this.rustIdentifierUseIsCondition(n) || (this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n)));
+        } finally {
+            this.rustOptBoolChainPending.delete(declaration);
+        }
+    }
+
+    /** ral-ua: `a && b` / `a || b` (parens, `!`) whose leaves are each checker `boolean | undefined`: as a condition every
+     *  leaf prints its truthiness, and a local read only as a condition never boxes the undefined arm. */
+    rustOptBoolChain(node): boolean {
+        const inner: any = this.unwrapParens(node);
+        if (inner === undefined) return false;
+        if (isPrefixUnaryExpression(inner) && inner.operator === SyntaxKind.ExclamationToken) return this.rustOptBoolChain(inner.operand);
+        if (isBinaryExpression(inner) && this.isLogicalOp(inner.operatorToken.kind)) return this.rustOptBoolChain(inner.left) && this.rustOptBoolChain(inner.right);
+        return (isIdentifier(inner) || isCallExpression(inner)) && this.isBooleanOrUndefinedType(this.typeOfNodeIfAny(inner));
     }
 
     /** Native truthiness text of the operand, or undefined to keep `is_true`. */
@@ -4038,7 +4068,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (member && !this.rustBoolMemberSource(initializer)) {
             return undefined;
         }
-        if (!this.rustTypeIsBoolean(initializer) || !this.rustLocalUsesAcceptBool(declaration, declaration.name.text)) {
+        if (!(this.rustTypeIsBoolean(initializer) && (this.rustLocalUsesAcceptBool(declaration, declaration.name.text) || member && this.rustOptBoolChainUsesOk(declaration))
+            || !member && this.rustOptBoolChainLocal(declaration))) {
             return undefined;
         }
         return member ? this.rustBoolMemberText(inner) : (peeled ?? inner);

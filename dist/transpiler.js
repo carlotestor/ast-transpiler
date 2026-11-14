@@ -51498,6 +51498,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustScopeIndexes = /* @__PURE__ */ new WeakMap();
     /** Declarations `printVariableDeclarationList` emitted as `let mut x: bool`. */
     this.rustBoolDeclaredLocals = /* @__PURE__ */ new WeakSet();
+    this.rustOptBoolChainPending = /* @__PURE__ */ new Set();
     // `.length` nodes printed as a native `len()` of a place, with that place (the loop-counter bound reads it)
     this.rustNativeLengths = /* @__PURE__ */ new WeakMap();
     // `is_less_than` & co. compare two `Value`s and answer `false` for
@@ -52191,7 +52192,35 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer !== current || declaration.name?.kind !== SyntaxKind7.Identifier) {
       return false;
     }
-    return this.rustNodeIsBoolExpression(declaration.initializer) && this.rustTypeIsBoolean(declaration.initializer) && this.rustLocalUsesAcceptBool(declaration, String(declaration.name.text));
+    return this.rustNodeIsBoolExpression(declaration.initializer) && (this.rustTypeIsBoolean(declaration.initializer) && this.rustLocalUsesAcceptBool(declaration, String(declaration.name.text)) || this.rustOptBoolChainLocal(declaration));
+  }
+  /** ral-ua: a local initialised by an optional-bool chain whose every read is a condition / bool-printed slot is `bool`. */
+  rustOptBoolChainLocal(declaration) {
+    const init = declaration?.initializer;
+    return init !== void 0 && isIdentifier3(declaration.name) && this.rustNodeIsBoolExpression(init) && isBinaryExpression5(this.unwrapParens(init)) && this.isLogicalOp(this.unwrapParens(init).operatorToken.kind) && this.rustOptBoolChain(init) && this.rustOptBoolChainUsesOk(declaration);
+  }
+  /** ral-ua: every read of an optional-bool chain local is a condition or sits in another bool-printed slot. */
+  rustOptBoolChainUsesOk(declaration) {
+    if (this.rustOptBoolChainPending.has(declaration))
+      return false;
+    this.rustOptBoolChainPending.add(declaration);
+    try {
+      return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => this.rustIdentifierUseIsCondition(n) || this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n));
+    } finally {
+      this.rustOptBoolChainPending.delete(declaration);
+    }
+  }
+  /** ral-ua: `a && b` / `a || b` (parens, `!`) whose leaves are each checker `boolean | undefined`: as a condition every
+   *  leaf prints its truthiness, and a local read only as a condition never boxes the undefined arm. */
+  rustOptBoolChain(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0)
+      return false;
+    if (isPrefixUnaryExpression3(inner) && inner.operator === SyntaxKind7.ExclamationToken)
+      return this.rustOptBoolChain(inner.operand);
+    if (isBinaryExpression5(inner) && this.isLogicalOp(inner.operatorToken.kind))
+      return this.rustOptBoolChain(inner.left) && this.rustOptBoolChain(inner.right);
+    return (isIdentifier3(inner) || isCallExpression6(inner)) && this.isBooleanOrUndefinedType(this.typeOfNodeIfAny(inner));
   }
   /** Native truthiness text of the operand, or undefined to keep `is_true`. */
   printNativeTruthiness(node) {
@@ -55171,7 +55200,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (member && !this.rustBoolMemberSource(initializer)) {
       return void 0;
     }
-    if (!this.rustTypeIsBoolean(initializer) || !this.rustLocalUsesAcceptBool(declaration, declaration.name.text)) {
+    if (!(this.rustTypeIsBoolean(initializer) && (this.rustLocalUsesAcceptBool(declaration, declaration.name.text) || member && this.rustOptBoolChainUsesOk(declaration)) || !member && this.rustOptBoolChainLocal(declaration))) {
       return void 0;
     }
     return member ? this.rustBoolMemberText(inner) : peeled ?? inner;
