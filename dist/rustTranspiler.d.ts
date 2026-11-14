@@ -993,6 +993,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `Object.keys`) and only ever pushed string-typed values, or a proven parameter of the caller. Producers of user data
      *  (`safeList`, a declared `string[]` return) prove nothing about their elements. */
     rustStrListArg(arg: any, depth: number): boolean;
+    /** wg: the element read prints straight off the list place (`xs.get(i)..and_then(Value::as_str).map(str::to_owned)`), so
+     *  the declaration and every use agree on the borrow (no temporary it could outlive; a helper read keeps `Value`). */
+    rustBorrowPlaceRead(declaration: any): boolean;
     /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
     rustExactStrListInit(init: any): boolean;
     rustInArrayNeedle(node: any): boolean;

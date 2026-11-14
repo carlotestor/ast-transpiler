@@ -58271,6 +58271,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const owner = this.rustDeclaredNode(init.expression);
     if (owner === void 0 || !isIdentifier3(owner.name) || !(isVariableDeclaration3(owner) ? this.rustExactStrListInit(owner.initializer) : this.rustStrListParam(owner, 0)))
       return false;
+    if (!isVariableDeclaration3(owner) && !this.rustBorrowPlaceRead(declaration))
+      return false;
     const recvOk = this.rustLocalUsesAll(owner, String(owner.name.text), true, (n) => {
       const up = n.parent;
       if (up !== void 0 && isElementAccessExpression4(up) && up.expression === n) {
@@ -58391,6 +58393,13 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (isArrayLiteralExpression4(init))
       return Array.from(init.elements).every(strElem);
     return this.rustExactStrListInit(init);
+  }
+  /** wg: the element read prints straight off the list place (`xs.get(i)..and_then(Value::as_str).map(str::to_owned)`), so
+   *  the declaration and every use agree on the borrow (no temporary it could outlive; a helper read keeps `Value`). */
+  rustBorrowPlaceRead(declaration) {
+    const init = this.rustScalarNativeText("ostr", declaration.initializer);
+    const recvName = super.printIdentifier(this.unwrapParens(declaration.initializer).expression);
+    return init !== void 0 && init.endsWith(".and_then(Value::as_str).map(str::to_owned)") && (init.startsWith(`${recvName}.get(`) || init.startsWith(`${recvName}.as_array().map(Vec::as_slice).unwrap_or_default().get(`));
   }
   /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
   rustExactStrListInit(init) {

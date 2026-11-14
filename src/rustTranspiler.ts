@@ -7067,6 +7067,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (init === undefined || !isElementAccessExpression(init) || !isIdentifier(init.expression) || this.rustElementReadScalarKind(init) !== 'ostr') return false;
         const owner: any = this.rustDeclaredNode(init.expression);
         if (owner === undefined || !isIdentifier(owner.name) || !(isVariableDeclaration(owner) ? this.rustExactStrListInit(owner.initializer) : this.rustStrListParam(owner, 0))) return false;
+        if (!isVariableDeclaration(owner) && !this.rustBorrowPlaceRead(declaration)) return false;
         const recvOk = this.rustLocalUsesAll(owner, String(owner.name.text), true, (n: any) => {
             const up: any = n.parent;
             if (up !== undefined && isElementAccessExpression(up) && up.expression === n) {
@@ -7173,6 +7174,15 @@ export class RustTranspiler extends BaseTranspiler {
         if (init === undefined) return false;
         if (isArrayLiteralExpression(init)) return Array.from(init.elements as any).every(strElem);
         return this.rustExactStrListInit(init);
+    }
+
+    /** wg: the element read prints straight off the list place (`xs.get(i)..and_then(Value::as_str).map(str::to_owned)`), so
+     *  the declaration and every use agree on the borrow (no temporary it could outlive; a helper read keeps `Value`). */
+    rustBorrowPlaceRead(declaration: any): boolean {
+        const init = this.rustScalarNativeText('ostr', declaration.initializer);
+        const recvName = super.printIdentifier(this.unwrapParens(declaration.initializer).expression);
+        return init !== undefined && init.endsWith('.and_then(Value::as_str).map(str::to_owned)')
+            && (init.startsWith(`${recvName}.get(`) || init.startsWith(`${recvName}.as_array().map(Vec::as_slice).unwrap_or_default().get(`));
     }
 
     /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
