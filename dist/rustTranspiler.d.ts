@@ -709,6 +709,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustReaderDefaultTouched(declaration: any): boolean;
     /** A string local that is the source of another local's write: that local then copies at its own uses. */
     rustReaderStrHandedOn(declaration: any): boolean;
+    /** ud: reader strings admitted only through the lending-slot exemption of `rustBlockLocalUsesAll`. */
+    private rustUdLent;
+    /** ud: a base-tier string reader (`safeString*`, `safeCurrencyCode`) initialiser, with or without a default. */
+    rustUdReaderStr(init: any): boolean;
     /** True when the initializer is a reader this block admits (its kind comes from `rustReaderDefaultKind`). */
     rustReaderDefaultInit(init: any): boolean;
     /** A number reader whose default may be an `Int` (an int literal, or anything not proven a float). */

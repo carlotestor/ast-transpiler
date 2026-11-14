@@ -12360,3 +12360,24 @@ describe('td: an `in` key under an `as string` cast', () => {
         expect(out).toContain('matches!(token.as_deref(), Some(__k) if mapping.contains_key(__k))');
     });
 });
+
+describe('ud: a reader string boxed at a lending slot before its last use', () => {
+    const write = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    id: string = 'x';\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    hold (a: any, b: any = undefined): any { return a; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venue + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('a sibling-block reader string is Option<String> and lends at the self-call slot (the copy the Value clone made), then moves', () => {
+        const out = write ('ud-lend', "    m (u: any, f: boolean) {\n        if (f) {\n            const messageHash = this.safeString (u, 'messageHash');\n            if (messageHash !== undefined) {\n                this.hold (messageHash, 'x');\n                return this.hold (messageHash);\n            }\n        } else {\n            const messageHash = this.safeString (u, 'other');\n            return this.hold (messageHash);\n        }\n        return undefined;\n    }\n");
+        expect(out).toMatch(/let mut messageHash: Option<String> = /);
+        expect(out).toContain('Value::from(messageHash.as_deref())');
+        expect(out).toContain('messageHash.map(Value::from).unwrap_or(Value::Null)');
+        expect(out).not.toContain('messageHash.clone()');
+    });
+    test('negative: a box at a free-function slot (reads &Value) keeps the Value', () => {
+        const out = write ('ud-lend-neg', "    m (u: any, f: boolean) {\n        if (f) {\n            const code = this.safeString (u, 'code');\n            const n = JSON.stringify (code);\n            return this.hold (code, n);\n        } else {\n            const code = this.safeString (u, 'other');\n            return this.hold (code);\n        }\n    }\n");
+        expect(out).toContain('let mut code: Value = self.safeString(u.clone(), Value::Str("code"');
+    });
+});
