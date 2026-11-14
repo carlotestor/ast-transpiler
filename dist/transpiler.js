@@ -69308,6 +69308,8 @@ ${iden}}`;
       return up.initializer === n;
     if (isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "push")
       return !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n));
+    if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustZgOuterLocalWrite(up.left, n))
+      return true;
     if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement)
       return !this.rustIdentifierRefersToDeclaration(this.rustSkipWrappers(up.left.expression), this.rustDeclarationOfIdentifier(n));
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
@@ -70159,6 +70161,22 @@ ${iden}}`;
       this.rustZgSiblingRows.add(declaration);
       return true;
     });
+  }
+  /** ral-zg: `y = el` where `y` is another `let` of the same function declared before the row's block, never typed by a
+   *  container rule (it stays the boxed `Value` the write targets). */
+  rustZgOuterLocalWrite(left, n) {
+    const target = this.rustDeclarationOfIdentifier(left);
+    const row = this.rustDeclarationOfIdentifier(n);
+    if (target === void 0 || row === void 0 || target === row || !isVariableDeclaration3(target) || !isVariableDeclaration3(row))
+      return false;
+    if (!this.rustDictElementSource(this.rustSkipWrappers(row.initializer)) || this.rustEnclosingFunction(target) !== this.rustEnclosingFunction(row))
+      return false;
+    if ((target.parent?.flags & NodeFlags4.Let) === 0 || target.pos > row.pos)
+      return false;
+    if (this.rustBorrowedLocalKind(target) !== void 0 || this.rustDictLocalIsTyped(target) || this.rustNilLocalKind(target) !== void 0 || this.rustReadBearerKindOfDeclaration(target) !== false)
+      return false;
+    this.rustZgSiblingRows.add(row);
+    return true;
   }
   /** Every other binding of `name` in the function is a `const` plain map literal declaration (ral-oc). */
   rustLiteralSiblingsAlike(declaration, name) {

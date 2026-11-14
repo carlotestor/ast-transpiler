@@ -18224,6 +18224,10 @@ export class RustTranspiler extends BaseTranspiler {
         // `rows.push (row)` into another local list: the list keeps its own type, the element enters as the shared map
         if (isCallExpression(up) && isPropertyAccessExpression(up.expression) && isIdentifier(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n
             && String(up.expression.name.text) === 'push') return !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n) as any);
+        // ral-zg: `y = el` into another plain local of the same function (a sibling-admitted row only: the optional form
+        // boxes back to exactly Null or the map, what the copied `Value` held)
+        if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(up.left)
+            && up.parent?.kind === SyntaxKind.ExpressionStatement && this.rustZgOuterLocalWrite(up.left, n)) return true;
         // `m[k] = el` stores the shared map into another container (the value slot of the write)
         if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && isElementAccessExpression(up.left)
             && up.parent?.kind === SyntaxKind.ExpressionStatement) return !this.rustIdentifierRefersToDeclaration(this.rustSkipWrappers(up.left.expression), this.rustDeclarationOfIdentifier(n) as any);
@@ -18996,6 +19000,20 @@ export class RustTranspiler extends BaseTranspiler {
             this.rustZgSiblingRows.add(declaration);
             return true;
         });
+    }
+
+    /** ral-zg: `y = el` where `y` is another `let` of the same function declared before the row's block, never typed by a
+     *  container rule (it stays the boxed `Value` the write targets). */
+    rustZgOuterLocalWrite(left: any, n: any): boolean {
+        const target: any = this.rustDeclarationOfIdentifier(left);
+        const row: any = this.rustDeclarationOfIdentifier(n);
+        if (target === undefined || row === undefined || target === row || !isVariableDeclaration(target) || !isVariableDeclaration(row)) return false;
+        if (!this.rustDictElementSource(this.rustSkipWrappers(row.initializer)) || this.rustEnclosingFunction(target) !== this.rustEnclosingFunction(row)) return false;
+        if ((target.parent?.flags & NodeFlags.Let) === 0 || target.pos > row.pos) return false;
+        if (this.rustBorrowedLocalKind(target) !== undefined || this.rustDictLocalIsTyped(target) || this.rustNilLocalKind(target) !== undefined
+            || this.rustReadBearerKindOfDeclaration(target) !== false) return false;
+        this.rustZgSiblingRows.add(row);
+        return true;
     }
 
     /** ral-zg: map rows admitted next to a differently sourced sibling; a whole hand-off of such a row takes the optional form
