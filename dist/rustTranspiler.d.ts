@@ -2513,6 +2513,20 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustParamIsLentResponse(param: any): boolean;
     private static readonly RUST_LENT_RESPONSE_TYPES;
     rustParamIsLentResponseUncached(param: any): boolean;
+    private rustLentVenueDecisions;
+    rustParamIsLentVenue(param: any): boolean;
+    rustVenueLentKind(param: any): 'dict' | 'list' | undefined;
+    rustVenueLentKindUncached(param: any): 'dict' | 'list' | undefined;
+    /** A method of a venue source (REST, pro or prediction) whose name the base tier never declares: each venue's
+     *  Rust method is an inherent one, so its signature is its own (a same-named method elsewhere is independent,
+     *  and the checker resolves a `this.` call to the declaration Rust picks); by-name arms pass a `Value`. */
+    rustVenueOnlyMethod(method: any, name: string): boolean;
+    private rustBaseTierMethodNamesByRoot;
+    rustBaseTierMethodNames(srcRoot: string): Set<string>;
+    /** The lent per-venue slot kind a call argument lands in (`this.m(.., x, ..)`). */
+    rustLentVenueSlot(call: any, arg: any): 'dict' | 'list' | undefined;
+    /** `&x` for a typed container local (plain or optional form) lent to a per-venue lent slot. */
+    printLentVenueArg(node: any, text: string): string | undefined;
     /** The response argument of a call to the class's own lent override (an inherited one is the `Value` trait method). */
     rustLentResponseSlot(call: any, arg: any): boolean;
     /** A base `extend` / `deepExtend`, or a `safeDict*` with an empty-map default: the local always holds a map. */
