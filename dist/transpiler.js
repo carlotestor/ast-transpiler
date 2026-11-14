@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -66138,7 +66138,7 @@ ${this.getIden(identation)}}`;
     return `Value::from(vec![${node.elements.map(element).join(", ")}])`;
   }
   printDeleteExpression(node, identation) {
-    return this.printWsBookMapDelete(node) ?? this.printWsCacheMapDelete(node) ?? this.printClientHandleDelete(node) ?? this.provenDictFieldDelete(node) ?? `remove(&mut ${this.printNode(node.expression.expression, 0)}, &${this.printNode(node.expression.argumentExpression, 0)})`;
+    return this.printBearerDelete(node) ?? this.printWsBookMapDelete(node) ?? this.printWsCacheMapDelete(node) ?? this.printClientHandleDelete(node) ?? this.provenDictFieldDelete(node) ?? `remove(&mut ${this.printNode(node.expression.expression, 0)}, &${this.printNode(node.expression.argumentExpression, 0)})`;
   }
   printInstanceOfExpression(node, identation) {
     return `${this.getIden(identation)}is_instance(&${this.printNode(node.left, 0)}, &${this.printNode(node.right, 0)})`;
@@ -67577,6 +67577,8 @@ ${iden}}`;
     }
     if (up !== void 0 && root === access && this.rustBearerElementPushCall(up.parent) !== void 0)
       return this.rustBearerElementPushText(up.parent, "v") !== void 0;
+    if (up !== void 0 && isDeleteExpression2(up) && root === access)
+      return this.rustBearerDeleteKey(up) !== void 0;
     if (up !== void 0 && (isDeleteExpression2(up) || isCallExpression6(up) && up.expression === root || up.kind === SyntaxKind7.PrefixUnaryExpression || up.kind === SyntaxKind7.PostfixUnaryExpression))
       return false;
     if (!this.isNativeAccessPositionSafe(root) && !isStringLiteralLikeNode4(this.rustSkipWrappers(access.argumentExpression)) && this.isNativeAccessPositionSafe(root, this.rustBearerSelfWriteHost(root, name)))
@@ -67625,6 +67627,32 @@ ${iden}}`;
     if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0)
       return false;
     return isObjectLiteralExpression4(this.rustSkipWrappers(declaration.initializer));
+  }
+  /** ral-yf: the key text of `delete m[k]` as an expression statement on a map-literal local `m`, `k` a literal bearer key
+   *  or a proven-string key place, else undefined. runtime `remove` on (Dict, Str) is `try_ws_subs_remove` (a literal
+   *  holds no ws marker, so it is dead) then `shift_remove`; a missing key is a no-op in both. */
+  rustBearerDeleteKey(del) {
+    const target = del?.expression;
+    if (target === void 0 || !isElementAccessExpression4(target) || !isIdentifier3(target.expression) || del.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(target.expression);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0 || !isObjectLiteralExpression4(this.rustSkipWrappers(declaration.initializer)))
+      return void 0;
+    const key = this.rustSkipWrappers(target.argumentExpression);
+    if (key === void 0 || !isStringLiteralLikeNode4(key) || !this.rustDictBearerKeyOk(key))
+      return void 0;
+    return JSON.stringify(String(key.text));
+  }
+  /** ral-yf: `delete m[k]` on a typed map-literal local. */
+  printBearerDelete(node) {
+    const target = node?.expression;
+    if (target === void 0 || !isElementAccessExpression4(target) || !isIdentifier3(target.expression))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(target.expression);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !this.rustDictLocalIsTyped(declaration))
+      return void 0;
+    const key = this.rustBearerDeleteKey(node);
+    return key === void 0 ? void 0 : `${String(target.expression.text)}.shift_remove(${key})`;
   }
   /** ral-xf: the `m[k]` receiver of a statement `m[k].push (v)` (one argument, no spread), else undefined. */
   rustBearerElementPushCall(call) {
@@ -72857,7 +72885,23 @@ ${iden}}`;
       return false;
     if (isArrayLiteralExpression4(rhs))
       return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement || isIdentifier3(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)) && (!rhs.elements.some((e) => isIdentifier3(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== void 0) || this.rustBuiltListBoxedLiteral(rhs) !== void 0;
-    return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs);
+    return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs) || this.rustDeclaredListProducer(rhs);
+  }
+  /** ral-yf: `await this.<endpoint> (..)` whose abstract declaration spells `Promise<List>` (a non-list answer reads as the
+   *  empty list, the landed ral-kc `into_list()` behaviour), or `this.parse<X> (..)` whose declaration returns `T[]`
+   *  (every override must return a list too): `.into_list()` moves exactly the list out of the box. */
+  rustDeclaredListProducer(rhs) {
+    if (rhs?.kind === SyntaxKind7.AwaitExpression) {
+      const call = this.rustSkipWrappers(rhs.expression);
+      return call !== void 0 && isCallExpression6(call) && !this.rustTestTierSource(call) && this.rustDeclaredEndpointKind(call) === "list";
+    }
+    if (!isCallExpression6(rhs) || !isPropertyAccessExpression3(rhs.expression) || rhs.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const method = String(rhs.expression.name.text);
+    if (!_RustTranspiler.RUST_LIST_PARSERS.has(method) || this.rustTestTierSource(rhs) || this.rustVirtualDispatch[this.toSnakeCaseName(method)] !== void 0)
+      return false;
+    const declaration = this.rustScalarCallee(rhs);
+    return declaration?.kind === SyntaxKind7.MethodDeclaration && declaration.type?.kind === SyntaxKind7.ArrayType && this.rustListPassthroughCallee(rhs, method);
   }
   /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
    *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so
@@ -79826,6 +79870,9 @@ _RustTranspiler.RUST_BOOK_CTORS = /* @__PURE__ */ new Set(["orderBook", "indexed
 _RustTranspiler.RUST_BOOK_SIDE_FIELDS = /* @__PURE__ */ new Set(["bids", "asks", "timestamp", "datetime", "nonce", "symbol", "cache"]);
 // `set_book_meta` writes these to the shared store (`cache` replaces the shared delta buffer)
 _RustTranspiler.RUST_BOOK_META_WRITES = /* @__PURE__ */ new Set(["timestamp", "datetime", "nonce", "symbol", "cache"]);
+// Base plural parsers (no venue redeclares them) whose every return is `[]`, a self call, or a base
+// `filterBy*SinceLimit` list: the runtime answers a `Value::Arr` on every path.
+_RustTranspiler.RUST_LIST_PARSERS = /* @__PURE__ */ new Set(["parseTrades", "parseWsTrades", "parseTradesHelper", "parseOrders"]);
 // ── optional list locals ─────────────────────────────────────────────────
 // A list local whose source may yield `undefined` (the permissive `marketSymbols`, `marketIds`, a `safeList*`
 // with no default) holds `Option<crate::value::List>` (`into_opt_list` moves the shared list out of the box).
