@@ -65809,10 +65809,11 @@ ${idn}}`;
   rustI64IndexText(keyNode, place) {
     return this.rustI64CounterUse(this.rustSkipWrappers(keyNode)) ? `${place} as usize` : `(${place}).as_i64().unwrap_or(-1) as usize`;
   }
-  /** A registered `i64` counter as a helper key (`Value::Int(i)`); a read the ccxt write-back binds keeps the counter `Value`. */
+  /** A registered `i64` counter as a helper key (`Value::Int(i)`). zf: a read the ccxt write-back binds takes it too
+   *  (`writeBackIndexedMutations` matches `get_value(&xs, &Value::Int(i))` and writes back at the same `Int` key). */
   rustI64HelperKeyText(keyNode, read) {
     const key = this.rustSkipWrappers(keyNode);
-    if (this.rustI64CounterOf(key) === void 0 || read !== void 0 && this.isWriteBackBindRead(read))
+    if (this.rustI64CounterOf(key) === void 0)
       return void 0;
     return this.rustI64CounterUse(key) ? `Value::Int(${String(key.text)})` : void 0;
   }

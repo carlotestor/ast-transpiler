@@ -4197,7 +4197,8 @@ describe('rust native container reads on typed receivers', () => {
             '    }\n' +
             '}';
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('let mut entry: Value = get_value(&data, &i);');
+        // ral-zf: the i64 counter keys it as `&Value::Int(i)`, which the write-back pass also matches
+        expect(output).toContain('let mut entry: Value = get_value(&data, &Value::Int(i));');
         expect(output).not.toContain(DYNAMIC);
     });
 
@@ -14083,5 +14084,17 @@ describe('ral-yf: delete m[k] on a map literal is the IndexMap shift_remove (run
     test('negative: a produced map keeps the box', () => {
         const body = out.slice (out.indexOf ('fn producedDelete'));
         expect(body).toMatch(/let mut request: Value = /);
+    });
+});
+
+describe('ral-zf: a counter-indexed bind the ccxt write-back pass rewrites keeps the i64 counter', () => {
+    test('const e = xs[i]; e[k] = v: the counter is i64 and the bind keys the helper with Value::Int(i)', () => {
+        const out = transpiler.transpileRust ("class T {\n    m (data: any[]) {\n        for (let i = 0; i < data.length; i++) {\n            const entry = data[i];\n            entry['page'] = 1;\n        }\n        return data;\n    }\n}").content;
+        expect(out).toContain('let mut i: i64 = 0;');
+        expect(out).toContain('let mut entry: Value = get_value(&data, &Value::Int(i));');
+    });
+    test('negative: an untyped counter (arithmetic with an any operand) keeps the Value key', () => {
+        const out = transpiler.transpileRust ("class T {\n    m (data: any[], n) {\n        for (let i = 0; i < data.length; i++) {\n            const entry = data[i];\n            entry['page'] = n - i;\n        }\n        return data;\n    }\n}").content;
+        expect(out).toContain('let mut entry: Value = get_value(&data, &i);');
     });
 });
