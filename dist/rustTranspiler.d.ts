@@ -2298,6 +2298,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBorrowedLocalKindUncached(declaration: any): 'dict' | 'list' | undefined;
     private rustOptContainerLocals;
     private rustBorrowedIndexReads;
+    /** `Promise.all ([..])` (an array literal operand): runtime `promise_all` hands its operand back, so it is always a list. */
+    rustPromiseAllListKind(call: any): 'list' | undefined;
     /** `x[k]`, read only (no write, call, property or nested element target), with a numeric literal key or a key local
      *  that prints as a `Value` (a literal-initialised counter, or an untyped `let`/`const` of number / string type). */
     rustBorrowedIndexReadUse(n: any): boolean;

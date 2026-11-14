@@ -13189,3 +13189,22 @@ describe('ral-wh: index and variable-key reads on a held safeList / safeDict loc
         expect(out).toContain('let mut byId: Value = ');
     });
 });
+
+describe('ral-wh: Promise.all results over a built list hold the List', () => {
+    const write = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    async fetchA (params: Dict = {}): Promise<any> { return {}; }\n    safeValue (o: any, k: any, d: any = undefined): any { return o[k]; }\n    isDictionary (v: any): boolean { return true; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    safeDict (dictionaryOrList: any, key: any, defaultValue: Dict = undefined): Dict | undefined {\n        const value = this.safeValue (dictionaryOrList, key, defaultValue);\n        if (value === undefined) {\n            return defaultValue;\n        }\n        if (this.isDictionary (value)) {\n            return value;\n        }\n        return defaultValue;\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venue + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('Promise.all over a pushed list of promises read by safeDict at an index is a List', () => {
+        const out = write ('wh-pall', "    async m (params: Dict = {}) {\n        const promises: Promise<any>[] = [\n            this.fetchA (params),\n            this.fetchA (params),\n        ];\n        promises.push (this.fetchA ());\n        const results = await Promise.all (promises);\n        const a = this.safeDict (results, 0, {});\n        const b = this.safeDict (results, 1, {});\n        return [ this.hold (a), this.hold (b) ];\n    }\n");
+        expect(out).toContain('let mut results: crate::value::List = promise_all(');
+        expect(out).toContain('.await.into_list()');
+    });
+    test('negative: Promise.all over a parameter of unknown kind stays a Value', () => {
+        const out = write ('wh-palln', "    async m (promises: any) {\n        const results = await Promise.all (promises);\n        const a = this.safeDict (results, 0, {});\n        return this.hold (a);\n    }\n");
+        expect(out).toContain('let mut results: Value = promise_all(');
+    });
+});
