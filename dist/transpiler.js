@@ -56927,7 +56927,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return strBase !== void 0 ? "ostr" : intBase !== void 0 ? "oint" : numBase !== void 0 ? "onum" : void 0;
       return void 0;
     }
-    const kind = this.rustReaderFallbackKind(fallback);
+    let kind = this.rustReaderFallbackKind(fallback);
+    if (kind === void 0 && isIdentifier3(fallback)) {
+      const pk = this.rustOptParamKind(fallback);
+      const same = pk === void 0 ? false : strBase !== void 0 ? pk === "str" || pk === "ostr" : intBase !== void 0 ? pk === "int" || pk === "oint" : numBase !== void 0 && (pk === "num" || pk === "onum");
+      if (same)
+        kind = pk;
+    }
     if (strBase !== void 0)
       return kind === "str" || kind === "ostr" || kind === void 0 && (this.rustReaderFallbackChecked(fallback) === "string" || this.rustVenueStrCall(fallback) || this.rustOptionsElemKind(fallback) === "ostr") ? "ostr" : void 0;
     if (intBase !== void 0)
@@ -57195,10 +57201,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         continue;
       const trial = this.rustScalarDecisions.get(declaration);
       const form = this.rustScalarUseForms.get(n);
-      if ((trial === "str" || trial === "ostr") && (form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration) && !(form === "box" && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== void 0 && this.rustScalarSelfArgBox(n)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustLendSlot(n)) && !(form === "box" && !this.rustStrNoLend && this.rustUdReaderStr(declaration.initializer) && this.rustLendSlot(n) && this.rustUdLent.add(declaration)))
+      if ((trial === "str" || trial === "ostr") && (form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration) && !(form === "key" && trial === "ostr") && !(form === "box" && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== void 0 && this.rustScalarSelfArgBox(n)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustLendSlot(n)) && !(form === "box" && !this.rustStrNoLend && this.rustUdReaderStr(declaration.initializer) && this.rustLendSlot(n) && this.rustUdLent.add(declaration)))
         return false;
       const push = findAncestor(n, (m) => isStatement(m) || isCallExpression6(m) && isPropertyAccessExpression3(m.expression) && m.expression.name.text === "push");
-      if (push !== void 0 && isCallExpression6(push))
+      if (push !== void 0 && isCallExpression6(push) && !this.rustCopyPushPairElement(n, push, trial))
         return false;
       const write = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken);
       if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write))
@@ -57211,7 +57217,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  local held (`Value::Int` / `Value::Null`), so no other local's decision reads this one's type. */
   rustScalarCacheFieldCtor(n, write) {
     const left = this.unwrapParens(write.left);
-    if (!isPropertyAccessExpression3(left) || left.expression.kind !== SyntaxKind7.ThisKeyword)
+    if (!(isPropertyAccessExpression3(left) && left.expression.kind === SyntaxKind7.ThisKeyword) && !this.rustWsCacheCtorSizeWrite(n, write))
       return false;
     const right = this.unwrapParens(write.right);
     if (right?.kind !== SyntaxKind7.NewExpression || right.arguments?.length !== 1 || this.unwrapParens(right.arguments[0]) !== n)
@@ -57219,6 +57225,28 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const kind = this.rustScalarDecisions.get(this.rustDeclaredNode(n));
     const form = this.rustScalarUseForms.get(n);
     return this.rustCacheCtorLimitArg(n, kind) && (form === "targ" || form === "box");
+  }
+  /** 40d: a Copy number that is a direct element of the array literal pushed whole (`rows.push ([ price, amount ])`):
+   *  the element prints `Value::from(x)` (the Int / Float / Null its box held, no copy) inside `Value::from(vec![..])`,
+   *  which ccxt's rustVecPushInline (build/rustTranspiler.ts) already treats as a marker-free source whatever the
+   *  elements print, so no text pass reads this local's type. */
+  rustCopyPushPairElement(n, push, kind) {
+    if (kind !== "int" && kind !== "oint" && kind !== "num" && kind !== "onum")
+      return false;
+    const list = n.parent;
+    if (!isArrayLiteralExpression4(list) || push.arguments.length !== 1 || this.unwrapParens(push.arguments[0]) !== list)
+      return false;
+    const form = this.rustScalarUseForms.get(n);
+    return form === "box" || form === "xbox";
+  }
+  /** 40d: `n` is the one argument of a base `ws/Cache.ts` constructor that is the whole source of a ws cache-map entry
+   *  write (`this.trades[k] = new ArrayCache (n)`, `this.ohlcvs[k][tf] = new ArrayCacheByTimestamp (n)`), which
+   *  printWsCacheMapWrite prints as `CacheStore::put` / `CacheShelves::put2` around the constructor text. */
+  rustWsCacheCtorSizeWrite(n, write) {
+    if (write === void 0 || !isBinaryExpression5(write) || write.operatorToken.kind !== SyntaxKind7.EqualsToken || !this.rustWsCacheMapEntry(write.left))
+      return false;
+    const right = this.unwrapParens(write.right);
+    return this.rustWsCacheCtor(right) && right.arguments?.length === 1 && this.unwrapParens(right.arguments[0]) === n;
   }
   /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole
    *  write (`x = Precise.stringDiv (Precise.stringMul (local, y), ..)`): the written text is a `Precise` call either
@@ -58723,7 +58751,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     const write = isBinaryExpression5(current) ? current : void 0;
     if (write === void 0 || write.operatorToken.kind !== SyntaxKind7.EqualsToken || !isElementAccessExpression4(write.left) || !(isElementAccessExpression4(write.left.expression) || isPropertyAccessExpression3(write.left.expression)))
       return false;
-    return !(this.rustThisFieldTarget(write.left.expression) && this.rustInsideCallArgument(n, write.right));
+    if (this.rustThisFieldTarget(write.left.expression) && this.rustInsideCallArgument(n, write.right))
+      return false;
+    return !this.rustWsCacheCtorSizeWrite(n, write);
   }
   // ── nested plain-field writes (rustNestedFieldKeyUse / printNestedFieldKeyWrite) ──
   // `this.balance[t][code] = v` prints `add_element_to_object(get_value_mut(&mut self.balance, &t), &code, v)`,
@@ -61052,6 +61082,15 @@ ${ind}];`;
     const init = declaration === void 0 || !isVariableDeclaration3(declaration) ? void 0 : this.unwrapParens(declaration.initializer);
     return init !== void 0 && isCallExpression6(init) && isPropertyAccessExpression3(init.expression) && init.expression.expression.kind === SyntaxKind7.ThisKeyword && String(init.expression.name.text) === "parseToInt";
   }
+  /** 40d: `const n = this.safeInteger* (.., <integer literal>)`: the reader answers an `Int` on every path (parsed or the
+   *  literal default), printed `i64` by the existing int reader form: an exact `i64` bound like a `parseToInt` one. */
+  rustIntReaderLitDefault(declaration) {
+    const init = declaration === void 0 || !isVariableDeclaration3(declaration) ? void 0 : this.unwrapParens(declaration.initializer);
+    if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const base = _RustTranspiler.RUST_SCALAR_INT_HELPERS[String(init.expression.name.text)];
+    return base !== void 0 && init.arguments.length === base + 1 && this.rustScalarIntLiteral(this.unwrapParens(init.arguments[base])) !== void 0;
+  }
   /** wi: a tuple slot whose producer builds an exact Int-or-null on every return (`checkOptionInteger`): an `i64` bound too. */
   rustTbExactIntSlot(declaration) {
     if (declaration === void 0 || !isBindingElement(declaration))
@@ -61112,7 +61151,7 @@ ${ind}];`;
       return void 0;
     if (_RustTranspiler.NATIVE_COMPARISON_OPERATORS[cond.operatorToken.kind] === void 0 || this.isEqualityOp(cond.operatorToken.kind))
       return void 0;
-    if (!isIdentifier3(n) || !(this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbExactIntSlot(this.rustDeclaredNode(n))) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond))
+    if (!isIdentifier3(n) || !(this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbExactIntSlot(this.rustDeclaredNode(n)) || this.rustIntReaderLitDefault(this.rustDeclaredNode(n))) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond))
       return void 0;
     const counter = cond.left;
     if (!isIdentifier3(counter))

@@ -803,6 +803,15 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  local, and the hand-written `::new(impl Into<Value>)` boxes an `i64` / `Option<i64>` into the `Value` the boxed
      *  local held (`Value::Int` / `Value::Null`), so no other local's decision reads this one's type. */
     rustScalarCacheFieldCtor(n: any, write: any): boolean;
+    /** 40d: a Copy number that is a direct element of the array literal pushed whole (`rows.push ([ price, amount ])`):
+     *  the element prints `Value::from(x)` (the Int / Float / Null its box held, no copy) inside `Value::from(vec![..])`,
+     *  which ccxt's rustVecPushInline (build/rustTranspiler.ts) already treats as a marker-free source whatever the
+     *  elements print, so no text pass reads this local's type. */
+    rustCopyPushPairElement(n: any, push: any, kind: string | undefined): boolean;
+    /** 40d: `n` is the one argument of a base `ws/Cache.ts` constructor that is the whole source of a ws cache-map entry
+     *  write (`this.trades[k] = new ArrayCache (n)`, `this.ohlcvs[k][tf] = new ArrayCacheByTimestamp (n)`), which
+     *  printWsCacheMapWrite prints as `CacheStore::put` / `CacheShelves::put2` around the constructor text. */
+    rustWsCacheCtorSizeWrite(n: any, write: any): boolean;
     /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole
      *  write (`x = Precise.stringDiv (Precise.stringMul (local, y), ..)`): the written text is a `Precise` call either
      *  way (the `&Value` operand takes the moved string), so the receiver's decision does not read this local's type. */
@@ -1333,6 +1342,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustValueIntCounter(node: any): boolean;
     /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */
     rustTbParseToIntInit(declaration: any): boolean;
+    /** 40d: `const n = this.safeInteger* (.., <integer literal>)`: the reader answers an `Int` on every path (parsed or the
+     *  literal default), printed `i64` by the existing int reader form: an exact `i64` bound like a `parseToInt` one. */
+    rustIntReaderLitDefault(declaration: any): boolean;
     /** wi: a tuple slot whose producer builds an exact Int-or-null on every return (`checkOptionInteger`): an `i64` bound too. */
     rustTbExactIntSlot(declaration: any): boolean;
     /** ub: a `this.parseToInt(..)` call printed as its boxed `Int` / `Null` (`Value::from(self.parse_to_int(..))`). */
