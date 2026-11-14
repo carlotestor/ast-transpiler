@@ -58659,8 +58659,10 @@ ${binding(plan.indent)}` : ""), head: "" };
     const lo = lk.startsWith("o");
     const ro = rk.startsWith("o");
     if (lo && ro) {
-      if (equality || base(lk) !== base(rk) || !isIdentifier3(left) || !isIdentifier3(right))
+      if (equality || base(lk) !== base(rk))
         return void 0;
+      if (!isIdentifier3(left) || !isIdentifier3(right))
+        return `matches!((${text(lk, left)}, ${text(rk, right)}), (Some(__l), Some(__r)) if (__l as f64) ${sign} (__r as f64))`;
       if (/ts[\\/]src[\\/]base[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? "")) && (this.rustScalarBareLastWrite(left) || this.rustScalarBareLastWrite(right)))
         return void 0;
       return `(${text(lk, left)}.is_some() && ${text(rk, right)}.is_some() && ${text(lk, left)} ${sign} ${text(rk, right)})`;

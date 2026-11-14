@@ -11718,6 +11718,19 @@ describe('ral-sd: reader strings decided with their receiving local; keys whose 
     });
 });
 
+describe('ral-sd: an optional integer expression ordered against an optional reader local', () => {
+    test('both readers are Option<i64>; `(U - 1) <= nonce` is a both-present f64 order (the helper orders as_f64, Null is false)', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-sdo-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export type Int = number | undefined;\nexport default class Exchange {\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    sync (book: any, msg: any) {\n        const U = this.safeInteger (msg, 'U');\n        const nonce = this.safeInteger (book, 'nonce');\n        if ((U - 1) <= nonce) {\n            return 1;\n        }\n        return 0;\n    }\n}\n");
+        const out = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut U: Option<i64> = ');
+        expect(out).toContain('let mut nonce: Option<i64> = ');
+        expect(out).toContain('matches!((((if let Some(__l) = U { Some(__l - 1) } else { None })), nonce), (Some(__l), Some(__r)) if (__l as f64) <= (__r as f64))');
+    });
+});
+
 describe('ral-qd: venue parse* string results lend like other venue strings', () => {
     test('a venue parseOrderStatus result is Option<String>: compared natively, boxed once into the order map', () => {
         const dir = path.join (rustFixtureRoot, 'ral-qd-parse-str');

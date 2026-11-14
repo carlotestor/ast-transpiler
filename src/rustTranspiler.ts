@@ -7372,7 +7372,10 @@ export class RustTranspiler extends BaseTranspiler {
         if (lo && ro) {
             // two optional numbers of one kind: JS orders only two numbers (`undefined` compares false), and
             // `Option` orders `Some` by its value once both are present (locals only: each is read twice)
-            if (equality || base(lk) !== base(rk) || !isIdentifier(left) || !isIdentifier(right)) return undefined;
+            if (equality || base(lk) !== base(rk)) return undefined;
+            // sd: an optional operand that is not a bare local (`(U - 1) <= nonce`) is evaluated once: both present, then ordered
+            // (ordered as `f64`, like the helper's `as_f64` of each `Int` / `Float`)
+            if (!isIdentifier(left) || !isIdentifier(right)) return `matches!((${text(lk, left)}, ${text(rk, right)}), (Some(__l), Some(__r)) if (__l as f64) ${sign} (__r as f64))`;
             // base tier: the moved `Value` at a bare last-use write `y = x;` becomes a ccxt-added clone of the typed local
             if (/ts[\\/]src[\\/]base[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? '')) && (this.rustScalarBareLastWrite(left) || this.rustScalarBareLastWrite(right))) return undefined;
             return `(${text(lk, left)}.is_some() && ${text(rk, right)}.is_some() && ${text(lk, left)} ${sign} ${text(rk, right)})`;

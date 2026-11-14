@@ -58658,8 +58658,10 @@ ${binding(plan.indent)}` : ""), head: "" };
     const lo = lk.startsWith("o");
     const ro = rk.startsWith("o");
     if (lo && ro) {
-      if (equality || base(lk) !== base(rk) || !_is.isIdentifier.call(void 0, left) || !_is.isIdentifier.call(void 0, right))
+      if (equality || base(lk) !== base(rk))
         return void 0;
+      if (!_is.isIdentifier.call(void 0, left) || !_is.isIdentifier.call(void 0, right))
+        return `matches!((${text(lk, left)}, ${text(rk, right)}), (Some(__l), Some(__r)) if (__l as f64) ${sign} (__r as f64))`;
       if (/ts[\\/]src[\\/]base[\\/]/.test(String(_nullishCoalesce(_optionalChain([node, 'access', _8957 => _8957.getSourceFile, 'optionalCall', _8958 => _8958(), 'optionalAccess', _8959 => _8959.fileName]), () => ( "")))) && (this.rustScalarBareLastWrite(left) || this.rustScalarBareLastWrite(right)))
         return void 0;
       return `(${text(lk, left)}.is_some() && ${text(rk, right)}.is_some() && ${text(lk, left)} ${sign} ${text(rk, right)})`;
