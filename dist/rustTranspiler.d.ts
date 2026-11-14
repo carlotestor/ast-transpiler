@@ -408,6 +408,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBindsName(node: any, name: string): boolean;
     rustIdentifierUseIsCondition(node: any): boolean;
     private rustLocalUsesAll;
+    /** ral-qd: `n` is the name of the method declaration `scope` itself (a declaration name, never a read of a local),
+     *  asked while the shared-container rule walks its uses (the copying `IndexMap` bearer rules keep the old walk). */
+    rustOwnMethodName(n: any, scope: any): boolean;
+    private rustOwnNameSkip;
     rustLocalUsesAcceptBool(declaration: any, sourceName: string): boolean;
     private rustBoolParamDecisions;
     rustParamPrintsBool(param: any): boolean;
@@ -2590,6 +2594,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustUntilHeadSlotUncached(element: any): boolean;
     /** `x` (moved at its last use) or `&x` for a shared-map local as the head of a base `extend`, else undefined. */
     printExtendHeadArg(node: any, text: string): string | undefined;
+    /** ral-qd: a local initialised from a `this.parse*(..)` call. */
+    rustParseResultLocal(declaration: any): boolean;
     /** The literal key of a statement write `n['k'] = v` (one level, not a book-meta or replaced key). */
     rustUntilHeadKeyWrite(n: any): string | undefined;
     /** `std::sync::Arc::make_mut(&mut x).insert("k".into(), v)` for a literal-key write on a typed request slot. */

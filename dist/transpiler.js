@@ -51507,6 +51507,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // `x = y` from a typed `Option<..>` local of the same kind that is never read after the write moves the
     // payload out (`x = y.take()`): no copy, and the dead source is left `None`.
     this.rustNilAliasMoves = /* @__PURE__ */ new WeakSet();
+    this.rustOwnNameSkip = false;
     // ── native `bool` parameters ──────────────────────────────────────────────
     //
     // A `boolean` parameter of a venue-local generated method prints `bool`
@@ -54335,7 +54336,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     let safe = true;
     for (const n of this.rustScopeNameNodes(scope, name)) {
-      if (skipScopeName && n === scope.name)
+      if ((skipScopeName || this.rustOwnMethodName(n, scope)) && n === scope.name)
         continue;
       if (n !== declaration && this.rustBindsName(n, name)) {
         safe = false;
@@ -54347,6 +54348,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       }
     }
     return safe;
+  }
+  /** ral-qd: `n` is the name of the method declaration `scope` itself (a declaration name, never a read of a local),
+   *  asked while the shared-container rule walks its uses (the copying `IndexMap` bearer rules keep the old walk). */
+  rustOwnMethodName(n, scope) {
+    return this.rustOwnNameSkip && scope?.kind === SyntaxKind7.MethodDeclaration && n === scope.name && n?.kind === SyntaxKind7.Identifier;
   }
   rustLocalUsesAcceptBool(declaration, sourceName) {
     return this.rustLocalUsesAll(declaration, sourceName, false, (n) => this.rustIdentifierUseIsCondition(n) || this.rustBoolParamUseAccepted(n));
@@ -56962,6 +56968,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     for (const n of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
       if (n === node || n === declaration.name || !isIdentifier3(n) || this.rustIdentifierIsPropertyName(n))
+        continue;
+      if (n === scope.name && scope.kind === SyntaxKind7.MethodDeclaration)
         continue;
       const symbol = this.rustSymbolOf(n);
       if (symbol !== void 0 && symbol !== own)
@@ -66104,7 +66112,14 @@ ${iden}}`;
     };
     const recordLookup = init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init);
     const blockScoped = !nilDeclared && (endpoint || init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0 || extendReuse && this.rustLiteralSiblingsAlike(declaration, name) || !recordLookup && this.rustSiblingBindingsAlike(declaration, name, init) || !recordLookup && this.rustElementSiblingsAlike(declaration, name, init));
-    const safe = blockScoped ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
+    const ownNameSkip = this.rustOwnNameSkip;
+    this.rustOwnNameSkip = true;
+    let safe;
+    try {
+      safe = blockScoped ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
+    } finally {
+      this.rustOwnNameSkip = ownNameSkip;
+    }
     const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || defaultedBoxes === boxedElementUses.length && optionalBoxes === 0 && paramsBoxes === 0 && this.rustDefaultedContainerBoxUse(boxedElementUses[0], init) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init));
     const boxOnly = reads === 0 && boxedElementUses.length > 0 && (this.rustDictElementSource(init) || this.rustListElementSource(init)) && nullTests === 0 && writes === 0;
     const endpointBoxOnly = endpointBoxes > 0 && nullTests === 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration) && boxedElementUses.every((u) => this.rustBoxLineOk(u));
@@ -70298,7 +70313,14 @@ ${iden}}`;
       return void 0;
     if (this.rustExtendReuseLocals.has(declaration) && (this.rustSelfExtendHead(node, declaration) || this.rustLocalLastUse(node, declaration)))
       return _RustTranspiler.rustLentMark(text);
-    return this.rustLocalLastUse(node, declaration) ? text : `&${text}`;
+    if (!this.rustLocalLastUse(node, declaration))
+      return `&${text}`;
+    return this.rustParseResultLocal(declaration) ? _RustTranspiler.rustLentMark(text) : text;
+  }
+  /** ral-qd: a local initialised from a `this.parse*(..)` call. */
+  rustParseResultLocal(declaration) {
+    const init = isVariableDeclaration3(declaration) ? this.rustSkipWrappers(declaration.initializer) : void 0;
+    return init !== void 0 && isCallExpression6(init) && isPropertyAccessExpression3(init.expression) && init.expression.expression.kind === SyntaxKind7.ThisKeyword && /^parse[A-Z]/.test(String(init.expression.name.text));
   }
   /** The literal key of a statement write `n['k'] = v` (one level, not a book-meta or replaced key). */
   rustUntilHeadKeyWrite(n) {
