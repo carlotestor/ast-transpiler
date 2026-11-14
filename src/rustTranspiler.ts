@@ -2107,8 +2107,12 @@ export class RustTranspiler extends BaseTranspiler {
                 : `let ${tmpName} = ${rhs}`;
             const slotRead = (idx: number) => (nativeList ? this.printTypedVecElementRead(tmpName, idx) : `get_value(&${tmpName}, &Value::Int(${idx}))`);
             // a string slot of a native list reads the element through `as_str` (the tuple-slot spelling, no Null box)
-            const assignments = left.elements.map((e, idx) => this.printRustNilSlotWrite(e, slotRead(idx), nativeList && /(?:^|[\\/])ts[\\/]src[\\/]pro[\\/]/.test(String(node.getSourceFile().fileName)) ? `${tmpName}.get(${idx}).and_then(Value::as_str)` : undefined,
-                nativeList ? `${tmpName}.get(${idx}).and_then(Value::as_bool)` : undefined) ?? `${this.printNode(e, 0)} = ${slotRead(idx)}`).join('; ');
+            const typedSlots = left.elements.map((e, idx) => this.printRustNilSlotWrite(e, slotRead(idx), nativeList && /(?:^|[\\/])ts[\\/]src[\\/]pro[\\/]/.test(String(node.getSourceFile().fileName)) ? `${tmpName}.get(${idx}).and_then(Value::as_str)` : undefined,
+                nativeList ? `${tmpName}.get(${idx}).and_then(Value::as_bool)` : undefined));
+            const assignments = typedSlots.map((t, idx) => t ?? `${this.printNode(left.elements[idx], 0)} = ${slotRead(idx)}`).join('; ');
+            // sa: every slot typed (no boxed slot read left for ccxt's `Vec<Value>` temp passes): `Value::into_list` moves the
+            // list out (an empty list for anything else), exactly `.as_array().cloned().unwrap_or_default()` without the copy
+            if (nativeList && typedSlots.every((t) => t !== undefined) && this.rustShortDestrHeads.has(node)) return `{ let ${tmpName} = ${rhs}.into_list(); ${assignments}; }`;
             return `{ ${head}; ${assignments}; }`;
         }
         const bookWrite = isAssign ? this.printWsBookMetaWrite(left, right) ?? this.printWsBookMapWrite(left, right) ?? this.printWsBookLocalWrite(left, right) : undefined; if (bookWrite !== undefined) return bookWrite;
@@ -19822,8 +19826,18 @@ export class RustTranspiler extends BaseTranspiler {
                 if (this.primitiveKindOfType(this.typeOfNodeIfAny(el)) === 'string') reserve += '.as_str().map(str::to_owned)'.length;
             }
         }
-        return width + reserve + '.into_dict()'.length + 'Value::Dict()'.length <= 400;
+        const budget = width + reserve + '.into_dict()'.length + 'Value::Dict()'.length;
+        if (budget <= 400) return true;
+        // sa: a destructure over a native list whose slots all print typed binds the temp `= X.into_list()` instead of
+        // `: Vec<Value> = X.as_array().cloned().unwrap_or_default()` (41 chars shorter); the print falls back when a slot stays boxed
+        const short = ': Vec<Value>'.length + '.as_array().cloned().unwrap_or_default()'.length - '.into_list()'.length;
+        if (write === undefined || !isBinaryExpression(write) || !isArrayLiteralExpression(write.left) || !this.rustNativeListSource(write.right) || budget - short > 400) return false;
+        if (!(write.left.elements as any).every((el: any) => isIdentifier(el) && this.rustNilSlotWrite(el))) return false;
+        this.rustShortDestrHeads.add(write);
+        return true;
     }
+
+    rustShortDestrHeads = new WeakSet<any>();
 
     /** A nil-declared slot local typed as the map. */
     rustNilSlotDictLocal(declaration: any): boolean {

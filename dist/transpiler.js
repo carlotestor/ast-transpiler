@@ -51721,6 +51721,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // tuple whose declared slot type is `Dict`, or an omit of the local itself), and the first write comes before any
     // read, so the local holds `crate::value::Dict` from that write on, handed on as the handed-slot rule does.
     this.rustNilSlotDictCandidates = /* @__PURE__ */ new WeakMap();
+    this.rustShortDestrHeads = /* @__PURE__ */ new WeakSet();
     this.rustUntilHeadDecisions = /* @__PURE__ */ new WeakMap();
     // ── lent list containers (rustParamIsLentList / rustLentListSlot / printLentListArg) ──
     // The response list of a base `parse*` method declared `List` takes `impl Into<crate::Value>`, in the base and in
@@ -53290,12 +53291,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const nativeList = this.rustNativeListSource(right);
       const head = nativeList ? `let ${tmpName}: Vec<Value> = ${rhs}.as_array().cloned().unwrap_or_default()` : `let ${tmpName} = ${rhs}`;
       const slotRead = (idx) => nativeList ? this.printTypedVecElementRead(tmpName, idx) : `get_value(&${tmpName}, &Value::Int(${idx}))`;
-      const assignments = left.elements.map((e, idx) => this.printRustNilSlotWrite(
+      const typedSlots = left.elements.map((e, idx) => this.printRustNilSlotWrite(
         e,
         slotRead(idx),
         nativeList && /(?:^|[\\/])ts[\\/]src[\\/]pro[\\/]/.test(String(node.getSourceFile().fileName)) ? `${tmpName}.get(${idx}).and_then(Value::as_str)` : void 0,
         nativeList ? `${tmpName}.get(${idx}).and_then(Value::as_bool)` : void 0
-      ) ?? `${this.printNode(e, 0)} = ${slotRead(idx)}`).join("; ");
+      ));
+      const assignments = typedSlots.map((t, idx) => t ?? `${this.printNode(left.elements[idx], 0)} = ${slotRead(idx)}`).join("; ");
+      if (nativeList && typedSlots.every((t) => t !== void 0) && this.rustShortDestrHeads.has(node))
+        return `{ let ${tmpName} = ${rhs}.into_list(); ${assignments}; }`;
       return `{ ${head}; ${assignments}; }`;
     }
     const bookWrite = isAssign ? this.printWsBookMetaWrite(left, right) ?? this.printWsBookMapWrite(left, right) ?? this.printWsBookLocalWrite(left, right) : void 0;
@@ -71011,7 +71015,16 @@ ${iden}}`;
           reserve += ".as_str().map(str::to_owned)".length;
       }
     }
-    return width + reserve + ".into_dict()".length + "Value::Dict()".length <= 400;
+    const budget = width + reserve + ".into_dict()".length + "Value::Dict()".length;
+    if (budget <= 400)
+      return true;
+    const short = ": Vec<Value>".length + ".as_array().cloned().unwrap_or_default()".length - ".into_list()".length;
+    if (write === void 0 || !isBinaryExpression5(write) || !isArrayLiteralExpression4(write.left) || !this.rustNativeListSource(write.right) || budget - short > 400)
+      return false;
+    if (!write.left.elements.every((el) => isIdentifier3(el) && this.rustNilSlotWrite(el)))
+      return false;
+    this.rustShortDestrHeads.add(write);
+    return true;
   }
   /** A nil-declared slot local typed as the map. */
   rustNilSlotDictLocal(declaration) {
