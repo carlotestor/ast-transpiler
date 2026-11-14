@@ -12903,3 +12903,24 @@ describe('ve: an order-book side parameter of a venue handler prints the Side ha
         expect(out).toMatch(/fn handleBidAsks\(&self, bookSide: Value, /);
     });
 });
+
+describe('we: a watch result whose every matching resolve passes a safeTicker map holds the map', () => {
+    // every `client.resolve (x, h)` that can meet the awaited hash passes a map record: the local is a Dict;
+    // one matching resolve of another kind keeps the Value
+    const mk = (extra: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-we-dict-'));
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    tickers: any = {};\n    safeString (o: any, k: any, d: any = undefined): any { return o[k]; }\n    safeTicker (t: Dict, m: any = undefined): any { return this.extend (t, {}); }\n    extend (...a: any[]): any { return Object.assign ({}, ...a); }\n    async watch (url: string, messageHash: string, message: any = undefined, subscribeHash: any = undefined, subscription: any = undefined): Promise<any> { return undefined; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    async watchT (symbol: string) {\n        const ticker = await this.watch ('u', 'ticker:' + symbol);\n        const result: any = {};\n        result[this.safeString (ticker, 'symbol')] = this.safeString (ticker, 'last');\n        return result;\n    }\n    handleTicker (client: any, message: any) {\n        const symbol = this.safeString (message, 's');\n        const t = this.safeTicker ({ 'symbol': symbol });\n        client.resolve (t, 'ticker:' + symbol);\n    }\n" + extra + "}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        return t.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+    };
+    test('every matching resolve passes a map: the local is a Dict', () => {
+        expect(mk('')).toMatch(/let mut ticker: crate::value::Dict = self\.watch\([^\n]*\.await\.into_dict\(\)/);
+    });
+    test('negative: another matching resolve passes a raw message', () => {
+        const out = mk("    handleRaw (client: any, message: any) {\n        client.resolve (message, 'ticker:' + this.safeString (message, 's'));\n    }\n");
+        expect(out).toMatch(/let mut ticker: Value = self\.watch\(/);
+    });
+});

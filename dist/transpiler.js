@@ -67274,6 +67274,8 @@ ${iden}}`;
     const sbAlias = from === void 0 && !nilDeclared && this.rustSbDictAliasSource(init);
     if (sbAlias)
       from = "dict";
+    if (from === void 0 && !nilDeclared && declaration.initializer !== void 0 && this.rustWsWatchResultKind(declaration.initializer) === "dict")
+      from = "dict";
     let sbMapWrites = 0;
     if (from === void 0 && !nilDeclared)
       return void 0;
@@ -68076,7 +68078,8 @@ ${iden}}`;
   /** A whole-value hand-off of a map element local: a plain `Value` argument of a `this.` method or an object literal value. */
   rustDictElementBoxUse(n, init) {
     const up = n.parent;
-    if (!this.rustDictElementSource(init) && !this.rustListElementSource(init) || up === void 0 || this.rustScalarInNestedWrite(n))
+    const watched = init !== void 0 && init.parent?.kind === SyntaxKind7.AwaitExpression && this.rustWsWatchResultKind(init.parent) === "dict";
+    if (!watched && !this.rustDictElementSource(init) && !this.rustListElementSource(init) || up === void 0 || this.rustScalarInNestedWrite(n))
       return false;
     if (up.kind === SyntaxKind7.PropertyAssignment)
       return up.initializer === n;
@@ -70389,6 +70392,8 @@ ${iden}}`;
     const n = this.rustStripWrappers(x);
     if (n === void 0)
       return void 0;
+    if (this.rustWsResolvedMap(n, 0))
+      return "dict";
     if (this.rustWsBookMapRead(n) || this.rustWsBookCtorLike(n))
       return "book";
     if (this.rustWsCacheField(n) || this.rustWsCacheCtor(n) || this.rustWsCacheMapEntry(n) || this.rustWsCacheMapLookup(n))
@@ -70408,6 +70413,43 @@ ${iden}}`;
       }
     }
     return void 0;
+  }
+  /** A resolved value that is a map on every path: a base record builder call, a sync method of the same class whose
+   *  every return is one, or an unreassigned single local bound to one. */
+  rustWsResolvedMap(x, depth) {
+    const n = this.rustStripWrappers(x);
+    if (n === void 0 || depth > 3)
+      return false;
+    if (isIdentifier3(n)) {
+      const d = this.rustDeclarationOfIdentifier(n);
+      if (d === void 0 || !isVariableDeclaration3(d) || !isIdentifier3(d.name) || d.initializer === void 0 || this.rustLocalReassigned(d))
+        return false;
+      return d.parent?.kind === SyntaxKind7.VariableDeclarationList && d.parent.declarations.length === 1 && this.rustWsResolvedMap(d.initializer, depth + 1);
+    }
+    if (!isCallExpression6(n) || !isPropertyAccessExpression3(n.expression) || n.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const declaration = this.rustScalarCallee(n);
+    if (declaration === void 0 || !isMethodDeclaration5(declaration) || declaration.body === void 0)
+      return false;
+    const file = String(declaration.getSourceFile?.()?.fileName ?? "");
+    if (_RustTranspiler.RUST_WS_MAP_RECORD_BUILDERS.has(String(n.expression.name.text)))
+      return _RustTranspiler.RUST_BASE_TIER_FILE.test(file);
+    if (findAncestor(declaration, isClassDeclaration4) !== findAncestor(n, isClassDeclaration4) || this.isAsyncFunction(declaration))
+      return false;
+    let returns = 0;
+    let ok = true;
+    this.rustWalkScope(declaration.body, (r) => {
+      if (r !== declaration.body && isFunctionLike(r))
+        return RUST_WALK_SKIP;
+      if (!isReturnStatement4(r))
+        return;
+      returns++;
+      if (r.expression === void 0 || !this.rustWsResolvedMap(r.expression, depth + 1)) {
+        ok = false;
+        return RUST_WALK_STOP;
+      }
+    });
+    return ok && returns > 0;
   }
   /** Any write of the local after its declaration (an assignment or an update). */
   rustLocalReassigned(declaration) {
@@ -70466,7 +70508,7 @@ ${iden}}`;
         this.rustWsHashEnv = env;
         try {
           const bound = (e) => {
-            const d = isIdentifier3(this.rustStripWrappers(e)) ? this.rustDeclarationOfIdentifier(this.rustStripWrappers(e)) : void 0;
+            const d = e !== void 0 && isIdentifier3(this.rustStripWrappers(e)) ? this.rustDeclarationOfIdentifier(this.rustStripWrappers(e)) : void 0;
             return d !== void 0 && env.has(d) ? env.get(d).arg : e;
           };
           table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), kind: kindOf(bound(x)) });
@@ -70500,7 +70542,7 @@ ${iden}}`;
       if (fh === void 0)
         add(n.arguments[1] ?? null, n.arguments[0], void 0, n);
       else
-        add(fh, n.arguments[0]);
+        add(fh, n.arguments[0], void 0, n);
     });
     this.rustWsResolveTables.set(cls, table);
     return table;
@@ -70668,17 +70710,22 @@ ${iden}}`;
       return void 0;
     let kind;
     let matched = 0;
+    let none = false;
     for (const r of table) {
-      if (r.kind === "none" || !r.pats.some((rp) => hashes.some((wp) => _RustTranspiler.rustWsPatternsMeet(rp, wp))))
+      if (!r.pats.some((rp) => hashes.some((wp) => _RustTranspiler.rustWsPatternsMeet(rp, wp))))
         continue;
-      if (r.kind !== "book" && r.kind !== "cache")
+      if (r.kind === "none") {
+        none = true;
+        continue;
+      }
+      if (r.kind !== "book" && r.kind !== "cache" && r.kind !== "dict")
         return void 0;
       if (kind !== void 0 && kind !== r.kind)
         return void 0;
       kind = r.kind;
       matched++;
     }
-    if (matched === 0 || kind === void 0)
+    if (matched === 0 || kind === void 0 || kind === "dict" && none)
       return void 0;
     this.rustWsWatchKinds.set(call, kind);
     return kind;
@@ -70739,6 +70786,39 @@ ${iden}}`;
       this.rustWsHashEnv = save;
     }
   }
+  /** `this.m (.., list, ..)` of a sync method of the same class whose parameter at `at` is never reassigned, pushed to,
+   *  element-written or handed on: only read (`p[i]`, `p.length`) or stored as an object literal value. */
+  rustWsReadOnlyListArg(call, at) {
+    if (!isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const declaration = this.rustScalarCallee(call);
+    if (declaration === void 0 || !isMethodDeclaration5(declaration) || declaration.body === void 0 || this.isAsyncFunction(declaration))
+      return false;
+    if (findAncestor(declaration, isClassDeclaration4) !== findAncestor(call, isClassDeclaration4))
+      return false;
+    const param = declaration.parameters[at];
+    if (param === void 0 || !isIdentifier3(param.name) || param.dotDotDotToken !== void 0 || this.rustLocalReassigned(param))
+      return false;
+    for (const n of this.rustScopeNameNodes(declaration, String(param.name.text))) {
+      if (!isIdentifier3(n) || n === param.name || isPropertyAccessExpression3(n.parent) && n.parent.name === n)
+        continue;
+      if (this.rustDeclarationOfIdentifier(n) !== param)
+        return false;
+      const up = n.parent;
+      if (isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "length" && !this.isNativeWriteTargetBase(up))
+        continue;
+      if (isElementAccessExpression4(up) && up.expression === n && !this.isNativeWriteTargetBase(up) && !isDeleteExpression2(up.parent))
+        continue;
+      if (up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n)
+        continue;
+      if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsEqualsEqualsToken)
+        continue;
+      if (isConditionalExpression4(up) && up.condition !== n)
+        continue;
+      return false;
+    }
+    return true;
+  }
   /** The patterns of a watchMultiple hash list: an array literal, a wrapper parameter bound to one, or a list local
    *  initialised from a literal that only grows by `x.push (h)` statements and is read only as a watch argument. */
   rustWsHashListPatterns(harg, depth) {
@@ -70778,6 +70858,8 @@ ${iden}}`;
       if (isCallExpression6(p) && p.arguments.indexOf(r) >= 0 && isPropertyAccessExpression3(p.expression) && p.expression.expression.kind === SyntaxKind7.ThisKeyword && (String(p.expression.name.text) === "watchMultiple" || this.rustWsFollowed.has(p)))
         continue;
       if (p?.kind === SyntaxKind7.PropertyAssignment && p.initializer === r)
+        continue;
+      if (isCallExpression6(p) && p.arguments.indexOf(r) >= 0 && this.rustWsReadOnlyListArg(p, p.arguments.indexOf(r)))
         continue;
       return void 0;
     }
@@ -78304,6 +78386,8 @@ _RustTranspiler.RUST_CACHE_MAP_TYPE = "pro::cache::CacheMap";
 // Its inner map `this.F[k]` / `this.safeDict (this.F, k)` is read like a cache map; `this.F[k] = {}` resets and
 // `this.F[k] = this.safeDict|safeValue (this.F, k, {})` ensures an entry. Any other write throws.
 _RustTranspiler.RUST_CACHE_SHELF_TYPE = "pro::cache::CacheShelf";
+// ral-we: base record builders that answer `this.extend (..)` (a fresh map) on every path
+_RustTranspiler.RUST_WS_MAP_RECORD_BUILDERS = /* @__PURE__ */ new Set(["safeTicker"]);
 // ── ws order books (rustWsBookMapField / rustWsBookLocal / printWsBook*) ──
 // The base field `orderbooks: Dictionary<WsOrderBook>` is a `BookMap` (`IndexMap<String, Book>`) and the base
 // `orderBook / indexedOrderBook / countedOrderBook` return the runtime's typed `Book`. Every use of the field is

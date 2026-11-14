@@ -16289,6 +16289,8 @@ export class RustTranspiler extends BaseTranspiler {
         // sb: `const y = x` of a typed shared-map local holds the same map (`Value::from(&x).into_dict()` shares the Arc, no copy)
         const sbAlias = from === undefined && !nilDeclared && this.rustSbDictAliasSource(init);
         if (sbAlias) from = 'dict';
+        // ral-we: a watch result whose every matching resolve passes a proven map holds that map (`.await.into_dict()`)
+        if (from === undefined && !nilDeclared && declaration.initializer !== undefined && this.rustWsWatchResultKind(declaration.initializer) === 'dict') from = 'dict';
         let sbMapWrites = 0;
         if (from === undefined && !nilDeclared) return undefined;
         const name = String(declaration.name.text);
@@ -17064,7 +17066,9 @@ export class RustTranspiler extends BaseTranspiler {
     /** A whole-value hand-off of a map element local: a plain `Value` argument of a `this.` method or an object literal value. */
     rustDictElementBoxUse(n: any, init: any): boolean {
         const up: any = n.parent;
-        if (!this.rustDictElementSource(init) && !this.rustListElementSource(init) || up === undefined || this.rustScalarInNestedWrite(n)) return false;
+        // ral-we: a watch result proven a map hands on whole like a map element
+        const watched = init !== undefined && init.parent?.kind === SyntaxKind.AwaitExpression && this.rustWsWatchResultKind(init.parent) === 'dict';
+        if (!watched && !this.rustDictElementSource(init) && !this.rustListElementSource(init) || up === undefined || this.rustScalarInNestedWrite(n)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
         // `rows.push (row)` into another local list: the list keeps its own type, the element enters as the shared map
         if (isCallExpression(up) && isPropertyAccessExpression(up.expression) && isIdentifier(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n
@@ -19075,7 +19079,7 @@ export class RustTranspiler extends BaseTranspiler {
     // literals and locals of the method, a class with ws subclasses or a ws parent, or any other resolve under a
     // matching hash fails the proof and the local stays `Value`.
     private rustWsResolveTables = new WeakMap<Node, Array<{ pats: Array<Array<string | null>>, kind: string }> | null>();
-    private rustWsWatchKinds = new WeakMap<Node, 'book' | 'cache' | null>();
+    private rustWsWatchKinds = new WeakMap<Node, 'book' | 'cache' | 'dict' | null>();
     // wrapper parameter -> the caller's argument (and the caller's own bindings) while a wrapper hash is read
     private rustWsHashEnv: Map<Node, { arg: any, env: Map<Node, any> | undefined }> | undefined = undefined;
     private rustWsFollowed = new Set<Node>();
@@ -19240,9 +19244,10 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** The typed kind a resolved value passes as, or undefined. */
-    rustWsResolvedKind(x: any): 'book' | 'cache' | undefined {
+    rustWsResolvedKind(x: any): 'book' | 'cache' | 'dict' | undefined {
         const n: any = this.rustStripWrappers(x);
         if (n === undefined) return undefined;
+        if (this.rustWsResolvedMap(n, 0)) return 'dict';
         if (this.rustWsBookMapRead(n) || this.rustWsBookCtorLike(n)) return 'book';
         if (this.rustWsCacheField(n) || this.rustWsCacheCtor(n) || this.rustWsCacheMapEntry(n) || this.rustWsCacheMapLookup(n)) return 'cache';
         if (isIdentifier(n)) {
@@ -19258,6 +19263,37 @@ export class RustTranspiler extends BaseTranspiler {
             }
         }
         return undefined;
+    }
+
+    // ral-we: base record builders that answer `this.extend (..)` (a fresh map) on every path
+    private static readonly RUST_WS_MAP_RECORD_BUILDERS = new Set([ 'safeTicker' ]);
+
+    /** A resolved value that is a map on every path: a base record builder call, a sync method of the same class whose
+     *  every return is one, or an unreassigned single local bound to one. */
+    rustWsResolvedMap(x: any, depth: number): boolean {
+        const n: any = this.rustStripWrappers(x);
+        if (n === undefined || depth > 3) return false;
+        if (isIdentifier(n)) {
+            const d: any = this.rustDeclarationOfIdentifier(n);
+            if (d === undefined || !isVariableDeclaration(d) || !isIdentifier(d.name) || d.initializer === undefined || this.rustLocalReassigned(d)) return false;
+            return (d.parent as any)?.kind === SyntaxKind.VariableDeclarationList && (d.parent as any).declarations.length === 1 && this.rustWsResolvedMap(d.initializer, depth + 1);
+        }
+        if (!isCallExpression(n) || !isPropertyAccessExpression(n.expression) || n.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const declaration: any = this.rustScalarCallee(n);
+        if (declaration === undefined || !isMethodDeclaration(declaration) || declaration.body === undefined) return false;
+        const file = String(declaration.getSourceFile?.()?.fileName ?? '');
+        if (RustTranspiler.RUST_WS_MAP_RECORD_BUILDERS.has(String(n.expression.name.text))) return RustTranspiler.RUST_BASE_TIER_FILE.test(file);
+        // a venue helper of the same ws class (no override below it: the class has no ws relatives)
+        if (findAncestor(declaration, isClassDeclaration) !== findAncestor(n, isClassDeclaration) || this.isAsyncFunction(declaration)) return false;
+        let returns = 0;
+        let ok = true;
+        this.rustWalkScope(declaration.body, (r: any) => {
+            if (r !== declaration.body && isFunctionLike(r)) return RUST_WALK_SKIP;
+            if (!isReturnStatement(r)) return;
+            returns++;
+            if (r.expression === undefined || !this.rustWsResolvedMap(r.expression, depth + 1)) { ok = false; return RUST_WALK_STOP; }
+        });
+        return ok && returns > 0;
     }
 
     /** Any write of the local after its declaration (an assignment or an update). */
@@ -19308,7 +19344,7 @@ export class RustTranspiler extends BaseTranspiler {
                 const save = this.rustWsHashEnv;
                 this.rustWsHashEnv = env;
                 try {
-                    const bound = (e: any) => { const d: any = isIdentifier(this.rustStripWrappers(e)) ? this.rustDeclarationOfIdentifier(this.rustStripWrappers(e)) : undefined; return d !== undefined && env.has(d) ? env.get(d)!.arg : e; };
+                    const bound = (e: any) => { const d: any = e !== undefined && isIdentifier(this.rustStripWrappers(e)) ? this.rustDeclarationOfIdentifier(this.rustStripWrappers(e)) : undefined; return d !== undefined && env.has(d) ? env.get(d)!.arg : e; };
                     table!.push({ pats: hash === null ? [[ null ]] : this.rustWsHashPatterns(hash, 0, new Set()), kind: kindOf(bound(x)) });
                 } finally {
                     this.rustWsHashEnv = save;
@@ -19332,7 +19368,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (name !== 'resolve') return;
             const fh = futureHash(recv);
             if (fh === undefined) add(n.arguments[1] ?? null, n.arguments[0], undefined, n);
-            else add(fh, n.arguments[0]);
+            // ral-we: a future handle's hash built from a helper parameter reads each caller's argument
+            else add(fh, n.arguments[0], undefined, n);
         });
         this.rustWsResolveTables.set(cls, table);
         return table;
@@ -19459,7 +19496,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** The proven kind of an `await this.watch|watchMultiple (..)` initializer, else undefined. */
-    rustWsWatchResultKind(init: any): 'book' | 'cache' | undefined {
+    rustWsWatchResultKind(init: any): 'book' | 'cache' | 'dict' | undefined {
         const awaited: any = this.unwrapParens(init);
         if (awaited?.kind !== SyntaxKind.AwaitExpression) return undefined;
         const call: any = this.unwrapParens(awaited.expression);
@@ -19480,16 +19517,19 @@ export class RustTranspiler extends BaseTranspiler {
             this.rustWsHashEnv = save;
         }
         if (hashes === undefined || hashes.length === 0 || hashes.some((p) => p.every((s) => s === null))) return undefined;
-        let kind: 'book' | 'cache' | undefined;
+        let kind: 'book' | 'cache' | 'dict' | undefined;
         let matched = 0;
+        let none = false;
         for (const r of table) {
-            if (r.kind === 'none' || !r.pats.some((rp) => hashes!.some((wp) => RustTranspiler.rustWsPatternsMeet(rp, wp)))) continue;
-            if (r.kind !== 'book' && r.kind !== 'cache') return undefined;
+            if (!r.pats.some((rp) => hashes!.some((wp) => RustTranspiler.rustWsPatternsMeet(rp, wp)))) continue;
+            if (r.kind === 'none') { none = true; continue; }
+            if (r.kind !== 'book' && r.kind !== 'cache' && r.kind !== 'dict') return undefined;
             if (kind !== undefined && kind !== r.kind) return undefined;
             kind = r.kind;
             matched++;
         }
-        if (matched === 0 || kind === undefined) return undefined;
+        // a Null settle would read as an empty map: the dict kind needs every matching resolve to pass a map
+        if (matched === 0 || kind === undefined || (kind === 'dict' && none)) return undefined;
         this.rustWsWatchKinds.set(call, kind);
         return kind;
     }
@@ -19544,6 +19584,30 @@ export class RustTranspiler extends BaseTranspiler {
         }
     }
 
+    /** `this.m (.., list, ..)` of a sync method of the same class whose parameter at `at` is never reassigned, pushed to,
+     *  element-written or handed on: only read (`p[i]`, `p.length`) or stored as an object literal value. */
+    rustWsReadOnlyListArg(call: any, at: number): boolean {
+        if (!isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const declaration: any = this.rustScalarCallee(call);
+        if (declaration === undefined || !isMethodDeclaration(declaration) || declaration.body === undefined || this.isAsyncFunction(declaration)) return false;
+        if (findAncestor(declaration, isClassDeclaration) !== findAncestor(call, isClassDeclaration)) return false;
+        const param: any = declaration.parameters[at];
+        if (param === undefined || !isIdentifier(param.name) || param.dotDotDotToken !== undefined || this.rustLocalReassigned(param)) return false;
+        for (const n of this.rustScopeNameNodes(declaration, String(param.name.text)) as any[]) {
+            if (!isIdentifier(n) || n === param.name || (isPropertyAccessExpression(n.parent) && n.parent.name === n)) continue;
+            if (this.rustDeclarationOfIdentifier(n) !== param) return false;
+            const up: any = n.parent;
+            if (isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) === 'length' && !this.isNativeWriteTargetBase(up)) continue;
+            if (isElementAccessExpression(up) && up.expression === n && !this.isNativeWriteTargetBase(up) && !isDeleteExpression(up.parent)) continue;
+            if (up?.kind === SyntaxKind.PropertyAssignment && up.initializer === n) continue;
+            if (isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.EqualsEqualsEqualsToken) continue;
+            // `(x === undefined) ? p : x` style picks read it only
+            if (isConditionalExpression(up) && up.condition !== n) continue;
+            return false;
+        }
+        return true;
+    }
+
     /** The patterns of a watchMultiple hash list: an array literal, a wrapper parameter bound to one, or a list local
      *  initialised from a literal that only grows by `x.push (h)` statements and is read only as a watch argument. */
     rustWsHashListPatterns(harg: any, depth: number): Array<Array<string | null>> | undefined {
@@ -19580,6 +19644,8 @@ export class RustTranspiler extends BaseTranspiler {
                 && (String(p.expression.name.text) === 'watchMultiple' || this.rustWsFollowed.has(p))) continue;
             // stored as a subscription field (`'messageHashes': list`)
             if (p?.kind === SyntaxKind.PropertyAssignment && p.initializer === r) continue;
+            // ral-we: handed to a sync method of the same class that never writes that parameter (the Rust call lends a copy)
+            if (isCallExpression(p) && p.arguments.indexOf(r) >= 0 && this.rustWsReadOnlyListArg(p, p.arguments.indexOf(r))) continue;
             return undefined;
         }
         return hashes;
