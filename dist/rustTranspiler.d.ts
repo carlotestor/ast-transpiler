@@ -2276,6 +2276,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustUntilSelfArg(n: any, declaration: any): boolean;
     /** pb: `Value::Dict(x)` for the moved request operand of a write-back `handleUntilOption`. */
     printUntilSelfArg(node: any, text: string): string | undefined;
+    private static readonly RUST_SELF_MERGE;
+    /** `n` is the target of a statement `n = this.mergeBalanceAccount (n, c, a)` whose other operands do not name `n`. */
+    rustSelfMergeWrite(n: any, declaration: any): boolean;
+    /** `n` is the head operand of such a write. */
+    rustSelfMergeHead(n: any, declaration: any): boolean;
     /** `n` is the request (first) operand of the runtime free function `jwt (request, secret, ..)`. */
     rustJwtRequestSlot(call: any, n: any): boolean;
     /** `&x` for a shared map local lent to the `jwt` request slot. */
@@ -2291,6 +2296,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** sb: `y = self.omit(&x, ..).into_dict()` for a shared-map alias (`omit` of a proven map answers `Value::Map`: the Arc moves back). */
     private rustSbAliasWrites;
     printSbAliasWrite(node: any, left: any, right: any): string | undefined;
+    /** ral-wf: `x[k] = v` (one key, `=`, statement) on a reuse literal with a non-literal key whose printed form is a plain
+     *  `Value` place, and the reuse writes' operands proven untagged (same proof as the literal-key writes). */
+    private rustReuseDynamicWrites;
+    rustReuseDynamicKeyWrite(n: any, declaration: any): boolean;
+    /** `Arc::make_mut(&mut x).insert(stringify_param(&k), v)`: `add_element_to_object` on an untagged map stores `v` under
+     *  `stringify_simple(k)` (a `Str` key is its own text), which `stringify_param` is. */
+    printReuseDynamicKeyWrite(left: any, right: any, valueText: string): string | undefined;
     /** `x = self.extend(x, ..).into_dict()` for a reuse local (`extend` answers `Value::Map`: the Arc moves back). */
     printExtendReuseWrite(left: any, right: any): string | undefined;
     rustBuiltMapKeyWriteOk(n: any, init: any): boolean;

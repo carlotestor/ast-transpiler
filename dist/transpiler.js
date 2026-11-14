@@ -51676,6 +51676,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustReuseProducerWrites = /* @__PURE__ */ new WeakSet();
     /** sb: `y = self.omit(&x, ..).into_dict()` for a shared-map alias (`omit` of a proven map answers `Value::Map`: the Arc moves back). */
     this.rustSbAliasWrites = /* @__PURE__ */ new WeakSet();
+    /** ral-wf: `x[k] = v` (one key, `=`, statement) on a reuse literal with a non-literal key whose printed form is a plain
+     *  `Value` place, and the reuse writes' operands proven untagged (same proof as the literal-key writes). */
+    this.rustReuseDynamicWrites = /* @__PURE__ */ new WeakSet();
     // Optional container locals whose declaration printed `Option<..>` (an earlier declaration form may keep the box).
     this.rustPrintedOptional = /* @__PURE__ */ new WeakSet();
     // ── nil-declared map locals (rustNilMapLocal) ──
@@ -53431,7 +53434,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const nestedKeyWrite = keyStrs.length > 1 ? this.printNestedFieldKeyWrite(left, acc, ((owned) => owned.startsWith("") ? owned : _RustTranspiler.cloneIfBareLocal(owned))(this.rustOwnedArgText(right, rhs.trim()))) : void 0;
       if (nestedKeyWrite !== void 0)
         return nestedKeyWrite;
-      const untilWrite = keyStrs.length === 1 ? this.printUntilHeadKeyWrite(left, right, rhs) ?? this.printNilMapKeyWrite(left, right, rhs) : void 0;
+      const untilWrite = keyStrs.length === 1 ? this.printUntilHeadKeyWrite(left, right, rhs) ?? this.printReuseDynamicKeyWrite(left, right, rhs) ?? this.printNilMapKeyWrite(left, right, rhs) : void 0;
       if (untilWrite !== void 0)
         return untilWrite;
       const helperCall = `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${this.rustOwnedArgText(right, rhs.trim())})`;
@@ -67256,7 +67259,7 @@ ${iden}}`;
         if (up.parent?.kind !== SyntaxKind7.ExpressionStatement)
           return false;
         if (extendReuse) {
-          if (this.rustSelfExtendWrite(n, declaration))
+          if (this.rustSelfExtendWrite(n, declaration) || this.rustSelfMergeWrite(n, declaration))
             return ++extendWrites > 0;
           if (!this.rustReuseMapProducerWrite(n))
             return false;
@@ -67313,6 +67316,8 @@ ${iden}}`;
       }
       if (this.rustExtendHeadUse(n))
         return ++extendHeads > 0 && ++reads > 0;
+      if (extendReuse && this.rustSelfMergeHead(n, declaration))
+        return ++reads > 0;
       if (extendReuse && this.rustUntilSelfWrite(n, declaration))
         return ++extendWrites > 0;
       if (extendReuse && this.rustUntilSelfArg(n, declaration))
@@ -67320,6 +67325,8 @@ ${iden}}`;
       if (!extendReuse && this.rustSafeDictKeyWriteOk(n, init))
         return keyWriteUses.push(n) > 0 && ++safeDictKeyWrites > 0 && ++keyWrites > 0 && ++reads > 0;
       if (this.rustUntilHeadKeyWrite(n) !== void 0 && (extendReuse ? this.rustExtendReuseKeyWriteOk(n, declaration) : init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) === "dict" || this.rustBuiltMapKeyWriteOk(n, init))))
+        return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
+      if (extendReuse && this.rustReuseDynamicKeyWrite(n, declaration))
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
       const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0) && boxedElementUses.push(n) > 0;
       const asArg = isAsExpression3(up) && up.expression === n && isCallExpression6(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : void 0;
@@ -67512,7 +67519,29 @@ ${iden}}`;
     const declaration = this.rustDeclarationOfIdentifier(node);
     if (declaration === void 0 || declaration.name === node || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration))
       return void 0;
-    return this.rustUntilSelfArg(node, declaration) ? `Value::Dict(${text})` : void 0;
+    return this.rustUntilSelfArg(node, declaration) || this.rustSelfMergeHead(node, declaration) ? `Value::Dict(${text})` : void 0;
+  }
+  /** `n` is the target of a statement `n = this.mergeBalanceAccount (n, c, a)` whose other operands do not name `n`. */
+  rustSelfMergeWrite(n, declaration) {
+    const up = n.parent;
+    if (!isBinaryExpression5(up) || up.left !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const rhs = this.rustSkipWrappers(up.right);
+    if (!isCallExpression6(rhs) || rhs.arguments.length !== 3 || !this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_SELF_MERGE))
+      return false;
+    const head = this.rustSkipWrappers(rhs.arguments[0]);
+    if (!isIdentifier3(head) || !this.rustIdentifierRefersToDeclaration(head, declaration))
+      return false;
+    const names = (x) => isIdentifier3(x) && x.text === n.text || (x.forEachChild(names) ?? false);
+    return !names(rhs.arguments[1]) && !names(rhs.arguments[2]) && String(up.getText()).split("\n")[0].length <= 240;
+  }
+  /** `n` is the head operand of such a write. */
+  rustSelfMergeHead(n, declaration) {
+    const call = n.parent;
+    if (!isCallExpression6(call) || call.arguments[0] !== n)
+      return false;
+    const write = call.parent;
+    return isBinaryExpression5(write) && write.right === call && isIdentifier3(write.left) && this.rustSelfMergeWrite(write.left, declaration);
   }
   /** `n` is the request (first) operand of the runtime free function `jwt (request, secret, ..)`. */
   rustJwtRequestSlot(call, n) {
@@ -67574,10 +67603,52 @@ ${iden}}`;
     const name = super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text);
     return `${name} = ${this.printNode(right, 0).trim()}.into_dict()`;
   }
+  rustReuseDynamicKeyWrite(n, declaration) {
+    const access = n.parent;
+    const write = access?.parent;
+    if (!isElementAccessExpression4(access) || access.expression !== n || !isBinaryExpression5(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const key = this.rustSkipWrappers(access.argumentExpression);
+    if (key === void 0 || isStringLiteralLikeNode4(key) || !isIdentifier3(key) || this.rustNodeIsKeyUnsafePlace(String(key.text)))
+      return false;
+    if (this.rustBearerWriteKeyArg(access.argumentExpression, this.printNode(access.argumentExpression, 0), String(n.text)) === void 0 || String(write.getText()).split("\n")[0].length > 200)
+      return false;
+    let ok = true;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (u) => {
+      if (this.rustSelfExtendWrite(u, declaration) && !this.rustExtendReuseOperandUntagged(this.rustSkipWrappers(u.parent.right).arguments[1]))
+        ok = false;
+      else if (!this.rustSelfExtendWrite(u, declaration) && this.rustReuseMapProducerWrite(u))
+        ok = false;
+      return true;
+    });
+    if (ok)
+      this.rustReuseDynamicWrites.add(write);
+    return ok;
+  }
+  /** `Arc::make_mut(&mut x).insert(stringify_param(&k), v)`: `add_element_to_object` on an untagged map stores `v` under
+   *  `stringify_simple(k)` (a `Str` key is its own text), which `stringify_param` is. */
+  printReuseDynamicKeyWrite(left, right, valueText) {
+    const write = left.parent;
+    if (!this.rustReuseDynamicWrites.has(write) || !isIdentifier3(left.expression))
+      return void 0;
+    const declaration = this.rustDeclaredNode(left.expression);
+    if (declaration === void 0 || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration))
+      return void 0;
+    const name = super.transformIdentifier(left.expression, this.ReservedKeywordsReplacements[left.expression.text] ?? left.expression.text);
+    const keyArg = this.rustBearerWriteKeyArg(left.argumentExpression, this.printNode(left.argumentExpression, 0), String(left.expression.text));
+    if (keyArg === void 0)
+      return void 0;
+    const value = this.rustNodeIsBoolExpression(right) && this.literalKindOfNode(this.unwrapParens(right)) !== "boolean" ? `Value::Bool(${valueText})` : valueText.trim();
+    const insert = (v) => `std::sync::Arc::make_mut(&mut ${name}).insert(${keyArg}, ${v})`;
+    const reads = (x) => isIdentifier3(x) && x.text === left.expression.text || (x.forEachChild(reads) ?? false);
+    if (reads(right))
+      return `{ let __be_tmp = ${value}; ${insert("__be_tmp")}; }`;
+    return insert(isIdentifier3(this.unwrapParens(right)) ? _RustTranspiler.cloneIfBareLocal(value) : value);
+  }
   /** `x = self.extend(x, ..).into_dict()` for a reuse local (`extend` answers `Value::Map`: the Arc moves back). */
   printExtendReuseWrite(left, right) {
     const declaration = this.rustDeclarationOfIdentifier(left);
-    if (declaration === void 0 || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration) || !(this.rustSelfExtendWrite(left, declaration) || this.rustReuseProducerWrites.has(left.parent)))
+    if (declaration === void 0 || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration) || !(this.rustSelfExtendWrite(left, declaration) || this.rustSelfMergeWrite(left, declaration) || this.rustReuseProducerWrites.has(left.parent)))
       return void 0;
     const name = super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text);
     return `${name} = ${this.printNode(right, 0).trim()}.into_dict()`;
@@ -78182,6 +78253,9 @@ _RustTranspiler.RUST_BORROWED_LIST_SOURCES = /* @__PURE__ */ new Set(["safeList"
 _RustTranspiler.RUST_BORROWED_ANY_KEY_READERS = /^safe(?:Value|String(?:Lower|Upper)?|Integer|Float|Timestamp|IntegerProduct)(?:2|N)?$/;
 _RustTranspiler.RUST_SELF_EXTEND = /* @__PURE__ */ new Set(["extend"]);
 _RustTranspiler.RUST_REUSE_SAFE_DICT = /* @__PURE__ */ new Set(["safeDict"]);
+// ral-wf: the generated base `merge_balance_account(result, code, account)` (exchange_generated.rs) returns its own
+// `result` argument on both paths, inserting only under `result[code]`, so a reuse literal moves in and back unchanged in kind
+_RustTranspiler.RUST_SELF_MERGE = /* @__PURE__ */ new Set(["mergeBalanceAccount"]);
 // hand-written helpers whose operand is `impl Into<crate::Value>` / `impl JsonText` (the optional form lends there too)
 _RustTranspiler.RUST_LENT_ENCODER_SLOTS = /* @__PURE__ */ new Set(["urlencode", "rawencode", "urlencodeNested", "urlencodeWithArrayRepeat", "isEmpty"]);
 _RustTranspiler.RUST_LENT_OPTIONAL_HELPERS = /* @__PURE__ */ new Set(["toArray", "arrayConcat", "json", "urlencode", "rawencode", "urlencodeNested", "urlencodeWithArrayRepeat", "isEmpty"]);

@@ -2189,7 +2189,7 @@ export class RustTranspiler extends BaseTranspiler {
             for (const key of keyStrs.slice(0, -1)) acc = `get_value_mut(${acc}, &${key})`;
             const rhs = this.printNode(right, 0);
             const nestedKeyWrite = keyStrs.length > 1 ? this.printNestedFieldKeyWrite(left, acc, ((owned) => owned.startsWith('\u0004') ? owned : RustTranspiler.cloneIfBareLocal(owned))(this.rustOwnedArgText(right, rhs.trim()))) : undefined; if (nestedKeyWrite !== undefined) return nestedKeyWrite;
-            const untilWrite = keyStrs.length === 1 ? this.printUntilHeadKeyWrite(left, right, rhs) ?? this.printNilMapKeyWrite(left, right, rhs) : undefined; if (untilWrite !== undefined) return untilWrite;
+            const untilWrite = keyStrs.length === 1 ? this.printUntilHeadKeyWrite(left, right, rhs) ?? this.printReuseDynamicKeyWrite(left, right, rhs) ?? this.printNilMapKeyWrite(left, right, rhs) : undefined; if (untilWrite !== undefined) return untilWrite;
             // the helper takes the value by move: an owned bare local (`Copy`, last use) is marked, the rest cloned on the file text
             const helperCall = `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${this.rustOwnedArgText(right, rhs.trim())})`;
             // a nested helper write whose value was read natively binds the value first, like the ccxt hoist did
@@ -16290,7 +16290,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (isBinaryExpression(up) && up.left === n && up.operatorToken.kind === SyntaxKind.EqualsToken) {
                 if (up.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
                 if (extendReuse) {
-                    if (this.rustSelfExtendWrite(n, declaration)) return ++extendWrites > 0;
+                    if (this.rustSelfExtendWrite(n, declaration) || this.rustSelfMergeWrite(n, declaration)) return ++extendWrites > 0;
                     // ral-vf: a write from a producer that answers a map on every path replaces the owned map
                     if (!this.rustReuseMapProducerWrite(n)) return false;
                     reuseProducerWrites.push(up);
@@ -16340,6 +16340,8 @@ export class RustTranspiler extends BaseTranspiler {
                 return true;
             }
             if (this.rustExtendHeadUse(n)) return ++extendHeads > 0 && ++reads > 0;
+            // ral-wf: `x = this.mergeBalanceAccount (x, code, account)` moves the map in and takes it back
+            if (extendReuse && this.rustSelfMergeHead(n, declaration)) return ++reads > 0;
             // pb: `[ x, p ] = this.handleUntilOption (k, x, p)` on a reuse literal: the map moves in and slot 0 hands it back
             if (extendReuse && this.rustUntilSelfWrite(n, declaration)) return ++extendWrites > 0;
             if (extendReuse && this.rustUntilSelfArg(n, declaration)) return ++reads > 0;
@@ -16349,6 +16351,8 @@ export class RustTranspiler extends BaseTranspiler {
             // skips a missing map exactly as `add_element_to_object` skipped the `Null`)
             if (!extendReuse && this.rustSafeDictKeyWriteOk(n, init)) return keyWriteUses.push(n) > 0 && ++safeDictKeyWrites > 0 && ++keyWrites > 0 && ++reads > 0;
             if (this.rustUntilHeadKeyWrite(n) !== undefined && (extendReuse ? this.rustExtendReuseKeyWriteOk(n, declaration) : init !== undefined && isCallExpression(init) && (this.rustBuiltReturnSourceKind(init) === 'dict' || this.rustBuiltMapKeyWriteOk(n, init)))) return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
+            // ral-wf: a dynamic-key write on a reuse literal (untagged operands only): the helper's tag routes cannot fire
+            if (extendReuse && this.rustReuseDynamicKeyWrite(n, declaration)) return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
             const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0
                 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0
                 || this.rustOptionalParamsSlot(up, n) && (from === 'dict' || from === 'api' && this.rustDeclaredEndpointKind(init) === 'dict') && ++paramsBoxes > 0
@@ -16554,7 +16558,31 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isIdentifier(node)) return undefined;
         const declaration: any = this.rustDeclarationOfIdentifier(node);
         if (declaration === undefined || declaration.name === node || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration)) return undefined;
-        return this.rustUntilSelfArg(node, declaration) ? `Value::Dict(${text})` : undefined;
+        return this.rustUntilSelfArg(node, declaration) || this.rustSelfMergeHead(node, declaration) ? `Value::Dict(${text})` : undefined;
+    }
+
+    // ral-wf: the generated base `merge_balance_account(result, code, account)` (exchange_generated.rs) returns its own
+    // `result` argument on both paths, inserting only under `result[code]`, so a reuse literal moves in and back unchanged in kind
+    private static readonly RUST_SELF_MERGE = new Set([ 'mergeBalanceAccount' ]);
+
+    /** `n` is the target of a statement `n = this.mergeBalanceAccount (n, c, a)` whose other operands do not name `n`. */
+    rustSelfMergeWrite(n: any, declaration: any): boolean {
+        const up: any = n.parent;
+        if (!isBinaryExpression(up) || up.left !== n || up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const rhs: any = this.rustSkipWrappers(up.right);
+        if (!isCallExpression(rhs) || rhs.arguments.length !== 3 || !this.rustBaseCallNamed(rhs, RustTranspiler.RUST_SELF_MERGE)) return false;
+        const head: any = this.rustSkipWrappers(rhs.arguments[0]);
+        if (!isIdentifier(head) || !this.rustIdentifierRefersToDeclaration(head, declaration)) return false;
+        const names = (x: any): boolean => (isIdentifier(x) && x.text === n.text) || (x.forEachChild(names) ?? false);
+        return !names(rhs.arguments[1]) && !names(rhs.arguments[2]) && String(up.getText()).split('\n')[0].length <= 240;
+    }
+
+    /** `n` is the head operand of such a write. */
+    rustSelfMergeHead(n: any, declaration: any): boolean {
+        const call: any = n.parent;
+        if (!isCallExpression(call) || call.arguments[0] !== n) return false;
+        const write: any = call.parent;
+        return isBinaryExpression(write) && write.right === call && isIdentifier(write.left) && this.rustSelfMergeWrite(write.left, declaration);
     }
 
     /** `n` is the request (first) operand of the runtime free function `jwt (request, secret, ..)`. */
@@ -16617,11 +16645,51 @@ export class RustTranspiler extends BaseTranspiler {
         return `${name} = ${this.printNode(right, 0).trim()}.into_dict()`;
     }
 
+    /** ral-wf: `x[k] = v` (one key, `=`, statement) on a reuse literal with a non-literal key whose printed form is a plain
+     *  `Value` place, and the reuse writes' operands proven untagged (same proof as the literal-key writes). */
+    private rustReuseDynamicWrites = new WeakSet<any>();
+    rustReuseDynamicKeyWrite(n: any, declaration: any): boolean {
+        const access: any = n.parent;
+        const write: any = access?.parent;
+        if (!isElementAccessExpression(access) || access.expression !== n || !isBinaryExpression(write) || write.left !== access
+            || write.operatorToken.kind !== SyntaxKind.EqualsToken || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const key: any = this.rustSkipWrappers(access.argumentExpression);
+        if (key === undefined || isStringLiteralLikeNode(key) || !isIdentifier(key) || this.rustNodeIsKeyUnsafePlace(String(key.text))) return false;
+        if (this.rustBearerWriteKeyArg(access.argumentExpression, this.printNode(access.argumentExpression, 0), String(n.text)) === undefined
+            || String(write.getText()).split('\n')[0].length > 200) return false;
+        let ok = true;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (u: any) => {
+            if (this.rustSelfExtendWrite(u, declaration) && !this.rustExtendReuseOperandUntagged(this.rustSkipWrappers(u.parent.right).arguments[1])) ok = false;
+            else if (!this.rustSelfExtendWrite(u, declaration) && this.rustReuseMapProducerWrite(u)) ok = false;
+            return true;
+        });
+        if (ok) this.rustReuseDynamicWrites.add(write);
+        return ok;
+    }
+
+    /** `Arc::make_mut(&mut x).insert(stringify_param(&k), v)`: `add_element_to_object` on an untagged map stores `v` under
+     *  `stringify_simple(k)` (a `Str` key is its own text), which `stringify_param` is. */
+    printReuseDynamicKeyWrite(left: any, right: any, valueText: string): string | undefined {
+        const write: any = left.parent;
+        if (!this.rustReuseDynamicWrites.has(write) || !isIdentifier(left.expression)) return undefined;
+        const declaration: any = this.rustDeclaredNode(left.expression);
+        if (declaration === undefined || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration)) return undefined;
+        const name = super.transformIdentifier(left.expression, this.ReservedKeywordsReplacements[left.expression.text] ?? left.expression.text);
+        // the bearer write key: `add_element_to_object`'s own key conversion for the printed key (Str text, stringify_simple, or a typed string)
+        const keyArg = this.rustBearerWriteKeyArg(left.argumentExpression, this.printNode(left.argumentExpression, 0), String(left.expression.text));
+        if (keyArg === undefined) return undefined;
+        const value = this.rustNodeIsBoolExpression(right) && this.literalKindOfNode(this.unwrapParens(right)) !== 'boolean' ? `Value::Bool(${valueText})` : valueText.trim();
+        const insert = (v: string) => `std::sync::Arc::make_mut(&mut ${name}).insert(${keyArg}, ${v})`;
+        const reads = (x: any): boolean => (isIdentifier(x) && x.text === left.expression.text) || (x.forEachChild(reads) ?? false);
+        if (reads(right)) return `{ let __be_tmp = ${value}; ${insert('__be_tmp')}; }`;
+        return insert(isIdentifier(this.unwrapParens(right)) ? RustTranspiler.cloneIfBareLocal(value) : value);
+    }
+
     /** `x = self.extend(x, ..).into_dict()` for a reuse local (`extend` answers `Value::Map`: the Arc moves back). */
     printExtendReuseWrite(left: any, right: any): string | undefined {
         const declaration: any = this.rustDeclarationOfIdentifier(left);
         if (declaration === undefined || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration)
-            || !(this.rustSelfExtendWrite(left, declaration) || this.rustReuseProducerWrites.has(left.parent))) return undefined;
+            || !(this.rustSelfExtendWrite(left, declaration) || this.rustSelfMergeWrite(left, declaration) || this.rustReuseProducerWrites.has(left.parent))) return undefined;
         const name = super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text);
         return `${name} = ${this.printNode(right, 0).trim()}.into_dict()`;
     }

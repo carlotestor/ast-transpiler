@@ -12970,3 +12970,27 @@ describe('ral-wf: a literal map read inside the value of a write on itself holds
         expect(body).toMatch(/let mut kept: Value = /);
     });
 });
+
+describe('ral-wf: a reuse literal rebuilt by mergeBalanceAccount and written at dynamic keys holds the shared Dict', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-wf-merge');
+        const files: Record<string, string> = {"ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    deepExtend (...args: any[]): any { return args[0]; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    mergeBalanceAccount (result: Dict, code: string, account: Dict): Dict {\n        if (!(code in result)) {\n            result[code] = account;\n        }\n        return result;\n    }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseBalanceRows (rows: Dict[], margin: boolean) {\n        let result: Dict = { 'info': rows };\n        for (let i = 0; i < rows.length; i++) {\n            const code = this.safeString (rows[i], 'c');\n            if (margin) {\n                result = this.mergeBalanceAccount (result, code, rows[i]);\n            } else {\n                result[code as string] = rows[i];\n            }\n        }\n        return this.hold (result);\n    }\n    deepRows (params: Dict) {\n        let request: Dict = { 'a': 1 };\n        request = this.deepExtend (request, params);\n        return this.hold (request);\n    }\n}\n"};
+        for (const [ rel, text ] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (dir, rel)), { recursive: true });
+            fs.writeFileSync (path.join (dir, rel), text);
+        }
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('x = mergeBalanceAccount (x, ..) moves the map through and takes it back; x[k] = v inserts on the shared map', () => {
+        const body = out.slice (out.indexOf ('fn parseBalanceRows'), out.indexOf ('fn deepRows'));
+        expect(body).toMatch(/let mut result: crate::value::Dict = /);
+        expect(body).toMatch(/result = self\.mergeBalanceAccount\(Value::Dict\(result\), [\s\S]*?\)\.into_dict\(\);/);
+        expect(body).toContain('std::sync::Arc::make_mut(&mut result).insert(');
+        expect(body).not.toContain('result.clone()');
+    });
+    test('negative: a deepExtend rebuild (may answer the non-map operand) keeps the box', () => {
+        const body = out.slice (out.indexOf ('fn deepRows'));
+        expect(body).toMatch(/let mut request: Value = /);
+    });
+});
