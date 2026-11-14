@@ -51733,6 +51733,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustNilListLocals = /* @__PURE__ */ new WeakSet();
     this.rustMutableBuiltLocals = /* @__PURE__ */ new WeakSet();
     this.rustDictElementBoxes = /* @__PURE__ */ new WeakMap();
+    this.rustContainerAliasInits = /* @__PURE__ */ new WeakSet();
+    this.rustContainerAliasAsking = /* @__PURE__ */ new WeakSet();
     this.rustValueWriteTargets = /* @__PURE__ */ new Map();
     this.rustValueWriteOpen = /* @__PURE__ */ new Set();
     // ── empty-declared endpoint responses (`let response = undefined; response = await this.<endpoint> (..)`) ──
@@ -57833,6 +57835,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return false;
       }
       return this.rustHandedDictLocal(source);
+    }
+    if (source !== void 0 && isVariableDeclaration3(source) && this.rustBorrowedPending.has(source) && this.rustContainerAliasAsking.has(init)) {
+      this.rustSbAliasDeferred.add(init.parent);
+      return false;
     }
     if (source === void 0 || !isVariableDeclaration3(source) || this.rustBorrowedPending.has(source))
       return false;
@@ -68843,6 +68849,7 @@ ${iden}}`;
     let nullWrites = 0;
     let endpointBoxes = 0;
     let plainReads = 0;
+    let aliasBoxes = 0;
     const boxedElementUses = [];
     const indexReadUses = [];
     const accept = (n) => {
@@ -68952,6 +68959,8 @@ ${iden}}`;
         return ++reads > 0;
       if (from === "dict" && this.rustJwtRequestSlot(up, n))
         return ++jwtLends > 0 && ++reads > 0;
+      if (this.rustContainerAliasInit(n, declaration))
+        return ++aliasBoxes > 0 && boxedElementUses.push(n) > 0;
       if (!isCallExpression6(up) || up.arguments[0] !== n)
         return handed();
       const keyArgs = up.arguments.slice(1, isPropertyAccessExpression3(up.expression) && /2$/.test(String(up.expression.name.text)) ? 3 : 2).map((a) => this.rustSkipWrappers(a));
@@ -68994,6 +69003,8 @@ ${iden}}`;
     const zgRow = this.rustZgSiblingRows.has(declaration) && boxedElementUses.length > 0;
     const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow;
     if (jwtLends > 0 && optional)
+      return void 0;
+    if (aliasBoxes > 0 && (optional || reads === 0 && aliasBoxes === boxedElementUses.length))
       return void 0;
     if (lentResponses > 0 && optional && !this.rustLentOptionalOk(declaration, name, fn, init, from))
       return void 0;
@@ -69711,6 +69722,10 @@ ${iden}}`;
       return false;
     if (isElementAccessExpression4(head))
       return isIdentifier3(head.expression);
+    if (isCallExpression6(head) && isPropertyAccessExpression3(head.expression) && head.expression.expression.kind === SyntaxKind7.ThisKeyword) {
+      const at = this.rustSkipWrappers(init.arguments[1]);
+      return at !== void 0 && this.literalKindOfNode(at) === "number" && this.rustCallBuildsContainer(head, "list");
+    }
     return isIdentifier3(head);
   }
   rustBuiltKeyWriteLineOk(n, extra = 0) {
@@ -69926,6 +69941,8 @@ ${iden}}`;
     const form = this.rustDictElementBoxes.get(node);
     if (form === void 0)
       return void 0;
+    if (this.rustContainerAliasInits.has(node) && this.rustSbDictAliasDecl(node.parent))
+      return void 0;
     const declaration = this.rustDeclarationOfIdentifier(node);
     if (declaration !== void 0 && this.rustOptContainerLocals.has(declaration)) {
       if (!this.rustPrintedOptional.has(declaration))
@@ -69995,6 +70012,80 @@ ${iden}}`;
     }
     this.rustValueWriteTargets.set(target, stays);
     return stays;
+  }
+  /** ral-40h: phase 1 of a container alias. `const|let y = x` (single declarator, same function, no closure between)
+   *  hands `x`'s container whole to `y`. `y` is decided in phase 2, once `x` has settled: a shared-map alias that is
+   *  never written takes `Value::from(&x).into_dict()` (the Arc the `Value` alias bumped), any other `Value` alias the box
+   *  (`Value::Dict(x)` / `Value::Arr(x)` when `x` is dead after it, else `Value::from(&x)`). Every other local's rule is
+   *  untouched: the target must stay `Value` or be the shared-map alias, both read `x` only as this one box. */
+  rustContainerAliasInit(n, own) {
+    const up = n.parent;
+    if (up === void 0 || !isVariableDeclaration3(up) || up.initializer !== n || !isIdentifier3(up.name) || up === own)
+      return false;
+    const list = up.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations?.length !== 1 || list.parent?.kind !== SyntaxKind7.VariableStatement)
+      return false;
+    if (this.rustEnclosingFunction(up) !== this.rustEnclosingFunction(own))
+      return false;
+    const ownInit = this.rustSkipWrappers(own.initializer);
+    if (ownInit !== void 0 && isCallExpression6(ownInit) && this.rustRecordLookupSource(ownInit))
+      return false;
+    if (!this.rustContainerNeverNullLocal(own, 0))
+      return false;
+    if (this.rustBorrowedPending.has(up) || this.rustValueWriteOpen.has(up))
+      return false;
+    if (this.rustValueWriteTargets.has(up))
+      return this.rustValueWriteTargets.get(up);
+    this.rustValueWriteOpen.add(up);
+    this.rustContainerAliasAsking.add(n);
+    let ok = false;
+    try {
+      ok = this.rustSlotTargetStaysValue(up) && !this.rustOptContainerLocals.has(up);
+    } finally {
+      this.rustValueWriteOpen.delete(up);
+      this.rustContainerAliasAsking.delete(n);
+    }
+    this.rustValueWriteTargets.set(up, ok);
+    if (ok)
+      this.rustContainerAliasInits.add(n);
+    return ok;
+  }
+  /** ral-40h: a local whose initializer and every whole write hold a container on every path (never Null): a fresh
+   *  built container, `omit` of a proven map, a `safeDict*` / `safeList*` read with an empty literal default, a
+   *  never-null venue container return, or an alias of such a local (syntactic: no other local's decision is read). */
+  rustContainerNeverNullLocal(declaration, depth) {
+    if (depth > 3 || declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    const producer = (e) => {
+      const x = this.rustSkipWrappers(e);
+      if (x === void 0)
+        return false;
+      if (isIdentifier3(x)) {
+        const d = this.rustDeclarationOfIdentifier(x);
+        return d !== void 0 && d !== declaration && d.name !== x && this.rustContainerNeverNullLocal(d, depth + 1);
+      }
+      if (!isCallExpression6(x))
+        return false;
+      if (this.rustContainerInitNeverNull(x, "map") || this.rustContainerInitNeverNull(x, "list") || this.rustOmitOfDict(x))
+        return true;
+      if (this.rustBuiltReturnSourceKind(x) !== void 0)
+        return true;
+      const venue = this.rustVenueContainerReturnKind(x);
+      return venue !== void 0 && venue.nullable === false;
+    };
+    if (!producer(declaration.initializer))
+      return false;
+    const fn = this.rustEnclosingFunction(declaration);
+    for (const n of this.rustScopeNameNodes(fn, String(declaration.name.text))) {
+      if (!isIdentifier3(n) || n === declaration.name || this.rustDeclaredNode(n) !== declaration)
+        continue;
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind) && (up.operatorToken.kind !== SyntaxKind7.EqualsToken || !producer(up.right)))
+        return false;
+      if (isArrayLiteralExpression4(up) && isBinaryExpression5(up.parent) && up.parent.left === up)
+        return false;
+    }
+    return true;
   }
   /** ral-ra: `m['k'] = x` / `m.k = x` one level on another local `m` (not `x` itself): the store takes the value by
    *  value, so the shared container is boxed there once (moved at its last use, else the Arc bump the `Value` paid). */
@@ -70684,10 +70775,26 @@ ${iden}}`;
         return false;
       if (this.rustTypedParamsParam(d))
         return true;
-      if (d.kind !== SyntaxKind7.VariableDeclaration || d.name?.kind !== SyntaxKind7.Identifier || (d.parent?.flags & NodeFlags4.Const) === 0)
+      if (d.kind !== SyntaxKind7.VariableDeclaration || d.name?.kind !== SyntaxKind7.Identifier)
         return false;
       const init = this.rustSkipWrappers(d.initializer);
-      return init !== void 0 && isObjectLiteralExpression4(init) && this.rustPlainDictLiteral(init) && init.properties.every((p) => p.kind === SyntaxKind7.PropertyAssignment) && !this.rustLocalIsReassigned(d, String(d.name.text));
+      const plainLiteral = (e) => e !== void 0 && isObjectLiteralExpression4(e) && this.rustPlainDictLiteral(e) && e.properties.every((p) => p.kind === SyntaxKind7.PropertyAssignment);
+      const mapCall = (e) => e !== void 0 && isCallExpression6(e) && (this.rustOmitOfDict(e) || this.rustBuiltReturnSourceKind(e) === "dict");
+      if ((d.parent?.flags & NodeFlags4.Const) !== 0)
+        return (plainLiteral(init) || mapCall(init)) && !this.rustLocalIsReassigned(d, String(d.name.text));
+      if (!plainLiteral(init))
+        return false;
+      const fn = this.rustEnclosingFunction(d);
+      return this.rustScopeNameNodes(fn, String(d.name.text)).every((n) => {
+        if (!isIdentifier3(n) || n === d.name || this.rustDeclaredNode(n) !== d)
+          return true;
+        const up = n.parent;
+        if (isBinaryExpression5(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind))
+          return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && plainLiteral(this.rustSkipWrappers(up.right));
+        if (isArrayLiteralExpression4(up) && isBinaryExpression5(up.parent) && up.parent.left === up)
+          return false;
+        return !(isElementAccessExpression4(up) && up.expression === n && isBinaryExpression5(up.parent) && up.parent.left === up) && !(isPropertyAccessExpression3(up) && up.expression === n && isBinaryExpression5(up.parent) && up.parent.left === up);
+      });
     });
   }
   /** Every other `let`/`const` of `name` in the enclosing function is initialised by a call of the same `this.` method. */
@@ -70964,9 +71071,11 @@ ${iden}}`;
       const visit = (n) => {
         if (!ok)
           return;
-        if (isElementAccessExpression4(n) && n.expression.kind === SyntaxKind7.ThisKeyword && isCallExpression6(n.parent) && n.parent.expression === n)
-          ok = false;
-        else if (thisCall(n) && String(n.expression.name.text) === "callDynamically")
+        if (isElementAccessExpression4(n) && n.expression.kind === SyntaxKind7.ThisKeyword && isCallExpression6(n.parent) && n.parent.expression === n) {
+          const dyn = this.r40hDynNames(n);
+          if (dyn === void 0 || !dyn.every((x) => names.has(x)) || n.parent.arguments.length !== 1 || !isMap(sf, rel, n.parent.arguments[0], 0))
+            ok = false;
+        } else if (thisCall(n) && String(n.expression.name.text) === "callDynamically")
           ok = false;
         else if (thisCall(n) && names.has(String(n.expression.name.text))) {
           const callee = String(n.expression.name.text);
@@ -70980,6 +71089,59 @@ ${iden}}`;
         return false;
     }
     return true;
+  }
+  /** ral-40h: the method names a dynamic `this[m]` can hold, read syntactically: `const m = 'a' + k + 'b'` where `k` is
+   *  `const k = this.safeString (L, ..)` over a `const L = { .. }` literal whose every value is a string literal (a
+   *  missing key leaves `k` undefined, which the venue throws on before the call), or `m` itself a string literal. */
+  r40hDynNames(access) {
+    const constInit = (id) => {
+      if (!isIdentifier3(id))
+        return void 0;
+      let fn = id.parent;
+      while (fn !== void 0 && !isFunctionLike(fn))
+        fn = fn.parent;
+      let found;
+      const visit = (x) => {
+        if (found === void 0 && isVariableDeclaration3(x) && isIdentifier3(x.name) && x.name.text === id.text)
+          found = x;
+        else
+          x.forEachChild?.(visit);
+      };
+      if (fn?.body !== void 0)
+        visit(fn.body);
+      if (found === void 0 || (found.parent?.flags & NodeFlags4.Const) === 0)
+        return void 0;
+      return found.initializer;
+    };
+    const values = (e, depth) => {
+      if (e === void 0 || depth > 4)
+        return void 0;
+      while (isParenthesizedExpression3(e))
+        e = e.expression;
+      if (isStringLiteralLikeNode4(e))
+        return [String(e.text)];
+      if (isIdentifier3(e))
+        return values(constInit(e), depth + 1);
+      if (isBinaryExpression5(e) && e.operatorToken.kind === SyntaxKind7.PlusToken) {
+        const l = values(e.left, depth + 1);
+        const r = values(e.right, depth + 1);
+        return l === void 0 || r === void 0 ? void 0 : l.flatMap((a) => r.map((b) => a + b));
+      }
+      if (isCallExpression6(e) && isPropertyAccessExpression3(e.expression) && e.expression.expression.kind === SyntaxKind7.ThisKeyword && String(e.expression.name.text) === "safeString" && e.arguments.length === 2) {
+        const lit = constInit(e.arguments[0]);
+        if (lit === void 0 || !isObjectLiteralExpression4(lit) || lit.properties.length === 0)
+          return void 0;
+        const out = [];
+        for (const p of lit.properties) {
+          if (p.kind !== SyntaxKind7.PropertyAssignment || !isStringLiteralLikeNode4(p.initializer))
+            return void 0;
+          out.push(String(p.initializer.text));
+        }
+        return out;
+      }
+      return void 0;
+    };
+    return values(access.argumentExpression, 0);
   }
   /** The `params` slot of a typed unified call (`impl Into<crate::Params> + Send`): `From<Value> for Params` takes the
    *  boxed map exactly as it took the `Value` local, so a dict local boxes there once (moved at the last use). */
