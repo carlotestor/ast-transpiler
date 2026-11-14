@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -51583,8 +51583,6 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustSbAliasDeferred = /* @__PURE__ */ new WeakSet();
     this.rustClientHandlePlans = /* @__PURE__ */ new WeakMap();
     this.rustClientHandleDeclPrinting = false;
-    /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl Into<Value>, ..)`
-     *  takes an optional string lent as `&x` (`From<&Option<String>>`: `None` is Null, `Some(s)` a `Str`, as the box gave). */
     /** vg: element locals printed as a borrowed `Option<&str>` off their list (`recv.get(i).and_then(Value::as_str)`). */
     this.rustBorrowedStrElems = /* @__PURE__ */ new WeakSet();
     this.rustScalarPending = /* @__PURE__ */ new Set();
@@ -56689,7 +56687,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const kind = this.rustReaderFallbackKind(fallback);
     if (strBase !== void 0)
-      return kind === "str" || kind === "ostr" || kind === void 0 && this.rustReaderFallbackChecked(fallback) === "string" ? "ostr" : void 0;
+      return kind === "str" || kind === "ostr" || kind === void 0 && (this.rustReaderFallbackChecked(fallback) === "string" || this.rustVenueStrCall(fallback)) ? "ostr" : void 0;
     if (intBase !== void 0)
       return kind === "int" || kind === "oint" ? "oint" : void 0;
     if (numBase !== void 0)
@@ -57398,6 +57396,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if ((kind === "bool" || kind === "obool") && this.rustIdentifierUseIsCondition(n))
       return "cond";
     if ((kind === "str" || kind === "ostr") && this.rustPreciseLentOperand(n) && this.rustPreciseLendLocal(n))
+      return "parg";
+    if ((kind === "str" || kind === "ostr" || kind === "int" || kind === "oint") && this.rustInArrayNeedle(n) && this.rustPreciseLendLocal(n))
       return "parg";
     if ((kind === "str" || kind === "ostr") && this.rustWsCacheMapKeyUse(n))
       return "fin";
@@ -58438,6 +58438,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return node.elements.length > 0 && node.elements.every((e) => this.literalKindOfNode(e) === "string");
     return isCallExpression6(node) && node.arguments.length === 1 && isPropertyAccessExpression3(node.expression) && node.expression.getText().replace(/\s+/g, "") === "Object.keys" && this.printClientHandleKeys(node) === void 0;
   }
+  /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl InArrayNeedle, ..)`
+   *  takes a typed string / integer lent as `&x` (`None` matches Null, a value the element its box would equal). */
   rustInArrayNeedle(node) {
     const call = node?.parent;
     return !this.rustTestTierSource(node) && isCallExpression6(call) && call.arguments[0] === node && isPropertyAccessExpression3(call.expression) && String(call.expression.name.text) === "inArray" && this.rustBaseTypedReturnKind(call) === "bool";
@@ -58456,6 +58458,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `${super.printIdentifier(node)}.as_deref().unwrap_or("null")`;
     if (form === "targ" && (local.kind === "str" || local.kind === "ostr") && this.rustWsKeyUse(node))
       return this.rustWsKeyText(node);
+    if (form === "parg" && this.rustInArrayNeedle(node))
+      return `&${super.printIdentifier(node)}`;
     if (form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "key" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey" || form === "parg")
       return super.printIdentifier(node);
     if (form === "err")
@@ -59899,14 +59903,20 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (held.length < 2)
       return boxed;
     let best = long(boxed).length;
-    for (const n of held) {
-      this.rustScalarVetoed.delete(n);
-      const trial = redo();
-      if (long(trial).length <= best) {
-        boxed = trial;
-        best = long(trial).length;
-      } else
-        this.rustScalarVetoed.add(n);
+    for (let round = 0, released = true; round < 2 && released; round++) {
+      released = false;
+      for (const n of held) {
+        if (!this.rustScalarVetoed.has(n))
+          continue;
+        this.rustScalarVetoed.delete(n);
+        const trial = redo();
+        if (long(trial).length <= best) {
+          boxed = trial;
+          best = long(trial).length;
+          released = true;
+        } else
+          this.rustScalarVetoed.add(n);
+      }
     }
     return redo();
   }
@@ -77771,7 +77781,7 @@ _RustTranspiler.RUST_BASE_TYPED_RUNTIME = {
 _RustTranspiler.RUST_BASE_TYPED_HAND_METHODS = /* @__PURE__ */ new Set(["valueIsDefined", "randNumber", "binaryLength"]);
 /** Runtime `Precise::string*` entry points whose string operands take `&impl PreciseArg` (precise.rs). The
  *  comparators keep `&Value` (a ccxt build/ pass reads their exact signature text). */
-_RustTranspiler.RUST_PRECISE_LENT = /* @__PURE__ */ new Set(["stringAdd", "stringSub", "stringMul", "stringDiv", "stringMod", "stringAbs", "stringNeg", "stringMin", "stringMax"]);
+_RustTranspiler.RUST_PRECISE_LENT = /* @__PURE__ */ new Set(["stringAdd", "stringSub", "stringMul", "stringDiv", "stringMod", "stringAbs", "stringNeg", "stringMin", "stringMax", "stringEq", "stringEquals", "stringGt", "stringGe", "stringLt", "stringLe", "stringOr"]);
 // ── byte buffers (rustBytesProducer / rustBytesSlot / rustBytesLocal) ──
 // The hand-written producers of a TS `Uint8Array` return `crate::value::Bytes` (the `Value::Arr` of byte
 // ints behind a typed handle) and the byte parameters of the hand-written consumers take `impl Into<Value>`.
