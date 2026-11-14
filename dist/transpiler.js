@@ -61787,6 +61787,13 @@ ${classMethods}
     }
     return { params, ret };
   }
+  // A typed unified method is async when declared `async` or when it returns a `Promise` directly (the Rust printer does
+  // not set `implicitAsyncTranspiling`, so `isAsyncFunction` misses the pass-through form ccxt still prints `pub async fn`).
+  rustTypedIsAsync(node) {
+    if (this.isAsyncFunction(node))
+      return true;
+    return /^Promise\s*</.test(String(node?.type?.getText?.() ?? ""));
+  }
   // The typed arguments lower to `Value` (`__args`, the derived-dispatch payload) and rebind as the `Value` body's
   // locals; `call_typed` turns its panics into `Err` and the result decodes through `types::FromRaw`.
   rustTypedBody(node, typed, identation, inner) {
@@ -61794,7 +61801,7 @@ ${classMethods}
     const lowered = [...required, ...typed.params.filter((p) => p.optional)].map((p) => p.toValue).join(", ");
     const i1 = this.getIden(identation + 1);
     const i2 = this.getIden(identation + 2);
-    const isAsync = this.isAsyncFunction(node);
+    const isAsync = this.rustTypedIsAsync(node);
     const binds = required.map((p) => `${i2}let mut ${p.name} = __it.next().unwrap_or_default();
 `).join("");
     return ` {
@@ -61836,7 +61843,7 @@ ${i1}}`;
     const typed = this.rustTypedSignature(decl);
     if (typed === void 0)
       return void 0;
-    const isAsync = this.isAsyncFunction(decl);
+    const isAsync = this.rustTypedIsAsync(decl);
     if (isAsync && !awaited)
       return void 0;
     const args = Array.from(node.arguments);

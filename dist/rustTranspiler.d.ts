@@ -1474,6 +1474,7 @@ export declare class RustTranspiler extends BaseTranspiler {
         }>;
         ret: string;
     } | undefined;
+    rustTypedIsAsync(node: any): boolean;
     rustTypedBody(node: any, typed: any, identation: number, inner: string): string;
     printTypedUnifiedCall(node: any): string | undefined;
     /** `await this.loadMarkets ();` as its own statement (the value is dropped). */
