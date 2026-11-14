@@ -1311,6 +1311,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustTypedResultElemUse(n: any, elem: 'vec' | 'map'): boolean;
     /** Element-access hook: the native read of a typed result element, boxed through its shared record handle. */
     printTypedResultElemRead(node: any): string | undefined;
+    printTypedResultIndex(key: any): string;
+    private rustRecordElemDecisions;
+    rustRecordElemLocal(declaration: any): string | undefined;
+    rustRecordElemLocalUncached(declaration: any): string | undefined;
+    rustRecordElemLocalOf(node: any): any;
+    /** `let mut r: Option<&crate::types::T> = rows.get(i)` for a record element handle. */
+    printRecordElemLocal(declaration: any, indent: string, varName: string): string | undefined;
     rustCallLocalOf(node: any): any;
     rustOptMarketLocalOf(node: any): any;
     /** The typed `this.market (x)` call, unboxed; its `Err` re-raises as the untyped call did. */
