@@ -6532,6 +6532,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustUrlsKeyReadUse(n)) return 'okey';
         // uh: a ternary of two string literals keys a proven map read natively (`m.get(k)` is the entry `get_value` reads)
         if (kind === 'str' && this.rustStrLiteralTernaryLocal(n) && this.rustOkeyReadUse(n)) return 'okey';
+        // 40b: any initialised `String` local keys a proven map read by borrowing it (`m.get(k.as_str())` is the entry
+        // `get_value` reads for its `Str` box); ws cache / subscription keys never reach here (rustWsCacheMapKeyUse above)
+        if (kind === 'str' && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && !this.rust40bProTier(n) && this.rust40bFieldKeyRead(n)) return 'okey';
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n)) return 'kin';
         // qf: the key of any other `k in obj` test boxes once (`in_op` reads a `Str` key or misses on `Null`, as the `Value` local did)
         // td: also through a `(k as string)` cast of the key (the cast prints nothing)
@@ -7817,6 +7820,17 @@ export class RustTranspiler extends BaseTranspiler {
         const placeRead = recvName !== undefined && init !== undefined && (init.startsWith(`${recvName}.get(`) || init.startsWith(`${recvName}.as_array().map(Vec::as_slice).unwrap_or_default().get(`));
         if (placeRead && init.endsWith(owned)) return `${indent}let mut ${varName}: Option<&str> = ${init.slice(0, -'.map(str::to_owned)'.length)}`;
         return init === undefined ? undefined : `${indent}let mut ${varName}: ${RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${init}`;
+    }
+
+    /** 40b: `n` keys a one-level native read of a base-declared `this.<dict field>` (`this.markets[k]`, `this.urls[k]`). */
+    rust40bFieldKeyRead(n: any): boolean {
+        const read: any = n.parent;
+        return isElementAccessExpression(read) && read.argumentExpression === n && this.rustDictField(read.expression) !== undefined && this.rustOkeyReadUse(n);
+    }
+
+    /** 40b: a node of the ws tier (`ts/src/pro/`): its subscription / cache keys stay boxed (in_op and ws cache locals must not move). */
+    rust40bProTier(n: any): boolean {
+        return /ts[\\/]src[\\/]pro[\\/]/.test(String(n.getSourceFile?.()?.fileName ?? ''));
     }
 
     /** 40b: the operand of a top-level `<expr> as T` write source (parens only around it), else undefined. */

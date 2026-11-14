@@ -57767,6 +57767,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "okey";
     if (kind === "str" && this.rustStrLiteralTernaryLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
+    if (kind === "str" && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && !this.rust40bProTier(n) && this.rust40bFieldKeyRead(n))
+      return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n))
       return "kin";
     if ((kind === "str" || kind === "ostr") && this.rustInKeyTop(n) !== void 0 && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n))
@@ -59133,6 +59135,15 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (placeRead && init.endsWith(owned))
       return `${indent}let mut ${varName}: Option<&str> = ${init.slice(0, -".map(str::to_owned)".length)}`;
     return init === void 0 ? void 0 : `${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${init}`;
+  }
+  /** 40b: `n` keys a one-level native read of a base-declared `this.<dict field>` (`this.markets[k]`, `this.urls[k]`). */
+  rust40bFieldKeyRead(n) {
+    const read = n.parent;
+    return isElementAccessExpression4(read) && read.argumentExpression === n && this.rustDictField(read.expression) !== void 0 && this.rustOkeyReadUse(n);
+  }
+  /** 40b: a node of the ws tier (`ts/src/pro/`): its subscription / cache keys stay boxed (in_op and ws cache locals must not move). */
+  rust40bProTier(n) {
+    return /ts[\\/]src[\\/]pro[\\/]/.test(String(n.getSourceFile?.()?.fileName ?? ""));
   }
   /** 40b: the operand of a top-level `<expr> as T` write source (parens only around it), else undefined. */
   rustScalarAsWrite(rhs) {

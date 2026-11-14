@@ -14554,3 +14554,32 @@ describe('ral-40b lift A: an `x = <expr> as T` write is decided with its operand
         });
     }
 });
+
+describe('ral-40b lift B: a String key local reads a base `this.<dict field>` by borrowing it', () => {
+    const t40 = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+    const root = path.join (rustFixtureRoot, '40b-field-key');
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    markets: Dict = undefined;\n" +
+        "    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    hold (x: any): any { return x; }\n}\n";
+    const venue = (dir: string, body: string) => "import Exchange from '../base/Exchange.js';\nimport type { Dict, Str } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n";
+    let n = 0;
+    const run = (sub: string, body: string) => {
+        const dir = path.join (root, String (n++));
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/' + sub), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/' + sub + '/venue.ts'), venue (sub, body));
+        return t40.transpileRustByPath (path.join (dir, 'ts/src/' + sub + '/venue.ts')).content;
+    };
+    const body = "    market (symbol: string, settle: string) {\n        const legacy = this.safeString (this.markets, 'x', '') + ':' + settle;\n" +
+        "        if (legacy in this.markets) {\n            return this.markets[legacy];\n        }\n        return this.hold (symbol);\n    }\n";
+    test('a format! key local into this.markets[k] is a String, the read borrows it', () => {
+        const out = run ('rest', body);
+        expect(out).toContain('let mut legacy: String = ');
+        expect(out).toContain('__m.get(legacy.as_str()).cloned().unwrap_or(Value::Null)');
+        expect(out).not.toContain('let mut legacy: Value');
+    });
+    test('negative: the ws tier keeps the boxed key (subscription / cache keys stay Value)', () => {
+        const out = run ('pro', body);
+        expect(out).not.toContain('let mut legacy: String');
+    });
+});
