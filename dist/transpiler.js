@@ -57051,7 +57051,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (!_RustTranspiler.RUST_NIL_ELEM_STR_KEYS.has(String(node.argumentExpression.text)) || this.checkerOrUndefined() === void 0)
       return void 0;
-    if (!this.rustNilVenueWrite(node) || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "string")
+    if (this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "string")
+      return void 0;
+    let arm = node;
+    while (isParenthesizedExpression3(arm.parent))
+      arm = arm.parent;
+    const whole = isConditionalExpression4(arm.parent) && arm.parent.condition !== arm ? arm.parent : node;
+    if (!this.rustNilVenueWrite(whole))
       return void 0;
     const read = this.printNode(node, 0).trim();
     if (!/^(?:crate|ccxt)::value::KeyRead::key_read\(&{1,2}[A-Za-z_][A-Za-z0-9_]*, "[A-Za-z]+"\)$/.test(read))
@@ -57078,7 +57084,19 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     if (this.rustScalarLocalOf(node) !== void 0 || this.rustNilLocalOfIdentifier(node) !== void 0 || this.rustStringLocalIdentifierIsTyped(node))
       return false;
-    return this.rustLocalLastUse(node, source);
+    let top = node;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    const target = isIdentifier3(top.parent?.left) ? this.rustDeclaredNode(top.parent.left) : void 0;
+    if (target === void 0 || !isVariableDeclaration3(target))
+      return false;
+    let returned = false;
+    this.rustLocalUsesAll(target, String(target.name.text), false, (n) => {
+      if (isReturnStatement4(n.parent))
+        returned = true;
+      return true;
+    });
+    return !returned && this.rustLocalLastUse(node, source);
   }
   /** The whole initializer of a `let`/`const` (writes and ternary arms keep their `Value`). */
   rustVenueInitializer(node) {

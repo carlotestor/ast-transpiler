@@ -5887,7 +5887,12 @@ export class RustTranspiler extends BaseTranspiler {
     rustNilElemStrText(node: any): string | undefined {
         if (node === undefined || !isElementAccessExpression(node) || !isIdentifier(node.expression) || !isStringLiteralLikeNode(node.argumentExpression)) return undefined;
         if (!RustTranspiler.RUST_NIL_ELEM_STR_KEYS.has(String(node.argumentExpression.text)) || this.checkerOrUndefined() === undefined) return undefined;
-        if (!this.rustNilVenueWrite(node) || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== 'string') return undefined;
+        if (this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== 'string') return undefined;
+        // the whole right side, or (through parens) an arm of a ternary that is the whole right side
+        let arm: any = node;
+        while (isParenthesizedExpression(arm.parent)) arm = arm.parent;
+        const whole = isConditionalExpression(arm.parent) && arm.parent.condition !== arm ? arm.parent : node;
+        if (!this.rustNilVenueWrite(whole)) return undefined;
         const read = this.printNode(node, 0).trim();
         if (!/^(?:crate|ccxt)::value::KeyRead::key_read\(&{1,2}[A-Za-z_][A-Za-z0-9_]*, "[A-Za-z]+"\)$/.test(read)) return undefined;
         return `${read}.into_opt_string()`;
@@ -5908,7 +5913,14 @@ export class RustTranspiler extends BaseTranspiler {
         const kind = reader ? 'ostr' : this.rustScalarValueKind(init, true);
         if (kind !== 'str' && kind !== 'ostr') return false;
         if (this.rustScalarLocalOf(node) !== undefined || this.rustNilLocalOfIdentifier(node) !== undefined || this.rustStringLocalIdentifierIsTyped(node)) return false;
-        return this.rustLocalLastUse(node, source);
+        // a target handed back by `return` keeps its rule (the method's printed return may be retyped after printing)
+        let top: any = node;
+        while (isParenthesizedExpression(top.parent)) top = top.parent;
+        const target: any = isIdentifier(top.parent?.left) ? this.rustDeclaredNode(top.parent.left) : undefined;
+        if (target === undefined || !isVariableDeclaration(target)) return false;
+        let returned = false;
+        this.rustLocalUsesAll(target, String(target.name.text), false, (n: any) => { if (isReturnStatement(n.parent)) returned = true; return true; });
+        return !returned && this.rustLocalLastUse(node, source);
     }
 
     /** The whole initializer of a `let`/`const` (writes and ternary arms keep their `Value`). */
