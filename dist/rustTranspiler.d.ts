@@ -798,6 +798,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustVenueIntToString(node: any, name: string): string | undefined;
     /** Declared return type texts per method name over the venue sources under `srcRoot`. */
     rustVenueReturnTypes(srcRoot: string): Map<string, Set<string>>;
+    private rustVenueFamiliesByRoot;
+    rustVenueFamilies(srcRoot: string): {
+        familyOf: Map<string, string>;
+        types: Map<string, Map<string, Set<string>>>;
+    };
+    /** Declared return types of `name` over the venue family of `file` (the callee's declaring file). */
+    rustVenueFamilyReturnTypes(file: string, at: number, name: string): Set<string> | undefined;
     /** The `Option<String>` text of a venue string-method call (the box a `Value` position adds is left off). */
     rustVenueStrCallText(node: any): string;
     private rustVenueTypedDecisions;
