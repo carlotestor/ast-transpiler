@@ -662,6 +662,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustBaseTypedReturnCall(node: any): string | undefined;
     /** `return x` in a typed method: the native value, converting a `Value` once. */
     printRustBaseTypedReturn(fn: any, exp: any): string | undefined;
+    /** `format!(..)` of a whole `Value::Str(format!(..).into())` print (balanced, nothing after), else undefined. */
+    rustBoxedFormatInner(text: string): string | undefined;
     private static readonly RUST_BYTES_PRODUCERS;
     private static readonly RUST_BYTES_SLOTS;
     private static readonly RUST_BYTES_FREE_SLOTS;
@@ -2609,6 +2611,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSafeValueKeyReadSource(call: any): boolean;
     /** `this.safeX (o, '<k>'[, d])`: a base by-reference reader whose container is `o`, at a literal non-index string key. */
     rustSafeValueKeyReaderUse(n: any): boolean;
+    private rustVenueContainerDecisions;
+    private static readonly RUST_VENUE_RECORD_NAMES;
+    rustVenueContainerReturnKind(call: any): {
+        kind: 'dict' | 'list';
+        nullable: boolean;
+    } | undefined;
+    rustVenueContainerReturnKindUncached(declaration: any): {
+        kind: 'dict' | 'list';
+        nullable: boolean;
+    } | undefined;
     /** `this.m(..)` of a venue method (no override, every venue declaration of the name returning `Dict`) whose every
      *  return is `this.safeDict (this.<field>, '<key>', {})`: the shared handle of a typed store entry, a map on every path. */
     rustStoreDictReturnCall(call: any): boolean;
