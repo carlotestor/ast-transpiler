@@ -1779,10 +1779,6 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  the same block mutates (`x['k'] = v` -> `add_element_to_object(&mut x…)`,
      *  `x.push(v)` -> `append_to_array(&mut x…)`). */
     isWriteBackBindRead(read: Node): boolean;
-    /** yb: the ccxt write-back pass (`writeBackIndexedMutations`) only fires when the line right after the bind is a top-level
-     *  element / property write or push on the bound local; any other next statement (an `if`, a plain reassignment) leaves
-     *  the bind alone, so its counter key may print boxed (`get_value(&xs, &Value::Int(i))`, the same helper call and value). */
-    rustWriteBackPassBind(read: any): boolean;
     /** A statement containing a write into a local (`x['k'] = v`, `x.k = v`,
      *  `x.push(v)`). */
     rustStatementMutatesLocal(node: Node, name: string): boolean;
@@ -2051,7 +2047,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBoolSlotLineLong(n: any): boolean;
     /** The `usize` index text of a `Value` list read: a registered `i64` counter indexes directly. */
     rustI64IndexText(keyNode: any, place: string): string;
-    /** A registered `i64` counter as a helper key (`Value::Int(i)`); a read the ccxt write-back binds keeps the counter `Value`. */
+    /** A registered `i64` counter as a helper key (`Value::Int(i)`). zf: a read the ccxt write-back binds takes it too
+     *  (`writeBackIndexedMutations` matches `get_value(&xs, &Value::Int(i))` and writes back at the same `Int` key). */
     rustI64HelperKeyText(keyNode: any, read?: any): string | undefined;
     /** xb: a use of a registered counter in its own function, outside any scalar scope solve (decisions never see a trial counter). */
     rustI64CounterOperand(node: any): boolean;
@@ -2288,6 +2285,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  (never `this.*`, `client.subscriptions` or a cache `hashmap()` read): the map enters the store whole, once. */
     rustLocalStoreHandOff(n: any): boolean;
     /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
+    /** zf: `this.balance[..]` / `this.options[..]` (any depth): the plain untagged store maps the r05 insert writes into. */
+    rustBalanceOptionsPlace(node: any): boolean;
     rustThisRootedPlace(node: any): boolean;
     /** Container kind an expression the callee body builds yields, or undefined.
      *  Shapes: a tag-free literal, a local that only ever receives element
@@ -3303,6 +3302,16 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  never-written local bound to one, read only by this call) of exactly the pattern's length, whose element `i` is
      *  that call inline or a never-reassigned local initialised by it. `promise_all` hands each element back as it came. */
     rustPromiseAllOperandProducer(element: any): any;
+    /** zf: the awaited producer behind a `Promise.all` slot when it answers a list on every path (a declared
+     *  `Promise<List>` endpoint, a non-overridden venue method declared `Promise<List | X[]>`, or a typed unified core
+     *  whose `Vec<T>` result boxes through `IntoRaw` as an Arr); `promise_all` hands it back as it came. */
+    rustPromiseAllListProducer(element: any): any;
+    /** zf: a venue-private async method (no override, no typed signature) whose every family declaration returns `Promise<Market[]>`. */
+    rustVenueMarketListMethod(declaration: any): boolean;
+    private rustPromiseAllListKinds;
+    rustPromiseAllListSlotKind(element: any): 'list' | undefined;
+    /** `let mut x: crate::value::List = <slot read>.into_list()` for a Promise.all list slot (the producer is always a list). */
+    printPromiseAllListSlot(element: any, printedName: string, read: string, indent: string): string | undefined;
     rustDeclaredDictSlot(element: any): boolean;
     /** Every `return` of the callee's own body is an array literal whose element `at` is a map literal or a `const`
      *  local initialised with one (a map on every path, whatever keys are written into it). */
