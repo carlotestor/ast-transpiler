@@ -1675,7 +1675,8 @@ describe('go inline equality', () => {
         const output = transpiler.transpileGo(input).content;
         expect(output).toContain("var a bool = (x == \"delivery\")");
         expect(output).toContain("var c bool = (x != \"delivery\")");
-        expect(output).toContain("var d bool = (n == 1)");
+        // `n: number` prints as an `any` box (int, int64 or float64): an untyped constant only matches int
+        expect(output).toContain("var d bool = IsEqual(n, 1)");
         expect(output).toContain("var e bool = (b == true)");
         // an `any` operand: only a string/bool literal may drop the helper, the
         // box can hold a number and IsEqual converts across numeric widths
@@ -1707,6 +1708,24 @@ describe('go inline equality', () => {
         expect(output).toContain("var e bool = IsEqual(i, nil)");
         expect(output).not.toContain("IsEqualString");
         expect(output).not.toContain("*s");
+    });
+    test('a number local the printer boxes as any keeps IsEqual against a numeric literal', () => {
+        // ral-40k: `const res = this.parseToNumeric (x); return res === 0;` printed `(res == 0)`;
+        // the box holds int64(0) or float64 and Go compares an untyped 0 (int) by exact type
+        const input =
+        "class X {\n" +
+        "    parseToNumeric (n: any): number {\n" +
+        "        return n;\n" +
+        "    }\n" +
+        "    isRoundNumber (value: number): boolean {\n" +
+        "        const res = this.parseToNumeric ((value % 1));\n" +
+        "        return res === 0;\n" +
+        "    }\n" +
+        "}\n"
+        const output = transpiler.transpileGo(input).content;
+        expect(output).toContain("var res any = ");
+        expect(output).not.toContain("(res == 0)");
+        expect(output).toContain("IsEqual(res, 0)");
     });
     test('mixed families and any operands keep IsEqual', () => {
         const input =
@@ -4136,7 +4155,7 @@ describe('go redundant parentheses', () => {
         // the parentheses of a call are not a ParenExpr, the argument keeps its own pair
         expect(output).toContain("mathAbs((n))");
         // the source pairs sit on the operands, not around the whole disjunction
-        expect(output).toContain("(n == 1) || (n == 2)");
+        expect(output).toContain("(IsEqual(n, 1)) || (IsEqual(n, 2))");
         expect(output).not.toContain("((n == 1))");
     });
 });
