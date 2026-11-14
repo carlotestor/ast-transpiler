@@ -2644,6 +2644,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  list-of-lists) local: each block-scoped binding converts to the same Rust type (`Dict` / `List`), so ccxt
      *  passes that key on the name read the same declared type for every sibling. */
     rustElementSiblingsAlike(declaration: any, name: string, init: any): boolean;
+    /** ral-zg: map rows admitted next to a differently sourced sibling; a whole hand-off of such a row takes the optional form
+     *  (`Option<Dict>` boxes back to exactly `Null` or the map, where `into_dict()` would hand an empty map for a Null row). */
+    private rustZgSiblingRows;
     /** Every other binding of `name` in the function is a `const` plain map literal declaration (ral-oc). */
     rustLiteralSiblingsAlike(declaration: any, name: string): boolean;
     rustSiblingBindingsAlike(declaration: any, name: string, init: any): boolean;

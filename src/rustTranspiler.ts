@@ -17454,7 +17454,9 @@ export class RustTranspiler extends BaseTranspiler {
         // the `ecdsa(..)` declaration adds no `.into_dict()` suffix: its line keeps the boxed length plus the type name
         if ((keyReads > 0 || (init !== undefined && isCallExpression(init) && this.rustRecordLookupSource(init))) && !this.rustEcdsaCall(init) && !this.rustDictKeyReadLineOk(declaration, name)) return undefined;
         // a nullable source lent whole keeps Null apart from an empty container: the optional form
-        const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0;
+        // ral-zg: a sibling-admitted map row handed on whole keeps Null apart from the empty map (the optional form)
+        const zgRow = this.rustZgSiblingRows.has(declaration) && boxedElementUses.length > 0;
+        const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow;
         if (jwtLends > 0 && optional) return undefined;
         if (lentResponses > 0 && optional && !this.rustLentOptionalOk(declaration, name, fn, init, from)) return undefined;
         if (extendHeads > 0 && (optional || from !== 'dict' && from !== 'api')) return undefined;
@@ -17481,7 +17483,7 @@ export class RustTranspiler extends BaseTranspiler {
         for (const n of indexReadUses) this.rustBorrowedIndexReads.add(n.parent);
         if (optional) {
             // Null stays distinct from an empty container: the local holds `Option<Dict>` / `Option<List>`.
-            if (from === 'api' || (nilDeclared && writes === 0) || (!nilDeclared && !this.rustOptContainerSourceOk(init, from))) return undefined;
+            if (from === 'api' || (nilDeclared && writes === 0) || (!nilDeclared && !(zgRow && this.rustDictElementSource(init)) && !this.rustOptContainerSourceOk(init, from))) return undefined;
             this.rustOptContainerLocals.add(declaration);
         }
         for (const n of boxedElementUses) this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) || (n.parent?.kind === SyntaxKind.ConditionalExpression && this.rustOwnedLastUse(n, declaration)) ? 'move' : 'share');
@@ -18986,9 +18988,19 @@ export class RustTranspiler extends BaseTranspiler {
             if (n === declaration || !this.rustBindsName(n, name)) return true;
             if (!isVariableDeclaration(n)) return false;
             const other: any = this.unwrapParens(n.initializer);
-            return dict ? this.rustDictElementSource(other) : this.rustListElementSource(other);
+            if (dict ? this.rustDictElementSource(other) : this.rustListElementSource(other)) return true;
+            // ral-zg: a typed map row (`rows[i]` of a `Dict[]`) next to a differently sourced `const` / `let` sibling in its own
+            // block: Rust scopes each binding to its block (rustBlockLocalUsesAll refuses nested or non-block siblings), and the
+            // only build/ pass that reads every same-named declaration (the native-push proof) keys on list locals
+            if (!dict || (n.parent?.flags & (NodeFlags.Let | NodeFlags.Const)) === 0) return false;
+            this.rustZgSiblingRows.add(declaration);
+            return true;
         });
     }
+
+    /** ral-zg: map rows admitted next to a differently sourced sibling; a whole hand-off of such a row takes the optional form
+     *  (`Option<Dict>` boxes back to exactly `Null` or the map, where `into_dict()` would hand an empty map for a Null row). */
+    private rustZgSiblingRows = new WeakSet<any>();
 
     /** Every other binding of `name` in the function is a `const` plain map literal declaration (ral-oc). */
     rustLiteralSiblingsAlike(declaration: any, name: string): boolean {
