@@ -359,6 +359,17 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNilStrStoreBox(n: any): boolean;
     private rustNilAliasMoves;
     rustNilAliasMove(rhs: any, kind: string): boolean;
+    /** nc: `n` is the whole source of `let t = n` / `t = n;` (a statement), `t` a typed scalar local of `kind`, and this is
+     *  the source's last use (no loop or closure between): the typed target takes the value by move. */
+    rustScalarAliasMove(n: any, kind: string, declaration: any): boolean;
+    /** nc: a string slot unwrap (`.as_str().map(str::to_owned)`) would take its destructure line from within to over 400 chars. */
+    rustNilSlotLineOverBudget(n: any): boolean;
+    /** nc: the whole source of a `let t = n` / `t = n;` statement at the source's last use. */
+    rustScalarAliasMoveSite(n: any, declaration: any): boolean;
+    /** nc: `x = y` from a typed `Option<String|i64|f64>` local of the same kind that is read again later (one function,
+     *  no closure between). A string clones `y` where the boxed write cloned it (`y.clone().map(Value::from)..`); a
+     *  number is `Copy` and its write prints `y` owned, so neither adds a copy. */
+    rustNilLiveAliasCopy(rhs: any, kind: string): boolean;
     /** Every box before the last sits at a `this.` / `super.` argument (where the `Value` form was cloned); no free-function,
      *  `Precise`, `Math` or `new` operand, which read `&Value` and would take a copy only because of the lending. */
     rustNilStrLendSites(declaration: any): boolean;
