@@ -90,7 +90,7 @@ const rustInlineFixtures: Record<string, Record<string, string>> = {
  },
  "scalar-locals": {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport type Num = number | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeString2 (o: any, k1: any, k2: any, d: Str = undefined): Str { return o; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o; }\n    safeTimestamp (o: any, k: any, d: Int = undefined): Int { return o; }\n    safeNumber (o: any, k: any, d: Num = undefined): Num { return o; }\n    safeBool (o: any, k: any, d: boolean): boolean { return o; }\n    parseNumber (x: any, d: any = undefined): any { return x; }\n    milliseconds (): number { return 1; }\n}\n",
-  "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseThing (resp: Dict, other: Dict) {\n        const id = this.safeString (resp, 'id');\n        const ts = this.safeInteger (resp, 'ts');\n        const lim = this.safeInteger (resp, 'limit', 100);\n        const price = this.safeNumber (resp, 'price');\n        const flag = this.safeBool (resp, 'flag', false);\n        const side = this.safeString (resp, 'side', 'buy');\n        let spot = true;\n        let name = 'abc';\n        let page = 1;\n        const fee = 0.25;\n        const req: Dict = {};\n        if (id === undefined) {\n            return undefined;\n        }\n        if (flag) {\n            req['f'] = 1;\n        }\n        if (name === 'x') {\n            name = 'y';\n            page = 2;\n            spot = false;\n        }\n        req['id'] = id;\n        req['ts'] = ts;\n        req['lim'] = lim;\n        req['p'] = price;\n        req['spot'] = spot;\n        req['side'] = side;\n        req['page'] = page;\n        req['fee'] = fee;\n        const kept = this.safeString (resp, 'kept');\n        const len = kept.length;\n        const other2 = kept.padStart (8, '0');\n        return [ req, name, len, other2 ];\n    }\n}\n"
+  "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseThing (resp: Dict, other: Dict) {\n        const id = this.safeString (resp, 'id');\n        const ts = this.safeInteger (resp, 'ts');\n        const lim = this.safeInteger (resp, 'limit', 100);\n        const price = this.safeNumber (resp, 'price');\n        const flag = this.safeBool (resp, 'flag', false);\n        const side = this.safeString (resp, 'side', 'buy');\n        let spot = true;\n        let name = 'abc';\n        let page = 1;\n        const fee = 0.25;\n        const req: Dict = {};\n        if (id === undefined) {\n            return undefined;\n        }\n        if (flag) {\n            req['f'] = 1;\n        }\n        if (name === 'x') {\n            name = 'y';\n            page = 2;\n            spot = false;\n        }\n        req['id'] = id;\n        req['ts'] = ts;\n        req['lim'] = lim;\n        req['p'] = price;\n        req['spot'] = spot;\n        req['side'] = side;\n        req['page'] = page;\n        req['fee'] = fee;\n        const kept = this.safeString (resp, 'kept');\n        const len = kept.length;\n        const other2 = kept.padStart (8, '00');\n        return [ req, name, len, other2 ];\n    }\n}\n"
  },
  "scalar-order": {
   "ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o; }\n}\n",
@@ -10613,7 +10613,7 @@ describe('ral-lf: market / currency field locals, sibling element bindings, Dict
         expect(out).toContain('let mut symbol: Option<String> = crate::value::KeyRead::key_read(&&resolved, "symbol").as_str().map(str::to_owned);');
         expect(out).toContain('symbol.map(Value::from).unwrap_or(Value::Null)');
         expect(out).toContain('let mut currencyCode: Option<String> = crate::value::KeyRead::key_read(&&currency, "code").as_str().map(str::to_owned);');
-        expect(out).not.toContain('let mut symbol: Value');
+        expect(out).not.toContain('let mut symbol: Value = ticker');
     });
     test('elements of typed Dict[] lists bound under one name in sibling blocks are each a crate::value::Dict', () => {
         const dir = path.join (rustFixtureRoot, 'ral-lf-sibling-elems');
@@ -10644,7 +10644,25 @@ describe('ral-md: market-field strings boxed before their last use', () => {
         const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
         expect(out).toContain('let mut symbol: Option<String> = crate::value::KeyRead::key_read(&&resolved, "symbol").as_str().map(str::to_owned);');
         expect(out).toContain('self.hold(Value::from(symbol.as_deref()))');
-        expect(out).not.toContain('let mut symbol: Value');
+        expect(out).not.toContain('let mut symbol: Value = ticker');
     });
 });
 
+describe('ral-ne: market flags, unified-row string fields and padded strings', () => {
+    test('struct market flags are bool / Option<bool>, row symbols Option<String>, padStart / padEnd native', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-ne-elements');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; id: string; spot: boolean; contract: boolean; linear: boolean | undefined; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport interface Ticker { symbol: string; info: any }\nexport default class Exchange {\n    markets: Dict = undefined;\n    market (symbol: string): MarketInterface { return this.markets[symbol]; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    parseTicker (t: Dict, market: Market = undefined): Ticker { return { 'symbol': this.safeString (t, 's'), 'info': t } as any; }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fetchThing (symbol: string, params: Dict = {}) {\n        const market = this.market (symbol);\n        const isContract = market['contract'];\n        const isLinear = market['linear'];\n        const kind = isContract ? 'swap' : 'spot';\n        const sub = isLinear ? 'linear' : 'inverse';\n        return this.hold ([ kind, sub ]);\n    }\n    parseTickers (rows: Dict[]) {\n        const result: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const ticker = this.parseTicker (rows[i]);\n            const symbol = ticker['symbol'];\n            if (symbol !== undefined) {\n                result[symbol] = ticker;\n            }\n        }\n        return result;\n    }\n    pad (resp: Dict) {\n        const r = this.safeString (resp, 'r', '');\n        const s = this.safeString (resp, 's');\n        const rp = r.padStart (64, '0');\n        const sp = s.padEnd (8, ' ');\n        return this.hold ([ rp, sp ]);\n    }\n}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['market'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut isContract: bool = (market).contract;');
+        expect(out).toContain('let mut isLinear: Option<bool> = (market).linear;');
+        expect(out).toContain('let mut symbol: Option<String> = ticker.get("symbol").and_then(Value::as_str).map(str::to_owned);');
+        expect(out).not.toContain('let mut symbol: Value = ticker');
+        expect(out).toContain('format!("{:0>64}", __s)');
+        expect(out).toContain('format!("{: <8}", __s)');
+        expect(out).not.toContain('let mut r: Value');
+        expect(out).not.toContain('let mut s: Value');
+    });
+});

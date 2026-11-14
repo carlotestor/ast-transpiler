@@ -625,6 +625,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustListLengthInit(node: any): boolean;
     rustListLengthText(node: any): string;
     rustElementReadScalarKind(node: any): string | undefined;
+    /** ne: `row['k']` (a literal key) off a local printed as a typed map (`Dict` / `IndexMap`) whose checker type
+     *  declares `k` a string (a unified `Ticker` / `Trade` / `Order` row): the `Option<String>` the boxed read held
+     *  (a non-string slot reads as `None`, like the lf / md market-field rule), only as a `const`/`let` initializer. */
+    rustRowFieldStrText(node: any): string | undefined;
     /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
     rustListParamElement(init: any): boolean;
     /** The local's last use is the whole right side of a statement `y = x;`: the boxed local moves there,
@@ -817,6 +821,11 @@ export declare class RustTranspiler extends BaseTranspiler {
         recvKind: string;
         method: string;
         kind: string;
+    } | undefined;
+    /** The literal width and one-char pad of a native `padStart` / `padEnd` (`format!` width counts chars and never truncates). */
+    rustScalarPadSpec(widthArg: any, padArg: any): {
+        width: number;
+        pad: string;
     } | undefined;
     /** `indexOf` needle as an `Option<&str>`: a non-empty literal, a typed string local, or a string-typed `Value` expression. */
     rustStrFindNeedle(node: any, syntactic: boolean): string | undefined;
