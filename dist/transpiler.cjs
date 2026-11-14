@@ -66161,6 +66161,7 @@ ${iden}}`;
     const moveEscapes = [];
     let rebuilds = 0;
     let elementUses = 0;
+    let elementBinds = 0;
     let enumUses = 0;
     const outerWidened = this.literalKeyHits;
     const outerSiblings = this.literalSiblingBindings;
@@ -66199,6 +66200,8 @@ ${iden}}`;
         if (!this.rustDictBearerElementUse(parent, name))
           return false;
         elementUses++;
+        if (_is.isVariableDeclaration.call(void 0, parent.parent) && parent.parent.initializer === parent)
+          elementBinds++;
         return true;
       }
       if (this.rustDictWriteValue(n))
@@ -66231,7 +66234,7 @@ ${iden}}`;
       return false;
     if (selfWrites > 0 && (moveEscapes.length > 0 || !escapes.every((e) => this.rustReturnOperand(e) || this.rustVecIsFinalUse(e, name) && !this.loopBetween(e))))
       return false;
-    if (selfWrites > 0 && produced)
+    if (selfWrites > 0 && (produced || elementBinds > 0))
       return false;
     const siblingMove = siblings > 0 && moveEscapes.length === 1 && escapes.length === 0 && rebuilds === 0 && enumUses === 0 && keyHits === 0;
     if (siblings > 0 && elementUses === 0 && !siblingMove)

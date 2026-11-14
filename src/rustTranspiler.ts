@@ -15167,6 +15167,7 @@ export class RustTranspiler extends BaseTranspiler {
         const moveEscapes: any[] = [];
         let rebuilds = 0;
         let elementUses = 0;
+        let elementBinds = 0;
         let enumUses = 0;
         const outerWidened = this.literalKeyHits;
         const outerSiblings = this.literalSiblingBindings;
@@ -15208,6 +15209,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (isElementAccessExpression(parent) && parent.expression === n) {
                 if (!this.rustDictBearerElementUse(parent, name)) return false;
                 elementUses++;
+                // ral-wf: an element bound to a local (`const e = m[k]`) is matched as a boxed read by ccxt's push pass
+                if (isVariableDeclaration(parent.parent) && parent.parent.initializer === parent) elementBinds++;
                 return true;
             }
             // The value of a dict write (`m['k'] = x`) is boxed once.
@@ -15242,7 +15245,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (!safe) return false;
         // ral-wf: a map typed by the self-write read rule may escape only as a move (an earlier escape would box a copy)
         if (selfWrites > 0 && (moveEscapes.length > 0 || !escapes.every((e: any) => this.rustReturnOperand(e) || (this.rustVecIsFinalUse(e, name) && !this.loopBetween(e))))) return false;
-        if (selfWrites > 0 && produced) return false;
+        if (selfWrites > 0 && (produced || elementBinds > 0)) return false;
         // Built once and handed straight back stays boxed.
         // ral-vf: except a single move at the last use (a list push / ws settle): each sibling `let` is its own Rust block,
         // and the move is the box the helper form made (D11: stored and boxed back is typed)
