@@ -552,6 +552,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarKeyedLocal(declaration: any): boolean;
     /** A local some `return` of a method with a declared string return hands back as-is. */
     rustStrReturnedLocal(declaration: any, scope: any): boolean;
+    private static readonly RUST_COPY_SCALAR_KINDS;
     rustParamAliasSeedKind(declaration: any): string | undefined;
     rustLimitCall(expr: any): boolean;
     rustLimitArgUse(n: any, kind: string): boolean;

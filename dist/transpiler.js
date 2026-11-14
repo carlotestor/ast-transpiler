@@ -55305,7 +55305,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (this.rustVenueTypedCostly(declaration, kind, copied))
       return void 0;
-    if (typedUses === 0 && this.rustParamAliasSeedKind(declaration) !== void 0)
+    if (typedUses === 0 && this.rustParamAliasSeedKind(declaration) !== void 0 && !_RustTranspiler.RUST_COPY_SCALAR_KINDS.has(kind))
       return void 0;
     if ((boxed > 0 || expressionUses) && this.rustReaderIntDefaultNum(declaration.initializer))
       return void 0;
@@ -55497,8 +55497,6 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     });
     return returned;
   }
-  // A local initialised as a plain alias of a typed optional `i64`/`f64` parameter takes the
-  // parameter's kind (`p.as_i64()` is a copy, the `Value` is never cloned); it must earn a native use.
   rustParamAliasSeedKind(declaration) {
     const init = this.unwrapParens(declaration?.initializer);
     return init !== void 0 && isIdentifier3(init) ? this.rustOptParamKind(init) : void 0;
@@ -74699,6 +74697,9 @@ _RustTranspiler.RUST_SCALAR_TYPES = {
   num: "f64",
   bool: "bool"
 };
+// A local initialised as a plain alias of a typed optional `i64`/`f64` parameter takes the
+// parameter's kind (`p.as_i64()` is a copy, the `Value` is never cloned); it must earn a native use.
+_RustTranspiler.RUST_COPY_SCALAR_KINDS = /* @__PURE__ */ new Set(["int", "oint", "num", "onum", "bool", "obool"]);
 // Base methods whose TS return is a concrete scalar: the local takes the callee's kind and
 // converts the `Value` result once at the declaration (`Str` -> `Option<String>`, `number` -> `Option<i64>`).
 _RustTranspiler.RUST_BASE_SCALAR_RETURNS = {
