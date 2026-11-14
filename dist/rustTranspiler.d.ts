@@ -711,6 +711,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustReaderDefaultTouched(declaration: any): boolean;
     /** A string local that is the source of another local's write: that local then copies at its own uses. */
     rustReaderStrHandedOn(declaration: any): boolean;
+    /** ud: `rustReaderLendBoxes`, plus a whole `const t = s` alias initialiser (the `Value` form cloned there too). */
+    rustUdOverrideLendBoxes(declaration: any): boolean;
+    /** ud: a `this.m(..)` initialiser whose callee is a venue override of a base native-`Str` method (step 3 seed). */
+    rustUdOverrideStrSeed(init: any): boolean;
+    /** ud: reader strings admitted only through the lending-slot exemption of `rustBlockLocalUsesAll`. */
+    private rustUdLent;
+    /** ud: a base-tier string reader (`safeString*`, `safeCurrencyCode`) initialiser, with or without a default. */
+    rustUdReaderStr(init: any): boolean;
     /** True when the initializer is a reader this block admits (its kind comes from `rustReaderDefaultKind`). */
     rustReaderDefaultInit(init: any): boolean;
     /** A number reader whose default may be an `Int` (an int literal, or anything not proven a float). */
@@ -913,6 +921,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustElemInsertKey(n: any): boolean;
     printElemKeyInOp(key: any, obj: any): string | undefined;
     rustThisFieldLiteralWrite(n: any): boolean;
+    /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
+    rustUdNestedBearerValue(n: any): boolean;
     rustScalarInNestedWrite(n: any): boolean;
     /** `this.balance|options[..][..]` with at least one hop below the field (the r05 receiver chain). */
     rustNestedFieldChain(access: any): boolean;
