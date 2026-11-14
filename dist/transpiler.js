@@ -60105,6 +60105,8 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustVenueKeptStrArm(node) {
     if (node?.kind !== SyntaxKind7.MethodDeclaration || !isIdentifier3(node.name))
       return false;
+    if (/ts[\\/]src[\\/]prediction[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? "")))
+      return false;
     const cls = node.parent;
     const clsName = cls?.name !== void 0 && isIdentifier3(cls.name) ? String(cls.name.text) : void 0;
     return clsName !== void 0 && (_RustTranspiler.RUST_VENUE_KEPT_STR_ARMS[clsName] ?? []).includes(String(node.name.text));

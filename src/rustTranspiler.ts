@@ -8741,6 +8741,8 @@ export class RustTranspiler extends BaseTranspiler {
 
     rustVenueKeptStrArm(node: any): boolean {
         if (node?.kind !== SyntaxKind.MethodDeclaration || !isIdentifier(node.name)) return false;
+        // vc: the table names REST venue classes; a prediction class of the same name (polymarket) is another venue
+        if (/ts[\\/]src[\\/]prediction[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? ''))) return false;
         const cls: any = node.parent;
         const clsName = cls?.name !== undefined && isIdentifier(cls.name) ? String(cls.name.text) : undefined;
         return clsName !== undefined && (RustTranspiler.RUST_VENUE_KEPT_STR_ARMS[clsName] ?? []).includes(String(node.name.text));
