@@ -5006,7 +5006,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (read.startsWith('crate::value::KeyRead::key_read(&&') && read.endsWith(')')) return `${read}.as_str().map(str::to_owned)`;
         // oe: a row local printed as a plain `Value` (`row.as_map().and_then(|__m| ..)`): the closure-free `KeyRead` read of the same slot
         if (read.endsWith(tail) && read.startsWith(`${super.printIdentifier(node.expression)}.as_map().and_then(|__m| __m.get(`)) {
-            return `crate::value::KeyRead::key_read(&&${super.printIdentifier(node.expression)}, "${this.escapeRustStringLiteral(String(node.argumentExpression.text))}").as_str().map(str::to_owned)`;
+            return `${this.rustTestTierSource(node) ? 'ccxt' : 'crate'}::value::KeyRead::key_read(&&${super.printIdentifier(node.expression)}, "${this.escapeRustStringLiteral(String(node.argumentExpression.text))}").as_str().map(str::to_owned)`;
         }
         return undefined;
     }
