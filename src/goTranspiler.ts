@@ -27637,7 +27637,10 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         // returned undefined by goScalarFamily, so they keep IsEqual. A `number` operand the
         // printer boxes as `any` keeps IsEqual too: a box holding int64(0) is never `== 0`,
         // because Go boxes the untyped constant as int.
-        const numberBox = (lFam === 'number') && (this.goIsAnyBoxExpression(left, leftText) || this.goIsAnyBoxExpression(right, rightText));
+        const numberBoxLocal = (n, text) => (n?.kind === SyntaxKind.Identifier)
+            && (this.goAnyBoxLocalDeclaration(n)?.kind === SyntaxKind.VariableDeclaration)
+            && (this.goOperandNumericKind(n, text) === undefined) && this.goIsAnyBoxExpression(n, text);
+        const numberBox = (lFam === 'number') && (numberBoxLocal(left, leftText) || numberBoxLocal(right, rightText));
         if (!lPtr && !rPtr && lFam !== undefined && rFam !== undefined
             && lFam !== 'nil' && rFam !== 'nil' && lFam === rFam && !numberBox) {
             return isEq ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
