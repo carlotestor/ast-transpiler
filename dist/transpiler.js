@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -66241,7 +66241,7 @@ ${iden}}`;
     const recordLookup = init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init);
     const blockScoped = !nilDeclared && (endpoint || init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0 || extendReuse && this.rustLiteralSiblingsAlike(declaration, name) || !recordLookup && this.rustSiblingBindingsAlike(declaration, name, init) || !recordLookup && this.rustElementSiblingsAlike(declaration, name, init));
     const safe = blockScoped ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
-    const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || defaultedBoxes === boxedElementUses.length && optionalBoxes === 0 && paramsBoxes === 0 && this.rustDefaultedContainerBoxUse(boxedElementUses[0], init) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init));
+    const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || optionalBoxes === 0 && paramsBoxes === 0 && boxedElementUses.every((u) => this.rustDefaultedContainerBoxUse(u, init)) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init));
     const boxOnly = reads === 0 && boxedElementUses.length > 0 && (this.rustDictElementSource(init) || this.rustListElementSource(init)) && nullTests === 0 && writes === 0;
     const endpointBoxOnly = endpointBoxes > 0 && nullTests === 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration) && boxedElementUses.every((u) => this.rustBoxLineOk(u));
     if (endpointBoxes > 0 && !endpointBoxOnly)
@@ -67485,6 +67485,8 @@ ${iden}}`;
       return filtered;
     if (method === "deepExtend")
       return this.rustDeepExtendOfMaps(call) ? "dict" : void 0;
+    if (method === "omit")
+      return !this.rustTestTierSource(call) && this.rustOmitOfDict(call) && this.rustOmitLineFits(call) ? "dict" : void 0;
     if (method === "sortBy" || method === "sortBy2")
       return !this.rustTestTierSource(call) && (this.extraArrSource(call) || this.rustSortOfTypedList(call)) ? "list" : void 0;
     if (/^(?:safe|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method))
@@ -67507,6 +67509,14 @@ ${iden}}`;
       this.rustFreshWide = wide;
     }
     return this.rustCallBuildsContainer(call, "list", 0) ? "list" : void 0;
+  }
+  /** The printed `let mut x: crate::value::Dict = self.omit(..).into_dict();` line of a one-line omit stays under 400 chars. */
+  rustOmitLineFits(call) {
+    const text = String(call.getText());
+    if (text.includes("\n"))
+      return false;
+    const literals = (text.match(/'[^']*'|"[^"]*"/g) ?? []).length;
+    return 16 + 60 + text.length + 22 * literals + 12 <= 330;
   }
   /** The container a base list filter answers, `undefined` when it is unproven, `null` when `method` is none of them. */
   rustBaseFilterReturnKind(call, method) {
