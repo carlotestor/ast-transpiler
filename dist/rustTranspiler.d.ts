@@ -331,6 +331,9 @@ export declare class RustTranspiler extends BaseTranspiler {
         kind: string;
     } | undefined;
     rustNilLocalKindUncached(declaration: any): string | undefined;
+    /** og: past a same-named sibling binding, a string local is typed only when each of its boxed hand-offs (a literal
+     *  value / element, a return) is its last use: the box moves it where the `Value` moved, so no copy is added. */
+    rustSiblingStrBoxesMove(declaration: any, scope: any): boolean;
     /** Static kind of a write's right-hand side: `null`, or the `Option` payload it yields exactly. */
     rustNilWriteKind(rhs: any): string | undefined;
     /** A boolean that is never undefined: `!x`, a ternary of boolean literals, or `&&` / `||` / parens over such operands. */
@@ -2062,6 +2065,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNilMapLocal(declaration: any): boolean;
     rustNilMapLocalUncached(declaration: any): boolean;
     private rustNilListLocals;
+    /** og: the nil-declared map local a declaration aliases whole (`const x = y`, same function, no closure between). */
+    rustNilMapAliasSource(declaration: any): any;
+    /** og: `y` as the whole initializer of a nil-map alias: the handle moves at y's last use, else an Arc bump. */
+    rustNilMapAliasInit(n: any): any;
     /** A list literal with no spread or bare-local element whose elements print natively (`vec![..]`). */
     rustNilListLiteralOk(rhs: any): boolean;
     /** Hand-offs past the object-literal value and return: another (untyped) local's initializer, or an argument of
