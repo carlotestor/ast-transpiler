@@ -3149,10 +3149,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  literal (no replaced, digit, book-meta or `__` tag key), the value not reading `n`. */
     rustSlotNestedInsertKeys(n: any): string[] | undefined;
     private static readonly RUST_SLOT_NESTED_TAG_ACCESS;
-    /** ral-40f: `p['k1']['k2'] = v` on a typed params slot (`crate::value::Dict`), in place, no copy:
-     *  `if let Value::Dict(__h1) = make_mut(&mut p).entry("k1").or_insert(Value::Null) { make_mut(__h1).insert("k2", v); }`.
-     *  `get_value_mut` inserts a missing hop key as `Null` exactly as `entry(..).or_insert(Value::Null)` does, and
-     *  `add_element_to_object` skips a `Null` / non-map hop exactly as the `if let` does (value.rs nested_slot_insert_tests). */
+    /** ral-40f: `p['k1']..['kN'] = v` on a typed params slot (`crate::value::Dict`), in place, no copy: the first hop is the
+     *  map's own `entry("k1").or_insert(Value::Null)` (the very arm `get_value_mut` runs on a `Value::Dict` with a `Str`
+     *  key), every hop below and the write keep their helpers (`get_value_mut` / `add_element_to_object`, so a `Null` /
+     *  non-map inner is skipped and tagged inner maps keep their routes; value.rs nested_slot_insert_tests). */
     printSlotNestedInsert(left: any, right: any, valueText: string): string | undefined;
     /** `std::sync::Arc::make_mut(&mut x).insert("k".into(), v)` for a literal-key write on a typed request slot. */
     printUntilHeadKeyWrite(left: any, right: any, valueText: string): string | undefined;

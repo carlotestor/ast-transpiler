@@ -22900,10 +22900,10 @@ export class RustTranspiler extends BaseTranspiler {
     }
     private static readonly RUST_SLOT_NESTED_TAG_ACCESS = /this\.(?:orderbooks|balance|ohlcvs|tickers|trades|bidsasks|positions|clients|transactions)\b|subscriptions|futures|\bcache\b|hashmap|this\.(?:orderBook|orderBookSide|indexedOrderBook|countedOrderBook)\s*\(/;
 
-    /** ral-40f: `p['k1']['k2'] = v` on a typed params slot (`crate::value::Dict`), in place, no copy:
-     *  `if let Value::Dict(__h1) = make_mut(&mut p).entry("k1").or_insert(Value::Null) { make_mut(__h1).insert("k2", v); }`.
-     *  `get_value_mut` inserts a missing hop key as `Null` exactly as `entry(..).or_insert(Value::Null)` does, and
-     *  `add_element_to_object` skips a `Null` / non-map hop exactly as the `if let` does (value.rs nested_slot_insert_tests). */
+    /** ral-40f: `p['k1']..['kN'] = v` on a typed params slot (`crate::value::Dict`), in place, no copy: the first hop is the
+     *  map's own `entry("k1").or_insert(Value::Null)` (the very arm `get_value_mut` runs on a `Value::Dict` with a `Str`
+     *  key), every hop below and the write keep their helpers (`get_value_mut` / `add_element_to_object`, so a `Null` /
+     *  non-map inner is skipped and tagged inner maps keep their routes; value.rs nested_slot_insert_tests). */
     printSlotNestedInsert(left: any, right: any, valueText: string): string | undefined {
         let recv: any = left;
         while (isElementAccessExpression(recv)) recv = recv.expression;
@@ -22913,11 +22913,10 @@ export class RustTranspiler extends BaseTranspiler {
         if (keys === undefined || declaration === recv || declaration?.kind !== SyntaxKind.BindingElement || !this.rustMutableDictSlot(declaration)
             || this.rustOptContainerLocals.has(declaration)) return undefined;
         const name = super.transformIdentifier(recv, this.ReservedKeywordsReplacements[recv.text] ?? recv.text);
-        const lit = (k: string) => `${this.quotedStringLiteral(k)}.to_string()`;
-        const last = keys.length - 1;
-        let body = `std::sync::Arc::make_mut(__h${last}).insert(${lit(keys[last])}, ${valueText.trim()});`;
-        for (let i = last - 1; i >= 1; i--) body = `if let Value::Dict(__h${i + 1}) = std::sync::Arc::make_mut(__h${i}).entry(${lit(keys[i])}).or_insert(Value::Null) { ${body} }`;
-        const out = `if let Value::Dict(__h1) = std::sync::Arc::make_mut(&mut ${name}).entry(${lit(keys[0])}).or_insert(Value::Null) { ${body} }`;
+        const key = (k: string) => `&Value::Str(${this.quotedStringLiteral(k)}.into())`;
+        let acc = `std::sync::Arc::make_mut(&mut ${name}).entry(${this.quotedStringLiteral(keys[0])}.to_string()).or_insert(Value::Null)`;
+        for (const k of keys.slice(1, -1)) acc = `get_value_mut(${acc}, ${key(k)})`;
+        const out = `add_element_to_object(${acc}, ${key(keys[keys.length - 1])}, ${valueText.trim()})`;
         return out.length + 36 > 400 ? undefined : out;
     }
 
