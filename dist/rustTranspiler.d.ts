@@ -542,6 +542,16 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  then re-checks all of them in declaration order until a whole pass changes nothing (each kept
      *  decision is then proven against the final ones); a candidate that keeps flipping stays `Value`. */
     rustScalarSolveScope(scope: any): void;
+    /** ya: the scope whose settled decisions an alias write may read (phase 2 of `rustScalarSolveScope`). */
+    private rustScalarAliasScope;
+    private rustScalarAliasTarget;
+    private rustScalarAliasJournal;
+    /** ya: phase 2. Once every scalar decision of the function has settled, a nil local still `Value` may take
+     *  `x = y.into_opt_string()` from a `Value` string local `y` at its last use. The alias never feeds back into
+     *  `y`'s own rule: it is admitted only when re-deciding every other candidate with it gives the same answers. */
+    rustScalarAliasPhase(scope: any, candidates: any[]): void;
+    /** ya: a nil local with at least one `x = y;` write whose `y` is an initialised local (cheap pre-filter). */
+    rustScalarAliasCandidate(declaration: any): boolean;
     rustScalarTry(declaration: any): string | null;
     /** The scalar local an identifier reads (never its own declaration name). */
     rustScalarLocalOf(node: any): {
@@ -808,6 +818,13 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `KeyRead::key_read(..)` temporary the checker types string: the string moves out of that temporary
      *  (`.into_opt_string()`: `Some` for a `Str`, `None` otherwise, as `as_str()` reads it), so no copy is added. */
     rustNilElemStrText(node: any): string | undefined;
+    /** ral-xa: `x = y;` into a nil-declared local, `y` a `Value` local of the same function the checker types string
+     *  (initialised, typed by no scalar / nil / reader rule) at its last use: `y.into_opt_string()` moves the string out. */
+    /** ya: argument count of a safeString-family reader before its default (`safeString2(o, a, b, d)`: 3). */
+    private static readonly RUST_SAFE_STRING_KEY_ARGS;
+    rustNilValueStrAlias(rhs: any): boolean;
+    /** ya: alias reads phase 2 admitted (the printer asks again after the solve; the answer must not change). */
+    private rustScalarAliasPrinted;
     /** The whole initializer of a `let`/`const` (writes and ternary arms keep their `Value`). */
     rustVenueInitializer(node: any): boolean;
     /** A venue `int` result boxed at two or more slots: the `i64` is `Copy`, so each box replaces a `Value` clone. */

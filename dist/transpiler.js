@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -51556,6 +51556,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustScalarSeeding = false;
     this.rustScalarVetoed = /* @__PURE__ */ new WeakSet();
     this.rustScalarGuarded = /* @__PURE__ */ new WeakSet();
+    /** ya: the scope whose settled decisions an alias write may read (phase 2 of `rustScalarSolveScope`). */
+    this.rustScalarAliasScope = void 0;
+    this.rustScalarAliasTarget = void 0;
+    this.rustScalarAliasJournal = [];
     /** String hand-off locals boxed more than once: each box before the last lends the string. */
     this.rustStrLentLocals = /* @__PURE__ */ new WeakSet();
     /** md: market-field strings lent at their boxes (guarded by their printed name: `type` prints `type_var`). */
@@ -51573,6 +51577,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // A call to a venue method already printed `-> Option<String>` is an optional-string source as it
     // stands, when every venue declaration of that name (REST, pro, prediction) declares a string return.
     this.rustVenueReturnTypesByRoot = /* @__PURE__ */ new Map();
+    /** ya: alias reads phase 2 admitted (the printer asks again after the solve; the answer must not change). */
+    this.rustScalarAliasPrinted = /* @__PURE__ */ new WeakSet();
     // wc: venue families keyed by file (relative to ts/src) and class: a family is the set of venue files joined by
     // `extends` (REST class, its pro subclass, sibling venues deriving from it); two families never share an instance.
     this.rustVenueFamiliesByRoot = /* @__PURE__ */ new Map();
@@ -53834,6 +53840,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (isIdentifier3(node)) {
       if (this.rustStringLocalIdentifierIsTyped(node))
         return "str";
+      if (this.rustNilValueStrAlias(node))
+        return "str";
       return this.rustNilLocalOfIdentifier(node)?.kind;
     }
     if (isBinaryExpression5(node) && node.operatorToken.kind === SyntaxKind7.PlusToken) {
@@ -54053,7 +54061,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const rhs = this.unwrapParens(parent.right);
       if (!this.rustNilDecodedWrite(rhs))
         writes++;
-      const write = isIdentifier3(rhs) && this.literalKindOfNode(rhs) !== "null" ? this.rustScalarIdentifierKind(rhs) : this.rustScalarValueKind(rhs, true);
+      const write = isIdentifier3(rhs) && this.literalKindOfNode(rhs) !== "null" ? this.rustScalarIdentifierKind(rhs) ?? (this.rustNilValueStrAlias(rhs) ? "ostr" : void 0) : this.rustScalarValueKind(rhs, true);
       joined = this.rustScalarJoinKinds(joined, write);
       if (joined === void 0)
         return void 0;
@@ -54107,7 +54115,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const parent = n.parent;
       if (isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.EqualsToken) {
         const rhs = this.unwrapParens(parent.right);
-        if (isIdentifier3(rhs) && !this.rustNilAliasMove(rhs, kind) && !this.rustNilLiveAliasCopy(rhs, kind))
+        if (isIdentifier3(rhs) && !this.rustNilAliasMove(rhs, kind) && !this.rustNilLiveAliasCopy(rhs, kind) && !(kind === "ostr" && this.rustNilValueStrAlias(rhs)))
           ok = false;
         return true;
       }
@@ -54352,6 +54360,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const int = this.rustNilIntLiteral(node);
     if (int !== void 0)
       return `${name} = Some(${int})`;
+    if (isIdentifier3(node) && local.kind === "str" && this.rustNilValueStrAlias(node))
+      return `${name} = ${super.printIdentifier(node)}.into_opt_string()`;
     if (isIdentifier3(node))
       return `${name} = ${super.printIdentifier(node)}.clone()`;
     const text = this.printNode(node, 0).trim();
@@ -55388,8 +55398,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
           }
           this.rustScalarDecisions.set(n, unstable.has(n) ? null : kind);
         }
-        if (!changed)
+        if (!changed) {
+          this.rustScalarAliasPhase(scope, candidates);
           return;
+        }
       }
       for (const n of candidates)
         this.rustScalarDecisions.set(n, null);
@@ -55397,6 +55409,49 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       this.rustScalarSolving.delete(scope);
       this.rustScalarSolved.add(scope);
     }
+  }
+  /** ya: phase 2. Once every scalar decision of the function has settled, a nil local still `Value` may take
+   *  `x = y.into_opt_string()` from a `Value` string local `y` at its last use. The alias never feeds back into
+   *  `y`'s own rule: it is admitted only when re-deciding every other candidate with it gives the same answers. */
+  rustScalarAliasPhase(scope, candidates) {
+    const targets = candidates.filter((n) => isVariableDeclaration3(n) && this.rustScalarDecisions.get(n) === null && (n.initializer === void 0 || this.literalKindOfNode(n.initializer) === "null") && this.rustScalarAliasCandidate(n));
+    if (targets.length === 0)
+      return;
+    this.rustScalarAliasScope = scope;
+    try {
+      for (const target of targets) {
+        const before = new Map(candidates.map((n) => [n, this.rustScalarDecisions.get(n) ?? null]));
+        this.rustScalarAliasTarget = target;
+        this.rustScalarAliasJournal = [];
+        const kind = this.rustScalarTry(target);
+        this.rustScalarAliasTarget = void 0;
+        let keep = kind === "ostr" && this.rustScalarAliasJournal.length > 0;
+        if (keep) {
+          this.rustScalarDecisions.set(target, kind);
+          keep = candidates.every((n) => n === target || this.rustScalarTry(n) === before.get(n));
+        }
+        if (!keep) {
+          this.rustScalarDecisions.set(target, null);
+          for (const n of this.rustScalarAliasJournal)
+            this.rustScalarAliasPrinted.delete(n);
+        }
+      }
+    } finally {
+      this.rustScalarAliasScope = void 0;
+      this.rustScalarAliasTarget = void 0;
+    }
+  }
+  /** ya: a nil local with at least one `x = y;` write whose `y` is an initialised local (cheap pre-filter). */
+  rustScalarAliasCandidate(declaration) {
+    const scope = this.rustEnclosingFunction(declaration);
+    for (const n of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
+      const parent = n.parent;
+      if (!isIdentifier3(n) || !isBinaryExpression5(parent) || parent.left !== n || parent.operatorToken.kind !== SyntaxKind7.EqualsToken)
+        continue;
+      if (isIdentifier3(this.unwrapParens(parent.right)) && this.rustDeclaredNode(n) === declaration)
+        return true;
+    }
+    return false;
   }
   rustScalarTry(declaration) {
     if (isBindingElement(declaration)) {
@@ -57184,6 +57239,46 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     return `${read}.into_opt_string()`;
   }
+  rustNilValueStrAlias(rhs) {
+    const node = this.unwrapParens(rhs);
+    if (node === void 0 || !isIdentifier3(node) || node.text === "undefined" || this.checkerOrUndefined() === void 0 || !this.rustNilVenueWrite(node))
+      return false;
+    if (this.rustScalarAliasScope === void 0 || this.rustEnclosingFunction(node) !== this.rustScalarAliasScope)
+      return this.rustScalarAliasPrinted.has(node);
+    const source = this.rustDeclarationOfIdentifier(node);
+    if (source === void 0 || !isVariableDeclaration3(source) || !isIdentifier3(source.name) || source.name === node || source.initializer === void 0)
+      return false;
+    if (this.literalKindOfNode(source.initializer) === "null" || source.parent?.kind !== SyntaxKind7.VariableDeclarationList || source.parent.declarations.length !== 1)
+      return false;
+    if (this.rustEnclosingFunction(source) !== this.rustEnclosingFunction(node) || this.primitiveKindOfType(this.typeOfNodeIfAny(source.name)) !== "string")
+      return false;
+    const init = this.unwrapParens(source.initializer);
+    const reader = isCallExpression6(init) && this.rustNilSelfHelperName(init) !== void 0 && _RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(this.rustNilSelfHelperName(init));
+    const kind = reader ? "ostr" : this.rustScalarValueKind(init, true);
+    if (kind !== "str" && kind !== "ostr")
+      return false;
+    if (reader && init.arguments.length <= (_RustTranspiler.RUST_SAFE_STRING_KEY_ARGS[this.rustNilSelfHelperName(init)] ?? 2))
+      return false;
+    if (this.rustScalarLocalOf(node) !== void 0 || this.rustNilLocalOfIdentifier(node) !== void 0 || this.rustStringLocalIdentifierIsTyped(node))
+      return false;
+    let top = node;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    const target = isIdentifier3(top.parent?.left) ? this.rustDeclaredNode(top.parent.left) : void 0;
+    if (target === void 0 || !isVariableDeclaration3(target))
+      return false;
+    let returned = false;
+    this.rustLocalUsesAll(target, String(target.name.text), false, (n) => {
+      if (isReturnStatement4(n.parent))
+        returned = true;
+      return true;
+    });
+    if (target !== this.rustScalarAliasTarget || returned || !this.rustLocalLastUse(node, source))
+      return false;
+    this.rustScalarAliasPrinted.add(node);
+    this.rustScalarAliasJournal.push(node);
+    return true;
+  }
   /** The whole initializer of a `let`/`const` (writes and ternary arms keep their `Value`). */
   rustVenueInitializer(node) {
     let current = node;
@@ -58544,7 +58639,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const optional = kind.startsWith("o");
     if (isIdentifier3(node) && node.text !== "undefined") {
       const source = this.rustScalarLocalOf(node)?.kind;
-      return source === kind || optional && source === kind.slice(1);
+      return source === kind || optional && source === kind.slice(1) || kind === "ostr" && source === void 0 && depth === 0 && this.rustNilValueStrAlias(node);
     }
     const value = this.rustScalarValueKind(node, true);
     if (value === kind || optional && (value === "null" || value === kind.slice(1)))
@@ -59028,6 +59123,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const alias = this.unwrapParens(right);
     if (local !== void 0 && isIdentifier3(alias) && this.rustNilAliasMoves.has(alias) && this.rustScalarIdentifierKind(alias) === local.kind)
       return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.take()`;
+    if (local?.kind === "ostr" && isIdentifier3(alias) && this.rustScalarIdentifierKind(alias) === void 0 && this.rustNilValueStrAlias(alias))
+      return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.into_opt_string()`;
     const text = local === void 0 ? void 0 : this.rustScalarNativeText(local.kind, right);
     const owned = text !== void 0 && isIdentifier3(alias) && text === super.printIdentifier(alias) && _RustTranspiler.RUST_COPY_SCALAR_KINDS.has(local.kind);
     return text === void 0 ? void 0 : `${super.printIdentifier(left)} = ${owned ? "" : ""}${text}`;
@@ -78970,6 +79067,20 @@ _RustTranspiler.RUST_BYTES_SLOTS = {
 _RustTranspiler.RUST_BYTES_FREE_SLOTS = { eddsa: [0, 1], jwt: [1] };
 // ral-xa: unified string keys of a market / currency record (an exchange id key may hold a number, which `as_str` drops)
 _RustTranspiler.RUST_NIL_ELEM_STR_KEYS = /* @__PURE__ */ new Set(["symbol", "base", "quote", "settle", "code"]);
+/** ral-xa: `x = y;` into a nil-declared local, `y` a `Value` local of the same function the checker types string
+ *  (initialised, typed by no scalar / nil / reader rule) at its last use: `y.into_opt_string()` moves the string out. */
+/** ya: argument count of a safeString-family reader before its default (`safeString2(o, a, b, d)`: 3). */
+_RustTranspiler.RUST_SAFE_STRING_KEY_ARGS = {
+  safeString: 2,
+  safeString2: 3,
+  safeStringN: 2,
+  safeStringLower: 2,
+  safeStringLower2: 3,
+  safeStringLowerN: 2,
+  safeStringUpper: 2,
+  safeStringUpper2: 3,
+  safeStringUpperN: 2
+};
 // rustWsClientCallArg: `client.resolve|reject|future|reusableFuture|send(.., x)` on a ws `Client`
 // receiver takes its arguments as plain `Value`s, so a string local boxes there.
 _RustTranspiler.RUST_WS_CLIENT_VALUE_METHODS = /* @__PURE__ */ new Set(["resolve", "reject", "future", "reusableFuture", "send"]);
