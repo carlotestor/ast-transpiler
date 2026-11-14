@@ -2636,6 +2636,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsSubscriptionWriteValue(n: any): boolean;
     private rustBuiltLists;
     rustBuiltListLocal(declaration: any): boolean;
+    /** ral-tf: no later statement of the function pushes to or writes the list, and the use is in no loop or closure. */
+    rustBuiltListFrozenAfter(node: any, declaration: any, name: string): boolean;
     /** `this.inArray (needle, x)` (haystack), `this.arrayConcat (a, b)` (either operand) on the base helpers, or the row of a
      *  `stored.append (x)` statement on a ws cache local: hand-written slots taking `impl Into<Value>`. */
     rustBuiltListLentHelperSlot(call: any, n: any): 'inArray' | 'arrayConcat' | 'append' | undefined;

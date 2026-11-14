@@ -12019,6 +12019,19 @@ describe('ral-sf: a list local written only under Array.isArray (y) from that y 
     });
 });
 
+describe('ral-tf: a one-kind push accumulator shared into an object literal before its last hand-off', () => {
+    test('the literal shares the list (one Arc bump), the pushes are native, the hash slots lend it; a push after the literal keeps Value', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-tf-acc');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    watchMultiple (url: string, h: any, m: any, s: any, sub: any = undefined): any { return h; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    unWatch (symbols: string[]) {\n        const hashes: string[] = [];\n        for (let i = 0; i < symbols.length; i++) {\n            hashes.push ('unsubscribe::' + symbols[i]);\n        }\n        const subscription: Dict = { 'messageHashes': hashes, 'unsubscribe': true };\n        return this.watchMultiple ('wss://x', hashes, {}, hashes, subscription);\n    }\n    pushedAfter (symbols: string[]) {\n        const hashes: string[] = [];\n        const subscription: Dict = { 'messageHashes': hashes };\n        hashes.push ('late');\n        return this.watchMultiple ('wss://x', hashes, {}, hashes, subscription);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/fn unWatch[\s\S]*?let mut hashes: crate::value::List = [\s\S]*?std::sync::Arc::make_mut\(&mut hashes\)\.push\([\s\S]*?Value::Arr\(hashes\.clone\(\)\)/);
+        expect(out.slice(0, out.indexOf('fn pushedAfter'))).not.toContain('append_to_array(&mut hashes');
+        expect(out).toMatch(/fn pushedAfter[\s\S]*?let mut hashes: Value = /);
+    });
+});
+
 describe('safe scalar locals, seventh pass: nested balance / options writes', () => {
     test('a typed string key of a nested this.balance / this.options write prints the r05 insert with its own key text', () => {
         const dir = path.join (rustFixtureRoot, 'scalar-pf');

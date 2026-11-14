@@ -19230,6 +19230,13 @@ export class RustTranspiler extends BaseTranspiler {
                 handOffs++;
                 return true;
             }
+            // ral-tf: a one-kind push accumulator boxed into an object-literal value before its last hand-off shares the
+            // list there (`Value::Arr(x.clone())`, an Arc bump where the Value box was `x.clone()`); nothing mutates it afterwards
+            if (up?.kind === SyntaxKind.PropertyAssignment && up.initializer === n && short(n) && this.rustBuiltListFrozenAfter(n, declaration, name)) {
+                boxes.push([n, 'clone']);
+                handOffs++;
+                return true;
+            }
             if (isCallExpression(up) && up.expression !== n && up.arguments.some((a: any) => a === n)) {
                 const callee: any = up.expression;
                 if (!isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword || !short(n)
@@ -19244,6 +19251,30 @@ export class RustTranspiler extends BaseTranspiler {
         if (!safe || (natives === 0 && (handOffs === 0 || handOffs + boxes.filter(([b]) => isReturnStatement(b.parent)).length !== boxes.length || boxes.some(([, form]) => form === 'clone')))) return false;
         for (const [n, form] of boxes) this.rustLentListBoxes.set(n, form);
         this.rustBuiltLists.add(declaration);
+        return true;
+    }
+
+    /** ral-tf: no later statement of the function pushes to or writes the list, and the use is in no loop or closure. */
+    rustBuiltListFrozenAfter(node: any, declaration: any, name: string): boolean {
+        for (let up: any = node.parent; up !== undefined && !(up.pos <= declaration.pos && declaration.end <= up.end); up = up.parent) {
+            if (isFunctionLike(up) || up.kind === SyntaxKind.ForStatement || up.kind === SyntaxKind.ForOfStatement || up.kind === SyntaxKind.ForInStatement
+                || up.kind === SyntaxKind.WhileStatement || up.kind === SyntaxKind.DoStatement) return false;
+        }
+        const scope: any = this.rustEnclosingFunction(declaration);
+        const own = this.rustSymbolOf(node);
+        if (scope === undefined || own === undefined) return false;
+        for (const n of this.rustScopeNameNodes(scope, name) as any[]) {
+            if (n === node || n.pos < node.pos || !isIdentifier(n) || this.rustIdentifierIsPropertyName(n)) continue;
+            const symbol = this.rustSymbolOf(n);
+            if (symbol !== undefined && symbol !== own) continue;
+            const up: any = n.parent;
+            if (isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) !== 'length') return false;
+            if (isBinaryExpression(up) && up.left === n) return false;
+            if (isElementAccessExpression(up) && up.expression === n) {
+                const w: any = up.parent;
+                if (isBinaryExpression(w) && w.left === up && rustIsAssignmentOperator(w.operatorToken.kind)) return false;
+            }
+        }
         return true;
     }
 
