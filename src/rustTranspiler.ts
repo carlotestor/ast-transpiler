@@ -15242,6 +15242,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (!safe) return false;
         // ral-wf: a map typed by the self-write read rule may escape only as a move (an earlier escape would box a copy)
         if (selfWrites > 0 && (moveEscapes.length > 0 || !escapes.every((e: any) => this.rustReturnOperand(e) || (this.rustVecIsFinalUse(e, name) && !this.loopBetween(e))))) return false;
+        if (selfWrites > 0 && produced) return false;
         // Built once and handed straight back stays boxed.
         // ral-vf: except a single move at the last use (a list push / ws settle): each sibling `let` is its own Rust block,
         // and the move is the box the helper form made (D11: stored and boxed back is typed)
@@ -15665,7 +15666,9 @@ export class RustTranspiler extends BaseTranspiler {
         // The printer proves the position on the outermost chain node.
         // ral-wf: a read inside the value of a one-key write on the same map (`m[k] = f (m[k])`) is evaluated before the
         // insert takes `&mut m` (rustBearerInsertText binds such a value first)
-        if (!this.isNativeAccessPositionSafe(root) && this.isNativeAccessPositionSafe(root, this.rustBearerSelfWriteHost(root, name))) this.literalSelfWriteHits++;
+        // (dynamic keys only: a literal-key self-write is the shared-Dict rule's `key_read` form already)
+        if (!this.isNativeAccessPositionSafe(root) && !isStringLiteralLikeNode(this.rustSkipWrappers(access.argumentExpression))
+            && this.isNativeAccessPositionSafe(root, this.rustBearerSelfWriteHost(root, name))) this.literalSelfWriteHits++;
         else if (!this.isNativeAccessPositionSafe(root)) return false;
         if (this.isNativeWriteTargetBase(root)) return false;
         // ccxt's write-back pass matches `get_value` text to write a mutated bind back.

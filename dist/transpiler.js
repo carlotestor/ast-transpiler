@@ -66232,6 +66232,8 @@ ${iden}}`;
       return false;
     if (selfWrites > 0 && (moveEscapes.length > 0 || !escapes.every((e) => this.rustReturnOperand(e) || this.rustVecIsFinalUse(e, name) && !this.loopBetween(e))))
       return false;
+    if (selfWrites > 0 && produced)
+      return false;
     const siblingMove = siblings > 0 && moveEscapes.length === 1 && escapes.length === 0 && rebuilds === 0 && enumUses === 0 && keyHits === 0;
     if (siblings > 0 && elementUses === 0 && !siblingMove)
       return false;
@@ -66643,7 +66645,7 @@ ${iden}}`;
     }
     if (up !== void 0 && (isDeleteExpression2(up) || isCallExpression6(up) && up.expression === root || up.kind === SyntaxKind7.PrefixUnaryExpression || up.kind === SyntaxKind7.PostfixUnaryExpression))
       return false;
-    if (!this.isNativeAccessPositionSafe(root) && this.isNativeAccessPositionSafe(root, this.rustBearerSelfWriteHost(root, name)))
+    if (!this.isNativeAccessPositionSafe(root) && !isStringLiteralLikeNode4(this.rustSkipWrappers(access.argumentExpression)) && this.isNativeAccessPositionSafe(root, this.rustBearerSelfWriteHost(root, name)))
       this.literalSelfWriteHits++;
     else if (!this.isNativeAccessPositionSafe(root))
       return false;
