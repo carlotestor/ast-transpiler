@@ -67434,6 +67434,13 @@ ${iden}}`;
     return false;
   }
   /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
+  /** zf: `this.balance[..]` / `this.options[..]` (any depth): the plain untagged store maps the r05 insert writes into. */
+  rustBalanceOptionsPlace(node) {
+    let base = node;
+    while (isElementAccessExpression4(base))
+      base = base.expression;
+    return isPropertyAccessExpression3(base) && base.expression.kind === SyntaxKind7.ThisKeyword && ["balance", "options"].includes(String(base.name.text));
+  }
   rustThisRootedPlace(node) {
     if (isPropertyAccessExpression3(node))
       return node.expression.kind === SyntaxKind7.ThisKeyword;
@@ -69354,7 +69361,11 @@ ${iden}}`;
   /** A plain `Value` argument of a `this.` method or an object literal value, for a message field read local. */
   rustWsFieldBoxUse(n, init) {
     const up = n.parent;
-    if (this.rustWsFieldRead(init) === void 0 || up === void 0 || this.rustScalarInNestedWrite(n))
+    if (this.rustWsFieldRead(init) === void 0 || up === void 0)
+      return false;
+    if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && isElementAccessExpression4(up.left) && this.rustBalanceOptionsPlace(up.left))
+      return true;
+    if (this.rustScalarInNestedWrite(n))
       return false;
     if (up.kind === SyntaxKind7.PropertyAssignment)
       return up.initializer === n;

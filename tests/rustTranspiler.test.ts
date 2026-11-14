@@ -14127,3 +14127,27 @@ describe('ral-zf: Promise.all slots of list producers are shared lists lent to a
         expect(out).toMatch(/let mut c: Value = /);
     });
 });
+
+describe('ral-zf: a message field Dict / List stored whole into this.balance / this.options', () => {
+    const mk = (body: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-zf-bo-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base/ws'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    balance: Dict = {};\n    options: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeDict (o: any, k: any, d: Dict = undefined): Dict | undefined { return o[k]; }\n    safeList (o: any, k: any, d: any[] = undefined): any[] | undefined { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/ws/Client.ts'), "export default class Client {\n    resolve (v: any, h: string | undefined = undefined): void {}\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange';\nimport type { Dict } from '../base/Exchange';\nimport Client from '../base/ws/Client';\nexport default class venue extends Exchange {\n" + body + "\n}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    test('a message field list stored into this.options[k] before a later read is shared (Value::Arr(x.clone()), an Arc bump)', () => {
+        const out = mk("    handleBalance (client: Client, message: Dict): void {\n        const data = this.safeDict (message, 'data', {});\n        const rows = this.safeList (message, 'rows', []);\n        this.balance['info'] = data;\n        this.options['rows'] = rows;\n        const total = this.safeString (rows, 0);\n        client.resolve (this.balance, total);\n    }");
+        expect(out).toMatch(/let mut rows: crate::value::List = [^\n]*\.get\(\\?"rows\\?"\)\.cloned\(\)\.unwrap_or_default\(\)\.into_list\(\);/);
+        expect(out).toMatch(/insert\(\\?"rows\\?"\.(?:into|to_string)\(\), Value::Arr\(rows\.clone\(\)\)\)/);
+        expect(out).not.toMatch(/let mut (data|rows): Value = /);
+    });
+    test('negative: a store into another this. field keeps the box', () => {
+        const out = mk("    handleBalance (client: Client, message: Dict): void {\n        const rows = this.safeList (message, 'rows', []);\n        this.orderbooks['x'] = rows;\n        const total = this.safeString (rows, 0);\n        client.resolve (this.balance, total);\n    }");
+        expect(out).toMatch(/let mut rows: Value = /);
+    });
+});

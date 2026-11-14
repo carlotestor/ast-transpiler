@@ -16386,6 +16386,13 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
+    /** zf: `this.balance[..]` / `this.options[..]` (any depth): the plain untagged store maps the r05 insert writes into. */
+    rustBalanceOptionsPlace(node: any): boolean {
+        let base: any = node;
+        while (isElementAccessExpression(base)) base = base.expression;
+        return isPropertyAccessExpression(base) && base.expression.kind === SyntaxKind.ThisKeyword && [ 'balance', 'options' ].includes(String(base.name.text));
+    }
+
     rustThisRootedPlace(node: any): boolean {
         if (isPropertyAccessExpression(node)) return node.expression.kind === SyntaxKind.ThisKeyword;
         if (isElementAccessExpression(node)) return this.rustThisRootedPlace(node.expression);
@@ -18267,7 +18274,12 @@ export class RustTranspiler extends BaseTranspiler {
     /** A plain `Value` argument of a `this.` method or an object literal value, for a message field read local. */
     rustWsFieldBoxUse(n: any, init: any): boolean {
         const up: any = n.parent;
-        if (this.rustWsFieldRead(init) === undefined || up === undefined || this.rustScalarInNestedWrite(n)) return false;
+        if (this.rustWsFieldRead(init) === undefined || up === undefined) return false;
+        // zf: the whole value of a `this.balance|options[..] = x` statement (the r05 insert's value text): the store takes
+        // the map by value, so the shared handle is boxed there once (moved at the last use), the `Value` the boxed local handed over
+        if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
+            && isElementAccessExpression(up.left) && this.rustBalanceOptionsPlace(up.left)) return true;
+        if (this.rustScalarInNestedWrite(n)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
         if (!isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression) || up.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const callee = String(up.expression.name.text);

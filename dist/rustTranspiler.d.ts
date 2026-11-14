@@ -2253,6 +2253,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  (never `this.*`, `client.subscriptions` or a cache `hashmap()` read): the map enters the store whole, once. */
     rustLocalStoreHandOff(n: any): boolean;
     /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
+    /** zf: `this.balance[..]` / `this.options[..]` (any depth): the plain untagged store maps the r05 insert writes into. */
+    rustBalanceOptionsPlace(node: any): boolean;
     rustThisRootedPlace(node: any): boolean;
     /** Container kind an expression the callee body builds yields, or undefined.
      *  Shapes: a tag-free literal, a local that only ever receives element
