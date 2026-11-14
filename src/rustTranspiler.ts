@@ -5108,6 +5108,29 @@ export class RustTranspiler extends BaseTranspiler {
         return `${text}.as_str().unwrap_or_default().to_owned()`;
     }
 
+    /** `format!(..)` of a whole `Value::Str(format!(..).into())` print (balanced, nothing after), else undefined. */
+    rustBoxedFormatInner(text: string): string | undefined {
+        const head = 'Value::Str(format!(';
+        const tail = '.into())';
+        if (!text.startsWith(head) || !text.endsWith(tail)) return undefined;
+        const inner = text.slice('Value::Str('.length, -tail.length);
+        // the inner text must be exactly one balanced `format!(..)` call (string literals skipped)
+        let depth = 0;
+        let quoted = false;
+        for (let i = 'format!'.length; i < inner.length; i++) {
+            const c = inner[i];
+            if (quoted) {
+                if (c === '\\') i++;
+                else if (c === '"') quoted = false;
+                continue;
+            }
+            if (c === '"') quoted = true;
+            else if (c === '(') depth++;
+            else if (c === ')' && --depth === 0 && i !== inner.length - 1) return undefined;
+        }
+        return depth === 0 && !quoted ? inner : undefined;
+    }
+
     // ── byte buffers (rustBytesProducer / rustBytesSlot / rustBytesLocal) ──
     // The hand-written producers of a TS `Uint8Array` return `crate::value::Bytes` (the `Value::Arr` of byte
     // ints behind a typed handle) and the byte parameters of the hand-written consumers take `impl Into<Value>`.
@@ -9192,7 +9215,7 @@ export class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_VENUE_KEPT_STR_ARMS: Record<string, string[]> = {
         'coinbaseinternational.ts#coinbaseinternational': [ 'parseTimeInForce' ], 'bitfinex.ts#bitfinex': [ 'convertDerivativesId' ],
         'blofin.ts#blofin': [ 'networkCodeToChainId' ], 'dydx.ts#dydx': [ 'hashMessage' ], 'modetrade.ts#modetrade': [ 'hashMessage' ],
-        'polymarket.ts#polymarket': [ 'hashMessage', 'signMessage' ],
+        'polymarket.ts#polymarket': [ 'hashMessage', 'signMessage', 'signHash' ],
     };
 
     rustVenueKeptStrArm(node: any): boolean {
@@ -14807,8 +14830,14 @@ export class RustTranspiler extends BaseTranspiler {
             const local = this.rustVenueStrReturnLocal(this.unwrapParensNode(exp));
             if (local !== undefined) return `${idn}return ${local};`;
             if (this.rustStrRuntimeCall(this.unwrapParens(exp))) return `${idn}return Some(${this.rustStrRuntimeBareText(this.unwrapParens(exp))});`;
+            const printed = this.printNode(exp, 0).trim();
+            // xc: a boxed `format!` string is the `String` itself: `Some(format!(..))`, not box-then-unwrap (the 28-char
+            // `.as_str().map(str::to_owned)` tail took polymarket signHash's return past 400 chars, and the long-line guard
+            // then sent its `sVal` local back to `Value`)
+            const formatted = this.rustStrNativeExpression(exp) ? undefined : this.rustBoxedFormatInner(printed);
+            if (formatted !== undefined) return `${idn}return Some(${formatted});`;
             const suffix = this.rustStrNativeExpression(exp) ? '' : '.as_str().map(str::to_owned)';
-            return `${idn}return ${this.printNode(exp, 0).trim()}${suffix};`;
+            return `${idn}return ${printed}${suffix};`;
         }
         return `${idn}return ${this.printNode(exp, 0).trim()};`;
     }

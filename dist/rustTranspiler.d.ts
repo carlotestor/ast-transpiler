@@ -659,6 +659,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustBaseTypedReturnCall(node: any): string | undefined;
     /** `return x` in a typed method: the native value, converting a `Value` once. */
     printRustBaseTypedReturn(fn: any, exp: any): string | undefined;
+    /** `format!(..)` of a whole `Value::Str(format!(..).into())` print (balanced, nothing after), else undefined. */
+    rustBoxedFormatInner(text: string): string | undefined;
     private static readonly RUST_BYTES_PRODUCERS;
     private static readonly RUST_BYTES_SLOTS;
     private static readonly RUST_BYTES_FREE_SLOTS;

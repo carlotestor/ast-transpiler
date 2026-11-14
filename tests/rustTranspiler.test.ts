@@ -2431,7 +2431,8 @@ describe('rust checker-typed native container access', () => {
         '    run(): string { return this.id + "x"; }\n' +
         '}';
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('Value::Str(format!("{}{}", self.id, "x").into())');
+        // xc: a `string` method returns the `format!` String itself (no box unwrapped back)
+        expect(output).toContain('return Some(format!("{}{}", self.id, "x"));');
     });
 
     // Dictionary reads with a string-literal key skip the `Value::Str`
@@ -11812,6 +11813,11 @@ describe('ral-xc: awaited / plain venue results declared Dict, NullableDict, a l
         const out = run ('record', "    async one (m: string): Promise<Ticker> {\n        return this.safeDict (this.options, m, {}) as Ticker;\n    }\n",
             "        const ticker = await this.one ('x');\n        return this.safeString (ticker, 'symbol');\n");
         expect(out).toMatch(/let mut ticker: crate::value::Dict = self\.one\("x"\)\.await\.into_dict\(\);/);
+    });
+    test('a string method returning a concat prints Some(format!(..)), not a box unwrapped back', () => {
+        const out = run ('fmt', "    signIt (a: any): string {\n        const s = this.safeString (a, 's');\n        return '0x' + s;\n    }\n", '        return this.signIt (p);\n');
+        expect(out).toMatch(/return Some\(format!\(/);
+        expect(out).not.toMatch(/\.into\(\)\)\.as_str\(\)\.map\(str::to_owned\);/);
     });
 });
 

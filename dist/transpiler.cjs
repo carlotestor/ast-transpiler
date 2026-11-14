@@ -56284,6 +56284,33 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${text}.as_bool().unwrap_or_default()`;
     return `${text}.as_str().unwrap_or_default().to_owned()`;
   }
+  /** `format!(..)` of a whole `Value::Str(format!(..).into())` print (balanced, nothing after), else undefined. */
+  rustBoxedFormatInner(text) {
+    const head = "Value::Str(format!(";
+    const tail = ".into())";
+    if (!text.startsWith(head) || !text.endsWith(tail))
+      return void 0;
+    const inner = text.slice("Value::Str(".length, -tail.length);
+    let depth = 0;
+    let quoted = false;
+    for (let i = "format!".length; i < inner.length; i++) {
+      const c = inner[i];
+      if (quoted) {
+        if (c === "\\")
+          i++;
+        else if (c === '"')
+          quoted = false;
+        continue;
+      }
+      if (c === '"')
+        quoted = true;
+      else if (c === "(")
+        depth++;
+      else if (c === ")" && --depth === 0 && i !== inner.length - 1)
+        return void 0;
+    }
+    return depth === 0 && !quoted ? inner : void 0;
+  }
   /** `this.encode(..)` & co. resolved to the base tier, or such a call on a test's untyped `exchange`. */
   rustBytesProducer(node) {
     if (this.rustHashBinaryCall(node))
@@ -65874,8 +65901,12 @@ ${iden}}`;
         return `${idn}return ${local};`;
       if (this.rustStrRuntimeCall(this.unwrapParens(exp)))
         return `${idn}return Some(${this.rustStrRuntimeBareText(this.unwrapParens(exp))});`;
+      const printed = this.printNode(exp, 0).trim();
+      const formatted = this.rustStrNativeExpression(exp) ? void 0 : this.rustBoxedFormatInner(printed);
+      if (formatted !== void 0)
+        return `${idn}return Some(${formatted});`;
       const suffix = this.rustStrNativeExpression(exp) ? "" : ".as_str().map(str::to_owned)";
-      return `${idn}return ${this.printNode(exp, 0).trim()}${suffix};`;
+      return `${idn}return ${printed}${suffix};`;
     }
     return `${idn}return ${this.printNode(exp, 0).trim()};`;
   }
@@ -78000,7 +78031,7 @@ _RustTranspiler.RUST_VENUE_KEPT_STR_ARMS = {
   "blofin.ts#blofin": ["networkCodeToChainId"],
   "dydx.ts#dydx": ["hashMessage"],
   "modetrade.ts#modetrade": ["hashMessage"],
-  "polymarket.ts#polymarket": ["hashMessage", "signMessage"]
+  "polymarket.ts#polymarket": ["hashMessage", "signMessage", "signHash"]
 };
 _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "Value": "value",
