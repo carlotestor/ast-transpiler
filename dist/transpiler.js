@@ -70024,7 +70024,7 @@ ${iden}}`;
         return false;
       const up = n.parent;
       if (isBinaryExpression5(up) && up.left === n) {
-        return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustBuiltListWriteSource(up.right) && String(up.parent.getText()).split("\n")[0].length <= 200;
+        return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustArrayGuardedMove(up)) && String(up.parent.getText()).split("\n")[0].length <= 200;
       }
       if (isElementAccessExpression4(up) && up.expression === n) {
         natives++;
@@ -70147,6 +70147,42 @@ ${iden}}`;
     if (isArrayLiteralExpression4(rhs))
       return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement || isIdentifier3(this.rustSkipWrappers(e)));
     return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs);
+  }
+  /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
+   *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so
+   *  `y.into_list()` moves exactly that list (no copy, no other variant to lose). */
+  rustArrayGuardedMove(write) {
+    const y = this.rustSkipWrappers(write.right);
+    if (y === void 0 || !isIdentifier3(y))
+      return false;
+    const statement = write.parent;
+    let branch = statement?.parent;
+    if (isBlock4(branch)) {
+      if (branch.statements.length !== 1)
+        return false;
+    } else
+      branch = statement;
+    const guard = branch?.parent;
+    if (guard === void 0 || guard.kind !== SyntaxKind7.IfStatement || guard.thenStatement !== branch)
+      return false;
+    const test = this.rustSkipWrappers(guard.expression);
+    if (!isCallExpression6(test) || test.arguments.length !== 1 || !isPropertyAccessExpression3(test.expression) || !isIdentifier3(test.expression.expression) || test.expression.expression.text !== "Array" || String(test.expression.name.text) !== "isArray")
+      return false;
+    const tested = this.rustSkipWrappers(test.arguments[0]);
+    if (tested === void 0 || !isIdentifier3(tested) || tested.text !== y.text)
+      return false;
+    const declaration = this.rustDeclarationOfIdentifier(y);
+    if (declaration === void 0 || declaration.name === y || !(isVariableDeclaration3(declaration) || isParameterDeclaration3(declaration)))
+      return false;
+    if (this.rustDeclarationOfIdentifier(tested) !== declaration || this.rustLocalIsReassigned(declaration, String(y.text)))
+      return false;
+    if (this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(write))
+      return false;
+    if (isVariableDeclaration3(declaration) && (this.rustLentListLocal(declaration) || this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustScalarLocalKind(declaration) !== void 0 || this.rustNilLocalKind(declaration) !== void 0))
+      return false;
+    if (this.printNode(y, 0).trim().replace(/^\u0004/, "") !== String(y.text))
+      return false;
+    return this.rustLocalLastUse(y, declaration);
   }
   rustBuiltListOf(node) {
     if (node === void 0 || !isIdentifier3(node))

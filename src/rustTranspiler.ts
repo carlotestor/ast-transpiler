@@ -18856,7 +18856,7 @@ export class RustTranspiler extends BaseTranspiler {
             const up: any = n.parent;
             if (isBinaryExpression(up) && up.left === n) {
                 return up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
-                    && this.rustBuiltListWriteSource(up.right) && String(up.parent.getText()).split('\n')[0].length <= 200;
+                    && (this.rustBuiltListWriteSource(up.right) || this.rustArrayGuardedMove(up)) && String(up.parent.getText()).split('\n')[0].length <= 200;
             }
             if (isElementAccessExpression(up) && up.expression === n) {
                 natives++;
@@ -18980,6 +18980,35 @@ export class RustTranspiler extends BaseTranspiler {
         // a bare local element would be copied into the native literal
         if (isArrayLiteralExpression(rhs)) return !rhs.elements.some((e: any) => e.kind === SyntaxKind.SpreadElement || isIdentifier(this.rustSkipWrappers(e)));
         return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs);
+    }
+
+    /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
+     *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so
+     *  `y.into_list()` moves exactly that list (no copy, no other variant to lose). */
+    rustArrayGuardedMove(write: any): boolean {
+        const y: any = this.rustSkipWrappers(write.right);
+        if (y === undefined || !isIdentifier(y)) return false;
+        const statement: any = write.parent;
+        let branch: any = statement?.parent;
+        if (isBlock(branch)) {
+            if (branch.statements.length !== 1) return false;
+        } else branch = statement;
+        const guard: any = branch?.parent;
+        if (guard === undefined || guard.kind !== SyntaxKind.IfStatement || guard.thenStatement !== branch) return false;
+        const test: any = this.rustSkipWrappers(guard.expression);
+        if (!isCallExpression(test) || test.arguments.length !== 1 || !isPropertyAccessExpression(test.expression)
+            || !isIdentifier(test.expression.expression) || test.expression.expression.text !== 'Array' || String(test.expression.name.text) !== 'isArray') return false;
+        const tested: any = this.rustSkipWrappers(test.arguments[0]);
+        if (tested === undefined || !isIdentifier(tested) || tested.text !== y.text) return false;
+        const declaration: any = this.rustDeclarationOfIdentifier(y);
+        if (declaration === undefined || declaration.name === y || !(isVariableDeclaration(declaration) || isParameterDeclaration(declaration))) return false;
+        if (this.rustDeclarationOfIdentifier(tested) !== declaration || this.rustLocalIsReassigned(declaration, String(y.text))) return false;
+        if (this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(write)) return false;
+        if (isVariableDeclaration(declaration) && (this.rustLentListLocal(declaration) || this.rustBorrowedLocalKind(declaration) !== undefined
+            || this.rustScalarLocalKind(declaration) !== undefined || this.rustNilLocalKind(declaration) !== undefined)) return false;
+        // the printer may mark the bare move owned (`\u0004`): still the plain `Value` binding
+        if (this.printNode(y, 0).trim().replace(/^\u0004/, '') !== String(y.text)) return false;
+        return this.rustLocalLastUse(y, declaration);
     }
 
     rustBuiltListOf(node: any): any {

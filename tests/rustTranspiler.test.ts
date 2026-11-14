@@ -11966,6 +11966,18 @@ describe('ral-sf: a literal map written at string-local keys and enumerated by O
     });
 });
 
+describe('ral-sf: a list local written only under Array.isArray (y) from that y moves the tested list', () => {
+    test('y.into_list() under the guard at its last use, the list read natively; an unguarded write keeps Value', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-sf-guarded');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    fetchRaw (): any { return []; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    guarded () {\n        const response = this.fetchRaw ();\n        let items: Dict[] = [];\n        if (Array.isArray (response)) {\n            items = response;\n        }\n        for (let i = 0; i < items.length; i++) {\n            this.hold (items[i]);\n        }\n    }\n    loose () {\n        const response = this.fetchRaw ();\n        let items: Dict[] = [];\n        if (response !== undefined) {\n            items = response;\n        }\n        for (let i = 0; i < items.length; i++) {\n            this.hold (items[i]);\n        }\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/fn guarded[\s\S]*?let mut items: crate::value::List = [\s\S]*?items = response\.into_list\(\);[\s\S]*?items\.get\(i as usize\)/);
+        expect(out).toMatch(/fn loose[\s\S]*?let mut items: Value = /);
+    });
+});
+
 describe('safe scalar locals, seventh pass: nested balance / options writes', () => {
     test('a typed string key of a nested this.balance / this.options write prints the r05 insert with its own key text', () => {
         const dir = path.join (rustFixtureRoot, 'scalar-pf');

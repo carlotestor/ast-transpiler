@@ -2594,6 +2594,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListSelfWriteArg(n: any, name: string): boolean;
     /** A right-hand side that answers a `Value::Arr` on every path. */
     rustBuiltListWriteSource(right: any): boolean;
+    /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
+     *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so
+     *  `y.into_list()` moves exactly that list (no copy, no other variant to lose). */
+    rustArrayGuardedMove(write: any): boolean;
     rustBuiltListOf(node: any): any;
     printBuiltListLiteral(node: any): string;
     printBuiltListDeclaration(declaration: any, indent: string, varName: string): string | undefined;
