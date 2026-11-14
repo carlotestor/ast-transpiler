@@ -2863,6 +2863,10 @@ export class RustTranspiler extends BaseTranspiler {
     /** Slot hook: an `Option<String>` local takes the slot's string. */
     printRustNilSlotWrite(element, read: string, strRead?: string, boolRead?: string): string | undefined {
         if (this.rustNilSlotDictOf(element) !== undefined) return `${super.printIdentifier(element)} = ${read}.into_dict()`;
+        if (isIdentifier(element)) {
+            const reuse: any = this.rustDeclarationOfIdentifier(element);
+            if (reuse !== undefined && reuse.name !== element && this.rustExtendReuseLocals.has(reuse) && this.rustPrintedBorrowed.has(reuse) && this.rustUntilSelfWrite(element, reuse)) return `${super.printIdentifier(element)} = ${read}.into_dict()`;
+        }
         if (isIdentifier(element) && this.rustScalarUseForms.get(element) === 'bslot' && this.rustScalarLocalOf(element)?.kind === 'bool') return `${super.printIdentifier(element)} = ${read}.as_bool() == Some(true)`;
         if (isIdentifier(element) && this.rustNilLocalOfIdentifier(element)?.kind === 'bool') return `${super.printIdentifier(element)} = ${boolRead ?? `${read}.as_bool()`}`;
         if (!isIdentifier(element) || this.rustScalarLocalOf(element)?.kind !== 'ostr' || this.rustScalarUseForms.get(element) !== 'slot') return undefined;
@@ -13654,7 +13658,7 @@ export class RustTranspiler extends BaseTranspiler {
         const text = super.transformIdentifier(node, identifier);
         const optList = this.printOptListIdentifier(node, text) ?? this.printNilMapBox(node, text); if (optList !== undefined) return optList;
         const asLent = this.printLentAsArg(node, text); if (asLent !== undefined) return asLent;
-        const borrowedArg = this.printExtendHeadArg(node, text) ?? this.printJwtLentArg(node, text) ?? this.printLentOptionalArg(node, text) ?? this.printBorrowedReaderArg(node, text) ?? this.printLentParamsArg(node, text) ?? this.printLentListArg(node, text) ?? this.printLentResponseArg(node, text) ?? this.printLentHelperArg(node, text) ?? this.printOptionalParamsArg(node, text) ?? this.printWsFieldBox(node, text) ?? this.printDictElementBox(node, text) ?? this.printHandedSlotBox(node, text); if (borrowedArg !== undefined) return borrowedArg;
+        const borrowedArg = this.printUntilSelfArg(node, text) ?? this.printExtendHeadArg(node, text) ?? this.printJwtLentArg(node, text) ?? this.printLentOptionalArg(node, text) ?? this.printBorrowedReaderArg(node, text) ?? this.printLentParamsArg(node, text) ?? this.printLentListArg(node, text) ?? this.printLentResponseArg(node, text) ?? this.printLentHelperArg(node, text) ?? this.printOptionalParamsArg(node, text) ?? this.printWsFieldBox(node, text) ?? this.printDictElementBox(node, text) ?? this.printHandedSlotBox(node, text); if (borrowedArg !== undefined) return borrowedArg;
         const containerBox = this.printRustContainerLocalBox(node, text);
         if (containerBox !== undefined) return containerBox;
         const lentBox = this.printRustLentListBox(node, text); if (lentBox !== undefined) return lentBox;
@@ -14974,6 +14978,9 @@ export class RustTranspiler extends BaseTranspiler {
                 return true;
             }
             if (this.rustExtendHeadUse(n)) return ++extendHeads > 0 && ++reads > 0;
+            // pb: `[ x, p ] = this.handleUntilOption (k, x, p)` on a reuse literal: the map moves in and slot 0 hands it back
+            if (extendReuse && this.rustUntilSelfWrite(n, declaration)) return ++extendWrites > 0;
+            if (extendReuse && this.rustUntilSelfArg(n, declaration)) return ++reads > 0;
             // a fresh built map written at a literal key: copy-on-write insert on the shared handle
             // (jd's untagged indexBy / groupBy / extend table admits the same write through this one mechanism)
             // pb: a literal-key write on a REST `safeDict*` result: copy-on-write insert (`if let Some` on the optional form, which
@@ -15095,6 +15102,42 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     private static readonly RUST_SELF_EXTEND = new Set([ 'extend' ]);
+
+    /** pb: the base `handleUntilOption (k, x, p)` of a statement `[ x, q ] = ..` writing slot 0 back into `x` (base
+     *  `handleUntilOption` returns its own `request` argument as slot 0, so the map moves through it). */
+    rustUntilSelfCall(n: any, declaration: any): any {
+        if (!this.rustNilSlotWrite(n) || n.parent.elements.indexOf(n) !== 0 || n.parent.elements.length !== 2) return undefined;
+        const call: any = this.rustSkipWrappers(n.parent.parent.right);
+        if (!this.rustBaseCallNamed(call, RustTranspiler.RUST_REQUEST_TUPLE_HELPERS) || !this.rustNativeListSource(call)) return undefined;
+        const arg: any = this.rustSkipWrappers(call.arguments[1]);
+        if (arg === undefined || !isIdentifier(arg) || !this.rustIdentifierRefersToDeclaration(arg, declaration)) return undefined;
+        const names = (x: any): boolean => (isIdentifier(x) && x.text === n.text) || (x.forEachChild(names) ?? false);
+        // the `__destr_tmp` line: the source text bounds it (the printer's own text is not consulted inside the decision)
+        if (call.arguments.some((a: any, i: number) => i !== 1 && names(a)) || String(n.parent.parent.getText()).length > 160) return undefined;
+        return call;
+    }
+
+    rustUntilSelfWrite(n: any, declaration: any): boolean {
+        return this.rustUntilSelfCall(n, declaration) !== undefined;
+    }
+
+    /** pb: `x` as the `request` operand of such a write-back call. */
+    rustUntilSelfArg(n: any, declaration: any): boolean {
+        const call: any = n.parent;
+        if (!isCallExpression(call) || call.arguments[1] !== n) return false;
+        const write: any = call.parent;
+        if (!isBinaryExpression(write) || !isArrayLiteralExpression(write.left)) return false;
+        const target: any = write.left.elements[0];
+        return target !== undefined && isIdentifier(target) && this.rustUntilSelfCall(target, declaration) === call;
+    }
+
+    /** pb: `Value::Dict(x)` for the moved request operand of a write-back `handleUntilOption`. */
+    printUntilSelfArg(node: any, text: string): string | undefined {
+        if (!isIdentifier(node)) return undefined;
+        const declaration: any = this.rustDeclarationOfIdentifier(node);
+        if (declaration === undefined || declaration.name === node || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration)) return undefined;
+        return this.rustUntilSelfArg(node, declaration) ? `Value::Dict(${text})` : undefined;
+    }
 
     /** `n` is the request (first) operand of the runtime free function `jwt (request, secret, ..)`. */
     rustJwtRequestSlot(call: any, n: any): boolean {

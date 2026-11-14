@@ -2046,6 +2046,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `n` is the target of a statement `n = this.extend (n, y)` (base `extend`, two operands, `y` not naming `n`). */
     rustSelfExtendWrite(n: any, declaration: any): boolean;
     private static readonly RUST_SELF_EXTEND;
+    /** pb: the base `handleUntilOption (k, x, p)` of a statement `[ x, q ] = ..` writing slot 0 back into `x` (base
+     *  `handleUntilOption` returns its own `request` argument as slot 0, so the map moves through it). */
+    rustUntilSelfCall(n: any, declaration: any): any;
+    rustUntilSelfWrite(n: any, declaration: any): boolean;
+    /** pb: `x` as the `request` operand of such a write-back call. */
+    rustUntilSelfArg(n: any, declaration: any): boolean;
+    /** pb: `Value::Dict(x)` for the moved request operand of a write-back `handleUntilOption`. */
+    printUntilSelfArg(node: any, text: string): string | undefined;
     /** `n` is the request (first) operand of the runtime free function `jwt (request, secret, ..)`. */
     rustJwtRequestSlot(call: any, n: any): boolean;
     /** `&x` for a shared map local lent to the `jwt` request slot. */

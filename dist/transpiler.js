@@ -54075,6 +54075,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   printRustNilSlotWrite(element, read, strRead, boolRead) {
     if (this.rustNilSlotDictOf(element) !== void 0)
       return `${super.printIdentifier(element)} = ${read}.into_dict()`;
+    if (isIdentifier3(element)) {
+      const reuse = this.rustDeclarationOfIdentifier(element);
+      if (reuse !== void 0 && reuse.name !== element && this.rustExtendReuseLocals.has(reuse) && this.rustPrintedBorrowed.has(reuse) && this.rustUntilSelfWrite(element, reuse))
+        return `${super.printIdentifier(element)} = ${read}.into_dict()`;
+    }
     if (isIdentifier3(element) && this.rustScalarUseForms.get(element) === "bslot" && this.rustScalarLocalOf(element)?.kind === "bool")
       return `${super.printIdentifier(element)} = ${read}.as_bool() == Some(true)`;
     if (isIdentifier3(element) && this.rustNilLocalOfIdentifier(element)?.kind === "bool")
@@ -64625,7 +64630,7 @@ ${iden}}`;
     const asLent = this.printLentAsArg(node, text);
     if (asLent !== void 0)
       return asLent;
-    const borrowedArg = this.printExtendHeadArg(node, text) ?? this.printJwtLentArg(node, text) ?? this.printLentOptionalArg(node, text) ?? this.printBorrowedReaderArg(node, text) ?? this.printLentParamsArg(node, text) ?? this.printLentListArg(node, text) ?? this.printLentResponseArg(node, text) ?? this.printLentHelperArg(node, text) ?? this.printOptionalParamsArg(node, text) ?? this.printWsFieldBox(node, text) ?? this.printDictElementBox(node, text) ?? this.printHandedSlotBox(node, text);
+    const borrowedArg = this.printUntilSelfArg(node, text) ?? this.printExtendHeadArg(node, text) ?? this.printJwtLentArg(node, text) ?? this.printLentOptionalArg(node, text) ?? this.printBorrowedReaderArg(node, text) ?? this.printLentParamsArg(node, text) ?? this.printLentListArg(node, text) ?? this.printLentResponseArg(node, text) ?? this.printLentHelperArg(node, text) ?? this.printOptionalParamsArg(node, text) ?? this.printWsFieldBox(node, text) ?? this.printDictElementBox(node, text) ?? this.printHandedSlotBox(node, text);
     if (borrowedArg !== void 0)
       return borrowedArg;
     const containerBox = this.printRustContainerLocalBox(node, text);
@@ -65900,6 +65905,10 @@ ${iden}}`;
       }
       if (this.rustExtendHeadUse(n))
         return ++extendHeads > 0 && ++reads > 0;
+      if (extendReuse && this.rustUntilSelfWrite(n, declaration))
+        return ++extendWrites > 0;
+      if (extendReuse && this.rustUntilSelfArg(n, declaration))
+        return ++reads > 0;
       if (!extendReuse && this.rustSafeDictKeyWriteOk(n, init))
         return keyWriteUses.push(n) > 0 && ++safeDictKeyWrites > 0 && ++keyWrites > 0 && ++reads > 0;
       if (this.rustUntilHeadKeyWrite(n) !== void 0 && (extendReuse ? this.rustExtendReuseKeyWriteOk(n, declaration) : init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) === "dict" || this.rustBuiltMapKeyWriteOk(n, init))))
@@ -66007,6 +66016,45 @@ ${iden}}`;
       return false;
     const names = (x) => isIdentifier3(x) && x.text === n.text || (x.forEachChild(names) ?? false);
     return !names(rhs.arguments[1]) && String(up.getText()).split("\n")[0].length <= 240;
+  }
+  /** pb: the base `handleUntilOption (k, x, p)` of a statement `[ x, q ] = ..` writing slot 0 back into `x` (base
+   *  `handleUntilOption` returns its own `request` argument as slot 0, so the map moves through it). */
+  rustUntilSelfCall(n, declaration) {
+    if (!this.rustNilSlotWrite(n) || n.parent.elements.indexOf(n) !== 0 || n.parent.elements.length !== 2)
+      return void 0;
+    const call = this.rustSkipWrappers(n.parent.parent.right);
+    if (!this.rustBaseCallNamed(call, _RustTranspiler.RUST_REQUEST_TUPLE_HELPERS) || !this.rustNativeListSource(call))
+      return void 0;
+    const arg = this.rustSkipWrappers(call.arguments[1]);
+    if (arg === void 0 || !isIdentifier3(arg) || !this.rustIdentifierRefersToDeclaration(arg, declaration))
+      return void 0;
+    const names = (x) => isIdentifier3(x) && x.text === n.text || (x.forEachChild(names) ?? false);
+    if (call.arguments.some((a, i) => i !== 1 && names(a)) || String(n.parent.parent.getText()).length > 160)
+      return void 0;
+    return call;
+  }
+  rustUntilSelfWrite(n, declaration) {
+    return this.rustUntilSelfCall(n, declaration) !== void 0;
+  }
+  /** pb: `x` as the `request` operand of such a write-back call. */
+  rustUntilSelfArg(n, declaration) {
+    const call = n.parent;
+    if (!isCallExpression6(call) || call.arguments[1] !== n)
+      return false;
+    const write = call.parent;
+    if (!isBinaryExpression5(write) || !isArrayLiteralExpression4(write.left))
+      return false;
+    const target = write.left.elements[0];
+    return target !== void 0 && isIdentifier3(target) && this.rustUntilSelfCall(target, declaration) === call;
+  }
+  /** pb: `Value::Dict(x)` for the moved request operand of a write-back `handleUntilOption`. */
+  printUntilSelfArg(node, text) {
+    if (!isIdentifier3(node))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration === void 0 || declaration.name === node || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration))
+      return void 0;
+    return this.rustUntilSelfArg(node, declaration) ? `Value::Dict(${text})` : void 0;
   }
   /** `n` is the request (first) operand of the runtime free function `jwt (request, secret, ..)`. */
   rustJwtRequestSlot(call, n) {
