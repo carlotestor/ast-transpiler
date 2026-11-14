@@ -65,7 +65,7 @@ interface RustScopeIndex {
     byName: Map<string, number[]> | undefined;
 }
 export type RustDispatchParamKind = 'value' | 'slice' | 'map' | 'strvec' | 'flag' | 'str' | 'optstr' | 'f64' | 'optf64' | 'opti64' | 'i64' | 'optstrvec' | 'strvecvec' | 'params' | 'orderreqs' | 'dict' | 'list' | 'optdict' | 'optlist' | 'optmarket' | 'optcurrency' | 'other';
-export type RustDispatchReturnKind = 'value' | 'void' | 'typed' | 'ostr' | 'oint' | 'keptostr' | 'keptint' | 'keptstr' | 'int' | 'string' | 'bool' | 'dict' | 'list' | 'optdict' | 'struct' | 'other';
+export type RustDispatchReturnKind = 'value' | 'void' | 'typed' | 'ostr' | 'oint' | 'keptostr' | 'keptint' | 'keptstr' | 'keptbool' | 'int' | 'string' | 'bool' | 'dict' | 'list' | 'optdict' | 'struct' | 'other';
 export interface RustMethodSignature {
     file: any;
     name: string;
@@ -716,6 +716,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustVenueTypedDecisions;
     rustVenueTypedCall(expr: any): string | undefined;
     rustVenueTypedKindUncached(declaration: any): string | undefined;
+    /** od: `parse*` / `handle*` results are their own groups' producers; the lending rules leave them alone. */
+    rustOdExcludedCallee(init: any): boolean;
     /** `x = E; return x;`: the returned local holds what the statement right before the return wrote. */
     rustVenueReturnSource(ret: any): any;
     /** An override whose hidden base method and every venue declaration of the name declare its own return type. */
