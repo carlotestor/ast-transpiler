@@ -528,6 +528,10 @@ export class RustTranspiler extends BaseTranspiler {
         if (node.text === 'undefined') return true;
         // the test tier's exchange handles become the typed `Exchange` (or `&mut` it) after printing, by their name
         if (/ts[/]src[/](?:pro[/])?test[/]/.test(String(node.getSourceFile().fileName)) && /^(?:exchange\d*|[A-Za-z_]\w*Exchange\d*)$/.test(String(node.text))) return false;
+        // a call inside an array literal may be a `Promise.all` operand, reshaped after printing (ccxt re-runs a
+        // static ws watch until its queue drains), so its argument is not a last use
+        if (findAncestor(node, (a: any) => isArrayLiteralExpression(a) || isStatement(a)) !== undefined
+            && isArrayLiteralExpression(findAncestor(node, (a: any) => isArrayLiteralExpression(a) || isStatement(a)))) return false;
         const scalar = this.rustScalarLocalOf(node)?.kind;
         if (scalar !== undefined) return RustTranspiler.RUST_COPY_SCALAR_KINDS.has(scalar);
         const nil = this.rustNilLocalOfIdentifier(node)?.kind;

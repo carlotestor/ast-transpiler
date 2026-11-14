@@ -247,6 +247,21 @@ describe('rust transpiling tests', () => {
         expect(out).toContain('self.m(c.clone(), f');
     });
 
+    test('a hand-off inside an array-literal element keeps its clone (Promise.all operands are reshaped after printing)', () => {
+        const ts = [
+            'class A {',
+            '    async m (x: any) { return x; }',
+            '    async run (a: any) {',
+            '        const promises = [ this.m (a), this.m (1) ];',
+            '        const r = await Promise.all (promises);',
+            '        return r;',
+            '    }',
+            '}',
+        ].join('\n');
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).toContain('self.m(a.clone())');
+    });
+
     test('a for-loop counter handed off by value is cloned (the next pass reads it again)', () => {
         const ts = [
             'class A {',
@@ -7526,7 +7541,7 @@ describe ('rustPredictionBearers', () => {
 
         test('a nested builder writes natively and boxes a clone per escape', () => {
             expect(prediction).toContain('let mut orderAction: indexmap::IndexMap<String, Value> = (');
-            expect(prediction).toContain('orderAction.insert("orders".into(), Value::from(vec![self.use(params)]));');
+            expect(prediction).toContain('orderAction.insert("orders".into(), Value::from(vec![self.use(params.clone())]));');
             expect(prediction).toContain('self.use(Value::Map(orderAction.clone()))');
             expect(prediction).toContain('m.insert("action".to_string(), Value::Map(orderAction.clone()));');
             expect(prediction).not.toContain('add_element_to_object(&mut orderAction');

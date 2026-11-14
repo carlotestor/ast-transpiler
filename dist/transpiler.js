@@ -51895,6 +51895,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     if (/ts[/]src[/](?:pro[/])?test[/]/.test(String(node.getSourceFile().fileName)) && /^(?:exchange\d*|[A-Za-z_]\w*Exchange\d*)$/.test(String(node.text)))
       return false;
+    if (findAncestor(node, (a) => isArrayLiteralExpression4(a) || isStatement(a)) !== void 0 && isArrayLiteralExpression4(findAncestor(node, (a) => isArrayLiteralExpression4(a) || isStatement(a))))
+      return false;
     const scalar = this.rustScalarLocalOf(node)?.kind;
     if (scalar !== void 0)
       return _RustTranspiler.RUST_COPY_SCALAR_KINDS.has(scalar);
