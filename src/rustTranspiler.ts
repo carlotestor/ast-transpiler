@@ -4300,6 +4300,12 @@ export class RustTranspiler extends BaseTranspiler {
         const readerLent = readerTouched && strKind && boxed > 0 && copied > 0 && !this.rustStrNoLend && this.rustReaderLendBoxes(declaration);
         if (readerTouched && strKind && ((boxed > 0 && copied > 0 && !readerLent) || this.rustReaderStrHandedOn(declaration))) return undefined;
         if (readerLent) this.rustStrLentLocals.add(declaration);
+        // ud: a local seeded from a venue override of a native-`Str` base method never copies where the `Value` moved
+        // (lent at its copying boxes when every one sits at a lending slot: the copy the `Value` clone made)
+        if (strKind && copied > 0 && this.rustUdOverrideStrSeed(declaration.initializer)) {
+            if (this.rustStrNoLend || this.rustStrReturnedLocal(declaration, scope) || !this.rustUdOverrideLendBoxes(declaration)) return undefined;
+            this.rustStrLentLocals.add(declaration);
+        }
         // ud: a base string reader copied only at lending slots lends there (the one copy the `Value` clone made)
         if (!readerLent && strKind && copied > 0 && this.rustUdLent.has(declaration) && this.rustReaderLendBoxes(declaration)) this.rustStrLentLocals.add(declaration);
         if (readerTouched && boxed > 0) this.rustScalarGuarded.add(declaration);
@@ -5406,6 +5412,33 @@ export class RustTranspiler extends BaseTranspiler {
             return true;
         });
         return handed;
+    }
+
+    /** ud: `rustReaderLendBoxes`, plus a whole `const t = s` alias initialiser (the `Value` form cloned there too). */
+    rustUdOverrideLendBoxes(declaration): boolean {
+        let ok = true;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
+            const form = this.rustScalarUseForms.get(n);
+            if (form === 'err' || form === 'key') ok = false;
+            if (form !== 'box' && form !== 'xbox') return true;
+            const up: any = n.parent;
+            if (isReturnStatement(up) || this.rustLocalLastUse(n, declaration)) return true;
+            if (isVariableDeclaration(up) && up.initializer === n) return true;
+            const selfArg = isCallExpression(up) && up.expression !== n && isPropertyAccessExpression(up.expression)
+                && (up.expression.expression.kind === SyntaxKind.ThisKeyword || up.expression.expression.kind === SyntaxKind.SuperKeyword);
+            if (!(selfArg || (up.kind === SyntaxKind.PropertyAssignment && up.initializer === n) || this.rustDictWriteValue(n)
+                || (isArrayLiteralExpression(up) && !(isBinaryExpression(up.parent) && up.parent.left === up)))) ok = false;
+            return true;
+        });
+        return ok;
+    }
+
+    /** ud: a `this.m(..)` initialiser whose callee is a venue override of a base native-`Str` method (step 3 seed). */
+    rustUdOverrideStrSeed(init): boolean {
+        const node: any = this.unwrapParens(init);
+        if (!isCallExpression(node) || !isPropertyAccessExpression(node.expression) || !this.rustBaseNativeStrCall(node)) return false;
+        const declaration: any = this.rustCallDeclarations.get(node);
+        return declaration !== undefined && declaration !== null && !RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? ''));
     }
 
     /** ud: reader strings admitted only through the lending-slot exemption of `rustBlockLocalUsesAll`. */

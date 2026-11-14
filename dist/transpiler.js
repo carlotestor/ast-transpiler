@@ -55420,6 +55420,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (readerLent)
       this.rustStrLentLocals.add(declaration);
+    if (strKind && copied > 0 && this.rustUdOverrideStrSeed(declaration.initializer)) {
+      if (this.rustStrNoLend || this.rustStrReturnedLocal(declaration, scope) || !this.rustUdOverrideLendBoxes(declaration))
+        return void 0;
+      this.rustStrLentLocals.add(declaration);
+    }
     if (!readerLent && strKind && copied > 0 && this.rustUdLent.has(declaration) && this.rustReaderLendBoxes(declaration))
       this.rustStrLentLocals.add(declaration);
     if (readerTouched && boxed > 0)
@@ -56555,6 +56560,35 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     });
     return handed;
+  }
+  /** ud: `rustReaderLendBoxes`, plus a whole `const t = s` alias initialiser (the `Value` form cloned there too). */
+  rustUdOverrideLendBoxes(declaration) {
+    let ok = true;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const form = this.rustScalarUseForms.get(n);
+      if (form === "err" || form === "key")
+        ok = false;
+      if (form !== "box" && form !== "xbox")
+        return true;
+      const up = n.parent;
+      if (isReturnStatement4(up) || this.rustLocalLastUse(n, declaration))
+        return true;
+      if (isVariableDeclaration3(up) && up.initializer === n)
+        return true;
+      const selfArg = isCallExpression6(up) && up.expression !== n && isPropertyAccessExpression3(up.expression) && (up.expression.expression.kind === SyntaxKind7.ThisKeyword || up.expression.expression.kind === SyntaxKind7.SuperKeyword);
+      if (!(selfArg || up.kind === SyntaxKind7.PropertyAssignment && up.initializer === n || this.rustDictWriteValue(n) || isArrayLiteralExpression4(up) && !(isBinaryExpression5(up.parent) && up.parent.left === up)))
+        ok = false;
+      return true;
+    });
+    return ok;
+  }
+  /** ud: a `this.m(..)` initialiser whose callee is a venue override of a base native-`Str` method (step 3 seed). */
+  rustUdOverrideStrSeed(init) {
+    const node = this.unwrapParens(init);
+    if (!isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || !this.rustBaseNativeStrCall(node))
+      return false;
+    const declaration = this.rustCallDeclarations.get(node);
+    return declaration !== void 0 && declaration !== null && !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? ""));
   }
   /** ud: a base-tier string reader (`safeString*`, `safeCurrencyCode`) initialiser, with or without a default. */
   rustUdReaderStr(init) {

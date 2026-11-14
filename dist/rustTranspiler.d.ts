@@ -709,6 +709,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustReaderDefaultTouched(declaration: any): boolean;
     /** A string local that is the source of another local's write: that local then copies at its own uses. */
     rustReaderStrHandedOn(declaration: any): boolean;
+    /** ud: `rustReaderLendBoxes`, plus a whole `const t = s` alias initialiser (the `Value` form cloned there too). */
+    rustUdOverrideLendBoxes(declaration: any): boolean;
+    /** ud: a `this.m(..)` initialiser whose callee is a venue override of a base native-`Str` method (step 3 seed). */
+    rustUdOverrideStrSeed(init: any): boolean;
     /** ud: reader strings admitted only through the lending-slot exemption of `rustBlockLocalUsesAll`. */
     private rustUdLent;
     /** ud: a base-tier string reader (`safeString*`, `safeCurrencyCode`) initialiser, with or without a default. */
