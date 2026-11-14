@@ -68303,6 +68303,8 @@ ${iden}}`;
       from = "dict";
     if (from === void 0 && !nilDeclared && declaration.initializer !== void 0 && this.rustWsWatchResultKind(declaration.initializer) === "dict")
       from = "dict";
+    if (from === void 0 && !nilDeclared && declaration.initializer !== void 0 && this.rustWsWatchResultKind(declaration.initializer) === "list")
+      from = "list";
     let sbMapWrites = 0;
     if (from === void 0 && !nilDeclared)
       return void 0;
@@ -69278,7 +69280,8 @@ ${iden}}`;
   /** A whole-value hand-off of a map element local: a plain `Value` argument of a `this.` method or an object literal value. */
   rustDictElementBoxUse(n, init) {
     const up = n.parent;
-    const watched = init !== void 0 && init.parent?.kind === SyntaxKind7.AwaitExpression && this.rustWsWatchResultKind(init.parent) === "dict";
+    const watchedKind = init !== void 0 && init.parent?.kind === SyntaxKind7.AwaitExpression ? this.rustWsWatchResultKind(init.parent) : void 0;
+    const watched = watchedKind === "dict" || watchedKind === "list";
     if (!watched && !this.rustDictElementSource(init) && !this.rustListElementSource(init) || up === void 0 || this.rustScalarInNestedWrite(n))
       return false;
     if (up.kind === SyntaxKind7.PropertyAssignment)
@@ -71657,6 +71660,8 @@ ${iden}}`;
       return void 0;
     if (this.rustWsResolvedMap(n, 0))
       return "dict";
+    if (this.rustWsResolvedList(n, 0))
+      return "list";
     if (this.rustWsBookMapRead(n) || this.rustWsBookCtorLike(n))
       return "book";
     if (this.rustWsCacheField(n) || this.rustWsCacheCtor(n) || this.rustWsCacheMapEntry(n) || this.rustWsCacheMapLookup(n))
@@ -71743,6 +71748,43 @@ ${iden}}`;
       }
     }
     return false;
+  }
+  /** ral-ze: a resolved value that is a list on every path: an array literal, a base list field (`this.symbols`), a
+   *  call whose every return builds a fresh list (parse* list returns, the always-list producers), a non-nullable
+   *  venue list return, or an unreassigned single local bound to one of these (pushes and element writes keep it a
+   *  list) or printed as a typed list. */
+  rustWsResolvedList(x, depth) {
+    const n = this.rustStripWrappers(x);
+    if (n === void 0 || depth > 3)
+      return false;
+    if (isArrayLiteralExpression4(n))
+      return !n.elements.some((e) => e.kind === SyntaxKind7.SpreadElement);
+    if (this.rustTypedListField(n))
+      return true;
+    if (isCallExpression6(n)) {
+      if (this.rustAlwaysListProducer(n))
+        return true;
+      let built;
+      try {
+        built = this.rustBuiltReturnSourceKind(n);
+      } catch (e) {
+        built = void 0;
+      }
+      if (built === "list")
+        return true;
+      const venue = this.rustVenueContainerReturnKind(n);
+      return venue !== void 0 && venue.kind === "list" && !venue.nullable;
+    }
+    if (!isIdentifier3(n))
+      return false;
+    const d = this.rustDeclarationOfIdentifier(n);
+    if (d === void 0 || !isVariableDeclaration3(d) || !isIdentifier3(d.name) || d.initializer === void 0 || this.rustLocalReassigned(d))
+      return false;
+    if (d.parent?.kind !== SyntaxKind7.VariableDeclarationList || d.parent.declarations.length !== 1)
+      return false;
+    if (this.rustWsResolvedList(d.initializer, depth + 1))
+      return true;
+    return !this.rustBorrowedPending.has(d) && this.rustBorrowedLocalKind(d) === "list";
   }
   /** A resolved value that is a map on every path: a base record builder call, a sync method of the same class whose
    *  every return is one, or an unreassigned single local bound to one. */
@@ -72053,14 +72095,14 @@ ${iden}}`;
         none = true;
         continue;
       }
-      if (r.kind !== "book" && r.kind !== "cache" && r.kind !== "dict")
+      if (r.kind !== "book" && r.kind !== "cache" && r.kind !== "dict" && r.kind !== "list")
         return void 0;
       if (kind !== void 0 && kind !== r.kind)
         return void 0;
       kind = r.kind;
       matched++;
     }
-    if (matched === 0 || kind === void 0 || kind === "dict" && none)
+    if (matched === 0 || kind === void 0 || (kind === "dict" || kind === "list") && none)
       return void 0;
     this.rustWsWatchKinds.set(call, kind);
     return kind;

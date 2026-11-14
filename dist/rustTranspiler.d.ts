@@ -2840,12 +2840,17 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Whether some string matches both patterns (a sound over-approximation: prefix and suffix agree). */
     static rustWsPatternsMeet(a0: Array<string | null>, b0: Array<string | null>): boolean;
     /** The typed kind a resolved value passes as, or undefined. */
-    rustWsResolvedKind(x: any): 'book' | 'cache' | 'dict' | undefined;
+    rustWsResolvedKind(x: any): 'book' | 'cache' | 'dict' | 'list' | undefined;
     /** ral-ye: a read of a plain base cache field the class keeps as a map, typed by the field's declaration:
      *  `this.F` whose declared type is a map (`balance: Dict`, `tickers: Dictionary<Ticker>`), or `this.F[k]` right
      *  after a statement of the same block (or an enclosing one) wrote `this.F[k] = v` with v a map (a declared record /
      *  map type, a map-kinded resolve or `this.extend (..)`), the key a literal or an unreassigned local. */
     rustWsCacheFieldDictRead(n: any): boolean;
+    /** ral-ze: a resolved value that is a list on every path: an array literal, a base list field (`this.symbols`), a
+     *  call whose every return builds a fresh list (parse* list returns, the always-list producers), a non-nullable
+     *  venue list return, or an unreassigned single local bound to one of these (pushes and element writes keep it a
+     *  list) or printed as a typed list. */
+    rustWsResolvedList(x: any, depth: number): boolean;
     private static readonly RUST_WS_MAP_RECORD_BUILDERS;
     /** A resolved value that is a map on every path: a base record builder call, a sync method of the same class whose
      *  every return is one, or an unreassigned single local bound to one. */
@@ -2873,7 +2878,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A ws subclass whose only methods are `describe` / `describeData` adds no handler and no resolve. */
     rustWsDescribeOnly(path: string): boolean;
     /** The proven kind of an `await this.watch|watchMultiple (..)` initializer, else undefined. */
-    rustWsWatchResultKind(init: any): 'book' | 'cache' | 'dict' | undefined;
+    rustWsWatchResultKind(init: any): 'book' | 'cache' | 'dict' | 'list' | undefined;
     /** The hash patterns a `this.watch|watchMultiple (..)` call (or a venue wrapper whose every return is one) awaits;
      *  undefined when the call is anything else. Runs with `rustWsHashEnv` binding the wrapper parameters. */
     rustWsAwaitedHashes(call: any, cls: any, depth: number): Array<Array<string | null>> | undefined;
