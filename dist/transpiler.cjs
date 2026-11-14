@@ -55226,7 +55226,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (keyLent)
       this.rustStrLentLocals.add(declaration);
-    const marketField = strKind && copied > 0 && this.rustMarketFieldScalar(this.unwrapParens(declaration.initializer)) !== void 0;
+    const marketField = strKind && copied > 0 && (this.rustMarketFieldScalar(this.unwrapParens(declaration.initializer)) !== void 0 || this.rustRowFieldStrText(this.unwrapParens(declaration.initializer)) !== void 0);
     const marketLent = marketField && !this.rustStrNoLend && this.rustReaderLendBoxes(declaration);
     if (marketField && !marketLent)
       return void 0;
@@ -55513,6 +55513,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "str";
     if (this.rustElementReadScalarKind(node) !== void 0)
       return this.rustElementReadScalarKind(node);
+    if (fresh && this.rustRowFieldStrText(node) !== void 0)
+      return "ostr";
     if (fresh) {
       const field = this.rustMarketArmStrKind(node);
       if (field !== void 0)
@@ -56100,6 +56102,36 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (listType === void 0 || !this.getChecker().isArrayType(listType))
       return void 0;
     return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string" ? "ostr" : void 0;
+  }
+  /** ne: `row['k']` (a literal key) off a local printed as a typed map (`Dict` / `IndexMap`) whose checker type
+   *  declares `k` a string (a unified `Ticker` / `Trade` / `Order` row): the `Option<String>` the boxed read held
+   *  (a non-string slot reads as `None`, like the lf / md market-field rule), only as a `const`/`let` initializer. */
+  rustRowFieldStrText(node) {
+    if (node === void 0 || !_is.isElementAccessExpression.call(void 0, node) || !_is.isIdentifier.call(void 0, node.expression) || !_is.isStringLiteralLikeNode.call(void 0, node.argumentExpression))
+      return void 0;
+    if (this.checkerOrUndefined() === void 0 || this.rustTypedMarketLocalOf(node.expression) !== void 0 || this.rustCurrencyLocalOf(node.expression) !== void 0)
+      return void 0;
+    let top = node;
+    while (top.parent !== void 0 && (_is.isParenthesizedExpression.call(void 0, top.parent) || top.parent.kind === _ast.SyntaxKind.AsExpression))
+      top = top.parent;
+    if (!_is.isVariableDeclaration.call(void 0, top.parent) || top.parent.initializer !== top)
+      return void 0;
+    const owner = this.rustDeclaredNode(node.expression);
+    if (owner === void 0 || !_is.isVariableDeclaration.call(void 0, owner))
+      return void 0;
+    const recvType = this.typeOfNodeIfAny(node.expression);
+    if (recvType === void 0 || (recvType.flags & (_sync.TypeFlags.Any | _sync.TypeFlags.Unknown)) !== 0 || this.getChecker().isArrayType(recvType))
+      return void 0;
+    const field = this.getChecker().getPropertyOfType(recvType, String(node.argumentExpression.text));
+    if (field === void 0 || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "string")
+      return void 0;
+    const read = this.printNode(node, 0).trim();
+    const tail = ".cloned().unwrap_or(Value::Null)";
+    if (read.endsWith(tail) && !read.includes("as_map()"))
+      return `${read.slice(0, -tail.length)}.and_then(Value::as_str).map(str::to_owned)`;
+    if (read.startsWith("crate::value::KeyRead::key_read(&&") && read.endsWith(")"))
+      return `${read}.as_str().map(str::to_owned)`;
+    return void 0;
   }
   /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
   rustListParamElement(init) {
@@ -57546,6 +57578,11 @@ ${binding(plan.indent)}` : ""), head: "" };
     }
     if (kind === "int" && this.rustListLengthInit(node))
       return this.rustListLengthText(node);
+    if (kind === "ostr") {
+      const row = this.rustRowFieldStrText(node);
+      if (row !== void 0)
+        return row;
+    }
     if (kind === "ostr" && this.rustElementReadScalarKind(node) !== void 0) {
       const read = this.printNode(node, 0).trim();
       const tail = ".cloned().unwrap_or(Value::Null)";
@@ -57706,6 +57743,16 @@ ${binding(plan.indent)}` : ""), head: "" };
     }
     const { width, pad } = this.rustStrPadArgs(args);
     return `format!("{:${pad}${method === "padStart" ? ">" : "<"}${width}}", ${s})`;
+  }
+  /** The literal width and one-char pad of a native `padStart` / `padEnd` (`format!` width counts chars and never truncates). */
+  rustScalarPadSpec(widthArg, padArg) {
+    const width = this.rustSliceLiteralBound(widthArg);
+    const pad = this.unwrapParens(padArg);
+    if (width === void 0 || width < 0 || width > 4096 || pad === void 0)
+      return void 0;
+    if (!_is.isStringLiteral.call(void 0, pad) && !_is.isNoSubstitutionTemplateLiteral.call(void 0, pad) || !/^[A-Za-z0-9 ]$/.test(pad.text))
+      return void 0;
+    return { width, pad: pad.text };
   }
   /** `indexOf` needle as an `Option<&str>`: a non-empty literal, a typed string local, or a string-typed `Value` expression. */
   rustStrFindNeedle(node, syntactic) {
@@ -58424,6 +58471,11 @@ ${binding(plan.indent)}` : ""), head: "" };
         if (method.recvKind === "ostr")
           return wrap(`(if let Some(__s) = ${name}.as_deref() { Some(__s.replace("${arg(0)}", "${arg(1)}")) } else { None })`);
         return wrap(`${name}.replace("${arg(0)}", "${arg(1)}")`);
+      }
+      if (method.method === "padStart" || method.method === "padEnd") {
+        const spec = this.rustScalarPadSpec(args[0], args[1]);
+        const spec2 = `{:${spec.pad}${method.method === "padStart" ? ">" : "<"}${spec.width}}`;
+        return wrap(method.recvKind === "ostr" ? `(if let Some(__s) = ${name}.as_deref() { Some(format!("${spec2}", __s)) } else { None })` : `format!("${spec2}", ${name})`);
       }
       const fn = method.method === "toLowerCase" ? "to_lowercase" : "to_uppercase";
       if (method.recvKind === "ostr")
@@ -60365,6 +60417,10 @@ ${i1}}`;
       return { kind: "ostr", text: `crate::value::KeyRead::key_read(&&${this.printNode(declaration.name, 0)}, ${JSON.stringify(key)}).as_str().map(str::to_owned)` };
     }
     const recv = `(${this.printNode(declaration.name, 0)})`;
+    if (_RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(key))
+      return { kind: "bool", text: `${recv}.${key}` };
+    if (_RustTranspiler.RUST_MARKET_OPT_BOOL_FIELDS.has(key))
+      return { kind: "obool", text: `${recv}.${key}` };
     const field = _RustTranspiler.RUST_MARKET_STR_FIELDS[key];
     if (field !== void 0)
       return { kind: "str", text: `${recv}.${field}.clone()` };
