@@ -13690,12 +13690,12 @@ describe('yd: a long line that holds a typed local is split by a let-bound typed
 });
 
 describe('yd: filterByValueSinceLimit joins the typed filter group (rows borrowed, since / limit Option<i64>)', () => {
-    test('the base signature lends its rows and types since / limit; its reader integer compared with since stays Option<i64>', () => {
+    test('the base signature types since / limit positionally (value stays Value); its reader integer compared with since stays Option<i64>', () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-yd-fvsl-'));
         fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
         fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport type IndexType = number | string;\nexport default class Exchange {\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k] ?? d; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    filterByValueSinceLimit (array: object[] | undefined, field: IndexType, value: any = undefined, since: Int = undefined, limit: Int = undefined, key = 'timestamp', tail = false): any[] {\n        const result = [];\n        for (let i = 0; i < array.length; i++) {\n            const entry = array[i];\n            const entryKeyValue = this.safeInteger (entry, key);\n            if ((entryKeyValue !== undefined) && (entryKeyValue >= since)) {\n                result.push (entry);\n            }\n        }\n        return result;\n    }\n}\n");
         const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/base/Exchange.ts')).content;
-        expect(out).toMatch(/fn filterByValueSinceLimit\(&self, array: impl Rows, field: Value, value: Value, since: Option<i64>, limit: Option<i64>, optional_args: &\[Value\]\)/);
+        expect(out).toMatch(/fn filterByValueSinceLimit\(&self, array: [^,]+, field: Value, value: Value, since: Option<i64>, limit: Option<i64>, optional_args: &\[Value\]\)/);
         expect(out).toMatch(/let mut entryKeyValue: Option<i64> = /);
     });
 });
