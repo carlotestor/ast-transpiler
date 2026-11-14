@@ -55208,7 +55208,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
     if (!ok || unused || storeOnly || clientOnce || guarded && scope.kind !== SyntaxKind7.MethodDeclaration || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration))
       return void 0;
-    if (strKind && copied > 0 && this.rustScalarHasPairEquality(declaration) && this.rustScalarBorrowedBox(declaration))
+    if (strKind && this.rustScalarHasPairEquality(declaration) && this.rustScalarBorrowedBox(declaration))
       return void 0;
     if (handOff && isConditionalExpression4(this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === void 0)
       return void 0;
@@ -58319,16 +58319,15 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustScalarBorrowedBox(declaration) {
     let borrowed = false;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
-      const form = this.rustScalarUseForms.get(n);
-      if (form !== "box" && form !== "xbox")
-        return true;
-      if (isReturnStatement4(n.parent) || this.rustLocalLastUse(n, declaration))
-        return true;
       let top = n;
       while (isParenthesizedExpression3(top.parent))
         top = top.parent;
-      if (isBinaryExpression5(top.parent) && top.parent.left === top && top.parent.operatorToken.kind === SyntaxKind7.InKeyword)
-        borrowed = true;
+      const up = top.parent;
+      if (isBinaryExpression5(up) && up.left === top && up.operatorToken.kind === SyntaxKind7.InKeyword) {
+        const map = this.unwrapParens(up.right);
+        if (map !== void 0 && isPropertyAccessExpression3(map) && map.expression.kind === SyntaxKind7.ThisKeyword && isIdentifier3(map.name) && !_RustTranspiler.RUST_PLAIN_DICT_FIELDS.has(String(map.name.text)))
+          borrowed = true;
+      }
       return true;
     });
     return borrowed;

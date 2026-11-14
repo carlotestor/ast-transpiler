@@ -10627,6 +10627,15 @@ describe('safe scalar locals, sixth pass: equality partners held as Value', () =
         expect(out).toContain('(pu == nonce.as_i64())');
         expect(out).not.toContain('is_equal(&pu');
     });
+    test('an equality partner also tested `in` a this-field map stays Value (its typed key would copy at that box)', () => {
+        const dir = path.join (rustFixtureRoot, 'scalar-of2');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    markets_by_id: any = undefined;\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue7.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue7 extends Exchange {\n    fees (rows: any[]) {\n        const out: any = {};\n        for (let i = 0; i < rows.length; i++) {\n            const entry = rows[i];\n            const marketId = this.safeString (entry, 'symbol');\n            if ((marketId === undefined) || !(marketId in this.markets_by_id)) {\n                continue;\n            }\n            const sym = this.safeString (entry, 'sym');\n            if ((sym === undefined) || (sym === marketId)) {\n                continue;\n            }\n            out[sym] = entry;\n        }\n        return out;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue7.ts')).content;
+        expect(out).toContain('let mut marketId: Value = ');
+        expect(out).not.toContain('marketId.clone().map(Value::from)');
+    });
 });
 
 describe('typed market locals across sibling blocks, lookup keys and ws callers', () => {

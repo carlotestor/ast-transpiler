@@ -55207,7 +55207,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
     if (!ok || unused || storeOnly || clientOnce || guarded && scope.kind !== _ast.SyntaxKind.MethodDeclaration || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration))
       return void 0;
-    if (strKind && copied > 0 && this.rustScalarHasPairEquality(declaration) && this.rustScalarBorrowedBox(declaration))
+    if (strKind && this.rustScalarHasPairEquality(declaration) && this.rustScalarBorrowedBox(declaration))
       return void 0;
     if (handOff && _is.isConditionalExpression.call(void 0, this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === void 0)
       return void 0;
@@ -58318,16 +58318,15 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustScalarBorrowedBox(declaration) {
     let borrowed = false;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
-      const form = this.rustScalarUseForms.get(n);
-      if (form !== "box" && form !== "xbox")
-        return true;
-      if (_is.isReturnStatement.call(void 0, n.parent) || this.rustLocalLastUse(n, declaration))
-        return true;
       let top = n;
       while (_is.isParenthesizedExpression.call(void 0, top.parent))
         top = top.parent;
-      if (_is.isBinaryExpression.call(void 0, top.parent) && top.parent.left === top && top.parent.operatorToken.kind === _ast.SyntaxKind.InKeyword)
-        borrowed = true;
+      const up = top.parent;
+      if (_is.isBinaryExpression.call(void 0, up) && up.left === top && up.operatorToken.kind === _ast.SyntaxKind.InKeyword) {
+        const map = this.unwrapParens(up.right);
+        if (map !== void 0 && _is.isPropertyAccessExpression.call(void 0, map) && map.expression.kind === _ast.SyntaxKind.ThisKeyword && _is.isIdentifier.call(void 0, map.name) && !_RustTranspiler.RUST_PLAIN_DICT_FIELDS.has(String(map.name.text)))
+          borrowed = true;
+      }
       return true;
     });
     return borrowed;

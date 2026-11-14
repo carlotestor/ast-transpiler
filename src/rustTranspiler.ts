@@ -4129,7 +4129,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (!ok || unused || storeOnly || clientOnce || (guarded && scope.kind !== SyntaxKind.MethodDeclaration) || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration)) return undefined;
         // of: a string compared against another local must not copy at a box where the `Value` was lent
         // (a call argument already copied the `Value`; an `in` key or other borrowed slot did not)
-        if (strKind && copied > 0 && this.rustScalarHasPairEquality(declaration) && this.rustScalarBorrowedBox(declaration)) return undefined;
+        if (strKind && this.rustScalarHasPairEquality(declaration) && this.rustScalarBorrowedBox(declaration)) return undefined;
         // a hand-off ternary whose arms print only as a `Value` keeps the box its uses would read
         if (handOff && isConditionalExpression(this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === undefined) return undefined;
         if (this.rustVenueScalarSource(declaration.initializer) && ((boxed > 0 && !handOff) || this.rustVenueLocalHandedOn(declaration))) return undefined;
@@ -7036,13 +7036,17 @@ export class RustTranspiler extends BaseTranspiler {
     rustScalarBorrowedBox(declaration): boolean {
         let borrowed = false;
         this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
-            const form = this.rustScalarUseForms.get(n);
-            if (form !== 'box' && form !== 'xbox') return true;
-            if (isReturnStatement(n.parent) || this.rustLocalLastUse(n, declaration)) return true;
             let top: any = n;
             while (isParenthesizedExpression(top.parent)) top = top.parent;
-            // `k in m` on a field map reads the boxed key by reference: the typed key copies there
-            if (isBinaryExpression(top.parent) && top.parent.left === top && top.parent.operatorToken.kind === SyntaxKind.InKeyword) borrowed = true;
+            // `k in m`: the key is read by reference from its box (syntactic: independent of decision order and pipeline)
+            // on a `this.<field>` map the typed key re-boxes with a copy (`&k.clone().map(Value::from)..`)
+            const up: any = top.parent;
+            if (isBinaryExpression(up) && up.left === top && up.operatorToken.kind === SyntaxKind.InKeyword) {
+                const map: any = this.unwrapParens(up.right);
+                // (the typed cache / plain-dict fields look the key up natively: no box there)
+                if (map !== undefined && isPropertyAccessExpression(map) && map.expression.kind === SyntaxKind.ThisKeyword && isIdentifier(map.name)
+                    && !RustTranspiler.RUST_PLAIN_DICT_FIELDS.has(String(map.name.text))) borrowed = true;
+            }
             return true;
         });
         return borrowed;
