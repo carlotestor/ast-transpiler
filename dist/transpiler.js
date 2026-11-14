@@ -58652,6 +58652,9 @@ ${binding(plan.indent)}` : ""), head: "" };
   }
   /** The key local of an `in` test has a non-null initializer (nil-declared locals are left to their own rule). */
   rustInKeyInitialised(n) {
+    const recv = this.unwrapParens(n.parent.right);
+    if (isPropertyAccessExpression3(recv) && /^(?:subscriptions|futures)$/.test(String(recv.name.text)) && this.rustIsWsClientType(this.typeOfNodeIfAny(recv.expression)))
+      return false;
     const declaration = this.rustDeclaredNode(n);
     return declaration !== void 0 && isVariableDeclaration3(declaration) && declaration.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== "null";
   }

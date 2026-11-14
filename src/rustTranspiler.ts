@@ -7347,6 +7347,9 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** The key local of an `in` test has a non-null initializer (nil-declared locals are left to their own rule). */
     rustInKeyInitialised(n): boolean {
+        // a ws `client.subscriptions|futures` receiver is rewritten by ccxt's container-op pass from a `Value` key: leave it
+        const recv: any = this.unwrapParens(n.parent.right);
+        if (isPropertyAccessExpression(recv) && /^(?:subscriptions|futures)$/.test(String(recv.name.text)) && this.rustIsWsClientType(this.typeOfNodeIfAny(recv.expression))) return false;
         const declaration: any = this.rustDeclaredNode(n);
         return declaration !== undefined && isVariableDeclaration(declaration) && declaration.initializer !== undefined
             && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== 'null';
