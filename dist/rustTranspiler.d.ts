@@ -1115,6 +1115,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustScalarGuardedBody(method: any, print: () => string): string;
     /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
     rustScalarInsertKeyUse(n: any): boolean;
+    /** tb: a `networkIdToCode` result keyed into a map whose written value only READS it (`networks[k] = { 'network': k }`):
+     *  JS evaluates the key before the value, and so does the printed `insert(key, value)`, so the key text is taken before
+     *  any box in the value. Scoped to that initialiser (other key locals keep their own rules). */
+    rustTbKeyReadOnlyInValue(n: any, value: any): boolean;
+    /** tb: `this.networkIdToCode (..)` (the base typed `Str` reader of a network id). */
+    rustTbNetworkCodeInit(init: any): boolean;
     /** A key written `m[k as string]` / `m[(k)]`: the cast and parens print nothing, so the key is `k` itself. */
     rustKeyWrapped(n: any): any;
     /** The insert key of a `String` scalar local, else undefined. */

@@ -12179,3 +12179,22 @@ describe('ral-sb: boxed typed values', () => {
         expect(out).not.toContain('let mut oids: Value');
     });
 });
+describe('ral-tb: boxed typed values remainder', () => {
+    const write = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    networkIdToCode (networkId: Str = undefined, currencyCode: Str = undefined): Str { return networkId; }\n    safeString (o: any, k: any): Str { return o[k]; }\n    safeList (o: any, k: any): any[] { return o[k]; }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venue + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('a networkIdToCode key whose inserted value only reads it is an Option<String> borrowed for the key (no copy)', () => {
+        const out = write ('tb-netkey', "    m (chains: any[], code: Str) {\n        const networks: Dict = {};\n        for (let j = 0; j < chains.length; j++) {\n            const chain = chains[j];\n            const networkId = this.safeString (chain, 'name');\n            const networkCode = this.networkIdToCode (networkId, code);\n            if (networkCode !== undefined) {\n                networks[networkCode] = {\n                    'id': networkId,\n                    'network': networkCode,\n                };\n            }\n        }\n        return this.hold (networks);\n    }\n");
+        expect(out).toContain('let mut networkCode: Option<String> = ');
+        expect(out).toContain('networks.insert(networkCode.as_deref().unwrap_or("null").to_string(), ');
+        expect(out).not.toContain('networkCode.clone()');
+    });
+    test('negative: a networkIdToCode key written inside its own inserted value stays a Value', () => {
+        const out = write ('tb-netkeyw', "    m (chains: any[], code: Str) {\n        const networks: Dict = {};\n        for (let j = 0; j < chains.length; j++) {\n            let networkCode = this.networkIdToCode (this.safeString (chains[j], 'name'), code);\n            networks[networkCode] = { 'network': (networkCode = 'x') };\n            this.hold (networkCode);\n        }\n        return this.hold (networks);\n    }\n");
+        expect(out).toContain('let mut networkCode: Value = ');
+    });
+});

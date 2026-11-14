@@ -8100,9 +8100,34 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isBinaryExpression(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind.EqualsToken || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
         const base: any = access.expression;
         const key = String(n.text);
-        if (new RegExp(`\\b${key}\\b`).test(String(write.right.getText()))) return false;
+        if (new RegExp(`\\b${key}\\b`).test(String(write.right.getText())) && !this.rustTbKeyReadOnlyInValue(n, write.right)) return false;
         return (this.rustBearerDictInsert(base, n, key, 'x') ?? this.rustMapParamDictInsert(base, n, key, 'x')
             ?? this.printNativeDictInsert(base, n, key, 'x') ?? this.rustNativeDictInsert(base, n, key, 'x')) !== undefined;
+    }
+
+    /** tb: a `networkIdToCode` result keyed into a map whose written value only READS it (`networks[k] = { 'network': k }`):
+     *  JS evaluates the key before the value, and so does the printed `insert(key, value)`, so the key text is taken before
+     *  any box in the value. Scoped to that initialiser (other key locals keep their own rules). */
+    rustTbKeyReadOnlyInValue(n: any, value: any): boolean {
+        const declaration: any = this.rustDeclaredNode(n);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || !this.rustTbNetworkCodeInit(declaration.initializer)) return false;
+        const symbol = this.rustSymbolOf(n);
+        let written = false;
+        const visit = (m: any): void => {
+            if (written || m === undefined) return;
+            if (isIdentifier(m) && this.rustSymbolOf(m) === symbol && this.rustIdentifierIsWritten(m)) { written = true; return; }
+            if (isFunctionLike(m)) { written = true; return; }
+            m.forEachChild?.(visit);
+        };
+        visit(value);
+        return !written;
+    }
+
+    /** tb: `this.networkIdToCode (..)` (the base typed `Str` reader of a network id). */
+    rustTbNetworkCodeInit(init: any): boolean {
+        const call: any = init === undefined ? undefined : this.unwrapParens(init);
+        return call !== undefined && isCallExpression(call) && isPropertyAccessExpression(call.expression)
+            && call.expression.expression.kind === SyntaxKind.ThisKeyword && String(call.expression.name.text) === 'networkIdToCode';
     }
 
     /** A key written `m[k as string]` / `m[(k)]`: the cast and parens print nothing, so the key is `k` itself. */

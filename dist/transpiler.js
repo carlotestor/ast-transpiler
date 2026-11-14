@@ -59483,9 +59483,39 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     const base = access.expression;
     const key = String(n.text);
-    if (new RegExp(`\\b${key}\\b`).test(String(write.right.getText())))
+    if (new RegExp(`\\b${key}\\b`).test(String(write.right.getText())) && !this.rustTbKeyReadOnlyInValue(n, write.right))
       return false;
     return (this.rustBearerDictInsert(base, n, key, "x") ?? this.rustMapParamDictInsert(base, n, key, "x") ?? this.printNativeDictInsert(base, n, key, "x") ?? this.rustNativeDictInsert(base, n, key, "x")) !== void 0;
+  }
+  /** tb: a `networkIdToCode` result keyed into a map whose written value only READS it (`networks[k] = { 'network': k }`):
+   *  JS evaluates the key before the value, and so does the printed `insert(key, value)`, so the key text is taken before
+   *  any box in the value. Scoped to that initialiser (other key locals keep their own rules). */
+  rustTbKeyReadOnlyInValue(n, value) {
+    const declaration = this.rustDeclaredNode(n);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !this.rustTbNetworkCodeInit(declaration.initializer))
+      return false;
+    const symbol = this.rustSymbolOf(n);
+    let written = false;
+    const visit = (m) => {
+      if (written || m === void 0)
+        return;
+      if (isIdentifier3(m) && this.rustSymbolOf(m) === symbol && this.rustIdentifierIsWritten(m)) {
+        written = true;
+        return;
+      }
+      if (isFunctionLike(m)) {
+        written = true;
+        return;
+      }
+      m.forEachChild?.(visit);
+    };
+    visit(value);
+    return !written;
+  }
+  /** tb: `this.networkIdToCode (..)` (the base typed `Str` reader of a network id). */
+  rustTbNetworkCodeInit(init) {
+    const call = init === void 0 ? void 0 : this.unwrapParens(init);
+    return call !== void 0 && isCallExpression6(call) && isPropertyAccessExpression3(call.expression) && call.expression.expression.kind === SyntaxKind7.ThisKeyword && String(call.expression.name.text) === "networkIdToCode";
   }
   /** A key written `m[k as string]` / `m[(k)]`: the cast and parens print nothing, so the key is `k` itself. */
   rustKeyWrapped(n) {
