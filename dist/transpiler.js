@@ -66869,7 +66869,7 @@ ${iden}}`;
       this.rustOptContainerLocals.add(declaration);
     }
     for (const n of boxedElementUses)
-      this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) ? "move" : "share");
+      this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) || n.parent?.kind === SyntaxKind7.ConditionalExpression && this.rustOwnedLastUse(n, declaration) ? "move" : "share");
     if (extendReuse)
       this.rustExtendReuseLocals.add(declaration);
     return from === "list" ? "list" : "dict";
@@ -68181,6 +68181,10 @@ ${iden}}`;
       return up.initializer === n && isObjectLiteralExpression4(up.parent) && !this.rustInDestructureWrite(n);
     if (isReturnStatement4(up))
       return up.expression === n;
+    if (up.kind === SyntaxKind7.ConditionalExpression && up.condition !== n) {
+      const other = this.unwrapParens(up.whenTrue === n ? up.whenFalse : up.whenTrue);
+      return isObjectLiteralExpression4(other) || this.literalKindOfNode(other) !== void 0;
+    }
     return isAsExpression3(up) && up.expression === n && isReturnStatement4(up.parent);
   }
   /** `this.F` for a checker dict-shaped field (`fundingRates: Dictionary<FundingRate>`) the native insert writes

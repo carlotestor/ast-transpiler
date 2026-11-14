@@ -15921,7 +15921,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (from === 'api' || (nilDeclared && writes === 0) || (!nilDeclared && !this.rustOptContainerSourceOk(init, from))) return undefined;
             this.rustOptContainerLocals.add(declaration);
         }
-        for (const n of boxedElementUses) this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) ? 'move' : 'share');
+        for (const n of boxedElementUses) this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) || (n.parent?.kind === SyntaxKind.ConditionalExpression && this.rustOwnedLastUse(n, declaration)) ? 'move' : 'share');
         if (extendReuse) this.rustExtendReuseLocals.add(declaration);
         return from === 'list' ? 'list' : 'dict';
     }
@@ -17147,6 +17147,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (up === undefined || this.rustScalarInNestedWrite(n)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n && isObjectLiteralExpression(up.parent) && !this.rustInDestructureWrite(n);
         if (isReturnStatement(up)) return up.expression === n;
+        // ral-ua: an arm of a ternary whose other arm is a literal boxes like a return (the arm value is the box)
+        if (up.kind === SyntaxKind.ConditionalExpression && up.condition !== n) {
+            const other: any = this.unwrapParens(up.whenTrue === n ? up.whenFalse : up.whenTrue);
+            return isObjectLiteralExpression(other) || this.literalKindOfNode(other) !== undefined;
+        }
         return isAsExpression(up) && up.expression === n && isReturnStatement(up.parent);
     }
 
