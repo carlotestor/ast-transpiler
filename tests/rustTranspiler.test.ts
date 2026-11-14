@@ -6497,8 +6497,15 @@ describe('empty-declared endpoint responses and flag slots', () => {
         expect(out).toContain('let mut rows: Option<crate::value::List> = None');
         expect(out).toContain('rows.map_or(Value::Null, Value::Arr)');
         expect(out).not.toContain('response.clone()');
-        // negative: a null test tells an off-shape answer apart, so the box stays
-        expect(out).toContain('let mut checked: Value = Value::Null');
+        // ral-ua: a null-tested declared Promise<Dict> response holds the optional map too (test is_none, None boxes to Null)
+        expect(out).toContain('let mut checked: Option<crate::value::Dict> = None');
+        expect(out).toContain('checked.is_none()');
+        expect(out).toContain('checked.map_or(Value::Null, Value::Dict)');
+    });
+
+    test('ral-ua: a declared Promise<List> response stays boxed when null-tested', () => {
+        const out = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'nil-declared-declared-endpoints', 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut tested: Value = Value::Null');
     });
 
     test('ral-ld: an optional string slot stored once into a map key moves into the box', () => {
