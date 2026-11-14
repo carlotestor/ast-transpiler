@@ -57130,6 +57130,24 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustAssignmentOpKind(op) {
     return op >= SyntaxKind7.FirstAssignment && op <= SyntaxKind7.LastAssignment;
   }
+  /** ral-ua: `acc += x` (statement) with `acc` a checker-string local the solve leaves boxed (its decision is not taken
+   *  during seeding: the join is assumed, then re-checked) and `x` a `string | undefined`, within the 400-char line. */
+  rustPlusEqualsJoinOperand(n) {
+    const parent = n.parent;
+    if (!isBinaryExpression5(parent) || parent.operatorToken.kind !== SyntaxKind7.PlusEqualsToken || parent.right !== n || !isIdentifier3(parent.left))
+      return false;
+    if (parent.parent?.kind !== SyntaxKind7.ExpressionStatement || !this.isStringLikeType(this.typeOfNodeIfAny(parent.left)))
+      return false;
+    if (!this.isStringOrNullishType(this.typeOfNodeIfAny(n)))
+      return false;
+    const accDecl = this.rustDeclaredNode(parent.left);
+    if (accDecl === void 0 || !isVariableDeclaration3(accDecl))
+      return false;
+    if (!this.rustScalarSeeding && (this.rustScalarDecisions.get(accDecl) ?? void 0) !== void 0)
+      return false;
+    const column = parent.getStart() - String(parent.getSourceFile().text).lastIndexOf("\n", parent.getStart()) - 1;
+    return column + 2 * String(parent.left.getText()).length + String(n.getText()).length + 72 <= 400;
+  }
   rustScalarUseFormOwn(n, kind) {
     const parent = n.parent;
     if (parent === void 0)
@@ -57211,6 +57229,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return typedReturn === kind || typedReturn === `o${kind}` ? "native" : void 0;
       return this.rustNativeStrReturnKind(fn) === "str" || this.rustStrReturnSignature(fn, n) ? void 0 : "box";
     }
+    if ((kind === "str" || kind === "ostr") && this.rustPlusEqualsJoinOperand(n))
+      return "concat";
     if (isBinaryExpression5(parent) && parent.operatorToken.kind === SyntaxKind7.PlusToken) {
       if (kind !== "str" && kind !== "ostr")
         return this.rustScalarExpressionUseForm(n, kind);
@@ -59432,6 +59452,8 @@ ${binding(plan.indent)}` : ""), head: "" };
         return dry ? "_" : `${name}.push_str(${this.quotedStringLiteral(right.text)})`;
       if (isIdentifier3(right) && this.rustScalarLocalOf(right)?.kind === "str")
         return dry ? "_" : `${name}.push_str(&${super.printIdentifier(right)})`;
+      if (isIdentifier3(right) && this.rustScalarLocalOf(right)?.kind === "ostr")
+        return dry ? "_" : `${name}.push_str(${super.printIdentifier(right)}.as_deref().unwrap_or("null"))`;
       const joined = this.rustStrPushValueText(node.left, right, dry);
       if (joined !== void 0)
         return dry ? "_" : `${name}.push_str(&${joined})`;
@@ -75482,7 +75504,18 @@ ${this.getIden(identation)}}`;
       }
       return false;
     };
-    return this.rustScopeNameNodes(scope, String(node.text)).some((u) => u !== node && isIdentifier3(u) && inCall(u) && this.rustDeclaredNode(u) === declaration && !this.rustVenueStrArgSlot(u));
+    return this.rustScopeNameNodes(scope, String(node.text)).some((u) => u !== node && isIdentifier3(u) && inCall(u) && this.rustDeclaredNode(u) === declaration && !this.rustVenueStrArgSlot(u) && !this.rustScalarBoxCopies(u));
+  }
+  /** ral-va: a typed string read in a by-value list element whose box copies (`Value::from(x.clone())`, not its last use):
+   *  it leaves the local in place, so a borrow of the same local in that call needs no copy of its own. */
+  rustScalarBoxCopies(u) {
+    const local = this.rustScalarLocalOf(u);
+    if (local === void 0 || local.kind !== "str" && local.kind !== "ostr" || !isArrayLiteralExpression4(u.parent))
+      return false;
+    const form = this.rustScalarUseForms.get(u);
+    if (form !== "box")
+      return false;
+    return !(isReturnStatement4(u.parent) || this.rustWsClientLastUse(u, local.declaration) || this.rustLocalLastUse(u, local.declaration) || this.rustOwnedHandOff(u) && this.rustOwnedLastUse(u, local.declaration));
   }
   /** A literal, an identifier, a field read, or a call: the converted argument stays short. */
   rustVenueStrSimpleArg(arg) {
