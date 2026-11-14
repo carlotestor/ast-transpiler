@@ -975,6 +975,17 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustScalarLocalCondition(node: any): string | undefined;
     /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl Into<Value>, ..)`
      *  takes an optional string lent as `&x` (`From<&Option<String>>`: `None` is Null, `Some(s)` a `Str`, as the box gave). */
+    /** vg: element locals printed as a borrowed `Option<&str>` off their list (`recv.get(i).and_then(Value::as_str)`). */
+    private rustBorrowedStrElems;
+    /** vg: `const k = recv[i]` where `recv` is a local list every element of which is a string (`Object.keys (..)`, a literal of
+     *  string literals) and every use of `recv` is an element read or `.length` (never written, pushed, moved or handed on, so the
+     *  borrow stays valid while `k` lives and no non-string can reach `k`: out of range reads `None`, the `Null` the box held).
+     *  Every use of `k` reads the borrow: literal tests, `format!` operands, map-key reads / `in` tests, and boxes at a call
+     *  argument, object-literal value, array element, dict write or `+` operand (`Value::from(k.as_deref())`: the copy the `Value`
+     *  clone made, never more). */
+    rustBorrowStrElem(declaration: any): boolean;
+    /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
+    rustExactStrListInit(init: any): boolean;
     rustInArrayNeedle(node: any): boolean;
     /** Identifier hook: a `box` use converts with the standard `From` impls (scalars are `Copy`). */
     printRustScalarLocalRead(node: any): string | undefined;
