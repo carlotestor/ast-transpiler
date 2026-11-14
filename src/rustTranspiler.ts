@@ -1943,12 +1943,20 @@ export class RustTranspiler extends BaseTranspiler {
         const r20 = this.nativeNumericAdd(op, left, right, leftText, rightText); if (r20 !== undefined) return r20;
         if (op === SyntaxKind.PlusToken && (this.isNativeStringConcatPair(leftType, rightType) || this.concatIsAnchored(left, right, leftType, rightType)
             || this.strOrNullConcatIsAnchored(left, right, leftType, rightType))) {
-            return this.printNativeStringConcat(leftText, rightText);
+            return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText), this.rustConcatLiteralText(right, rightText));
         }
         if (!this.isNumberLikeType(leftType) || !this.isNumberLikeType(rightType)) {
             return this.nativeCoercingArithmetic(op, left, right, leftText, rightText);
         }
         return this.printNativeNumeric(op, leftText, rightText);
+    }
+
+    /** A string-literal operand of a `format!` concat prints as the `&str` literal itself:
+     *  `Display` of `Value::Str(s)` is `s`, so the text is identical and the box is gone. */
+    rustConcatLiteralText(node: any, text: string): string {
+        const inner: any = this.unwrapParensNode(node);
+        if (inner === undefined || !isStringLiteral(inner) || inner.text in this.StringLiteralReplacements) return text;
+        return this.quotedStringLiteral(inner.text);
     }
 
     printNativeStringConcat(leftText: string, rightText: string): string {
@@ -5900,7 +5908,9 @@ export class RustTranspiler extends BaseTranspiler {
             const up: any = n.parent;
             // a call argument already copied the `Value`; other slots moved or borrowed it
             const argCopy = isCallExpression(up) && up.expression !== n && (form === 'box' || form === 'xbox');
-            if (form === 'err' || form === 'key' || ((form === 'box' || form === 'xbox') && !argCopy && !this.rustScalarBoxMoves(n, form, declaration))) copied = true;
+            // an insert key prints its own key text (`as_deref().unwrap_or("null").to_string()`), the one
+            // allocation the boxed key's `stringify_param` made: lent, not copied
+            if (form === 'err' || (form === 'key' && !this.rustElemInsertKey(this.rustKeyWrapped(n))) || ((form === 'box' || form === 'xbox') && !argCopy && !this.rustScalarBoxMoves(n, form, declaration))) copied = true;
             return true;
         });
         return keyed && copied;
@@ -19279,7 +19289,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (stringSide === undefined || !this.printsValueExpression(stringSide)) return undefined;
         const inner = this.unwrapParensNode(stringSide);
         if (inner !== undefined && (this.rustStringLocalIdentifierIsTyped(inner) || this.rustNativeStrCalleeKind(inner) === 'str')) return undefined;
-        return this.printNativeStringConcat(leftText, rightText);
+        return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText), this.rustConcatLiteralText(right, rightText));
     }
 
     // Native reads on receivers the plain-dict proof admits (tag-free literal / `account ()` / `omit` /
