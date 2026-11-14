@@ -2039,6 +2039,27 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustBorrowedKinds;
     rustBorrowedLocalKindUncached(declaration: any): 'dict' | 'list' | undefined;
     private rustOptContainerLocals;
+    private rustExtendReuseLocals;
+    /** A plain map literal (outside the test tier): every `x = ..` write must be `x = this.extend (x, y)`; the
+     *  existing borrowed-dict use rules decide the rest. The `IndexMap` bearer rule claims its locals first. */
+    rustExtendReuseLiteral(declaration: any, init: any): boolean;
+    /** `n` is the target of a statement `n = this.extend (n, y)` (base `extend`, two operands, `y` not naming `n`). */
+    rustSelfExtendWrite(n: any, declaration: any): boolean;
+    private static readonly RUST_SELF_EXTEND;
+    /** `n` is the request (first) operand of the runtime free function `jwt (request, secret, ..)`. */
+    rustJwtRequestSlot(call: any, n: any): boolean;
+    /** `&x` for a shared map local lent to the `jwt` request slot. */
+    printJwtLentArg(node: any, text: string): string | undefined;
+    /** An untagged map operand, or a `const y = this.omit (p, keys)` of one (omit only drops keys; a list passes
+     *  unchanged and `extend` merges maps only, so no tag can reach the merged map either way). */
+    rustExtendReuseOperandUntagged(arg: any): boolean;
+    /** A literal-key write on a reuse local: the map is the plain literal merged with untagged operands only, so the
+     *  copy-on-write insert equals `add_element_to_object` (which differs only on a tagged map). */
+    rustExtendReuseKeyWriteOk(n: any, declaration: any): boolean;
+    /** The head of `x = this.extend (x, y)` on a reuse local: moved (the statement writes `x` back). */
+    rustSelfExtendHead(node: any, declaration: any): boolean;
+    /** `x = self.extend(x, ..).into_dict()` for a reuse local (`extend` answers `Value::Map`: the Arc moves back). */
+    printExtendReuseWrite(left: any, right: any): string | undefined;
     rustBuiltMapKeyWriteOk(n: any, init: any): boolean;
     rustUntaggedMapOperand(arg: any): boolean;
     /** A whole hand-off of a nullable container local (a base `safeDict*` / `safeList*` with no or a nullish default,
@@ -2188,7 +2209,7 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  (`printNativeDictInsert`: `rustFieldStaysDict`). The insert stores whatever handle it is given, so a built map
      *  boxes there as the field-key rule's plain fields do. */
     rustDictShapedFieldInsert(expr: any): boolean;
-    rustBuiltReturnBoxUse(n: any, init: any): boolean;
+    rustBuiltReturnBoxUse(n: any, init: any, literalDict?: boolean): boolean;
     /** A base `this.omit (x, keys)` whose head always holds a map: a literal, a built map (`extend`, ..) or a local that
      *  prints the shared map. A `Dict`-typed parameter is not enough: a list body (`Array.isArray (params)` in `sign`)
      *  passes `omit` unchanged, and `into_dict()` would turn it into an empty map. */
@@ -2201,6 +2222,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  list-of-lists) local: each block-scoped binding converts to the same Rust type (`Dict` / `List`), so ccxt
      *  passes that key on the name read the same declared type for every sibling. */
     rustElementSiblingsAlike(declaration: any, name: string, init: any): boolean;
+    /** Every other binding of `name` in the function is a `const` plain map literal declaration (ral-oc). */
+    rustLiteralSiblingsAlike(declaration: any, name: string): boolean;
     rustSiblingBindingsAlike(declaration: any, name: string, init: any): boolean;
     /** The `params` of a typed unified method, never reassigned: it arrives through `impl Into<crate::Params>` and is
      *  rebound by `get_arg(.., Value::Map({}))`, so it is always a map (`From<Value> for Params` drops a non-map, and
