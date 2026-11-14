@@ -357,6 +357,21 @@ describe('rust transpiling tests', () => {
         expect(clone('stored.append(trade);', false, true)).toBe('stored.append(trade);');
     });
 
+    test('a helper write clones a value read again and moves one at its last use', () => {
+        const ts = [
+            'class A {',
+            '    run (d: any, x: any, y: any) {',
+            '        d[\'a\'] = x;',
+            '        d[\'b\'] = y;',
+            '        return x;',
+            '    }',
+            '}',
+        ].join('\n');
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).toMatch(/\(&mut d, &Value::Str\("a"\.into\(\)\), x\.clone\(\)\)/);
+        expect(out).toMatch(/\(&mut d, &Value::Str\("b"\.into\(\)\), y\)/);
+    });
+
     test('a for-loop counter handed off by value is cloned (the next pass reads it again)', () => {
         const ts = [
             'class A {',
@@ -1246,7 +1261,7 @@ describe('rust transpiling tests', () => {
     test('array push call', () => {
         const ts = 'arr.push(x);'
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('append_to_array(&mut arr, x)');
+        expect(output).toContain('append_to_array(&mut arr, x.clone())');
     });
 
     test('array includes call', () => {
@@ -6503,7 +6518,7 @@ describe('two-level dict bearers', () => {
 
     test('a three-level chain keeps every middle hop on get_value_mut', () => {
         const out = rs("        const d = {};\n        d['a']['b']['c'] = v;\n        return d;");
-        expect(out).toContain('add_element_to_object(get_value_mut(d.entry("a".into()).or_default(), &Value::Str("b".into())), &Value::Str("c".into()), v);');
+        expect(out).toContain('add_element_to_object(get_value_mut(d.entry("a".into()).or_default(), &Value::Str("b".into())), &Value::Str("c".into()), v.clone());');
     });
 
     test('negative: an unproven hop key or a receiver-reading value keeps the box', () => {

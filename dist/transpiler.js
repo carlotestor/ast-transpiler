@@ -53279,7 +53279,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const untilWrite = keyStrs.length === 1 ? this.printUntilHeadKeyWrite(left, right, rhs) ?? this.printNilMapKeyWrite(left, right, rhs) : void 0;
       if (untilWrite !== void 0)
         return untilWrite;
-      const helperCall = `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${rhs})`;
+      const helperCall = `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${this.rustOwnedArgText(right, rhs.trim())})`;
       const helperWrite = this.rustDictHoistHosts.has(node) ? `{ let __be_tmp = ${rhs}; add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, __be_tmp); }` : helperCall;
       const nestedInsert = keyStrs.length === 2 ? this.rustNestedBearerInsert(baseExpr, keys[0], keyStrs[0], keys[1], keyStrs[1], rhs) ?? this.nestedDictWrite(baseExpr, keys, keyStrs, rhs, helperWrite) : this.nestedDictWrite(baseExpr, keys, keyStrs, rhs, helperWrite) ?? this.rustNestedBearerBucket(baseExpr, keys[0], keyStrs[0], right);
       if (nestedInsert !== void 0)
@@ -60373,6 +60373,14 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     }
     return text;
   }
+  /** `set_value` / `append_to_array` / `add_element_to_object` take the value by move: a bare local final argument
+   *  is cloned unless the printer marked it owned (`\u0004`). */
+  static cloneHelperWriteValues(text) {
+    return text.replace(
+      /\b((?:set_value|append_to_array|add_element_to_object)\([^;]*?,\s*)([a-zA-Z_][a-zA-Z0-9_]*)\)(\s*;)/g,
+      (whole, prefix, ident, tail) => ident === "self" ? whole : `${prefix}${ident}.clone())${tail}`
+    );
+  }
   static rustBalancedClose(text, from) {
     let depth = 1, inStr = false, escape = false;
     for (let j = from; j < text.length; j++) {
@@ -62247,7 +62255,7 @@ ${ind}let ${view}: &${map} = &${arc};
       const ws = /ts[/]src[/]pro[/]/.test(file);
       const cacheCalls = !test || /ts[/]src[/]pro[/]test[/]base[/]/.test(file);
       const exchangeFile = cacheCalls && !/ts[/]src[/]base[/]/.test(file);
-      return _RustTranspiler.cloneSliceElements(_RustTranspiler.cloneCacheCallArgs(_RustTranspiler.cloneByValueCallArgs(_RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws), exchangeFile, !test)).replaceAll("", "");
+      return _RustTranspiler.cloneSliceElements(_RustTranspiler.cloneHelperWriteValues(_RustTranspiler.cloneCacheCallArgs(_RustTranspiler.cloneByValueCallArgs(_RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws), exchangeFile, !test))).replaceAll("", "");
     }
     return this.printNodeUncloned(node, identation);
   }
@@ -63275,7 +63283,7 @@ ${this.getIden(identation)}}`;
     return `is_integer(&${parsedArg})`;
   }
   printArrayPushCall(node, identation, name = void 0, parsedArg = void 0) {
-    return this.printRustVecPush(node, name, parsedArg) ?? this.printBuiltListPush(node, name, parsedArg) ?? this.arrPush(node, name, parsedArg) ?? `append_to_array(&mut ${name}, ${parsedArg})`;
+    return this.printRustVecPush(node, name, parsedArg) ?? this.printBuiltListPush(node, name, parsedArg) ?? this.arrPush(node, name, parsedArg) ?? `append_to_array(&mut ${name}, ${node?.arguments?.length === 1 && parsedArg !== void 0 ? this.rustOwnedArgText(node.arguments[0], parsedArg.trim()) : parsedArg})`;
   }
   printIncludesCall(node, identation, name = void 0, parsedArg = void 0) {
     return `Value::Bool(contains(&${name}, &${parsedArg}))`;

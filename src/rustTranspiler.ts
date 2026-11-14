@@ -2122,7 +2122,8 @@ export class RustTranspiler extends BaseTranspiler {
             for (const key of keyStrs.slice(0, -1)) acc = `get_value_mut(${acc}, &${key})`;
             const rhs = this.printNode(right, 0);
             const untilWrite = keyStrs.length === 1 ? this.printUntilHeadKeyWrite(left, right, rhs) ?? this.printNilMapKeyWrite(left, right, rhs) : undefined; if (untilWrite !== undefined) return untilWrite;
-            const helperCall = `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${rhs})`;
+            // the helper takes the value by move: an owned bare local (`Copy`, last use) is marked, the rest cloned on the file text
+            const helperCall = `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${this.rustOwnedArgText(right, rhs.trim())})`;
             // a nested helper write whose value was read natively binds the value first, like the ccxt hoist did
             const helperWrite = this.rustDictHoistHosts.has(node)
                 ? `{ let __be_tmp = ${rhs}; add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, __be_tmp); }` : helperCall;
@@ -9363,6 +9364,13 @@ export class RustTranspiler extends BaseTranspiler {
         return text;
     }
 
+    /** `set_value` / `append_to_array` / `add_element_to_object` take the value by move: a bare local final argument
+     *  is cloned unless the printer marked it owned (`\u0004`). */
+    static cloneHelperWriteValues(text: string): string {
+        return text.replace(/\b((?:set_value|append_to_array|add_element_to_object)\([^;]*?,\s*)([a-zA-Z_][a-zA-Z0-9_]*)\)(\s*;)/g,
+            (whole: string, prefix: string, ident: string, tail: string) => (ident === 'self' ? whole : `${prefix}${ident}.clone())${tail}`));
+    }
+
     private static rustBalancedClose(text: string, from: number): number {
         let depth = 1, inStr = false, escape = false;
         for (let j = from; j < text.length; j++) {
@@ -11241,7 +11249,7 @@ export class RustTranspiler extends BaseTranspiler {
             // cache / order-book calls on locals and the ws cache constructors (exchange files and the ws base tests)
             const cacheCalls = !test || /ts[/]src[/]pro[/]test[/]base[/]/.test(file);
             const exchangeFile = cacheCalls && !/ts[/]src[/]base[/]/.test(file);
-            return RustTranspiler.cloneSliceElements(RustTranspiler.cloneCacheCallArgs(RustTranspiler.cloneByValueCallArgs(RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws), exchangeFile, !test)).replaceAll('\u0004', '');
+            return RustTranspiler.cloneSliceElements(RustTranspiler.cloneHelperWriteValues(RustTranspiler.cloneCacheCallArgs(RustTranspiler.cloneByValueCallArgs(RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws), exchangeFile, !test))).replaceAll('\u0004', '');
         }
         return this.printNodeUncloned(node, identation);
     }
@@ -12319,7 +12327,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printArrayPushCall(node, identation, name = undefined, parsedArg = undefined) {
-        return this.printRustVecPush(node, name, parsedArg) ?? this.printBuiltListPush(node, name, parsedArg) ?? this.arrPush(node, name, parsedArg) ?? `append_to_array(&mut ${name}, ${parsedArg})`;
+        return this.printRustVecPush(node, name, parsedArg) ?? this.printBuiltListPush(node, name, parsedArg) ?? this.arrPush(node, name, parsedArg) ?? `append_to_array(&mut ${name}, ${node?.arguments?.length === 1 && parsedArg !== undefined ? this.rustOwnedArgText(node.arguments[0], parsedArg.trim()) : parsedArg})`;
     }
 
     printIncludesCall(node, identation, name = undefined, parsedArg = undefined) {
