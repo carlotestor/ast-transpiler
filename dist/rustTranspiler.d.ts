@@ -788,6 +788,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The `String` inside the printed join, printed at emission only (a print inside a decision perturbs other locals);
      *  any other printed form reads its `Str` back (`join` always answers a `Str`). */
     rustSbJoinText(node: any): string;
+    /** sb: an identifier initializer naming a local already decided as a shared `Dict` (decided before this one: no pending cycle). */
+    rustSbDictAliasSource(init: any): boolean;
+    private rustHandedPending;
+    /** sb: the alias declaration shares its source's Arc (`Value::from(&x).into_dict()`, the bump the `Value` alias made). */
+    rustSbDictAliasDecl(declaration: any): boolean;
+    private rustSbAliasDeferred;
     rustAssignmentOpKind(op: any): boolean;
     rustScalarUseFormOwn(n: any, kind: string): string | undefined;
     private static readonly RUST_WS_CLIENT_VALUE_METHODS;
@@ -2184,6 +2190,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustExtendReuseKeyWriteOk(n: any, declaration: any): boolean;
     /** The head of `x = this.extend (x, y)` on a reuse local: moved (the statement writes `x` back). */
     rustSelfExtendHead(node: any, declaration: any): boolean;
+    /** sb: `y = self.omit(&x, ..).into_dict()` for a shared-map alias (`omit` of a proven map answers `Value::Map`: the Arc moves back). */
+    private rustSbAliasWrites;
+    printSbAliasWrite(node: any, left: any, right: any): string | undefined;
     /** `x = self.extend(x, ..).into_dict()` for a reuse local (`extend` answers `Value::Map`: the Arc moves back). */
     printExtendReuseWrite(left: any, right: any): string | undefined;
     rustBuiltMapKeyWriteOk(n: any, init: any): boolean;

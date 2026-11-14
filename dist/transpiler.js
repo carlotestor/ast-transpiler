@@ -51567,6 +51567,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustVenueTypedDecisions = /* @__PURE__ */ new WeakMap();
     this.rustSbPartnerMemo = /* @__PURE__ */ new Map();
     this.rustSbJoinMemo = /* @__PURE__ */ new Map();
+    this.rustHandedPending = /* @__PURE__ */ new WeakSet();
+    this.rustSbAliasDeferred = /* @__PURE__ */ new WeakSet();
     this.rustClientHandlePlans = /* @__PURE__ */ new WeakMap();
     this.rustClientHandleDeclPrinting = false;
     this.rustScalarPending = /* @__PURE__ */ new Set();
@@ -51651,6 +51653,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustOptContainerLocals = /* @__PURE__ */ new WeakSet();
     // ── ral-oc: map literals rebuilt by `x = this.extend (x, y)` (rustExtendReuseLiteral / printExtendReuseWrite) ──
     this.rustExtendReuseLocals = /* @__PURE__ */ new WeakSet();
+    /** sb: `y = self.omit(&x, ..).into_dict()` for a shared-map alias (`omit` of a proven map answers `Value::Map`: the Arc moves back). */
+    this.rustSbAliasWrites = /* @__PURE__ */ new WeakSet();
     // Optional container locals whose declaration printed `Option<..>` (an earlier declaration form may keep the box).
     this.rustPrintedOptional = /* @__PURE__ */ new WeakSet();
     // ── nil-declared map locals (rustNilMapLocal) ──
@@ -53309,7 +53313,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return marketWrite;
     if (isAssign && this.rustTypedListField(left))
       return `${this.printNode(left, 0)} = ${this.printNode(right, 0).trim()}.into_list()`;
-    const optContainerWrite = isAssign && isIdentifier3(left) ? this.printOptContainerWrite(left, right) ?? this.printOptListWrite(left, right) ?? this.printExtendReuseWrite(left, right) : void 0;
+    const optContainerWrite = isAssign && isIdentifier3(left) ? this.printOptContainerWrite(left, right) ?? this.printOptListWrite(left, right) ?? this.printExtendReuseWrite(left, right) ?? this.printSbAliasWrite(node, left, right) : void 0;
     if (optContainerWrite !== void 0)
       return optContainerWrite;
     const nilMapWrite = isAssign && isIdentifier3(left) ? this.printNilMapWrite(left, right, identation) : void 0;
@@ -53530,7 +53534,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration)) {
       this.rustPrintedBorrowed.add(declaration);
-      const read = this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? parsedValue;
+      const read = this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? (this.rustSbDictAliasDecl(declaration) ? `Value::from(&${parsedValue.trim()})` : parsedValue);
       return this.rustBorrowedLocalKind(declaration) === "list" ? `${indent}let mut ${varName}: crate::value::List = ${read}.into_list()` : `${indent}let mut ${varName}: crate::value::Dict = ${read}.into_dict()`;
     }
     if (node.declarations.length === 1 && this.rustHandedDictLocal(declaration)) {
@@ -56994,6 +56998,27 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const inner = m !== null && /\.join\([^()]*\)(\)\.unwrap_or_default\(\))?$/.test(m[1]) && !m[1].includes("\n") ? m[1] : `${text}.as_str().unwrap_or_default().to_string()`;
     this.rustSbJoinMemo.set(node, inner);
     return inner;
+  }
+  /** sb: an identifier initializer naming a local already decided as a shared `Dict` (decided before this one: no pending cycle). */
+  rustSbDictAliasSource(init) {
+    if (init === void 0 || !isIdentifier3(init))
+      return false;
+    const source = this.rustDeclaredNode(init);
+    if (source !== void 0 && source.kind === SyntaxKind7.BindingElement) {
+      if (this.rustHandedPending.has(source)) {
+        this.rustSbAliasDeferred.add(init.parent);
+        return false;
+      }
+      return this.rustHandedDictLocal(source);
+    }
+    if (source === void 0 || !isVariableDeclaration3(source) || this.rustBorrowedPending.has(source))
+      return false;
+    return this.rustBorrowedLocalKind(source) === "dict";
+  }
+  /** sb: the alias declaration shares its source's Arc (`Value::from(&x).into_dict()`, the bump the `Value` alias made). */
+  rustSbDictAliasDecl(declaration) {
+    const init = this.rustSkipWrappers(declaration?.initializer);
+    return init !== void 0 && isIdentifier3(init) && this.rustBorrowedLocalKind(declaration) === "dict" && this.rustSbDictAliasSource(init);
   }
   rustAssignmentOpKind(op) {
     return op >= SyntaxKind7.FirstAssignment && op <= SyntaxKind7.LastAssignment;
@@ -66515,6 +66540,11 @@ ${iden}}`;
         this.rustBorrowedPending.delete(declaration);
       }
       this.rustBorrowedKinds.set(declaration, kind);
+      if (kind === void 0 && this.rustSbAliasDeferred.has(declaration)) {
+        this.rustSbAliasDeferred.delete(declaration);
+        this.rustBorrowedKinds.delete(declaration);
+        return void 0;
+      }
     }
     return this.rustBorrowedKinds.get(declaration);
   }
@@ -66541,6 +66571,10 @@ ${iden}}`;
     const keyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && this.rustSafeValueKeyReadSource(init);
     if (keyReadOnly)
       from = "dict";
+    const sbAlias = from === void 0 && !nilDeclared && this.rustSbDictAliasSource(init);
+    if (sbAlias)
+      from = "dict";
+    let sbMapWrites = 0;
     if (from === void 0 && !nilDeclared)
       return void 0;
     const name = String(declaration.name.text);
@@ -66593,6 +66627,10 @@ ${iden}}`;
         if (extendReuse)
           return this.rustSelfExtendWrite(n, declaration) && ++extendWrites > 0;
         const rhs = this.rustSkipWrappers(up.right);
+        if (sbAlias && this.rustOmitOfDict(rhs) && String(rhs.getText()).split("\n")[0].length <= 240) {
+          this.rustSbAliasWrites.add(up);
+          return ++sbMapWrites > 0;
+        }
         writes++;
         if (this.literalKindOfNode(rhs) === "null")
           return ++nullWrites > 0;
@@ -66837,6 +66875,13 @@ ${iden}}`;
     while (up !== void 0 && (isParenthesizedExpression3(up) || isAsExpression3(up)))
       up = up.parent;
     return isCallExpression6(call) && call.arguments[0] === node && isBinaryExpression5(up) && isIdentifier3(up.left) && this.rustSelfExtendWrite(up.left, declaration);
+  }
+  printSbAliasWrite(node, left, right) {
+    const declaration = this.rustDeclarationOfIdentifier(left);
+    if (declaration === void 0 || !this.rustSbAliasWrites.has(node) || !this.rustPrintedBorrowed.has(declaration) || this.rustBorrowedLocalKind(declaration) !== "dict")
+      return void 0;
+    const name = super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text);
+    return `${name} = ${this.printNode(right, 0).trim()}.into_dict()`;
   }
   /** `x = self.extend(x, ..).into_dict()` for a reuse local (`extend` answers `Value::Map`: the Arc moves back). */
   printExtendReuseWrite(left, right) {
@@ -70668,10 +70713,13 @@ ${iden}}`;
     let decision = this.rustHandedDictDecisions.get(declaration);
     if (decision === void 0) {
       this.rustHandedDictDecisions.set(declaration, false);
+      this.rustHandedPending.add(declaration);
       try {
         decision = this.rustHandedDictLocalUncached(declaration);
       } catch (e) {
         decision = false;
+      } finally {
+        this.rustHandedPending.delete(declaration);
       }
       this.rustHandedDictDecisions.set(declaration, decision);
     }

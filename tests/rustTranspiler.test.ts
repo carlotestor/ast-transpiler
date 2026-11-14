@@ -11998,6 +11998,15 @@ describe('ral-sb: boxed typed values', () => {
         const out = write ('sb-ptn', "    m (rate: Dict, n: any) {\n        const maxAttempts = this.parseToInt (rate['x']);\n        const tries = n;\n        if (tries < maxAttempts) {\n            return this.hold (maxAttempts);\n        }\n        return this.hold (tries);\n    }\n");
         expect(out).toContain('let mut maxAttempts: Value = ');
     });
+    test('an alias of a typed params slot rewritten only by omit shares the Arc (Value::from(&x).into_dict(), no copy)', () => {
+        const dir = path.join (rustFixtureRoot, 'sb-alias');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    handlePostOnly (a: boolean, b: boolean, params: Dict = {}): [ boolean, Dict ] { return [ a, params ]; }\n    omit (x: any, k: any): any { return x; }\n    safeString (o: any, k: any): string { return o[k]; }\n    extend (a: any, b: any): any { return a; }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (params: Dict = {}) {\n        const [ postOnly, paramsPostOnly ] = this.handlePostOnly (true, false, params);\n        let paramsStopLoss = paramsPostOnly;\n        if (postOnly) {\n            paramsStopLoss = this.omit (paramsPostOnly, 'stopLoss');\n        }\n        const x = this.safeString (paramsPostOnly, 'a');\n        return this.hold (this.extend ({ 'x': x }, paramsStopLoss));\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut paramsStopLoss: crate::value::Dict = Value::from(&paramsPostOnly).into_dict();');
+        expect(out).toContain('paramsStopLoss = self.omit(&paramsPostOnly, Value::Str("stopLoss".into()), &[]).into_dict();');
+    });
     test('a join local is the String inside the printed join (join always answers a Str)', () => {
         const out = write ('sb-join', "    m (ids: string[]) {\n        const oids = ids.join (',');\n        const request = { 'ids': oids };\n        return this.hold (request);\n    }\n");
         expect(out).toMatch(/let mut oids: String = ids[^;]*\.join\(","\)[^;]*;/);
