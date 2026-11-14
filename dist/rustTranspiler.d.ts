@@ -3107,6 +3107,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** qe: slot `i` of `await Promise.all ([ .., x, .. ])` whose operand `x` is a local printed `crate::value::Dict`
      *  (never the optional form): `promise_all` hands each operand back as it came, so the slot is that map. */
     rustPromiseAllDictSlot(element: any): boolean;
+    /** xi: the awaited call behind slot `i` of `const [ .. ] = await Promise.all (x)`: `x` an array literal (or a
+     *  never-written local bound to one, read only by this call) of exactly the pattern's length, whose element `i` is
+     *  that call inline or a never-reassigned local initialised by it. `promise_all` hands each element back as it came. */
+    rustPromiseAllOperandProducer(element: any): any;
     rustDeclaredDictSlot(element: any): boolean;
     /** Every `return` of the callee's own body is an array literal whose element `at` is a map literal or a `const`
      *  local initialised with one (a map on every path, whatever keys are written into it). */

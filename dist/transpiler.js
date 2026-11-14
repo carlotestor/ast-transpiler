@@ -73806,15 +73806,50 @@ ${iden}}`;
     if (!isCallExpression6(call) || call.arguments.length !== 1 || !isPropertyAccessExpression3(call.expression) || !isIdentifier3(call.expression.expression) || call.expression.expression.text !== "Promise" || String(call.expression.name.text) !== "all")
       return false;
     const list = this.rustSkipWrappers(call.arguments[0]);
-    if (!isArrayLiteralExpression4(list))
-      return false;
-    const operand = this.rustSkipWrappers(list.elements[element.parent.elements.indexOf(element)]);
-    if (operand === void 0 || !isIdentifier3(operand))
-      return false;
-    const d = this.rustDeclarationOfIdentifier(operand);
-    if (d === void 0 || !isVariableDeclaration3(d) || d.name === operand)
-      return false;
-    return this.rustBorrowedLocalKind(d) === "dict" && !this.rustOptContainerLocals.has(d);
+    if (isArrayLiteralExpression4(list)) {
+      const operand = this.rustSkipWrappers(list.elements[element.parent.elements.indexOf(element)]);
+      const d = operand !== void 0 && isIdentifier3(operand) ? this.rustDeclarationOfIdentifier(operand) : void 0;
+      if (d !== void 0 && isVariableDeclaration3(d) && d.name !== operand && this.rustBorrowedLocalKind(d) === "dict" && !this.rustOptContainerLocals.has(d))
+        return true;
+    }
+    const producer = this.rustPromiseAllOperandProducer(element);
+    return producer !== void 0 && this.rustDeclaredEndpointKind(producer) === "dict";
+  }
+  /** xi: the awaited call behind slot `i` of `const [ .. ] = await Promise.all (x)`: `x` an array literal (or a
+   *  never-written local bound to one, read only by this call) of exactly the pattern's length, whose element `i` is
+   *  that call inline or a never-reassigned local initialised by it. `promise_all` hands each element back as it came. */
+  rustPromiseAllOperandProducer(element) {
+    const pattern = element?.parent;
+    const owner = pattern?.parent;
+    if (pattern?.kind !== SyntaxKind7.ArrayBindingPattern || owner === void 0 || !isVariableDeclaration3(owner) || owner.name !== pattern)
+      return void 0;
+    const awaited = this.rustSkipWrappers(owner.initializer);
+    if (awaited?.kind !== SyntaxKind7.AwaitExpression)
+      return void 0;
+    const call = this.rustSkipWrappers(awaited.expression);
+    if (!isCallExpression6(call) || call.arguments.length !== 1 || !isPropertyAccessExpression3(call.expression) || !isIdentifier3(call.expression.expression) || call.expression.expression.text !== "Promise" || String(call.expression.name.text) !== "all")
+      return void 0;
+    const fn = this.rustEnclosingFunction(owner);
+    const soleUse = (d, at) => isVariableDeclaration3(d) && isIdentifier3(d.name) && this.rustEnclosingFunction(d) === fn && !this.rustLocalIsReassigned(d, String(d.name.text)) && this.rustLocalUsesAll(d, String(d.name.text), false, (n) => this.rustIdentifierIsPropertyName(n) || n === at);
+    let list = this.rustSkipWrappers(call.arguments[0]);
+    if (isIdentifier3(list)) {
+      const d = this.rustDeclarationOfIdentifier(list);
+      if (d === void 0 || d.name === list || !soleUse(d, list))
+        return void 0;
+      list = this.rustSkipWrappers(d.initializer);
+    }
+    if (!isArrayLiteralExpression4(list) || list.elements.length !== pattern.elements.length || list.elements.some((e) => e.kind === SyntaxKind7.SpreadElement))
+      return void 0;
+    let operand = this.rustSkipWrappers(list.elements[pattern.elements.indexOf(element)]);
+    if (operand !== void 0 && isIdentifier3(operand)) {
+      const d = this.rustDeclarationOfIdentifier(operand);
+      if (d === void 0 || d.name === operand || !soleUse(d, operand))
+        return void 0;
+      operand = this.rustSkipWrappers(d.initializer);
+    }
+    if (operand?.kind === SyntaxKind7.AwaitExpression)
+      operand = this.rustSkipWrappers(operand.expression);
+    return operand !== void 0 && isCallExpression6(operand) ? operand : void 0;
   }
   rustDeclaredDictSlot(element) {
     const owner = element?.parent?.parent;
