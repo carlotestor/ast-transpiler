@@ -1065,6 +1065,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** qf: the `Option<&str>` text of a typed string local keying an `in` test (`inbox` use), else undefined:
      *  `Some(k.as_str())` / `k.as_deref()`, so a native `contains_key` reads it without the box (`None` misses like `Null`). */
     rustInKeyTypedText(key: any): string | undefined;
+    /** td: the left operand of a `k in obj` test that is `k` itself or `k` under parens / `as` casts, else undefined. */
+    rustInKeyTop(n: any): any;
     /** The key local of an `in` test has a non-null initializer (nil-declared locals are left to their own rule). */
     rustInKeyInitialised(n: any): boolean;
     /** qf: a typed local against an untyped `Value` partner (a local or parameter) that the checker types like the local:

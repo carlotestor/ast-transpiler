@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -57118,7 +57118,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n))
       return "kin";
-    if ((kind === "str" || kind === "ostr") && isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.InKeyword && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n))
+    if ((kind === "str" || kind === "ostr") && this.rustInKeyTop(n) !== void 0 && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n))
       return "inbox";
     if (isCallExpression6(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== void 0)
       return "native";
@@ -59012,16 +59012,26 @@ ${binding(plan.indent)}` : ""), head: "" };
   /** qf: the `Option<&str>` text of a typed string local keying an `in` test (`inbox` use), else undefined:
    *  `Some(k.as_str())` / `k.as_deref()`, so a native `contains_key` reads it without the box (`None` misses like `Null`). */
   rustInKeyTypedText(key) {
-    const inner = this.unwrapParens(key);
+    let inner = this.unwrapParens(key);
+    while (inner?.kind === SyntaxKind7.AsExpression || inner?.kind === SyntaxKind7.ParenthesizedExpression)
+      inner = inner.expression;
     if (!isIdentifier3(inner) || this.rustScalarUseForms.get(inner) !== "inbox")
       return void 0;
     const kind = this.rustScalarLocalOf(inner)?.kind;
     const name = super.printIdentifier(inner);
     return kind === "str" ? `Some(${name}.as_str())` : kind === "ostr" ? `${name}.as_deref()` : void 0;
   }
+  /** td: the left operand of a `k in obj` test that is `k` itself or `k` under parens / `as` casts, else undefined. */
+  rustInKeyTop(n) {
+    let top = n;
+    while (top.parent?.kind === SyntaxKind7.ParenthesizedExpression || top.parent?.kind === SyntaxKind7.AsExpression)
+      top = top.parent;
+    const up = top.parent;
+    return isBinaryExpression5(up) && up.left === top && up.operatorToken.kind === SyntaxKind7.InKeyword ? top : void 0;
+  }
   /** The key local of an `in` test has a non-null initializer (nil-declared locals are left to their own rule). */
   rustInKeyInitialised(n) {
-    const recv = this.unwrapParens(n.parent.right);
+    const recv = this.unwrapParens(this.rustInKeyTop(n).parent.right);
     if (isPropertyAccessExpression3(recv) && /^(?:subscriptions|futures)$/.test(String(recv.name.text)) && this.rustIsWsClientType(this.typeOfNodeIfAny(recv.expression)))
       return false;
     const declaration = this.rustDeclaredNode(n);
@@ -67678,6 +67688,8 @@ ${iden}}`;
       return `Value::Bool(${name}.contains_key(${k.text}))`;
     const inner = this.rustSkipWrappers(key);
     if (this.bearerInOpKeyText(key) === void 0 && isIdentifier3(inner))
+      return `Value::Bool(${this.rustBorrowedStrKeyTest(name, inner)})`;
+    if (isIdentifier3(inner) && this.rustInKeyTypedText(key) !== void 0)
       return `Value::Bool(${this.rustBorrowedStrKeyTest(name, inner)})`;
     return `Value::Bool(matches!(&${k.text}, Value::Str(__k) if ${name}.contains_key(__k.as_ref())))`;
   }
@@ -76580,7 +76592,9 @@ _RustTranspiler.RUST_BASE_TYPED_RUNTIME = {
   seconds: "int",
   randNumber: "int",
   precisionFromString: "int",
-  binaryLength: "int"
+  binaryLength: "int",
+  // td: the hand-written `crc32` stub always answers an integer (`Value::Int` before; `-> i64` now)
+  crc32: "int"
 };
 // base methods with a TS body that the runtime implements by hand (`exchange_stubs.rs`), typed like the runtime table
 _RustTranspiler.RUST_BASE_TYPED_HAND_METHODS = /* @__PURE__ */ new Set(["valueIsDefined", "randNumber", "binaryLength"]);
