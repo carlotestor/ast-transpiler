@@ -55462,7 +55462,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
     const expected = kind === "ostr" || kind === "str" ? "string" : kind === "bool" || kind === "obool" ? "boolean" : "number";
-    if (checked !== expected && !boolTested && !(kind === "int" && this.rustArithCombinator(this.unwrapParens(declaration.initializer)) && this.rustArithCallKind(declaration.initializer) === "int"))
+    if (checked !== expected && !boolTested && !(kind === "ostr" && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(kind === "int" && this.rustArithCombinator(this.unwrapParens(declaration.initializer)) && this.rustArithCallKind(declaration.initializer) === "int"))
       return void 0;
     const seeded = kind;
     kind = this.rustScalarWidenedKind(declaration, kind);
@@ -56561,7 +56561,62 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const listType = this.typeOfNodeIfAny(node.expression);
     if (listType === void 0 || !this.getChecker().isArrayType(listType))
       return void 0;
-    return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string" ? "ostr" : void 0;
+    if (this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string")
+      return "ostr";
+    return this.rustAnyStrPushElem(node) ? "ostr" : void 0;
+  }
+  /** xg: the element read prints straight off the list place (`xs.get(..).and_then(Value::as_str)..`), never a helper read
+   *  that would leave the declaration `Value` while its uses read a string (the paradex E0599 trap). */
+  rustAnyStrPlaceRead(declaration) {
+    const init = this.rustScalarNativeText("ostr", declaration.initializer);
+    const node = this.unwrapParens(declaration.initializer);
+    const recvName = super.printIdentifier(node.expression);
+    return init !== void 0 && init.endsWith(".and_then(Value::as_str).map(str::to_owned)") && init.startsWith(`${recvName}.get(`);
+  }
+  /** xg: `const k = xs[i]` where `xs` is a local `[]` (declared `any[]` / `List` / unannotated) whose only writes are
+   *  `.push (v)` of one string-typed value: never rebound, element-written, spliced or handed on whole. Every element
+   *  the list can hold is a `Str`, so the read is the string or (out of range) undefined. */
+  rustAnyStrPushElem(node) {
+    if (!isElementAccessExpression4(node) || !isIdentifier3(node.expression) || this.rustTestTierSource(node))
+      return false;
+    let top = node;
+    while (top.parent !== void 0 && (isParenthesizedExpression3(top.parent) || top.parent.kind === SyntaxKind7.AsExpression))
+      top = top.parent;
+    if (!isVariableDeclaration3(top.parent) || top.parent.initializer !== top)
+      return false;
+    const owner = this.rustDeclaredNode(node.expression);
+    if (owner === void 0 || !isVariableDeclaration3(owner) || !isIdentifier3(owner.name))
+      return false;
+    if (this.rustEnclosingFunction(owner) !== this.rustEnclosingFunction(node))
+      return false;
+    const element = this.typeOfNodeIfAny(node);
+    if (element === void 0 || (element.flags & TypeFlags6.Any) === 0)
+      return false;
+    const init = this.unwrapParens(owner.initializer);
+    if (init === void 0 || !isArrayLiteralExpression4(init) || init.elements.length !== 0)
+      return false;
+    let pushes = 0;
+    const ok = this.rustLocalUsesAll(owner, String(owner.name.text), true, (n) => {
+      const up = n.parent;
+      if (up === void 0)
+        return false;
+      if (isPropertyAccessExpression3(up) && up.expression === n) {
+        const name = String(up.name.text);
+        if (name === "length")
+          return !(isBinaryExpression5(up.parent) && up.parent.left === up);
+        if (name !== "push" || !isCallExpression6(up.parent) || up.parent.expression !== up || up.parent.arguments.length !== 1)
+          return false;
+        const arg = up.parent.arguments[0];
+        pushes++;
+        return this.literalKindOfNode(arg) === "string" || this.primitiveKindOfType(this.typeOfNodeIfAny(arg)) === "string";
+      }
+      if (isElementAccessExpression4(up) && up.expression === n) {
+        const use = up.parent;
+        return !(use !== void 0 && (isBinaryExpression5(use) && use.left === up && this.rustAssignmentOpKind(use.operatorToken.kind) || use.kind === SyntaxKind7.DeleteExpression || use.kind === SyntaxKind7.PrefixUnaryExpression || use.kind === SyntaxKind7.PostfixUnaryExpression));
+      }
+      return false;
+    });
+    return ok && pushes > 0;
   }
   /** ral-ug: `t[i]` (a literal index) of a never-written `const t = this.m (..)` whose every return puts an exact
    *  Bool-or-Null at slot i (`handleOptionBoolAndParams[2]`: `checkOptionBool`): `Option<bool>`, as the slot rule. */

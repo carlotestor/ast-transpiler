@@ -711,6 +711,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustListLengthInit(node: any): boolean;
     rustListLengthText(node: any): string;
     rustElementReadScalarKind(node: any): string | undefined;
+    /** xg: the element read prints straight off the list place (`xs.get(..).and_then(Value::as_str)..`), never a helper read
+     *  that would leave the declaration `Value` while its uses read a string (the paradex E0599 trap). */
+    rustAnyStrPlaceRead(declaration: any): boolean;
+    /** xg: `const k = xs[i]` where `xs` is a local `[]` (declared `any[]` / `List` / unannotated) whose only writes are
+     *  `.push (v)` of one string-typed value: never rebound, element-written, spliced or handed on whole. Every element
+     *  the list can hold is a `Str`, so the read is the string or (out of range) undefined. */
+    rustAnyStrPushElem(node: any): boolean;
     /** ral-ug: `t[i]` (a literal index) of a never-written `const t = this.m (..)` whose every return puts an exact
      *  Bool-or-Null at slot i (`handleOptionBoolAndParams[2]`: `checkOptionBool`): `Option<bool>`, as the slot rule. */
     rustExactBoolTupleRead(node: any, owner: any): string | undefined;
