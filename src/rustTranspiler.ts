@@ -4314,6 +4314,7 @@ export class RustTranspiler extends BaseTranspiler {
         // vg: an element of a never-written all-string list borrows (`Option<&str>`): no copy at the declaration or any box
         this.rustBorrowedStrElems.delete(declaration);
         if (ok && kind === 'ostr' && this.rustBorrowStrElem(declaration)) { this.rustBorrowedStrElems.add(declaration); return kind; }
+        if (ok && this.rustWgKeyReadInValueUse(declaration)) return undefined;
         // boxed uses of the expression shapes are checked against the printed method lines
         const guarded = (widened || expressionUses || this.rustOptListParamInit(declaration.initializer)) && boxed > 0;
         // a local only handed back to `Value` slots keeps its producer's type: one conversion per box, no extra string copy
@@ -6657,7 +6658,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isBinaryExpression(write) || write.left !== parent || write.operatorToken.kind !== SyntaxKind.EqualsToken
             || write.parent?.kind !== SyntaxKind.ExpressionStatement) return undefined;
         // the value operand must not read the key local (the insert takes it by name)
-        if (new RegExp(`\\b${String(n.text)}\\b`).test(String(write.right.getText()))) return undefined;
+        // wg: unless the key is a borrowed element (`Option<&str>` is Copy: the value reads it, the insert builds the owned key)
+        if (new RegExp(`\\b${String(n.text)}\\b`).test(String(write.right.getText()))) {
+            if (!this.rustBorrowStrElemShape(this.rustDeclaredNode(n))) return undefined;
+            this.rustWgKeyReadInValue.add(n);
+        }
         return 'key';
     }
 
@@ -7195,6 +7200,27 @@ export class RustTranspiler extends BaseTranspiler {
         const call: any = access?.parent;
         return isPropertyAccessExpression(access) && access.expression === n && RustTranspiler.RUST_BORROW_STR_METHODS.has(String(access.name.text))
             && isCallExpression(call) && call.expression === access;
+    }
+
+    /** wg: field-write keys whose write value also reads the key (admitted only for a borrowed element). */
+    private rustWgKeyReadInValue = new WeakSet<any>();
+
+    rustWgKeyReadInValueUse(declaration: any): boolean {
+        let found = false;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
+            if (this.rustWgKeyReadInValue.has(n)) found = true;
+            return true;
+        });
+        return found;
+    }
+
+    /** wg: `const k = xs[i]` off a never-written local list of only strings (vg's owner rule, uses of `k` not yet checked). */
+    rustBorrowStrElemShape(declaration: any): boolean {
+        if (declaration === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name) || this.rustTestTierSource(declaration)) return false;
+        const init: any = this.unwrapParens(declaration.initializer);
+        if (init === undefined || !isElementAccessExpression(init) || !isIdentifier(init.expression)) return false;
+        const owner: any = this.rustDeclaredNode(init.expression);
+        return owner !== undefined && isVariableDeclaration(owner) && isIdentifier(owner.name) && this.rustExactStrListInit(owner.initializer);
     }
 
     /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */

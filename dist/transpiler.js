@@ -51578,6 +51578,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
      *  takes an optional string lent as `&x` (`From<&Option<String>>`: `None` is Null, `Some(s)` a `Str`, as the box gave). */
     /** vg: element locals printed as a borrowed `Option<&str>` off their list (`recv.get(i).and_then(Value::as_str)`). */
     this.rustBorrowedStrElems = /* @__PURE__ */ new WeakSet();
+    /** wg: field-write keys whose write value also reads the key (admitted only for a borrowed element). */
+    this.rustWgKeyReadInValue = /* @__PURE__ */ new WeakSet();
     this.rustScalarPending = /* @__PURE__ */ new Set();
     // ── native `Option<String>` returns (`: Str` methods) ─────────────────────
     //
@@ -55463,6 +55465,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       this.rustBorrowedStrElems.add(declaration);
       return kind;
     }
+    if (ok && this.rustWgKeyReadInValueUse(declaration))
+      return void 0;
     const guarded = (widened || expressionUses || this.rustOptListParamInit(declaration.initializer)) && boxed > 0;
     const strKind = kind === "str" || kind === "ostr";
     const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !strKind || !this.rustStrNoLend && (this.rustStrLendSites(declaration) || kind === "str" && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustReaderLendBoxes(declaration) || this.rustScOwnSelfCall(declaration.initializer) && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustVenueLocalHandedOn(declaration) && this.rustReaderLendBoxes(declaration))) && !this.rustStrReturnedLocal(declaration, scope);
@@ -57865,8 +57869,11 @@ ${binding(plan.indent)}` : ""), head: "" };
       return "frd";
     if (!isBinaryExpression5(write) || write.left !== parent || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
       return void 0;
-    if (new RegExp(`\\b${String(n.text)}\\b`).test(String(write.right.getText())))
-      return void 0;
+    if (new RegExp(`\\b${String(n.text)}\\b`).test(String(write.right.getText()))) {
+      if (!this.rustBorrowStrElemShape(this.rustDeclaredNode(n)))
+        return void 0;
+      this.rustWgKeyReadInValue.add(n);
+    }
     return "key";
   }
   /** Element-access hook: `this.f[k]` read with a typed string key. */
@@ -58408,6 +58415,25 @@ ${binding(plan.indent)}` : ""), head: "" };
     const access = n.parent;
     const call = access?.parent;
     return isPropertyAccessExpression3(access) && access.expression === n && _RustTranspiler.RUST_BORROW_STR_METHODS.has(String(access.name.text)) && isCallExpression6(call) && call.expression === access;
+  }
+  rustWgKeyReadInValueUse(declaration) {
+    let found = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      if (this.rustWgKeyReadInValue.has(n))
+        found = true;
+      return true;
+    });
+    return found;
+  }
+  /** wg: `const k = xs[i]` off a never-written local list of only strings (vg's owner rule, uses of `k` not yet checked). */
+  rustBorrowStrElemShape(declaration) {
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name) || this.rustTestTierSource(declaration))
+      return false;
+    const init = this.unwrapParens(declaration.initializer);
+    if (init === void 0 || !isElementAccessExpression4(init) || !isIdentifier3(init.expression))
+      return false;
+    const owner = this.rustDeclaredNode(init.expression);
+    return owner !== void 0 && isVariableDeclaration3(owner) && isIdentifier3(owner.name) && this.rustExactStrListInit(owner.initializer);
   }
   /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
   rustExactStrListInit(init) {

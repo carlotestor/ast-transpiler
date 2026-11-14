@@ -999,6 +999,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_BORROW_STR_METHODS;
     /** wg: `k.m (..)` with `m` a pure string method (reads the receiver, returns a fresh value). */
     rustBorrowStrMethodRecv(n: any): boolean;
+    /** wg: field-write keys whose write value also reads the key (admitted only for a borrowed element). */
+    private rustWgKeyReadInValue;
+    rustWgKeyReadInValueUse(declaration: any): boolean;
+    /** wg: `const k = xs[i]` off a never-written local list of only strings (vg's owner rule, uses of `k` not yet checked). */
+    rustBorrowStrElemShape(declaration: any): boolean;
     /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
     rustExactStrListInit(init: any): boolean;
     rustInArrayNeedle(node: any): boolean;

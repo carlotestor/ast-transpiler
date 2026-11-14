@@ -12927,3 +12927,26 @@ describe('ral-wg: a borrowed string element is the receiver of a string method',
         expect(out).not.toMatch(/let mut key: Option<&str>/);
     });
 });
+
+describe('ral-wg: a borrowed element keys a this.balance write whose value reads it', () => {
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-wg-bal-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    balance: Dict = {};\n    safeValue (o: any, k: any, d: any = undefined): any { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    test('the insert builds the owned key once, the value reads the borrow', () => {
+        const out = mk("    handleBalance (balance: Dict) {\n        const keys = Object.keys (balance);\n        for (let i = 0; i < keys.length; i++) {\n            const key = keys[i];\n            this.balance[key] = this.safeValue (balance, key);\n        }\n    }");
+        expect(out).toMatch(/let mut key: Option<&str> = keys\.get\(i as usize\)\.and_then\(Value::as_str\);/);
+        expect(out).toContain('.insert(key.as_deref().unwrap_or("null").to_string(), __be_tmp)');
+        expect(out).not.toContain('key.clone()');
+    });
+    test('negative: a non-borrowed key read in the written value keeps the helper key', () => {
+        const out = mk("    handleBalance (balance: Dict, other: Dict) {\n        const key = this.safeValue (other, 'k');\n        this.balance[key] = this.safeValue (balance, key);\n    }");
+        expect(out).not.toContain('Option<&str>');
+    });
+});
