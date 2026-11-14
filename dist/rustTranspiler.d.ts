@@ -2749,6 +2749,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustDictSlotOfWrite(n: any): boolean;
     rustNilSlotDictCandidateUncached(declaration: any): boolean;
     rustNilSlotLineOk(n: any): boolean;
+    rustShortDestrHeads: WeakSet<any>;
     /** A nil-declared slot local typed as the map. */
     rustNilSlotDictLocal(declaration: any): boolean;
     rustNilSlotDictOf(node: any): any;

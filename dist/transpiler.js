@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -51727,6 +51727,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // tuple whose declared slot type is `Dict`, or an omit of the local itself), and the first write comes before any
     // read, so the local holds `crate::value::Dict` from that write on, handed on as the handed-slot rule does.
     this.rustNilSlotDictCandidates = /* @__PURE__ */ new WeakMap();
+    this.rustShortDestrHeads = /* @__PURE__ */ new WeakSet();
     this.rustUntilHeadDecisions = /* @__PURE__ */ new WeakMap();
     // ── lent list containers (rustParamIsLentList / rustLentListSlot / printLentListArg) ──
     // The response list of a base `parse*` method declared `List` takes `impl Into<crate::Value>`, in the base and in
@@ -53296,12 +53297,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const nativeList = this.rustNativeListSource(right);
       const head = nativeList ? `let ${tmpName}: Vec<Value> = ${rhs}.as_array().cloned().unwrap_or_default()` : `let ${tmpName} = ${rhs}`;
       const slotRead = (idx) => nativeList ? this.printTypedVecElementRead(tmpName, idx) : `get_value(&${tmpName}, &Value::Int(${idx}))`;
-      const assignments = left.elements.map((e, idx) => this.printRustNilSlotWrite(
+      const typedSlots = left.elements.map((e, idx) => this.printRustNilSlotWrite(
         e,
         slotRead(idx),
         nativeList && /(?:^|[\\/])ts[\\/]src[\\/]pro[\\/]/.test(String(node.getSourceFile().fileName)) ? `${tmpName}.get(${idx}).and_then(Value::as_str)` : void 0,
         nativeList ? `${tmpName}.get(${idx}).and_then(Value::as_bool)` : void 0
-      ) ?? `${this.printNode(e, 0)} = ${slotRead(idx)}`).join("; ");
+      ));
+      const assignments = typedSlots.map((t, idx) => t ?? `${this.printNode(left.elements[idx], 0)} = ${slotRead(idx)}`).join("; ");
+      if (nativeList && typedSlots.every((t) => t !== void 0) && this.rustShortDestrHeads.has(node))
+        return `{ let ${tmpName} = ${rhs}.into_list(); ${assignments}; }`;
       return `{ ${head}; ${assignments}; }`;
     }
     const bookWrite = isAssign ? this.printWsBookMetaWrite(left, right) ?? this.printWsBookMapWrite(left, right) ?? this.printWsBookLocalWrite(left, right) : void 0;
@@ -53740,6 +53744,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "bool";
     if (!isCallExpression6(node))
       return void 0;
+    if (this.rustBaseTypedReturnKind(node) === "bool")
+      return "bool";
     const callee = node.expression;
     if (isPropertyAccessExpression3(callee) && isIdentifier3(callee.expression) && callee.expression.text === "Precise") {
       return _RustTranspiler.RUST_NIL_PRECISE_STR.test(String(callee.name.text)) ? "str" : void 0;
@@ -53818,6 +53824,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "cond";
     if (kind === "bool" && this.rustNilNegatedBoolWrite(n))
       return "cond";
+    if (kind === "bool" && this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n))
+      return "cond";
     if (isCallExpression6(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
       return this.rustNilBoxCallOk(parent, parent.arguments.indexOf(n)) ? "box" : void 0;
     }
@@ -53893,6 +53901,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   printRustNilLocalCondition(node) {
     const inner = this.unwrapParens(node);
     const local = this.rustNilLocalOfIdentifier(inner);
+    if (local === void 0 && inner !== node && isPrefixUnaryExpression3(inner) && inner.operator === SyntaxKind7.ExclamationToken) {
+      const operand = this.unwrapParens(inner.operand);
+      if (this.rustNilLocalOfIdentifier(operand)?.kind === "bool")
+        return `(!(${super.printIdentifier(operand)} == Some(true)))`;
+    }
     return local?.kind === "bool" ? `(${super.printIdentifier(inner)} == Some(true))` : void 0;
   }
   /** Identifier hook: a box read converts with the standard `From` impls. */
@@ -54216,6 +54229,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (local.kind === "int")
       return `${name} = ${text}.as_i64()`;
+    if (isCallExpression6(node) && this.rustBaseTypedReturnKind(node) === "bool")
+      return `${name} = Some(${this.rustBaseTypedBareText(node)})`;
     if (isCallExpression6(node))
       return `${name} = ${text}.as_bool()`;
     const pick = this.printRustNilBoolTernary(node);
@@ -71366,7 +71381,16 @@ ${iden}}`;
           reserve += ".as_str().map(str::to_owned)".length;
       }
     }
-    return width + reserve + ".into_dict()".length + "Value::Dict()".length <= 400;
+    const budget = width + reserve + ".into_dict()".length + "Value::Dict()".length;
+    if (budget <= 400)
+      return true;
+    const short = ": Vec<Value>".length + ".as_array().cloned().unwrap_or_default()".length - ".into_list()".length;
+    if (write === void 0 || !isBinaryExpression5(write) || !isArrayLiteralExpression4(write.left) || !this.rustNativeListSource(write.right) || budget - short > 400)
+      return false;
+    if (!write.left.elements.every((el) => isIdentifier3(el) && this.rustNilSlotWrite(el)))
+      return false;
+    this.rustShortDestrHeads.add(write);
+    return true;
   }
   /** A nil-declared slot local typed as the map. */
   rustNilSlotDictLocal(declaration) {
