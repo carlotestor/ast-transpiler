@@ -5756,6 +5756,38 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustBlockLocalUsesAll(declaration, name, acceptUse, true);
     }
 
+    /** zi: `rustLocalUsesAll` for a `const [ .. ] = ..` slot: a same-named slot of another `let` / `const` destructure in a
+     *  disjoint sibling block (`if { const [ r, p ] = .. } else { const [ r, p ] = .. }`) is another symbol, printed as its
+     *  own block-scoped `let`, so its name and uses are skipped. Any other second binding of the name keeps the old walk. */
+    rustSlotUsesAll(element: any, name: string, skipPropertyNames: boolean, acceptUse: (n: any) => boolean): boolean {
+        const statementOf = (b: any) => b?.parent?.parent?.parent?.parent;
+        const own: any = element?.kind === SyntaxKind.BindingElement ? this.rustSymbolOf(element.name) : undefined;
+        const scope: any = this.rustEnclosingFunction(element);
+        const blockScoped = (b: any) => b?.kind === SyntaxKind.BindingElement && b.parent?.kind === SyntaxKind.ArrayBindingPattern
+            && isVariableDeclaration(b.parent.parent) && (b.parent.parent.parent?.flags & (NodeFlags.Let | NodeFlags.Const)) !== 0;
+        if (own === undefined || scope === undefined || !blockScoped(element)) return this.rustLocalUsesAll(element, name, skipPropertyNames, acceptUse);
+        const nodes = this.rustScopeNameNodes(scope, name) as any[];
+        const siblings = nodes.filter((n: any) => isIdentifier(n) && n !== element.name && n.parent?.kind === SyntaxKind.BindingElement && n.parent.name === n);
+        if (siblings.length === 0 || nodes.some((n: any) => n !== element && this.rustBindsName(n, name))) return this.rustLocalUsesAll(element, name, skipPropertyNames, acceptUse);
+        const mine = statementOf(element);
+        for (const s of siblings) {
+            const other = statementOf(s.parent);
+            if (!blockScoped(s.parent) || this.rustEnclosingFunction(s) !== scope || mine === undefined || other === undefined
+                || this.isNodeInsideNode(mine, other.parent) || this.isNodeInsideNode(other, mine.parent)) return this.rustLocalUsesAll(element, name, skipPropertyNames, acceptUse);
+        }
+        for (const n of nodes) {
+            if (n.kind !== SyntaxKind.Identifier || n === element.name || siblings.includes(n)) continue;
+            if (skipPropertyNames && this.rustIdentifierIsPropertyName(n)) continue;
+            if (n.parent?.kind !== SyntaxKind.ShorthandPropertyAssignment && !this.rustIdentifierIsPropertyName(n)) {
+                const symbol = this.rustSymbolOf(n);
+                if (symbol === undefined) return false;
+                if (symbol !== own) continue;
+            } else if (!this.isNodeInsideNode(n, mine.parent)) continue;
+            if (!acceptUse(n)) return false;
+        }
+        return true;
+    }
+
     rustBlockLocalUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean, scalar = false): boolean {
         const own: any = this.rustSymbolOf(declaration.name);
         const scope = this.rustEnclosingFunction(declaration);
@@ -22085,7 +22117,9 @@ export class RustTranspiler extends BaseTranspiler {
         let uses = 0;
         let boxes = 0;
         let longBox = false;
-        const safe = this.rustLocalUsesAll(declaration, name, false, (n: any) => {
+        // zi: a slot re-declared by a destructure in a disjoint sibling block is its own block-scoped local
+        const walk = declaration.kind === SyntaxKind.BindingElement ? this.rustSlotUsesAll.bind(this) : this.rustLocalUsesAll.bind(this);
+        const safe = walk(declaration, name, false, (n: any) => {
             if (this.rustIdentifierIsPropertyName(n)) return !(n.parent?.kind === SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
             if (this.rustDeclaredNode(n) !== declaration || this.rustEnclosingFunction(n) !== fn) return false;
             const call: any = n.parent;
@@ -22401,7 +22435,7 @@ export class RustTranspiler extends BaseTranspiler {
         const fn: any = this.rustEnclosingFunction(element);
         if (fn === undefined || isSourceFile(fn) || this.rustLocalIsReassigned(element, name)) return false;
         let heads = 0;
-        const safe = this.rustLocalUsesAll(element, name, false, (n: any) => {
+        const safe = this.rustSlotUsesAll(element, name, false, (n: any) => {
             if (this.rustIdentifierIsPropertyName(n)) return !(n.parent?.kind === SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
             if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn) return false;
             if (this.rustExtendHeadUse(n)) return heads++ >= 0;

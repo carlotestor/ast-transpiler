@@ -56959,6 +56959,44 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustScalarUsesAll(declaration, name, acceptUse) {
     return this.rustBlockLocalUsesAll(declaration, name, acceptUse, true);
   }
+  /** zi: `rustLocalUsesAll` for a `const [ .. ] = ..` slot: a same-named slot of another `let` / `const` destructure in a
+   *  disjoint sibling block (`if { const [ r, p ] = .. } else { const [ r, p ] = .. }`) is another symbol, printed as its
+   *  own block-scoped `let`, so its name and uses are skipped. Any other second binding of the name keeps the old walk. */
+  rustSlotUsesAll(element, name, skipPropertyNames, acceptUse) {
+    const statementOf = (b) => b?.parent?.parent?.parent?.parent;
+    const own = element?.kind === SyntaxKind7.BindingElement ? this.rustSymbolOf(element.name) : void 0;
+    const scope = this.rustEnclosingFunction(element);
+    const blockScoped = (b) => b?.kind === SyntaxKind7.BindingElement && b.parent?.kind === SyntaxKind7.ArrayBindingPattern && isVariableDeclaration3(b.parent.parent) && (b.parent.parent.parent?.flags & (NodeFlags4.Let | NodeFlags4.Const)) !== 0;
+    if (own === void 0 || scope === void 0 || !blockScoped(element))
+      return this.rustLocalUsesAll(element, name, skipPropertyNames, acceptUse);
+    const nodes = this.rustScopeNameNodes(scope, name);
+    const siblings = nodes.filter((n) => isIdentifier3(n) && n !== element.name && n.parent?.kind === SyntaxKind7.BindingElement && n.parent.name === n);
+    if (siblings.length === 0 || nodes.some((n) => n !== element && this.rustBindsName(n, name)))
+      return this.rustLocalUsesAll(element, name, skipPropertyNames, acceptUse);
+    const mine = statementOf(element);
+    for (const s of siblings) {
+      const other = statementOf(s.parent);
+      if (!blockScoped(s.parent) || this.rustEnclosingFunction(s) !== scope || mine === void 0 || other === void 0 || this.isNodeInsideNode(mine, other.parent) || this.isNodeInsideNode(other, mine.parent))
+        return this.rustLocalUsesAll(element, name, skipPropertyNames, acceptUse);
+    }
+    for (const n of nodes) {
+      if (n.kind !== SyntaxKind7.Identifier || n === element.name || siblings.includes(n))
+        continue;
+      if (skipPropertyNames && this.rustIdentifierIsPropertyName(n))
+        continue;
+      if (n.parent?.kind !== SyntaxKind7.ShorthandPropertyAssignment && !this.rustIdentifierIsPropertyName(n)) {
+        const symbol = this.rustSymbolOf(n);
+        if (symbol === void 0)
+          return false;
+        if (symbol !== own)
+          continue;
+      } else if (!this.isNodeInsideNode(n, mine.parent))
+        continue;
+      if (!acceptUse(n))
+        return false;
+    }
+    return true;
+  }
   rustBlockLocalUsesAll(declaration, name, acceptUse, scalar = false) {
     const own = this.rustSymbolOf(declaration.name);
     const scope = this.rustEnclosingFunction(declaration);
@@ -73437,7 +73475,8 @@ ${iden}}`;
     let uses = 0;
     let boxes = 0;
     let longBox = false;
-    const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
+    const walk = declaration.kind === SyntaxKind7.BindingElement ? this.rustSlotUsesAll.bind(this) : this.rustLocalUsesAll.bind(this);
+    const safe = walk(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
       if (this.rustDeclaredNode(n) !== declaration || this.rustEnclosingFunction(n) !== fn)
@@ -73753,7 +73792,7 @@ ${iden}}`;
     if (fn === void 0 || isSourceFile5(fn) || this.rustLocalIsReassigned(element, name))
       return false;
     let heads = 0;
-    const safe = this.rustLocalUsesAll(element, name, false, (n) => {
+    const safe = this.rustSlotUsesAll(element, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
       if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn)

@@ -14048,3 +14048,24 @@ describe('yi: option-helper tuple slots', () => {
         expect(out).toContain('let mut perRequest: Value = ');
     });
 });
+
+describe('zi: tuple slots fifth pass', () => {
+    const fx = (name: string, base: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    const base = "export interface Dict { [key: string]: any }\nconst omit = (x: Dict | undefined, ...args: any) => x;\nconst extend = (...args: any[]) => Object.assign ({}, ...args);\nexport default class Exchange {\n    omit = omit;\n    extend = extend;\n    safeInteger (o: any, k: any): number | undefined { return o; }\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    handleUntilOption (key: string, request: Dict, params: Dict, multiplier: number = 1): [Dict, Dict] {\n        const until = this.safeInteger (params, 'until');\n        if (until !== undefined) {\n            request[key] = until;\n        }\n        const paramsOmitted = (until !== undefined) ? this.omit (params, 'until') : params;\n        return [ request, paramsOmitted ];\n    }\n}\n";
+    test('zi: a slot re-declared by a destructure in a disjoint sibling block is its own block-scoped Dict local', () => {
+        const file = fx ('zi-sibling-slots', base, "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fetchThing (flag: boolean, params: Dict = {}) {\n        const request: Dict = { 'a': 1 };\n        if (flag) {\n            const [ requestUntil, paramsUntil ] = this.handleUntilOption ('before', request, params);\n            return this.hold (this.extend (requestUntil, paramsUntil));\n        } else {\n            const [ requestUntil, paramsUntil ] = this.handleUntilOption ('lastTime', request, params);\n            return this.hold (this.extend (requestUntil, paramsUntil));\n        }\n    }\n    fetchNested (flag: boolean, params: Dict = {}) {\n        const request: Dict = { 'a': 1 };\n        const [ requestUntil, paramsUntil ] = this.handleUntilOption ('before', request, params);\n        if (flag) {\n            const [ requestUntil, paramsUntil ] = this.handleUntilOption ('lastTime', request, params);\n            return this.hold (this.extend (requestUntil, paramsUntil));\n        }\n        return this.hold (this.extend (requestUntil, paramsUntil));\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        const thing = out.slice (out.indexOf ('fn fetchThing'), out.indexOf ('fn fetchNested'));
+        expect(thing.match(/let mut requestUntil: crate::value::Dict = /g)?.length).toBe(2);
+        expect(thing.match(/let mut paramsUntil: crate::value::Dict = /g)?.length).toBe(2);
+        // negative: a nested (shadowing) re-declaration keeps the old walk
+        const nested = out.slice (out.indexOf ('fn fetchNested'));
+        expect(nested).toContain('let mut requestUntil: Value = ');
+    });
+});

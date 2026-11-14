@@ -770,6 +770,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A number reader whose default may be an `Int` (an int literal, or anything not proven a float). */
     rustReaderIntDefaultNum(init: any): boolean;
     rustScalarUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean): boolean;
+    /** zi: `rustLocalUsesAll` for a `const [ .. ] = ..` slot: a same-named slot of another `let` / `const` destructure in a
+     *  disjoint sibling block (`if { const [ r, p ] = .. } else { const [ r, p ] = .. }`) is another symbol, printed as its
+     *  own block-scoped `let`, so its name and uses are skipped. Any other second binding of the name keeps the old walk. */
+    rustSlotUsesAll(element: any, name: string, skipPropertyNames: boolean, acceptUse: (n: any) => boolean): boolean;
     rustBlockLocalUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean, scalar?: boolean): boolean;
     /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole
      *  write (`x = Precise.stringDiv (Precise.stringMul (local, y), ..)`): the written text is a `Precise` call either
