@@ -14492,3 +14492,27 @@ describe('ye: resolve proof for literal-map, cache-field and wildcard-hash resol
         });
     }
 });
+
+describe('ral-40a: nil-declared Dict locals lent to extend', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type NullableDict = Dict | undefined;\nexport default class Exchange {\n    omit (o: any, ...keys: any[]): any { return o; }\n    extend (...args: any[]): any { return Object.assign ({}, ...args); }\n    deepExtend (...args: any[]): any { return Object.assign ({}, ...args); }\n    hold (x: any): any { return x; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nimport type { Dict, NullableDict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    createOrderRequest (params: Dict = {}, tif: boolean = false) {\n        const request: Dict = { 'a': 1 };\n        let requestParams: NullableDict = undefined;\n        if (tif) {\n            requestParams = this.omit (params, [ 'tif' ]);\n        } else {\n            requestParams = this.omit (params, 'x');\n        }\n        return this.extend (request, requestParams);\n    }\n    deepRequest (params: Dict = {}, tif: boolean = false) {\n        const request: Dict = { 'a': 1 };\n        let deepParams = undefined;\n        if (tif) {\n            deepParams = this.omit (params, [ 'tif' ]);\n        }\n        return this.deepExtend (request, deepParams);\n    }\n}\n";
+    const out = () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-40a-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('an omit-only nil local whose one use is the extra operand of extend is Option<Dict> lent as &[&x]', () => {
+        const text = out();
+        const co = text.slice(text.indexOf('fn createOrderRequest'), text.indexOf('fn deepRequest'));
+        expect(co).toContain('let mut requestParams: Option<crate::value::Dict> = None');
+        expect(co).toContain('.into_opt_dict();');
+        expect(co).toContain('&[&requestParams]');
+        expect(co).not.toContain('requestParams.clone()');
+        // negative: deepExtend merges a list operand too, so its operand keeps the box
+        const de = text.slice(text.indexOf('fn deepRequest'));
+        expect(de).toContain('let mut deepParams: Value = Value::Null');
+    });
+});

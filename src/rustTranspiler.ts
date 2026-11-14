@@ -17690,6 +17690,9 @@ export class RustTranspiler extends BaseTranspiler {
                 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0) && boxedElementUses.push(n) > 0;
             const asArg: any = isAsExpression(up) && up.expression === n && isCallExpression(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : undefined;
             if (asArg !== undefined && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared)) return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
+            // ral-40a: the sole extra operand of a base `extend` takes the optional map lent (`&[&x]`, MergeOperands for
+            // `&[&Option<Dict>; 1]`): `None` merges nothing, exactly as the boxed Null (or any non-map) merged nothing
+            if (nilDeclared && from === 'dict' && this.rustOptExtendOperandUse(n)) return ++lentNullable > 0 && ++reads > 0;
             // a per-venue lent slot takes any typed container local by reference (the optional form arrives as Null for None)
             if ((from === 'dict' || from === 'list') && this.rustLentVenueSlot(up, n) !== undefined) return ++reads > 0;
             if (this.rustLentResponseSlot(up, n) && (extendReuse || this.rustLentResponseSource(init))) return ++lentResponses > 0 && ++reads > 0;
@@ -22779,6 +22782,14 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustBaseCallNamed(call, RustTranspiler.RUST_HANDED_DICT_EXTEND) ? call.arguments[1] : undefined;
     }
 
+    private static readonly RUST_OPT_EXTEND = new Set([ 'extend' ]);
+
+    /** ral-40a: `n` is the sole extra operand of a base `this.extend (a, n)` (not `deepExtend`, which merges a list too). */
+    rustOptExtendOperandUse(n: any): boolean {
+        const call: any = n?.parent;
+        return isCallExpression(call) && this.rustHandedDictExtendOperand(call) === n && this.rustBaseCallNamed(call, RustTranspiler.RUST_OPT_EXTEND);
+    }
+
     /** `self.extend(a, &[&x])` / `self.omit(&x, keys, &[])` lending a handed dict local. */
     printHandedDictExtend(node: any, identation: number): string | undefined {
         if (!isCallExpression(node)) return undefined;
@@ -22796,7 +22807,12 @@ export class RustTranspiler extends BaseTranspiler {
             return `self.omit(${lent(first)}, ${this.printNode(node.arguments[1], identation).trim()}, &[])`;
         }
         const operand: any = this.rustHandedDictExtendOperand(node);
-        if (operand === undefined || !lentDict(operand)) return undefined;
+        // ral-40a: an `Option<Dict>` local lent to `extend` (MergeOperands for `&[&Option<Dict>; 1]`)
+        const optOperand = (n: any) => {
+            const d: any = this.rustDeclarationOfIdentifier(n);
+            return d !== undefined && d.name !== n && this.rustOptExtendOperandUse(n) && this.rustBorrowedLocalKind(d) === 'dict' && this.rustOptContainerLocals.has(d) && this.rustPrintedOptional.has(d);
+        };
+        if (operand === undefined || !(lentDict(operand) || optOperand(operand))) return undefined;
         const head = this.printNode(first, identation).trim();
         const method = this.toSnakeCaseName(String((node.expression as any).name.text));
         return `self.${method}(${isIdentifier(first) && this.printExtendHeadArg(first, head) !== undefined ? head : RustTranspiler.cloneIfBareLocal(head)}, &[${lent(operand)}])`;

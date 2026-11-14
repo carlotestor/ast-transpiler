@@ -68786,6 +68786,8 @@ ${iden}}`;
       const asArg = isAsExpression3(up) && up.expression === n && isCallExpression6(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : void 0;
       if (asArg !== void 0 && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared))
         return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
+      if (nilDeclared && from === "dict" && this.rustOptExtendOperandUse(n))
+        return ++lentNullable > 0 && ++reads > 0;
       if ((from === "dict" || from === "list") && this.rustLentVenueSlot(up, n) !== void 0)
         return ++reads > 0;
       if (this.rustLentResponseSlot(up, n) && (extendReuse || this.rustLentResponseSource(init)))
@@ -74163,6 +74165,11 @@ ${iden}}`;
       return void 0;
     return this.rustBaseCallNamed(call, _RustTranspiler.RUST_HANDED_DICT_EXTEND) ? call.arguments[1] : void 0;
   }
+  /** ral-40a: `n` is the sole extra operand of a base `this.extend (a, n)` (not `deepExtend`, which merges a list too). */
+  rustOptExtendOperandUse(n) {
+    const call = n?.parent;
+    return isCallExpression6(call) && this.rustHandedDictExtendOperand(call) === n && this.rustBaseCallNamed(call, _RustTranspiler.RUST_OPT_EXTEND);
+  }
   /** `self.extend(a, &[&x])` / `self.omit(&x, keys, &[])` lending a handed dict local. */
   printHandedDictExtend(node, identation) {
     if (!isCallExpression6(node))
@@ -74180,7 +74187,11 @@ ${iden}}`;
       return `self.omit(${lent(first)}, ${this.printNode(node.arguments[1], identation).trim()}, &[])`;
     }
     const operand = this.rustHandedDictExtendOperand(node);
-    if (operand === void 0 || !lentDict(operand))
+    const optOperand = (n) => {
+      const d = this.rustDeclarationOfIdentifier(n);
+      return d !== void 0 && d.name !== n && this.rustOptExtendOperandUse(n) && this.rustBorrowedLocalKind(d) === "dict" && this.rustOptContainerLocals.has(d) && this.rustPrintedOptional.has(d);
+    };
+    if (operand === void 0 || !(lentDict(operand) || optOperand(operand)))
       return void 0;
     const head = this.printNode(first, identation).trim();
     const method = this.toSnakeCaseName(String(node.expression.name.text));
@@ -80414,6 +80425,7 @@ _RustTranspiler.RUST_HANDED_DICT_SOURCES = /* @__PURE__ */ new Set(["extend", "o
 _RustTranspiler.RUST_ALWAYS_MAP_HELPERS = /* @__PURE__ */ new Set(["extend", "indexBy", "groupBy"]);
 _RustTranspiler.RUST_HANDED_DICT_OMIT = /* @__PURE__ */ new Set(["omit"]);
 _RustTranspiler.RUST_HANDED_DICT_EXTEND = /* @__PURE__ */ new Set(["extend", "deepExtend"]);
+_RustTranspiler.RUST_OPT_EXTEND = /* @__PURE__ */ new Set(["extend"]);
 _RustTranspiler.RUST_EXTEND_HEAD_CALLS = /* @__PURE__ */ new Set(["extend", "deepExtend"]);
 _RustTranspiler.RUST_LENT_LIST_TYPES = /* @__PURE__ */ new Set(["List", "NullableList"]);
 _RustTranspiler.RUST_LENT_RESPONSE_READERS = /* @__PURE__ */ new Set(["parseLedger", "parseOpenInterestsHistory", "parseBorrowRateHistory", "convertTradingViewToOHLCV"]);

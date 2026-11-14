@@ -3129,6 +3129,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_HANDED_DICT_EXTEND;
     /** The sole extra operand of a base `this.extend (a, x)` / `this.deepExtend (a, x)` when it is a bare identifier. */
     rustHandedDictExtendOperand(call: any): any;
+    private static readonly RUST_OPT_EXTEND;
+    /** ral-40a: `n` is the sole extra operand of a base `this.extend (a, n)` (not `deepExtend`, which merges a list too). */
+    rustOptExtendOperandUse(n: any): boolean;
     /** `self.extend(a, &[&x])` / `self.omit(&x, keys, &[])` lending a handed dict local. */
     printHandedDictExtend(node: any, identation: number): string | undefined;
     /** `let mut x: crate::value::Dict = <slot read>.into_dict()` for a handed params slot. */
