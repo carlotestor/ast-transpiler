@@ -1995,6 +1995,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  value of a ws `client.resolve|reject|send (m, ..)`: each takes the boxed `Value` by value, so the map's last
      *  use moves into `Value::Map(m)`, exactly the shared map the boxed local handed over. */
     rustLiteralMoveSlot(n: any): boolean;
+    /** `client.resolve|reject (x, ..)` on a ws handle, x the settled value. */
+    rustWsSettleMove(n: any): boolean;
     /** A prediction venue: `ts/src/prediction/<id>.ts` builds nested request maps in one method. */
     private static readonly RUST_PREDICTION_VENUE_FILE;
     /** The declaration behind `node` when it is a local typed as a dict bearer. */
@@ -2679,6 +2681,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsSubscriptionWriteValue(n: any): boolean;
     private rustBuiltLists;
     rustBuiltListLocal(declaration: any): boolean;
+    /** ral-tf: no later statement of the function pushes to or writes the list, and the use is in no loop or closure. */
+    rustBuiltListFrozenAfter(node: any, declaration: any, name: string): boolean;
     /** `this.inArray (needle, x)` (haystack), `this.arrayConcat (a, b)` (either operand) on the base helpers, or the row of a
      *  `stored.append (x)` statement on a ws cache local: hand-written slots taking `impl Into<Value>`. */
     rustBuiltListLentHelperSlot(call: any, n: any): 'inArray' | 'arrayConcat' | 'append' | undefined;
@@ -2693,8 +2697,15 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `y.into_list()` moves exactly that list (no copy, no other variant to lose). */
     rustArrayGuardedMove(write: any): boolean;
     rustBuiltListOf(node: any): any;
+    /** ral-tf: a bare element local read nowhere after the literal (no loop or closure between): it moves into the element slot. */
+    rustBuiltListMovedElement(e: any): boolean;
+    /** ral-tf: the element list of a literal with moved bare elements, exactly as its `Value` box printed it (no added copy). */
+    rustBuiltListMovedLiteral(node: any): string | undefined;
     printBuiltListLiteral(node: any): string;
     printBuiltListDeclaration(declaration: any, indent: string, varName: string): string | undefined;
+    rustOptListGuardedMove(write: any): any;
+    /** A never-reassigned local initialised by a `[]`-defaulted base `safeList*` that still prints as the plain `Value` binding. */
+    rustDefaultedListValue(declaration: any, y: any): boolean;
     printBuiltListWrite(left: any, right: any): string | undefined;
     printBuiltListPush(node: any, name: string | undefined, parsedArg: string | undefined): string | undefined;
     private static readonly RUST_OPT_LIST_SOURCES;
@@ -2790,6 +2801,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustLentRecordTypeNode(type: any): boolean;
     /** `Dict[]` / `object[]`, optionally `| undefined`: a list of rows, the same Value list a `List` holds. */
     rustRowListTypeNode(type: any): boolean;
+    /** ral-tf: per-venue ws helpers whose hash / topic / channel lists callers build and hand on whole. */
+    private static readonly RUST_LENT_HASH_LIST_METHODS;
+    /** ral-tf: `string[]` / `Str[]` / `any[]` (a hash, topic or channel list): a required per-venue list slot like `Dict[]`. */
+    rustScalarListTypeNode(type: any): boolean;
     /** A call argument landing in a lent list parameter of the callee. */
     rustLentListSlot(call: any, arg: any): boolean;
     /** `&x` for a shared list local lent to a lent list parameter. */
