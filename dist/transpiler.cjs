@@ -58644,6 +58644,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const node = this.unwrapParens(rhs);
     if (node === void 0 || depth > 3)
       return false;
+    if (depth === 0 && this.rustScalarAsWrite(node) !== void 0)
+      return this.rustScalarWriteOk(kind, this.rustScalarAsWrite(node), 0);
     if (this.rustOptParamWriteOk(kind, node))
       return true;
     if (kind === "oint" && this.rustLimitCall(node))
@@ -59131,9 +59133,22 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `${indent}let mut ${varName}: Option<&str> = ${init.slice(0, -".map(str::to_owned)".length)}`;
     return init === void 0 ? void 0 : `${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${init}`;
   }
+  /** 40b: the operand of a top-level `<expr> as T` write source (parens only around it), else undefined. */
+  rustScalarAsWrite(rhs) {
+    const node = this.unwrapParens(rhs);
+    if (node === void 0 || !_is.isAsExpression.call(void 0, node))
+      return void 0;
+    const inner = this.unwrapParens(node.expression);
+    return inner === void 0 || _is.isAsExpression.call(void 0, inner) || _is.isIdentifier.call(void 0, inner) || this.literalKindOfNode(inner) === "null" ? void 0 : inner;
+  }
   /** Assignment hook: `x = <rhs>` in the local's native type. */
   printRustScalarLocalWrite(left, right) {
     const local = this.rustScalarLocalOf(left);
+    if (local !== void 0 && this.rustScalarAsWrite(right) !== void 0) {
+      const decl = local.declaration;
+      const typedDecl = _is.isVariableDeclaration.call(void 0, decl) && decl.initializer !== void 0 && this.rustScalarNativeText(local.kind, decl.initializer) !== void 0;
+      return typedDecl ? this.printRustScalarLocalWrite(left, this.rustScalarAsWrite(right)) : void 0;
+    }
     const alias = this.unwrapParens(right);
     if (local !== void 0 && _is.isIdentifier.call(void 0, alias) && this.rustNilAliasMoves.has(alias) && this.rustScalarIdentifierKind(alias) === local.kind)
       return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.take()`;
@@ -59656,7 +59671,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       const parent = n.parent;
       if (!_is.isIdentifier.call(void 0, n) || !_is.isBinaryExpression.call(void 0, parent) || parent.left !== n || parent.operatorToken.kind !== _ast.SyntaxKind.EqualsToken)
         continue;
-      const write = _is.isIdentifier.call(void 0, this.unwrapParens(parent.right)) && this.literalKindOfNode(this.unwrapParens(parent.right)) !== "null" ? _nullishCoalesce(this.rustScalarIdentifierKind(this.unwrapParens(parent.right)), () => ( this.rustOptParamKind(parent.right))) : this.rustScalarValueKind(parent.right, true);
+      const src = _nullishCoalesce(this.rustScalarAsWrite(parent.right), () => ( parent.right));
+      const write = _is.isIdentifier.call(void 0, this.unwrapParens(src)) && this.literalKindOfNode(this.unwrapParens(src)) !== "null" ? _nullishCoalesce(this.rustScalarIdentifierKind(this.unwrapParens(src)), () => ( this.rustOptParamKind(src))) : this.rustScalarValueKind(src, true);
       const next = write === void 0 ? void 0 : this.rustScalarJoinKinds(joined, write);
       if (next !== void 0 && (next === joined || next === `o${joined}`))
         joined = next;

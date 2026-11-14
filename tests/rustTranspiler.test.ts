@@ -14518,3 +14518,39 @@ describe('ral-zb lift 3: a sum local over a typed-signature Int parameter is Opt
         expect(out).not.toContain('let mut end: Option<i64>');
     });
 });
+
+describe('ral-40b lift A: an `x = <expr> as T` write is decided with its operand (the assertion is no runtime op)', () => {
+    const t40 = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+    const root = path.join (rustFixtureRoot, '40b-as-write');
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n" +
+        "    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeNumber (o: any, k: any, d: any = undefined): number | undefined { return o; }\n    parseNumber (x: any): number | undefined { return x; }\n    hold (x: any): any { return x; }\n}\n";
+    const precise = "export class Precise {\n    static stringAdd (a: any, b: any): any { return a; }\n    static stringNeg (a: any): any { return a; }\n}\n";
+    const venue = (body: string) => "import Exchange from './base/Exchange.js';\nimport { Precise } from './base/Precise.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n";
+    let n = 0;
+    const run = (body: string) => {
+        const dir = path.join (root, String (n++));
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Precise.ts'), precise);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue (body));
+        return t40.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const cases: [string, string, string[], string[]][] = [
+        [ 'a Precise.stringAdd write cast `as string` keeps an Option<String> accumulator',
+            "    parseThing (d: Dict, x: Str) {\n        let filled = this.safeString (d, 'f', '0');\n        if (x !== undefined) {\n            filled = Precise.stringAdd (filled, x) as string;\n        }\n        return this.hold ({ 'filled': filled });\n    }\n",
+            [ 'let mut filled: Option<String> = ', 'filled = crate::precise::Precise::stringAdd(&filled, &x).as_str().map(str::to_owned);' ], [ 'let mut filled: Value' ] ],
+        [ 'a safeNumber write cast `as number` keeps an Option<f64> local',
+            "    parseThing (d: Dict) {\n        let contracts = this.parseNumber (this.safeString (d, 'c'));\n        if (contracts === undefined) {\n            contracts = this.safeNumber (d, 'k') as number;\n        }\n        return this.hold ({ 'contracts': contracts });\n    }\n",
+            [ 'let mut contracts: Option<f64> = ', '.as_f64();' ], [ 'let mut contracts: Value' ] ],
+        [ 'negative: an `as string` write of an identifier is an alias (decided by the alias rules, not here)',
+            "    parseThing (d: Dict) {\n        const k = this.safeString (d, 'k');\n        let message = '';\n        if (k !== undefined) {\n            message = d['m'] as string;\n        }\n        return this.hold ({ 'm': message });\n    }\n",
+            [], [ 'let mut message: String' ] ],
+    ];
+    for (const [ name, body, want, no ] of cases) {
+        test(name, () => {
+            const out = run (body);
+            for (const x of want) expect(out).toContain(x);
+            for (const x of no) expect(out).not.toContain(x);
+        });
+    }
+});

@@ -1084,6 +1084,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarNativeText(kind: string, expr: any): string | undefined;
     /** Declaration hook: `let mut x: <scalar> = <native init>`, else undefined. */
     printRustScalarLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
+    /** 40b: the operand of a top-level `<expr> as T` write source (parens only around it), else undefined. */
+    rustScalarAsWrite(rhs: any): any;
     /** Assignment hook: `x = <rhs>` in the local's native type. */
     printRustScalarLocalWrite(left: any, right: any): string | undefined;
     private static readonly RUST_SCALAR_ARITH_OPS;
