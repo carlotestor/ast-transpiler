@@ -51498,6 +51498,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustScopeIndexes = /* @__PURE__ */ new WeakMap();
     /** Declarations `printVariableDeclarationList` emitted as `let mut x: bool`. */
     this.rustBoolDeclaredLocals = /* @__PURE__ */ new WeakSet();
+    this.rustOptBoolChainPending = /* @__PURE__ */ new Set();
     // `.length` nodes printed as a native `len()` of a place, with that place (the loop-counter bound reads it)
     this.rustNativeLengths = /* @__PURE__ */ new WeakMap();
     // `is_less_than` & co. compare two `Value`s and answer `false` for
@@ -52197,7 +52198,35 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer !== current || declaration.name?.kind !== SyntaxKind7.Identifier) {
       return false;
     }
-    return this.rustNodeIsBoolExpression(declaration.initializer) && this.rustTypeIsBoolean(declaration.initializer) && this.rustLocalUsesAcceptBool(declaration, String(declaration.name.text));
+    return this.rustNodeIsBoolExpression(declaration.initializer) && (this.rustTypeIsBoolean(declaration.initializer) && this.rustLocalUsesAcceptBool(declaration, String(declaration.name.text)) || this.rustOptBoolChainLocal(declaration));
+  }
+  /** ral-ua: a local initialised by an optional-bool chain whose every read is a condition / bool-printed slot is `bool`. */
+  rustOptBoolChainLocal(declaration) {
+    const init = declaration?.initializer;
+    return init !== void 0 && isIdentifier3(declaration.name) && this.rustNodeIsBoolExpression(init) && isBinaryExpression5(this.unwrapParens(init)) && this.isLogicalOp(this.unwrapParens(init).operatorToken.kind) && this.rustOptBoolChain(init) && this.rustOptBoolChainUsesOk(declaration);
+  }
+  /** ral-ua: every read of an optional-bool chain local is a condition or sits in another bool-printed slot. */
+  rustOptBoolChainUsesOk(declaration) {
+    if (this.rustOptBoolChainPending.has(declaration))
+      return false;
+    this.rustOptBoolChainPending.add(declaration);
+    try {
+      return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => this.rustIdentifierUseIsCondition(n) || this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n));
+    } finally {
+      this.rustOptBoolChainPending.delete(declaration);
+    }
+  }
+  /** ral-ua: `a && b` / `a || b` (parens, `!`) whose leaves are each checker `boolean | undefined`: as a condition every
+   *  leaf prints its truthiness, and a local read only as a condition never boxes the undefined arm. */
+  rustOptBoolChain(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0)
+      return false;
+    if (isPrefixUnaryExpression3(inner) && inner.operator === SyntaxKind7.ExclamationToken)
+      return this.rustOptBoolChain(inner.operand);
+    if (isBinaryExpression5(inner) && this.isLogicalOp(inner.operatorToken.kind))
+      return this.rustOptBoolChain(inner.left) && this.rustOptBoolChain(inner.right);
+    return (isIdentifier3(inner) || isCallExpression6(inner)) && this.isBooleanOrUndefinedType(this.typeOfNodeIfAny(inner));
   }
   /** Native truthiness text of the operand, or undefined to keep `is_true`. */
   printNativeTruthiness(node) {
@@ -55180,7 +55209,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (member && !this.rustBoolMemberSource(initializer)) {
       return void 0;
     }
-    if (!this.rustTypeIsBoolean(initializer) || !this.rustLocalUsesAcceptBool(declaration, declaration.name.text)) {
+    if (!(this.rustTypeIsBoolean(initializer) && (this.rustLocalUsesAcceptBool(declaration, declaration.name.text) || member && this.rustOptBoolChainUsesOk(declaration)) || !member && this.rustOptBoolChainLocal(declaration))) {
       return void 0;
     }
     return member ? this.rustBoolMemberText(inner) : peeled ?? inner;
@@ -66873,6 +66902,7 @@ ${iden}}`;
     let optionalBoxes = 0;
     let paramsBoxes = 0;
     let declaredEndpointWrites = 0;
+    let castLengths = 0;
     let nullWrites = 0;
     let endpointBoxes = 0;
     let plainReads = 0;
@@ -66912,6 +66942,15 @@ ${iden}}`;
           mixed = true;
         from = from ?? kind;
         return String(rhs.getText()).split("\n")[0].length <= 240;
+      }
+      let lenAt = n;
+      while ((isAsExpression3(lenAt.parent) || isParenthesizedExpression3(lenAt.parent)) && lenAt.parent.expression === lenAt)
+        lenAt = lenAt.parent;
+      if (lenAt !== n && isPropertyAccessExpression3(lenAt.parent) && lenAt.parent.expression === lenAt && String(lenAt.parent.name.text) === "length") {
+        lengths++;
+        castLengths++;
+        const use = lenAt.parent.parent;
+        return use?.kind !== SyntaxKind7.PrefixUnaryExpression && use?.kind !== SyntaxKind7.PostfixUnaryExpression && !(isBinaryExpression5(use) && use.left === lenAt.parent && rustIsAssignmentOperator(use.operatorToken.kind));
       }
       if (isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "length") {
         lengths++;
@@ -66985,14 +67024,15 @@ ${iden}}`;
     }
     const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || optionalBoxes === 0 && paramsBoxes === 0 && boxedElementUses.every((u) => this.rustDefaultedContainerBoxUse(u, init)) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init));
     const boxOnly = reads === 0 && boxedElementUses.length > 0 && (this.rustDictElementSource(init) || this.rustListElementSource(init)) && nullTests === 0 && writes === 0;
-    const endpointBoxOnly = endpointBoxes > 0 && nullTests === 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration) && boxedElementUses.every((u) => this.rustBoxLineOk(u));
+    const declaredDictOnly = nilDeclared && from === "dict" && !mixed && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration);
+    const endpointBoxOnly = endpointBoxes > 0 && (nullTests === 0 || declaredDictOnly) && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration) && boxedElementUses.every((u) => this.rustBoxLineOk(u));
     if (endpointBoxes > 0 && !endpointBoxOnly)
       return void 0;
     if (keyReadOnly && (!safe || plainReads === 0 || plainReads !== reads || nullTests + writes + lengths + indexLikeReads + boxedElementUses.length + lentResponses + lentNullable + keySets + keyWrites + extendHeads + jwtLends > 0))
       return void 0;
     if (!safe || reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0 && !this.rustUrlsMapEntry(init)) || this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))
       return void 0;
-    if (declaredEndpointWrites > 0 && nullTests > 0)
+    if (declaredEndpointWrites > 0 && nullTests > 0 && !declaredDictOnly)
       return void 0;
     if (this.rustNilResponseLocals.has(declaration) && (lentResponses > 0 || lentNullable > 0))
       return void 0;
@@ -67024,7 +67064,10 @@ ${iden}}`;
       return void 0;
     if (keyWrites > 0)
       this.rustMutableBuiltLocals.add(declaration);
-    if (lengths > 0 && (from !== "list" || optional))
+    const declaredListOnly = nilDeclared && from === "list" && !mixed && nullTests === 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes;
+    if (castLengths > 0 && !declaredListOnly)
+      return void 0;
+    if (lengths > 0 && (from !== "list" || optional && !declaredListOnly))
       return void 0;
     if (optional) {
       if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !this.rustOptContainerSourceOk(init, from))
@@ -67032,7 +67075,7 @@ ${iden}}`;
       this.rustOptContainerLocals.add(declaration);
     }
     for (const n of boxedElementUses)
-      this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) ? "move" : "share");
+      this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) || n.parent?.kind === SyntaxKind7.ConditionalExpression && this.rustOwnedLastUse(n, declaration) ? "move" : "share");
     if (extendReuse)
       this.rustExtendReuseLocals.add(declaration);
     return from === "list" ? "list" : "dict";
@@ -68366,6 +68409,10 @@ ${iden}}`;
       return up.initializer === n && isObjectLiteralExpression4(up.parent) && !this.rustInDestructureWrite(n);
     if (isReturnStatement4(up))
       return up.expression === n;
+    if (up.kind === SyntaxKind7.ConditionalExpression && up.condition !== n) {
+      const other = this.unwrapParens(up.whenTrue === n ? up.whenFalse : up.whenTrue);
+      return isObjectLiteralExpression4(other) || this.literalKindOfNode(other) !== void 0;
+    }
     return isAsExpression3(up) && up.expression === n && isReturnStatement4(up.parent);
   }
   /** `this.F` for a checker dict-shaped field (`fundingRates: Dictionary<FundingRate>`) the native insert writes
@@ -71365,6 +71412,10 @@ ${iden}}`;
     return `Value::Bool(${this.rustOptListName(arg)}.is_some())`;
   }
   printOptListLength(node) {
+    const held = this.rustSkipWrappers(node.expression);
+    const opt = this.rustOptContainerOf(held);
+    if (opt !== void 0 && opt.kind === "list" && this.rustPrintedOptional.has(opt.declaration))
+      return this.printNativeLength(node, this.rustOptListSlice(held));
     if (this.rustOptListOf(node.expression) === void 0)
       return void 0;
     return this.printNativeLength(node, this.rustOptListSlice(node.expression));

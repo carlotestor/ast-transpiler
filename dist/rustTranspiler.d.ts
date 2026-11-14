@@ -196,6 +196,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Outermost ancestor reached through parens, `!` and `&&`/`||`. */
     rustClimbLogicalWrappers(node: any): any;
     rustConditionBoolSlot(node: any): boolean;
+    private rustOptBoolChainPending;
+    /** ral-ua: a local initialised by an optional-bool chain whose every read is a condition / bool-printed slot is `bool`. */
+    rustOptBoolChainLocal(declaration: any): boolean;
+    /** ral-ua: every read of an optional-bool chain local is a condition or sits in another bool-printed slot. */
+    rustOptBoolChainUsesOk(declaration: any): boolean;
+    /** ral-ua: `a && b` / `a || b` (parens, `!`) whose leaves are each checker `boolean | undefined`: as a condition every
+     *  leaf prints its truthiness, and a local read only as a condition never boxes the undefined arm. */
+    rustOptBoolChain(node: any): boolean;
     /** Native truthiness text of the operand, or undefined to keep `is_true`. */
     printNativeTruthiness(node: any): string | undefined;
     /** Same native truthiness for a bare `Value`-boxed identifier of boolean type. Prints the bool-tuple
