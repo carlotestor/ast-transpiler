@@ -2784,6 +2784,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     static rustWsPatternsMeet(a0: Array<string | null>, b0: Array<string | null>): boolean;
     /** The typed kind a resolved value passes as, or undefined. */
     rustWsResolvedKind(x: any): 'book' | 'cache' | 'dict' | undefined;
+    /** ral-ye: a read of a plain base cache field the class keeps as a map, typed by the field's declaration:
+     *  `this.F` whose declared type is a map (`balance: Dict`, `tickers: Dictionary<Ticker>`), or `this.F[k]` right
+     *  after a statement of the same block (or an enclosing one) wrote `this.F[k] = v` with v a map (a declared record /
+     *  map type, a map-kinded resolve or `this.extend (..)`), the key a literal or an unreassigned local. */
+    rustWsCacheFieldDictRead(n: any): boolean;
     private static readonly RUST_WS_MAP_RECORD_BUILDERS;
     /** A resolved value that is a map on every path: a base record builder call, a sync method of the same class whose
      *  every return is one, or an unreassigned single local bound to one. */
