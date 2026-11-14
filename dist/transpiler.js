@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -57630,6 +57630,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "fin";
     if (kind === "bool" && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== void 0)
       return "cond";
+    if (kind === "bool" && isPrefixUnaryExpression3(parent) && this.rustValueNotOfBoolLocal(parent) !== void 0)
+      return "cond";
     if (kind === "str" || kind === "ostr") {
       const fieldForm = this.rustFieldKeyUseForm(n);
       if (fieldForm !== void 0)
@@ -59649,6 +59651,18 @@ ${binding(plan.indent)}` : ""), head: "" };
       return true;
     return kind === "bool" && this.rustBoolNativeText(node) !== void 0;
   }
+  /** yb: `!x` over a `bool` scalar local outside a condition and outside any logical: `Value::Bool(!x)`, the box the
+   *  `!is_true(&x)` form got (`is_true(&Value::Bool(b))` is `b`). */
+  rustValueNotOfBoolLocal(node) {
+    if (!isPrefixUnaryExpression3(node) || node.operator !== SyntaxKind7.ExclamationToken)
+      return void 0;
+    const operand = this.unwrapParens(node.operand);
+    if (!isIdentifier3(operand) || this.rustScalarLocalOf(operand)?.kind !== "bool")
+      return void 0;
+    if (this.rustClimbLogicalWrappers(node) !== node || this.isBooleanPosition(node))
+      return void 0;
+    return `Value::Bool(!${super.printIdentifier(operand)})`;
+  }
   /** `a || b` / `a && b` whose every leaf is a native `bool` and one is a `bool` scalar local: JS returns an
    *  operand, which is then a boolean, so the Rust `||` / `&&` value is the same. */
   rustScalarBoolLogicalText(expr) {
@@ -60560,10 +60574,13 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (other === void 0 || this.literalKindOfNode(other) === "string")
       return false;
     const counter = isIdentifier3(other) ? this.rustDeclaredNode(other) : void 0;
-    if (counter !== void 0 && isVariableDeclaration3(counter) && counter.parent?.parent?.kind === SyntaxKind7.ForStatement)
+    const intCounter = counter !== void 0 && isIdentifier3(other) && this.rustValueIntCounter(other);
+    if (counter !== void 0 && isVariableDeclaration3(counter) && counter.parent?.parent?.kind === SyntaxKind7.ForStatement && !intCounter)
       return false;
-    if (this.rustScalarExprHasForCounter(other))
+    if (!intCounter && this.rustScalarExprHasForCounter(other))
       return false;
+    if (intCounter)
+      return kind === "int" || kind === "oint";
     return this.primitiveKindOfType(this.typeOfNodeIfAny(parent.left === n ? parent.right : parent.left)) === "number";
   }
   /** rd: some `+` chain holding this local also holds a nil-declared local (typing this one would retype that one, which
@@ -64199,6 +64216,24 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       return false;
     return this.rustStatementMutatesLocal(siblings[at + 1], name);
   }
+  /** yb: the ccxt write-back pass (`writeBackIndexedMutations`) only fires when the line right after the bind is a top-level
+   *  element / property write or push on the bound local; any other next statement (an `if`, a plain reassignment) leaves
+   *  the bind alone, so its counter key may print boxed (`get_value(&xs, &Value::Int(i))`, the same helper call and value). */
+  rustWriteBackPassBind(read) {
+    const declaration = read.parent;
+    const name = String(declaration.name.text);
+    let statement = declaration;
+    while (statement !== void 0 && !isStatement(statement))
+      statement = statement.parent;
+    const siblings = statement?.parent?.statements ?? [];
+    const next = siblings[siblings.indexOf(statement) + 1];
+    if (next === void 0 || next.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const e = next.expression;
+    if (isBinaryExpression5(e) && rustIsAssignmentOperator(e.operatorToken.kind))
+      return !isIdentifier3(e.left) && this.rootPlaceText(e.left) === name;
+    return isCallExpression6(e) && isPropertyAccessExpression3(e.expression) && e.expression.name.text === "push" && this.rootPlaceText(e.expression.expression) === name;
+  }
   /** A statement containing a write into a local (`x['k'] = v`, `x.k = v`,
    *  `x.push(v)`). */
   rustStatementMutatesLocal(node, name) {
@@ -65813,7 +65848,7 @@ ${idn}}`;
   /** A registered `i64` counter as a helper key (`Value::Int(i)`); a read the ccxt write-back binds keeps the counter `Value`. */
   rustI64HelperKeyText(keyNode, read) {
     const key = this.rustSkipWrappers(keyNode);
-    if (this.rustI64CounterOf(key) === void 0 || read !== void 0 && this.isWriteBackBindRead(read))
+    if (this.rustI64CounterOf(key) === void 0 || read !== void 0 && this.isWriteBackBindRead(read) && this.rustWriteBackPassBind(read))
       return void 0;
     return this.rustI64CounterUse(key) ? `Value::Int(${String(key.text)})` : void 0;
   }
@@ -66095,8 +66130,12 @@ ${idn}}`;
   printPrefixUnaryExpression(node, identation) {
     const { operand, operator } = node;
     const idn = this.getIden(identation);
-    if (operator === SyntaxKind7.ExclamationToken)
+    if (operator === SyntaxKind7.ExclamationToken) {
+      const notBool = this.rustValueNotOfBoolLocal(node);
+      if (notBool !== void 0)
+        return idn + notBool;
       return idn + "!" + this.printCondition(operand, 0);
+    }
     if (operator !== SyntaxKind7.MinusToken)
       return idn + this.PrefixFixOperators[operator] + this.printNode(operand, 0);
     const operandText = this.printNode(operand, 0);
