@@ -772,6 +772,32 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** How a use of a scalar local prints: `test` (literal/null compare), `cond` (bool condition),
      *  `write` (same-kind assignment statement), `concat` (a `format!` operand) or `box` (a by-value `Value` slot). */
     rustScalarUseForm(n: any, kind: string): string | undefined;
+    /** sb: a Copy number local (`i64` / `f64` / `Option<..>`) initialised from a typed base call that the `Value` local only boxed
+     *  (`Value::from(self.parse_to_int(..))`) keeps the typed value and boxes it at any plain read no other rule prints natively:
+     *  `Value::from(x)` is the Int / Float / Null the `Value` local held (the same conversion the initialiser did), and a Copy
+     *  value boxes with no clone. Writes, nested-write operands, element keys and receivers keep their own rules. */
+    rustSbCopyBoxUse(n: any, kind: string): boolean;
+    /** sb: `const x = this.m(..)` where `m` is a typed base method / runtime call (no `safe*` / `handle*` reader). */
+    rustSbTypedCallInit(declaration: any): boolean;
+    private rustSbPartnerMemo;
+    /** sb: typing this local could flip another local's decision (it meets another identifier in a compare / arithmetic /
+     *  `Math.*` / ternary, or initialises / is written into another local): those partners belong to other groups. */
+    rustSbHasPartner(declaration: any): boolean;
+    private rustSbJoinMemo;
+    /** sb: `xs.join(sep)` as a local's initializer: every printed join form is `Value::Str(<String>.into())` (a non-list
+     *  receiver joins to `""`, never `Null`), so the local is that `String`. Only at a declaration initializer. */
+    rustSbJoinShape(node: any): boolean;
+    /** The `String` inside the printed join, printed at emission only (a print inside a decision perturbs other locals);
+     *  any other printed form reads its `Str` back (`join` always answers a `Str`). */
+    rustSbJoinText(node: any): string;
+    /** sb: an identifier initializer naming a local already decided as a shared `Dict` (decided before this one: no pending cycle). */
+    rustSbDictAliasSource(init: any): boolean;
+    private rustHandedPending;
+    /** sb: the alias declaration shares its source's Arc (`Value::from(&x).into_dict()`, the bump the `Value` alias made). */
+    rustSbDictAliasDecl(declaration: any): boolean;
+    private rustSbAliasDeferred;
+    rustAssignmentOpKind(op: any): boolean;
+    rustScalarUseFormOwn(n: any, kind: string): string | undefined;
     private static readonly RUST_WS_CLIENT_VALUE_METHODS;
     rustWsClientCallArg(call: any, kind: string): boolean;
     rustWsClientOnlyUse(declaration: any): boolean;
@@ -2171,6 +2197,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustExtendReuseKeyWriteOk(n: any, declaration: any): boolean;
     /** The head of `x = this.extend (x, y)` on a reuse local: moved (the statement writes `x` back). */
     rustSelfExtendHead(node: any, declaration: any): boolean;
+    /** sb: `y = self.omit(&x, ..).into_dict()` for a shared-map alias (`omit` of a proven map answers `Value::Map`: the Arc moves back). */
+    private rustSbAliasWrites;
+    printSbAliasWrite(node: any, left: any, right: any): string | undefined;
     /** `x = self.extend(x, ..).into_dict()` for a reuse local (`extend` answers `Value::Map`: the Arc moves back). */
     printExtendReuseWrite(left: any, right: any): string | undefined;
     rustBuiltMapKeyWriteOk(n: any, init: any): boolean;
