@@ -66326,6 +66326,8 @@ ${idn}}`;
     return `${this.printCondition(node.left, 0).trim()} ${token} ${this.printCondition(node.right, 0).trim()}`;
   }
   printWhileStatement(node, identation) {
+    if (node.expression?.kind === SyntaxKind7.TrueKeyword)
+      return `${this.getIden(identation)}loop${this.printBlock(node.statement, identation)}`;
     return `${this.getIden(identation)}while ${this.printCondition(node.expression, 0)}${this.printBlock(node.statement, identation)}`;
   }
   printIfStatement(node, identation) {

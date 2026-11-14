@@ -14555,3 +14555,13 @@ describe('ral-40f: a defaulted safeDict / safeList local written whole into this
         expect(out).not.toContain('let mut flag: Option<String>');
     });
 });
+
+describe('ral-40f: while (true) prints as loop (moved from ccxt build/ whileTrueToLoop)', () => {
+    test('while (true) is loop; any other condition stays while', () => {
+        const out = transpiler.transpileRust("class X {\n    f (a: any) {\n        let i = 0;\n        while (true) {\n            i = i + 1;\n            if (i > 3) {\n                break;\n            }\n        }\n        while (i > 0) {\n            i = i - 1;\n        }\n        return i;\n    }\n}").content;
+        expect(out).toContain('        loop {');
+        expect(out).not.toContain('while true');
+        expect(out).not.toContain('while (true)');
+        expect(out).toContain('while i > 0 {');
+    });
+});

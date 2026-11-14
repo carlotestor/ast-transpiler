@@ -15146,6 +15146,9 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printWhileStatement(node, identation) {
+        // ral-40f (moved from ccxt build/ whileTrueToLoop): `while (true)` is rustc's `while_true` lint, an error under the
+        // CI clippy lane's `-D warnings`; every generated infinite loop leaves through `break`, so `loop` is the same loop
+        if (node.expression?.kind === SyntaxKind.TrueKeyword) return `${this.getIden(identation)}loop${this.printBlock(node.statement, identation)}`;
         return `${this.getIden(identation)}while ${this.printCondition(node.expression, 0)}${this.printBlock(node.statement, identation)}`;
     }
 
