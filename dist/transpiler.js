@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -60268,8 +60268,19 @@ ${binding(plan.indent)}` : ""), head: "" };
   /** Re-boxing an optional local lengthens each use: keep a line under the 400-char limit it was under. */
   /** Prints a method body; boxed expression-shape locals named on a printed line over 400 chars
    *  are left `Value` when that lowers the count of such lines. */
-  printRustScalarGuardedBody(method, print) {
+  printRustScalarGuardedBody(method, rawPrint) {
     const loops = this.forLoopCounter;
+    const print = () => {
+      const text = rawPrint();
+      if (!text.split("\n").some((l) => l.length > 400))
+        return text;
+      const names = [];
+      for (const n of this.rustScopeIndex(method.getSourceFile()).nodes) {
+        if (isVariableDeclaration3(n) && this.rustScalarGuarded.has(n) && this.rustScalarDecisions.get(n) && !this.rustScalarVetoed.has(n) && this.rustEnclosingFunction(n) === method && isIdentifier3(n.name))
+          names.push(String(n.name.text));
+      }
+      return names.length === 0 ? text : this.rustSplitLongLines(text, names);
+    };
     const typed = print();
     const long = (text) => text.split("\n").filter((l) => l.length > 400);
     const lines = long(typed);
@@ -60327,6 +60338,103 @@ ${binding(plan.indent)}` : ""), head: "" };
       }
     }
     return redo();
+  }
+  /** yd: index of the bracket closing the one opened at `open` (string literals skipped). */
+  rustCloseBracketAt(text, open) {
+    const pairs = { "(": ")", "[": "]", "{": "}" };
+    const stack = [];
+    for (let i = open; i < text.length; i++) {
+      const c = text[i];
+      if (c === '"') {
+        for (i++; i < text.length && text[i] !== '"'; i++)
+          if (text[i] === "\\")
+            i++;
+        continue;
+      }
+      if (pairs[c] !== void 0)
+        stack.push(pairs[c]);
+      else if (c === ")" || c === "]" || c === "}") {
+        if (stack.pop() !== c)
+          return -1;
+        if (stack.length === 0)
+          return i;
+      }
+    }
+    return -1;
+  }
+  /** yd: splits one printed statement line over 400 chars that names a guarded local by hoisting its FIRST evaluated
+   *  operand into a let-bound typed temp on the line before (a move or a borrow, never a copy). Exact shapes only:
+   *  `let x: T = self.f(..(Value::from(vec![..])));` (the list moves: `Vec<Value>`), `let x: T = (match R.get("k") {..` (the
+   *  lookup borrows: `Option<&Value>`), `let x: T = (match (&(Value::from(self.parseToInt(..))), ..` (`Option<i64>`, moved into the box). */
+  rustSplitLongLine(line, nth, after = "") {
+    const head = /^(\s*)(?:let mut \w+: [^=]+ = |return |\w+\.push\()/.exec(line);
+    if (head === null || !line.endsWith(";"))
+      return void 0;
+    const isLet = head[0].trimStart().startsWith("let ");
+    const ind = head[1];
+    const tmp = `__yd${nth}`;
+    let open = -1, close = -1, decl = "";
+    const vec = /^(?:self\.\w+\()*Value::from\(vec!\[/.exec(line.slice(head[0].length));
+    const look = isLet ? /^\(match (\w+)\.get\("[^"\\]*"\) \{/.exec(line.slice(head[0].length)) : null;
+    const toInt = isLet ? /^\(match \(&\(Value::from\(self\.parseToInt\(/.exec(line.slice(head[0].length)) : null;
+    if (vec !== null) {
+      open = head[0].length + vec[0].length - 5;
+      close = this.rustCloseBracketAt(line, open + 4);
+      decl = "Vec<Value>";
+    } else if (look !== null) {
+      open = head[0].length + "(match ".length;
+      close = this.rustCloseBracketAt(line, open + look[1].length + 4);
+      decl = "Option<&Value>";
+    } else if (toInt !== null) {
+      open = head[0].length + toInt[0].length - "self.parseToInt(".length;
+      close = this.rustCloseBracketAt(line, open + "self.parseToInt".length);
+      decl = "Option<i64>";
+    }
+    if (open < 0 || close < 0)
+      return void 0;
+    let hoisted = `${ind}let ${tmp}: ${decl} = ${line.slice(open, close + 1)};`;
+    const rest = line.slice(0, open) + tmp + line.slice(close + 1);
+    if (hoisted.length > 400 && decl === "Vec<Value>") {
+      const inner = line.slice(open + 5, close);
+      const parts = [];
+      for (let i = 0, from = 0; i <= inner.length; i++) {
+        if (i === inner.length || inner[i] === ",") {
+          parts.push(inner.slice(from, i).trim());
+          from = i + 1;
+          continue;
+        }
+        if ("([{".includes(inner[i])) {
+          const j = this.rustCloseBracketAt(inner, i);
+          if (j < 0)
+            return void 0;
+          i = j;
+        } else if (inner[i] === '"') {
+          for (i++; i < inner.length && inner[i] !== '"'; i++)
+            if (inner[i] === "\\")
+              i++;
+        }
+      }
+      hoisted = `${ind}let ${tmp}: ${decl} = vec![
+` + parts.map((e) => `${ind}    ${e},`).join("\n") + `
+${ind}];`;
+    }
+    if (decl === "Vec<Value>") {
+      hoisted = hoisted.replace(/(\[|, |\n\s+)([A-Za-z_]\w*)(?=,|\])/g, (m, pre, id) => new RegExp(`\\b${id}\\b`).test(after) ? `${pre}${id}.clone()` : m);
+    }
+    if (hoisted.split("\n").some((l) => l.length > 400) || rest.length > 400)
+      return void 0;
+    return hoisted + "\n" + rest;
+  }
+  rustSplitLongLines(text, names) {
+    if (!text.split("\n").some((l) => l.length > 400))
+      return text;
+    let nth = 0;
+    const lines = text.split("\n");
+    return lines.map((l, k) => {
+      if (l.length <= 400 || !names.some((n) => new RegExp(`\\b${n}\\b`).test(l)))
+        return l;
+      return this.rustSplitLongLine(l, nth++, lines.slice(k + 1).join("\n")) ?? l;
+    }).join("\n");
   }
   /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
   rustScalarInsertKeyUse(n) {
@@ -60920,7 +61028,9 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustNativeStrReturnDecisionUncached(node) {
     if (node.type === void 0 || this.isAsyncFunction(node))
       return false;
-    if (!this.rustBaseNativeStrMethod(node) && (this.getMethodOverride(node) !== void 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(node.getSourceFile().fileName))) {
+    const hidden = this.getMethodOverride(node);
+    const venueGroup = hidden !== void 0 && hidden !== node && !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(hidden.getSourceFile().fileName)) && !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(node.getSourceFile().fileName)) && this.rustNativeStrReturnKind(hidden) === "str";
+    if (!venueGroup && !this.rustBaseNativeStrMethod(node) && (hidden !== void 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(node.getSourceFile().fileName))) {
       return false;
     }
     let type;
@@ -74223,7 +74333,7 @@ ${iden}}`;
       const absent = p.initializer === void 0 || this.literalKindOfNode(this.unwrapParens(p.initializer)) === "null";
       if (optional && rustType !== void 0 && absent)
         typed.set(i, rustType);
-      else if (optional && absent && (declared === "Strings" || p.type?.kind === SyntaxKind7.AnyKeyword))
+      else if (optional && absent && (declared === "Strings" || p.type?.kind === SyntaxKind7.AnyKeyword && String(method.name.text) !== "filterByValueSinceLimit"))
         typed.set(i, lent);
       else if (i === 0 && !optional && p.type?.kind === SyntaxKind7.AnyKeyword && String(method.name.text) === "filterByArray")
         typed.set(i, lent);
@@ -79048,7 +79158,9 @@ _RustTranspiler.RUST_VENUE_KEPT_STR_ARMS = {
   "blofin.ts#blofin": ["networkCodeToChainId"],
   "dydx.ts#dydx": ["hashMessage"],
   "modetrade.ts#modetrade": ["hashMessage"],
-  "polymarket.ts#polymarket": ["hashMessage", "signMessage", "signHash"]
+  "polymarket.ts#polymarket": ["hashMessage", "signMessage", "signHash"],
+  // yd: pro phemex fromEn joins venue phemex fromEn's `-> Option<String>` group; its by-name `from_en` arm stays
+  "pro/phemex.ts#phemex": ["fromEn"]
 };
 _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "Value": "value",
@@ -79867,7 +79979,7 @@ _RustTranspiler.RUST_LENT_HELPER_SLOTS = {
 // ── typed filter parameters (rustTypedFilterParams / printTypedFilterSignature / printTypedFilterCall) ──
 // The base `filterBy*` helpers take their optional `Int` / `Str` parameters as positional `Option<i64>` /
 // `Option<&str>` (with any optional parameter before them as a positional `Value`); the rest stay in the slice.
-_RustTranspiler.RUST_TYPED_FILTER_METHODS = /* @__PURE__ */ new Set(["filterBySinceLimit", "filterBySymbolSinceLimit", "filterBySymbolsSinceLimit", "filterByArray"]);
+_RustTranspiler.RUST_TYPED_FILTER_METHODS = /* @__PURE__ */ new Set(["filterBySinceLimit", "filterBySymbolSinceLimit", "filterBySymbolsSinceLimit", "filterByArray", "filterByValueSinceLimit"]);
 _RustTranspiler.RUST_TYPED_FILTER_TYPES = { Int: "Option<i64>", Str: "Option<&str>" };
 // ── filter rows (rustFilterRowsParamOk / rustFilterRowsArgText / printFilterRows*) ──
 // The rows argument of a typed base `filterBy*` method declared `object[]` (or a map/list union, never `any`)
