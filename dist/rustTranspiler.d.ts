@@ -1221,6 +1221,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A bare local element of a `&[..]` argument slice or a `Value::from(vec![..])` list literal is moved into the
      *  temporary: it is cloned unless the printer marked it owned (`\u0004`: a `Copy` local or its last use). */
     static cloneSliceElements(text: string): string;
+    private static readonly RUST_CACHE_CALL_HEADS;
+    private static readonly RUST_CACHE_CALL_HEADS_TEST;
+    /** A bare local argument of a cache / order-book call on a local (`stored.append(x)`) or a ws cache constructor
+     *  is moved into the callee: cloned unless the printer marked it owned (`\u0004`). */
+    static cloneCacheCallArgs(text: string, on: boolean, exchange: boolean): string;
     private static rustBalancedClose;
     private static rustSplitTopLevel;
     printCallExpression(node: any, identation: any): string;

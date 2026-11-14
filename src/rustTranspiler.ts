@@ -9330,6 +9330,39 @@ export class RustTranspiler extends BaseTranspiler {
         return out;
     }
 
+    private static readonly RUST_CACHE_CALL_HEADS = [
+        /\b[a-zA-Z_]\w*\.(?:append|store|store_array|reset|update|get_limit|limit|reusable_future)\(/g,
+        /\b(?:(?:Indexed|Counted)?OrderBook|ArrayCache(?:|ByTimestamp|BySymbolById|BySymbolBySide|ByOutcomeById))::new\(/g,
+    ];
+
+    private static readonly RUST_CACHE_CALL_HEADS_TEST = [
+        /\b[a-zA-Z_]\w*\.(?:append|store|store_array|reset|update|get_limit)\(/g,
+        RustTranspiler.RUST_CACHE_CALL_HEADS[1],
+    ];
+
+    /** A bare local argument of a cache / order-book call on a local (`stored.append(x)`) or a ws cache constructor
+     *  is moved into the callee: cloned unless the printer marked it owned (`\u0004`). */
+    static cloneCacheCallArgs(text: string, on: boolean, exchange: boolean): string {
+        if (!on) return text;
+        for (const head of exchange ? RustTranspiler.RUST_CACHE_CALL_HEADS : RustTranspiler.RUST_CACHE_CALL_HEADS_TEST) {
+            const re = new RegExp(head.source, 'g');
+            let out = '';
+            let i = 0;
+            let m: RegExpExecArray | null;
+            while ((m = re.exec(text)) !== null) {
+                const open = m.index + m[0].length;
+                const j = RustTranspiler.rustBalancedClose(text, open);
+                if (j >= text.length) break;
+                const parts = RustTranspiler.rustSplitTopLevel(text.slice(open, j));
+                out += text.slice(i, open) + (parts === undefined ? text.slice(open, j) : parts.map((a) => (/^[a-zA-Z_]\w*$/.test(a) ? `${a}.clone()` : a)).join(', ')) + ')';
+                i = j + 1;
+                re.lastIndex = i;
+            }
+            text = out + text.slice(i);
+        }
+        return text;
+    }
+
     private static rustBalancedClose(text: string, from: number): number {
         let depth = 1, inStr = false, escape = false;
         for (let j = from; j < text.length; j++) {
@@ -9574,8 +9607,10 @@ export class RustTranspiler extends BaseTranspiler {
         // Classes the ccxt post-pass routes to the same constructors — their
         // message argument is audited too; every other `X::new(..)` prints as
         // before.
+        // a ws cache / order-book constructor takes its arguments by move: an owned one (`Copy`, last use) is marked
+        const owned = (a: any, text: string) => (typeof expression === 'string' && /^(?:(?:Indexed|Counted)?OrderBook|ArrayCache\w*)$/.test(expression) ? this.rustOwnedArgText(a, text.trim()) : text);
         const args = typeof expression === 'string'
-            ? node.arguments.map((a, index) => this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation)).join(', ')
+            ? node.arguments.map((a, index) => owned(a, this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation))).join(', ')
             : node.arguments.map(a => this.printNode(a, identation)).join(', ');
         return this.rustWsCacheCtorBox(node, `${expression}::new(${args})`);
     }
@@ -11205,7 +11240,10 @@ export class RustTranspiler extends BaseTranspiler {
             const file = String((node as any).fileName ?? '');
             const test = /ts[/]src[/](?:pro[/])?test[/]/.test(file);
             const ws = /ts[/]src[/]pro[/]/.test(file);
-            return RustTranspiler.cloneSliceElements(RustTranspiler.cloneByValueCallArgs(RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws)).replaceAll('\u0004', '');
+            // cache / order-book calls on locals and the ws cache constructors (exchange files and the ws base tests)
+            const cacheCalls = !test || /ts[/]src[/]pro[/]test[/]base[/]/.test(file);
+            const exchangeFile = cacheCalls && !/ts[/]src[/]base[/]/.test(file);
+            return RustTranspiler.cloneSliceElements(RustTranspiler.cloneCacheCallArgs(RustTranspiler.cloneByValueCallArgs(RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws), exchangeFile, !test)).replaceAll('\u0004', '');
         }
         return this.printNodeUncloned(node, identation);
     }

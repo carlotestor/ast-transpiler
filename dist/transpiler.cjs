@@ -60348,6 +60348,30 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     }
     return out;
   }
+  /** A bare local argument of a cache / order-book call on a local (`stored.append(x)`) or a ws cache constructor
+   *  is moved into the callee: cloned unless the printer marked it owned (`\u0004`). */
+  static cloneCacheCallArgs(text, on, exchange) {
+    if (!on)
+      return text;
+    for (const head of exchange ? _RustTranspiler.RUST_CACHE_CALL_HEADS : _RustTranspiler.RUST_CACHE_CALL_HEADS_TEST) {
+      const re = new RegExp(head.source, "g");
+      let out = "";
+      let i = 0;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        const open = m.index + m[0].length;
+        const j = _RustTranspiler.rustBalancedClose(text, open);
+        if (j >= text.length)
+          break;
+        const parts = _RustTranspiler.rustSplitTopLevel(text.slice(open, j));
+        out += text.slice(i, open) + (parts === void 0 ? text.slice(open, j) : parts.map((a) => /^[a-zA-Z_]\w*$/.test(a) ? `${a}.clone()` : a).join(", ")) + ")";
+        i = j + 1;
+        re.lastIndex = i;
+      }
+      text = out + text.slice(i);
+    }
+    return text;
+  }
   static rustBalancedClose(text, from) {
     let depth = 1, inStr = false, escape = false;
     for (let j = from; j < text.length; j++) {
@@ -60596,7 +60620,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       const built = `crate::exchange_errors::create_error(&crate::runtime::stringify_param(&(${dynamicClass})), &crate::runtime::stringify_param(&(${args2})))`;
       return _optionalChain([node, 'access', _9160 => _9160.parent, 'optionalAccess', _9161 => _9161.kind]) === _ast.SyntaxKind.ThrowStatement ? built : `Value::from(${built})`;
     }
-    const args = typeof expression === "string" ? node.arguments.map((a, index) => this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation)).join(", ") : node.arguments.map((a) => this.printNode(a, identation)).join(", ");
+    const owned = (a, text) => typeof expression === "string" && /^(?:(?:Indexed|Counted)?OrderBook|ArrayCache\w*)$/.test(expression) ? this.rustOwnedArgText(a, text.trim()) : text;
+    const args = typeof expression === "string" ? node.arguments.map((a, index) => owned(a, this.printErrorConstructorArg(this.rustErrorConstructorName(expression), index, a, identation))).join(", ") : node.arguments.map((a) => this.printNode(a, identation)).join(", ");
     return this.rustWsCacheCtorBox(node, `${expression}::new(${args})`);
   }
   /** Printed class expression of a `new` whose class is a runtime value, else undefined. */
@@ -62220,7 +62245,9 @@ ${ind}let ${view}: &${map} = &${arc};
       const file = String(_nullishCoalesce(node.fileName, () => ( "")));
       const test = /ts[/]src[/](?:pro[/])?test[/]/.test(file);
       const ws = /ts[/]src[/]pro[/]/.test(file);
-      return _RustTranspiler.cloneSliceElements(_RustTranspiler.cloneByValueCallArgs(_RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws)).replaceAll("", "");
+      const cacheCalls = !test || /ts[/]src[/]pro[/]test[/]base[/]/.test(file);
+      const exchangeFile = cacheCalls && !/ts[/]src[/]base[/]/.test(file);
+      return _RustTranspiler.cloneSliceElements(_RustTranspiler.cloneCacheCallArgs(_RustTranspiler.cloneByValueCallArgs(_RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws), exchangeFile, !test)).replaceAll("", "");
     }
     return this.printNodeUncloned(node, identation);
   }
@@ -73133,6 +73160,14 @@ _RustTranspiler.RUST_PRECISE_TRIMMED = /^string(?:Div|Mul|Add|Sub|Mod|Eq|Gt|Ge|L
 // a bare local argument is printed `x.clone()` so the local stays usable after the call.
 _RustTranspiler.RUST_BY_VALUE_CALLEE = /(?:\b(?:self|super)\.[a-zA-Z_][a-zA-Z0-9_]*|\bexchange\d*\.[a-zA-Z_][a-zA-Z0-9_]*|\brsa|\beddsa|\becdsa|\bjwt|\btotp|\bhelper[A-Z][a-zA-Z0-9_]*|\bprecise[A-Z][a-zA-Z0-9_]*|\btest[A-Z][a-zA-Z0-9_]*|\b[a-z][a-zA-Z0-9_]*(?:Helper(?:Test)?|Test)|\bassert[A-Z][a-zA-Z0-9_]*|\b(?:equals|deepEqual|assert|dump|callMethod|callMethodSync|callExchangeMethodDynamically|callExchangeMethodDynamicallySync|getExchangeProp|setExchangeProp|setFetchResponse|setFetchResponseByUrl|initExchange|close|jsonStringify|jsonParse|exceptionMessage|convertAscii|isNullValue|ioFileExists|ioFileRead|ioDirRead|setupWsMockTransport|getWsSentMessages|injectWsMessage|wsClientHasPendingFutures|markWsTestCompleted|isWsTestCompleted|rejectPendingWsFutures|preloadWsMessages|wsHasQueuedMessages))\(/;
 _RustTranspiler.RUST_BY_VALUE_CALLEE_NO_SUPER = new RegExp(_RustTranspiler.RUST_BY_VALUE_CALLEE.source.replace("(?:self|super)", "self"));
+_RustTranspiler.RUST_CACHE_CALL_HEADS = [
+  /\b[a-zA-Z_]\w*\.(?:append|store|store_array|reset|update|get_limit|limit|reusable_future)\(/g,
+  /\b(?:(?:Indexed|Counted)?OrderBook|ArrayCache(?:|ByTimestamp|BySymbolById|BySymbolBySide|ByOutcomeById))::new\(/g
+];
+_RustTranspiler.RUST_CACHE_CALL_HEADS_TEST = [
+  /\b[a-zA-Z_]\w*\.(?:append|store|store_array|reset|update|get_limit)\(/g,
+  _RustTranspiler.RUST_CACHE_CALL_HEADS[1]
+];
 // Native string args to the runtime error constructors, audited against
 // rust/ccxt-base/src/exchange_errors.rs: `msg` is `impl ToErrorMessage` (`&str`/`String`/`Value`
 // yield the same string) and `create_error`'s class name is `&str` (bare literal only).

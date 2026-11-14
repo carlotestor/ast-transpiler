@@ -348,6 +348,15 @@ describe('rust transpiling tests', () => {
         expect(out).toContain('Value::from(vec![a, x])');
     });
 
+    test('cloneCacheCallArgs clones a bare cache-call argument and keeps an owned one', () => {
+        const T: any = (transpiler as any).rustTranspiler.constructor;
+        const clone = (t: string, on: boolean, ex: boolean): string => T.cloneCacheCallArgs(t, on, ex);
+        expect(clone('stored.append(trade); c = ArrayCache::new(limit, Value::Null); s.append(\u0004t);', true, true))
+            .toBe('stored.append(trade.clone()); c = ArrayCache::new(limit.clone(), Value::Null); s.append(\u0004t);');
+        expect(clone('stored.limit(x);', true, false)).toBe('stored.limit(x);');
+        expect(clone('stored.append(trade);', false, true)).toBe('stored.append(trade);');
+    });
+
     test('a for-loop counter handed off by value is cloned (the next pass reads it again)', () => {
         const ts = [
             'class A {',
