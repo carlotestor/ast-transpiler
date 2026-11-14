@@ -13232,3 +13232,26 @@ describe('we: a side read off a proven book local and used only as a side holds 
         expect(mk("        const first = this.safeList (bookSide, 0);\n        bookSide.store (price, first);\n")).not.toContain('let mut bookSide: crate::pro::order_book::Side');
     });
 });
+
+describe('xe: a ternary of the two sides of one proven book used only as a side holds Side', () => {
+    // `c ? book['bids'] : book['asks']` reads one side marker of the same proven book on either arm
+    const mk = (init: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-xe-ternside-'));
+        const files: Record<string, string> = {
+            'ts/src/base/ws/OrderBook.ts': "export class WsOrderBook {\n    [key: string]: any;\n    cache: any[] = [];\n    constructor (snapshot: any = {}, depth: any = undefined) {}\n}\n",
+            'ts/src/base/Exchange.ts': "import { WsOrderBook } from './ws/OrderBook.js';\nexport interface Dictionary<T> { [key: string]: T }\nexport default class Exchange {\n    orderbooks: Dictionary<WsOrderBook> = {};\n    other: any = {};\n}\n",
+            'ts/src/pro/venue.ts': "import Exchange from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    handleLevels (symbol: string, side: number, price: any) {\n        const orderbook = this.orderbooks[symbol];\n        const other = this.other[symbol];\n        const bookSide = " + init + ";\n        bookSide.store (price, 1);\n    }\n}\n",
+        };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        return new Transpiler({ 'verbose': false }).transpileRustByPath (path.join (root, 'ts/src/pro/venue.ts')).content;
+    };
+    test('both arms sides of one book: the local is a Side', () => {
+        expect(mk("(side === 0) ? orderbook['bids'] : orderbook['asks']")).toContain('let mut bookSide: crate::pro::order_book::Side = crate::pro::order_book::Side::of(');
+    });
+    test('negative: one arm off another container keeps Value', () => {
+        expect(mk("(side === 0) ? orderbook['bids'] : other['asks']")).not.toContain('let mut bookSide: crate::pro::order_book::Side');
+    });
+});
