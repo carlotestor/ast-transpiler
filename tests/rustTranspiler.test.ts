@@ -5375,7 +5375,8 @@ describe('rust math/comparison on structurally numeric operands', () => {
     });
 
     test('<= with a literal-initialised numeric local against a nullable number is native', () => {
-        expect(out).toContain('while errors.as_f64().unwrap_or(f64::NAN) <= limit.as_f64().unwrap_or(f64::NAN) {');
+        // rd: the literal-initialised local is an i64; the nullable side still reads its f64 payload (Null -> NaN -> false)
+        expect(out).toContain('while (errors as f64) <= limit.as_f64().unwrap_or(f64::NAN) {');
     });
 
     test('any operands and two nullable sides of <= keep the helpers', () => {
@@ -7140,13 +7141,19 @@ describe('FM-RS1 L2 integer for-loop counters', () => {
         expect(o).toContain('self.bar(Value::Int(i))');
     });
 
+    test('rd: a counter compared with an int literal is still an i64 counter (the Int payload compares as the i64)', () => {
+        const o = body("        const xs = v.split (',');\n        for (let i = 0; i < xs.length; i++) {\n            const e = xs[i];\n            if (i === 3) { return e; }\n        }");
+        expect(o).toContain('let mut i: i64 = 0;');
+        expect(o).toContain('if (i == 3) {');
+    });
+
     test('the step binds __n when the function already uses the name n', () => {
         const o = body("        for (let i = 0; i < n; i++) { this.bar (n); }", 'n: number');
         expect(o).toContain('if let Value::Int(__n) = &mut i { *__n += 1; }');
     });
 
     test('a counter with any other use stays a Value counter', () => {
-        const o = body("        const xs = v.split (',');\n        for (let i = 0; i < xs.length; i++) {\n            const e = xs[i];\n            if (i === 3) { return e; }\n        }");
+        const o = body("        const xs = v.split (',');\n        for (let i = 0; i < xs.length; i++) {\n            const e = xs[i];\n            if (i === lim) { return e; }\n        }");
         expect(o).toContain('let mut i: Value = Value::Int(0);');
         expect(o).toMatch(step('i'));
         expect(o).not.toContain('i: i64');
@@ -11690,5 +11697,39 @@ describe('int37: nested this.balance insert under a local upper key keeps that l
         // on bullish handleBalance (tradingAccountId); with a local upper key the helper chain stays and `code` is not nkey
         expect(out).not.toContain('__r05d).insert(code');
         expect(out).toContain('let mut code: Value = ');
+    });
+});
+
+describe('ral-rd: scalar-literal and boxed locals', () => {
+    const write = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    id: string = 'x';\n    exceptions: any = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeInteger (o: any, k: any, d: number = undefined): number { return o[k]; }\n    hold (x: any): any { return x; }\n    throwExactlyMatchedException (e: any, s: any, m: any) { return undefined; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport { ExchangeError } from './base/errors.js';\nexport default class venue extends Exchange {\n" + venue + "}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/base/errors.ts'), "export class ExchangeError extends Error {}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('an int-literal local ordered against a number-typed Value compares as f64 and stays i64 (a Value operand reads its f64 payload, Null is NaN)', () => {
+        const out = write ('rd-cmp', "    m (resp: Dict, rows: any[]) {\n        const limit: number = resp['limit'];\n        let count = 0;\n        while (count < limit) {\n            count = rows.length;\n        }\n        const pageLimit = 100;\n        if (limit < pageLimit) {\n            return this.hold (pageLimit);\n        }\n        return this.hold (count);\n    }\n");
+        expect(out).toContain('let mut count: i64 = 0;');
+        expect(out).toContain('(count as f64) < limit.as_f64().unwrap_or(f64::NAN)');
+        expect(out).toContain('let mut pageLimit: i64 = 100;');
+        expect(out).toContain('limit.as_f64().unwrap_or(f64::NAN) < (pageLimit as f64)');
+    });
+    test('an int local beside a Value operand of Math.min boxes once into the helper slot (Value::from, a Copy)', () => {
+        const out = write ('rd-min', "    m (resp: Dict, limit: number) {\n        const maxLimit = 300;\n        const request = { 'limit': Math.min (limit, maxLimit) };\n        return this.hold ([ request, maxLimit ]);\n    }\n");
+        expect(out).toContain('let mut maxLimit: i64 = 300;');
+        expect(out).toContain('crate::runtime::Math::min(&limit, &Value::from(maxLimit))');
+    });
+    test('a format! error message is a String moved into the final throw (one copy at the self-call slot, as the Value clone)', () => {
+        const out = write ('rd-fmt', "    handleErrors (code: any, body: string) {\n        const feedback = this.id + ' ' + body;\n        this.throwExactlyMatchedException (this.exceptions, code, feedback);\n        throw new ExchangeError (feedback);\n    }\n");
+        expect(out).toMatch(/let mut feedback: String = format!\(/);
+        expect(out).toContain('exchange_error(feedback)');
+        expect(out.split('feedback.clone()').length - 1).toBeLessThanOrEqual(1);
+    });
+    test('a for counter compared with an int literal stays an i64 (no as_f64 unwrap, no Value counter)', () => {
+        const out = write ('rd-for', "    m (rows: any[]) {\n        const out = [];\n        for (let j = 0; j < rows.length; j++) {\n            if (j > 0) {\n                out.push (rows[j]);\n            }\n        }\n        return out;\n    }\n");
+        expect(out).toContain('let mut j: i64 = 0;');
+        expect(out).toContain('if j > 0 {');
     });
 });

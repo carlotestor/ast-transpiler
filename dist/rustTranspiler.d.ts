@@ -840,6 +840,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     printFieldKeyRead(node: any): string | undefined;
     /** A boxed use that takes the local by move (a `return`, or its last use); `err` always copies. */
     rustScalarBoxMoves(n: any, form: string, declaration: any): boolean;
+    /** rd: a `String` error message at its provable last use moves into the constructor (`ToErrorMessage for String`). */
+    rustErrMsgMoves(n: any, declaration: any): boolean;
+    /** rd: a `format!` string local whose every use is a `this.`/`super.` argument (lent: the copy the `Value` clone made)
+     *  or a moving last use (`return`, a final error message, the last box). */
+    rustFormatLendLocal(declaration: any): boolean;
     /** A bare argument of a `this.` / `super.` call: ccxt's arg pass clones the `Value` local there, so a typed
      *  string re-boxed at that slot pays the same one copy (`Value::from(x.as_deref())` / `x.clone().map(..)`). */
     rustScalarSelfArgBox(n: any): boolean;
@@ -957,6 +962,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustArithOperandKind(node: any): string | undefined;
     /** A combinator over a typed operand prints native and boxes its result once. */
     printRustArithCall(node: any): string | undefined;
+    /** rd: `n` is one argument of a two-operand `Math.min|max` whose other argument is a number-typed `Value`. */
+    rustMathMinMaxValueArg(call: any, n: any): boolean;
     /** `this.sum(..)` / `Math.min|max(a, b)`: a call whose own kind comes from its operands. */
     rustArithCombinator(node: any): boolean;
     private static readonly RUST_MATH_FLOAT_OPS;
@@ -1009,6 +1016,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustScalarPending;
     /** The partner is a local whose checker type is a string / number and whose initializer is a scalar reader shape. */
     rustScalarValuePartnerShape(partner: any): boolean;
+    /** rd: a non-literal operand printed as a `Value` whose checker type is `number` (`Int|Float|Null` at runtime). */
+    rustScalarValueNumber(node: any): boolean;
     rustScalarCompareKind(node: any): string | undefined;
     /** `s.indexOf("lit") >= 0` / `> -1` / `!== -1` (contains) and `< 0` / `=== -1` (absent) on a typed string. */
     rustScalarContainsTest(node: any, dry: boolean): string | undefined;
@@ -1721,6 +1730,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     }): string | {
         cond: string;
     } | undefined;
+    /** rd: `i <op> <int literal>` (either side) over a counter: the `Int` payload compares as the `i64` itself. */
+    rustI64LiteralCompare(id: any): {
+        op: string;
+        literal: string;
+        counterLeft: boolean;
+    } | undefined;
+    /** rd: the native compare of a registered `i64` counter against an integer literal, else undefined. */
+    printI64CounterCompare(node: any): string | undefined;
     /** A bare counter use that is an argument of a `this.m(..)` call or the value of an `x[k] = i` write. */
     rustI64BoxedUse(id: any): boolean;
     rustBoolSlotWrite(n: any): boolean;

@@ -1010,6 +1010,8 @@ export class RustTranspiler extends BaseTranspiler {
     // Native `==`/`!=` on the unwrapped payload when the checker proves the
     // Value variants line up; undefined keeps the is_equal() helper.
     printNativeEqualityComparison(left, right, op): string {
+        const counterTest = isBinaryExpression(left?.parent) && left.parent.right === right ? this.printI64CounterCompare(left.parent) : undefined;
+        if (counterTest !== undefined) return counterTest.startsWith('Value::Bool(') ? counterTest.slice('Value::Bool('.length, -1) : counterTest;
         const nilLocal = this.printRustNilLocalEquality(left, right, op); if (nilLocal !== undefined) return nilLocal;
         const bookTest = this.printWsBookNullTest(left, right, op); if (bookTest !== undefined) return bookTest;
         const mapTest = this.printWsCacheMapNullTest(left, right, op); if (mapTest !== undefined) return mapTest;
@@ -1914,6 +1916,7 @@ export class RustTranspiler extends BaseTranspiler {
     // operands prove the helper's answer: one number pins `<`/`>`; `>=`/`<=`
     // OR `is_equal` in (TRUE for two Nulls) and need a 'definite' operand.
     printNativeOrderedComparison(node, op, left, right): string | undefined {
+        const counterCompare = this.printI64CounterCompare(node); if (counterCompare !== undefined) return counterCompare;
         const scalar = this.rustScalarOwnsOperand(left) || this.rustScalarOwnsOperand(right) ? this.printRustScalarBinary(node) : undefined; if (scalar !== undefined) return scalar;
         const operator = RustTranspiler.NATIVE_COMPARISON_OPERATORS[op];
         if (operator === undefined || !this.printsValueExpression(this.orderedComparisonOperand(left)) ||
@@ -4203,7 +4206,7 @@ export class RustTranspiler extends BaseTranspiler {
             this.rustScalarUseForms.set(n, form);
             if (form === 'box' || form === 'xbox' || form === 'err') {
                 boxed++;
-                if (form === 'err' || !(isReturnStatement(n.parent) || this.rustLocalLastUse(n, declaration))) copied++;
+                if (form === 'err' ? !this.rustLocalLastUse(n, declaration) : !(isReturnStatement(n.parent) || this.rustLocalLastUse(n, declaration))) copied++;
             } else if (form !== undefined && !this.rustIdentifierIsPropertyName(n)) nativeUses++;
             if (form === 'test' || form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'lwrite' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'kin' || form === 'nkey' || (form === 'key' && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))) typedUses++;
             if (form === 'xbox' || form === 'native' || form === 'targ' || form === 'err') expressionUses = true;
@@ -4337,7 +4340,9 @@ export class RustTranspiler extends BaseTranspiler {
             const up: any = n.parent;
             const selfArg = isCallExpression(up) && up.expression !== n && isPropertyAccessExpression(up.expression)
                 && (up.expression.expression.kind === SyntaxKind.ThisKeyword || up.expression.expression.kind === SyntaxKind.SuperKeyword);
-            if ((isCallExpression(up) && up.expression !== n && !selfArg) || up?.kind === SyntaxKind.NewExpression) ok = false;
+            // rd: the final `throw new E(x)` message of a `String` moves (no copy)
+            const errMove = up?.kind === SyntaxKind.NewExpression && up.parent?.kind === SyntaxKind.ThrowStatement && this.rustLocalLastUse(n, declaration);
+            if ((isCallExpression(up) && up.expression !== n && !selfArg) || (up?.kind === SyntaxKind.NewExpression && !errMove)) ok = false;
             else if (!selfArg && !isReturnStatement(up) && !this.rustLocalLastUse(n, declaration)) ok = false;
             return true;
         });
@@ -5374,7 +5379,8 @@ export class RustTranspiler extends BaseTranspiler {
             const trial = this.rustScalarDecisions.get(declaration);
             const form = this.rustScalarUseForms.get(n);
             if ((trial === 'str' || trial === 'ostr') && (form === 'box' || form === 'xbox' || form === 'err' || form === 'key') && !this.rustScalarBoxMoves(n, form, declaration)
-                && !(form === 'box' && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== undefined && this.rustScalarSelfArgBox(n))) return false;
+                && !(form === 'box' && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== undefined && this.rustScalarSelfArgBox(n))
+                && !(form === 'box' && trial === 'str' && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration))) return false;
             // a `.push(..)` argument: ccxt's native-push pass keys on the boxed operand text
             const push: any = findAncestor(n, (m: any) => isStatement(m) || (isCallExpression(m) && isPropertyAccessExpression(m.expression) && m.expression.name.text === 'push'));
             if (push !== undefined && isCallExpression(push)) return false;
@@ -5419,6 +5425,11 @@ export class RustTranspiler extends BaseTranspiler {
         const operator = RustTranspiler.NATIVE_COMPARISON_OPERATORS[op];
         const { left, right } = cond as any;
         if (operator === undefined || !isIdentifier(left) || left.text !== name) return undefined;
+        // rd: a bound that is itself a typed `i64` / `f64` local compares natively (`Int` payloads order as their f64)
+        const bound: any = this.unwrapParens(right);
+        const boundKind = isIdentifier(bound) ? this.rustScalarLocalOf(bound)?.kind : undefined;
+        if (boundKind === 'int') return `${name} ${operator} ${super.printIdentifier(bound)}`;
+        if (boundKind === 'num') return `(${name} as f64) ${operator} ${super.printIdentifier(bound)}`;
         const refs = (n: any): boolean => (isIdentifier(n) && n.text === name) || (n.forEachChild(refs) ?? false);
         if (refs(right) || !this.printsValueExpression(left) || !this.printsValueExpression(this.orderedComparisonOperand(right))) return undefined;
         if (this.printRustScalarBinary(cond) !== undefined || this.rustScalarOwnsOperand(left) || this.rustScalarOwnsOperand(right)) return undefined;
@@ -5731,6 +5742,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n)) return 'okey';
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n)) return 'kin';
         if (isCallExpression(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== undefined) return 'native';
+        // rd: a Copy number beside a `Value` operand of `Math.min|max` boxes once into the helper's `&Value` slot (`Value::from`, no copy)
+        if ((kind === 'int' || kind === 'num') && this.rustMathMinMaxValueArg(parent, n)) return 'xbox';
         if (this.rustVenueStrLocalArg(n)) return 'targ';
         if (this.rustLimitArgUse(n, kind)) return 'targ';
         if ((kind === 'int' || kind === 'num' || kind === 'oint' || kind === 'onum') && this.rustSideStoreArg(n)) return 'targ';
@@ -6268,7 +6281,21 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** A boxed use that takes the local by move (a `return`, or its last use); `err` always copies. */
     rustScalarBoxMoves(n: any, form: string, declaration: any): boolean {
-        return form !== 'err' && (isReturnStatement(n.parent) || this.rustLocalLastUse(n, declaration));
+        if (form === 'err') return this.rustErrMsgMoves(n, declaration);
+        return isReturnStatement(n.parent) || this.rustLocalLastUse(n, declaration);
+    }
+
+    /** rd: a `String` error message at its provable last use moves into the constructor (`ToErrorMessage for String`). */
+    rustErrMsgMoves(n: any, declaration: any): boolean {
+        return this.rustScalarLocalOf(n)?.kind === 'str' && this.rustLocalLastUse(n, declaration);
+    }
+
+    /** rd: a `format!` string local whose every use is a `this.`/`super.` argument (lent: the copy the `Value` clone made)
+     *  or a moving last use (`return`, a final error message, the last box). */
+    rustFormatLendLocal(declaration: any): boolean {
+        const init: any = this.unwrapParens(declaration.initializer);
+        return isBinaryExpression(init) && init.operatorToken.kind === SyntaxKind.PlusToken && this.rustScalarFormatText(init) !== undefined
+            && this.rustStrLendSites(declaration);
     }
 
     /** A bare argument of a `this.` / `super.` call: ccxt's arg pass clones the `Value` local there, so a typed
@@ -6601,7 +6628,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (form === 'concat' && local.kind === 'ostr') return `${super.printIdentifier(node)}.as_deref().unwrap_or("null")`;
         if (form === 'targ' && (local.kind === 'str' || local.kind === 'ostr') && this.rustWsKeyUse(node)) return this.rustWsKeyText(node);
         if (form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'key' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'kin' || form === 'nkey') return super.printIdentifier(node);
-        if (form === 'err') return `${super.printIdentifier(node)}.clone()`;
+        if (form === 'err') return this.rustErrMsgMoves(node, local.declaration) ? super.printIdentifier(node) : `${super.printIdentifier(node)}.clone()`;
         if (form !== 'box' && form !== 'xbox') return undefined;
         const name = super.printIdentifier(node);
         const last = isReturnStatement(node.parent) || this.rustWsClientLastUse(node, local.declaration)
@@ -7031,6 +7058,16 @@ export class RustTranspiler extends BaseTranspiler {
         return text === undefined ? undefined : this.rustScalarBoxText(kind, text, node);
     }
 
+    /** rd: `n` is one argument of a two-operand `Math.min|max` whose other argument is a number-typed `Value`. */
+    rustMathMinMaxValueArg(call, n): boolean {
+        if (!isCallExpression(call) || call.expression === n || !isPropertyAccessExpression(call.expression) || call.arguments.length !== 2) return false;
+        const recv: any = call.expression.expression;
+        const name = String(call.expression.name.text);
+        if (!isIdentifier(recv) || recv.text !== 'Math' || (name !== 'min' && name !== 'max')) return false;
+        const other: any = call.arguments[0] === n ? call.arguments[1] : (call.arguments[1] === n ? call.arguments[0] : undefined);
+        return other !== undefined && this.rustArithCallKind(call) === undefined && this.rustScalarValueNumber(other);
+    }
+
     /** `this.sum(..)` / `Math.min|max(a, b)`: a call whose own kind comes from its operands. */
     rustArithCombinator(node): boolean {
         if (!isCallExpression(node) || !isPropertyAccessExpression(node.expression)) return false;
@@ -7303,6 +7340,16 @@ export class RustTranspiler extends BaseTranspiler {
         const sign = equality ? (op === SyntaxKind.EqualsEqualsToken || op === SyntaxKind.EqualsEqualsEqualsToken ? '==' : '!=') : symbol;
         // of: a typed local against an equality partner its own veto keeps a `Value` (proven `Str|Null` / `Int|Null`)
         if ((lk === undefined) !== (rk === undefined) && equality) return this.rustScalarValuePartnerTest(lk === undefined ? right : left, lk === undefined ? left : right, lk ?? rk, sign, dry);
+        // rd: an `i64` / `f64` local ordered against a number-typed `Value` (`Int|Float|Null`): the helper compares the two
+        // `as_f64` payloads and answers false for `Null`, which is the f64 compare with a NaN stand-in
+        if ((lk === undefined) !== (rk === undefined) && !equality) {
+            const [ typed, other, k ] = lk === undefined ? [ right, left, rk ] : [ left, right, lk ];
+            if ((k !== 'int' && k !== 'num') || !isIdentifier(typed) || this.rustScalarLocalOf(typed) === undefined || !this.rustScalarValueNumber(other)) return undefined;
+            if (dry) return '_';
+            const own = k === 'int' ? `(${text(k, typed)} as f64)` : text(k, typed);
+            const value = `${this.printNode(other, 0).trim()}.as_f64().unwrap_or(f64::NAN)`;
+            return lk === undefined ? `${value} ${sign} ${own}` : `${own} ${sign} ${value}`;
+        }
         if (lk === undefined || rk === undefined) return undefined;
         if (equality && (lk === 'slit' || rk === 'slit')) {
             const [ lit, other, ok ] = lk === 'slit' ? [ left, right, rk ] : [ right, left, lk ];
@@ -7445,6 +7492,16 @@ export class RustTranspiler extends BaseTranspiler {
         return (checked === 'string' || checked === 'number') && this.rustScalarInitShape(declaration.initializer);
     }
 
+
+    /** rd: a non-literal operand printed as a `Value` whose checker type is `number` (`Int|Float|Null` at runtime). */
+    rustScalarValueNumber(node): boolean {
+        const inner: any = this.unwrapParens(node);
+        if (inner === undefined || this.literalKindOfNode(inner) !== undefined || this.rustScalarExprHasForCounter(inner)) return false;
+        if (isIdentifier(inner) && (this.rustScalarIdentifierKind(inner) !== undefined || this.rustScalarParamRead(inner) !== undefined)) return false;
+        if (!isIdentifier(inner) && !isPropertyAccessExpression(inner) && !isElementAccessExpression(inner)) return false;
+        if (!this.printsValueExpression(this.orderedComparisonOperand(inner))) return false;
+        return this.primitiveKindOfType(this.typeOfNodeIfAny(inner)) === 'number';
+    }
 
     rustScalarCompareKind(node): string | undefined {
         if (this.literalKindOfNode(node) === 'string') return node.text in this.StringLiteralReplacements ? undefined : 'slit';
@@ -12777,11 +12834,34 @@ export class RustTranspiler extends BaseTranspiler {
             if (id.kind !== SyntaxKind.Identifier || this.rustIdentifierIsPropertyName(id) || this.rustSymbolOf(id) !== counter.symbol) continue;
             const up: any = id.parent;
             const admissible = (isElementAccessExpression(up) && up.argumentExpression === id)
-                || this.rustI64BoxedUse(id)
+                || this.rustI64BoxedUse(id) || this.rustI64LiteralCompare(id) !== undefined
                 || (isVariableDeclaration(up) && up.initializer === id);
             if (!admissible) return undefined;
         }
         return bound;
+    }
+
+    /** rd: `i <op> <int literal>` (either side) over a counter: the `Int` payload compares as the `i64` itself. */
+    rustI64LiteralCompare(id: any): { op: string, literal: string, counterLeft: boolean } | undefined {
+        const up: any = id.parent;
+        if (!isBinaryExpression(up)) return undefined;
+        const kind = up.operatorToken.kind;
+        const op = this.isEqualityOp(kind) ? (kind === SyntaxKind.EqualsEqualsToken || kind === SyntaxKind.EqualsEqualsEqualsToken ? '==' : '!=') : RustTranspiler.NATIVE_COMPARISON_OPERATORS[kind];
+        if (op === undefined) return undefined;
+        const other: any = up.left === id ? up.right : up.left;
+        const literal = this.rustScalarIntLiteral(this.unwrapParens(other));
+        return literal === undefined ? undefined : { op, literal, counterLeft: up.left === id };
+    }
+
+    /** rd: the native compare of a registered `i64` counter against an integer literal, else undefined. */
+    printI64CounterCompare(node: any): string | undefined {
+        if (this.rustI64Counters.size === 0 || !isBinaryExpression(node)) return undefined;
+        const id: any = isIdentifier(node.left) && this.rustI64CounterOf(node.left) !== undefined ? node.left : (isIdentifier(node.right) && this.rustI64CounterOf(node.right) !== undefined ? node.right : undefined);
+        const cmp = id === undefined ? undefined : this.rustI64LiteralCompare(id);
+        if (cmp === undefined || !this.rustI64CounterUse(id)) return undefined;
+        const name = String(id.text);
+        const text = cmp.counterLeft ? `${name} ${cmp.op} ${cmp.literal}` : `${cmp.literal} ${cmp.op} ${name}`;
+        return this.isBooleanPosition(node) ? text : `Value::Bool(${text})`;
     }
 
     /** A bare counter use that is an argument of a `this.m(..)` call or the value of an `x[k] = i` write. */
