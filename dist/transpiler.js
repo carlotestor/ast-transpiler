@@ -51561,6 +51561,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustVenueTypedDecisions = /* @__PURE__ */ new WeakMap();
     this.rustClientHandlePlans = /* @__PURE__ */ new WeakMap();
     this.rustClientHandleDeclPrinting = false;
+    this.rustScalarPending = /* @__PURE__ */ new Set();
     // ── native `Option<String>` returns (`: Str` methods) ─────────────────────
     //
     // An internal, non-override, non-async method declared `: Str`
@@ -55273,6 +55274,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
     if (!ok || unused || storeOnly || clientOnce || guarded && scope.kind !== SyntaxKind7.MethodDeclaration || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration))
       return void 0;
+    if (strKind && this.rustScalarHasPairEquality(declaration) && this.rustScalarBorrowedBox(declaration))
+      return void 0;
     if (handOff && isConditionalExpression4(this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === void 0)
       return void 0;
     if (this.rustVenueScalarSource(declaration.initializer) && (boxed > 0 && !handOff || this.rustVenueLocalHandedOn(declaration)))
@@ -58401,9 +58404,11 @@ ${binding(plan.indent)}` : ""), head: "" };
     const literal2 = (n) => literalKind !== void 0 && this.rustScalarIntLiteral(n) !== void 0 ? literalKind : void 0;
     const lk = literal2(left) ?? this.rustScalarCompareKind(left);
     const rk = literal2(right) ?? this.rustScalarCompareKind(right);
+    const sign = equality ? op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken ? "==" : "!=" : symbol;
+    if (lk === void 0 !== (rk === void 0) && equality)
+      return this.rustScalarValuePartnerTest(lk === void 0 ? right : left, lk === void 0 ? left : right, lk ?? rk, sign, dry);
     if (lk === void 0 || rk === void 0)
       return void 0;
-    const sign = equality ? op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken ? "==" : "!=" : symbol;
     if (equality && (lk === "slit" || rk === "slit")) {
       const [lit, other, ok] = lk === "slit" ? [left, right, rk] : [right, left, lk];
       if (ok !== "str" && ok !== "ostr")
@@ -58448,6 +58453,114 @@ ${binding(plan.indent)}` : ""), head: "" };
     }
     const kind = lk === "num" || rk === "num" ? "num" : "int";
     return `${text(kind, left)} ${sign} ${text(kind, right)}`;
+  }
+  /** `x == p` of a typed scalar local `x` and a `Value` local `p` whose initializer and every write print
+   *  one scalar family or `Null` (`Str|Null` / `Int|Null`): `is_equal` on those operands is exactly the
+   *  variant compare (`Null == Null`, `Str == Str` by text, `Int == Int`, else false), so the typed side
+   *  compares its own `Option` against `p.as_str()` / `p.as_i64()`. Both read in place, no copy. */
+  /** A use that boxes the local as the key of an `in` test before its last use (read there by reference, so the box copies). */
+  rustScalarBorrowedBox(declaration) {
+    let borrowed = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      let top = n;
+      while (isParenthesizedExpression3(top.parent))
+        top = top.parent;
+      const up = top.parent;
+      if (isBinaryExpression5(up) && up.left === top && up.operatorToken.kind === SyntaxKind7.InKeyword) {
+        const map = this.unwrapParens(up.right);
+        if (map !== void 0 && isPropertyAccessExpression3(map) && map.expression.kind === SyntaxKind7.ThisKeyword && isIdentifier3(map.name) && !_RustTranspiler.RUST_PLAIN_DICT_FIELDS.has(String(map.name.text)))
+          borrowed = true;
+      }
+      return true;
+    });
+    return borrowed;
+  }
+  /** The local is one side of `x === y` / `x !== y` against a `Value` partner (`rustScalarValuePartnerTest`). */
+  rustScalarHasPairEquality(declaration) {
+    let pair = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      let top = n;
+      while (isParenthesizedExpression3(top.parent))
+        top = top.parent;
+      const up = top.parent;
+      if (isBinaryExpression5(up) && this.isEqualityOp(up.operatorToken.kind)) {
+        const other = this.unwrapParens(up.left === top ? up.right : up.left);
+        if (other !== void 0 && isIdentifier3(other) && other.text !== "undefined" && this.rustScalarValuePartnerShape(other))
+          pair = true;
+      }
+      return true;
+    });
+    return pair;
+  }
+  rustScalarValuePartnerTest(typed, other, kind, sign, dry) {
+    const self = this.unwrapParens(typed);
+    const partner = this.unwrapParens(other);
+    if (!isIdentifier3(self) || !isIdentifier3(partner) || this.rustScalarIdentifierKind(self) === void 0)
+      return void 0;
+    const base = kind.startsWith("o") ? kind.slice(1) : kind;
+    if (base !== "str" && base !== "int" || this.rustScalarValuePartnerKind(partner) !== base)
+      return void 0;
+    if (dry)
+      return "_";
+    const name = super.printIdentifier(self);
+    const own = base === "str" ? kind === "str" ? `Some(${name}.as_str())` : `${name}.as_deref()` : kind === "int" ? `Some(${name})` : name;
+    return `(${own} ${sign} ${super.printIdentifier(partner)}.${base === "str" ? "as_str" : "as_i64"}())`;
+  }
+  /** `'str'` / `'int'` when `p` is a plain `Value` local (no typed-local rule claims it) whose initializer and every
+   *  write is a fresh `str|ostr|null` (`int|oint|null`) producer, written only by whole `p = ..` statements. */
+  rustScalarValuePartnerKind(partner) {
+    const declaration = this.rustDeclaredNode(partner);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name) || declaration.initializer === void 0)
+      return void 0;
+    if (this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === "null" || this.rustScalarPending.has(declaration))
+      return void 0;
+    if (this.rustScalarBorrowedBox(declaration))
+      return void 0;
+    const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
+    const family = checked === "string" ? "str" : checked === "number" ? "int" : void 0;
+    if (family === void 0)
+      return void 0;
+    this.rustScalarPending.add(declaration);
+    try {
+      if (this.rustScalarIdentifierKind(partner) !== void 0 || !this.rustScalarPlainValueTarget(partner))
+        return void 0;
+      const fits = (rhs) => {
+        const k = this.rustScalarValueKind(rhs, true);
+        return k === "null" || k === family || k === `o${family}`;
+      };
+      if (!fits(declaration.initializer))
+        return void 0;
+      const scope = this.rustEnclosingFunction(declaration);
+      let ok = true;
+      this.rustScalarUsesAll(declaration, String(declaration.name.text), (n) => {
+        if (this.rustEnclosingFunction(n) !== scope)
+          ok = false;
+        let top = n;
+        while (isParenthesizedExpression3(top.parent))
+          top = top.parent;
+        const up = top.parent;
+        if (isBinaryExpression5(up) && up.left === top && up.operatorToken.kind >= SyntaxKind7.FirstAssignment && up.operatorToken.kind <= SyntaxKind7.LastAssignment) {
+          if (up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !fits(up.right))
+            ok = false;
+        }
+        if ((isPrefixUnaryExpression3(up) || up?.kind === SyntaxKind7.PostfixUnaryExpression) && (up.operator === SyntaxKind7.PlusPlusToken || up.operator === SyntaxKind7.MinusMinusToken))
+          ok = false;
+        if (isArrayLiteralExpression4(up) && isBinaryExpression5(up.parent) && up.parent.left === up)
+          ok = false;
+        return true;
+      });
+      return ok ? family : void 0;
+    } finally {
+      this.rustScalarPending.delete(declaration);
+    }
+  }
+  /** The partner is a local whose checker type is a string / number and whose initializer is a scalar reader shape. */
+  rustScalarValuePartnerShape(partner) {
+    const declaration = this.rustDeclaredNode(partner);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0)
+      return false;
+    const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
+    return (checked === "string" || checked === "number") && this.rustScalarInitShape(declaration.initializer);
   }
   rustScalarCompareKind(node) {
     if (this.literalKindOfNode(node) === "string")
