@@ -14776,12 +14776,6 @@ export class RustTranspiler extends BaseTranspiler {
         if (peeled !== undefined && this.rustConditionBoolSlot(node) && !this.printedBoolHelperCall(this.stripOuterParens(peeled))) {
             return `${idn}(${peeled})`;
         }
-        // `k in m` over a borrowed Dict prints the map's own `contains_key`: already a Rust bool in any condition
-        const inOp: any = this.unwrapParens(node);
-        if (peeled !== undefined && isBinaryExpression(inOp) && inOp.operatorToken.kind === SyntaxKind.InKeyword && this.rustBorrowedDictName(inOp.right) !== undefined
-            && /^[A-Za-z_][A-Za-z0-9_]*\.contains_key\("(?:[^"\\]|\\.)*"\)$/.test(this.stripOuterParens(peeled))) {
-            return `${idn}(${this.stripOuterParens(peeled)})`;
-        }
         return `${idn}is_true(&${this.printTruthyArgument(expression)})`;
     }
 

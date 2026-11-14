@@ -65932,10 +65932,6 @@ ${idn}}`;
     if (peeled !== void 0 && this.rustConditionBoolSlot(node) && !this.printedBoolHelperCall(this.stripOuterParens(peeled))) {
       return `${idn}(${peeled})`;
     }
-    const inOp = this.unwrapParens(node);
-    if (peeled !== void 0 && _is.isBinaryExpression.call(void 0, inOp) && inOp.operatorToken.kind === _ast.SyntaxKind.InKeyword && this.rustBorrowedDictName(inOp.right) !== void 0 && /^[A-Za-z_][A-Za-z0-9_]*\.contains_key\("(?:[^"\\]|\\.)*"\)$/.test(this.stripOuterParens(peeled))) {
-      return `${idn}(${this.stripOuterParens(peeled)})`;
-    }
     return `${idn}is_true(&${this.printTruthyArgument(expression)})`;
   }
   /** The `&&` / `||` / `!` chain around `node` ends in a statement or ternary condition (not a value the

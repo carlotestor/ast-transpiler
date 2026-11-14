@@ -14096,12 +14096,6 @@ describe('ral-zh: sign params of a venue whose every request-path caller hands a
         const out = write ('zhsignok', sign, "    async f (params: Dict = {}) {\n        const request: Dict = { 'a': 1 };\n        return await this.publicGetX (this.extend (request, params));\n    }\n");
         expect(out).toContain('let mut query: crate::value::Dict = ');
     });
-    test('a literal-key `in` on the held Dict under `!` reads contains_key bare (no is_true)', () => {
-        const s = "    sign (path: string, api = 'public', method = 'GET', params: Dict = {}, headers: any = undefined, body: any = undefined) {\n        const query = this.omit (params, this.extractParams (path));\n        let sendAsQuery = (method === 'GET');\n        if (method === 'DELETE') {\n            sendAsQuery = !('orders' in query);\n        }\n        if (sendAsQuery) {\n            return [ this.urlencode (query) ];\n        }\n        return [ this.json (query) ];\n    }\n";
-        const out = write ('zhsignin', s, "    async f (params: Dict = {}) {\n        return await this.publicGetX (this.extend ({ 'a': 1 }, params));\n    }\n");
-        expect(out).toContain('let mut query: crate::value::Dict = ');
-        expect(out).toContain('sendAsQuery = !(query.contains_key("orders"));');
-    });
     test('negative: one caller passes a list body: the omit keeps its box', () => {
         const out = write ('zhsignlist', sign, "    async f (params: Dict = {}) {\n        return await this.publicGetX ([ params ]);\n    }\n");
         expect(out).not.toContain('let mut query: crate::value::Dict = ');
