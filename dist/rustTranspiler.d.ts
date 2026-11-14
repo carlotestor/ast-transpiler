@@ -2358,6 +2358,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBorrowedLocalKindUncached(declaration: any): 'dict' | 'list' | undefined;
     private rustOptContainerLocals;
     private rustBorrowedIndexReads;
+    /** `Promise.all ([..])` (an array literal operand): runtime `promise_all` hands its operand back, so it is always a list. */
+    rustPromiseAllListKind(call: any): 'list' | undefined;
     /** `x[k]`, read only (no write, call, property or nested element target), with a numeric literal key or a key local
      *  that prints as a `Value` (a literal-initialised counter, or an untyped `let`/`const` of number / string type). */
     rustBorrowedIndexReadUse(n: any): boolean;
@@ -2418,6 +2420,7 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  or a `let` filled by such writes) to a lent `impl Into<crate::Value>` slot. */
     rustLentOptionalHandOff(call: any, arg: any, init: any, from: 'dict' | 'list' | 'api' | undefined, nilDeclared: boolean): boolean;
     private static readonly RUST_LENT_ENCODER_SLOTS;
+    private static readonly RUST_LIST_TELLING_SLOTS;
     private static readonly RUST_LENT_OPTIONAL_HELPERS;
     /** `this.parseX (x as Dict, ..)`: the assertion only retypes the TS side, the argument lands in the same lent slot. */
     rustLentAsHandOff(asArg: any, init: any, from: 'dict' | 'list' | 'api' | undefined, endpoint: boolean, nilDeclared: boolean): boolean;
