@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -57657,6 +57657,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "key";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
+    if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustUrlsKeyReadUse(n))
+      return "okey";
     if (kind === "str" && this.rustStrLiteralTernaryLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n))
@@ -60421,13 +60423,16 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (init !== void 0 && isObjectLiteralExpression4(init)) {
       const name = String(access.expression.text);
       let enumerated = false;
+      let keyRead = false;
       this.rustLocalUsesAll(declaration, name, false, (u) => {
         if (this.bearerEnumArg(u.parent) === u || this.bearerEnumArg(u.parent?.parent) === u)
           enumerated = true;
+        else if (isElementAccessExpression4(u.parent) && u.parent.expression === u && !(isBinaryExpression5(u.parent.parent) && u.parent.parent.left === u.parent))
+          keyRead = true;
         return true;
       });
       if (enumerated)
-        return false;
+        return !keyRead && isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) && this.rustScalarInsertKeyUse(n);
       return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);
     }
     return this.rustScalarInsertKeyUse(n);
@@ -60524,6 +60529,20 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     const kind = this.rustOkeyKind(read.expression, read);
     return kind === "map" || kind === "value" && RUST_PLAIN_PLACE.test(this.printNode(read.expression, 0).trim());
+  }
+  /** ral-yg: `this.urls['<lit>'][k]` read only (no write, chain link, delete or update) where `this.urls['<lit>']` is the
+   *  base-declared string-keyed map (`rustUrlsMapEntry`): the native read takes the borrowed key off the map the boxed
+   *  read reached (a non-map entry or a `None` key reads Null, as `get_value` did on a non-map or a `Null` key). */
+  rustUrlsKeyReadUse(n) {
+    const read = n.parent;
+    if (!isElementAccessExpression4(read) || read.argumentExpression !== n || !this.rustUrlsMapEntry(read.expression))
+      return false;
+    const up = read.parent;
+    if (up === void 0 || isElementAccessExpression4(up) && up.expression === read || up.kind === SyntaxKind7.DeleteExpression || isPrefixUnaryExpression3(up) || up.kind === SyntaxKind7.PostfixUnaryExpression)
+      return false;
+    if (isBinaryExpression5(up) && up.left === read && rustIsAssignmentOperator(up.operatorToken.kind))
+      return false;
+    return this.isNativeAccessPositionSafe(read) && !this.isNativeWriteTargetBase(read);
   }
   /** uh: the use's local is initialised by `c ? 'a' : 'b'` (both arms string literals). */
   rustStrLiteralTernaryLocal(n) {
