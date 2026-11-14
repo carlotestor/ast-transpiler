@@ -16127,6 +16127,9 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-ua: every non-null write is a declared `Promise<Dict>` endpoint: a null test reads the optional map (`is_none()`)
         const declaredDictOnly = nilDeclared && from === 'dict' && !mixed && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes
             && !this.rustNilResponseLocals.has(declaration);
+        // ral-va: the same for an all-declared `Promise<List>` endpoint local: a null test reads the optional list (`is_none()`)
+        const declaredListTested = nilDeclared && from === 'list' && !mixed && nullTests > 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes
+            && !this.rustNilResponseLocals.has(declaration) && lengths === 0 && castLengths === 0;
         const endpointBoxOnly = endpointBoxes > 0 && (nullTests === 0 || declaredDictOnly) && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes
             && !this.rustNilResponseLocals.has(declaration) && boxedElementUses.every((u: any) => this.rustBoxLineOk(u));
         if (endpointBoxes > 0 && !endpointBoxOnly) return undefined;
@@ -16136,7 +16139,7 @@ export class RustTranspiler extends BaseTranspiler {
             || ((this.rustNilResponseLocals.has(declaration) || from === 'api' || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || (indexLikeReads > 0 && !this.rustUrlsMapEntry(init))))
             || (this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))) return undefined;
         // ral-kc: a declared endpoint answering off its declared shape is `None` in the optional form: a null test would tell it apart
-        if (declaredEndpointWrites > 0 && nullTests > 0 && !declaredDictOnly) return undefined;
+        if (declaredEndpointWrites > 0 && nullTests > 0 && !declaredDictOnly && !declaredListTested) return undefined;
         // an endpoint written into an empty `let` may answer a list: `into_opt_dict` keeps only maps, so it is never lent whole
         if (this.rustNilResponseLocals.has(declaration) && (lentResponses > 0 || lentNullable > 0)) return undefined;
         // the `ecdsa(..)` declaration adds no `.into_dict()` suffix: its line keeps the boxed length plus the type name
