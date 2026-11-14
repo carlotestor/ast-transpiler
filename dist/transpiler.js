@@ -56947,7 +56947,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (parent === void 0 || !isIdentifier3(n) || this.rustIdentifierIsPropertyName(n))
       return false;
     const declaration = this.rustDeclaredNode(n);
-    if (!this.rustSbTypedCallInit(declaration) || this.rustSbHasPartner(declaration))
+    if (!this.rustSbTypedCallInit(declaration) || this.rustSbHasPartner(declaration) && !this.rustUbPtiPartnersDecided(declaration))
       return false;
     if (isBinaryExpression5(parent) || parent.kind === SyntaxKind7.ConditionalExpression || this.rustIdentifierUseIsCondition(n))
       return false;
@@ -58902,6 +58902,13 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (lk === void 0 !== (rk === void 0) && !equality) {
       const [typed, other, k] = lk === void 0 ? [right, left, rk] : [left, right, lk];
       const own = isIdentifier3(typed) ? this.rustScalarLocalOf(typed) : void 0;
+      if (k === "oint" && own !== void 0 && this.rustUbPtiPartnersDecided(own.declaration) && (this.rustScalarValueNumber(other) || this.rustUbPtiCall(other)) && this.rustUbPartnerInBucket(other)) {
+        if (dry)
+          return "_";
+        const value2 = `${this.printNode(other, 0).trim()}.as_f64().unwrap_or(f64::NAN)`;
+        const test = lk === void 0 ? `${value2} ${sign} (__p as f64)` : `(__p as f64) ${sign} ${value2}`;
+        return `matches!(${text(k, typed)}, Some(__p) if ${test})`;
+      }
       if (k !== "int" && k !== "num" || own === void 0 || !this.rustRdOwnInit(own.declaration) || !this.rustScalarValueNumber(other))
         return void 0;
       if (dry)
@@ -59763,6 +59770,49 @@ ${binding(plan.indent)}` : ""), head: "" };
     const init = declaration === void 0 || !isVariableDeclaration3(declaration) ? void 0 : this.unwrapParens(declaration.initializer);
     return init !== void 0 && isCallExpression6(init) && isPropertyAccessExpression3(init.expression) && init.expression.expression.kind === SyntaxKind7.ThisKeyword && String(init.expression.name.text) === "parseToInt";
   }
+  /** ub: a `this.parseToInt(..)` call printed as its boxed `Int` / `Null` (`Value::from(self.parse_to_int(..))`). */
+  rustUbPtiCall(node) {
+    const inner = this.unwrapParens(node);
+    return inner !== void 0 && isCallExpression6(inner) && isPropertyAccessExpression3(inner.expression) && inner.expression.expression.kind === SyntaxKind7.ThisKeyword && String(inner.expression.name.text) === "parseToInt" && this.printsValueExpression(inner);
+  }
+  /** ub: a compare partner that is not another group's local: a literal, call, element / property read, parameter,
+   *  `for` counter or another parseToInt local (reader, ternary and nil-declared locals keep their own decisions). */
+  rustUbPartnerInBucket(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0)
+      return false;
+    if (!isIdentifier3(inner))
+      return !isBinaryExpression5(inner) || this.rustUbPartnerInBucket(inner.left) && this.rustUbPartnerInBucket(inner.right);
+    const d = this.rustDeclaredNode(inner);
+    if (d === void 0 || !isVariableDeclaration3(d))
+      return d !== void 0 && isParameterDeclaration3(d);
+    return this.rustTbParseToIntInit(d) || d.parent?.parent?.kind === SyntaxKind7.ForStatement;
+  }
+  /** ub: a parseToInt local whose partner uses are all ordered / equality tests the solver prints with both operands
+   *  decided (`rustScalarCompareText`): its plain reads box like any other typed base call result. */
+  rustUbPtiPartnersDecided(declaration) {
+    if (!this.rustTbParseToIntInit(declaration))
+      return false;
+    let ok = true;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (u) => {
+      let top = u;
+      while (isParenthesizedExpression3(top.parent))
+        top = top.parent;
+      const up = top.parent;
+      if (this.rustIdentifierIsWritten(u) || isVariableDeclaration3(up) && up.initializer === top)
+        ok = false;
+      else if (isBinaryExpression5(up) && (_RustTranspiler.NATIVE_COMPARISON_OPERATORS[up.operatorToken.kind] === void 0 && !this.isEqualityOp(up.operatorToken.kind) && !_RustTranspiler.RUST_SCALAR_VALUE_OPERAND_OPS.has(up.operatorToken.kind)))
+        ok = false;
+      else if (isBinaryExpression5(up) && !this.rustUbPartnerInBucket(up.left === top ? up.right : up.left))
+        ok = false;
+      else if (up?.kind === SyntaxKind7.ConditionalExpression || up?.kind === SyntaxKind7.PrefixUnaryExpression || up?.kind === SyntaxKind7.AsExpression)
+        ok = false;
+      else if (isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && up.expression.expression.text === "Math")
+        ok = false;
+      return true;
+    });
+    return ok;
+  }
   /** tb: `i OP b` as the condition of `for (let i = <int>; ..; i++)` (the step is the counter's only write, so it is always
    *  an `Int`), `b` a parseToInt `i64` / `Option<i64>` local: the counter operand, else undefined. */
   rustTbCounterBound(cond, n, kind) {
@@ -59792,6 +59842,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       while (isParenthesizedExpression3(top.parent) || top.parent?.kind === SyntaxKind7.AsExpression)
         top = top.parent;
       const up = top.parent;
+      if (isBinaryExpression5(up) && !this.rustAssignmentOpKind(up.operatorToken.kind) && (_RustTranspiler.NATIVE_COMPARISON_OPERATORS[up.operatorToken.kind] !== void 0 || this.isEqualityOp(up.operatorToken.kind)) && this.rustScalarIntLiteral(this.unwrapParens(up.left === top ? up.right : up.left)) !== void 0)
+        return true;
       if (this.rustIdentifierIsWritten(u) || isBinaryExpression5(up) || up?.kind === SyntaxKind7.ConditionalExpression || up?.kind === SyntaxKind7.PrefixUnaryExpression || isVariableDeclaration3(up) && up.initializer === top)
         partner = true;
       return true;

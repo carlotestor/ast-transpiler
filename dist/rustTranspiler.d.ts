@@ -1153,6 +1153,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustValueIntCounter(node: any): boolean;
     /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */
     rustTbParseToIntInit(declaration: any): boolean;
+    /** ub: a `this.parseToInt(..)` call printed as its boxed `Int` / `Null` (`Value::from(self.parse_to_int(..))`). */
+    rustUbPtiCall(node: any): boolean;
+    /** ub: a compare partner that is not another group's local: a literal, call, element / property read, parameter,
+     *  `for` counter or another parseToInt local (reader, ternary and nil-declared locals keep their own decisions). */
+    rustUbPartnerInBucket(node: any): boolean;
+    /** ub: a parseToInt local whose partner uses are all ordered / equality tests the solver prints with both operands
+     *  decided (`rustScalarCompareText`): its plain reads box like any other typed base call result. */
+    rustUbPtiPartnersDecided(declaration: any): boolean;
     /** tb: `i OP b` as the condition of `for (let i = <int>; ..; i++)` (the step is the counter's only write, so it is always
      *  an `Int`), `b` a parseToInt `i64` / `Option<i64>` local: the counter operand, else undefined. */
     rustTbCounterBound(cond: any, n: any, kind: string): any;
