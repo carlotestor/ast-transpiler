@@ -57517,6 +57517,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "fin";
     if (kind === "bool" && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== void 0)
       return "cond";
+    if (kind === "bool" && isPrefixUnaryExpression3(parent) && this.rustValueNotOfBoolLocal(parent) !== void 0)
+      return "cond";
     if (kind === "str" || kind === "ostr") {
       const fieldForm = this.rustFieldKeyUseForm(n);
       if (fieldForm !== void 0)
@@ -59523,6 +59525,18 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (isIdentifier3(node) && this.rustOptParamKind(node) === kind)
       return true;
     return kind === "bool" && this.rustBoolNativeText(node) !== void 0;
+  }
+  /** yb: `!x` over a `bool` scalar local outside a condition and outside any logical: `Value::Bool(!x)`, the box the
+   *  `!is_true(&x)` form got (`is_true(&Value::Bool(b))` is `b`). */
+  rustValueNotOfBoolLocal(node) {
+    if (!isPrefixUnaryExpression3(node) || node.operator !== SyntaxKind7.ExclamationToken)
+      return void 0;
+    const operand = this.unwrapParens(node.operand);
+    if (!isIdentifier3(operand) || this.rustScalarLocalOf(operand)?.kind !== "bool")
+      return void 0;
+    if (this.rustClimbLogicalWrappers(node) !== node || this.isBooleanPosition(node))
+      return void 0;
+    return `Value::Bool(!${super.printIdentifier(operand)})`;
   }
   /** `a || b` / `a && b` whose every leaf is a native `bool` and one is a `bool` scalar local: JS returns an
    *  operand, which is then a boolean, so the Rust `||` / `&&` value is the same. */
@@ -65980,8 +65994,12 @@ ${idn}}`;
   printPrefixUnaryExpression(node, identation) {
     const { operand, operator } = node;
     const idn = this.getIden(identation);
-    if (operator === SyntaxKind7.ExclamationToken)
+    if (operator === SyntaxKind7.ExclamationToken) {
+      const notBool = this.rustValueNotOfBoolLocal(node);
+      if (notBool !== void 0)
+        return idn + notBool;
       return idn + "!" + this.printCondition(operand, 0);
+    }
     if (operator !== SyntaxKind7.MinusToken)
       return idn + this.PrefixFixOperators[operator] + this.printNode(operand, 0);
     const operandText = this.printNode(operand, 0);

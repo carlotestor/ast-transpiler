@@ -6315,6 +6315,7 @@ export class RustTranspiler extends BaseTranspiler {
         if ((kind === 'str' || kind === 'ostr' || kind === 'int' || kind === 'oint') && this.rustInArrayNeedle(n) && this.rustPreciseLendLocal(n)) return 'parg';
         if ((kind === 'str' || kind === 'ostr') && this.rustWsCacheMapKeyUse(n)) return 'fin';
         if (kind === 'bool' && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== undefined) return 'cond';
+        if (kind === 'bool' && isPrefixUnaryExpression(parent) && this.rustValueNotOfBoolLocal(parent) !== undefined) return 'cond';
         if (kind === 'str' || kind === 'ostr') { const fieldForm = this.rustFieldKeyUseForm(n); if (fieldForm !== undefined) return fieldForm; }
         if ((kind === 'str' || kind === 'ostr') && this.rustWsKeyUse(n)) return 'targ';
         if ((kind === 'str' || kind === 'ostr') && this.rustWsSubscriptionWriteValue(n)) return 'box';
@@ -8191,6 +8192,16 @@ export class RustTranspiler extends BaseTranspiler {
         }
         if (isIdentifier(node) && this.rustOptParamKind(node) === kind) return true;
         return kind === 'bool' && this.rustBoolNativeText(node) !== undefined;
+    }
+
+    /** yb: `!x` over a `bool` scalar local outside a condition and outside any logical: `Value::Bool(!x)`, the box the
+     *  `!is_true(&x)` form got (`is_true(&Value::Bool(b))` is `b`). */
+    rustValueNotOfBoolLocal(node: any): string | undefined {
+        if (!isPrefixUnaryExpression(node) || node.operator !== SyntaxKind.ExclamationToken) return undefined;
+        const operand: any = this.unwrapParens(node.operand);
+        if (!isIdentifier(operand) || this.rustScalarLocalOf(operand)?.kind !== 'bool') return undefined;
+        if (this.rustClimbLogicalWrappers(node) !== node || this.isBooleanPosition(node)) return undefined;
+        return `Value::Bool(!${super.printIdentifier(operand)})`;
     }
 
     /** `a || b` / `a && b` whose every leaf is a native `bool` and one is a `bool` scalar local: JS returns an
@@ -14843,7 +14854,12 @@ export class RustTranspiler extends BaseTranspiler {
     printPrefixUnaryExpression(node, identation) {
         const { operand, operator } = node;
         const idn = this.getIden(identation);
-        if (operator === SyntaxKind.ExclamationToken) return idn + '!' + this.printCondition(operand, 0);
+        if (operator === SyntaxKind.ExclamationToken) {
+            // yb: `!x` over a `bool` local in a value slot (no logical around it) is the `Value::Bool` the helper form boxed
+            const notBool = this.rustValueNotOfBoolLocal(node);
+            if (notBool !== undefined) return idn + notBool;
+            return idn + '!' + this.printCondition(operand, 0);
+        }
         if (operator !== SyntaxKind.MinusToken) return idn + this.PrefixFixOperators[operator] + this.printNode(operand, 0);
         const operandText = this.printNode(operand, 0);
         return idn + (this.foldNegateLiteral(operandText) ?? this.printRustNativeNegate(operand, operandText) ?? `negate(&${operandText})`);

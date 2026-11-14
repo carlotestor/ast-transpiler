@@ -1147,6 +1147,9 @@ export declare class RustTranspiler extends BaseTranspiler {
         text: string;
     } | undefined;
     rustOptParamWriteOk(kind: string, node: any): boolean;
+    /** yb: `!x` over a `bool` scalar local outside a condition and outside any logical: `Value::Bool(!x)`, the box the
+     *  `!is_true(&x)` form got (`is_true(&Value::Bool(b))` is `b`). */
+    rustValueNotOfBoolLocal(node: any): string | undefined;
     /** `a || b` / `a && b` whose every leaf is a native `bool` and one is a `bool` scalar local: JS returns an
      *  operand, which is then a boolean, so the Rust `||` / `&&` value is the same. */
     rustScalarBoolLogicalText(expr: any): string | undefined;

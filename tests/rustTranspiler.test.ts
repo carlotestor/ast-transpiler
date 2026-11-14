@@ -13711,3 +13711,12 @@ describe('ral-yb: counter-indexed bind not followed by a write-back mutation (ro
         hasNot.forEach((h) => expect(out).not.toContain(h));
     });
 });
+
+describe('ral-yb: !x of a bool local in a value slot (round 38)', () => {
+    test('a literal-seeded flag read as !flag in a map literal is a bool, boxed Value::Bool(!flag)', () => {
+        const out = transpiler.transpileRust("class X {\n    a (m: any) {\n        let swap = false;\n        if (m['t'] === 'swap') {\n            swap = true;\n        }\n        const r = { 'contract': !swap, 'swap': swap };\n        return r;\n    }\n}").content;
+        expect(out).toContain('let mut swap: bool = false;');
+        expect(out).toContain('m.insert("contract".to_string(), Value::Bool(!swap));');
+        expect(out).not.toContain('!is_true(&swap)');
+    });
+});
