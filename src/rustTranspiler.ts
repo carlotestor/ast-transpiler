@@ -7087,6 +7087,8 @@ export class RustTranspiler extends BaseTranspiler {
             const form = this.rustScalarUseForms.get(n);
             if (keyed && (form === 'okey' || form === 'kin' || form === 'key' || form === 'inbox')) return false;
             if (form === 'test' || form === 'concat' || form === 'okey' || form === 'kin' || form === 'key' || form === 'inbox') return true;
+            // wg: the receiver of a string method reads the borrow (`k.as_deref()` is the same `Option<&str>`)
+            if (form === 'native' && this.rustBorrowStrMethodRecv(n)) return true;
             if (form !== 'box' && form !== 'xbox') return false;
             const up: any = n.parent;
             return (isCallExpression(up) && up.expression !== n) || (up.kind === SyntaxKind.PropertyAssignment && up.initializer === n)
@@ -7183,6 +7185,16 @@ export class RustTranspiler extends BaseTranspiler {
         const recvName = super.printIdentifier(this.unwrapParens(declaration.initializer).expression);
         return init !== undefined && init.endsWith('.and_then(Value::as_str).map(str::to_owned)')
             && (init.startsWith(`${recvName}.get(`) || init.startsWith(`${recvName}.as_array().map(Vec::as_slice).unwrap_or_default().get(`));
+    }
+
+    private static readonly RUST_BORROW_STR_METHODS = new Set([ 'split', 'replace', 'toUpperCase', 'toLowerCase', 'startsWith', 'endsWith', 'indexOf', 'includes', 'trim' ]);
+
+    /** wg: `k.m (..)` with `m` a pure string method (reads the receiver, returns a fresh value). */
+    rustBorrowStrMethodRecv(n: any): boolean {
+        const access: any = n.parent;
+        const call: any = access?.parent;
+        return isPropertyAccessExpression(access) && access.expression === n && RustTranspiler.RUST_BORROW_STR_METHODS.has(String(access.name.text))
+            && isCallExpression(call) && call.expression === access;
     }
 
     /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */

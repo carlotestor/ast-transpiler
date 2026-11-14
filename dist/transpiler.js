@@ -58294,6 +58294,8 @@ ${binding(plan.indent)}` : ""), head: "" };
         return false;
       if (form === "test" || form === "concat" || form === "okey" || form === "kin" || form === "key" || form === "inbox")
         return true;
+      if (form === "native" && this.rustBorrowStrMethodRecv(n))
+        return true;
       if (form !== "box" && form !== "xbox")
         return false;
       const up = n.parent;
@@ -58400,6 +58402,12 @@ ${binding(plan.indent)}` : ""), head: "" };
     const init = this.rustScalarNativeText("ostr", declaration.initializer);
     const recvName = super.printIdentifier(this.unwrapParens(declaration.initializer).expression);
     return init !== void 0 && init.endsWith(".and_then(Value::as_str).map(str::to_owned)") && (init.startsWith(`${recvName}.get(`) || init.startsWith(`${recvName}.as_array().map(Vec::as_slice).unwrap_or_default().get(`));
+  }
+  /** wg: `k.m (..)` with `m` a pure string method (reads the receiver, returns a fresh value). */
+  rustBorrowStrMethodRecv(n) {
+    const access = n.parent;
+    const call = access?.parent;
+    return isPropertyAccessExpression3(access) && access.expression === n && _RustTranspiler.RUST_BORROW_STR_METHODS.has(String(access.name.text)) && isCallExpression6(call) && call.expression === access;
   }
   /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
   rustExactStrListInit(init) {
@@ -77556,6 +77564,7 @@ _RustTranspiler.RUST_CLIENT_HANDLE_METHODS = /* @__PURE__ */ new Set(["resolve",
 _RustTranspiler.RUST_CLIENT_HANDLE_MARK = "client-handle";
 /** ExchangeOps methods (rust/tests/src/test_helpers.rs) whose argument is not a plain `Value`. */
 _RustTranspiler.RUST_TEST_NATIVE_SLOT_METHODS = /* @__PURE__ */ new Set(["safeValue", "safeString", "safeBool", "safeDict", "safeList", "safeNumber", "safeInteger", "safeStringN", "market", "setSandboxMode", "sleep"]);
+_RustTranspiler.RUST_BORROW_STR_METHODS = /* @__PURE__ */ new Set(["split", "replace", "toUpperCase", "toLowerCase", "startsWith", "endsWith", "indexOf", "includes", "trim"]);
 // Expression-shaped scalar locals: aliases, ternaries, arithmetic/comparisons over typed operands,
 // string-method and `.length` results of typed strings, and `Precise.string*` results.
 _RustTranspiler.RUST_SCALAR_ARITH_OPS = /* @__PURE__ */ new Set([

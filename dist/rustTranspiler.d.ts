@@ -996,6 +996,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** wg: the element read prints straight off the list place (`xs.get(i)..and_then(Value::as_str).map(str::to_owned)`), so
      *  the declaration and every use agree on the borrow (no temporary it could outlive; a helper read keeps `Value`). */
     rustBorrowPlaceRead(declaration: any): boolean;
+    private static readonly RUST_BORROW_STR_METHODS;
+    /** wg: `k.m (..)` with `m` a pure string method (reads the receiver, returns a fresh value). */
+    rustBorrowStrMethodRecv(n: any): boolean;
     /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
     rustExactStrListInit(init: any): boolean;
     rustInArrayNeedle(node: any): boolean;

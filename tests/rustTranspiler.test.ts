@@ -12905,3 +12905,25 @@ describe('ral-wg: a string element of a list parameter proven string borrows as 
         expect(out).not.toMatch(/let mut name: Option<&str>/);
     });
 });
+
+describe('ral-wg: a borrowed string element is the receiver of a string method', () => {
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-wg-meth-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    test('split on an Object.keys element calls str::split on the borrow', () => {
+        const out = mk("    parse (data: Dict) {\n        const keys = Object.keys (data);\n        const r = [];\n        for (let i = 0; i < keys.length; i++) {\n            const key = keys[i];\n            const parts = key.split ('_');\n            r.push ([ parts, this.safeString (data, key) ]);\n        }\n        return r;\n    }");
+        expect(out).toMatch(/let mut key: Option<&str> = keys\.get\(i as usize\)\.and_then\(Value::as_str\);/);
+        expect(out).toContain('key.as_deref()');
+    });
+    test('negative: a non-string-method member call keeps the Value element', () => {
+        const out = mk("    parse (data: Dict) {\n        const keys = Object.keys (data);\n        const r = [];\n        for (let i = 0; i < keys.length; i++) {\n            const key = keys[i];\n            r.push (key.slice (1));\n        }\n        return r;\n    }");
+        expect(out).not.toMatch(/let mut key: Option<&str>/);
+    });
+});
