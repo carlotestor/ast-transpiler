@@ -6881,7 +6881,10 @@ export class RustTranspiler extends BaseTranspiler {
             return source === kind || (optional && source === kind.slice(1));
         }
         const value = this.rustScalarValueKind(node, true);
-        return value === kind || (optional && (value === 'null' || value === kind.slice(1)));
+        if (value === kind || (optional && (value === 'null' || value === kind.slice(1)))) return true;
+        // vd: a later write from a venue string method (`status = this.parseStatus (status)`): the same proof the
+        // initialiser takes (every venue declaration returns `string` / `Str`), printed through rustVenueStrCallText
+        return kind === 'ostr' && value === undefined && this.rustVenueStrCall(node);
     }
 
     /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */
@@ -12415,8 +12418,14 @@ export class RustTranspiler extends BaseTranspiler {
             return wrap(`match ${get} { Some(Value::Str(__s)) if !__s.is_empty() => Value::Str(__s.clone()), Some(Value::Int(__n)) => Value::Str(__n.to_string().into()), Some(Value::Float(__f)) => Value::Str(__f.to_string().into()), _ => ${fallback} }`);
         case 'safeInteger':
             return wrap(`match ${get} { Some(Value::Int(__n)) => Value::Int(*__n), Some(Value::Float(__f)) => Value::Int(*__f as i64), Some(Value::Str(__s)) => match __s.parse::<i64>() { Ok(__n) => Value::Int(__n), Err(_) => match __s.parse::<f64>() { Ok(__f) if __f.is_finite() => Value::Int(__f as i64), _ => ${fallback} } }, _ => ${fallback} }`);
-        case 'safeNumber':
-            return wrap(`match ${get} { Some(Value::Float(__f)) => Value::Float(*__f), Some(Value::Int(__n)) => Value::Float(*__n as f64), Some(Value::Str(__s)) => match __s.parse::<f64>() { Ok(__n) => Value::Float(__n), Err(_) => ${fallback} }, _ => ${fallback} }`);
+        case 'safeNumber': {
+            // vd: a default that is a plain local or literal costs nothing to evaluate in the string arm, so the
+            // parse prints as `map_or` (same Float / default answer, 25 chars shorter: lines near the 400-char
+            // guard keep their typed locals)
+            const plain = args.length === 2 || isIdentifier(args[2]) || this.literalKindOfNode(args[2]) !== undefined;
+            const str = plain ? `__s.parse::<f64>().map_or(${fallback}, Value::Float)` : `match __s.parse::<f64>() { Ok(__n) => Value::Float(__n), Err(_) => ${fallback} }`;
+            return wrap(`match ${get} { Some(Value::Float(__f)) => Value::Float(*__f), Some(Value::Int(__n)) => Value::Float(*__n as f64), Some(Value::Str(__s)) => ${str}, _ => ${fallback} }`);
+        }
         case 'safeBool':
             return wrap(`match ${get} { Some(Value::Bool(__b)) => Value::Bool(*__b), _ => ${fallback} }`);
         case 'safeDict':

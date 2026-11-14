@@ -12634,3 +12634,30 @@ describe('vd: a WS-handler shadow scalar read prints straight into its Option lo
         expect(output).not.toContain('.as_i64();');
     });
 });
+
+describe('vd: shadowed-dict safeNumber with a plain default parses with map_or', () => {
+    test('the string arm is `__s.parse::<f64>().map_or(d, Value::Float)` (same Float / default answers, shorter line)', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-vd-num-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport class Client { resolve (v: any, h: any = undefined): void {} }\nexport default class Exchange {\n    id: string = 'x';\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k]; }\n    hold (a: any): any { return a; }\n    safeNumber (o: any, k: any, d: any = undefined): any { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue2.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue2 extends Exchange {\n    m (feeTier: Dict, d: number) {\n        const f = this.safeNumber (feeTier, 'taker_fee_rate', d);\n        return f;\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false });
+        const output = t.transpileRustByPath(path.join(root, 'ts/src/venue2.ts')).content;
+        expect(output).toContain('(match feeTier.get("taker_fee_rate") { Some(Value::Float(__f)) => Value::Float(*__f), Some(Value::Int(__n)) => Value::Float(*__n as f64), Some(Value::Str(__s)) => __s.parse::<f64>().map_or(d, Value::Float), _ => d })');
+    });
+});
+
+describe('vd: a reader string later overwritten by a venue string method stays Option<String>', () => {
+    test('status = this.parseStatus (status) assigns the method\'s own Option<String> (no box, no unwrap)', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-vd-reassign-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport class Client { resolve (v: any, h: any = undefined): void {} }\nexport default class Exchange {\n    id: string = 'x';\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k]; }\n    hold (a: any): any { return a; }\n    safeNumber (o: any, k: any, d: any = undefined): any { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue3.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue3 extends Exchange {\n    parseStatus (status: Str): Str {\n        const statuses: Dict = { 'a': 'open' };\n        return this.safeString (statuses, status, status);\n    }\n    m (order: Dict) {\n        let status = this.safeString (order, 'status');\n        if (status === 'x') {\n            status = 'canceled';\n        }\n        status = this.parseStatus (status);\n        return this.hold ({ 'status': status });\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false });
+        const output = t.transpileRustByPath(path.join(root, 'ts/src/venue3.ts')).content;
+        expect(output).toMatch(/let mut status: Option<String> = \(match order\.get\("status"\)/);
+        expect(output).toContain('status = Some("canceled".to_string());');
+        expect(output).toContain('status = self.parseStatus(status.as_deref());');
+        expect(output).toContain('m.insert("status".to_string(), status.map(Value::from).unwrap_or(Value::Null));');
+    });
+});
