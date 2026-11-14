@@ -53319,7 +53319,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       for (const key of keyStrs.slice(0, -1))
         acc = `get_value_mut(${acc}, &${key})`;
       const rhs = this.printNode(right, 0);
-      const nestedKeyWrite = keyStrs.length > 1 ? this.printNestedFieldKeyWrite(left, acc, this.rustOwnedArgText(right, rhs.trim())) : void 0;
+      const nestedKeyWrite = keyStrs.length > 1 ? this.printNestedFieldKeyWrite(left, acc, ((owned) => owned.startsWith("") ? owned : _RustTranspiler.cloneIfBareLocal(owned))(this.rustOwnedArgText(right, rhs.trim()))) : void 0;
       if (nestedKeyWrite !== void 0)
         return nestedKeyWrite;
       const untilWrite = keyStrs.length === 1 ? _nullishCoalesce(this.printUntilHeadKeyWrite(left, right, rhs), () => ( this.printNilMapKeyWrite(left, right, rhs))) : void 0;
