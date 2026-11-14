@@ -7,6 +7,7 @@ import * as path from 'path';
 
 // fixture trees used above are written to a temp dir so the suite carries no fixture files
 const rustInlineFixtures: Record<string, Record<string, string>> = {
+ "test-tier-harness": {"ts/src/base/Exchange.ts": "export default class Exchange {\n    safeString (o: any, k: any, d: string = undefined): string | undefined { return o[k]; }\n    hold (a: any, b: any = undefined): any { return a; }\n}\n", "ts/src/base/Precise.ts": "export class Precise {\n    static stringGt (a: string, b: string): boolean { return a > b; }\n}\n", "ts/src/test/Exchange/test.harness.ts": "import Exchange from '../../base/Exchange';\nimport { Precise } from '../../base/Precise';\nfunction testHarness (exchange: Exchange, entry: any) {\n    const price = exchange.safeString (entry, 'price');\n    if (price === undefined) {\n        return undefined;\n    }\n    exchange.hold (entry, price);\n    exchange.hold (price);\n    const cost = exchange.safeString (entry, 'cost');\n    if (cost !== undefined && Precise.stringGt (cost, '0')) {\n        return exchange.hold (cost);\n    }\n    return Precise.stringGt (cost, '1');\n}\nexport default testHarness;\n"},
  "test-tier-readers": {"ts/src/base/Exchange.ts": "export default class Exchange {\n    safeString (o: any, k: any, d: string = undefined): string | undefined { return o[k]; }\n    safeValue (o: any, k: any, d: any = undefined): any { return o[k]; }\n    hold (x: any): any { return x; }\n}\n", "ts/src/test/Exchange/test.readers.ts": "import Exchange from '../../base/Exchange';\nfunction testReaders (exchange: Exchange, entry: any) {\n    const a = exchange.safeValue (entry, 'a');\n    const b = exchange.safeValue (entry, 'b');\n    const other = 'ETH/USDT';\n    return exchange.hold ([ a, b, other ]);\n}\nexport default testReaders;\n"},
  "base-predicate-flags": {"ts/src/base/Exchange.ts": "export default class Exchange {\n    httpProxy: any = undefined;\n    socksProxy: any = undefined;\n    valueIsDefined<T> (value: T): value is NonNullable<T> {\n        return value !== undefined && value !== null;\n    }\n    hold (x: any): any { return x; }\n    proxyFlags () {\n        const isHttp = this.valueIsDefined (this.httpProxy);\n        const isSocks = this.valueIsDefined (this.socksProxy);\n        if (isHttp || isSocks) {\n            return this.hold (isHttp ? this.httpProxy : this.socksProxy);\n        }\n        return undefined;\n    }\n}\n"},
  "reader-defaults": {"ts/src/base/Exchange.ts": "export default class Exchange {\n    options: any = {};\n    safeString (o: any, k: any, d: string = undefined): string | undefined { return o[k]; }\n    safeInteger (o: any, k: any, d: number = undefined): number | undefined { return o[k]; }\n    safeNumber (o: any, k: any, d: number = undefined): number | undefined { return o[k]; }\n    safeBool (o: any, k: any, d: boolean = undefined): boolean | undefined { return o[k]; }\n    hold (x: any): any { return x; }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange';\nexport default class venue extends Exchange {\n    f (o: any, fallback: string, n: number): any {\n        const flag = this.safeBool (o, 'flag');\n        if (flag) {\n            return 1;\n        }\n        const name = this.safeString (o, 'name', fallback);\n        if (name === 'x') {\n            return 2;\n        }\n        const limit = this.safeInteger (o, 'limit', this.safeInteger (o, 'max'));\n        if (limit === undefined) {\n            return 3;\n        }\n        const fee = this.safeNumber (o, 'fee', 0);\n        if (fee === undefined) {\n            return 4;\n        }\n        const boxed = this.safeNumber (o, 'boxed', 0);\n        return this.hold (boxed);\n    }\n}\n"},
@@ -7933,13 +7934,15 @@ describe('rust optional list joins and map values', () => {
 });
 
 describe('rust test-source locals', () => {
-    test('flags, loop counters and base reader results on the exchange get native types; a literal only handed on stays boxed', () => {
+    test('flags, loop counters and base reader results on the exchange get native types; a literal only handed on moves into its box', () => {
         const fresh = new Transpiler({ verbose: false, rust: {} } as any);
         const out = fresh.transpileRustByPath(path.join (rustFixtureRoot, 'test-tier-locals', 'ts/src/test/Exchange/test.locals.ts')).content;
         expect(out).toContain('let mut ok: bool = true;');
         expect(out).toContain('let mut i: i64 = 0;');
         expect(out).toMatch(/let mut id: Option<String> = exchange\.safe_?[sS]tring\(/);
-        expect(out).toContain('let mut kept: Value = ');
+        // a literal only handed to the by-value harness moves into its box at the last use (D11)
+        expect(out).toContain('let mut kept: String = ');
+        expect(out).toContain('exchange.hold(Value::from(kept))');
     });
 });
 
@@ -10611,6 +10614,18 @@ describe('rust test-source reader arguments', () => {
         expect(out).toMatch(/exchange\.safe_?[vV]alue\(&entry, /);
         expect(out).not.toContain('entry.clone()');
         expect(out).toContain('let mut other: String = ');
+    });
+});
+
+describe('rust test-tier harness boxes', () => {
+    test('a test string boxed into by-value harness args is lent there, a Precise operand keeps the local boxed', () => {
+        const fresh = new Transpiler({ verbose: false, rust: {} } as any);
+        const out = fresh.transpileRustByPath(path.join (rustFixtureRoot, 'test-tier-harness', 'ts/src/test/Exchange/test.harness.ts')).content;
+        expect(out).toContain('let mut price: Option<String> = ');
+        expect(out).toContain('Value::from(price.as_deref())');
+        expect(out).not.toContain('price.clone()');
+        // `cost` reaches a `Precise` operand (read by reference): typing it would copy there, so it stays a `Value`
+        expect(out).toContain('let mut cost: Value = ');
     });
 });
 

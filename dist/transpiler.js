@@ -55070,8 +55070,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       this.rustScalarGuarded.add(declaration);
     if (readerTouched && this.rustReaderDeclTooLong(declaration, kind))
       return void 0;
-    if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustTestTierSource(declaration))
-      return void 0;
+    if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustTestTierSource(declaration)) {
+      if (this.rustStrNoLend || !this.rustTestLendBoxes(declaration))
+        return void 0;
+      this.rustStrLentLocals.add(declaration);
+    }
     const keyLent = !this.rustStrNoLend && this.rustScalarOptKeyCostly(declaration, kind) && this.rustReaderLendBoxes(declaration, true);
     if (this.rustScalarOptKeyCostly(declaration, kind) && !keyLent)
       return void 0;
@@ -55175,6 +55178,28 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const selfArg = isCallExpression6(up) && up.expression !== n && isPropertyAccessExpression3(up.expression) && (up.expression.expression.kind === SyntaxKind7.ThisKeyword || up.expression.expression.kind === SyntaxKind7.SuperKeyword);
       const slot = selfArg || up.kind === SyntaxKind7.PropertyAssignment && up.initializer === n || this.rustDictWriteValue(n) || isArrayLiteralExpression4(up) && !(isBinaryExpression5(up.parent) && up.parent.left === up);
       if (!slot)
+        ok = false;
+      return true;
+    });
+    return ok;
+  }
+  /** Test tier: every non-moving box of the string is a by-value `Value` argument / element of a call (the
+   *  harness helpers take `Value`), where the `Value` form printed `x.clone()`: lending there costs that copy. */
+  rustTestLendBoxes(declaration) {
+    let ok = true;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const form = this.rustScalarUseForms.get(n);
+      if (form === "err" || form === "key")
+        ok = false;
+      if (form !== "box" && form !== "xbox")
+        return true;
+      const up = n.parent;
+      if (isReturnStatement4(up) || this.rustLocalLastUse(n, declaration))
+        return true;
+      const callee = isCallExpression6(up) && up.expression !== n ? up.expression : void 0;
+      const byValue = callee !== void 0 && isPropertyAccessExpression3(callee) && !(isIdentifier3(callee.expression) && (callee.expression.text === "Precise" || callee.expression.text === "Math"));
+      const arg = byValue || isArrayLiteralExpression4(up) && !(isBinaryExpression5(up.parent) && up.parent.left === up) || up.kind === SyntaxKind7.PropertyAssignment && up.initializer === n;
+      if (!arg)
         ok = false;
       return true;
     });
@@ -57116,7 +57141,19 @@ ${binding(plan.indent)}` : ""), head: "" };
       const params = this.rustCalleeParams(call);
       return params === void 0 || this.rustNativeMapArgumentSlot(params, at) === void 0 && !this.rustNativeStrVecArgumentSlot(params, at) && !this.rustNativeBoolArgumentSlot(params, at);
     }
-    return isIdentifier3(callee.expression) && callee.expression.text === "Precise";
+    if (isIdentifier3(callee.expression) && callee.expression.text === "Precise")
+      return true;
+    return this.rustTestHarnessSlot(call);
+  }
+  /** Test tier: a call of the harness (`exchange.m(..)` on the base `Exchange`, `testSharedMethods.m(..)`) whose
+   *  printed callee takes every argument as a by-value `Value` (no native-typed slot). */
+  rustTestHarnessSlot(call) {
+    const callee = call.expression;
+    if (!this.rustTestTierSource(call) || !isPropertyAccessExpression3(callee) || !isIdentifier3(callee.expression))
+      return false;
+    if (this.rustScalarReceiver(callee.expression))
+      return !_RustTranspiler.RUST_TEST_NATIVE_SLOT_METHODS.has(String(callee.name.text));
+    return callee.expression.text === "testSharedMethods";
   }
   /** Native right-hand side of `x == <literal>` for a scalar local of `kind`; undefined when not exact. */
   rustScalarLiteralTest(kind, other) {
@@ -73283,6 +73320,8 @@ _RustTranspiler.RUST_CLIENT_HANDLE_KEYS = /* @__PURE__ */ new Set(["subscription
 _RustTranspiler.RUST_CLIENT_HANDLE_NAMES = { subscriptions: "subscription", futures: "future" };
 _RustTranspiler.RUST_CLIENT_HANDLE_METHODS = /* @__PURE__ */ new Set(["resolve", "reject", "send", "future", "reusableFuture"]);
 _RustTranspiler.RUST_CLIENT_HANDLE_MARK = "client-handle";
+/** ExchangeOps methods (rust/tests/src/test_helpers.rs) whose argument is not a plain `Value`. */
+_RustTranspiler.RUST_TEST_NATIVE_SLOT_METHODS = /* @__PURE__ */ new Set(["safeValue", "safeString", "safeBool", "safeDict", "safeList", "safeNumber", "safeInteger", "safeStringN", "market", "setSandboxMode", "sleep"]);
 // Expression-shaped scalar locals: aliases, ternaries, arithmetic/comparisons over typed operands,
 // string-method and `.length` results of typed strings, and `Precise.string*` results.
 _RustTranspiler.RUST_SCALAR_ARITH_OPS = /* @__PURE__ */ new Set([

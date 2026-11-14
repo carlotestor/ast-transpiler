@@ -507,6 +507,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Every non-moving box of the string is a slot where the `Value` form cloned it (a `this.`/`super.` argument,
      *  an object-literal value, a dict write or an array element), so lending there adds no copy. */
     rustReaderLendBoxes(declaration: any, nativeKeys?: boolean): boolean;
+    /** Test tier: every non-moving box of the string is a by-value `Value` argument / element of a call (the
+     *  harness helpers take `Value`), where the `Value` form printed `x.clone()`: lending there costs that copy. */
+    rustTestLendBoxes(declaration: any): boolean;
     /** The key reads a local declared with a non-null initializer (nil-declared locals and slots keep their own rules). */
     rustInitKeyLocal(n: any): boolean;
     /** Some use of the local is a native map-key read (`okey`) or `in` test (`kin`). */
@@ -792,6 +795,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarWriteOk(kind: string, rhs: any, depth: number): boolean;
     /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */
     rustNilBoxSlotOk(call: any, at: number): boolean;
+    /** Test tier: a call of the harness (`exchange.m(..)` on the base `Exchange`, `testSharedMethods.m(..)`) whose
+     *  printed callee takes every argument as a by-value `Value` (no native-typed slot). */
+    rustTestHarnessSlot(call: any): boolean;
+    /** ExchangeOps methods (rust/tests/src/test_helpers.rs) whose argument is not a plain `Value`. */
+    static RUST_TEST_NATIVE_SLOT_METHODS: Set<string>;
     /** Native right-hand side of `x == <literal>` for a scalar local of `kind`; undefined when not exact. */
     rustScalarLiteralTest(kind: string, other: any): string | undefined;
     /** Equality hook: `x.is_none()`, `x.as_deref() == Some("lit")`, `n == 5`. */
