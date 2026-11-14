@@ -73441,7 +73441,7 @@ ${iden}}`;
       if (pattern?.kind !== SyntaxKind7.ArrayBindingPattern || !isVariableDeclaration3(owner) || owner.name !== pattern || owner.parent?.declarations?.length !== 1)
         return false;
       const at = pattern.elements.indexOf(declaration);
-      const allSlot = at >= 0 && (this.rustPromiseAllDictSlot(declaration) || at === 0 && this.rustUntilRequestSlot(declaration));
+      const allSlot = at >= 0 && (this.rustPromiseAllDictSlot(declaration) || at === 0 && this.rustUntilRequestSlot(declaration) || this.rustTernaryDictSlot(declaration));
       if (at !== 1 && !allSlot && !(at >= 0 && this.rustDeclaredDictSlot(declaration)))
         return false;
       if (declaration.dotDotDotToken !== void 0 || declaration.initializer !== void 0 || this.rustTupleSlotKind(declaration) !== void 0)
@@ -74927,6 +74927,25 @@ ${iden}}`;
       init = this.rustSkipWrappers(init.expression);
     if (!isCallExpression6(init) || !this.rustNativeListSource(init))
       return false;
+    return this.rustCallDeclaresDictSlot(init, element.parent.elements.indexOf(element));
+  }
+  /** zi: `const [ a, b ] = c ? this.f (..) : this.g (..)`: slot `at` is a map when each arm's own callee declares it one
+   *  (the venue-pair form of `rustDeclaredDictSlot`; the temp keeps its `Vec<Value>` head). */
+  rustTernaryDictSlot(element) {
+    const owner = element?.parent?.parent;
+    if (element?.parent?.kind !== SyntaxKind7.ArrayBindingPattern || !isVariableDeclaration3(owner) || owner.name !== element.parent)
+      return false;
+    const init = this.rustSkipWrappers(owner.initializer);
+    if (init?.kind !== SyntaxKind7.ConditionalExpression || !this.rustNativeListSource(owner.initializer))
+      return false;
+    const at = element.parent.elements.indexOf(element);
+    const arm = (n) => {
+      const c = this.rustSkipWrappers(n);
+      return isCallExpression6(c) && isPropertyAccessExpression3(c.expression) && c.expression.expression.kind === SyntaxKind7.ThisKeyword && this.rustCallDeclaresDictSlot(c, at);
+    };
+    return at >= 0 && arm(init.whenTrue) && arm(init.whenFalse);
+  }
+  rustCallDeclaresDictSlot(init, at) {
     const declaration = this.rustCalleeDeclaration(init);
     if (declaration === void 0 || declaration.body === void 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName)))
       return false;
@@ -74935,10 +74954,10 @@ ${iden}}`;
     if (named(type, "Promise") && type.typeArguments?.length === 1)
       type = type.typeArguments[0];
     if (type === void 0 || type.kind === SyntaxKind7.AnyKeyword)
-      return this.rustReturnsBuildMapSlot(declaration, element.parent.elements.indexOf(element));
+      return this.rustReturnsBuildMapSlot(declaration, at);
     if (type?.kind !== SyntaxKind7.TupleType)
       return false;
-    const slot = type.elements?.[element.parent.elements.indexOf(element)];
+    const slot = type.elements?.[at];
     return named(slot, "Dict") && slot.typeArguments === void 0;
   }
   /** Every `return` of the callee's own body is an array literal whose element `at` is a map literal or a `const`

@@ -22087,7 +22087,7 @@ export class RustTranspiler extends BaseTranspiler {
                 || (owner.parent as any)?.declarations?.length !== 1) return false;
             // slot 1 is the params dict; any other slot only where the callee's own tuple type declares it `Dict`
             const at = pattern.elements.indexOf(declaration);
-            const allSlot = at >= 0 && (this.rustPromiseAllDictSlot(declaration) || at === 0 && this.rustUntilRequestSlot(declaration));
+            const allSlot = at >= 0 && (this.rustPromiseAllDictSlot(declaration) || at === 0 && this.rustUntilRequestSlot(declaration) || this.rustTernaryDictSlot(declaration));
             if (at !== 1 && !allSlot && !(at >= 0 && this.rustDeclaredDictSlot(declaration))) return false;
             if (declaration.dotDotDotToken !== undefined || declaration.initializer !== undefined || this.rustTupleSlotKind(declaration) !== undefined) return false;
             const init: any = this.rustAwaitedCall(owner.initializer);
@@ -23538,15 +23538,31 @@ export class RustTranspiler extends BaseTranspiler {
         let init: any = this.rustSkipWrappers(owner?.initializer);
         if (init?.kind === SyntaxKind.AwaitExpression) init = this.rustSkipWrappers(init.expression);
         if (!isCallExpression(init) || !this.rustNativeListSource(init)) return false;
+        return this.rustCallDeclaresDictSlot(init, element.parent.elements.indexOf(element));
+    }
+
+    /** zi: `const [ a, b ] = c ? this.f (..) : this.g (..)`: slot `at` is a map when each arm's own callee declares it one
+     *  (the venue-pair form of `rustDeclaredDictSlot`; the temp keeps its `Vec<Value>` head). */
+    rustTernaryDictSlot(element: any): boolean {
+        const owner: any = element?.parent?.parent;
+        if (element?.parent?.kind !== SyntaxKind.ArrayBindingPattern || !isVariableDeclaration(owner) || owner.name !== element.parent) return false;
+        const init: any = this.rustSkipWrappers(owner.initializer);
+        if (init?.kind !== SyntaxKind.ConditionalExpression || !this.rustNativeListSource(owner.initializer)) return false;
+        const at = element.parent.elements.indexOf(element);
+        const arm = (n: any) => { const c: any = this.rustSkipWrappers(n); return isCallExpression(c) && isPropertyAccessExpression(c.expression) && c.expression.expression.kind === SyntaxKind.ThisKeyword && this.rustCallDeclaresDictSlot(c, at); };
+        return at >= 0 && arm(init.whenTrue) && arm(init.whenFalse);
+    }
+
+    rustCallDeclaresDictSlot(init: any, at: number): boolean {
         const declaration: any = this.rustCalleeDeclaration(init);
         if (declaration === undefined || declaration.body === undefined || RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName))) return false;
         let type: any = declaration.type;
         const named = (t: any, name: string): boolean => t?.kind === SyntaxKind.TypeReference && isIdentifier(t.typeName) && t.typeName.text === name;
         if (named(type, 'Promise') && type.typeArguments?.length === 1) type = type.typeArguments[0];
         // qe: an `any` return proves the slot by its own returns: each builds slot `i` from a map literal
-        if (type === undefined || type.kind === SyntaxKind.AnyKeyword) return this.rustReturnsBuildMapSlot(declaration, element.parent.elements.indexOf(element));
+        if (type === undefined || type.kind === SyntaxKind.AnyKeyword) return this.rustReturnsBuildMapSlot(declaration, at);
         if (type?.kind !== SyntaxKind.TupleType) return false;
-        const slot: any = type.elements?.[element.parent.elements.indexOf(element)];
+        const slot: any = type.elements?.[at];
         return named(slot, 'Dict') && slot.typeArguments === undefined;
     }
 

@@ -3244,6 +3244,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  that call inline or a never-reassigned local initialised by it. `promise_all` hands each element back as it came. */
     rustPromiseAllOperandProducer(element: any): any;
     rustDeclaredDictSlot(element: any): boolean;
+    /** zi: `const [ a, b ] = c ? this.f (..) : this.g (..)`: slot `at` is a map when each arm's own callee declares it one
+     *  (the venue-pair form of `rustDeclaredDictSlot`; the temp keeps its `Vec<Value>` head). */
+    rustTernaryDictSlot(element: any): boolean;
+    rustCallDeclaresDictSlot(init: any, at: number): boolean;
     /** Every `return` of the callee's own body is an array literal whose element `at` is a map literal or a `const`
      *  local initialised with one (a map on every path, whatever keys are written into it). */
     rustReturnsBuildMapSlot(declaration: any, at: number): boolean;

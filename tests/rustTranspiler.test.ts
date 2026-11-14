@@ -14068,4 +14068,12 @@ describe('zi: tuple slots fifth pass', () => {
         const nested = out.slice (out.indexOf ('fn fetchNested'));
         expect(nested).toContain('let mut requestUntil: Value = ');
     });
+    test('zi: a venue-pair ternary destructure types a slot Dict when both arms declare it Dict', () => {
+        const file = fx ('zi-venue-pair', base, "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    prepareA (params: Dict = {}): [Dict, Dict] {\n        const request: Dict = { 'a': 1 };\n        return [ request, params ];\n    }\n    prepareB (params: Dict = {}): [Dict, Dict] {\n        const request: Dict = { 'b': 1 };\n        return [ request, params ];\n    }\n    prepareC (params: Dict = {}): [any, Dict] {\n        return [ this.hold (params), params ];\n    }\n    fetchThing (flag: boolean, params: Dict = {}) {\n        const [ request, requestParams ] = flag ? this.prepareA (params) : this.prepareB (params);\n        request['id'] = 1;\n        return this.hold (this.extend (request, requestParams));\n    }\n    fetchMixed (flag: boolean, params: Dict = {}) {\n        const [ loose, looseParams ] = flag ? this.prepareA (params) : this.prepareC (params);\n        loose['id'] = 1;\n        return this.hold (this.extend (loose, looseParams));\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        expect(out).toContain('let mut request: crate::value::Dict = ');
+        expect(out).toContain('let mut requestParams: crate::value::Dict = ');
+        // negative: an arm whose callee does not declare slot 0 `Dict` keeps the box
+        expect(out).toContain('let mut loose: Value = ');
+    });
 });
