@@ -11054,7 +11054,7 @@ describe('safe scalar locals, fourth pass: element-write hand-offs, null-printin
         expect(out).toContain('bookside.store(price, amount)');
         // a this-field write whose source is a call keeps the call argument boxed with `Value::from`
         expect(out).toContain('let mut ts: Option<i64> = ');
-        expect(out).toContain('self.iso8601(Value::from(ts))');
+        expect(out).toContain('self.iso8601(ts)');
         // `k in seen` on an object-literal map local: the bearer's own lookup of the borrowed key, None never contained
         expect(out).toContain('let mut k: Option<String> = ');
         expect(out).toContain('matches!(k.as_deref(), Some(__k) if seen.contains_key(__k))');
@@ -13214,5 +13214,25 @@ describe('wd: a typed string operand of a Precise comparator is lent (stringEq/G
         expect(output).toMatch(/let mut amount: Option<String> = /);
         expect(output).toContain('crate::precise::Precise::stringGt(&amount, ');
         expect(output).toContain('crate::precise::Precise::stringEq(&amount, ');
+    });
+});
+
+describe('xd: a number local as the argument of base iso8601 passes as is (runtime iso8601(ts: impl Into<Value>))', () => {
+    const mk = (venue: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-xd-iso-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base/functions'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/functions/time.ts'), "// @ts-nocheck\nconst iso8601 = (timestamp): string | undefined => undefined;\nexport { iso8601 };\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "import { iso8601 } from './functions/time.js';\nexport interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport default class Exchange {\n    iso8601 = iso8601;\n    hold (x: any): any { return x; }\n    safeInteger (o: any, k: string, d: Int = undefined): Int { return o[k] ?? d; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        return transpiler.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+    };
+    test('a reader integer stored nested through iso8601 stays Option<i64> and passes bare', () => {
+        const out = mk("import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (message: Dict, type: string) {\n        const timestamp = this.safeInteger (message, 'E');\n        const r = {};\n        r[type] = {};\n        r[type]['datetime'] = this.iso8601 (timestamp);\n        return this.hold ([ r, timestamp ]);\n    }\n}\n");
+        expect(out).toMatch(/let mut timestamp: Option<i64> = /);
+        expect(out).toContain('self.iso8601(timestamp)');
+    });
+    test('negative: an argument of another base method keeps its own rule', () => {
+        const out = mk("import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (message: Dict, type: string) {\n        const timestamp = this.safeInteger (message, 'E');\n        const r = {};\n        r[type] = {};\n        r[type]['datetime'] = this.hold (timestamp);\n        return r;\n    }\n}\n");
+        expect(out).toMatch(/let mut timestamp: Value = /);
     });
 });

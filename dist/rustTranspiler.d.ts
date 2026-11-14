@@ -1010,6 +1010,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl InArrayNeedle, ..)`
      *  takes a typed string / integer lent as `&x` (`None` matches Null, a value the element its box would equal). */
     rustInArrayNeedle(node: any): boolean;
+    /** xd: `n` is the only argument of `this.iso8601 (n)` outside the test crate (hand-written `iso8601(ts: impl Into<Value>)`). */
+    rustIso8601Arg(n: any): boolean;
     /** Identifier hook: a `box` use converts with the standard `From` impls (scalars are `Copy`). */
     printRustScalarLocalRead(node: any): string | undefined;
     /** The native value of a scalar expression for a local of `kind` (`Some(..)` for optional kinds). */

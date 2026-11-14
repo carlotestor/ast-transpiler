@@ -6223,6 +6223,9 @@ export class RustTranspiler extends BaseTranspiler {
         if ((kind === 'str' || kind === 'ostr') && this.rustPreciseLentOperand(n) && this.rustPreciseLendLocal(n)) return 'parg';
         // wd: the needle of a base `inArray` is lent as is (`impl InArrayNeedle`: same answers as the boxed `is_equal`)
         if ((kind === 'str' || kind === 'ostr' || kind === 'int' || kind === 'oint') && this.rustInArrayNeedle(n) && this.rustPreciseLendLocal(n)) return 'parg';
+        // xd: a number local as the one argument of base `iso8601` passes as is (the runtime takes `impl Into<Value>`: an
+        // `Option<i64>` / `i64` / `f64` converts to the very Int / Float / Null its box held); the printed call text is unchanged
+        if ((kind === 'int' || kind === 'oint' || kind === 'num' || kind === 'onum') && this.rustIso8601Arg(n)) return 'parg';
         if ((kind === 'str' || kind === 'ostr') && this.rustWsCacheMapKeyUse(n)) return 'fin';
         if (kind === 'bool' && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== undefined) return 'cond';
         if (kind === 'str' || kind === 'ostr') { const fieldForm = this.rustFieldKeyUseForm(n); if (fieldForm !== undefined) return fieldForm; }
@@ -7234,6 +7237,14 @@ export class RustTranspiler extends BaseTranspiler {
         const call: any = node?.parent;
         return !this.rustTestTierSource(node) && isCallExpression(call) && call.arguments[0] === node && isPropertyAccessExpression(call.expression)
             && String(call.expression.name.text) === 'inArray' && this.rustBaseTypedReturnKind(call) === 'bool';
+    }
+
+    /** xd: `n` is the only argument of `this.iso8601 (n)` outside the test crate (hand-written `iso8601(ts: impl Into<Value>)`). */
+    rustIso8601Arg(n): boolean {
+        const call: any = n?.parent;
+        return !this.rustTestTierSource(n) && isCallExpression(call) && call.arguments.length === 1 && call.arguments[0] === n
+            && isPropertyAccessExpression(call.expression) && call.expression.expression.kind === SyntaxKind.ThisKeyword
+            && String(call.expression.name.text) === 'iso8601';
     }
 
     /** Identifier hook: a `box` use converts with the standard `From` impls (scalars are `Copy`). */
