@@ -66614,7 +66614,7 @@ ${iden}}`;
       return void 0;
     if (keyReadOnly && (!safe || plainReads === 0 || plainReads !== reads || nullTests + writes + lengths + indexLikeReads + boxedElementUses.length + lentResponses + lentNullable + keySets + keyWrites + extendHeads + jwtLends > 0))
       return void 0;
-    if (!safe || reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0) || this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))
+    if (!safe || reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0 && !this.rustUrlsMapEntry(init)) || this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))
       return void 0;
     if (declaredEndpointWrites > 0 && nullTests > 0)
       return void 0;
@@ -67176,6 +67176,8 @@ ${iden}}`;
   // The element leaves its copied box as the shared map (the same Arc bump the copy paid). A missing
   // element reads as an empty map, so the borrowed rule keeps it only for null-safe key reads.
   rustDictElementSource(init) {
+    if (this.rustUrlsMapEntry(init))
+      return true;
     if (init === void 0 || !_is.isElementAccessExpression.call(void 0, init) || !_is.isIdentifier.call(void 0, init.expression) || this.checkerOrUndefined() === void 0)
       return false;
     const key = this.rustSkipWrappers(init.argumentExpression);
@@ -67188,6 +67190,24 @@ ${iden}}`;
       if (!_is.isIdentifier.call(void 0, key) || this.primitiveKindOfType(this.typeOfNodeIfAny(key)) !== "string" || !this.rustDictOfDictsLocal(init.expression))
         return false;
     } else if (!this.getChecker().isArrayType(listType))
+      return false;
+    const element = this.typeOfNodeIfAny(init);
+    if (element === void 0 || (element.flags & (_sync.TypeFlags.Any | _sync.TypeFlags.Unknown | _sync.TypeFlags.Union)) !== 0)
+      return false;
+    return this.primitiveKindOfType(element) === void 0 && this.getChecker().getIndexTypeOfType(element, _sync.IndexKind.String) !== void 0 && !this.getChecker().isArrayType(element);
+  }
+  /** te: `this.urls['<lit>']` where the base `Exchange` declaration types that entry as a string-keyed map
+   *  (`urls!: { api: Dict, .. }`). The read leaves its box as the shared map (the same Arc bump the copy paid);
+   *  a missing or non-map entry reads Null at every string key, exactly as the empty map `into_dict()` leaves. */
+  rustUrlsMapEntry(init) {
+    if (init === void 0 || !_is.isElementAccessExpression.call(void 0, init) || this.checkerOrUndefined() === void 0)
+      return false;
+    const field = this.rustSkipWrappers(init.expression);
+    const key = this.rustSkipWrappers(init.argumentExpression);
+    if (!_is.isPropertyAccessExpression.call(void 0, field) || field.expression.kind !== _ast.SyntaxKind.ThisKeyword || String(field.name.text) !== "urls" || key === void 0 || !_is.isStringLiteralLikeNode.call(void 0, key))
+      return false;
+    const declarations = _chunkQYYT7MP4cjs.symbolDeclarations.call(void 0, this.getChecker().getSymbolAtLocation(field.name));
+    if (declarations.length === 0 || !declarations.every((d) => d.kind === _ast.SyntaxKind.PropertyDeclaration && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(d.getSourceFile().fileName))))
       return false;
     const element = this.typeOfNodeIfAny(init);
     if (element === void 0 || (element.flags & (_sync.TypeFlags.Any | _sync.TypeFlags.Unknown | _sync.TypeFlags.Union)) !== 0)
