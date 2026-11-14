@@ -71481,8 +71481,14 @@ ${iden}}`;
       return cross(this.rustWsHashPatterns(n.left, depth + 1, seen), this.rustWsHashPatterns(n.right, depth + 1, seen));
     if (isConditionalExpression4(n))
       return [...this.rustWsHashPatterns(n.whenTrue, depth + 1, seen), ...this.rustWsHashPatterns(n.whenFalse, depth + 1, seen)].slice(0, 16);
-    if (isCallExpression6(n))
+    if (isCallExpression6(n)) {
+      if (isPropertyAccessExpression3(n.expression) && n.expression.expression.kind === SyntaxKind7.ThisKeyword && String(n.expression.name.text) === "safeString" && n.arguments.length >= 2 && n.arguments.length <= 3 && !isStringLiteralLikeNode4(n.arguments[1]) && (n.arguments[2] === void 0 || isStringLiteralLikeNode4(n.arguments[2]))) {
+        const list = this.rustWsHashListPatterns(n.arguments[0], 1);
+        if (list !== void 0 && list.length > 0)
+          return n.arguments[2] === void 0 ? list : [...list, [String(n.arguments[2].text)]];
+      }
       return this.rustWsReturnPatterns(n, depth, seen) ?? any;
+    }
     if (!isIdentifier3(n))
       return any;
     const declaration = this.rustDeclarationOfIdentifier(n);
@@ -71663,6 +71669,11 @@ ${iden}}`;
         return "cache";
       if (declaration !== void 0 && isVariableDeclaration3(declaration) && !this.rustLocalReassigned(declaration) && this.rustBorrowedLocalKind(declaration) === "dict")
         return "dict";
+    }
+    if (this.rustWsCacheFieldDictRead(n))
+      return "dict";
+    if (isIdentifier3(n)) {
+      const declaration = this.rustDeclarationOfIdentifier(n);
       if (declaration !== void 0 && isVariableDeclaration3(declaration) && isIdentifier3(declaration.name) && declaration.initializer !== void 0 && !this.rustLocalReassigned(declaration)) {
         const init = this.rustStripWrappers(declaration.initializer);
         if (this.rustWsBookMapRead(init) || this.rustWsBookCtorLike(init))
@@ -71673,12 +71684,74 @@ ${iden}}`;
     }
     return void 0;
   }
+  /** ral-ye: a read of a plain base cache field the class keeps as a map, typed by the field's declaration:
+   *  `this.F` whose declared type is a map (`balance: Dict`, `tickers: Dictionary<Ticker>`), or `this.F[k]` right
+   *  after a statement of the same block (or an enclosing one) wrote `this.F[k] = v` with v a map (a declared record /
+   *  map type, a map-kinded resolve or `this.extend (..)`), the key a literal or an unreassigned local. */
+  rustWsCacheFieldDictRead(n) {
+    const field = (e) => {
+      e = this.rustStripWrappers(e);
+      return isPropertyAccessExpression3(e) && e.expression.kind === SyntaxKind7.ThisKeyword && isIdentifier3(e.name) && _RustTranspiler.RUST_PLAIN_DICT_FIELDS.has(String(e.name.text)) && this.rustFieldStaysDict(e, String(e.name.text));
+    };
+    const mapType = (t) => {
+      if (t === void 0 || t.flags & TypeFlags6.Any)
+        return false;
+      if (t.flags & TypeFlags6.Union && (typeParts(t) ?? []).some((p) => p.flags & (TypeFlags6.Undefined | TypeFlags6.Null | TypeFlags6.Void | TypeFlags6.Any)))
+        return false;
+      return !(t.flags & (TypeFlags6.Undefined | TypeFlags6.Null | TypeFlags6.Void)) && this.rustWriteDictShape(t);
+    };
+    if (field(n))
+      return mapType(this.typeOfNodeIfAny(n));
+    if (!isElementAccessExpression4(n) || !field(n.expression))
+      return false;
+    const key = this.rustStripWrappers(n.argumentExpression);
+    if (!isStringLiteralLikeNode4(key)) {
+      const d = isIdentifier3(key) ? this.rustDeclarationOfIdentifier(key) : void 0;
+      if (d === void 0 || this.rustLocalReassigned(d))
+        return false;
+    }
+    const keyText = String(key.getText());
+    const fieldName = String(this.rustStripWrappers(n.expression).name.text);
+    const isWrite = (s) => {
+      const e = s?.kind === SyntaxKind7.ExpressionStatement ? this.rustStripWrappers(s.expression) : void 0;
+      if (e === void 0 || !isBinaryExpression5(e) || e.operatorToken.kind !== SyntaxKind7.EqualsToken)
+        return void 0;
+      const l = this.rustStripWrappers(e.left);
+      if (l === void 0 || !isElementAccessExpression4(l) || !field(l.expression) || String(this.rustStripWrappers(l.expression).name.text) !== fieldName)
+        return void 0;
+      return String(this.rustStripWrappers(l.argumentExpression).getText()) === keyText ? e.right : null;
+    };
+    const mapValue = (v) => {
+      const x = this.rustStripWrappers(v);
+      if (x === void 0)
+        return false;
+      return mapType(this.typeOfNodeIfAny(x)) || this.rustWsResolvedMap(x, 0) || isIdentifier3(x) && this.rustWsResolvedKind(x) === "dict";
+    };
+    for (let s = findAncestor(n, isStatement); s !== void 0 && !isFunctionLike(s); s = s.parent) {
+      const list = isBlock4(s.parent) ? Array.from(s.parent.statements) : void 0;
+      if (list === void 0)
+        continue;
+      for (let i = list.indexOf(s) - 1; i >= 0; i--) {
+        const v = isWrite(list[i]);
+        if (v === null)
+          return false;
+        if (v !== void 0)
+          return mapValue(v);
+        const text = String(list[i].getText());
+        if (new RegExp(`\\bthis\\.${fieldName}\\b`).test(text) || !isStringLiteralLikeNode4(key) && new RegExp(`\\b${keyText}\\s*=[^=]`).test(text))
+          return false;
+      }
+    }
+    return false;
+  }
   /** A resolved value that is a map on every path: a base record builder call, a sync method of the same class whose
    *  every return is one, or an unreassigned single local bound to one. */
   rustWsResolvedMap(x, depth) {
     const n = this.rustStripWrappers(x);
     if (n === void 0 || depth > 3)
       return false;
+    if (isObjectLiteralExpression4(n))
+      return true;
     if (isIdentifier3(n)) {
       const d = this.rustDeclarationOfIdentifier(n);
       if (d === void 0 || !isVariableDeclaration3(d) || !isIdentifier3(d.name) || d.initializer === void 0 || this.rustLocalReassigned(d))
@@ -71687,6 +71760,9 @@ ${iden}}`;
     }
     if (!isCallExpression6(n) || !isPropertyAccessExpression3(n.expression) || n.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
+    const callee = String(n.expression.name.text);
+    if ((callee === "extend" || callee === "indexBy" && n.arguments.length === 2) && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(this.rustScalarCallee(n)?.getSourceFile?.()?.fileName ?? "")))
+      return true;
     const declaration = this.rustScalarCallee(n);
     if (declaration === void 0 || !isMethodDeclaration5(declaration) || declaration.body === void 0)
       return false;
@@ -71757,7 +71833,7 @@ ${iden}}`;
     const nothing = (x) => x === void 0 || this.rustStripWrappers(x)?.kind === SyntaxKind7.UndefinedKeyword || isIdentifier3(this.rustStripWrappers(x)) && this.rustStripWrappers(x).text === "undefined";
     const kindOf = (x) => nothing(x) ? "none" : this.rustWsResolvedKind(x) ?? "other";
     const add = (hash, x, kind, site) => {
-      const sites = kind === void 0 && site !== void 0 ? this.rustWsHelperCallSites(cls, site, [hash, x]) : void 0;
+      const sites = site !== void 0 ? this.rustWsHelperCallSites(cls, site, [hash, x]) : void 0;
       if (sites === void 0) {
         table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), kind: kind ?? kindOf(x) });
         return;
@@ -71770,7 +71846,7 @@ ${iden}}`;
             const d = e !== void 0 && isIdentifier3(this.rustStripWrappers(e)) ? this.rustDeclarationOfIdentifier(this.rustStripWrappers(e)) : void 0;
             return d !== void 0 && env.has(d) ? env.get(d).arg : e;
           };
-          table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), kind: kindOf(bound(x)) });
+          table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), kind: kind ?? kindOf(bound(x)) });
         } finally {
           this.rustWsHashEnv = save;
         }
@@ -71783,7 +71859,7 @@ ${iden}}`;
       const recv = this.rustStripWrappers(n.expression.expression);
       if (recv.kind === SyntaxKind7.ThisKeyword) {
         if (name === "cleanUnsubscription")
-          add(n.arguments[2] ?? null, void 0, "other");
+          add(n.arguments[2] ?? null, void 0, "other", n);
         else if (name === "loadOrderBook")
           add(n.arguments[1] ?? null, void 0, "book");
         else if (name === "spawn" || name === "delay") {
@@ -72071,6 +72147,8 @@ ${iden}}`;
       if (up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n)
         continue;
       if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsEqualsEqualsToken)
+        continue;
+      if (isCallExpression6(up) && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && up.expression.expression.kind === SyntaxKind7.ThisKeyword && String(up.expression.name.text) === "safeString")
         continue;
       if (isConditionalExpression4(up) && up.condition !== n)
         continue;
