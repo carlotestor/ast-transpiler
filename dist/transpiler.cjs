@@ -56642,7 +56642,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     const kind = this.rustReaderFallbackKind(fallback);
     if (strBase !== void 0)
-      return kind === "str" || kind === "ostr" || kind === void 0 && this.rustReaderFallbackChecked(fallback) === "string" ? "ostr" : void 0;
+      return kind === "str" || kind === "ostr" || kind === void 0 && (this.rustReaderFallbackChecked(fallback) === "string" || this.rustVenueStrCall(fallback)) ? "ostr" : void 0;
     if (intBase !== void 0)
       return kind === "int" || kind === "oint" ? "oint" : void 0;
     if (numBase !== void 0)

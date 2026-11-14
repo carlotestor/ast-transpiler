@@ -12961,3 +12961,14 @@ describe('wd: a typed string / integer needle of a base inArray is lent (impl In
         expect(out).not.toContain('self.inArray(&n, ');
     });
 });
+
+describe('wd: a reader string default that is a venue method printed -> Option<String> keeps the local Option<String>', () => {
+    test('safeString (params, k, this.venueStr ()) types the local', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-wd-vdef-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeString (o: any, k: string, d: Str = undefined): Str { return o[k] ?? d; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    wallet (): Str {\n        return this.safeString ({}, 'w');\n    }\n    m (params: Dict) {\n        const address = this.safeString (params, 'address', this.wallet ());\n        return this.hold (address + 'x');\n    }\n}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let mut address: Option<String> = /);
+    });
+});

@@ -5485,7 +5485,8 @@ export class RustTranspiler extends BaseTranspiler {
             return undefined;
         }
         const kind = this.rustReaderFallbackKind(fallback);
-        if (strBase !== undefined) return kind === 'str' || kind === 'ostr' || (kind === undefined && this.rustReaderFallbackChecked(fallback) === 'string') ? 'ostr' : undefined;
+        // wd: a venue method already printed `-> Option<String>` is a string-or-Null default as it stands
+        if (strBase !== undefined) return kind === 'str' || kind === 'ostr' || (kind === undefined && (this.rustReaderFallbackChecked(fallback) === 'string' || this.rustVenueStrCall(fallback))) ? 'ostr' : undefined;
         if (intBase !== undefined) return kind === 'int' || kind === 'oint' ? 'oint' : undefined;
         if (numBase !== undefined) return kind !== undefined || this.rustReaderFallbackChecked(fallback) === 'number' ? 'onum' : undefined;
         return fresh && (kind === 'bool' || kind === 'obool' || (kind === undefined && this.rustReaderFallbackChecked(fallback) === 'boolean')) ? 'obool' : undefined;
