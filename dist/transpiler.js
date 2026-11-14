@@ -51659,6 +51659,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustOptContainerLocals = /* @__PURE__ */ new WeakSet();
     // ── ral-oc: map literals rebuilt by `x = this.extend (x, y)` (rustExtendReuseLiteral / printExtendReuseWrite) ──
     this.rustExtendReuseLocals = /* @__PURE__ */ new WeakSet();
+    // ── ral-vf: a reuse map literal overwritten from a map producer (`x = this.safeDict (r, k, {})`, `x = this.extend (..)`) ──
+    // `extend` / `indexBy` / `groupBy` answer a fresh `Value::Map`, a proven-map `omit` too, and a never-null base
+    // `safeDict` answers its map (or the empty default): `.into_dict()` moves the Arc out, the owned map is replaced, no copy.
+    this.rustReuseProducerWrites = /* @__PURE__ */ new WeakSet();
     /** sb: `y = self.omit(&x, ..).into_dict()` for a shared-map alias (`omit` of a proven map answers `Value::Map`: the Arc moves back). */
     this.rustSbAliasWrites = /* @__PURE__ */ new WeakSet();
     // Optional container locals whose declaration printed `Option<..>` (an earlier declaration form may keep the box).
@@ -66865,6 +66869,7 @@ ${iden}}`;
     const keyWriteUses = [];
     let extendHeads = 0;
     let extendWrites = 0;
+    const reuseProducerWrites = [];
     let jwtLends = 0;
     let lentResponses = 0;
     let lentNullable = 0;
@@ -66892,8 +66897,14 @@ ${iden}}`;
       if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken) {
         if (up.parent?.kind !== SyntaxKind7.ExpressionStatement)
           return false;
-        if (extendReuse)
-          return this.rustSelfExtendWrite(n, declaration) && ++extendWrites > 0;
+        if (extendReuse) {
+          if (this.rustSelfExtendWrite(n, declaration))
+            return ++extendWrites > 0;
+          if (!this.rustReuseMapProducerWrite(n))
+            return false;
+          reuseProducerWrites.push(up);
+          return ++extendWrites > 0;
+        }
         const rhs = this.rustSkipWrappers(up.right);
         if (sbAlias && this.rustOmitOfDict(rhs) && String(rhs.getText()).split("\n")[0].length <= 240) {
           this.rustSbAliasWrites.add(up);
@@ -67035,6 +67046,8 @@ ${iden}}`;
       this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) ? "move" : "share");
     if (extendReuse)
       this.rustExtendReuseLocals.add(declaration);
+    for (const w of reuseProducerWrites)
+      this.rustReuseProducerWrites.add(w);
     return from === "list" ? "list" : "dict";
   }
   /** A plain map literal (outside the test tier): every `x = ..` write must be `x = this.extend (x, y)`; the
@@ -67057,6 +67070,39 @@ ${iden}}`;
       return false;
     const names = (x) => isIdentifier3(x) && x.text === n.text || (x.forEachChild(names) ?? false);
     return !names(rhs.arguments[1]) && String(up.getText()).split("\n")[0].length <= 240;
+  }
+  /** A statement `n = <map producer>` whose right side does not name `n`. */
+  rustReuseMapProducerWrite(n) {
+    const up = n.parent;
+    if (!isBinaryExpression5(up) || up.left !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const rhs = this.rustSkipWrappers(up.right);
+    if (rhs === void 0 || !isCallExpression6(rhs) || String(up.getText()).split("\n")[0].length > 240)
+      return false;
+    const names = (x) => isIdentifier3(x) && x.text === n.text || (x.forEachChild(names) ?? false);
+    if (names(rhs))
+      return false;
+    if (this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_ALWAYS_MAP_HELPERS))
+      return true;
+    if (this.rustOmitOfDict(rhs) && this.rustOmitLineFits(rhs))
+      return true;
+    if (this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_REUSE_SAFE_DICT) && this.rustContainerInitNeverNull(rhs, "map") && !this.rustContainerInitReadsStore(rhs) && !this.rustInitReadsTaggedStore(rhs) && this.rustWsFieldRead(rhs) === void 0)
+      return true;
+    return false;
+  }
+  /** The producer of a reuse write builds from untagged operands only: `extend` / `omit` operands proven plain
+   *  (`rustUntaggedMapOperand`), `indexBy` / `groupBy` fresh maps, a REST `safeDict` read off a local (parsed JSON). */
+  rustReuseProducerUntagged(n, rhs) {
+    const method = String(rhs.expression?.name?.text ?? "");
+    if (method === "indexBy" || method === "groupBy")
+      return true;
+    if (method === "extend")
+      return Array.from(rhs.arguments).every((a) => this.rustUntaggedMapOperand(a));
+    if (method === "safeDict") {
+      const head = this.rustSkipWrappers(rhs.arguments[0]);
+      return /(?:^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test(String(n.getSourceFile?.()?.fileName ?? "")) && head !== void 0 && (isIdentifier3(head) || isElementAccessExpression4(head) && isIdentifier3(head.expression));
+    }
+    return this.rustUntaggedMapOperand(rhs.arguments[0]);
   }
   /** pb: the base `handleUntilOption (k, x, p)` of a statement `[ x, q ] = ..` writing slot 0 back into `x` (base
    *  `handleUntilOption` returns its own `request` argument as slot 0, so the map moves through it). */
@@ -67132,6 +67178,8 @@ ${iden}}`;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (u) => {
       if (this.rustSelfExtendWrite(u, declaration) && !this.rustExtendReuseOperandUntagged(this.rustSkipWrappers(u.parent.right).arguments[1]))
         ok = false;
+      else if (!this.rustSelfExtendWrite(u, declaration) && this.rustReuseMapProducerWrite(u) && !this.rustReuseProducerUntagged(u, this.rustSkipWrappers(u.parent.right)))
+        ok = false;
       return true;
     });
     return ok;
@@ -67154,7 +67202,7 @@ ${iden}}`;
   /** `x = self.extend(x, ..).into_dict()` for a reuse local (`extend` answers `Value::Map`: the Arc moves back). */
   printExtendReuseWrite(left, right) {
     const declaration = this.rustDeclarationOfIdentifier(left);
-    if (declaration === void 0 || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration) || !this.rustSelfExtendWrite(left, declaration))
+    if (declaration === void 0 || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration) || !(this.rustSelfExtendWrite(left, declaration) || this.rustReuseProducerWrites.has(left.parent)))
       return void 0;
     const name = super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text);
     return `${name} = ${this.printNode(right, 0).trim()}.into_dict()`;
@@ -77742,6 +77790,7 @@ _RustTranspiler.RUST_BORROWED_LIST_SOURCES = /* @__PURE__ */ new Set(["safeList"
 // Hand-written readers whose container argument takes a map or list by reference, any key.
 _RustTranspiler.RUST_BORROWED_ANY_KEY_READERS = /^safe(?:Value|String(?:Lower|Upper)?|Integer|Float|Timestamp|IntegerProduct)(?:2|N)?$/;
 _RustTranspiler.RUST_SELF_EXTEND = /* @__PURE__ */ new Set(["extend"]);
+_RustTranspiler.RUST_REUSE_SAFE_DICT = /* @__PURE__ */ new Set(["safeDict"]);
 // hand-written helpers whose operand is `impl Into<crate::Value>` / `impl JsonText` (the optional form lends there too)
 _RustTranspiler.RUST_LENT_ENCODER_SLOTS = /* @__PURE__ */ new Set(["urlencode", "rawencode", "urlencodeNested", "urlencodeWithArrayRepeat", "isEmpty"]);
 _RustTranspiler.RUST_LENT_OPTIONAL_HELPERS = /* @__PURE__ */ new Set(["toArray", "arrayConcat", "json", "urlencode", "rawencode", "urlencodeNested", "urlencodeWithArrayRepeat", "isEmpty"]);

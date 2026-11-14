@@ -4905,7 +4905,9 @@ describe('native element writes on plain-dict locals', () => {
         expect(output).not.toContain('merged.clone()');
         // negative: written from a foreign map / a non-self extend: keeps the helper (no shared-handle form)
         expect(output).not.toContain('let mut foreign: crate::value::Dict');
-        expect(output).not.toContain('let mut extended: crate::value::Dict');
+        // ral-vf: `extended = this.extend (params, {})` answers a fresh map from untagged operands (the built-map key-write
+        // proof): the reuse literal holds the shared Dict and the result moves in
+        expect(output).toContain('let mut extended: crate::value::Dict');
     });
 
     test('a local aliased into a let-bound literal keeps the helper', () => {
@@ -4919,7 +4921,7 @@ describe('native element writes on plain-dict locals', () => {
 
     test('omit / extend of a foreign dict keep the helper', () => {
         expect(output).toContain('add_element_to_object(&mut foreign, &Value::Str("e".into())');
-        expect(output).toContain('add_element_to_object(&mut extended, &Value::Str("f".into())');
+        expect(output).toContain('std::sync::Arc::make_mut(&mut extended).insert("f".into(), Value::Int(6));');
     });
 });
 
@@ -12590,5 +12592,25 @@ describe('ral-uf: a push / concat accumulator returned through `as T[]` is a bui
     });
     test('a push accumulator handed to a Value slot and returned as T[] moves at the return', () => {
         expect(out).toMatch(/fn pushRet[\s\S]*?let mut result: crate::value::List = [\s\S]*?return Value::Arr\(result\);/);
+    });
+});
+
+describe('ral-vf: a reuse map literal overwritten from a map producer holds the shared Dict', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-vf-reuse');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    extend (...args: any[]): any { return args[0]; }\n    safeDict (o: any, k: any, d: Dict = undefined): Dict | undefined { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    hold (x: any, y: any = undefined): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fromExtend (params: Dict, a: Dict) {\n        let request: Dict = { 'a': 1 };\n        if (a !== undefined) {\n            request = this.extend ({ 'z': 0 }, params);\n        }\n        request['x'] = 2;\n        return this.hold (request);\n    }\n    fromSafeDict (response: any) {\n        let data: Dict = {};\n        data = this.safeDict (response, 'data', {});\n        data['x'] = 1;\n        return this.hold (data);\n    }\n    noDefault (response: any) {\n        let kept: Dict = {};\n        kept = this.safeDict (response, 'data');\n        kept['x'] = 1;\n        return this.hold (kept);\n    }\n}\n");
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('x = this.extend ({..}, params) replaces the owned map: the Arc moves out of the result, no copy', () => {
+        expect(out).toMatch(/fn fromExtend[\s\S]*?let mut request: crate::value::Dict = [\s\S]*?request = self\.extend\([\s\S]*?\)\.into_dict\(\);[\s\S]*?Arc::make_mut\(&mut request\)\.insert\("x"\.into\(\), Value::Int\(2\)\)/);
+    });
+    test('x = this.safeDict (r, k, {}) (never null) replaces the owned map', () => {
+        expect(out).toMatch(/fn fromSafeDict[\s\S]*?let mut data: crate::value::Dict = [\s\S]*?data = self\.safeDict\([\s\S]*?\)\.into_dict\(\);[\s\S]*?Arc::make_mut\(&mut data\)\.insert\("x"\.into\(\), Value::Int\(1\)\)/);
+    });
+    test('negative: a safeDict write without a map default (may be Null) keeps the box', () => {
+        expect(out).toMatch(/fn noDefault[\s\S]*?let mut kept: Value = /);
     });
 });

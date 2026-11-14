@@ -2208,6 +2208,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `n` is the target of a statement `n = this.extend (n, y)` (base `extend`, two operands, `y` not naming `n`). */
     rustSelfExtendWrite(n: any, declaration: any): boolean;
     private static readonly RUST_SELF_EXTEND;
+    private rustReuseProducerWrites;
+    /** A statement `n = <map producer>` whose right side does not name `n`. */
+    rustReuseMapProducerWrite(n: any): boolean;
+    private static readonly RUST_REUSE_SAFE_DICT;
+    /** The producer of a reuse write builds from untagged operands only: `extend` / `omit` operands proven plain
+     *  (`rustUntaggedMapOperand`), `indexBy` / `groupBy` fresh maps, a REST `safeDict` read off a local (parsed JSON). */
+    rustReuseProducerUntagged(n: any, rhs: any): boolean;
     /** pb: the base `handleUntilOption (k, x, p)` of a statement `[ x, q ] = ..` writing slot 0 back into `x` (base
      *  `handleUntilOption` returns its own `request` argument as slot 0, so the map moves through it). */
     rustUntilSelfCall(n: any, declaration: any): any;
