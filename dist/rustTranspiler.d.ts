@@ -1004,6 +1004,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWgKeyReadInValueUse(declaration: any): boolean;
     /** wg: `const k = xs[i]` off a never-written local list of only strings (vg's owner rule, uses of `k` not yet checked). */
     rustBorrowStrElemShape(declaration: any): boolean;
+    /** wg: `const xs: string[] = []` whose every push is one string-typed value and that is never rebound or element-written. */
+    rustStrPushFilledList(owner: any): boolean;
     /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
     rustExactStrListInit(init: any): boolean;
     rustInArrayNeedle(node: any): boolean;

@@ -12950,3 +12950,26 @@ describe('ral-wg: a borrowed element keys a this.balance write whose value reads
         expect(out).not.toContain('Option<&str>');
     });
 });
+
+describe('ral-wg: an element of a string list filled by pushes that end before the read borrows', () => {
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-wg-fill-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    const body = (late: string) => "    group (rows: Dict[]) {\n        const order: string[] = [];\n        const grouped: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const id = this.safeString (rows[i], 'id');\n            if (id === undefined) {\n                continue;\n            }\n            order.push (id);\n        }\n        const r = [];\n        for (let i = 0; i < order.length; i++) {\n            const fixtureId = order[i];\n" + late + "            r.push ({ 'id': fixtureId, 'rows': grouped[fixtureId] });\n        }\n        return r;\n    }";
+    test('the element borrows and keys the map read with the borrow itself', () => {
+        const out = mk(body(''));
+        expect(out).toMatch(/let mut fixtureId: Option<&str> = order\.get\(i as usize\)\.and_then\(Value::as_str\);/);
+        expect(out).not.toContain('Value::from(fixtureId.as_deref()).as_str()');
+    });
+    test('negative: a push after the element is read (a write while it lives) keeps Value', () => {
+        const out = mk(body("            order.push ('x');\n"));
+        expect(out).not.toMatch(/let mut fixtureId: Option<&str>/);
+    });
+});

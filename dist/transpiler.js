@@ -58276,9 +58276,10 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (init === void 0 || !isElementAccessExpression4(init) || !isIdentifier3(init.expression) || this.rustElementReadScalarKind(init) !== "ostr")
       return false;
     const owner = this.rustDeclaredNode(init.expression);
-    if (owner === void 0 || !isIdentifier3(owner.name) || !(isVariableDeclaration3(owner) ? this.rustExactStrListInit(owner.initializer) : this.rustStrListParam(owner, 0)))
+    const filled = isVariableDeclaration3(owner) && !this.rustExactStrListInit(owner.initializer) && this.rustStrPushFilledList(owner);
+    if (owner === void 0 || !isIdentifier3(owner.name) || !(isVariableDeclaration3(owner) ? filled || this.rustExactStrListInit(owner.initializer) : this.rustStrListParam(owner, 0)))
       return false;
-    if (!isVariableDeclaration3(owner) && !this.rustBorrowPlaceRead(declaration))
+    if ((filled || !isVariableDeclaration3(owner)) && !this.rustBorrowPlaceRead(declaration))
       return false;
     const recvOk = this.rustLocalUsesAll(owner, String(owner.name.text), true, (n) => {
       const up = n.parent;
@@ -58286,6 +58287,8 @@ ${binding(plan.indent)}` : ""), head: "" };
         const top = up.parent;
         return !(top !== void 0 && (isBinaryExpression5(top) && top.left === up && this.rustAssignmentOpKind(top.operatorToken.kind) || top.kind === SyntaxKind7.DeleteExpression || top.kind === SyntaxKind7.PrefixUnaryExpression || top.kind === SyntaxKind7.PostfixUnaryExpression));
       }
+      if (filled && up !== void 0 && isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "push" && isCallExpression6(up.parent) && up.parent.expression === up && up.parent.end <= declaration.pos && this.rustEnclosingFunction(up) === this.rustEnclosingFunction(declaration))
+        return true;
       if (up !== void 0 && isBinaryExpression5(up) && this.isEqualityOp(up.operatorToken.kind) && this.literalKindOfNode(up.left === n ? up.right : up.left) === "null")
         return true;
       return up !== void 0 && isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "length";
@@ -58434,6 +58437,25 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     const owner = this.rustDeclaredNode(init.expression);
     return owner !== void 0 && isVariableDeclaration3(owner) && isIdentifier3(owner.name) && this.rustExactStrListInit(owner.initializer);
+  }
+  /** wg: `const xs: string[] = []` whose every push is one string-typed value and that is never rebound or element-written. */
+  rustStrPushFilledList(owner) {
+    const init = this.unwrapParens(owner.initializer);
+    if (init === void 0 || !isArrayLiteralExpression4(init) || init.elements.length !== 0 || !this.rustStrArrayDeclared(owner.name))
+      return false;
+    let pushes = 0;
+    const ok = this.rustLocalUsesAll(owner, String(owner.name.text), true, (n) => {
+      const up = n.parent;
+      if (!isPropertyAccessExpression3(up) || up.expression !== n || String(up.name.text) !== "push")
+        return true;
+      const call = up.parent;
+      if (!isCallExpression6(call) || call.expression !== up || call.arguments.length !== 1)
+        return false;
+      const arg = call.arguments[0];
+      pushes++;
+      return this.literalKindOfNode(arg) === "string" || this.primitiveKindOfType(this.typeOfNodeIfAny(arg)) === "string";
+    });
+    return ok && pushes > 0;
   }
   /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
   rustExactStrListInit(init) {
@@ -64182,6 +64204,15 @@ ${ind}let ${view}: &${map} = &${arc};
   }
   /** Dict read keyed by a Str place: closure-free when both operands are side-effect-free places. */
   rustDictRead(recv, key, node, guarded = false) {
+    const lent = /^Value::from\(([A-Za-z_]\w*)\.as_deref\(\)\)$/.exec(key);
+    if (lent !== null && RUST_PLAIN_PLACE.test(recv) && !this.isTestSource(node)) {
+      return this.rustDictSite({
+        free: `(if let (Some(__m), Some(__k)) = (${recv}.as_map(), ${lent[1]}) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null })`,
+        guarded,
+        helper: `get_value(&${recv}, &${key})`,
+        closure: `${recv}.as_map().and_then(|__m| ${lent[1]}.and_then(|__k| __m.get(__k))).cloned().unwrap_or(Value::Null)`
+      });
+    }
     const free = RUST_PLAIN_PLACE.test(recv) && RUST_PLAIN_PLACE.test(key) && !this.isTestSource(node) ? `(if let (Some(__m), Some(__k)) = (${recv}.as_map(), ${key}.as_str()) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null })` : void 0;
     return this.rustDictSite({
       free,
@@ -76074,7 +76105,8 @@ ${this.getIden(identation)}}`;
   /** Argument text for a per-venue string slot: a typed local or literal natively, any other value read once. */
   rustVenueStrArgText(arg, type, identation) {
     const local = this.rustScalarTypedArgText(arg, type);
-    if (local !== void 0 && this.rustVenueStrMovedInCall(arg))
+    const lent = isIdentifier3(this.unwrapParens(arg)) && this.rustBorrowedStrElems.has(this.rustDeclaredNode(this.unwrapParens(arg)));
+    if (local !== void 0 && !lent && this.rustVenueStrMovedInCall(arg))
       return local.replace(/^(Some\()?([A-Za-z_]\w*)\./, "$1$2.clone().");
     if (local !== void 0)
       return local;

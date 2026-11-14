@@ -7071,8 +7071,10 @@ export class RustTranspiler extends BaseTranspiler {
         const init: any = this.unwrapParens(declaration.initializer);
         if (init === undefined || !isElementAccessExpression(init) || !isIdentifier(init.expression) || this.rustElementReadScalarKind(init) !== 'ostr') return false;
         const owner: any = this.rustDeclaredNode(init.expression);
-        if (owner === undefined || !isIdentifier(owner.name) || !(isVariableDeclaration(owner) ? this.rustExactStrListInit(owner.initializer) : this.rustStrListParam(owner, 0))) return false;
-        if (!isVariableDeclaration(owner) && !this.rustBorrowPlaceRead(declaration)) return false;
+        // wg: an empty `string[]` literal filled only by string pushes that all end before `k` is declared (no write while it lives)
+        const filled = isVariableDeclaration(owner) && !this.rustExactStrListInit(owner.initializer) && this.rustStrPushFilledList(owner);
+        if (owner === undefined || !isIdentifier(owner.name) || !(isVariableDeclaration(owner) ? (filled || this.rustExactStrListInit(owner.initializer)) : this.rustStrListParam(owner, 0))) return false;
+        if ((filled || !isVariableDeclaration(owner)) && !this.rustBorrowPlaceRead(declaration)) return false;
         const recvOk = this.rustLocalUsesAll(owner, String(owner.name.text), true, (n: any) => {
             const up: any = n.parent;
             if (up !== undefined && isElementAccessExpression(up) && up.expression === n) {
@@ -7080,6 +7082,9 @@ export class RustTranspiler extends BaseTranspiler {
                 return !(top !== undefined && ((isBinaryExpression(top) && top.left === up && this.rustAssignmentOpKind(top.operatorToken.kind))
                     || top.kind === SyntaxKind.DeleteExpression || top.kind === SyntaxKind.PrefixUnaryExpression || top.kind === SyntaxKind.PostfixUnaryExpression));
             }
+            // wg: a string push that ends before the element is declared (the filled-list owner)
+            if (filled && up !== undefined && isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) === 'push' && isCallExpression(up.parent)
+                && up.parent.expression === up && up.parent.end <= declaration.pos && this.rustEnclosingFunction(up) === this.rustEnclosingFunction(declaration)) return true;
             // wg: a nil test of the list reads it (`xs === undefined`)
             if (up !== undefined && isBinaryExpression(up) && this.isEqualityOp(up.operatorToken.kind) && this.literalKindOfNode(up.left === n ? up.right : up.left) === 'null') return true;
             return up !== undefined && isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) === 'length';
@@ -7221,6 +7226,23 @@ export class RustTranspiler extends BaseTranspiler {
         if (init === undefined || !isElementAccessExpression(init) || !isIdentifier(init.expression)) return false;
         const owner: any = this.rustDeclaredNode(init.expression);
         return owner !== undefined && isVariableDeclaration(owner) && isIdentifier(owner.name) && this.rustExactStrListInit(owner.initializer);
+    }
+
+    /** wg: `const xs: string[] = []` whose every push is one string-typed value and that is never rebound or element-written. */
+    rustStrPushFilledList(owner: any): boolean {
+        const init: any = this.unwrapParens(owner.initializer);
+        if (init === undefined || !isArrayLiteralExpression(init) || init.elements.length !== 0 || !this.rustStrArrayDeclared(owner.name)) return false;
+        let pushes = 0;
+        const ok = this.rustLocalUsesAll(owner, String(owner.name.text), true, (n: any) => {
+            const up: any = n.parent;
+            if (!isPropertyAccessExpression(up) || up.expression !== n || String(up.name.text) !== 'push') return true;
+            const call: any = up.parent;
+            if (!isCallExpression(call) || call.expression !== up || call.arguments.length !== 1) return false;
+            const arg: any = call.arguments[0];
+            pushes++;
+            return this.literalKindOfNode(arg) === 'string' || this.primitiveKindOfType(this.typeOfNodeIfAny(arg)) === 'string';
+        });
+        return ok && pushes > 0;
     }
 
     /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
@@ -13095,6 +13117,12 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** Dict read keyed by a Str place: closure-free when both operands are side-effect-free places. */
     rustDictRead(recv: string, key: string, node: Node, guarded = false): string {
+        // wg: a borrowed element key reads the map with the borrow itself (`Value::from(k.as_deref()).as_str()` is `k`)
+        const lent = /^Value::from\(([A-Za-z_]\w*)\.as_deref\(\)\)$/.exec(key);
+        if (lent !== null && RUST_PLAIN_PLACE.test(recv) && !this.isTestSource(node)) {
+            return this.rustDictSite({ free: `(if let (Some(__m), Some(__k)) = (${recv}.as_map(), ${lent[1]}) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null })`, guarded, helper: `get_value(&${recv}, &${key})`,
+                closure: `${recv}.as_map().and_then(|__m| ${lent[1]}.and_then(|__k| __m.get(__k))).cloned().unwrap_or(Value::Null)` });
+        }
         const free = RUST_PLAIN_PLACE.test(recv) && RUST_PLAIN_PLACE.test(key) && !this.isTestSource(node)
             ? `(if let (Some(__m), Some(__k)) = (${recv}.as_map(), ${key}.as_str()) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null })` : undefined;
         return this.rustDictSite({
@@ -24695,7 +24723,9 @@ export class RustTranspiler extends BaseTranspiler {
     rustVenueStrArgText(arg: any, type: string, identation: number): string {
         const local = this.rustScalarTypedArgText(arg, type);
         // the same call also takes the local by value: borrow from a copy so the move stays legal
-        if (local !== undefined && this.rustVenueStrMovedInCall(arg)) return local.replace(/^(Some\()?([A-Za-z_]\w*)\./, '$1$2.clone().');
+        // wg: a borrowed element (`Option<&str>`) is Copy: no clone
+        const lent = isIdentifier(this.unwrapParens(arg)) && this.rustBorrowedStrElems.has(this.rustDeclaredNode(this.unwrapParens(arg)));
+        if (local !== undefined && !lent && this.rustVenueStrMovedInCall(arg)) return local.replace(/^(Some\()?([A-Za-z_]\w*)\./, '$1$2.clone().');
         if (local !== undefined) return local;
         const inner: any = this.unwrapParens(arg);
         if (type !== '&str' && type !== 'Option<&str>') return this.rustVenueScalarArgText(arg, type, identation);
