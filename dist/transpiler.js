@@ -51345,8 +51345,8 @@ function rustScopeNameTable(index) {
   return byName;
 }
 var RUST_DISPATCH_TYPED_KINDS = /* @__PURE__ */ new Set(["str", "optstr", "f64", "optf64", "opti64", "i64", "optstrvec", "strvecvec", "orderreqs", "params", "flag", "dict", "list", "optdict", "optlist", "optmarket", "optcurrency"]);
-var RUST_DISPATCH_NATIVE_RETURNS = /* @__PURE__ */ new Set(["oint", "keptostr", "keptint", "keptstr", "int", "string", "bool", "dict", "list", "optdict", "struct"]);
-var RUST_DISPATCH_KEPT_RETURNS = /* @__PURE__ */ new Set(["oint", "keptostr", "keptint", "keptstr"]);
+var RUST_DISPATCH_NATIVE_RETURNS = /* @__PURE__ */ new Set(["oint", "keptostr", "keptint", "keptstr", "keptbool", "int", "string", "bool", "dict", "list", "optdict", "struct"]);
+var RUST_DISPATCH_KEPT_RETURNS = /* @__PURE__ */ new Set(["oint", "keptostr", "keptint", "keptstr", "keptbool"]);
 var rustDispatch = {
   isTyped: (kind) => RUST_DISPATCH_TYPED_KINDS.has(kind),
   /** Tail of a dynamic-dispatch `args` list as a slice: the whole list, or the tail past index `i`. */
@@ -51471,6 +51471,7 @@ var rustDispatch = {
       case "keptostr":
       case "keptint":
       case "keptstr":
+      case "keptbool":
       case "int":
       case "string":
       case "bool":
@@ -55275,9 +55276,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (handOff && isConditionalExpression4(this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === void 0)
       return void 0;
-    if (this.rustVenueScalarSource(declaration.initializer) && (boxed > 0 && !handOff || this.rustVenueLocalHandedOn(declaration)))
-      return void 0;
-    if (this.rustVenueTypedCostly(declaration, kind, copied))
+    if (this.rustVenueScalarSource(declaration.initializer) && (boxed > 0 && !handOff || this.rustVenueLocalHandedOn(declaration))) {
+      if (!strKind || this.rustStrNoLend || this.rustOdExcludedCallee(declaration.initializer) || this.rustStrReturnedLocal(declaration, scope) || this.rustVenueLocalHandedOn(declaration) || this.rustReaderDeclTooLong(declaration, kind) || !this.rustReaderLendBoxes(declaration))
+        return void 0;
+      this.rustStrLentLocals.add(declaration);
+    }
+    const venueLent = kind === "ostr" && copied > 0 && !this.rustStrNoLend && this.rustVenueTypedCall(declaration.initializer) !== void 0 && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustStrReturnedLocal(declaration, scope) && !this.rustVenueLocalHandedOn(declaration) && !this.rustReaderDeclTooLong(declaration, kind) && this.rustReaderLendBoxes(declaration);
+    if (venueLent)
+      this.rustStrLentLocals.add(declaration);
+    else if (this.rustVenueTypedCostly(declaration, kind, copied))
       return void 0;
     if (typedUses === 0 && this.rustParamAliasSeedKind(declaration) !== void 0)
       return void 0;
@@ -55916,6 +55923,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${text}.as_i64()`;
     if (kind === "ostr")
       return `${text}.as_str().map(str::to_owned)`;
+    if (kind === "bool")
+      return `${text}.as_bool().unwrap_or_default()`;
     return `${text}.as_str().unwrap_or_default().to_owned()`;
   }
   /** `this.encode(..)` & co. resolved to the base tier, or such a call on a test's untyped `exchange`. */
@@ -56502,7 +56511,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (at < 0)
       return false;
     const types = this.rustVenueReturnTypes(file.slice(0, at) + "/ts/src").get(String(node.expression.name.text));
-    return types !== void 0 && [...types].every((t) => t === "string" || t === "Str");
+    return types !== void 0 && [...types].every((t) => t === "string" || t === "Str" || /^Promise</.test(t) && !this.isAsyncFunction(this.rustScalarCallee(node)));
   }
   /** A sync venue method (not a base one) every venue declaration of which returns `int`: it keeps its
    *  `-> Value` signature and dispatch arm, and its result holds an `Int`, read once as an `i64`. */
@@ -56648,6 +56657,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     };
     declaration.body.forEachChild(visit);
     return ok ? kind : void 0;
+  }
+  /** od: `parse*` / `handle*` results are their own groups' producers; the lending rules leave them alone. */
+  rustOdExcludedCallee(init) {
+    let node = this.unwrapParens(init);
+    if (node?.kind === SyntaxKind7.AwaitExpression)
+      node = this.unwrapParens(node.expression);
+    return node !== void 0 && isCallExpression6(node) && isPropertyAccessExpression3(node.expression) && /^(parse|handle)[A-Z]/.test(String(node.expression.name.text));
   }
   /** `x = E; return x;`: the returned local holds what the statement right before the return wrote. */
   rustVenueReturnSource(ret) {
@@ -58086,6 +58102,11 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (math && kinds.every((k) => k !== void 0) && kinds.some((k) => k === "oint" || k === "onum")) {
       return kinds.every((k) => k === "int" || k === "oint") ? "oint" : "onum";
     }
+    if (!math && kinds.every((k) => k !== void 0) && kinds.some((k) => k === "oint" || k === "onum")) {
+      if (kinds.every((k) => k === "int" || k === "oint"))
+        return "oint";
+      return args.length === 2 && kinds.every((k) => k === "int" || k === "oint" || k === "num" || k === "onum") ? "onum" : void 0;
+    }
     if (kinds.some((k) => k !== "int" && k !== "num"))
       return void 0;
     return kinds.every((k) => k === "int") ? "int" : args.length === 2 ? "num" : void 0;
@@ -58179,7 +58200,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       const opts = sides.filter((x) => x.opt !== void 0);
       const pat = opts.length === 1 ? `Some(${opts[0].bind})` : `(${opts.map((x) => `Some(${x.bind})`).join(", ")})`;
       const scrut = opts.length === 1 ? opts[0].opt : `(${opts.map((x) => x.opt).join(", ")})`;
-      return `(if let ${pat} = ${scrut} { Some(${ty}::${name}(${sides[0].use}, ${sides[1].use})) } else { None })`;
+      const op = name === "sum" ? `(${sides.map((x) => x.use).join(" + ")})` : `${ty}::${name}(${sides[0].use}, ${sides[1].use})`;
+      return `(if let ${pat} = ${scrut} { Some(${op}) } else { None })`;
     }
     if (this.rustBaseTypedReturnKind(node) === "int")
       text = this.rustBaseTypedBareText(node);
@@ -59651,7 +59673,7 @@ ${classMethods}
   rustRecordSignature(node, name, params, returnType) {
     let ret = _RustTranspiler.RUST_DISPATCH_RETURN_KINDS[returnType] ?? (returnType.startsWith("crate::Result<") ? "typed" : "other");
     if (this.rustMethodTypedReturnKind(node) !== void 0)
-      ret = { "Option<i64>": "oint", "Option<String>": "keptostr", "i64": "keptint", "String": "keptstr" }[returnType] ?? ret;
+      ret = { "Option<i64>": "oint", "Option<String>": "keptostr", "i64": "keptint", "String": "keptstr", "bool": "keptbool" }[returnType] ?? ret;
     if (ret === "ostr" && this.rustBaseNativeStrMethod(node))
       ret = "keptostr";
     if (ret === "ostr" && this.rustVenueKeptStrArm(node))
@@ -63531,16 +63553,28 @@ ${idn}}`;
   rustBoolSlotUsesOk(declaration) {
     let slots = 0;
     let others = true;
+    const writes = /* @__PURE__ */ new Set();
+    const boxes = [];
     this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
       const form = this.rustScalarUseForms.get(n);
       if (form === "bslot") {
         slots++;
+        writes.add(n.parent.parent);
         if (this.rustBoolSlotLineLong(n))
           others = false;
-      } else if (form !== "cond" && form !== "write")
+      } else if (form === "box")
+        boxes.push(n);
+      else if (form !== "cond" && form !== "write")
         others = false;
       return true;
     });
+    for (const n of slots === 0 ? [] : boxes) {
+      let up = n;
+      while (up?.parent !== void 0 && !(up.parent.kind === SyntaxKind7.BinaryExpression && up.parent.right === up && writes.has(up.parent)))
+        up = up.parent;
+      if (up?.parent === void 0 || [...writes].some((w) => w.pos < up.parent.pos))
+        others = false;
+    }
     return slots === 0 || others;
   }
   /** The destructuring statement keeps the 400-char line budget with the slot's `== Some(true)` read. */
@@ -74694,7 +74728,8 @@ _RustTranspiler.RUST_BASE_TYPED_METHODS = {
   symbol: ["string", "str"],
   findTimeframe: ["Str", "ostr"],
   networkIdToCode: ["Str", "ostr"],
-  requestId: ["int", "int"]
+  requestId: ["int", "int"],
+  isPostOnly: ["boolean", "bool"]
 };
 _RustTranspiler.RUST_BASE_TYPED_RUNTIME = {
   milliseconds: "int",
@@ -74707,10 +74742,11 @@ _RustTranspiler.RUST_BASE_TYPED_RUNTIME = {
   isJsonEncodedObject: "bool",
   seconds: "int",
   randNumber: "int",
-  precisionFromString: "int"
+  precisionFromString: "int",
+  binaryLength: "int"
 };
 // base methods with a TS body that the runtime implements by hand (`exchange_stubs.rs`), typed like the runtime table
-_RustTranspiler.RUST_BASE_TYPED_HAND_METHODS = /* @__PURE__ */ new Set(["valueIsDefined", "randNumber"]);
+_RustTranspiler.RUST_BASE_TYPED_HAND_METHODS = /* @__PURE__ */ new Set(["valueIsDefined", "randNumber", "binaryLength"]);
 // ── byte buffers (rustBytesProducer / rustBytesSlot / rustBytesLocal) ──
 // The hand-written producers of a TS `Uint8Array` return `crate::value::Bytes` (the `Value::Arr` of byte
 // ints behind a typed handle) and the byte parameters of the hand-written consumers take `impl Into<Value>`.
