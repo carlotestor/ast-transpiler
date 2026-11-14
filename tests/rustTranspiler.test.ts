@@ -14516,3 +14516,17 @@ describe('40d: an optional-string reader keying a map insert before a later box 
         expect(out).not.toContain('code.clone()');
     });
 });
+
+describe('40d: number readers that are the elements of an array literal pushed whole type (Value::from(x) per element inside vec![..])', () => {
+    test('[ price, amount ] rows in two sibling loops box each Option<f64> element', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-40d-pushpair-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Num = number | undefined;\nexport default class Exchange {\n    safeNumber (o: any, k: any, d: Num = undefined): Num { return o[k] ?? d; }\n    sortBy (a: any, k: any): any { return a; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    rows (asks: any[], bids: any[]) {\n        const asksResult = [];\n        const bidsResult = [];\n        for (let i = 0; i < asks.length; i += 2) {\n            const price = this.safeNumber (asks, i);\n            const amount = this.safeNumber (asks, i + 1);\n            asksResult.push ([ price, amount ]);\n        }\n        for (let i = 0; i < bids.length; i += 2) {\n            const price = this.safeNumber (bids, i);\n            const amount = this.safeNumber (bids, i + 1);\n            bidsResult.push ([ price, amount ]);\n        }\n        return { 'asks': this.sortBy (asksResult, 0), 'bids': this.sortBy (bidsResult, 0) };\n    }\n}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        expect(out).not.toMatch(/let mut (price|amount): Value = /);
+        expect((out.match(/let mut (price|amount): Option<f64> = /g) ?? []).length).toBe(4);
+        expect((out.match(/vec!\[Value::from\(price\), Value::from\(amount\)\]/g) ?? []).length).toBe(2);
+    });
+});

@@ -57113,7 +57113,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if ((trial === "str" || trial === "ostr") && (form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration) && !(form === "key" && trial === "ostr") && !(form === "box" && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== void 0 && this.rustScalarSelfArgBox(n)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustLendSlot(n)) && !(form === "box" && !this.rustStrNoLend && this.rustUdReaderStr(declaration.initializer) && this.rustLendSlot(n) && this.rustUdLent.add(declaration)))
         return false;
       const push = findAncestor(n, (m) => isStatement(m) || isCallExpression6(m) && isPropertyAccessExpression3(m.expression) && m.expression.name.text === "push");
-      if (push !== void 0 && isCallExpression6(push))
+      if (push !== void 0 && isCallExpression6(push) && !this.rustCopyPushPairElement(n, push, trial))
         return false;
       const write = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken);
       if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write))
@@ -57134,6 +57134,19 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const kind = this.rustScalarDecisions.get(this.rustDeclaredNode(n));
     const form = this.rustScalarUseForms.get(n);
     return this.rustCacheCtorLimitArg(n, kind) && (form === "targ" || form === "box");
+  }
+  /** 40d: a Copy number that is a direct element of the array literal pushed whole (`rows.push ([ price, amount ])`):
+   *  the element prints `Value::from(x)` (the Int / Float / Null its box held, no copy) inside `Value::from(vec![..])`,
+   *  which ccxt's rustVecPushInline (build/rustTranspiler.ts) already treats as a marker-free source whatever the
+   *  elements print, so no text pass reads this local's type. */
+  rustCopyPushPairElement(n, push, kind) {
+    if (kind !== "int" && kind !== "oint" && kind !== "num" && kind !== "onum")
+      return false;
+    const list = n.parent;
+    if (!isArrayLiteralExpression4(list) || push.arguments.length !== 1 || this.unwrapParens(push.arguments[0]) !== list)
+      return false;
+    const form = this.rustScalarUseForms.get(n);
+    return form === "box" || form === "xbox";
   }
   /** 40d: `n` is the one argument of a base `ws/Cache.ts` constructor that is the whole source of a ws cache-map entry
    *  write (`this.trades[k] = new ArrayCache (n)`, `this.ohlcvs[k][tf] = new ArrayCacheByTimestamp (n)`), which

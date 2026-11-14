@@ -5885,7 +5885,7 @@ export class RustTranspiler extends BaseTranspiler {
                 && !(form === 'box' && !this.rustStrNoLend && this.rustUdReaderStr(declaration.initializer) && this.rustLendSlot(n) && this.rustUdLent.add(declaration))) return false;
             // a `.push(..)` argument: ccxt's native-push pass keys on the boxed operand text
             const push: any = findAncestor(n, (m: any) => isStatement(m) || (isCallExpression(m) && isPropertyAccessExpression(m.expression) && m.expression.name.text === 'push'));
-            if (push !== undefined && isCallExpression(push)) return false;
+            if (push !== undefined && isCallExpression(push) && !this.rustCopyPushPairElement(n, push, trial)) return false;
             // nor when it feeds a write to another local (ccxt passes read that write's printed source)
             const write: any = findAncestor(n, (m: any) => isStatement(m) || (isBinaryExpression(m) && m.operatorToken.kind === SyntaxKind.EqualsToken));
             if (write !== undefined && isBinaryExpression(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration)
@@ -5905,6 +5905,18 @@ export class RustTranspiler extends BaseTranspiler {
         const kind = this.rustScalarDecisions.get(this.rustDeclaredNode(n));
         const form = this.rustScalarUseForms.get(n);
         return this.rustCacheCtorLimitArg(n, kind) && (form === 'targ' || form === 'box');
+    }
+
+    /** 40d: a Copy number that is a direct element of the array literal pushed whole (`rows.push ([ price, amount ])`):
+     *  the element prints `Value::from(x)` (the Int / Float / Null its box held, no copy) inside `Value::from(vec![..])`,
+     *  which ccxt's rustVecPushInline (build/rustTranspiler.ts) already treats as a marker-free source whatever the
+     *  elements print, so no text pass reads this local's type. */
+    rustCopyPushPairElement(n: any, push: any, kind: string | undefined): boolean {
+        if (kind !== 'int' && kind !== 'oint' && kind !== 'num' && kind !== 'onum') return false;
+        const list: any = n.parent;
+        if (!isArrayLiteralExpression(list) || push.arguments.length !== 1 || this.unwrapParens(push.arguments[0]) !== list) return false;
+        const form = this.rustScalarUseForms.get(n);
+        return form === 'box' || form === 'xbox';
     }
 
     /** 40d: `n` is the one argument of a base `ws/Cache.ts` constructor that is the whole source of a ws cache-map entry
