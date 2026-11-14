@@ -6107,6 +6107,8 @@ export class RustTranspiler extends BaseTranspiler {
         const callee: any = call.expression;
         if (!isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword || call.arguments.some((a: any) => a.kind === SyntaxKind.SpreadElement)) return false;
         const name = String(callee.name.text);
+        // `client(url)` takes the same `impl Into<Option<&str>>` url slot
+        if (name === 'client') return at === 0 && call.arguments.length === 1 && this.rustCalleeIsRuntimeBase(call);
         if (!(at === 0 || ((at === 1 || at === 3) && name === 'watch')) || (name !== 'watch' && name !== 'watchMultiple') || call.arguments.length < 2) return false;
         return this.rustCalleeIsRuntimeBase(call);
     }
@@ -19389,6 +19391,7 @@ export class RustTranspiler extends BaseTranspiler {
     // `watch(url, hash, message, subscribe_hash, subscription)` and `watch_multiple(url, hashes, message, subscribe_hashes,
     // subscription)` take every parameter by position: an omitted one is `Value::Null`, an omitted subscribe hash `None`.
     printWsWatchCall(node: any, receiver: string, methodName: string, identation: number): string | undefined {
+        if (receiver === 'self' && methodName === 'client' && this.rustWsWatchSlot(node, 0)) return `self.client(${this.rustWsWatchSlotText(node.arguments[0], this.rustPrintedArgs(node, identation)[0])})`;
         if (receiver !== 'self' || (methodName !== 'watch' && methodName !== 'watchMultiple') || node.arguments.length > 5 || !this.rustWsWatchSlot(node, 0)) return undefined;
         const printed = this.rustPrintedArgs(node, identation);
         const single = methodName === 'watch';

@@ -57294,6 +57294,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!_is.isPropertyAccessExpression.call(void 0, callee) || callee.expression.kind !== _ast.SyntaxKind.ThisKeyword || call.arguments.some((a) => a.kind === _ast.SyntaxKind.SpreadElement))
       return false;
     const name = String(callee.name.text);
+    if (name === "client")
+      return at === 0 && call.arguments.length === 1 && this.rustCalleeIsRuntimeBase(call);
     if (!(at === 0 || (at === 1 || at === 3) && name === "watch") || name !== "watch" && name !== "watchMultiple" || call.arguments.length < 2)
       return false;
     return this.rustCalleeIsRuntimeBase(call);
@@ -70597,6 +70599,8 @@ ${iden}}`;
   // `watch(url, hash, message, subscribe_hash, subscription)` and `watch_multiple(url, hashes, message, subscribe_hashes,
   // subscription)` take every parameter by position: an omitted one is `Value::Null`, an omitted subscribe hash `None`.
   printWsWatchCall(node, receiver, methodName, identation) {
+    if (receiver === "self" && methodName === "client" && this.rustWsWatchSlot(node, 0))
+      return `self.client(${this.rustWsWatchSlotText(node.arguments[0], this.rustPrintedArgs(node, identation)[0])})`;
     if (receiver !== "self" || methodName !== "watch" && methodName !== "watchMultiple" || node.arguments.length > 5 || !this.rustWsWatchSlot(node, 0))
       return void 0;
     const printed = this.rustPrintedArgs(node, identation);
