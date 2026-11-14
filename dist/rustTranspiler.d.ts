@@ -2654,6 +2654,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListOf(node: any): any;
     printBuiltListLiteral(node: any): string;
     printBuiltListDeclaration(declaration: any, indent: string, varName: string): string | undefined;
+    rustOptListGuardedMove(write: any): any;
+    /** A never-reassigned local initialised by a `[]`-defaulted base `safeList*` that still prints as the plain `Value` binding. */
+    rustDefaultedListValue(declaration: any, y: any): boolean;
     printBuiltListWrite(left: any, right: any): string | undefined;
     printBuiltListPush(node: any, name: string | undefined, parsedArg: string | undefined): string | undefined;
     private static readonly RUST_OPT_LIST_SOURCES;

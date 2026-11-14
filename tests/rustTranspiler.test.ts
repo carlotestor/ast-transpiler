@@ -12032,6 +12032,26 @@ describe('ral-tf: a one-kind push accumulator shared into an object literal befo
     });
 });
 
+describe('ral-tf: guarded nullable list aliases', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-tf-lists');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeList (o: any, k: any, d: any[] = undefined): any[] { return o; }\n    parseTrades (rows: any, market: any = undefined): any[] { return rows; }\n    watchMultiple (url: string, h: any, m: any, s: any): any { return h; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    watchTopics (url: string, messageHashes: string[], topics: string[], params: Dict = {}) {\n        for (let i = 0; i < topics.length; i++) {\n            this.hold (topics[i]);\n        }\n        return this.watchMultiple (url, messageHashes, { 'args': topics }, messageHashes);\n    }\n    watchThing (symbol: string, params: Dict = {}) {\n        const topics = [ 'thing.' + symbol ];\n        return this.watchTopics ('wss://x', [ 'thing::' + symbol ], topics, params);\n    }\n    optRows (response: Dict) {\n        const data = this.safeList (response, 'data');\n        let dataList: Dict[] = [];\n        if (data !== undefined) {\n            dataList = data;\n        }\n        for (let i = 0; i < dataList.length; i++) {\n            this.hold (dataList[i]);\n        }\n    }\n    defRows (response: Dict) {\n        const data = this.safeList (response, 'data', []);\n        this.hold (data);\n        let dataList: Dict[] = [];\n        if (data !== undefined) {\n            dataList = data;\n        }\n        for (let i = 0; i < dataList.length; i++) {\n            this.hold (dataList[i]);\n        }\n    }\n    readLater (response: Dict) {\n        const data = this.safeList (response, 'data');\n        let dataList: Dict[] = [];\n        if (data !== undefined) {\n            dataList = data;\n        }\n        this.hold (data);\n        for (let i = 0; i < dataList.length; i++) {\n            this.hold (dataList[i]);\n        }\n    }\n}\n");
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('x = y under if (y !== undefined), y an optional list at its last use, moves the list out (no copy)', () => {
+        expect(out).toMatch(/fn optRows[\s\S]*?let mut dataList: crate::value::List = [\s\S]*?dataList = data\.unwrap_or_default\(\);/);
+    });
+    test('a []-defaulted safeList Value local moves into the list at its last use', () => {
+        expect(out).toMatch(/fn defRows[\s\S]*?let mut dataList: crate::value::List = [\s\S]*?dataList = data\.into_list\(\);/);
+    });
+    test('negative: the source read again after the alias keeps the Value alias', () => {
+        expect(out).toMatch(/fn readLater[\s\S]*?let mut dataList: Value = /);
+    });
+});
+
 describe('safe scalar locals, seventh pass: nested balance / options writes', () => {
     test('a typed string key of a nested this.balance / this.options write prints the r05 insert with its own key text', () => {
         const dir = path.join (rustFixtureRoot, 'scalar-pf');

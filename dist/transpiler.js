@@ -70357,7 +70357,7 @@ ${iden}}`;
         return false;
       const up = n.parent;
       if (isBinaryExpression5(up) && up.left === n) {
-        return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustArrayGuardedMove(up)) && String(up.parent.getText()).split("\n")[0].length <= 200;
+        return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
       }
       if (isElementAccessExpression4(up) && up.expression === n) {
         natives++;
@@ -70571,10 +70571,61 @@ ${iden}}`;
       return `${indent}let mut ${varName}: crate::value::List = ${this.printNode(declaration.initializer, 0).trim()}.into_list()`;
     return `${indent}let mut ${varName}: crate::value::List = ${this.printBuiltListLiteral(declaration.initializer)}`;
   }
+  // ── ral-tf: `x = y` under `if (y !== undefined)`, y an optional list local (`Option<List>`) at its last use ──
+  // The guard proves `Some`, so `y.unwrap_or_default()` moves the shared list out exactly (no element copy).
+  rustOptListGuardedMove(write) {
+    if (!isBinaryExpression5(write))
+      return void 0;
+    const y = this.rustSkipWrappers(write.right);
+    if (y === void 0 || !isIdentifier3(y))
+      return void 0;
+    const statement = write.parent;
+    let branch = statement?.parent;
+    if (isBlock4(branch)) {
+      if (branch.statements.length !== 1)
+        return void 0;
+    } else
+      branch = statement;
+    const guard = branch?.parent;
+    if (guard === void 0 || guard.kind !== SyntaxKind7.IfStatement || guard.thenStatement !== branch)
+      return void 0;
+    const test = this.rustSkipWrappers(guard.expression);
+    if (!isBinaryExpression5(test) || test.operatorToken.kind !== SyntaxKind7.ExclamationEqualsEqualsToken && test.operatorToken.kind !== SyntaxKind7.ExclamationEqualsToken)
+      return void 0;
+    const l = this.rustSkipWrappers(test.left);
+    const r = this.rustSkipWrappers(test.right);
+    const tested = isIdentifier3(l) && l.text === y.text ? l : isIdentifier3(r) && r.text === y.text ? r : void 0;
+    const other = tested === l ? r : l;
+    if (tested === void 0 || !(other?.kind === SyntaxKind7.UndefinedKeyword || isIdentifier3(other) && other.text === "undefined" || other?.kind === SyntaxKind7.NullKeyword))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(y);
+    if (declaration === void 0 || declaration.name === y || !isVariableDeclaration3(declaration) || this.rustDeclarationOfIdentifier(tested) !== declaration)
+      return void 0;
+    if (this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(write) || this.rustLocalIsReassigned(declaration, String(y.text)))
+      return void 0;
+    if (!this.rustLocalLastUse(y, declaration))
+      return void 0;
+    if (this.rustDefaultedListValue(declaration, y))
+      return declaration;
+    const optList = this.rustOptListLocal(declaration) || !this.rustBorrowedPending.has(declaration) && this.rustBorrowedLocalKind(declaration) === "list" && this.rustOptContainerLocals.has(declaration);
+    return optList ? declaration : void 0;
+  }
+  /** A never-reassigned local initialised by a `[]`-defaulted base `safeList*` that still prints as the plain `Value` binding. */
+  rustDefaultedListValue(declaration, y) {
+    const init = isVariableDeclaration3(declaration) ? this.rustSkipWrappers(declaration.initializer) : void 0;
+    if (init === void 0 || !this.rustDefaultedListRead(init))
+      return false;
+    if (this.rustLentListLocal(declaration) || this.rustBorrowedPending.has(declaration) || this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustOptListLocal(declaration) || this.rustScalarLocalKind(declaration) !== void 0 || this.rustNilLocalKind(declaration) !== void 0)
+      return false;
+    return this.printNode(y, 0).trim().replace(/^\u0004/, "") === String(y.text);
+  }
   printBuiltListWrite(left, right) {
     if (this.rustBuiltListOf(left) === void 0)
       return void 0;
     const rhs = this.rustSkipWrappers(right);
+    const guarded = isIdentifier3(rhs) && isBinaryExpression5(rhs.parent) ? this.rustOptListGuardedMove(rhs.parent) : void 0;
+    if (guarded !== void 0)
+      return `${this.printNode(left, 0).trim()} = ${rhs.text}.${this.rustDefaultedListValue(guarded, rhs) ? "into_list" : "unwrap_or_default"}()`;
     const value = isArrayLiteralExpression4(rhs) ? this.printBuiltListLiteral(rhs) : `${this.printNode(right, 0).trim()}.into_list()`;
     return `${this.printNode(left, 0).trim()} = ${value}`;
   }
