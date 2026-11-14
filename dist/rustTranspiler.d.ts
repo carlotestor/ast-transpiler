@@ -689,6 +689,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVenueTypedText(kind: string, expr: any): string | undefined;
     /** A venue typed string is copied out of the `Value` once: a box short of a moving last use, or a hand-on, would copy it again. */
     rustVenueTypedCostly(declaration: any, kind: string, copied: number): boolean;
+    /** A price / size argument of an order-book side's `x.store(price, size)`: the hand-written runtime
+     *  `Value::store` / `store_to_bids|asks` take `impl Into<Value>`, so a Copy number passes as-is
+     *  (`From<Option<f64>>` / `From<Option<i64>>` give the same `Value::Null` the box held). */
+    rustSideStoreArg(n: any): boolean;
     /** The bare `format!(..)` a string concat prints as (its `Value::Str(..into())` box peeled), else undefined. */
     rustScalarFormatText(node: any): string | undefined;
     /** How a use of a scalar local prints: `test` (literal/null compare), `cond` (bool condition),
@@ -791,6 +795,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     printElemKeyInOp(key: any, obj: any): string | undefined;
     rustThisFieldLiteralWrite(n: any): boolean;
     rustScalarInNestedWrite(n: any): boolean;
+    /** `this.f` (one level, no element read in between). */
+    rustThisFieldTarget(node: any): boolean;
+    /** `n` is (inside) an argument of a call that lies within `root`, the call itself not being `n`. */
+    rustInsideCallArgument(n: any, root: any): boolean;
     /** A write source the local's type holds exactly: a same-kind value, a typed scalar local of the
      *  same kind, or a ternary of those (its condition printed as a bool). */
     rustScalarWriteOk(kind: string, rhs: any, depth: number): boolean;
@@ -1872,6 +1880,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `k in x` on a typed bearer: `in_op`'s own Dict arm — a key that is not a
      *  `Str` is never a hit — with the lookup on the bare map. */
     bearerInOp(key: any, obj: any): string | undefined;
+    /** `k in m` with `k` an optional-string scalar local keyed natively (`kin`): `printElemKeyInOp` prints the
+     *  bearer's own lookup; an open key decision leaves the bearer decision uncached, like a write key. */
+    rustBearerOptKeyIn(recv: any, keyNode: any): boolean;
     /** The key half of `bearerInOp`, also used while the receiver's own bearer
      *  proof is still running (its declaration probe answers "not typed" then). */
     bearerInOpKeyText(key: any): string | undefined;

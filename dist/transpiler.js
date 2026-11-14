@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -56052,7 +56052,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       let top = n;
       while (isParenthesizedExpression3(top.parent) || isConditionalExpression4(top.parent))
         top = top.parent;
-      if (isBinaryExpression5(top.parent) && top.parent.right === top && top.parent.operatorToken.kind === SyntaxKind7.EqualsToken)
+      if (isBinaryExpression5(top.parent) && top.parent.right === top && top.parent.operatorToken.kind === SyntaxKind7.EqualsToken && !isElementAccessExpression4(this.unwrapParens(top.parent.left)) && !isPropertyAccessExpression3(this.unwrapParens(top.parent.left)))
         handed = true;
       if (isVariableDeclaration3(top.parent) && top.parent.initializer === top)
         handed = true;
@@ -56368,6 +56368,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     return kind === "ostr" && (copied > 0 || this.rustVenueLocalHandedOn(declaration)) || this.rustReaderDeclTooLong(declaration, kind);
   }
+  /** A price / size argument of an order-book side's `x.store(price, size)`: the hand-written runtime
+   *  `Value::store` / `store_to_bids|asks` take `impl Into<Value>`, so a Copy number passes as-is
+   *  (`From<Option<f64>>` / `From<Option<i64>>` give the same `Value::Null` the box held). */
+  rustSideStoreArg(n) {
+    const call = n.parent;
+    if (!isCallExpression6(call) || call.expression === n || call.arguments.length !== 2 || !call.arguments.some((a) => a === n))
+      return false;
+    const callee = call.expression;
+    if (!isPropertyAccessExpression3(callee) || String(callee.name.text) !== "store" || !isIdentifier3(callee.expression))
+      return false;
+    return this.rustDeclaredNode(callee.expression) !== void 0 && this.rustScalarLocalOf(callee.expression) === void 0;
+  }
   /** The bare `format!(..)` a string concat prints as (its `Value::Str(..into())` box peeled), else undefined. */
   rustScalarFormatText(node) {
     const text = this.stripOuterParens(this.printNode(node, 0).trim());
@@ -56440,6 +56452,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "targ";
     if (this.rustLimitArgUse(n, kind))
       return "targ";
+    if ((kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustSideStoreArg(n))
+      return "targ";
     if (isCallExpression6(parent) && parent.expression !== n && ({ "Option<&str>": ["str", "ostr"], "Option<i64>": ["int", "oint"] }[this.rustTypedFilterSlot(parent, parent.arguments.indexOf(n))] ?? []).includes(kind))
       return "targ";
     if (isCallExpression6(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
@@ -56461,7 +56475,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (isBinaryExpression5(parent) && parent.operatorToken.kind === SyntaxKind7.PlusToken) {
       if (kind !== "str" && kind !== "ostr")
         return this.rustScalarExpressionUseForm(n, kind);
-      return kind === "str" && this.printNode(parent, 0).trim().startsWith("Value::Str(format!(") ? "concat" : "box";
+      return this.printNode(parent, 0).trim().startsWith("Value::Str(format!(") ? "concat" : "box";
     }
     if (isConditionalExpression4(parent) && parent.condition !== n)
       return "box";
@@ -57047,8 +57061,10 @@ ${binding(plan.indent)}` : ""), head: "" };
     const own = isIdentifier3(recv) ? this.rustDeclarationOfIdentifier(recv) : void 0;
     if (own === void 0 && isIdentifier3(recv))
       return false;
-    if (own !== void 0 && (!isVariableDeclaration3(own) || own.initializer === void 0 || isObjectLiteralExpression4(this.rustSkipWrappers(own.initializer))))
+    if (own !== void 0 && (!isVariableDeclaration3(own) || own.initializer === void 0))
       return false;
+    if (own !== void 0 && isObjectLiteralExpression4(this.rustSkipWrappers(own.initializer)))
+      return true;
     if (this.rustBorrowedDictName(recv) !== void 0 || this.rustParamShadowOf(recv) !== void 0 || this.rustFieldKeyReceiver(recv) !== void 0 || this.rustClientHandleAccess(recv) !== void 0 || isPropertyAccessExpression3(recv) && _RustTranspiler.RUST_TAGGED_CONTAINER_FIELDS.has(String(recv.name.text)))
       return false;
     return this.isDictShapedType(this.typeOfNodeIfAny(test.right)) || this.rustDictLocalProof(recv) === "plain";
@@ -57081,7 +57097,10 @@ ${binding(plan.indent)}` : ""), head: "" };
     const inner = this.rustStripWrappers(key);
     if (!isIdentifier3(inner) || this.rustScalarUseForms.get(inner) !== "kin" || this.rustScalarLocalOf(inner)?.kind !== "ostr")
       return void 0;
-    const recv = this.printNode(this.rustStripWrappers(obj), 0).trim();
+    const recvNode = this.rustStripWrappers(obj);
+    const recv = this.printNode(recvNode, 0).trim();
+    if (this.rustDictBearerDeclaration(recvNode) !== void 0)
+      return `Value::Bool(matches!(${super.printIdentifier(inner)}.as_deref(), Some(__k) if ${String(recvNode.text)}.contains_key(__k)))`;
     return `Value::Bool(matches!((&${recv}, ${super.printIdentifier(inner)}.as_deref()), (Value::Dict(__d), Some(__k)) if __d.contains_key(__k)))`;
   }
   rustThisFieldLiteralWrite(n) {
@@ -57099,7 +57118,21 @@ ${binding(plan.indent)}` : ""), head: "" };
     while (current.parent !== void 0 && !isStatement(current.parent))
       current = current.parent;
     const write = isBinaryExpression5(current) ? current : void 0;
-    return write !== void 0 && write.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(write.left) && (isElementAccessExpression4(write.left.expression) || isPropertyAccessExpression3(write.left.expression));
+    if (write === void 0 || write.operatorToken.kind !== SyntaxKind7.EqualsToken || !isElementAccessExpression4(write.left) || !(isElementAccessExpression4(write.left.expression) || isPropertyAccessExpression3(write.left.expression)))
+      return false;
+    return !(this.rustThisFieldTarget(write.left.expression) && this.rustInsideCallArgument(n, write.right));
+  }
+  /** `this.f` (one level, no element read in between). */
+  rustThisFieldTarget(node) {
+    return isPropertyAccessExpression3(node) && node.expression.kind === SyntaxKind7.ThisKeyword;
+  }
+  /** `n` is (inside) an argument of a call that lies within `root`, the call itself not being `n`. */
+  rustInsideCallArgument(n, root) {
+    for (let child = n, up = n.parent; up !== void 0 && child !== root; child = up, up = up.parent) {
+      if (isCallExpression6(up) && up.expression !== child)
+        return true;
+    }
+    return false;
   }
   /** A write source the local's type holds exactly: a same-kind value, a typed scalar local of the
    *  same kind, or a ternary of those (its condition printed as a bool). */
@@ -64140,7 +64173,7 @@ ${iden}}`;
         return true;
       }
       if (isBinaryExpression5(parent) && parent.operatorToken.kind === SyntaxKind7.InKeyword && parent.right === n)
-        return this.bearerInOpKeyText(parent.left) !== void 0 || this.literalKeyWidened(this.rustLiteralBearerKeyArg(n, parent.left));
+        return this.bearerInOpKeyText(parent.left) !== void 0 || this.literalKeyWidened(this.rustLiteralBearerKeyArg(n, parent.left)) || this.rustBearerOptKeyIn(n, parent.left);
       if (this.rustBearerRebuild(n))
         return true;
       const reuse = this.rustProducerReuse(n);
@@ -64720,6 +64753,19 @@ ${iden}}`;
     if (text === void 0)
       return void 0;
     return `Value::Bool(matches!(&${text}, Value::Str(__k) if ${String(recv.text)}.contains_key(__k.as_ref())))`;
+  }
+  /** `k in m` with `k` an optional-string scalar local keyed natively (`kin`): `printElemKeyInOp` prints the
+   *  bearer's own lookup; an open key decision leaves the bearer decision uncached, like a write key. */
+  rustBearerOptKeyIn(recv, keyNode) {
+    const key = this.rustSkipWrappers(keyNode);
+    if (key === void 0 || !isIdentifier3(key))
+      return false;
+    const own = isIdentifier3(recv) ? this.rustDeclarationOfIdentifier(recv) : void 0;
+    if (own === void 0 || !isVariableDeclaration3(own) || own.initializer === void 0 || !isObjectLiteralExpression4(this.rustSkipWrappers(own.initializer)))
+      return false;
+    if (this.rustKeyScalarDecisionOpen(key))
+      this.rustBearerSawOpenKey = true;
+    return this.rustScalarLocalOf(key)?.kind === "ostr" && this.rustScalarUseForms.get(key) === "kin";
   }
   /** The key half of `bearerInOp`, also used while the receiver's own bearer
    *  proof is still running (its declaration probe answers "not typed" then). */
