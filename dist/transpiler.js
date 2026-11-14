@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -57219,7 +57219,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     if (own !== void 0 && (!isVariableDeclaration3(own) || own.initializer === void 0 || isObjectLiteralExpression4(this.rustSkipWrappers(own.initializer))))
       return false;
-    if (this.rustBorrowedDictName(recv) !== void 0 || this.rustParamShadowOf(recv) !== void 0 || this.rustFieldKeyReceiver(recv) !== void 0 || this.rustClientHandleAccess(recv) !== void 0 || isPropertyAccessExpression3(recv) && _RustTranspiler.RUST_TAGGED_CONTAINER_FIELDS.has(String(recv.name.text)))
+    if (this.rustParamShadowOf(recv) !== void 0 || this.rustFieldKeyReceiver(recv) !== void 0 || this.rustClientHandleAccess(recv) !== void 0 || isPropertyAccessExpression3(recv) && _RustTranspiler.RUST_TAGGED_CONTAINER_FIELDS.has(String(recv.name.text)))
       return false;
     return this.isDictShapedType(this.typeOfNodeIfAny(test.right)) || this.rustDictLocalProof(recv) === "plain";
   }
@@ -65425,6 +65425,8 @@ ${iden}}`;
       if (this.rustBorrowedKeySetUse(n)) {
         keyReads++;
         keySets++;
+        if (isBinaryExpression5(n.parent))
+          reads++;
         return true;
       }
       if (this.rustExtendHeadUse(n))
@@ -66092,7 +66094,43 @@ ${iden}}`;
       return literal2 === void 0 ? void 0 : { literal: true, text: literal2 };
     }
     const text = this.bearerInOpKeyText(key);
+    if (text === void 0 && node !== void 0 && isIdentifier3(node) && this.rustStrKeyIdentifier(node))
+      return { literal: false, text: String(node.text) };
     return text === void 0 ? void 0 : { literal: false, text };
+  }
+  /** A `string` / `Str` identifier key of `k in m`: a local whose print is decided at the test
+   *  (`rustBorrowedStrKeyTest`), so the receiver's proof never waits on the key's own scalar decision. */
+  rustStrKeyIdentifier(node) {
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration === void 0 || declaration.name === node || !isVariableDeclaration3(declaration) && !this.rustStrKeyParam(declaration))
+      return false;
+    const type = this.typeOfNodeIfAny(node);
+    if (type === void 0)
+      return false;
+    const parts = type.flags & TypeFlags6.Union ? typeParts(type) ?? [] : [type];
+    return parts.length > 0 && parts.some((p) => (p.flags & TypeFlags6.StringLike) !== 0) && parts.every((p) => (p.flags & (TypeFlags6.StringLike | TypeFlags6.Undefined | TypeFlags6.Null)) !== 0);
+  }
+  /** `contains_key` on the shared map for a string identifier key, printed from the key's settled decision: a
+   *  `String` local by `as_str`, an `Option<String>` local by `as_deref` (`None` misses, as `in_op` on `Null`),
+   *  a boxed key by the `Str` arm `in_op` takes (any other variant misses). */
+  /** A parameter key prints as its signature type: a boxed `Value`, `&str` or `Option<&str>` (per-venue string slots). */
+  rustStrKeyParam(declaration) {
+    return declaration?.kind === SyntaxKind7.Parameter && ["Value", "&str", "Option<&str>"].includes(this.rustParamType(declaration));
+  }
+  rustBorrowedStrKeyTest(name, node) {
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    const param = declaration?.kind === SyntaxKind7.Parameter ? this.rustParamType(declaration) : void 0;
+    if (param === "&str")
+      return `${name}.contains_key(${super.printIdentifier(node)})`;
+    if (param === "Option<&str>")
+      return `matches!(${super.printIdentifier(node)}, Some(__k) if ${name}.contains_key(__k))`;
+    const kind = param === void 0 ? this.rustScalarLocalOf(node)?.kind : void 0;
+    const key = super.printIdentifier(node);
+    if (kind === "str")
+      return `${name}.contains_key(${key}.as_str())`;
+    if (kind === "ostr")
+      return `matches!(${key}.as_deref(), Some(__k) if ${name}.contains_key(__k))`;
+    return `matches!(&${key}, Value::Str(__k) if ${name}.contains_key(__k.as_ref()))`;
   }
   rustBorrowedDictName(node) {
     const recv = this.rustSkipWrappers(node);
@@ -66115,7 +66153,12 @@ ${iden}}`;
     const k = name === void 0 ? void 0 : this.rustBorrowedInOpKey(key);
     if (k === void 0)
       return void 0;
-    return k.literal ? `Value::Bool(${name}.contains_key(${k.text}))` : `Value::Bool(matches!(&${k.text}, Value::Str(__k) if ${name}.contains_key(__k.as_ref())))`;
+    if (k.literal)
+      return `Value::Bool(${name}.contains_key(${k.text}))`;
+    const inner = this.rustSkipWrappers(key);
+    if (this.bearerInOpKeyText(key) === void 0 && isIdentifier3(inner))
+      return `Value::Bool(${this.rustBorrowedStrKeyTest(name, inner)})`;
+    return `Value::Bool(matches!(&${k.text}, Value::Str(__k) if ${name}.contains_key(__k.as_ref())))`;
   }
   // ── rustDictKeyReadUse / printDictKeyRead: direct literal-key reads (`m['k']`, `m.k`) on a dict local ──
   // The shared map (or its optional form) reads through the reader trait the `safe_*_k` readers use:
