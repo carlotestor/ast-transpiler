@@ -6296,7 +6296,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (form === 'fin' || form === 'frd' || (form === 'key' && this.rustFieldKeyReceiver(n.parent?.expression) !== undefined)) field = true;
             // rf: a native insert key takes the key text (`as_deref().unwrap_or("null").to_string()`), the one allocation
             // `stringify_param` made for the boxed key: no copy where the `Value` moved
-            else if (form === 'key' && RustTranspiler.RUST_PRO_TIER_FILE.test(String(n.getSourceFile().fileName)) && this.rustScalarInsertKeyUse(n)) return true;
+            else if (form === 'key' && RustTranspiler.RUST_PRO_TIER_FILE.test(String(n.getSourceFile().fileName)) && this.rustLiteralKeyReceiver(n) && this.rustScalarInsertKeyUse(n)) return true;
             else if ((form === 'box' || form === 'xbox' || form === 'err' || form === 'key') && !this.rustScalarBoxMoves(n, form, declaration)) {
                 boxed = true;
                 // a `this.` / `super.` argument cloned the `Value`: lending the string there costs that same one copy
@@ -6309,6 +6309,21 @@ export class RustTranspiler extends BaseTranspiler {
             return false;
         }
         return field && boxed;
+    }
+
+    /** rf: the map `m[k] = v` writes into is not a call-bound local that a typed key turns into an IndexMap bearer (its
+     *  `.as_map().cloned()` copies the map out of the `Value`; bitvavo `limits`). A literal-bound map, or one whose insert
+     *  stays the guarded `if let Value::Dict(..)` write, takes the key text with no copy. */
+    rustLiteralKeyReceiver(n: any): boolean {
+        const access: any = this.rustKeyWrapped(n).parent;
+        if (!isElementAccessExpression(access)) return false;
+        if (!isIdentifier(access.expression)) return true;
+        const declaration: any = this.rustDeclarationOfIdentifier(access.expression);
+        if (declaration === undefined || !isVariableDeclaration(declaration)) return true;
+        const init: any = this.rustSkipWrappers(declaration.initializer);
+        // syntactic: a call-bound receiver (`safeDict (..)`) may become that bearer once the key is typed (the bearer
+        // decision reads the key's own decision), so only a literal-bound or unbound one is taken
+        return init === undefined || isObjectLiteralExpression(init) || !isCallExpression(init);
     }
 
     /** A loop (or closure) lies between the declaration and `n`: a box there repeats. */

@@ -57499,7 +57499,7 @@ ${binding(plan.indent)}` : ""), head: "" };
         return true;
       if (form === "fin" || form === "frd" || form === "key" && this.rustFieldKeyReceiver(n.parent?.expression) !== void 0)
         field = true;
-      else if (form === "key" && _RustTranspiler.RUST_PRO_TIER_FILE.test(String(n.getSourceFile().fileName)) && this.rustScalarInsertKeyUse(n))
+      else if (form === "key" && _RustTranspiler.RUST_PRO_TIER_FILE.test(String(n.getSourceFile().fileName)) && this.rustLiteralKeyReceiver(n) && this.rustScalarInsertKeyUse(n))
         return true;
       else if ((form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration)) {
         boxed = true;
@@ -57513,6 +57513,21 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     }
     return field && boxed;
+  }
+  /** rf: the map `m[k] = v` writes into is not a call-bound local that a typed key turns into an IndexMap bearer (its
+   *  `.as_map().cloned()` copies the map out of the `Value`; bitvavo `limits`). A literal-bound map, or one whose insert
+   *  stays the guarded `if let Value::Dict(..)` write, takes the key text with no copy. */
+  rustLiteralKeyReceiver(n) {
+    const access = this.rustKeyWrapped(n).parent;
+    if (!isElementAccessExpression4(access))
+      return false;
+    if (!isIdentifier3(access.expression))
+      return true;
+    const declaration = this.rustDeclarationOfIdentifier(access.expression);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration))
+      return true;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    return init === void 0 || isObjectLiteralExpression4(init) || !isCallExpression6(init);
   }
   /** A loop (or closure) lies between the declaration and `n`: a box there repeats. */
   rustLoopAfterDeclaration(n, declaration) {

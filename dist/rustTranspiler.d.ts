@@ -845,6 +845,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarSelfArgBox(n: any): boolean;
     /** A local keyed on a field and re-boxed anywhere but a moving use would copy where the `Value` moved. */
     rustFieldKeyCostly(declaration: any): boolean;
+    /** rf: the map `m[k] = v` writes into is not a call-bound local that a typed key turns into an IndexMap bearer (its
+     *  `.as_map().cloned()` copies the map out of the `Value`; bitvavo `limits`). A literal-bound map, or one whose insert
+     *  stays the guarded `if let Value::Dict(..)` write, takes the key text with no copy. */
+    rustLiteralKeyReceiver(n: any): boolean;
     /** A loop (or closure) lies between the declaration and `n`: a box there repeats. */
     rustLoopAfterDeclaration(n: any, declaration: any): boolean;
     /** The statement holding `n` reads the local again. */
