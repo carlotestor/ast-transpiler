@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -54184,6 +54184,20 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     });
     return ok;
   }
+  /** ral-va: an identifier partner of an optional-string `+` operand whose checker type is string-or-nullish: the
+   *  pair prints the `format!` arm whatever its Rust form (`Value`, `String`, `Option<String>` read), and each of
+   *  those displays as the JS concat does (Str text, Null `null`). */
+  rustNilConcatPartner(other) {
+    const inner = this.unwrapParensNode(other);
+    if (inner === void 0)
+      return false;
+    let place = isPropertyAccessExpression3(inner) && inner.expression.kind === SyntaxKind7.ThisKeyword;
+    if (isIdentifier3(inner)) {
+      const decl = this.rustDeclaredNode(inner);
+      place = decl !== void 0 && isVariableDeclaration3(decl) && decl.initializer !== void 0 && this.literalKindOfNode(decl.initializer) !== "null" && (decl.parent?.flags & NodeFlags4.Const) !== 0;
+    }
+    return place && this.literalKindOfNode(inner) !== "null" && this.isStringOrNullishType(this.typeOfNodeIfAny(inner)) && this.isStringLikeType(this.typeOfNodeIfAny(inner));
+  }
   // An optional string joins a `format!` concat whose other operand is always a string: the
   // operand prints as `as_deref().unwrap_or("null")`, the text `Display` gives the boxed form.
   rustNilOptStrConcatUse(n) {
@@ -54191,9 +54205,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!isBinaryExpression5(parent) || parent.operatorToken.kind !== SyntaxKind7.PlusToken)
       return false;
     const other = parent.left === n ? parent.right : parent.left;
-    if (!this.alwaysStr(other) || this.primitiveKindOfType(this.typeOfNodeIfAny(n)) !== "string")
+    if (this.primitiveKindOfType(this.typeOfNodeIfAny(n)) !== "string")
       return false;
     if (!this.isNativeStringConcatPair(this.typeOfNodeIfAny(parent.left), this.typeOfNodeIfAny(parent.right)))
+      return false;
+    if (!this.alwaysStr(other) && !this.rustNilConcatPartner(other))
       return false;
     return this.rustOptStrConcatFits(n);
   }
@@ -57240,6 +57256,24 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustAssignmentOpKind(op) {
     return op >= SyntaxKind7.FirstAssignment && op <= SyntaxKind7.LastAssignment;
   }
+  /** ral-ua: `acc += x` (statement) with `acc` a checker-string local the solve leaves boxed (its decision is not taken
+   *  during seeding: the join is assumed, then re-checked) and `x` a `string | undefined`, within the 400-char line. */
+  rustPlusEqualsJoinOperand(n) {
+    const parent = n.parent;
+    if (!isBinaryExpression5(parent) || parent.operatorToken.kind !== SyntaxKind7.PlusEqualsToken || parent.right !== n || !isIdentifier3(parent.left))
+      return false;
+    if (parent.parent?.kind !== SyntaxKind7.ExpressionStatement || !this.isStringLikeType(this.typeOfNodeIfAny(parent.left)))
+      return false;
+    if (!this.isStringOrNullishType(this.typeOfNodeIfAny(n)))
+      return false;
+    const accDecl = this.rustDeclaredNode(parent.left);
+    if (accDecl === void 0 || !isVariableDeclaration3(accDecl))
+      return false;
+    if (!this.rustScalarSeeding && (this.rustScalarDecisions.get(accDecl) ?? void 0) !== void 0)
+      return false;
+    const column = parent.getStart() - String(parent.getSourceFile().text).lastIndexOf("\n", parent.getStart()) - 1;
+    return column + 2 * String(parent.left.getText()).length + String(n.getText()).length + 72 <= 400;
+  }
   rustScalarUseFormOwn(n, kind) {
     const parent = n.parent;
     if (parent === void 0)
@@ -57325,6 +57359,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return typedReturn === kind || typedReturn === `o${kind}` ? "native" : void 0;
       return this.rustNativeStrReturnKind(fn) === "str" || this.rustStrReturnSignature(fn, n) ? void 0 : "box";
     }
+    if ((kind === "str" || kind === "ostr") && this.rustPlusEqualsJoinOperand(n))
+      return "concat";
     if (isBinaryExpression5(parent) && parent.operatorToken.kind === SyntaxKind7.PlusToken) {
       if (kind !== "str" && kind !== "ostr")
         return this.rustScalarExpressionUseForm(n, kind);
@@ -59585,6 +59621,8 @@ ${binding(plan.indent)}` : ""), head: "" };
         return dry ? "_" : `${name}.push_str(${this.quotedStringLiteral(right.text)})`;
       if (isIdentifier3(right) && this.rustScalarLocalOf(right)?.kind === "str")
         return dry ? "_" : `${name}.push_str(&${super.printIdentifier(right)})`;
+      if (isIdentifier3(right) && this.rustScalarLocalOf(right)?.kind === "ostr")
+        return dry ? "_" : `${name}.push_str(${super.printIdentifier(right)}.as_deref().unwrap_or("null"))`;
       const joined = this.rustStrPushValueText(node.left, right, dry);
       if (joined !== void 0)
         return dry ? "_" : `${name}.push_str(&${joined})`;
@@ -67320,6 +67358,7 @@ ${iden}}`;
     const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || optionalBoxes === 0 && paramsBoxes === 0 && boxedElementUses.every((u) => this.rustDefaultedContainerBoxUse(u, init)) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init));
     const boxOnly = reads === 0 && boxedElementUses.length > 0 && (this.rustDictElementSource(init) || this.rustListElementSource(init)) && nullTests === 0 && writes === 0;
     const declaredDictOnly = nilDeclared && from === "dict" && !mixed && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration);
+    const declaredListTested = nilDeclared && from === "list" && !mixed && nullTests > 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration) && lengths === 0 && castLengths === 0;
     const endpointBoxOnly = endpointBoxes > 0 && (nullTests === 0 || declaredDictOnly) && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration) && boxedElementUses.every((u) => this.rustBoxLineOk(u));
     if (endpointBoxes > 0 && !endpointBoxOnly)
       return void 0;
@@ -67327,7 +67366,7 @@ ${iden}}`;
       return void 0;
     if (!safe || reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0 && !this.rustUrlsMapEntry(init)) || this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))
       return void 0;
-    if (declaredEndpointWrites > 0 && nullTests > 0 && !declaredDictOnly)
+    if (declaredEndpointWrites > 0 && nullTests > 0 && !declaredDictOnly && !declaredListTested)
       return void 0;
     if (this.rustNilResponseLocals.has(declaration) && (lentResponses > 0 || lentNullable > 0))
       return void 0;
@@ -75850,7 +75889,18 @@ ${this.getIden(identation)}}`;
       }
       return false;
     };
-    return this.rustScopeNameNodes(scope, String(node.text)).some((u) => u !== node && isIdentifier3(u) && inCall(u) && this.rustDeclaredNode(u) === declaration && !this.rustVenueStrArgSlot(u));
+    return this.rustScopeNameNodes(scope, String(node.text)).some((u) => u !== node && isIdentifier3(u) && inCall(u) && this.rustDeclaredNode(u) === declaration && !this.rustVenueStrArgSlot(u) && !this.rustScalarBoxCopies(u));
+  }
+  /** ral-va: a typed string read in a by-value list element whose box copies (`Value::from(x.clone())`, not its last use):
+   *  it leaves the local in place, so a borrow of the same local in that call needs no copy of its own. */
+  rustScalarBoxCopies(u) {
+    const local = this.rustScalarLocalOf(u);
+    if (local === void 0 || local.kind !== "str" && local.kind !== "ostr" || !isArrayLiteralExpression4(u.parent))
+      return false;
+    const form = this.rustScalarUseForms.get(u);
+    if (form !== "box")
+      return false;
+    return !(isReturnStatement4(u.parent) || this.rustWsClientLastUse(u, local.declaration) || this.rustLocalLastUse(u, local.declaration) || this.rustOwnedHandOff(u) && this.rustOwnedLastUse(u, local.declaration));
   }
   /** A literal, an identifier, a field read, or a call: the converted argument stays short. */
   rustVenueStrSimpleArg(arg) {

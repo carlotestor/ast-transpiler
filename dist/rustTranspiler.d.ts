@@ -393,6 +393,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Every box before the last sits at a `this.` / `super.` argument (where the `Value` form was cloned); no free-function,
      *  `Precise`, `Math` or `new` operand, which read `&Value` and would take a copy only because of the lending. */
     rustNilStrLendSites(declaration: any): boolean;
+    /** ral-va: an identifier partner of an optional-string `+` operand whose checker type is string-or-nullish: the
+     *  pair prints the `format!` arm whatever its Rust form (`Value`, `String`, `Option<String>` read), and each of
+     *  those displays as the JS concat does (Str text, Null `null`). */
+    rustNilConcatPartner(other: any): boolean;
     rustNilOptStrConcatUse(n: any): boolean;
     /** The `as_deref().unwrap_or("null")` read of a concat operand keeps its statement within the 400-char line budget. */
     rustOptStrConcatFits(n: any): boolean;
@@ -829,6 +833,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSbDictAliasDecl(declaration: any): boolean;
     private rustSbAliasDeferred;
     rustAssignmentOpKind(op: any): boolean;
+    /** ral-ua: `acc += x` (statement) with `acc` a checker-string local the solve leaves boxed (its decision is not taken
+     *  during seeding: the join is assumed, then re-checked) and `x` a `string | undefined`, within the 400-char line. */
+    rustPlusEqualsJoinOperand(n: any): boolean;
     rustScalarUseFormOwn(n: any, kind: string): string | undefined;
     private static readonly RUST_WS_CLIENT_VALUE_METHODS;
     rustWsClientCallArg(call: any, kind: string): boolean;
@@ -3332,6 +3339,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVenueStrReturnLocal(node: any): string | undefined;
     /** Another read of the same local inside the call the argument belongs to, not itself a borrowing slot. */
     rustVenueStrMovedInCall(arg: any): boolean;
+    /** ral-va: a typed string read in a by-value list element whose box copies (`Value::from(x.clone())`, not its last use):
+     *  it leaves the local in place, so a borrow of the same local in that call needs no copy of its own. */
+    rustScalarBoxCopies(u: any): boolean;
     /** A literal, an identifier, a field read, or a call: the converted argument stays short. */
     rustVenueStrSimpleArg(arg: any): boolean;
     /** The argument node lands in a per-venue string slot of its call. */
