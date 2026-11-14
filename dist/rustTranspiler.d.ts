@@ -1251,6 +1251,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustOkeyKind(receiver: any, read: any): 'map' | 'value' | undefined;
     /** A one-level read `m[k]` (not a write target, not a chain link) on an `rustOkeyKind` receiver. */
     rustOkeyReadUse(n: any): boolean;
+    /** ral-yg: `this.urls['<lit>'][k]` read only (no write, chain link, delete or update) where `this.urls['<lit>']` is the
+     *  base-declared string-keyed map (`rustUrlsMapEntry`): the native read takes the borrowed key off the map the boxed
+     *  read reached (a non-map entry or a `None` key reads Null, as `get_value` did on a non-map or a `Null` key). */
+    rustUrlsKeyReadUse(n: any): boolean;
     /** uh: the use's local is initialised by `c ? 'a' : 'b'` (both arms string literals). */
     rustStrLiteralTernaryLocal(n: any): boolean;
     /** Element-access hook: the native read of an `okey` use. */

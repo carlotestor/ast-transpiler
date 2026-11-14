@@ -13671,3 +13671,26 @@ describe('ral-yg: a typed string element keying a local map literal that is only
         expect(out).toContain('let mut symbol: Value = ');
     });
 });
+
+describe('ral-yg: a string element of a list parameter keying the base-declared this.urls[lit] map reads by the borrowed key', () => {
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-yg-urls-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    urls!: { api: Dict, [key: string]: any };\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    const body = (use: string) => "    pick (api: string[], access: string) {\n        const section = api[0];\n        const url = this.safeString (" + use + ", access);\n        return url;\n    }";
+    test('the key borrows into the urls map read', () => {
+        const out = mk(body("this.urls['api'][section]"));
+        expect(out).toContain('let mut section: Option<String> = ');
+        expect(out).toContain('section.as_deref()) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null })');
+    });
+    test('negative: a key into a map that is not the declared urls entry keeps the boxed element', () => {
+        const out = mk(body("this.urls['other'][section]"));
+        expect(out).toContain('let mut section: Value = ');
+    });
+});

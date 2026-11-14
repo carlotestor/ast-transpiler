@@ -57598,6 +57598,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "key";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
+    if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustUrlsKeyReadUse(n))
+      return "okey";
     if (kind === "str" && this.rustStrLiteralTernaryLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n))
@@ -60447,6 +60449,20 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     const kind = this.rustOkeyKind(read.expression, read);
     return kind === "map" || kind === "value" && RUST_PLAIN_PLACE.test(this.printNode(read.expression, 0).trim());
+  }
+  /** ral-yg: `this.urls['<lit>'][k]` read only (no write, chain link, delete or update) where `this.urls['<lit>']` is the
+   *  base-declared string-keyed map (`rustUrlsMapEntry`): the native read takes the borrowed key off the map the boxed
+   *  read reached (a non-map entry or a `None` key reads Null, as `get_value` did on a non-map or a `Null` key). */
+  rustUrlsKeyReadUse(n) {
+    const read = n.parent;
+    if (!_is.isElementAccessExpression.call(void 0, read) || read.argumentExpression !== n || !this.rustUrlsMapEntry(read.expression))
+      return false;
+    const up = read.parent;
+    if (up === void 0 || _is.isElementAccessExpression.call(void 0, up) && up.expression === read || up.kind === _ast.SyntaxKind.DeleteExpression || _is.isPrefixUnaryExpression.call(void 0, up) || up.kind === _ast.SyntaxKind.PostfixUnaryExpression)
+      return false;
+    if (_is.isBinaryExpression.call(void 0, up) && up.left === read && rustIsAssignmentOperator(up.operatorToken.kind))
+      return false;
+    return this.isNativeAccessPositionSafe(read) && !this.isNativeWriteTargetBase(read);
   }
   /** uh: the use's local is initialised by `c ? 'a' : 'b'` (both arms string literals). */
   rustStrLiteralTernaryLocal(n) {
