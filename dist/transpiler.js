@@ -53738,6 +53738,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "bool";
     if (!isCallExpression6(node))
       return void 0;
+    if (this.rustBaseTypedReturnKind(node) === "bool")
+      return "bool";
     const callee = node.expression;
     if (isPropertyAccessExpression3(callee) && isIdentifier3(callee.expression) && callee.expression.text === "Precise") {
       return _RustTranspiler.RUST_NIL_PRECISE_STR.test(String(callee.name.text)) ? "str" : void 0;
@@ -54221,6 +54223,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (local.kind === "int")
       return `${name} = ${text}.as_i64()`;
+    if (isCallExpression6(node) && this.rustBaseTypedReturnKind(node) === "bool")
+      return `${name} = Some(${this.rustBaseTypedBareText(node)})`;
     if (isCallExpression6(node))
       return `${name} = ${text}.as_bool()`;
     const pick = this.printRustNilBoolTernary(node);

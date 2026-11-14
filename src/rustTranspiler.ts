@@ -2520,6 +2520,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (isBinaryExpression(node) && RustTranspiler.COMPARISON_OPS.has(node.operatorToken.kind)) return 'bool';
         if (this.rustNilDefiniteBool(node)) return 'bool';
         if (!isCallExpression(node)) return undefined;
+        // ta: a base call of the typed-return table answering a Rust `bool` (`isPostOnly`, runtime `inArray`): never undefined
+        if (this.rustBaseTypedReturnKind(node) === 'bool') return 'bool';
         const callee: any = node.expression;
         if (isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === 'Precise') {
             return RustTranspiler.RUST_NIL_PRECISE_STR.test(String(callee.name.text)) ? 'str' : undefined;
@@ -2974,6 +2976,7 @@ export class RustTranspiler extends BaseTranspiler {
             return `${name} = ${text}.as_str().map(str::to_owned)`;
         }
         if (local.kind === 'int') return `${name} = ${text}.as_i64()`;
+        if (isCallExpression(node) && this.rustBaseTypedReturnKind(node) === 'bool') return `${name} = Some(${this.rustBaseTypedBareText(node)})`;
         if (isCallExpression(node)) return `${name} = ${text}.as_bool()`;
         const pick = this.printRustNilBoolTernary(node); if (pick !== undefined) return `${name} = Some(${pick})`;
         const bool = this.peelValueBoolBox(this.stripOuterParens(text));
