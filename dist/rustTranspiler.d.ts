@@ -1337,6 +1337,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarExprHasForCounter(node: any): boolean;
     /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
      *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */
+    /** ral-40a: the identifier under `(x as string)` (parens and a `string` assertion only), else undefined. */
+    rustStrCastLocal(node: any): any;
     rustScalarExpressionUseForm(n: any, kind: string): string | undefined;
     /** `(x as string).split(..)` on a string local: the split prints from the local itself (`rustStrLocalSplitText`). */
     rustCastSplitRecv(cast: any): boolean;

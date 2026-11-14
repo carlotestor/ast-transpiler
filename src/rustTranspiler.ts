@@ -9574,8 +9574,26 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
      *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */
+    /** ral-40a: the identifier under `(x as string)` (parens and a `string` assertion only), else undefined. */
+    rustStrCastLocal(node: any): any {
+        let inner: any = node;
+        let cast = false;
+        while (inner !== undefined && (isParenthesizedExpression(inner) || (isAsExpression(inner) && inner.type?.kind === SyntaxKind.StringKeyword))) {
+            if (isAsExpression(inner)) cast = true;
+            inner = inner.expression;
+        }
+        return cast && isIdentifier(inner) ? inner : undefined;
+    }
+
     rustScalarExpressionUseForm(n, kind: string): string | undefined {
         const parent: any = n.parent;
+        // ral-40a: `(x as string)` as a ws `watch` url / hash slot: the slot reads the string local through the cast
+        if ((kind === 'str' || kind === 'ostr') && isAsExpression(parent) && this.rustStrCastLocal(parent) === n) {
+            let top: any = parent;
+            while (isParenthesizedExpression(top.parent)) top = top.parent;
+            const call: any = top.parent;
+            if (isCallExpression(call) && call.expression !== top && this.rustWsWatchSlot(call, call.arguments.indexOf(top))) return 'targ';
+        }
         if (isParenthesizedExpression(parent) || parent.kind === SyntaxKind.AsExpression) {
             const outer = this.rustScalarUseForm(parent, kind);
             return outer === 'box' || outer === 'xbox' || (outer === 'native' && (isParenthesizedExpression(parent) || this.rustCastSplitRecv(parent))) ? outer : undefined;
@@ -20077,7 +20095,8 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** A `watch` url / hash slot takes `impl Into<Option<&str>>`: a string local or literal as `&str`, anything else lent as `&Value`. */
     rustWsWatchSlotText(arg: any, printed: string): string {
-        const inner: any = this.unwrapParens(arg);
+        // ral-40a: `(url as string)` prints as `url` (the cast is a no-op): the slot reads the local itself
+        const inner: any = this.rustStrCastLocal(arg) ?? this.unwrapParens(arg);
         // ral-yc: an unbound `&str` venue parameter is handed to the slot as the borrow it is
         if (isIdentifier(inner) && this.rustVenueStrParamUnboundRead(inner)) return RustTranspiler.rustLentMark(super.printIdentifier(inner));
         if (this.rustWsStrKey(inner) || (isStringLiteral(inner) && !(inner.text in this.StringLiteralReplacements))) return this.rustWsKeyText(inner);

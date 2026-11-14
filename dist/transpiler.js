@@ -61064,8 +61064,27 @@ ${ind}];`;
   }
   /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
    *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */
+  /** ral-40a: the identifier under `(x as string)` (parens and a `string` assertion only), else undefined. */
+  rustStrCastLocal(node) {
+    let inner = node;
+    let cast = false;
+    while (inner !== void 0 && (isParenthesizedExpression3(inner) || isAsExpression3(inner) && inner.type?.kind === SyntaxKind7.StringKeyword)) {
+      if (isAsExpression3(inner))
+        cast = true;
+      inner = inner.expression;
+    }
+    return cast && isIdentifier3(inner) ? inner : void 0;
+  }
   rustScalarExpressionUseForm(n, kind) {
     const parent = n.parent;
+    if ((kind === "str" || kind === "ostr") && isAsExpression3(parent) && this.rustStrCastLocal(parent) === n) {
+      let top = parent;
+      while (isParenthesizedExpression3(top.parent))
+        top = top.parent;
+      const call = top.parent;
+      if (isCallExpression6(call) && call.expression !== top && this.rustWsWatchSlot(call, call.arguments.indexOf(top)))
+        return "targ";
+    }
     if (isParenthesizedExpression3(parent) || parent.kind === SyntaxKind7.AsExpression) {
       const outer = this.rustScalarUseForm(parent, kind);
       return outer === "box" || outer === "xbox" || outer === "native" && (isParenthesizedExpression3(parent) || this.rustCastSplitRecv(parent)) ? outer : void 0;
@@ -71278,7 +71297,7 @@ ${iden}}`;
   }
   /** A `watch` url / hash slot takes `impl Into<Option<&str>>`: a string local or literal as `&str`, anything else lent as `&Value`. */
   rustWsWatchSlotText(arg, printed) {
-    const inner = this.unwrapParens(arg);
+    const inner = this.rustStrCastLocal(arg) ?? this.unwrapParens(arg);
     if (isIdentifier3(inner) && this.rustVenueStrParamUnboundRead(inner))
       return _RustTranspiler.rustLentMark(super.printIdentifier(inner));
     if (this.rustWsStrKey(inner) || isStringLiteral3(inner) && !(inner.text in this.StringLiteralReplacements))

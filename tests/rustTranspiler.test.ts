@@ -14552,3 +14552,21 @@ describe('ral-40a: bool nil locals written through `!` cycles and bool locals', 
         expect(m).not.toContain('Option<bool>');
     });
 });
+
+describe('ral-40a: `(x as string)` in a ws watch url slot', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    urls: any = {};\n    safeString (o: any, k: any, d: any = undefined): string | undefined { return o[k]; }\n    async watch (url: string, messageHash: string, message: any = undefined, subscribeHash: any = undefined, subscription: any = undefined): Promise<any> { return undefined; }\n}\n";
+    const venue = "import Exchange from '../base/Exchange.js';\nimport type { Dict } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    async watchT (symbol: string, spot: boolean) {\n        let url = undefined;\n        if (spot) {\n            url = this.safeString (this.urls['api'], 'spot');\n        } else {\n            url = this.safeString (this.urls['api'], 'swap');\n        }\n        return await this.watch ((url as string), 'ticker:' + symbol);\n    }\n}\n";
+    test('the nil string local is Option<String> and the slot reads `url.as_deref()` through the cast', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-40a-'));
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        let out = '';
+        try { out = t.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+        expect(out).toContain('let mut url: Option<String> = None');
+        expect(out).toContain('self.watch(url.as_deref(), ');
+        expect(out).not.toContain('url.clone()');
+    });
+});
