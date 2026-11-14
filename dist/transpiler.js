@@ -54145,6 +54145,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     let ok = true;
     let unmoved = false;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      if (this.rustIdentifierIsPropertyName(n) && n.parent?.kind !== SyntaxKind7.ShorthandPropertyAssignment)
+        return true;
       const form = this.rustScalarUseForms.get(n);
       if (form === "slot" || form === "test")
         return true;

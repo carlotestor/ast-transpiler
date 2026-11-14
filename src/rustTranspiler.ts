@@ -2837,6 +2837,8 @@ export class RustTranspiler extends BaseTranspiler {
         let ok = true;
         let unmoved = false;
         this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+            // za: a same-spelled property name (`this.nonce ()`, `this.symbol (..)`) is not a use of the local
+            if (this.rustIdentifierIsPropertyName(n) && n.parent?.kind !== SyntaxKind.ShorthandPropertyAssignment) return true;
             const form = this.rustScalarUseForms.get(n);
             if (form === 'slot' || form === 'test') return true;
             const parent: any = n.parent;
