@@ -71843,7 +71843,7 @@ ${iden}}`;
         return false;
       const up = n.parent;
       if (_is.isBinaryExpression.call(void 0, up) && up.left === n) {
-        return up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _optionalChain([up, 'access', _9867 => _9867.parent, 'optionalAccess', _9868 => _9868.kind]) === _ast.SyntaxKind.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
+        return up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _optionalChain([up, 'access', _9867 => _9867.parent, 'optionalAccess', _9868 => _9868.kind]) === _ast.SyntaxKind.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
       }
       if (_is.isElementAccessExpression.call(void 0, up) && up.expression === n) {
         natives++;
@@ -71985,6 +71985,19 @@ ${iden}}`;
       return false;
     const callee = call.expression;
     return _is.isPropertyAccessExpression.call(void 0, callee) && _is.isIdentifier.call(void 0, callee.expression) && callee.expression.text === "Promise" && String(callee.name.text) === "all";
+  }
+  /** ral-xf: `x = this.sortBy* (x, ..)` (base sort, no venue override) on the built list itself: the runtime sorts the
+   *  items of the `Value::Arr` it is handed and answers a new `Value::Arr` (exchange_stubs.rs sort_by / sort_by2: any
+   *  other variant is handed back as it came, and the moved-in box is always an Arr), so `.into_list()` takes exactly it. */
+  rustBuiltListSelfSort(write, name) {
+    const call = this.rustSkipWrappers(write.right);
+    if (!_is.isCallExpression.call(void 0, call) || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword)
+      return false;
+    const method = String(call.expression.name.text);
+    if (method !== "sortBy" && method !== "sortBy2" || this.rustTestTierSource(call) || !this.rustListPassthroughCall(call))
+      return false;
+    const first = this.rustSkipWrappers(call.arguments[0]);
+    return first !== void 0 && _is.isIdentifier.call(void 0, first) && String(first.text) === name && this.rustBuiltListSelfWriteArg(call.arguments[0], name);
   }
   /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */
   rustBuiltListSelfWriteArg(n, name) {

@@ -2861,6 +2861,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListLentHelperSlot(call: any, n: any): 'inArray' | 'arrayConcat' | 'append' | undefined;
     /** `Promise.all(x)` with `x` its only argument (printed `promise_all(&x)`). */
     rustBuiltListPromiseAllOperand(call: any, n: any): boolean;
+    /** ral-xf: `x = this.sortBy* (x, ..)` (base sort, no venue override) on the built list itself: the runtime sorts the
+     *  items of the `Value::Arr` it is handed and answers a new `Value::Arr` (exchange_stubs.rs sort_by / sort_by2: any
+     *  other variant is handed back as it came, and the moved-in box is always an Arr), so `.into_list()` takes exactly it. */
+    rustBuiltListSelfSort(write: any, name: string): boolean;
     /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */
     rustBuiltListSelfWriteArg(n: any, name: string): boolean;
     /** A right-hand side that answers a `Value::Arr` on every path. */

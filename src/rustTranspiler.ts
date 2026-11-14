@@ -20576,7 +20576,7 @@ export class RustTranspiler extends BaseTranspiler {
             const up: any = n.parent;
             if (isBinaryExpression(up) && up.left === n) {
                 return up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
-                    && (this.rustBuiltListWriteSource(up.right) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== undefined || this.rustDefaultedAliasMove(up) !== undefined) && String(up.parent.getText()).split('\n')[0].length <= 200;
+                    && (this.rustBuiltListWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== undefined || this.rustDefaultedAliasMove(up) !== undefined) && String(up.parent.getText()).split('\n')[0].length <= 200;
             }
             if (isElementAccessExpression(up) && up.expression === n) {
                 natives++;
@@ -20723,6 +20723,18 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isCallExpression(call) || call.arguments.length !== 1 || call.arguments[0] !== n) return false;
         const callee: any = call.expression;
         return isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === 'Promise' && String(callee.name.text) === 'all';
+    }
+
+    /** ral-xf: `x = this.sortBy* (x, ..)` (base sort, no venue override) on the built list itself: the runtime sorts the
+     *  items of the `Value::Arr` it is handed and answers a new `Value::Arr` (exchange_stubs.rs sort_by / sort_by2: any
+     *  other variant is handed back as it came, and the moved-in box is always an Arr), so `.into_list()` takes exactly it. */
+    rustBuiltListSelfSort(write: any, name: string): boolean {
+        const call: any = this.rustSkipWrappers(write.right);
+        if (!isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const method = String(call.expression.name.text);
+        if ((method !== 'sortBy' && method !== 'sortBy2') || this.rustTestTierSource(call) || !this.rustListPassthroughCall(call)) return false;
+        const first: any = this.rustSkipWrappers(call.arguments[0]);
+        return first !== undefined && isIdentifier(first) && String(first.text) === name && this.rustBuiltListSelfWriteArg(call.arguments[0], name);
     }
 
     /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */

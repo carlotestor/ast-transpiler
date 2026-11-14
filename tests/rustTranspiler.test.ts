@@ -13300,3 +13300,26 @@ describe('ral-xf: symbol-named key places and m[k].push receivers on a map liter
         expect(body).toMatch(/let mut grouped: Value = /);
     });
 });
+
+describe('ral-xf: a built list re-sorted in place (x = this.sortBy (x, ..)) stays a native list', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-xf-sortself');
+        const files: Record<string, string> = {"ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    parseRow (x: any): Dict { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    sortBy (array: any[], key: any, descending = false, defaultValue: any = 0): any[] { return array; }\n    filterBySinceLimit (array: any[], since: any = undefined, limit: any = undefined, key = 'timestamp', tail = false): any[] { return array; }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    rows (raw: Dict[], since: any, limit: any) {\n        let result = [];\n        for (let i = 0; i < raw.length; i++) {\n            result.push (this.parseRow (raw[i]));\n        }\n        result = this.sortBy (result, 'timestamp');\n        return this.filterBySinceLimit (result, since, limit);\n    }\n    rowsOther (raw: Dict[], other: any[], since: any, limit: any) {\n        let result = [];\n        for (let i = 0; i < raw.length; i++) {\n            result.push (this.parseRow (raw[i]));\n        }\n        result = this.sortBy (other, 'timestamp');\n        return this.filterBySinceLimit (result, since, limit);\n    }\n}\n"};
+        for (const [ rel, text ] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (dir, rel)), { recursive: true });
+            fs.writeFileSync (path.join (dir, rel), text);
+        }
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('x = sortBy (x, ..): moves in as Value::Arr(x), comes back .into_list()', () => {
+        const body = out.slice (out.indexOf ('fn rows('), out.indexOf ('fn rowsOther'));
+        expect(body).toMatch(/let mut result: crate::value::List = /);
+        expect(body).toMatch(/result = self\.(?:sort_by|sortBy)\(Value::Arr\(result\), [^;]*\)\.into_list\(\);/);
+        expect(body).not.toContain('result.clone()');
+    });
+    test('negative: sorting another list into x keeps the box', () => {
+        const body = out.slice (out.indexOf ('fn rowsOther'));
+        expect(body).toMatch(/let mut result: Value = /);
+    });
+});
