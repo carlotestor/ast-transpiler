@@ -605,6 +605,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustMethodTypedReturnKind(node: any): string | undefined;
     /** `x.m(..)` whose member resolves to a table method of the base tier (or a typed override of one). */
     rustBaseTypedReturnKind(expr: any): string | undefined;
+    /** pg: a call of a precision formatter of the typed-return table (`-> Option<String>`); its locals carry the venue copy veto. */
+    rustPrecisionCall(expr: any): boolean;
+    /** pg: the local is written from a precision formatter, or returned by one of the typed precision methods. */
+    rustPrecisionTouched(declaration: any, scope: any): boolean;
+    /** pg: a later whole write of the local is a precision-formatter call (the 400-char guard watches such locals). */
+    rustPrecisionWritten(declaration: any): boolean;
+    /** pg: some use of the local is an argument of a `Precise.<op>(..)` call. */
+    rustPreciseOperandLocal(declaration: any): boolean;
     /** The unboxed call text. */
     rustBaseTypedBareText(node: any): string;
     /** The call as a `kind` value: the bare text, or `Some(..)` of a non-optional one. */

@@ -55276,6 +55276,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (handOff && isConditionalExpression4(this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === void 0)
       return void 0;
+    if (strKind && copied > 0 && this.rustPrecisionTouched(declaration, scope) && this.rustPreciseOperandLocal(declaration))
+      return void 0;
     if (this.rustVenueScalarSource(declaration.initializer) && (boxed > 0 && !handOff || this.rustVenueLocalHandedOn(declaration))) {
       if (!strKind || this.rustStrNoLend || this.rustOdExcludedCallee(declaration.initializer) || this.rustStrReturnedLocal(declaration, scope) || this.rustVenueLocalHandedOn(declaration) || this.rustReaderDeclTooLong(declaration, kind) || !this.rustReaderLendBoxes(declaration))
         return void 0;
@@ -55338,7 +55340,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (this.rustScalarOptKeyCostly(declaration, kind) === false && kind === "ostr" && this.rustScalarOptKeyCount(declaration) > 0)
       this.rustScalarGuarded.add(declaration);
-    if (guarded || handOff || this.rustStrMethodRecvLocal(declaration))
+    if (guarded || handOff || this.rustStrMethodRecvLocal(declaration) || strKind && this.rustPrecisionWritten(declaration))
       this.rustScalarGuarded.add(declaration);
     if (handOff && copied > 0 && strKind && this.rustStrLendOnly(declaration))
       this.rustStrLentLocals.add(declaration);
@@ -55841,7 +55843,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (node?.kind !== SyntaxKind7.MethodDeclaration || node.body === void 0 || this.isAsyncFunction(node) || !isIdentifier3(node.name))
       return void 0;
     const entry = _RustTranspiler.RUST_BASE_TYPED_METHODS[String(node.name.text)];
-    if (entry === void 0 || String(node.type?.getText?.() ?? "").trim() !== entry[0])
+    if (!Array.isArray(entry) || !entry[0].split("|").includes(String(node.type?.getText?.() ?? "").trim()))
       return void 0;
     return /ts[\\/]src[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? "")) ? entry[1] : void 0;
   }
@@ -55866,6 +55868,44 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (member.kind === SyntaxKind7.MethodDeclaration)
       return this.rustMethodTypedReturnKind(member) ?? (base && _RustTranspiler.RUST_BASE_TYPED_HAND_METHODS.has(name) ? _RustTranspiler.RUST_BASE_TYPED_RUNTIME[name] : void 0);
     return base && member.kind === SyntaxKind7.PropertyDeclaration ? _RustTranspiler.RUST_BASE_TYPED_RUNTIME[name] : void 0;
+  }
+  /** pg: a call of a precision formatter of the typed-return table (`-> Option<String>`); its locals carry the venue copy veto. */
+  rustPrecisionCall(expr) {
+    const node = this.unwrapParens(expr);
+    return node !== void 0 && isCallExpression6(node) && isPropertyAccessExpression3(node.expression) && /^(amount|price|cost|fee|currency)ToPrecision$/.test(String(node.expression.name.text)) && this.rustBaseTypedReturnKind(node) === "ostr";
+  }
+  /** pg: the local is written from a precision formatter, or returned by one of the typed precision methods. */
+  rustPrecisionTouched(declaration, scope) {
+    if (this.rustPrecisionCall(declaration.initializer))
+      return true;
+    if (isMethodDeclaration5(scope) && isIdentifier3(scope.name) && /^(amount|price|cost|fee|currency)ToPrecision$/.test(String(scope.name.text)) && this.rustMethodTypedReturnKind(scope) !== void 0 && this.rustStrReturnedLocal(declaration, scope))
+      return true;
+    return false;
+  }
+  /** pg: a later whole write of the local is a precision-formatter call (the 400-char guard watches such locals). */
+  rustPrecisionWritten(declaration) {
+    let written = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const parent = n.parent;
+      if (isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.EqualsToken && this.rustPrecisionCall(parent.right))
+        written = true;
+      return true;
+    });
+    return written;
+  }
+  /** pg: some use of the local is an argument of a `Precise.<op>(..)` call. */
+  rustPreciseOperandLocal(declaration) {
+    let found = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      let top = n;
+      while (isParenthesizedExpression3(top.parent) || top.parent?.kind === SyntaxKind7.AsExpression)
+        top = top.parent;
+      const call = top.parent;
+      if (isCallExpression6(call) && call.expression !== top && isPropertyAccessExpression3(call.expression) && isIdentifier3(call.expression.expression) && String(call.expression.expression.text) === "Precise" && !this.rustLocalLastUse(n, declaration))
+        found = true;
+      return true;
+    });
+    return found;
   }
   /** The unboxed call text. */
   rustBaseTypedBareText(node) {
@@ -56702,6 +56742,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** A venue typed string is copied out of the `Value` once: a box short of a moving last use, or a hand-on, would copy it again. */
   rustVenueTypedCostly(declaration, kind, copied) {
+    if (kind === "ostr" && copied > 0 && this.rustPrecisionCall(declaration.initializer) && this.rustPreciseOperandLocal(declaration))
+      return true;
     if (this.rustVenueTypedCall(declaration.initializer) === void 0)
       return false;
     return kind === "ostr" && (copied > 0 || this.rustVenueLocalHandedOn(declaration)) || this.rustReaderDeclTooLong(declaration, kind);
@@ -74729,7 +74771,13 @@ _RustTranspiler.RUST_BASE_TYPED_METHODS = {
   findTimeframe: ["Str", "ostr"],
   networkIdToCode: ["Str", "ostr"],
   requestId: ["int", "int"],
-  isPostOnly: ["boolean", "bool"]
+  isPostOnly: ["boolean", "bool"],
+  // pg: the precision formatters answer `Str` (overrides may spell `string`); every return is a string or undefined
+  amountToPrecision: ["Str|string", "ostr"],
+  priceToPrecision: ["Str|string", "ostr"],
+  costToPrecision: ["Str|string", "ostr"],
+  feeToPrecision: ["Str|string", "ostr"],
+  currencyToPrecision: ["Str|string", "ostr"]
 };
 _RustTranspiler.RUST_BASE_TYPED_RUNTIME = {
   milliseconds: "int",
