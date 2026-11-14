@@ -1135,6 +1135,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustOkeyKind(receiver: any, read: any): 'map' | 'value' | undefined;
     /** A one-level read `m[k]` (not a write target, not a chain link) on an `rustOkeyKind` receiver. */
     rustOkeyReadUse(n: any): boolean;
+    /** uh: the use's local is initialised by `c ? 'a' : 'b'` (both arms string literals). */
+    rustStrLiteralTernaryLocal(n: any): boolean;
     /** Element-access hook: the native read of an `okey` use. */
     printOkeyRead(node: any): string | undefined;
     private static readonly RUST_SCALAR_VALUE_OPERAND_OPS;

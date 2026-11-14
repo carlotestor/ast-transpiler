@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -57116,6 +57116,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "key";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
+    if (kind === "str" && this.rustStrLiteralTernaryLocal(n) && this.rustOkeyReadUse(n))
+      return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n))
       return "kin";
     if ((kind === "str" || kind === "ostr") && isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.InKeyword && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n))
@@ -59649,13 +59651,25 @@ ${binding(plan.indent)}` : ""), head: "" };
     const kind = this.rustOkeyKind(read.expression, read);
     return kind === "map" || kind === "value" && RUST_PLAIN_PLACE.test(this.printNode(read.expression, 0).trim());
   }
+  /** uh: the use's local is initialised by `c ? 'a' : 'b'` (both arms string literals). */
+  rustStrLiteralTernaryLocal(n) {
+    const declaration = this.rustDeclaredNode(n);
+    const init = declaration !== void 0 && isVariableDeclaration3(declaration) ? this.unwrapParens(declaration.initializer) : void 0;
+    return init !== void 0 && isConditionalExpression4(init) && this.literalKindOfNode(this.unwrapParens(init.whenTrue)) === "string" && this.literalKindOfNode(this.unwrapParens(init.whenFalse)) === "string";
+  }
   /** Element-access hook: the native read of an `okey` use. */
   printOkeyRead(node) {
     const key = node.argumentExpression;
-    if (!isIdentifier3(key) || this.rustScalarUseForms.get(key) !== "okey" || this.rustScalarLocalOf(key)?.kind !== "ostr")
+    const keyKind = isIdentifier3(key) && this.rustScalarUseForms.get(key) === "okey" ? this.rustScalarLocalOf(key)?.kind : void 0;
+    if (keyKind !== "ostr" && keyKind !== "str")
       return void 0;
     const recv = this.printNode(node.expression, 0).trim();
     const name = super.printIdentifier(key);
+    if (keyKind === "str") {
+      if (this.rustOkeyKind(node.expression, node) === "map")
+        return `${recv}.get(${name}.as_str()).cloned().unwrap_or(Value::Null)`;
+      return `(if let Some(__m) = ${recv}.as_map() { __m.get(${name}.as_str()).cloned().unwrap_or(Value::Null) } else { Value::Null })`;
+    }
     if (this.rustOkeyKind(node.expression, node) === "map")
       return `${recv}.get(${name}.as_deref().unwrap_or("")).cloned().unwrap_or(Value::Null)`;
     return `(if let (Some(__m), Some(__k)) = (${recv}.as_map(), ${name}.as_deref()) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null })`;
