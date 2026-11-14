@@ -28,7 +28,7 @@ var require_dirname = __commonJS({
 init_esm_shims();
 var import_dirname = __toESM(require_dirname(), 1);
 import { ScriptTarget, SyntaxKind as SyntaxKind9 } from "typescript/unstable/ast";
-import { API as API3, CheckFlags, ElementFlags as ElementFlags2, IndexKind as IndexKind5, ObjectFlags as ObjectFlags2, SignatureKind as SignatureKind3, SymbolFlags as SymbolFlags4, TypeFlags as TypeFlags7, TypeFormatFlags } from "typescript/unstable/sync";
+import { API as API4, CheckFlags, ElementFlags as ElementFlags2, IndexKind as IndexKind5, ObjectFlags as ObjectFlags2, SignatureKind as SignatureKind3, SymbolFlags as SymbolFlags4, TypeFlags as TypeFlags7, TypeFormatFlags } from "typescript/unstable/sync";
 
 // src/pythonTranspiler.ts
 init_esm_shims();
@@ -51193,6 +51193,7 @@ import { NodeFlags as NodeFlags4, SyntaxKind as SyntaxKind7 } from "typescript/u
 import { isArrayBindingPattern, isArrayLiteralExpression as isArrayLiteralExpression4, isArrowFunction as isArrowFunction5, isAsExpression as isAsExpression3, isBinaryExpression as isBinaryExpression5, isBindingElement, isBlock as isBlock4, isCallExpression as isCallExpression6, isClassDeclaration as isClassDeclaration4, isClassExpression as isClassExpression2, isConditionalExpression as isConditionalExpression4, isDeleteExpression as isDeleteExpression2, isElementAccessExpression as isElementAccessExpression4, isForInStatement as isForInStatement2, isForOfStatement as isForOfStatement2, isIdentifier as isIdentifier3, isMethodDeclaration as isMethodDeclaration5, isNoSubstitutionTemplateLiteral, isNonNullExpression as isNonNullExpression2, isNumericLiteral as isNumericLiteral4, isObjectLiteralExpression as isObjectLiteralExpression4, isParameterDeclaration as isParameterDeclaration3, isParenthesizedExpression as isParenthesizedExpression3, isPostfixUnaryExpression as isPostfixUnaryExpression3, isPrefixUnaryExpression as isPrefixUnaryExpression3, isPropertyAccessExpression as isPropertyAccessExpression3, isReturnStatement as isReturnStatement4, isShorthandPropertyAssignment as isShorthandPropertyAssignment2, isSourceFile as isSourceFile5, isStatement, isStringLiteral as isStringLiteral3, isStringLiteralLikeNode as isStringLiteralLikeNode4, isTypeAssertion as isTypeAssertion3, isVariableDeclaration as isVariableDeclaration3 } from "typescript/unstable/ast/is";
 import { IndexKind as IndexKind4, ObjectFlags, SignatureKind as SignatureKind2, SymbolFlags as SymbolFlags3, TypeFlags as TypeFlags6 } from "typescript/unstable/sync";
 import * as fs3 from "fs";
+import * as tsSync2 from "typescript/unstable/sync";
 var RUST_PLAIN_PLACE = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
 var parserConfig6 = {
   "ELSEIF_TOKEN": "else if",
@@ -70249,7 +70250,199 @@ ${iden}}`;
       return false;
     }
     const slot = typed?.params?.[at];
+    if (slot === void 0 && String(fn.name?.text) === "sign" && at === 3)
+      return this.rustSignParamsProvenMap(fn) && !this.rustLocalIsReassigned(d, String(d.name.text));
     return slot !== void 0 && String(slot.rustType).startsWith("impl Into<crate::Params>") && !this.rustLocalIsReassigned(d, String(d.name.text));
+  }
+  /** A venue `sign (path, api, method, params)` whose `params` is a map on every path. `params` reaches `sign` only
+   *  through `fetch2` (from `request`, every implicit endpoint and the venue's own direct calls); the base declares
+   *  it `Dict`, but a list body passes through untouched (`omit` hands a list back, and `into_dict()` would empty
+   *  it). So the venue is proven when every request-path call in its own file, its pro file and each subclass file
+   *  that inherits this `sign` hands over a map: an object literal, a map builder (`extend`, `deepExtend`,
+   *  `keysort`, `ordered`, `omit` of a proven map), a `Dict` parameter, a `handle*AndParams` params slot, a method
+   *  declared `Dict`, or a local whose every write is one of these. Any list literal, any dynamic `this[name] (..)`
+   *  / `callDynamically` call, or anything else unproven fails the venue (fail closed). */
+  rustSignParamsProvenMap(fn) {
+    const file = String(fn.getSourceFile().fileName).replace(/\\/g, "/");
+    const m = /^(.*ts\/src\/)((?:prediction\/)?[a-z0-9]+)\.ts$/.exec(file);
+    if (m === null || isClassExpression2(fn.parent))
+      return false;
+    const key = m[1] + m[2];
+    const hit = _RustTranspiler.RUST_SIGN_MAP_PROOF.get(key);
+    if (hit !== void 0)
+      return hit;
+    _RustTranspiler.RUST_SIGN_MAP_PROOF.set(key, false);
+    let ok = false;
+    try {
+      ok = this.rustSignParamsProofUncached(m[1], m[2]);
+    } catch (e) {
+      ok = false;
+    }
+    _RustTranspiler.RUST_SIGN_MAP_PROOF.set(key, ok);
+    return ok;
+  }
+  rustSignParamsProofUncached(root, venue) {
+    const api = _RustTranspiler.rustSignProofApi ??= new tsSync2.API({ cwd: process.cwd() });
+    const dirs = venue.startsWith("prediction/") ? ["prediction/"] : ["", "pro/"];
+    const parsed = /* @__PURE__ */ new Map();
+    const parse = (rel) => {
+      if (!parsed.has(rel))
+        parsed.set(rel, fs3.existsSync(root + rel + ".ts") ? api.createSourceFile(root + rel + ".ts", fs3.readFileSync(root + rel + ".ts", "utf8")) : void 0);
+      return parsed.get(rel);
+    };
+    const classOf = (sf) => sf?.statements?.find((s) => isClassDeclaration4(s));
+    const ownMethod = (cls, name) => cls?.members?.find((x) => isMethodDeclaration5(x) && String(x.name?.text) === name);
+    const parentOf = (rel) => {
+      const sf = parse(rel);
+      const cls = classOf(sf);
+      const base = cls?.heritageClauses?.[0]?.types?.[0]?.expression;
+      if (base === void 0 || !isIdentifier3(base))
+        return void 0;
+      for (const st of sf.statements) {
+        if (st.kind !== SyntaxKind7.ImportDeclaration || st.importClause?.name?.text !== base.text)
+          continue;
+        const spec = String(st.moduleSpecifier.text).replace(/\.js$/, "");
+        if (!spec.startsWith(".") || spec.includes("abstract") || spec.includes("base/"))
+          return void 0;
+        const parts = (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/") + 1) : "").split("/").filter((x) => x !== "");
+        for (const seg of spec.split("/")) {
+          if (seg === "..")
+            parts.pop();
+          else if (seg !== ".")
+            parts.push(seg);
+        }
+        return parts.join("/");
+      }
+      return void 0;
+    };
+    const files = [];
+    for (const dir of dirs) {
+      if (!fs3.existsSync(root + dir))
+        continue;
+      for (const f of fs3.readdirSync(root + dir))
+        if (f.endsWith(".ts"))
+          files.push(dir + f.slice(0, -3));
+    }
+    const owners = files.filter((rel) => {
+      let r = rel;
+      const seen = /* @__PURE__ */ new Set();
+      while (r !== void 0 && !seen.has(r)) {
+        seen.add(r);
+        if (r === venue)
+          return true;
+        if (!r.startsWith("pro/") && ownMethod(classOf(parse(r)), "sign") !== void 0)
+          return false;
+        r = parentOf(r);
+      }
+      return false;
+    });
+    if (!owners.includes(venue))
+      return false;
+    const names = /* @__PURE__ */ new Set(["request", "fetch2"]);
+    const abstractOf = (rel) => {
+      const a = root + "abstract/" + rel.replace(/^pro\//, "") + ".ts";
+      if (!fs3.existsSync(a))
+        return;
+      for (const mm of fs3.readFileSync(a, "utf8").matchAll(/^ {4}([A-Za-z0-9]+) \(params/gm))
+        names.add(mm[1]);
+    };
+    for (let r = venue; r !== void 0; r = parentOf(r))
+      abstractOf(r);
+    if (names.size === 2)
+      return false;
+    const thisCall = (n) => n !== void 0 && isCallExpression6(n) && isPropertyAccessExpression3(n.expression) && n.expression.expression.kind === SyntaxKind7.ThisKeyword;
+    const builders = /* @__PURE__ */ new Set(["extend", "deepExtend", "keysort", "ordered"]);
+    const declaredDict = (sf, rel, name) => {
+      for (let r = rel; r !== void 0; r = parentOf(r)) {
+        const md = ownMethod(classOf(parse(r)), name);
+        if (md !== void 0)
+          return md.type !== void 0 && /^(?:Promise<)?Dict>?$/.test(String(md.type.getText()));
+      }
+      return false;
+    };
+    const enclosingFn = (n) => {
+      let x = n.parent;
+      while (x !== void 0 && !isFunctionLike(x))
+        x = x.parent;
+      return x;
+    };
+    const isMap = (sf, rel, arg, depth) => {
+      if (arg === void 0)
+        return true;
+      if (depth > 6)
+        return false;
+      while (isParenthesizedExpression3(arg) || isAsExpression3(arg) || arg.kind === SyntaxKind7.AwaitExpression)
+        arg = arg.expression;
+      if (isObjectLiteralExpression4(arg))
+        return true;
+      if (isConditionalExpression4(arg))
+        return isMap(sf, rel, arg.whenTrue, depth + 1) && isMap(sf, rel, arg.whenFalse, depth + 1);
+      if (thisCall(arg)) {
+        const callee = String(arg.expression.name.text);
+        if (builders.has(callee))
+          return true;
+        if (callee === "omit")
+          return isMap(sf, rel, arg.arguments[0], depth + 1);
+        return declaredDict(sf, rel, callee);
+      }
+      if (!isIdentifier3(arg))
+        return false;
+      const fnNode = enclosingFn(arg);
+      if (fnNode === void 0)
+        return false;
+      const p = Array.from(fnNode.parameters ?? []).find((x) => isIdentifier3(x.name) && x.name.text === arg.text);
+      if (p !== void 0)
+        return p.type !== void 0 && /^Dict\b/.test(String(p.type.getText())) || p.type === void 0 && p.initializer !== void 0 && isObjectLiteralExpression4(p.initializer);
+      let writes = 0;
+      let good = true;
+      const visit = (n) => {
+        if (!good)
+          return;
+        if (isVariableDeclaration3(n) && isIdentifier3(n.name) && n.name.text === arg.text) {
+          writes++;
+          good = n.initializer !== void 0 && isMap(sf, rel, n.initializer, depth + 1);
+        } else if (isBindingElement(n) && isIdentifier3(n.name) && n.name.text === arg.text) {
+          writes++;
+          const init = n.parent?.parent?.initializer;
+          good = n.parent.elements.indexOf(n) >= 1 && thisCall(init) && /AndParams/.test(String(init.expression.name.text)) && Array.from(init.arguments).some((x) => isMap(sf, rel, x, depth + 1));
+        } else if (isBinaryExpression5(n) && n.operatorToken.kind === SyntaxKind7.EqualsToken) {
+          if (isIdentifier3(n.left) && n.left.text === arg.text) {
+            writes++;
+            good = isMap(sf, rel, n.right, depth + 1);
+          } else if (isArrayLiteralExpression4(n.left) && n.left.elements.some((e) => isIdentifier3(e) && e.text === arg.text)) {
+            writes++;
+            const at = n.left.elements.findIndex((e) => isIdentifier3(e) && e.text === arg.text);
+            const rhs = n.right;
+            good = at >= 1 && thisCall(rhs) && /AndParams/.test(String(rhs.expression.name.text)) && Array.from(rhs.arguments).some((x) => isMap(sf, rel, x, depth + 1));
+          }
+        }
+        n.forEachChild?.(visit);
+      };
+      visit(fnNode.body);
+      return good && writes > 0;
+    };
+    for (const rel of owners) {
+      const sf = parse(rel);
+      let ok = true;
+      const visit = (n) => {
+        if (!ok)
+          return;
+        if (isElementAccessExpression4(n) && n.expression.kind === SyntaxKind7.ThisKeyword && isCallExpression6(n.parent) && n.parent.expression === n)
+          ok = false;
+        else if (thisCall(n) && String(n.expression.name.text) === "callDynamically")
+          ok = false;
+        else if (thisCall(n) && names.has(String(n.expression.name.text))) {
+          const callee = String(n.expression.name.text);
+          if (!isMap(sf, rel, callee === "request" || callee === "fetch2" ? n.arguments[3] : n.arguments[0], 0))
+            ok = false;
+        }
+        n.forEachChild?.(visit);
+      };
+      visit(sf);
+      if (!ok)
+        return false;
+    }
+    return true;
   }
   /** The `params` slot of a typed unified call (`impl Into<crate::Params> + Send`): `From<Value> for Params` takes the
    *  boxed map exactly as it took the `Value` local, so a dict local boxes there once (moved at the last use). */
@@ -79805,6 +79998,7 @@ _RustTranspiler.RUST_BASE_FILTER_LISTS = /* @__PURE__ */ new Set([
   "filterByCurrencySinceLimit",
   "filterBySymbolsSinceLimit"
 ]);
+_RustTranspiler.RUST_SIGN_MAP_PROOF = /* @__PURE__ */ new Map();
 // ── ral-qa: rustSafeValueKeyReadSource / rustSafeValueKeyReaderUse ──
 // `const o = this.safeValue (r, k[, d])` (base hand-written reader) whose every use is a base reader at a literal
 // string key (`this.safeX (o, 'k')`) or a `o.k` / `o['k']` read. Invariant: a string-key read of any non-map Value
@@ -80913,7 +81107,7 @@ function getProgramWideDiagnostics(program) {
 }
 var processApi;
 function getApi(cache) {
-  cache.api ??= processApi ??= new API3({ cwd: process.cwd() });
+  cache.api ??= processApi ??= new API4({ cwd: process.cwd() });
   return cache.api;
 }
 function createSnapshotProgram(cache, rootFiles, files) {

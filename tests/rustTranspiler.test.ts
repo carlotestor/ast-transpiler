@@ -14080,3 +14080,28 @@ describe('ral-yh: a safeList local rewritten only with its own kind holds the li
         expect(out).toContain('orders = Value::from(vec![]).into_opt_list();');
     });
 });
+
+describe('ral-zh: sign params of a venue whose every request-path caller hands a map', () => {
+    const write = (name: string, venue: string, caller: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    omit (x: any, ...args: any): any { return x; }\n    extend (...args: any): any { return {}; }\n    extractParams (s: string): string[] { return []; }\n    urlencode (o: any): string { return ''; }\n    json (o: any): string { return ''; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/' + name + '.ts'), "import _Exchange from '../base/Exchange.js';\nexport default abstract class Exchange extends _Exchange {\n    publicGetX (params = {}): Promise<any> {\n        return this.omit (params);\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/' + name + '.ts'), "import Exchange from './abstract/" + name + ".js';\nimport type { Dict } from './base/Exchange.js';\nexport default class " + name + " extends Exchange {\n" + caller + venue + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/' + name + '.ts')).content;
+    };
+    const sign = "    sign (path: string, api = 'public', method = 'GET', params = {}, headers: any = undefined, body: any = undefined) {\n        let url = '/' + path;\n        const query = this.omit (params, this.extractParams (path));\n        if (Object.keys (query).length) {\n            url += '?' + this.urlencode (query);\n        }\n        body = this.json (query);\n        return [ url, body ];\n    }\n";
+    test('every implicit-endpoint caller passes a map: the omit of sign params holds the Dict', () => {
+        const out = write ('zhsignok', sign, "    async f (params: Dict = {}) {\n        const request: Dict = { 'a': 1 };\n        return await this.publicGetX (this.extend (request, params));\n    }\n");
+        expect(out).toContain('let mut query: crate::value::Dict = ');
+    });
+    test('negative: one caller passes a list body: the omit keeps its box', () => {
+        const out = write ('zhsignlist', sign, "    async f (params: Dict = {}) {\n        return await this.publicGetX ([ params ]);\n    }\n");
+        expect(out).not.toContain('let mut query: crate::value::Dict = ');
+    });
+    test('negative: a dynamic this[name] call keeps the box', () => {
+        const out = write ('zhsigndyn', sign, "    async f (name: string, params: Dict = {}) {\n        return await this[name] (params);\n    }\n");
+        expect(out).not.toContain('let mut query: crate::value::Dict = ');
+    });
+});
