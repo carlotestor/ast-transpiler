@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -56830,6 +56830,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "kin";
     if (isCallExpression6(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== void 0)
       return "native";
+    if ((kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustMathMinMaxValueOperand(n) && this.rustInlineIfMatchInit(this.rustDeclaredNode(n)))
+      return "box";
     if (this.rustVenueStrLocalArg(n))
       return "targ";
     if (this.rustLimitArgUse(n, kind))
@@ -58179,6 +58181,25 @@ ${binding(plan.indent)}` : ""), head: "" };
     const kind = this.rustArithCallKind(node);
     const text = kind === void 0 ? void 0 : this.rustArithCallText(kind, node);
     return text === void 0 ? void 0 : this.rustScalarBoxText(kind, text, node);
+  }
+  /** qb: a local whose initializer prints as an inline `if` / `match` (a ternary, or runtime arithmetic): the
+   *  ternary / match result family. Reader, self-call, nil-declared and element-read locals belong to other families. */
+  rustInlineIfMatchInit(declaration) {
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0)
+      return false;
+    const init = this.unwrapParens(declaration.initializer);
+    return isConditionalExpression4(init) || isBinaryExpression5(init) && _RustTranspiler.RUST_SCALAR_ARITH_OPS.has(init.operatorToken.kind);
+  }
+  /** qb: `n` is an argument of a two-operand `Math.min|max` the printer keeps as the runtime helper (no native kind). */
+  rustMathMinMaxValueOperand(n) {
+    const call = n.parent;
+    if (call === void 0 || !isCallExpression6(call) || call.expression === n || call.arguments.length !== 2 || !call.arguments.some((a) => a === n))
+      return false;
+    const callee = call.expression;
+    if (!isPropertyAccessExpression3(callee) || !isIdentifier3(callee.expression) || callee.expression.text !== "Math")
+      return false;
+    const name = String(callee.name.text);
+    return (name === "min" || name === "max") && this.rustArithCallKind(call) === void 0;
   }
   /** `this.sum(..)` / `Math.min|max(a, b)`: a call whose own kind comes from its operands. */
   rustArithCombinator(node) {

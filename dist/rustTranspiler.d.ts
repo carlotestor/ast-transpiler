@@ -939,6 +939,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustArithOperandKind(node: any): string | undefined;
     /** A combinator over a typed operand prints native and boxes its result once. */
     printRustArithCall(node: any): string | undefined;
+    /** qb: a local whose initializer prints as an inline `if` / `match` (a ternary, or runtime arithmetic): the
+     *  ternary / match result family. Reader, self-call, nil-declared and element-read locals belong to other families. */
+    rustInlineIfMatchInit(declaration: any): boolean;
+    /** qb: `n` is an argument of a two-operand `Math.min|max` the printer keeps as the runtime helper (no native kind). */
+    rustMathMinMaxValueOperand(n: any): boolean;
     /** `this.sum(..)` / `Math.min|max(a, b)`: a call whose own kind comes from its operands. */
     rustArithCombinator(node: any): boolean;
     private static readonly RUST_MATH_FLOAT_OPS;
