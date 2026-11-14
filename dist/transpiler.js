@@ -58635,6 +58635,8 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustScalarIdentifierKind(node) {
     if (node === void 0 || !isIdentifier3(node) || node.text === "undefined")
       return void 0;
+    if (this.rustI64CounterOperand(node))
+      return "int";
     const scalar = this.rustScalarLocalOf(node)?.kind;
     if (scalar !== void 0)
       return scalar;
@@ -58904,6 +58906,11 @@ ${binding(plan.indent)}` : ""), head: "" };
         const kind = a.endsWith("int") && b.endsWith("int") ? "int" : "num";
         return a.startsWith("o") || b.startsWith("o") ? `o${kind}` : kind;
       }
+      if (op === SyntaxKind7.PercentToken) {
+        const a = this.rustScalarNumericKind(node.left);
+        const k = this.rustScalarIntLiteral(this.unwrapParens(node.right));
+        return (a === "int" || a === "oint") && k !== void 0 && Number(k) !== 0 ? a : void 0;
+      }
       if (op === SyntaxKind7.SlashToken) {
         const a = this.rustScalarNumericKind(node.left);
         const divisor = this.rustScalarFloatLiteral(node.right);
@@ -59171,6 +59178,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     return kind === void 0 ? void 0 : { kind, text: `${super.printIdentifier(inner)}.${_RustTranspiler.RUST_PARAM_READ[kind]}` };
   }
   rustScalarRecvName(node) {
+    if (this.rustI64CounterOperand(this.unwrapParens(node)) && this.rustI64CounterUse(this.unwrapParens(node)))
+      return String(this.unwrapParens(node).text);
     return this.rustScalarParamRead(node)?.text ?? super.printIdentifier(this.unwrapParens(node));
   }
   rustScalarParamOperand(node) {
@@ -59611,7 +59620,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (inner === void 0)
       return false;
     if (isIdentifier3(inner))
-      return this.rustScalarLocalOf(inner) !== void 0;
+      return this.rustScalarLocalOf(inner) !== void 0 || this.rustI64CounterOperand(inner);
     if (isBinaryExpression5(inner))
       return this.rustScalarOwnsOperand(inner.left) || this.rustScalarOwnsOperand(inner.right);
     if (isPropertyAccessExpression3(inner))
@@ -59660,7 +59669,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const optional = kind.startsWith("o");
     const wrap = (t) => own === kind ? t : optional && own === kind.slice(1) ? `Some(${t})` : void 0;
     if (isIdentifier3(node)) {
-      const name = super.printIdentifier(node);
+      const name = this.rustI64CounterOperand(node) && this.rustI64CounterUse(node) ? String(node.text) : super.printIdentifier(node);
       if (kind === "num" && own === "int")
         return `(${name} as f64)`;
       const source = this.rustScalarLocalOf(node)?.declaration;
@@ -59671,7 +59680,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       const op = node.operatorToken.kind;
       if (own === "bool")
         return wrap(this.rustScalarCompareText(node, false));
-      const sign = op === SyntaxKind7.PlusToken ? "+" : op === SyntaxKind7.MinusToken ? "-" : op === SyntaxKind7.AsteriskToken ? "*" : "/";
+      const sign = op === SyntaxKind7.PlusToken ? "+" : op === SyntaxKind7.MinusToken ? "-" : op === SyntaxKind7.AsteriskToken ? "*" : op === SyntaxKind7.PercentToken ? "%" : "/";
       if (own === "oint" || own === "onum")
         return own === kind ? this.rustScalarOptArithText(own.slice(1), node, sign) : void 0;
       const text = `(${this.rustScalarOperandText(own, node.left)} ${sign} ${this.rustScalarOperandText(own, node.right)})`;
@@ -59762,7 +59771,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const op = node.operatorToken.kind;
     if (op === SyntaxKind7.PlusEqualsToken || op === SyntaxKind7.MinusEqualsToken)
       return this.rustScalarCompoundText(node, false);
-    if (!_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) || this.isEqualityOp(op))
+    if (!_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) && op !== SyntaxKind7.PercentToken || this.isEqualityOp(op))
       return void 0;
     if (!this.rustScalarOwnsOperand(node.left) && !this.rustScalarOwnsOperand(node.right))
       return void 0;
@@ -60321,7 +60330,7 @@ ${binding(plan.indent)}` : ""), head: "" };
           return target === kind || target === `o${kind}` ? "native" : void 0;
         return this.rustScalarPlainValueTarget(parent.left) ? "xbox" : void 0;
       }
-      if (_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) && this.rustScalarExpressionKind(parent) !== void 0)
+      if ((_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) || op === SyntaxKind7.PercentToken) && this.rustScalarExpressionKind(parent) !== void 0)
         return "native";
       if (this.rustTbCounterBound(parent, n, kind) !== void 0)
         return "native";
@@ -65013,6 +65022,9 @@ ${ind}let ${view}: &${map} = &${arc};
     let statements;
     let typed = false;
     if (bound !== void 0 && counter !== void 0) {
+      const scope = this.rustEnclosingFunction(node);
+      if (scope !== void 0 && !isSourceFile5(scope) && !this.rustScalarSolved.has(scope) && !this.rustScalarSolving.has(scope))
+        this.rustScalarSolveScope(scope);
       const before = this.forLoopCounter;
       const previous = this.rustI64Counters.get(counter.name);
       this.rustI64Counters.set(counter.name, counter.symbol);
@@ -65112,7 +65124,7 @@ ${idn}}`;
       if (id.kind !== SyntaxKind7.Identifier || this.rustIdentifierIsPropertyName(id) || this.rustSymbolOf(id) !== counter.symbol)
         continue;
       const up = id.parent;
-      const admissible = isElementAccessExpression4(up) && up.argumentExpression === id || this.rustI64BoxedUse(id) || this.rustI64LiteralCompare(id) !== void 0 || isVariableDeclaration3(up) && up.initializer === id;
+      const admissible = isElementAccessExpression4(up) && up.argumentExpression === id || this.rustI64BoxedUse(id) || this.rustI64LiteralCompare(id) !== void 0 || isVariableDeclaration3(up) && up.initializer === id || isBinaryExpression5(up) && (_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(up.operatorToken.kind) || up.operatorToken.kind === SyntaxKind7.PercentToken) || isPropertyAccessExpression3(up) && up.expression === id && up.name.text === "toString" && isCallExpression6(up.parent) && up.parent.expression === up;
       if (!admissible)
         return void 0;
     }
@@ -65146,6 +65158,14 @@ ${idn}}`;
   /** A bare counter use that is an argument of a `this.m(..)` call or the value of an `x[k] = i` write. */
   rustI64BoxedUse(id) {
     const up = id.parent;
+    if (isReturnStatement4(up) && up.expression === id)
+      return this.rustEnclosingFunction(id) === this.rustEnclosingFunction(this.rustDeclaredNode(id));
+    if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.right === id && isIdentifier3(up.left))
+      return up.parent?.kind === SyntaxKind7.ExpressionStatement;
+    if (up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === id)
+      return true;
+    if (isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && up.expression.name.text === "push" && up.expression.expression.kind !== SyntaxKind7.ThisKeyword && up.arguments.length === 1 && up.arguments[0] === id)
+      return true;
     if (isCallExpression6(up)) {
       const callee = up.expression;
       return callee.kind === SyntaxKind7.PropertyAccessExpression && callee.expression.kind === SyntaxKind7.ThisKeyword && up.arguments.some((a) => a === id);
@@ -65209,6 +65229,13 @@ ${idn}}`;
     if (this.rustI64CounterOf(key) === void 0 || read !== void 0 && this.isWriteBackBindRead(read))
       return void 0;
     return this.rustI64CounterUse(key) ? `Value::Int(${String(key.text)})` : void 0;
+  }
+  /** xb: a use of a registered counter in its own function, outside any scalar scope solve (decisions never see a trial counter). */
+  rustI64CounterOperand(node) {
+    if (this.rustI64Counters.size === 0 || this.rustScalarSolving.size > 0 || this.rustI64CounterOf(node) === void 0)
+      return false;
+    const declaration = this.rustDeclaredNode(node);
+    return declaration !== void 0 && this.rustEnclosingFunction(declaration) === this.rustEnclosingFunction(node);
   }
   /** The registered counter's symbol when `node` is a use of it, else undefined. */
   rustI64CounterOf(node) {
@@ -74365,6 +74392,8 @@ ${this.getIden(identation)}}`;
     const receiver = node?.expression?.expression;
     const sbLocal = receiver !== void 0 && isIdentifier3(receiver) ? this.rustScalarLocalOf(receiver) : void 0;
     if (sbLocal !== void 0 && this.rustScalarUseForms.get(receiver) === "xbox" && this.rustSbCopyBoxUse(receiver, sbLocal.kind))
+      return `Value::Str(format!("{}", ${name}).into())`;
+    if (receiver !== void 0 && this.rustI64CounterOperand(this.unwrapParens(receiver)) && this.rustI64CounterUse(this.unwrapParens(receiver)))
       return `Value::Str(format!("{}", ${name}).into())`;
     const kind = this.rustOperandKind(receiver);
     if (kind !== "number" && kind !== "string")

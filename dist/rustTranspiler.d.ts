@@ -1946,6 +1946,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustI64IndexText(keyNode: any, place: string): string;
     /** A registered `i64` counter as a helper key (`Value::Int(i)`); a read the ccxt write-back binds keeps the counter `Value`. */
     rustI64HelperKeyText(keyNode: any, read?: any): string | undefined;
+    /** xb: a use of a registered counter in its own function, outside any scalar scope solve (decisions never see a trial counter). */
+    rustI64CounterOperand(node: any): boolean;
     /** The registered counter's symbol when `node` is a use of it, else undefined. */
     rustI64CounterOf(node: any): any;
     private rustI64ClosedUses;
