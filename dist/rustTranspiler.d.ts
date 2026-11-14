@@ -547,6 +547,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrLendOnly(declaration: any): boolean;
     /** Every box of the string sits where the `Value` form cloned it (a `this.` / `super.` argument) or is its
      *  moving last use, and no use reads it by reference: lending there costs the one copy the clone made. */
+    /** sc: the initializer is a call of another `this.` method (sync or awaited) that the scalar seed typed as a string */
+    rustScOwnSelfCall(init: any): boolean;
     rustStrLendSites(declaration: any): boolean;
     /** Every non-moving box of the string is a slot where the `Value` form cloned it (a `this.`/`super.` argument,
      *  an object-literal value, a dict write or an array element), so lending there adds no copy. */
