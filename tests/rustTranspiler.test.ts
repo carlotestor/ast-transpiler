@@ -13323,3 +13323,25 @@ describe('ral-xf: a built list re-sorted in place (x = this.sortBy (x, ..)) stay
         expect(body).toMatch(/let mut result: Value = /);
     });
 });
+
+describe('ral-xf: a list literal with a bare local element read only by index is a native list (its elements as the box printed them)', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-xf-bareelem');
+        const files: Record<string, string> = {"ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    pair (row: Dict) {\n        const ticker = this.safeString (row, 't');\n        const ids = [ ticker, ticker + '-NO' ];\n        const out = [];\n        for (let i = 0; i < 2; i++) {\n            out.push ({ 'id': ids[i] });\n        }\n        return out;\n    }\n    pairKept (row: Dict) {\n        const ticker = this.safeString (row, 't');\n        const ids = [ ticker, ticker + '-NO' ];\n        ids.push (this.hold (ids));\n        return ids;\n    }\n}\n"};
+        for (const [ rel, text ] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (dir, rel)), { recursive: true });
+            fs.writeFileSync (path.join (dir, rel), text);
+        }
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('[ ticker, ticker + .. ] (the box copies ticker): the vec! holds the same element texts, reads go native', () => {
+        const body = out.slice (out.indexOf ('fn pair('), out.indexOf ('fn pairKept'));
+        expect(body).toMatch(/let mut ids: crate::value::List = std::sync::Arc::new\(vec!\[ticker\.clone\(\)\.map\(Value::from\)/);
+        expect(body).toMatch(/ids\.get\(i as usize\)/);
+    });
+    test('negative: a list read inside its own push keeps the box', () => {
+        const body = out.slice (out.indexOf ('fn pairKept'));
+        expect(body).toMatch(/let mut ids: Value = /);
+    });
+});

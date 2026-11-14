@@ -20754,8 +20754,9 @@ export class RustTranspiler extends BaseTranspiler {
         const rhs: any = this.rustSkipWrappers(right);
         if (rhs === undefined) return false;
         // a bare local element would be copied into the native literal, unless it moves there at its last use (ral-tf)
-        if (isArrayLiteralExpression(rhs)) return !rhs.elements.some((e: any) => e.kind === SyntaxKind.SpreadElement || (isIdentifier(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)))
-            && (!rhs.elements.some((e: any) => isIdentifier(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== undefined);
+        if (isArrayLiteralExpression(rhs)) return (!rhs.elements.some((e: any) => e.kind === SyntaxKind.SpreadElement || (isIdentifier(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)))
+            && (!rhs.elements.some((e: any) => isIdentifier(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== undefined))
+            || this.rustBuiltListBoxedLiteral(rhs) !== undefined;
         return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs);
     }
 
@@ -20864,9 +20865,35 @@ export class RustTranspiler extends BaseTranspiler {
         return `vec![${m[1]}]`;
     }
 
+    /** ral-xf: a literal with bare local elements, exactly as its `Value` box printed it (`Value::from(vec![a.clone(), ..])`):
+     *  the native `vec![..]` holds the same element texts, so each copy the box made is the only one (none added). */
+    rustBuiltListBoxedLiteral(node: any): string | undefined {
+        if (node.elements?.some((e: any) => e.kind === SyntaxKind.SpreadElement)) return undefined;
+        const m = /^Value::from\(vec!\[([\s\S]*)\]\)$/.exec(this.printNode(node, 0).trim());
+        if (m === null) return undefined;
+        // the box's top-level element texts: a bare local printed plain (`vec![x]`) is copied later by ccxt's clone pass,
+        // which reads the boxed literal only, so a native literal would move it while a reader follows: refused
+        const parts: string[] = [];
+        let depth = 0, from = 0;
+        for (let i = 0; i < m[1].length; i++) {
+            const c = m[1][i];
+            if (c === '(' || c === '[' || c === '{') depth++;
+            else if (c === ')' || c === ']' || c === '}') depth--;
+            else if (c === ',' && depth === 0) { parts.push(m[1].slice(from, i).trim()); from = i + 1; }
+        }
+        parts.push(m[1].slice(from).trim());
+        const elements: any[] = Array.from(node.elements ?? []);
+        if (parts.length !== elements.length) return undefined;
+        for (let i = 0; i < elements.length; i++) {
+            const id: any = this.rustSkipWrappers(elements[i]);
+            if (isIdentifier(id) && !this.rustBuiltListMovedElement(elements[i]) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(parts[i])) return undefined;
+        }
+        return `vec![${m[1]}]`;
+    }
+
     printBuiltListLiteral(node: any): string {
         if (node.elements?.some((e: any) => isIdentifier(this.rustSkipWrappers(e)))) {
-            const moved = this.rustBuiltListMovedLiteral(node);
+            const moved = this.rustBuiltListMovedLiteral(node) ?? this.rustBuiltListBoxedLiteral(node);
             if (moved !== undefined) return `std::sync::Arc::new(${moved})`;
         }
         const native = this.rustVecNativeLiteral({ initializer: node });

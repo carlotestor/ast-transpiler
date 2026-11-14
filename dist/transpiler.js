@@ -72021,7 +72021,7 @@ ${iden}}`;
     if (rhs === void 0)
       return false;
     if (isArrayLiteralExpression4(rhs))
-      return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement || isIdentifier3(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)) && (!rhs.elements.some((e) => isIdentifier3(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== void 0);
+      return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement || isIdentifier3(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)) && (!rhs.elements.some((e) => isIdentifier3(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== void 0) || this.rustBuiltListBoxedLiteral(rhs) !== void 0;
     return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs);
   }
   /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
@@ -72149,9 +72149,41 @@ ${iden}}`;
       return void 0;
     return `vec![${m[1]}]`;
   }
+  /** ral-xf: a literal with bare local elements, exactly as its `Value` box printed it (`Value::from(vec![a.clone(), ..])`):
+   *  the native `vec![..]` holds the same element texts, so each copy the box made is the only one (none added). */
+  rustBuiltListBoxedLiteral(node) {
+    if (node.elements?.some((e) => e.kind === SyntaxKind7.SpreadElement))
+      return void 0;
+    const m = /^Value::from\(vec!\[([\s\S]*)\]\)$/.exec(this.printNode(node, 0).trim());
+    if (m === null)
+      return void 0;
+    const parts = [];
+    let depth = 0, from = 0;
+    for (let i = 0; i < m[1].length; i++) {
+      const c = m[1][i];
+      if (c === "(" || c === "[" || c === "{")
+        depth++;
+      else if (c === ")" || c === "]" || c === "}")
+        depth--;
+      else if (c === "," && depth === 0) {
+        parts.push(m[1].slice(from, i).trim());
+        from = i + 1;
+      }
+    }
+    parts.push(m[1].slice(from).trim());
+    const elements = Array.from(node.elements ?? []);
+    if (parts.length !== elements.length)
+      return void 0;
+    for (let i = 0; i < elements.length; i++) {
+      const id = this.rustSkipWrappers(elements[i]);
+      if (isIdentifier3(id) && !this.rustBuiltListMovedElement(elements[i]) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(parts[i]))
+        return void 0;
+    }
+    return `vec![${m[1]}]`;
+  }
   printBuiltListLiteral(node) {
     if (node.elements?.some((e) => isIdentifier3(this.rustSkipWrappers(e)))) {
-      const moved = this.rustBuiltListMovedLiteral(node);
+      const moved = this.rustBuiltListMovedLiteral(node) ?? this.rustBuiltListBoxedLiteral(node);
       if (moved !== void 0)
         return `std::sync::Arc::new(${moved})`;
     }

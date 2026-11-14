@@ -2886,6 +2886,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListMovedElement(e: any): boolean;
     /** ral-tf: the element list of a literal with moved bare elements, exactly as its `Value` box printed it (no added copy). */
     rustBuiltListMovedLiteral(node: any): string | undefined;
+    /** ral-xf: a literal with bare local elements, exactly as its `Value` box printed it (`Value::from(vec![a.clone(), ..])`):
+     *  the native `vec![..]` holds the same element texts, so each copy the box made is the only one (none added). */
+    rustBuiltListBoxedLiteral(node: any): string | undefined;
     printBuiltListLiteral(node: any): string;
     printBuiltListDeclaration(declaration: any, indent: string, varName: string): string | undefined;
     rustOptListGuardedMove(write: any): any;
