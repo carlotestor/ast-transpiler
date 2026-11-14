@@ -61113,7 +61113,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (watchCall !== void 0)
       return watchCall;
     const args = this.rustPrintedArgs(node, identation);
-    if (args.length < fixed || args.length > 0 && args[args.length - 1].startsWith("&["))
+    if (args.length < fixed || args.length > 0 && args[args.length - 1].startsWith("&[") && !this.rustOmitLiteralKeys(node))
       return void 0;
     const params = this.rustCalleeParams(node);
     const cloned = args.map((a, at) => at >= node.arguments.length || this.rustVenueStrSlot(params, at) !== void 0 || this.rustMarketSlot(params, at) || this.rustCurrencySlot(params, at) ? a : this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== void 0 ? a : at < fixed && this.rustOwnedArgText(node.arguments[at], a) !== a ? `${a}` : this.rustSliceArgText(a));
@@ -67990,6 +67990,8 @@ ${iden}}`;
     const init = this.rustSkipWrappers(declaration.initializer);
     if (isArrayLiteralExpression4(init))
       return this.rustBuiltListLocal(declaration);
+    if (this.rustDefaultedListRead(init) && isIdentifier3(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
+      return this.rustBuiltListLocal(declaration);
     if (!this.rustLentListSource(init))
       return false;
     const defaulted = this.rustDefaultedListRead(init);
@@ -69811,9 +69813,10 @@ ${iden}}`;
     if (/[\\/]test[\\/]/.test(String(declaration.getSourceFile?.()?.fileName ?? "")))
       return false;
     const init = declaration.initializer;
-    if (init === void 0 || !isArrayLiteralExpression4(init) || init.elements.some((e) => e.kind === SyntaxKind7.SpreadElement))
+    const read = init !== void 0 && this.rustDefaultedListRead(this.rustSkipWrappers(init));
+    if (init === void 0 || !read && (!isArrayLiteralExpression4(init) || init.elements.some((e) => e.kind === SyntaxKind7.SpreadElement)))
       return false;
-    const type = this.typeOfNodeIfAny(declaration.name);
+    const type = this.typeOfNodeIfAny(read ? init : declaration.name);
     if (type === void 0 || !this.getChecker().isArrayType(type))
       return false;
     const name = String(declaration.name.text);
@@ -69822,7 +69825,7 @@ ${iden}}`;
       return false;
     if (this.rustReadBearerKindOfDeclaration(declaration) !== false || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustBorrowedDictLocal(declaration) || this.rustNilLocalKind(declaration) !== void 0 || this.rustScalarLocalKind(declaration) !== void 0)
       return false;
-    if (String(init.getText()).split("\n")[0].length > 120 || !this.rustBuiltListWriteSource(init))
+    if (String(init.getText()).split("\n")[0].length > (read ? 240 : 120) || !this.rustBuiltListWriteSource(init))
       return false;
     const boxes = [];
     let natives = 0;
@@ -69969,6 +69972,9 @@ ${iden}}`;
   printBuiltListDeclaration(declaration, indent, varName) {
     if (!this.rustLentListLocal(declaration) || !this.rustBuiltLists.has(declaration))
       return void 0;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    if (!isArrayLiteralExpression4(init))
+      return `${indent}let mut ${varName}: crate::value::List = ${this.printNode(declaration.initializer, 0).trim()}.into_list()`;
     return `${indent}let mut ${varName}: crate::value::List = ${this.printBuiltListLiteral(declaration.initializer)}`;
   }
   printBuiltListWrite(left, right) {

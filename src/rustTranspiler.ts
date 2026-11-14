@@ -10063,7 +10063,8 @@ export class RustTranspiler extends BaseTranspiler {
     printOptionalArgsSliceCall(node, receiver: string, methodName: string, fixed: number, identation: number): string | undefined {
         const watchCall = this.printWsWatchCall(node, receiver, methodName, identation); if (watchCall !== undefined) return watchCall;
         const args = this.rustPrintedArgs(node, identation);
-        if (args.length < fixed || (args.length > 0 && args[args.length - 1].startsWith('&['))) return undefined;
+        // a trailing `&[..]` is an already-sliced tail, except the `&["a", ..]` key slot of a literal omit (ral-ra)
+        if (args.length < fixed || (args.length > 0 && args[args.length - 1].startsWith('&[') && !this.rustOmitLiteralKeys(node))) return undefined;
         const params = this.rustCalleeParams(node);
         const cloned = args.map((a, at) => at >= node.arguments.length || this.rustVenueStrSlot(params, at) !== undefined || this.rustMarketSlot(params, at) || this.rustCurrencySlot(params, at) ? a : this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : (at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== undefined ? a : (at < fixed && this.rustOwnedArgText(node.arguments[at], a) !== a ? `\u0004${a}` : this.rustSliceArgText(a))));
         return `${receiver}.${methodName}(${cloned.slice(0, fixed).join(', ')}${fixed > 0 ? ', ' : ''}&[${cloned.slice(fixed).join(', ')}])`;
@@ -16954,6 +16955,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (typeof source === 'string' && /[\\/]test[\\/]/.test(source)) return false;
         const init: any = this.rustSkipWrappers(declaration.initializer);
         if (isArrayLiteralExpression(init)) return this.rustBuiltListLocal(declaration);
+        // ral-ra: a reassigned `[]`-defaulted `safeList*` read whose every write is a list producer is a built list too
+        if (this.rustDefaultedListRead(init) && isIdentifier(declaration.name) && this.rustLocalIsReassigned(declaration, String(declaration.name.text))) return this.rustBuiltListLocal(declaration);
         if (!this.rustLentListSource(init)) return false;
         // a defaulted read boxes its shared handle only when it also has a length or index read
         const defaulted = this.rustDefaultedListRead(init);
@@ -18651,8 +18654,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (list?.kind !== SyntaxKind.VariableDeclarationList || list.declarations?.length !== 1 || list.parent?.kind !== SyntaxKind.VariableStatement) return false;
         if (/[\\/]test[\\/]/.test(String(declaration.getSourceFile?.()?.fileName ?? ''))) return false;
         const init: any = declaration.initializer;
-        if (init === undefined || !isArrayLiteralExpression(init) || init.elements.some((e: any) => e.kind === SyntaxKind.SpreadElement)) return false;
-        const type: any = this.typeOfNodeIfAny(declaration.name);
+        const read = init !== undefined && this.rustDefaultedListRead(this.rustSkipWrappers(init));
+        if (init === undefined || !read && (!isArrayLiteralExpression(init) || init.elements.some((e: any) => e.kind === SyntaxKind.SpreadElement))) return false;
+        const type: any = this.typeOfNodeIfAny(read ? init : declaration.name);
         if (type === undefined || !this.getChecker().isArrayType(type)) return false;
         const name = String(declaration.name.text);
         const fn: any = this.rustEnclosingFunction(declaration);
@@ -18660,7 +18664,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustReadBearerKindOfDeclaration(declaration) !== false || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration)
             || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustBorrowedDictLocal(declaration)
             || this.rustNilLocalKind(declaration) !== undefined || this.rustScalarLocalKind(declaration) !== undefined) return false;
-        if (String(init.getText()).split('\n')[0].length > 120 || !this.rustBuiltListWriteSource(init)) return false;
+        if (String(init.getText()).split('\n')[0].length > (read ? 240 : 120) || !this.rustBuiltListWriteSource(init)) return false;
         const boxes: [any, 'clone' | 'move' | 'lend'][] = [];
         let natives = 0;
         let handOffs = 0;
@@ -18798,6 +18802,8 @@ export class RustTranspiler extends BaseTranspiler {
 
     printBuiltListDeclaration(declaration: any, indent: string, varName: string): string | undefined {
         if (!this.rustLentListLocal(declaration) || !this.rustBuiltLists.has(declaration)) return undefined;
+        const init: any = this.rustSkipWrappers(declaration.initializer);
+        if (!isArrayLiteralExpression(init)) return `${indent}let mut ${varName}: crate::value::List = ${this.printNode(declaration.initializer, 0).trim()}.into_list()`;
         return `${indent}let mut ${varName}: crate::value::List = ${this.printBuiltListLiteral(declaration.initializer)}`;
     }
 
