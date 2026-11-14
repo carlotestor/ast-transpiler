@@ -55900,7 +55900,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "onum";
     if (this.rustVenueParseToInt(node))
       return "int";
-    if (this.rustVenueInitializer(node) && this.rustVenueStrCall(node))
+    if ((this.rustVenueInitializer(node) || this.rustNilVenueWrite(node)) && this.rustVenueStrCall(node))
       return "ostr";
     if (fresh && this.rustVenueInitializer(node) && this.rustVenueIntCall(node))
       return "int";
@@ -57024,6 +57024,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return true;
     });
     return handed;
+  }
+  /** ral-wa: the whole right side of an `x = <call>;` statement writing a nil-declared (`let x;`) local: the
+   *  venue result moves into the `Option<String>` local as printed (no box, no copy). */
+  rustNilVenueWrite(node) {
+    let current = node;
+    while (isParenthesizedExpression3(current.parent))
+      current = current.parent;
+    const up = current.parent;
+    if (!isBinaryExpression5(up) || up.right !== current || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const declaration = isIdentifier3(up.left) ? this.rustDeclaredNode(up.left) : void 0;
+    return declaration !== void 0 && isVariableDeclaration3(declaration) && (declaration.initializer === void 0 || this.literalKindOfNode(declaration.initializer) === "null");
   }
   /** The whole initializer of a `let`/`const` (writes and ternary arms keep their `Value`). */
   rustVenueInitializer(node) {

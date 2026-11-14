@@ -788,6 +788,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  (each would copy the `String`). */
     rustVenueScalarSource(init: any): boolean;
     rustVenueLocalHandedOn(declaration: any): boolean;
+    /** ral-wa: the whole right side of an `x = <call>;` statement writing a nil-declared (`let x;`) local: the
+     *  venue result moves into the `Option<String>` local as printed (no box, no copy). */
+    rustNilVenueWrite(node: any): boolean;
     /** The whole initializer of a `let`/`const` (writes and ternary arms keep their `Value`). */
     rustVenueInitializer(node: any): boolean;
     /** A venue `int` result boxed at two or more slots: the `i64` is `Copy`, so each box replaces a `Value` clone. */
