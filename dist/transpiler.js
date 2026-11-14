@@ -66696,6 +66696,7 @@ ${iden}}`;
     let optionalBoxes = 0;
     let paramsBoxes = 0;
     let declaredEndpointWrites = 0;
+    let castLengths = 0;
     let nullWrites = 0;
     let endpointBoxes = 0;
     let plainReads = 0;
@@ -66735,6 +66736,15 @@ ${iden}}`;
           mixed = true;
         from = from ?? kind;
         return String(rhs.getText()).split("\n")[0].length <= 240;
+      }
+      let lenAt = n;
+      while ((isAsExpression3(lenAt.parent) || isParenthesizedExpression3(lenAt.parent)) && lenAt.parent.expression === lenAt)
+        lenAt = lenAt.parent;
+      if (lenAt !== n && isPropertyAccessExpression3(lenAt.parent) && lenAt.parent.expression === lenAt && String(lenAt.parent.name.text) === "length") {
+        lengths++;
+        castLengths++;
+        const use = lenAt.parent.parent;
+        return use?.kind !== SyntaxKind7.PrefixUnaryExpression && use?.kind !== SyntaxKind7.PostfixUnaryExpression && !(isBinaryExpression5(use) && use.left === lenAt.parent && rustIsAssignmentOperator(use.operatorToken.kind));
       }
       if (isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "length") {
         lengths++;
@@ -66848,7 +66858,10 @@ ${iden}}`;
       return void 0;
     if (keyWrites > 0)
       this.rustMutableBuiltLocals.add(declaration);
-    if (lengths > 0 && (from !== "list" || optional))
+    const declaredListOnly = nilDeclared && from === "list" && !mixed && nullTests === 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes;
+    if (castLengths > 0 && !declaredListOnly)
+      return void 0;
+    if (lengths > 0 && (from !== "list" || optional && !declaredListOnly))
       return void 0;
     if (optional) {
       if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !this.rustOptContainerSourceOk(init, from))
@@ -71058,6 +71071,10 @@ ${iden}}`;
     return `Value::Bool(${this.rustOptListName(arg)}.is_some())`;
   }
   printOptListLength(node) {
+    const held = this.rustSkipWrappers(node.expression);
+    const opt = this.rustOptContainerOf(held);
+    if (opt !== void 0 && opt.kind === "list" && this.rustPrintedOptional.has(opt.declaration))
+      return this.printNativeLength(node, this.rustOptListSlice(held));
     if (this.rustOptListOf(node.expression) === void 0)
       return void 0;
     return this.printNativeLength(node, this.rustOptListSlice(node.expression));

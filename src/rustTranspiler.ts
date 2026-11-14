@@ -15750,6 +15750,7 @@ export class RustTranspiler extends BaseTranspiler {
         let optionalBoxes = 0;
         let paramsBoxes = 0;
         let declaredEndpointWrites = 0;
+        let castLengths = 0;
         let nullWrites = 0;
         let endpointBoxes = 0;
         let plainReads = 0;
@@ -15778,6 +15779,16 @@ export class RustTranspiler extends BaseTranspiler {
                 if (from !== undefined && from !== kind) mixed = true;
                 from = from ?? kind;
                 return String(rhs.getText()).split('\n')[0].length <= 240;
+            }
+            // ral-ua: `(x as List).length` reads the same list as `x.length`
+            let lenAt: any = n;
+            while ((isAsExpression(lenAt.parent) || isParenthesizedExpression(lenAt.parent)) && lenAt.parent.expression === lenAt) lenAt = lenAt.parent;
+            if (lenAt !== n && isPropertyAccessExpression(lenAt.parent) && lenAt.parent.expression === lenAt && String(lenAt.parent.name.text) === 'length') {
+                lengths++;
+                castLengths++;
+                const use: any = lenAt.parent.parent;
+                return use?.kind !== SyntaxKind.PrefixUnaryExpression && use?.kind !== SyntaxKind.PostfixUnaryExpression
+                    && !(isBinaryExpression(use) && use.left === lenAt.parent && rustIsAssignmentOperator(use.operatorToken.kind));
             }
             if (isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) === 'length') {
                 lengths++;
@@ -15901,7 +15912,10 @@ export class RustTranspiler extends BaseTranspiler {
         if (extendReuse && (keySets > 0 || boxedElementUses.some((n: any) => !this.rustBoxLineOk(n)))) return undefined;
         if (init !== undefined && isCallExpression(init) && this.rustBuiltReturnSourceKind(init) !== undefined && boxedElementUses.some((n: any) => !this.rustBoxLineOk(n))) return undefined;
         if (keyWrites > 0) this.rustMutableBuiltLocals.add(declaration);
-        if (lengths > 0 && (from !== 'list' || optional)) return undefined;
+        // ral-ua: an all-declared `Promise<List>` optional list (never null-tested) reads its length through the slice (0 for `None`)
+        const declaredListOnly = nilDeclared && from === 'list' && !mixed && nullTests === 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes;
+        if (castLengths > 0 && !declaredListOnly) return undefined;
+        if (lengths > 0 && (from !== 'list' || (optional && !declaredListOnly))) return undefined;
         if (optional) {
             // Null stays distinct from an empty container: the local holds `Option<Dict>` / `Option<List>`.
             if (from === 'api' || (nilDeclared && writes === 0) || (!nilDeclared && !this.rustOptContainerSourceOk(init, from))) return undefined;
@@ -19848,6 +19862,9 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printOptListLength(node: any): string | undefined {
+        const held = this.rustSkipWrappers(node.expression);
+        const opt = this.rustOptContainerOf(held);
+        if (opt !== undefined && opt.kind === 'list' && this.rustPrintedOptional.has(opt.declaration)) return this.printNativeLength(node, this.rustOptListSlice(held));
         if (this.rustOptListOf(node.expression) === undefined) return undefined;
         return this.printNativeLength(node, this.rustOptListSlice(node.expression));
     }
