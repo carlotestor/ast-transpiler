@@ -4946,6 +4946,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isIdentifier(callee.expression) || String(callee.expression.text) !== 'Precise' || !RustTranspiler.RUST_PRECISE_LENT.has(String(callee.name.text))) return false;
         const at = Array.from(call.arguments).indexOf(top);
         if (at < 0 || at >= (String(callee.name.text) === 'stringAbs' || String(callee.name.text) === 'stringNeg' ? 1 : 2)) return false;
+        // a Precise call returned as is stays on the boxed path: the method's native return decision reads it
+        // (gate getGateFuturesSignedAmount -> Option<String> would fall back to -> Value and gain a dispatch arm)
+        let ret: any = call;
+        while (isParenthesizedExpression(ret.parent)) ret = ret.parent;
+        if (isReturnStatement(ret.parent)) return false;
         // a function holding a chain of four nested Precise calls keeps its boxed operands: lending its other operands
         // shortens their lines, and the 400-char guard then prefers boxing the chain's own locals (hibachi orderMessage)
         return !this.rustDeepPreciseChainIn(this.rustEnclosingFunction(call));

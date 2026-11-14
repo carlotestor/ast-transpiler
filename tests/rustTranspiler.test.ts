@@ -12691,4 +12691,14 @@ describe('vd: a typed string operand of a Precise arithmetic entry point is lent
         expect(output).toContain('crate::precise::Precise::stringAbs(&amount)');
         expect(output).not.toContain('amount.clone()');
     });
+    test('negative: a Precise call returned as is keeps its boxed operand (the method keeps its native return and its arms)', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-vd-precise-ret-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport class Client { resolve (v: any, h: any = undefined): void {} }\nexport default class Exchange {\n    id: string = 'x';\n    options: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k]; }\n    hold (a: any): any { return a; }\n    safeDict (o: any, k: any, d: any = undefined): any { return o[k]; }\n    safeNumber (o: any, k: any, d: any = undefined): any { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/Precise.ts'), "export class Precise {\n    static stringMul (a: string | undefined, b: string | undefined): string | undefined { return a; }\n    static stringAbs (a: string | undefined): string | undefined { return a; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue6.ts'), "import Exchange from './base/Exchange.js';\nimport { Precise } from './base/Precise.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue6 extends Exchange {\n    signed (trade: Dict, side: Str): Str {\n        const amount = this.safeString (trade, 'amount');\n        if (side === 'sell') {\n            return Precise.stringAbs (amount);\n        }\n        return amount;\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false });
+        const output = t.transpileRustByPath(path.join(root, 'ts/src/venue6.ts')).content;
+        expect(output).not.toContain('Precise::stringAbs(&amount)');
+    });
 });

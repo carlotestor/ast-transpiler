@@ -56083,6 +56083,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const at = Array.from(call.arguments).indexOf(top);
     if (at < 0 || at >= (String(callee.name.text) === "stringAbs" || String(callee.name.text) === "stringNeg" ? 1 : 2))
       return false;
+    let ret = call;
+    while (_is.isParenthesizedExpression.call(void 0, ret.parent))
+      ret = ret.parent;
+    if (_is.isReturnStatement.call(void 0, ret.parent))
+      return false;
     return !this.rustDeepPreciseChainIn(this.rustEnclosingFunction(call));
   }
   rustDeepPreciseChainIn(scope) {
