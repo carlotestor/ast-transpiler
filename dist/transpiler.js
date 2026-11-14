@@ -67623,7 +67623,7 @@ ${iden}}`;
         return ++lentResponses > 0 && ++reads > 0;
       if ((endpoint || this.rustLentContainerSource(init)) && this.rustLentEndpointSlot(up, n, from))
         return ++lentResponses > 0 && ++reads > 0;
-      if ((from === "dict" || from === "list") && this.rustLentHelperSlot(up, n, from) && (String(up.expression.name.text) !== "json" || endpoint || this.rustLentContainerSource(init)) && !(_RustTranspiler.RUST_LENT_ENCODER_SLOTS.has(String(up.expression.name.text)) && this.rustBaseCallNamed(init, _RustTranspiler.RUST_HANDED_DICT_OMIT) && !this.rustOmitOfDict(init)))
+      if ((from === "dict" || from === "list") && this.rustLentHelperSlot(up, n, from) && (String(up.expression.name.text) !== "json" || endpoint || this.rustLentContainerSource(init)) && !(_RustTranspiler.RUST_LIST_TELLING_SLOTS.has(String(up.expression.name.text)) && this.rustBaseCallNamed(init, _RustTranspiler.RUST_HANDED_DICT_OMIT) && !this.rustOmitOfDict(init)))
         return ++lentResponses > 0 && ++reads > 0;
       if (this.rustLentOptionalHandOff(up, n, init, from, nilDeclared))
         return ++lentNullable > 0 && ++reads > 0;
@@ -67981,7 +67981,7 @@ ${iden}}`;
       return true;
     if (this.rustLentWsSettleSlot(call, arg))
       return true;
-    if (_RustTranspiler.RUST_LENT_ENCODER_SLOTS.has(String(call.expression?.name?.text ?? "")) && init !== void 0 && this.rustBaseCallNamed(init, _RustTranspiler.RUST_HANDED_DICT_OMIT) && !this.rustOmitOfDict(init))
+    if (_RustTranspiler.RUST_LIST_TELLING_SLOTS.has(String(call.expression?.name?.text ?? "")) && init !== void 0 && this.rustBaseCallNamed(init, _RustTranspiler.RUST_HANDED_DICT_OMIT) && !this.rustOmitOfDict(init))
       return false;
     return this.rustLentHelperSlot(call, arg, from) && _RustTranspiler.RUST_LENT_OPTIONAL_HELPERS.has(String(call.expression.name.text));
   }
@@ -78577,6 +78577,11 @@ _RustTranspiler.RUST_SELF_EXTEND = /* @__PURE__ */ new Set(["extend"]);
 _RustTranspiler.RUST_REUSE_SAFE_DICT = /* @__PURE__ */ new Set(["safeDict"]);
 // hand-written helpers whose operand is `impl Into<crate::Value>` / `impl JsonText` (the optional form lends there too)
 _RustTranspiler.RUST_LENT_ENCODER_SLOTS = /* @__PURE__ */ new Set(["urlencode", "rawencode", "urlencodeNested", "urlencodeWithArrayRepeat", "isEmpty"]);
+// ral-xh: of the lent encoder slots only `isEmpty` tells a list from the empty map (`is_empty(Arr[..])` is false):
+// `urlencode` / `rawencode` / `urlencodeNested` / `urlencodeWithArrayRepeat` answer `""` for every non-map operand,
+// exactly what they answer for the empty map `into_dict()` leaves, so an `omit` whose head may be a list body
+// (`sign`'s `params`) still lends there; `json` keeps its own never-null guard.
+_RustTranspiler.RUST_LIST_TELLING_SLOTS = /* @__PURE__ */ new Set(["isEmpty"]);
 _RustTranspiler.RUST_LENT_OPTIONAL_HELPERS = /* @__PURE__ */ new Set(["toArray", "arrayConcat", "json", "urlencode", "rawencode", "urlencodeNested", "urlencodeWithArrayRepeat", "isEmpty"]);
 // ── rustParamReadsByReference / rustReaderTakesContainerByReference: generated readers lend their container ──
 // A generated base reader whose container parameter is only handed to by-reference readers declares it

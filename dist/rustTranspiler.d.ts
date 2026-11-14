@@ -2348,6 +2348,7 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  or a `let` filled by such writes) to a lent `impl Into<crate::Value>` slot. */
     rustLentOptionalHandOff(call: any, arg: any, init: any, from: 'dict' | 'list' | 'api' | undefined, nilDeclared: boolean): boolean;
     private static readonly RUST_LENT_ENCODER_SLOTS;
+    private static readonly RUST_LIST_TELLING_SLOTS;
     private static readonly RUST_LENT_OPTIONAL_HELPERS;
     /** `this.parseX (x as Dict, ..)`: the assertion only retypes the TS side, the argument lands in the same lent slot. */
     rustLentAsHandOff(asArg: any, init: any, from: 'dict' | 'list' | 'api' | undefined, endpoint: boolean, nilDeclared: boolean): boolean;
