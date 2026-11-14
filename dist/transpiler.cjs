@@ -56878,7 +56878,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return strBase !== void 0 ? "ostr" : intBase !== void 0 ? "oint" : numBase !== void 0 ? "onum" : void 0;
       return void 0;
     }
-    const kind = this.rustReaderFallbackKind(fallback);
+    let kind = this.rustReaderFallbackKind(fallback);
+    if (kind === void 0 && _is.isIdentifier.call(void 0, fallback)) {
+      const pk = this.rustOptParamKind(fallback);
+      const same = pk === void 0 ? false : strBase !== void 0 ? pk === "str" || pk === "ostr" : intBase !== void 0 ? pk === "int" || pk === "oint" : numBase !== void 0 && (pk === "num" || pk === "onum");
+      if (same)
+        kind = pk;
+    }
     if (strBase !== void 0)
       return kind === "str" || kind === "ostr" || kind === void 0 && (this.rustReaderFallbackChecked(fallback) === "string" || this.rustVenueStrCall(fallback) || this.rustOptionsElemKind(fallback) === "ostr") ? "ostr" : void 0;
     if (intBase !== void 0)

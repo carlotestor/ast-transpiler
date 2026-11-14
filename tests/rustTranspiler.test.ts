@@ -14530,3 +14530,22 @@ describe('40d: number readers that are the elements of an array literal pushed w
         expect((out.match(/vec!\[Value::from\(price\), Value::from\(amount\)\]/g) ?? []).length).toBe(2);
     });
 });
+
+describe('40d: an integer reader whose default is a typed Option<i64> parameter of a typed signature types (the parameter holds Int or Null only)', () => {
+    const mk = (reader: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-40d-paramdflt-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport type Num = number | undefined;\nexport type Str = string | undefined;\nexport interface Trade { id: string }\nexport default class Exchange {\n    markets: Dict = undefined;\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k] ?? d; }\n    safeNumber (o: any, k: any, d: Num = undefined): Num { return o[k] ?? d; }\n    omit (o: any, k: any): Dict { return o; }\n    ymd (x: any): string { return ''; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Int, Str, Trade } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async fetchMyTrades (symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Trade[]> {\n        const sinceValue = this." + reader + " (params, 'start_date', since);\n        const paramsOmitted: Dict = this.omit (params, 'start_date');\n        const request: Dict = {};\n        if (limit !== undefined) {\n            request['size'] = limit;\n        }\n        if (sinceValue !== undefined) {\n            request['start_date'] = this.ymd (sinceValue);\n        }\n        return [ request, paramsOmitted ] as any;\n    }\n}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['fetchMyTrades'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = typed.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    test('safeInteger (params, k, since) prints Option<i64>', () => {
+        expect(mk('safeInteger')).toMatch(/let mut sinceValue: Option<i64> = /);
+    });
+    test('safeNumber over the same Int parameter (an Int / Float mix) stays Value', () => {
+        expect(mk('safeNumber')).toMatch(/let mut sinceValue: Value = /);
+    });
+});

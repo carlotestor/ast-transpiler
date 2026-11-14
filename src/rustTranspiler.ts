@@ -5654,7 +5654,15 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.literalKindOfNode(fallback) === 'null') return strBase !== undefined ? 'ostr' : (intBase !== undefined ? 'oint' : (numBase !== undefined ? 'onum' : undefined));
             return undefined;
         }
-        const kind = this.rustReaderFallbackKind(fallback);
+        let kind = this.rustReaderFallbackKind(fallback);
+        // 40d: a typed-signature parameter never written in the body holds only its declared kind or `Null`
+        // (rustOptParamKind): the same proof a typed local gives, taken only for a reader of that same kind
+        // (an integer parameter under a number reader is an Int / Float mix and stays)
+        if (kind === undefined && isIdentifier(fallback)) {
+            const pk = this.rustOptParamKind(fallback);
+            const same = pk === undefined ? false : (strBase !== undefined ? (pk === 'str' || pk === 'ostr') : (intBase !== undefined ? (pk === 'int' || pk === 'oint') : (numBase !== undefined && (pk === 'num' || pk === 'onum'))));
+            if (same) kind = pk;
+        }
         // wd: a venue method already printed `-> Option<String>` is a string-or-Null default as it stands
         if (strBase !== undefined) return kind === 'str' || kind === 'ostr' || (kind === undefined && (this.rustReaderFallbackChecked(fallback) === 'string' || this.rustVenueStrCall(fallback) || this.rustOptionsElemKind(fallback) === 'ostr')) ? 'ostr' : undefined;
         if (intBase !== undefined) return kind === 'int' || kind === 'oint' ? 'oint' : undefined;
