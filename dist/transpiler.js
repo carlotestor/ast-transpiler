@@ -51909,6 +51909,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     if (!isVariableDeclaration3(declaration) && !isParameterDeclaration3(declaration))
       return false;
+    const header = declaration.parent?.parent;
+    if (header !== void 0 && (header.kind === SyntaxKind7.ForStatement || header.kind === SyntaxKind7.ForOfStatement || header.kind === SyntaxKind7.ForInStatement))
+      return false;
     if (!this.rustLocalLastUse(node, declaration))
       return false;
     const scope = this.rustEnclosingFunction(declaration);

@@ -536,6 +536,9 @@ export class RustTranspiler extends BaseTranspiler {
         const declaration: any = this.rustDeclarationOfIdentifier(node);
         if (declaration === undefined || declaration.name === node || !isIdentifier(declaration.name)) return false;
         if (!isVariableDeclaration(declaration) && !isParameterDeclaration(declaration)) return false;
+        // a loop-header binding is read again by the condition / incrementor of the next pass
+        const header: any = declaration.parent?.parent;
+        if (header !== undefined && (header.kind === SyntaxKind.ForStatement || header.kind === SyntaxKind.ForOfStatement || header.kind === SyntaxKind.ForInStatement)) return false;
         if (!this.rustLocalLastUse(node, declaration)) return false;
         // a closure below the declaration that names the local may still hold it
         const scope: any = this.rustEnclosingFunction(declaration);

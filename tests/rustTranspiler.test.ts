@@ -247,6 +247,25 @@ describe('rust transpiling tests', () => {
         expect(out).toContain('self.m(c.clone(), f');
     });
 
+    test('a for-loop counter handed off by value is cloned (the next pass reads it again)', () => {
+        const ts = [
+            'class A {',
+            '    m (x: any) { return x; }',
+            '    run (n: any) {',
+            '        let page = undefined;',
+            '        for (let i = 0; i < n; i++) {',
+            '            page = i;',
+            '            this.m (i);',
+            '        }',
+            '        return page;',
+            '    }',
+            '}',
+        ].join('\n');
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).not.toMatch(/page = i;/);
+        expect(out).toContain('self.m(i.clone());');
+    });
+
     test('basic variable declaration', () => {
         const ts = "const x = 1;"
         const rust = "let mut x: Value = Value::Int(1);"
