@@ -12938,3 +12938,26 @@ describe('vd: a typed string operand of a Precise arithmetic entry point is lent
     });
 });
 
+
+describe('wd: a typed string / integer needle of a base inArray is lent (impl InArrayNeedle)', () => {
+    const mk = (venue: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-wd-needle-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base/functions'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/functions/generic.ts'), "// @ts-nocheck\nconst inArray = (needle: any, haystack: any[]): boolean => haystack.includes (needle);\nexport { inArray };\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "import { inArray } from './functions/generic.js';\nexport interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport default class Exchange {\n    inArray = inArray;\n    hold (x: any): any { return x; }\n    safeString (o: any, k: string, d: Str = undefined): Str { return o[k] ?? d; }\n    safeInteger (o: any, k: string, d: Int = undefined): Int { return o[k] ?? d; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        return transpiler.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+    };
+    test('a reader string and a reader integer read again after the inArray pass &x (no box)', () => {
+        const out = mk("import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (e: Dict, codes: string[], ids: number[]) {\n        const code = this.safeString (e, 'c');\n        const n = this.safeInteger (e, 'n');\n        if (this.inArray (code, codes) || this.inArray (n, ids)) {\n            return this.hold ([ code, n ]);\n        }\n        return this.hold ([ n, code ]);\n    }\n}\n");
+        expect(out).toMatch(/let mut code: Option<String> = /);
+        expect(out).toMatch(/let mut n: Option<i64> = /);
+        expect(out).toContain('self.inArray(&code, ');
+        expect(out).toContain('self.inArray(&n, ');
+        expect(out).not.toContain('self.inArray(Value::from(n)');
+    });
+    test('negative: a nil-declared local stays on its own rules (no lend)', () => {
+        const out = mk("import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (e: Dict, ids: number[]) {\n        let n = undefined;\n        n = this.safeInteger (e, 'n');\n        return this.inArray (n, ids);\n    }\n}\n");
+        expect(out).not.toContain('self.inArray(&n, ');
+    });
+});

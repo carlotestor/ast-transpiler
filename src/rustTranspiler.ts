@@ -6151,6 +6151,8 @@ export class RustTranspiler extends BaseTranspiler {
         // vd: a string operand of a `Precise.string<Add|Sub|..>` arithmetic entry point is lent as is (the runtime takes
         // `&impl PreciseArg`: `None` reads as the `Null` box, a string as its `Str`); no box, no copy
         if ((kind === 'str' || kind === 'ostr') && this.rustPreciseLentOperand(n) && this.rustPreciseLendLocal(n)) return 'parg';
+        // wd: the needle of a base `inArray` is lent as is (`impl InArrayNeedle`: same answers as the boxed `is_equal`)
+        if ((kind === 'str' || kind === 'ostr' || kind === 'int' || kind === 'oint') && this.rustInArrayNeedle(n) && this.rustPreciseLendLocal(n)) return 'parg';
         if ((kind === 'str' || kind === 'ostr') && this.rustWsCacheMapKeyUse(n)) return 'fin';
         if (kind === 'bool' && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== undefined) return 'cond';
         if (kind === 'str' || kind === 'ostr') { const fieldForm = this.rustFieldKeyUseForm(n); if (fieldForm !== undefined) return fieldForm; }
@@ -7107,8 +7109,8 @@ export class RustTranspiler extends BaseTranspiler {
         return kind === 'bool' ? super.printIdentifier(inner) : (kind === 'obool' ? `(${super.printIdentifier(inner)} == Some(true))` : undefined);
     }
 
-    /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl Into<Value>, ..)`
-     *  takes an optional string lent as `&x` (`From<&Option<String>>`: `None` is Null, `Some(s)` a `Str`, as the box gave). */
+    /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl InArrayNeedle, ..)`
+     *  takes a typed string / integer lent as `&x` (`None` matches Null, a value the element its box would equal). */
     rustInArrayNeedle(node): boolean {
         const call: any = node?.parent;
         return !this.rustTestTierSource(node) && isCallExpression(call) && call.arguments[0] === node && isPropertyAccessExpression(call.expression)
@@ -7124,6 +7126,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (form === 'cond' && local.kind === 'obool') return `(${super.printIdentifier(node)} == Some(true))`;
         if (form === 'concat' && local.kind === 'ostr') return `${super.printIdentifier(node)}.as_deref().unwrap_or("null")`;
         if (form === 'targ' && (local.kind === 'str' || local.kind === 'ostr') && this.rustWsKeyUse(node)) return this.rustWsKeyText(node);
+        if (form === 'parg' && this.rustInArrayNeedle(node)) return `&${super.printIdentifier(node)}`;
         if (form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'key' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'kin' || form === 'nkey' || form === 'parg') return super.printIdentifier(node);
         if (form === 'err') return this.rustErrMsgMoves(node, local.declaration) ? super.printIdentifier(node) : `${super.printIdentifier(node)}.clone()`;
         if (form === 'inbox') return local.kind === 'ostr' ? `Value::from(&${super.printIdentifier(node)})` : `Value::from(${super.printIdentifier(node)}.as_str())`;

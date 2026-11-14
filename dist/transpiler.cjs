@@ -57310,6 +57310,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "cond";
     if ((kind === "str" || kind === "ostr") && this.rustPreciseLentOperand(n) && this.rustPreciseLendLocal(n))
       return "parg";
+    if ((kind === "str" || kind === "ostr" || kind === "int" || kind === "oint") && this.rustInArrayNeedle(n) && this.rustPreciseLendLocal(n))
+      return "parg";
     if ((kind === "str" || kind === "ostr") && this.rustWsCacheMapKeyUse(n))
       return "fin";
     if (kind === "bool" && this.rustScalarBoolLogicalText(this.rustClimbLogicalWrappers(n)) !== void 0)
@@ -58301,8 +58303,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const kind = _optionalChain([this, 'access', _8931 => _8931.rustScalarLocalOf, 'call', _8932 => _8932(inner), 'optionalAccess', _8933 => _8933.kind]);
     return kind === "bool" ? super.printIdentifier(inner) : kind === "obool" ? `(${super.printIdentifier(inner)} == Some(true))` : void 0;
   }
-  /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl Into<Value>, ..)`
-   *  takes an optional string lent as `&x` (`From<&Option<String>>`: `None` is Null, `Some(s)` a `Str`, as the box gave). */
+  /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl InArrayNeedle, ..)`
+   *  takes a typed string / integer lent as `&x` (`None` matches Null, a value the element its box would equal). */
   rustInArrayNeedle(node) {
     const call = _optionalChain([node, 'optionalAccess', _8934 => _8934.parent]);
     return !this.rustTestTierSource(node) && _is.isCallExpression.call(void 0, call) && call.arguments[0] === node && _is.isPropertyAccessExpression.call(void 0, call.expression) && String(call.expression.name.text) === "inArray" && this.rustBaseTypedReturnKind(call) === "bool";
@@ -58319,6 +58321,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `${super.printIdentifier(node)}.as_deref().unwrap_or("null")`;
     if (form === "targ" && (local.kind === "str" || local.kind === "ostr") && this.rustWsKeyUse(node))
       return this.rustWsKeyText(node);
+    if (form === "parg" && this.rustInArrayNeedle(node))
+      return `&${super.printIdentifier(node)}`;
     if (form === "cond" || form === "concat" || form === "native" || form === "targ" || form === "key" || form === "okey" || form === "fin" || form === "frd" || form === "kin" || form === "nkey" || form === "parg")
       return super.printIdentifier(node);
     if (form === "err")
