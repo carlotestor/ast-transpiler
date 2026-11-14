@@ -61843,7 +61843,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const safe = this.rustLocalUsesAll(element, name, true, (n) => {
       if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn)
         return false;
-      const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) : this.rustIdentifierUseIsCondition(n);
+      const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n);
       if (ok)
         nativeUses++;
       const box = !ok && kind === "string" && this.rustStrSlotBoxUse(n) && (isCallExpression6(n.parent) || isReturnStatement4(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustSlotUseOutsideLoop(n, element));
@@ -61852,6 +61852,15 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       return ok || box;
     });
     return safe && (nativeUses > 0 || kind === "string" && copies === 0) ? kind === "string" ? "str" : "bool" : void 0;
+  }
+  /** qe: `x === true` / `x !== true` on a bool tuple slot: the slot reads `as_bool() == Some(true)`, so the native
+   *  bool answers the strict test exactly (Null and a non-bool are `false` on both sides). Never `=== false`. */
+  rustBoolSlotTrueTest(n) {
+    const up = n.parent;
+    if (!isBinaryExpression5(up) || up.operatorToken.kind !== SyntaxKind7.EqualsEqualsEqualsToken && up.operatorToken.kind !== SyntaxKind7.ExclamationEqualsEqualsToken)
+      return false;
+    const other = this.unwrapParens(up.left === n ? up.right : up.left);
+    return other?.kind === SyntaxKind7.TrueKeyword;
   }
   // ── optional params slots ────────────────────────────────────────────────
   // A literal-tested `Option<String>` tuple slot may also hand itself to a plain `Value` slot (a `this.`/`super.`
@@ -72617,6 +72626,13 @@ ${this.getIden(identation)}}`;
       return void 0;
     const [literal2, other] = leftLiteral ? [left, right] : [right, left];
     const inner = this.unwrapParens(other);
+    if (literal2.kind === SyntaxKind7.TrueKeyword && isIdentifier3(inner) && this.rustBoolSlotTrueTest(inner)) {
+      const slot = this.rustDeclaredNode(inner);
+      if (slot?.kind === SyntaxKind7.BindingElement && slot.name !== inner && this.rustTupleSlotKind(slot) === "bool") {
+        const name = this.printNode(inner, 0).trim();
+        return op === SyntaxKind7.EqualsEqualsToken || op === SyntaxKind7.EqualsEqualsEqualsToken ? name : `!${name}`;
+      }
+    }
     if (inner === void 0 || !isIdentifier3(inner) && !isCallExpression6(inner) || !this.printsValueExpression(inner) || isCallExpression6(inner) && this.rustCallPrintsBool(inner) || this.rustBoolMemberLocal(inner) || this.rustNativeBoolLocal(inner) || !this.rustBoolValue(inner)) {
       return void 0;
     }

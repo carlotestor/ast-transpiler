@@ -1418,6 +1418,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustTupleSlotDecisions;
     rustTupleSlotKind(element: any): string | undefined;
     private rustTupleSlotKindUncached;
+    /** qe: `x === true` / `x !== true` on a bool tuple slot: the slot reads `as_bool() == Some(true)`, so the native
+     *  bool answers the strict test exactly (Null and a non-bool are `false` on both sides). Never `=== false`. */
+    rustBoolSlotTrueTest(n: any): boolean;
     rustStrSlotBoxUse(n: any): boolean;
     /** A `+` operand of a thrown error message: the statement diverges, so the slot moves into its `format!`. */
     rustStrSlotThrownConcat(n: any): boolean;

@@ -10805,7 +10805,7 @@ export class RustTranspiler extends BaseTranspiler {
         let copies = 0;
         const safe = this.rustLocalUsesAll(element, name, true, (n: any) => {
             if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn) return false;
-            const ok = kind === 'string' ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) : this.rustIdentifierUseIsCondition(n);
+            const ok = kind === 'string' ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n);
             if (ok) nativeUses++;
             const box = !ok && kind === 'string' && this.rustStrSlotBoxUse(n) && (isCallExpression(n.parent) || isReturnStatement(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustSlotUseOutsideLoop(n, element));
             if (box && !(isReturnStatement(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustStrSlotLastUse(n, element))) copies++;
@@ -10813,6 +10813,15 @@ export class RustTranspiler extends BaseTranspiler {
         });
         // a string slot only handed back to `Value` slots is typed when each box moves it (no copy of the string)
         return safe && (nativeUses > 0 || (kind === 'string' && copies === 0)) ? (kind === 'string' ? 'str' : 'bool') : undefined;
+    }
+
+    /** qe: `x === true` / `x !== true` on a bool tuple slot: the slot reads `as_bool() == Some(true)`, so the native
+     *  bool answers the strict test exactly (Null and a non-bool are `false` on both sides). Never `=== false`. */
+    rustBoolSlotTrueTest(n: any): boolean {
+        const up: any = n.parent;
+        if (!isBinaryExpression(up) || (up.operatorToken.kind !== SyntaxKind.EqualsEqualsEqualsToken && up.operatorToken.kind !== SyntaxKind.ExclamationEqualsEqualsToken)) return false;
+        const other: any = this.unwrapParens(up.left === n ? up.right : up.left);
+        return other?.kind === SyntaxKind.TrueKeyword;
     }
 
     // ── optional params slots ────────────────────────────────────────────────
@@ -21371,6 +21380,14 @@ export class RustTranspiler extends BaseTranspiler {
         if (leftLiteral === rightLiteral) return undefined;
         const [ literal, other ] = leftLiteral ? [ left, right ] : [ right, left ];
         const inner: any = this.unwrapParens(other);
+        // qe: a native `bool` tuple slot against `true` (the slot reads `as_bool() == Some(true)`): the bool itself
+        if (literal.kind === SyntaxKind.TrueKeyword && isIdentifier(inner) && this.rustBoolSlotTrueTest(inner)) {
+            const slot: any = this.rustDeclaredNode(inner);
+            if (slot?.kind === SyntaxKind.BindingElement && slot.name !== inner && this.rustTupleSlotKind(slot) === 'bool') {
+                const name = this.printNode(inner, 0).trim();
+                return (op === SyntaxKind.EqualsEqualsToken || op === SyntaxKind.EqualsEqualsEqualsToken) ? name : `!${name}`;
+            }
+        }
         if (inner === undefined || (!isIdentifier(inner) && !isCallExpression(inner)) || !this.printsValueExpression(inner)
             || (isCallExpression(inner) && this.rustCallPrintsBool(inner)) || this.rustBoolMemberLocal(inner) || this.rustNativeBoolLocal(inner) || !this.rustBoolValue(inner)) {
             return undefined;
