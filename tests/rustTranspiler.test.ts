@@ -12388,3 +12388,16 @@ describe('ud: a reader string boxed at a lending slot before its last use', () =
         expect(out).not.toContain('topic.clone()');
     });
 });
+
+describe('ud: a venue override of base safeCurrencyCode still prints Option<String>, so its locals take that kind', () => {
+    test('the local is Option<String> from the bare call (no Value round trip)', () => {
+        const dir = path.join (rustFixtureRoot, 'ud-scc-ovr');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    id: string = 'x';\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    hold (a: any, b: any = undefined): any { return a; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    override safeCurrencyCode (currencyId: Str, currency: any = undefined): Str {\n        if (currencyId === 'X') {\n            return 'Y';\n        }\n        return super.safeCurrencyCode (currencyId, currency);\n    }\n    m (u: any) {\n        const code = this.safeCurrencyCode (this.safeString (u, 'c'));\n        if (code === undefined) {\n            return undefined;\n        }\n        return this.hold (code);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut code: Option<String> = self.safeCurrencyCode(');
+        expect(out).toContain('if (code.is_none())');
+        expect(out).not.toContain('.map(Value::from).unwrap_or(Value::Null);');
+    });
+});

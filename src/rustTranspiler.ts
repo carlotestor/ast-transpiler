@@ -4705,7 +4705,8 @@ export class RustTranspiler extends BaseTranspiler {
         // the member is declared on the base class (an override keeps the base signature)
         const member: any = this.getChecker().getSymbolAtLocation(call.expression.name)?.valueDeclaration;
         const owner: any = member?.resolve?.() ?? member;
-        if (owner === undefined || !RustTranspiler.RUST_BASE_TIER_FILE.test(String(owner.getSourceFile?.()?.fileName ?? ''))) return undefined;
+        // ud: a venue override of a base `: Str` method of the native table still prints `-> Option<String>`
+        if ((owner === undefined || !RustTranspiler.RUST_BASE_TIER_FILE.test(String(owner.getSourceFile?.()?.fileName ?? ''))) && !(kind === 'ostr' && this.rustBaseNativeStrCall(call))) return undefined;
         const want = kind === 'ostr' ? 'string' : 'number';
         return this.primitiveKindOfType(this.typeOfNodeIfAny(call)) === want ? kind : undefined;
     }
