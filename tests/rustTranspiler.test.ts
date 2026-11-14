@@ -12878,3 +12878,30 @@ describe('ral-vg: a string element of a never-written all-string list borrows as
         expect(out).not.toContain('Option<&str>');
     });
 });
+
+describe('ral-wg: a string element of a list parameter proven string borrows as Option<&str>', () => {
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-wg-param-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    urls: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeList (o: any, k: any, d: any = undefined): any { return o[k]; }\n    sign (path: string, api: string[] = [ 'public' ], method: string = 'GET', params: Dict = {}): Dict { return {}; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    test('the api element of a sign override (base declares string[]) lends at its boxes', () => {
+        const out = mk("    sign (path: string, api: string[] = [ 'public' ], method: string = 'GET', params: Dict = {}): Dict {\n        const apiName = api[0];\n        const url = this.safeString (this.urls, apiName);\n        if (apiName === 'private') {\n            return { 'url': url + '/' + apiName };\n        }\n        return { 'url': url };\n    }");
+        expect(out).toMatch(/let mut apiName: Option<&str> = api\.get\(0\)\.and_then\(Value::as_str\);/);
+        expect(out).toContain('Value::from(apiName.as_deref())');
+        expect(out).not.toContain('apiName.clone()');
+    });
+    test('a venue-private string[] parameter whose every caller passes string lists', () => {
+        const out = mk("    pick (names: string[]) {\n        const r = [];\n        for (let i = 0; i < names.length; i++) {\n            const name = names[i];\n            r.push (this.safeString (this.urls, name));\n        }\n        return r;\n    }\n    run () {\n        const ks = Object.keys (this.urls);\n        return [ this.pick ([ 'a', 'b' ]), this.pick (ks) ];\n    }");
+        expect(out).toMatch(/let mut name: Option<&str> = names\.get\(i as usize\)\.and_then\(Value::as_str\);/);
+    });
+    test('negative: a caller handing user data (safeList) keeps the Value element', () => {
+        const out = mk("    pick (names: string[]) {\n        const r = [];\n        for (let i = 0; i < names.length; i++) {\n            const name = names[i];\n            r.push (this.safeString (this.urls, name));\n        }\n        return r;\n    }\n    run (params: Dict) {\n        const qs = this.safeList (params, 'queries', []);\n        return this.pick (qs);\n    }");
+        expect(out).not.toMatch(/let mut name: Option<&str>/);
+    });
+});

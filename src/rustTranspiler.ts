@@ -7066,7 +7066,7 @@ export class RustTranspiler extends BaseTranspiler {
         const init: any = this.unwrapParens(declaration.initializer);
         if (init === undefined || !isElementAccessExpression(init) || !isIdentifier(init.expression) || this.rustElementReadScalarKind(init) !== 'ostr') return false;
         const owner: any = this.rustDeclaredNode(init.expression);
-        if (owner === undefined || !isVariableDeclaration(owner) || !isIdentifier(owner.name) || !this.rustExactStrListInit(owner.initializer)) return false;
+        if (owner === undefined || !isIdentifier(owner.name) || !(isVariableDeclaration(owner) ? this.rustExactStrListInit(owner.initializer) : this.rustStrListParam(owner, 0))) return false;
         const recvOk = this.rustLocalUsesAll(owner, String(owner.name.text), true, (n: any) => {
             const up: any = n.parent;
             if (up !== undefined && isElementAccessExpression(up) && up.expression === n) {
@@ -7074,12 +7074,17 @@ export class RustTranspiler extends BaseTranspiler {
                 return !(top !== undefined && ((isBinaryExpression(top) && top.left === up && this.rustAssignmentOpKind(top.operatorToken.kind))
                     || top.kind === SyntaxKind.DeleteExpression || top.kind === SyntaxKind.PrefixUnaryExpression || top.kind === SyntaxKind.PostfixUnaryExpression));
             }
+            // wg: a nil test of the list reads it (`xs === undefined`)
+            if (up !== undefined && isBinaryExpression(up) && this.isEqualityOp(up.operatorToken.kind) && this.literalKindOfNode(up.left === n ? up.right : up.left) === 'null') return true;
             return up !== undefined && isPropertyAccessExpression(up) && up.expression === n && String(up.name.text) === 'length';
         });
         if (!recvOk) return false;
+        // wg: a parameter list's element keys no map (a keyed map decides its own type from a `Value` key)
+        const keyed = isParameterDeclaration(owner);
         return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
             if (this.rustIdentifierIsPropertyName(n)) return n.parent?.kind !== SyntaxKind.ShorthandPropertyAssignment;
             const form = this.rustScalarUseForms.get(n);
+            if (keyed && (form === 'okey' || form === 'kin' || form === 'key' || form === 'inbox')) return false;
             if (form === 'test' || form === 'concat' || form === 'okey' || form === 'kin' || form === 'key' || form === 'inbox') return true;
             if (form !== 'box' && form !== 'xbox') return false;
             const up: any = n.parent;
@@ -7087,6 +7092,87 @@ export class RustTranspiler extends BaseTranspiler {
                 || (isArrayLiteralExpression(up) && !(isBinaryExpression(up.parent) && up.parent.left === up)) || this.rustDictWriteValue(n)
                 || (isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.PlusToken);
         });
+    }
+
+    /** wg: a `string[]` / `Strings` parameter whose list holds only strings: declared so by the base tier (a unified method:
+     *  its callers are the typed API and `fetch2`), or proven at every call site of a venue-private method. */
+    rustStrListParam(param: any, depth: number): boolean {
+        const method: any = param?.parent;
+        if (!isParameterDeclaration(param) || !isIdentifier(param.name) || param.dotDotDotToken !== undefined || !isMethodDeclaration(method) || method.body === undefined) return false;
+        if (!this.rustStrArrayDeclared(param.name)) return false;
+        const baseFile = RustTranspiler.RUST_BASE_TIER_FILE;
+        if (baseFile.test(param.getSourceFile().fileName)) return true;
+        const hidden: any = this.getMethodOverride(method);
+        if (hidden !== undefined) return baseFile.test(hidden.getSourceFile().fileName) && hidden.parameters?.[Array.from(method.parameters).indexOf(param)] !== undefined
+            && this.rustStrArrayDeclared(hidden.parameters[Array.from(method.parameters).indexOf(param)].name);
+        if (depth > 2 || this.rustMethodReferencedAsValue(method) || (method.modifiers ?? []).some((m: any) => m.kind === SyntaxKind.StaticKeyword)) return false;
+        const name = String(method.name?.text ?? '');
+        const index = Array.from(method.parameters as any).indexOf(param);
+        const key = this.rustDeclarationKey(method);
+        let sites = 0;
+        for (const call of this.rustCallSitesForName(name) as any[]) {
+            let declaration: any;
+            try {
+                declaration = signatureDeclaration((this.getChecker() as any).getResolvedSignature(call));
+            } catch (e) {
+                return false;
+            }
+            declaration = declaration?.resolve?.() ?? declaration;
+            if (declaration === undefined || declaration === null) return false;
+            if (this.rustDeclarationKey(declaration) !== key) continue;
+            const arg: any = call.arguments?.[index];
+            if ((call.arguments ?? []).some((a: any) => a.kind === SyntaxKind.SpreadElement) || arg === undefined || !this.rustStrListArg(arg, depth)) return false;
+            sites++;
+        }
+        return sites > 0;
+    }
+
+    /** wg: the declared (checker) type is a list of strings (`string[]`, `Strings`). */
+    rustStrArrayDeclared(node: any): boolean {
+        const checker: any = this.checkerOrUndefined();
+        let type: any = checker === undefined ? undefined : this.typeOfNodeIfAny(node);
+        if (type !== undefined && (type.flags & TypeFlags.Union) !== 0) {
+            const parts = (typeParts(type) ?? []).filter((t: any) => (t.flags & (TypeFlags.Undefined | TypeFlags.Null)) === 0);
+            type = parts.length === 1 ? parts[0] : undefined;
+        }
+        return type !== undefined && checker.isArrayType(type) && this.primitiveKindOfType(checker.getTypeArguments?.(type)?.[0]) === 'string';
+    }
+
+    /** wg: a call argument that is a list of strings: a literal of string-typed elements, a local list initialised so (or by
+     *  `Object.keys`) and only ever pushed string-typed values, or a proven parameter of the caller. Producers of user data
+     *  (`safeList`, a declared `string[]` return) prove nothing about their elements. */
+    rustStrListArg(arg: any, depth: number): boolean {
+        const node: any = this.unwrapParens(arg);
+        if (node === undefined) return false;
+        const strElem = (e: any) => e.kind !== SyntaxKind.SpreadElement && (this.literalKindOfNode(e) === 'string' || this.primitiveKindOfType(this.typeOfNodeIfAny(e)) === 'string');
+        if (isArrayLiteralExpression(node)) return Array.from(node.elements as any).every(strElem);
+        if (!isIdentifier(node)) return false;
+        const declaration: any = this.rustDeclaredNode(node);
+        if (declaration === undefined || !isIdentifier(declaration.name)) return false;
+        // only `.push (string)`, element reads and whole reads: never rebound, element-written or spliced
+        const pushesOnlyStrings = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n: any) => {
+            const up: any = n.parent;
+            if (isBinaryExpression(up) && up.left === n && this.rustAssignmentOpKind(up.operatorToken.kind)) return false;
+            if (isElementAccessExpression(up) && up.expression === n) {
+                const top: any = up.parent;
+                return !(top !== undefined && ((isBinaryExpression(top) && top.left === up && this.rustAssignmentOpKind(top.operatorToken.kind)) || top.kind === SyntaxKind.DeleteExpression
+                    || top.kind === SyntaxKind.PrefixUnaryExpression || top.kind === SyntaxKind.PostfixUnaryExpression));
+            }
+            if (isPropertyAccessExpression(up) && up.expression === n) {
+                const member = String(up.name.text);
+                if (member === 'length') return true;
+                const call: any = up.parent;
+                return member === 'push' && isCallExpression(call) && call.expression === up && call.arguments.length === 1 && strElem(call.arguments[0]);
+            }
+            return true;
+        });
+        if (!pushesOnlyStrings) return false;
+        if (isParameterDeclaration(declaration)) return this.rustStrListParam(declaration, depth + 1);
+        if (!isVariableDeclaration(declaration)) return false;
+        const init: any = this.unwrapParens(declaration.initializer);
+        if (init === undefined) return false;
+        if (isArrayLiteralExpression(init)) return Array.from(init.elements as any).every(strElem);
+        return this.rustExactStrListInit(init);
     }
 
     /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */

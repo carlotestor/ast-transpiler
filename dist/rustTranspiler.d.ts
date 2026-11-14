@@ -984,6 +984,15 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  argument, object-literal value, array element, dict write or `+` operand (`Value::from(k.as_deref())`: the copy the `Value`
      *  clone made, never more). */
     rustBorrowStrElem(declaration: any): boolean;
+    /** wg: a `string[]` / `Strings` parameter whose list holds only strings: declared so by the base tier (a unified method:
+     *  its callers are the typed API and `fetch2`), or proven at every call site of a venue-private method. */
+    rustStrListParam(param: any, depth: number): boolean;
+    /** wg: the declared (checker) type is a list of strings (`string[]`, `Strings`). */
+    rustStrArrayDeclared(node: any): boolean;
+    /** wg: a call argument that is a list of strings: a literal of string-typed elements, a local list initialised so (or by
+     *  `Object.keys`) and only ever pushed string-typed values, or a proven parameter of the caller. Producers of user data
+     *  (`safeList`, a declared `string[]` return) prove nothing about their elements. */
+    rustStrListArg(arg: any, depth: number): boolean;
     /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
     rustExactStrListInit(init: any): boolean;
     rustInArrayNeedle(node: any): boolean;
