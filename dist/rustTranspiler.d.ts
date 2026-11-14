@@ -497,6 +497,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarReceiver(node: any): boolean;
     /** String hand-off locals boxed more than once: each box before the last lends the string. */
     private rustStrLentLocals;
+    /** md: market-field strings lent at their boxes (guarded by their printed name: `type` prints `type_var`). */
+    private rustMarketLentLocals;
     rustScalarLocalKindUncached(declaration: any): string | undefined;
     rustAnyBoolTestedLocal(declaration: any): boolean;
     private rustStrNoLend;

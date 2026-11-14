@@ -51542,6 +51542,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustScalarGuarded = /* @__PURE__ */ new WeakSet();
     /** String hand-off locals boxed more than once: each box before the last lends the string. */
     this.rustStrLentLocals = /* @__PURE__ */ new WeakSet();
+    /** md: market-field strings lent at their boxes (guarded by their printed name: `type` prints `type_var`). */
+    this.rustMarketLentLocals = /* @__PURE__ */ new WeakSet();
     this.rustStrNoLend = false;
     this.rustStrRuntimeBare = /* @__PURE__ */ new Set();
     this.rustBaseTypedBare = /* @__PURE__ */ new Set();
@@ -55077,8 +55079,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (keyLent)
       this.rustStrLentLocals.add(declaration);
-    if (strKind && copied > 0 && this.rustMarketFieldScalar(this.unwrapParens(declaration.initializer)) !== void 0)
+    const marketField = strKind && copied > 0 && this.rustMarketFieldScalar(this.unwrapParens(declaration.initializer)) !== void 0;
+    const marketLent = marketField && !this.rustStrNoLend && this.rustReaderLendBoxes(declaration);
+    if (marketField && !marketLent)
       return void 0;
+    if (marketLent) {
+      this.rustStrLentLocals.add(declaration);
+      this.rustScalarGuarded.add(declaration);
+      this.rustMarketLentLocals.add(declaration);
+    }
     const numericSum = (kind === "int" || kind === "num") && this.rustSumShape(this.unwrapParens(declaration.initializer));
     if (!numericSum && this.rustNewShapeCostly(declaration.initializer, typedUses, kind === "str" || kind === "ostr" ? copied : 0))
       return void 0;
@@ -58155,7 +58164,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     for (const n of this.rustScopeIndex(method.getSourceFile()).nodes) {
       if (!_is.isVariableDeclaration.call(void 0, n) || !this.rustScalarGuarded.has(n) || this.rustEnclosingFunction(n) !== method)
         continue;
-      if (this.rustScalarDecisions.get(n) && lines.some((l) => new RegExp(`\\b${n.name.text}\\b`).test(l)))
+      const shown = this.rustMarketLentLocals.has(n) ? this.printNode(n.name, 0) : n.name.text;
+      if (this.rustScalarDecisions.get(n) && lines.some((l) => new RegExp(`\\b${shown}\\b`).test(l)))
         held.push(n);
     }
     if (held.length === 0)
