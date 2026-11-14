@@ -5875,6 +5875,9 @@ export class RustTranspiler extends BaseTranspiler {
             const trial = this.rustScalarDecisions.get(declaration);
             const form = this.rustScalarUseForms.get(n);
             if ((trial === 'str' || trial === 'ostr') && (form === 'box' || form === 'xbox' || form === 'err' || form === 'key') && !this.rustScalarBoxMoves(n, form, declaration)
+                // 40d: an optional-string insert key prints its key text (`as_deref().unwrap_or("null").to_string()`): one fresh
+                // `String`, exactly the allocation the `stringify_param(&k)` of the boxed key made, so no copy where the `Value` moved
+                && !(form === 'key' && trial === 'ostr')
                 && !(form === 'box' && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== undefined && this.rustScalarSelfArgBox(n))
                 && !(form === 'box' && trial === 'str' && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration))
                 && !(form === 'box' && trial === 'str' && !this.rustStrNoLend && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustLendSlot(n))

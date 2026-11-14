@@ -14501,3 +14501,18 @@ describe('40d: a reader integer that sizes a ws cache-map entry constructor type
         expect(out).not.toContain('limit.clone()');
     });
 });
+
+describe('40d: an optional-string reader keying a map insert before a later box types (the key text is the one allocation stringify_param made)', () => {
+    test('the first code keys holdingCodes and this.balance[..] as as_deref().unwrap_or("null").to_string(); a same-named sibling stays typed', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-40d-optkey-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface BalanceAccount { free: Str; used: Str; total: Str; }\nexport default class Exchange {\n    options: Dict = {};\n    balance: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k] ?? d; }\n    safeDict (o: any, k: any, d: Dict = undefined): Dict { return o[k] ?? d; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    account (): BalanceAccount { return { 'free': undefined, 'used': undefined, 'total': undefined }; }\n    prune (a: any, b: Dict): any { return a; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    handleBalance (holding: Dict, other: Dict) {\n        const holdingCodes: Dict = {};\n        for (let i = 0; i < 2; i++) {\n            const code = this.safeCurrencyCode (this.safeString (holding, 'k'));\n            if (code !== undefined) {\n                holdingCodes[code] = true;\n                this.balance['cash'][code] = {};\n            }\n        }\n        for (let i = 0; i < 2; i++) {\n            const code = this.safeCurrencyCode (this.safeString (other, 'k'));\n            this.balance['margin'] = code;\n        }\n        return holdingCodes;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        expect(out).not.toMatch(/let mut code: Value = /);
+        expect((out.match(/let mut code: Option<String> = /g) ?? []).length).toBe(2);
+        expect(out).toContain('holdingCodes.insert(code.as_deref().unwrap_or("null").to_string(), Value::Bool(true));');
+        expect(out).not.toContain('code.clone()');
+    });
+});
