@@ -60441,7 +60441,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (!intCounter && this.rustScalarExprHasForCounter(other))
       return false;
     if (intCounter)
-      return kind === "int";
+      return kind === "int" || kind === "oint";
     return this.primitiveKindOfType(this.typeOfNodeIfAny(parent.left === n ? parent.right : parent.left)) === "number";
   }
   /** rd: some `+` chain holding this local also holds a nil-declared local (typing this one would retype that one, which
@@ -64066,6 +64066,24 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       return false;
     return this.rustStatementMutatesLocal(siblings[at + 1], name);
   }
+  /** yb: the ccxt write-back pass (`writeBackIndexedMutations`) only fires when the line right after the bind is a top-level
+   *  element / property write or push on the bound local; any other next statement (an `if`, a plain reassignment) leaves
+   *  the bind alone, so its counter key may print boxed (`get_value(&xs, &Value::Int(i))`, the same helper call and value). */
+  rustWriteBackPassBind(read) {
+    const declaration = read.parent;
+    const name = String(declaration.name.text);
+    let statement = declaration;
+    while (statement !== void 0 && !isStatement(statement))
+      statement = statement.parent;
+    const siblings = statement?.parent?.statements ?? [];
+    const next = siblings[siblings.indexOf(statement) + 1];
+    if (next === void 0 || next.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const e = next.expression;
+    if (isBinaryExpression5(e) && rustIsAssignmentOperator(e.operatorToken.kind))
+      return !isIdentifier3(e.left) && this.rootPlaceText(e.left) === name;
+    return isCallExpression6(e) && isPropertyAccessExpression3(e.expression) && e.expression.name.text === "push" && this.rootPlaceText(e.expression.expression) === name;
+  }
   /** A statement containing a write into a local (`x['k'] = v`, `x.k = v`,
    *  `x.push(v)`). */
   rustStatementMutatesLocal(node, name) {
@@ -65680,7 +65698,7 @@ ${idn}}`;
   /** A registered `i64` counter as a helper key (`Value::Int(i)`); a read the ccxt write-back binds keeps the counter `Value`. */
   rustI64HelperKeyText(keyNode, read) {
     const key = this.rustSkipWrappers(keyNode);
-    if (this.rustI64CounterOf(key) === void 0 || read !== void 0 && this.isWriteBackBindRead(read))
+    if (this.rustI64CounterOf(key) === void 0 || read !== void 0 && this.isWriteBackBindRead(read) && this.rustWriteBackPassBind(read))
       return void 0;
     return this.rustI64CounterUse(key) ? `Value::Int(${String(key.text)})` : void 0;
   }

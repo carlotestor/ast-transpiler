@@ -9021,7 +9021,7 @@ export class RustTranspiler extends BaseTranspiler {
         const intCounter = counter !== undefined && isIdentifier(other) && this.rustValueIntCounter(other);
         if (counter !== undefined && isVariableDeclaration(counter) && counter.parent?.parent?.kind === SyntaxKind.ForStatement && !intCounter) return false;
         if (!intCounter && this.rustScalarExprHasForCounter(other)) return false;
-        if (intCounter) return kind === 'int';
+        if (intCounter) return kind === 'int' || kind === 'oint';
         return this.primitiveKindOfType(this.typeOfNodeIfAny(parent.left === n ? parent.right : parent.left)) === 'number';
     }
 
@@ -12904,6 +12904,22 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustStatementMutatesLocal(siblings[at + 1], name);
     }
 
+    /** yb: the ccxt write-back pass (`writeBackIndexedMutations`) only fires when the line right after the bind is a top-level
+     *  element / property write or push on the bound local; any other next statement (an `if`, a plain reassignment) leaves
+     *  the bind alone, so its counter key may print boxed (`get_value(&xs, &Value::Int(i))`, the same helper call and value). */
+    rustWriteBackPassBind(read: any): boolean {
+        const declaration: any = read.parent;
+        const name = String(declaration.name.text);
+        let statement: any = declaration;
+        while (statement !== undefined && !isStatement(statement)) statement = statement.parent;
+        const siblings: any[] = statement?.parent?.statements ?? [];
+        const next: any = siblings[siblings.indexOf(statement) + 1];
+        if (next === undefined || next.kind !== SyntaxKind.ExpressionStatement) return false;
+        const e: any = next.expression;
+        if (isBinaryExpression(e) && rustIsAssignmentOperator(e.operatorToken.kind)) return !isIdentifier(e.left) && this.rootPlaceText(e.left) === name;
+        return isCallExpression(e) && isPropertyAccessExpression(e.expression) && e.expression.name.text === 'push' && this.rootPlaceText(e.expression.expression) === name;
+    }
+
     /** A statement containing a write into a local (`x['k'] = v`, `x.k = v`,
      *  `x.push(v)`). */
     rustStatementMutatesLocal(node: Node, name: string): boolean {
@@ -14533,7 +14549,7 @@ export class RustTranspiler extends BaseTranspiler {
     /** A registered `i64` counter as a helper key (`Value::Int(i)`); a read the ccxt write-back binds keeps the counter `Value`. */
     rustI64HelperKeyText(keyNode: any, read?: any): string | undefined {
         const key = this.rustSkipWrappers(keyNode);
-        if (this.rustI64CounterOf(key) === undefined || (read !== undefined && this.isWriteBackBindRead(read))) return undefined;
+        if (this.rustI64CounterOf(key) === undefined || (read !== undefined && this.isWriteBackBindRead(read) && this.rustWriteBackPassBind(read))) return undefined;
         return this.rustI64CounterUse(key) ? `Value::Int(${String(key.text)})` : undefined;
     }
 
