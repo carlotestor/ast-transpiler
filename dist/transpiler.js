@@ -51571,6 +51571,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustSbAliasDeferred = /* @__PURE__ */ new WeakSet();
     this.rustClientHandlePlans = /* @__PURE__ */ new WeakMap();
     this.rustClientHandleDeclPrinting = false;
+    /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl Into<Value>, ..)`
+     *  takes an optional string lent as `&x` (`From<&Option<String>>`: `None` is Null, `Some(s)` a `Str`, as the box gave). */
+    /** vg: element locals printed as a borrowed `Option<&str>` off their list (`recv.get(i).and_then(Value::as_str)`). */
+    this.rustBorrowedStrElems = /* @__PURE__ */ new WeakSet();
     this.rustScalarPending = /* @__PURE__ */ new Set();
     // ── native `Option<String>` returns (`: Str` methods) ─────────────────────
     //
@@ -55423,6 +55427,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustScalarDecisions.set(declaration, previous);
     if (ok && kind === "bool" && !this.rustBoolSlotUsesOk(declaration))
       return void 0;
+    this.rustBorrowedStrElems.delete(declaration);
+    if (ok && kind === "ostr" && this.rustBorrowStrElem(declaration)) {
+      this.rustBorrowedStrElems.add(declaration);
+      return kind;
+    }
     const guarded = (widened || expressionUses || this.rustOptListParamInit(declaration.initializer)) && boxed > 0;
     const strKind = kind === "str" || kind === "ostr";
     const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !strKind || !this.rustStrNoLend && (this.rustStrLendSites(declaration) || kind === "str" && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustReaderLendBoxes(declaration) || this.rustScOwnSelfCall(declaration.initializer) && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustVenueLocalHandedOn(declaration) && this.rustReaderLendBoxes(declaration))) && !this.rustStrReturnedLocal(declaration, scope);
@@ -58110,8 +58119,52 @@ ${binding(plan.indent)}` : ""), head: "" };
     const kind = this.rustScalarLocalOf(inner)?.kind;
     return kind === "bool" ? super.printIdentifier(inner) : kind === "obool" ? `(${super.printIdentifier(inner)} == Some(true))` : void 0;
   }
-  /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl Into<Value>, ..)`
-   *  takes an optional string lent as `&x` (`From<&Option<String>>`: `None` is Null, `Some(s)` a `Str`, as the box gave). */
+  /** vg: `const k = recv[i]` where `recv` is a local list every element of which is a string (`Object.keys (..)`, a literal of
+   *  string literals) and every use of `recv` is an element read or `.length` (never written, pushed, moved or handed on, so the
+   *  borrow stays valid while `k` lives and no non-string can reach `k`: out of range reads `None`, the `Null` the box held).
+   *  Every use of `k` reads the borrow: literal tests, `format!` operands, map-key reads / `in` tests, and boxes at a call
+   *  argument, object-literal value, array element, dict write or `+` operand (`Value::from(k.as_deref())`: the copy the `Value`
+   *  clone made, never more). */
+  rustBorrowStrElem(declaration) {
+    if (this.rustTestTierSource(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    const init = this.unwrapParens(declaration.initializer);
+    if (init === void 0 || !isElementAccessExpression4(init) || !isIdentifier3(init.expression) || this.rustElementReadScalarKind(init) !== "ostr")
+      return false;
+    const owner = this.rustDeclaredNode(init.expression);
+    if (owner === void 0 || !isVariableDeclaration3(owner) || !isIdentifier3(owner.name) || !this.rustExactStrListInit(owner.initializer))
+      return false;
+    const recvOk = this.rustLocalUsesAll(owner, String(owner.name.text), true, (n) => {
+      const up = n.parent;
+      if (up !== void 0 && isElementAccessExpression4(up) && up.expression === n) {
+        const top = up.parent;
+        return !(top !== void 0 && (isBinaryExpression5(top) && top.left === up && this.rustAssignmentOpKind(top.operatorToken.kind) || top.kind === SyntaxKind7.DeleteExpression || top.kind === SyntaxKind7.PrefixUnaryExpression || top.kind === SyntaxKind7.PostfixUnaryExpression));
+      }
+      return up !== void 0 && isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "length";
+    });
+    if (!recvOk)
+      return false;
+    return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      if (this.rustIdentifierIsPropertyName(n))
+        return n.parent?.kind !== SyntaxKind7.ShorthandPropertyAssignment;
+      const form = this.rustScalarUseForms.get(n);
+      if (form === "test" || form === "concat" || form === "okey" || form === "kin" || form === "key" || form === "inbox")
+        return true;
+      if (form !== "box" && form !== "xbox")
+        return false;
+      const up = n.parent;
+      return isCallExpression6(up) && up.expression !== n || up.kind === SyntaxKind7.PropertyAssignment && up.initializer === n || isArrayLiteralExpression4(up) && !(isBinaryExpression5(up.parent) && up.parent.left === up) || this.rustDictWriteValue(n) || isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.PlusToken;
+    });
+  }
+  /** vg: `Object.keys (x)` (never a ws client handle's key list) or a non-empty literal of string literals: only strings. */
+  rustExactStrListInit(init) {
+    const node = this.unwrapParens(init);
+    if (node === void 0)
+      return false;
+    if (isArrayLiteralExpression4(node))
+      return node.elements.length > 0 && node.elements.every((e) => this.literalKindOfNode(e) === "string");
+    return isCallExpression6(node) && node.arguments.length === 1 && isPropertyAccessExpression3(node.expression) && node.expression.getText().replace(/\s+/g, "") === "Object.keys" && this.printClientHandleKeys(node) === void 0;
+  }
   rustInArrayNeedle(node) {
     const call = node?.parent;
     return !this.rustTestTierSource(node) && isCallExpression6(call) && call.arguments[0] === node && isPropertyAccessExpression3(call.expression) && String(call.expression.name.text) === "inArray" && this.rustBaseTypedReturnKind(call) === "bool";
@@ -58120,6 +58173,8 @@ ${binding(plan.indent)}` : ""), head: "" };
   printRustScalarLocalRead(node) {
     const local = this.rustScalarLocalOf(node);
     const form = local === void 0 ? void 0 : this.rustScalarUseForms.get(node);
+    if (local?.kind === "ostr" && this.rustBorrowedStrElems.has(local.declaration) && (form === "key" || form === "inbox" || form === "box" || form === "xbox"))
+      return `Value::from(${super.printIdentifier(node)}.as_deref())`;
     if (form === "key" && local.kind === "ostr")
       return `${super.printIdentifier(node)}${this.rustLocalLastUse(node, local.declaration) ? "" : ".clone()"}.map(Value::from).unwrap_or(Value::Null)`;
     if (form === "cond" && local.kind === "obool")
@@ -58283,6 +58338,11 @@ ${binding(plan.indent)}` : ""), head: "" };
   printRustScalarLocalDeclaration(declaration, varName, indent) {
     const kind = this.rustScalarLocalKind(declaration);
     const init = kind === void 0 ? void 0 : this.rustScalarNativeText(kind, declaration.initializer);
+    const owned = ".and_then(Value::as_str).map(str::to_owned)";
+    const recvName = kind === "ostr" && this.rustBorrowedStrElems.has(declaration) ? super.printIdentifier(this.unwrapParens(declaration.initializer).expression) : void 0;
+    const placeRead = recvName !== void 0 && init !== void 0 && (init.startsWith(`${recvName}.get(`) || init.startsWith(`${recvName}.as_array().map(Vec::as_slice).unwrap_or_default().get(`));
+    if (placeRead && init.endsWith(owned))
+      return `${indent}let mut ${varName}: Option<&str> = ${init.slice(0, -".map(str::to_owned)".length)}`;
     return init === void 0 ? void 0 : `${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${init}`;
   }
   /** Assignment hook: `x = <rhs>` in the local's native type. */
