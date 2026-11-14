@@ -12054,7 +12054,11 @@ export class RustTranspiler extends BaseTranspiler {
                 return `${idn2}m.insert("${escapeKey(name)}".to_string(), ${name}.clone());`;
             }
             const keyText = isStringLiteral(p.name) ? p.name.text : p.name.text;
-            return `${idn2}m.insert("${escapeKey(keyText)}".to_string(), ${this.printNode(p.initializer, 0)});`;
+            // a bare local value is handed into the map: cloned unless the hand-off is owned (`rustOwnedUseIsFree`)
+            const value = this.printNode(p.initializer, 0);
+            const bare = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value.trim()) && value.trim() !== 'self';
+            const owned = bare && isIdentifier(this.unwrapParens(p.initializer)) && this.rustOwnedUseIsFree(this.unwrapParens(p.initializer));
+            return `${idn2}m.insert("${escapeKey(keyText)}".to_string(), ${bare && !owned ? `${value.trim()}.clone()` : value});`;
         });
         const idn1 = this.getIden(identation + 1);
         const body = lines.map(l => l + '\n').join('');

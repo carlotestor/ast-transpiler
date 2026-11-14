@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -63043,7 +63043,10 @@ ${idn}}`;
         return `${idn2}m.insert("${escapeKey(name)}".to_string(), ${name}.clone());`;
       }
       const keyText = isStringLiteral3(p.name) ? p.name.text : p.name.text;
-      return `${idn2}m.insert("${escapeKey(keyText)}".to_string(), ${this.printNode(p.initializer, 0)});`;
+      const value = this.printNode(p.initializer, 0);
+      const bare2 = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value.trim()) && value.trim() !== "self";
+      const owned = bare2 && isIdentifier3(this.unwrapParens(p.initializer)) && this.rustOwnedUseIsFree(this.unwrapParens(p.initializer));
+      return `${idn2}m.insert("${escapeKey(keyText)}".to_string(), ${bare2 && !owned ? `${value.trim()}.clone()` : value});`;
     });
     const idn1 = this.getIden(identation + 1);
     const body = lines.map((l) => l + "\n").join("");

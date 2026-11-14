@@ -303,6 +303,21 @@ describe('rust transpiling tests', () => {
         expect(out).toContain('self.parseNumber(v, &[])');
     });
 
+    test('an object-literal value clones a bare local read again and moves one at its last use', () => {
+        const ts = [
+            'class A {',
+            '    hold (x: any) { return x; }',
+            '    run (a: any, b: any) {',
+            '        const r = { \'x\': a, \'y\': b };',
+            '        return [ r, a ];',
+            '    }',
+            '}',
+        ].join('\n');
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).toContain('m.insert("x".to_string(), a.clone());');
+        expect(out).toContain('m.insert("y".to_string(), b);');
+    });
+
     test('a for-loop counter handed off by value is cloned (the next pass reads it again)', () => {
         const ts = [
             'class A {',
