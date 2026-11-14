@@ -2218,6 +2218,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A call to a generated base reader (any overload) whose container parameter prints `impl KeyRead`. */
     rustReaderTakesContainerByReference(call: any): boolean;
     rustBuiltReturnSourceKind(call: any): 'dict' | 'list' | undefined;
+    /** The printed `let mut x: crate::value::Dict = self.omit(..).into_dict();` line of a one-line omit stays under 400 chars. */
+    rustOmitLineFits(call: any): boolean;
     private static readonly RUST_BUILT_BOX_RECEIVER_METHODS;
     private static readonly RUST_BUILT_HELPER_RETURNS;
     private static readonly RUST_BASE_FILTER_LISTS;

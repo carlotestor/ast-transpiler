@@ -8662,6 +8662,34 @@ describe('rust list reads with an empty list default', () => {
     });
 });
 
+describe('ral-qc: an omit of a proven map holds the shared map', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/Exchange.ts': 'export default class Exchange {\n' +
+            '    extend (a: any, b: any = undefined): any { return a; }\n    omit (o: any, k: any): any { return o; }\n    hold (x: any): any { return x; }\n}\n',
+        'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n" +
+            "    built (params: any, flag: boolean) {\n        const merged = this.extend ({ 'a': 1 }, params);\n        const rest = this.omit (merged, [ 'a' ]);\n        return this.hold (rest);\n    }\n" +
+            "    literal (flag: boolean) {\n        const rest = this.omit ({ 'a': 1, 'b': 2 }, 'a');\n        return this.hold (rest);\n    }\n" +
+            "    opaque (params: any) {\n        const rest = this.omit (params, 'a');\n        return this.hold (rest);\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-qc-omit-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('an omit of a built map or a map literal is crate::value::Dict, moved into its last Value slot', () => {
+        expect(out).toMatch(/let mut rest: crate::value::Dict = self\.omit\(.*\)\.into_dict\(\);\n\s*return self\.hold\(Value::Dict\(rest\)/);
+        expect(out.match(/let mut rest: crate::value::Dict = self\.omit\(/g)?.length).toBe(2);
+    });
+    test('an omit of an untyped params value keeps the box (a list body passes omit unchanged)', () => {
+        expect(out).toMatch(/let mut rest: Value = self\.omit\(params/);
+    });
+});
+
 describe('rust base list filters answer a fresh container', () => {
     const files: Record<string, string> = {
         'ts/src/base/Exchange.ts': 'export type Int = number | undefined;\nexport default class Exchange {\n' +

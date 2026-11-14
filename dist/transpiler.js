@@ -67288,6 +67288,8 @@ ${iden}}`;
       return filtered;
     if (method === "deepExtend")
       return this.rustDeepExtendOfMaps(call) ? "dict" : void 0;
+    if (method === "omit")
+      return !this.rustTestTierSource(call) && this.rustOmitOfDict(call) && this.rustOmitLineFits(call) ? "dict" : void 0;
     if (method === "sortBy" || method === "sortBy2")
       return !this.rustTestTierSource(call) && (this.extraArrSource(call) || this.rustSortOfTypedList(call)) ? "list" : void 0;
     if (/^(?:safe|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method))
@@ -67310,6 +67312,14 @@ ${iden}}`;
       this.rustFreshWide = wide;
     }
     return this.rustCallBuildsContainer(call, "list", 0) ? "list" : void 0;
+  }
+  /** The printed `let mut x: crate::value::Dict = self.omit(..).into_dict();` line of a one-line omit stays under 400 chars. */
+  rustOmitLineFits(call) {
+    const text = String(call.getText());
+    if (text.includes("\n"))
+      return false;
+    const literals = (text.match(/'[^']*'|"[^"]*"/g) ?? []).length;
+    return 16 + 60 + text.length + 22 * literals + 12 <= 330;
   }
   /** The container a base list filter answers, `undefined` when it is unproven, `null` when `method` is none of them. */
   rustBaseFilterReturnKind(call, method) {

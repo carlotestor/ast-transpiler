@@ -16269,6 +16269,9 @@ export class RustTranspiler extends BaseTranspiler {
         const filtered = this.rustBaseFilterReturnKind(call, method); if (filtered !== null) return filtered;
         // `deepExtend` answers its last non-map operand as it came: a map only when every operand is a proven map
         if (method === 'deepExtend') return this.rustDeepExtendOfMaps(call) ? 'dict' : undefined;
+        // ral-qc: `omit` drops keys from a proven map head (copy-on-write when the head is shared), so it answers a map;
+        // its key list prints ~22 chars wider per literal, and the typed line must stay within the 400-char budget
+        if (method === 'omit') return !this.rustTestTierSource(call) && this.rustOmitOfDict(call) && this.rustOmitLineFits(call) ? 'dict' : undefined;
         // `sortBy*` hands a non-list input back as it came: a list only when its input is one (the Arr-only proof)
         if (method === 'sortBy' || method === 'sortBy2') return !this.rustTestTierSource(call) && (this.extraArrSource(call) || this.rustSortOfTypedList(call)) ? 'list' : undefined;
         if (/^(?:safe|extend$|deepExtend$|omit$|keysort$|parseJson$|watch|subscribe|unsubscribe|market$|currency$)/.test(method)) return undefined;
@@ -16287,6 +16290,14 @@ export class RustTranspiler extends BaseTranspiler {
             this.rustFreshWide = wide;
         }
         return this.rustCallBuildsContainer(call, 'list', 0) ? 'list' : undefined;
+    }
+
+    /** The printed `let mut x: crate::value::Dict = self.omit(..).into_dict();` line of a one-line omit stays under 400 chars. */
+    rustOmitLineFits(call: any): boolean {
+        const text = String(call.getText());
+        if (text.includes('\n')) return false;
+        const literals = (text.match(/'[^']*'|"[^"]*"/g) ?? []).length;
+        return 16 + 60 + text.length + 22 * literals + 12 <= 330;
     }
 
     // The box that hands such a local on whole: a plain `Value` slot of a `this.` method, `return x`, an object literal
