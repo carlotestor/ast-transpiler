@@ -18419,6 +18419,12 @@ export class RustTranspiler extends BaseTranspiler {
         // the read's head is a local (or one element of a local list), never a `this.` store or a field of another object
         if (head === undefined) return false;
         if (isElementAccessExpression(head)) return isIdentifier(head.expression);
+        // ral-40h: an element of a list a same-venue `this.` method builds fresh on every return (rustCallBuildsContainer):
+        // its maps are built in that body (literals / extend of them), never a ws store, so the insert tags nothing
+        if (isCallExpression(head) && isPropertyAccessExpression(head.expression) && head.expression.expression.kind === SyntaxKind.ThisKeyword) {
+            const at: any = this.rustSkipWrappers(init.arguments[1]);
+            return at !== undefined && this.literalKindOfNode(at) === 'number' && this.rustCallBuildsContainer(head, 'list');
+        }
         return isIdentifier(head);
     }
 
@@ -19600,7 +19606,11 @@ export class RustTranspiler extends BaseTranspiler {
             let ok = true;
             const visit = (n: any) => {
                 if (!ok) return;
-                if (isElementAccessExpression(n) && n.expression.kind === SyntaxKind.ThisKeyword && isCallExpression(n.parent) && n.parent.expression === n) ok = false;
+                if (isElementAccessExpression(n) && n.expression.kind === SyntaxKind.ThisKeyword && isCallExpression(n.parent) && n.parent.expression === n) {
+                    // ral-40h: `this[m] (arg)` whose every name `m` can hold is an implicit endpoint and whose arg is a map
+                    const dyn = this.r40hDynNames(n);
+                    if (dyn === undefined || !dyn.every((x) => names.has(x)) || n.parent.arguments.length !== 1 || !isMap(sf, rel, n.parent.arguments[0], 0)) ok = false;
+                }
                 else if (thisCall(n) && String(n.expression.name.text) === 'callDynamically') ok = false;
                 else if (thisCall(n) && names.has(String(n.expression.name.text))) {
                     const callee = String(n.expression.name.text);
@@ -19612,6 +19622,45 @@ export class RustTranspiler extends BaseTranspiler {
             if (!ok) return false;
         }
         return true;
+    }
+
+    /** ral-40h: the method names a dynamic `this[m]` can hold, read syntactically: `const m = 'a' + k + 'b'` where `k` is
+     *  `const k = this.safeString (L, ..)` over a `const L = { .. }` literal whose every value is a string literal (a
+     *  missing key leaves `k` undefined, which the venue throws on before the call), or `m` itself a string literal. */
+    r40hDynNames(access: any): string[] | undefined {
+        const constInit = (id: any): any => {
+            if (!isIdentifier(id)) return undefined;
+            let fn: any = id.parent;
+            while (fn !== undefined && !isFunctionLike(fn)) fn = fn.parent;
+            let found: any;
+            const visit = (x: any) => { if (found === undefined && isVariableDeclaration(x) && isIdentifier(x.name) && x.name.text === id.text) found = x; else x.forEachChild?.(visit); };
+            if (fn?.body !== undefined) visit(fn.body);
+            if (found === undefined || (found.parent?.flags & NodeFlags.Const) === 0) return undefined;
+            return found.initializer;
+        };
+        const values = (e: any, depth: number): string[] | undefined => {
+            if (e === undefined || depth > 4) return undefined;
+            while (isParenthesizedExpression(e)) e = e.expression;
+            if (isStringLiteralLikeNode(e)) return [ String(e.text) ];
+            if (isIdentifier(e)) return values(constInit(e), depth + 1);
+            if (isBinaryExpression(e) && e.operatorToken.kind === SyntaxKind.PlusToken) {
+                const l = values(e.left, depth + 1);
+                const r = values(e.right, depth + 1);
+                return l === undefined || r === undefined ? undefined : l.flatMap((a) => r.map((b) => a + b));
+            }
+            if (isCallExpression(e) && isPropertyAccessExpression(e.expression) && e.expression.expression.kind === SyntaxKind.ThisKeyword && String(e.expression.name.text) === 'safeString' && e.arguments.length === 2) {
+                const lit: any = constInit(e.arguments[0]);
+                if (lit === undefined || !isObjectLiteralExpression(lit) || lit.properties.length === 0) return undefined;
+                const out: string[] = [];
+                for (const p of lit.properties as any) {
+                    if (p.kind !== SyntaxKind.PropertyAssignment || !isStringLiteralLikeNode(p.initializer)) return undefined;
+                    out.push(String(p.initializer.text));
+                }
+                return out;
+            }
+            return undefined;
+        };
+        return values(access.argumentExpression, 0);
     }
 
     /** The `params` slot of a typed unified call (`impl Into<crate::Params> + Send`): `From<Value> for Params` takes the

@@ -69526,6 +69526,10 @@ ${iden}}`;
       return false;
     if (isElementAccessExpression4(head))
       return isIdentifier3(head.expression);
+    if (isCallExpression6(head) && isPropertyAccessExpression3(head.expression) && head.expression.expression.kind === SyntaxKind7.ThisKeyword) {
+      const at = this.rustSkipWrappers(init.arguments[1]);
+      return at !== void 0 && this.literalKindOfNode(at) === "number" && this.rustCallBuildsContainer(head, "list");
+    }
     return isIdentifier3(head);
   }
   rustBuiltKeyWriteLineOk(n, extra = 0) {
@@ -70836,9 +70840,11 @@ ${iden}}`;
       const visit = (n) => {
         if (!ok)
           return;
-        if (isElementAccessExpression4(n) && n.expression.kind === SyntaxKind7.ThisKeyword && isCallExpression6(n.parent) && n.parent.expression === n)
-          ok = false;
-        else if (thisCall(n) && String(n.expression.name.text) === "callDynamically")
+        if (isElementAccessExpression4(n) && n.expression.kind === SyntaxKind7.ThisKeyword && isCallExpression6(n.parent) && n.parent.expression === n) {
+          const dyn = this.r40hDynNames(n);
+          if (dyn === void 0 || !dyn.every((x) => names.has(x)) || n.parent.arguments.length !== 1 || !isMap(sf, rel, n.parent.arguments[0], 0))
+            ok = false;
+        } else if (thisCall(n) && String(n.expression.name.text) === "callDynamically")
           ok = false;
         else if (thisCall(n) && names.has(String(n.expression.name.text))) {
           const callee = String(n.expression.name.text);
@@ -70852,6 +70858,59 @@ ${iden}}`;
         return false;
     }
     return true;
+  }
+  /** ral-40h: the method names a dynamic `this[m]` can hold, read syntactically: `const m = 'a' + k + 'b'` where `k` is
+   *  `const k = this.safeString (L, ..)` over a `const L = { .. }` literal whose every value is a string literal (a
+   *  missing key leaves `k` undefined, which the venue throws on before the call), or `m` itself a string literal. */
+  r40hDynNames(access) {
+    const constInit = (id) => {
+      if (!isIdentifier3(id))
+        return void 0;
+      let fn = id.parent;
+      while (fn !== void 0 && !isFunctionLike(fn))
+        fn = fn.parent;
+      let found;
+      const visit = (x) => {
+        if (found === void 0 && isVariableDeclaration3(x) && isIdentifier3(x.name) && x.name.text === id.text)
+          found = x;
+        else
+          x.forEachChild?.(visit);
+      };
+      if (fn?.body !== void 0)
+        visit(fn.body);
+      if (found === void 0 || (found.parent?.flags & NodeFlags4.Const) === 0)
+        return void 0;
+      return found.initializer;
+    };
+    const values = (e, depth) => {
+      if (e === void 0 || depth > 4)
+        return void 0;
+      while (isParenthesizedExpression3(e))
+        e = e.expression;
+      if (isStringLiteralLikeNode4(e))
+        return [String(e.text)];
+      if (isIdentifier3(e))
+        return values(constInit(e), depth + 1);
+      if (isBinaryExpression5(e) && e.operatorToken.kind === SyntaxKind7.PlusToken) {
+        const l = values(e.left, depth + 1);
+        const r = values(e.right, depth + 1);
+        return l === void 0 || r === void 0 ? void 0 : l.flatMap((a) => r.map((b) => a + b));
+      }
+      if (isCallExpression6(e) && isPropertyAccessExpression3(e.expression) && e.expression.expression.kind === SyntaxKind7.ThisKeyword && String(e.expression.name.text) === "safeString" && e.arguments.length === 2) {
+        const lit = constInit(e.arguments[0]);
+        if (lit === void 0 || !isObjectLiteralExpression4(lit) || lit.properties.length === 0)
+          return void 0;
+        const out = [];
+        for (const p of lit.properties) {
+          if (p.kind !== SyntaxKind7.PropertyAssignment || !isStringLiteralLikeNode4(p.initializer))
+            return void 0;
+          out.push(String(p.initializer.text));
+        }
+        return out;
+      }
+      return void 0;
+    };
+    return values(access.argumentExpression, 0);
   }
   /** The `params` slot of a typed unified call (`impl Into<crate::Params> + Send`): `From<Value> for Params` takes the
    *  boxed map exactly as it took the `Value` local, so a dict local boxes there once (moved at the last use). */

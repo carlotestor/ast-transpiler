@@ -14545,3 +14545,45 @@ describe('ral-40h: deepExtend of proven maps beyond the json hand-off (omit-of-m
         expect(out).not.toContain('let mut request: crate::value::Dict = ');
     });
 });
+
+describe('ral-40h: REST safeDict element of a same-venue built list takes a literal-key write (untagged source)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    extend (...args: any[]): any { return args[0]; }\n    safeDict (o: any, k: any, d: any = undefined): any { return o[k]; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n";
+    const run = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const build = "    build (side: string, params: Dict = {}): Dict[] {\n        const request: Dict = { 'side': side };\n        const orders: Dict[] = [];\n        orders.push (this.extend (request, params));\n        return orders;\n    }\n";
+    test('element 0 of a built list is a Dict written in place', () => {
+        const out = run ('r40h-sd-built', build + "    m (params: Dict = {}): Dict[] {\n        const orders: Dict[] = [];\n        const orderObj = this.safeDict (this.build ('buy', params), 0, {});\n        orderObj['client_order_index'] = 0;\n        orders.push (orderObj);\n        return orders;\n    }\n");
+        expect(out).toContain('let mut orderObj: crate::value::Dict = ');
+        expect(out).toContain('std::sync::Arc::make_mut(&mut orderObj).insert(\"client_order_index\".into(), Value::Int(0));');
+    });
+    test('an element of an unproven call result keeps the helper', () => {
+        const out = run ('r40h-sd-unproven', "    other (x: any): any { return x; }\n    m (params: Dict = {}): Dict[] {\n        const orders: Dict[] = [];\n        const orderObj = this.safeDict (this.other (params), 0, {});\n        orderObj['client_order_index'] = 0;\n        orders.push (orderObj);\n        return orders;\n    }\n");
+        expect(out).not.toContain('let mut orderObj: crate::value::Dict = ');
+    });
+});
+
+describe('ral-40h: a dynamic this[m] call whose names are all implicit map endpoints keeps the sign params proof', () => {
+    const write = (name: string, caller: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    omit (x: any, ...args: any): any { return x; }\n    extend (...args: any): any { return {}; }\n    safeString (x: any, k: any, d: any = undefined): any { return x; }\n    extractParams (s: string): string[] { return []; }\n    urlencode (o: any): string { return ''; }\n    json (o: any): string { return ''; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/' + name + '.ts'), "import _Exchange from '../base/Exchange.js';\nexport default abstract class Exchange extends _Exchange {\n    privatePostAWithdrawal (params = {}): Promise<any> {\n        return this.omit (params);\n    }\n    privatePostBWithdrawal (params = {}): Promise<any> {\n        return this.omit (params);\n    }\n}\n");
+        const sign = "    sign (path: string, api = 'public', method = 'GET', params = {}, headers: any = undefined, body: any = undefined) {\n        let url = '/' + path;\n        const query = this.omit (params, this.extractParams (path));\n        if (Object.keys (query).length) {\n            url += '?' + this.urlencode (query);\n        }\n        body = this.json (query);\n        return [ url, body ];\n    }\n";
+        fs.writeFileSync (path.join (dir, 'ts/src/' + name + '.ts'), "import Exchange from './abstract/" + name + ".js';\nimport type { Dict } from './base/Exchange.js';\nexport default class " + name + " extends Exchange {\n" + caller + sign + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/' + name + '.ts')).content;
+    };
+    test('every name the table spells is an implicit endpoint and the argument a map: proof holds', () => {
+        const out = write ('r40hdynok', "    async w (code: string, params: Dict = {}) {\n        const methods: Dict = { 'X': 'A', 'Y': 'B' };\n        const method = this.safeString (methods, code);\n        const request: Dict = { 'a': 1 };\n        const classMethod = 'privatePost' + method + 'Withdrawal';\n        return await this[classMethod] (this.extend (request, params));\n    }\n");
+        expect(out).toContain('let mut query: crate::value::Dict = ');
+    });
+    test('negative: one spelled name is not an endpoint: the box stays', () => {
+        const out = write ('r40hdynbad', "    async w (code: string, params: Dict = {}) {\n        const methods: Dict = { 'X': 'A', 'Y': 'C' };\n        const method = this.safeString (methods, code);\n        const request: Dict = { 'a': 1 };\n        const classMethod = 'privatePost' + method + 'Withdrawal';\n        return await this[classMethod] (this.extend (request, params));\n    }\n");
+        expect(out).not.toContain('let mut query: crate::value::Dict = ');
+    });
+});

@@ -2725,6 +2725,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  / `callDynamically` call, or anything else unproven fails the venue (fail closed). */
     rustSignParamsProvenMap(fn: any): boolean;
     rustSignParamsProofUncached(root: string, venue: string): boolean;
+    /** ral-40h: the method names a dynamic `this[m]` can hold, read syntactically: `const m = 'a' + k + 'b'` where `k` is
+     *  `const k = this.safeString (L, ..)` over a `const L = { .. }` literal whose every value is a string literal (a
+     *  missing key leaves `k` undefined, which the venue throws on before the call), or `m` itself a string literal. */
+    r40hDynNames(access: any): string[] | undefined;
     /** The `params` slot of a typed unified call (`impl Into<crate::Params> + Send`): `From<Value> for Params` takes the
      *  boxed map exactly as it took the `Value` local, so a dict local boxes there once (moved at the last use). */
     rustTypedParamsSlot(call: any, at: number): boolean;
