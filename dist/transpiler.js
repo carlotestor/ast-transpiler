@@ -70667,7 +70667,7 @@ ${iden}}`;
         return false;
       const up = n.parent;
       if (isBinaryExpression5(up) && up.left === n) {
-        return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
+        return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
       }
       if (isElementAccessExpression4(up) && up.expression === n) {
         natives++;
@@ -70851,7 +70851,9 @@ ${iden}}`;
     const declaration = this.rustDeclarationOfIdentifier(y);
     if (declaration === void 0 || declaration.name === y || !(isVariableDeclaration3(declaration) || isParameterDeclaration3(declaration)))
       return false;
-    if (this.rustDeclarationOfIdentifier(tested) !== declaration || this.rustLocalIsReassigned(declaration, String(y.text)))
+    if (this.rustDeclarationOfIdentifier(tested) !== declaration)
+      return false;
+    if (this.rustLocalIsReassigned(declaration, String(y.text)) && !(isVariableDeclaration3(declaration) && this.rustWritesAllBefore(declaration, write)))
       return false;
     if (this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(write))
       return false;
@@ -70860,7 +70862,67 @@ ${iden}}`;
     const printedY = this.printNode(y, 0).trim();
     if ((printedY.startsWith("") ? printedY.slice(1) : printedY) !== String(y.text))
       return false;
-    return this.rustLocalLastUse(y, declaration);
+    return this.rustLocalLastUse(y, declaration) || this.rustGuardedBranchLastUse(y, declaration, guard);
+  }
+  /** ral-uf: every later read of `node`'s local lies in the else branch of `guard` (a path disjoint from the move) and
+   *  nothing reads it after the if statement; no loop or closure sits between the move and the declaration. */
+  rustGuardedBranchLastUse(node, declaration, guard) {
+    const other = guard?.elseStatement;
+    const own = this.rustSymbolOf(node);
+    const scope = this.rustEnclosingFunction(declaration);
+    if (other === void 0 || own === void 0 || scope === void 0 || !(guard.thenStatement.pos <= node.pos && node.end <= guard.thenStatement.end))
+      return false;
+    for (const n of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
+      if (n === node || n === declaration.name || !isIdentifier3(n) || this.rustIdentifierIsPropertyName(n))
+        continue;
+      if (n === scope.name && scope.kind === SyntaxKind7.MethodDeclaration)
+        continue;
+      const symbol = this.rustSymbolOf(n);
+      if (symbol !== void 0 && symbol !== own)
+        continue;
+      if (n.pos > node.pos && !(other.pos <= n.pos && n.end <= other.end))
+        return false;
+    }
+    for (let up = node.parent; up !== void 0 && !(up.pos <= declaration.pos && declaration.end <= up.end); up = up.parent) {
+      if (isFunctionLike(up) || up.kind === SyntaxKind7.ForStatement || up.kind === SyntaxKind7.ForOfStatement || up.kind === SyntaxKind7.ForInStatement || up.kind === SyntaxKind7.WhileStatement || up.kind === SyntaxKind7.DoStatement)
+        return false;
+    }
+    return true;
+  }
+  /** ral-uf: `x = y`, y a never-written `[]`-defaulted `safeList*` local still printed as the plain `Value` binding, at its
+   *  last use (or read again only in the else branch of the if whose then-branch holds the write): y is always an Arr. */
+  /** Every write to the local (`x = ..`) sits at or before `write` in source order. */
+  rustWritesAllBefore(declaration, write) {
+    const scope = this.rustEnclosingFunction(declaration);
+    if (scope === void 0)
+      return false;
+    for (const n of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind) && up.pos > write.pos)
+        return false;
+      if ((up?.kind === SyntaxKind7.PrefixUnaryExpression || up?.kind === SyntaxKind7.PostfixUnaryExpression) && n.pos > write.pos)
+        return false;
+    }
+    return true;
+  }
+  rustDefaultedAliasMove(write) {
+    if (!isBinaryExpression5(write))
+      return void 0;
+    const y = this.rustSkipWrappers(write.right);
+    if (y === void 0 || !isIdentifier3(y))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(y);
+    if (declaration === void 0 || declaration.name === y || !isVariableDeclaration3(declaration))
+      return void 0;
+    if (this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(write) || this.rustLocalIsReassigned(declaration, String(y.text)))
+      return void 0;
+    if (!this.rustDefaultedListValue(declaration, y))
+      return void 0;
+    let branch = write.parent?.parent;
+    if (!isBlock4(branch))
+      branch = write.parent;
+    const guard = branch?.parent?.kind === SyntaxKind7.IfStatement && branch.parent.thenStatement === branch ? branch.parent : void 0;
+    return this.rustLocalLastUse(y, declaration) || guard !== void 0 && this.rustGuardedBranchLastUse(y, declaration, guard) ? declaration : void 0;
   }
   rustBuiltListOf(node) {
     if (node === void 0 || !isIdentifier3(node))
@@ -70937,7 +70999,7 @@ ${iden}}`;
       return void 0;
     if (this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(write) || this.rustLocalIsReassigned(declaration, String(y.text)))
       return void 0;
-    if (!this.rustLocalLastUse(y, declaration))
+    if (!this.rustLocalLastUse(y, declaration) && !this.rustGuardedBranchLastUse(y, declaration, guard))
       return void 0;
     if (this.rustDefaultedListValue(declaration, y))
       return declaration;
@@ -70960,13 +71022,18 @@ ${iden}}`;
     const guarded = isIdentifier3(rhs) && isBinaryExpression5(rhs.parent) ? this.rustOptListGuardedMove(rhs.parent) : void 0;
     if (guarded !== void 0)
       return `${this.printNode(left, 0).trim()} = ${rhs.text}.${this.rustDefaultedListValue(guarded, rhs) ? "into_list" : "unwrap_or_default"}()`;
+    if (isIdentifier3(rhs) && isBinaryExpression5(rhs.parent) && this.rustDefaultedAliasMove(rhs.parent) !== void 0)
+      return `${this.printNode(left, 0).trim()} = ${rhs.text}.into_list()`;
     const value = isArrayLiteralExpression4(rhs) ? this.printBuiltListLiteral(rhs) : `${this.printNode(right, 0).trim()}.into_list()`;
     return `${this.printNode(left, 0).trim()} = ${value}`;
   }
   printBuiltListPush(node, name, parsedArg) {
     if (name === void 0 || parsedArg === void 0 || this.rustBuiltListOf(node?.expression?.expression) === void 0)
       return void 0;
-    return `std::sync::Arc::make_mut(&mut ${name}).push(${_RustTranspiler.cloneIfBareLocal(parsedArg.trim())})`;
+    const arg = node?.arguments?.[0];
+    const decl = arg !== void 0 && isIdentifier3(arg) ? this.rustDeclarationOfIdentifier(arg) : void 0;
+    const moves = decl !== void 0 && decl.name !== arg && (isVariableDeclaration3(decl) || isParameterDeclaration3(decl)) && this.rustEnclosingFunction(decl) === this.rustEnclosingFunction(arg) && this.rustLocalLastUse(arg, decl);
+    return `std::sync::Arc::make_mut(&mut ${name}).push(${moves ? parsedArg.trim() : _RustTranspiler.cloneIfBareLocal(parsedArg.trim())})`;
   }
   rustOptListLocal(declaration) {
     if (declaration?.kind !== SyntaxKind7.VariableDeclaration)

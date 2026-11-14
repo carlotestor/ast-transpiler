@@ -12399,3 +12399,26 @@ describe('se: ws watch results through hash helpers, helper-parameter resolves a
         expect(out).toMatch(/let mut ticker: Value = self\.watch\(/);
     });
 });
+
+describe('ral-uf: nullable list aliases read again only on the other branch, earlier-written guarded sources, pushes at last use', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-uf-alias');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n    safeList (o: any, k: any, d: any[] = undefined): any[] { return o; }\n    safeDict (o: any, k: any, d: any = undefined): any { return o; }\n    parseTrades (rows: any, market: any = undefined): any[] { return rows; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    elseRead (message: Dict) {\n        const data = this.safeValue (message, 'data');\n        let rows = [];\n        if (Array.isArray (data)) {\n            rows = data;\n        } else {\n            rows.push (data);\n        }\n        for (let i = 0; i < rows.length; i++) {\n            this.hold (this.safeDict (rows, i));\n        }\n    }\n    written (a: Dict, b: Dict) {\n        let response = undefined;\n        if (a !== undefined) {\n            response = this.hold (a);\n        } else {\n            response = this.hold (b);\n        }\n        let candles = [];\n        if (Array.isArray (response)) {\n            candles = response;\n        } else {\n            candles = this.safeList (response, 'data', []);\n        }\n        this.hold (candles.length);\n        return this.parseTrades (candles);\n    }\n    defElse (hip: Dict) {\n        const given = this.safeList (hip, 'dexes', []);\n        let list = [];\n        if (given.length > 0) {\n            list = given;\n        } else {\n            list.push (this.hold (given));\n        }\n        return this.parseTrades (list);\n    }\n    readAfter (message: Dict) {\n        const data = this.safeValue (message, 'data');\n        let rows = [];\n        if (Array.isArray (data)) {\n            rows = data;\n        } else {\n            rows.push (data);\n        }\n        this.hold (data);\n        return this.parseTrades (rows);\n    }\n}\n");
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('x = y under Array.isArray (y), y read again only in the else branch: y moves, the else push moves y too', () => {
+        expect(out).toMatch(/fn elseRead[\s\S]*?let mut rows: crate::value::List = [\s\S]*?rows = data\.into_list\(\);[\s\S]*?std::sync::Arc::make_mut\(&mut rows\)\.push\(data\);/);
+    });
+    test('a guarded source written only before the alias moves out', () => {
+        expect(out).toMatch(/fn written[\s\S]*?let mut candles: crate::value::List = [\s\S]*?candles = response\.into_list\(\);/);
+    });
+    test('a []-defaulted safeList source read again only in the else branch moves', () => {
+        expect(out).toMatch(/fn defElse[\s\S]*?let mut list: crate::value::List = [\s\S]*?list = given\.into_list\(\);/);
+    });
+    test('negative: the source read after the if keeps the Value alias', () => {
+        expect(out).toMatch(/fn readAfter[\s\S]*?let mut rows: Value = /);
+    });
+});
