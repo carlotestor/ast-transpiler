@@ -1195,6 +1195,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustValueIntCounter(node: any): boolean;
     /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */
     rustTbParseToIntInit(declaration: any): boolean;
+    /** wi: a tuple slot whose producer builds an exact Int-or-null on every return (`checkOptionInteger`): an `i64` bound too. */
+    rustTbExactIntSlot(declaration: any): boolean;
     /** ub: a `this.parseToInt(..)` call printed as its boxed `Int` / `Null` (`Value::from(self.parse_to_int(..))`). */
     rustUbPtiCall(node: any): boolean;
     /** ub: a compare partner that is not another group's local: a literal, call, element / property read, parameter,

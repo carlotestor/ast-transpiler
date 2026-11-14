@@ -8631,6 +8631,14 @@ export class RustTranspiler extends BaseTranspiler {
             && init.expression.expression.kind === SyntaxKind.ThisKeyword && String(init.expression.name.text) === 'parseToInt';
     }
 
+    /** wi: a tuple slot whose producer builds an exact Int-or-null on every return (`checkOptionInteger`): an `i64` bound too. */
+    rustTbExactIntSlot(declaration: any): boolean {
+        if (declaration === undefined || !isBindingElement(declaration) || declaration.parent?.kind !== SyntaxKind.ArrayBindingPattern) return false;
+        const owner: any = declaration.parent.parent;
+        return owner !== undefined && isVariableDeclaration(owner) && owner.initializer !== undefined
+            && this.rustExactSlotCallee(owner.initializer, declaration.parent.elements.indexOf(declaration), 'int');
+    }
+
     /** ub: a `this.parseToInt(..)` call printed as its boxed `Int` / `Null` (`Value::from(self.parse_to_int(..))`). */
     rustUbPtiCall(node: any): boolean {
         const inner: any = this.unwrapParens(node);
@@ -8674,7 +8682,7 @@ export class RustTranspiler extends BaseTranspiler {
     rustTbCounterBound(cond: any, n: any, kind: string): any {
         if ((kind !== 'int' && kind !== 'oint') || !isBinaryExpression(cond) || this.unwrapParens(cond.right) !== n && cond.right !== n) return undefined;
         if (RustTranspiler.NATIVE_COMPARISON_OPERATORS[cond.operatorToken.kind] === undefined || this.isEqualityOp(cond.operatorToken.kind)) return undefined;
-        if (!isIdentifier(n) || !this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond)) return undefined;
+        if (!isIdentifier(n) || !(this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbExactIntSlot(this.rustDeclaredNode(n))) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond)) return undefined;
         const counter: any = cond.left;
         if (!isIdentifier(counter)) return undefined;
         const d: any = this.rustDeclaredNode(counter);
