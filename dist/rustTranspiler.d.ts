@@ -142,6 +142,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustOwnedSelfWrite(node: any): boolean;
     /** A by-value argument of a call (the box is handed over whole). */
     rustOwnedHandOff(node: any): boolean;
+    /** The use sits inside the receiver of a member access (`f(x).replace(..)`): native receiver forms print the
+     *  receiver text twice (`.unwrap_or_else(|| recv.clone())`), so the argument is read twice. */
+    rustOwnedInReceiverChain(node: any): boolean;
     rustOwnedUseIsFree(node: any): boolean;
     /** A bare read of an imported (or top-level destructured) binding: never a callee, member, key or `new` target. */
     rustIsImportedValueName(node: any): boolean;

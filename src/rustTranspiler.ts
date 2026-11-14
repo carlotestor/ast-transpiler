@@ -549,11 +549,22 @@ export class RustTranspiler extends BaseTranspiler {
     rustOwnedHandOff(node): boolean {
         const call: any = node.parent;
         return isCallExpression(call) && call.expression !== node && Array.from(call.arguments).includes(node)
-            && findAncestor(node, (a: any) => isArrayLiteralExpression(a) || isStatement(a))?.kind !== SyntaxKind.ArrayLiteralExpression;
+            && findAncestor(node, (a: any) => isArrayLiteralExpression(a) || isStatement(a))?.kind !== SyntaxKind.ArrayLiteralExpression
+            && !this.rustOwnedInReceiverChain(node);
+    }
+
+    /** The use sits inside the receiver of a member access (`f(x).replace(..)`): native receiver forms print the
+     *  receiver text twice (`.unwrap_or_else(|| recv.clone())`), so the argument is read twice. */
+    rustOwnedInReceiverChain(node): boolean {
+        for (let child: any = node, up: any = node.parent; up !== undefined && !isStatement(up); child = up, up = up.parent) {
+            if ((isPropertyAccessExpression(up) || isElementAccessExpression(up)) && up.expression === child) return true;
+        }
+        return false;
     }
 
     rustOwnedUseIsFree(node): boolean {
         if (node.text === 'undefined') return true;
+        if (this.rustOwnedInReceiverChain(node)) return false;
         // the test tier's exchange handles become the typed `Exchange` (or `&mut` it) after printing, by their name
         if (/ts[/]src[/](?:pro[/])?test[/]/.test(String(node.getSourceFile().fileName)) && /^(?:exchange\d*|[A-Za-z_]\w*Exchange\d*)$/.test(String(node.text))) return false;
         // a call inside an array literal may be a `Promise.all` operand, reshaped after printing (ccxt re-runs a
@@ -5370,12 +5381,10 @@ export class RustTranspiler extends BaseTranspiler {
         const scope = this.rustEnclosingFunction(declaration);
         if (own === undefined || scope === undefined || this.rustEnclosingFunction(node) !== scope) return false;
         const settled = (n: any): boolean => {
-            // a read in an earlier property of the same object literal (each property is its own insert statement)
-            const prop: any = findAncestor(node, (a: any) => a.kind === SyntaxKind.PropertyAssignment || isStatement(a));
-            if (prop?.kind === SyntaxKind.PropertyAssignment && isObjectLiteralExpression(prop.parent) && n.end <= prop.pos && n.pos >= prop.parent.pos
-                && findAncestor(n, (a: any) => a.kind === SyntaxKind.PropertyAssignment || isStatement(a))?.parent === prop.parent) return true;
             for (let up: any = node.parent; up !== undefined && up !== statement.parent; up = up.parent) {
-                if (isConditionalExpression(up) && up.condition.pos <= n.pos && n.end <= up.condition.end && up.condition.end <= node.pos) return true;
+                // ccxt hoists `self.X(..)` arguments of an enclosing call ahead of the statement: a ternary under a call is not ordered
+                if (isConditionalExpression(up) && up.condition.pos <= n.pos && n.end <= up.condition.end && up.condition.end <= node.pos
+                    && findAncestor(up.parent, (a: any) => isCallExpression(a) || isStatement(a))?.kind !== SyntaxKind.CallExpression) return true;
                 if (isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.EqualsToken && up.left === n && up.right.pos <= node.pos && node.end <= up.right.end) return true;
             }
             return false;

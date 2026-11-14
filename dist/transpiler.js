@@ -51922,11 +51922,22 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** A by-value argument of a call (the box is handed over whole). */
   rustOwnedHandOff(node) {
     const call = node.parent;
-    return isCallExpression6(call) && call.expression !== node && Array.from(call.arguments).includes(node) && findAncestor(node, (a) => isArrayLiteralExpression4(a) || isStatement(a))?.kind !== SyntaxKind7.ArrayLiteralExpression;
+    return isCallExpression6(call) && call.expression !== node && Array.from(call.arguments).includes(node) && findAncestor(node, (a) => isArrayLiteralExpression4(a) || isStatement(a))?.kind !== SyntaxKind7.ArrayLiteralExpression && !this.rustOwnedInReceiverChain(node);
+  }
+  /** The use sits inside the receiver of a member access (`f(x).replace(..)`): native receiver forms print the
+   *  receiver text twice (`.unwrap_or_else(|| recv.clone())`), so the argument is read twice. */
+  rustOwnedInReceiverChain(node) {
+    for (let child = node, up = node.parent; up !== void 0 && !isStatement(up); child = up, up = up.parent) {
+      if ((isPropertyAccessExpression3(up) || isElementAccessExpression4(up)) && up.expression === child)
+        return true;
+    }
+    return false;
   }
   rustOwnedUseIsFree(node) {
     if (node.text === "undefined")
       return true;
+    if (this.rustOwnedInReceiverChain(node))
+      return false;
     if (/ts[/]src[/](?:pro[/])?test[/]/.test(String(node.getSourceFile().fileName)) && /^(?:exchange\d*|[A-Za-z_]\w*Exchange\d*)$/.test(String(node.text)))
       return false;
     if (findAncestor(node, (a) => isArrayLiteralExpression4(a) || isStatement(a)) !== void 0 && isArrayLiteralExpression4(findAncestor(node, (a) => isArrayLiteralExpression4(a) || isStatement(a))))
@@ -56520,11 +56531,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (own === void 0 || scope === void 0 || this.rustEnclosingFunction(node) !== scope)
       return false;
     const settled = (n) => {
-      const prop = findAncestor(node, (a) => a.kind === SyntaxKind7.PropertyAssignment || isStatement(a));
-      if (prop?.kind === SyntaxKind7.PropertyAssignment && isObjectLiteralExpression4(prop.parent) && n.end <= prop.pos && n.pos >= prop.parent.pos && findAncestor(n, (a) => a.kind === SyntaxKind7.PropertyAssignment || isStatement(a))?.parent === prop.parent)
-        return true;
       for (let up = node.parent; up !== void 0 && up !== statement.parent; up = up.parent) {
-        if (isConditionalExpression4(up) && up.condition.pos <= n.pos && n.end <= up.condition.end && up.condition.end <= node.pos)
+        if (isConditionalExpression4(up) && up.condition.pos <= n.pos && n.end <= up.condition.end && up.condition.end <= node.pos && findAncestor(up.parent, (a) => isCallExpression6(a) || isStatement(a))?.kind !== SyntaxKind7.CallExpression)
           return true;
         if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.left === n && up.right.pos <= node.pos && node.end <= up.right.end)
           return true;
