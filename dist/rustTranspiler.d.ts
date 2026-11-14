@@ -393,6 +393,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNilSlotLineOverBudget(n: any): boolean;
     /** nc: the whole source of a `let t = n` / `t = n;` statement at the source's last use. */
     rustScalarAliasMoveSite(n: any, declaration: any): boolean;
+    /** 40i: an arm of `c ? n : z` that is the whole initializer of another local, at the source's last use outside a
+     *  loop (bybit withdraw `defaultAccountType`): only one arm runs and the source is never read again, so it moves. */
+    rustScalarTernaryArmMoveSite(n: any, declaration: any): boolean;
     /** nc: `x = y` from a typed `Option<String|i64|f64>` local of the same kind that is read again later (one function,
      *  no closure between). A string clones `y` where the boxed write cloned it (`y.clone().map(Value::from)..`); a
      *  number is `Copy` and its write prints `y` owned, so neither adds a copy. */
@@ -3349,6 +3352,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** zi: `n` is an arm of `c ? a : b`, the whole initializer of a local the joint solve currently types `Option<String>`
      *  (or `String`), and the other arm prints as that kind too: the target is decided with the slot, never left `Value`. */
     rustStrSlotTernaryArmJoined(n: any, element: any): boolean;
+    /** 40i: the other arm is a typed string local of the same function read here for the last time (bybit withdraw
+     *  `defaultAccountType`): the arm moves it into the target, so typing the target adds no copy. */
+    rustStrTernaryOtherArmMoves(other: any, ternary: any): boolean;
     /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
      *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
     rustSlotJoinsSolve(element: any): boolean;
