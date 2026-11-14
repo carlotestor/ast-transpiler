@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -51588,6 +51588,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // by-name dispatch arms, the virtual-dispatch preamble and the DerivedExchange forwarders from this table.
     this.rustSignatureTable = /* @__PURE__ */ new Map();
     this.rustMarketLocalDecisions = /* @__PURE__ */ new Map();
+    // ── ral-tg: record element handles ──
+    // `const r = rows[i]` over a `Vec<T>` typed result (T a raw record: Position, Order, ..) whose every use is the
+    // container of a literal-key base reader or the item of an `x.append (r)` statement holds `Option<&T>`: the
+    // borrowed row (no re-encode). `KeyRead for &Option<&T>` reads the row's own map and `From<Option<&T>> for Value`
+    // hands on its shared handle, so out of range, a Null row and a wrong-kind row read exactly as the boxed element.
+    this.rustRecordElemDecisions = /* @__PURE__ */ new WeakMap();
     this.rustOptMarketBoxing = /* @__PURE__ */ new Set();
     // `const [a, b] = this.handleXAndParams (..)` over a proven `Vec<Value>`: a `string` slot used only in
     // null / literal compares is `Option<String>`; a `boolean` slot used only as a condition is `bool`.
@@ -53478,6 +53484,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const currencyLocal = node.declarations.length === 1 ? this.printCurrencyLocalDeclaration(declaration, indent, varName) : void 0;
     if (currencyLocal !== void 0)
       return currencyLocal;
+    const recordElem = node.declarations.length === 1 ? this.printRecordElemLocal(declaration, indent, varName) : void 0;
+    if (recordElem !== void 0)
+      return recordElem;
     const nilKind = node.declarations.length === 1 ? this.rustNilLocalKind(declaration) : void 0;
     if (nilKind !== void 0) {
       return `${indent}let mut ${varName}: Option<${nilKind === "str" ? "String" : nilKind === "int" ? "i64" : "bool"}> = None`;
@@ -60953,14 +60962,69 @@ ${i1}}`;
     const key = this.rustSkipWrappers(node.argumentExpression);
     if (elem === "map")
       return `crate::value::KeyRead::read(&&${name}, &${this.printNode(key, 0).trim()})`;
-    let index;
+    return `${name}.get(${this.printTypedResultIndex(key)}).map(crate::Value::from).unwrap_or_default()`;
+  }
+  printTypedResultIndex(key) {
     if (isNumericLiteral4(key))
-      index = String(Number(key.text));
-    else if (this.rustI64CounterUse(key))
-      index = `${super.printIdentifier(key)} as usize`;
-    else
-      index = `${this.printNode(key, 0).trim()}.as_i64().unwrap_or(-1) as usize`;
-    return `${name}.get(${index}).map(crate::Value::from).unwrap_or_default()`;
+      return String(Number(key.text));
+    if (this.rustI64CounterUse(key))
+      return `${super.printIdentifier(key)} as usize`;
+    return `${this.printNode(key, 0).trim()}.as_i64().unwrap_or(-1) as usize`;
+  }
+  rustRecordElemLocal(declaration) {
+    if (declaration === void 0 || !isVariableDeclaration3(declaration))
+      return void 0;
+    let decision = this.rustRecordElemDecisions.get(declaration);
+    if (decision === void 0) {
+      this.rustRecordElemDecisions.set(declaration, false);
+      decision = this.rustRecordElemLocalUncached(declaration) ?? false;
+      this.rustRecordElemDecisions.set(declaration, decision);
+    }
+    return decision === false ? void 0 : decision;
+  }
+  rustRecordElemLocalUncached(declaration) {
+    if (!isIdentifier3(declaration.name) || declaration.parent?.declarations?.length !== 1 || (declaration.parent.flags & NodeFlags4.Const) === 0)
+      return void 0;
+    const file = String(declaration.getSourceFile?.()?.fileName ?? "");
+    if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file))
+      return void 0;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    if (init === void 0 || !isElementAccessExpression4(init) || !isIdentifier3(init.expression))
+      return void 0;
+    const rows = this.rustCallLocalOf(init.expression);
+    if (rows === void 0 || this.rustTypedResultElemKind(rows.initializer) !== "vec" || !this.rustTypedResultElemUse(init.expression, "vec"))
+      return void 0;
+    const m = /^Vec<crate::types::(\w+)>$/.exec(this.rustTypedCallResultType(rows.initializer) ?? "");
+    if (m === null)
+      return void 0;
+    const scope = this.rustEnclosingFunction(declaration);
+    let uses = 0;
+    const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
+      if (this.rustEnclosingFunction(n) !== scope)
+        return false;
+      const up = n.parent;
+      if (up === void 0 || !isCallExpression6(up))
+        return false;
+      uses++;
+      if (up.arguments[0] === n && this.rustBorrowedDictReader(up) !== void 0)
+        return true;
+      return up.arguments.length === 1 && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && String(up.expression.name.text) === "append" && up.parent?.kind === SyntaxKind7.ExpressionStatement;
+    });
+    return ok && uses > 0 ? m[1] : void 0;
+  }
+  rustRecordElemLocalOf(node) {
+    if (node === void 0 || !isIdentifier3(node))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    return declaration !== void 0 && declaration.name !== node && this.rustRecordElemLocal(declaration) !== void 0 ? declaration : void 0;
+  }
+  /** `let mut r: Option<&crate::types::T> = rows.get(i)` for a record element handle. */
+  printRecordElemLocal(declaration, indent, varName) {
+    const type = this.rustRecordElemLocal(declaration);
+    if (type === void 0)
+      return void 0;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    return `${indent}let mut ${varName}: Option<&crate::types::${type}> = ${super.printIdentifier(init.expression)}.get(${this.printTypedResultIndex(this.rustSkipWrappers(init.argumentExpression))})`;
   }
   rustCallLocalOf(node) {
     if (node === void 0 || !isIdentifier3(node))
@@ -68505,7 +68569,7 @@ ${iden}}`;
     if (recv === void 0 || !isIdentifier3(recv))
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(recv);
-    const owned = declaration !== void 0 && declaration !== recv && (this.rustBorrowedDictLocal(declaration) || this.rustHandedDictLocal(declaration) || this.rustOptMarketLocalOf(recv) !== void 0 || this.rustSafeMarketLocalOf(recv) !== void 0 || this.rustMarketSlotParamOf(recv) !== void 0 || this.rustCurrencySlotParamOf(recv) !== void 0 || this.rustCurrencyLocalOf(recv) !== void 0 || this.rustTypedMarketLocalOf(recv) !== void 0 && this.printTypedMarketRead(node) === void 0);
+    const owned = declaration !== void 0 && declaration !== recv && (this.rustBorrowedDictLocal(declaration) || this.rustHandedDictLocal(declaration) || this.rustOptMarketLocalOf(recv) !== void 0 || this.rustSafeMarketLocalOf(recv) !== void 0 || this.rustMarketSlotParamOf(recv) !== void 0 || this.rustCurrencySlotParamOf(recv) !== void 0 || this.rustCurrencyLocalOf(recv) !== void 0 || this.rustRecordElemLocalOf(recv) !== void 0 || this.rustTypedMarketLocalOf(recv) !== void 0 && this.printTypedMarketRead(node) === void 0);
     if (!owned && !(this.rustContainerBoxUses.get(recv) !== void 0 && this.rustReadBearerKind(recv) !== void 0))
       return void 0;
     const key = this.rustSkipWrappers(node.arguments[1]);
