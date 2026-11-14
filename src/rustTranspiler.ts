@@ -18603,7 +18603,9 @@ export class RustTranspiler extends BaseTranspiler {
 
     rustBuiltReturnBoxUse(n: any, init: any, literalDict = false): boolean {
         const up: any = n.parent;
-        if (up === undefined || !literalDict && (init === undefined || !isCallExpression(init) || this.rustBuiltReturnSourceKind(init) === undefined)) return false;
+        // ral-yc: a never-null venue container result (rustVenueContainerReturnKind) is a built container too
+        if (up === undefined || !literalDict && (init === undefined || !isCallExpression(init) || (this.rustBuiltReturnSourceKind(init) === undefined
+            && !(this.rustVenueContainerReturnKind(init) !== undefined && this.rustVenueContainerReturnKind(init)?.nullable === false)))) return false;
         // `this.tickers[k] = x` (a plain base cache field, one key, statement): the field insert stores the handle
         if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && isElementAccessExpression(up.left)
             && up.parent?.kind === SyntaxKind.ExpressionStatement && (this.rustFieldKeyReceiver(up.left.expression) !== undefined || this.rustDictShapedFieldInsert(up.left.expression))) {
@@ -22345,7 +22347,9 @@ export class RustTranspiler extends BaseTranspiler {
             const decl: any = this.rustDeclaredNode(arg);
             if (decl === undefined || !isVariableDeclaration(decl) || !isIdentifier(decl.name)) return false;
             const init: any = decl.initializer === undefined ? undefined : this.rustSkipWrappers(decl.initializer);
-            return init === undefined || isCallExpression(init) || isArrayLiteralExpression(init) || isObjectLiteralExpression(init) || this.literalKindOfNode(init) === 'null';
+            // ral-yc: an awaited venue result of this container kind (rustVenueContainerReturnKind) is held typed: lent too
+            return init === undefined || isCallExpression(init) || isArrayLiteralExpression(init) || isObjectLiteralExpression(init) || this.literalKindOfNode(init) === 'null'
+                || (init.kind === SyntaxKind.AwaitExpression && isCallExpression(this.rustSkipWrappers(init.expression)) && this.rustVenueContainerReturnKind(this.rustSkipWrappers(init.expression)) !== undefined);
         };
         // ral-tf: a hash / topic list slot binds only where a caller holds a list that is not already a `Vec` (which boxes anyway)
         const hashList = RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type);
