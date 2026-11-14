@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -65221,17 +65221,16 @@ ${idn}}`;
     this.rustI64ClosedUses.add(node);
     return true;
   }
-  /** True when every occurrence of `name` in the body printed as a `.get(name as usize)` read or a `Value::Int(name)` box. */
+  /** True when every occurrence of `name` in the body printed as a `.get(name as usize)` read or a `Value::Int(name)` box.
+   *  wb: a body that never reads the counter is closed too (only the step and the bound see it). */
   rustI64BodyIsClosed(body, name) {
-    let closed = 0;
     for (const n of this.rustScopeNameNodes(body, name)) {
       if (isIdentifier3(n) && this.rustIdentifierIsPropertyName(n) && n.parent.kind !== SyntaxKind7.ShorthandPropertyAssignment)
         continue;
       if (!isIdentifier3(n) || !this.rustI64ClosedUses.has(n))
         return false;
-      closed++;
     }
-    return closed > 0;
+    return true;
   }
   /** `i < X.length` whose condition printed as a native compare over a native `len()`: the place `X`. */
   rustLengthCounterBound(node, counter) {

@@ -1950,7 +1950,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustI64CounterOf(node: any): any;
     private rustI64ClosedUses;
     rustI64CounterUse(node: any): boolean;
-    /** True when every occurrence of `name` in the body printed as a `.get(name as usize)` read or a `Value::Int(name)` box. */
+    /** True when every occurrence of `name` in the body printed as a `.get(name as usize)` read or a `Value::Int(name)` box.
+     *  wb: a body that never reads the counter is closed too (only the step and the bound see it). */
     rustI64BodyIsClosed(body: any, name: string): boolean;
     /** `i < X.length` whose condition printed as a native compare over a native `len()`: the place `X`. */
     rustLengthCounterBound(node: any, counter: string): string | undefined;
