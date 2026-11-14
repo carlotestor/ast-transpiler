@@ -2434,17 +2434,44 @@ export class RustTranspiler extends BaseTranspiler {
         let kind = this.rustNilLocalDecisions.get(declaration);
         if (kind === undefined) {
             this.rustNilLocalDecisions.set(declaration, null); // re-entrancy guard
+            this.rustNilDeciding.push(declaration);
             try {
                 kind = this.rustNilLocalKindUncached(declaration) ?? null;
             } catch (e) {
                 kind = null;
+            } finally {
+                this.rustNilDeciding.pop();
             }
             this.rustNilLocalDecisions.set(declaration, kind);
+            // ral-40a: locals decided while assuming this one `bool` (a `!x` cycle) are asked again when it is not
+            const assumed = this.rustNilBoolAssumed.get(declaration);
+            if (assumed !== undefined) {
+                this.rustNilBoolAssumed.delete(declaration);
+                if (kind !== 'bool') for (const d of assumed) this.rustNilLocalDecisions.delete(d);
+            }
         }
         return kind ?? undefined;
     }
 
     private rustNilCandidateNames = new WeakMap<Node, Set<string>>();
+
+    // ral-40a: the nil locals being decided (innermost last) and, per local, those decided while assuming it `bool`
+    private rustNilDeciding: any[] = [];
+    private rustNilBoolAssumed = new Map<any, any[]>();
+
+    /** ral-40a: `y` of `y = !x` is a nil local typed `Option<bool>`, or one still being decided (a `!x` cycle such as
+     *  `inverse = !linear; .. linear = !inverse`): assumed `bool`, and every local decided under that assumption is
+     *  asked again if `y` settles otherwise, so the cycle settles by fixed point. */
+    rustNilBoolTarget(target: any): boolean {
+        if (this.rustNilLocalOfIdentifier(target)?.kind === 'bool') return true;
+        const declaration: any = this.rustDeclaredNode(target);
+        const at = declaration === undefined ? -1 : this.rustNilDeciding.indexOf(declaration);
+        if (at < 0 || at === this.rustNilDeciding.length - 1 || this.rustNilLocalDecisions.get(declaration) !== null) return false;
+        const assumed = this.rustNilBoolAssumed.get(declaration) ?? [];
+        assumed.push(...this.rustNilDeciding.slice(at + 1));
+        this.rustNilBoolAssumed.set(declaration, assumed);
+        return true;
+    }
 
     rustNilLocalOfIdentifier(node): { declaration: any, kind: string } | undefined {
         if (node === undefined || !isIdentifier(node) || this.checkerOrUndefined() === undefined) return undefined;
@@ -2556,6 +2583,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (isIdentifier(node)) {
             if (this.rustStringLocalIdentifierIsTyped(node)) return 'str';
             if (this.rustNilValueStrAlias(node)) return 'str';
+            // ral-40a: a native `bool` scalar local (never undefined) is a bool write, printed `Some(x)`
+            if (this.rustScalarLocalOf(node)?.kind === 'bool') return 'bool';
             return this.rustNilLocalOfIdentifier(node)?.kind;
         }
         // za: `c ? undefined : false` (arms each undefined or a boolean literal, one of each): `None` / `Some(lit)` per arm
@@ -2605,6 +2634,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.literalKindOfNode(node) === 'boolean') return true;
         if (isBinaryExpression(node) && RustTranspiler.COMPARISON_OPS.has(node.operatorToken.kind)) return true;
         if (isPrefixUnaryExpression(node) && node.operator === SyntaxKind.ExclamationToken) return true;
+        // ral-40a: a native `bool` scalar local is a leaf of the join (`a && b` over such leaves is never undefined)
+        if (isIdentifier(node) && this.rustScalarLocalOf(node)?.kind === 'bool') return true;
         if (isConditionalExpression(node)) return this.literalKindOfNode(this.unwrapParens(node.whenTrue)) === 'boolean' && this.literalKindOfNode(this.unwrapParens(node.whenFalse)) === 'boolean';
         if (isBinaryExpression(node) && (node.operatorToken.kind === SyntaxKind.AmpersandAmpersandToken || node.operatorToken.kind === SyntaxKind.BarBarToken)) {
             return this.rustNilDefiniteBool(node.left) && this.rustNilDefiniteBool(node.right);
@@ -2672,7 +2703,7 @@ export class RustTranspiler extends BaseTranspiler {
         while (up?.kind === SyntaxKind.ParenthesizedExpression) up = up.parent;
         if (!isBinaryExpression(up) || up.operatorToken.kind !== SyntaxKind.EqualsToken || !isIdentifier(up.left) || this.unwrapParens(up.right) !== not
             || up.parent?.kind !== SyntaxKind.ExpressionStatement || up.left.text === n.text) return false;
-        return this.rustNilLocalOfIdentifier(up.left)?.kind === 'bool';
+        return this.rustNilBoolTarget(up.left);
     }
 
     /** Box reads go only into plain `Value` slots: no `&mut` receivers, no native-typed callee slots. */
@@ -3087,6 +3118,7 @@ export class RustTranspiler extends BaseTranspiler {
             const arm = (a) => (this.literalKindOfNode(this.unwrapParens(a)) === 'null' ? 'None' : `Some(${this.unwrapParens(a).kind === SyntaxKind.TrueKeyword ? 'true' : 'false'})`);
             return `${name} = (if ${this.printCondition(node.condition, 0)} { ${arm(node.whenTrue)} } else { ${arm(node.whenFalse)} })`;
         }
+        if (local.kind === 'bool' && isIdentifier(node) && this.rustScalarLocalOf(node)?.kind === 'bool') return `${name} = Some(${super.printIdentifier(node)})`;
         if (isIdentifier(node)) return `${name} = ${super.printIdentifier(node)}.clone()`;
         const text = this.printNode(node, 0).trim();
         if (local.kind === 'str') {
@@ -9555,6 +9587,8 @@ export class RustTranspiler extends BaseTranspiler {
                 // a typed target prints the write itself, from this local's native value
                 const target = isIdentifier(parent.left) ? this.rustScalarLocalOf(parent.left)?.kind : undefined;
                 if (target !== undefined) return target === kind || target === `o${kind}` ? 'native' : undefined;
+                // ral-40a: a bool local written into a nil local typed `Option<bool>` prints `y = Some(x)` (no box)
+                if (kind === 'bool' && isIdentifier(parent.left) && this.rustNilLocalOfIdentifier(parent.left)?.kind === 'bool') return 'native';
                 return this.rustScalarPlainValueTarget(parent.left) ? 'xbox' : undefined;
             }
             if ((RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) || op === SyntaxKind.PercentToken) && this.rustScalarExpressionKind(parent) !== undefined) return 'native';

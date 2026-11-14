@@ -14516,3 +14516,39 @@ describe('ral-40a: nil-declared Dict locals lent to extend', () => {
         expect(de).toContain('let mut deepParams: Value = Value::Null');
     });
 });
+
+describe('ral-40a: bool nil locals written through `!` cycles and bool locals', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Bool = boolean | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: any = undefined): string | undefined { return o; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nimport type { Dict, Bool } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseKind (row: Dict, kind: string) {\n        let linear: Bool = undefined;\n        let inverse: Bool = undefined;\n        if (kind === 'a') {\n            linear = (kind.indexOf ('_v') >= 0);\n            inverse = !linear;\n        } else {\n            if (kind === 'b') {\n                inverse = true;\n            } else {\n                inverse = false;\n            }\n            linear = !inverse;\n        }\n        return { 'linear': linear, 'inverse': inverse };\n    }\n    parseAny (rows: Dict[], wanted: boolean) {\n        let anyActive = false;\n        for (let i = 0; i < rows.length; i++) {\n            if (this.safeString (rows[i], 's') === 'active') {\n                anyActive = true;\n            }\n        }\n        let active: Bool = undefined;\n        if (wanted) {\n            active = anyActive;\n        }\n        return { 'active': active };\n    }\n    parseMixed (row: Dict, kind: string) {\n        let spot = undefined;\n        let other = undefined;\n        if (kind === 'a') {\n            spot = row['x'];\n            other = !spot;\n        } else {\n            other = true;\n            spot = !other;\n        }\n        return { 'spot': spot, 'other': other };\n    }\n}\n";
+    const out = () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-40a-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('a `!x` cycle between two nil locals settles both as Option<bool>', () => {
+        const text = out();
+        const k = text.slice(text.indexOf('fn parseKind'), text.indexOf('fn parseAny'));
+        expect(k).toContain('let mut linear: Option<bool> = None');
+        expect(k).toContain('let mut inverse: Option<bool> = None');
+        expect(k).toContain('inverse = Some(!(linear == Some(true)));');
+        expect(k).toContain('linear = Some(!(inverse == Some(true)));');
+        expect(k).not.toContain('.clone()');
+    });
+    test('a native bool local written into a nil local is `Some(x)` and keeps its own rule', () => {
+        const text = out();
+        const a = text.slice(text.indexOf('fn parseAny'), text.indexOf('fn parseMixed'));
+        expect(a).toContain('let mut anyActive: bool = false');
+        expect(a).toContain('let mut active: Option<bool> = None');
+        expect(a).toContain('active = Some(anyActive);');
+        expect(a).not.toContain('.clone()');
+    });
+    test('negative: a cycle whose other local has a Value write stays mixed (both boxed)', () => {
+        const text = out();
+        const m = text.slice(text.indexOf('fn parseMixed'));
+        expect(m).toContain('let mut spot: Value = Value::Null');
+        expect(m).not.toContain('Option<bool>');
+    });
+});

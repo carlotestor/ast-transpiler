@@ -51515,6 +51515,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustNativeCompares = /* @__PURE__ */ new WeakSet();
     this.rustNilLocalDecisions = /* @__PURE__ */ new Map();
     this.rustNilCandidateNames = /* @__PURE__ */ new WeakMap();
+    // ral-40a: the nil locals being decided (innermost last) and, per local, those decided while assuming it `bool`
+    this.rustNilDeciding = [];
+    this.rustNilBoolAssumed = /* @__PURE__ */ new Map();
     this.rustNilStrLentLocals = /* @__PURE__ */ new WeakSet();
     // ── alias writes as moves (rustNilAliasMove) ──
     // `x = y` from a typed `Option<..>` local of the same kind that is never read after the write moves the
@@ -53705,14 +53708,39 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     let kind = this.rustNilLocalDecisions.get(declaration);
     if (kind === void 0) {
       this.rustNilLocalDecisions.set(declaration, null);
+      this.rustNilDeciding.push(declaration);
       try {
         kind = this.rustNilLocalKindUncached(declaration) ?? null;
       } catch (e) {
         kind = null;
+      } finally {
+        this.rustNilDeciding.pop();
       }
       this.rustNilLocalDecisions.set(declaration, kind);
+      const assumed = this.rustNilBoolAssumed.get(declaration);
+      if (assumed !== void 0) {
+        this.rustNilBoolAssumed.delete(declaration);
+        if (kind !== "bool")
+          for (const d of assumed)
+            this.rustNilLocalDecisions.delete(d);
+      }
     }
     return kind ?? void 0;
+  }
+  /** ral-40a: `y` of `y = !x` is a nil local typed `Option<bool>`, or one still being decided (a `!x` cycle such as
+   *  `inverse = !linear; .. linear = !inverse`): assumed `bool`, and every local decided under that assumption is
+   *  asked again if `y` settles otherwise, so the cycle settles by fixed point. */
+  rustNilBoolTarget(target) {
+    if (this.rustNilLocalOfIdentifier(target)?.kind === "bool")
+      return true;
+    const declaration = this.rustDeclaredNode(target);
+    const at = declaration === void 0 ? -1 : this.rustNilDeciding.indexOf(declaration);
+    if (at < 0 || at === this.rustNilDeciding.length - 1 || this.rustNilLocalDecisions.get(declaration) !== null)
+      return false;
+    const assumed = this.rustNilBoolAssumed.get(declaration) ?? [];
+    assumed.push(...this.rustNilDeciding.slice(at + 1));
+    this.rustNilBoolAssumed.set(declaration, assumed);
+    return true;
   }
   rustNilLocalOfIdentifier(node) {
     if (node === void 0 || !isIdentifier3(node) || this.checkerOrUndefined() === void 0)
@@ -53848,6 +53876,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return "str";
       if (this.rustNilValueStrAlias(node))
         return "str";
+      if (this.rustScalarLocalOf(node)?.kind === "bool")
+        return "bool";
       return this.rustNilLocalOfIdentifier(node)?.kind;
     }
     if (this.rustNilBoolNullTernary(node))
@@ -53903,6 +53933,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (isBinaryExpression5(node) && _RustTranspiler.COMPARISON_OPS.has(node.operatorToken.kind))
       return true;
     if (isPrefixUnaryExpression3(node) && node.operator === SyntaxKind7.ExclamationToken)
+      return true;
+    if (isIdentifier3(node) && this.rustScalarLocalOf(node)?.kind === "bool")
       return true;
     if (isConditionalExpression4(node))
       return this.literalKindOfNode(this.unwrapParens(node.whenTrue)) === "boolean" && this.literalKindOfNode(this.unwrapParens(node.whenFalse)) === "boolean";
@@ -53975,7 +54007,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       up = up.parent;
     if (!isBinaryExpression5(up) || up.operatorToken.kind !== SyntaxKind7.EqualsToken || !isIdentifier3(up.left) || this.unwrapParens(up.right) !== not || up.parent?.kind !== SyntaxKind7.ExpressionStatement || up.left.text === n.text)
       return false;
-    return this.rustNilLocalOfIdentifier(up.left)?.kind === "bool";
+    return this.rustNilBoolTarget(up.left);
   }
   /** Box reads go only into plain `Value` slots: no `&mut` receivers, no native-typed callee slots. */
   rustNilBoxCallOk(call, at) {
@@ -54410,6 +54442,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const arm = (a) => this.literalKindOfNode(this.unwrapParens(a)) === "null" ? "None" : `Some(${this.unwrapParens(a).kind === SyntaxKind7.TrueKeyword ? "true" : "false"})`;
       return `${name} = (if ${this.printCondition(node.condition, 0)} { ${arm(node.whenTrue)} } else { ${arm(node.whenFalse)} })`;
     }
+    if (local.kind === "bool" && isIdentifier3(node) && this.rustScalarLocalOf(node)?.kind === "bool")
+      return `${name} = Some(${super.printIdentifier(node)})`;
     if (isIdentifier3(node))
       return `${name} = ${super.printIdentifier(node)}.clone()`;
     const text = this.printNode(node, 0).trim();
@@ -61044,6 +61078,8 @@ ${ind}];`;
         const target = isIdentifier3(parent.left) ? this.rustScalarLocalOf(parent.left)?.kind : void 0;
         if (target !== void 0)
           return target === kind || target === `o${kind}` ? "native" : void 0;
+        if (kind === "bool" && isIdentifier3(parent.left) && this.rustNilLocalOfIdentifier(parent.left)?.kind === "bool")
+          return "native";
         return this.rustScalarPlainValueTarget(parent.left) ? "xbox" : void 0;
       }
       if ((_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) || op === SyntaxKind7.PercentToken) && this.rustScalarExpressionKind(parent) !== void 0)

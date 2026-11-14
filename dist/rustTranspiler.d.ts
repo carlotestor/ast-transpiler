@@ -338,6 +338,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `'str' | 'int' | 'bool'` when the nil-declared local prints `Option<..>`, else undefined. */
     rustNilLocalKind(declaration: any): string | undefined;
     private rustNilCandidateNames;
+    private rustNilDeciding;
+    private rustNilBoolAssumed;
+    /** ral-40a: `y` of `y = !x` is a nil local typed `Option<bool>`, or one still being decided (a `!x` cycle such as
+     *  `inverse = !linear; .. linear = !inverse`): assumed `bool`, and every local decided under that assumption is
+     *  asked again if `y` settles otherwise, so the cycle settles by fixed point. */
+    rustNilBoolTarget(target: any): boolean;
     rustNilLocalOfIdentifier(node: any): {
         declaration: any;
         kind: string;
