@@ -689,6 +689,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustListLengthInit(node: any): boolean;
     rustListLengthText(node: any): string;
     rustElementReadScalarKind(node: any): string | undefined;
+    /** ral-ug: `t[i]` (a literal index) of a never-written `const t = this.m (..)` whose every return puts an exact
+     *  Bool-or-Null at slot i (`handleOptionBoolAndParams[2]`: `checkOptionBool`): `Option<bool>`, as the slot rule. */
+    rustExactBoolTupleRead(node: any, owner: any): string | undefined;
     /** ne: `row['k']` (a literal key) off a local printed as a typed map (`Dict` / `IndexMap`) whose checker type
      *  declares `k` a string (a unified `Ticker` / `Trade` / `Order` row): the `Option<String>` the boxed read held
      *  (a non-string slot reads as `None`, like the lf / md market-field rule), only as a `const`/`let` initializer. */
@@ -1364,6 +1367,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustRecordElemLocal(declaration: any): string | undefined;
     rustRecordElemLocalUncached(declaration: any): string | undefined;
     rustRecordElemLocalOf(node: any): any;
+    private rustBookSideDecisions;
+    rustBookSideLocal(declaration: any): boolean;
+    rustBookSideLocalUncached(declaration: any): boolean;
+    rustBookSideLocalOf(node: any): boolean;
+    printBookSideLocal(declaration: any, indent: string, varName: string): string | undefined;
+    /** `s.length` / `s[i]` on a side handle: the marker's own length and level reads. */
+    printBookSideRead(node: any): string | undefined;
+    /** A record element handle handed on whole (`list.push (r)`, `return r`) boxes the row's shared handle there. */
+    printRecordElemBox(node: any): string | undefined;
     /** `let mut r: Option<&crate::types::T> = rows.get(i)` for a record element handle. */
     printRecordElemLocal(declaration: any, indent: string, varName: string): string | undefined;
     rustCallLocalOf(node: any): any;
