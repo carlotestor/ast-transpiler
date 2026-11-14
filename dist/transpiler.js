@@ -73229,7 +73229,7 @@ ${this.getIden(identation)}}`;
     if (optional && !this.rustVenueOptionalSlotOpen(method, param))
       return void 0;
     const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
-    if (file.search(/(?:^|\/)ts\/src\/(?:pro\/|prediction\/)?[^/]+\.ts$/) < 0)
+    if (file.search(/(?:^|\/)ts\/src\/(?:pro\/|prediction\/)?[^/]+\.ts$/) < 0 && !this.rustBaseOnlyMethod(method, file))
       return void 0;
     if ((method.modifiers ?? []).some((m) => m.kind === SyntaxKind7.StaticKeyword))
       return void 0;
@@ -73269,6 +73269,25 @@ ${this.getIden(identation)}}`;
         return void 0;
     }
     return rustType;
+  }
+  /** A sync method of the base `Exchange` class with no override in any venue file, no trait slot and no typed
+   *  signature: every call resolves to this one body, so typing its parameter changes no other declaration. */
+  rustBaseOnlyMethod(method, file) {
+    const at = file.search(/(?:^|\/)ts\/src\/base\/(?:Exchange|\.__ExchangeNoOverloads)\.ts$/);
+    if (at < 0 || this.isAsyncFunction(method))
+      return false;
+    const name = String(method.name.text);
+    if (!_RustTranspiler.RUST_BASE_SCALAR_PARAM_METHODS.includes(name))
+      return false;
+    if (this.toSnakeCaseName(name) in (this.rustVirtualDispatch ?? {}) || this.rustNonVirtualShims?.has(this.toSnakeCaseName(name)))
+      return false;
+    const root = file.slice(0, file.indexOf("ts/src/", at)) + "ts/src";
+    let predictionOverride = false;
+    try {
+      predictionOverride = new RegExp(`^\\s+(?:(?:override|async|public|protected)\\s+)*${name}\\s*\\(`, "m").test(fs3.readFileSync(root + "/base/PredictionExchange.ts", "utf8"));
+    } catch (e) {
+    }
+    return !predictionOverride && !this.rustVenueReturnTypes(root).has(name);
   }
   /** Rust type of a scalar TS parameter type: string -> `&str`, `number` / `Num` -> `f64`, `int` / `Int` -> `i64`,
    *  boolean -> `bool`; a nullable part makes it an `Option` (never for `bool`). */
@@ -75776,6 +75795,9 @@ _RustTranspiler.PARAMS_SLOT_ARG = {
   handleSubTypeAndParams: 2,
   handleMaxEntriesPerRequestAndParams: 2
 };
+// Base methods whose scalar parameters print typed (measured one by one: each frees more locals than it adds
+// conversions at its callers); a method listed here must have no venue override and no hand-written body.
+_RustTranspiler.RUST_BASE_SCALAR_PARAM_METHODS = ["convertExpireDate", "convertExpireDateToMarketIdDate", "convertMarketIdExpireDate"];
 // ── typed currencies: the `currency` slot of base `safeCurrency` / `safeCurrencyCode` (and overrides) ──
 // It prints as a lent `Option<&crate::types::Currency>`; a caller passes `None`, a slot parameter as is, or
 // decodes a `Value` currency once (until its producer is typed).

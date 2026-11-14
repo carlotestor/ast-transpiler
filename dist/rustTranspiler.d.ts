@@ -2961,6 +2961,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustVenueStrCallers;
     rustVenueStrParamType(param: any): string | undefined;
     rustVenueStrParamTypeUncached(param: any): string | undefined;
+    private static readonly RUST_BASE_SCALAR_PARAM_METHODS;
+    /** A sync method of the base `Exchange` class with no override in any venue file, no trait slot and no typed
+     *  signature: every call resolves to this one body, so typing its parameter changes no other declaration. */
+    rustBaseOnlyMethod(method: any, file: string): boolean;
     /** Rust type of a scalar TS parameter type: string -> `&str`, `number` / `Num` -> `f64`, `int` / `Int` -> `i64`,
      *  boolean -> `bool`; a nullable part makes it an `Option` (never for `bool`). */
     rustVenueScalarTypeOf(type: any, typeNode: any): string | undefined;
