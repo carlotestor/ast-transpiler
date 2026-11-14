@@ -57676,6 +57676,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "targ";
     if (_is.isCallExpression.call(void 0, parent) && parent.expression !== n && (_nullishCoalesce({ "Option<&str>": ["str", "ostr"], "Option<i64>": ["int", "oint"] }[this.rustTypedFilterSlot(parent, parent.arguments.indexOf(n))], () => ( []))).includes(kind))
       return "targ";
+    if ((kind === "int" || kind === "oint") && _is.isCallExpression.call(void 0, parent) && parent.expression !== n && _is.isElementAccessExpression.call(void 0, parent.expression) && parent.expression.expression.kind === _ast.SyntaxKind.ThisKeyword && _is.isIdentifier.call(void 0, parent.expression.argumentExpression))
+      return "box";
     if (_is.isCallExpression.call(void 0, parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
       return this.rustNilBoxSlotOk(parent, parent.arguments.indexOf(n)) || this.rustWsClientCallArg(parent, kind) ? "box" : this.rustScalarExpressionUseForm(n, kind);
     }
@@ -64023,11 +64025,13 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   /** An expression that is exactly Int-or-null / Bool-or-null in the `Value` form. */
   rustExactScalarExpr(expr, want, method, depth) {
     const node = this.unwrapParens(expr);
-    if (node === void 0 || depth > 4)
+    if (node === void 0)
       return false;
     const literal2 = this.literalKindOfNode(node);
     if (literal2 === "null")
       return true;
+    if (depth > 4)
+      return false;
     if (want === "bool") {
       if (literal2 === "boolean")
         return true;
@@ -64037,6 +64041,9 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         return true;
     } else if (this.rustScalarIntLiteral(node) !== void 0)
       return true;
+    if (node.kind === _ast.SyntaxKind.ConditionalExpression) {
+      return this.rustExactScalarExpr(node.whenTrue, want, method, depth + 1) && this.rustExactScalarExpr(node.whenFalse, want, method, depth + 1);
+    }
     if (want === "num" && _is.isIdentifier.call(void 0, node) && _is.isParameterDeclaration.call(void 0, this.rustDeclaredNode(node)) && this.rustEnclosingFunction(this.rustDeclaredNode(node)) === method)
       return true;
     if (_is.isCallExpression.call(void 0, node) && _is.isPropertyAccessExpression.call(void 0, node.expression) && node.expression.expression.kind === _ast.SyntaxKind.ThisKeyword) {
