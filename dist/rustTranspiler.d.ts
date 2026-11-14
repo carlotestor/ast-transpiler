@@ -3532,6 +3532,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-ve: a required `string` parameter of a per-venue ws method that every caller in its file fills with a
      *  `this.urls[..]` read: the url of a ws client (requestId / subscriptionExistsForHash / waitForPendingUnsubscribe). */
     rustVenueUrlParam(method: any, param: any): boolean;
+    /** ral-yc: a required `&str` venue parameter whose every read is a ws url / hash slot (`client(x)`, `watch` /
+     *  `watchMultiple` url, `watch` hashes: all `impl Into<Option<&str>>`) needs no `Value` binding: the borrow goes
+     *  there as it came in. Never written, never read anywhere else. */
+    private rustVenueStrUnbound;
+    rustVenueStrParamUnbound(param: any): boolean;
+    rustVenueStrParamUnboundUncached(param: any): boolean;
+    rustVenueStrParamUnboundRead(node: any): boolean;
     /** Scalar-local kind of a per-venue string parameter read through its `Value` binding. */
     rustVenueStrParamKind(param: any): string | undefined;
     /** The per-venue string type of the callee parameter at `at`. */

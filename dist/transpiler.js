@@ -51842,6 +51842,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustVenueStrDecisions = /* @__PURE__ */ new WeakMap();
     this.rustVenueStrCallers = /* @__PURE__ */ new WeakMap();
     this.rustOverrideGroupAgreeByRoot = /* @__PURE__ */ new Map();
+    /** ral-yc: a required `&str` venue parameter whose every read is a ws url / hash slot (`client(x)`, `watch` /
+     *  `watchMultiple` url, `watch` hashes: all `impl Into<Option<&str>>`) needs no `Value` binding: the borrow goes
+     *  there as it came in. Never written, never read anywhere else. */
+    this.rustVenueStrUnbound = /* @__PURE__ */ new WeakMap();
     this.rustCurrencySlotDecisions = /* @__PURE__ */ new WeakMap();
     this.rustCurrencyBoxing = /* @__PURE__ */ new Set();
     this.rustCurrencyLocalDecisions = /* @__PURE__ */ new Map();
@@ -70034,7 +70038,7 @@ ${iden}}`;
   }
   rustBuiltReturnBoxUse(n, init, literalDict = false) {
     const up = n.parent;
-    if (up === void 0 || !literalDict && (init === void 0 || !isCallExpression6(init) || this.rustBuiltReturnSourceKind(init) === void 0))
+    if (up === void 0 || !literalDict && (init === void 0 || !isCallExpression6(init) || this.rustBuiltReturnSourceKind(init) === void 0 && !(this.rustVenueContainerReturnKind(init) !== void 0 && this.rustVenueContainerReturnKind(init)?.nullable === false)))
       return false;
     if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustFieldKeyReceiver(up.left.expression) !== void 0 || this.rustDictShapedFieldInsert(up.left.expression))) {
       return !new RegExp(`\\b${String(n.text)}\\b`).test(String(up.left.argumentExpression.getText()));
@@ -70830,6 +70834,8 @@ ${iden}}`;
   /** A `watch` url / hash slot takes `impl Into<Option<&str>>`: a string local or literal as `&str`, anything else lent as `&Value`. */
   rustWsWatchSlotText(arg, printed) {
     const inner = this.unwrapParens(arg);
+    if (isIdentifier3(inner) && this.rustVenueStrParamUnboundRead(inner))
+      return _RustTranspiler.rustLentMark(super.printIdentifier(inner));
     if (this.rustWsStrKey(inner) || isStringLiteral3(inner) && !(inner.text in this.StringLiteralReplacements))
       return this.rustWsKeyText(inner);
     const kind = isIdentifier3(inner) ? this.rustScalarIdentifierKind(inner) : void 0;
@@ -74021,7 +74027,7 @@ ${iden}}`;
       if (decl === void 0 || !isVariableDeclaration3(decl) || !isIdentifier3(decl.name))
         return false;
       const init = decl.initializer === void 0 ? void 0 : this.rustSkipWrappers(decl.initializer);
-      return init === void 0 || isCallExpression6(init) || isArrayLiteralExpression4(init) || isObjectLiteralExpression4(init) || this.literalKindOfNode(init) === "null";
+      return init === void 0 || isCallExpression6(init) || isArrayLiteralExpression4(init) || isObjectLiteralExpression4(init) || this.literalKindOfNode(init) === "null" || init.kind === SyntaxKind7.AwaitExpression && isCallExpression6(this.rustSkipWrappers(init.expression)) && this.rustVenueContainerReturnKind(this.rustSkipWrappers(init.expression)) !== void 0;
     };
     const hashList = _RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type);
     const lends = (call, arg) => lendable(arg) && !(hashList && (this.rustVecLocalIsTyped(this.rustDeclaredNode(arg)) || Array.from(call.arguments ?? []).some((a) => a !== arg && isIdentifier3(a) && a.text === arg.text)));
@@ -74623,7 +74629,7 @@ ${iden}}`;
   }
   /** `let mut params: Value = params.into();` heading a method whose params dict is lent: the body reads the `Value`. */
   rustLentParamsBinding(node, identation) {
-    const lent = Array.from(node.parameters ?? []).filter((p) => this.rustParamIsLentDict(p) || this.rustParamIsLentList(p) || this.rustParamIsLentResponse(p) || this.rustParamIsLentVenue(p) || this.rustVenueStrParamType(p) !== void 0);
+    const lent = Array.from(node.parameters ?? []).filter((p) => this.rustParamIsLentDict(p) || this.rustParamIsLentList(p) || this.rustParamIsLentResponse(p) || this.rustParamIsLentVenue(p) || this.rustVenueStrParamType(p) !== void 0 && !this.rustVenueStrParamUnbound(p));
     return lent.map((p) => {
       const name = this.printNode(p.name, 0);
       return `${this.getIden(identation + 2)}let mut ${name}: Value = ${name}.into();
@@ -77373,6 +77379,47 @@ ${this.getIden(identation)}}`;
     const at = Array.from(method.parameters).indexOf(param);
     const calls = this.rustVenueStrCallSites(method);
     return calls.length > 0 && calls.every((call) => this.rustWsUrlReadIdent(call.arguments[at]));
+  }
+  rustVenueStrParamUnbound(param) {
+    if (param?.kind !== SyntaxKind7.Parameter || !isIdentifier3(param.name))
+      return false;
+    let known = this.rustVenueStrUnbound.get(param);
+    if (known === void 0) {
+      this.rustVenueStrUnbound.set(param, false);
+      try {
+        known = this.rustVenueStrParamUnboundUncached(param);
+      } catch (e) {
+        known = false;
+      }
+      this.rustVenueStrUnbound.set(param, known);
+    }
+    return known;
+  }
+  rustVenueStrParamUnboundUncached(param) {
+    if (this.rustVenueStrParamType(param) !== "&str")
+      return false;
+    const method = param.parent;
+    let uses = 0;
+    for (const n of this.rustScopeNameNodes(method, String(param.name.text))) {
+      if (n === param.name || n === param || n.parent === param)
+        continue;
+      if (!isIdentifier3(n) || this.rustDeclaredNode(n) !== param)
+        return false;
+      const call = n.parent;
+      if (!isCallExpression6(call) || call.expression === n || !isPropertyAccessExpression3(call.expression))
+        return false;
+      const name = String(call.expression.name.text);
+      if (!((name === "client" || name === "watch" || name === "watchMultiple") && call.arguments.length <= 5))
+        return false;
+      if (!this.rustWsWatchSlot(call, Array.from(call.arguments).indexOf(n)))
+        return false;
+      uses++;
+    }
+    return uses > 0;
+  }
+  rustVenueStrParamUnboundRead(node) {
+    const param = this.rustDeclaredNode(node);
+    return param?.kind === SyntaxKind7.Parameter && param.name !== node && this.rustVenueStrParamUnbound(param);
   }
   /** Scalar-local kind of a per-venue string parameter read through its `Value` binding. */
   rustVenueStrParamKind(param) {
