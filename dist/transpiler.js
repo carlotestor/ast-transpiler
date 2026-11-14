@@ -55314,7 +55314,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       this.rustScalarUseForms.set(n, form);
       if (form === "box" || form === "xbox" || form === "err") {
         boxed++;
-        if (form === "err" ? !this.rustLocalLastUse(n, declaration) : !(isReturnStatement4(n.parent) || this.rustLocalLastUse(n, declaration)))
+        if (form === "err" ? !this.rustErrMsgMoves(n, declaration) : !(isReturnStatement4(n.parent) || this.rustLocalLastUse(n, declaration)))
           copied++;
       } else if (form !== void 0 && !this.rustIdentifierIsPropertyName(n))
         nativeUses++;
@@ -55460,7 +55460,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       const up = n.parent;
       const selfArg = isCallExpression6(up) && up.expression !== n && isPropertyAccessExpression3(up.expression) && (up.expression.expression.kind === SyntaxKind7.ThisKeyword || up.expression.expression.kind === SyntaxKind7.SuperKeyword);
-      const errMove = up?.kind === SyntaxKind7.NewExpression && up.parent?.kind === SyntaxKind7.ThrowStatement && this.rustLocalLastUse(n, declaration);
+      const errMove = up?.kind === SyntaxKind7.NewExpression && up.parent?.kind === SyntaxKind7.ThrowStatement && this.rustRdOwnInit(declaration) && this.rustLocalLastUse(n, declaration);
       if (isCallExpression6(up) && up.expression !== n && !selfArg || up?.kind === SyntaxKind7.NewExpression && !errMove)
         ok = false;
       else if (!selfArg && !isReturnStatement4(up) && !this.rustLocalLastUse(n, declaration))
@@ -56912,7 +56912,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "kin";
     if (isCallExpression6(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== void 0)
       return "native";
-    if ((kind === "int" || kind === "num") && this.rustMathMinMaxValueArg(parent, n))
+    if ((kind === "int" || kind === "num") && this.rustMathMinMaxValueArg(parent, n) && this.rustRdOwnInit(this.rustDeclaredNode(n)))
       return "xbox";
     if (this.rustVenueStrLocalArg(n))
       return "targ";
@@ -57489,7 +57489,7 @@ ${binding(plan.indent)}` : ""), head: "" };
   }
   /** rd: a `String` error message at its provable last use moves into the constructor (`ToErrorMessage for String`). */
   rustErrMsgMoves(n, declaration) {
-    return this.rustScalarLocalOf(n)?.kind === "str" && this.rustLocalLastUse(n, declaration);
+    return this.rustScalarLocalOf(n)?.kind === "str" && this.rustRdOwnInit(declaration) && this.rustLocalLastUse(n, declaration);
   }
   /** rd: a box at a slot where the `Value` form cloned the local (a `this.`/`super.` argument, an object-literal value,
    *  a dict write, an array element): lending the `String` there costs that same one copy. */
@@ -58645,13 +58645,14 @@ ${binding(plan.indent)}` : ""), head: "" };
       return this.rustScalarValuePartnerTest(lk === void 0 ? right : left, lk === void 0 ? left : right, lk ?? rk, sign, dry);
     if (lk === void 0 !== (rk === void 0) && !equality) {
       const [typed, other, k] = lk === void 0 ? [right, left, rk] : [left, right, lk];
-      if (k !== "int" && k !== "num" || !isIdentifier3(typed) || this.rustScalarLocalOf(typed) === void 0 || !this.rustScalarValueNumber(other))
+      const own = isIdentifier3(typed) ? this.rustScalarLocalOf(typed) : void 0;
+      if (k !== "int" && k !== "num" || own === void 0 || !this.rustRdOwnInit(own.declaration) || !this.rustScalarValueNumber(other))
         return void 0;
       if (dry)
         return "_";
-      const own = k === "int" ? `(${text(k, typed)} as f64)` : text(k, typed);
+      const mine = k === "int" ? `(${text(k, typed)} as f64)` : text(k, typed);
       const value = `${this.printNode(other, 0).trim()}.as_f64().unwrap_or(f64::NAN)`;
-      return lk === void 0 ? `${value} ${sign} ${own}` : `${own} ${sign} ${value}`;
+      return lk === void 0 ? `${value} ${sign} ${mine}` : `${mine} ${sign} ${value}`;
     }
     if (lk === void 0 || rk === void 0)
       return void 0;
@@ -58807,6 +58808,26 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
     return (checked === "string" || checked === "number") && this.rustScalarInitShape(declaration.initializer);
+  }
+  /** rd: the scalar-literal / boxed initializer shapes this rule owns: a literal, a `+`/arithmetic chain, a list `.length`,
+   *  `indexOf` / `toString` / a string method, a clock or nonce, a `Math.*` or typed base call that is no `safe*` / `handle*`
+   *  reader (readers, ternaries, aliases, element reads and nil-declared locals keep their own rules). */
+  rustRdOwnInit(declaration) {
+    const init = declaration === void 0 || !isVariableDeclaration3(declaration) ? void 0 : this.unwrapParens(declaration.initializer);
+    if (init === void 0 || this.literalKindOfNode(init) === "null")
+      return false;
+    if (this.literalKindOfNode(init) !== void 0 || this.rustScalarIntLiteral(init) !== void 0 || this.rustScalarFloatLiteral(init) !== void 0)
+      return true;
+    if (isBinaryExpression5(init))
+      return true;
+    if (isPropertyAccessExpression3(init))
+      return this.rustListLengthInit(init);
+    if (!isCallExpression6(init) || !isPropertyAccessExpression3(init.expression))
+      return false;
+    const name = String(init.expression.name.text);
+    if (init.expression.expression.kind === SyntaxKind7.ThisKeyword)
+      return !/^(safe|handle)/.test(name);
+    return true;
   }
   /** rd: a non-literal operand printed as a `Value` whose checker type is `number` (`Int|Float|Null` at runtime). */
   rustScalarValueNumber(node) {
@@ -59005,6 +59026,9 @@ ${binding(plan.indent)}` : ""), head: "" };
   }
   /** Binary hook: arithmetic/ordered comparisons over typed operands, and `+=`/`-=` on a typed local. */
   printRustScalarBinary(node) {
+    const counterCompare = this.printI64CounterCompare(node);
+    if (counterCompare !== void 0)
+      return counterCompare;
     const op = node.operatorToken.kind;
     if (op === SyntaxKind7.PlusEqualsToken || op === SyntaxKind7.MinusEqualsToken)
       return this.rustScalarCompoundText(node, false);
@@ -63946,8 +63970,8 @@ ${idn}}`;
     const op = this.isEqualityOp(kind) ? kind === SyntaxKind7.EqualsEqualsToken || kind === SyntaxKind7.EqualsEqualsEqualsToken ? "==" : "!=" : _RustTranspiler.NATIVE_COMPARISON_OPERATORS[kind];
     if (op === void 0)
       return void 0;
-    const other = up.left === id ? up.right : up.left;
-    const literal2 = this.rustScalarIntLiteral(this.unwrapParens(other));
+    const other = this.unwrapParens(up.left === id ? up.right : up.left);
+    const literal2 = this.rustScalarIntLiteral(other) ?? (isIdentifier3(other) && this.rustScalarLocalOf(other)?.kind === "int" ? super.printIdentifier(other) : void 0);
     return literal2 === void 0 ? void 0 : { op, literal: literal2, counterLeft: up.left === id };
   }
   /** rd: the native compare of a registered `i64` counter against an integer literal, else undefined. */

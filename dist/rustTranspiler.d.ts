@@ -1019,6 +1019,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustScalarPending;
     /** The partner is a local whose checker type is a string / number and whose initializer is a scalar reader shape. */
     rustScalarValuePartnerShape(partner: any): boolean;
+    /** rd: the scalar-literal / boxed initializer shapes this rule owns: a literal, a `+`/arithmetic chain, a list `.length`,
+     *  `indexOf` / `toString` / a string method, a clock or nonce, a `Math.*` or typed base call that is no `safe*` / `handle*`
+     *  reader (readers, ternaries, aliases, element reads and nil-declared locals keep their own rules). */
+    rustRdOwnInit(declaration: any): boolean;
     /** rd: a non-literal operand printed as a `Value` whose checker type is `number` (`Int|Float|Null` at runtime). */
     rustScalarValueNumber(node: any): boolean;
     rustScalarCompareKind(node: any): string | undefined;

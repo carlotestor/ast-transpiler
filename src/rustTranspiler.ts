@@ -4206,7 +4206,7 @@ export class RustTranspiler extends BaseTranspiler {
             this.rustScalarUseForms.set(n, form);
             if (form === 'box' || form === 'xbox' || form === 'err') {
                 boxed++;
-                if (form === 'err' ? !this.rustLocalLastUse(n, declaration) : !(isReturnStatement(n.parent) || this.rustLocalLastUse(n, declaration))) copied++;
+                if (form === 'err' ? !this.rustErrMsgMoves(n, declaration) : !(isReturnStatement(n.parent) || this.rustLocalLastUse(n, declaration))) copied++;
             } else if (form !== undefined && !this.rustIdentifierIsPropertyName(n)) nativeUses++;
             if (form === 'test' || form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'lwrite' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'kin' || form === 'nkey' || (form === 'key' && this.rustOkeyLocal(n) && this.rustElemInsertKey(n))) typedUses++;
             if (form === 'xbox' || form === 'native' || form === 'targ' || form === 'err') expressionUses = true;
@@ -4348,7 +4348,7 @@ export class RustTranspiler extends BaseTranspiler {
             const selfArg = isCallExpression(up) && up.expression !== n && isPropertyAccessExpression(up.expression)
                 && (up.expression.expression.kind === SyntaxKind.ThisKeyword || up.expression.expression.kind === SyntaxKind.SuperKeyword);
             // rd: the final `throw new E(x)` message of a `String` moves (no copy)
-            const errMove = up?.kind === SyntaxKind.NewExpression && up.parent?.kind === SyntaxKind.ThrowStatement && this.rustLocalLastUse(n, declaration);
+            const errMove = up?.kind === SyntaxKind.NewExpression && up.parent?.kind === SyntaxKind.ThrowStatement && this.rustRdOwnInit(declaration) && this.rustLocalLastUse(n, declaration);
             if ((isCallExpression(up) && up.expression !== n && !selfArg) || (up?.kind === SyntaxKind.NewExpression && !errMove)) ok = false;
             else if (!selfArg && !isReturnStatement(up) && !this.rustLocalLastUse(n, declaration)) ok = false;
             return true;
@@ -5751,7 +5751,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n)) return 'kin';
         if (isCallExpression(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== undefined) return 'native';
         // rd: a Copy number beside a `Value` operand of `Math.min|max` boxes once into the helper's `&Value` slot (`Value::from`, no copy)
-        if ((kind === 'int' || kind === 'num') && this.rustMathMinMaxValueArg(parent, n)) return 'xbox';
+        if ((kind === 'int' || kind === 'num') && this.rustMathMinMaxValueArg(parent, n) && this.rustRdOwnInit(this.rustDeclaredNode(n))) return 'xbox';
         if (this.rustVenueStrLocalArg(n)) return 'targ';
         if (this.rustLimitArgUse(n, kind)) return 'targ';
         if ((kind === 'int' || kind === 'num' || kind === 'oint' || kind === 'onum') && this.rustSideStoreArg(n)) return 'targ';
@@ -6295,7 +6295,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** rd: a `String` error message at its provable last use moves into the constructor (`ToErrorMessage for String`). */
     rustErrMsgMoves(n: any, declaration: any): boolean {
-        return this.rustScalarLocalOf(n)?.kind === 'str' && this.rustLocalLastUse(n, declaration);
+        return this.rustScalarLocalOf(n)?.kind === 'str' && this.rustRdOwnInit(declaration) && this.rustLocalLastUse(n, declaration);
     }
 
     /** rd: a box at a slot where the `Value` form cloned the local (a `this.`/`super.` argument, an object-literal value,
@@ -7360,11 +7360,12 @@ export class RustTranspiler extends BaseTranspiler {
         // `as_f64` payloads and answers false for `Null`, which is the f64 compare with a NaN stand-in
         if ((lk === undefined) !== (rk === undefined) && !equality) {
             const [ typed, other, k ] = lk === undefined ? [ right, left, rk ] : [ left, right, lk ];
-            if ((k !== 'int' && k !== 'num') || !isIdentifier(typed) || this.rustScalarLocalOf(typed) === undefined || !this.rustScalarValueNumber(other)) return undefined;
+            const own = isIdentifier(typed) ? this.rustScalarLocalOf(typed) : undefined;
+            if ((k !== 'int' && k !== 'num') || own === undefined || !this.rustRdOwnInit(own.declaration) || !this.rustScalarValueNumber(other)) return undefined;
             if (dry) return '_';
-            const own = k === 'int' ? `(${text(k, typed)} as f64)` : text(k, typed);
+            const mine = k === 'int' ? `(${text(k, typed)} as f64)` : text(k, typed);
             const value = `${this.printNode(other, 0).trim()}.as_f64().unwrap_or(f64::NAN)`;
-            return lk === undefined ? `${value} ${sign} ${own}` : `${own} ${sign} ${value}`;
+            return lk === undefined ? `${value} ${sign} ${mine}` : `${mine} ${sign} ${value}`;
         }
         if (lk === undefined || rk === undefined) return undefined;
         if (equality && (lk === 'slit' || rk === 'slit')) {
@@ -7508,6 +7509,21 @@ export class RustTranspiler extends BaseTranspiler {
         return (checked === 'string' || checked === 'number') && this.rustScalarInitShape(declaration.initializer);
     }
 
+
+    /** rd: the scalar-literal / boxed initializer shapes this rule owns: a literal, a `+`/arithmetic chain, a list `.length`,
+     *  `indexOf` / `toString` / a string method, a clock or nonce, a `Math.*` or typed base call that is no `safe*` / `handle*`
+     *  reader (readers, ternaries, aliases, element reads and nil-declared locals keep their own rules). */
+    rustRdOwnInit(declaration: any): boolean {
+        const init: any = declaration === undefined || !isVariableDeclaration(declaration) ? undefined : this.unwrapParens(declaration.initializer);
+        if (init === undefined || this.literalKindOfNode(init) === 'null') return false;
+        if (this.literalKindOfNode(init) !== undefined || this.rustScalarIntLiteral(init) !== undefined || this.rustScalarFloatLiteral(init) !== undefined) return true;
+        if (isBinaryExpression(init)) return true;
+        if (isPropertyAccessExpression(init)) return this.rustListLengthInit(init);
+        if (!isCallExpression(init) || !isPropertyAccessExpression(init.expression)) return false;
+        const name = String(init.expression.name.text);
+        if (init.expression.expression.kind === SyntaxKind.ThisKeyword) return !/^(safe|handle)/.test(name);
+        return true;
+    }
 
     /** rd: a non-literal operand printed as a `Value` whose checker type is `number` (`Int|Float|Null` at runtime). */
     rustScalarValueNumber(node): boolean {
@@ -7677,6 +7693,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** Binary hook: arithmetic/ordered comparisons over typed operands, and `+=`/`-=` on a typed local. */
     printRustScalarBinary(node): string | undefined {
+        const counterCompare = this.printI64CounterCompare(node); if (counterCompare !== undefined) return counterCompare;
         const op = node.operatorToken.kind;
         if (op === SyntaxKind.PlusEqualsToken || op === SyntaxKind.MinusEqualsToken) return this.rustScalarCompoundText(node, false);
         if (!RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) || this.isEqualityOp(op)) return undefined;
@@ -12905,8 +12922,9 @@ export class RustTranspiler extends BaseTranspiler {
         const kind = up.operatorToken.kind;
         const op = this.isEqualityOp(kind) ? (kind === SyntaxKind.EqualsEqualsToken || kind === SyntaxKind.EqualsEqualsEqualsToken ? '==' : '!=') : RustTranspiler.NATIVE_COMPARISON_OPERATORS[kind];
         if (op === undefined) return undefined;
-        const other: any = up.left === id ? up.right : up.left;
-        const literal = this.rustScalarIntLiteral(this.unwrapParens(other));
+        const other: any = this.unwrapParens(up.left === id ? up.right : up.left);
+        // an int literal, or an `i64` scalar local (decided by its own uses, printed bare either way)
+        const literal = this.rustScalarIntLiteral(other) ?? (isIdentifier(other) && this.rustScalarLocalOf(other)?.kind === 'int' ? super.printIdentifier(other) : undefined);
         return literal === undefined ? undefined : { op, literal, counterLeft: up.left === id };
     }
 

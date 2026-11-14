@@ -11728,10 +11728,10 @@ describe('ral-rd: scalar-literal and boxed locals', () => {
         expect(out).toContain('exchange_error(feedback)');
         expect(out.split('feedback.clone()').length - 1).toBeLessThanOrEqual(1);
     });
-    test('a length local ordered against a Value for counter (always an Int) stays i64', () => {
+    test('a length local ordered against a for counter stays i64 (and the counter with it)', () => {
         const out = write ('rd-vcnt', "    m (rows: any[], bids: any[]) {\n        const bidsLength = bids.length;\n        for (let i = 0; i < rows.length; i++) {\n            if (i < bidsLength) {\n                this.hold (rows[i]);\n            }\n            this.hold (i);\n        }\n    }\n");
         expect(out).toContain('let mut bidsLength: i64 = bids.len() as i64;');
-        expect(out).toContain('i.as_f64().unwrap_or(f64::NAN) < (bidsLength as f64)');
+        expect(out).toContain('if i < bidsLength {');
     });
     test('a clock string handed to header slots is a String lent there (one copy each, as the Value clone) and moved last', () => {
         const out = write ('rd-clock', "    sign (path: string) {\n        const timestamp = this.nonce ().toString ();\n        const headers = { 'A': timestamp, 'B': timestamp };\n        return this.hold ([ headers, timestamp ]);\n    }\n");
@@ -11740,6 +11740,11 @@ describe('ral-rd: scalar-literal and boxed locals', () => {
     test('negative: a clock string concatenated with a nil-declared local leaves that local a Value (it is the nil rule\'s)', () => {
         const out = write ('rd-clocknil', "    apiKey: string = 'k';\n    json (x: any): any { return x; }\n    sign (params: Dict) {\n        let requestBody: Str = undefined;\n        const timestamp = this.nonce ().toString ();\n        if (params['x'] !== undefined) {\n            requestBody = this.json (params);\n        } else {\n            requestBody = '{}';\n        }\n        const payload = timestamp + this.apiKey + requestBody;\n        const headers = { 'T': timestamp, 'S': payload };\n        const bodyResolved = requestBody;\n        return this.hold ([ headers, bodyResolved ]);\n    }\n");
         expect(out).toContain('let mut requestBody: Value = Value::Null;');
+    });
+    test('a for counter compared with an i64 local stays an i64 counter (both Int payloads, compared as i64)', () => {
+        const out = write ('rd-for2', "    m (rows: any[]) {\n        const last = rows.length;\n        const out = [];\n        for (let i = 0; i < rows.length; i++) {\n            if (i < last) {\n                out.push (rows[i]);\n            }\n        }\n        return out;\n    }\n");
+        expect(out).toContain('let mut i: i64 = 0;');
+        expect(out).toContain('if i < last {');
     });
     test('a for counter compared with an int literal stays an i64 (no as_f64 unwrap, no Value counter)', () => {
         const out = write ('rd-for', "    m (rows: any[]) {\n        const out = [];\n        for (let j = 0; j < rows.length; j++) {\n            if (j > 0) {\n                out.push (rows[j]);\n            }\n        }\n        return out;\n    }\n");
