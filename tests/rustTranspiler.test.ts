@@ -4774,7 +4774,16 @@ describe('native element writes on plain-dict locals', () => {
 
     test('omit of itself / extend of plain dicts keep the local plain', () => {
         expect(output).toContain(insert('request', 'b', 'Value::Int(2)'));
-        expect(output).toContain(insert('merged', 'd', 'Value::Int(4)'));
+        // ral-oc: a literal rebuilt only by `x = this.extend (x, ..)` holds the shared Dict (copy-on-write insert)
+        expect(output).toContain('std::sync::Arc::make_mut(&mut merged).insert("d".into(), Value::Int(4));');
+        expect(output).toContain('let mut merged: crate::value::Dict = Value::Map({');
+        expect(output).toContain('Value::Dict(merged)');
+        // the head moves into extend and the result is taken back without a copy
+        expect(output).toContain('merged = self.extend(merged, &[');
+        expect(output).not.toContain('merged.clone()');
+        // negative: written from a foreign map / a non-self extend: keeps the helper (no shared-handle form)
+        expect(output).not.toContain('let mut foreign: crate::value::Dict');
+        expect(output).not.toContain('let mut extended: crate::value::Dict');
     });
 
     test('a local aliased into a let-bound literal keeps the helper', () => {
@@ -6025,7 +6034,11 @@ describe('typed dict bearers', () => {
 
     test('negative: a literal map pushed before a later use, or pushed twice, keeps the box', () => {
         const later = rs("        const out = [];\n        const item = { 'id': v };\n        out.push (item);\n        item['k'] = 1;\n        return out;");
-        expect(later).toContain('let mut item: Value = Value::Map({');
+        // ral-oc: no IndexMap bearer; the shared Dict lends an Arc bump to the push and inserts copy-on-write afterwards
+        expect(later).not.toContain('indexmap::IndexMap<String, Value> = ({');
+        expect(later).toContain('let mut item: crate::value::Dict = Value::Map({');
+        expect(later).toContain('out.push(Value::from(&item));');
+        expect(later).toContain('std::sync::Arc::make_mut(&mut item).insert("k".into(), Value::Int(1));');
         const twice = rs("        const out = [];\n        const item = { 'id': v };\n        out.push (item);\n        out.push (item);\n        return out;");
         expect(twice).toContain('let mut item: Value = Value::Map({');
     });
@@ -8634,8 +8647,10 @@ describe('rust lookup tables and always-list producers', () => {
         expect(out).not.toContain('rows.clone().into()');
         expect(out).toContain('Value::Arr(rows.clone())');
     });
-    test('negative: a table also handed to another method keeps its box', () => {
-        expect(out).toContain('let mut kept: Value = ');
+    test('negative: a table also handed to another method keeps no IndexMap bearer (ral-oc: shared Dict, lent there)', () => {
+        expect(out).not.toContain('let mut kept: indexmap::IndexMap');
+        expect(out).toContain('let mut kept: crate::value::Dict = Value::Map({');
+        expect(out).toContain('self.hold(Value::from(&kept));');
     });
 });
 
