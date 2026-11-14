@@ -27640,7 +27640,8 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         const numberBoxLocal = (n, text) => (n?.kind === SyntaxKind.Identifier)
             && (this.goAnyBoxLocalDeclaration(n)?.kind === SyntaxKind.VariableDeclaration)
             && (this.goOperandNumericKind(n, text) === undefined) && this.goIsAnyBoxExpression(n, text);
-        const numberBox = (lFam === 'number') && (numberBoxLocal(left, leftText) || numberBoxLocal(right, rightText));
+        const numberBox = (lFam === 'number') && ((numberBoxLocal(left, leftText) && this.goIsNumericConstant(right))
+            || (numberBoxLocal(right, rightText) && this.goIsNumericConstant(left)));
         if (!lPtr && !rPtr && lFam !== undefined && rFam !== undefined
             && lFam !== 'nil' && rFam !== 'nil' && lFam === rFam && !numberBox) {
             return isEq ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;

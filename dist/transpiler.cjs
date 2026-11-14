@@ -36196,7 +36196,7 @@ ${indent}}`);
       return isEq ? `(${rightText} != nil && *${rightText} == ${leftText})` : `(${rightText} == nil || *${rightText} != ${leftText})`;
     }
     const numberBoxLocal = (n, text) => _optionalChain([n, 'optionalAccess', _5980 => _5980.kind]) === _ast.SyntaxKind.Identifier && _optionalChain([this, 'access', _5981 => _5981.goAnyBoxLocalDeclaration, 'call', _5982 => _5982(n), 'optionalAccess', _5983 => _5983.kind]) === _ast.SyntaxKind.VariableDeclaration && this.goOperandNumericKind(n, text) === void 0 && this.goIsAnyBoxExpression(n, text);
-    const numberBox = lFam === "number" && (numberBoxLocal(left, leftText) || numberBoxLocal(right, rightText));
+    const numberBox = lFam === "number" && (numberBoxLocal(left, leftText) && this.goIsNumericConstant(right) || numberBoxLocal(right, rightText) && this.goIsNumericConstant(left));
     if (!lPtr && !rPtr && lFam !== void 0 && rFam !== void 0 && lFam !== "nil" && rFam !== "nil" && lFam === rFam && !numberBox) {
       return isEq ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
     }
