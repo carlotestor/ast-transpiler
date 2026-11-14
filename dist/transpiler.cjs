@@ -58370,6 +58370,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return void 0;
     if (this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === "null" || this.rustScalarPending.has(declaration))
       return void 0;
+    if (this.rustScalarBorrowedBox(declaration))
+      return void 0;
     const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
     const family = checked === "string" ? "str" : checked === "number" ? "int" : void 0;
     if (family === void 0)

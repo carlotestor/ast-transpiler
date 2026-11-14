@@ -7087,6 +7087,8 @@ export class RustTranspiler extends BaseTranspiler {
         const declaration: any = this.rustDeclaredNode(partner);
         if (declaration === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name) || declaration.initializer === undefined) return undefined;
         if (this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === 'null' || this.rustScalarPending.has(declaration)) return undefined;
+        // a partner keyed `in` a this-field map: an `as_str()` compare lets ccxt's optional-reader pass type it, and its key then copies
+        if (this.rustScalarBorrowedBox(declaration)) return undefined;
         const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
         const family = checked === 'string' ? 'str' : (checked === 'number' ? 'int' : undefined);
         if (family === undefined) return undefined;
