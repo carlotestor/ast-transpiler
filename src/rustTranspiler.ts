@@ -4023,15 +4023,15 @@ export class RustTranspiler extends BaseTranspiler {
      *  then re-checks all of them in declaration order until a whole pass changes nothing (each kept
      *  decision is then proven against the final ones); a candidate that keeps flipping stays `Value`. */
     rustScalarSolveScope(scope): void {
-        const candidates = (this.rustScopeIndex(scope.getSourceFile()).nodes as any[]).filter((n) => isVariableDeclaration(n) && isIdentifier(n.name)
-            && this.rustScalarInitShape(n.initializer) && this.rustEnclosingFunction(n) === scope);
+        const candidates = (this.rustScopeIndex(scope.getSourceFile()).nodes as any[]).filter((n) => ((isVariableDeclaration(n) && isIdentifier(n.name)
+            && this.rustScalarInitShape(n.initializer)) || (isBindingElement(n) && this.rustSlotJoinsSolve(n))) && this.rustEnclosingFunction(n) === scope);
         this.rustScalarSolving.add(scope);
         try {
             // the other typed-local rules decide first and cache, so they never see a trial kind
             for (const n of candidates) {
                 this.rustScalarDecisions.set(n, null);
                 try {
-                    this.rustSafeStringLocalIsTyped(n); this.rustStringMethodLocalInit(n);
+                    if (isVariableDeclaration(n)) { this.rustSafeStringLocalIsTyped(n); this.rustStringMethodLocalInit(n); }
                 } catch (e) {
                     // the scalar rule re-checks and refuses on its own
                 }
@@ -4065,6 +4065,14 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     rustScalarTry(declaration): string | null {
+        if (isBindingElement(declaration)) {
+            if (this.rustScalarSeeding) return 'ostr';
+            try {
+                return this.rustStrSlotKind(declaration, this.rustEnclosingFunction(declaration)) ?? null;
+            } catch (e) {
+                return null;
+            }
+        }
         try {
             return this.rustScalarLocalKindUncached(declaration) ?? null;
         } catch (e) {
@@ -10738,6 +10746,12 @@ export class RustTranspiler extends BaseTranspiler {
 
     rustExactSlotKind(element: any): string | undefined {
         let decision = this.rustExactSlotDecisions.get(element);
+        // pb: a string slot copied whole into another local is a candidate of its function's scalar solve (decided with that local)
+        if (this.rustSlotJoinsSolve(element)) {
+            const scope: any = this.rustEnclosingFunction(element);
+            if (!this.rustScalarSolved.has(scope) && !this.rustScalarSolving.has(scope)) this.rustScalarSolveScope(scope);
+            return this.rustScalarDecisions.get(element) ?? undefined;
+        }
         if (decision === undefined) {
             this.rustExactSlotDecisions.set(element, null); // re-entrancy guard
             try {
@@ -19718,6 +19732,9 @@ export class RustTranspiler extends BaseTranspiler {
         let nativeUses = 0;
         let copies = 0;
         this.rustExactSlotDecisions.set(element, 'ostr'); // uses that read the slot itself see the trial kind
+        const joined = this.rustScalarSolving.has(scope) && this.rustSlotJoinsSolve(element);
+        const previous = this.rustScalarDecisions.get(element);
+        if (joined) this.rustScalarDecisions.set(element, 'ostr');
         let ok = false;
         try {
             ok = this.rustLocalUsesAll(element, String(element.name.text), true, (n: any) => {
@@ -19732,6 +19749,8 @@ export class RustTranspiler extends BaseTranspiler {
                 const push: any = findAncestor(n, (m: any) => isStatement(m) || (isCallExpression(m) && isPropertyAccessExpression(m.expression) && m.expression.name.text === 'push'));
                 if (push !== undefined && isCallExpression(push)) return false;
                 if ((form === 'box' || form === 'xbox') && !this.rustSlotUseOutsideLoop(n, element)) return false;
+                // pb: a whole alias into a local the joint solve types `Option<String>`, at the slot's last use, moves the string
+                if (joined && this.rustScalarAliasMove(n, 'ostr', element)) { nativeUses++; return true; }
                 // a box feeding another local's write or initializer would make that local's own typing depend on this slot
                 const feeds: any = findAncestor(n, (m: any) => isStatement(m) || (isBinaryExpression(m) && m.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(m.left)) || isVariableDeclaration(m));
                 if (feeds !== undefined && !isStatement(feeds) && (form === 'box' || form === 'xbox')) return false;
@@ -19741,9 +19760,31 @@ export class RustTranspiler extends BaseTranspiler {
             });
         } finally {
             this.rustExactSlotDecisions.set(element, null);
+            if (joined) this.rustScalarDecisions.set(element, previous);
         }
         // a slot only handed back to `Value` slots is typed when each box moves it
         return ok && (nativeUses > 0 || copies === 0) ? 'ostr' : undefined;
+    }
+
+    /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
+     *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
+    rustSlotJoinsSolve(element: any): boolean {
+        if (element?.kind !== SyntaxKind.BindingElement || !isIdentifier(element.name) || this.rustTestTierSource(element)) return false;
+        const owner: any = element.parent?.parent;
+        if (owner === undefined || !isVariableDeclaration(owner) || owner.initializer === undefined || !this.rustNativeListSource(owner.initializer)) return false;
+        const scope: any = this.rustEnclosingFunction(owner);
+        if (scope === undefined || isSourceFile(scope) || scope.kind !== SyntaxKind.MethodDeclaration) return false;
+        if (this.primitiveKindOfType(this.typeOfNodeIfAny(element.name)) !== 'string' || this.rustTupleSlotKind(element) !== undefined) return false;
+        let alias = false;
+        this.rustLocalUsesAll(element, String(element.name.text), false, (n: any) => {
+            let top: any = n;
+            while (isParenthesizedExpression(top.parent)) top = top.parent;
+            const up: any = top.parent;
+            if ((isVariableDeclaration(up) && up.initializer === top && isIdentifier(up.name))
+                || (isBinaryExpression(up) && up.right === top && up.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(up.left) && up.parent?.kind === SyntaxKind.ExpressionStatement)) alias = true;
+            return true;
+        });
+        return alias;
     }
 
     // ── declared dict slots ──────────────────────────────────────────────────

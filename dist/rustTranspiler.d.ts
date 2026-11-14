@@ -2693,6 +2693,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `ostr` for a string slot read through the scalar forms: tests, `format!` concats, string methods, typed
      *  writes, and boxes (alias, ternary arm, `Value` slots) that re-box through `From`; needs one native use. */
     rustStrSlotKind(element: any, scope: any): string | undefined;
+    /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
+     *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
+    rustSlotJoinsSolve(element: any): boolean;
     rustDeclaredDictSlot(element: any): boolean;
     /** One element read rooted at the bearer: a plain read the native op serves. */
     rustReadBearerElementUse(access: any, kind: 'list' | 'map'): boolean;

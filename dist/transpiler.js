@@ -55098,14 +55098,16 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  then re-checks all of them in declaration order until a whole pass changes nothing (each kept
    *  decision is then proven against the final ones); a candidate that keeps flipping stays `Value`. */
   rustScalarSolveScope(scope) {
-    const candidates = this.rustScopeIndex(scope.getSourceFile()).nodes.filter((n) => isVariableDeclaration3(n) && isIdentifier3(n.name) && this.rustScalarInitShape(n.initializer) && this.rustEnclosingFunction(n) === scope);
+    const candidates = this.rustScopeIndex(scope.getSourceFile()).nodes.filter((n) => (isVariableDeclaration3(n) && isIdentifier3(n.name) && this.rustScalarInitShape(n.initializer) || isBindingElement(n) && this.rustSlotJoinsSolve(n)) && this.rustEnclosingFunction(n) === scope);
     this.rustScalarSolving.add(scope);
     try {
       for (const n of candidates) {
         this.rustScalarDecisions.set(n, null);
         try {
-          this.rustSafeStringLocalIsTyped(n);
-          this.rustStringMethodLocalInit(n);
+          if (isVariableDeclaration3(n)) {
+            this.rustSafeStringLocalIsTyped(n);
+            this.rustStringMethodLocalInit(n);
+          }
         } catch (e) {
         }
       }
@@ -55141,6 +55143,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
   }
   rustScalarTry(declaration) {
+    if (isBindingElement(declaration)) {
+      if (this.rustScalarSeeding)
+        return "ostr";
+      try {
+        return this.rustStrSlotKind(declaration, this.rustEnclosingFunction(declaration)) ?? null;
+      } catch (e) {
+        return null;
+      }
+    }
     try {
       return this.rustScalarLocalKindUncached(declaration) ?? null;
     } catch (e) {
@@ -61762,6 +61773,12 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
   }
   rustExactSlotKind(element) {
     let decision = this.rustExactSlotDecisions.get(element);
+    if (this.rustSlotJoinsSolve(element)) {
+      const scope = this.rustEnclosingFunction(element);
+      if (!this.rustScalarSolved.has(scope) && !this.rustScalarSolving.has(scope))
+        this.rustScalarSolveScope(scope);
+      return this.rustScalarDecisions.get(element) ?? void 0;
+    }
     if (decision === void 0) {
       this.rustExactSlotDecisions.set(element, null);
       try {
@@ -70883,6 +70900,10 @@ ${iden}}`;
     let nativeUses = 0;
     let copies = 0;
     this.rustExactSlotDecisions.set(element, "ostr");
+    const joined = this.rustScalarSolving.has(scope) && this.rustSlotJoinsSolve(element);
+    const previous = this.rustScalarDecisions.get(element);
+    if (joined)
+      this.rustScalarDecisions.set(element, "ostr");
     let ok = false;
     try {
       ok = this.rustLocalUsesAll(element, String(element.name.text), true, (n) => {
@@ -70903,6 +70924,10 @@ ${iden}}`;
           return false;
         if ((form === "box" || form === "xbox") && !this.rustSlotUseOutsideLoop(n, element))
           return false;
+        if (joined && this.rustScalarAliasMove(n, "ostr", element)) {
+          nativeUses++;
+          return true;
+        }
         const feeds = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(m.left) || isVariableDeclaration3(m));
         if (feeds !== void 0 && !isStatement(feeds) && (form === "box" || form === "xbox"))
           return false;
@@ -70914,8 +70939,35 @@ ${iden}}`;
       });
     } finally {
       this.rustExactSlotDecisions.set(element, null);
+      if (joined)
+        this.rustScalarDecisions.set(element, previous);
     }
     return ok && (nativeUses > 0 || copies === 0) ? "ostr" : void 0;
+  }
+  /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
+   *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
+  rustSlotJoinsSolve(element) {
+    if (element?.kind !== SyntaxKind7.BindingElement || !isIdentifier3(element.name) || this.rustTestTierSource(element))
+      return false;
+    const owner = element.parent?.parent;
+    if (owner === void 0 || !isVariableDeclaration3(owner) || owner.initializer === void 0 || !this.rustNativeListSource(owner.initializer))
+      return false;
+    const scope = this.rustEnclosingFunction(owner);
+    if (scope === void 0 || isSourceFile5(scope) || scope.kind !== SyntaxKind7.MethodDeclaration)
+      return false;
+    if (this.primitiveKindOfType(this.typeOfNodeIfAny(element.name)) !== "string" || this.rustTupleSlotKind(element) !== void 0)
+      return false;
+    let alias = false;
+    this.rustLocalUsesAll(element, String(element.name.text), false, (n) => {
+      let top = n;
+      while (isParenthesizedExpression3(top.parent))
+        top = top.parent;
+      const up = top.parent;
+      if (isVariableDeclaration3(up) && up.initializer === top && isIdentifier3(up.name) || isBinaryExpression5(up) && up.right === top && up.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement)
+        alias = true;
+      return true;
+    });
+    return alias;
   }
   // ── declared dict slots ──────────────────────────────────────────────────
   // A transpiled venue method declaring a `[.., Dict, ..]` (or `Promise<[..]>`) return builds that tuple on every
