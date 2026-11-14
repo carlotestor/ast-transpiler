@@ -2193,6 +2193,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  list-of-lists) local: each block-scoped binding converts to the same Rust type (`Dict` / `List`), so ccxt
      *  passes that key on the name read the same declared type for every sibling. */
     rustElementSiblingsAlike(declaration: any, name: string, init: any): boolean;
+    /** Every other binding of `name` in the function is a `const` plain map literal declaration (ral-oc). */
+    rustLiteralSiblingsAlike(declaration: any, name: string): boolean;
     rustSiblingBindingsAlike(declaration: any, name: string, init: any): boolean;
     /** The `params` of a typed unified method, never reassigned: it arrives through `impl Into<crate::Params>` and is
      *  rebound by `get_arg(.., Value::Map({}))`, so it is always a map (`From<Value> for Params` drops a non-map, and

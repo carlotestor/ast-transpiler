@@ -65741,7 +65741,7 @@ ${iden}}`;
       return true;
     };
     const recordLookup = init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init);
-    const blockScoped = !nilDeclared && (endpoint || init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0 || !recordLookup && this.rustSiblingBindingsAlike(declaration, name, init) || !recordLookup && this.rustElementSiblingsAlike(declaration, name, init));
+    const blockScoped = !nilDeclared && (endpoint || init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) !== void 0 || extendReuse && this.rustLiteralSiblingsAlike(declaration, name) || !recordLookup && this.rustSiblingBindingsAlike(declaration, name, init) || !recordLookup && this.rustElementSiblingsAlike(declaration, name, init));
     const safe = blockScoped ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
     const builtBoxOnly = reads === 0 && boxedElementUses.length > 0 && nullTests === 0 && writes === 0 && init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) !== void 0 || paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init) || defaultedBoxes === boxedElementUses.length && optionalBoxes === 0 && paramsBoxes === 0 && this.rustDefaultedContainerBoxUse(boxedElementUses[0], init) || optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init));
     const boxOnly = reads === 0 && boxedElementUses.length > 0 && (this.rustDictElementSource(init) || this.rustListElementSource(init)) && nullTests === 0 && writes === 0;
@@ -67044,6 +67044,20 @@ ${iden}}`;
         return false;
       const other = this.unwrapParens(n.initializer);
       return dict ? this.rustDictElementSource(other) : this.rustListElementSource(other);
+    });
+  }
+  /** Every other binding of `name` in the function is a `const` plain map literal declaration (ral-oc). */
+  rustLiteralSiblingsAlike(declaration, name) {
+    const scope = this.rustEnclosingFunction(declaration);
+    if (scope === void 0 || (declaration.parent.flags & NodeFlags4.Const) === 0)
+      return false;
+    return this.rustScopeNameNodes(scope, name).every((n) => {
+      if (n === declaration || !this.rustBindsName(n, name))
+        return true;
+      if (!isVariableDeclaration3(n) || (n.parent.flags & NodeFlags4.Const) === 0)
+        return false;
+      const other = this.rustSkipWrappers(n.initializer);
+      return other !== void 0 && isObjectLiteralExpression4(other) && this.rustPlainDictLiteral(other);
     });
   }
   rustSiblingBindingsAlike(declaration, name, init) {

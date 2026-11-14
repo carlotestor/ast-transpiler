@@ -14841,6 +14841,8 @@ export class RustTranspiler extends BaseTranspiler {
         //  market / currency record lookup, whose lane keeps the single-binding rule)
         const recordLookup = init !== undefined && isCallExpression(init) && this.rustRecordLookupSource(init);
         const blockScoped = !nilDeclared && ((endpoint || (init !== undefined && isCallExpression(init) && this.rustBuiltReturnSourceKind(init) !== undefined))
+            // ral-oc: a literal map whose same-named sibling bindings are const plain literals too (each its own Rust block)
+            || (extendReuse && this.rustLiteralSiblingsAlike(declaration, name))
             || (!recordLookup && this.rustSiblingBindingsAlike(declaration, name, init))
             // lf: an element of a typed `Dict[]` / list-of-lists (`rows[i]`) in a sibling block of a same-named element local
             || (!recordLookup && this.rustElementSiblingsAlike(declaration, name, init)));
@@ -16046,6 +16048,18 @@ export class RustTranspiler extends BaseTranspiler {
             if (!isVariableDeclaration(n)) return false;
             const other: any = this.unwrapParens(n.initializer);
             return dict ? this.rustDictElementSource(other) : this.rustListElementSource(other);
+        });
+    }
+
+    /** Every other binding of `name` in the function is a `const` plain map literal declaration (ral-oc). */
+    rustLiteralSiblingsAlike(declaration: any, name: string): boolean {
+        const scope: any = this.rustEnclosingFunction(declaration);
+        if (scope === undefined || ((declaration.parent as any).flags & NodeFlags.Const) === 0) return false;
+        return (this.rustScopeNameNodes(scope, name) as any[]).every((n: any) => {
+            if (n === declaration || !this.rustBindsName(n, name)) return true;
+            if (!isVariableDeclaration(n) || ((n.parent as any).flags & NodeFlags.Const) === 0) return false;
+            const other: any = this.rustSkipWrappers(n.initializer);
+            return other !== undefined && isObjectLiteralExpression(other) && this.rustPlainDictLiteral(other);
         });
     }
 
