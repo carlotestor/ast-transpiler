@@ -64371,7 +64371,7 @@ ${this.getIden(identation)}}`;
     if (arg === void 0 || this.rustTestTierSource(arg) || this.rustDictBearerDeclaration(arg) === void 0)
       return void 0;
     const recv = String(arg.text);
-    const body = kind === "keys" ? `${recv}.keys().map(|__k| Value::Str(__k.clone().into())).collect()` : `${recv}.values().cloned().collect()`;
+    const body = kind === "keys" ? `${recv}.keys().cloned().map(Value::from).collect()` : `${recv}.values().cloned().collect()`;
     return `Value::Array(${body})`;
   }
   /** The single plain-identifier argument of `Object.keys/values(…)`. */
@@ -65322,7 +65322,7 @@ ${iden}}`;
         return false;
       this.rustLiteralMoves.add(moveEscapes[0]);
     }
-    if (widened && (enumUses > 0 || !escapes.every((e) => this.rustReturnOperand(e) || this.rustVecIsFinalUse(e, name) && !this.loopBetween(e))))
+    if (widened && !escapes.every((e) => this.rustReturnOperand(e) || this.rustVecIsFinalUse(e, name) && !this.loopBetween(e)))
       return false;
     if (produced && escapes.length > 0 && elementUses === 0)
       return false;

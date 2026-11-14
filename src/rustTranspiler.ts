@@ -13358,8 +13358,9 @@ export class RustTranspiler extends BaseTranspiler {
         // a test map's key list copies each key where the helper lent the map
         if (arg === undefined || this.rustTestTierSource(arg) || this.rustDictBearerDeclaration(arg) === undefined) return undefined;
         const recv = String(arg.text);
+        // the keys print like the borrowed-dict form (`printBorrowedKeys`): closure-free, one `Value::Str` per key
         const body = kind === 'keys'
-            ? `${recv}.keys().map(|__k| Value::Str(__k.clone().into())).collect()`
+            ? `${recv}.keys().cloned().map(Value::from).collect()`
             : `${recv}.values().cloned().collect()`;
         return `Value::Array(${body})`;
     }
@@ -14381,7 +14382,9 @@ export class RustTranspiler extends BaseTranspiler {
             this.rustLiteralMoves.add(moveEscapes[0]);
         }
         // Admitted by the literal hand-off shapes: every escape must be a move.
-        if (widened && (enumUses > 0 || !escapes.every((e: any) => this.rustReturnOperand(e) || (this.rustVecIsFinalUse(e, name) && !this.loopBetween(e))))) return false;
+        // ral-sf: `Object.keys/values` on such a map prints the map's own iterators (insertion order, the helper's order; a
+        // literal-built map carries no ws tag for the helper to filter), so an enumeration is a native read like an element read
+        if (widened && !escapes.every((e: any) => this.rustReturnOperand(e) || (this.rustVecIsFinalUse(e, name) && !this.loopBetween(e)))) return false;
         // A produced map that also escapes re-boxes as `Value::Map(x.clone())`
         // at the escape, so it pays off only where the bearer folds a helper call on it.
         if (produced && escapes.length > 0 && elementUses === 0) return false;

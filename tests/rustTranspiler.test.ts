@@ -5474,7 +5474,7 @@ describe('base-tier enumeration, Arr-only sources and string-method receivers', 
     // `built` is a literal-built local, so it is a typed bearer now and
     // enumerates through the map's own iterators (no `as_map` box, no `object_keys`).
     test('Object.keys / Object.values on a base-tier plain local are native; any keeps the helper', () => {
-        expect(base).toContain('let mut keys: Value = Value::Array(built.keys().map(|__k| Value::Str(__k.clone().into())).collect());');
+        expect(base).toContain('let mut keys: Value = Value::Array(built.keys().cloned().map(Value::from).collect());');
         expect(base).toContain('let mut values: Value = Value::Array(built.values().cloned().collect());');
         expect(base).toContain('object_keys(&response)');
     });
@@ -7590,7 +7590,7 @@ describe ('rustBearerBoxedKeyWrites', () => {
                 + '    }\n');
             expect(out).toContain('let mut marketIds: indexmap::IndexMap<String, Value> = (');
             expect(out).toContain('marketIds.insert(crate::runtime::stringify_param(&(market.as_map().and_then(|__m| __m.get("id")).cloned().unwrap_or(Value::Null))), Value::Bool(true));');
-            expect(out).toContain('Value::Array(marketIds.keys().map(|__k| Value::Str(__k.clone().into())).collect())');
+            expect(out).toContain('Value::Array(marketIds.keys().cloned().map(Value::from).collect())');
             expect(out).not.toContain('add_element_to_object(&mut marketIds');
         });
 
@@ -7615,7 +7615,7 @@ describe ('rustBearerBoxedKeyWrites', () => {
                 + '    }\n');
             expect(out).toContain('let mut seen: indexmap::IndexMap<String, Value> = (');
             expect(out).toContain('seen.insert(crate::runtime::stringify_param(&(crate::value::get_value_k(&value, "id"))), value.clone());');
-            expect(out).toContain('Value::Array(seen.keys().map(|__k| Value::Str(__k.clone().into())).collect())');
+            expect(out).toContain('Value::Array(seen.keys().cloned().map(Value::from).collect())');
             expect(out).not.toContain('add_element_to_object(&mut seen');
             expect(out).not.toContain('object_keys(&seen');
         });
@@ -11949,6 +11949,20 @@ describe('ral-sf: built lists lent to impl Into<Value> parse / per-venue slots, 
     });
     test('negative: a push after the literal keeps the aliased Value', () => {
         expect(out).toMatch(/let mut kept: Value = /);
+    });
+});
+
+describe('ral-sf: a literal map written at string-local keys and enumerated by Object.keys holds the IndexMap', () => {
+    test('the key set prints the map\'s own keys (insertion order), closure-free; the write is a native insert', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-sf-keyset');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    parseOrder (o: any): Order { return o; }\n}\nexport interface Order { symbol: string; id: string }\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    collect (rows: any[]) {\n        const symbols: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const parsed = this.parseOrder (rows[i]);\n            const symbol = parsed['symbol'];\n            symbols[symbol] = true;\n        }\n        const keys = Object.keys (symbols);\n        for (let i = 0; i < keys.length; i++) {\n            this.hold (keys[i]);\n        }\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut symbols: indexmap::IndexMap<String, Value> = ');
+        expect(out).toContain('symbols.insert(crate::runtime::stringify_param(&symbol), Value::Bool(true));');
+        expect(out).toContain('Value::Array(symbols.keys().cloned().map(Value::from).collect())');
+        expect(out).not.toContain('object_keys(&symbols)');
     });
 });
 
