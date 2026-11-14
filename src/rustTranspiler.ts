@@ -4219,7 +4219,8 @@ export class RustTranspiler extends BaseTranspiler {
         // a local only handed back to `Value` slots keeps its producer's type: one conversion per box, no extra string copy
         // (never a local returned from a method declaring a string return: that signature decides from the boxed local)
         const strKind = kind === 'str' || kind === 'ostr';
-        const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !strKind || (!this.rustStrNoLend && this.rustStrLendSites(declaration))) && !this.rustStrReturnedLocal(declaration, scope);
+        const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !strKind || (!this.rustStrNoLend && (this.rustStrLendSites(declaration)
+            || (kind === 'str' && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustReaderLendBoxes(declaration))))) && !this.rustStrReturnedLocal(declaration, scope);
         const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
         const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
         // a string handed once to a ws client call and nothing else stays a `Value`
@@ -4273,7 +4274,13 @@ export class RustTranspiler extends BaseTranspiler {
         if (marketLent) { this.rustStrLentLocals.add(declaration); this.rustScalarGuarded.add(declaration); this.rustMarketLentLocals.add(declaration); }
         // D11: a proven integer / number `sum` handed on boxes a Copy scalar (`Value::from`), no copy to earn back
         const numericSum = (kind === 'int' || kind === 'num') && this.rustSumShape(this.unwrapParens(declaration.initializer));
-        if (!numericSum && this.rustNewShapeCostly(declaration.initializer, typedUses, kind === 'str' || kind === 'ostr' ? copied : 0)) return undefined;
+        // rd: a clock / nonce string whose copying boxes all sit at lending slots lends there (`Value::from(x.as_str())`: the
+        // one copy the `Value` clone made); one handed only to moving boxes is stored and boxed back (D11)
+        const clockInit: any = this.unwrapParens(declaration.initializer);
+        const clockLent = kind === 'str' && this.rustClockString(clockInit) && !this.rustStrNoLend && (copied > 0 ? this.rustReaderLendBoxes(declaration) : handOff)
+            && !this.rustConcatWithNilLocal(declaration);
+        if (clockLent && copied > 0) this.rustStrLentLocals.add(declaration);
+        if (!numericSum && !clockLent && this.rustNewShapeCostly(declaration.initializer, typedUses, kind === 'str' || kind === 'ostr' ? copied : 0)) return undefined;
         if (this.rustFieldKeyCostly(declaration)) return undefined;
         if (this.rustStrRuntimeLocalCostly(declaration)) return undefined;
         // a case-converted `Value` place copies at every box but a moving last one, where the `Value` moved
@@ -5380,7 +5387,8 @@ export class RustTranspiler extends BaseTranspiler {
             const form = this.rustScalarUseForms.get(n);
             if ((trial === 'str' || trial === 'ostr') && (form === 'box' || form === 'xbox' || form === 'err' || form === 'key') && !this.rustScalarBoxMoves(n, form, declaration)
                 && !(form === 'box' && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== undefined && this.rustScalarSelfArgBox(n))
-                && !(form === 'box' && trial === 'str' && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration))) return false;
+                && !(form === 'box' && trial === 'str' && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration))
+                && !(form === 'box' && trial === 'str' && !this.rustStrNoLend && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustLendSlot(n))) return false;
             // a `.push(..)` argument: ccxt's native-push pass keys on the boxed operand text
             const push: any = findAncestor(n, (m: any) => isStatement(m) || (isCallExpression(m) && isPropertyAccessExpression(m.expression) && m.expression.name.text === 'push'));
             if (push !== undefined && isCallExpression(push)) return false;
@@ -6288,6 +6296,14 @@ export class RustTranspiler extends BaseTranspiler {
     /** rd: a `String` error message at its provable last use moves into the constructor (`ToErrorMessage for String`). */
     rustErrMsgMoves(n: any, declaration: any): boolean {
         return this.rustScalarLocalOf(n)?.kind === 'str' && this.rustLocalLastUse(n, declaration);
+    }
+
+    /** rd: a box at a slot where the `Value` form cloned the local (a `this.`/`super.` argument, an object-literal value,
+     *  a dict write, an array element): lending the `String` there costs that same one copy. */
+    rustLendSlot(n: any): boolean {
+        const up: any = n.parent;
+        return this.rustScalarSelfArgBox(n) || (up?.kind === SyntaxKind.PropertyAssignment && up.initializer === n) || this.rustDictWriteValue(n)
+            || (isArrayLiteralExpression(up) && !(isBinaryExpression(up.parent) && up.parent.left === up));
     }
 
     /** rd: a `format!` string local whose every use is a `this.`/`super.` argument (lent: the copy the `Value` clone made)
@@ -7496,7 +7512,9 @@ export class RustTranspiler extends BaseTranspiler {
     /** rd: a non-literal operand printed as a `Value` whose checker type is `number` (`Int|Float|Null` at runtime). */
     rustScalarValueNumber(node): boolean {
         const inner: any = this.unwrapParens(node);
-        if (inner === undefined || this.literalKindOfNode(inner) !== undefined || this.rustScalarExprHasForCounter(inner)) return false;
+        if (inner === undefined || this.literalKindOfNode(inner) !== undefined) return false;
+        // a `for` counter is a `Value` here only when its own i64 plan failed: it still holds the `Int` its literal / step gave
+        if (this.rustScalarExprHasForCounter(inner) && !(isIdentifier(inner) && this.rustValueIntCounter(inner))) return false;
         if (isIdentifier(inner) && (this.rustScalarIdentifierKind(inner) !== undefined || this.rustScalarParamRead(inner) !== undefined)) return false;
         if (!isIdentifier(inner) && !isPropertyAccessExpression(inner) && !isElementAccessExpression(inner)) return false;
         if (!this.printsValueExpression(this.orderedComparisonOperand(inner))) return false;
@@ -7969,6 +7987,45 @@ export class RustTranspiler extends BaseTranspiler {
         if (counter !== undefined && isVariableDeclaration(counter) && counter.parent?.parent?.kind === SyntaxKind.ForStatement) return false;
         if (this.rustScalarExprHasForCounter(other)) return false;
         return this.primitiveKindOfType(this.typeOfNodeIfAny(parent.left === n ? parent.right : parent.left)) === 'number';
+    }
+
+    /** rd: some `+` chain holding this local also holds a nil-declared local (typing this one would retype that one, which
+     *  belongs to the nil-declared rules). */
+    rustConcatWithNilLocal(declaration: any): boolean {
+        let found = false;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
+            let top: any = n;
+            while (isBinaryExpression(top.parent) && top.parent.operatorToken.kind === SyntaxKind.PlusToken || isParenthesizedExpression(top.parent)) top = top.parent;
+            const visit = (m: any): void => {
+                if (found || m === undefined) return;
+                if (isIdentifier(m) && m !== n) {
+                    const d: any = this.rustDeclaredNode(m);
+                    if (d !== undefined && isVariableDeclaration(d) && (d.initializer === undefined || this.literalKindOfNode(d.initializer) === 'null')) found = true;
+                    return;
+                }
+                if (isBinaryExpression(m) && m.operatorToken.kind === SyntaxKind.PlusToken) { visit(m.left); visit(m.right); } else if (isParenthesizedExpression(m)) visit(m.expression);
+            };
+            if (top !== n) visit(top);
+            return true;
+        });
+        return found;
+    }
+
+    /** rd: a `for (let i = <int>; ..; i++)` counter read in its own loop whose only write is the step: always an `Int`. */
+    rustValueIntCounter(node): boolean {
+        const d: any = this.rustDeclaredNode(node);
+        const loop: any = d?.parent?.parent;
+        if (d === undefined || !isVariableDeclaration(d) || loop?.kind !== SyntaxKind.ForStatement || this.rustScalarIntLiteral(this.unwrapParens(d.initializer)) === undefined) return false;
+        const incr: any = loop.incrementor;
+        if (incr === undefined || !this.isNodeInsideNode(node, loop)) return false;
+        const symbol = this.rustSymbolOf(d.name);
+        for (const n of this.rustScopeNameNodes(loop, String(d.name.text)) as any[]) {
+            if (n === d.name || !isIdentifier(n) || this.rustSymbolOf(n) !== symbol || this.isNodeInsideNode(n, incr)) continue;
+            if (this.rustIdentifierIsWritten(n)) return false;
+        }
+        return (incr.kind === SyntaxKind.PostfixUnaryExpression || incr.kind === SyntaxKind.PrefixUnaryExpression)
+            && (incr.operator === SyntaxKind.PlusPlusToken || incr.operator === SyntaxKind.MinusMinusToken)
+            && isIdentifier(incr.operand) && this.rustSymbolOf(incr.operand) === symbol;
     }
 
     rustScalarExprHasForCounter(node): boolean {

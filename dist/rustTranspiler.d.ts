@@ -842,6 +842,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarBoxMoves(n: any, form: string, declaration: any): boolean;
     /** rd: a `String` error message at its provable last use moves into the constructor (`ToErrorMessage for String`). */
     rustErrMsgMoves(n: any, declaration: any): boolean;
+    /** rd: a box at a slot where the `Value` form cloned the local (a `this.`/`super.` argument, an object-literal value,
+     *  a dict write, an array element): lending the `String` there costs that same one copy. */
+    rustLendSlot(n: any): boolean;
     /** rd: a `format!` string local whose every use is a `this.`/`super.` argument (lent: the copy the `Value` clone made)
      *  or a moving last use (`return`, a final error message, the last box). */
     rustFormatLendLocal(declaration: any): boolean;
@@ -1074,6 +1077,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_SCALAR_VALUE_OPERAND_OPS;
     /** A number local as one operand of `+ - * /` whose other operand prints as a `Value` (ordered compares keep their own native form). */
     rustScalarValueOperandUse(parent: any, n: any, kind: string): boolean;
+    /** rd: some `+` chain holding this local also holds a nil-declared local (typing this one would retype that one, which
+     *  belongs to the nil-declared rules). */
+    rustConcatWithNilLocal(declaration: any): boolean;
+    /** rd: a `for (let i = <int>; ..; i++)` counter read in its own loop whose only write is the step: always an `Int`. */
+    rustValueIntCounter(node: any): boolean;
     rustScalarExprHasForCounter(node: any): boolean;
     /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
      *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */

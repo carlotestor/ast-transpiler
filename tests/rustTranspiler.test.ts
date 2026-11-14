@@ -5304,7 +5304,8 @@ describe('overloaded base safeDict/safeList/safeBool feed the plain-dict and lis
     });
 
     test('list reads at counter/length arithmetic indices are native; an any-typed operand keeps get_value', () => {
-        expect(output).toContain('last = trades.as_array().and_then(|__arr| match &((match (&(numTrades), &(Value::Int(1)))');
+        // rd: numTrades is an i64 (its `i < numTrades` bound is a Value counter, always an Int), so the index is native
+        expect(output).toContain('last = trades.as_array().and_then(|__arr| match &(Value::Int((numTrades - 1)))');
         expect(output).toContain('let mut prev: Value = trades.as_array().and_then(|__arr| match &((match (&(i), &(Value::Int(1)))');
         expect(output).toContain('Value::Int(__n) if *__n >= 0 => __arr.get(*__n as usize), _ => None }).cloned().unwrap_or(Value::Null)');
         expect(output).toContain('get_value(&trades, &(match (&(k), &(Value::Int(1))) {'); // inline math/comparison dispatch
@@ -11704,8 +11705,8 @@ describe('ral-rd: scalar-literal and boxed locals', () => {
     const write = (name: string, venue: string) => {
         const dir = path.join (rustFixtureRoot, name);
         fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
-        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    id: string = 'x';\n    exceptions: any = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeInteger (o: any, k: any, d: number = undefined): number { return o[k]; }\n    hold (x: any): any { return x; }\n    throwExactlyMatchedException (e: any, s: any, m: any) { return undefined; }\n}\n");
-        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport { ExchangeError } from './base/errors.js';\nexport default class venue extends Exchange {\n" + venue + "}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type int = number;\nexport default class Exchange {\n    id: string = 'x';\n    exceptions: any = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeInteger (o: any, k: any, d: number = undefined): number { return o[k]; }\n    hold (x: any): any { return x; }\n    nonce (): int { return 1; }\n    throwExactlyMatchedException (e: any, s: any, m: any) { return undefined; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nimport { ExchangeError } from './base/errors.js';\nexport default class venue extends Exchange {\n" + venue + "}\n");
         fs.writeFileSync (path.join (dir, 'ts/src/base/errors.ts'), "export class ExchangeError extends Error {}\n");
         return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
     };
@@ -11726,6 +11727,19 @@ describe('ral-rd: scalar-literal and boxed locals', () => {
         expect(out).toMatch(/let mut feedback: String = format!\(/);
         expect(out).toContain('exchange_error(feedback)');
         expect(out.split('feedback.clone()').length - 1).toBeLessThanOrEqual(1);
+    });
+    test('a length local ordered against a Value for counter (always an Int) stays i64', () => {
+        const out = write ('rd-vcnt', "    m (rows: any[], bids: any[]) {\n        const bidsLength = bids.length;\n        for (let i = 0; i < rows.length; i++) {\n            if (i < bidsLength) {\n                this.hold (rows[i]);\n            }\n            this.hold (i);\n        }\n    }\n");
+        expect(out).toContain('let mut bidsLength: i64 = bids.len() as i64;');
+        expect(out).toContain('i.as_f64().unwrap_or(f64::NAN) < (bidsLength as f64)');
+    });
+    test('a clock string handed to header slots is a String lent there (one copy each, as the Value clone) and moved last', () => {
+        const out = write ('rd-clock', "    sign (path: string) {\n        const timestamp = this.nonce ().toString ();\n        const headers = { 'A': timestamp, 'B': timestamp };\n        return this.hold ([ headers, timestamp ]);\n    }\n");
+        expect(out).not.toContain('let mut timestamp: Value');
+    });
+    test('negative: a clock string concatenated with a nil-declared local leaves that local a Value (it is the nil rule\'s)', () => {
+        const out = write ('rd-clocknil', "    apiKey: string = 'k';\n    json (x: any): any { return x; }\n    sign (params: Dict) {\n        let requestBody: Str = undefined;\n        const timestamp = this.nonce ().toString ();\n        if (params['x'] !== undefined) {\n            requestBody = this.json (params);\n        } else {\n            requestBody = '{}';\n        }\n        const payload = timestamp + this.apiKey + requestBody;\n        const headers = { 'T': timestamp, 'S': payload };\n        const bodyResolved = requestBody;\n        return this.hold ([ headers, bodyResolved ]);\n    }\n");
+        expect(out).toContain('let mut requestBody: Value = Value::Null;');
     });
     test('a for counter compared with an int literal stays an i64 (no as_f64 unwrap, no Value counter)', () => {
         const out = write ('rd-for', "    m (rows: any[]) {\n        const out = [];\n        for (let j = 0; j < rows.length; j++) {\n            if (j > 0) {\n                out.push (rows[j]);\n            }\n        }\n        return out;\n    }\n");

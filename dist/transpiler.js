@@ -55329,7 +55329,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const guarded = (widened || expressionUses || this.rustOptListParamInit(declaration.initializer)) && boxed > 0;
     const strKind = kind === "str" || kind === "ostr";
-    const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !strKind || !this.rustStrNoLend && this.rustStrLendSites(declaration)) && !this.rustStrReturnedLocal(declaration, scope);
+    const handOff = nativeUses === 0 && boxed >= 1 && (copied === 0 || !strKind || !this.rustStrNoLend && (this.rustStrLendSites(declaration) || kind === "str" && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustReaderLendBoxes(declaration))) && !this.rustStrReturnedLocal(declaration, scope);
     const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
     const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
@@ -55385,7 +55385,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       this.rustMarketLentLocals.add(declaration);
     }
     const numericSum = (kind === "int" || kind === "num") && this.rustSumShape(this.unwrapParens(declaration.initializer));
-    if (!numericSum && this.rustNewShapeCostly(declaration.initializer, typedUses, kind === "str" || kind === "ostr" ? copied : 0))
+    const clockInit = this.unwrapParens(declaration.initializer);
+    const clockLent = kind === "str" && this.rustClockString(clockInit) && !this.rustStrNoLend && (copied > 0 ? this.rustReaderLendBoxes(declaration) : handOff) && !this.rustConcatWithNilLocal(declaration);
+    if (clockLent && copied > 0)
+      this.rustStrLentLocals.add(declaration);
+    if (!numericSum && !clockLent && this.rustNewShapeCostly(declaration.initializer, typedUses, kind === "str" || kind === "ostr" ? copied : 0))
       return void 0;
     if (this.rustFieldKeyCostly(declaration))
       return void 0;
@@ -56532,7 +56536,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         continue;
       const trial = this.rustScalarDecisions.get(declaration);
       const form = this.rustScalarUseForms.get(n);
-      if ((trial === "str" || trial === "ostr") && (form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration) && !(form === "box" && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== void 0 && this.rustScalarSelfArgBox(n)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration)))
+      if ((trial === "str" || trial === "ostr") && (form === "box" || form === "xbox" || form === "err" || form === "key") && !this.rustScalarBoxMoves(n, form, declaration) && !(form === "box" && this.rustElementReadScalarKind(this.unwrapParens(declaration.initializer)) !== void 0 && this.rustScalarSelfArgBox(n)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustScalarSelfArgBox(n) && this.rustFormatLendLocal(declaration)) && !(form === "box" && trial === "str" && !this.rustStrNoLend && this.rustClockString(this.unwrapParens(declaration.initializer)) && this.rustLendSlot(n)))
         return false;
       const push = findAncestor(n, (m) => isStatement(m) || isCallExpression6(m) && isPropertyAccessExpression3(m.expression) && m.expression.name.text === "push");
       if (push !== void 0 && isCallExpression6(push))
@@ -57486,6 +57490,12 @@ ${binding(plan.indent)}` : ""), head: "" };
   /** rd: a `String` error message at its provable last use moves into the constructor (`ToErrorMessage for String`). */
   rustErrMsgMoves(n, declaration) {
     return this.rustScalarLocalOf(n)?.kind === "str" && this.rustLocalLastUse(n, declaration);
+  }
+  /** rd: a box at a slot where the `Value` form cloned the local (a `this.`/`super.` argument, an object-literal value,
+   *  a dict write, an array element): lending the `String` there costs that same one copy. */
+  rustLendSlot(n) {
+    const up = n.parent;
+    return this.rustScalarSelfArgBox(n) || up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n || this.rustDictWriteValue(n) || isArrayLiteralExpression4(up) && !(isBinaryExpression5(up.parent) && up.parent.left === up);
   }
   /** rd: a `format!` string local whose every use is a `this.`/`super.` argument (lent: the copy the `Value` clone made)
    *  or a moving last use (`return`, a final error message, the last box). */
@@ -58801,7 +58811,9 @@ ${binding(plan.indent)}` : ""), head: "" };
   /** rd: a non-literal operand printed as a `Value` whose checker type is `number` (`Int|Float|Null` at runtime). */
   rustScalarValueNumber(node) {
     const inner = this.unwrapParens(node);
-    if (inner === void 0 || this.literalKindOfNode(inner) !== void 0 || this.rustScalarExprHasForCounter(inner))
+    if (inner === void 0 || this.literalKindOfNode(inner) !== void 0)
+      return false;
+    if (this.rustScalarExprHasForCounter(inner) && !(isIdentifier3(inner) && this.rustValueIntCounter(inner)))
       return false;
     if (isIdentifier3(inner) && (this.rustScalarIdentifierKind(inner) !== void 0 || this.rustScalarParamRead(inner) !== void 0))
       return false;
@@ -59326,6 +59338,53 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (this.rustScalarExprHasForCounter(other))
       return false;
     return this.primitiveKindOfType(this.typeOfNodeIfAny(parent.left === n ? parent.right : parent.left)) === "number";
+  }
+  /** rd: some `+` chain holding this local also holds a nil-declared local (typing this one would retype that one, which
+   *  belongs to the nil-declared rules). */
+  rustConcatWithNilLocal(declaration) {
+    let found = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      let top = n;
+      while (isBinaryExpression5(top.parent) && top.parent.operatorToken.kind === SyntaxKind7.PlusToken || isParenthesizedExpression3(top.parent))
+        top = top.parent;
+      const visit = (m) => {
+        if (found || m === void 0)
+          return;
+        if (isIdentifier3(m) && m !== n) {
+          const d = this.rustDeclaredNode(m);
+          if (d !== void 0 && isVariableDeclaration3(d) && (d.initializer === void 0 || this.literalKindOfNode(d.initializer) === "null"))
+            found = true;
+          return;
+        }
+        if (isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.PlusToken) {
+          visit(m.left);
+          visit(m.right);
+        } else if (isParenthesizedExpression3(m))
+          visit(m.expression);
+      };
+      if (top !== n)
+        visit(top);
+      return true;
+    });
+    return found;
+  }
+  /** rd: a `for (let i = <int>; ..; i++)` counter read in its own loop whose only write is the step: always an `Int`. */
+  rustValueIntCounter(node) {
+    const d = this.rustDeclaredNode(node);
+    const loop = d?.parent?.parent;
+    if (d === void 0 || !isVariableDeclaration3(d) || loop?.kind !== SyntaxKind7.ForStatement || this.rustScalarIntLiteral(this.unwrapParens(d.initializer)) === void 0)
+      return false;
+    const incr = loop.incrementor;
+    if (incr === void 0 || !this.isNodeInsideNode(node, loop))
+      return false;
+    const symbol = this.rustSymbolOf(d.name);
+    for (const n of this.rustScopeNameNodes(loop, String(d.name.text))) {
+      if (n === d.name || !isIdentifier3(n) || this.rustSymbolOf(n) !== symbol || this.isNodeInsideNode(n, incr))
+        continue;
+      if (this.rustIdentifierIsWritten(n))
+        return false;
+    }
+    return (incr.kind === SyntaxKind7.PostfixUnaryExpression || incr.kind === SyntaxKind7.PrefixUnaryExpression) && (incr.operator === SyntaxKind7.PlusPlusToken || incr.operator === SyntaxKind7.MinusMinusToken) && isIdentifier3(incr.operand) && this.rustSymbolOf(incr.operand) === symbol;
   }
   rustScalarExprHasForCounter(node) {
     const inner = this.unwrapParens(node);
