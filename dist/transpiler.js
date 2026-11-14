@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -56772,10 +56772,33 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (push !== void 0 && isCallExpression6(push))
         return false;
       const write = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken);
-      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write))
+      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration))
         return false;
     }
     return true;
+  }
+  /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole
+   *  write (`x = Precise.stringDiv (Precise.stringMul (local, y), ..)`): the written text is a `Precise` call either
+   *  way (the `&Value` operand takes the moved string), so the receiver's decision does not read this local's type. */
+  rustScalarPreciseFeed(n, write, declaration) {
+    if (this.rustScalarUseForms.get(n) !== "box" || !this.rustPreciseStringCall(declaration.initializer) || !this.rustLocalLastUse(n, declaration))
+      return false;
+    let top = n;
+    for (; ; ) {
+      while (isParenthesizedExpression3(top.parent))
+        top = top.parent;
+      const call = top.parent;
+      if (!this.rustPreciseStringCall(call) || call.expression === top)
+        return false;
+      if (call === this.unwrapParens(write.right))
+        return true;
+      top = call;
+    }
+  }
+  /** `Precise.<op> (..)`: the hand-written `crate::precise::Precise` string math (a string or undefined). */
+  rustPreciseStringCall(node) {
+    const call = this.unwrapParens(node);
+    return call !== void 0 && isCallExpression6(call) && isPropertyAccessExpression3(call.expression) && isIdentifier3(call.expression.expression) && String(call.expression.expression.text) === "Precise" && /^string[A-Z]/.test(String(call.expression.name.text));
   }
   /** A String-helper result boxed as an object-literal value or as a one-level element write: the written
    *  place is a `Value` either way, so no other local's decision reads this one's type. */
@@ -73267,7 +73290,12 @@ ${iden}}`;
       if (joined)
         this.rustScalarDecisions.set(element, previous);
     }
-    return ok && (nativeUses > 0 || copies === 0) ? "ostr" : void 0;
+    if (ok && (nativeUses > 0 || copies === 0))
+      return "ostr";
+    if (!ok || joined || this.rustStrNoLend || !this.rustReaderLendBoxes(element))
+      return void 0;
+    this.rustStrLentLocals.add(element);
+    return "ostr";
   }
   /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
    *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
