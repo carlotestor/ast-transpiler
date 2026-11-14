@@ -56443,6 +56443,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (isBinaryExpression5(parent) && parent.operatorToken.kind === SyntaxKind7.PlusToken) {
       if (kind !== "str" && kind !== "ostr")
         return this.rustScalarExpressionUseForm(n, kind);
+      if (kind === "ostr" && this.rustNilOptStrConcatUse(n) && this.printNode(parent, 0).trim().startsWith("Value::Str(format!("))
+        return "concat";
       return kind === "str" && this.printNode(parent, 0).trim().startsWith("Value::Str(format!(") ? "concat" : "box";
     }
     if (isConditionalExpression4(parent) && parent.condition !== n)
@@ -58573,6 +58575,13 @@ ${binding(plan.indent)}` : ""), head: "" };
       this.rustBaseNativeStrBare.delete(node);
     }
   }
+  rustVenueKeptStrArm(node) {
+    if (node?.kind !== SyntaxKind7.MethodDeclaration || !isIdentifier3(node.name))
+      return false;
+    const cls = node.parent;
+    const clsName = cls?.name !== void 0 && isIdentifier3(cls.name) ? String(cls.name.text) : void 0;
+    return clsName !== void 0 && (_RustTranspiler.RUST_VENUE_KEPT_STR_ARMS[clsName] ?? []).includes(String(node.name.text));
+  }
   /** A `: Str` method of the table declared in the base tier, or an override of one. */
   rustBaseNativeStrMethod(node) {
     if (node?.kind !== SyntaxKind7.MethodDeclaration || !isIdentifier3(node.name) || !_RustTranspiler.RUST_BASE_NATIVE_STR_METHODS.has(String(node.name.text)))
@@ -59032,6 +59041,8 @@ ${classMethods}
     if (this.rustMethodTypedReturnKind(node) !== void 0)
       ret = { "Option<i64>": "oint", "Option<String>": "keptostr", "i64": "keptint", "String": "keptstr" }[returnType] ?? ret;
     if (ret === "ostr" && this.rustBaseNativeStrMethod(node))
+      ret = "keptostr";
+    if (ret === "ostr" && this.rustVenueKeptStrArm(node))
       ret = "keptostr";
     this.rustSignatureTable.set(node, {
       file: node.getSourceFile?.(),
@@ -73317,6 +73328,9 @@ _RustTranspiler.RUST_BASE_TIER_FILE = /ts[\\/]src[\\/]base[\\/]/;
 // Base methods printed `-> Option<String>` in the base tier and in every override (their only hand-written
 // caller, kraken's `super_safe_currency_code` shim, returns the same type); the by-name arm boxes back once.
 _RustTranspiler.RUST_BASE_NATIVE_STR_METHODS = /* @__PURE__ */ new Set(["safeCurrencyCode"]);
+// Venue methods (class -> method names) whose `: Str` return was spelled after their by-name arm existed: the arm
+// stays (it boxes the `Option<String>` once), so the dispatch-arm name set is unchanged.
+_RustTranspiler.RUST_VENUE_KEPT_STR_ARMS = { coinbaseinternational: ["parseTimeInForce"] };
 _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "Value": "value",
   "impl Into<crate::Value>": "value",

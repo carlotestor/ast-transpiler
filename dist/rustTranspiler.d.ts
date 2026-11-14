@@ -966,6 +966,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBaseNativeStrCall(node: any): boolean;
     /** The call's own `Option<String>`, unboxed. */
     rustBaseNativeStrBareText(node: any): string;
+    private static readonly RUST_VENUE_KEPT_STR_ARMS;
+    rustVenueKeptStrArm(node: any): boolean;
     /** A `: Str` method of the table declared in the base tier, or an override of one. */
     rustBaseNativeStrMethod(node: any): boolean;
     /** Every `return` of the method's own body converts, and the body's last

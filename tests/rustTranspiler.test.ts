@@ -10623,3 +10623,37 @@ describe('rust base predicate flags', () => {
         expect(out).not.toMatch(/let mut isHttp: Value/);
     });
 });
+
+describe('mh1: safeSymbol concat operands, venue kept-str arms', () => {
+    let out = '';
+    let sigs: any[] = [];
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'mh1-venue');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), 'export type Str = string | undefined;\n'
+            + 'export default class Exchange {\n'
+            + '    orderbooks: any = {};\n'
+            + '    safeString (o: any, k: any, d: string = undefined): string | undefined { return o[k]; }\n'
+            + '    safeSymbol (id: string | undefined): string | undefined { return id; }\n'
+            + '    hold (x: any): any { return x; }\n'
+            + '}\n');
+        fs.writeFileSync (path.join (dir, 'ts/src/coinbaseinternational.ts'), "import Exchange from './base/Exchange.js';\nimport type { Str } from './base/Exchange.js';\n"
+            + 'export default class coinbaseinternational extends Exchange {\n'
+            + "    parseTimeInForce (timeInForce: Str): Str {\n        const m = { 'gtc': 'GTC' };\n        return this.safeString (m, timeInForce, timeInForce);\n    }\n"
+            + "    parseOrder (o: any): any {\n        const tif = this.parseTimeInForce (this.safeString (o, 't'));\n        return this.hold ({ 'timeInForce': tif });\n    }\n"
+            + "    handleBook (m: any) {\n        const symbol = this.safeSymbol (this.safeString (m, 's'));\n        const book = this.orderbooks[symbol];\n        const messageHash = 'book:' + symbol;\n        return this.hold ([ book, messageHash ]);\n    }\n"
+            + '}\n');
+        const r = transpiler.transpileRustByPath (path.join (dir, 'ts/src/coinbaseinternational.ts'));
+        out = r.content;
+        sigs = r.rustSignatures ?? [];
+    });
+    test('an optional-string operand of an always-string concat reads in place, no box', () => {
+        expect(out).toMatch(/let mut symbol: Option<String> = /);
+        expect(out).toContain('symbol.as_deref().unwrap_or("null")');
+    });
+    test('a venue method of the kept-str table keeps its by-name arm kind when its Str return is spelled', () => {
+        expect(out).toContain('-> Option<String>');
+        expect(sigs.find((s) => s.name === 'parse_time_in_force')?.ret).toBe('keptostr');
+        expect(out).toMatch(/let mut tif: Option<String> = /);
+    });
+});

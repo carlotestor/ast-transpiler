@@ -5286,6 +5286,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (isBinaryExpression(parent) && parent.operatorToken.kind === SyntaxKind.PlusToken) {
             // a `String` is a `format!` operand as-is; other concats need the box
             if (kind !== 'str' && kind !== 'ostr') return this.rustScalarExpressionUseForm(n, kind);
+            // mh1: an optional string operand of an always-string `format!` concat reads in place (`as_deref().unwrap_or("null")`,
+            // the nil-local rule's own form), no copy where the box cloned it
+            if (kind === 'ostr' && this.rustNilOptStrConcatUse(n) && this.printNode(parent, 0).trim().startsWith('Value::Str(format!(')) return 'concat';
             return kind === 'str' && this.printNode(parent, 0).trim().startsWith('Value::Str(format!(') ? 'concat' : 'box';
         }
         if (isConditionalExpression(parent) && parent.condition !== n) return 'box';
@@ -7259,6 +7262,17 @@ export class RustTranspiler extends BaseTranspiler {
         }
     }
 
+    // Venue methods (class -> method names) whose `: Str` return was spelled after their by-name arm existed: the arm
+    // stays (it boxes the `Option<String>` once), so the dispatch-arm name set is unchanged.
+    private static readonly RUST_VENUE_KEPT_STR_ARMS: Record<string, string[]> = { coinbaseinternational: [ 'parseTimeInForce' ] };
+
+    rustVenueKeptStrArm(node: any): boolean {
+        if (node?.kind !== SyntaxKind.MethodDeclaration || !isIdentifier(node.name)) return false;
+        const cls: any = node.parent;
+        const clsName = cls?.name !== undefined && isIdentifier(cls.name) ? String(cls.name.text) : undefined;
+        return clsName !== undefined && (RustTranspiler.RUST_VENUE_KEPT_STR_ARMS[clsName] ?? []).includes(String(node.name.text));
+    }
+
     /** A `: Str` method of the table declared in the base tier, or an override of one. */
     rustBaseNativeStrMethod(node: any): boolean {
         if (node?.kind !== SyntaxKind.MethodDeclaration || !isIdentifier(node.name) || !RustTranspiler.RUST_BASE_NATIVE_STR_METHODS.has(String(node.name.text))) return false;
@@ -7750,6 +7764,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustMethodTypedReturnKind(node) !== undefined) ret = ({ 'Option<i64>': 'oint', 'Option<String>': 'keptostr', 'i64': 'keptint', 'String': 'keptstr' } as Record<string, RustDispatchReturnKind>)[returnType] ?? ret;
         // ral-fb: a base method printing `Option<String>` (safeCurrencyCode and its overrides) keeps its `-> Value` arms the same way
         if (ret === 'ostr' && this.rustBaseNativeStrMethod(node)) ret = 'keptostr';
+        // mh1: a venue method that printed `-> Value` (with a by-name arm) until its `: Str` return was spelled keeps that arm
+        if (ret === 'ostr' && this.rustVenueKeptStrArm(node)) ret = 'keptostr';
         this.rustSignatureTable.set(node, {
             file: node.getSourceFile?.(),
             name: this.toSnakeCaseName(name),
