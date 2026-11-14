@@ -51728,6 +51728,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustNilListLocals = /* @__PURE__ */ new WeakSet();
     this.rustMutableBuiltLocals = /* @__PURE__ */ new WeakSet();
     this.rustDictElementBoxes = /* @__PURE__ */ new WeakMap();
+    this.rustContainerAliasInits = /* @__PURE__ */ new WeakSet();
+    this.rustContainerAliasAsking = /* @__PURE__ */ new WeakSet();
     this.rustValueWriteTargets = /* @__PURE__ */ new Map();
     this.rustValueWriteOpen = /* @__PURE__ */ new Set();
     // ── empty-declared endpoint responses (`let response = undefined; response = await this.<endpoint> (..)`) ──
@@ -57675,6 +57677,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return false;
       }
       return this.rustHandedDictLocal(source);
+    }
+    if (source !== void 0 && isVariableDeclaration3(source) && this.rustBorrowedPending.has(source) && this.rustContainerAliasAsking.has(init)) {
+      this.rustSbAliasDeferred.add(init.parent);
+      return false;
     }
     if (source === void 0 || !isVariableDeclaration3(source) || this.rustBorrowedPending.has(source))
       return false;
@@ -68648,6 +68654,7 @@ ${iden}}`;
     let nullWrites = 0;
     let endpointBoxes = 0;
     let plainReads = 0;
+    let aliasBoxes = 0;
     const boxedElementUses = [];
     const indexReadUses = [];
     const accept = (n) => {
@@ -68757,6 +68764,8 @@ ${iden}}`;
         return ++reads > 0;
       if (from === "dict" && this.rustJwtRequestSlot(up, n))
         return ++jwtLends > 0 && ++reads > 0;
+      if (this.rustContainerAliasInit(n, declaration))
+        return ++aliasBoxes > 0 && boxedElementUses.push(n) > 0;
       if (!isCallExpression6(up) || up.arguments[0] !== n)
         return handed();
       const keyArgs = up.arguments.slice(1, isPropertyAccessExpression3(up.expression) && /2$/.test(String(up.expression.name.text)) ? 3 : 2).map((a) => this.rustSkipWrappers(a));
@@ -68798,6 +68807,8 @@ ${iden}}`;
       return void 0;
     const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0;
     if (jwtLends > 0 && optional)
+      return void 0;
+    if (aliasBoxes > 0 && (optional || reads === 0 && aliasBoxes === boxedElementUses.length))
       return void 0;
     if (lentResponses > 0 && optional && !this.rustLentOptionalOk(declaration, name, fn, init, from))
       return void 0;
@@ -69716,6 +69727,8 @@ ${iden}}`;
     const form = this.rustDictElementBoxes.get(node);
     if (form === void 0)
       return void 0;
+    if (this.rustContainerAliasInits.has(node) && this.rustSbDictAliasDecl(node.parent))
+      return void 0;
     const declaration = this.rustDeclarationOfIdentifier(node);
     if (declaration !== void 0 && this.rustOptContainerLocals.has(declaration)) {
       if (!this.rustPrintedOptional.has(declaration))
@@ -69785,6 +69798,80 @@ ${iden}}`;
     }
     this.rustValueWriteTargets.set(target, stays);
     return stays;
+  }
+  /** ral-40h: phase 1 of a container alias. `const|let y = x` (single declarator, same function, no closure between)
+   *  hands `x`'s container whole to `y`. `y` is decided in phase 2, once `x` has settled: a shared-map alias that is
+   *  never written takes `Value::from(&x).into_dict()` (the Arc the `Value` alias bumped), any other `Value` alias the box
+   *  (`Value::Dict(x)` / `Value::Arr(x)` when `x` is dead after it, else `Value::from(&x)`). Every other local's rule is
+   *  untouched: the target must stay `Value` or be the shared-map alias, both read `x` only as this one box. */
+  rustContainerAliasInit(n, own) {
+    const up = n.parent;
+    if (up === void 0 || !isVariableDeclaration3(up) || up.initializer !== n || !isIdentifier3(up.name) || up === own)
+      return false;
+    const list = up.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations?.length !== 1 || list.parent?.kind !== SyntaxKind7.VariableStatement)
+      return false;
+    if (this.rustEnclosingFunction(up) !== this.rustEnclosingFunction(own))
+      return false;
+    const ownInit = this.rustSkipWrappers(own.initializer);
+    if (ownInit !== void 0 && isCallExpression6(ownInit) && this.rustRecordLookupSource(ownInit))
+      return false;
+    if (!this.rustContainerNeverNullLocal(own, 0))
+      return false;
+    if (this.rustBorrowedPending.has(up) || this.rustValueWriteOpen.has(up))
+      return false;
+    if (this.rustValueWriteTargets.has(up))
+      return this.rustValueWriteTargets.get(up);
+    this.rustValueWriteOpen.add(up);
+    this.rustContainerAliasAsking.add(n);
+    let ok = false;
+    try {
+      ok = this.rustSlotTargetStaysValue(up) && !this.rustOptContainerLocals.has(up);
+    } finally {
+      this.rustValueWriteOpen.delete(up);
+      this.rustContainerAliasAsking.delete(n);
+    }
+    this.rustValueWriteTargets.set(up, ok);
+    if (ok)
+      this.rustContainerAliasInits.add(n);
+    return ok;
+  }
+  /** ral-40h: a local whose initializer and every whole write hold a container on every path (never Null): a fresh
+   *  built container, `omit` of a proven map, a `safeDict*` / `safeList*` read with an empty literal default, a
+   *  never-null venue container return, or an alias of such a local (syntactic: no other local's decision is read). */
+  rustContainerNeverNullLocal(declaration, depth) {
+    if (depth > 3 || declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    const producer = (e) => {
+      const x = this.rustSkipWrappers(e);
+      if (x === void 0)
+        return false;
+      if (isIdentifier3(x)) {
+        const d = this.rustDeclarationOfIdentifier(x);
+        return d !== void 0 && d !== declaration && d.name !== x && this.rustContainerNeverNullLocal(d, depth + 1);
+      }
+      if (!isCallExpression6(x))
+        return false;
+      if (this.rustContainerInitNeverNull(x, "map") || this.rustContainerInitNeverNull(x, "list") || this.rustOmitOfDict(x))
+        return true;
+      if (this.rustBuiltReturnSourceKind(x) !== void 0)
+        return true;
+      const venue = this.rustVenueContainerReturnKind(x);
+      return venue !== void 0 && venue.nullable === false;
+    };
+    if (!producer(declaration.initializer))
+      return false;
+    const fn = this.rustEnclosingFunction(declaration);
+    for (const n of this.rustScopeNameNodes(fn, String(declaration.name.text))) {
+      if (!isIdentifier3(n) || n === declaration.name || this.rustDeclaredNode(n) !== declaration)
+        continue;
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind) && (up.operatorToken.kind !== SyntaxKind7.EqualsToken || !producer(up.right)))
+        return false;
+      if (isArrayLiteralExpression4(up) && isBinaryExpression5(up.parent) && up.parent.left === up)
+        return false;
+    }
+    return true;
   }
   /** ral-ra: `m['k'] = x` / `m.k = x` one level on another local `m` (not `x` itself): the store takes the value by
    *  value, so the shared container is boxed there once (moved at its last use, else the Arc bump the `Value` paid). */

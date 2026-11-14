@@ -6450,6 +6450,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustHandedPending.has(source)) { this.rustSbAliasDeferred.add(init.parent); return false; }
             return this.rustHandedDictLocal(source);
         }
+        // ral-40h: a container alias asked from inside its source's open decision is re-asked once the source settles
+        if (source !== undefined && isVariableDeclaration(source) && this.rustBorrowedPending.has(source) && this.rustContainerAliasAsking.has(init)) { this.rustSbAliasDeferred.add(init.parent); return false; }
         if (source === undefined || !isVariableDeclaration(source) || this.rustBorrowedPending.has(source)) return false;
         return this.rustBorrowedLocalKind(source) === 'dict';
     }
@@ -17561,6 +17563,7 @@ export class RustTranspiler extends BaseTranspiler {
         let nullWrites = 0;
         let endpointBoxes = 0;
         let plainReads = 0;
+        let aliasBoxes = 0;
         const boxedElementUses: any[] = [];
         const indexReadUses: any[] = [];
         const accept = (n: any) => {
@@ -17662,6 +17665,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (from === 'dict' && isCallExpression(up) && this.rustLentParamsSlot(up, n) && (extendReuse || init !== undefined && isCallExpression(init) && this.rustBuiltReturnSourceKind(init) === 'dict')) return ++reads > 0;
             // ral-oc: the runtime `jwt(request: impl Into<Value>, ..)` takes the request map lent (an Arc bump)
             if (from === 'dict' && this.rustJwtRequestSlot(up, n)) return ++jwtLends > 0 && ++reads > 0;
+            // ral-40h: `const|let y = x` of a container local (phase 1): the alias takes the container whole
+            if (this.rustContainerAliasInit(n, declaration)) return ++aliasBoxes > 0 && boxedElementUses.push(n) > 0;
             if (!isCallExpression(up) || up.arguments[0] !== n) return handed();
             // An endpoint response may be a list or a map: only string-key reads agree for both.
             const keyArgs: any[] = up.arguments.slice(1, isPropertyAccessExpression(up.expression) && /2$/.test(String(up.expression.name.text)) ? 3 : 2).map((a: any) => this.rustSkipWrappers(a));
@@ -17724,6 +17729,8 @@ export class RustTranspiler extends BaseTranspiler {
         // a nullable source lent whole keeps Null apart from an empty container: the optional form
         const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0;
         if (jwtLends > 0 && optional) return undefined;
+        // ral-40h: an alias takes the plain container only (an optional one would copy at the box)
+        if (aliasBoxes > 0 && (optional || reads === 0 && aliasBoxes === boxedElementUses.length)) return undefined;
         if (lentResponses > 0 && optional && !this.rustLentOptionalOk(declaration, name, fn, init, from)) return undefined;
         if (extendHeads > 0 && (optional || from !== 'dict' && from !== 'api')) return undefined;
         if (optional && boxedElementUses.length > 0 && (this.rustWsFieldRead(init) !== undefined || defaultedBoxes > 0)) return undefined;
@@ -18594,6 +18601,8 @@ export class RustTranspiler extends BaseTranspiler {
     printDictElementBox(node: any, text: string): string | undefined {
         const form = this.rustDictElementBoxes.get(node);
         if (form === undefined) return undefined;
+        // ral-40h phase 2: a shared-map alias prints `Value::from(&x).into_dict()` around the bare source
+        if (this.rustContainerAliasInits.has(node) && this.rustSbDictAliasDecl(node.parent)) return undefined;
         const declaration: any = this.rustDeclarationOfIdentifier(node);
         if (declaration !== undefined && this.rustOptContainerLocals.has(declaration)) {
             if (!this.rustPrintedOptional.has(declaration)) return undefined;
@@ -18654,6 +18663,72 @@ export class RustTranspiler extends BaseTranspiler {
         this.rustValueWriteTargets.set(target, stays);
         return stays;
     }
+
+    /** ral-40h: phase 1 of a container alias. `const|let y = x` (single declarator, same function, no closure between)
+     *  hands `x`'s container whole to `y`. `y` is decided in phase 2, once `x` has settled: a shared-map alias that is
+     *  never written takes `Value::from(&x).into_dict()` (the Arc the `Value` alias bumped), any other `Value` alias the box
+     *  (`Value::Dict(x)` / `Value::Arr(x)` when `x` is dead after it, else `Value::from(&x)`). Every other local's rule is
+     *  untouched: the target must stay `Value` or be the shared-map alias, both read `x` only as this one box. */
+    rustContainerAliasInit(n: any, own: any): boolean {
+        const up: any = n.parent;
+        if (up === undefined || !isVariableDeclaration(up) || up.initializer !== n || !isIdentifier(up.name) || up === own) return false;
+        const list: any = up.parent;
+        if (list?.kind !== SyntaxKind.VariableDeclarationList || list.declarations?.length !== 1 || list.parent?.kind !== SyntaxKind.VariableStatement) return false;
+        if (this.rustEnclosingFunction(up) !== this.rustEnclosingFunction(own)) return false;
+        // market / currency records keep their own lane
+        const ownInit: any = this.rustSkipWrappers(own.initializer);
+        if (ownInit !== undefined && isCallExpression(ownInit) && this.rustRecordLookupSource(ownInit)) return false;
+        // the plain form turns a Null source into the empty container: only a source that is never Null may box whole
+        if (!this.rustContainerNeverNullLocal(own, 0)) return false;
+        if (this.rustBorrowedPending.has(up) || this.rustValueWriteOpen.has(up)) return false;
+        if (this.rustValueWriteTargets.has(up)) return this.rustValueWriteTargets.get(up) as boolean;
+        this.rustValueWriteOpen.add(up);
+        this.rustContainerAliasAsking.add(n);
+        let ok = false;
+        try {
+            // phase 2 answers asked while `x` is open: a shared-map alias defers (sb) and stays `Value` here
+            ok = this.rustSlotTargetStaysValue(up) && !this.rustOptContainerLocals.has(up);
+        } finally {
+            this.rustValueWriteOpen.delete(up);
+            this.rustContainerAliasAsking.delete(n);
+        }
+        this.rustValueWriteTargets.set(up, ok);
+        if (ok) this.rustContainerAliasInits.add(n);
+        return ok;
+    }
+
+    /** ral-40h: a local whose initializer and every whole write hold a container on every path (never Null): a fresh
+     *  built container, `omit` of a proven map, a `safeDict*` / `safeList*` read with an empty literal default, a
+     *  never-null venue container return, or an alias of such a local (syntactic: no other local's decision is read). */
+    rustContainerNeverNullLocal(declaration: any, depth: number): boolean {
+        if (depth > 3 || declaration === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name)) return false;
+        const producer = (e: any): boolean => {
+            const x: any = this.rustSkipWrappers(e);
+            if (x === undefined) return false;
+            if (isIdentifier(x)) {
+                const d: any = this.rustDeclarationOfIdentifier(x);
+                return d !== undefined && d !== declaration && d.name !== x && this.rustContainerNeverNullLocal(d, depth + 1);
+            }
+            if (!isCallExpression(x)) return false;
+            if (this.rustContainerInitNeverNull(x, 'map') || this.rustContainerInitNeverNull(x, 'list') || this.rustOmitOfDict(x)) return true;
+            if (this.rustBuiltReturnSourceKind(x) !== undefined) return true;
+            const venue = this.rustVenueContainerReturnKind(x);
+            return venue !== undefined && venue.nullable === false;
+        };
+        if (!producer(declaration.initializer)) return false;
+        const fn: any = this.rustEnclosingFunction(declaration);
+        for (const n of this.rustScopeNameNodes(fn, String(declaration.name.text)) as any[]) {
+            if (!isIdentifier(n) || n === declaration.name || this.rustDeclaredNode(n) !== declaration) continue;
+            const up: any = n.parent;
+            if (isBinaryExpression(up) && up.left === n && rustIsAssignmentOperator(up.operatorToken.kind) && (up.operatorToken.kind !== SyntaxKind.EqualsToken || !producer(up.right))) return false;
+            // a destructuring write (`[a, x] = ..`) is no proven producer
+            if (isArrayLiteralExpression(up) && isBinaryExpression(up.parent) && up.parent.left === up) return false;
+        }
+        return true;
+    }
+
+    private rustContainerAliasInits = new WeakSet<any>();
+    private rustContainerAliasAsking = new WeakSet<any>();
 
     private rustValueWriteTargets = new Map<any, boolean>();
     private rustValueWriteOpen = new Set<any>();

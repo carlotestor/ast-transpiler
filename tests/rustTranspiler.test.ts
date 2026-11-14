@@ -14494,3 +14494,29 @@ describe('ral-zh: an Object.keys key list with a same-named twin in a sibling bl
         expect(out).not.toContain('let mut symbols: crate::value::List = ');
     });
 });
+
+describe('ral-40h: container aliases decided in two phases (the source settles first, the alias then shares or takes the box)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    omit (o: any, k: any): any { return o; }\n    safeDict (o: any, k: any, d: any = undefined): any { return o[k]; }\n    safeString (o: any, k: any, d: any = undefined): any { return o[k]; }\n    keep (p: any): any { return p; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n";
+    const run = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('a written alias takes the box: the source is a Dict moved at its last use', () => {
+        const out = run ('r40h-alias-box', "    a (response: Dict) {\n        const data = this.safeDict (response, 'data', {});\n        const code = this.safeString (data, 'code');\n        let result: Dict = data;\n        if (code !== undefined) {\n            result = this.keep (code);\n        }\n        return this.keep (result);\n    }\n");
+        expect(out).toContain('let mut data: crate::value::Dict = ');
+        expect(out).toContain('let mut result: Value = Value::Dict(data);');
+    });
+    test('a never-written alias shares the map (an Arc bump, no copy)', () => {
+        const out = run ('r40h-alias-share', "    b (response: Dict) {\n        const data = this.safeDict (response, 'data', {});\n        const id = this.safeString (data, 'id');\n        const result = data;\n        return [ id, this.safeString (result, 'k') ];\n    }\n");
+        expect(out).toContain('let mut data: crate::value::Dict = ');
+        expect(out).toContain('let mut result: crate::value::Dict = Value::from(&data).into_dict();');
+    });
+    test('an alias of an optional container keeps both boxed', () => {
+        const out = run ('r40h-alias-opt', "    c (response: Dict) {\n        const data = this.safeDict (response, 'data');\n        const id = this.safeString (data, 'id');\n        const result = data;\n        return [ id, result ];\n    }\n");
+        expect(out).not.toContain('let mut result: crate::value::Dict');
+        expect(out).not.toContain('Value::Dict(data)');
+    });
+});

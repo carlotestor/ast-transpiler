@@ -2586,6 +2586,18 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  value, so the shared handle moves in boxed once (`Value::Dict(x)` / `Value::Arr(x)`), exactly the value the boxed
      *  `x` held. A target with its own typed rule stays out (its write proof reads its sources). */
     rustValueLocalWriteHandOff(n: any): boolean;
+    /** ral-40h: phase 1 of a container alias. `const|let y = x` (single declarator, same function, no closure between)
+     *  hands `x`'s container whole to `y`. `y` is decided in phase 2, once `x` has settled: a shared-map alias that is
+     *  never written takes `Value::from(&x).into_dict()` (the Arc the `Value` alias bumped), any other `Value` alias the box
+     *  (`Value::Dict(x)` / `Value::Arr(x)` when `x` is dead after it, else `Value::from(&x)`). Every other local's rule is
+     *  untouched: the target must stay `Value` or be the shared-map alias, both read `x` only as this one box. */
+    rustContainerAliasInit(n: any, own: any): boolean;
+    /** ral-40h: a local whose initializer and every whole write hold a container on every path (never Null): a fresh
+     *  built container, `omit` of a proven map, a `safeDict*` / `safeList*` read with an empty literal default, a
+     *  never-null venue container return, or an alias of such a local (syntactic: no other local's decision is read). */
+    rustContainerNeverNullLocal(declaration: any, depth: number): boolean;
+    private rustContainerAliasInits;
+    private rustContainerAliasAsking;
     private rustValueWriteTargets;
     private rustValueWriteOpen;
     /** ral-ra: `m['k'] = x` / `m.k = x` one level on another local `m` (not `x` itself): the store takes the value by
