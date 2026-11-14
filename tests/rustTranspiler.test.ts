@@ -12193,6 +12193,16 @@ describe('ral-tb: boxed typed values remainder', () => {
         expect(out).toContain('networks.insert(networkCode.as_deref().unwrap_or("null").to_string(), ');
         expect(out).not.toContain('networkCode.clone()');
     });
+    test('a parseToInt for-bound is an Option<i64> compared with the Int counter inline (Some orders as f64, None is false)', () => {
+        const out = write ('tb-ptibound', "    parseToInt (n: any): number { return n; }\n    m (n: any) {\n        let s = '1';\n        const decimalsCount = this.parseToInt (n);\n        for (let i = 0; i < decimalsCount; i++) {\n            s = s + '0';\n        }\n        return this.hold (s);\n    }\n");
+        expect(out).toContain('let mut decimalsCount: Option<i64> = ');
+        expect(out).toContain('matches!(decimalsCount, Some(__b) if i.as_f64().unwrap_or(f64::NAN) < (__b as f64))');
+        expect(out).not.toContain('is_less_than(');
+    });
+    test('negative: a parseToInt for-bound that also meets another local elsewhere stays a Value', () => {
+        const out = write ('tb-ptiboundp', "    parseToInt (n: any): number { return n; }\n    m (n: any, k: any) {\n        let s = '1';\n        const pages = this.parseToInt (n);\n        for (let i = 0; i < pages; i++) {\n            s = s + '0';\n        }\n        if (k < pages) {\n            return this.hold (k);\n        }\n        return this.hold (s);\n    }\n");
+        expect(out).toContain('let mut pages: Value = ');
+    });
     test('negative: a networkIdToCode key written inside its own inserted value stays a Value', () => {
         const out = write ('tb-netkeyw', "    m (chains: any[], code: Str) {\n        const networks: Dict = {};\n        for (let j = 0; j < chains.length; j++) {\n            let networkCode = this.networkIdToCode (this.safeString (chains[j], 'name'), code);\n            networks[networkCode] = { 'network': (networkCode = 'x') };\n            this.hold (networkCode);\n        }\n        return this.hold (networks);\n    }\n");
         expect(out).toContain('let mut networkCode: Value = ');

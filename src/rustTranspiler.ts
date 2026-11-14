@@ -5483,6 +5483,8 @@ export class RustTranspiler extends BaseTranspiler {
         const boundKind = isIdentifier(bound) ? this.rustScalarLocalOf(bound)?.kind : undefined;
         if (boundKind === 'int') return `${name} ${operator} ${super.printIdentifier(bound)}`;
         if (boundKind === 'num') return `(${name} as f64) ${operator} ${super.printIdentifier(bound)}`;
+        // tb: an `Option<i64>` parseToInt bound: `is_less_than(Int, Null)` is false, `Some` orders as f64 like the helper
+        if (boundKind === 'oint' && this.rustTbCounterBound(cond, bound, 'oint') !== undefined) return `matches!(${super.printIdentifier(bound)}, Some(__b) if (${name} as f64) ${operator} (__b as f64))`;
         const refs = (n: any): boolean => (isIdentifier(n) && n.text === name) || (n.forEachChild(refs) ?? false);
         if (refs(right) || !this.printsValueExpression(left) || !this.printsValueExpression(this.orderedComparisonOperand(right))) return undefined;
         if (this.printRustScalarBinary(cond) !== undefined || this.rustScalarOwnsOperand(left) || this.rustScalarOwnsOperand(right)) return undefined;
@@ -7959,6 +7961,7 @@ export class RustTranspiler extends BaseTranspiler {
     /** Binary hook: arithmetic/ordered comparisons over typed operands, and `+=`/`-=` on a typed local. */
     printRustScalarBinary(node): string | undefined {
         const counterCompare = this.printI64CounterCompare(node); if (counterCompare !== undefined) return counterCompare;
+        const tbBound = this.printTbCounterBound(node); if (tbBound !== undefined) return tbBound;
         const op = node.operatorToken.kind;
         if (op === SyntaxKind.PlusEqualsToken || op === SyntaxKind.MinusEqualsToken) return this.rustScalarCompoundText(node, false);
         if (!RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) || this.isEqualityOp(op)) return undefined;
@@ -8335,6 +8338,56 @@ export class RustTranspiler extends BaseTranspiler {
             && isIdentifier(incr.operand) && this.rustSymbolOf(incr.operand) === symbol;
     }
 
+    /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */
+    rustTbParseToIntInit(declaration: any): boolean {
+        const init: any = declaration === undefined || !isVariableDeclaration(declaration) ? undefined : this.unwrapParens(declaration.initializer);
+        return init !== undefined && isCallExpression(init) && isPropertyAccessExpression(init.expression)
+            && init.expression.expression.kind === SyntaxKind.ThisKeyword && String(init.expression.name.text) === 'parseToInt';
+    }
+
+    /** tb: `i OP b` as the condition of `for (let i = <int>; ..; i++)` (the step is the counter's only write, so it is always
+     *  an `Int`), `b` a parseToInt `i64` / `Option<i64>` local: the counter operand, else undefined. */
+    rustTbCounterBound(cond: any, n: any, kind: string): any {
+        if ((kind !== 'int' && kind !== 'oint') || !isBinaryExpression(cond) || this.unwrapParens(cond.right) !== n && cond.right !== n) return undefined;
+        if (RustTranspiler.NATIVE_COMPARISON_OPERATORS[cond.operatorToken.kind] === undefined || this.isEqualityOp(cond.operatorToken.kind)) return undefined;
+        if (!isIdentifier(n) || !this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond)) return undefined;
+        const counter: any = cond.left;
+        if (!isIdentifier(counter)) return undefined;
+        const d: any = this.rustDeclaredNode(counter);
+        const loop: any = d?.parent?.parent;
+        if (d === undefined || !isVariableDeclaration(d) || loop?.kind !== SyntaxKind.ForStatement || loop.condition !== cond) return undefined;
+        return this.rustValueIntCounter(counter) ? counter : undefined;
+    }
+
+    /** tb: a use of the bound outside that for-condition meets another local (an operand, a write, another local's initializer or
+     *  assignment source): those partners are other groups' decisions, so the bound keeps its `Value`. */
+    rustTbBoundHasPartner(declaration: any, cond: any): boolean {
+        let partner = false;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (u: any) => {
+            if (this.isNodeInsideNode(u, cond)) return true;
+            let top: any = u;
+            while (isParenthesizedExpression(top.parent) || top.parent?.kind === SyntaxKind.AsExpression) top = top.parent;
+            const up: any = top.parent;
+            if (this.rustIdentifierIsWritten(u) || isBinaryExpression(up) || up?.kind === SyntaxKind.ConditionalExpression || up?.kind === SyntaxKind.PrefixUnaryExpression
+                || (isVariableDeclaration(up) && up.initializer === top)) partner = true;
+            return true;
+        });
+        return partner;
+    }
+
+    /** tb: the for-condition of a `Value` `Int` counter (its i64 plan declined) against a typed parseToInt bound. */
+    printTbCounterBound(node: any): string | undefined {
+        if (!isBinaryExpression(node) || !isIdentifier(node.right)) return undefined;
+        const kind = this.rustScalarLocalOf(node.right)?.kind;
+        if ((kind !== 'int' && kind !== 'oint') || this.rustTbCounterBound(node, node.right, kind) === undefined) return undefined;
+        if (this.rustI64CounterOf(node.left) !== undefined) return undefined;
+        const op = RustTranspiler.NATIVE_COMPARISON_OPERATORS[node.operatorToken.kind];
+        const i = `${super.printIdentifier(node.left)}.as_f64().unwrap_or(f64::NAN)`;
+        const b = super.printIdentifier(node.right);
+        const text = kind === 'int' ? `${i} ${op} (${b} as f64)` : `matches!(${b}, Some(__b) if ${i} ${op} (__b as f64))`;
+        return this.isBooleanPosition(node) ? text : `Value::Bool(${text})`;
+    }
+
     rustScalarExprHasForCounter(node): boolean {
         const inner: any = this.unwrapParens(node);
         if (inner === undefined) return false;
@@ -8360,6 +8413,8 @@ export class RustTranspiler extends BaseTranspiler {
                 return this.rustScalarPlainValueTarget(parent.left) ? 'xbox' : undefined;
             }
             if (RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) && this.rustScalarExpressionKind(parent) !== undefined) return 'native';
+            // tb: the bound of its own `for` counter's ordered test prints with the counter, unboxed (`printTbCounterBound`)
+            if (this.rustTbCounterBound(parent, n, kind) !== undefined) return 'native';
             // the other operand is still a `Value`: the runtime arithmetic reads this one boxed
             // (`Value::from` of a Copy number is the Int / Float / Null the `Value` local held), decided with that operand
             if (this.rustScalarValueOperandUse(parent, n, kind)) return 'xbox';

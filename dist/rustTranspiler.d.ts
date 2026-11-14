@@ -1149,6 +1149,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustConcatWithNilLocal(declaration: any): boolean;
     /** rd: a `for (let i = <int>; ..; i++)` counter read in its own loop whose only write is the step: always an `Int`. */
     rustValueIntCounter(node: any): boolean;
+    /** tb: `const b = this.parseToInt (..)` (an `Int`-or-`Null` producer, `i64` / `Option<i64>`). */
+    rustTbParseToIntInit(declaration: any): boolean;
+    /** tb: `i OP b` as the condition of `for (let i = <int>; ..; i++)` (the step is the counter's only write, so it is always
+     *  an `Int`), `b` a parseToInt `i64` / `Option<i64>` local: the counter operand, else undefined. */
+    rustTbCounterBound(cond: any, n: any, kind: string): any;
+    /** tb: a use of the bound outside that for-condition meets another local (an operand, a write, another local's initializer or
+     *  assignment source): those partners are other groups' decisions, so the bound keeps its `Value`. */
+    rustTbBoundHasPartner(declaration: any, cond: any): boolean;
+    /** tb: the for-condition of a `Value` `Int` counter (its i64 plan declined) against a typed parseToInt bound. */
+    printTbCounterBound(node: any): string | undefined;
     rustScalarExprHasForCounter(node: any): boolean;
     /** Use forms of the expression shapes: `native` (operand / receiver printed by the shape), `targ`
      *  (typed-signature argument), `err` (error message) or `box` (alias, key, push, initializer). */
