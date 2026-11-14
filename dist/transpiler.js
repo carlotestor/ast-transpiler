@@ -59178,6 +59178,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const inner = this.unwrapParens(node);
     if (inner === void 0 || !isIdentifier3(inner) || this.rustScalarIdentifierKind(inner) !== void 0)
       return void 0;
+    if (this.rustTypedFilterParamOf(inner)?.rustType === "Option<i64>")
+      return { kind: "oint", text: super.printIdentifier(inner) };
     const kind = this.rustOptParamKind(inner);
     return kind === void 0 ? void 0 : { kind, text: `${super.printIdentifier(inner)}.${_RustTranspiler.RUST_PARAM_READ[kind]}` };
   }

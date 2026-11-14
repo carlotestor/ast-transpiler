@@ -13236,3 +13236,14 @@ describe('xd: a number local as the argument of base iso8601 passes as is (runti
         expect(out).toMatch(/let mut timestamp: Value = /);
     });
 });
+
+describe('xd: an Int parameter of a typed base filter signature (Option<i64>) is a native compare operand', () => {
+    test('a reader integer compared with the since parameter of filterBySinceLimit stays Option<i64>', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-xd-fsince-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport default class Exchange {\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k] ?? d; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    filterBySinceLimit (array: object[] | undefined, since: Int = undefined, limit: Int = undefined, key: string = 'timestamp', tail = false): any[] {\n        const result = [];\n        for (let i = 0; i < array.length; i++) {\n            const entry = array[i];\n            const value = this.safeInteger (entry, key);\n            if ((value !== undefined) && (value >= since)) {\n                result.push (entry);\n            }\n        }\n        return result;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/base/Exchange.ts')).content;
+        expect(out).toMatch(/let mut value: Option<i64> = /);
+        expect(out).toContain('value.is_some() && since.is_some() && value >= since');
+    });
+});

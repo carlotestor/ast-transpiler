@@ -7880,6 +7880,8 @@ export class RustTranspiler extends BaseTranspiler {
     rustScalarParamRead(node): { kind: string, text: string } | undefined {
         const inner: any = this.unwrapParens(node);
         if (inner === undefined || !isIdentifier(inner) || this.rustScalarIdentifierKind(inner) !== undefined) return undefined;
+        // xd: an `Int` parameter of a typed base filter signature is a native `Option<i64>` already: read as is
+        if (this.rustTypedFilterParamOf(inner)?.rustType === 'Option<i64>') return { kind: 'oint', text: super.printIdentifier(inner) };
         const kind = this.rustOptParamKind(inner);
         return kind === undefined ? undefined : { kind, text: `${super.printIdentifier(inner)}.${RustTranspiler.RUST_PARAM_READ[kind]}` };
     }
