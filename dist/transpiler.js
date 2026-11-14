@@ -65688,6 +65688,12 @@ ${this.getIden(identation)}}`;
     return `is_integer(&${parsedArg})`;
   }
   printArrayPushCall(node, identation, name = void 0, parsedArg = void 0) {
+    const recv = this.rustBearerElementPushCall(node);
+    if (recv !== void 0 && parsedArg !== void 0 && this.rustDictBearerDeclaration(recv.expression) !== void 0) {
+      const text = this.rustBearerElementPushText(node, _RustTranspiler.cloneIfBareLocal(parsedArg.trim()));
+      if (text !== void 0)
+        return text;
+    }
     return this.printRustVecPush(node, name, parsedArg) ?? this.printBuiltListPush(node, name, parsedArg) ?? this.arrPush(node, name, parsedArg) ?? `append_to_array(&mut ${name}, ${node?.arguments?.length === 1 && parsedArg !== void 0 ? this.rustOwnedArgText(node.arguments[0], parsedArg.trim()) : parsedArg})`;
   }
   printIncludesCall(node, identation, name = void 0, parsedArg = void 0) {
@@ -66958,6 +66964,8 @@ ${iden}}`;
         return this.rustBearerChainHopArg(access.argumentExpression, this.printNode(access.argumentExpression, 0), name) !== void 0;
       return this.rustDictBearerKeyOk(access.argumentExpression) || this.rustBearerWriteKeyOk(access.argumentExpression, name) || this.literalKeyWidened(this.rustLiteralBearerKeyArg(access.expression, access.argumentExpression));
     }
+    if (up !== void 0 && root === access && this.rustBearerElementPushCall(up.parent) !== void 0)
+      return this.rustBearerElementPushText(up.parent, "v") !== void 0;
     if (up !== void 0 && (isDeleteExpression2(up) || isCallExpression6(up) && up.expression === root || up.kind === SyntaxKind7.PrefixUnaryExpression || up.kind === SyntaxKind7.PostfixUnaryExpression))
       return false;
     if (!this.isNativeAccessPositionSafe(root) && !isStringLiteralLikeNode4(this.rustSkipWrappers(access.argumentExpression)) && this.isNativeAccessPositionSafe(root, this.rustBearerSelfWriteHost(root, name)))
@@ -66984,6 +66992,116 @@ ${iden}}`;
       return false;
     return isObjectLiteralExpression4(this.rustSkipWrappers(declaration.initializer));
   }
+  /** ral-xf: the `m[k]` receiver of a statement `m[k].push (v)` (one argument, no spread), else undefined. */
+  rustBearerElementPushCall(call) {
+    if (call === void 0 || !isCallExpression6(call) || call.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return void 0;
+    const callee = call.expression;
+    if (!isPropertyAccessExpression3(callee) || String(callee.name.text) !== "push" || call.arguments.length !== 1 || call.arguments[0].kind === SyntaxKind7.SpreadElement)
+      return void 0;
+    const access = callee.expression;
+    if (!isElementAccessExpression4(access) || !isIdentifier3(access.expression))
+      return void 0;
+    return access;
+  }
+  /** ral-xf: `m[k].push (v)` on a map-literal local whose every stored value (literal properties and `m[k] = v` writes)
+   *  is never a map: `append_to_object_array`'s book-cache route needs a tagged map at `m[k]`, so what is left of it is
+   *  `entry(k).or_insert_with(empty list)` then a push when the entry is a list, on the map the type already is. The key
+   *  is a literal or a proven-string `Value` place (`as_str()` is `Some` exactly when the helper's `(Dict, Str)` arm
+   *  runs). */
+  rustBearerElementPushText(call, valueText) {
+    const access = this.rustBearerElementPushCall(call);
+    if (access === void 0)
+      return void 0;
+    const name = String(access.expression.text);
+    const declaration = this.rustDeclarationOfIdentifier(access.expression);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0)
+      return void 0;
+    const literal2 = this.rustSkipWrappers(declaration.initializer);
+    if (!isObjectLiteralExpression4(literal2) || !this.rustVecPushShape(call, name))
+      return void 0;
+    const key = this.rustSkipWrappers(access.argumentExpression);
+    let head;
+    if (key !== void 0 && isStringLiteralLikeNode4(key)) {
+      if (!_RustTranspiler.rustBearerKeyTextOk(String(key.text)))
+        return void 0;
+      head = `if let Value::Arr(__a) = ${name}.entry("${this.escapeRustStringLiteral(String(key.text))}".to_string())`;
+    } else {
+      if (!this.rustDictBearerKeyOk(access.argumentExpression))
+        return void 0;
+      head = `if let Some(__k) = ${this.printNode(key, 0).trim()}.as_str() { if let Value::Arr(__a) = ${name}.entry(__k.to_string())`;
+    }
+    if (!this.rustBearerValuesNeverMap(declaration, literal2, name))
+      return void 0;
+    if (this.rustMapHandedToSelfCall(declaration, name))
+      return void 0;
+    const tail = isStringLiteralLikeNode4(key) ? "" : " }";
+    return `${head}.or_insert_with(|| Value::Array(Vec::new())) { std::sync::Arc::make_mut(__a).push(${valueText}); }${tail}`;
+  }
+  /** ral-xf: the local is an argument of a `this.` / `super.` call somewhere in its function. */
+  rustMapHandedToSelfCall(declaration, name) {
+    const fn = this.rustEnclosingFunction(declaration);
+    if (fn === void 0)
+      return true;
+    let found = false;
+    const visit = (n) => {
+      if (found)
+        return;
+      if (isCallExpression6(n) && isPropertyAccessExpression3(n.expression) && (n.expression.expression.kind === SyntaxKind7.ThisKeyword || n.expression.expression.kind === SyntaxKind7.SuperKeyword) && n.arguments.some((a) => {
+        const s = this.rustSkipWrappers(a);
+        return isIdentifier3(s) && String(s.text) === name;
+      })) {
+        found = true;
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    fn.forEachChild(visit);
+    return found;
+  }
+  /** Every value the literal stores is a list or a scalar by its checker type (never `any`, never an object). */
+  rustBearerValuesNeverMap(declaration, literal2, name) {
+    const checker = this.checkerOrUndefined();
+    if (checker === void 0)
+      return false;
+    const okType = (node) => {
+      const type = this.getCheckedTypeOf(node);
+      if (type === void 0)
+        return false;
+      const parts = type.flags & TypeFlags6.Union ? typeParts(type) ?? [] : [type];
+      return parts.length > 0 && parts.every((part) => {
+        if (part.flags & (TypeFlags6.Any | TypeFlags6.Unknown))
+          return false;
+        if (part.flags & (TypeFlags6.String | TypeFlags6.StringLiteral | TypeFlags6.Number | TypeFlags6.NumberLiteral | TypeFlags6.Boolean | TypeFlags6.BooleanLiteral | TypeFlags6.Undefined | TypeFlags6.Null))
+          return true;
+        return checker.isArrayType(part) || checker.isTupleType(part);
+      });
+    };
+    for (const property of literal2.properties) {
+      if (property.kind !== SyntaxKind7.PropertyAssignment || !okType(property.initializer))
+        return false;
+    }
+    const fn = this.rustEnclosingFunction(declaration);
+    if (fn === void 0)
+      return false;
+    let ok = true;
+    const visit = (n) => {
+      if (!ok)
+        return;
+      if (isBinaryExpression5(n) && rustIsAssignmentOperator(n.operatorToken.kind) && isElementAccessExpression4(n.left)) {
+        let base = n.left;
+        while (isElementAccessExpression4(base.expression))
+          base = base.expression;
+        if (isIdentifier3(base.expression) && String(base.expression.text) === name && (base !== n.left || n.operatorToken.kind !== SyntaxKind7.EqualsToken || !okType(n.right))) {
+          ok = false;
+          return;
+        }
+      }
+      n.forEachChild(visit);
+    };
+    fn.forEachChild(visit);
+    return ok;
+  }
   /** ral-wf: the statement `name[k] = v` (one key, `=`) whose value holds `node`. */
   rustBearerSelfWriteHost(node, name) {
     let up = node.parent;
@@ -67009,9 +67127,24 @@ ${iden}}`;
       return _RustTranspiler.rustBearerKeyTextOk(String(key.text));
     if (!isIdentifier3(key) || !this.rustKeyIsProvenString(key) || this.rustStringLocalIdentifierIsTyped(key))
       return false;
-    if (this.rustNodeIsKeyUnsafePlace(String(key.text)))
+    if (this.rustNodeIsKeyUnsafePlace(String(key.text)) && !this.rustBookMetaPlaceOnLiteral(key))
       return false;
     return /^[A-Za-z_][A-Za-z0-9_]*$/.test(this.printNode(key, 0).trim());
+  }
+  /** ral-xf: a book-meta-named key place (`symbol`, `timestamp`, `datetime`, `nonce`, `checksum`) indexing a map-literal
+   *  local. `get_value` / `set_value` route such a key to the book store only on a map holding `__book_id`; a literal
+   *  never holds it (its keys are its own literal keys and proven-string places, the same proof as every other dynamic
+   *  key), so the read is the map lookup. `cache` / `hashmap` / `subscriptions` / `futures` stay excluded. */
+  rustBookMetaPlaceOnLiteral(key) {
+    if (!["symbol", "timestamp", "datetime", "nonce", "checksum"].includes(String(key.text)))
+      return false;
+    const access = this.rustElementReadOfKey(key);
+    if (access === void 0 || !isIdentifier3(access.expression))
+      return false;
+    const declaration = this.rustDeclarationOfIdentifier(access.expression);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0)
+      return false;
+    return isObjectLiteralExpression4(this.rustSkipWrappers(declaration.initializer));
   }
   /** Keys a bearer may carry: no empty/numeric key, no ws client-handle marker
    *  (`subscriptions`/`futures` serve their live registry) and nothing `__`-prefixed. */
@@ -67119,7 +67252,7 @@ ${iden}}`;
     if (!isIdentifier3(key) || !this.rustStringLocalIdentifierIsTyped(key))
       return false;
     const name = String(key.text);
-    return name !== "self" && !this.rustNodeIsKeyUnsafePlace(name);
+    return name !== "self" && (!this.rustNodeIsKeyUnsafePlace(name) || this.rustBookMetaPlaceOnLiteral(key));
   }
   /** The native map key for a printed bearer-write key, or undefined when the
    *  box's payload is not a `String`. Literal keys stay with the shared path. */

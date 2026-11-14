@@ -13268,3 +13268,35 @@ describe('ral-xf: a literal map element bound and pushed to (ccxt write-back pas
         expect(body).toMatch(/let mut byCode: Value = /);
     });
 });
+
+describe('ral-xf: symbol-named key places and m[k].push receivers on a map literal', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-xf-symbolpush');
+        const files: Record<string, string> = {"ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeList (o: any, k: any, d: any[] = undefined): any[] { return o; }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    bySymbol (rows: Dict[]) {\n        const ids: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const symbol = this.safeString (rows[i], 's');\n            ids[symbol] = this.safeString (rows[i], 'id');\n        }\n        const keys = Object.keys (ids);\n        const out = [];\n        for (let i = 0; i < keys.length; i++) {\n            const symbol = keys[i];\n            out.push (ids[symbol]);\n        }\n        return out;\n    }\n    group (rows: Dict[]) {\n        const grouped: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const id = this.safeString (rows[i], 'id');\n            if (!(id in grouped)) {\n                grouped[id] = [];\n            }\n            grouped[id].push (rows[i]);\n        }\n        return grouped;\n    }\n    groupAny (rows: Dict[], x: any) {\n        const grouped: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const id = this.safeString (rows[i], 'id');\n            grouped[id] = x;\n            grouped[id].push (rows[i]);\n        }\n        return grouped;\n    }\n    groupHanded (rows: Dict[]) {\n        const grouped: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const id = this.safeString (rows[i], 'id');\n            grouped[id] = this.safeList (grouped, id, []);\n            grouped[id].push (rows[i]);\n        }\n        return grouped;\n    }\n}\n"};
+        for (const [ rel, text ] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (dir, rel)), { recursive: true });
+            fs.writeFileSync (path.join (dir, rel), text);
+        }
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('a `symbol` key place on a literal (no __book_id can be in it) reads and writes the IndexMap', () => {
+        const body = out.slice (out.indexOf ('fn bySymbol'), out.indexOf ('fn group('));
+        expect(body).toMatch(/let mut ids: indexmap::IndexMap<String, Value> = /);
+        expect(body).toMatch(/ids\.get\(symbol\./);
+    });
+    test('m[k].push (v) with list-only values pushes on the entry of the typed map', () => {
+        const body = out.slice (out.indexOf ('fn group('), out.indexOf ('fn groupAny'));
+        expect(body).toMatch(/let mut grouped: indexmap::IndexMap<String, Value> = /);
+        expect(body).toContain('.entry(__k.to_string()).or_insert_with(|| Value::Array(Vec::new())) { std::sync::Arc::make_mut(__a).push(');
+        expect(body).not.toContain('append_to_object_array');
+    });
+    test('negative: an any-typed stored value (may be a book cache) keeps the helper', () => {
+        const body = out.slice (out.indexOf ('fn groupAny'), out.indexOf ('fn groupHanded'));
+        expect(body).toMatch(/let mut grouped: Value = /);
+    });
+    test('negative: a map also handed to a this. call keeps the box (no IndexMap copy)', () => {
+        const body = out.slice (out.indexOf ('fn groupHanded'));
+        expect(body).toMatch(/let mut grouped: Value = /);
+    });
+});

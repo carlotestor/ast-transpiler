@@ -14613,6 +14613,11 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printArrayPushCall(node, identation, name = undefined, parsedArg = undefined) {
+        const recv: any = this.rustBearerElementPushCall(node);
+        if (recv !== undefined && parsedArg !== undefined && this.rustDictBearerDeclaration(recv.expression) !== undefined) {
+            const text = this.rustBearerElementPushText(node, RustTranspiler.cloneIfBareLocal(parsedArg.trim()));
+            if (text !== undefined) return text;
+        }
         return this.printRustVecPush(node, name, parsedArg) ?? this.printBuiltListPush(node, name, parsedArg) ?? this.arrPush(node, name, parsedArg) ?? `append_to_array(&mut ${name}, ${node?.arguments?.length === 1 && parsedArg !== undefined ? this.rustOwnedArgText(node.arguments[0], parsedArg.trim()) : parsedArg})`;
     }
 
@@ -15952,6 +15957,8 @@ export class RustTranspiler extends BaseTranspiler {
             return this.rustDictBearerKeyOk(access.argumentExpression) || this.rustBearerWriteKeyOk(access.argumentExpression, name)
                 || this.literalKeyWidened(this.rustLiteralBearerKeyArg(access.expression, access.argumentExpression));
         }
+        // ral-xf: `m[k].push (v)` on a map whose stored values are never maps (rustBearerElementPushText)
+        if (up !== undefined && root === access && this.rustBearerElementPushCall(up.parent) !== undefined) return this.rustBearerElementPushText(up.parent, 'v') !== undefined;
         if (up !== undefined && (isDeleteExpression(up) || (isCallExpression(up) && up.expression === root)
             || up.kind === SyntaxKind.PrefixUnaryExpression || up.kind === SyntaxKind.PostfixUnaryExpression)) return false;
         // The printer proves the position on the outermost chain node.
@@ -15980,6 +15987,97 @@ export class RustTranspiler extends BaseTranspiler {
         return isObjectLiteralExpression(this.rustSkipWrappers(declaration.initializer));
     }
 
+    /** ral-xf: the `m[k]` receiver of a statement `m[k].push (v)` (one argument, no spread), else undefined. */
+    rustBearerElementPushCall(call: any): any {
+        if (call === undefined || !isCallExpression(call) || call.parent?.kind !== SyntaxKind.ExpressionStatement) return undefined;
+        const callee: any = call.expression;
+        if (!isPropertyAccessExpression(callee) || String(callee.name.text) !== 'push' || call.arguments.length !== 1
+            || call.arguments[0].kind === SyntaxKind.SpreadElement) return undefined;
+        const access: any = callee.expression;
+        if (!isElementAccessExpression(access) || !isIdentifier(access.expression)) return undefined;
+        return access;
+    }
+
+    /** ral-xf: `m[k].push (v)` on a map-literal local whose every stored value (literal properties and `m[k] = v` writes)
+     *  is never a map: `append_to_object_array`'s book-cache route needs a tagged map at `m[k]`, so what is left of it is
+     *  `entry(k).or_insert_with(empty list)` then a push when the entry is a list, on the map the type already is. The key
+     *  is a literal or a proven-string `Value` place (`as_str()` is `Some` exactly when the helper's `(Dict, Str)` arm
+     *  runs). */
+    rustBearerElementPushText(call: any, valueText: string): string | undefined {
+        const access: any = this.rustBearerElementPushCall(call);
+        if (access === undefined) return undefined;
+        const name = String(access.expression.text);
+        const declaration: any = this.rustDeclarationOfIdentifier(access.expression);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.initializer === undefined) return undefined;
+        const literal: any = this.rustSkipWrappers(declaration.initializer);
+        if (!isObjectLiteralExpression(literal) || !this.rustVecPushShape(call, name)) return undefined;
+        const key: any = this.rustSkipWrappers(access.argumentExpression);
+        let head: string;
+        if (key !== undefined && isStringLiteralLikeNode(key)) {
+            if (!RustTranspiler.rustBearerKeyTextOk(String(key.text))) return undefined;
+            head = `if let Value::Arr(__a) = ${name}.entry("${this.escapeRustStringLiteral(String(key.text))}".to_string())`;
+        } else {
+            if (!this.rustDictBearerKeyOk(access.argumentExpression)) return undefined;
+            head = `if let Some(__k) = ${this.printNode(key, 0).trim()}.as_str() { if let Value::Arr(__a) = ${name}.entry(__k.to_string())`;
+        }
+        if (!this.rustBearerValuesNeverMap(declaration, literal, name)) return undefined;
+        // a map also handed to a `this.` call would box an `IndexMap` copy there (the shared box was a refcount): no added copy
+        if (this.rustMapHandedToSelfCall(declaration, name)) return undefined;
+        const tail = isStringLiteralLikeNode(key) ? '' : ' }';
+        return `${head}.or_insert_with(|| Value::Array(Vec::new())) { std::sync::Arc::make_mut(__a).push(${valueText}); }${tail}`;
+    }
+
+    /** ral-xf: the local is an argument of a `this.` / `super.` call somewhere in its function. */
+    rustMapHandedToSelfCall(declaration: any, name: string): boolean {
+        const fn: any = this.rustEnclosingFunction(declaration);
+        if (fn === undefined) return true;
+        let found = false;
+        const visit = (n: any) => {
+            if (found) return;
+            if (isCallExpression(n) && isPropertyAccessExpression(n.expression)
+                && (n.expression.expression.kind === SyntaxKind.ThisKeyword || n.expression.expression.kind === SyntaxKind.SuperKeyword)
+                && n.arguments.some((a: any) => { const s: any = this.rustSkipWrappers(a); return isIdentifier(s) && String(s.text) === name; })) { found = true; return; }
+            n.forEachChild(visit);
+        };
+        fn.forEachChild(visit);
+        return found;
+    }
+
+    /** Every value the literal stores is a list or a scalar by its checker type (never `any`, never an object). */
+    rustBearerValuesNeverMap(declaration: any, literal: any, name: string): boolean {
+        const checker: any = this.checkerOrUndefined();
+        if (checker === undefined) return false;
+        const okType = (node: any): boolean => {
+            const type: any = this.getCheckedTypeOf(node);
+            if (type === undefined) return false;
+            const parts: any[] = (type.flags & TypeFlags.Union) ? (typeParts(type) ?? []) : [type];
+            return parts.length > 0 && parts.every((part: any) => {
+                if (part.flags & (TypeFlags.Any | TypeFlags.Unknown)) return false;
+                if (part.flags & (TypeFlags.String | TypeFlags.StringLiteral | TypeFlags.Number | TypeFlags.NumberLiteral
+                    | TypeFlags.Boolean | TypeFlags.BooleanLiteral | TypeFlags.Undefined | TypeFlags.Null)) return true;
+                return checker.isArrayType(part) || checker.isTupleType(part);
+            });
+        };
+        for (const property of literal.properties) {
+            if (property.kind !== SyntaxKind.PropertyAssignment || !okType(property.initializer)) return false;
+        }
+        const fn: any = this.rustEnclosingFunction(declaration);
+        if (fn === undefined) return false;
+        let ok = true;
+        const visit = (n: any) => {
+            if (!ok) return;
+            if (isBinaryExpression(n) && rustIsAssignmentOperator(n.operatorToken.kind) && isElementAccessExpression(n.left)) {
+                let base: any = n.left;
+                while (isElementAccessExpression(base.expression)) base = base.expression;
+                if (isIdentifier(base.expression) && String(base.expression.text) === name
+                    && (base !== n.left || n.operatorToken.kind !== SyntaxKind.EqualsToken || !okType(n.right))) { ok = false; return; }
+            }
+            n.forEachChild(visit);
+        };
+        fn.forEachChild(visit);
+        return ok;
+    }
+
     /** ral-wf: the statement `name[k] = v` (one key, `=`) whose value holds `node`. */
     rustBearerSelfWriteHost(node: any, name: string): any {
         let up: any = node.parent;
@@ -16004,8 +16102,21 @@ export class RustTranspiler extends BaseTranspiler {
         if (key === undefined) return false;
         if (isStringLiteralLikeNode(key)) return RustTranspiler.rustBearerKeyTextOk(String((key as any).text));
         if (!isIdentifier(key) || !this.rustKeyIsProvenString(key) || this.rustStringLocalIdentifierIsTyped(key)) return false;
-        if (this.rustNodeIsKeyUnsafePlace(String((key as any).text))) return false;
+        if (this.rustNodeIsKeyUnsafePlace(String((key as any).text)) && !this.rustBookMetaPlaceOnLiteral(key)) return false;
         return /^[A-Za-z_][A-Za-z0-9_]*$/.test(this.printNode(key, 0).trim());
+    }
+
+    /** ral-xf: a book-meta-named key place (`symbol`, `timestamp`, `datetime`, `nonce`, `checksum`) indexing a map-literal
+     *  local. `get_value` / `set_value` route such a key to the book store only on a map holding `__book_id`; a literal
+     *  never holds it (its keys are its own literal keys and proven-string places, the same proof as every other dynamic
+     *  key), so the read is the map lookup. `cache` / `hashmap` / `subscriptions` / `futures` stay excluded. */
+    rustBookMetaPlaceOnLiteral(key: any): boolean {
+        if (!['symbol', 'timestamp', 'datetime', 'nonce', 'checksum'].includes(String(key.text))) return false;
+        const access: any = this.rustElementReadOfKey(key);
+        if (access === undefined || !isIdentifier(access.expression)) return false;
+        const declaration: any = this.rustDeclarationOfIdentifier(access.expression);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.initializer === undefined) return false;
+        return isObjectLiteralExpression(this.rustSkipWrappers(declaration.initializer));
     }
 
     /** Keys a bearer may carry: no empty/numeric key, no ws client-handle marker
@@ -16122,7 +16233,7 @@ export class RustTranspiler extends BaseTranspiler {
     placeKeyNative(key: any): boolean {
         if (!isIdentifier(key) || !this.rustStringLocalIdentifierIsTyped(key)) return false;
         const name = String(key.text);
-        return name !== 'self' && !this.rustNodeIsKeyUnsafePlace(name);
+        return name !== 'self' && (!this.rustNodeIsKeyUnsafePlace(name) || this.rustBookMetaPlaceOnLiteral(key));
     }
 
     /** The native map key for a printed bearer-write key, or undefined when the
