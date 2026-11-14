@@ -2437,6 +2437,15 @@ describe('rust error constructor message arguments', () => {
         expect(output).toContain('rsa(a.clone(), b.clone(), h.clone())');
     });
 
+    test('ral-oc: a literal request map is lent to the runtime jwt (request: impl Into<Value>)', () => {
+        const ts = "function jwt (r: any, s: any, h: any, isRsa = false, o: any = {}): any { return r; }\n"
+            + "class T {\n    f (a: any, b: any) {\n        const request = { 'access_key': a };\n        request['query_hash'] = b;\n        return jwt (request, b, 'sha256');\n    }\n}";
+        const output = transpiler.transpileRust(ts).content;
+        expect(output).toContain('let mut request: crate::value::Dict = Value::Map({');
+        expect(output).toContain('jwt(&request, ');
+        expect(output).not.toContain('request.clone()');
+    });
+
     test('an unproven message keeps its box', () => {
         const ts = "function f(msg: any) {\n    throw new NotSupported(msg);\n}";
         const output = transpiler.transpileRust(ts).content;

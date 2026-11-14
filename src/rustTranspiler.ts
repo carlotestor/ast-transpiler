@@ -13486,7 +13486,7 @@ export class RustTranspiler extends BaseTranspiler {
         const text = super.transformIdentifier(node, identifier);
         const optList = this.printOptListIdentifier(node, text) ?? this.printNilMapBox(node, text); if (optList !== undefined) return optList;
         const asLent = this.printLentAsArg(node, text); if (asLent !== undefined) return asLent;
-        const borrowedArg = this.printExtendHeadArg(node, text) ?? this.printLentOptionalArg(node, text) ?? this.printBorrowedReaderArg(node, text) ?? this.printLentParamsArg(node, text) ?? this.printLentListArg(node, text) ?? this.printLentResponseArg(node, text) ?? this.printLentHelperArg(node, text) ?? this.printOptionalParamsArg(node, text) ?? this.printWsFieldBox(node, text) ?? this.printDictElementBox(node, text) ?? this.printHandedSlotBox(node, text); if (borrowedArg !== undefined) return borrowedArg;
+        const borrowedArg = this.printExtendHeadArg(node, text) ?? this.printJwtLentArg(node, text) ?? this.printLentOptionalArg(node, text) ?? this.printBorrowedReaderArg(node, text) ?? this.printLentParamsArg(node, text) ?? this.printLentListArg(node, text) ?? this.printLentResponseArg(node, text) ?? this.printLentHelperArg(node, text) ?? this.printOptionalParamsArg(node, text) ?? this.printWsFieldBox(node, text) ?? this.printDictElementBox(node, text) ?? this.printHandedSlotBox(node, text); if (borrowedArg !== undefined) return borrowedArg;
         const containerBox = this.printRustContainerLocalBox(node, text);
         if (containerBox !== undefined) return containerBox;
         const lentBox = this.printRustLentListBox(node, text); if (lentBox !== undefined) return lentBox;
@@ -14752,6 +14752,7 @@ export class RustTranspiler extends BaseTranspiler {
         const keyWriteUses: any[] = [];
         let extendHeads = 0;
         let extendWrites = 0;
+        let jwtLends = 0;
         let lentResponses = 0;
         let lentNullable = 0;
         let mixed = false;
@@ -14822,6 +14823,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustLentOptionalHandOff(up, n, init, from, nilDeclared)) return ++lentNullable > 0 && ++reads > 0;
             // a lent params slot (`watch` message, a lent `params`) takes the built map by reference, as the handed rule lends it
             if (from === 'dict' && isCallExpression(up) && this.rustLentParamsSlot(up, n) && (extendReuse || init !== undefined && isCallExpression(init) && this.rustBuiltReturnSourceKind(init) === 'dict')) return ++reads > 0;
+            // ral-oc: the runtime `jwt(request: impl Into<Value>, ..)` takes the request map lent (an Arc bump)
+            if (from === 'dict' && this.rustJwtRequestSlot(up, n)) return ++jwtLends > 0 && ++reads > 0;
             if (!isCallExpression(up) || up.arguments[0] !== n) return handed();
             // An endpoint response may be a list or a map: only string-key reads agree for both.
             const keyArgs: any[] = up.arguments.slice(1, isPropertyAccessExpression(up.expression) && /2$/.test(String(up.expression.name.text)) ? 3 : 2).map((a: any) => this.rustSkipWrappers(a));
@@ -14866,6 +14869,7 @@ export class RustTranspiler extends BaseTranspiler {
         if ((keyReads > 0 || (init !== undefined && isCallExpression(init) && this.rustRecordLookupSource(init))) && !this.rustEcdsaCall(init) && !this.rustDictKeyReadLineOk(declaration, name)) return undefined;
         // a nullable source lent whole keeps Null apart from an empty container: the optional form
         const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0;
+        if (jwtLends > 0 && optional) return undefined;
         if (lentResponses > 0 && optional && !this.rustLentOptionalOk(declaration, name, fn, init, from)) return undefined;
         if (extendHeads > 0 && (optional || from !== 'dict' && from !== 'api')) return undefined;
         if (optional && boxedElementUses.length > 0 && (this.rustWsFieldRead(init) !== undefined || defaultedBoxes > 0)) return undefined;
@@ -14916,6 +14920,20 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     private static readonly RUST_SELF_EXTEND = new Set([ 'extend' ]);
+
+    /** `n` is the request (first) operand of the runtime free function `jwt (request, secret, ..)`. */
+    rustJwtRequestSlot(call: any, n: any): boolean {
+        // the same syntactic match as `printRustSignerCall` (the call always prints the runtime `jwt(..)`)
+        return isCallExpression(call) && call.arguments[0] === n && isIdentifier(call.expression) && String(call.expression.text) === 'jwt';
+    }
+
+    /** `&x` for a shared map local lent to the `jwt` request slot. */
+    printJwtLentArg(node: any, text: string): string | undefined {
+        if (!isIdentifier(node) || !this.rustJwtRequestSlot(node.parent, node)) return undefined;
+        const declaration: any = this.rustDeclarationOfIdentifier(node);
+        if (declaration === undefined || declaration === node || declaration.name === node || this.rustOptContainerLocals.has(declaration)) return undefined;
+        return this.rustBorrowedLocalKind(declaration) === 'dict' && this.rustPrintedBorrowed.has(declaration) ? `&${text}` : undefined;
+    }
 
     /** An untagged map operand, or a `const y = this.omit (p, keys)` of one (omit only drops keys; a list passes
      *  unchanged and `extend` merges maps only, so no tag can reach the merged map either way). */

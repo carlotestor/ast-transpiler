@@ -2025,6 +2025,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `n` is the target of a statement `n = this.extend (n, y)` (base `extend`, two operands, `y` not naming `n`). */
     rustSelfExtendWrite(n: any, declaration: any): boolean;
     private static readonly RUST_SELF_EXTEND;
+    /** `n` is the request (first) operand of the runtime free function `jwt (request, secret, ..)`. */
+    rustJwtRequestSlot(call: any, n: any): boolean;
+    /** `&x` for a shared map local lent to the `jwt` request slot. */
+    printJwtLentArg(node: any, text: string): string | undefined;
     /** An untagged map operand, or a `const y = this.omit (p, keys)` of one (omit only drops keys; a list passes
      *  unchanged and `extend` merges maps only, so no tag can reach the merged map either way). */
     rustExtendReuseOperandUntagged(arg: any): boolean;

@@ -64436,7 +64436,7 @@ ${iden}}`;
     const asLent = this.printLentAsArg(node, text);
     if (asLent !== void 0)
       return asLent;
-    const borrowedArg = this.printExtendHeadArg(node, text) ?? this.printLentOptionalArg(node, text) ?? this.printBorrowedReaderArg(node, text) ?? this.printLentParamsArg(node, text) ?? this.printLentListArg(node, text) ?? this.printLentResponseArg(node, text) ?? this.printLentHelperArg(node, text) ?? this.printOptionalParamsArg(node, text) ?? this.printWsFieldBox(node, text) ?? this.printDictElementBox(node, text) ?? this.printHandedSlotBox(node, text);
+    const borrowedArg = this.printExtendHeadArg(node, text) ?? this.printJwtLentArg(node, text) ?? this.printLentOptionalArg(node, text) ?? this.printBorrowedReaderArg(node, text) ?? this.printLentParamsArg(node, text) ?? this.printLentListArg(node, text) ?? this.printLentResponseArg(node, text) ?? this.printLentHelperArg(node, text) ?? this.printOptionalParamsArg(node, text) ?? this.printWsFieldBox(node, text) ?? this.printDictElementBox(node, text) ?? this.printHandedSlotBox(node, text);
     if (borrowedArg !== void 0)
       return borrowedArg;
     const containerBox = this.printRustContainerLocalBox(node, text);
@@ -65648,6 +65648,7 @@ ${iden}}`;
     const keyWriteUses = [];
     let extendHeads = 0;
     let extendWrites = 0;
+    let jwtLends = 0;
     let lentResponses = 0;
     let lentNullable = 0;
     let mixed = false;
@@ -65725,6 +65726,8 @@ ${iden}}`;
         return ++lentNullable > 0 && ++reads > 0;
       if (from === "dict" && isCallExpression6(up) && this.rustLentParamsSlot(up, n) && (extendReuse || init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) === "dict"))
         return ++reads > 0;
+      if (from === "dict" && this.rustJwtRequestSlot(up, n))
+        return ++jwtLends > 0 && ++reads > 0;
       if (!isCallExpression6(up) || up.arguments[0] !== n)
         return handed();
       const keyArgs = up.arguments.slice(1, isPropertyAccessExpression3(up.expression) && /2$/.test(String(up.expression.name.text)) ? 3 : 2).map((a) => this.rustSkipWrappers(a));
@@ -65754,6 +65757,8 @@ ${iden}}`;
     if ((keyReads > 0 || init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init)) && !this.rustEcdsaCall(init) && !this.rustDictKeyReadLineOk(declaration, name))
       return void 0;
     const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0;
+    if (jwtLends > 0 && optional)
+      return void 0;
     if (lentResponses > 0 && optional && !this.rustLentOptionalOk(declaration, name, fn, init, from))
       return void 0;
     if (extendHeads > 0 && (optional || from !== "dict" && from !== "api"))
@@ -65809,6 +65814,19 @@ ${iden}}`;
       return false;
     const names = (x) => isIdentifier3(x) && x.text === n.text || (x.forEachChild(names) ?? false);
     return !names(rhs.arguments[1]) && String(up.getText()).split("\n")[0].length <= 240;
+  }
+  /** `n` is the request (first) operand of the runtime free function `jwt (request, secret, ..)`. */
+  rustJwtRequestSlot(call, n) {
+    return isCallExpression6(call) && call.arguments[0] === n && isIdentifier3(call.expression) && String(call.expression.text) === "jwt";
+  }
+  /** `&x` for a shared map local lent to the `jwt` request slot. */
+  printJwtLentArg(node, text) {
+    if (!isIdentifier3(node) || !this.rustJwtRequestSlot(node.parent, node))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration === void 0 || declaration === node || declaration.name === node || this.rustOptContainerLocals.has(declaration))
+      return void 0;
+    return this.rustBorrowedLocalKind(declaration) === "dict" && this.rustPrintedBorrowed.has(declaration) ? `&${text}` : void 0;
   }
   /** An untagged map operand, or a `const y = this.omit (p, keys)` of one (omit only drops keys; a list passes
    *  unchanged and `extend` merges maps only, so no tag can reach the merged map either way). */
