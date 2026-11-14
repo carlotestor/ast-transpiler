@@ -77049,7 +77049,7 @@ _RustTranspiler.RUST_PRO_TIER_FILE = /ts[\\/]src[\\/]pro[\\/]/;
 _RustTranspiler.RUST_BASE_NATIVE_STR_METHODS = /* @__PURE__ */ new Set(["safeCurrencyCode"]);
 // Venue methods (class -> method names) whose `: Str` return was spelled after their by-name arm existed: the arm
 // stays (it boxes the `Option<String>` once), so the dispatch-arm name set is unchanged.
-_RustTranspiler.RUST_VENUE_KEPT_STR_ARMS = { coinbaseinternational: ["parseTimeInForce"], bitfinex: ["convertDerivativesId"], blofin: ["networkCodeToChainId"] };
+_RustTranspiler.RUST_VENUE_KEPT_STR_ARMS = { coinbaseinternational: ["parseTimeInForce"], bitfinex: ["convertDerivativesId"], blofin: ["networkCodeToChainId"], dydx: ["hashMessage"], modetrade: ["hashMessage"], polymarket: ["hashMessage"] };
 _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "Value": "value",
   "impl Into<crate::Value>": "value",
