@@ -54375,7 +54375,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${name} = ${super.printIdentifier(node)}.into_opt_string()`;
     if (local.kind === "bool" && this.rustNilBoolNullTernary(node)) {
       const arm = (a) => this.literalKindOfNode(this.unwrapParens(a)) === "null" ? "None" : `Some(${this.unwrapParens(a).kind === _ast.SyntaxKind.TrueKeyword ? "true" : "false"})`;
-      return `${name} = if ${this.printCondition(node.condition, 0)} { ${arm(node.whenTrue)} } else { ${arm(node.whenFalse)} }`;
+      return `${name} = (if ${this.printCondition(node.condition, 0)} { ${arm(node.whenTrue)} } else { ${arm(node.whenFalse)} })`;
     }
     if (_is.isIdentifier.call(void 0, node))
       return `${name} = ${super.printIdentifier(node)}.clone()`;

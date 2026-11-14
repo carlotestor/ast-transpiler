@@ -6593,7 +6593,7 @@ describe('empty-declared endpoint responses and flag slots', () => {
         const out = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'nil-declared-bool-null', 'ts/src/venue.ts')).content;
         const cur = out.slice(out.indexOf('fn parseCurrency'), out.indexOf('fn parseOutcome'));
         expect(cur).toContain('let mut active: Option<bool> = None');
-        expect(cur).toContain('active = if stock { None } else { Some(false) }');
+        expect(cur).toContain('active = (if stock { None } else { Some(false) });');
         expect(cur).toContain('active.map(Value::from).unwrap_or(Value::Null)');
         const oc = out.slice(out.indexOf('fn parseOutcome'));
         expect(oc).toContain('let mut winnerRaw: Option<bool> = None');
