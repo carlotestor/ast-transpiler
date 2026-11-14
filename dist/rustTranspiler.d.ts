@@ -2104,7 +2104,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The source statement of a box (`Value::Dict(x)`, +13 chars) leaves the printed line within 400 chars. */
     rustBoxLineOk(n: any): boolean;
     /** The copy-on-write insert line (indent + `Arc::make_mut(&mut x).insert(..)`) stays within the 400-char budget. */
-    rustBuiltKeyWriteLineOk(n: any): boolean;
+    /** pb: `x['k'] = v` (statement, literal non-meta key) on a local initialised from a base `safeDict*` read of a REST-tier
+     *  (`ts/src/<venue>.ts`) local or response: no ws subscription, cache or book store, so the map carries no runtime tag. */
+    rustSafeDictKeyWriteOk(n: any, init: any): boolean;
+    rustBuiltKeyWriteLineOk(n: any, extra?: number): boolean;
     rustNullTestedDictLocal(init: any, nullTests: number, writes: number): boolean;
     rustDictElementSource(init: any): boolean;
     /** lf: a local spelled `Dictionary<Dict>` (`const d: Dictionary<Dict> = …`): its string-keyed values are maps. */

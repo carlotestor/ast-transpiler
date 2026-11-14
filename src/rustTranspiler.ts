@@ -14917,6 +14917,7 @@ export class RustTranspiler extends BaseTranspiler {
         let keyReads = 0;
         let keySets = 0;
         let keyWrites = 0;
+        let safeDictKeyWrites = 0;
         const keyWriteUses: any[] = [];
         let extendHeads = 0;
         let extendWrites = 0;
@@ -14975,6 +14976,9 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustExtendHeadUse(n)) return ++extendHeads > 0 && ++reads > 0;
             // a fresh built map written at a literal key: copy-on-write insert on the shared handle
             // (jd's untagged indexBy / groupBy / extend table admits the same write through this one mechanism)
+            // pb: a literal-key write on a REST `safeDict*` result: copy-on-write insert (`if let Some` on the optional form, which
+            // skips a missing map exactly as `add_element_to_object` skipped the `Null`)
+            if (!extendReuse && this.rustSafeDictKeyWriteOk(n, init)) return keyWriteUses.push(n) > 0 && ++safeDictKeyWrites > 0 && ++keyWrites > 0 && ++reads > 0;
             if (this.rustUntilHeadKeyWrite(n) !== undefined && (extendReuse ? this.rustExtendReuseKeyWriteOk(n, declaration) : init !== undefined && isCallExpression(init) && (this.rustBuiltReturnSourceKind(init) === 'dict' || this.rustBuiltMapKeyWriteOk(n, init)))) return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
             const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0
                 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0
@@ -15048,8 +15052,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (optionalBoxes > 0 && (boxedElementUses.length !== optionalBoxes || nilDeclared || writes > 0 || from !== 'dict')) return undefined;
         // a `handle*` params slot takes a `Value`: the map boxes there (the plain form only, its map is never Null)
         if (paramsBoxes > 0 && (optional || from !== 'dict')) return undefined;
-        if ((keySets > 0 || keyWrites > 0) && (from !== 'dict' || optional || (init !== undefined && !extendReuse && this.rustInitReadsTaggedStore(init)))) return undefined;
-        if (keyWriteUses.some((n: any) => !this.rustBuiltKeyWriteLineOk(n))) return undefined;
+        const onlySafeDictWrites = keyWrites > 0 && safeDictKeyWrites === keyWrites && keySets === 0;
+        if ((keySets > 0 || keyWrites > 0) && (from !== 'dict' || (optional && !onlySafeDictWrites) || (init !== undefined && !extendReuse && this.rustInitReadsTaggedStore(init)))) return undefined;
+        if (keyWriteUses.some((n: any) => !this.rustBuiltKeyWriteLineOk(n, optional ? 30 : 0))) return undefined;
         if (extendReuse && (keySets > 0 || boxedElementUses.some((n: any) => !this.rustBoxLineOk(n)))) return undefined;
         if (init !== undefined && isCallExpression(init) && this.rustBuiltReturnSourceKind(init) !== undefined && boxedElementUses.some((n: any) => !this.rustBoxLineOk(n))) return undefined;
         if (keyWrites > 0) this.rustMutableBuiltLocals.add(declaration);
@@ -15463,7 +15468,23 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** The copy-on-write insert line (indent + `Arc::make_mut(&mut x).insert(..)`) stays within the 400-char budget. */
-    rustBuiltKeyWriteLineOk(n: any): boolean {
+    /** pb: `x['k'] = v` (statement, literal non-meta key) on a local initialised from a base `safeDict*` read of a REST-tier
+     *  (`ts/src/<venue>.ts`) local or response: no ws subscription, cache or book store, so the map carries no runtime tag. */
+    rustSafeDictKeyWriteOk(n: any, init: any): boolean {
+        const key = this.rustUntilHeadKeyWrite(n);
+        // a REST response map is parsed JSON (no `__book_id`): a book-meta key is a plain insert there, as in the runtime helper
+        if (key === undefined || key.startsWith('__')) return false;
+        if (init === undefined || !isCallExpression(init) || !isPropertyAccessExpression(init.expression) || !/^safeDict(?:2|N)?$/.test(String(init.expression.name.text))) return false;
+        if (!this.rustBorrowedDictSource(init) || this.rustInitReadsTaggedStore(init)) return false;
+        if (!/(?:^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test(String(n.getSourceFile?.()?.fileName ?? ''))) return false;
+        const head: any = this.rustSkipWrappers(init.arguments[0]);
+        // the read's head is a local (or one element of a local list), never a `this.` store or a field of another object
+        if (head === undefined) return false;
+        if (isElementAccessExpression(head)) return isIdentifier(head.expression);
+        return isIdentifier(head);
+    }
+
+    rustBuiltKeyWriteLineOk(n: any, extra = 0): boolean {
         const write: any = n.parent.parent;
         let depth = 0;
         for (let up: any = write; up !== undefined && !isFunctionLike(up); up = up.parent) if (isBlock(up)) depth++;
@@ -15473,7 +15494,7 @@ export class RustTranspiler extends BaseTranspiler {
         } catch (e) {
             return false;
         }
-        return depth * 4 + String(n.text).length + rhs.length + 70 <= 400;
+        return depth * 4 + String(n.text).length + rhs.length + 70 + extra <= 400;
     }
 
     // ── rustNullTestedDictLocal: a base `safeDict*` result that is only tested against null ──
@@ -18951,7 +18972,10 @@ export class RustTranspiler extends BaseTranspiler {
         if (key === undefined || declaration === recv || !(this.rustUntilHeadSlot(declaration) || this.rustMutableDictSlot(declaration))) return undefined;
         const name = super.transformIdentifier(recv, this.ReservedKeywordsReplacements[recv.text] ?? recv.text);
         const value = this.rustNodeIsBoolExpression(right) && this.literalKindOfNode(this.unwrapParens(right)) !== 'boolean' ? `Value::Bool(${valueText})` : valueText.trim();
-        const insert = (v: string) => `std::sync::Arc::make_mut(&mut ${name}).insert(${this.quotedStringLiteral(key)}.into(), ${v})`;
+        // pb: the optional form skips a missing map, as `add_element_to_object` skipped the `Null`
+        const insert = this.rustOptContainerLocals.has(declaration)
+            ? (v: string) => `if let Some(__d) = &mut ${name} { std::sync::Arc::make_mut(__d).insert(${this.quotedStringLiteral(key)}.into(), ${v}); }`
+            : (v: string) => `std::sync::Arc::make_mut(&mut ${name}).insert(${this.quotedStringLiteral(key)}.into(), ${v})`;
         const reads = (n: any): boolean => (isIdentifier(n) && n.text === recv.text) || (n.forEachChild(reads) ?? false);
         if (reads(right)) return `{ let __be_tmp = ${value}; ${insert('__be_tmp')}; }`;
         const bare: any = this.unwrapParens(right);

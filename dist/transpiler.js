@@ -65834,6 +65834,7 @@ ${iden}}`;
     let keyReads = 0;
     let keySets = 0;
     let keyWrites = 0;
+    let safeDictKeyWrites = 0;
     const keyWriteUses = [];
     let extendHeads = 0;
     let extendWrites = 0;
@@ -65899,6 +65900,8 @@ ${iden}}`;
       }
       if (this.rustExtendHeadUse(n))
         return ++extendHeads > 0 && ++reads > 0;
+      if (!extendReuse && this.rustSafeDictKeyWriteOk(n, init))
+        return keyWriteUses.push(n) > 0 && ++safeDictKeyWrites > 0 && ++keyWrites > 0 && ++reads > 0;
       if (this.rustUntilHeadKeyWrite(n) !== void 0 && (extendReuse ? this.rustExtendReuseKeyWriteOk(n, declaration) : init !== void 0 && isCallExpression6(init) && (this.rustBuiltReturnSourceKind(init) === "dict" || this.rustBuiltMapKeyWriteOk(n, init))))
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
       const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0) && boxedElementUses.push(n) > 0;
@@ -65960,9 +65963,10 @@ ${iden}}`;
       return void 0;
     if (paramsBoxes > 0 && (optional || from !== "dict"))
       return void 0;
-    if ((keySets > 0 || keyWrites > 0) && (from !== "dict" || optional || init !== void 0 && !extendReuse && this.rustInitReadsTaggedStore(init)))
+    const onlySafeDictWrites = keyWrites > 0 && safeDictKeyWrites === keyWrites && keySets === 0;
+    if ((keySets > 0 || keyWrites > 0) && (from !== "dict" || optional && !onlySafeDictWrites || init !== void 0 && !extendReuse && this.rustInitReadsTaggedStore(init)))
       return void 0;
-    if (keyWriteUses.some((n) => !this.rustBuiltKeyWriteLineOk(n)))
+    if (keyWriteUses.some((n) => !this.rustBuiltKeyWriteLineOk(n, optional ? 30 : 0)))
       return void 0;
     if (extendReuse && (keySets > 0 || boxedElementUses.some((n) => !this.rustBoxLineOk(n))))
       return void 0;
@@ -66390,7 +66394,26 @@ ${iden}}`;
     return depth * 4 + first.length + 20 <= 400;
   }
   /** The copy-on-write insert line (indent + `Arc::make_mut(&mut x).insert(..)`) stays within the 400-char budget. */
-  rustBuiltKeyWriteLineOk(n) {
+  /** pb: `x['k'] = v` (statement, literal non-meta key) on a local initialised from a base `safeDict*` read of a REST-tier
+   *  (`ts/src/<venue>.ts`) local or response: no ws subscription, cache or book store, so the map carries no runtime tag. */
+  rustSafeDictKeyWriteOk(n, init) {
+    const key = this.rustUntilHeadKeyWrite(n);
+    if (key === void 0 || key.startsWith("__"))
+      return false;
+    if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || !/^safeDict(?:2|N)?$/.test(String(init.expression.name.text)))
+      return false;
+    if (!this.rustBorrowedDictSource(init) || this.rustInitReadsTaggedStore(init))
+      return false;
+    if (!/(?:^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test(String(n.getSourceFile?.()?.fileName ?? "")))
+      return false;
+    const head = this.rustSkipWrappers(init.arguments[0]);
+    if (head === void 0)
+      return false;
+    if (isElementAccessExpression4(head))
+      return isIdentifier3(head.expression);
+    return isIdentifier3(head);
+  }
+  rustBuiltKeyWriteLineOk(n, extra = 0) {
     const write = n.parent.parent;
     let depth = 0;
     for (let up = write; up !== void 0 && !isFunctionLike(up); up = up.parent)
@@ -66402,7 +66425,7 @@ ${iden}}`;
     } catch (e) {
       return false;
     }
-    return depth * 4 + String(n.text).length + rhs.length + 70 <= 400;
+    return depth * 4 + String(n.text).length + rhs.length + 70 + extra <= 400;
   }
   // ── rustNullTestedDictLocal: a base `safeDict*` result that is only tested against null ──
   // The optional map answers the test natively (`is_some()` / `is_none()`); a non-map reads as `None`, as the reader does.
@@ -70108,7 +70131,7 @@ ${iden}}`;
       return void 0;
     const name = super.transformIdentifier(recv, this.ReservedKeywordsReplacements[recv.text] ?? recv.text);
     const value = this.rustNodeIsBoolExpression(right) && this.literalKindOfNode(this.unwrapParens(right)) !== "boolean" ? `Value::Bool(${valueText})` : valueText.trim();
-    const insert = (v) => `std::sync::Arc::make_mut(&mut ${name}).insert(${this.quotedStringLiteral(key)}.into(), ${v})`;
+    const insert = this.rustOptContainerLocals.has(declaration) ? (v) => `if let Some(__d) = &mut ${name} { std::sync::Arc::make_mut(__d).insert(${this.quotedStringLiteral(key)}.into(), ${v}); }` : (v) => `std::sync::Arc::make_mut(&mut ${name}).insert(${this.quotedStringLiteral(key)}.into(), ${v})`;
     const reads = (n) => isIdentifier3(n) && n.text === recv.text || (n.forEachChild(reads) ?? false);
     if (reads(right))
       return `{ let __be_tmp = ${value}; ${insert("__be_tmp")}; }`;
