@@ -12380,4 +12380,11 @@ describe('ud: a reader string boxed at a lending slot before its last use', () =
         const out = write ('ud-lend-neg', "    m (u: any, f: boolean) {\n        if (f) {\n            const code = this.safeString (u, 'code');\n            const n = JSON.stringify (code);\n            return this.hold (code, n);\n        } else {\n            const code = this.safeString (u, 'other');\n            return this.hold (code);\n        }\n    }\n");
         expect(out).toContain('let mut code: Value = self.safeString(u.clone(), Value::Str("code"');
     });
+    test('a reader string that is a split receiver lends at its earlier self-call box instead of staying a Value', () => {
+        const out = write ('ud-recv', "    m (u: any) {\n        const topic = this.safeString (u, 'topic');\n        this.hold (topic, 'x');\n        const parts = topic.split (':');\n        return this.hold (parts, topic);\n    }\n");
+        expect(out).toMatch(/let mut topic: Option<String> = /);
+        expect(out).toContain('self.hold(Value::from(topic.as_deref()), ');
+        expect(out).toContain('topic.as_deref() { __s.split(');
+        expect(out).not.toContain('topic.clone()');
+    });
 });

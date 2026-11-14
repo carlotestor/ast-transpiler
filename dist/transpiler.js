@@ -55458,8 +55458,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (copied > 0 && this.rustValueCaseInit(declaration.initializer))
       return void 0;
-    if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustStrMethodRecvLocal(declaration))
-      return void 0;
+    if (copied > 0 && (kind === "str" || kind === "ostr") && this.rustStrMethodRecvLocal(declaration)) {
+      if (this.rustStrNoLend || !this.rustUdReaderStr(declaration.initializer) || this.rustStrReturnedLocal(declaration, scope) || !this.rustReaderLendBoxes(declaration))
+        return void 0;
+      this.rustStrLentLocals.add(declaration);
+    }
     if (this.rustListParamElement(declaration.initializer) && (copied > 0 || boxed > 0 && typedUses === 0 || this.rustScalarFeedsWrite(declaration)))
       return void 0;
     if (this.rustListParamElement(declaration.initializer) && boxed > 0)

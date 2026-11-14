@@ -4335,7 +4335,11 @@ export class RustTranspiler extends BaseTranspiler {
         // a case-converted `Value` place copies at every box but a moving last one, where the `Value` moved
         if (copied > 0 && this.rustValueCaseInit(declaration.initializer)) return undefined;
         // a local typed for its string-method reads must not copy where the `Value` moved
-        if (copied > 0 && (kind === 'str' || kind === 'ostr') && this.rustStrMethodRecvLocal(declaration)) return undefined;
+        if (copied > 0 && (kind === 'str' || kind === 'ostr') && this.rustStrMethodRecvLocal(declaration)) {
+            // ud: a reader string receiver whose copying boxes all sit at lending slots lends there (the copy the `Value` clone made)
+            if (this.rustStrNoLend || !this.rustUdReaderStr(declaration.initializer) || this.rustStrReturnedLocal(declaration, scope) || !this.rustReaderLendBoxes(declaration)) return undefined;
+            this.rustStrLentLocals.add(declaration);
+        }
         // an element of a typed list parameter keeps the 400-char guard and never copies at a box
         // and never feeds another local's write (typing it flips that local's own decision and its method's return)
         if (this.rustListParamElement(declaration.initializer) && (copied > 0 || (boxed > 0 && typedUses === 0) || this.rustScalarFeedsWrite(declaration))) return undefined;
