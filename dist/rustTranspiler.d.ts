@@ -2509,9 +2509,21 @@ export declare class RustTranspiler extends BaseTranspiler {
         pats: Array<Array<string | null>>;
         kind: string;
     }> | null;
+    /** When `site` sits in a method of `cls` with parameters: the parameter bindings of every call of that method
+     *  (`this.m (..)`, or `this.spawn (this.m, ..)`), so a hash or value built from a parameter reads each caller's
+     *  argument. Undefined when the method is referenced any other way (a handler table entry) or never called. */
+    rustWsHelperCallSites(cls: any, site: any, exprs: any[]): Array<Map<Node, {
+        arg: any;
+        env: Map<Node, any> | undefined;
+    }>> | undefined;
+    /** `this.m (..)` of a sync method of the same ws class whose every return is a hash expression: the patterns of
+     *  those returns with the method's parameters bound to this call's arguments (defaults when omitted). */
+    rustWsReturnPatterns(call: any, depth: number, seen: Set<Node>): Array<Array<string | null>> | undefined;
     private rustWsWsParents;
     /** A pro venue that extends (through its abstract shim) another pro venue, or that another pro venue extends. */
     rustWsHasWsRelatives(file: string, at: number): boolean;
+    /** A ws subclass whose only methods are `describe` / `describeData` adds no handler and no resolve. */
+    rustWsDescribeOnly(path: string): boolean;
     /** The proven kind of an `await this.watch|watchMultiple (..)` initializer, else undefined. */
     rustWsWatchResultKind(init: any): 'book' | 'cache' | undefined;
     /** The hash patterns a `this.watch|watchMultiple (..)` call (or a venue wrapper whose every return is one) awaits;
