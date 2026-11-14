@@ -2089,6 +2089,15 @@ export declare class RustTranspiler extends BaseTranspiler {
         literal: boolean;
         text: string;
     } | undefined;
+    /** A `string` / `Str` identifier key of `k in m`: a local whose print is decided at the test
+     *  (`rustBorrowedStrKeyTest`), so the receiver's proof never waits on the key's own scalar decision. */
+    rustStrKeyIdentifier(node: any): boolean;
+    /** `contains_key` on the shared map for a string identifier key, printed from the key's settled decision: a
+     *  `String` local by `as_str`, an `Option<String>` local by `as_deref` (`None` misses, as `in_op` on `Null`),
+     *  a boxed key by the `Str` arm `in_op` takes (any other variant misses). */
+    /** A parameter key prints as its signature type: a boxed `Value`, `&str` or `Option<&str>` (per-venue string slots). */
+    rustStrKeyParam(declaration: any): boolean;
+    rustBorrowedStrKeyTest(name: string, node: any): string;
     rustBorrowedDictName(node: any): string | undefined;
     printBorrowedKeys(node: any, kind: 'keys' | 'values'): string | undefined;
     printBorrowedInOp(key: any, obj: any): string | undefined;
