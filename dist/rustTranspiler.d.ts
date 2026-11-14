@@ -347,7 +347,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustNilAliasMoves;
     rustNilAliasMove(rhs: any, kind: string): boolean;
     /** mc: `x = y` from a typed `Option<..>` local of the same kind that is read again later: the typed write clones
-     *  `y` where the boxed write cloned it too (`y.clone().map(Value::from)..`), so no copy is added. */
+     *  `y` where the boxed write cloned it too (`y.clone().map(Value::from)..`), so no copy is added. Strings only: an
+     *  `Option<i64>` / `Option<f64>` source boxed as `Value::from(y)` with no clone, and ccxt's build pass clones every
+     *  bare `x = y;` alias write, so typing those would add one. */
     rustNilLiveAliasCopy(rhs: any, kind: string): boolean;
     /** Every box before the last sits at a `this.` / `super.` argument (where the `Value` form was cloned); no free-function,
      *  `Precise`, `Math` or `new` operand, which read `&Value` and would take a copy only because of the lending. */

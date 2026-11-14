@@ -2628,9 +2628,11 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     /** mc: `x = y` from a typed `Option<..>` local of the same kind that is read again later: the typed write clones
-     *  `y` where the boxed write cloned it too (`y.clone().map(Value::from)..`), so no copy is added. */
+     *  `y` where the boxed write cloned it too (`y.clone().map(Value::from)..`), so no copy is added. Strings only: an
+     *  `Option<i64>` / `Option<f64>` source boxed as `Value::from(y)` with no clone, and ccxt's build pass clones every
+     *  bare `x = y;` alias write, so typing those would add one. */
     rustNilLiveAliasCopy(rhs: any, kind: string): boolean {
-        if (kind !== 'ostr' && kind !== 'oint' && kind !== 'onum') return false;
+        if (kind !== 'ostr') return false;
         const source: any = this.rustDeclarationOfIdentifier(rhs);
         if (source === undefined || !isVariableDeclaration(source) || source.name === rhs || this.rustScalarIdentifierKind(rhs) !== kind) return false;
         return this.rustEnclosingFunction(source) === this.rustEnclosingFunction(rhs) && !this.rustLocalLastUse(rhs, source);
