@@ -11613,14 +11613,16 @@ describe('rust test-source reader arguments', () => {
 });
 
 describe('rust test-tier harness boxes', () => {
-    test('a test string boxed into by-value harness args is lent there, a Precise operand keeps the local boxed', () => {
+    test('a test string boxed into by-value harness args is lent there, and lent to a Precise comparator', () => {
         const fresh = new Transpiler({ verbose: false, rust: {} } as any);
         const out = fresh.transpileRustByPath(path.join (rustFixtureRoot, 'test-tier-harness', 'ts/src/test/Exchange/test.harness.ts')).content;
         expect(out).toContain('let mut price: Option<String> = ');
         expect(out).toContain('Value::from(price.as_deref())');
         expect(out).not.toContain('price.clone()');
-        // `cost` reaches a `Precise` operand (read by reference): typing it would copy there, so it stays a `Value`
-        expect(out).toContain('let mut cost: Value = ');
+        // wd: `cost` reaches a `Precise` comparator, which takes `&impl PreciseArg`: lent there, no copy
+        expect(out).toContain('let mut cost: Option<String> = ');
+        expect(out).toContain('Precise::stringGt(&cost, ');
+        expect(out).not.toContain('cost.clone()');
     });
 });
 
@@ -12970,5 +12972,20 @@ describe('wd: a reader string default that is a venue method printed -> Option<S
         fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    wallet (): Str {\n        return this.safeString ({}, 'w');\n    }\n    m (params: Dict) {\n        const address = this.safeString (params, 'address', this.wallet ());\n        return this.hold (address + 'x');\n    }\n}\n");
         const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
         expect(out).toMatch(/let mut address: Option<String> = /);
+    });
+});
+
+describe('wd: a typed string operand of a Precise comparator is lent (stringEq/Gt/Ge/Lt/Le/Equals/Or take &impl PreciseArg)', () => {
+    test('Precise.stringGt (amount, "0") passes &amount, no box', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-wd-pcmp-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    hold (a: any): any { return a; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/Precise.ts'), "export class Precise {\n    static stringGt (a: string | undefined, b: string | undefined): boolean { return true; }\n    static stringEq (a: string | undefined, b: string | undefined): boolean { return true; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue7.ts'), "import Exchange from './base/Exchange.js';\nimport { Precise } from './base/Precise.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue7 extends Exchange {\n    m (trade: Dict) {\n        const amount = this.safeString (trade, 'amount');\n        const side = Precise.stringGt (amount, '0') ? 'buy' : 'sell';\n        const zero = Precise.stringEq (amount, '0');\n        return this.hold ([ side, zero, amount ]);\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false });
+        const output = t.transpileRustByPath(path.join(root, 'ts/src/venue7.ts')).content;
+        expect(output).toMatch(/let mut amount: Option<String> = /);
+        expect(output).toContain('crate::precise::Precise::stringGt(&amount, ');
+        expect(output).toContain('crate::precise::Precise::stringEq(&amount, ');
     });
 });

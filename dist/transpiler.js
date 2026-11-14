@@ -77444,7 +77444,7 @@ _RustTranspiler.RUST_BASE_TYPED_RUNTIME = {
 _RustTranspiler.RUST_BASE_TYPED_HAND_METHODS = /* @__PURE__ */ new Set(["valueIsDefined", "randNumber", "binaryLength"]);
 /** Runtime `Precise::string*` entry points whose string operands take `&impl PreciseArg` (precise.rs). The
  *  comparators keep `&Value` (a ccxt build/ pass reads their exact signature text). */
-_RustTranspiler.RUST_PRECISE_LENT = /* @__PURE__ */ new Set(["stringAdd", "stringSub", "stringMul", "stringDiv", "stringMod", "stringAbs", "stringNeg", "stringMin", "stringMax"]);
+_RustTranspiler.RUST_PRECISE_LENT = /* @__PURE__ */ new Set(["stringAdd", "stringSub", "stringMul", "stringDiv", "stringMod", "stringAbs", "stringNeg", "stringMin", "stringMax", "stringEq", "stringEquals", "stringGt", "stringGe", "stringLt", "stringLe", "stringOr"]);
 // ── byte buffers (rustBytesProducer / rustBytesSlot / rustBytesLocal) ──
 // The hand-written producers of a TS `Uint8Array` return `crate::value::Bytes` (the `Value::Arr` of byte
 // ints behind a typed handle) and the byte parameters of the hand-written consumers take `impl Into<Value>`.

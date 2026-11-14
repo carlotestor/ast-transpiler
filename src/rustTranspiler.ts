@@ -4967,7 +4967,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** Runtime `Precise::string*` entry points whose string operands take `&impl PreciseArg` (precise.rs). The
      *  comparators keep `&Value` (a ccxt build/ pass reads their exact signature text). */
-    private static readonly RUST_PRECISE_LENT = new Set([ 'stringAdd', 'stringSub', 'stringMul', 'stringDiv', 'stringMod', 'stringAbs', 'stringNeg', 'stringMin', 'stringMax' ]);
+    private static readonly RUST_PRECISE_LENT = new Set([ 'stringAdd', 'stringSub', 'stringMul', 'stringDiv', 'stringMod', 'stringAbs', 'stringNeg', 'stringMin', 'stringMax', 'stringEq', 'stringEquals', 'stringGt', 'stringGe', 'stringLt', 'stringLe', 'stringOr' ]);
 
     /** vd: only a local declared with a value (nil-declared locals keep their own box rules). */
     rustPreciseLendLocal(n): boolean {
