@@ -53487,6 +53487,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const untilWrite = keyStrs.length === 1 ? this.printUntilHeadKeyWrite(left, right, rhs) ?? this.printReuseDynamicKeyWrite(left, right, rhs) ?? this.printNilMapKeyWrite(left, right, rhs) : void 0;
       if (untilWrite !== void 0)
         return untilWrite;
+      const slotNested = keyStrs.length > 1 ? this.printSlotNestedInsert(left, right, this.rustOwnedArgText(right, rhs.trim())) : void 0;
+      if (slotNested !== void 0)
+        return slotNested;
       const helperCall = `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${this.rustOwnedArgText(right, rhs.trim())})`;
       const helperWrite = this.rustDictHoistHosts.has(node) ? `{ let __be_tmp = ${rhs}; add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, __be_tmp); }` : helperCall;
       const nestedInsert = keyStrs.length === 2 ? this.rustNestedBearerInsert(baseExpr, keys[0], keyStrs[0], keys[1], keyStrs[1], rhs) ?? this.nestedDictWrite(baseExpr, keys, keyStrs, rhs, helperWrite) : this.nestedDictWrite(baseExpr, keys, keyStrs, rhs, helperWrite) ?? this.rustNestedBearerBucket(baseExpr, keys[0], keyStrs[0], right);
@@ -74251,6 +74254,57 @@ ${iden}}`;
       return void 0;
     return String(key.text);
   }
+  /** ral-40f: the literal keys of a statement write `n['k1']..['kN'] = v` (N >= 2) rooted at `n`: every key a plain string
+   *  literal (no replaced, digit, book-meta or `__` tag key), the value not reading `n`. */
+  rustSlotNestedInsertKeys(n) {
+    if (!isIdentifier3(n))
+      return void 0;
+    const keys = [];
+    let access = n.parent;
+    let inner = n;
+    while (isElementAccessExpression4(access) && access.expression === inner) {
+      const key = this.rustSkipWrappers(access.argumentExpression);
+      if (key === void 0 || !isStringLiteralLikeNode4(key))
+        return void 0;
+      const text = String(key.text);
+      if (text in this.StringLiteralReplacements || /^\d+$/.test(text) || text.startsWith("__") || _RustTranspiler.RUST_BOOK_META_KEYS.has(text))
+        return void 0;
+      keys.push(text);
+      inner = access;
+      access = access.parent;
+    }
+    const write = access;
+    if (keys.length < 2 || keys.length > 4 || !isBinaryExpression5(write) || write.left !== inner || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return void 0;
+    const reads = (x) => isIdentifier3(x) && x.text === n.text || (x.forEachChild(reads) ?? false);
+    if (reads(write.right))
+      return void 0;
+    const fn = this.rustEnclosingFunction(n);
+    return fn === void 0 || _RustTranspiler.RUST_SLOT_NESTED_TAG_ACCESS.test(String(fn.getText())) ? void 0 : keys;
+  }
+  /** ral-40f: `p['k1']['k2'] = v` on a typed params slot (`crate::value::Dict`), in place, no copy:
+   *  `if let Value::Dict(__h1) = make_mut(&mut p).entry("k1").or_insert(Value::Null) { make_mut(__h1).insert("k2", v); }`.
+   *  `get_value_mut` inserts a missing hop key as `Null` exactly as `entry(..).or_insert(Value::Null)` does, and
+   *  `add_element_to_object` skips a `Null` / non-map hop exactly as the `if let` does (value.rs nested_slot_insert_tests). */
+  printSlotNestedInsert(left, right, valueText) {
+    let recv = left;
+    while (isElementAccessExpression4(recv))
+      recv = recv.expression;
+    if (!isIdentifier3(recv))
+      return void 0;
+    const keys = this.rustSlotNestedInsertKeys(recv);
+    const declaration = this.rustDeclaredNode(recv);
+    if (keys === void 0 || declaration === recv || declaration?.kind !== SyntaxKind7.BindingElement || !this.rustMutableDictSlot(declaration) || this.rustOptContainerLocals.has(declaration))
+      return void 0;
+    const name = super.transformIdentifier(recv, this.ReservedKeywordsReplacements[recv.text] ?? recv.text);
+    const lit = (k) => `${this.quotedStringLiteral(k)}.to_string()`;
+    const last = keys.length - 1;
+    let body = `std::sync::Arc::make_mut(__h${last}).insert(${lit(keys[last])}, ${valueText.trim()});`;
+    for (let i = last - 1; i >= 1; i--)
+      body = `if let Value::Dict(__h${i + 1}) = std::sync::Arc::make_mut(__h${i}).entry(${lit(keys[i])}).or_insert(Value::Null) { ${body} }`;
+    const out = `if let Value::Dict(__h1) = std::sync::Arc::make_mut(&mut ${name}).entry(${lit(keys[0])}).or_insert(Value::Null) { ${body} }`;
+    return out.length + 36 > 400 ? void 0 : out;
+  }
   /** `std::sync::Arc::make_mut(&mut x).insert("k".into(), v)` for a literal-key write on a typed request slot. */
   printUntilHeadKeyWrite(left, right, valueText) {
     const recv = isElementAccessExpression4(left) ? left.expression : void 0;
@@ -75164,7 +75218,7 @@ ${iden}}`;
     if (declaration?.kind !== SyntaxKind7.BindingElement || this.rustDeclaredNode(n) !== declaration)
       return void 0;
     const up = n.parent;
-    if (this.rustDictKeyReadUse(n) || this.rustUntilHeadKeyWrite(n) !== void 0)
+    if (this.rustDictKeyReadUse(n) || this.rustUntilHeadKeyWrite(n) !== void 0 || this.rustSlotNestedInsertKeys(n) !== void 0)
       return "native";
     if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.InKeyword && up.right === n) {
       const key = this.rustSkipWrappers(up.left);
@@ -80426,6 +80480,7 @@ _RustTranspiler.RUST_ALWAYS_MAP_HELPERS = /* @__PURE__ */ new Set(["extend", "in
 _RustTranspiler.RUST_HANDED_DICT_OMIT = /* @__PURE__ */ new Set(["omit"]);
 _RustTranspiler.RUST_HANDED_DICT_EXTEND = /* @__PURE__ */ new Set(["extend", "deepExtend"]);
 _RustTranspiler.RUST_EXTEND_HEAD_CALLS = /* @__PURE__ */ new Set(["extend", "deepExtend"]);
+_RustTranspiler.RUST_SLOT_NESTED_TAG_ACCESS = /this\.(?:orderbooks|balance|ohlcvs|tickers|trades|bidsasks|positions|clients|transactions)\b|subscriptions|futures|\bcache\b|hashmap|this\.(?:orderBook|orderBookSide|indexedOrderBook|countedOrderBook)\s*\(/;
 _RustTranspiler.RUST_LENT_LIST_TYPES = /* @__PURE__ */ new Set(["List", "NullableList"]);
 _RustTranspiler.RUST_LENT_RESPONSE_READERS = /* @__PURE__ */ new Set(["parseLedger", "parseOpenInterestsHistory", "parseBorrowRateHistory", "convertTradingViewToOHLCV"]);
 /** ral-tf: per-venue ws helpers whose hash / topic / channel lists callers build and hand on whole. */

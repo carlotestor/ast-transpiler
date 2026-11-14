@@ -2197,6 +2197,7 @@ export class RustTranspiler extends BaseTranspiler {
             const rhs = this.printNode(right, 0);
             const nestedKeyWrite = keyStrs.length > 1 ? this.printNestedFieldKeyWrite(left, acc, ((owned) => owned.startsWith('\u0004') ? owned : RustTranspiler.cloneIfBareLocal(owned))(this.rustOwnedArgText(right, rhs.trim()))) : undefined; if (nestedKeyWrite !== undefined) return nestedKeyWrite;
             const untilWrite = keyStrs.length === 1 ? this.printUntilHeadKeyWrite(left, right, rhs) ?? this.printReuseDynamicKeyWrite(left, right, rhs) ?? this.printNilMapKeyWrite(left, right, rhs) : undefined; if (untilWrite !== undefined) return untilWrite;
+            const slotNested = keyStrs.length > 1 ? this.printSlotNestedInsert(left, right, this.rustOwnedArgText(right, rhs.trim())) : undefined; if (slotNested !== undefined) return slotNested;
             // the helper takes the value by move: an owned bare local (`Copy`, last use) is marked, the rest cloned on the file text
             const helperCall = `add_element_to_object(${acc}, &${keyStrs[keyStrs.length - 1]}, ${this.rustOwnedArgText(right, rhs.trim())})`;
             // a nested helper write whose value was read natively binds the value first, like the ccxt hoist did
@@ -22872,6 +22873,54 @@ export class RustTranspiler extends BaseTranspiler {
         return String(key.text);
     }
 
+    /** ral-40f: the literal keys of a statement write `n['k1']..['kN'] = v` (N >= 2) rooted at `n`: every key a plain string
+     *  literal (no replaced, digit, book-meta or `__` tag key), the value not reading `n`. */
+    rustSlotNestedInsertKeys(n: any): string[] | undefined {
+        if (!isIdentifier(n)) return undefined;
+        const keys: string[] = [];
+        let access: any = n.parent;
+        let inner: any = n;
+        while (isElementAccessExpression(access) && access.expression === inner) {
+            const key: any = this.rustSkipWrappers(access.argumentExpression);
+            if (key === undefined || !isStringLiteralLikeNode(key)) return undefined;
+            const text = String(key.text);
+            if (text in this.StringLiteralReplacements || /^\d+$/.test(text) || text.startsWith('__') || RustTranspiler.RUST_BOOK_META_KEYS.has(text)) return undefined;
+            keys.push(text);
+            inner = access;
+            access = access.parent;
+        }
+        const write: any = access;
+        if (keys.length < 2 || keys.length > 4 || !isBinaryExpression(write) || write.left !== inner || write.operatorToken.kind !== SyntaxKind.EqualsToken
+            || write.parent?.kind !== SyntaxKind.ExpressionStatement) return undefined;
+        const reads = (x: any): boolean => (isIdentifier(x) && x.text === n.text) || (x.forEachChild(reads) ?? false);
+        if (reads(write.right)) return undefined;
+        // the inner map must not be a tagged live handle (book / subscription / cache): the function touches none (as ccxt nativeInserts' TAG_ACCESS)
+        const fn: any = this.rustEnclosingFunction(n);
+        return fn === undefined || RustTranspiler.RUST_SLOT_NESTED_TAG_ACCESS.test(String(fn.getText())) ? undefined : keys;
+    }
+    private static readonly RUST_SLOT_NESTED_TAG_ACCESS = /this\.(?:orderbooks|balance|ohlcvs|tickers|trades|bidsasks|positions|clients|transactions)\b|subscriptions|futures|\bcache\b|hashmap|this\.(?:orderBook|orderBookSide|indexedOrderBook|countedOrderBook)\s*\(/;
+
+    /** ral-40f: `p['k1']['k2'] = v` on a typed params slot (`crate::value::Dict`), in place, no copy:
+     *  `if let Value::Dict(__h1) = make_mut(&mut p).entry("k1").or_insert(Value::Null) { make_mut(__h1).insert("k2", v); }`.
+     *  `get_value_mut` inserts a missing hop key as `Null` exactly as `entry(..).or_insert(Value::Null)` does, and
+     *  `add_element_to_object` skips a `Null` / non-map hop exactly as the `if let` does (value.rs nested_slot_insert_tests). */
+    printSlotNestedInsert(left: any, right: any, valueText: string): string | undefined {
+        let recv: any = left;
+        while (isElementAccessExpression(recv)) recv = recv.expression;
+        if (!isIdentifier(recv)) return undefined;
+        const keys = this.rustSlotNestedInsertKeys(recv);
+        const declaration: any = this.rustDeclaredNode(recv);
+        if (keys === undefined || declaration === recv || declaration?.kind !== SyntaxKind.BindingElement || !this.rustMutableDictSlot(declaration)
+            || this.rustOptContainerLocals.has(declaration)) return undefined;
+        const name = super.transformIdentifier(recv, this.ReservedKeywordsReplacements[recv.text] ?? recv.text);
+        const lit = (k: string) => `${this.quotedStringLiteral(k)}.to_string()`;
+        const last = keys.length - 1;
+        let body = `std::sync::Arc::make_mut(__h${last}).insert(${lit(keys[last])}, ${valueText.trim()});`;
+        for (let i = last - 1; i >= 1; i--) body = `if let Value::Dict(__h${i + 1}) = std::sync::Arc::make_mut(__h${i}).entry(${lit(keys[i])}).or_insert(Value::Null) { ${body} }`;
+        const out = `if let Value::Dict(__h1) = std::sync::Arc::make_mut(&mut ${name}).entry(${lit(keys[0])}).or_insert(Value::Null) { ${body} }`;
+        return out.length + 36 > 400 ? undefined : out;
+    }
+
     /** `std::sync::Arc::make_mut(&mut x).insert("k".into(), v)` for a literal-key write on a typed request slot. */
     printUntilHeadKeyWrite(left: any, right: any, valueText: string): string | undefined {
         const recv: any = isElementAccessExpression(left) ? left.expression : undefined;
@@ -23779,7 +23828,7 @@ export class RustTranspiler extends BaseTranspiler {
     rustMutableSlotUse(n: any, declaration: any): 'native' | 'box' | undefined {
         if (declaration?.kind !== SyntaxKind.BindingElement || this.rustDeclaredNode(n) !== declaration) return undefined;
         const up: any = n.parent;
-        if (this.rustDictKeyReadUse(n) || this.rustUntilHeadKeyWrite(n) !== undefined) return 'native';
+        if (this.rustDictKeyReadUse(n) || this.rustUntilHeadKeyWrite(n) !== undefined || this.rustSlotNestedInsertKeys(n) !== undefined) return 'native';
         if (isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.InKeyword && up.right === n) {
             const key: any = this.rustSkipWrappers(up.left);
             return key !== undefined && isStringLiteral(key) && this.rustBorrowedInOpKey(key)?.literal === true ? 'native' : undefined;

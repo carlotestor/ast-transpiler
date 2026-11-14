@@ -3145,6 +3145,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustParseResultLocal(declaration: any): boolean;
     /** The literal key of a statement write `n['k'] = v` (one level, not a book-meta or replaced key). */
     rustUntilHeadKeyWrite(n: any): string | undefined;
+    /** ral-40f: the literal keys of a statement write `n['k1']..['kN'] = v` (N >= 2) rooted at `n`: every key a plain string
+     *  literal (no replaced, digit, book-meta or `__` tag key), the value not reading `n`. */
+    rustSlotNestedInsertKeys(n: any): string[] | undefined;
+    private static readonly RUST_SLOT_NESTED_TAG_ACCESS;
+    /** ral-40f: `p['k1']['k2'] = v` on a typed params slot (`crate::value::Dict`), in place, no copy:
+     *  `if let Value::Dict(__h1) = make_mut(&mut p).entry("k1").or_insert(Value::Null) { make_mut(__h1).insert("k2", v); }`.
+     *  `get_value_mut` inserts a missing hop key as `Null` exactly as `entry(..).or_insert(Value::Null)` does, and
+     *  `add_element_to_object` skips a `Null` / non-map hop exactly as the `if let` does (value.rs nested_slot_insert_tests). */
+    printSlotNestedInsert(left: any, right: any, valueText: string): string | undefined;
     /** `std::sync::Arc::make_mut(&mut x).insert("k".into(), v)` for a literal-key write on a typed request slot. */
     printUntilHeadKeyWrite(left: any, right: any, valueText: string): string | undefined;
     private rustLentListParamDecisions;
