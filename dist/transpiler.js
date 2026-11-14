@@ -36196,7 +36196,8 @@ ${indent}}`);
       }
       return isEq ? `(${rightText} != nil && *${rightText} == ${leftText})` : `(${rightText} == nil || *${rightText} != ${leftText})`;
     }
-    if (!lPtr && !rPtr && lFam !== void 0 && rFam !== void 0 && lFam !== "nil" && rFam !== "nil" && lFam === rFam && lFam !== "number") {
+    const numberBox = lFam === "number" && (this.goIsAnyBoxExpression(left, leftText) || this.goIsAnyBoxExpression(right, rightText));
+    if (!lPtr && !rPtr && lFam !== void 0 && rFam !== void 0 && lFam !== "nil" && rFam !== "nil" && lFam === rFam && !numberBox) {
       return isEq ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
     }
     const numericKind = !lPtr && !rPtr ? this.goNativeNumericEqualityKind(left, leftText, right, rightText) : void 0;

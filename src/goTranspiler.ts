@@ -27634,11 +27634,12 @@ ${this.getIden(identation)}PanicOnError(${varName})`;
         }
         // two definitely-present scalars of the same family: `==` is valid Go and
         // needs no helper. Nullable aliases (Str/Int/Num/Bool) are `any` in Go and
-        // returned undefined by goScalarFamily, so they keep IsEqual. A `number` pair needs a
-        // concrete Go kind on both sides (checked below): an `any` local holding int64(0)
-        // never `== 0`, because the untyped constant boxes as int.
+        // returned undefined by goScalarFamily, so they keep IsEqual. A `number` operand the
+        // printer boxes as `any` keeps IsEqual too: a box holding int64(0) is never `== 0`,
+        // because Go boxes the untyped constant as int.
+        const numberBox = (lFam === 'number') && (this.goIsAnyBoxExpression(left, leftText) || this.goIsAnyBoxExpression(right, rightText));
         if (!lPtr && !rPtr && lFam !== undefined && rFam !== undefined
-            && lFam !== 'nil' && rFam !== 'nil' && lFam === rFam && lFam !== 'number') {
+            && lFam !== 'nil' && rFam !== 'nil' && lFam === rFam && !numberBox) {
             return isEq ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
         }
         // both operands print as a concrete Go numeric kind (a declared int/int64/float64, or a
