@@ -13673,3 +13673,18 @@ describe('yd: pro phemex fromEn joins venue fromEn -> Option<String> and keeps i
         expect((r.rustSignatures ?? []).find((s: any) => s.name === 'from_en')?.ret).toBe('keptostr');
     });
 });
+
+describe('yd: a long line that holds a typed local is split by a let-bound typed temp (a move, no copy)', () => {
+    test('a returned list over 400 chars hoists into `let __yd0: Vec<Value> = vec![..]` one element per line and the reader number local types', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-yd-split-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Num = number | undefined;\nexport type Int = number | undefined;\nexport default class Exchange {\n    safeNumber (o: any, k: any, d: Num = undefined): Num { return o[k] ?? d; }\n    safeTimestamp (o: any, k: any, d: Int = undefined): Int { return o[k] ?? d; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue9.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue9 extends Exchange {\n    parseRow (row: Dict): any {\n        const openingPriceOfTheCandle = this.safeNumber (row, 'open');\n        const highestPriceOfTheCandle = this.safeNumber (row, 'high');\n        const lowestPriceOfTheCandle = this.safeNumber (row, 'low');\n        const closingPriceOfTheCandle = this.safeNumber (row, 'close');\n        const fallbackSinglePrice = this.safeNumber (row, 'price', this.safeNumber (row, 'value'));\n        return [\n            this.safeTimestamp (row, 'timestamp'),\n            (openingPriceOfTheCandle !== undefined) ? openingPriceOfTheCandle : fallbackSinglePrice,\n            (highestPriceOfTheCandle !== undefined) ? highestPriceOfTheCandle : fallbackSinglePrice,\n            (lowestPriceOfTheCandle !== undefined) ? lowestPriceOfTheCandle : fallbackSinglePrice,\n            (closingPriceOfTheCandle !== undefined) ? closingPriceOfTheCandle : fallbackSinglePrice,\n            0,\n        ];\n    }\n}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/venue9.ts')).content;
+        expect(out).toMatch(/let mut fallbackSinglePrice: Option<f64> = /);
+        expect(out).toContain('let __yd0: Vec<Value> = vec![\n');
+        expect(out).toContain('return Value::from(__yd0);');
+        expect(out.split('\n').filter((l: string) => l.length > 400)).toEqual([]);
+        expect(out).not.toContain('fallbackSinglePrice.clone()');
+    });
+});

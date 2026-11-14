@@ -8739,8 +8739,19 @@ export class RustTranspiler extends BaseTranspiler {
     /** Re-boxing an optional local lengthens each use: keep a line under the 400-char limit it was under. */
     /** Prints a method body; boxed expression-shape locals named on a printed line over 400 chars
      *  are left `Value` when that lowers the count of such lines. */
-    printRustScalarGuardedBody(method, print: () => string): string {
+    printRustScalarGuardedBody(method, rawPrint: () => string): string {
         const loops = this.forLoopCounter;
+        // yd: a line over the limit that names a guarded typed local is first split by a let-bound typed temp (a move or a borrow)
+        const print = () => {
+            const text = rawPrint();
+            if (!text.split('\n').some((l) => l.length > 400)) return text;
+            const names: string[] = [];
+            for (const n of this.rustScopeIndex(method.getSourceFile()).nodes as any[]) {
+                if (isVariableDeclaration(n) && this.rustScalarGuarded.has(n) && this.rustScalarDecisions.get(n) && !this.rustScalarVetoed.has(n)
+                    && this.rustEnclosingFunction(n) === method && isIdentifier(n.name)) names.push(String((n.name as any).text));
+            }
+            return names.length === 0 ? text : this.rustSplitLongLines(text, names);
+        };
         const typed = print();
         const long = (text: string) => text.split('\n').filter((l) => l.length > 400);
         const lines = long(typed);
@@ -8790,6 +8801,79 @@ export class RustTranspiler extends BaseTranspiler {
             }
         }
         return redo();
+    }
+
+    /** yd: index of the bracket closing the one opened at `open` (string literals skipped). */
+    rustCloseBracketAt(text: string, open: number): number {
+        const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
+        const stack: string[] = [];
+        for (let i = open; i < text.length; i++) {
+            const c = text[i];
+            if (c === '"') {
+                for (i++; i < text.length && text[i] !== '"'; i++) if (text[i] === '\\') i++;
+                continue;
+            }
+            if (pairs[c] !== undefined) stack.push(pairs[c]);
+            else if (c === ')' || c === ']' || c === '}') {
+                if (stack.pop() !== c) return -1;
+                if (stack.length === 0) return i;
+            }
+        }
+        return -1;
+    }
+
+    /** yd: splits one printed statement line over 400 chars that names a guarded local by hoisting its FIRST evaluated
+     *  operand into a let-bound typed temp on the line before (a move or a borrow, never a copy). Exact shapes only:
+     *  `let x: T = self.f(..(Value::from(vec![..])));` (the list moves: `Vec<Value>`), `let x: T = (match R.get("k") {..` (the
+     *  lookup borrows: `Option<&Value>`), `let x: T = (match (&(Value::from(self.parseToInt(..))), ..` (`Option<i64>`, moved into the box). */
+    rustSplitLongLine(line: string, nth: number): string | undefined {
+        const head = /^(\s*)(?:let mut \w+: [^=]+ = |return |\w+\.push\()/.exec(line);
+        if (head === null || !line.endsWith(';')) return undefined;
+        const isLet = head[0].trimStart().startsWith('let ');
+        const ind = head[1];
+        const tmp = `__yd${nth}`;
+        let open = -1, close = -1, decl = '';
+        const vec = /^(?:self\.\w+\()*Value::from\(vec!\[/.exec(line.slice(head[0].length));
+        const look = isLet ? /^\(match (\w+)\.get\("[^"\\]*"\) \{/.exec(line.slice(head[0].length)) : null;
+        const toInt = isLet ? /^\(match \(&\(Value::from\(self\.parseToInt\(/.exec(line.slice(head[0].length)) : null;
+        if (vec !== null) {
+            open = head[0].length + vec[0].length - 5;
+            close = this.rustCloseBracketAt(line, open + 4);
+            decl = 'Vec<Value>';
+        } else if (look !== null) {
+            open = head[0].length + '(match '.length;
+            close = this.rustCloseBracketAt(line, open + look[1].length + 4);
+            decl = 'Option<&Value>';
+        } else if (toInt !== null) {
+            open = head[0].length + toInt[0].length - 'self.parseToInt('.length;
+            close = this.rustCloseBracketAt(line, open + 'self.parseToInt'.length);
+            decl = 'Option<i64>';
+        }
+        if (open < 0 || close < 0) return undefined;
+        let hoisted = `${ind}let ${tmp}: ${decl} = ${line.slice(open, close + 1)};`;
+        const rest = line.slice(0, open) + tmp + line.slice(close + 1);
+        if (hoisted.length > 400 && decl === 'Vec<Value>') {
+            // the list itself is too long: one element per line (split at its top-level commas)
+            const inner = line.slice(open + 5, close);
+            const parts: string[] = [];
+            for (let i = 0, from = 0; i <= inner.length; i++) {
+                if (i === inner.length || inner[i] === ',') { parts.push(inner.slice(from, i).trim()); from = i + 1; continue; }
+                if ('([{'.includes(inner[i])) { const j = this.rustCloseBracketAt(inner, i); if (j < 0) return undefined; i = j; }
+                else if (inner[i] === '"') { for (i++; i < inner.length && inner[i] !== '"'; i++) if (inner[i] === '\\') i++; }
+            }
+            hoisted = `${ind}let ${tmp}: ${decl} = vec![\n` + parts.map((e) => `${ind}    ${e},`).join('\n') + `\n${ind}];`;
+        }
+        if (hoisted.split('\n').some((l) => l.length > 400) || rest.length > 400) return undefined;
+        return hoisted + '\n' + rest;
+    }
+
+    rustSplitLongLines(text: string, names: string[]): string {
+        if (!text.split('\n').some((l) => l.length > 400)) return text;
+        let nth = 0;
+        return text.split('\n').map((l) => {
+            if (l.length <= 400 || !names.some((n) => new RegExp(`\\b${n}\\b`).test(l))) return l;
+            return this.rustSplitLongLine(l, nth++) ?? l;
+        }).join('\n');
     }
 
     /** `m[k] = v` with `k` a `String` local whose single-key write prints a native insert. */
