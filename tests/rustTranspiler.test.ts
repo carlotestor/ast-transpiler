@@ -14481,3 +14481,23 @@ describe('zd: a string reader whose default is an options element written only a
         expect(mk('1')).toMatch(/let mut region: Value = /);
     });
 });
+
+describe('40d: a reader integer that sizes a ws cache-map entry constructor types (`this.trades[k] = new ArrayCache (limit)`)', () => {
+    test('the size boxes into ::new as Value::from(limit) inside the printer CacheStore::put; a second use keeps it typed too', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-40d-cachemapctor-'));
+        const files: Record<string, string> = {
+            'ts/src/base/ws/Cache.ts': 'export class ArrayCache {\n    constructor (maxSize: any = undefined) {}\n    append (item: any) {}\n}\n',
+            'ts/src/base/Exchange.ts': "import { ArrayCache } from './ws/Cache.js';\nexport interface Dictionary<T> { [key: string]: T }\nexport interface Dict { [key: string]: any }\nexport default class Exchange {\n    options: Dict = {};\n    trades: Dictionary<ArrayCache>;\n    safeString (obj: any, key: any, defaultValue: string = undefined): string { return obj[key]; }\n    safeInteger (obj: any, key: string, defaultValue: number = undefined): number { return obj[key]; }\n}\n",
+            'ts/src/pro/venue.ts': "import Exchange from '../base/Exchange.js';\nimport { ArrayCache } from '../base/ws/Cache.js';\nexport default class venue extends Exchange {\n    handleTrades (message: any) {\n        const symbol = this.safeString (message, 's');\n        if (!(symbol in this.trades)) {\n            const limit = this.safeInteger (this.options, 'tradesLimit', 1000);\n            this.trades[symbol] = new ArrayCache (limit);\n        }\n        return message;\n    }\n}\n",
+        };
+        for (const [rel, text] of Object.entries(files)) {
+            fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+            fs.writeFileSync(path.join(root, rel), text);
+        }
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        expect(out).toMatch(/let mut limit: i64 = /);
+        expect(out).toContain('CacheStore::put(&mut self.trades, &symbol, ArrayCache::new(Value::from(limit)))');
+        expect(out).not.toContain('limit.clone()');
+    });
+});

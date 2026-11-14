@@ -5896,12 +5896,21 @@ export class RustTranspiler extends BaseTranspiler {
      *  local held (`Value::Int` / `Value::Null`), so no other local's decision reads this one's type. */
     rustScalarCacheFieldCtor(n: any, write: any): boolean {
         const left: any = this.unwrapParens(write.left);
-        if (!isPropertyAccessExpression(left) || left.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        if (!(isPropertyAccessExpression(left) && left.expression.kind === SyntaxKind.ThisKeyword) && !this.rustWsCacheCtorSizeWrite(n, write)) return false;
         const right: any = this.unwrapParens(write.right);
         if (right?.kind !== SyntaxKind.NewExpression || right.arguments?.length !== 1 || this.unwrapParens(right.arguments[0]) !== n) return false;
         const kind = this.rustScalarDecisions.get(this.rustDeclaredNode(n));
         const form = this.rustScalarUseForms.get(n);
         return this.rustCacheCtorLimitArg(n, kind) && (form === 'targ' || form === 'box');
+    }
+
+    /** 40d: `n` is the one argument of a base `ws/Cache.ts` constructor that is the whole source of a ws cache-map entry
+     *  write (`this.trades[k] = new ArrayCache (n)`, `this.ohlcvs[k][tf] = new ArrayCacheByTimestamp (n)`), which
+     *  printWsCacheMapWrite prints as `CacheStore::put` / `CacheShelves::put2` around the constructor text. */
+    rustWsCacheCtorSizeWrite(n: any, write: any): boolean {
+        if (write === undefined || !isBinaryExpression(write) || write.operatorToken.kind !== SyntaxKind.EqualsToken || !this.rustWsCacheMapEntry(write.left)) return false;
+        const right: any = this.unwrapParens(write.right);
+        return this.rustWsCacheCtor(right) && right.arguments?.length === 1 && this.unwrapParens(right.arguments[0]) === n;
     }
 
     /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole
@@ -7363,7 +7372,10 @@ export class RustTranspiler extends BaseTranspiler {
             || !(isElementAccessExpression(write.left.expression) || isPropertyAccessExpression(write.left.expression))) return false;
         // a `this.f[k] = this.m(.., n, ..)` source: `n` is a call argument evaluated before the write, the
         // text passes key on the target and the whole right-hand side, never on an argument inside it
-        return !(this.rustThisFieldTarget(write.left.expression) && this.rustInsideCallArgument(n, write.right));
+        if (this.rustThisFieldTarget(write.left.expression) && this.rustInsideCallArgument(n, write.right)) return false;
+        // 40d: the size of `this.<cache>[k] (|[k2]) = new ArrayCache*(n)`: the printer's own `CacheStore::put` /
+        // `CacheShelves::put2` prints that write (no ccxt text pass reads it) and the size boxes into `::new`
+        return !this.rustWsCacheCtorSizeWrite(n, write);
     }
 
     // ── nested plain-field writes (rustNestedFieldKeyUse / printNestedFieldKeyWrite) ──

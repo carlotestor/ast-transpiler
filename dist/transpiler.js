@@ -57126,7 +57126,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  local held (`Value::Int` / `Value::Null`), so no other local's decision reads this one's type. */
   rustScalarCacheFieldCtor(n, write) {
     const left = this.unwrapParens(write.left);
-    if (!isPropertyAccessExpression3(left) || left.expression.kind !== SyntaxKind7.ThisKeyword)
+    if (!(isPropertyAccessExpression3(left) && left.expression.kind === SyntaxKind7.ThisKeyword) && !this.rustWsCacheCtorSizeWrite(n, write))
       return false;
     const right = this.unwrapParens(write.right);
     if (right?.kind !== SyntaxKind7.NewExpression || right.arguments?.length !== 1 || this.unwrapParens(right.arguments[0]) !== n)
@@ -57134,6 +57134,15 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const kind = this.rustScalarDecisions.get(this.rustDeclaredNode(n));
     const form = this.rustScalarUseForms.get(n);
     return this.rustCacheCtorLimitArg(n, kind) && (form === "targ" || form === "box");
+  }
+  /** 40d: `n` is the one argument of a base `ws/Cache.ts` constructor that is the whole source of a ws cache-map entry
+   *  write (`this.trades[k] = new ArrayCache (n)`, `this.ohlcvs[k][tf] = new ArrayCacheByTimestamp (n)`), which
+   *  printWsCacheMapWrite prints as `CacheStore::put` / `CacheShelves::put2` around the constructor text. */
+  rustWsCacheCtorSizeWrite(n, write) {
+    if (write === void 0 || !isBinaryExpression5(write) || write.operatorToken.kind !== SyntaxKind7.EqualsToken || !this.rustWsCacheMapEntry(write.left))
+      return false;
+    const right = this.unwrapParens(write.right);
+    return this.rustWsCacheCtor(right) && right.arguments?.length === 1 && this.unwrapParens(right.arguments[0]) === n;
   }
   /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole
    *  write (`x = Precise.stringDiv (Precise.stringMul (local, y), ..)`): the written text is a `Precise` call either
@@ -58638,7 +58647,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     const write = isBinaryExpression5(current) ? current : void 0;
     if (write === void 0 || write.operatorToken.kind !== SyntaxKind7.EqualsToken || !isElementAccessExpression4(write.left) || !(isElementAccessExpression4(write.left.expression) || isPropertyAccessExpression3(write.left.expression)))
       return false;
-    return !(this.rustThisFieldTarget(write.left.expression) && this.rustInsideCallArgument(n, write.right));
+    if (this.rustThisFieldTarget(write.left.expression) && this.rustInsideCallArgument(n, write.right))
+      return false;
+    return !this.rustWsCacheCtorSizeWrite(n, write);
   }
   // ── nested plain-field writes (rustNestedFieldKeyUse / printNestedFieldKeyWrite) ──
   // `this.balance[t][code] = v` prints `add_element_to_object(get_value_mut(&mut self.balance, &t), &code, v)`,
