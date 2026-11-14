@@ -2752,6 +2752,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustLentRecordTypeNode(type: any): boolean;
     /** `Dict[]` / `object[]`, optionally `| undefined`: a list of rows, the same Value list a `List` holds. */
     rustRowListTypeNode(type: any): boolean;
+    /** ral-tf: per-venue ws helpers whose hash / topic / channel lists callers build and hand on whole. */
+    private static readonly RUST_LENT_HASH_LIST_METHODS;
+    /** ral-tf: `string[]` / `Str[]` / `any[]` (a hash, topic or channel list): a required per-venue list slot like `Dict[]`. */
+    rustScalarListTypeNode(type: any): boolean;
     /** A call argument landing in a lent list parameter of the callee. */
     rustLentListSlot(call: any, arg: any): boolean;
     /** `&x` for a shared list local lent to a lent list parameter. */

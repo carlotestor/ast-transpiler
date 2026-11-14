@@ -71389,6 +71389,13 @@ ${iden}}`;
     const element = rows[0].elementType;
     return element?.kind === SyntaxKind7.ObjectKeyword || element?.kind === SyntaxKind7.TypeReference && isIdentifier3(element.typeName) && element.typeArguments === void 0 && String(element.typeName.text) === "Dict";
   }
+  /** ral-tf: `string[]` / `Str[]` / `any[]` (a hash, topic or channel list): a required per-venue list slot like `Dict[]`. */
+  rustScalarListTypeNode(type) {
+    if (type?.kind !== SyntaxKind7.ArrayType)
+      return false;
+    const element = type.elementType;
+    return element?.kind === SyntaxKind7.StringKeyword || element?.kind === SyntaxKind7.AnyKeyword || element?.kind === SyntaxKind7.TypeReference && isIdentifier3(element.typeName) && element.typeArguments === void 0 && String(element.typeName.text) === "Str";
+  }
   /** A call argument landing in a lent list parameter of the callee. */
   rustLentListSlot(call, arg) {
     if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
@@ -71498,7 +71505,7 @@ ${iden}}`;
       return void 0;
     const type = param.type;
     const typeName = type?.kind === SyntaxKind7.TypeReference && isIdentifier3(type.typeName) && type.typeArguments === void 0 ? String(type.typeName.text) : "";
-    const kind = _RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) ? "list" : this.rustLentRecordTypeNode(type) ? "dict" : void 0;
+    const kind = _RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || _RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type) ? "list" : this.rustLentRecordTypeNode(type) ? "dict" : void 0;
     if (kind === void 0)
       return void 0;
     const pname = String(param.name.text);
@@ -71531,7 +71538,9 @@ ${iden}}`;
       const init = decl.initializer === void 0 ? void 0 : this.rustSkipWrappers(decl.initializer);
       return init === void 0 || isCallExpression6(init) || isArrayLiteralExpression4(init) || isObjectLiteralExpression4(init) || this.literalKindOfNode(init) === "null";
     };
-    return this.rustVenueStrCallSites(method).some((call) => lendable(call.arguments?.[at])) ? kind : void 0;
+    const hashList = _RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type);
+    const lends = (call, arg) => lendable(arg) && !(hashList && (this.rustVecLocalIsTyped(this.rustDeclaredNode(arg)) || Array.from(call.arguments ?? []).some((a) => a !== arg && isIdentifier3(a) && a.text === arg.text)));
+    return this.rustVenueStrCallSites(method).some((call) => lends(call, call.arguments?.[at])) ? kind : void 0;
   }
   /** A method of a venue source (REST, pro or prediction) whose name the base tier never declares: each venue's
    *  Rust method is an inherent one, so its signature is its own (a same-named method elsewhere is independent,
@@ -77202,6 +77211,8 @@ _RustTranspiler.RUST_HANDED_DICT_EXTEND = /* @__PURE__ */ new Set(["extend", "de
 _RustTranspiler.RUST_EXTEND_HEAD_CALLS = /* @__PURE__ */ new Set(["extend", "deepExtend"]);
 _RustTranspiler.RUST_LENT_LIST_TYPES = /* @__PURE__ */ new Set(["List", "NullableList"]);
 _RustTranspiler.RUST_LENT_RESPONSE_READERS = /* @__PURE__ */ new Set(["parseLedger", "parseOpenInterestsHistory", "parseBorrowRateHistory", "convertTradingViewToOHLCV"]);
+/** ral-tf: per-venue ws helpers whose hash / topic / channel lists callers build and hand on whole. */
+_RustTranspiler.RUST_LENT_HASH_LIST_METHODS = /* @__PURE__ */ new Set(["watchTopics", "sendSubscription", "unWatchChannels"]);
 _RustTranspiler.RUST_LENT_RESPONSE_TYPES = /* @__PURE__ */ new Set(["Dict", "NullableDict"]);
 // Hand-written base helpers whose operand is lent (`impl Into<crate::Value>`, `OmitSource`, `MergeOperands`).
 _RustTranspiler.RUST_LENT_HELPER_SLOTS = {

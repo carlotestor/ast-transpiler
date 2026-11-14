@@ -20199,6 +20199,17 @@ export class RustTranspiler extends BaseTranspiler {
         return element?.kind === SyntaxKind.ObjectKeyword || (element?.kind === SyntaxKind.TypeReference && isIdentifier(element.typeName) && element.typeArguments === undefined && String(element.typeName.text) === 'Dict');
     }
 
+    /** ral-tf: per-venue ws helpers whose hash / topic / channel lists callers build and hand on whole. */
+    private static readonly RUST_LENT_HASH_LIST_METHODS = new Set([ 'watchTopics', 'sendSubscription', 'unWatchChannels' ]);
+
+    /** ral-tf: `string[]` / `Str[]` / `any[]` (a hash, topic or channel list): a required per-venue list slot like `Dict[]`. */
+    rustScalarListTypeNode(type: any): boolean {
+        if (type?.kind !== SyntaxKind.ArrayType) return false;
+        const element: any = type.elementType;
+        return element?.kind === SyntaxKind.StringKeyword || element?.kind === SyntaxKind.AnyKeyword
+            || (element?.kind === SyntaxKind.TypeReference && isIdentifier(element.typeName) && element.typeArguments === undefined && String(element.typeName.text) === 'Str');
+    }
+
     /** A call argument landing in a lent list parameter of the callee. */
     rustLentListSlot(call: any, arg: any): boolean {
         if (!isCallExpression(call) || !isPropertyAccessExpression(call.expression) || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
@@ -20308,7 +20319,7 @@ export class RustTranspiler extends BaseTranspiler {
             || this.rustParamIsLentResponse(param) || this.rustParamPrintsMap(param) || this.rustParamPrintsStrVec(param) || this.rustParamReadsByReference(param)) return undefined;
         const type: any = param.type;
         const typeName = type?.kind === SyntaxKind.TypeReference && isIdentifier(type.typeName) && type.typeArguments === undefined ? String(type.typeName.text) : '';
-        const kind: 'dict' | 'list' | undefined = RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) ? 'list' : (this.rustLentRecordTypeNode(type) ? 'dict' : undefined);
+        const kind: 'dict' | 'list' | undefined = RustTranspiler.RUST_LENT_LIST_TYPES.has(typeName) || this.rustRowListTypeNode(type) || (RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type)) ? 'list' : (this.rustLentRecordTypeNode(type) ? 'dict' : undefined);
         if (kind === undefined) return undefined;
         // read-only in the body: a written / re-bound parameter belongs to the owned-map rules
         const pname = String(param.name.text);
@@ -20333,7 +20344,12 @@ export class RustTranspiler extends BaseTranspiler {
             const init: any = decl.initializer === undefined ? undefined : this.rustSkipWrappers(decl.initializer);
             return init === undefined || isCallExpression(init) || isArrayLiteralExpression(init) || isObjectLiteralExpression(init) || this.literalKindOfNode(init) === 'null';
         };
-        return this.rustVenueStrCallSites(method).some((call: any) => lendable(call.arguments?.[at])) ? kind : undefined;
+        // ral-tf: a hash / topic list slot binds only where a caller holds a list that is not already a `Vec` (which boxes anyway)
+        const hashList = RustTranspiler.RUST_LENT_HASH_LIST_METHODS.has(name) && this.rustScalarListTypeNode(type);
+        // (a list named twice in one call is boxed at its other slot anyway)
+        const lends = (call: any, arg: any): boolean => lendable(arg) && !(hashList && (this.rustVecLocalIsTyped(this.rustDeclaredNode(arg))
+            || Array.from(call.arguments ?? []).some((a: any) => a !== arg && isIdentifier(a) && a.text === arg.text)));
+        return this.rustVenueStrCallSites(method).some((call: any) => lends(call, call.arguments?.[at])) ? kind : undefined;
     }
 
     /** A method of a venue source (REST, pro or prediction) whose name the base tier never declares: each venue's
