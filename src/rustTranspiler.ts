@@ -2773,7 +2773,9 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustDeclaredNode(n) !== declaration) continue;
             const rhs: any = this.unwrapParens(parent.right);
             if (!this.rustNilDecodedWrite(rhs)) writes++;
-            const write = isIdentifier(rhs) && this.literalKindOfNode(rhs) !== 'null' ? (this.rustScalarIdentifierKind(rhs) ?? (this.rustNilValueStrAlias(rhs) ? 'ostr' : undefined)) : this.rustScalarValueKind(rhs, true);
+            let write = isIdentifier(rhs) && this.literalKindOfNode(rhs) !== 'null' ? (this.rustScalarIdentifierKind(rhs) ?? (this.rustNilValueStrAlias(rhs) ? 'ostr' : undefined)) : this.rustScalarValueKind(rhs, true);
+            // za: `x = c ? <scalar> : x` keeps x on one arm: the write's kind is the other arm's (joined below with x's own)
+            if (write === undefined) write = this.rustNilSelfArmTernaryKind(rhs, declaration);
             joined = this.rustScalarJoinKinds(joined, write);
             if (joined === undefined) return undefined;
         }
@@ -2806,6 +2808,24 @@ export class RustTranspiler extends BaseTranspiler {
         // boxed uses are checked against the printed method lines
         if (boxed.length > 0) this.rustScalarGuarded.add(declaration);
         return kind;
+    }
+
+    /** za: kind of the scalar arm of `c ? <scalar> : x` / `c ? x : <scalar>` where the other arm is the written local itself. */
+    rustNilSelfArmTernaryKind(rhs: any, declaration: any): string | undefined {
+        if (rhs === undefined || !isConditionalExpression(rhs)) return undefined;
+        const self = (a: any) => { const u: any = this.unwrapParens(a); return isIdentifier(u) && this.rustDeclaredNode(u) === declaration; };
+        const t = self(rhs.whenTrue); const f = self(rhs.whenFalse);
+        if (t === f) return undefined;
+        const other: any = t ? rhs.whenFalse : rhs.whenTrue;
+        const k = this.rustScalarValueKind(other, true);
+        if (k !== 'str' && k !== 'ostr') return undefined;
+        // a `Precise.*` operand borrows the `Value` local (`&x`); the optional string would box with a copy there
+        const lentToPrecise = this.rustScopeNameNodes(this.rustEnclosingFunction(declaration), String(declaration.name.text)).some((n: any) => {
+            const call: any = n.parent;
+            return isIdentifier(n) && isCallExpression(call) && call.arguments.some((a: any) => a === n) && isPropertyAccessExpression(call.expression)
+                && isIdentifier(call.expression.expression) && call.expression.expression.text === 'Precise';
+        });
+        return lentToPrecise ? undefined : 'ostr';
     }
 
     // ── nil scalar hand-off (rustNilScalarHandOff) ──

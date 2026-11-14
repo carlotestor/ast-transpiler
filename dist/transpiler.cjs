@@ -54072,7 +54072,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const rhs = this.unwrapParens(parent.right);
       if (!this.rustNilDecodedWrite(rhs))
         writes++;
-      const write = _is.isIdentifier.call(void 0, rhs) && this.literalKindOfNode(rhs) !== "null" ? _nullishCoalesce(this.rustScalarIdentifierKind(rhs), () => ( (this.rustNilValueStrAlias(rhs) ? "ostr" : void 0))) : this.rustScalarValueKind(rhs, true);
+      let write = _is.isIdentifier.call(void 0, rhs) && this.literalKindOfNode(rhs) !== "null" ? _nullishCoalesce(this.rustScalarIdentifierKind(rhs), () => ( (this.rustNilValueStrAlias(rhs) ? "ostr" : void 0))) : this.rustScalarValueKind(rhs, true);
+      if (write === void 0)
+        write = this.rustNilSelfArmTernaryKind(rhs, declaration);
       joined = this.rustScalarJoinKinds(joined, write);
       if (joined === void 0)
         return void 0;
@@ -54110,6 +54112,28 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (boxed.length > 0)
       this.rustScalarGuarded.add(declaration);
     return kind;
+  }
+  /** za: kind of the scalar arm of `c ? <scalar> : x` / `c ? x : <scalar>` where the other arm is the written local itself. */
+  rustNilSelfArmTernaryKind(rhs, declaration) {
+    if (rhs === void 0 || !_is.isConditionalExpression.call(void 0, rhs))
+      return void 0;
+    const self = (a) => {
+      const u = this.unwrapParens(a);
+      return _is.isIdentifier.call(void 0, u) && this.rustDeclaredNode(u) === declaration;
+    };
+    const t = self(rhs.whenTrue);
+    const f = self(rhs.whenFalse);
+    if (t === f)
+      return void 0;
+    const other = t ? rhs.whenFalse : rhs.whenTrue;
+    const k = this.rustScalarValueKind(other, true);
+    if (k !== "str" && k !== "ostr")
+      return void 0;
+    const lentToPrecise = this.rustScopeNameNodes(this.rustEnclosingFunction(declaration), String(declaration.name.text)).some((n) => {
+      const call = n.parent;
+      return _is.isIdentifier.call(void 0, n) && _is.isCallExpression.call(void 0, call) && call.arguments.some((a) => a === n) && _is.isPropertyAccessExpression.call(void 0, call.expression) && _is.isIdentifier.call(void 0, call.expression.expression) && call.expression.expression.text === "Precise";
+    });
+    return lentToPrecise ? void 0 : "ostr";
   }
   // ── nil scalar hand-off (rustNilScalarHandOff) ──
   // An empty local written from known scalar sources and only boxed back keeps that type: each box
