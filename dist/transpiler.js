@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -60319,6 +60319,8 @@ ${binding(plan.indent)}` : ""), head: "" };
   rustVenueKeptStrArm(node) {
     if (node?.kind !== SyntaxKind7.MethodDeclaration || !isIdentifier3(node.name))
       return false;
+    if (/ts[\\/]src[\\/]prediction[\\/]/.test(String(node.getSourceFile?.()?.fileName ?? "")))
+      return false;
     const cls = node.parent;
     const clsName = cls?.name !== void 0 && isIdentifier3(cls.name) ? String(cls.name.text) : void 0;
     return clsName !== void 0 && (_RustTranspiler.RUST_VENUE_KEPT_STR_ARMS[clsName] ?? []).includes(String(node.name.text));
@@ -77443,7 +77445,7 @@ _RustTranspiler.RUST_PRO_TIER_FILE = /ts[\\/]src[\\/]pro[\\/]/;
 _RustTranspiler.RUST_BASE_NATIVE_STR_METHODS = /* @__PURE__ */ new Set(["safeCurrencyCode"]);
 // Venue methods (class -> method names) whose `: Str` return was spelled after their by-name arm existed: the arm
 // stays (it boxes the `Option<String>` once), so the dispatch-arm name set is unchanged.
-_RustTranspiler.RUST_VENUE_KEPT_STR_ARMS = { coinbaseinternational: ["parseTimeInForce"], bitfinex: ["convertDerivativesId"], blofin: ["networkCodeToChainId"] };
+_RustTranspiler.RUST_VENUE_KEPT_STR_ARMS = { coinbaseinternational: ["parseTimeInForce"], bitfinex: ["convertDerivativesId"], blofin: ["networkCodeToChainId"], dydx: ["hashMessage"], modetrade: ["hashMessage"], polymarket: ["hashMessage"] };
 _RustTranspiler.RUST_DISPATCH_PARAM_KINDS = {
   "Value": "value",
   "impl Into<crate::Value>": "value",
