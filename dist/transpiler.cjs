@@ -69356,6 +69356,8 @@ ${iden}}`;
       return cross(this.rustWsHashPatterns(n.left, depth + 1, seen), this.rustWsHashPatterns(n.right, depth + 1, seen));
     if (_is.isConditionalExpression.call(void 0, n))
       return [...this.rustWsHashPatterns(n.whenTrue, depth + 1, seen), ...this.rustWsHashPatterns(n.whenFalse, depth + 1, seen)].slice(0, 16);
+    if (_is.isCallExpression.call(void 0, n))
+      return _nullishCoalesce(this.rustWsReturnPatterns(n, depth, seen), () => ( any));
     if (!_is.isIdentifier.call(void 0, n))
       return any;
     const declaration = this.rustDeclarationOfIdentifier(n);
@@ -69587,7 +69589,27 @@ ${iden}}`;
       return void 0;
     };
     const nothing = (x) => x === void 0 || _optionalChain([this, 'access', _9694 => _9694.rustStripWrappers, 'call', _9695 => _9695(x), 'optionalAccess', _9696 => _9696.kind]) === _ast.SyntaxKind.UndefinedKeyword || _is.isIdentifier.call(void 0, this.rustStripWrappers(x)) && this.rustStripWrappers(x).text === "undefined";
-    const add = (hash, x, kind) => table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), kind: _nullishCoalesce(kind, () => ( (nothing(x) ? "none" : _nullishCoalesce(this.rustWsResolvedKind(x), () => ( "other"))))) });
+    const kindOf = (x) => nothing(x) ? "none" : _nullishCoalesce(this.rustWsResolvedKind(x), () => ( "other"));
+    const add = (hash, x, kind, site) => {
+      const sites = kind === void 0 && site !== void 0 ? this.rustWsHelperCallSites(cls, site, [hash, x]) : void 0;
+      if (sites === void 0) {
+        table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), kind: _nullishCoalesce(kind, () => ( kindOf(x))) });
+        return;
+      }
+      for (const env of sites) {
+        const save = this.rustWsHashEnv;
+        this.rustWsHashEnv = env;
+        try {
+          const bound = (e) => {
+            const d = _is.isIdentifier.call(void 0, this.rustStripWrappers(e)) ? this.rustDeclarationOfIdentifier(this.rustStripWrappers(e)) : void 0;
+            return d !== void 0 && env.has(d) ? env.get(d).arg : e;
+          };
+          table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), kind: kindOf(bound(x)) });
+        } finally {
+          this.rustWsHashEnv = save;
+        }
+      }
+    };
     this.rustWalkScope(cls, (n) => {
       if (!_is.isCallExpression.call(void 0, n) || !_is.isPropertyAccessExpression.call(void 0, n.expression))
         return;
@@ -69611,12 +69633,93 @@ ${iden}}`;
         return;
       const fh = futureHash(recv);
       if (fh === void 0)
-        add(_nullishCoalesce(n.arguments[1], () => ( null)), n.arguments[0]);
+        add(_nullishCoalesce(n.arguments[1], () => ( null)), n.arguments[0], void 0, n);
       else
         add(fh, n.arguments[0]);
     });
     this.rustWsResolveTables.set(cls, table);
     return table;
+  }
+  /** When `site` sits in a method of `cls` with parameters: the parameter bindings of every call of that method
+   *  (`this.m (..)`, or `this.spawn (this.m, ..)`), so a hash or value built from a parameter reads each caller's
+   *  argument. Undefined when the method is referenced any other way (a handler table entry) or never called. */
+  rustWsHelperCallSites(cls, site, exprs) {
+    const method = _chunkQYYT7MP4cjs.findAncestor.call(void 0, site, _chunkQYYT7MP4cjs.isFunctionLike);
+    if (method === void 0 || !_is.isMethodDeclaration.call(void 0, method) || _chunkQYYT7MP4cjs.findAncestor.call(void 0, method, _is.isClassDeclaration) !== cls || !_is.isIdentifier.call(void 0, method.name))
+      return void 0;
+    const params = Array.from(method.parameters);
+    if (params.some((p) => p.dotDotDotToken !== void 0 || !_is.isIdentifier.call(void 0, p.name)))
+      return void 0;
+    if (params.length === 0 || exprs.every((e) => e === null || e === void 0))
+      return void 0;
+    for (const p of params)
+      if (this.rustLocalReassigned(p))
+        return void 0;
+    const name = String(method.name.text);
+    const out = [];
+    let other = false;
+    this.rustWalkScope(cls, (n) => {
+      if (!_is.isPropertyAccessExpression.call(void 0, n) || n.expression.kind !== _ast.SyntaxKind.ThisKeyword || String(n.name.text) !== name)
+        return;
+      const call = n.parent;
+      let args;
+      if (_is.isCallExpression.call(void 0, call) && call.expression === n)
+        args = Array.from(call.arguments);
+      else if (_is.isCallExpression.call(void 0, call) && call.arguments[0] === n && _is.isPropertyAccessExpression.call(void 0, call.expression) && call.expression.expression.kind === _ast.SyntaxKind.ThisKeyword && String(call.expression.name.text) === "spawn")
+        args = Array.from(call.arguments).slice(1);
+      if (args === void 0 || args.length > params.length || args.some((a) => a.kind === _ast.SyntaxKind.SpreadElement)) {
+        other = true;
+        return RUST_WALK_STOP;
+      }
+      const env = /* @__PURE__ */ new Map();
+      params.forEach((p, i) => env.set(p, { arg: _nullishCoalesce(args[i], () => ( p.initializer)), env: void 0 }));
+      out.push(env);
+    });
+    return other || out.length === 0 ? void 0 : out;
+  }
+  /** `this.m (..)` of a sync method of the same ws class whose every return is a hash expression: the patterns of
+   *  those returns with the method's parameters bound to this call's arguments (defaults when omitted). */
+  rustWsReturnPatterns(call, depth, seen) {
+    if (!_is.isCallExpression.call(void 0, call) || !_is.isPropertyAccessExpression.call(void 0, call.expression) || call.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword)
+      return void 0;
+    const cls = _chunkQYYT7MP4cjs.findAncestor.call(void 0, call, _is.isClassDeclaration);
+    const declaration = this.rustScalarCallee(call);
+    if (cls === void 0 || declaration === void 0 || !_is.isMethodDeclaration.call(void 0, declaration) || declaration.body === void 0 || _chunkQYYT7MP4cjs.findAncestor.call(void 0, declaration, _is.isClassDeclaration) !== cls)
+      return void 0;
+    if (seen.has(declaration) || (_nullishCoalesce(declaration.modifiers, () => ( []))).some((m) => m.kind === _ast.SyntaxKind.AsyncKeyword))
+      return void 0;
+    const params = Array.from(declaration.parameters);
+    if (call.arguments.length > params.length || params.some((p) => p.dotDotDotToken !== void 0 || !_is.isIdentifier.call(void 0, p.name) || this.rustLocalReassigned(p)))
+      return void 0;
+    const returns = [];
+    let other = false;
+    this.rustWalkScope(declaration.body, (n) => {
+      if (n !== declaration.body && _chunkQYYT7MP4cjs.isFunctionLike.call(void 0, n))
+        return RUST_WALK_SKIP;
+      if (!_is.isReturnStatement.call(void 0, n))
+        return;
+      if (n.expression === void 0) {
+        other = true;
+        return RUST_WALK_STOP;
+      }
+      returns.push(n.expression);
+    });
+    if (other || returns.length === 0)
+      return void 0;
+    const env = /* @__PURE__ */ new Map();
+    params.forEach((p, i) => env.set(p, { arg: _nullishCoalesce(call.arguments[i], () => ( p.initializer)), env: this.rustWsHashEnv }));
+    const save = this.rustWsHashEnv;
+    this.rustWsHashEnv = env;
+    seen.add(declaration);
+    try {
+      const out = [];
+      for (const r of returns)
+        out.push(...this.rustWsHashPatterns(r, depth + 1, seen));
+      return out.length > 16 ? void 0 : out;
+    } finally {
+      seen.delete(declaration);
+      this.rustWsHashEnv = save;
+    }
   }
   /** A pro venue that extends (through its abstract shim) another pro venue, or that another pro venue extends. */
   rustWsHasWsRelatives(file, at) {
@@ -69653,10 +69756,22 @@ ${iden}}`;
     const id = file.slice(file.lastIndexOf("/") + 1, -3);
     if (!parents.has(id) || parents.get(id) !== void 0)
       return true;
-    for (const p of parents.values())
-      if (p === id)
+    for (const [child, p] of parents)
+      if (p === id && !this.rustWsDescribeOnly(`${root}/pro/${child}.ts`))
         return true;
     return false;
+  }
+  /** A ws subclass whose only methods are `describe` / `describeData` adds no handler and no resolve. */
+  rustWsDescribeOnly(path4) {
+    let text;
+    try {
+      text = fs3.readFileSync(path4, "utf8");
+    } catch (e) {
+      return false;
+    }
+    const body = text.slice(text.indexOf("export default class"));
+    const methods = [...body.matchAll(/^ {4}(?:(?:public|private|protected|static|override|async|get|set) +)*([A-Za-z_$][\w$]*) *[(<]/gm)].map((m) => m[1]);
+    return methods.length > 0 && methods.every((m) => m === "describe" || m === "describeData") && !/^ {4}(?:(?:public|private|protected|static|override|readonly) +)*[A-Za-z_$][\w$]* *[:=]/m.test(body);
   }
   /** The proven kind of an `await this.watch|watchMultiple (..)` initializer, else undefined. */
   rustWsWatchResultKind(init) {
