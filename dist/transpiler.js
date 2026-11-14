@@ -53783,6 +53783,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (kind === "bool" && this.rustIdentifierUseIsCondition(n))
       return "cond";
+    if (kind === "bool" && this.rustNilNegatedBoolWrite(n))
+      return "cond";
     if (isCallExpression6(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
       return this.rustNilBoxCallOk(parent, parent.arguments.indexOf(n)) ? "box" : void 0;
     }
@@ -53794,6 +53796,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return this.rustNativeStrReturnKind(findAncestor(parent.parent, isFunctionLike)) === "str" ? void 0 : "box";
     }
     return void 0;
+  }
+  /** rb: `y = !x;` as a whole statement, where `y` is another nil local typed `Option<bool>` (decided first; a cycle stays boxed). */
+  rustNilNegatedBoolWrite(n) {
+    const not = n.parent;
+    if (not === void 0 || !isPrefixUnaryExpression3(not) || not.operator !== SyntaxKind7.ExclamationToken || not.operand !== n)
+      return false;
+    let up = not.parent;
+    while (up?.kind === SyntaxKind7.ParenthesizedExpression)
+      up = up.parent;
+    if (!isBinaryExpression5(up) || up.operatorToken.kind !== SyntaxKind7.EqualsToken || !isIdentifier3(up.left) || this.unwrapParens(up.right) !== not || up.parent?.kind !== SyntaxKind7.ExpressionStatement || up.left.text === n.text)
+      return false;
+    return this.rustNilLocalOfIdentifier(up.left)?.kind === "bool";
   }
   /** Box reads go only into plain `Value` slots: no `&mut` receivers, no native-typed callee slots. */
   rustNilBoxCallOk(call, at) {
@@ -54060,9 +54074,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken)
         return true;
       const selfArg = isCallExpression6(up) && up.expression !== n && isPropertyAccessExpression3(up.expression) && (up.expression.expression.kind === SyntaxKind7.ThisKeyword || up.expression.expression.kind === SyntaxKind7.SuperKeyword);
+      const literalSlot = up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n || this.rustDictWriteValue(n) || isArrayLiteralExpression4(up) && !(isBinaryExpression5(up.parent) && up.parent.left === up);
       if (isCallExpression6(up) && up.expression !== n && !selfArg || up?.kind === SyntaxKind7.NewExpression)
         ok = false;
-      else if (!selfArg && !this.rustScalarBoxMoves(n, form, declaration))
+      else if (!selfArg && !literalSlot && !this.rustScalarBoxMoves(n, form, declaration))
         ok = false;
       return true;
     });
@@ -54176,6 +54191,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const bool = this.peelValueBoolBox(this.stripOuterParens(text));
     if (bool !== void 0)
       return `${name} = Some(${bool})`;
+    if (isPrefixUnaryExpression3(node) && node.operator === SyntaxKind7.ExclamationToken && this.rustNilLocalOfIdentifier(this.unwrapParens(node.operand))?.kind === "bool")
+      return `${name} = Some(${text})`;
     return `${name} = Some(${this.printedBoolHelperCall(this.stripOuterParens(text)) ? text : `is_true(&(${text}))`})`;
   }
   // Call to a hand-written `-> bool` fn: the checker must agree the TS call
