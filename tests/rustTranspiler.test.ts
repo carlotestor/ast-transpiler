@@ -12369,3 +12369,31 @@ describe('ral-tg record element handles', () => {
         expect(out).toContain('let mut p0: Value = positions.get(0).map(crate::Value::from).unwrap_or_default()');
     });
 });
+
+describe('ral-ug order-book side handles', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/ws/OrderBookSide.ts': "export class OrderBookSide extends Array {\n    store (price: any, size: any) {}\n    storeArray (delta: any) {}\n}\n",
+        'ts/src/base/ws/OrderBook.ts': "import { OrderBookSide } from './OrderBookSide.js';\nexport class OrderBook {\n    bids: OrderBookSide;\n    asks: OrderBookSide;\n    constructor (snapshot: any = {}, depth: any = undefined) {}\n}\n",
+        'ts/src/base/Exchange.ts': "import { OrderBook } from './ws/OrderBook.js';\nexport default class Exchange {\n    orderbooks: { [key: string]: OrderBook } = {};\n    hold (x: any): any { return x; }\n    safeNumber (o: any, k: any): any { return o; }\n}\n",
+        'ts/src/pro/venue.ts': "import Exchange from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    handleLevels (symbol: string, price: any, size: any) {\n        const orderbook = this.orderbooks[symbol];\n        const bids = orderbook['bids'];\n        bids.store (price, size);\n        bids.storeArray ([ price, size ]);\n        const asks = orderbook['asks'];\n        let total = 0;\n        for (let i = 0; i < asks.length; i++) {\n            total = total + this.safeNumber (asks[i], 1);\n        }\n        const handed = orderbook['bids'];\n        this.hold (handed);\n        return total;\n    }\n}\n",
+    };
+    let out = '';
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-ug-side-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = new Transpiler({ 'verbose': false }).transpileRustByPath (path.join (root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('a side local only stored into or read by level holds the hand-written Side handle', () => {
+        expect(out).toMatch(/let mut bids: crate::pro::order_book::Side = crate::pro::order_book::Side::of\(/);
+        expect(out).toMatch(/let mut asks: crate::pro::order_book::Side = crate::pro::order_book::Side::of\(/);
+        expect(out).toContain('asks.length()');
+        expect(out).toMatch(/asks\.level\(&/);
+    });
+    test('a side handed on whole stays the boxed marker', () => {
+        expect(out).toMatch(/let mut handed: Value = /);
+    });
+});

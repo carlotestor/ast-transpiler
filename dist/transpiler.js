@@ -51594,6 +51594,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // borrowed row (no re-encode). `KeyRead for &Option<&T>` reads the row's own map and `From<Option<&T>> for Value`
     // hands on its shared handle, so out of range, a Null row and a wrong-kind row read exactly as the boxed element.
     this.rustRecordElemDecisions = /* @__PURE__ */ new WeakMap();
+    // ── ral-ug: order-book side handles ──
+    // `const s = book[k]` (checker type an `OrderBookSide`) whose every use is `s.store (p, a)` / `s.storeArray (d)` as a
+    // statement, `s.length` or a read `s[i]` holds the hand-written `Side` handle over the same shared side marker: each
+    // operation is the marker's own (`Value::store` / `store_array`, `get_array_length`, `get_value`), so a Null or
+    // wrong-kind side behaves as before. Any hand-on keeps the boxed marker.
+    this.rustBookSideDecisions = /* @__PURE__ */ new WeakMap();
     this.rustOptMarketBoxing = /* @__PURE__ */ new Set();
     // `const [a, b] = this.handleXAndParams (..)` over a proven `Vec<Value>`: a `string` slot used only in
     // null / literal compares is `Option<String>`; a `boolean` slot used only as a condition is `bool`.
@@ -52459,6 +52465,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return (type.flags & (TypeFlags6.Undefined | TypeFlags6.Null | TypeFlags6.Void)) !== 0 || this.getChecker().isArrayType(type) || this.getChecker().isTupleType(type) || this.isStringType(type.flags);
   }
   printArrayLength(node, identation, leftExpr = void 0) {
+    const sideLength = this.printBookSideRead(node);
+    if (sideLength !== void 0)
+      return sideLength;
     const scalarLength = this.rustScalarLengthText(node, true) ?? this.printOptListLength(node) ?? this.printWsCacheLength(node);
     if (scalarLength !== void 0)
       return scalarLength;
@@ -53490,6 +53499,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const recordElem = node.declarations.length === 1 ? this.printRecordElemLocal(declaration, indent, varName) : void 0;
     if (recordElem !== void 0)
       return recordElem;
+    const sideLocal = node.declarations.length === 1 ? this.printBookSideLocal(declaration, indent, varName) : void 0;
+    if (sideLocal !== void 0)
+      return sideLocal;
     const nilKind = node.declarations.length === 1 ? this.rustNilLocalKind(declaration) : void 0;
     if (nilKind !== void 0) {
       return `${indent}let mut ${varName}: Option<${nilKind === "str" ? "String" : nilKind === "int" ? "i64" : "bool"}> = None`;
@@ -61048,6 +61060,76 @@ ${i1}}`;
     const declaration = this.rustDeclarationOfIdentifier(node);
     return declaration !== void 0 && declaration.name !== node && this.rustRecordElemLocal(declaration) !== void 0 ? declaration : void 0;
   }
+  rustBookSideLocal(declaration) {
+    if (declaration === void 0 || !isVariableDeclaration3(declaration))
+      return false;
+    let decision = this.rustBookSideDecisions.get(declaration);
+    if (decision === void 0) {
+      this.rustBookSideDecisions.set(declaration, false);
+      try {
+        decision = this.rustBookSideLocalUncached(declaration);
+      } catch (e) {
+        decision = false;
+      }
+      this.rustBookSideDecisions.set(declaration, decision);
+    }
+    return decision;
+  }
+  rustBookSideLocalUncached(declaration) {
+    if (!isIdentifier3(declaration.name) || declaration.parent?.declarations?.length !== 1 || (declaration.parent.flags & NodeFlags4.Const) === 0)
+      return false;
+    const file = String(declaration.getSourceFile?.()?.fileName ?? "");
+    if (!/ts[/]src[/]pro[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file))
+      return false;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    if (init === void 0 || !isElementAccessExpression4(init))
+      return false;
+    const symbol = this.typeOfNodeIfAny(declaration.name)?.getSymbol?.();
+    if (symbol === void 0 || !/^(Indexed|Counted)?OrderBookSide$/.test(String(symbol.name)))
+      return false;
+    const scope = this.rustEnclosingFunction(declaration);
+    let uses = 0;
+    const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
+      if (this.rustEnclosingFunction(n) !== scope)
+        return false;
+      const up = n.parent;
+      uses++;
+      if (isPropertyAccessExpression3(up) && up.expression === n) {
+        const name = String(up.name.text);
+        if (name === "length")
+          return !(isBinaryExpression5(up.parent) && up.parent.left === up);
+        return (name === "store" || name === "storeArray") && isCallExpression6(up.parent) && up.parent.expression === up && up.parent.parent?.kind === SyntaxKind7.ExpressionStatement;
+      }
+      if (isElementAccessExpression4(up) && up.expression === n) {
+        const w = up.parent;
+        return !(isBinaryExpression5(w) && w.left === up) && !((isPropertyAccessExpression3(w) || isCallExpression6(w) || isElementAccessExpression4(w)) && w.expression === up);
+      }
+      return false;
+    });
+    return ok && uses > 0;
+  }
+  rustBookSideLocalOf(node) {
+    if (node === void 0 || !isIdentifier3(node))
+      return false;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    return declaration !== void 0 && declaration.name !== node && this.rustBookSideLocal(declaration);
+  }
+  printBookSideLocal(declaration, indent, varName) {
+    if (!this.rustBookSideLocal(declaration))
+      return void 0;
+    const path4 = this.rustWsBookPath(declaration, "pro::order_book::Side");
+    return `${indent}let mut ${varName}: ${path4} = ${path4}::of(${this.printNode(declaration.initializer, 0).trim()})`;
+  }
+  /** `s.length` / `s[i]` on a side handle: the marker's own length and level reads. */
+  printBookSideRead(node) {
+    const recv = node.expression;
+    if (!this.rustBookSideLocalOf(recv))
+      return void 0;
+    const name = super.printIdentifier(recv);
+    if (isPropertyAccessExpression3(node))
+      return String(node.name.text) === "length" ? `${name}.length()` : void 0;
+    return `${name}.level(&${this.rustI64HelperKeyText(node.argumentExpression, node) ?? this.printNode(node.argumentExpression, 0).trim()})`;
+  }
   /** A record element handle handed on whole (`list.push (r)`, `return r`) boxes the row's shared handle there. */
   printRecordElemBox(node) {
     const up = node.parent;
@@ -64224,6 +64306,9 @@ ${ind}let ${view}: &${map} = &${arc};
     return this.quotedStringLiteral(text);
   }
   printElementAccessExpression(node, identation) {
+    const sideRead = this.printBookSideRead(node);
+    if (sideRead !== void 0)
+      return sideRead;
     const bookRead = this.printWsBookMapRead(node) ?? this.printWsBookFieldRead(node);
     if (bookRead !== void 0)
       return bookRead;

@@ -1106,6 +1106,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printArrayLength(node, identation, leftExpr = undefined) {
+        const sideLength = this.printBookSideRead(node); if (sideLength !== undefined) return sideLength;
         const scalarLength = this.rustScalarLengthText(node, true) ?? this.printOptListLength(node) ?? this.printWsCacheLength(node); if (scalarLength !== undefined) return scalarLength;
         const receiver = leftExpr ?? this.printNode(node.expression, 0);
         if (!this.rustIsOrderBookSide(node.expression) && this.isValueLengthType(this.typeOfNodeIfAny(node.expression))) return this.printNativeLength(node, receiver);
@@ -2285,6 +2286,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (currencyLocal !== undefined) return currencyLocal;
         const recordElem = node.declarations.length === 1 ? this.printRecordElemLocal(declaration, indent, varName) : undefined;
         if (recordElem !== undefined) return recordElem;
+        const sideLocal = node.declarations.length === 1 ? this.printBookSideLocal(declaration, indent, varName) : undefined;
+        if (sideLocal !== undefined) return sideLocal;
         const nilKind = node.declarations.length === 1 ? this.rustNilLocalKind(declaration) : undefined;
         if (nilKind !== undefined) {
             return `${indent}let mut ${varName}: Option<${nilKind === 'str' ? 'String' : (nilKind === 'int' ? 'i64' : 'bool')}> = None`;
@@ -9923,6 +9926,74 @@ export class RustTranspiler extends BaseTranspiler {
         return declaration !== undefined && declaration.name !== node && this.rustRecordElemLocal(declaration) !== undefined ? declaration : undefined;
     }
 
+    // ── ral-ug: order-book side handles ──
+    // `const s = book[k]` (checker type an `OrderBookSide`) whose every use is `s.store (p, a)` / `s.storeArray (d)` as a
+    // statement, `s.length` or a read `s[i]` holds the hand-written `Side` handle over the same shared side marker: each
+    // operation is the marker's own (`Value::store` / `store_array`, `get_array_length`, `get_value`), so a Null or
+    // wrong-kind side behaves as before. Any hand-on keeps the boxed marker.
+    private rustBookSideDecisions = new WeakMap<any, boolean>();
+
+    rustBookSideLocal(declaration: any): boolean {
+        if (declaration === undefined || !isVariableDeclaration(declaration)) return false;
+        let decision = this.rustBookSideDecisions.get(declaration);
+        if (decision === undefined) {
+            this.rustBookSideDecisions.set(declaration, false);
+            try { decision = this.rustBookSideLocalUncached(declaration); } catch (e) { decision = false; }
+            this.rustBookSideDecisions.set(declaration, decision);
+        }
+        return decision;
+    }
+
+    rustBookSideLocalUncached(declaration: any): boolean {
+        if (!isIdentifier(declaration.name) || declaration.parent?.declarations?.length !== 1 || (declaration.parent.flags & NodeFlags.Const) === 0) return false;
+        const file = String(declaration.getSourceFile?.()?.fileName ?? '');
+        if (!/ts[/]src[/]pro[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file)) return false;
+        const init: any = this.rustSkipWrappers(declaration.initializer);
+        if (init === undefined || !isElementAccessExpression(init)) return false;
+        const symbol: any = (this.typeOfNodeIfAny(declaration.name) as any)?.getSymbol?.();
+        if (symbol === undefined || !/^(Indexed|Counted)?OrderBookSide$/.test(String(symbol.name))) return false;
+        const scope = this.rustEnclosingFunction(declaration);
+        let uses = 0;
+        const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => {
+            if (this.rustEnclosingFunction(n) !== scope) return false;
+            const up: any = n.parent;
+            uses++;
+            if (isPropertyAccessExpression(up) && up.expression === n) {
+                const name = String(up.name.text);
+                if (name === 'length') return !(isBinaryExpression(up.parent) && up.parent.left === up);
+                return (name === 'store' || name === 'storeArray') && isCallExpression(up.parent) && up.parent.expression === up
+                    && up.parent.parent?.kind === SyntaxKind.ExpressionStatement;
+            }
+            if (isElementAccessExpression(up) && up.expression === n) {
+                const w: any = up.parent;
+                return !(isBinaryExpression(w) && w.left === up) && !((isPropertyAccessExpression(w) || isCallExpression(w) || isElementAccessExpression(w)) && w.expression === up);
+            }
+            return false;
+        });
+        return ok && uses > 0;
+    }
+
+    rustBookSideLocalOf(node: any): boolean {
+        if (node === undefined || !isIdentifier(node)) return false;
+        const declaration: any = this.rustDeclarationOfIdentifier(node);
+        return declaration !== undefined && declaration.name !== node && this.rustBookSideLocal(declaration);
+    }
+
+    printBookSideLocal(declaration: any, indent: string, varName: string): string | undefined {
+        if (!this.rustBookSideLocal(declaration)) return undefined;
+        const path = this.rustWsBookPath(declaration, 'pro::order_book::Side');
+        return `${indent}let mut ${varName}: ${path} = ${path}::of(${this.printNode(declaration.initializer, 0).trim()})`;
+    }
+
+    /** `s.length` / `s[i]` on a side handle: the marker's own length and level reads. */
+    printBookSideRead(node: any): string | undefined {
+        const recv: any = node.expression;
+        if (!this.rustBookSideLocalOf(recv)) return undefined;
+        const name = super.printIdentifier(recv);
+        if (isPropertyAccessExpression(node)) return String(node.name.text) === 'length' ? `${name}.length()` : undefined;
+        return `${name}.level(&${this.rustI64HelperKeyText(node.argumentExpression, node) ?? this.printNode(node.argumentExpression, 0).trim()})`;
+    }
+
     /** A record element handle handed on whole (`list.push (r)`, `return r`) boxes the row's shared handle there. */
     printRecordElemBox(node: any): string | undefined {
         const up: any = node.parent;
@@ -13155,6 +13226,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printElementAccessExpression(node, identation) {
+        const sideRead = this.printBookSideRead(node); if (sideRead !== undefined) return sideRead;
         const bookRead = this.printWsBookMapRead(node) ?? this.printWsBookFieldRead(node); if (bookRead !== undefined) return bookRead;
         const typedElem = this.printTypedResultElemRead(node); if (typedElem !== undefined) return typedElem;
         const mapRead = this.printWsCacheMapRead(node); if (mapRead !== undefined) return mapRead;
