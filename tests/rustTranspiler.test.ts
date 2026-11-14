@@ -11514,3 +11514,19 @@ describe('ral-oe: ecdsa r / s and row string fields of plain Value rows', () => 
         expect(out).not.toContain('let mut symbol: Value');
     });
 });
+
+describe('ral-qd: venue parse* string results lend like other venue strings', () => {
+    test('a venue parseOrderStatus result is Option<String>: compared natively, boxed once into the order map', () => {
+        const dir = path.join (rustFixtureRoot, 'ral-qd-parse-str');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeOrder (o: Dict): Dict { return o; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseOrderStatus (status: Str): Str {\n        const statuses: Dict = { 'NEW': 'open', 'DONE': 'closed' };\n        return this.safeString (statuses, status, status);\n    }\n    parseOrder (order: Dict) {\n        const status = this.parseOrderStatus (this.safeString (order, 'state'));\n        let remaining = undefined;\n        if (status === 'closed') {\n            remaining = '0';\n        }\n        return this.safeOrder ({ 'status': status, 'remaining': remaining, 'again': status });\n    }\n}\n");
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toMatch(/let mut status: Option<String> = self\.parseOrderStatus\(/);
+        expect(out).not.toContain('let mut status: Value = self.parseOrderStatus(');
+        expect(out).toContain('status.as_deref() == Some("closed")');
+        // each copying box lends (the copy the `Value` clone made)
+        expect(out).toContain('m.insert("status".to_string(), Value::from(status.as_deref()));');
+    });
+});

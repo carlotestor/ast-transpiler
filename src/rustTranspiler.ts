@@ -5553,11 +5553,13 @@ export class RustTranspiler extends BaseTranspiler {
         return ok ? kind : undefined;
     }
 
-    /** od: `parse*` / `handle*` results are their own groups' producers; the lending rules leave them alone. */
+    /** od: `handle*` results are their own group's producers; the lending rules leave them alone.
+     *  ral-qd: a venue `parse*` string result lends like any other venue string (`Value::from(x.as_deref())`
+     *  at each copying box: the copy the `Value` clone made). */
     rustOdExcludedCallee(init): boolean {
         let node: any = this.unwrapParens(init);
         if (node?.kind === SyntaxKind.AwaitExpression) node = this.unwrapParens(node.expression);
-        return node !== undefined && isCallExpression(node) && isPropertyAccessExpression(node.expression) && /^(parse|handle)[A-Z]/.test(String(node.expression.name.text));
+        return node !== undefined && isCallExpression(node) && isPropertyAccessExpression(node.expression) && /^handle[A-Z]/.test(String(node.expression.name.text));
     }
 
     /** `x = E; return x;`: the returned local holds what the statement right before the return wrote. */

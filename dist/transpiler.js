@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -56702,12 +56702,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     declaration.body.forEachChild(visit);
     return ok ? kind : void 0;
   }
-  /** od: `parse*` / `handle*` results are their own groups' producers; the lending rules leave them alone. */
+  /** od: `handle*` results are their own group's producers; the lending rules leave them alone.
+   *  ral-qd: a venue `parse*` string result lends like any other venue string (`Value::from(x.as_deref())`
+   *  at each copying box: the copy the `Value` clone made). */
   rustOdExcludedCallee(init) {
     let node = this.unwrapParens(init);
     if (node?.kind === SyntaxKind7.AwaitExpression)
       node = this.unwrapParens(node.expression);
-    return node !== void 0 && isCallExpression6(node) && isPropertyAccessExpression3(node.expression) && /^(parse|handle)[A-Z]/.test(String(node.expression.name.text));
+    return node !== void 0 && isCallExpression6(node) && isPropertyAccessExpression3(node.expression) && /^handle[A-Z]/.test(String(node.expression.name.text));
   }
   /** `x = E; return x;`: the returned local holds what the statement right before the return wrote. */
   rustVenueReturnSource(ret) {

@@ -732,7 +732,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustVenueTypedDecisions;
     rustVenueTypedCall(expr: any): string | undefined;
     rustVenueTypedKindUncached(declaration: any): string | undefined;
-    /** od: `parse*` / `handle*` results are their own groups' producers; the lending rules leave them alone. */
+    /** od: `handle*` results are their own group's producers; the lending rules leave them alone.
+     *  ral-qd: a venue `parse*` string result lends like any other venue string (`Value::from(x.as_deref())`
+     *  at each copying box: the copy the `Value` clone made). */
     rustOdExcludedCallee(init: any): boolean;
     /** `x = E; return x;`: the returned local holds what the statement right before the return wrote. */
     rustVenueReturnSource(ret: any): any;
