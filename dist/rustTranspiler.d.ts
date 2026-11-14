@@ -2257,6 +2257,22 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `delete` and a call on the read reach the container through a `&mut Value`, so
      *  they keep the box. */
     rustDictBearerElementUse(access: any, name: string): boolean;
+    /** ral-xf: `const x = m[k]` mutated by the next statement, where `m` is a map-literal local and `k` a plain
+     *  identifier key: the printer's native read (`m.get(k.as_str().unwrap_or("")).cloned()..`) is a form ccxt's
+     *  write-back pass (`writeBackIndexedMutations`) and push pass (`rustVecPushInline`) read as the same get. */
+    rustLiteralWriteBackBindOk(access: any): boolean;
+    /** ral-xf: the `m[k]` receiver of a statement `m[k].push (v)` (one argument, no spread), else undefined. */
+    rustBearerElementPushCall(call: any): any;
+    /** ral-xf: `m[k].push (v)` on a map-literal local whose every stored value (literal properties and `m[k] = v` writes)
+     *  is never a map: `append_to_object_array`'s book-cache route needs a tagged map at `m[k]`, so what is left of it is
+     *  `entry(k).or_insert_with(empty list)` then a push when the entry is a list, on the map the type already is. The key
+     *  is a literal or a proven-string `Value` place (`as_str()` is `Some` exactly when the helper's `(Dict, Str)` arm
+     *  runs). */
+    rustBearerElementPushText(call: any, valueText: string): string | undefined;
+    /** ral-xf: the local is an argument of a `this.` / `super.` call somewhere in its function. */
+    rustMapHandedToSelfCall(declaration: any, name: string): boolean;
+    /** Every value the literal stores is a list or a scalar by its checker type (never `any`, never an object). */
+    rustBearerValuesNeverMap(declaration: any, literal: any, name: string): boolean;
     /** ral-wf: the statement `name[k] = v` (one key, `=`) whose value holds `node`. */
     rustBearerSelfWriteHost(node: any, name: string): any;
     /** A literal string key, or a checker-proven `string` place. A by-construction
@@ -2264,6 +2280,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  and no ws client-handle triple, so `get_value`'s store routes cannot fire and
      *  the read is the map lookup. */
     rustDictBearerKeyOk(keyNode: any): boolean;
+    /** ral-xf: a book-meta-named key place (`symbol`, `timestamp`, `datetime`, `nonce`, `checksum`) indexing a map-literal
+     *  local. `get_value` / `set_value` route such a key to the book store only on a map holding `__book_id`; a literal
+     *  never holds it (its keys are its own literal keys and proven-string places, the same proof as every other dynamic
+     *  key), so the read is the map lookup. `cache` / `hashmap` / `subscriptions` / `futures` stay excluded. */
+    rustBookMetaPlaceOnLiteral(key: any): boolean;
     /** Keys a bearer may carry: no empty/numeric key, no ws client-handle marker
      *  (`subscriptions`/`futures` serve their live registry) and nothing `__`-prefixed. */
     static rustBearerKeyTextOk(text: string): boolean;
@@ -2907,6 +2928,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListLentHelperSlot(call: any, n: any): 'inArray' | 'arrayConcat' | 'append' | undefined;
     /** `Promise.all(x)` with `x` its only argument (printed `promise_all(&x)`). */
     rustBuiltListPromiseAllOperand(call: any, n: any): boolean;
+    /** ral-xf: `x = this.sortBy* (x, ..)` (base sort, no venue override) on the built list itself: the runtime sorts the
+     *  items of the `Value::Arr` it is handed and answers a new `Value::Arr` (exchange_stubs.rs sort_by / sort_by2: any
+     *  other variant is handed back as it came, and the moved-in box is always an Arr), so `.into_list()` takes exactly it. */
+    rustBuiltListSelfSort(write: any, name: string): boolean;
     /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */
     rustBuiltListSelfWriteArg(n: any, name: string): boolean;
     /** A right-hand side that answers a `Value::Arr` on every path. */
@@ -2928,6 +2953,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListMovedElement(e: any): boolean;
     /** ral-tf: the element list of a literal with moved bare elements, exactly as its `Value` box printed it (no added copy). */
     rustBuiltListMovedLiteral(node: any): string | undefined;
+    /** ral-xf: a literal with bare local elements, exactly as its `Value` box printed it (`Value::from(vec![a.clone(), ..])`):
+     *  the native `vec![..]` holds the same element texts, so each copy the box made is the only one (none added). */
+    rustBuiltListBoxedLiteral(node: any): string | undefined;
     printBuiltListLiteral(node: any): string;
     printBuiltListDeclaration(declaration: any, indent: string, varName: string): string | undefined;
     rustOptListGuardedMove(write: any): any;
