@@ -14073,3 +14073,17 @@ describe('yd: filterByValueSinceLimit joins the typed filter group (rows borrowe
         expect(out).toMatch(/let mut entryKeyValue: Option<i64> = /);
     });
 });
+
+describe('zd: a reader integer that sizes `this.<field> = new ArrayCache*(limit)` types (the cache field is no local)', () => {
+    test('sibling `const limit` reader locals feeding cache-field constructors print i64 and pass bare into ::new', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-zd-cachector-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base/ws'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport default class Exchange {\n    options: Dict = {};\n    orders: any = undefined;\n    myTrades: any = undefined;\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k] ?? d; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/ws/Cache.ts'), "export class ArrayCache { constructor (maxSize: any = undefined) {} }\nexport class ArrayCacheBySymbolById extends ArrayCache {}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport { ArrayCacheBySymbolById } from '../base/ws/Cache.js';\nexport default class venue extends Exchange {\n    handleOrders (message: any) {\n        if (this.orders === undefined) {\n            const limit = this.safeInteger (this.options, 'ordersLimit', 1000);\n            this.orders = new ArrayCacheBySymbolById (limit);\n        }\n        if (this.myTrades === undefined) {\n            const limit = this.safeInteger (this.options, 'tradesLimit', 1000);\n            this.myTrades = new ArrayCacheBySymbolById (limit);\n        }\n        return message;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+        expect(out).not.toMatch(/let mut limit: Value = /);
+        expect((out.match(/let mut limit: i64 = /g) ?? []).length).toBe(2);
+    });
+});

@@ -56995,10 +56995,23 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (push !== void 0 && isCallExpression6(push))
         return false;
       const write = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken);
-      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration))
+      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write))
         return false;
     }
     return true;
+  }
+  /** zd: the size argument of `this.<field> = new ArrayCache*(limit)`: the written place is a ws cache field, not a
+   *  local, and the hand-written `::new(impl Into<Value>)` boxes an `i64` / `Option<i64>` into the `Value` the boxed
+   *  local held (`Value::Int` / `Value::Null`), so no other local's decision reads this one's type. */
+  rustScalarCacheFieldCtor(n, write) {
+    const left = this.unwrapParens(write.left);
+    if (!isPropertyAccessExpression3(left) || left.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const right = this.unwrapParens(write.right);
+    if (right?.kind !== SyntaxKind7.NewExpression || right.arguments?.length !== 1 || this.unwrapParens(right.arguments[0]) !== n)
+      return false;
+    const kind = this.rustScalarDecisions.get(this.rustDeclaredNode(n));
+    return this.rustCacheCtorLimitArg(n, kind) && this.rustScalarUseForms.get(n) === "targ";
   }
   /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole
    *  write (`x = Precise.stringDiv (Precise.stringMul (local, y), ..)`): the written text is a `Precise` call either

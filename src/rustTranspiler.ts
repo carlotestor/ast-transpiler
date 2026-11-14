@@ -5792,9 +5792,21 @@ export class RustTranspiler extends BaseTranspiler {
             // nor when it feeds a write to another local (ccxt passes read that write's printed source)
             const write: any = findAncestor(n, (m: any) => isStatement(m) || (isBinaryExpression(m) && m.operatorToken.kind === SyntaxKind.EqualsToken));
             if (write !== undefined && isBinaryExpression(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration)
-                && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration)) return false;
+                && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write)) return false;
         }
         return true;
+    }
+
+    /** zd: the size argument of `this.<field> = new ArrayCache*(limit)`: the written place is a ws cache field, not a
+     *  local, and the hand-written `::new(impl Into<Value>)` boxes an `i64` / `Option<i64>` into the `Value` the boxed
+     *  local held (`Value::Int` / `Value::Null`), so no other local's decision reads this one's type. */
+    rustScalarCacheFieldCtor(n: any, write: any): boolean {
+        const left: any = this.unwrapParens(write.left);
+        if (!isPropertyAccessExpression(left) || left.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const right: any = this.unwrapParens(write.right);
+        if (right?.kind !== SyntaxKind.NewExpression || right.arguments?.length !== 1 || this.unwrapParens(right.arguments[0]) !== n) return false;
+        const kind = this.rustScalarDecisions.get(this.rustDeclaredNode(n));
+        return this.rustCacheCtorLimitArg(n, kind) && this.rustScalarUseForms.get(n) === 'targ';
     }
 
     /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole

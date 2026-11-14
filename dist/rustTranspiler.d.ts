@@ -771,6 +771,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustReaderIntDefaultNum(init: any): boolean;
     rustScalarUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean): boolean;
     rustBlockLocalUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean, scalar?: boolean): boolean;
+    /** zd: the size argument of `this.<field> = new ArrayCache*(limit)`: the written place is a ws cache field, not a
+     *  local, and the hand-written `::new(impl Into<Value>)` boxes an `i64` / `Option<i64>` into the `Value` the boxed
+     *  local held (`Value::Int` / `Value::Null`), so no other local's decision reads this one's type. */
+    rustScalarCacheFieldCtor(n: any, write: any): boolean;
     /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole
      *  write (`x = Precise.stringDiv (Precise.stringMul (local, y), ..)`): the written text is a `Precise` call either
      *  way (the `&Value` operand takes the moved string), so the receiver's decision does not read this local's type. */
