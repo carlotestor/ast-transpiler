@@ -68035,6 +68035,8 @@ ${iden}}`;
         writes++;
         if (this.literalKindOfNode(rhs) === "null")
           return ++nullWrites > 0;
+        if (!nilDeclared && (from === "dict" || from === "list") && this.rustSameKindRewrite(rhs, from))
+          return String(rhs.getText()).split("\n")[0].length <= 240;
         const kind = this.rustNilResponseWriteKind(rhs, nilDeclared, declaration);
         const declaredWrite = nilDeclared && this.rustDeclaredEndpointWrite(rhs);
         if (declaredWrite)
@@ -68208,6 +68210,16 @@ ${iden}}`;
     if (d === void 0 || !isVariableDeclaration3(d) || d.name === arg)
       return void 0;
     return this.rustVecLocalIsTyped(d) || this.rustLentListLocal(d) ? "list" : void 0;
+  }
+  /** ral-yh: the right side of `x = ..` on a never-nil container local builds the same container kind on every path. */
+  rustSameKindRewrite(rhs, from) {
+    if (rhs === void 0 || this.rustTestTierSource(rhs))
+      return false;
+    if (from === "dict" && isObjectLiteralExpression4(rhs))
+      return this.rustPlainDictLiteral(rhs) && rhs.properties.every((p) => p.kind === SyntaxKind7.PropertyAssignment);
+    if (from === "list" && isArrayLiteralExpression4(rhs))
+      return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement);
+    return isCallExpression6(rhs) && this.rustBuiltReturnSourceKind(rhs) === from;
   }
   /** ral-yh: a producer that answers `Value::Map` on every path, so `json` of it can never print `null` or a list:
    *  `extend` (always `Value::Map(out)`), `indexBy` / `groupBy`, `deepExtend` whose every operand is a proven map, and an

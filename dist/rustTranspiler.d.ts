@@ -2360,6 +2360,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustBorrowedIndexReads;
     /** `Promise.all ([..])` (an array literal operand): runtime `promise_all` hands its operand back, so it is always a list. */
     rustPromiseAllListKind(call: any): 'list' | undefined;
+    /** ral-yh: the right side of `x = ..` on a never-nil container local builds the same container kind on every path. */
+    rustSameKindRewrite(rhs: any, from: 'dict' | 'list'): boolean;
     /** ral-yh: a producer that answers `Value::Map` on every path, so `json` of it can never print `null` or a list:
      *  `extend` (always `Value::Map(out)`), `indexBy` / `groupBy`, `deepExtend` whose every operand is a proven map, and an
      *  `omit` of a proven map head. An `omit (params, ..)` of `sign`'s params is not one (a list body passes through). */

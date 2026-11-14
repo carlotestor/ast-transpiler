@@ -13700,3 +13700,16 @@ describe('ral-yh: a defaulted safeDict written into another plain local at its l
         expect(out).not.toContain('order = Value::Dict(data);');
     });
 });
+
+describe('ral-yh: a safeList local rewritten only with its own kind holds the list', () => {
+    test('orders = safeList (r, k, []); if (orders === undefined) orders = []: Option<List>, lent whole', () => {
+        const dir = path.join (rustFixtureRoot, 'yh-rw');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeList (o: any, k: any, d: any[] = undefined): any[] | undefined { return o[k]; }\n    safeValue (o: any, k: any): any { return o[k]; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseThem (orders: Dict[]) {\n        const out = [];\n        for (let i = 0; i < orders.length; i++) {\n            out.push (orders[i]);\n        }\n        return out;\n    }\n    m (params: Dict = {}) {\n        const response = this.hold (params);\n        let orders = this.safeList (response, 'data', []);\n        if (orders === undefined) {\n            orders = [];\n        }\n        return this.parseThem (orders);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut orders: Option<crate::value::List> = ');
+        expect(out).toContain('orders.is_none()');
+        expect(out).toContain('orders = Value::from(vec![]).into_opt_list();');
+    });
+});

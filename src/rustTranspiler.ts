@@ -17005,6 +17005,9 @@ export class RustTranspiler extends BaseTranspiler {
                 if (sbAlias && this.rustOmitOfDict(rhs) && String(rhs.getText()).split('\n')[0].length <= 240) { this.rustSbAliasWrites.add(up); return ++sbMapWrites > 0; }
                 writes++;
                 if (this.literalKindOfNode(rhs) === 'null') return ++nullWrites > 0;
+                // ral-yh: a `safeDict*` / `safeList*` local rewritten only with its own kind: a tag-free map literal / a list
+                // literal, or a base builder that answers that container on every path (`arrayConcat`, `filterBy`, `extend`, ..)
+                if (!nilDeclared && (from === 'dict' || from === 'list') && this.rustSameKindRewrite(rhs, from)) return String(rhs.getText()).split('\n')[0].length <= 240;
                 const kind = this.rustNilResponseWriteKind(rhs, nilDeclared, declaration);
                 const declaredWrite = nilDeclared && this.rustDeclaredEndpointWrite(rhs);
                 if (declaredWrite) declaredEndpointWrites++;
@@ -17191,6 +17194,14 @@ export class RustTranspiler extends BaseTranspiler {
         const d: any = isIdentifier(arg) ? this.rustDeclarationOfIdentifier(arg) : undefined;
         if (d === undefined || !isVariableDeclaration(d) || d.name === arg) return undefined;
         return this.rustVecLocalIsTyped(d) || this.rustLentListLocal(d) ? 'list' : undefined;
+    }
+
+    /** ral-yh: the right side of `x = ..` on a never-nil container local builds the same container kind on every path. */
+    rustSameKindRewrite(rhs: any, from: 'dict' | 'list'): boolean {
+        if (rhs === undefined || this.rustTestTierSource(rhs)) return false;
+        if (from === 'dict' && isObjectLiteralExpression(rhs)) return this.rustPlainDictLiteral(rhs) && rhs.properties.every((p: any) => p.kind === SyntaxKind.PropertyAssignment);
+        if (from === 'list' && isArrayLiteralExpression(rhs)) return !rhs.elements.some((e: any) => e.kind === SyntaxKind.SpreadElement);
+        return isCallExpression(rhs) && this.rustBuiltReturnSourceKind(rhs) === from;
     }
 
     /** ral-yh: a producer that answers `Value::Map` on every path, so `json` of it can never print `null` or a list:
