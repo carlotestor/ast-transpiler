@@ -796,6 +796,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `KeyRead::key_read(..)` temporary the checker types string: the string moves out of that temporary
      *  (`.into_opt_string()`: `Some` for a `Str`, `None` otherwise, as `as_str()` reads it), so no copy is added. */
     rustNilElemStrText(node: any): string | undefined;
+    /** ral-xa: `x = y;` into a nil-declared local, `y` a `Value` local of the same function the checker types string
+     *  (initialised, typed by no scalar / nil / reader rule) at its last use: `y.into_opt_string()` moves the string out. */
+    rustNilValueStrAlias(rhs: any): boolean;
     /** The whole initializer of a `let`/`const` (writes and ternary arms keep their `Value`). */
     rustVenueInitializer(node: any): boolean;
     /** A venue `int` result boxed at two or more slots: the `i64` is `Copy`, so each box replaces a `Value` clone. */

@@ -53812,6 +53812,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (isIdentifier3(node)) {
       if (this.rustStringLocalIdentifierIsTyped(node))
         return "str";
+      if (this.rustNilValueStrAlias(node))
+        return "str";
       return this.rustNilLocalOfIdentifier(node)?.kind;
     }
     if (isBinaryExpression5(node) && node.operatorToken.kind === SyntaxKind7.PlusToken) {
@@ -54031,7 +54033,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const rhs = this.unwrapParens(parent.right);
       if (!this.rustNilDecodedWrite(rhs))
         writes++;
-      const write = isIdentifier3(rhs) && this.literalKindOfNode(rhs) !== "null" ? this.rustScalarIdentifierKind(rhs) : this.rustScalarValueKind(rhs, true);
+      const write = isIdentifier3(rhs) && this.literalKindOfNode(rhs) !== "null" ? this.rustScalarIdentifierKind(rhs) ?? (this.rustNilValueStrAlias(rhs) ? "ostr" : void 0) : this.rustScalarValueKind(rhs, true);
       joined = this.rustScalarJoinKinds(joined, write);
       if (joined === void 0)
         return void 0;
@@ -54085,7 +54087,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const parent = n.parent;
       if (isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.EqualsToken) {
         const rhs = this.unwrapParens(parent.right);
-        if (isIdentifier3(rhs) && !this.rustNilAliasMove(rhs, kind) && !this.rustNilLiveAliasCopy(rhs, kind))
+        if (isIdentifier3(rhs) && !this.rustNilAliasMove(rhs, kind) && !this.rustNilLiveAliasCopy(rhs, kind) && !(kind === "ostr" && this.rustNilValueStrAlias(rhs)))
           ok = false;
         return true;
       }
@@ -54312,6 +54314,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const int = this.rustNilIntLiteral(node);
     if (int !== void 0)
       return `${name} = Some(${int})`;
+    if (isIdentifier3(node) && local.kind === "str" && this.rustNilValueStrAlias(node))
+      return `${name} = ${super.printIdentifier(node)}.into_opt_string()`;
     if (isIdentifier3(node))
       return `${name} = ${super.printIdentifier(node)}.clone()`;
     const text = this.printNode(node, 0).trim();
@@ -57054,6 +57058,28 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     return `${read}.into_opt_string()`;
   }
+  /** ral-xa: `x = y;` into a nil-declared local, `y` a `Value` local of the same function the checker types string
+   *  (initialised, typed by no scalar / nil / reader rule) at its last use: `y.into_opt_string()` moves the string out. */
+  rustNilValueStrAlias(rhs) {
+    const node = this.unwrapParens(rhs);
+    if (node === void 0 || !isIdentifier3(node) || node.text === "undefined" || this.checkerOrUndefined() === void 0 || !this.rustNilVenueWrite(node))
+      return false;
+    const source = this.rustDeclarationOfIdentifier(node);
+    if (source === void 0 || !isVariableDeclaration3(source) || !isIdentifier3(source.name) || source.name === node || source.initializer === void 0)
+      return false;
+    if (this.literalKindOfNode(source.initializer) === "null" || source.parent?.kind !== SyntaxKind7.VariableDeclarationList || source.parent.declarations.length !== 1)
+      return false;
+    if (this.rustEnclosingFunction(source) !== this.rustEnclosingFunction(node) || this.primitiveKindOfType(this.typeOfNodeIfAny(source.name)) !== "string")
+      return false;
+    const init = this.unwrapParens(source.initializer);
+    const reader = isCallExpression6(init) && this.rustNilSelfHelperName(init) !== void 0 && _RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(this.rustNilSelfHelperName(init));
+    const kind = reader ? "ostr" : this.rustScalarValueKind(init, true);
+    if (kind !== "str" && kind !== "ostr")
+      return false;
+    if (this.rustScalarLocalOf(node) !== void 0 || this.rustNilLocalOfIdentifier(node) !== void 0 || this.rustStringLocalIdentifierIsTyped(node))
+      return false;
+    return this.rustLocalLastUse(node, source);
+  }
   /** The whole initializer of a `let`/`const` (writes and ternary arms keep their `Value`). */
   rustVenueInitializer(node) {
     let current = node;
@@ -58661,6 +58687,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const alias = this.unwrapParens(right);
     if (local !== void 0 && isIdentifier3(alias) && this.rustNilAliasMoves.has(alias) && this.rustScalarIdentifierKind(alias) === local.kind)
       return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.take()`;
+    if (local?.kind === "ostr" && isIdentifier3(alias) && this.rustScalarIdentifierKind(alias) === void 0 && this.rustNilValueStrAlias(alias))
+      return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.into_opt_string()`;
     const text = local === void 0 ? void 0 : this.rustScalarNativeText(local.kind, right);
     const owned = text !== void 0 && isIdentifier3(alias) && text === super.printIdentifier(alias) && _RustTranspiler.RUST_COPY_SCALAR_KINDS.has(local.kind);
     return text === void 0 ? void 0 : `${super.printIdentifier(left)} = ${owned ? "" : ""}${text}`;
