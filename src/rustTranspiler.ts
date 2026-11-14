@@ -16041,12 +16041,25 @@ export class RustTranspiler extends BaseTranspiler {
         // stored whole into a plain `this.f[..]` / `this.f` slot or an array literal element (D11: stored and boxed back)
         if (up.kind === SyntaxKind.ArrayLiteralExpression) return !this.rustInDestructureWrite(n);
         if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
-            && (isElementAccessExpression(up.left) || isPropertyAccessExpression(up.left)) && this.rustThisRootedPlace(up.left)) return true;
+            && (isElementAccessExpression(up.left) || isPropertyAccessExpression(up.left)) && (this.rustThisRootedPlace(up.left) || this.rustLocalKeyPlace(up.left, n))) return true;
         if (!isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression) || up.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const callee = String(up.expression.name.text);
         if (RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee)) return false;
         const at = Array.from(up.arguments).indexOf(n);
         return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && this.rustNilBoxSlotOk(up, at);
+    }
+
+    /** ral-ra: `m['k'] = x` / `m.k = x` one level on another local `m` (not `x` itself): the store takes the value by
+     *  value, so the shared container is boxed there once (moved at its last use, else the Arc bump the `Value` paid). */
+    rustLocalKeyPlace(place: any, n: any): boolean {
+        const recv: any = place.expression;
+        if (!isIdentifier(recv) || recv.text === n.text || isElementAccessExpression(recv) || isPropertyAccessExpression(recv)) return false;
+        if (isElementAccessExpression(place) && !isStringLiteralLikeNode(this.rustSkipWrappers(place.argumentExpression))) return false;
+        const d: any = this.rustDeclarationOfIdentifier(recv);
+        if (d === undefined || d === recv || d.name === recv || !(isVariableDeclaration(d) || d.kind === SyntaxKind.Parameter)) return false;
+        // JS stores a reference: only at the stored local's last use can no later write to it show through `m`
+        const own: any = this.rustDeclarationOfIdentifier(n);
+        return own !== undefined && own !== n && own.name !== n && this.rustLocalLastUse(n, own);
     }
 
     // ── rustOptReaderBoxUse: a nullable base `safeDict*` read handed on whole ──
@@ -19055,7 +19068,23 @@ export class RustTranspiler extends BaseTranspiler {
         if (up?.kind === SyntaxKind.PropertyAssignment && up.initializer === n && up.parent?.kind === SyntaxKind.ObjectLiteralExpression) {
             return this.rustLocalLastUse(n, declaration) ? 'move' : 'clone';
         }
+        // ral-ra: stored whole at one key of a local / `this.` place, or written whole into another local: the box gives
+        // back exactly the `Value` the reader answered (`None` is `Value::Null`), moved at the last use
+        if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
+            && !this.rustScalarInNestedWrite(n) && !this.rustInDestructureWrite(n)) {
+            const place: any = up.left;
+            const keyed = (isElementAccessExpression(place) || isPropertyAccessExpression(place)) && (this.rustThisRootedPlace(place) || this.rustLocalKeyPlace(place, n));
+            const alias = isIdentifier(place) && place.text !== n.text && this.rustOptListAliasTarget(place);
+            if (keyed || alias) return this.rustLocalLastUse(n, declaration) ? 'move' : 'clone';
+        }
         return undefined;
+    }
+
+    /** A plain local (not this list, no container rule of its own) that takes a whole optional list as a `Value`. */
+    rustOptListAliasTarget(place: any): boolean {
+        const d: any = this.rustDeclarationOfIdentifier(place);
+        if (d === undefined || d === place || d.name === place || !(isVariableDeclaration(d) || d.kind === SyntaxKind.Parameter)) return false;
+        return this.rustEnclosingFunction(d) === this.rustEnclosingFunction(place);
     }
 
     printOptListJoin(node: any): string | undefined {

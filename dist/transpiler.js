@@ -66995,7 +66995,7 @@ ${iden}}`;
       return true;
     if (up.kind === SyntaxKind7.ArrayLiteralExpression)
       return !this.rustInDestructureWrite(n);
-    if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (isElementAccessExpression4(up.left) || isPropertyAccessExpression3(up.left)) && this.rustThisRootedPlace(up.left))
+    if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (isElementAccessExpression4(up.left) || isPropertyAccessExpression3(up.left)) && (this.rustThisRootedPlace(up.left) || this.rustLocalKeyPlace(up.left, n)))
       return true;
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
@@ -67004,6 +67004,20 @@ ${iden}}`;
       return false;
     const at = Array.from(up.arguments).indexOf(n);
     return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && this.rustNilBoxSlotOk(up, at);
+  }
+  /** ral-ra: `m['k'] = x` / `m.k = x` one level on another local `m` (not `x` itself): the store takes the value by
+   *  value, so the shared container is boxed there once (moved at its last use, else the Arc bump the `Value` paid). */
+  rustLocalKeyPlace(place, n) {
+    const recv = place.expression;
+    if (!isIdentifier3(recv) || recv.text === n.text || isElementAccessExpression4(recv) || isPropertyAccessExpression3(recv))
+      return false;
+    if (isElementAccessExpression4(place) && !isStringLiteralLikeNode4(this.rustSkipWrappers(place.argumentExpression)))
+      return false;
+    const d = this.rustDeclarationOfIdentifier(recv);
+    if (d === void 0 || d === recv || d.name === recv || !(isVariableDeclaration3(d) || d.kind === SyntaxKind7.Parameter))
+      return false;
+    const own = this.rustDeclarationOfIdentifier(n);
+    return own !== void 0 && own !== n && own.name !== n && this.rustLocalLastUse(n, own);
   }
   // ── rustOptReaderBoxUse: a nullable base `safeDict*` read handed on whole ──
   // `Option<Dict>` keeps Null apart from the map, so `x.map_or(Value::Null, Value::Dict)` gives back exactly the
@@ -70218,7 +70232,21 @@ ${iden}}`;
     if (up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n && up.parent?.kind === SyntaxKind7.ObjectLiteralExpression) {
       return this.rustLocalLastUse(n, declaration) ? "move" : "clone";
     }
+    if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && !this.rustScalarInNestedWrite(n) && !this.rustInDestructureWrite(n)) {
+      const place = up.left;
+      const keyed = (isElementAccessExpression4(place) || isPropertyAccessExpression3(place)) && (this.rustThisRootedPlace(place) || this.rustLocalKeyPlace(place, n));
+      const alias = isIdentifier3(place) && place.text !== n.text && this.rustOptListAliasTarget(place);
+      if (keyed || alias)
+        return this.rustLocalLastUse(n, declaration) ? "move" : "clone";
+    }
     return void 0;
+  }
+  /** A plain local (not this list, no container rule of its own) that takes a whole optional list as a `Value`. */
+  rustOptListAliasTarget(place) {
+    const d = this.rustDeclarationOfIdentifier(place);
+    if (d === void 0 || d === place || d.name === place || !(isVariableDeclaration3(d) || d.kind === SyntaxKind7.Parameter))
+      return false;
+    return this.rustEnclosingFunction(d) === this.rustEnclosingFunction(place);
   }
   printOptListJoin(node) {
     const access = node?.expression;

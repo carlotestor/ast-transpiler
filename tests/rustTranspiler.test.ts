@@ -8728,6 +8728,9 @@ describe('ral-ra: omit / extend remainder', () => {
             "    opaqueRewritten (params: any, flag: boolean) {\n        let rest = this.omit (params, 'a');\n        if (flag) {\n            rest = this.omit (rest, 'b');\n        }\n        return this.hold (rest);\n    }\n" +
             "    keys (params: any) {\n        const rest = this.omit (params, [ 'a', 'b' ]);\n        return this.hold (rest);\n    }\n" +
             "    lists (data: any, flag: boolean) {\n        let rows = this.safeList (data, 'a', []);\n        if (flag) {\n            rows = this.safeList (data, 'b', []);\n        }\n        return this.hold (rows.length);\n    }\n" +
+            "    stored (result: any) {\n        const order: any = { 'a': 1 };\n        const trades = this.safeList (result, 'trades', []);\n        order['trades'] = trades;\n        return this.hold (order);\n    }\n" +
+            "    nullable (params: any, request: any) {\n        const ids = this.safeList (params, 'ids');\n        if (ids !== undefined) {\n            request['ids'] = ids;\n        }\n        return this.hold (request);\n    }\n" +
+            "    aliased (response: any) {\n        let rows = undefined;\n        const data = this.safeList (response, 'data');\n        if (data !== undefined) {\n            rows = data;\n        }\n        return this.hold (rows);\n    }\n" +
             "    head (params: any) {\n        const merged = this.extend ({ 'a': 1 }, params);\n        const s = this.safeString (merged, 'a');\n        return this.hold (this.extend (merged, { 's': s }));\n    }\n}\n",
     };
     let out: string;
@@ -8766,6 +8769,20 @@ describe('ral-ra: omit / extend remainder', () => {
         const b = body('lists');
         expect(b).toMatch(/let mut rows: crate::value::List = self\.safeList\(.*\)\.into_list\(\);/);
         expect(b).toMatch(/\n\s*rows = self\.safeList\(.*\)\.into_list\(\);/);
+    });
+    test('a never-null safeList stored at a key of a local map holds the list and moves into the store', () => {
+        const b = body('stored');
+        expect(b).toMatch(/let mut trades: crate::value::List = /);
+        expect(b).toMatch(/insert\("trades"[^;]*Value::Arr\(trades\)\)/);
+    });
+    test('a no-default safeList stored at a key or aliased is Option<List>, None boxing to Value::Null', () => {
+        const a = body('nullable');
+        expect(a).toMatch(/let mut ids: Option<crate::value::List> = .*\.into_opt_list\(\);/);
+        expect(a).toContain('ids.is_some()');
+        expect(a).toMatch(/"ids"[^;]*ids\.map_or\(Value::Null, Value::Arr\)\)/);
+        const b = body('aliased');
+        expect(b).toMatch(/let mut data: Option<crate::value::List> = /);
+        expect(b).toContain('rows = data.map_or(Value::Null, Value::Arr);');
     });
     test('a shared-map extend head at its last use moves without a clone', () => {
         const b = body('head');

@@ -2177,6 +2177,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `Value::Dict(x)` / `Value::Arr(x)` at the last use (moved), else `Value::from(&x)` (the Arc bump the copied `Value` paid). */
     printDictElementBox(node: any, text: string): string | undefined;
     rustDefaultedContainerBoxUse(n: any, init: any): boolean;
+    /** ral-ra: `m['k'] = x` / `m.k = x` one level on another local `m` (not `x` itself): the store takes the value by
+     *  value, so the shared container is boxed there once (moved at its last use, else the Arc bump the `Value` paid). */
+    rustLocalKeyPlace(place: any, n: any): boolean;
     rustOptReaderBoxUse(n: any, init: any): boolean;
     rustBorrowedKeySetUse(n: any): boolean;
     /** The key operand of `k in m`: a literal as `"k"`, else the boxed key text `bearerInOp` tests. */
@@ -2589,6 +2592,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `[..]` without spread is always a list, so `into_opt_list` keeps exactly what the box held. */
     rustOptListLiteralWrite(node: any): boolean;
     rustOptListExtraUse(n: any, declaration: any): 'join' | 'move' | 'clone' | undefined;
+    /** A plain local (not this list, no container rule of its own) that takes a whole optional list as a `Value`. */
+    rustOptListAliasTarget(place: any): boolean;
     printOptListJoin(node: any): string | undefined;
     private static readonly RUST_HANDED_DICT_SOURCES;
     private rustHandedDictDecisions;
