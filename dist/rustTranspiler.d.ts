@@ -1410,6 +1410,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBookSideLocalOf(node: any): boolean;
     private rustBookSideParams;
     rustBookSideParam(param: any): boolean;
+    private static readonly RUST_BOOK_SIDE_GROUP;
+    rustBookSideGroupParam(param: any): boolean;
+    /** Every use of the parameter is a side operation statement, a `length` read, a level read or a side-slot hand-on. */
+    rustBookSideUsesOnly(param: any, allowNone: boolean): boolean;
     rustBookSideParamUncached(param: any): boolean;
     /** The argument lands in a side parameter slot of a `this.<m>(..)` call. */
     rustBookSideArgSlot(n: any): boolean;

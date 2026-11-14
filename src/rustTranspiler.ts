@@ -10284,8 +10284,13 @@ export class RustTranspiler extends BaseTranspiler {
         if (init === undefined || !isElementAccessExpression(init)) return false;
         const symbol: any = (this.typeOfNodeIfAny(declaration.name) as any)?.getSymbol?.();
         const scope = this.rustEnclosingFunction(declaration);
+        // ral-we: `book['bids'|'asks']` off a proven book local reads the side marker whatever the checker type says
+        const bookRecv: any = this.rustSkipWrappers(init.expression);
+        const bookKey: any = this.rustSkipWrappers(init.argumentExpression);
+        const offBook = isIdentifier(bookRecv) && isStringLiteralLikeNode(bookKey) && (String(bookKey.text) === 'bids' || String(bookKey.text) === 'asks')
+            && this.rustWsBookLocal(this.rustDeclarationOfIdentifier(bookRecv)) !== undefined;
         // ral-ve: an element read of any type whose every use hands it to a side parameter (which wraps it anyway)
-        if (symbol === undefined || !/^(Indexed|Counted)?OrderBookSide$/.test(String(symbol.name))) {
+        if (!offBook && (symbol === undefined || !/^(Indexed|Counted)?OrderBookSide$/.test(String(symbol.name)))) {
             let slots = 0;
             const handed = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => this.rustEnclosingFunction(n) === scope && this.rustBookSideArgSlot(n) && ++slots > 0);
             return handed && slots > 0;
@@ -10330,10 +10335,59 @@ export class RustTranspiler extends BaseTranspiler {
         let decision = this.rustBookSideParams.get(param);
         if (decision === undefined) {
             this.rustBookSideParams.set(param, false); // re-entrancy guard
-            try { decision = this.rustBookSideParamUncached(param); } catch (e) { decision = false; }
+            const group = this.rustBookSideGroupParam(param);
+            if (group) {
+                // a group member must type with the base and every override: a use outside the side forms fails loudly
+                if (!this.rustBookSideUsesOnly(param, true)) throw new Error(`side group ${String(param.parent.name.text)}: ${String(param.name.text)} used outside the side forms`);
+                decision = true;
+            } else {
+                try { decision = this.rustBookSideParamUncached(param); } catch (e) { decision = false; }
+            }
             this.rustBookSideParams.set(param, decision);
         }
         return decision;
+    }
+
+    // ── ral-we: the handleDelta / handleDeltas group (base Exchange declaration + every ts/src/pro override) ──
+    // The base calls handle_deltas by name (dispatch_to_derived) and every override shares the base signature, so slot 0
+    // types as `Side` across the whole group at once; the by-name arm wraps the boxed slot once (`Side::of`).
+    private static readonly RUST_BOOK_SIDE_GROUP: Record<string, number> = { 'handleDelta': 0, 'handleDeltas': 0 };
+
+    rustBookSideGroupParam(param: any): boolean {
+        const method: any = param.parent;
+        if (!isMethodDeclaration(method) || method.body === undefined || !isIdentifier(method.name) || !isClassDeclaration(method.parent)) return false;
+        const at = RustTranspiler.RUST_BOOK_SIDE_GROUP[String(method.name.text)];
+        if (at === undefined || Array.from(method.parameters as any).indexOf(param) !== at || !isIdentifier(param.name)) return false;
+        const file = String(method.getSourceFile().fileName).replace(/\\/g, '/');
+        // the build prints the base from `.__ExchangeNoOverloads.ts` (overload signatures stripped) next to Exchange.ts
+        return /(?:^|\/)ts\/src\/(?:pro\/[^/]+|base\/(?:Exchange|\.__ExchangeNoOverloads))\.ts$/.test(file);
+    }
+
+    /** Every use of the parameter is a side operation statement, a `length` read, a level read or a side-slot hand-on. */
+    rustBookSideUsesOnly(param: any, allowNone: boolean): boolean {
+        const method: any = param.parent;
+        const name = String(param.name.text);
+        let uses = 0;
+        for (const n of this.rustScopeNameNodes(method, name) as any[]) {
+            if (n === param || n === param.name || (isPropertyAccessExpression(n.parent) && n.parent.name === n)) continue;
+            if (n !== param && this.rustBindsName(n, name)) return false;
+            if (!isIdentifier(n) || this.rustDeclaredNode(n) !== param) return false;
+            uses++;
+            const up: any = n.parent;
+            if (isPropertyAccessExpression(up) && up.expression === n) {
+                const op = String(up.name.text);
+                if (op === 'length') { if (isBinaryExpression(up.parent) && up.parent.left === up) return false; continue; }
+                if ((op === 'store' || op === 'storeArray') && isCallExpression(up.parent) && up.parent.expression === up && up.parent.parent?.kind === SyntaxKind.ExpressionStatement) continue;
+                return false;
+            }
+            if (isElementAccessExpression(up) && up.expression === n) {
+                const w: any = up.parent;
+                if ((isBinaryExpression(w) && w.left === up) || ((isPropertyAccessExpression(w) || isCallExpression(w) || isElementAccessExpression(w)) && w.expression === up)) return false;
+                continue;
+            }
+            if (!this.rustBookSideArgSlot(n)) return false;
+        }
+        return allowNone || uses > 0;
     }
 
     rustBookSideParamUncached(param: any): boolean {

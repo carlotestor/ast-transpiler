@@ -61427,7 +61427,10 @@ ${i1}}`;
       return false;
     const symbol = this.typeOfNodeIfAny(declaration.name)?.getSymbol?.();
     const scope = this.rustEnclosingFunction(declaration);
-    if (symbol === void 0 || !/^(Indexed|Counted)?OrderBookSide$/.test(String(symbol.name))) {
+    const bookRecv = this.rustSkipWrappers(init.expression);
+    const bookKey = this.rustSkipWrappers(init.argumentExpression);
+    const offBook = isIdentifier3(bookRecv) && isStringLiteralLikeNode4(bookKey) && (String(bookKey.text) === "bids" || String(bookKey.text) === "asks") && this.rustWsBookLocal(this.rustDeclarationOfIdentifier(bookRecv)) !== void 0;
+    if (!offBook && (symbol === void 0 || !/^(Indexed|Counted)?OrderBookSide$/.test(String(symbol.name)))) {
       let slots = 0;
       const handed = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => this.rustEnclosingFunction(n) === scope && this.rustBookSideArgSlot(n) && ++slots > 0);
       return handed && slots > 0;
@@ -61466,14 +61469,67 @@ ${i1}}`;
     let decision = this.rustBookSideParams.get(param);
     if (decision === void 0) {
       this.rustBookSideParams.set(param, false);
-      try {
-        decision = this.rustBookSideParamUncached(param);
-      } catch (e) {
-        decision = false;
+      const group = this.rustBookSideGroupParam(param);
+      if (group) {
+        if (!this.rustBookSideUsesOnly(param, true))
+          throw new Error(`side group ${String(param.parent.name.text)}: ${String(param.name.text)} used outside the side forms`);
+        decision = true;
+      } else {
+        try {
+          decision = this.rustBookSideParamUncached(param);
+        } catch (e) {
+          decision = false;
+        }
       }
       this.rustBookSideParams.set(param, decision);
     }
     return decision;
+  }
+  rustBookSideGroupParam(param) {
+    const method = param.parent;
+    if (!isMethodDeclaration5(method) || method.body === void 0 || !isIdentifier3(method.name) || !isClassDeclaration4(method.parent))
+      return false;
+    const at = _RustTranspiler.RUST_BOOK_SIDE_GROUP[String(method.name.text)];
+    if (at === void 0 || Array.from(method.parameters).indexOf(param) !== at || !isIdentifier3(param.name))
+      return false;
+    const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
+    return /(?:^|\/)ts\/src\/(?:pro\/[^/]+|base\/(?:Exchange|\.__ExchangeNoOverloads))\.ts$/.test(file);
+  }
+  /** Every use of the parameter is a side operation statement, a `length` read, a level read or a side-slot hand-on. */
+  rustBookSideUsesOnly(param, allowNone) {
+    const method = param.parent;
+    const name = String(param.name.text);
+    let uses = 0;
+    for (const n of this.rustScopeNameNodes(method, name)) {
+      if (n === param || n === param.name || isPropertyAccessExpression3(n.parent) && n.parent.name === n)
+        continue;
+      if (n !== param && this.rustBindsName(n, name))
+        return false;
+      if (!isIdentifier3(n) || this.rustDeclaredNode(n) !== param)
+        return false;
+      uses++;
+      const up = n.parent;
+      if (isPropertyAccessExpression3(up) && up.expression === n) {
+        const op = String(up.name.text);
+        if (op === "length") {
+          if (isBinaryExpression5(up.parent) && up.parent.left === up)
+            return false;
+          continue;
+        }
+        if ((op === "store" || op === "storeArray") && isCallExpression6(up.parent) && up.parent.expression === up && up.parent.parent?.kind === SyntaxKind7.ExpressionStatement)
+          continue;
+        return false;
+      }
+      if (isElementAccessExpression4(up) && up.expression === n) {
+        const w = up.parent;
+        if (isBinaryExpression5(w) && w.left === up || (isPropertyAccessExpression3(w) || isCallExpression6(w) || isElementAccessExpression4(w)) && w.expression === up)
+          return false;
+        continue;
+      }
+      if (!this.rustBookSideArgSlot(n))
+        return false;
+    }
+    return allowNone || uses > 0;
   }
   rustBookSideParamUncached(param) {
     const method = param.parent;
@@ -78018,6 +78074,10 @@ _RustTranspiler.RUST_RAW_RECORD_TYPES = /* @__PURE__ */ new Set([
   "LongShortRatio",
   "BorrowInterest"
 ]);
+// ── ral-we: the handleDelta / handleDeltas group (base Exchange declaration + every ts/src/pro override) ──
+// The base calls handle_deltas by name (dispatch_to_derived) and every override shares the base signature, so slot 0
+// types as `Side` across the whole group at once; the by-name arm wraps the boxed slot once (`Side::of`).
+_RustTranspiler.RUST_BOOK_SIDE_GROUP = { "handleDelta": 0, "handleDeltas": 0 };
 // Base methods declared `: Market` whose every return is `undefined` or a loaded market: `Option<crate::types::Market>`.
 _RustTranspiler.RUST_OPT_MARKET_RETURNS = /* @__PURE__ */ new Set(["getMarketFromSymbols"]);
 // `MarketInterface` keys typed `Bool`: a raw read of one holds a Bool or Null.
