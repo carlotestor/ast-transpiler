@@ -73282,6 +73282,8 @@ ${iden}}`;
       return up.initializer === n;
     if (isArrayLiteralExpression4(up) && isReturnStatement4(up.parent) && this.rustNilSlotDictCandidate(declaration))
       return true;
+    if (isArrayLiteralExpression4(up) && isReturnStatement4(up.parent) && declaration?.kind === SyntaxKind7.BindingElement && declaration.parent?.elements?.indexOf(declaration) === 1)
+      return true;
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword && up.expression.expression.kind !== SyntaxKind7.SuperKeyword)
       return false;
     const callee = String(up.expression.name.text);

@@ -22007,6 +22007,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
         // an element of a returned tuple literal (`return [ a, p ]`): the map boxes into the list
         if (isArrayLiteralExpression(up) && isReturnStatement(up.parent) && this.rustNilSlotDictCandidate(declaration)) return true;
+        // wi: the params slot of a destructure handed back whole in the returned tuple: moved there (its last use)
+        if (isArrayLiteralExpression(up) && isReturnStatement(up.parent) && declaration?.kind === SyntaxKind.BindingElement && declaration.parent?.elements?.indexOf(declaration) === 1) return true;
         if (!isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression)
             || (up.expression.expression.kind !== SyntaxKind.ThisKeyword && up.expression.expression.kind !== SyntaxKind.SuperKeyword)) return false;
         const callee = String(up.expression.name.text);

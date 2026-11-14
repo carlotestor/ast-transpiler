@@ -11273,6 +11273,13 @@ describe('literal and boxed-field locals typed at the declaration', () => {
         expect(out).toContain('let mut twice: Value = ');
         expect(out).not.toContain('leftSide.clone()');
     });
+    test('wi: a params Dict slot handed back whole in the returned tuple is a Dict, moved there (no copy)', () => {
+        const file = fx ('wi-dict-slot-return', "export interface Dict { [key: string]: any }\nexport type Bool = boolean | undefined;\nexport default class Exchange {\n    safeBool (o: any, k: any, d: Bool = undefined): Bool { return o[k]; }\n    handleOptionAndParamsBool (params: Dict, m: string, k: string, d: Bool = undefined): [Bool, Dict] {\n        const value = this.safeBool (params, k, d);\n        return [ value, params ];\n    }\n    hold (x: any, y: any = undefined): any { return x; }\n}\n", "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (params: Dict) {\n        const [ flag, rest ] = this.handleOptionAndParamsBool (params, 'm', 'flag', false);\n        if (flag) {\n            this.hold (1);\n        }\n        return [ flag, rest ];\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        expect(out).toContain('let mut rest: crate::value::Dict = ');
+        expect(out).toContain('Value::Dict(rest)]);');
+        expect(out).not.toContain('rest.clone()');
+    });
     test('wi: a string tuple slot aliased whole into a local and read again is Option<String>, the alias typed too (one copy, as the box)', () => {
         const file = fx ('wi-str-slot-alias', "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    handleParamString (params: Dict, paramName: string, defaultValue: Str = undefined): [Str, Dict] {\n        const value = this.safeString (params, paramName, defaultValue);\n        return [ value, params ];\n    }\n    hold (x: any, y: any = undefined): any { return x; }\n}\n", "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (params: Dict) {\n        const [ raw, rest ] = this.handleParamString (params, 'kind');\n        let kind: Str = raw;\n        if (raw === 'spot') {\n            kind = 'swap';\n        }\n        if (kind === 'swap') {\n            return this.hold (rest);\n        }\n        return this.hold (kind, rest);\n    }\n}\n");
         const out = transpiler.transpileRustByPath (file).content;
