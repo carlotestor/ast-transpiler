@@ -1937,6 +1937,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  order/subscription cache) or a `.subscriptions` / `.futures` read. The
      *  runtime tags those dicts, so a write must reach the store. */
     rustInitReadsTaggedStore(node: any): boolean;
+    /** qe: `rows.push (x)` into another local list, or `m[k] = x` into a local container that is not a tagged store
+     *  (never `this.*`, `client.subscriptions` or a cache `hashmap()` read): the map enters the store whole, once. */
+    rustLocalStoreHandOff(n: any): boolean;
     /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
     rustThisRootedPlace(node: any): boolean;
     /** Container kind an expression the callee body builds yields, or undefined.

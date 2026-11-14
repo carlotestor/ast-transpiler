@@ -65337,6 +65337,25 @@ ${iden}}`;
       return false;
     });
   }
+  /** qe: `rows.push (x)` into another local list, or `m[k] = x` into a local container that is not a tagged store
+   *  (never `this.*`, `client.subscriptions` or a cache `hashmap()` read): the map enters the store whole, once. */
+  rustLocalStoreHandOff(n) {
+    const up = n.parent;
+    const own = this.rustDeclarationOfIdentifier(n);
+    const untaggedLocal = (root) => {
+      if (!isIdentifier3(root) || this.rustIdentifierRefersToDeclaration(root, own))
+        return false;
+      const d = this.rustDeclarationOfIdentifier(root);
+      if (d === void 0 || !isVariableDeclaration3(d) || d.name === root)
+        return false;
+      return d.initializer === void 0 || !this.rustInitReadsTaggedStore(d.initializer) && !this.rustContainerInitReadsStore(this.rustSkipWrappers(d.initializer));
+    };
+    if (isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "push")
+      return untaggedLocal(up.expression.expression);
+    if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement)
+      return untaggedLocal(this.rustSkipWrappers(up.left.expression));
+    return false;
+  }
   /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
   rustThisRootedPlace(node) {
     if (isPropertyAccessExpression3(node))
@@ -66879,6 +66898,8 @@ ${iden}}`;
       return !this.rustInDestructureWrite(n);
     if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (isElementAccessExpression4(up.left) || isPropertyAccessExpression3(up.left)) && this.rustThisRootedPlace(up.left))
       return true;
+    if (this.rustLocalStoreHandOff(n))
+      return true;
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     const callee = String(up.expression.name.text);
@@ -66901,6 +66922,8 @@ ${iden}}`;
     if (isReturnStatement4(up))
       return up.expression === n;
     if (isAsExpression3(up) && up.expression === n && isReturnStatement4(up.parent))
+      return true;
+    if (this.rustLocalStoreHandOff(n))
       return true;
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;

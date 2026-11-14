@@ -14395,6 +14395,24 @@ export class RustTranspiler extends BaseTranspiler {
         });
     }
 
+    /** qe: `rows.push (x)` into another local list, or `m[k] = x` into a local container that is not a tagged store
+     *  (never `this.*`, `client.subscriptions` or a cache `hashmap()` read): the map enters the store whole, once. */
+    rustLocalStoreHandOff(n: any): boolean {
+        const up: any = n.parent;
+        const own: any = this.rustDeclarationOfIdentifier(n);
+        const untaggedLocal = (root: any): boolean => {
+            if (!isIdentifier(root) || this.rustIdentifierRefersToDeclaration(root, own)) return false;
+            const d: any = this.rustDeclarationOfIdentifier(root);
+            if (d === undefined || !isVariableDeclaration(d) || d.name === root) return false;
+            return d.initializer === undefined || !this.rustInitReadsTaggedStore(d.initializer) && !this.rustContainerInitReadsStore(this.rustSkipWrappers(d.initializer));
+        };
+        if (isCallExpression(up) && isPropertyAccessExpression(up.expression) && up.arguments.length === 1 && up.arguments[0] === n
+            && String(up.expression.name.text) === 'push') return untaggedLocal(up.expression.expression);
+        if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && isElementAccessExpression(up.left)
+            && up.parent?.kind === SyntaxKind.ExpressionStatement) return untaggedLocal(this.rustSkipWrappers(up.left.expression));
+        return false;
+    }
+
     /** `this.<field>` or `this.<field>[…]` — a store the runtime may tag. */
     rustThisRootedPlace(node: any): boolean {
         if (isPropertyAccessExpression(node)) return node.expression.kind === SyntaxKind.ThisKeyword;
@@ -15908,6 +15926,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (up.kind === SyntaxKind.ArrayLiteralExpression) return !this.rustInDestructureWrite(n);
         if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
             && (isElementAccessExpression(up.left) || isPropertyAccessExpression(up.left)) && this.rustThisRootedPlace(up.left)) return true;
+        if (this.rustLocalStoreHandOff(n)) return true;
         if (!isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression) || up.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const callee = String(up.expression.name.text);
         if (RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee)) return false;
@@ -15928,6 +15947,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (isReturnStatement(up)) return up.expression === n;
         // `return x as T`: the assertion only retypes the TS side
         if (isAsExpression(up) && up.expression === n && isReturnStatement(up.parent)) return true;
+        // qe: pushed / stored whole into a local container: `None` boxes to exactly the `Null` the reader answered
+        if (this.rustLocalStoreHandOff(n)) return true;
         if (!isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression) || up.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const callee = String(up.expression.name.text);
         if (RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee)) return false;
