@@ -51892,6 +51892,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustOwnedUseIsFree(node) {
     if (node.text === "undefined")
       return true;
+    if (/ts[/]src[/](?:pro[/])?test[/]/.test(String(node.getSourceFile().fileName)) && /^(?:exchange\d*|[A-Za-z_]\w*Exchange\d*)$/.test(String(node.text)))
+      return false;
     const scalar = _optionalChain([this, 'access', _8500 => _8500.rustScalarLocalOf, 'call', _8501 => _8501(node), 'optionalAccess', _8502 => _8502.kind]);
     if (scalar !== void 0)
       return _RustTranspiler.RUST_COPY_SCALAR_KINDS.has(scalar);

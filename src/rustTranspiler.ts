@@ -526,6 +526,8 @@ export class RustTranspiler extends BaseTranspiler {
 
     rustOwnedUseIsFree(node): boolean {
         if (node.text === 'undefined') return true;
+        // the test tier's exchange handles become the typed `Exchange` (or `&mut` it) after printing, by their name
+        if (/ts[/]src[/](?:pro[/])?test[/]/.test(String(node.getSourceFile().fileName)) && /^(?:exchange\d*|[A-Za-z_]\w*Exchange\d*)$/.test(String(node.text))) return false;
         const scalar = this.rustScalarLocalOf(node)?.kind;
         if (scalar !== undefined) return RustTranspiler.RUST_COPY_SCALAR_KINDS.has(scalar);
         const nil = this.rustNilLocalOfIdentifier(node)?.kind;
