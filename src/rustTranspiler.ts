@@ -21621,7 +21621,12 @@ export class RustTranspiler extends BaseTranspiler {
             if (joined) this.rustScalarDecisions.set(element, previous);
         }
         // a slot only handed back to `Value` slots is typed when each box moves it
-        return ok && (nativeUses > 0 || copies === 0) ? 'ostr' : undefined;
+        if (ok && (nativeUses > 0 || copies === 0)) return 'ostr';
+        // vi: or when each copying box is a slot where the `Value` form cloned it (a self-call argument, an object-literal
+        // value, a dict write, an array element): lent there (`Value::from(x.as_deref())`), as the od / uc reader rule
+        if (!ok || joined || this.rustStrNoLend || !this.rustReaderLendBoxes(element)) return undefined;
+        this.rustStrLentLocals.add(element);
+        return 'ostr';
     }
 
     /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of

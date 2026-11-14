@@ -11233,6 +11233,14 @@ describe('literal and boxed-field locals typed at the declaration', () => {
         expect(out).toContain('let mut twice: Value = ');
         expect(out).not.toContain('leftSide.clone()');
     });
+    test('vi: a string tuple slot boxed at lending slots before its last use is Option<String>, lent there', () => {
+        const file = fx ('vi-str-slot-lend', "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    handleParamString (params: Dict, paramName: string, defaultValue: Str = undefined): [Str, Dict] {\n        const value = this.safeString (params, paramName, defaultValue);\n        return [ value, params ];\n    }\n    hold (x: any, y: any = undefined): any { return x; }\n}\n", "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (params: Dict) {\n        const [ kind, rest ] = this.handleParamString (params, 'kind');\n        const request: Dict = {};\n        if (rest['x'] !== undefined) {\n            request['category'] = kind;\n        }\n        request['productType'] = kind;\n        return this.hold (request, rest);\n    }\n    n (params: Dict) {\n        const [ code, rest ] = this.handleParamString (params, 'code');\n        const out = this.hold (code + '!');\n        return this.hold (out, code);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        expect(out).toContain('let mut kind: Option<String> = ');
+        expect(out).toContain('request.insert(\"category\".into(), Value::from(kind.as_deref()));');
+        expect(out).toContain('request.insert(\"productType\".into(), kind.map(Value::from).unwrap_or(Value::Null));');
+        expect(out).not.toContain('kind.clone()');
+    });
 });
 
 describe('rust ws watch results typed by a resolve proof', () => {

@@ -72870,7 +72870,12 @@ ${iden}}`;
       if (joined)
         this.rustScalarDecisions.set(element, previous);
     }
-    return ok && (nativeUses > 0 || copies === 0) ? "ostr" : void 0;
+    if (ok && (nativeUses > 0 || copies === 0))
+      return "ostr";
+    if (!ok || joined || this.rustStrNoLend || !this.rustReaderLendBoxes(element))
+      return void 0;
+    this.rustStrLentLocals.add(element);
+    return "ostr";
   }
   /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
    *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
