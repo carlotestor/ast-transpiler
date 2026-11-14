@@ -58198,6 +58198,9 @@ ${binding(plan.indent)}` : ""), head: "" };
       return paramText;
     if (kind === "oint" && this.rustLimitCall(node))
       return this.rustLimitCallText(node);
+    const shadowRead = this.rustProShadowScalarText(kind, node);
+    if (shadowRead !== void 0)
+      return shadowRead;
     const marketField = base === "str" ? this.rustMarketArmStrText(kind, node) : void 0;
     if (marketField !== void 0)
       return marketField;
@@ -63645,6 +63648,25 @@ ${ind}let ${view}: &${map} = &${arc};
   /** A miss-arm default the match can hold: absent (`Value::Null`) or a
    *  literal; a computed default keeps the helper (its Value is not
    *  re-printable inside an arm without re-evaluating it twice). */
+  /** vd: a no-default `safeInteger` / `safeString` / `safeNumber` read of the WS-handler shadow, printed
+   *  straight into an `Option<i64>` / `Option<String>` / `Option<f64>` local. Same arms as
+   *  `rustProHandlerShadowReadText` (so the same Null / wrong-kind answers as the `_k` runtime helper:
+   *  a missing key, `Null`, an empty string, an unparsable string or any other kind is `None`), without the
+   *  `Value` round trip and its `.cloned()` (the old line exceeded 400 chars and vetoed the typed local). */
+  rustProShadowScalarText(kind, node) {
+    const want = kind === "oint" ? "integer" : kind === "ostr" ? "string" : kind === "onum" ? "float" : void 0;
+    if (want === void 0 || !isCallExpression6(node) || this.printProHandlerShadowRead(node, true) === void 0)
+      return void 0;
+    const callee = node.expression;
+    if (_RustTranspiler.PRO_HANDLER_SHADOW_SAFE_READS[String(callee.name?.text ?? "")] !== want || node.arguments.length !== 2)
+      return void 0;
+    const at = `match ${_RustTranspiler.PRO_HANDLER_SHADOW_NAME}.get("${this.escapeRustStringLiteral(node.arguments[1].text)}")`;
+    if (want === "integer")
+      return `(${at} { Some(Value::Int(__n)) => Some(*__n), Some(Value::Float(__f)) => Some(*__f as i64), Some(Value::Str(__s)) if !__s.is_empty() => match __s.parse::<i64>() { Ok(__n) => Some(__n), Err(_) => match __s.parse::<f64>() { Ok(__f) if __f.is_finite() => Some(__f as i64), _ => None } }, _ => None })`;
+    if (want === "string")
+      return `(${at} { Some(Value::Str(__s)) if !__s.is_empty() => Some(__s.to_string()), Some(Value::Int(__n)) => Some(__n.to_string()), Some(Value::Float(__f)) => Some(__f.to_string()), _ => None })`;
+    return `(${at} { Some(Value::Float(__f)) => Some(*__f), Some(Value::Int(__n)) => Some(*__n as f64), Some(Value::Str(__s)) if !__s.is_empty() => __s.parse::<f64>().ok(), _ => None })`;
+  }
   rustProHandlerShadowDefaultShape(node) {
     return node.kind === SyntaxKind7.StringLiteral || node.kind === SyntaxKind7.NumericLiteral || node.kind === SyntaxKind7.TrueKeyword || node.kind === SyntaxKind7.FalseKeyword || node.kind === SyntaxKind7.NullKeyword || node.kind === SyntaxKind7.ArrayLiteralExpression || node.kind === SyntaxKind7.ObjectLiteralExpression || isIdentifier3(node) && node.text === "undefined";
   }

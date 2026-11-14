@@ -6995,6 +6995,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustBaseTypedReturnKind(node) !== undefined && !(kind === 'int' && this.rustVenueParseToInt(node))) return this.rustBaseTypedText(kind, node);
         const paramText = this.rustOptParamText(kind, node); if (paramText !== undefined) return paramText;
         if (kind === 'oint' && this.rustLimitCall(node)) return this.rustLimitCallText(node);
+        const shadowRead = this.rustProShadowScalarText(kind, node); if (shadowRead !== undefined) return shadowRead;
         const marketField = base === 'str' ? this.rustMarketArmStrText(kind, node) : undefined; if (marketField !== undefined) return marketField;
         // `parseNumber('0.0005')`: a plain decimal literal parses to the same `f64` in the runtime, no box
         if (base === 'num' && this.rustParseNumberOfString(node)) {
@@ -12552,6 +12553,22 @@ export class RustTranspiler extends BaseTranspiler {
     /** A miss-arm default the match can hold: absent (`Value::Null`) or a
      *  literal; a computed default keeps the helper (its Value is not
      *  re-printable inside an arm without re-evaluating it twice). */
+    /** vd: a no-default `safeInteger` / `safeString` / `safeNumber` read of the WS-handler shadow, printed
+     *  straight into an `Option<i64>` / `Option<String>` / `Option<f64>` local. Same arms as
+     *  `rustProHandlerShadowReadText` (so the same Null / wrong-kind answers as the `_k` runtime helper:
+     *  a missing key, `Null`, an empty string, an unparsable string or any other kind is `None`), without the
+     *  `Value` round trip and its `.cloned()` (the old line exceeded 400 chars and vetoed the typed local). */
+    rustProShadowScalarText(kind: string, node: Node): string | undefined {
+        const want = kind === 'oint' ? 'integer' : (kind === 'ostr' ? 'string' : (kind === 'onum' ? 'float' : undefined));
+        if (want === undefined || !isCallExpression(node) || this.printProHandlerShadowRead(node, true) === undefined) return undefined;
+        const callee: any = node.expression;
+        if (RustTranspiler.PRO_HANDLER_SHADOW_SAFE_READS[String(callee.name?.text ?? '')] !== want || node.arguments.length !== 2) return undefined;
+        const at = `match ${RustTranspiler.PRO_HANDLER_SHADOW_NAME}.get("${this.escapeRustStringLiteral((node.arguments[1] as any).text)}")`;
+        if (want === 'integer') return `(${at} { Some(Value::Int(__n)) => Some(*__n), Some(Value::Float(__f)) => Some(*__f as i64), Some(Value::Str(__s)) if !__s.is_empty() => match __s.parse::<i64>() { Ok(__n) => Some(__n), Err(_) => match __s.parse::<f64>() { Ok(__f) if __f.is_finite() => Some(__f as i64), _ => None } }, _ => None })`;
+        if (want === 'string') return `(${at} { Some(Value::Str(__s)) if !__s.is_empty() => Some(__s.to_string()), Some(Value::Int(__n)) => Some(__n.to_string()), Some(Value::Float(__f)) => Some(__f.to_string()), _ => None })`;
+        return `(${at} { Some(Value::Float(__f)) => Some(*__f), Some(Value::Int(__n)) => Some(*__n as f64), Some(Value::Str(__s)) if !__s.is_empty() => __s.parse::<f64>().ok(), _ => None })`;
+    }
+
     rustProHandlerShadowDefaultShape(node: Node): boolean {
         return node.kind === SyntaxKind.StringLiteral || node.kind === SyntaxKind.NumericLiteral ||
             node.kind === SyntaxKind.TrueKeyword || node.kind === SyntaxKind.FalseKeyword ||

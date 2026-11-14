@@ -1698,6 +1698,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A miss-arm default the match can hold: absent (`Value::Null`) or a
      *  literal; a computed default keeps the helper (its Value is not
      *  re-printable inside an arm without re-evaluating it twice). */
+    /** vd: a no-default `safeInteger` / `safeString` / `safeNumber` read of the WS-handler shadow, printed
+     *  straight into an `Option<i64>` / `Option<String>` / `Option<f64>` local. Same arms as
+     *  `rustProHandlerShadowReadText` (so the same Null / wrong-kind answers as the `_k` runtime helper:
+     *  a missing key, `Null`, an empty string, an unparsable string or any other kind is `None`), without the
+     *  `Value` round trip and its `.cloned()` (the old line exceeded 400 chars and vetoed the typed local). */
+    rustProShadowScalarText(kind: string, node: Node): string | undefined;
     rustProHandlerShadowDefaultShape(node: Node): boolean;
     rustProHandlerShadowDefault(node: Node): string | undefined;
     /** Exact native form of the runtime `_k` helper: same value kinds, same

@@ -12617,3 +12617,20 @@ describe('ud: an override-seeded safeCurrencyCode string copied only at literal 
         expect(out).not.toContain('code.clone()');
     });
 });
+
+describe('vd: a WS-handler shadow scalar read prints straight into its Option local', () => {
+    // the old print boxed the `.get` match into a Value and called `.as_i64()` on it: the same answers, but the line
+    // passed 400 chars on longer names and the guard sent the local back to Value
+    test('safeInteger without a default types the local from the borrowed .get match (no Value round trip)', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-vd-shadow-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nexport class Client { resolve (v: any, h: any = undefined): void {} }\nexport default class Exchange {\n    id: string = 'x';\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k]; }\n    hold (a: any): any { return a; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict, Client } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    handleTicker (client: Client, message: Dict) {\n        const n = this.safeInteger (message, 'count');\n        const s = this.safeString (message, 'channel');\n        if (n !== undefined && s !== undefined) {\n            client.resolve (message, s);\n        }\n        return this.hold (n);\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false });
+        const output = t.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+        expect(output).toContain('let mut n: Option<i64> = (match __pro_message.get("count") { Some(Value::Int(__n)) => Some(*__n), Some(Value::Float(__f)) => Some(*__f as i64), Some(Value::Str(__s)) if !__s.is_empty() => match __s.parse::<i64>() { Ok(__n) => Some(__n), Err(_) => match __s.parse::<f64>() { Ok(__f) if __f.is_finite() => Some(__f as i64), _ => None } }, _ => None });');
+        expect(output).toContain('self.hold(Value::from(n))');
+        expect(output).not.toContain('.as_i64();');
+    });
+});
