@@ -359,10 +359,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNilStrStoreBox(n: any): boolean;
     private rustNilAliasMoves;
     rustNilAliasMove(rhs: any, kind: string): boolean;
-    /** mc: `x = y` from a typed `Option<..>` local of the same kind that is read again later: the typed write clones
-     *  `y` where the boxed write cloned it too (`y.clone().map(Value::from)..`), so no copy is added. Strings only: an
-     *  `Option<i64>` / `Option<f64>` source boxed as `Value::from(y)` with no clone, and ccxt's build pass clones every
-     *  bare `x = y;` alias write, so typing those would add one. */
+    /** nc: `n` is the whole source of `let t = n` / `t = n;` (a statement), `t` a typed scalar local of `kind`, and this is
+     *  the source's last use (no loop or closure between): the typed target takes the value by move. */
+    rustScalarAliasMove(n: any, kind: string, declaration: any): boolean;
+    /** nc: a string slot unwrap (`.as_str().map(str::to_owned)`) would take its destructure line from within to over 400 chars. */
+    rustNilSlotLineOverBudget(n: any): boolean;
+    /** nc: the whole source of a `let t = n` / `t = n;` statement at the source's last use. */
+    rustScalarAliasMoveSite(n: any, declaration: any): boolean;
+    /** nc: `x = y` from a typed `Option<String|i64|f64>` local of the same kind that is read again later (one function,
+     *  no closure between). A string clones `y` where the boxed write cloned it (`y.clone().map(Value::from)..`); a
+     *  number is `Copy` and its write prints `y` owned, so neither adds a copy. */
     rustNilLiveAliasCopy(rhs: any, kind: string): boolean;
     /** Every box before the last sits at a `this.` / `super.` argument (where the `Value` form was cloned); no free-function,
      *  `Precise`, `Math` or `new` operand, which read `&Value` and would take a copy only because of the lending. */
@@ -2472,6 +2478,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `this.m (..)` resolved to the base tier, `m` in `names`. */
     rustBaseCallNamed(call: any, names: Set<string>): boolean;
     rustHandedDictLocalUncached(declaration: any): boolean;
+    private rustNilSlotDictCandidates;
+    rustNilSlotDictCandidate(declaration: any): boolean;
+    /** The element `n` of `[ .., n, .. ] = <call>` sits at a map slot of the call's tuple. */
+    rustDictSlotOfWrite(n: any): boolean;
+    rustNilSlotDictCandidateUncached(declaration: any): boolean;
+    rustNilSlotLineOk(n: any): boolean;
+    /** A nil-declared slot local typed as the map. */
+    rustNilSlotDictLocal(declaration: any): boolean;
+    rustNilSlotDictOf(node: any): any;
     /** `[a, b] = this.m (.., n)`: printed as one `__destr_tmp` block line, kept within the line budget by the bare box. */
     rustInDestructureWrite(n: any): boolean;
     private static readonly RUST_HANDED_DICT_OMIT;
