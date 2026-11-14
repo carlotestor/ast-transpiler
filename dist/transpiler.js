@@ -69277,6 +69277,7 @@ ${iden}}`;
       return false;
     const boxes = [];
     let natives = 0;
+    let handOffs = 0;
     const short = (n) => {
       let st = n;
       while (st !== void 0 && !isStatement(st))
@@ -69317,6 +69318,18 @@ ${iden}}`;
         boxes.push([n, hashSlot]);
         return true;
       }
+      if (this.rustLentWsSettleSlot(up, n)) {
+        boxes.push([n, this.rustLocalLastUse(n, declaration) ? "move" : "lend"]);
+        handOffs++;
+        return true;
+      }
+      if (this.rustBuiltListPromiseAllOperand(up, n)) {
+        if (!this.rustLocalLastUse(n, declaration) || !short(n))
+          return false;
+        boxes.push([n, "move"]);
+        handOffs++;
+        return true;
+      }
       if (isCallExpression6(up) && up.expression !== n && up.arguments.some((a) => a === n)) {
         const callee = up.expression;
         if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !short(n) || _RustTranspiler.MUT_SELF_METHODS.has(this.toSnakeCaseName(String(callee.name.text))) || !this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n)))
@@ -69326,12 +69339,19 @@ ${iden}}`;
       }
       return false;
     });
-    if (!safe || natives === 0)
+    if (!safe || natives === 0 && (handOffs === 0 || handOffs !== boxes.length || boxes.some(([, form]) => form === "clone")))
       return false;
     for (const [n, form] of boxes)
       this.rustLentListBoxes.set(n, form);
     this.rustBuiltLists.add(declaration);
     return true;
+  }
+  /** `Promise.all(x)` with `x` its only argument (printed `promise_all(&x)`). */
+  rustBuiltListPromiseAllOperand(call, n) {
+    if (!isCallExpression6(call) || call.arguments.length !== 1 || call.arguments[0] !== n)
+      return false;
+    const callee = call.expression;
+    return isPropertyAccessExpression3(callee) && isIdentifier3(callee.expression) && callee.expression.text === "Promise" && String(callee.name.text) === "all";
   }
   /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */
   rustBuiltListSelfWriteArg(n, name) {
