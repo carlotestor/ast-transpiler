@@ -5343,7 +5343,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (isReturnStatement(n)) {
                 const value: any = this.unwrapParens(n.expression);
                 const nullish = value === undefined || this.literalKindOfNode(value) === 'null';
-                const type: any = nullish ? undefined : this.getCheckedTypeOf(value);
+                const type: any = nullish ? undefined : this.getCheckedTypeOf(this.rustVenueReturnSource(n) ?? value);
                 // `any` proves nothing; only a `Str` return may be absent
                 if (nullish ? kind !== 'ostr' : (type === undefined || (type.flags & TypeFlags.Any) !== 0 || this.primitiveKindOfType(type) !== expected
                     || (kind !== 'ostr' && (type.flags & TypeFlags.Union) !== 0 && typeParts(type).some((t: any) => (t.flags & (TypeFlags.Undefined | TypeFlags.Null)) !== 0)))) ok = false;
@@ -5352,6 +5352,18 @@ export class RustTranspiler extends BaseTranspiler {
         };
         declaration.body.forEachChild(visit);
         return ok ? kind : undefined;
+    }
+
+    /** `x = E; return x;`: the returned local holds what the statement right before the return wrote. */
+    rustVenueReturnSource(ret: any): any {
+        const value: any = this.unwrapParens(ret.expression);
+        const block: any = ret.parent;
+        if (value === undefined || !isIdentifier(value) || !isBlock(block)) return undefined;
+        const prev: any = block.statements[block.statements.indexOf(ret) - 1];
+        const write: any = prev?.kind === SyntaxKind.ExpressionStatement ? this.unwrapParens(prev.expression) : undefined;
+        if (write === undefined || !isBinaryExpression(write) || write.operatorToken.kind !== SyntaxKind.EqualsToken
+            || !isIdentifier(write.left) || String(write.left.text) !== String(value.text)) return undefined;
+        return this.unwrapParens(write.right);
     }
 
     /** An override whose hidden base method and every venue declaration of the name declare its own return type. */

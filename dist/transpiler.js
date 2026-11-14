@@ -56471,7 +56471,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (isReturnStatement4(n)) {
         const value = this.unwrapParens(n.expression);
         const nullish = value === void 0 || this.literalKindOfNode(value) === "null";
-        const type = nullish ? void 0 : this.getCheckedTypeOf(value);
+        const type = nullish ? void 0 : this.getCheckedTypeOf(this.rustVenueReturnSource(n) ?? value);
         if (nullish ? kind !== "ostr" : type === void 0 || (type.flags & TypeFlags6.Any) !== 0 || this.primitiveKindOfType(type) !== expected || kind !== "ostr" && (type.flags & TypeFlags6.Union) !== 0 && typeParts(type).some((t) => (t.flags & (TypeFlags6.Undefined | TypeFlags6.Null)) !== 0))
           ok = false;
       }
@@ -56479,6 +56479,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     };
     declaration.body.forEachChild(visit);
     return ok ? kind : void 0;
+  }
+  /** `x = E; return x;`: the returned local holds what the statement right before the return wrote. */
+  rustVenueReturnSource(ret) {
+    const value = this.unwrapParens(ret.expression);
+    const block = ret.parent;
+    if (value === void 0 || !isIdentifier3(value) || !isBlock4(block))
+      return void 0;
+    const prev = block.statements[block.statements.indexOf(ret) - 1];
+    const write = prev?.kind === SyntaxKind7.ExpressionStatement ? this.unwrapParens(prev.expression) : void 0;
+    if (write === void 0 || !isBinaryExpression5(write) || write.operatorToken.kind !== SyntaxKind7.EqualsToken || !isIdentifier3(write.left) || String(write.left.text) !== String(value.text))
+      return void 0;
+    return this.unwrapParens(write.right);
   }
   /** An override whose hidden base method and every venue declaration of the name declare its own return type. */
   rustVenueOverrideAgrees(declaration, hidden) {
