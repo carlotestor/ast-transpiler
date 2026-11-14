@@ -15458,7 +15458,6 @@ export class RustTranspiler extends BaseTranspiler {
         const moveEscapes: any[] = [];
         let rebuilds = 0;
         let elementUses = 0;
-        let elementBinds = 0;
         let enumUses = 0;
         const outerWidened = this.literalKeyHits;
         const outerSiblings = this.literalSiblingBindings;
@@ -15500,8 +15499,6 @@ export class RustTranspiler extends BaseTranspiler {
             if (isElementAccessExpression(parent) && parent.expression === n) {
                 if (!this.rustDictBearerElementUse(parent, name)) return false;
                 elementUses++;
-                // ral-wf: an element bound to a local (`const e = m[k]`) is matched as a boxed read by ccxt's push pass
-                if (isVariableDeclaration(parent.parent) && parent.parent.initializer === parent) elementBinds++;
                 return true;
             }
             // The value of a dict write (`m['k'] = x`) is boxed once.
@@ -15536,7 +15533,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (!safe) return false;
         // ral-wf: a map typed by the self-write read rule may escape only as a move (an earlier escape would box a copy)
         if (selfWrites > 0 && (moveEscapes.length > 0 || !escapes.every((e: any) => this.rustReturnOperand(e) || (this.rustVecIsFinalUse(e, name) && !this.loopBetween(e))))) return false;
-        if (selfWrites > 0 && (produced || elementBinds > 0)) return false;
+        if (selfWrites > 0 && produced) return false;
         // Built once and handed straight back stays boxed.
         // ral-vf: except a single move at the last use (a list push / ws settle): each sibling `let` is its own Rust block,
         // and the move is the box the helper form made (D11: stored and boxed back is typed)
@@ -15966,8 +15963,21 @@ export class RustTranspiler extends BaseTranspiler {
         else if (!this.isNativeAccessPositionSafe(root)) return false;
         if (this.isNativeWriteTargetBase(root)) return false;
         // ccxt's write-back pass matches `get_value` text to write a mutated bind back.
-        if (this.isWriteBackBindRead(access)) return false;
+        // ral-xf: it also matches a literal map's native dynamic read (`m.get(k.as_str()..)`) and writes back by insert.
+        if (this.isWriteBackBindRead(access) && !this.rustLiteralWriteBackBindOk(access)) return false;
         return this.rustDictBearerKeyOk(access.argumentExpression);
+    }
+
+    /** ral-xf: `const x = m[k]` mutated by the next statement, where `m` is a map-literal local and `k` a plain
+     *  identifier key: the printer's native read (`m.get(k.as_str().unwrap_or("")).cloned()..`) is a form ccxt's
+     *  write-back pass (`writeBackIndexedMutations`) and push pass (`rustVecPushInline`) read as the same get. */
+    rustLiteralWriteBackBindOk(access: any): boolean {
+        if (access === undefined || !isElementAccessExpression(access) || !isIdentifier(access.expression)) return false;
+        const key: any = this.rustSkipWrappers(access.argumentExpression);
+        if (key === undefined || !isIdentifier(key) || key !== access.argumentExpression) return false;
+        const declaration: any = this.rustDeclarationOfIdentifier(access.expression);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.initializer === undefined) return false;
+        return isObjectLiteralExpression(this.rustSkipWrappers(declaration.initializer));
     }
 
     /** ral-wf: the statement `name[k] = v` (one key, `=`) whose value holds `node`. */
@@ -16014,7 +16024,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (!typed) return undefined;
         const key: any = this.rustSkipWrappers(keyNode);
         if (key === undefined || isStringLiteralLikeNode(key) || !this.rustDictBearerKeyOk(key)) return undefined;
-        if (this.isWriteBackBindRead(this.rustElementReadOfKey(keyNode))) return undefined;
+        const bind = this.rustElementReadOfKey(keyNode);
+        if (this.isWriteBackBindRead(bind) && !this.rustLiteralWriteBackBindOk(bind)) return undefined;
         const keyText = this.printNode(keyNode, 0).trim();
         return `${receiverText}.get(${keyText}.as_str().unwrap_or("")).cloned().unwrap_or(Value::Null)`;
     }
@@ -24260,7 +24271,8 @@ export class RustTranspiler extends BaseTranspiler {
         const recv: any = node?.expression?.expression;
         // A `Value` local read straight out of a plain `IndexMap` local
         // carries no book-cache handle, so its push is the same guarded `Arc::make_mut`.
-        if (name !== undefined && parsedArg !== undefined && this.bearerReadLocal(recv)
+        // (ral-xf: not a write-back bind `const x = m[k]; x.push (v)`: ccxt's write-back pass keys on the helper push)
+        if (name !== undefined && parsedArg !== undefined && this.bearerReadLocal(recv) && !this.isWriteBackBindRead(this.rustSkipWrappers(this.rustSingleLocalDeclaration(recv)?.initializer))
             && node?.arguments?.length === 1 && node.arguments[0].kind !== SyntaxKind.SpreadElement
             && node.parent?.kind === SyntaxKind.ExpressionStatement && name.trim() === this.printNode(recv, 0).trim()
             && this.rustVecPushShape(node, String(recv.text))) {

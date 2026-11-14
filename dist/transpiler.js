@@ -66477,7 +66477,6 @@ ${iden}}`;
     const moveEscapes = [];
     let rebuilds = 0;
     let elementUses = 0;
-    let elementBinds = 0;
     let enumUses = 0;
     const outerWidened = this.literalKeyHits;
     const outerSiblings = this.literalSiblingBindings;
@@ -66516,8 +66515,6 @@ ${iden}}`;
         if (!this.rustDictBearerElementUse(parent, name))
           return false;
         elementUses++;
-        if (isVariableDeclaration3(parent.parent) && parent.parent.initializer === parent)
-          elementBinds++;
         return true;
       }
       if (this.rustDictWriteValue(n))
@@ -66550,7 +66547,7 @@ ${iden}}`;
       return false;
     if (selfWrites > 0 && (moveEscapes.length > 0 || !escapes.every((e) => this.rustReturnOperand(e) || this.rustVecIsFinalUse(e, name) && !this.loopBetween(e))))
       return false;
-    if (selfWrites > 0 && (produced || elementBinds > 0))
+    if (selfWrites > 0 && produced)
       return false;
     const siblingMove = siblings > 0 && moveEscapes.length === 1 && escapes.length === 0 && rebuilds === 0 && enumUses === 0 && keyHits === 0;
     if (siblings > 0 && elementUses === 0 && !siblingMove)
@@ -66969,9 +66966,23 @@ ${iden}}`;
       return false;
     if (this.isNativeWriteTargetBase(root))
       return false;
-    if (this.isWriteBackBindRead(access))
+    if (this.isWriteBackBindRead(access) && !this.rustLiteralWriteBackBindOk(access))
       return false;
     return this.rustDictBearerKeyOk(access.argumentExpression);
+  }
+  /** ral-xf: `const x = m[k]` mutated by the next statement, where `m` is a map-literal local and `k` a plain
+   *  identifier key: the printer's native read (`m.get(k.as_str().unwrap_or("")).cloned()..`) is a form ccxt's
+   *  write-back pass (`writeBackIndexedMutations`) and push pass (`rustVecPushInline`) read as the same get. */
+  rustLiteralWriteBackBindOk(access) {
+    if (access === void 0 || !isElementAccessExpression4(access) || !isIdentifier3(access.expression))
+      return false;
+    const key = this.rustSkipWrappers(access.argumentExpression);
+    if (key === void 0 || !isIdentifier3(key) || key !== access.argumentExpression)
+      return false;
+    const declaration = this.rustDeclarationOfIdentifier(access.expression);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0)
+      return false;
+    return isObjectLiteralExpression4(this.rustSkipWrappers(declaration.initializer));
   }
   /** ral-wf: the statement `name[k] = v` (one key, `=`) whose value holds `node`. */
   rustBearerSelfWriteHost(node, name) {
@@ -67017,7 +67028,8 @@ ${iden}}`;
     const key = this.rustSkipWrappers(keyNode);
     if (key === void 0 || isStringLiteralLikeNode4(key) || !this.rustDictBearerKeyOk(key))
       return void 0;
-    if (this.isWriteBackBindRead(this.rustElementReadOfKey(keyNode)))
+    const bind = this.rustElementReadOfKey(keyNode);
+    if (this.isWriteBackBindRead(bind) && !this.rustLiteralWriteBackBindOk(bind))
       return void 0;
     const keyText = this.printNode(keyNode, 0).trim();
     return `${receiverText}.get(${keyText}.as_str().unwrap_or("")).cloned().unwrap_or(Value::Null)`;
@@ -75608,7 +75620,7 @@ ${this.getIden(identation)}}`;
   /** `x.push(v)` statement on an Arr-only local: `append_to_array`'s cache-push arm needs a Dict. */
   arrPush(node, name, parsedArg) {
     const recv = node?.expression?.expression;
-    if (name !== void 0 && parsedArg !== void 0 && this.bearerReadLocal(recv) && node?.arguments?.length === 1 && node.arguments[0].kind !== SyntaxKind7.SpreadElement && node.parent?.kind === SyntaxKind7.ExpressionStatement && name.trim() === this.printNode(recv, 0).trim() && this.rustVecPushShape(node, String(recv.text))) {
+    if (name !== void 0 && parsedArg !== void 0 && this.bearerReadLocal(recv) && !this.isWriteBackBindRead(this.rustSkipWrappers(this.rustSingleLocalDeclaration(recv)?.initializer)) && node?.arguments?.length === 1 && node.arguments[0].kind !== SyntaxKind7.SpreadElement && node.parent?.kind === SyntaxKind7.ExpressionStatement && name.trim() === this.printNode(recv, 0).trim() && this.rustVecPushShape(node, String(recv.text))) {
       const bareArg = parsedArg.trim();
       const bareValue = _RustTranspiler.cloneIfBareLocal(bareArg);
       return `if let Value::Arr(__a) = &mut ${name} { std::sync::Arc::make_mut(__a).push(${bareValue}); }`;

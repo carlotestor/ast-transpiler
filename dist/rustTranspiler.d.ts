@@ -2201,6 +2201,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `delete` and a call on the read reach the container through a `&mut Value`, so
      *  they keep the box. */
     rustDictBearerElementUse(access: any, name: string): boolean;
+    /** ral-xf: `const x = m[k]` mutated by the next statement, where `m` is a map-literal local and `k` a plain
+     *  identifier key: the printer's native read (`m.get(k.as_str().unwrap_or("")).cloned()..`) is a form ccxt's
+     *  write-back pass (`writeBackIndexedMutations`) and push pass (`rustVecPushInline`) read as the same get. */
+    rustLiteralWriteBackBindOk(access: any): boolean;
     /** ral-wf: the statement `name[k] = v` (one key, `=`) whose value holds `node`. */
     rustBearerSelfWriteHost(node: any, name: string): any;
     /** A literal string key, or a checker-proven `string` place. A by-construction

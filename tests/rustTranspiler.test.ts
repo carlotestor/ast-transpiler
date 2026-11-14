@@ -4642,8 +4642,10 @@ describe('rust typed-receiver native reads', () => {
             '    }\n' +
             '}';
         const output = transpiler.transpileRust(ts).content;
-        // the ccxt write-back pass matches the printer's closure-free bind of the same container/key
-        expect(output).toContain('let mut row: Value = (if let (Some(__m), Some(__k)) = (result.as_map(), key.as_str()) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null });');
+        // the ccxt write-back pass matches the printer's bind of the same container/key (ral-xf: the literal map is now a
+        // typed IndexMap and the bind its native get, which the pass writes back by insert)
+        expect(output).toContain('let mut row: Value = result.get(key.as_str().unwrap_or("")).cloned().unwrap_or(Value::Null);');
+        expect(output).toContain('append_to_array(&mut row, ');
         expect(output).not.toContain('row.as_map()');
     });
 
@@ -13240,5 +13242,29 @@ describe('ral-wf: a reuse literal rebuilt by mergeBalanceAccount and written at 
     test('negative: a deepExtend rebuild (may answer the non-map operand) keeps the box', () => {
         const body = out.slice (out.indexOf ('fn deepRows'));
         expect(body).toMatch(/let mut request: Value = /);
+    });
+});
+
+describe('ral-xf: a literal map element bound and pushed to (ccxt write-back pass reads the native get)', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-xf-bindpush');
+        const files: Record<string, string> = {"ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    group (rows: Dict[]) {\n        const byCode: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const code = this.safeString (rows[i], 'c');\n            if (!(code in byCode)) {\n                byCode[code] = [];\n            }\n            const bucket = byCode[code];\n            bucket.push (rows[i]);\n            byCode[code] = bucket;\n        }\n        return byCode;\n    }\n    groupProduced (rows: Dict[]) {\n        const byCode: Dict = this.hold ({});\n        for (let i = 0; i < rows.length; i++) {\n            const code = this.safeString (rows[i], 'c');\n            const bucket = byCode[code];\n            bucket.push (rows[i]);\n        }\n        return byCode;\n    }\n}\n"};
+        for (const [ rel, text ] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (dir, rel)), { recursive: true });
+            fs.writeFileSync (path.join (dir, rel), text);
+        }
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('const e = m[k]; e.push (v): the bind reads natively off the IndexMap, the push stays the helper for the write-back pass', () => {
+        const body = out.slice (out.indexOf ('fn group'), out.indexOf ('fn groupProduced'));
+        expect(body).toMatch(/let mut byCode: indexmap::IndexMap<String, Value> = /);
+        expect(body).toMatch(/let mut bucket: Value = byCode\.get\(code\.as_str\(\)\.unwrap_or\(""\)\)\.cloned\(\)\.unwrap_or\(Value::Null\);/);
+        expect(body).toContain('append_to_array(&mut bucket, ');
+        expect(body).toContain('Value::Map(byCode)');
+    });
+    test('negative: a produced map keeps the box', () => {
+        const body = out.slice (out.indexOf ('fn groupProduced'));
+        expect(body).toMatch(/let mut byCode: Value = /);
     });
 });
