@@ -2321,6 +2321,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `this.m (..)` resolved to the base tier, `m` in `names`. */
     rustBaseCallNamed(call: any, names: Set<string>): boolean;
     rustHandedDictLocalUncached(declaration: any): boolean;
+    private rustNilSlotDictCandidates;
+    rustNilSlotDictCandidate(declaration: any): boolean;
+    /** The element `n` of `[ .., n, .. ] = <call>` sits at a map slot of the call's tuple. */
+    rustDictSlotOfWrite(n: any): boolean;
+    rustNilSlotDictCandidateUncached(declaration: any): boolean;
+    rustNilSlotLineOk(n: any): boolean;
+    /** A nil-declared slot local typed as the map. */
+    rustNilSlotDictLocal(declaration: any): boolean;
+    rustNilSlotDictOf(node: any): any;
     /** `[a, b] = this.m (.., n)`: printed as one `__destr_tmp` block line, kept within the line budget by the bare box. */
     rustInDestructureWrite(n: any): boolean;
     private static readonly RUST_HANDED_DICT_OMIT;
