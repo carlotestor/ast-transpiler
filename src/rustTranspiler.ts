@@ -5960,6 +5960,10 @@ export class RustTranspiler extends BaseTranspiler {
         if ((kind === 'str' || kind === 'ostr') && this.rustNestedFieldKeyUse(n)) return 'nkey';
         // a Copy number written into a nested `this.balance|options[..]['k'] = n`: the r05 insert takes the box
         if ((kind === 'int' || kind === 'num' || kind === 'oint' || kind === 'onum') && this.rustNestedFieldValueUse(n)) return 'box';
+        // ud: the whole value of `x[k1][k2] = n` on a typed two-level local map prints the printer's own
+        // `entry(..).or_default().insert(k2, ..)` (no ccxt pass reads it): a Copy number boxes, a string moves at its last use
+        if (this.rustUdNestedBearerValue(n) && ((kind === 'int' || kind === 'num' || kind === 'oint' || kind === 'onum')
+            || ((kind === 'str' || kind === 'ostr') && this.rustLocalLastUse(n, this.rustDeclaredNode(n))))) return 'box';
         // a nested `a[k1][k2] = ..` write is rewritten by ccxt text passes keyed on its boxed operands
         if (this.rustScalarInNestedWrite(n)) return undefined;
         if (kind === 'str' && this.rustScalarInsertKeyUse(n)) return 'key';
@@ -6701,6 +6705,15 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isElementAccessExpression(left) || !isPropertyAccessExpression(left.expression) || left.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const key: any = this.rustSkipWrappers(left.argumentExpression);
         return key !== undefined && isStringLiteral(key) && !/^\d+$/.test(String(key.text)) && !(String(key.text) in this.StringLiteralReplacements);
+    }
+
+    /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
+    rustUdNestedBearerValue(n: any): boolean {
+        const write: any = n.parent;
+        if (!isBinaryExpression(write) || write.right !== n || write.operatorToken.kind !== SyntaxKind.EqualsToken || write.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const outer: any = write.left;
+        if (!isElementAccessExpression(outer) || !isElementAccessExpression(outer.expression)) return false;
+        return this.rustNestedDictBearerDeclaration(outer.expression.expression) !== undefined;
     }
 
     rustScalarInNestedWrite(n): boolean {

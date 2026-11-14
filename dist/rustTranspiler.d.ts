@@ -915,6 +915,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustElemInsertKey(n: any): boolean;
     printElemKeyInOp(key: any, obj: any): string | undefined;
     rustThisFieldLiteralWrite(n: any): boolean;
+    /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
+    rustUdNestedBearerValue(n: any): boolean;
     rustScalarInNestedWrite(n: any): boolean;
     /** `this.balance|options[..][..]` with at least one hop below the field (the r05 receiver chain). */
     rustNestedFieldChain(access: any): boolean;

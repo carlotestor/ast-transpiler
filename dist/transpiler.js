@@ -57126,6 +57126,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "nkey";
     if ((kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustNestedFieldValueUse(n))
       return "box";
+    if (this.rustUdNestedBearerValue(n) && (kind === "int" || kind === "num" || kind === "oint" || kind === "onum" || (kind === "str" || kind === "ostr") && this.rustLocalLastUse(n, this.rustDeclaredNode(n))))
+      return "box";
     if (this.rustScalarInNestedWrite(n))
       return void 0;
     if (kind === "str" && this.rustScalarInsertKeyUse(n))
@@ -57890,6 +57892,16 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     const key = this.rustSkipWrappers(left.argumentExpression);
     return key !== void 0 && isStringLiteral3(key) && !/^\d+$/.test(String(key.text)) && !(String(key.text) in this.StringLiteralReplacements);
+  }
+  /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
+  rustUdNestedBearerValue(n) {
+    const write = n.parent;
+    if (!isBinaryExpression5(write) || write.right !== n || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const outer = write.left;
+    if (!isElementAccessExpression4(outer) || !isElementAccessExpression4(outer.expression))
+      return false;
+    return this.rustNestedDictBearerDeclaration(outer.expression.expression) !== void 0;
   }
   rustScalarInNestedWrite(n) {
     let current = n;

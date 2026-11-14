@@ -12401,3 +12401,16 @@ describe('ud: a venue override of base safeCurrencyCode still prints Option<Stri
         expect(out).not.toContain('.map(Value::from).unwrap_or(Value::Null);');
     });
 });
+
+describe('ud: a reader number written whole into a two-level local map (missing intermediate created first)', () => {
+    test('the local is Option<f64> and boxes into the bearer insert (no clone)', () => {
+        const dir = path.join (rustFixtureRoot, 'ud-nested-bearer');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Num = number | undefined;\nexport default class Exchange {\n    id: string = 'x';\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeNumber (o: any, k: any, d: Num = undefined): Num { return o[k]; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (rows: any[]) {\n        const fees = {};\n        for (let i = 0; i < rows.length; i++) {\n            const code = this.safeString (rows[i], 'c');\n            const net = this.safeString (rows[i], 'n');\n            const fee = this.safeNumber (rows[i], 'f');\n            fees[code] = {};\n            fees[code][net] = fee;\n        }\n        return { 'withdraw': fees };\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut fee: Option<f64> = ');
+        expect(out).toContain('.or_default().insert(crate::runtime::stringify_param(&net), Value::from(fee));');
+        expect(out).not.toContain('fee.clone()');
+    });
+});
