@@ -56638,10 +56638,33 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (push !== void 0 && _is.isCallExpression.call(void 0, push))
         return false;
       const write = _chunkQYYT7MP4cjs.findAncestor.call(void 0, n, (m) => _is.isStatement.call(void 0, m) || _is.isBinaryExpression.call(void 0, m) && m.operatorToken.kind === _ast.SyntaxKind.EqualsToken);
-      if (write !== void 0 && _is.isBinaryExpression.call(void 0, write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write))
+      if (write !== void 0 && _is.isBinaryExpression.call(void 0, write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration))
         return false;
     }
     return true;
+  }
+  /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole
+   *  write (`x = Precise.stringDiv (Precise.stringMul (local, y), ..)`): the written text is a `Precise` call either
+   *  way (the `&Value` operand takes the moved string), so the receiver's decision does not read this local's type. */
+  rustScalarPreciseFeed(n, write, declaration) {
+    if (this.rustScalarUseForms.get(n) !== "box" || !this.rustPreciseStringCall(declaration.initializer) || !this.rustLocalLastUse(n, declaration))
+      return false;
+    let top = n;
+    for (; ; ) {
+      while (_is.isParenthesizedExpression.call(void 0, top.parent))
+        top = top.parent;
+      const call = top.parent;
+      if (!this.rustPreciseStringCall(call) || call.expression === top)
+        return false;
+      if (call === this.unwrapParens(write.right))
+        return true;
+      top = call;
+    }
+  }
+  /** `Precise.<op> (..)`: the hand-written `crate::precise::Precise` string math (a string or undefined). */
+  rustPreciseStringCall(node) {
+    const call = this.unwrapParens(node);
+    return call !== void 0 && _is.isCallExpression.call(void 0, call) && _is.isPropertyAccessExpression.call(void 0, call.expression) && _is.isIdentifier.call(void 0, call.expression.expression) && String(call.expression.expression.text) === "Precise" && /^string[A-Z]/.test(String(call.expression.name.text));
   }
   /** A String-helper result boxed as an object-literal value or as a one-level element write: the written
    *  place is a `Value` either way, so no other local's decision reads this one's type. */

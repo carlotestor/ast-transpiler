@@ -11222,6 +11222,17 @@ describe('literal and boxed-field locals typed at the declaration', () => {
         // negative: a slot fed by an `any` producer keeps its box
         expect(out).toContain('let mut loose: Value = ');
     });
+    test('vi: a Precise string-math result moved into a Precise chain that is a whole write is Option<String>', () => {
+        const file = fx ('vi-precise-chain', "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    hold (x: any): any { return x; }\n}\n", "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nimport Precise from './base/Precise.js';\nexport default class venue extends Exchange {\n    m (p: Dict, k: string) {\n        const a = this.safeString (p, 'a');\n        const b = this.safeString (p, 'b');\n        let out: Str = undefined;\n        if (k === 'x') {\n            const leftSide = Precise.stringAdd (a, b);\n            out = Precise.stringDiv (Precise.stringMul (leftSide, b), '1', 8);\n        } else {\n            const leftSide = Precise.stringMul (a, b);\n            out = Precise.stringAdd (leftSide, out);\n        }\n        if (k === 'y') {\n            const twice = Precise.stringMul (a, b);\n            out = Precise.stringAdd (twice, twice);\n        } else {\n            const twice = Precise.stringAdd (a, b);\n            out = Precise.stringAdd (twice, twice);\n        }\n        return this.hold (out);\n    }\n}\n");
+        fs.writeFileSync (path.join (path.dirname (file), 'base/Precise.ts'), "export default class Precise {\n    static stringAdd (a: Str, b: Str): Str { return a; }\n    static stringMul (a: Str, b: Str): Str { return a; }\n    static stringDiv (a: Str, b: Str, p: any = undefined): Str { return a; }\n}\ntype Str = string | undefined;\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        expect(out).toContain('let mut leftSide: Option<String> = crate::precise::Precise::stringAdd(');
+        expect(out).toContain('crate::precise::Precise::stringMul(&leftSide.map(Value::from).unwrap_or(Value::Null), ');
+        expect(out).toContain('let mut leftSide: Option<String> = crate::precise::Precise::stringMul(');
+        // negative: read twice in its write (no last use) keeps its box
+        expect(out).toContain('let mut twice: Value = ');
+        expect(out).not.toContain('leftSide.clone()');
+    });
 });
 
 describe('rust ws watch results typed by a resolve proof', () => {
