@@ -296,7 +296,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     printNativeArithmetic(op: any, left: any, right: any, leftText: any, rightText: any): string | undefined;
     /** A string-literal operand of a `format!` concat prints as the `&str` literal itself:
      *  `Display` of `Value::Str(s)` is `s`, so the text is identical and the box is gone. */
-    rustConcatLiteralText(node: any, text: string): string;
+    rustConcatLiteralText(node: any, text: string, other: any): string;
     printNativeStringConcat(leftText: string, rightText: string): string;
     printNativeNumeric(op: any, leftText: string, rightText: string): string;
     private static readonly RUST_TYPEOF_HELPERS;

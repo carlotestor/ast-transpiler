@@ -1943,7 +1943,7 @@ export class RustTranspiler extends BaseTranspiler {
         const r20 = this.nativeNumericAdd(op, left, right, leftText, rightText); if (r20 !== undefined) return r20;
         if (op === SyntaxKind.PlusToken && (this.isNativeStringConcatPair(leftType, rightType) || this.concatIsAnchored(left, right, leftType, rightType)
             || this.strOrNullConcatIsAnchored(left, right, leftType, rightType))) {
-            return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText), this.rustConcatLiteralText(right, rightText));
+            return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText, right), this.rustConcatLiteralText(right, rightText, left));
         }
         if (!this.isNumberLikeType(leftType) || !this.isNumberLikeType(rightType)) {
             return this.nativeCoercingArithmetic(op, left, right, leftText, rightText);
@@ -1953,9 +1953,11 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** A string-literal operand of a `format!` concat prints as the `&str` literal itself:
      *  `Display` of `Value::Str(s)` is `s`, so the text is identical and the box is gone. */
-    rustConcatLiteralText(node: any, text: string): string {
+    rustConcatLiteralText(node: any, text: string, other: any): string {
         const inner: any = this.unwrapParensNode(node);
         if (inner === undefined || !isStringLiteral(inner) || inner.text in this.StringLiteralReplacements) return text;
+        // a call operand keeps the boxed literal: ccxt's dead-clone pass reads its argument liveness from that text
+        if (isCallExpression(this.unwrapParensNode(other) ?? other)) return text;
         return this.quotedStringLiteral(inner.text);
     }
 
@@ -19289,7 +19291,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (stringSide === undefined || !this.printsValueExpression(stringSide)) return undefined;
         const inner = this.unwrapParensNode(stringSide);
         if (inner !== undefined && (this.rustStringLocalIdentifierIsTyped(inner) || this.rustNativeStrCalleeKind(inner) === 'str')) return undefined;
-        return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText), this.rustConcatLiteralText(right, rightText));
+        return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText, right), this.rustConcatLiteralText(right, rightText, left));
     }
 
     // Native reads on receivers the plain-dict proof admits (tag-free literal / `account ()` / `omit` /

@@ -53110,7 +53110,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (r20 !== void 0)
       return r20;
     if (op === SyntaxKind7.PlusToken && (this.isNativeStringConcatPair(leftType, rightType) || this.concatIsAnchored(left, right, leftType, rightType) || this.strOrNullConcatIsAnchored(left, right, leftType, rightType))) {
-      return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText), this.rustConcatLiteralText(right, rightText));
+      return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText, right), this.rustConcatLiteralText(right, rightText, left));
     }
     if (!this.isNumberLikeType(leftType) || !this.isNumberLikeType(rightType)) {
       return this.nativeCoercingArithmetic(op, left, right, leftText, rightText);
@@ -53119,9 +53119,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** A string-literal operand of a `format!` concat prints as the `&str` literal itself:
    *  `Display` of `Value::Str(s)` is `s`, so the text is identical and the box is gone. */
-  rustConcatLiteralText(node, text) {
+  rustConcatLiteralText(node, text, other) {
     const inner = this.unwrapParensNode(node);
     if (inner === void 0 || !isStringLiteral3(inner) || inner.text in this.StringLiteralReplacements)
+      return text;
+    if (isCallExpression6(this.unwrapParensNode(other) ?? other))
       return text;
     return this.quotedStringLiteral(inner.text);
   }
@@ -70462,7 +70464,7 @@ ${this.getIden(identation)}}`;
     const inner = this.unwrapParensNode(stringSide);
     if (inner !== void 0 && (this.rustStringLocalIdentifierIsTyped(inner) || this.rustNativeStrCalleeKind(inner) === "str"))
       return void 0;
-    return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText), this.rustConcatLiteralText(right, rightText));
+    return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText, right), this.rustConcatLiteralText(right, rightText, left));
   }
   // Native reads on receivers the plain-dict proof admits (tag-free literal / `account ()` / `omit` /
   // `extend` / tuple element 0 locals) and on `Dict`-annotated parameters whose writes keep them plain:
