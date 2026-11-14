@@ -791,6 +791,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-wa: the whole right side of an `x = <call>;` statement writing a nil-declared (`let x;`) local: the
      *  venue result moves into the `Option<String>` local as printed (no box, no copy). */
     rustNilVenueWrite(node: any): boolean;
+    private static readonly RUST_NIL_ELEM_STR_KEYS;
+    /** ral-xa: `m['symbol']` as the whole right side of `x = m['k'];` into a nil-declared local, printed as an owned
+     *  `KeyRead::key_read(..)` temporary the checker types string: the string moves out of that temporary
+     *  (`.into_opt_string()`: `Some` for a `Str`, `None` otherwise, as `as_str()` reads it), so no copy is added. */
+    rustNilElemStrText(node: any): string | undefined;
     /** The whole initializer of a `let`/`const` (writes and ternary arms keep their `Value`). */
     rustVenueInitializer(node: any): boolean;
     /** A venue `int` result boxed at two or more slots: the `i64` is `Copy`, so each box replaces a `Value` clone. */

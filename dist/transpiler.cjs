@@ -55865,6 +55865,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return this.rustElementReadScalarKind(node);
     if (fresh && this.rustRowFieldStrText(node) !== void 0)
       return "ostr";
+    if (fresh && this.rustNilElemStrText(node) !== void 0)
+      return "ostr";
     if (fresh) {
       const field = this.rustMarketArmStrKind(node);
       if (field !== void 0)
@@ -57035,6 +57037,21 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const declaration = _is.isIdentifier.call(void 0, up.left) ? this.rustDeclaredNode(up.left) : void 0;
     return declaration !== void 0 && _is.isVariableDeclaration.call(void 0, declaration) && (declaration.initializer === void 0 || this.literalKindOfNode(declaration.initializer) === "null");
+  }
+  /** ral-xa: `m['symbol']` as the whole right side of `x = m['k'];` into a nil-declared local, printed as an owned
+   *  `KeyRead::key_read(..)` temporary the checker types string: the string moves out of that temporary
+   *  (`.into_opt_string()`: `Some` for a `Str`, `None` otherwise, as `as_str()` reads it), so no copy is added. */
+  rustNilElemStrText(node) {
+    if (node === void 0 || !_is.isElementAccessExpression.call(void 0, node) || !_is.isIdentifier.call(void 0, node.expression) || !_is.isStringLiteralLikeNode.call(void 0, node.argumentExpression))
+      return void 0;
+    if (!_RustTranspiler.RUST_NIL_ELEM_STR_KEYS.has(String(node.argumentExpression.text)) || this.checkerOrUndefined() === void 0)
+      return void 0;
+    if (!this.rustNilVenueWrite(node) || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "string")
+      return void 0;
+    const read = this.printNode(node, 0).trim();
+    if (!/^(?:crate|ccxt)::value::KeyRead::key_read\(&{1,2}[A-Za-z_][A-Za-z0-9_]*, "[A-Za-z]+"\)$/.test(read))
+      return void 0;
+    return `${read}.into_opt_string()`;
   }
   /** The whole initializer of a `let`/`const` (writes and ternary arms keep their `Value`). */
   rustVenueInitializer(node) {
@@ -58560,6 +58577,11 @@ ${binding(plan.indent)}` : ""), head: "" };
       const row = this.rustRowFieldStrText(node);
       if (row !== void 0)
         return row;
+    }
+    if (kind === "ostr") {
+      const owned = this.rustNilElemStrText(node);
+      if (owned !== void 0)
+        return owned;
     }
     if (kind === "ostr" && this.rustElementReadScalarKind(node) !== void 0) {
       const read = this.printNode(node, 0).trim();
@@ -77803,6 +77825,8 @@ _RustTranspiler.RUST_BYTES_SLOTS = {
   urlencodeBase64: [0]
 };
 _RustTranspiler.RUST_BYTES_FREE_SLOTS = { eddsa: [0, 1], jwt: [1] };
+// ral-xa: unified string keys of a market / currency record (an exchange id key may hold a number, which `as_str` drops)
+_RustTranspiler.RUST_NIL_ELEM_STR_KEYS = /* @__PURE__ */ new Set(["symbol", "base", "quote", "settle", "code"]);
 // rustWsClientCallArg: `client.resolve|reject|future|reusableFuture|send(.., x)` on a ws `Client`
 // receiver takes its arguments as plain `Value`s, so a string local boxes there.
 _RustTranspiler.RUST_WS_CLIENT_VALUE_METHODS = /* @__PURE__ */ new Set(["resolve", "reject", "future", "reusableFuture", "send"]);
