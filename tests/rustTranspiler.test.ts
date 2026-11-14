@@ -262,6 +262,27 @@ describe('rust transpiling tests', () => {
         expect(out).toContain('self.m(a.clone())');
     });
 
+    test('a self-write and a ternary branch move the local; a read after the statement keeps the clone', () => {
+        const ts = [
+            'class A {',
+            '    extend (x: any, y: any) { return x; }',
+            '    m (x: any) { return x; }',
+            '    run (a: any, p: any, c: any) {',
+            '        for (let i = 0; i < 2; i++) {',
+            '            a = this.extend (a, p);',
+            '        }',
+            '        const r = (c !== undefined) ? this.m (c) : undefined;',
+            '        const q = this.m (p);',
+            '        return [ a, r, q, p ];',
+            '    }',
+            '}',
+        ].join('\n');
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).toContain('a = self.extend(a, p.clone());');
+        expect(out).toMatch(/\{ self\.m\(c\) \}/);
+        expect(out).toContain('self.m(p.clone())');
+    });
+
     test('a for-loop counter handed off by value is cloned (the next pass reads it again)', () => {
         const ts = [
             'class A {',
@@ -1435,7 +1456,7 @@ ${body}
             expect(out).toContain('side = Some("buy".to_string());');
             expect(out).toContain('side = self.safeString(o.clone(), Value::Str("side".into()), &[]).as_str().map(str::to_owned);');
             expect(out).toContain('side.as_deref() == Some("buy")');
-            expect(out).toContain('self.hold(side.clone().map(Value::from).unwrap_or(Value::Null))');
+            expect(out).toContain('self.hold(side.map(Value::from).unwrap_or(Value::Null))');
             expect(out).not.toContain('side: Value');
         });
 
@@ -5602,7 +5623,7 @@ describe('string locals from hand-written runtime methods returning String', () 
     });
     test('an implodeParams / intToBase16 result is a String local joined natively', () => {
         expect(out).toContain('let mut implodedPath: String = self.implodeParams(path, params);');
-        expect(out).toContain('let mut v: String = self.intToBase16(n.clone(), &[]);');
+        expect(out).toContain('let mut v: String = self.intToBase16(n, &[]);');
         expect(out).not.toMatch(/let mut (implodedPath|v): Value/);
     });
     test('a result handed straight to a Value slot is boxed once with Value::from', () => {
@@ -7556,7 +7577,7 @@ describe ('rustPredictionBearers', () => {
 
         test('a reassigned local keeps the box', () => {
             expect(prediction).toContain('let mut query: Value = Value::Map({');
-            expect(prediction).toContain('query = self.extend(query.clone(), params);');
+            expect(prediction).toContain('query = self.extend(query, params);');
         });
 
         test('a closure capture keeps the box', () => {
@@ -7615,7 +7636,7 @@ describe('rust dynamic self access and optional-argument slices', () => {
         expect(venue).toContain('self.safeStringUpperN(o.clone(), Value::Str("id".into()), &[])');
     });
     test('a transpiled base method folds its optional parameters', () => {
-        expect(venue).toContain('self.parseLiquidation(o.clone(), &[])');
+        expect(venue).toContain('self.parseLiquidation(o, &[])');
     });
 });
 
@@ -8261,7 +8282,7 @@ describe('rust list reads with an empty list default', () => {
         fs.rmSync (root, { recursive: true, force: true });
     });
     test('a list read by index and length holds the shared list with a native bound', () => {
-        expect(out).toContain('let mut rows: crate::value::List = self.safeList(response.clone(), Value::Str("data".into()), &[Value::from(vec![])]).into_list();');
+        expect(out).toContain('let mut rows: crate::value::List = self.safeList(response, Value::Str("data".into()), &[Value::from(vec![])]).into_list();');
         expect(out).not.toContain('&[Value::from(vec![])]).as_array().cloned().unwrap_or_default()');
         expect(out).toContain('i < (rows.len() as i64)');
         expect(out).toContain('rows.get(i as usize).cloned().unwrap_or(Value::Null)');
@@ -8275,7 +8296,7 @@ describe('rust list reads with an empty list default', () => {
     });
     test('negative: a list only handed on, or one that may be undefined, keeps its box', () => {
         expect(out).toContain('return self.hold(rows);');
-        expect(out).toContain('let mut rows: Value = self.safeList(response.clone(), Value::Str("data".into()), &[Value::from(vec![])]);');
+        expect(out).toContain('let mut rows: Value = self.safeList(response, Value::Str("data".into()), &[Value::from(vec![])]);');
         expect(out).not.toContain('&[]).into_list()');
     });
 });

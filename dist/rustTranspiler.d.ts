@@ -137,6 +137,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     printIdentifier(node: any): string;
     private static readonly RUST_COPY_SCALAR_KINDS;
     rustOwnedUseMark(node: any, text: string): string;
+    /** `x = f(.., x, ..)` as a statement, `x` named once on the right side and not captured: the old value is dead
+     *  after the call (the write replaces it before any later read, in a loop too). */
+    rustOwnedSelfWrite(node: any): boolean;
+    /** A by-value argument of a call (the box is handed over whole). */
+    rustOwnedHandOff(node: any): boolean;
     rustOwnedUseIsFree(node: any): boolean;
     /** A bare read of an imported (or top-level destructured) binding: never a callee, member, key or `new` target. */
     rustIsImportedValueName(node: any): boolean;
@@ -695,6 +700,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsClientCallArg(call: any, kind: string): boolean;
     rustWsClientOnlyUse(declaration: any): boolean;
     rustWsClientLastUse(node: any, declaration: any): boolean;
+    /** `rustLocalLastUse`, also admitting earlier reads in the same statement that end before the hand-off: the
+     *  condition of a ternary whose branch holds the use, and the target of `x = f(.., x, ..)` (written after). */
+    rustOwnedLastUse(node: any, declaration: any): boolean;
     rustLocalLastUse(node: any, declaration: any): boolean;
     rustWsSettleCall(call: any): boolean;
     /** `client.future|reusableFuture(hash)` on a ws handle: the hand-written method takes `hash: impl Into<Value>`. */
