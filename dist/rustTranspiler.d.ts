@@ -3251,6 +3251,16 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  never-written local bound to one, read only by this call) of exactly the pattern's length, whose element `i` is
      *  that call inline or a never-reassigned local initialised by it. `promise_all` hands each element back as it came. */
     rustPromiseAllOperandProducer(element: any): any;
+    /** zf: the awaited producer behind a `Promise.all` slot when it answers a list on every path (a declared
+     *  `Promise<List>` endpoint, a non-overridden venue method declared `Promise<List | X[]>`, or a typed unified core
+     *  whose `Vec<T>` result boxes through `IntoRaw` as an Arr); `promise_all` hands it back as it came. */
+    rustPromiseAllListProducer(element: any): any;
+    /** zf: a venue-private async method (no override, no typed signature) whose every family declaration returns `Promise<Market[]>`. */
+    rustVenueMarketListMethod(declaration: any): boolean;
+    private rustPromiseAllListKinds;
+    rustPromiseAllListSlotKind(element: any): 'list' | undefined;
+    /** `let mut x: crate::value::List = <slot read>.into_list()` for a Promise.all list slot (the producer is always a list). */
+    printPromiseAllListSlot(element: any, printedName: string, read: string, indent: string): string | undefined;
     rustDeclaredDictSlot(element: any): boolean;
     /** Every `return` of the callee's own body is an array literal whose element `at` is a map literal or a `const`
      *  local initialised with one (a map on every path, whatever keys are written into it). */

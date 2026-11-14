@@ -14098,3 +14098,32 @@ describe('ral-zf: a counter-indexed bind the ccxt write-back pass rewrites keeps
         expect(out).toContain('let mut entry: Value = get_value(&data, &i);');
     });
 });
+
+describe('ral-zf: Promise.all slots of list producers are shared lists lent to arrayConcat', () => {
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-zf-pall-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport interface Market { id: string }\nexport default class Exchange {\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    arrayConcat (a: any[], b: any[]): any[] { return a.concat (b); }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/abstract/venue.ts'), "import _Exchange from '../base/Exchange.js';\nimport type { List } from '../base/Exchange.js';\nexport default abstract class Exchange extends _Exchange {\n    publicGetA (params = {}): Promise<List> { return this.hold (params); }\n    publicGetC (params = {}): Promise<any> { return this.hold (params); }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './abstract/venue.js';\nimport type { Dict, Market } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    const markets = "    async fetchSpotMarkets (params: Dict = {}): Promise<Market[]> { return this.hold ([]); }\n    async fetchSwapMarkets (params: Dict = {}): Promise<Market[]> { return this.hold ([]); }\n";
+    test('Promise<List> endpoint slots (bound operands or inline): List slots lent to arrayConcat, no copy', () => {
+        const out = mk(markets + "    async fetchAll (params: Dict = {}) {\n        const p1 = this.publicGetA (params);\n        const p2 = this.publicGetA (params);\n        const [ spot, swap ] = await Promise.all ([ p1, p2 ]);\n        return this.arrayConcat (spot, swap);\n    }\n    async fetchRows (params: Dict = {}) {\n        const [ a, b ] = await Promise.all ([ this.publicGetA (params), this.publicGetA (params) ]);\n        return this.arrayConcat (a, b);\n    }");
+        expect(out).toMatch(/let mut spot: crate::value::List = spotswapVariable\.get\(0\)\.cloned\(\)\.unwrap_or\(Value::Null\)\.into_list\(\);/);
+        expect(out).toMatch(/let mut swap: crate::value::List = /);
+        expect(out).toContain('self.arrayConcat(&spot, &swap)');
+        expect(out).toMatch(/let mut a: crate::value::List = /);
+        expect(out).toContain('self.arrayConcat(&a, &b)');
+        expect(out).not.toMatch(/\b(spot|swap|a|b)\.clone\(\)/);
+    });
+    test('negative: an untyped endpoint answer keeps the Value slot', () => {
+        const out = mk(markets + "    async fetchAll (params: Dict = {}) {\n        const [ a, c ] = await Promise.all ([ this.publicGetA (params), this.publicGetC (params) ]);\n        return this.arrayConcat (a, c);\n    }");
+        expect(out).toMatch(/let mut c: Value = /);
+    });
+});
