@@ -780,6 +780,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A number reader whose default may be an `Int` (an int literal, or anything not proven a float). */
     rustReaderIntDefaultNum(init: any): boolean;
     rustScalarUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean): boolean;
+    /** zi: `rustLocalUsesAll` for a `const [ .. ] = ..` slot: a same-named slot of another `let` / `const` destructure in a
+     *  disjoint sibling block (`if { const [ r, p ] = .. } else { const [ r, p ] = .. }`) is another symbol, printed as its
+     *  own block-scoped `let`, so its name and uses are skipped. Any other second binding of the name keeps the old walk. */
+    rustSlotUsesAll(element: any, name: string, skipPropertyNames: boolean, acceptUse: (n: any) => boolean): boolean;
     rustBlockLocalUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean, scalar?: boolean): boolean;
     /** vi: a `Precise.string*` result moved at its last use into an operand of a `Precise.*` chain that is the whole
      *  write (`x = Precise.stringDiv (Precise.stringMul (local, y), ..)`): the written text is a `Precise` call either
@@ -3293,6 +3297,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `ostr` for a string slot read through the scalar forms: tests, `format!` concats, string methods, typed
      *  writes, and boxes (alias, ternary arm, `Value` slots) that re-box through `From`; needs one native use. */
     rustStrSlotKind(element: any, scope: any): string | undefined;
+    /** zi: `n` is an arm of `c ? a : b`, the whole initializer of a local the joint solve currently types `Option<String>`
+     *  (or `String`), and the other arm prints as that kind too: the target is decided with the slot, never left `Value`. */
+    rustStrSlotTernaryArmJoined(n: any, element: any): boolean;
     /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
      *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
     rustSlotJoinsSolve(element: any): boolean;
@@ -3304,6 +3311,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  that call inline or a never-reassigned local initialised by it. `promise_all` hands each element back as it came. */
     rustPromiseAllOperandProducer(element: any): any;
     rustDeclaredDictSlot(element: any): boolean;
+    /** zi: `const [ a, b ] = c ? this.f (..) : this.g (..)`: slot `at` is a map when each arm's own callee declares it one
+     *  (the venue-pair form of `rustDeclaredDictSlot`; the temp keeps its `Vec<Value>` head). */
+    rustTernaryDictSlot(element: any): boolean;
+    rustCallDeclaresDictSlot(init: any, at: number): boolean;
     /** Every `return` of the callee's own body is an array literal whose element `at` is a map literal or a `const`
      *  local initialised with one (a map on every path, whatever keys are written into it). */
     rustReturnsBuildMapSlot(declaration: any, at: number): boolean;

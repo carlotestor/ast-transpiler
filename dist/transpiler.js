@@ -57020,6 +57020,44 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustScalarUsesAll(declaration, name, acceptUse) {
     return this.rustBlockLocalUsesAll(declaration, name, acceptUse, true);
   }
+  /** zi: `rustLocalUsesAll` for a `const [ .. ] = ..` slot: a same-named slot of another `let` / `const` destructure in a
+   *  disjoint sibling block (`if { const [ r, p ] = .. } else { const [ r, p ] = .. }`) is another symbol, printed as its
+   *  own block-scoped `let`, so its name and uses are skipped. Any other second binding of the name keeps the old walk. */
+  rustSlotUsesAll(element, name, skipPropertyNames, acceptUse) {
+    const statementOf = (b) => b?.parent?.parent?.parent?.parent;
+    const own = element?.kind === SyntaxKind7.BindingElement ? this.rustSymbolOf(element.name) : void 0;
+    const scope = this.rustEnclosingFunction(element);
+    const blockScoped = (b) => b?.kind === SyntaxKind7.BindingElement && b.parent?.kind === SyntaxKind7.ArrayBindingPattern && isVariableDeclaration3(b.parent.parent) && (b.parent.parent.parent?.flags & (NodeFlags4.Let | NodeFlags4.Const)) !== 0;
+    if (own === void 0 || scope === void 0 || !blockScoped(element))
+      return this.rustLocalUsesAll(element, name, skipPropertyNames, acceptUse);
+    const nodes = this.rustScopeNameNodes(scope, name);
+    const siblings = nodes.filter((n) => isIdentifier3(n) && n !== element.name && n.parent?.kind === SyntaxKind7.BindingElement && n.parent.name === n);
+    if (siblings.length === 0 || nodes.some((n) => n !== element && this.rustBindsName(n, name)))
+      return this.rustLocalUsesAll(element, name, skipPropertyNames, acceptUse);
+    const mine = statementOf(element);
+    for (const s of siblings) {
+      const other = statementOf(s.parent);
+      if (!blockScoped(s.parent) || this.rustEnclosingFunction(s) !== scope || mine === void 0 || other === void 0 || this.isNodeInsideNode(mine, other.parent) || this.isNodeInsideNode(other, mine.parent))
+        return this.rustLocalUsesAll(element, name, skipPropertyNames, acceptUse);
+    }
+    for (const n of nodes) {
+      if (n.kind !== SyntaxKind7.Identifier || n === element.name || siblings.includes(n))
+        continue;
+      if (skipPropertyNames && this.rustIdentifierIsPropertyName(n))
+        continue;
+      if (n.parent?.kind !== SyntaxKind7.ShorthandPropertyAssignment && !this.rustIdentifierIsPropertyName(n)) {
+        const symbol = this.rustSymbolOf(n);
+        if (symbol === void 0)
+          return false;
+        if (symbol !== own)
+          continue;
+      } else if (!this.isNodeInsideNode(n, mine.parent))
+        continue;
+      if (!acceptUse(n))
+        return false;
+    }
+    return true;
+  }
   rustBlockLocalUsesAll(declaration, name, acceptUse, scalar = false) {
     const own = this.rustSymbolOf(declaration.name);
     const scope = this.rustEnclosingFunction(declaration);
@@ -73860,7 +73898,7 @@ ${iden}}`;
       if (pattern?.kind !== SyntaxKind7.ArrayBindingPattern || !isVariableDeclaration3(owner) || owner.name !== pattern || owner.parent?.declarations?.length !== 1)
         return false;
       const at = pattern.elements.indexOf(declaration);
-      const allSlot = at >= 0 && (this.rustPromiseAllDictSlot(declaration) || at === 0 && this.rustUntilRequestSlot(declaration));
+      const allSlot = at >= 0 && (this.rustPromiseAllDictSlot(declaration) || at === 0 && this.rustUntilRequestSlot(declaration) || this.rustTernaryDictSlot(declaration));
       if (at !== 1 && !allSlot && !(at >= 0 && this.rustDeclaredDictSlot(declaration)))
         return false;
       if (declaration.dotDotDotToken !== void 0 || declaration.initializer !== void 0 || this.rustTupleSlotKind(declaration) !== void 0)
@@ -73894,7 +73932,8 @@ ${iden}}`;
     let uses = 0;
     let boxes = 0;
     let longBox = false;
-    const safe = this.rustLocalUsesAll(declaration, name, false, (n) => {
+    const walk = declaration.kind === SyntaxKind7.BindingElement ? this.rustSlotUsesAll.bind(this) : this.rustLocalUsesAll.bind(this);
+    const safe = walk(declaration, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
       if (this.rustDeclaredNode(n) !== declaration || this.rustEnclosingFunction(n) !== fn)
@@ -74210,7 +74249,7 @@ ${iden}}`;
     if (fn === void 0 || isSourceFile5(fn) || this.rustLocalIsReassigned(element, name))
       return false;
     let heads = 0;
-    const safe = this.rustLocalUsesAll(element, name, false, (n) => {
+    const safe = this.rustSlotUsesAll(element, name, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
       if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn)
@@ -75233,6 +75272,10 @@ ${iden}}`;
           nativeUses++;
           return true;
         }
+        if (joined && this.rustStrSlotTernaryArmJoined(n, element)) {
+          nativeUses++;
+          return true;
+        }
         const feeds = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(m.left) || isVariableDeclaration3(m));
         if (feeds !== void 0 && !isStatement(feeds) && (form === "box" || form === "xbox"))
           return false;
@@ -75254,6 +75297,28 @@ ${iden}}`;
     this.rustStrLentLocals.add(element);
     return "ostr";
   }
+  /** zi: `n` is an arm of `c ? a : b`, the whole initializer of a local the joint solve currently types `Option<String>`
+   *  (or `String`), and the other arm prints as that kind too: the target is decided with the slot, never left `Value`. */
+  rustStrSlotTernaryArmJoined(n, element) {
+    let top = n;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    const ternary = top.parent;
+    if (!isConditionalExpression4(ternary) || ternary.condition === top || !this.rustStrTernaryArmSolved(ternary, element))
+      return false;
+    let up = ternary;
+    while (isParenthesizedExpression3(up.parent))
+      up = up.parent;
+    const target = up.parent;
+    const kind = this.rustScalarDecisions.get(target);
+    if (kind !== "ostr" && kind !== "str")
+      return false;
+    const other = this.unwrapParens(ternary.whenTrue === top ? ternary.whenFalse : ternary.whenTrue);
+    const lit = this.literalKindOfNode(other);
+    if (lit !== "string" && lit !== "null")
+      return false;
+    return this.rustLocalLastUse(n, element) || this.rustSlotUseOutsideLoop(n, element);
+  }
   /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
    *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
   rustSlotJoinsSolve(element) {
@@ -75274,6 +75339,8 @@ ${iden}}`;
         top = top.parent;
       const up = top.parent;
       if (isVariableDeclaration3(up) && up.initializer === top && isIdentifier3(up.name) || isBinaryExpression5(up) && up.right === top && up.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement)
+        alias = true;
+      if (isConditionalExpression4(up) && up.condition !== top && this.rustStrTernaryArmSolved(up, element))
         alias = true;
       return true;
     });
@@ -75345,6 +75412,25 @@ ${iden}}`;
       init = this.rustSkipWrappers(init.expression);
     if (!isCallExpression6(init) || !this.rustNativeListSource(init))
       return false;
+    return this.rustCallDeclaresDictSlot(init, element.parent.elements.indexOf(element));
+  }
+  /** zi: `const [ a, b ] = c ? this.f (..) : this.g (..)`: slot `at` is a map when each arm's own callee declares it one
+   *  (the venue-pair form of `rustDeclaredDictSlot`; the temp keeps its `Vec<Value>` head). */
+  rustTernaryDictSlot(element) {
+    const owner = element?.parent?.parent;
+    if (element?.parent?.kind !== SyntaxKind7.ArrayBindingPattern || !isVariableDeclaration3(owner) || owner.name !== element.parent)
+      return false;
+    const init = this.rustSkipWrappers(owner.initializer);
+    if (init?.kind !== SyntaxKind7.ConditionalExpression || !this.rustNativeListSource(owner.initializer))
+      return false;
+    const at = element.parent.elements.indexOf(element);
+    const arm = (n) => {
+      const c = this.rustSkipWrappers(n);
+      return isCallExpression6(c) && isPropertyAccessExpression3(c.expression) && c.expression.expression.kind === SyntaxKind7.ThisKeyword && this.rustCallDeclaresDictSlot(c, at);
+    };
+    return at >= 0 && arm(init.whenTrue) && arm(init.whenFalse);
+  }
+  rustCallDeclaresDictSlot(init, at) {
     const declaration = this.rustCalleeDeclaration(init);
     if (declaration === void 0 || declaration.body === void 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName)))
       return false;
@@ -75353,10 +75439,10 @@ ${iden}}`;
     if (named(type, "Promise") && type.typeArguments?.length === 1)
       type = type.typeArguments[0];
     if (type === void 0 || type.kind === SyntaxKind7.AnyKeyword)
-      return this.rustReturnsBuildMapSlot(declaration, element.parent.elements.indexOf(element));
+      return this.rustReturnsBuildMapSlot(declaration, at);
     if (type?.kind !== SyntaxKind7.TupleType)
       return false;
-    const slot = type.elements?.[element.parent.elements.indexOf(element)];
+    const slot = type.elements?.[at];
     return named(slot, "Dict") && slot.typeArguments === void 0;
   }
   /** Every `return` of the callee's own body is an array literal whose element `at` is a map literal or a `const`
