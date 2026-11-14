@@ -8662,6 +8662,32 @@ describe('rust list reads with an empty list default', () => {
     });
 });
 
+describe('ral-qc: a safeList [] read handed on to several Value slots holds the shared list', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/Exchange.ts': 'export default class Exchange {\n' +
+            '    safeList (o: any, k: any, d: any[] = undefined): any[] | undefined { return o[k]; }\n    hold (a: any, x: any): any { return x; }\n}\n',
+        'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n" +
+            "    twice (response: any) {\n        const rows = this.safeList (response, 'data', []);\n        this.hold (1, rows);\n        return this.hold (2, rows);\n    }\n" +
+            "    nullable (response: any) {\n        const rows = this.safeList (response, 'data');\n        this.hold (1, rows);\n        return this.hold (2, rows);\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-qc-list-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    test('lent before the last use, moved at it', () => {
+        expect(out).toMatch(/let mut rows: crate::value::List = self\.safeList\(.*\)\.into_list\(\);\n\s*self\.hold\(.*Value::from\(&rows\)\);\n\s*return self\.hold\(.*Value::Arr\(rows\)\)/);
+    });
+    test('negative: without a default the read may be Null and never holds the plain list', () => {
+        expect(out).toMatch(/fn nullable[\s\S]*?let mut rows: (?:Value|Option<crate::value::List>) = self\.safeList\(/);
+    });
+});
+
 describe('ral-qc: an omit of a proven map holds the shared map', () => {
     const files: Record<string, string> = {
         'ts/src/base/Exchange.ts': 'export default class Exchange {\n' +
@@ -9295,8 +9321,9 @@ describe('lent response dicts', () => {
     test('negative: an optional map or an any-typed base response keeps the Value hand-off', () => {
         const out = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'lent-response-dicts', 'ts/src/venue.ts')).content;
         expect(out).toMatch(/fn parseLoose\(&self, (mut )?thing: Value, optional_args/);
-        expect(out).toContain('return self.parseLoose(data, &[]);');
-        expect(out).not.toContain('let mut data: crate::value::Dict = resp.get(\"data\").cloned().unwrap_or_default().into_dict();\n        return self.parseLoose');
+        // ral-qc: a never-null `safeDict (.., {})` read handed whole to the any-typed slot holds the map and moves it there (no lend)
+        expect(out).toContain('return self.parseLoose(Value::Dict(data), &[]);');
+        expect(out).not.toContain('self.parseLoose(&data');
         // a nullable safeDict is lent in its optional form now (Null stays Null)
         expect(out).toMatch(/let mut data: Option<crate::value::Dict> = [^;]*;\n\s*return self\.parseThing\(&data, &\[\]\);/);
     });
