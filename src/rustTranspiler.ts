@@ -20259,9 +20259,39 @@ export class RustTranspiler extends BaseTranspiler {
         let type: any = declaration.type;
         const named = (t: any, name: string): boolean => t?.kind === SyntaxKind.TypeReference && isIdentifier(t.typeName) && t.typeName.text === name;
         if (named(type, 'Promise') && type.typeArguments?.length === 1) type = type.typeArguments[0];
+        // qe: an `any` return proves the slot by its own returns: each builds slot `i` from a map literal
+        if (type === undefined || type.kind === SyntaxKind.AnyKeyword) return this.rustReturnsBuildMapSlot(declaration, element.parent.elements.indexOf(element));
         if (type?.kind !== SyntaxKind.TupleType) return false;
         const slot: any = type.elements?.[element.parent.elements.indexOf(element)];
         return named(slot, 'Dict') && slot.typeArguments === undefined;
+    }
+
+    /** Every `return` of the callee's own body is an array literal whose element `at` is a map literal or a `const`
+     *  local initialised with one (a map on every path, whatever keys are written into it). */
+    rustReturnsBuildMapSlot(declaration: any, at: number): boolean {
+        let returns = 0;
+        let all = true;
+        const mapElement = (n: any): boolean => {
+            const e: any = this.rustSkipWrappers(n);
+            if (e !== undefined && isObjectLiteralExpression(e)) return true;
+            if (e === undefined || !isIdentifier(e)) return false;
+            const d: any = this.rustDeclarationOfIdentifier(e);
+            if (d === undefined || !isVariableDeclaration(d) || d.name === e || this.rustEnclosingFunction(d) !== declaration) return false;
+            const list: any = d.parent;
+            return list?.kind === SyntaxKind.VariableDeclarationList && (list.flags & NodeFlags.Const) !== 0 && isObjectLiteralExpression(this.rustSkipWrappers(d.initializer));
+        };
+        const visit = (node: any) => {
+            if (!all || (node !== declaration.body && isFunctionLike(node))) return;
+            if (isReturnStatement(node)) {
+                returns++;
+                const list: any = this.rustSkipWrappers(node.expression);
+                all = list !== undefined && isArrayLiteralExpression(list) && list.elements.length > at && mapElement(list.elements[at]);
+                return;
+            }
+            node.forEachChild(visit);
+        };
+        declaration.body.forEachChild(visit);
+        return all && returns > 0;
     }
 
     /** One element read rooted at the bearer: a plain read the native op serves. */

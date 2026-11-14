@@ -2757,6 +2757,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  (never the optional form): `promise_all` hands each operand back as it came, so the slot is that map. */
     rustPromiseAllDictSlot(element: any): boolean;
     rustDeclaredDictSlot(element: any): boolean;
+    /** Every `return` of the callee's own body is an array literal whose element `at` is a map literal or a `const`
+     *  local initialised with one (a map on every path, whatever keys are written into it). */
+    rustReturnsBuildMapSlot(declaration: any, at: number): boolean;
     /** One element read rooted at the bearer: a plain read the native op serves. */
     rustReadBearerElementUse(access: any, kind: 'list' | 'map'): boolean;
     /** Key a read-only bearer serves natively: a literal string for a map, a

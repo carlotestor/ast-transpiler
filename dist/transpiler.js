@@ -71477,10 +71477,43 @@ ${iden}}`;
     const named = (t, name) => t?.kind === SyntaxKind7.TypeReference && isIdentifier3(t.typeName) && t.typeName.text === name;
     if (named(type, "Promise") && type.typeArguments?.length === 1)
       type = type.typeArguments[0];
+    if (type === void 0 || type.kind === SyntaxKind7.AnyKeyword)
+      return this.rustReturnsBuildMapSlot(declaration, element.parent.elements.indexOf(element));
     if (type?.kind !== SyntaxKind7.TupleType)
       return false;
     const slot = type.elements?.[element.parent.elements.indexOf(element)];
     return named(slot, "Dict") && slot.typeArguments === void 0;
+  }
+  /** Every `return` of the callee's own body is an array literal whose element `at` is a map literal or a `const`
+   *  local initialised with one (a map on every path, whatever keys are written into it). */
+  rustReturnsBuildMapSlot(declaration, at) {
+    let returns = 0;
+    let all = true;
+    const mapElement = (n) => {
+      const e = this.rustSkipWrappers(n);
+      if (e !== void 0 && isObjectLiteralExpression4(e))
+        return true;
+      if (e === void 0 || !isIdentifier3(e))
+        return false;
+      const d = this.rustDeclarationOfIdentifier(e);
+      if (d === void 0 || !isVariableDeclaration3(d) || d.name === e || this.rustEnclosingFunction(d) !== declaration)
+        return false;
+      const list = d.parent;
+      return list?.kind === SyntaxKind7.VariableDeclarationList && (list.flags & NodeFlags4.Const) !== 0 && isObjectLiteralExpression4(this.rustSkipWrappers(d.initializer));
+    };
+    const visit = (node) => {
+      if (!all || node !== declaration.body && isFunctionLike(node))
+        return;
+      if (isReturnStatement4(node)) {
+        returns++;
+        const list = this.rustSkipWrappers(node.expression);
+        all = list !== void 0 && isArrayLiteralExpression4(list) && list.elements.length > at && mapElement(list.elements[at]);
+        return;
+      }
+      node.forEachChild(visit);
+    };
+    declaration.body.forEachChild(visit);
+    return all && returns > 0;
   }
   /** One element read rooted at the bearer: a plain read the native op serves. */
   rustReadBearerElementUse(access, kind) {
