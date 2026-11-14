@@ -12064,7 +12064,8 @@ describe('od: typed results of other self method calls (third pass)', () => {
         expect(out).toContain('&[Value::Bool(uta)]');
     });
     test('sum with an optional integer operand prints the native Option<i64> sum (Null when an operand is missing)', () => {
-        expect(out).toContain('Value::from((if let Some(__m0) = start { Some((__m0 + 60)) } else { None }))');
+        // zb: the Option sum now types the `end` local itself (Option<i64>), boxed only where it is handed on
+        expect(out).toContain('let mut end: Option<i64> = (if let Some(__m0) = start { Some((__m0 + 60)) } else { None });');
         expect(out).not.toContain('self.sum(');
     });
     test('negative: a string local the method returns keeps the method\'s typed return', () => {
@@ -14117,4 +14118,30 @@ describe('ral-zb: Math.min / max and sum over a typed-signature numeric paramete
             for (const x of no) expect(out).not.toContain(x);
         });
     }
+});
+
+describe('ral-zb lift 3: a sum local over a typed-signature Int parameter is Option<i64> despite its any checker type', () => {
+    const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['fetchTrades'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+    const root = path.join (rustFixtureRoot, 'zb-sum-local');
+    const base = "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport type Trade = any;\nexport default class Exchange {\n" +
+        "    sum (...args: any[]): any { return args[0] + args[1]; }\n    g (x: any): any { return x; }\n    parseToInt (x: any): any { return x; }\n}\n";
+    const venue = (body: string) => "import Exchange from './base/Exchange.js';\nimport type { Dict, Int, Trade } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" +
+        "    async fetchTrades (symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Trade[]> {\n" + body + "    }\n}\n";
+    let n = 0;
+    const run = (body: string) => {
+        const dir = path.join (root, String (n++));
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue (body));
+        return typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('const end = this.sum (since, 60000) prints the Option sum into an Option<i64> local', () => {
+        const out = run ("        const end = this.sum (since, 60000);\n        return this.g ({ 'end': end });\n");
+        expect(out).toContain('let mut end: Option<i64> = (if let Some(__m0) = since.as_i64() { Some((__m0 + 60000)) } else { None });');
+        expect(out).not.toContain('let mut end: Value');
+    });
+    test('negative: a sum over an any-typed operand keeps the box', () => {
+        const out = run ("        const p = this.g (params);\n        const end = this.sum (p, 60000);\n        return this.g ({ 'end': end });\n");
+        expect(out).not.toContain('let mut end: Option<i64>');
+    });
 });
