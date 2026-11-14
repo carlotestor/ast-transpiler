@@ -65409,6 +65409,11 @@ ${iden}}`;
       return up.arguments.length === 1 && this.rustCallsRuntimeHandle(up);
     return (method === "resolve" || method === "reject") && this.rustWsSettleCall(up);
   }
+  /** `client.resolve|reject (x, ..)` on a ws handle, x the settled value. */
+  rustWsSettleMove(n) {
+    const up = n?.parent;
+    return isCallExpression6(up) && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && (String(up.expression.name.text) === "resolve" || String(up.expression.name.text) === "reject") && this.rustWsSettleCall(up);
+  }
   /** The declaration behind `node` when it is a local typed as a dict bearer. */
   rustDictBearerDeclaration(node) {
     if (!isIdentifier3(node))
@@ -65535,7 +65540,7 @@ ${iden}}`;
     if (siblings > 0 && elementUses === 0)
       return false;
     if (moveEscapes.length > 0) {
-      if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 || widened || enumUses > 0 || prediction || !this.rustLocalLastUse(moveEscapes[0], declaration) || !this.rustBoxLineOk(moveEscapes[0]))
+      if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 || widened && !this.rustWsSettleMove(moveEscapes[0]) || enumUses > 0 || prediction || !this.rustLocalLastUse(moveEscapes[0], declaration) || !this.rustBoxLineOk(moveEscapes[0]))
         return false;
       this.rustLiteralMoves.add(moveEscapes[0]);
     }

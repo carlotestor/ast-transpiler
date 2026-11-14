@@ -14442,6 +14442,13 @@ export class RustTranspiler extends BaseTranspiler {
         return (method === 'resolve' || method === 'reject') && this.rustWsSettleCall(up);
     }
 
+    /** `client.resolve|reject (x, ..)` on a ws handle, x the settled value. */
+    rustWsSettleMove(n: any): boolean {
+        const up: any = n?.parent;
+        return isCallExpression(up) && up.arguments[0] === n && isPropertyAccessExpression(up.expression) && isIdentifier(up.expression.expression)
+            && (String(up.expression.name.text) === 'resolve' || String(up.expression.name.text) === 'reject') && this.rustWsSettleCall(up);
+    }
+
     /** A prediction venue: `ts/src/prediction/<id>.ts` builds nested request maps in one method. */
     // eslint-disable-next-line no-useless-escape
     private static readonly RUST_PREDICTION_VENUE_FILE = /ts[\/]src[\/]prediction[\/][^/]+\.ts$/;
@@ -14575,7 +14582,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (siblings > 0 && elementUses === 0) return false;
         // a list-element / settle hand-off moves the map: only its single last use, with no other escape, may take it
         if (moveEscapes.length > 0) {
-            if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 || widened || enumUses > 0 || prediction
+            // ral-tf: a map widened by string-local keys (written at `m[k] = v`) still moves whole into a ws settle value at
+            // its last use: that is its only escape, so the move is the box the helper form made (no copy)
+            if (moveEscapes.length > 1 || escapes.length > 0 || rebuilds > 0 || (widened && !this.rustWsSettleMove(moveEscapes[0])) || enumUses > 0 || prediction
                 || !this.rustLocalLastUse(moveEscapes[0], declaration) || !this.rustBoxLineOk(moveEscapes[0])) return false;
             this.rustLiteralMoves.add(moveEscapes[0]);
         }

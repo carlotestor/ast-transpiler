@@ -1967,6 +1967,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  value of a ws `client.resolve|reject|send (m, ..)`: each takes the boxed `Value` by value, so the map's last
      *  use moves into `Value::Map(m)`, exactly the shared map the boxed local handed over. */
     rustLiteralMoveSlot(n: any): boolean;
+    /** `client.resolve|reject (x, ..)` on a ws handle, x the settled value. */
+    rustWsSettleMove(n: any): boolean;
     /** A prediction venue: `ts/src/prediction/<id>.ts` builds nested request maps in one method. */
     private static readonly RUST_PREDICTION_VENUE_FILE;
     /** The declaration behind `node` when it is a local typed as a dict bearer. */

@@ -12071,6 +12071,10 @@ describe('ral-tf: map literals settled whole and list literals with moved bare e
         out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
         ws = transpiler.transpileRustByPath (path.join (dir, 'ts/src/pro/venue.ts')).content;
     });
+    test('a literal map written at a string-local key and resolved at its last use moves into the settle value', () => {
+        expect(ws).toContain('let mut fresh: indexmap::IndexMap<String, Value> = ');
+        expect(ws).toMatch(/client\.resolve\(Value::Map\(fresh\)/);
+    });
     test('a list literal whose bare element moves there at its last use is a built list (no element copy)', () => {
         expect(out).toMatch(/fn wrapOne[\s\S]*?let mut orders: crate::value::List = std::sync::Arc::new\(vec!\[response\]\);/);
     });
