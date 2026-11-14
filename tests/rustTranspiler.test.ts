@@ -14127,3 +14127,26 @@ describe('ral-zg: a Dict[] row assigned whole into an outer let keeps Option<Dic
         expect(out).toMatch(/let mut row: Value = rows\.get\(i as usize\)/);
     });
 });
+
+describe('ral-zg: a Dict[] row appended whole to a cache local takes Option<Dict> (append boxes exactly Null or the map)', () => {
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-zg-append-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n    toArray (o: any): any { return o; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    const body = (target: string) => "    prune (newCache: any, cache: any, symbol: Str) {\n        const entries: Dict[] = this.toArray (cache);\n        for (let i = 0; i < entries.length; i++) {\n            const entry = entries[i];\n            if (this.safeString (entry, 'symbol') !== symbol) {\n                " + target + ".append (entry);\n            }\n        }\n        return newCache;\n    }";
+    test('newCache.append (entry): Option<Dict> boxed back at the append', () => {
+        const out = mk(body('newCache'));
+        expect(out).toMatch(/let mut entry: Option<crate::value::Dict> = entries\.get\(i as usize\)\.cloned\(\)\.unwrap_or\(Value::Null\)\.into_opt_dict\(\);/);
+        expect(out).toContain('newCache.append(entry.map_or(Value::Null, Value::Dict));');
+    });
+    test('negative: appending to the row itself keeps it Value', () => {
+        const out = mk(body('entry'));
+        expect(out).toMatch(/let mut entry: Value = entries\.get\(i as usize\)/);
+    });
+});

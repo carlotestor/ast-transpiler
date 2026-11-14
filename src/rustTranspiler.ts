@@ -18224,6 +18224,15 @@ export class RustTranspiler extends BaseTranspiler {
         // `rows.push (row)` into another local list: the list keeps its own type, the element enters as the shared map
         if (isCallExpression(up) && isPropertyAccessExpression(up.expression) && isIdentifier(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n
             && String(up.expression.name.text) === 'push') return !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n) as any);
+        // ral-zg: `cache.append (el)` on another local / parameter: the runtime `append(item: impl Into<Value>)` takes the box;
+        // the row takes the optional form so the box is exactly Null or the map
+        if (isCallExpression(up) && isPropertyAccessExpression(up.expression) && isIdentifier(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n
+            && String(up.expression.name.text) === 'append' && this.rustDictElementSource(init)) {
+            const row: any = this.rustDeclarationOfIdentifier(n);
+            if (row === undefined || this.rustIdentifierRefersToDeclaration(up.expression.expression, row)) return false;
+            this.rustZgSiblingRows.add(row);
+            return true;
+        }
         // ral-zg: `y = el` into another plain local of the same function (a sibling-admitted row only: the optional form
         // boxes back to exactly Null or the map, what the copied `Value` held)
         if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(up.left)
