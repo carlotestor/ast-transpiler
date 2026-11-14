@@ -62742,6 +62742,10 @@ ${idn}}`;
     if (node.kind === SyntaxKind7.PrefixUnaryExpression && node.operator === SyntaxKind7.ExclamationToken) {
       return this.printPrefixUnaryExpression(node, identation);
     }
+    const notHelper = this.unwrapParens(node);
+    if (notHelper !== node && notHelper?.kind === SyntaxKind7.PrefixUnaryExpression && notHelper.operator === SyntaxKind7.ExclamationToken && this.rustBaseTypedReturnKind(this.unwrapParens(notHelper.operand)) === "bool" && this.rustLogicalChainIsCondition(this.unwrapParens(notHelper.operand))) {
+      return `${idn}(${this.printPrefixUnaryExpression(notHelper, 0)})`;
+    }
     const handleCondition = this.printClientHandleCondition(node);
     if (handleCondition !== void 0)
       return idn + handleCondition;
@@ -62897,6 +62901,8 @@ ${idn}}`;
     if (this.nativeEqualityText(inner) !== void 0 || this.rustClientHandleIsInTest(inner))
       return true;
     if (this.printTypedMarketRead(inner, true) !== void 0)
+      return true;
+    if (this.rustBaseTypedReturnKind(inner) === "bool" && this.rustLogicalChainIsCondition(inner))
       return true;
     if (inner.kind === SyntaxKind7.BinaryExpression && this.nativeIndexOfLiteralTestText(inner.operatorToken.kind, inner.left, inner.right) !== void 0)
       return true;

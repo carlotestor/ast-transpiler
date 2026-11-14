@@ -11766,6 +11766,12 @@ export class RustTranspiler extends BaseTranspiler {
         if (node.kind === SyntaxKind.PrefixUnaryExpression && node.operator === SyntaxKind.ExclamationToken) {
             return this.printPrefixUnaryExpression(node, identation);
         }
+        // `(!helper (..))` over a hand-written `-> bool` base helper is already a Rust bool
+        const notHelper: any = this.unwrapParens(node);
+        if (notHelper !== node && notHelper?.kind === SyntaxKind.PrefixUnaryExpression && notHelper.operator === SyntaxKind.ExclamationToken
+            && this.rustBaseTypedReturnKind(this.unwrapParens(notHelper.operand)) === 'bool' && this.rustLogicalChainIsCondition(this.unwrapParens(notHelper.operand))) {
+            return `${idn}(${this.printPrefixUnaryExpression(notHelper, 0)})`;
+        }
         const handleCondition = this.printClientHandleCondition(node); if (handleCondition !== undefined) return idn + handleCondition;
         const nilCondition = this.printRustNilLocalCondition(node);
         if (nilCondition !== undefined) return idn + nilCondition;
@@ -11910,6 +11916,7 @@ export class RustTranspiler extends BaseTranspiler {
         }
         if (this.nativeEqualityText(inner) !== undefined || this.rustClientHandleIsInTest(inner)) return true;
         if (this.printTypedMarketRead(inner, true) !== undefined) return true; // a typed market flag is a bool
+        if (this.rustBaseTypedReturnKind(inner) === 'bool' && this.rustLogicalChainIsCondition(inner)) return true; // a hand-written `-> bool` base helper
         if (inner.kind === SyntaxKind.BinaryExpression && this.nativeIndexOfLiteralTestText(inner.operatorToken.kind, inner.left, inner.right) !== undefined) return true;
         if (inner.kind === SyntaxKind.BinaryExpression && this.rustScalarOwnsOperand(inner) && this.rustScalarCompareText(inner, true) !== undefined) return true;
         return inner.kind === SyntaxKind.BinaryExpression && this.isLogicalOp(inner.operatorToken.kind) &&
