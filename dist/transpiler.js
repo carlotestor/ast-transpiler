@@ -53301,6 +53301,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const nilMapWrite = isAssign && isIdentifier3(left) ? this.printNilMapWrite(left, right, identation) : void 0;
     if (nilMapWrite !== void 0)
       return nilMapWrite;
+    if (isAssign && this.rustHandedRewriteOf(left) !== void 0) {
+      const rhs = this.rustSkipWrappers(right);
+      const self = isCallExpression6(rhs) && this.rustHandedSelfOmit(rhs, this.rustHandedRewriteOf(left));
+      const target = super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text);
+      const value = self ? `self.omit(Value::Dict(${target}), ${this.printNode(rhs.arguments[1], 0).trim()}, &[])` : this.printNode(right, 0).trim();
+      return `${target} = ${value}.into_dict()`;
+    }
     if (isAssign && this.rustNilSlotDictOf(left) !== void 0)
       return `${super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text)} = ${this.printNode(right, 0).trim()}.into_dict()`;
     const nilWrite = isAssign && isIdentifier3(left) ? this.printRustNilLocalWrite(left, right) : void 0;
@@ -64190,6 +64197,8 @@ ${body}${idn1}m
 ${this.getIden(identation)}}`;
   }
   printArrayLiteralExpression(node, identation) {
+    if (this.rustOmitLiteralKeys(node.parent) && node.parent.arguments[1] === node)
+      return `&[${node.elements.map((e) => this.rustStringLiteralOf(this.printNode(e, 0))).join(", ")}]`;
     const element = (e) => {
       const text = this.printNode(e, 0);
       return isIdentifier3(e) && _RustTranspiler.isBareLocal(text.trim()) && this.rustOwnedUseIsFree(e, true) ? `${text.trim()}` : text;
@@ -67516,7 +67525,21 @@ ${iden}}`;
     if (text.includes("\n"))
       return false;
     const literals = (text.match(/'[^']*'|"[^"]*"/g) ?? []).length;
-    return 16 + 60 + text.length + 22 * literals + 12 <= 330;
+    const keys = this.rustOmitLiteralKeys(call) ? call.arguments[1] : void 0;
+    const boxed = keys === void 0 ? literals : literals - keys.elements.length;
+    return 16 + 60 + text.length + 22 * boxed + 12 <= 330;
+  }
+  /** `this.omit (x, [ 'a', 'b' ])` on the base helper (outside the test tier) with a non-empty list of plain string
+   *  literals: the key slot takes `&[&str; N]`, which drops exactly the keys the boxed `Value::Arr` of strings dropped. */
+  rustOmitLiteralKeys(call) {
+    if (call === void 0 || !isCallExpression6(call) || call.arguments.length !== 2 || this.rustTestTierSource(call))
+      return false;
+    const keys = call.arguments[1];
+    if (!isArrayLiteralExpression4(keys) || keys.elements.length === 0)
+      return false;
+    if (!keys.elements.every((e) => isStringLiteral3(e) && !(String(e.text) in this.StringLiteralReplacements)))
+      return false;
+    return this.rustBaseCallNamed(call, _RustTranspiler.RUST_HANDED_DICT_OMIT);
   }
   /** The container a base list filter answers, `undefined` when it is unproven, `null` when `method` is none of them. */
   rustBaseFilterReturnKind(call, method) {
@@ -70260,7 +70283,8 @@ ${iden}}`;
     }
     const name = String(declaration.name.text);
     const fn = this.rustEnclosingFunction(declaration);
-    if (fn === void 0 || isSourceFile5(fn) || !nilSlot && this.rustLocalIsReassigned(declaration, name))
+    const rewritten = !nilSlot && this.rustLocalIsReassigned(declaration, name);
+    if (fn === void 0 || isSourceFile5(fn) || rewritten && !this.rustHandedMapInit(declaration))
       return false;
     let uses = 0;
     let boxes = 0;
@@ -70271,6 +70295,8 @@ ${iden}}`;
       if (this.rustDeclaredNode(n) !== declaration || this.rustEnclosingFunction(n) !== fn)
         return false;
       const call = n.parent;
+      if (rewritten && isBinaryExpression5(call) && call.left === n)
+        return this.rustHandedMapWrite(n, declaration);
       if (nilSlot && (this.rustNilSlotWrite(n) || isBinaryExpression5(call) && call.left === n)) {
         if (this.rustNilSlotWrite(n) && !this.rustNilSlotLineOk(n))
           longBox = true;
@@ -70301,6 +70327,44 @@ ${iden}}`;
     if (nilSlot)
       return safe && !longBox && (uses > 0 || boxes > 0);
     return safe && (uses > 0 || (declaration.kind === SyntaxKind7.BindingElement || this.rustHandedTernaryLocal(declaration)) && boxes > 0 && !longBox);
+  }
+  /** The initialiser of a reassigned handed local answers a map on every path. */
+  rustHandedMapInit(declaration) {
+    if (!isVariableDeclaration3(declaration))
+      return false;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    return init !== void 0 && (this.rustBaseCallNamed(init, _RustTranspiler.RUST_ALWAYS_MAP_HELPERS) || this.rustOmitOfDict(init) && this.rustOmitLineFits(init)) && String(declaration.initializer.getText()).split("\n")[0].length <= 240;
+  }
+  /** `n = <map>` as a statement: an always-map helper, an omit of `n` itself, or an omit of a proven map. */
+  rustHandedMapWrite(n, declaration) {
+    const up = n.parent;
+    if (!isBinaryExpression5(up) || up.left !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const rhs = this.rustSkipWrappers(up.right);
+    if (rhs === void 0 || !isCallExpression6(rhs) || String(up.getText()).split("\n")[0].length > 240)
+      return false;
+    if (this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_ALWAYS_MAP_HELPERS))
+      return true;
+    return (this.rustHandedSelfOmit(rhs, declaration) || this.rustOmitOfDict(rhs)) && this.rustOmitLineFits(rhs);
+  }
+  /** `this.omit (x, k)` whose head is the local itself (named nowhere else in the call). */
+  rustHandedSelfOmit(call, declaration) {
+    if (!this.rustBaseCallNamed(call, _RustTranspiler.RUST_HANDED_DICT_OMIT) || call.arguments.length !== 2)
+      return false;
+    const head = this.rustSkipWrappers(call.arguments[0]);
+    if (head === void 0 || !isIdentifier3(head) || !this.rustIdentifierRefersToDeclaration(head, declaration))
+      return false;
+    const names = (x) => isIdentifier3(x) && x.text === head.text || (x.forEachChild(names) ?? false);
+    return !names(call.arguments[1]);
+  }
+  /** The reassigned handed local written by `n = ..`, else undefined. */
+  rustHandedRewriteOf(n) {
+    if (!isIdentifier3(n))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(n);
+    if (declaration === void 0 || declaration.name === n || !isVariableDeclaration3(declaration) || this.rustNilSlotDictCandidate(declaration))
+      return void 0;
+    return this.rustHandedDictLocal(declaration) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)) ? declaration : void 0;
   }
   rustNilSlotDictCandidate(declaration) {
     if (!isVariableDeclaration3(declaration))
@@ -70534,7 +70598,7 @@ ${iden}}`;
       return void 0;
     if (this.rustExtendReuseLocals.has(declaration) && (this.rustSelfExtendHead(node, declaration) || this.rustLocalLastUse(node, declaration)))
       return _RustTranspiler.rustLentMark(text);
-    return this.rustLocalLastUse(node, declaration) ? text : `&${text}`;
+    return this.rustLocalLastUse(node, declaration) ? _RustTranspiler.rustLentMark(text) : `&${text}`;
   }
   /** The literal key of a statement write `n['k'] = v` (one level, not a book-meta or replaced key). */
   rustUntilHeadKeyWrite(n) {
@@ -76323,6 +76387,12 @@ _RustTranspiler.RUST_OPT_LIST_SOURCES = /* @__PURE__ */ new Set(["marketSymbols"
 // An `extend`/`omit`/`indexBy` result or the params slot of a `handle*AndParams` destructure that is only read,
 // given to `omit`, or lent as the sole extra operand of `extend`/`deepExtend` holds the shared map.
 _RustTranspiler.RUST_HANDED_DICT_SOURCES = /* @__PURE__ */ new Set(["extend", "omit", "indexBy", "groupBy"]);
+// ── ral-ra: reassigned handed maps ──
+// `let x = this.omit (m, k); .. x = this.omit (x, k2);` holds a map on every path when the initialiser and every
+// write answer one: base `extend` / `indexBy` / `groupBy` always build a `Value::Map`, and `omit` keeps a map head a
+// map (the head is the local itself or a proven map). `omit` hands a list through unchanged, so an unproven head
+// (a `params: Value` that may carry a list body) never qualifies.
+_RustTranspiler.RUST_ALWAYS_MAP_HELPERS = /* @__PURE__ */ new Set(["extend", "indexBy", "groupBy"]);
 _RustTranspiler.RUST_HANDED_DICT_OMIT = /* @__PURE__ */ new Set(["omit"]);
 _RustTranspiler.RUST_HANDED_DICT_EXTEND = /* @__PURE__ */ new Set(["extend", "deepExtend"]);
 _RustTranspiler.RUST_EXTEND_HEAD_CALLS = /* @__PURE__ */ new Set(["extend", "deepExtend"]);

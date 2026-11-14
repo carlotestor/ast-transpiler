@@ -8719,6 +8719,46 @@ describe('ral-qc: an omit of a proven map holds the shared map', () => {
     });
 });
 
+describe('ral-ra: omit / extend remainder', () => {
+    const files: Record<string, string> = {
+        'ts/src/base/Exchange.ts': 'export default class Exchange {\n' +
+            '    extend (a: any, b: any = undefined): any { return a; }\n    omit (o: any, k: any): any { return o; }\n    hold (x: any): any { return x; }\n    safeString (o: any, k: any): any { return o; }\n}\n',
+        'ts/src/venue.ts': "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n" +
+            "    rewritten (params: any, flag: boolean) {\n        let rest = this.omit ({ 'a': 1, 'b': 2 }, 'a');\n        const s = this.safeString (rest, 'b');\n        if (flag) {\n            rest = this.omit (rest, [ 'b', 'c' ]);\n        }\n        return this.hold (this.extend ({ 's': s }, rest));\n    }\n" +
+            "    opaqueRewritten (params: any, flag: boolean) {\n        let rest = this.omit (params, 'a');\n        if (flag) {\n            rest = this.omit (rest, 'b');\n        }\n        return this.hold (rest);\n    }\n" +
+            "    keys (params: any) {\n        const rest = this.omit (params, [ 'a', 'b' ]);\n        return this.hold (rest);\n    }\n" +
+            "    head (params: any) {\n        const merged = this.extend ({ 'a': 1 }, params);\n        const s = this.safeString (merged, 'a');\n        return this.hold (this.extend (merged, { 's': s }));\n    }\n}\n",
+    };
+    let out: string;
+    beforeAll(() => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-ra-'));
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        out = transpiler.transpileRustByPath(path.join (root, 'ts/src/venue.ts')).content;
+        fs.rmSync (root, { recursive: true, force: true });
+    });
+    const body = (name: string) => out.slice(out.indexOf(`fn ${name}`), out.indexOf('\n    }\n', out.indexOf(`fn ${name}`)));
+    test('a reassigned omit of a proven map stays crate::value::Dict; its self-omit moves the map through the call', () => {
+        const b = body('rewritten');
+        expect(b).toMatch(/let mut rest: crate::value::Dict = self\.omit\(/);
+        expect(b).toContain('rest = self.omit(Value::Dict(rest), &["b", "c"], &[]).into_dict();');
+    });
+    test('a reassigned omit of an unproven params value keeps the box', () => {
+        expect(body('opaqueRewritten')).toMatch(/let mut rest: Value = self\.omit\(params/);
+    });
+    test('a literal omit key list prints the &[&str; N] key slot', () => {
+        expect(body('keys')).toContain('self.omit(params, &["a", "b"]');
+        expect(body('keys')).not.toContain('Value::Str("a"');
+    });
+    test('a shared-map extend head at its last use moves without a clone', () => {
+        const b = body('head');
+        expect(b).toMatch(/self\.extend\(merged, /);
+        expect(b).not.toContain('merged.clone()');
+    });
+});
+
 describe('rust base list filters answer a fresh container', () => {
     const files: Record<string, string> = {
         'ts/src/base/Exchange.ts': 'export type Int = number | undefined;\nexport default class Exchange {\n' +

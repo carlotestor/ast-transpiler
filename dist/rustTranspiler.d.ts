@@ -2249,6 +2249,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltReturnSourceKind(call: any): 'dict' | 'list' | undefined;
     /** The printed `let mut x: crate::value::Dict = self.omit(..).into_dict();` line of a one-line omit stays under 400 chars. */
     rustOmitLineFits(call: any): boolean;
+    /** `this.omit (x, [ 'a', 'b' ])` on the base helper (outside the test tier) with a non-empty list of plain string
+     *  literals: the key slot takes `&[&str; N]`, which drops exactly the keys the boxed `Value::Arr` of strings dropped. */
+    rustOmitLiteralKeys(call: any): boolean;
     private static readonly RUST_BUILT_BOX_RECEIVER_METHODS;
     private static readonly RUST_BUILT_HELPER_RETURNS;
     private static readonly RUST_BASE_FILTER_LISTS;
@@ -2593,6 +2596,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `this.m (..)` resolved to the base tier, `m` in `names`. */
     rustBaseCallNamed(call: any, names: Set<string>): boolean;
     rustHandedDictLocalUncached(declaration: any): boolean;
+    private static readonly RUST_ALWAYS_MAP_HELPERS;
+    /** The initialiser of a reassigned handed local answers a map on every path. */
+    rustHandedMapInit(declaration: any): boolean;
+    /** `n = <map>` as a statement: an always-map helper, an omit of `n` itself, or an omit of a proven map. */
+    rustHandedMapWrite(n: any, declaration: any): boolean;
+    /** `this.omit (x, k)` whose head is the local itself (named nowhere else in the call). */
+    rustHandedSelfOmit(call: any, declaration: any): boolean;
+    /** The reassigned handed local written by `n = ..`, else undefined. */
+    rustHandedRewriteOf(n: any): any;
     private rustNilSlotDictCandidates;
     rustNilSlotDictCandidate(declaration: any): boolean;
     /** The element `n` of `[ .., n, .. ] = <call>` sits at a map slot of the call's tuple. */

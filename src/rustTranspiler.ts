@@ -2113,6 +2113,14 @@ export class RustTranspiler extends BaseTranspiler {
         const optContainerWrite = isAssign && isIdentifier(left) ? this.printOptContainerWrite(left, right) ?? this.printOptListWrite(left, right) ?? this.printExtendReuseWrite(left, right) : undefined;
         if (optContainerWrite !== undefined) return optContainerWrite;
         const nilMapWrite = isAssign && isIdentifier(left) ? this.printNilMapWrite(left, right, identation) : undefined; if (nilMapWrite !== undefined) return nilMapWrite;
+        // ral-ra: a reassigned handed map takes the written map back (`omit (x, k)` of itself moves the map through the call)
+        if (isAssign && this.rustHandedRewriteOf(left) !== undefined) {
+            const rhs: any = this.rustSkipWrappers(right);
+            const self = isCallExpression(rhs) && this.rustHandedSelfOmit(rhs, this.rustHandedRewriteOf(left));
+            const target = super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text);
+            const value = self ? `self.omit(Value::Dict(${target}), ${this.printNode(rhs.arguments[1], 0).trim()}, &[])` : this.printNode(right, 0).trim();
+            return `${target} = ${value}.into_dict()`;
+        }
         if (isAssign && this.rustNilSlotDictOf(left) !== undefined) return `${super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text)} = ${this.printNode(right, 0).trim()}.into_dict()`;
         const nilWrite = isAssign && isIdentifier(left) ? this.printRustNilLocalWrite(left, right) : undefined;
         if (nilWrite !== undefined) return nilWrite;
@@ -13166,6 +13174,8 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printArrayLiteralExpression(node, identation) {
+        // ral-ra: the literal key list of a base `omit` prints as the hand-written `&["a", "b"]` key slot (`OmitKeys`)
+        if (this.rustOmitLiteralKeys(node.parent) && node.parent.arguments[1] === node) return `&[${node.elements.map((e: any) => this.rustStringLiteralOf(this.printNode(e, 0))).join(', ')}]`;
         // a bare local element is moved into the list: owned (`\u0004`, left uncloned) when `Copy` or at its last use
         const element = (e: any) => {
             const text = this.printNode(e, 0);
@@ -16498,7 +16508,20 @@ export class RustTranspiler extends BaseTranspiler {
         const text = String(call.getText());
         if (text.includes('\n')) return false;
         const literals = (text.match(/'[^']*'|"[^"]*"/g) ?? []).length;
-        return 16 + 60 + text.length + 22 * literals + 12 <= 330;
+        // ral-ra: a literal key list prints `&["a", "b"]` (about as wide as its TS text), only the other literals box
+        const keys: any = this.rustOmitLiteralKeys(call) ? call.arguments[1] : undefined;
+        const boxed = keys === undefined ? literals : literals - keys.elements.length;
+        return 16 + 60 + text.length + 22 * boxed + 12 <= 330;
+    }
+
+    /** `this.omit (x, [ 'a', 'b' ])` on the base helper (outside the test tier) with a non-empty list of plain string
+     *  literals: the key slot takes `&[&str; N]`, which drops exactly the keys the boxed `Value::Arr` of strings dropped. */
+    rustOmitLiteralKeys(call: any): boolean {
+        if (call === undefined || !isCallExpression(call) || call.arguments.length !== 2 || this.rustTestTierSource(call)) return false;
+        const keys: any = call.arguments[1];
+        if (!isArrayLiteralExpression(keys) || keys.elements.length === 0) return false;
+        if (!keys.elements.every((e: any) => isStringLiteral(e) && !(String(e.text) in this.StringLiteralReplacements))) return false;
+        return this.rustBaseCallNamed(call, RustTranspiler.RUST_HANDED_DICT_OMIT);
     }
 
     // The box that hands such a local on whole: a plain `Value` slot of a `this.` method, `return x`, an object literal
@@ -19102,7 +19125,9 @@ export class RustTranspiler extends BaseTranspiler {
         }
         const name = String(declaration.name.text);
         const fn: any = this.rustEnclosingFunction(declaration);
-        if (fn === undefined || isSourceFile(fn) || (!nilSlot && this.rustLocalIsReassigned(declaration, name))) return false;
+        // ral-ra: a reassigned local is typed only when the initialiser and every write answer a map (rustHandedMapWrite)
+        const rewritten = !nilSlot && this.rustLocalIsReassigned(declaration, name);
+        if (fn === undefined || isSourceFile(fn) || (rewritten && !this.rustHandedMapInit(declaration))) return false;
         let uses = 0;
         let boxes = 0;
         let longBox = false;
@@ -19110,6 +19135,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustIdentifierIsPropertyName(n)) return !(n.parent?.kind === SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
             if (this.rustDeclaredNode(n) !== declaration || this.rustEnclosingFunction(n) !== fn) return false;
             const call: any = n.parent;
+            if (rewritten && isBinaryExpression(call) && call.left === n) return this.rustHandedMapWrite(n, declaration);
             // nil-declared slot local: its writes were proven by the candidate check (each takes a map)
             if (nilSlot && (this.rustNilSlotWrite(n) || (isBinaryExpression(call) && call.left === n))) {
                 // `.into_dict()` (+12) must not push the `__destr_tmp` line over the 400-char budget (a line already over stays one long line)
@@ -19135,6 +19161,48 @@ export class RustTranspiler extends BaseTranspiler {
         // a params slot only handed back to `Value` slots shares its map there (moved at the last use, lent before it)
         if (nilSlot) return safe && !longBox && (uses > 0 || boxes > 0);
         return safe && (uses > 0 || ((declaration.kind === SyntaxKind.BindingElement || this.rustHandedTernaryLocal(declaration)) && boxes > 0 && !longBox));
+    }
+
+    // ── ral-ra: reassigned handed maps ──
+    // `let x = this.omit (m, k); .. x = this.omit (x, k2);` holds a map on every path when the initialiser and every
+    // write answer one: base `extend` / `indexBy` / `groupBy` always build a `Value::Map`, and `omit` keeps a map head a
+    // map (the head is the local itself or a proven map). `omit` hands a list through unchanged, so an unproven head
+    // (a `params: Value` that may carry a list body) never qualifies.
+    private static readonly RUST_ALWAYS_MAP_HELPERS = new Set([ 'extend', 'indexBy', 'groupBy' ]);
+
+    /** The initialiser of a reassigned handed local answers a map on every path. */
+    rustHandedMapInit(declaration: any): boolean {
+        if (!isVariableDeclaration(declaration)) return false;
+        const init: any = this.rustSkipWrappers(declaration.initializer);
+        return init !== undefined && (this.rustBaseCallNamed(init, RustTranspiler.RUST_ALWAYS_MAP_HELPERS) || (this.rustOmitOfDict(init) && this.rustOmitLineFits(init)))
+            && String(declaration.initializer.getText()).split('\n')[0].length <= 240;
+    }
+
+    /** `n = <map>` as a statement: an always-map helper, an omit of `n` itself, or an omit of a proven map. */
+    rustHandedMapWrite(n: any, declaration: any): boolean {
+        const up: any = n.parent;
+        if (!isBinaryExpression(up) || up.left !== n || up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
+        const rhs: any = this.rustSkipWrappers(up.right);
+        if (rhs === undefined || !isCallExpression(rhs) || String(up.getText()).split('\n')[0].length > 240) return false;
+        if (this.rustBaseCallNamed(rhs, RustTranspiler.RUST_ALWAYS_MAP_HELPERS)) return true;
+        return (this.rustHandedSelfOmit(rhs, declaration) || this.rustOmitOfDict(rhs)) && this.rustOmitLineFits(rhs);
+    }
+
+    /** `this.omit (x, k)` whose head is the local itself (named nowhere else in the call). */
+    rustHandedSelfOmit(call: any, declaration: any): boolean {
+        if (!this.rustBaseCallNamed(call, RustTranspiler.RUST_HANDED_DICT_OMIT) || call.arguments.length !== 2) return false;
+        const head: any = this.rustSkipWrappers(call.arguments[0]);
+        if (head === undefined || !isIdentifier(head) || !this.rustIdentifierRefersToDeclaration(head, declaration)) return false;
+        const names = (x: any): boolean => (isIdentifier(x) && x.text === head.text) || (x.forEachChild(names) ?? false);
+        return !names(call.arguments[1]);
+    }
+
+    /** The reassigned handed local written by `n = ..`, else undefined. */
+    rustHandedRewriteOf(n: any): any {
+        if (!isIdentifier(n)) return undefined;
+        const declaration: any = this.rustDeclarationOfIdentifier(n);
+        if (declaration === undefined || declaration.name === n || !isVariableDeclaration(declaration) || this.rustNilSlotDictCandidate(declaration)) return undefined;
+        return this.rustHandedDictLocal(declaration) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)) ? declaration : undefined;
     }
 
     // ── nil-declared params slots (ral-nd) ──
@@ -19370,7 +19438,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (!shared) return undefined;
         // a literal shared map moves into the head at its last use or when the statement writes the result back
         if (this.rustExtendReuseLocals.has(declaration) && (this.rustSelfExtendHead(node, declaration) || this.rustLocalLastUse(node, declaration))) return RustTranspiler.rustLentMark(text);
-        return this.rustLocalLastUse(node, declaration) ? text : `&${text}`;
+        // ral-ra: at its proven last use (no later read, not inside a loop or closure) the shared map moves into the head;
+        // the mark keeps the by-value clone pass from copying a local that nothing reads afterwards
+        return this.rustLocalLastUse(node, declaration) ? RustTranspiler.rustLentMark(text) : `&${text}`;
     }
 
     /** The literal key of a statement write `n['k'] = v` (one level, not a book-meta or replaced key). */
