@@ -11783,7 +11783,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (marketFlagLocal !== undefined) return idn + marketFlagLocal;
         const scalarCondition = this.printRustScalarLocalCondition(node); if (scalarCondition !== undefined) return idn + scalarCondition;
         // A call to a hand-written `-> bool` fn is already a Rust bool.
-        if (this.rustCallPrintsBool(node) || this.rustBaseTypedReturnKind(node) === 'bool') return idn + this.printNode(node, 0);
+        if (this.rustCallPrintsBool(node) || (this.rustBaseTypedReturnKind(node) === 'bool' && this.rustLogicalChainIsCondition(node))) return idn + this.printNode(node, 0);
         // Checker-proved boolean Value (safe_bool / get_value): native matches!.
         const nativeTruthiness = this.printNativeTruthiness(node);
         if (nativeTruthiness !== undefined) return idn + nativeTruthiness;
@@ -11799,6 +11799,23 @@ export class RustTranspiler extends BaseTranspiler {
             return `${idn}(${peeled})`;
         }
         return `${idn}is_true(&${this.printTruthyArgument(expression)})`;
+    }
+
+    /** The `&&` / `||` / `!` chain around `node` ends in a statement or ternary condition (not a value the
+     *  `-> Value` post-passes box by its `is_true` operands). */
+    rustLogicalChainIsCondition(node): boolean {
+        let current: any = node;
+        let parent: any = current.parent;
+        while (parent !== undefined && (isParenthesizedExpression(parent) || (parent.kind === SyntaxKind.PrefixUnaryExpression && parent.operator === SyntaxKind.ExclamationToken)
+            || (isBinaryExpression(parent) && this.isLogicalOp(parent.operatorToken.kind)))) {
+            current = parent;
+            parent = parent.parent;
+        }
+        switch (parent?.kind) {
+        case SyntaxKind.IfStatement: case SyntaxKind.WhileStatement: case SyntaxKind.DoStatement: return parent.expression === current;
+        case SyntaxKind.ForStatement: case SyntaxKind.ConditionalExpression: return parent.condition === current;
+        }
+        return false;
     }
 
     // `is_true(&(…)` on an operand the printer already emits as a native Rust `bool` (payload

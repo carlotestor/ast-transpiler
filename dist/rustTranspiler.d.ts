@@ -1582,6 +1582,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     isEqualityOp(op: any): boolean;
     isLogicalOp(op: any): boolean;
     printCondition(node: any, identation: any): any;
+    /** The `&&` / `||` / `!` chain around `node` ends in a statement or ternary condition (not a value the
+     *  `-> Value` post-passes box by its `is_true` operands). */
+    rustLogicalChainIsCondition(node: any): boolean;
     /** Bool-slot text of a parenthesised native comparison/predicate, else undefined. */
     printNativeParenthesizedCondition(node: any): string | undefined;
     printTruthyArgument(expression: string): string;

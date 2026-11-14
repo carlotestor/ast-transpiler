@@ -62764,7 +62764,7 @@ ${idn}}`;
     const scalarCondition = this.printRustScalarLocalCondition(node);
     if (scalarCondition !== void 0)
       return idn + scalarCondition;
-    if (this.rustCallPrintsBool(node) || this.rustBaseTypedReturnKind(node) === "bool")
+    if (this.rustCallPrintsBool(node) || this.rustBaseTypedReturnKind(node) === "bool" && this.rustLogicalChainIsCondition(node))
       return idn + this.printNode(node, 0);
     const nativeTruthiness = this.printNativeTruthiness(node);
     if (nativeTruthiness !== void 0)
@@ -62784,6 +62784,26 @@ ${idn}}`;
       return `${idn}(${peeled})`;
     }
     return `${idn}is_true(&${this.printTruthyArgument(expression)})`;
+  }
+  /** The `&&` / `||` / `!` chain around `node` ends in a statement or ternary condition (not a value the
+   *  `-> Value` post-passes box by its `is_true` operands). */
+  rustLogicalChainIsCondition(node) {
+    let current = node;
+    let parent = current.parent;
+    while (parent !== void 0 && (isParenthesizedExpression3(parent) || parent.kind === SyntaxKind7.PrefixUnaryExpression && parent.operator === SyntaxKind7.ExclamationToken || isBinaryExpression5(parent) && this.isLogicalOp(parent.operatorToken.kind))) {
+      current = parent;
+      parent = parent.parent;
+    }
+    switch (parent?.kind) {
+      case SyntaxKind7.IfStatement:
+      case SyntaxKind7.WhileStatement:
+      case SyntaxKind7.DoStatement:
+        return parent.expression === current;
+      case SyntaxKind7.ForStatement:
+      case SyntaxKind7.ConditionalExpression:
+        return parent.condition === current;
+    }
+    return false;
   }
   // `is_true(&(…)` on an operand the printer already emits as a native Rust `bool` (payload
   // compares, `matches!` predicates, `&&`/`||` of those) is the identity (`IsTruthy for bool`);
