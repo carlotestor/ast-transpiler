@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -55561,7 +55561,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
     const expected = kind === "ostr" || kind === "str" ? "string" : kind === "bool" || kind === "obool" ? "boolean" : "number";
-    if (checked !== expected && !boolTested && !(kind === "ostr" && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(kind === "int" && this.rustArithCombinator(this.unwrapParens(declaration.initializer)) && this.rustArithCallKind(declaration.initializer) === "int"))
+    const combinatorKind = this.rustArithCombinator(this.unwrapParens(declaration.initializer)) ? this.rustArithCallKind(declaration.initializer) : void 0;
+    if (checked !== expected && !boolTested && !(kind === "ostr" && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(combinatorKind !== void 0 && combinatorKind === kind && (kind === "int" || checked === void 0)))
       return void 0;
     const seeded = kind;
     kind = this.rustScalarWidenedKind(declaration, kind);
@@ -55671,7 +55672,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       this.rustScalarGuarded.add(declaration);
       this.rustMarketLentLocals.add(declaration);
     }
-    const numericSum = (kind === "int" || kind === "num") && this.rustSumShape(this.unwrapParens(declaration.initializer));
+    const numericSum = (kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustSumShape(this.unwrapParens(declaration.initializer));
     const clockInit = this.unwrapParens(declaration.initializer);
     const clockLent = kind === "str" && this.rustClockString(clockInit) && !this.rustStrNoLend && (copied > 0 ? this.rustReaderLendBoxes(declaration) : handOff) && !this.rustConcatWithNilLocal(declaration);
     if (clockLent && copied > 0)
@@ -59411,8 +59412,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       const op = node.operatorToken.kind;
       const numeric = (k) => k === "int" || k === "num" || k === "oint" || k === "onum";
       if (op === SyntaxKind7.PlusToken || op === SyntaxKind7.MinusToken || op === SyntaxKind7.AsteriskToken) {
-        const a = this.rustScalarNumericKind(node.left);
-        const b = this.rustScalarNumericKind(node.right);
+        const a = this.rustArithSideKind(node.left);
+        const b = this.rustArithSideKind(node.right);
         if (!numeric(a) || !numeric(b))
           return void 0;
         const kind = a.endsWith("int") && b.endsWith("int") ? "int" : "num";
@@ -59492,7 +59493,27 @@ ${binding(plan.indent)}` : ""), head: "" };
     const kind = this.rustScalarNumericKind(inner);
     if (kind !== void 0)
       return kind;
+    const param = this.rustArithParamKind(inner);
+    if (param !== void 0)
+      return param;
     return isCallExpression6(inner) && this.rustScalarValueKind(inner, true) === "int" && this.rustScalarNativeText("int", inner) !== void 0 ? "int" : void 0;
+  }
+  /** zb: an arithmetic side's kind: a typed scalar shape, else a typed-signature numeric parameter read
+   *  (`now - limit * duration`: `limit` holds only `Int` or `Null`, so the Option arm equals the helper's). */
+  rustArithSideKind(node) {
+    const own = this.rustScalarNumericKind(node);
+    if (own !== void 0)
+      return own;
+    const param = this.rustArithParamKind(node);
+    return param === "int" || param === "oint" ? param : void 0;
+  }
+  /** zb: the numeric kind of an unwritten typed-signature parameter read (`oint` / `onum` / `int` / `num`), else undefined. */
+  rustArithParamKind(node) {
+    const inner = this.unwrapParens(node);
+    if (inner === void 0 || !isIdentifier3(inner))
+      return void 0;
+    const kind = this.rustScalarParamRead(inner)?.kind;
+    return kind === "oint" || kind === "onum" || kind === "int" || kind === "num" ? kind : void 0;
   }
   /** A combinator over a typed operand prints native and boxes its result once. */
   printRustArithCall(node) {
@@ -60264,7 +60285,7 @@ ${binding(plan.indent)}` : ""), head: "" };
    *  (`add`/`subtract`/`multiply`/`divide` by a non-zero literal) answer `Null` when either operand is `Null`. */
   rustScalarOptArithText(base, node, sign) {
     const sides = [node.left, node.right].map((n, i) => {
-      const k = this.rustScalarNumericKind(n);
+      const k = this.rustArithSideKind(n);
       if (k !== "oint" && k !== "onum")
         return { use: this.rustScalarOperandText(base, n) };
       const v = i === 0 ? "__l" : "__r";
