@@ -19579,6 +19579,8 @@ export class RustTranspiler extends BaseTranspiler {
             const declaration: any = this.rustDeclarationOfIdentifier(n);
             if (this.rustWsBookLocal(declaration) !== undefined) return 'book';
             if (this.rustWsCacheLocal(declaration) !== undefined) return 'cache';
+            // ral-xe: a handler local printed as the shared map (`let mut x: crate::value::Dict = ..into_dict()`) resolves `Value::Dict`
+            if (declaration !== undefined && isVariableDeclaration(declaration) && !this.rustLocalReassigned(declaration) && this.rustBorrowedLocalKind(declaration) === 'dict') return 'dict';
             // a local left boxed whose only write is its book / cache source still holds that kind (or nothing)
             if (declaration !== undefined && isVariableDeclaration(declaration) && isIdentifier(declaration.name) && declaration.initializer !== undefined
                 && !this.rustLocalReassigned(declaration)) {

@@ -70725,6 +70725,8 @@ ${iden}}`;
         return "book";
       if (this.rustWsCacheLocal(declaration) !== void 0)
         return "cache";
+      if (declaration !== void 0 && _is.isVariableDeclaration.call(void 0, declaration) && !this.rustLocalReassigned(declaration) && this.rustBorrowedLocalKind(declaration) === "dict")
+        return "dict";
       if (declaration !== void 0 && _is.isVariableDeclaration.call(void 0, declaration) && _is.isIdentifier.call(void 0, declaration.name) && declaration.initializer !== void 0 && !this.rustLocalReassigned(declaration)) {
         const init = this.rustStripWrappers(declaration.initializer);
         if (this.rustWsBookMapRead(init) || this.rustWsBookCtorLike(init))
