@@ -70689,6 +70689,10 @@ ${iden}}`;
         boxes.push([n, "move"]);
         return true;
       }
+      if (up?.kind === SyntaxKind7.AsExpression && up.expression === n && isReturnStatement4(up.parent) && up.parent.expression === up) {
+        boxes.push([n, "move"]);
+        return true;
+      }
       const hashSlot = this.rustWatchHashListSlot(up, n);
       if (hashSlot !== void 0) {
         boxes.push([n, hashSlot]);
@@ -70737,7 +70741,7 @@ ${iden}}`;
       }
       return false;
     });
-    if (!safe || natives === 0 && (handOffs === 0 || handOffs + boxes.filter(([b]) => isReturnStatement4(b.parent)).length !== boxes.length || boxes.some(([, form]) => form === "clone")))
+    if (!safe || natives === 0 && (handOffs === 0 || handOffs + boxes.filter(([b]) => isReturnStatement4(b.parent) || b.parent?.kind === SyntaxKind7.AsExpression && isReturnStatement4(b.parent.parent)).length !== boxes.length || boxes.some(([, form]) => form === "clone")))
       return false;
     for (const [n, form] of boxes)
       this.rustLentListBoxes.set(n, form);

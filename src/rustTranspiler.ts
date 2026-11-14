@@ -19479,6 +19479,11 @@ export class RustTranspiler extends BaseTranspiler {
                 boxes.push([n, 'move']);
                 return true;
             }
+            // ral-uf: `return x as T[]` hands the list on whole too (the cast prints nothing)
+            if (up?.kind === SyntaxKind.AsExpression && up.expression === n && isReturnStatement(up.parent) && up.parent.expression === up) {
+                boxes.push([n, 'move']);
+                return true;
+            }
             const hashSlot = this.rustWatchHashListSlot(up, n);
             if (hashSlot !== undefined) {
                 boxes.push([n, hashSlot]);
@@ -19538,7 +19543,7 @@ export class RustTranspiler extends BaseTranspiler {
             return false;
         });
         // a list with no native use is typed only when every use is a hand-off that moves or lends it (a `return x` move included)
-        if (!safe || (natives === 0 && (handOffs === 0 || handOffs + boxes.filter(([b]) => isReturnStatement(b.parent)).length !== boxes.length || boxes.some(([, form]) => form === 'clone')))) return false;
+        if (!safe || (natives === 0 && (handOffs === 0 || handOffs + boxes.filter(([b]) => isReturnStatement(b.parent) || (b.parent?.kind === SyntaxKind.AsExpression && isReturnStatement(b.parent.parent))).length !== boxes.length || boxes.some(([, form]) => form === 'clone')))) return false;
         for (const [n, form] of boxes) this.rustLentListBoxes.set(n, form);
         this.rustBuiltLists.add(declaration);
         return true;

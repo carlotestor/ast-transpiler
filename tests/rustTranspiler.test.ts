@@ -8235,8 +8235,10 @@ describe('rust literal containers handed off by move', () => {
         expect(output).toContain('Value::Map(request)');
     });
 
-    test('a list handed out before a cast return keeps the Value box', () => {
-        expect(output).toContain('let mut out: Value = Value::from(vec![]);');
+    test('a list handed out before a cast return is the shared list (ral-uf: lent as an Arc bump, moved at the return)', () => {
+        expect(output).toContain('let mut out: crate::value::List = std::sync::Arc::new(Vec::new());');
+        expect(output).toContain('self.hold(Value::Arr(out.clone()));');
+        expect(output).toContain('return Value::Arr(out);');
     });
 });
 
@@ -12420,5 +12422,22 @@ describe('ral-uf: nullable list aliases read again only on the other branch, ear
     });
     test('negative: the source read after the if keeps the Value alias', () => {
         expect(out).toMatch(/fn readAfter[\s\S]*?let mut rows: Value = /);
+    });
+});
+
+describe('ral-uf: a push / concat accumulator returned through `as T[]` is a built list', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-uf-ret');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport interface Trade { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    arrayConcat (a: any[], b: any[]): any[] {\n        return a.concat (b);\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Trade } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    concatRet (pages: Dict[][]): Trade[] {\n        let trades: Dict[] = [];\n        for (let i = 0; i < pages.length; i++) {\n            trades = this.arrayConcat (trades, pages[i]);\n        }\n        return trades as Trade[];\n    }\n    pushRet (rows: Dict[]): Trade[] {\n        const result: Dict[] = [];\n        for (let i = 0; i < rows.length; i++) {\n            result.push ({ 'id': i });\n        }\n        this.hold (result);\n        return result as Trade[];\n    }\n}\n");
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('an arrayConcat accumulator returned as T[] holds the list and moves at the return', () => {
+        expect(out).toMatch(/fn concatRet[\s\S]*?let mut trades: crate::value::List = [\s\S]*?return Value::Arr\(trades\);/);
+    });
+    test('a push accumulator handed to a Value slot and returned as T[] moves at the return', () => {
+        expect(out).toMatch(/fn pushRet[\s\S]*?let mut result: crate::value::List = [\s\S]*?return Value::Arr\(result\);/);
     });
 });
