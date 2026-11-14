@@ -18902,6 +18902,20 @@ export class RustTranspiler extends BaseTranspiler {
                 handOffs++;
                 return true;
             }
+            // ral-sf: a plural `parse*` response slot or a per-venue list / map slot takes `impl Into<crate::Value>`:
+            // the shared list is lent there (`&x`, an Arc bump), never copied
+            if (isCallExpression(up) && up.expression !== n && !this.rustTestTierSource(up) && (this.rustLentListSlot(up, n) || this.rustLentVenueSlot(up, n) !== undefined)) {
+                boxes.push([n, 'lend']);
+                handOffs++;
+                return true;
+            }
+            // ral-sf: an object-literal value at the list's proven last use (no later read or push, not in a loop or
+            // closure) takes the list whole: `Value::Arr(x)` moves it, so a push accumulator is boxed once
+            if (up?.kind === SyntaxKind.PropertyAssignment && up.initializer === n && this.rustLocalLastUse(n, declaration) && short(n)) {
+                boxes.push([n, 'move']);
+                handOffs++;
+                return true;
+            }
             if (isCallExpression(up) && up.expression !== n && up.arguments.some((a: any) => a === n)) {
                 const callee: any = up.expression;
                 if (!isPropertyAccessExpression(callee) || callee.expression.kind !== SyntaxKind.ThisKeyword || !short(n)

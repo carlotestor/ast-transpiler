@@ -70070,6 +70070,16 @@ ${iden}}`;
         handOffs++;
         return true;
       }
+      if (isCallExpression6(up) && up.expression !== n && !this.rustTestTierSource(up) && (this.rustLentListSlot(up, n) || this.rustLentVenueSlot(up, n) !== void 0)) {
+        boxes.push([n, "lend"]);
+        handOffs++;
+        return true;
+      }
+      if (up?.kind === SyntaxKind7.PropertyAssignment && up.initializer === n && this.rustLocalLastUse(n, declaration) && short(n)) {
+        boxes.push([n, "move"]);
+        handOffs++;
+        return true;
+      }
       if (isCallExpression6(up) && up.expression !== n && up.arguments.some((a) => a === n)) {
         const callee = up.expression;
         if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !short(n) || _RustTranspiler.MUT_SELF_METHODS.has(this.toSnakeCaseName(String(callee.name.text))) || !this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n)))

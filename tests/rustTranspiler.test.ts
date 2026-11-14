@@ -11925,6 +11925,33 @@ describe('ral-pe: built lists lent / moved into impl Into<Value> helper slots', 
     });
 });
 
+describe('ral-sf: built lists lent to impl Into<Value> parse / per-venue slots, moved into a literal value at last use', () => {
+    let out: string;
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-sf-lists');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    toArray (x: any): any[] { return Object.values (x); }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseTrades (trades: List, market: any = undefined): any { return trades; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    rows (response: any, flag: boolean) {\n        let responseList = [];\n        if (flag) {\n            responseList = this.toArray (response);\n        }\n        return this.parseTrades (responseList);\n    }\n    send (a: any, ids: Dict[]) {\n        return this.hold (ids);\n    }\n    many (response: any, flag: boolean) {\n        let ids = [];\n        if (flag) {\n            ids = this.toArray (response);\n        }\n        this.hold (1);\n        return this.send (1, ids);\n    }\n    body (response: any, n: number) {\n        let amount = [];\n        if (n > 1) {\n            amount = this.toArray (response);\n        }\n        for (let i = 0; i < n; i++) {\n            amount.push ({ 'n': i });\n        }\n        const request: Dict = { 'amount': amount };\n        return this.hold (request);\n    }\n    late (response: any, n: number) {\n        let kept = [];\n        if (n > 1) {\n            kept = this.toArray (response);\n        }\n        const request: Dict = { 'kept': kept };\n        kept.push (n);\n        return this.hold (request);\n    }\n}\n");
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('a list handed to a plural parse* response slot is lent', () => {
+        expect(out).toContain('let mut responseList: crate::value::List = ');
+        expect(out).toMatch(/parseTrades\(&responseList/);
+    });
+    test('a list handed to a per-venue list slot is lent', () => {
+        expect(out).toContain('let mut ids: crate::value::List = ');
+        expect(out).toMatch(/self\.send\([^;]*&ids\)/);
+    });
+    test('a push accumulator moves into an object-literal value at its last use, boxed once', () => {
+        expect(out).toContain('let mut amount: crate::value::List = ');
+        expect(out).toContain('Value::Arr(amount)');
+        expect(out).not.toContain('Value::Arr(amount.clone())');
+    });
+    test('negative: a push after the literal keeps the aliased Value', () => {
+        expect(out).toMatch(/let mut kept: Value = /);
+    });
+});
+
 describe('safe scalar locals, seventh pass: nested balance / options writes', () => {
     test('a typed string key of a nested this.balance / this.options write prints the r05 insert with its own key text', () => {
         const dir = path.join (rustFixtureRoot, 'scalar-pf');
