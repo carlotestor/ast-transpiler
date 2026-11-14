@@ -811,6 +811,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNilElemStrText(node: any): string | undefined;
     /** ral-xa: `x = y;` into a nil-declared local, `y` a `Value` local of the same function the checker types string
      *  (initialised, typed by no scalar / nil / reader rule) at its last use: `y.into_opt_string()` moves the string out. */
+    /** ya: argument count of a safeString-family reader before its default (`safeString2(o, a, b, d)`: 3). */
+    private static readonly RUST_SAFE_STRING_KEY_ARGS;
     rustNilValueStrAlias(rhs: any): boolean;
     /** ya: alias reads phase 2 admitted (the printer asks again after the solve; the answer must not change). */
     private rustScalarAliasPrinted;

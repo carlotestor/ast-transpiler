@@ -5965,6 +5965,11 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** ral-xa: `x = y;` into a nil-declared local, `y` a `Value` local of the same function the checker types string
      *  (initialised, typed by no scalar / nil / reader rule) at its last use: `y.into_opt_string()` moves the string out. */
+    /** ya: argument count of a safeString-family reader before its default (`safeString2(o, a, b, d)`: 3). */
+    private static readonly RUST_SAFE_STRING_KEY_ARGS: { [name: string]: number } = {
+        safeString: 2, safeString2: 3, safeStringN: 2, safeStringLower: 2, safeStringLower2: 3, safeStringLowerN: 2, safeStringUpper: 2, safeStringUpper2: 3, safeStringUpperN: 2,
+    };
+
     rustNilValueStrAlias(rhs: any): boolean {
         const node: any = this.unwrapParens(rhs);
         if (node === undefined || !isIdentifier(node) || node.text === 'undefined' || this.checkerOrUndefined() === undefined || !this.rustNilVenueWrite(node)) return false;
@@ -5979,6 +5984,9 @@ export class RustTranspiler extends BaseTranspiler {
         const reader = isCallExpression(init) && this.rustNilSelfHelperName(init) !== undefined && RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(this.rustNilSelfHelperName(init));
         const kind = reader ? 'ostr' : this.rustScalarValueKind(init, true);
         if (kind !== 'str' && kind !== 'ostr') return false;
+        // ya: a reader with no default is retyped after printing by the ccxt `_opt` reader pass (`safe_string_k_opt`):
+        // the printer cannot see that source settle, so it never takes it (gate 13941 sent two such sources back to Value)
+        if (reader && init.arguments.length <= (RustTranspiler.RUST_SAFE_STRING_KEY_ARGS[this.rustNilSelfHelperName(init)] ?? 2)) return false;
         if (this.rustScalarLocalOf(node) !== undefined || this.rustNilLocalOfIdentifier(node) !== undefined || this.rustStringLocalIdentifierIsTyped(node)) return false;
         // a target handed back by `return` keeps its rule (the method's printed return may be retyped after printing)
         let top: any = node;

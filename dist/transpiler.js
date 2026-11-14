@@ -54028,37 +54028,22 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
   rustNilScalarKind(declaration) {
     const list = declaration.parent;
-    if (!isIdentifier3(declaration.name) || list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations.length !== 1 || (list.flags & NodeFlags4.Const) !== 0 || list.parent?.kind !== SyntaxKind7.VariableStatement) {
-      if (process.env.YADBG && this.rustScalarAliasTarget === declaration)
-        console.error("RET1");
+    if (!isIdentifier3(declaration.name) || list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations.length !== 1 || (list.flags & NodeFlags4.Const) !== 0 || list.parent?.kind !== SyntaxKind7.VariableStatement)
       return void 0;
-    }
-    if (this.rustNilLocalKind(declaration) !== void 0) {
-      if (process.env.YADBG && this.rustScalarAliasTarget === declaration)
-        console.error("RET2");
+    if (this.rustNilLocalKind(declaration) !== void 0)
       return void 0;
-    }
     const scope = this.rustEnclosingFunction(declaration);
-    if (scope === void 0 || isSourceFile5(scope) || this.rustNativeStrReturnKind(scope) === "str") {
-      if (process.env.YADBG && this.rustScalarAliasTarget === declaration)
-        console.error("RET3");
+    if (scope === void 0 || isSourceFile5(scope) || this.rustNativeStrReturnKind(scope) === "str")
       return void 0;
-    }
     const name = String(declaration.name.text);
     let joined = "null";
     let writes = 0;
     for (const n of this.rustScopeNameNodes(scope, name)) {
       if (isIdentifier3(n) && this.rustNilSlotWrite(n) && this.rustDeclaredNode(n) === declaration) {
-        if (this.primitiveKindOfType(this.typeOfNodeIfAny(n)) !== "string") {
-          if (process.env.YADBG && this.rustScalarAliasTarget === declaration)
-            console.error("RET4");
+        if (this.primitiveKindOfType(this.typeOfNodeIfAny(n)) !== "string")
           return void 0;
-        }
-        if (this.rustScalarSeeding && this.rustNilSlotLineOverBudget(n)) {
-          if (process.env.YADBG && this.rustScalarAliasTarget === declaration)
-            console.error("RET5");
+        if (this.rustScalarSeeding && this.rustNilSlotLineOverBudget(n))
           return void 0;
-        }
         joined = this.rustScalarJoinKinds(joined, "ostr");
         continue;
       }
@@ -54072,29 +54057,17 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         writes++;
       const write = isIdentifier3(rhs) && this.literalKindOfNode(rhs) !== "null" ? this.rustScalarIdentifierKind(rhs) ?? (this.rustNilValueStrAlias(rhs) ? "ostr" : void 0) : this.rustScalarValueKind(rhs, true);
       joined = this.rustScalarJoinKinds(joined, write);
-      if (joined === void 0) {
-        if (process.env.YADBG && this.rustScalarAliasTarget === declaration)
-          console.error("RET6");
+      if (joined === void 0)
         return void 0;
-      }
     }
-    if (joined !== "ostr" && joined !== "oint" && joined !== "onum") {
-      if (process.env.YADBG && this.rustScalarAliasTarget === declaration)
-        console.error("RET7");
+    if (joined !== "ostr" && joined !== "oint" && joined !== "onum")
       return void 0;
-    }
     const declared = declaration.type === void 0 ? void 0 : this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
-    if (declared !== void 0 && declared !== (joined === "ostr" ? "string" : "number")) {
-      if (process.env.YADBG && this.rustScalarAliasTarget === declaration)
-        console.error("RET8");
+    if (declared !== void 0 && declared !== (joined === "ostr" ? "string" : "number"))
       return void 0;
-    }
     const kind = joined;
-    if (kind === "ostr" && !this.rustSiblingStrBoxesMove(declaration, scope)) {
-      if (process.env.YADBG && this.rustScalarAliasTarget === declaration)
-        console.error("RET9");
+    if (kind === "ostr" && !this.rustSiblingStrBoxesMove(declaration, scope))
       return void 0;
-    }
     if (this.rustScalarSeeding)
       return kind;
     const boxed = [];
@@ -54109,19 +54082,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const optConcat = kind === "ostr" && this.rustNilOptStrConcatUse(n);
       const form = this.rustNilSlotWrite(n) ? "slot" : optConcat ? "concat" : this.rustScalarUseForm(n, kind);
       this.rustScalarUseForms.set(n, form);
-      if (process.env.YADBG && this.rustScalarAliasTarget === declaration)
-        console.error("FORM", n.parent?.getText?.().slice(0, 60), form);
       if (form === "box" || form === "xbox" || form === "err")
         boxed.push(n);
       if (_RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form))
         native++;
       return form !== void 0;
     });
-    if (!ok || native === 0 && writes <= 1 && !this.rustNilScalarHandOff(declaration, scope, kind, boxed) || boxed.length > 0 && scope.kind !== SyntaxKind7.MethodDeclaration) {
-      if (process.env.YADBG && this.rustScalarAliasTarget === declaration)
-        console.error("RET10", ok, native, writes, boxed.length);
+    if (!ok || native === 0 && writes <= 1 && !this.rustNilScalarHandOff(declaration, scope, kind, boxed) || boxed.length > 0 && scope.kind !== SyntaxKind7.MethodDeclaration)
       return void 0;
-    }
     if (boxed.length > 0)
       this.rustScalarGuarded.add(declaration);
     return kind;
@@ -55441,8 +55409,6 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
    *  `y`'s own rule: it is admitted only when re-deciding every other candidate with it gives the same answers. */
   rustScalarAliasPhase(scope, candidates) {
     const targets = candidates.filter((n) => isVariableDeclaration3(n) && this.rustScalarDecisions.get(n) === null && (n.initializer === void 0 || this.literalKindOfNode(n.initializer) === "null") && this.rustScalarAliasCandidate(n));
-    if (process.env.YADBG)
-      console.error("ALIASPHASE", scope.name?.text, targets.map((n) => n.name.text));
     if (targets.length === 0)
       return;
     this.rustScalarAliasScope = scope;
@@ -55454,8 +55420,6 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         const kind = this.rustScalarTry(target);
         this.rustScalarAliasTarget = void 0;
         let keep = kind === "ostr" && this.rustScalarAliasJournal.length > 0;
-        if (process.env.YADBG)
-          console.error("ALIASTRY", target.name.text, kind, this.rustScalarAliasJournal.length);
         if (keep) {
           this.rustScalarDecisions.set(target, kind);
           keep = candidates.every((n) => n === target || this.rustScalarTry(n) === before.get(n));
@@ -57187,8 +57151,6 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     return `${read}.into_opt_string()`;
   }
-  /** ral-xa: `x = y;` into a nil-declared local, `y` a `Value` local of the same function the checker types string
-   *  (initialised, typed by no scalar / nil / reader rule) at its last use: `y.into_opt_string()` moves the string out. */
   rustNilValueStrAlias(rhs) {
     const node = this.unwrapParens(rhs);
     if (node === void 0 || !isIdentifier3(node) || node.text === "undefined" || this.checkerOrUndefined() === void 0 || !this.rustNilVenueWrite(node))
@@ -57206,6 +57168,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const reader = isCallExpression6(init) && this.rustNilSelfHelperName(init) !== void 0 && _RustTranspiler.RUST_STRING_LOCAL_HELPERS.has(this.rustNilSelfHelperName(init));
     const kind = reader ? "ostr" : this.rustScalarValueKind(init, true);
     if (kind !== "str" && kind !== "ostr")
+      return false;
+    if (reader && init.arguments.length <= (_RustTranspiler.RUST_SAFE_STRING_KEY_ARGS[this.rustNilSelfHelperName(init)] ?? 2))
       return false;
     if (this.rustScalarLocalOf(node) !== void 0 || this.rustNilLocalOfIdentifier(node) !== void 0 || this.rustStringLocalIdentifierIsTyped(node))
       return false;
@@ -78638,6 +78602,20 @@ _RustTranspiler.RUST_BYTES_SLOTS = {
 _RustTranspiler.RUST_BYTES_FREE_SLOTS = { eddsa: [0, 1], jwt: [1] };
 // ral-xa: unified string keys of a market / currency record (an exchange id key may hold a number, which `as_str` drops)
 _RustTranspiler.RUST_NIL_ELEM_STR_KEYS = /* @__PURE__ */ new Set(["symbol", "base", "quote", "settle", "code"]);
+/** ral-xa: `x = y;` into a nil-declared local, `y` a `Value` local of the same function the checker types string
+ *  (initialised, typed by no scalar / nil / reader rule) at its last use: `y.into_opt_string()` moves the string out. */
+/** ya: argument count of a safeString-family reader before its default (`safeString2(o, a, b, d)`: 3). */
+_RustTranspiler.RUST_SAFE_STRING_KEY_ARGS = {
+  safeString: 2,
+  safeString2: 3,
+  safeStringN: 2,
+  safeStringLower: 2,
+  safeStringLower2: 3,
+  safeStringLowerN: 2,
+  safeStringUpper: 2,
+  safeStringUpper2: 3,
+  safeStringUpperN: 2
+};
 // rustWsClientCallArg: `client.resolve|reject|future|reusableFuture|send(.., x)` on a ws `Client`
 // receiver takes its arguments as plain `Value`s, so a string local boxes there.
 _RustTranspiler.RUST_WS_CLIENT_VALUE_METHODS = /* @__PURE__ */ new Set(["resolve", "reject", "future", "reusableFuture", "send"]);
