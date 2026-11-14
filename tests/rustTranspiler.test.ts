@@ -456,7 +456,7 @@ describe('rust transpiling tests', () => {
         "    break;\n" +
         "}"
         const rust =
-        "while (true) {\n" +
+        "loop {\n" +
         "    let mut x: Value = Value::Int(1);\n" +
         "    break;\n" +
         "}";
