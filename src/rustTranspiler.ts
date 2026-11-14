@@ -6979,8 +6979,10 @@ export class RustTranspiler extends BaseTranspiler {
         const literal = (n) => literalKind !== undefined && this.rustScalarIntLiteral(n) !== undefined ? literalKind : undefined;
         const lk = literal(left) ?? this.rustScalarCompareKind(left);
         const rk = literal(right) ?? this.rustScalarCompareKind(right);
-        if (lk === undefined || rk === undefined) return undefined;
         const sign = equality ? (op === SyntaxKind.EqualsEqualsToken || op === SyntaxKind.EqualsEqualsEqualsToken ? '==' : '!=') : symbol;
+        // of: a typed local against an equality partner its own veto keeps a `Value` (proven `Str|Null` / `Int|Null`)
+        if ((lk === undefined) !== (rk === undefined) && equality) return this.rustScalarValuePartnerTest(lk === undefined ? right : left, lk === undefined ? left : right, lk ?? rk, sign, dry);
+        if (lk === undefined || rk === undefined) return undefined;
         if (equality && (lk === 'slit' || rk === 'slit')) {
             const [ lit, other, ok ] = lk === 'slit' ? [ left, right, rk ] : [ right, left, lk ];
             if (ok !== 'str' && ok !== 'ostr') return undefined;
@@ -7022,6 +7024,58 @@ export class RustTranspiler extends BaseTranspiler {
         const kind = lk === 'num' || rk === 'num' ? 'num' : 'int';
         return `${text(kind, left)} ${sign} ${text(kind, right)}`;
     }
+
+    /** `x == p` of a typed scalar local `x` and a `Value` local `p` whose initializer and every write print
+     *  one scalar family or `Null` (`Str|Null` / `Int|Null`): `is_equal` on those operands is exactly the
+     *  variant compare (`Null == Null`, `Str == Str` by text, `Int == Int`, else false), so the typed side
+     *  compares its own `Option` against `p.as_str()` / `p.as_i64()`. Both read in place, no copy. */
+    rustScalarValuePartnerTest(typed, other, kind: string, sign: string, dry: boolean): string | undefined {
+        const self: any = this.unwrapParens(typed);
+        const partner: any = this.unwrapParens(other);
+        if (!isIdentifier(self) || !isIdentifier(partner) || this.rustScalarIdentifierKind(self) === undefined) return undefined;
+        const base = kind.startsWith('o') ? kind.slice(1) : kind;
+        if ((base !== 'str' && base !== 'int') || this.rustScalarValuePartnerKind(partner) !== base) return undefined;
+        if (dry) return '_';
+        const name = super.printIdentifier(self);
+        const own = base === 'str' ? (kind === 'str' ? `Some(${name}.as_str())` : `${name}.as_deref()`) : (kind === 'int' ? `Some(${name})` : name);
+        return `(${own} ${sign} ${super.printIdentifier(partner)}.${base === 'str' ? 'as_str' : 'as_i64'}())`;
+    }
+
+    /** `'str'` / `'int'` when `p` is a plain `Value` local (no typed-local rule claims it) whose initializer and every
+     *  write is a fresh `str|ostr|null` (`int|oint|null`) producer, written only by whole `p = ..` statements. */
+    rustScalarValuePartnerKind(partner): string | undefined {
+        const declaration: any = this.rustDeclaredNode(partner);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name) || declaration.initializer === undefined) return undefined;
+        if (this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === 'null' || this.rustScalarPending.has(declaration)) return undefined;
+        const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
+        const family = checked === 'string' ? 'str' : (checked === 'number' ? 'int' : undefined);
+        if (family === undefined) return undefined;
+        this.rustScalarPending.add(declaration);
+        try {
+            if (this.rustScalarIdentifierKind(partner) !== undefined || !this.rustScalarPlainValueTarget(partner)) return undefined;
+            const fits = (rhs) => { const k = this.rustScalarValueKind(rhs, true); return k === 'null' || k === family || k === `o${family}`; };
+            if (!fits(declaration.initializer)) return undefined;
+            const scope = this.rustEnclosingFunction(declaration);
+            let ok = true;
+            this.rustScalarUsesAll(declaration, String(declaration.name.text), (n) => {
+                if (this.rustEnclosingFunction(n) !== scope) ok = false;
+                let top: any = n;
+                while (isParenthesizedExpression(top.parent)) top = top.parent;
+                const up: any = top.parent;
+                if (isBinaryExpression(up) && up.left === top && up.operatorToken.kind >= SyntaxKind.FirstAssignment && up.operatorToken.kind <= SyntaxKind.LastAssignment) {
+                    if (up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement || !fits(up.right)) ok = false;
+                }
+                if ((isPrefixUnaryExpression(up) || up?.kind === SyntaxKind.PostfixUnaryExpression) && (up.operator === SyntaxKind.PlusPlusToken || up.operator === SyntaxKind.MinusMinusToken)) ok = false;
+                if (isArrayLiteralExpression(up) && isBinaryExpression(up.parent) && up.parent.left === up) ok = false;
+                return true;
+            });
+            return ok ? family : undefined;
+        } finally {
+            this.rustScalarPending.delete(declaration);
+        }
+    }
+
+    private rustScalarPending = new Set<any>();
 
     rustScalarCompareKind(node): string | undefined {
         if (this.literalKindOfNode(node) === 'string') return node.text in this.StringLiteralReplacements ? undefined : 'slit';

@@ -953,6 +953,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBoolNativeText(expr: any): string | undefined;
     /** Native text of an ordered/equality comparison over typed operands (`dry`: shape check only). */
     rustScalarCompareText(node: any, dry: boolean, literalKind?: string): string | undefined;
+    /** `x == p` of a typed scalar local `x` and a `Value` local `p` whose initializer and every write print
+     *  one scalar family or `Null` (`Str|Null` / `Int|Null`): `is_equal` on those operands is exactly the
+     *  variant compare (`Null == Null`, `Str == Str` by text, `Int == Int`, else false), so the typed side
+     *  compares its own `Option` against `p.as_str()` / `p.as_i64()`. Both read in place, no copy. */
+    rustScalarValuePartnerTest(typed: any, other: any, kind: string, sign: string, dry: boolean): string | undefined;
+    /** `'str'` / `'int'` when `p` is a plain `Value` local (no typed-local rule claims it) whose initializer and every
+     *  write is a fresh `str|ostr|null` (`int|oint|null`) producer, written only by whole `p = ..` statements. */
+    rustScalarValuePartnerKind(partner: any): string | undefined;
+    private rustScalarPending;
     rustScalarCompareKind(node: any): string | undefined;
     /** `s.indexOf("lit") >= 0` / `> -1` / `!== -1` (contains) and `< 0` / `=== -1` (absent) on a typed string. */
     rustScalarContainsTest(node: any, dry: boolean): string | undefined;
