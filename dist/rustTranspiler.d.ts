@@ -2081,7 +2081,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     nativeEqualityText(node: any): string;
     unwrapParens(node: any): any;
     hasNativeComparisonOperand(node: any): any;
-    printLogicalInBooleanContext(node: any): any;
+    printLogicalInBooleanContext(node: any): string;
     printWhileStatement(node: any, identation: any): string;
     printIfStatement(node: any, identation: any): string;
     printPostFixUnaryExpression(node: any, identation: any): string;
@@ -2701,6 +2701,18 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  rebound by `get_arg(.., Value::Map({}))`, so it is always a map (`From<Value> for Params` drops a non-map, and
      *  the empty set's `Value::Null` takes the `{}` default). A list body only reaches untyped `sign` / `request`. */
     rustTypedParamsParam(d: any): boolean;
+    private static readonly RUST_SIGN_MAP_PROOF;
+    private static rustSignProofApi;
+    /** A venue `sign (path, api, method, params)` whose `params` is a map on every path. `params` reaches `sign` only
+     *  through `fetch2` (from `request`, every implicit endpoint and the venue's own direct calls); the base declares
+     *  it `Dict`, but a list body passes through untouched (`omit` hands a list back, and `into_dict()` would empty
+     *  it). So the venue is proven when every request-path call in its own file, its pro file and each subclass file
+     *  that inherits this `sign` hands over a map: an object literal, a map builder (`extend`, `deepExtend`,
+     *  `keysort`, `ordered`, `omit` of a proven map), a `Dict` parameter, a `handle*AndParams` params slot, a method
+     *  declared `Dict`, or a local whose every write is one of these. Any list literal, any dynamic `this[name] (..)`
+     *  / `callDynamically` call, or anything else unproven fails the venue (fail closed). */
+    rustSignParamsProvenMap(fn: any): boolean;
+    rustSignParamsProofUncached(root: string, venue: string): boolean;
     /** The `params` slot of a typed unified call (`impl Into<crate::Params> + Send`): `From<Value> for Params` takes the
      *  boxed map exactly as it took the `Value` local, so a dict local boxes there once (moved at the last use). */
     rustTypedParamsSlot(call: any, at: number): boolean;
