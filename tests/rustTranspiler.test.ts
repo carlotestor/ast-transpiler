@@ -13662,3 +13662,22 @@ describe('ral-xh: omit results lent to the encoder slots', () => {
         expect(out).toContain('let mut query: Value = ');
     });
 });
+
+describe('ral-yh: a proven-map producer lends its Dict to json', () => {
+    const write = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    omit (x: any, ...args: any): any { return x; }\n    extend (...args: any): any { return {}; }\n    extractParams (s: string): string[] { return []; }\n    urlencode (o: any): string { return ''; }\n    json (o: any): string { return ''; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venue + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('extend ({}, omit (params, ..)) read by Object.keys, urlencode and json holds the Dict and lends it to json', () => {
+        const out = write ('yh-json', "    sign (path: string, params: Dict = {}) {\n        let url = '/' + path;\n        let body = undefined;\n        const query = this.extend ({}, this.omit (params, this.extractParams (path)));\n        if (Object.keys (query).length) {\n            url += '?' + this.urlencode (query);\n        }\n        body = this.json (query);\n        return [ url, body ];\n    }\n");
+        expect(out).toContain('let mut query: crate::value::Dict = ');
+        expect(out).not.toContain('let mut query: Value = ');
+    });
+    test('negative: an omit of sign params read by json keeps its box (a list body passes omit, json tells it from a map)', () => {
+        const out = write ('yh-jsonn', "    sign (path: string, params: Dict = {}) {\n        let url = '/' + path;\n        let body = undefined;\n        const query = this.omit (params, this.extractParams (path));\n        if (Object.keys (query).length) {\n            url += '?' + this.urlencode (query);\n        }\n        body = this.json (query);\n        return [ url, body ];\n    }\n");
+        expect(out).not.toContain('let mut query: crate::value::Dict = ');
+    });
+});

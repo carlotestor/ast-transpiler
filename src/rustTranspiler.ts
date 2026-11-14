@@ -17071,7 +17071,7 @@ export class RustTranspiler extends BaseTranspiler {
             if ((endpoint || this.rustLentContainerSource(init)) && this.rustLentEndpointSlot(up, n, from)) return ++lentResponses > 0 && ++reads > 0;
             // `json` tells Null from an empty container: only a never-null source lends there as the plain container
             // `omit` hands a list through unchanged: its result reaches the encoder slots only when its head is a proven map
-            if ((from === 'dict' || from === 'list') && this.rustLentHelperSlot(up, n, from) && (String(up.expression.name.text) !== 'json' || endpoint || this.rustLentContainerSource(init))
+            if ((from === 'dict' || from === 'list') && this.rustLentHelperSlot(up, n, from) && (String(up.expression.name.text) !== 'json' || endpoint || this.rustLentContainerSource(init) || (from === 'dict' && this.rustJsonMapProducer(init)))
                 && !(RustTranspiler.RUST_LIST_TELLING_SLOTS.has(String(up.expression.name.text)) && this.rustBaseCallNamed(init, RustTranspiler.RUST_HANDED_DICT_OMIT) && !this.rustOmitOfDict(init))) return ++lentResponses > 0 && ++reads > 0;
             if (this.rustLentOptionalHandOff(up, n, init, from, nilDeclared)) return ++lentNullable > 0 && ++reads > 0;
             // a lent params slot (`watch` message, a lent `params`) takes the built map by reference, as the handed rule lends it
@@ -17191,6 +17191,18 @@ export class RustTranspiler extends BaseTranspiler {
         const d: any = isIdentifier(arg) ? this.rustDeclarationOfIdentifier(arg) : undefined;
         if (d === undefined || !isVariableDeclaration(d) || d.name === arg) return undefined;
         return this.rustVecLocalIsTyped(d) || this.rustLentListLocal(d) ? 'list' : undefined;
+    }
+
+    /** ral-yh: a producer that answers `Value::Map` on every path, so `json` of it can never print `null` or a list:
+     *  `extend` (always `Value::Map(out)`), `indexBy` / `groupBy`, `deepExtend` whose every operand is a proven map, and an
+     *  `omit` of a proven map head. An `omit (params, ..)` of `sign`'s params is not one (a list body passes through). */
+    rustJsonMapProducer(init: any): boolean {
+        if (init === undefined || !isCallExpression(init) || !isPropertyAccessExpression(init.expression) || this.rustTestTierSource(init)) return false;
+        const name = String(init.expression.name.text);
+        if (name === 'extend' || name === 'indexBy' || name === 'groupBy') return this.rustBuiltReturnSourceKind(init) === 'dict';
+        if (name === 'deepExtend') return this.rustDeepExtendOfMaps(init);
+        if (name === 'omit') return this.rustOmitOfDict(init);
+        return false;
     }
 
     /** `x[k]`, read only (no write, call, property or nested element target), with a numeric literal key or a key local
