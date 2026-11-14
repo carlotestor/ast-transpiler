@@ -855,6 +855,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarSelfArgBox(n: any): boolean;
     /** A local keyed on a field and re-boxed anywhere but a moving use would copy where the `Value` moved. */
     rustFieldKeyCostly(declaration: any): boolean;
+    /** rf: the map `m[k] = v` writes into is not a call-bound local that a typed key turns into an IndexMap bearer (its
+     *  `.as_map().cloned()` copies the map out of the `Value`; bitvavo `limits`). A literal-bound map, or one whose insert
+     *  stays the guarded `if let Value::Dict(..)` write, takes the key text with no copy. */
+    rustLiteralKeyReceiver(n: any): boolean;
     /** A loop (or closure) lies between the declaration and `n`: a box there repeats. */
     rustLoopAfterDeclaration(n: any, declaration: any): boolean;
     /** The statement holding `n` reads the local again. */
@@ -1108,6 +1112,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarLengthText(node: any, boxed: boolean): string | undefined;
     private rustNativeStrReturnDecisions;
     private static readonly RUST_BASE_TIER_FILE;
+    private static readonly RUST_PRO_TIER_FILE;
     /** `'str'` when the method is emitted `-> Option<String>`, else undefined. */
     rustNativeStrReturnKind(node: Node): string | undefined;
     private rustMethodOverrides;
@@ -2351,6 +2356,21 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_TYPED_LIST_FIELDS;
     rustTypedListField(node: any): boolean;
     printTypedListFieldRead(node: any): string | undefined;
+    /** rf: `x === undefined` / `x !== undefined` of a local bound to a typed list field (`this.symbols`): the field is a
+     *  `List`, so the boxed `Value::Arr(..)` the local held was never `Null` and the test is a constant. */
+    rustLentFieldNullTest(up: any, at: any, init: any): boolean;
+    printLentFieldListNullTest(left: any, right: any, op: any): string | undefined;
+    private rustHandlerTableLocals;
+    rustHandlerTableLocal(declaration: any): boolean;
+    rustHandlerTableLocalUncached(declaration: any): boolean;
+    /** `this.safeValue (table, k)` of a base-tier `safeValue` over a handler table. */
+    rustHandlerTableRead(expr: any): boolean;
+    printHandlerTableLocalWrite(left: any, right: any): string | undefined;
+    /** A local map literal whose every value is a `this.<method>` reference, only read by `this.safeValue (m, k)`. */
+    rustHandlerTable(node: any): boolean;
+    rustHandlerTableLocalOf(node: any): boolean;
+    printHandlerTableLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
+    printHandlerTableNullTest(left: any, right: any, op: any): string | undefined;
     rustLentListUse(node: any): boolean;
     /** `x.join("lit")` on a lent `string[]` list: each element's `Display` text (the helper's `stringify_simple` for
      *  `Str` / `Int` / `Float` / `Bool` / `Null`) joined by the literal, with no copy of the list. */
