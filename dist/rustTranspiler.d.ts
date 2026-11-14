@@ -1444,6 +1444,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBookSideLocalOf(node: any): boolean;
     private rustBookSideParams;
     rustBookSideParam(param: any): boolean;
+    private static readonly RUST_BOOK_SIDE_GROUP;
+    rustBookSideGroupParam(param: any): boolean;
+    /** Every use of the parameter is a side operation statement, a `length` read, a level read or a side-slot hand-on. */
+    rustBookSideUsesOnly(param: any, allowNone: boolean): boolean;
     rustBookSideParamUncached(param: any): boolean;
     /** The argument lands in a side parameter slot of a `this.<m>(..)` call. */
     rustBookSideArgSlot(n: any): boolean;
@@ -2707,7 +2711,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Whether some string matches both patterns (a sound over-approximation: prefix and suffix agree). */
     static rustWsPatternsMeet(a0: Array<string | null>, b0: Array<string | null>): boolean;
     /** The typed kind a resolved value passes as, or undefined. */
-    rustWsResolvedKind(x: any): 'book' | 'cache' | undefined;
+    rustWsResolvedKind(x: any): 'book' | 'cache' | 'dict' | undefined;
+    private static readonly RUST_WS_MAP_RECORD_BUILDERS;
+    /** A resolved value that is a map on every path: a base record builder call, a sync method of the same class whose
+     *  every return is one, or an unreassigned single local bound to one. */
+    rustWsResolvedMap(x: any, depth: number): boolean;
     /** Any write of the local after its declaration (an assignment or an update). */
     rustLocalReassigned(declaration: any): boolean;
     /** Every resolve of the ws class with its hash patterns and kind; null when the class has ws relatives. */
@@ -2731,10 +2739,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A ws subclass whose only methods are `describe` / `describeData` adds no handler and no resolve. */
     rustWsDescribeOnly(path: string): boolean;
     /** The proven kind of an `await this.watch|watchMultiple (..)` initializer, else undefined. */
-    rustWsWatchResultKind(init: any): 'book' | 'cache' | undefined;
+    rustWsWatchResultKind(init: any): 'book' | 'cache' | 'dict' | undefined;
     /** The hash patterns a `this.watch|watchMultiple (..)` call (or a venue wrapper whose every return is one) awaits;
      *  undefined when the call is anything else. Runs with `rustWsHashEnv` binding the wrapper parameters. */
     rustWsAwaitedHashes(call: any, cls: any, depth: number): Array<Array<string | null>> | undefined;
+    /** `this.m (.., list, ..)` of a sync method of the same class whose parameter at `at` is never reassigned, pushed to,
+     *  element-written or handed on: only read (`p[i]`, `p.length`) or stored as an object literal value. */
+    rustWsReadOnlyListArg(call: any, at: number): boolean;
     /** The patterns of a watchMultiple hash list: an array literal, a wrapper parameter bound to one, or a list local
      *  initialised from a literal that only grows by `x.push (h)` statements and is read only as a watch argument. */
     rustWsHashListPatterns(harg: any, depth: number): Array<Array<string | null>> | undefined;
