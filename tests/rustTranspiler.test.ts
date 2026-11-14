@@ -318,6 +318,22 @@ describe('rust transpiling tests', () => {
         expect(out).toContain('m.insert("y".to_string(), b);');
     });
 
+    test('a slice element clones a local read again and moves one at its last use', () => {
+        const ts = [
+            'class A {',
+            '    opt (a: any = undefined) { return a; }',
+            '    run (x: any, y: any) {',
+            '        this.opt (x);',
+            '        this.opt (y);',
+            '        return x;',
+            '    }',
+            '}',
+        ].join('\n');
+        const out = transpiler.transpileRust(ts).content;
+        expect(out).toContain('self.opt(&[x.clone()])');
+        expect(out).toContain('self.opt(&[y])');
+    });
+
     test('a for-loop counter handed off by value is cloned (the next pass reads it again)', () => {
         const ts = [
             'class A {',
@@ -5074,11 +5090,11 @@ describe('safeDict / builder plain dicts and bool-value truthiness', () => {
         expect(output).toContain('let mut paginate: bool = ');
         expect(output).toContain('if paginate {');
         expect(output).toContain('if isTrigger.as_bool() == Some(true) {');
-        expect(output).toContain('if !(self.isConditionalOrder(&[params]).as_bool() == Some(true)) {');
+        expect(output).toContain('if !(self.isConditionalOrder(&[params.clone()]).as_bool() == Some(true)) {');
     });
 
     test('an any-valued method / tuple element keeps is_true', () => {
-        expect(output).toContain('if is_true(&self.looseFlag(&[params])) {');
+        expect(output).toContain('if is_true(&self.looseFlag(&[params.clone()])) {');
         expect(output).toContain('if is_true(&loose) {');
     });
 });

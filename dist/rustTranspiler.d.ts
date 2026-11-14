@@ -1218,6 +1218,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     static rustLentMark(text: string): string;
     private static readonly RUST_BY_VALUE_CALLEE_NO_SUPER;
     static cloneByValueCallArgs(text: string, superCalls?: boolean): string;
+    /** A bare local element of a `&[..]` argument slice is moved into the
+     *  temporary: it is cloned unless the printer marked it owned (`\u0004`: a `Copy` local or its last use). */
+    static cloneSliceElements(text: string): string;
     private static rustBalancedClose;
     private static rustSplitTopLevel;
     printCallExpression(node: any, identation: any): string;

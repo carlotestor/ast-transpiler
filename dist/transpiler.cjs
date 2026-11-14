@@ -60056,7 +60056,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         const ownedArgs = (list) => list.map((a, i) => this.rustOwnedArgText(a, this.rustWsWatchSlot(node, i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, i))).join(", ");
         const requiredArgs = [ownedArgs(args.slice(0, sig.requiredCount)), ...this.rustVenuePads(calleeParams, args.length, sig.requiredCount)].filter((a) => a !== "").join(", ");
         const reqPart = requiredArgs ? `${requiredArgs}, ` : "";
-        return `self.${methodName}(${reqPart}&[${printArgs(args.slice(sig.requiredCount), sig.requiredCount)}])`;
+        return `self.${methodName}(${reqPart}&[${args.slice(sig.requiredCount).map((a, i) => this.rustOwnedArgText(a, printArgs([a], sig.requiredCount + i))).join(", ")}])`;
       }
     }
     return void 0;
@@ -60090,7 +60090,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (args.length < fixed || args.length > 0 && args[args.length - 1].startsWith("&["))
       return void 0;
     const params = this.rustCalleeParams(node);
-    const cloned = args.map((a, at) => at >= node.arguments.length || this.rustVenueStrSlot(params, at) !== void 0 || this.rustMarketSlot(params, at) || this.rustCurrencySlot(params, at) ? a : this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== void 0 ? a : at < fixed && this.rustOwnedArgText(node.arguments[at], a) !== a ? `${a}` : this.rustSliceArgText(a));
+    const cloned = args.map((a, at) => at >= node.arguments.length || this.rustVenueStrSlot(params, at) !== void 0 || this.rustMarketSlot(params, at) || this.rustCurrencySlot(params, at) ? a : this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== void 0 ? a : this.rustOwnedArgText(node.arguments[at], a) !== a ? `${a}` : this.rustSliceArgText(a));
     return `${receiver}.${methodName}(${cloned.slice(0, fixed).join(", ")}${fixed > 0 ? ", " : ""}&[${cloned.slice(fixed).join(", ")}])`;
   }
   /** A ws `super.parseX (x, market)` to a fixed-arity parser with a lent market slot: by-value locals are cloned
@@ -60315,6 +60315,35 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(t) && !["self", "None", "true", "false"].includes(t) ? `${t}.clone()` : a;
       }).join(", ");
       out += text.slice(absStart, callStart) + cloned + ")";
+      i = j + 1;
+    }
+    return out;
+  }
+  /** A bare local element of a `&[..]` argument slice is moved into the
+   *  temporary: it is cloned unless the printer marked it owned (`\u0004`: a `Copy` local or its last use). */
+  static cloneSliceElements(text) {
+    const elements = (inside) => {
+      const parts = _RustTranspiler.rustSplitTopLevel(inside);
+      return parts === void 0 ? inside : parts.map((a) => _RustTranspiler.isBareLocal(a) && a !== "None" ? `${a}.clone()` : a).join(", ");
+    };
+    let out = "";
+    let i = 0;
+    const re = /[,(]\s*&\[/g;
+    while (i < text.length) {
+      re.lastIndex = i;
+      const m = re.exec(text);
+      if (!m) {
+        out += text.slice(i);
+        break;
+      }
+      const open = m.index + m[0].length;
+      const j = _RustTranspiler.rustBalancedClose(text, open);
+      if (j >= text.length) {
+        out += text.slice(i);
+        break;
+      }
+      const head = `${m[0][0]}${m[0][0] === "(" ? "" : " "}&[`;
+      out += text.slice(i, m.index) + head + elements(_RustTranspiler.cloneSliceElements(text.slice(open, j))) + "]";
       i = j + 1;
     }
     return out;
@@ -62191,7 +62220,7 @@ ${ind}let ${view}: &${map} = &${arc};
       const file = String(_nullishCoalesce(node.fileName, () => ( "")));
       const test = /ts[/]src[/](?:pro[/])?test[/]/.test(file);
       const ws = /ts[/]src[/]pro[/]/.test(file);
-      return _RustTranspiler.cloneByValueCallArgs(_RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws).replaceAll("", "");
+      return _RustTranspiler.cloneSliceElements(_RustTranspiler.cloneByValueCallArgs(_RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws)).replaceAll("", "");
     }
     return this.printNodeUncloned(node, identation);
   }

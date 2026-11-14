@@ -8991,7 +8991,7 @@ export class RustTranspiler extends BaseTranspiler {
                 const ownedArgs = (list) => list.map((a, i) => this.rustOwnedArgText(a, this.rustWsWatchSlot(node, i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, i))).join(', ');
                 const requiredArgs = [ ownedArgs(args.slice(0, sig.requiredCount)), ...this.rustVenuePads(calleeParams, args.length, sig.requiredCount) ].filter((a) => a !== '').join(', ');
                 const reqPart = requiredArgs ? `${requiredArgs}, ` : '';
-                return `self.${methodName}(${reqPart}&[${printArgs(args.slice(sig.requiredCount), sig.requiredCount)}])`;
+                return `self.${methodName}(${reqPart}&[${args.slice(sig.requiredCount).map((a, i) => this.rustOwnedArgText(a, printArgs([ a ], sig.requiredCount + i))).join(', ')}])`;
             }
         }
 
@@ -9071,7 +9071,7 @@ export class RustTranspiler extends BaseTranspiler {
         const args = this.rustPrintedArgs(node, identation);
         if (args.length < fixed || (args.length > 0 && args[args.length - 1].startsWith('&['))) return undefined;
         const params = this.rustCalleeParams(node);
-        const cloned = args.map((a, at) => at >= node.arguments.length || this.rustVenueStrSlot(params, at) !== undefined || this.rustMarketSlot(params, at) || this.rustCurrencySlot(params, at) ? a : this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : (at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== undefined ? a : (at < fixed && this.rustOwnedArgText(node.arguments[at], a) !== a ? `\u0004${a}` : this.rustSliceArgText(a))));
+        const cloned = args.map((a, at) => at >= node.arguments.length || this.rustVenueStrSlot(params, at) !== undefined || this.rustMarketSlot(params, at) || this.rustCurrencySlot(params, at) ? a : this.rustWsWatchSlot(node, at) ? this.rustWsWatchSlotText(node.arguments[at], a) : (at === 0 && this.printExtendHeadArg(node.arguments[0], a) !== undefined ? a : (this.rustOwnedArgText(node.arguments[at], a) !== a ? `\u0004${a}` : this.rustSliceArgText(a))));
         return `${receiver}.${methodName}(${cloned.slice(0, fixed).join(', ')}${fixed > 0 ? ', ' : ''}&[${cloned.slice(fixed).join(', ')}])`;
     }
 
@@ -9300,6 +9300,30 @@ export class RustTranspiler extends BaseTranspiler {
                 return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(t) && !['self', 'None', 'true', 'false'].includes(t) ? `${t}.clone()` : a;
             }).join(', ');
             out += text.slice(absStart, callStart) + cloned + ')';
+            i = j + 1;
+        }
+        return out;
+    }
+
+    /** A bare local element of a `&[..]` argument slice is moved into the
+     *  temporary: it is cloned unless the printer marked it owned (`\u0004`: a `Copy` local or its last use). */
+    static cloneSliceElements(text: string): string {
+        const elements = (inside: string) => {
+            const parts = RustTranspiler.rustSplitTopLevel(inside);
+            return parts === undefined ? inside : parts.map((a) => (RustTranspiler.isBareLocal(a) && a !== 'None' ? `${a}.clone()` : a)).join(', ');
+        };
+        let out = '';
+        let i = 0;
+        const re = /[,(]\s*&\[/g;
+        while (i < text.length) {
+            re.lastIndex = i;
+            const m = re.exec(text);
+            if (!m) { out += text.slice(i); break; }
+            const open = m.index + m[0].length;
+            const j = RustTranspiler.rustBalancedClose(text, open);
+            if (j >= text.length) { out += text.slice(i); break; }
+            const head = `${m[0][0]}${m[0][0] === '(' ? '' : ' '}&[`;
+            out += text.slice(i, m.index) + head + elements(RustTranspiler.cloneSliceElements(text.slice(open, j))) + ']';
             i = j + 1;
         }
         return out;
@@ -11180,7 +11204,7 @@ export class RustTranspiler extends BaseTranspiler {
             const file = String((node as any).fileName ?? '');
             const test = /ts[/]src[/](?:pro[/])?test[/]/.test(file);
             const ws = /ts[/]src[/]pro[/]/.test(file);
-            return RustTranspiler.cloneByValueCallArgs(RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws).replaceAll('\u0004', '');
+            return RustTranspiler.cloneSliceElements(RustTranspiler.cloneByValueCallArgs(RustTranspiler.cloneAliasSources(this.printNodeUncloned(node, identation), !test), !ws)).replaceAll('\u0004', '');
         }
         return this.printNodeUncloned(node, identation);
     }
