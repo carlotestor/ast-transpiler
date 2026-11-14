@@ -2917,14 +2917,35 @@ export class RustTranspiler extends BaseTranspiler {
         return ok;
     }
 
+    /** ral-va: an identifier partner of an optional-string `+` operand whose checker type is string-or-nullish: the
+     *  pair prints the `format!` arm whatever its Rust form (`Value`, `String`, `Option<String>` read), and each of
+     *  those displays as the JS concat does (Str text, Null `null`). */
+    rustNilConcatPartner(other): boolean {
+        const inner: any = this.unwrapParensNode(other);
+        if (inner === undefined) return false;
+        // ral-va: a `const` local with an initializer or a `this.` field (never another nil-declared local or a parameter,
+        // whose own decisions the existing negatives keep boxed)
+        let place = isPropertyAccessExpression(inner) && inner.expression.kind === SyntaxKind.ThisKeyword;
+        if (isIdentifier(inner)) {
+            const decl: any = this.rustDeclaredNode(inner);
+            place = decl !== undefined && isVariableDeclaration(decl) && decl.initializer !== undefined && this.literalKindOfNode(decl.initializer) !== 'null'
+                && (decl.parent?.flags & NodeFlags.Const) !== 0;
+        }
+        return place && this.literalKindOfNode(inner) !== 'null'
+            && this.isStringOrNullishType(this.typeOfNodeIfAny(inner)) && this.isStringLikeType(this.typeOfNodeIfAny(inner));
+    }
+
     // An optional string joins a `format!` concat whose other operand is always a string: the
     // operand prints as `as_deref().unwrap_or("null")`, the text `Display` gives the boxed form.
     rustNilOptStrConcatUse(n): boolean {
         const parent: any = n.parent;
         if (!isBinaryExpression(parent) || parent.operatorToken.kind !== SyntaxKind.PlusToken) return false;
         const other: any = parent.left === n ? parent.right : parent.left;
-        if (!this.alwaysStr(other) || this.primitiveKindOfType(this.typeOfNodeIfAny(n)) !== 'string') return false;
+        if (this.primitiveKindOfType(this.typeOfNodeIfAny(n)) !== 'string') return false;
         if (!this.isNativeStringConcatPair(this.typeOfNodeIfAny(parent.left), this.typeOfNodeIfAny(parent.right))) return false;
+        // ral-va: a checker-string partner that is not always a Str (a `Value` / optional local) still takes the
+        // `format!` arm (the pair test above), where `Display` of the `Value` it replaces printed `null` / the text
+        if (!this.alwaysStr(other) && !this.rustNilConcatPartner(other)) return false;
         return this.rustOptStrConcatFits(n);
     }
 

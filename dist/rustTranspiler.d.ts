@@ -393,6 +393,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Every box before the last sits at a `this.` / `super.` argument (where the `Value` form was cloned); no free-function,
      *  `Precise`, `Math` or `new` operand, which read `&Value` and would take a copy only because of the lending. */
     rustNilStrLendSites(declaration: any): boolean;
+    /** ral-va: an identifier partner of an optional-string `+` operand whose checker type is string-or-nullish: the
+     *  pair prints the `format!` arm whatever its Rust form (`Value`, `String`, `Option<String>` read), and each of
+     *  those displays as the JS concat does (Str text, Null `null`). */
+    rustNilConcatPartner(other: any): boolean;
     rustNilOptStrConcatUse(n: any): boolean;
     /** The `as_deref().unwrap_or("null")` read of a concat operand keeps its statement within the 400-char line budget. */
     rustOptStrConcatFits(n: any): boolean;
