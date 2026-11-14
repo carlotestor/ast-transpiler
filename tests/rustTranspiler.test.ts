@@ -14530,3 +14530,28 @@ describe('ral-40f: a nested literal-key write on a typed params slot inserts the
         hasNot.forEach((h) => expect(out).not.toContain(h));
     });
 });
+
+describe('ral-40f: a defaulted safeDict / safeList local written whole into this.options[k] keeps its typed container (no veto for the r05 store)', () => {
+    const mk = (body: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-40f-bo-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base/ws'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    balance: Dict = {};\n    options: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeDict (o: any, k: any, d: Dict = undefined): Dict | undefined { return o[k]; }\n    safeList (o: any, k: any, d: any[] = undefined): any[] | undefined { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/ws/Client.ts'), "export default class Client {\n    resolve (v: any, h: string | undefined = undefined): void {}\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange';\nimport type { Dict } from '../base/Exchange';\nimport Client from '../base/ws/Client';\nexport default class venue extends Exchange {\n" + body + "\n}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    test('a defaulted map stored then returned shares the map (Value::from(&x), an Arc bump) and a list stored last moves', () => {
+        const out = mk("    loadMeta (response: Dict): Dict {\n        const data = this.safeDict (response, 'data', {});\n        this.options['meta'] = data;\n        return data;\n    }\n    storeChains (multi: Dict): void {\n        const chains = this.safeList (multi, 'chains', []);\n        this.options['chains'] = chains;\n    }");
+        expect(out).toContain('let mut data: crate::value::Dict = ');
+        expect(out).toContain('insert("meta".into(), Value::from(&data))');
+        expect(out).toContain('let mut chains: crate::value::List = ');
+        expect(out).toContain('insert("chains".into(), Value::Arr(chains))');
+    });
+    test('negative: a scalar written into a nested write keeps the scalar use-form veto (Value local)', () => {
+        const out = mk("    keep (m: Dict): void {\n        const flag = this.safeString (m, 'f');\n        this.options['a']['b'] = flag;\n    }");
+        expect(out).not.toContain('let mut flag: Option<String>');
+    });
+});

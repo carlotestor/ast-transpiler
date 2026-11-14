@@ -2842,7 +2842,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isBinaryExpression(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement) return false;
         const left: any = up.left;
         if (!isElementAccessExpression(left) && !isPropertyAccessExpression(left)) return false;
-        if (!isIdentifier(left.expression) || this.rustScalarInNestedWrite(n)) return false;
+        if (!isIdentifier(left.expression) || this.rustScalarInNestedWrite(n, true)) return false;
         const own: any = this.rustDeclarationOfIdentifier(n);
         if (this.rustIdentifierRefersToDeclaration(left.expression, own)) return false;
         if (!isElementAccessExpression(left) || isStringLiteralLikeNode(this.rustSkipWrappers(left.argumentExpression))) return true;
@@ -6364,7 +6364,7 @@ export class RustTranspiler extends BaseTranspiler {
             && parent.parent.expression === parent && parent.parent.arguments.length === 0) return true;
         if (isElementAccessExpression(parent) || (isPropertyAccessExpression(parent) && parent.expression === n)) return false;
         if (isArrayLiteralExpression(parent) && isBinaryExpression(parent.parent) && parent.parent.left === parent) return false;
-        if (this.rustScalarInNestedWrite(n)) return false;
+        if (this.rustScalarInNestedWrite(n, true)) return false;
         return true;
     }
 
@@ -7301,7 +7301,7 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustNestedDictBearerDeclaration(outer.expression.expression) !== undefined;
     }
 
-    rustScalarInNestedWrite(n): boolean {
+    rustScalarInNestedWrite(n, boxUse?: boolean): boolean {
         let current: any = n;
         while (current.parent !== undefined && !isStatement(current.parent)) current = current.parent;
         const write: any = isBinaryExpression(current) ? current : undefined;
@@ -7309,7 +7309,12 @@ export class RustTranspiler extends BaseTranspiler {
             || !(isElementAccessExpression(write.left.expression) || isPropertyAccessExpression(write.left.expression))) return false;
         // a `this.f[k] = this.m(.., n, ..)` source: `n` is a call argument evaluated before the write, the
         // text passes key on the target and the whole right-hand side, never on an argument inside it
-        return !(this.rustThisFieldTarget(write.left.expression) && this.rustInsideCallArgument(n, write.right));
+        if (this.rustThisFieldTarget(write.left.expression) && this.rustInsideCallArgument(n, write.right)) return false;
+        // ral-40f: a box use (not a scalar use form) inside a nested write no ccxt pass decides on: the untagged
+        // `this.balance|options[..]` stores (the r05 insert copies the value text verbatim; zf measured it type-agnostic)
+        // and the typed params-slot insert the printer itself prints (printSlotNestedInsert; nativeInserts never sees it)
+        if (boxUse === true && (this.rustBalanceOptionsPlace(write.left) || this.rustPrintedSlotNestedWrite(write.left))) return false;
+        return true;
     }
 
     // ── nested plain-field writes (rustNestedFieldKeyUse / printNestedFieldKeyWrite) ──
@@ -12872,7 +12877,7 @@ export class RustTranspiler extends BaseTranspiler {
     // `optional_args` slice as the shared map (`From<&Dict>`, no copy).
 
     rustStrSlotBoxUse(n: any): boolean {
-        if (this.rustScalarInNestedWrite(n)) return false;
+        if (this.rustScalarInNestedWrite(n, true)) return false;
         const parent: any = n.parent;
         if (isCallExpression(parent) && parent.expression !== n) {
             const callee: any = parent.expression;
@@ -17387,7 +17392,7 @@ export class RustTranspiler extends BaseTranspiler {
      *  literal property or array element, or `return x`; a nullable local only feeds base `safe*` readers. */
     rustContainerBoxForm(n: any, neverNull: boolean): 'clone' | 'move' | undefined {
         const parent: any = n.parent;
-        if (parent === undefined || this.rustScalarInNestedWrite(n)) return undefined;
+        if (parent === undefined || this.rustScalarInNestedWrite(n, true)) return undefined;
         if (isCallExpression(parent) && parent.expression !== n && parent.arguments.some((a: any) => a === n)) {
             const at = Array.from(parent.arguments).indexOf(n);
             if (!this.rustNilBoxSlotOk(parent, at) || !isPropertyAccessExpression(parent.expression)
@@ -18241,7 +18246,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (isBinaryExpression(parent) && this.isEqualityOp(parent.operatorToken.kind)) {
                 return this.literalKindOfNode(this.unwrapParens(parent.left === n ? parent.right : parent.left)) === 'null';
             }
-            if ((parent?.kind === SyntaxKind.PropertyAssignment && parent.initializer === n && !this.rustScalarInNestedWrite(n))
+            if ((parent?.kind === SyntaxKind.PropertyAssignment && parent.initializer === n && !this.rustScalarInNestedWrite(n, true))
                 || (isReturnStatement(parent) && parent.expression === n)) {
                 boxes++;
                 return true;
@@ -18502,7 +18507,7 @@ export class RustTranspiler extends BaseTranspiler {
         const up: any = n.parent;
         // ral-we: a watch result proven a map hands on whole like a map element
         const watched = init !== undefined && init.parent?.kind === SyntaxKind.AwaitExpression && this.rustWsWatchResultKind(init.parent) === 'dict';
-        if (!watched && !this.rustDictElementSource(init) && !this.rustListElementSource(init) || up === undefined || this.rustScalarInNestedWrite(n)) return false;
+        if (!watched && !this.rustDictElementSource(init) && !this.rustListElementSource(init) || up === undefined || this.rustScalarInNestedWrite(n, true)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
         // `rows.push (row)` into another local list: the list keeps its own type, the element enters as the shared map
         if (isCallExpression(up) && isPropertyAccessExpression(up.expression) && isIdentifier(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n
@@ -18545,7 +18550,7 @@ export class RustTranspiler extends BaseTranspiler {
         // the map by value, so the shared handle is boxed there once (moved at the last use), the `Value` the boxed local handed over
         if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
             && isElementAccessExpression(up.left) && this.rustBalanceOptionsPlace(up.left)) return true;
-        if (this.rustScalarInNestedWrite(n)) return false;
+        if (this.rustScalarInNestedWrite(n, true)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
         if (!isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression) || up.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const callee = String(up.expression.name.text);
@@ -18611,7 +18616,7 @@ export class RustTranspiler extends BaseTranspiler {
     // takes the shared handle (moved at the last use, else the Arc bump the boxed local's copy paid).
     rustDefaultedContainerBoxUse(n: any, init: any): boolean {
         const up: any = n.parent;
-        if (init === undefined || !isCallExpression(init) || up === undefined || this.rustScalarInNestedWrite(n)) return false;
+        if (init === undefined || !isCallExpression(init) || up === undefined || this.rustScalarInNestedWrite(n, true)) return false;
         const from = this.rustBorrowedSourceKind(init);
         if ((from !== 'dict' && from !== 'list') || !/^safe(?:Dict|List)(?:2|N)?$/.test(String((init.expression as any).name?.text ?? ''))
             || !this.rustContainerInitNeverNull(init, from === 'list' ? 'list' : 'map') || this.rustContainerInitReadsStore(init)) return false;
@@ -18678,7 +18683,7 @@ export class RustTranspiler extends BaseTranspiler {
     // `Value` the reader answered (moved at the last use, else the Arc bump the boxed local's copy paid).
     rustOptReaderBoxUse(n: any, init: any): boolean {
         const up: any = n.parent;
-        if (init === undefined || !isCallExpression(init) || up === undefined || this.rustScalarInNestedWrite(n)) return false;
+        if (init === undefined || !isCallExpression(init) || up === undefined || this.rustScalarInNestedWrite(n, true)) return false;
         if (this.rustBorrowedSourceKind(init) !== 'dict' || !/^safeDict(?:2|N)?$/.test(String((init.expression as any).name?.text ?? ''))
             || !this.rustOptContainerSourceOk(init, 'dict') || this.rustContainerInitNeverNull(init, 'map') || this.rustContainerInitReadsStore(init)
             || this.rustWsFieldRead(init) !== undefined || this.rustInitReadsTaggedStore(init)) return false;
@@ -19208,7 +19213,7 @@ export class RustTranspiler extends BaseTranspiler {
     // answer of the declared shape, Null for an unset local.
     rustDeclaredEndpointBoxUse(n: any): boolean {
         const up: any = n.parent;
-        if (up === undefined || this.rustScalarInNestedWrite(n)) return false;
+        if (up === undefined || this.rustScalarInNestedWrite(n, true)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n && isObjectLiteralExpression(up.parent) && !this.rustInDestructureWrite(n);
         if (isReturnStatement(up)) return up.expression === n;
         // ral-ua: an arm of a ternary whose other arm is a literal boxes like a return (the arm value is the box)
@@ -19238,7 +19243,7 @@ export class RustTranspiler extends BaseTranspiler {
             && up.parent?.kind === SyntaxKind.ExpressionStatement && (this.rustFieldKeyReceiver(up.left.expression) !== undefined || this.rustDictShapedFieldInsert(up.left.expression))) {
             return !new RegExp(`\\b${String(n.text)}\\b`).test(String(up.left.argumentExpression.getText()));
         }
-        if (this.rustScalarInNestedWrite(n)) return false;
+        if (this.rustScalarInNestedWrite(n, true)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
         if (isReturnStatement(up)) return up.expression === n;
         // an element of a destructuring target `[a, x] = ..` is a write, not a box
@@ -19417,7 +19422,7 @@ export class RustTranspiler extends BaseTranspiler {
     /** `this.safeX (o, '<k>'[, d])`: a base by-reference reader whose container is `o`, at a literal non-index string key. */
     rustSafeValueKeyReaderUse(n: any): boolean {
         const up: any = n.parent;
-        if (!isCallExpression(up) || up.arguments[0] !== n || this.rustScalarInNestedWrite(n)) return false;
+        if (!isCallExpression(up) || up.arguments[0] !== n || this.rustScalarInNestedWrite(n, true)) return false;
         return this.rustBorrowedDictReader(up) !== undefined && !/^\d+$/.test(String(this.rustSkipWrappers(up.arguments[1]).text));
     }
 
@@ -22415,7 +22420,7 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-ra: stored whole at one key of a local / `this.` place, or written whole into another local: the box gives
         // back exactly the `Value` the reader answered (`None` is `Value::Null`), moved at the last use
         if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
-            && !this.rustScalarInNestedWrite(n) && !this.rustInDestructureWrite(n)) {
+            && !this.rustScalarInNestedWrite(n, true) && !this.rustInDestructureWrite(n)) {
             const place: any = up.left;
             const keyed = (isElementAccessExpression(place) || isPropertyAccessExpression(place)) && (this.rustThisRootedPlace(place) || this.rustLocalKeyPlace(place, n));
             const alias = isIdentifier(place) && place.text !== n.text && this.rustOptListAliasTarget(place);
@@ -22899,6 +22904,15 @@ export class RustTranspiler extends BaseTranspiler {
         return fn === undefined || RustTranspiler.RUST_SLOT_NESTED_TAG_ACCESS.test(String(fn.getText())) ? undefined : keys;
     }
     private static readonly RUST_SLOT_NESTED_TAG_ACCESS = /this\.(?:orderbooks|balance|ohlcvs|tickers|trades|bidsasks|positions|clients|transactions)\b|subscriptions|futures|\bcache\b|hashmap|this\.(?:orderBook|orderBookSide|indexedOrderBook|countedOrderBook)\s*\(/;
+
+    /** ral-40f: the target of a nested write printSlotNestedInsert prints (a typed params slot, literal keys). */
+    rustPrintedSlotNestedWrite(place: any): boolean {
+        let recv: any = place;
+        while (isElementAccessExpression(recv)) recv = recv.expression;
+        if (!isIdentifier(recv) || this.rustSlotNestedInsertKeys(recv) === undefined) return false;
+        const declaration: any = this.rustDeclaredNode(recv);
+        return declaration !== recv && declaration?.kind === SyntaxKind.BindingElement && this.rustHandedDictLocal(declaration) && !this.rustOptContainerLocals.has(declaration);
+    }
 
     /** ral-40f: `p['k1']..['kN'] = v` on a typed params slot (`crate::value::Dict`), in place, no copy: the first hop is the
      *  map's own `entry("k1").or_insert(Value::Null)` (the very arm `get_value_mut` runs on a `Value::Dict` with a `Str`
@@ -23782,7 +23796,7 @@ export class RustTranspiler extends BaseTranspiler {
 
     rustHandedSlotBoxUse(n: any, declaration: any): boolean {
         const up: any = n.parent;
-        if ((declaration?.kind !== SyntaxKind.BindingElement && !this.rustHandedTernaryLocal(declaration) && !this.rustNilSlotDictCandidate(declaration)) || up === undefined || this.rustScalarInNestedWrite(n)) return false;
+        if ((declaration?.kind !== SyntaxKind.BindingElement && !this.rustHandedTernaryLocal(declaration) && !this.rustNilSlotDictCandidate(declaration)) || up === undefined || this.rustScalarInNestedWrite(n, true)) return false;
         if (up.kind === SyntaxKind.PropertyAssignment) return up.initializer === n;
         // an element of a returned tuple literal (`return [ a, p ]`): the map boxes into the list
         if (isArrayLiteralExpression(up) && isReturnStatement(up.parent) && this.rustNilSlotDictCandidate(declaration)) return true;

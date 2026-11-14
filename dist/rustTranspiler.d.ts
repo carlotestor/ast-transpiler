@@ -1010,7 +1010,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustThisFieldLiteralWrite(n: any): boolean;
     /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
     rustUdNestedBearerValue(n: any): boolean;
-    rustScalarInNestedWrite(n: any): boolean;
+    rustScalarInNestedWrite(n: any, boxUse?: boolean): boolean;
     /** `this.balance|options[..][..]` with at least one hop below the field (the r05 receiver chain). */
     rustNestedFieldChain(access: any): boolean;
     /** The statement write `this.F[..][n] = v` whose last key is `n` and whose other operands never name `n` or `this`
@@ -3149,6 +3149,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  literal (no replaced, digit, book-meta or `__` tag key), the value not reading `n`. */
     rustSlotNestedInsertKeys(n: any): string[] | undefined;
     private static readonly RUST_SLOT_NESTED_TAG_ACCESS;
+    /** ral-40f: the target of a nested write printSlotNestedInsert prints (a typed params slot, literal keys). */
+    rustPrintedSlotNestedWrite(place: any): boolean;
     /** ral-40f: `p['k1']..['kN'] = v` on a typed params slot (`crate::value::Dict`), in place, no copy: the first hop is the
      *  map's own `entry("k1").or_insert(Value::Null)` (the very arm `get_value_mut` runs on a `Value::Dict` with a `Str`
      *  key), every hop below and the write keep their helpers (`get_value_mut` / `add_element_to_object`, so a `Null` /
