@@ -51735,6 +51735,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // local holds `Option<Dict>`. Null tests, any-key reads and lengths would tell the variants apart: rejected.
     this.rustNilResponseLocals = /* @__PURE__ */ new WeakSet();
     this.rustByRefParamDecisions = /* @__PURE__ */ new WeakMap();
+    /** ral-zg: map rows admitted next to a differently sourced sibling; a whole hand-off of such a row takes the optional form
+     *  (`Option<Dict>` boxes back to exactly `Null` or the map, where `into_dict()` would hand an empty map for a Null row). */
+    this.rustZgSiblingRows = /* @__PURE__ */ new WeakSet();
     // ── xc: rustVenueContainerReturnKind: results of venue-private methods declared as a container or unified record ──
     // `[await] this.m (..)` of a venue method (not base, not an override, still printed `-> Value`) whose declared return
     // (the `Promise` argument when awaited) is `Dict`, `NullableDict`, `List`, `Dict[]` / `any[]`, a unified record already in
@@ -68795,7 +68798,8 @@ ${iden}}`;
       return void 0;
     if ((keyReads > 0 || init !== void 0 && isCallExpression6(init) && this.rustRecordLookupSource(init)) && !this.rustEcdsaCall(init) && !this.rustDictKeyReadLineOk(declaration, name))
       return void 0;
-    const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0;
+    const zgRow = this.rustZgSiblingRows.has(declaration) && boxedElementUses.length > 0;
+    const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow;
     if (jwtLends > 0 && optional)
       return void 0;
     if (lentResponses > 0 && optional && !this.rustLentOptionalOk(declaration, name, fn, init, from))
@@ -68831,7 +68835,7 @@ ${iden}}`;
     for (const n of indexReadUses)
       this.rustBorrowedIndexReads.add(n.parent);
     if (optional) {
-      if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !this.rustOptContainerSourceOk(init, from))
+      if (from === "api" || nilDeclared && writes === 0 || !nilDeclared && !(zgRow && this.rustDictElementSource(init)) && !this.rustOptContainerSourceOk(init, from))
         return void 0;
       this.rustOptContainerLocals.add(declaration);
     }
@@ -69620,6 +69624,15 @@ ${iden}}`;
       return up.initializer === n;
     if (isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "push")
       return !this.rustIdentifierRefersToDeclaration(up.expression.expression, this.rustDeclarationOfIdentifier(n));
+    if (isCallExpression6(up) && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && up.arguments.length === 1 && up.arguments[0] === n && String(up.expression.name.text) === "append" && this.rustDictElementSource(init)) {
+      const row = this.rustDeclarationOfIdentifier(n);
+      if (row === void 0 || this.rustIdentifierRefersToDeclaration(up.expression.expression, row))
+        return false;
+      this.rustZgSiblingRows.add(row);
+      return true;
+    }
+    if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement && this.rustZgOuterLocalWrite(up.left, n))
+      return true;
     if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && isElementAccessExpression4(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement)
       return !this.rustIdentifierRefersToDeclaration(this.rustSkipWrappers(up.left.expression), this.rustDeclarationOfIdentifier(n));
     if (!isCallExpression6(up) || up.expression === n || !isPropertyAccessExpression3(up.expression) || up.expression.expression.kind !== SyntaxKind7.ThisKeyword)
@@ -70496,8 +70509,29 @@ ${iden}}`;
       if (!isVariableDeclaration3(n))
         return false;
       const other = this.unwrapParens(n.initializer);
-      return dict ? this.rustDictElementSource(other) : this.rustListElementSource(other);
+      if (dict ? this.rustDictElementSource(other) : this.rustListElementSource(other))
+        return true;
+      if (!dict || (n.parent?.flags & (NodeFlags4.Let | NodeFlags4.Const)) === 0)
+        return false;
+      this.rustZgSiblingRows.add(declaration);
+      return true;
     });
+  }
+  /** ral-zg: `y = el` where `y` is another `let` of the same function declared before the row's block, never typed by a
+   *  container rule (it stays the boxed `Value` the write targets). */
+  rustZgOuterLocalWrite(left, n) {
+    const target = this.rustDeclarationOfIdentifier(left);
+    const row = this.rustDeclarationOfIdentifier(n);
+    if (target === void 0 || row === void 0 || target === row || !isVariableDeclaration3(target) || !isVariableDeclaration3(row))
+      return false;
+    if (!this.rustDictElementSource(this.rustSkipWrappers(row.initializer)) || this.rustEnclosingFunction(target) !== this.rustEnclosingFunction(row))
+      return false;
+    if ((target.parent?.flags & NodeFlags4.Let) === 0 || target.pos > row.pos)
+      return false;
+    if (this.rustBorrowedLocalKind(target) !== void 0 || this.rustDictLocalIsTyped(target) || this.rustNilLocalKind(target) !== void 0 || this.rustReadBearerKindOfDeclaration(target) !== false)
+      return false;
+    this.rustZgSiblingRows.add(row);
+    return true;
   }
   /** Every other binding of `name` in the function is a `const` plain map literal declaration (ral-oc). */
   rustLiteralSiblingsAlike(declaration, name) {
