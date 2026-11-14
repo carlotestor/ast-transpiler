@@ -6569,8 +6569,17 @@ export class RustTranspiler extends BaseTranspiler {
         // decision reads the key's own decision), so only a literal-bound or unbound one is taken
         if (init === undefined || isObjectLiteralExpression(init) || !isCallExpression(init)) return true;
         // a `safeDict (this.<field>, ..)` map never becomes that bearer (rustSafeDictKeyWriteOk refuses a `this.` head)
+        // and whose every use is an `in` test, a key write or a whole store into a `this.` field (no reader takes it)
         const head: any = isPropertyAccessExpression(init.expression) && /^safeDict$/.test(String(init.expression.name.text)) ? this.rustSkipWrappers(init.arguments[0]) : undefined;
-        return head !== undefined && isPropertyAccessExpression(head) && head.expression.kind === SyntaxKind.ThisKeyword;
+        if (head === undefined || !isPropertyAccessExpression(head) || head.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (u: any) => {
+            const p: any = u.parent;
+            if (isBinaryExpression(p) && p.operatorToken.kind === SyntaxKind.InKeyword) return p.right === u;
+            if (isElementAccessExpression(p) && p.expression === u) return isBinaryExpression(p.parent) && p.parent.left === p && p.parent.operatorToken.kind === SyntaxKind.EqualsToken;
+            if (!isBinaryExpression(p) || p.right !== u || p.operatorToken.kind !== SyntaxKind.EqualsToken) return false;
+            const store: any = this.rustSkipWrappers(p.left);
+            return isElementAccessExpression(store) && isPropertyAccessExpression(store.expression) && store.expression.expression.kind === SyntaxKind.ThisKeyword;
+        });
     }
 
     /** A loop (or closure) lies between the declaration and `n`: a box there repeats. */

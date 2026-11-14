@@ -57769,7 +57769,19 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (init === void 0 || isObjectLiteralExpression4(init) || !isCallExpression6(init))
       return true;
     const head = isPropertyAccessExpression3(init.expression) && /^safeDict$/.test(String(init.expression.name.text)) ? this.rustSkipWrappers(init.arguments[0]) : void 0;
-    return head !== void 0 && isPropertyAccessExpression3(head) && head.expression.kind === SyntaxKind7.ThisKeyword;
+    if (head === void 0 || !isPropertyAccessExpression3(head) || head.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (u) => {
+      const p = u.parent;
+      if (isBinaryExpression5(p) && p.operatorToken.kind === SyntaxKind7.InKeyword)
+        return p.right === u;
+      if (isElementAccessExpression4(p) && p.expression === u)
+        return isBinaryExpression5(p.parent) && p.parent.left === p && p.parent.operatorToken.kind === SyntaxKind7.EqualsToken;
+      if (!isBinaryExpression5(p) || p.right !== u || p.operatorToken.kind !== SyntaxKind7.EqualsToken)
+        return false;
+      const store = this.rustSkipWrappers(p.left);
+      return isElementAccessExpression4(store) && isPropertyAccessExpression3(store.expression) && store.expression.expression.kind === SyntaxKind7.ThisKeyword;
+    });
   }
   /** A loop (or closure) lies between the declaration and `n`: a box there repeats. */
   rustLoopAfterDeclaration(n, declaration) {

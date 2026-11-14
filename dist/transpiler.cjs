@@ -57768,7 +57768,19 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (init === void 0 || _is.isObjectLiteralExpression.call(void 0, init) || !_is.isCallExpression.call(void 0, init))
       return true;
     const head = _is.isPropertyAccessExpression.call(void 0, init.expression) && /^safeDict$/.test(String(init.expression.name.text)) ? this.rustSkipWrappers(init.arguments[0]) : void 0;
-    return head !== void 0 && _is.isPropertyAccessExpression.call(void 0, head) && head.expression.kind === _ast.SyntaxKind.ThisKeyword;
+    if (head === void 0 || !_is.isPropertyAccessExpression.call(void 0, head) || head.expression.kind !== _ast.SyntaxKind.ThisKeyword)
+      return false;
+    return this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (u) => {
+      const p = u.parent;
+      if (_is.isBinaryExpression.call(void 0, p) && p.operatorToken.kind === _ast.SyntaxKind.InKeyword)
+        return p.right === u;
+      if (_is.isElementAccessExpression.call(void 0, p) && p.expression === u)
+        return _is.isBinaryExpression.call(void 0, p.parent) && p.parent.left === p && p.parent.operatorToken.kind === _ast.SyntaxKind.EqualsToken;
+      if (!_is.isBinaryExpression.call(void 0, p) || p.right !== u || p.operatorToken.kind !== _ast.SyntaxKind.EqualsToken)
+        return false;
+      const store = this.rustSkipWrappers(p.left);
+      return _is.isElementAccessExpression.call(void 0, store) && _is.isPropertyAccessExpression.call(void 0, store.expression) && store.expression.expression.kind === _ast.SyntaxKind.ThisKeyword;
+    });
   }
   /** A loop (or closure) lies between the declaration and `n`: a box there repeats. */
   rustLoopAfterDeclaration(n, declaration) {
