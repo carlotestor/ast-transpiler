@@ -12378,3 +12378,21 @@ describe('ue: client(url) takes the url as a string slot', () => {
         expect(out).toContain('self.client("authenticationFlights")');
     });
 });
+
+describe('ue: an optional string key written into a safeDict of a this. field', () => {
+    // `safeDict (this.options, ..)` is never an IndexMap bearer, so its insert keeps the guarded write and takes the key text
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-ue-key-'));
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    options: any;\n    balance: any;\n    numberToString (x: any): Str { return String (x); }\n    safeDict (o: any, k: any, d: any = undefined): any { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        return t.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+    };
+    test('the key stays Option<String> and inserts its text', () => {
+        const out = mk("    async watchX (id: number) {\n        const key = this.numberToString (id) as string;\n        if (!(key in this.balance)) {\n            this.balance[key] = {};\n        }\n        const loaded = this.safeDict (this.options, 'loaded', {});\n        if (!(key in loaded)) {\n            loaded[key] = true;\n            this.options['loaded'] = loaded;\n        }\n        return key;\n    }");
+        expect(out).toContain('let mut key: Option<String> = ');
+        expect(out).toContain('insert(key.as_deref().unwrap_or("null").to_string(), Value::Bool(true))');
+    });
+});

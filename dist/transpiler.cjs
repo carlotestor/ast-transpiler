@@ -57765,7 +57765,10 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration))
       return true;
     const init = this.rustSkipWrappers(declaration.initializer);
-    return init === void 0 || _is.isObjectLiteralExpression.call(void 0, init) || !_is.isCallExpression.call(void 0, init);
+    if (init === void 0 || _is.isObjectLiteralExpression.call(void 0, init) || !_is.isCallExpression.call(void 0, init))
+      return true;
+    const head = _is.isPropertyAccessExpression.call(void 0, init.expression) && /^safeDict$/.test(String(init.expression.name.text)) ? this.rustSkipWrappers(init.arguments[0]) : void 0;
+    return head !== void 0 && _is.isPropertyAccessExpression.call(void 0, head) && head.expression.kind === _ast.SyntaxKind.ThisKeyword;
   }
   /** A loop (or closure) lies between the declaration and `n`: a box there repeats. */
   rustLoopAfterDeclaration(n, declaration) {

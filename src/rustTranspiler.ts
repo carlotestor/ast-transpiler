@@ -6567,7 +6567,10 @@ export class RustTranspiler extends BaseTranspiler {
         const init: any = this.rustSkipWrappers(declaration.initializer);
         // syntactic: a call-bound receiver (`safeDict (..)`) may become that bearer once the key is typed (the bearer
         // decision reads the key's own decision), so only a literal-bound or unbound one is taken
-        return init === undefined || isObjectLiteralExpression(init) || !isCallExpression(init);
+        if (init === undefined || isObjectLiteralExpression(init) || !isCallExpression(init)) return true;
+        // a `safeDict (this.<field>, ..)` map never becomes that bearer (rustSafeDictKeyWriteOk refuses a `this.` head)
+        const head: any = isPropertyAccessExpression(init.expression) && /^safeDict$/.test(String(init.expression.name.text)) ? this.rustSkipWrappers(init.arguments[0]) : undefined;
+        return head !== undefined && isPropertyAccessExpression(head) && head.expression.kind === SyntaxKind.ThisKeyword;
     }
 
     /** A loop (or closure) lies between the declaration and `n`: a box there repeats. */
