@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -57337,8 +57337,10 @@ ${binding(plan.indent)}` : ""), head: "" };
     const call = this.unwrapParens(node);
     if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression))
       return void 0;
-    const recv = call.expression.expression;
-    if (!isIdentifier3(recv) || call.expression.expression.kind === SyntaxKind7.ThisKeyword)
+    let recv = call.expression.expression;
+    while (recv !== void 0 && (recv.kind === SyntaxKind7.ParenthesizedExpression || recv.kind === SyntaxKind7.AsExpression))
+      recv = recv.expression;
+    if (recv === void 0 || !isIdentifier3(recv))
       return void 0;
     const method = String(call.expression.name.text);
     const args = Array.from(call.arguments ?? []);
@@ -57371,7 +57373,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return { recv, recvKind, method, kind: "bool" };
     if (shape === "find")
       return this.rustStrFindNeedle(args[0], false) === void 0 ? void 0 : { recv, recvKind, method, kind: "int" };
-    if ((shape === "pad" || shape === "slice") && this.rustScalarIdentifierKind(recv) === void 0)
+    if ((shape === "pad" || shape === "slice") && this.rustScalarIdentifierKind(recv) === void 0 && this.rustScalarParamRead(recv) === void 0)
       return void 0;
     if (recvKind === "ostr" && shape !== "case" && shape !== "replace" && shape !== "pad" && shape !== "slice")
       return void 0;
@@ -57588,6 +57590,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     const name = String(node.expression.name.text);
     const args = Array.from(node.arguments ?? []);
     const math = isIdentifier3(recv) && recv.text === "Math" && (name === "min" || name === "max") && args.length === 2;
+    const unary = this.rustMathFloatCall(node);
+    if (unary !== void 0)
+      return unary;
     if (!math && recv.kind !== SyntaxKind7.ThisKeyword)
       return void 0;
     if (!math) {
@@ -57603,6 +57608,9 @@ ${binding(plan.indent)}` : ""), head: "" };
         return void 0;
     }
     const kinds = args.map((a) => this.rustArithOperandKind(a));
+    if (math && kinds.every((k) => k !== void 0) && kinds.some((k) => k === "oint" || k === "onum")) {
+      return kinds.every((k) => k === "int" || k === "oint") ? "oint" : "onum";
+    }
     if (kinds.some((k) => k !== "int" && k !== "num"))
       return void 0;
     return kinds.every((k) => k === "int") ? "int" : args.length === 2 ? "num" : void 0;
@@ -57638,7 +57646,38 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     const name = String(node.expression.name.text);
     const recv = node.expression.expression;
-    return name === "sum" && recv.kind === SyntaxKind7.ThisKeyword || (name === "min" || name === "max") && isIdentifier3(recv) && recv.text === "Math";
+    return name === "sum" && recv.kind === SyntaxKind7.ThisKeyword || (name === "min" || name === "max") && isIdentifier3(recv) && recv.text === "Math" || this.rustMathFloatShape(node);
+  }
+  rustMathFloatShape(node) {
+    if (!isCallExpression6(node) || !isPropertyAccessExpression3(node.expression))
+      return false;
+    const recv = node.expression.expression;
+    const name = String(node.expression.name.text);
+    return isIdentifier3(recv) && recv.text === "Math" && _RustTranspiler.RUST_MATH_FLOAT_OPS.has(name) && node.arguments.length === (name === "pow" ? 2 : 1) && !Array.from(node.arguments).some((a) => a.kind === SyntaxKind7.SpreadElement);
+  }
+  rustMathFloatCall(node) {
+    if (!this.rustMathFloatShape(node))
+      return void 0;
+    const name = String(node.expression.name.text);
+    const kinds = Array.from(node.arguments).map((a) => this.rustScalarNumericKind(a));
+    if (kinds.some((k) => k === void 0))
+      return void 0;
+    if (name === "abs" && kinds[0] !== "num" && kinds[0] !== "onum")
+      return void 0;
+    if (name === "pow")
+      return kinds.every((k) => k === "int" || k === "num") ? "num" : void 0;
+    return kinds[0] === "int" || kinds[0] === "num" ? "num" : "onum";
+  }
+  rustMathFloatText(node) {
+    const name = String(node.expression.name.text);
+    const args = Array.from(node.arguments);
+    if (name === "pow")
+      return `f64::powf(${this.rustScalarOperandText("num", args[0])}, ${this.rustScalarOperandText("num", args[1])})`;
+    const k = this.rustScalarNumericKind(args[0]);
+    if (k === "int" || k === "num")
+      return `f64::${name}(${this.rustScalarOperandText("num", args[0])})`;
+    const opt = this.rustScalarOperandText(k, args[0]);
+    return `(if let Some(__x) = ${opt} { Some(f64::${name}(${k === "oint" ? "__x as f64" : "__x"})) } else { None })`;
   }
   rustArithCallText(kind, expr) {
     const node = this.unwrapParens(expr);
@@ -57647,6 +57686,26 @@ ${binding(plan.indent)}` : ""), head: "" };
       return void 0;
     const name = String(node.expression.name.text);
     let text;
+    if (this.rustMathFloatShape(node)) {
+      const t = this.rustMathFloatText(node);
+      return kind === own ? t : own === "num" && kind === "onum" ? `Some(${t})` : void 0;
+    }
+    if (own === "oint" || own === "onum") {
+      if (kind !== own)
+        return void 0;
+      const base = own.slice(1);
+      const ty = base === "int" ? "i64" : "f64";
+      const sides = Array.from(node.arguments).map((a, i) => {
+        const k = this.rustArithOperandKind(a);
+        if (k === "oint" || k === "onum")
+          return { opt: this.rustScalarOperandText(k, a), bind: `__m${i}`, use: base === "num" && k === "oint" ? `(__m${i} as f64)` : `__m${i}` };
+        return { use: this.rustScalarOperandText(base, a) };
+      });
+      const opts = sides.filter((x) => x.opt !== void 0);
+      const pat = opts.length === 1 ? `Some(${opts[0].bind})` : `(${opts.map((x) => `Some(${x.bind})`).join(", ")})`;
+      const scrut = opts.length === 1 ? opts[0].opt : `(${opts.map((x) => x.opt).join(", ")})`;
+      return `(if let ${pat} = ${scrut} { Some(${ty}::${name}(${sides[0].use}, ${sides[1].use})) } else { None })`;
+    }
     if (this.rustBaseTypedReturnKind(node) === "int")
       text = this.rustBaseTypedBareText(node);
     else if (_RustTranspiler.RUST_ALWAYS_INT_CALLS.has(name))
@@ -57777,7 +57836,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       return void 0;
     const callee = call.expression;
     const name = String(callee.name.text);
-    if (name === "sum")
+    if (name !== "min" && name !== "max")
       return void 0;
     const [a, b] = Array.from(call.arguments).map((x) => this.unwrapParens(x));
     const sameParam = (x) => isIdentifier3(x) && this.rustDeclaredNode(x) === this.rustDeclaredNode(param);
@@ -73221,6 +73280,12 @@ _RustTranspiler.RUST_SCALAR_ARITH_OPS = /* @__PURE__ */ new Set([
 // integer reader, and `this.sum` / two-operand `Math.min|max` over int/num operands: the native i64 / f64 result
 // equals the helper's (Int with Int stays Int, any Float operand gives Float).
 _RustTranspiler.RUST_ALWAYS_INT_CALLS = /* @__PURE__ */ new Set(["milliseconds", "seconds", "parseTimeframe"]);
+// ── Math.floor / round / ceil / abs / pow over typed numeric operands (rustMathFloatCall) ──
+// The runtime helpers answer `Float(op(as_f64(x)))` (`Float(x.powf(y))`) for a numeric operand and `Null` for a
+// missing one, so over an `int` / `num` operand the result is exactly an `f64`, and over an `oint` / `onum`
+// operand exactly an `Option<f64>` (`None` where the helper answers `Null`). `Math.abs` keeps an `Int` as `Int`,
+// so it is taken only over `num` / `onum` operands.
+_RustTranspiler.RUST_MATH_FLOAT_OPS = /* @__PURE__ */ new Set(["floor", "round", "ceil", "abs", "pow"]);
 // the typed argument's own `Value` rebinding read back as the native kind the signature declared
 _RustTranspiler.RUST_PARAM_READ = {
   oint: "as_i64()",
