@@ -13670,3 +13670,18 @@ describe('ral-xb: integer for counters used in arithmetic (round 37)', () => {
         expect(out).toContain('let mut i: Value = Value::Int(0);');
     });
 });
+
+describe('ral-yb: length local and counter decided together (round 38)', () => {
+    const src = (body: string) => transpiler.transpileRust("class X {\n    f (xs: any[]) {\n        const r = [];\n" + body + "\n        return r;\n    }\n}").content;
+    const cases: [ string, string, string[], string[] ][] = [
+        [ 'reverse index n - i - 1 over a list length', "        const n = xs.length;\n        for (let i = 0; i < n; i++) {\n            r.push (this.safeList (xs, n - i - 1));\n        }",
+            [ 'let mut n: i64 = xs.len() as i64;', 'let mut i: i64 = 0;', 'Value::Int((((n - i)) - 1))' ], [ 'let mut n: Value', 'let mut i: Value' ] ],
+        [ 'a Value receiver length stays Value', "        const ys = this.filterBySymbolSinceLimit (xs, 's', undefined, undefined);\n        const n = ys.length;\n        for (let i = 0; i < n; i++) {\n            r.push (this.safeList (ys, n - i - 1));\n        }",
+            [ 'let mut n: Value = get_array_length(&ys);' ], [ 'let mut n: i64' ] ],
+    ];
+    test.each(cases)('%s', (_name, body, has, hasNot) => {
+        const out = src(body);
+        has.forEach((h) => expect(out).toContain(h));
+        hasNot.forEach((h) => expect(out).not.toContain(h));
+    });
+});

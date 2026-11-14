@@ -60435,10 +60435,13 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (other === void 0 || this.literalKindOfNode(other) === "string")
       return false;
     const counter = isIdentifier3(other) ? this.rustDeclaredNode(other) : void 0;
-    if (counter !== void 0 && isVariableDeclaration3(counter) && counter.parent?.parent?.kind === SyntaxKind7.ForStatement)
+    const intCounter = counter !== void 0 && isIdentifier3(other) && this.rustValueIntCounter(other);
+    if (counter !== void 0 && isVariableDeclaration3(counter) && counter.parent?.parent?.kind === SyntaxKind7.ForStatement && !intCounter)
       return false;
-    if (this.rustScalarExprHasForCounter(other))
+    if (!intCounter && this.rustScalarExprHasForCounter(other))
       return false;
+    if (intCounter)
+      return kind === "int";
     return this.primitiveKindOfType(this.typeOfNodeIfAny(parent.left === n ? parent.right : parent.left)) === "number";
   }
   /** rd: some `+` chain holding this local also holds a nil-declared local (typing this one would retype that one, which

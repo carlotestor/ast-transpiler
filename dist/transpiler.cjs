@@ -60434,10 +60434,13 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (other === void 0 || this.literalKindOfNode(other) === "string")
       return false;
     const counter = _is.isIdentifier.call(void 0, other) ? this.rustDeclaredNode(other) : void 0;
-    if (counter !== void 0 && _is.isVariableDeclaration.call(void 0, counter) && _optionalChain([counter, 'access', _9099 => _9099.parent, 'optionalAccess', _9100 => _9100.parent, 'optionalAccess', _9101 => _9101.kind]) === _ast.SyntaxKind.ForStatement)
+    const intCounter = counter !== void 0 && _is.isIdentifier.call(void 0, other) && this.rustValueIntCounter(other);
+    if (counter !== void 0 && _is.isVariableDeclaration.call(void 0, counter) && _optionalChain([counter, 'access', _9099 => _9099.parent, 'optionalAccess', _9100 => _9100.parent, 'optionalAccess', _9101 => _9101.kind]) === _ast.SyntaxKind.ForStatement && !intCounter)
       return false;
-    if (this.rustScalarExprHasForCounter(other))
+    if (!intCounter && this.rustScalarExprHasForCounter(other))
       return false;
+    if (intCounter)
+      return kind === "int";
     return this.primitiveKindOfType(this.typeOfNodeIfAny(parent.left === n ? parent.right : parent.left)) === "number";
   }
   /** rd: some `+` chain holding this local also holds a nil-declared local (typing this one would retype that one, which

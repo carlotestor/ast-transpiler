@@ -9016,8 +9016,12 @@ export class RustTranspiler extends BaseTranspiler {
         if (other === undefined || this.literalKindOfNode(other) === 'string') return false;
         // a `for` counter decides its own i64 plan from a native bound
         const counter: any = isIdentifier(other) ? this.rustDeclaredNode(other) : undefined;
-        if (counter !== undefined && isVariableDeclaration(counter) && counter.parent?.parent?.kind === SyntaxKind.ForStatement) return false;
-        if (this.rustScalarExprHasForCounter(other)) return false;
+        // yb: unless it is an always-`Int` counter (its only write is the step): the runtime arithmetic over `Value::from(x)`
+        // and that `Int` is exactly what the `Value` local gave, and once the counter's own plan closes it prints `x - i` natively
+        const intCounter = counter !== undefined && isIdentifier(other) && this.rustValueIntCounter(other);
+        if (counter !== undefined && isVariableDeclaration(counter) && counter.parent?.parent?.kind === SyntaxKind.ForStatement && !intCounter) return false;
+        if (!intCounter && this.rustScalarExprHasForCounter(other)) return false;
+        if (intCounter) return kind === 'int';
         return this.primitiveKindOfType(this.typeOfNodeIfAny(parent.left === n ? parent.right : parent.left)) === 'number';
     }
 
