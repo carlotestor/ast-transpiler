@@ -53207,12 +53207,22 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (r20 !== void 0)
       return r20;
     if (op === _ast.SyntaxKind.PlusToken && (this.isNativeStringConcatPair(leftType, rightType) || this.concatIsAnchored(left, right, leftType, rightType) || this.strOrNullConcatIsAnchored(left, right, leftType, rightType))) {
-      return this.printNativeStringConcat(leftText, rightText);
+      return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText, right), this.rustConcatLiteralText(right, rightText, left));
     }
     if (!this.isNumberLikeType(leftType) || !this.isNumberLikeType(rightType)) {
       return this.nativeCoercingArithmetic(op, left, right, leftText, rightText);
     }
     return this.printNativeNumeric(op, leftText, rightText);
+  }
+  /** A string-literal operand of a `format!` concat prints as the `&str` literal itself:
+   *  `Display` of `Value::Str(s)` is `s`, so the text is identical and the box is gone. */
+  rustConcatLiteralText(node, text, other) {
+    const inner = this.unwrapParensNode(node);
+    if (inner === void 0 || !_is.isStringLiteral.call(void 0, inner) || inner.text in this.StringLiteralReplacements)
+      return text;
+    if (_is.isCallExpression.call(void 0, _nullishCoalesce(this.unwrapParensNode(other), () => ( other))))
+      return text;
+    return this.quotedStringLiteral(inner.text);
   }
   printNativeStringConcat(leftText, rightText) {
     return `Value::Str(format!("{}{}", ${leftText}, ${rightText}).into())`;
@@ -57313,7 +57323,7 @@ ${binding(plan.indent)}` : ""), head: "" };
         keyed = true;
       const up = n.parent;
       const argCopy = _is.isCallExpression.call(void 0, up) && up.expression !== n && (form === "box" || form === "xbox");
-      if (form === "err" || form === "key" || (form === "box" || form === "xbox") && !argCopy && !this.rustScalarBoxMoves(n, form, declaration))
+      if (form === "err" || form === "key" && !this.rustElemInsertKey(this.rustKeyWrapped(n)) || (form === "box" || form === "xbox") && !argCopy && !this.rustScalarBoxMoves(n, form, declaration))
         copied = true;
       return true;
     });
@@ -71130,7 +71140,7 @@ ${this.getIden(identation)}}`;
     const inner = this.unwrapParensNode(stringSide);
     if (inner !== void 0 && (this.rustStringLocalIdentifierIsTyped(inner) || this.rustNativeStrCalleeKind(inner) === "str"))
       return void 0;
-    return this.printNativeStringConcat(leftText, rightText);
+    return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText, right), this.rustConcatLiteralText(right, rightText, left));
   }
   // Native reads on receivers the plain-dict proof admits (tag-free literal / `account ()` / `omit` /
   // `extend` / tuple element 0 locals) and on `Dict`-annotated parameters whose writes keep them plain:
