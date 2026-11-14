@@ -62939,10 +62939,16 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       return void 0;
     let nativeUses = 0;
     let copies = 0;
+    let concats = 0;
     const safe = this.rustLocalUsesAll(element, name, true, (n) => {
       if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn)
         return false;
-      const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) || this.rustStrSlotConcatUse(n, element) : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n);
+      if (kind === "string" && !this.rustStringLocalUseIsNative(n) && !this.rustVenueStrArgSlot(n) && this.rustStrSlotConcatUse(n, element)) {
+        nativeUses++;
+        concats++;
+        return true;
+      }
+      const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n) || this.rustBoolSlotLogicalUse(n);
       if (ok)
         nativeUses++;
       const box = !ok && kind === "string" && this.rustStrSlotBoxUse(n) && (_is.isCallExpression.call(void 0, n.parent) || _is.isReturnStatement.call(void 0, n.parent) || this.rustStrSlotThrownConcat(n) || this.rustSlotUseOutsideLoop(n, element));
@@ -62950,7 +62956,53 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
         copies++;
       return ok || box;
     });
+    if (safe && concats > 0 && (this.rustStrSlotExactRouteTakes(element, fn) || !this.rustStrSlotBoxesFit(element, fn))) {
+      this.rustScalarSolved.delete(fn);
+      return void 0;
+    }
+    if (!safe && concats > 0)
+      this.rustScalarSolved.delete(fn);
     return safe && (nativeUses > 0 || kind === "string" && copies === 0) ? kind === "string" ? "str" : "bool" : void 0;
+  }
+  /** Every boxed read of the slot keeps its statement within the 400-char line budget once the box text is added
+   *  (a longer line would make the line guard veto other typed locals on it). */
+  rustStrSlotBoxesFit(element, fn) {
+    const grow = ".map(Value::from).unwrap_or(Value::Null)".length;
+    let fits = true;
+    this.rustLocalUsesAll(element, String(element.name.text), true, (n) => {
+      if (this.rustStrSlotConcatUses.has(n) || !this.rustStrSlotBoxUse(n) || this.rustEnclosingFunction(n) !== fn)
+        return true;
+      const statement = _chunkQYYT7MP4cjs.findAncestor.call(void 0, n.parent, (a) => _is.isStatement.call(void 0, a));
+      if (statement === void 0 || _is.isBlock.call(void 0, statement))
+        return true;
+      const column = statement.getStart() - String(statement.getSourceFile().text).lastIndexOf("\n", statement.getStart()) - 1;
+      const longest = Math.max(...this.printNode(statement, 0).split("\n").map((l) => l.trim().length));
+      if (column + longest + grow > 400)
+        fits = false;
+      return true;
+    });
+    return fits;
+  }
+  /** Trial of the exact-slot route for a slot whose tuple decision is pending; its cache entry is restored after. */
+  rustStrSlotExactRouteTakes(element, fn) {
+    if (fn.kind !== _ast.SyntaxKind.MethodDeclaration || this.rustSlotJoinsSolve(element))
+      return true;
+    const previous = this.rustExactSlotDecisions.get(element);
+    try {
+      return this.rustStrSlotKind(element, fn) !== void 0;
+    } catch (e) {
+      return false;
+    } finally {
+      if (previous === void 0)
+        this.rustExactSlotDecisions.delete(element);
+      else
+        this.rustExactSlotDecisions.set(element, previous);
+    }
+  }
+  /** wi: a bare read under `!` / `&&` / `||` whose whole logical sits in a slot the printer already prints `bool`
+   *  (a condition, `Value::Bool(..)`, a `bool` local): the slot's truthiness, `None` (Null) false as `is_true`. */
+  rustBoolSlotLogicalUse(n) {
+    return this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n);
   }
   /** qe: `x === true` / `x !== true` on a bool tuple slot: the slot reads `as_bool() == Some(true)`, so the native
    *  bool answers the strict test exactly (Null and a non-bool are `false` on both sides). Never `=== false`. */
@@ -62994,7 +63046,21 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     return _optionalChain([up, 'optionalAccess', _9353 => _9353.kind]) === _ast.SyntaxKind.NewExpression && _optionalChain([up, 'access', _9354 => _9354.parent, 'optionalAccess', _9355 => _9355.kind]) === _ast.SyntaxKind.ThrowStatement;
   }
   rustStrSlotConcatUse(n, element) {
-    const ok = !this.rustStrSlotThrownConcat(n) && this.rustNilOptStrConcatUse(n) && this.printNode(n.parent, 0).trim().startsWith("Value::Str(format!(");
+    const pending = this.rustTupleSlotDecisions.get(element);
+    const exact = this.rustExactSlotDecisions.get(element);
+    if (pending === null)
+      this.rustTupleSlotDecisions.set(element, "str");
+    let ok = false;
+    try {
+      ok = !this.rustStrSlotThrownConcat(n) && this.rustNilOptStrConcatUse(n) && this.printNode(n.parent, 0).trim().startsWith("Value::Str(format!(");
+    } finally {
+      if (pending === null)
+        this.rustTupleSlotDecisions.set(element, null);
+      if (exact === void 0)
+        this.rustExactSlotDecisions.delete(element);
+      else
+        this.rustExactSlotDecisions.set(element, exact);
+    }
     if (ok)
       this.rustStrSlotConcatUses.add(n);
     return ok;

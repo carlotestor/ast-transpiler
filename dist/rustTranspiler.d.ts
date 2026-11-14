@@ -1599,6 +1599,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustTupleSlotDecisions;
     rustTupleSlotKind(element: any): string | undefined;
     private rustTupleSlotKindUncached;
+    /** Every boxed read of the slot keeps its statement within the 400-char line budget once the box text is added
+     *  (a longer line would make the line guard veto other typed locals on it). */
+    rustStrSlotBoxesFit(element: any, fn: any): boolean;
+    /** Trial of the exact-slot route for a slot whose tuple decision is pending; its cache entry is restored after. */
+    rustStrSlotExactRouteTakes(element: any, fn: any): boolean;
+    /** wi: a bare read under `!` / `&&` / `||` whose whole logical sits in a slot the printer already prints `bool`
+     *  (a condition, `Value::Bool(..)`, a `bool` local): the slot's truthiness, `None` (Null) false as `is_true`. */
+    rustBoolSlotLogicalUse(n: any): boolean;
     /** qe: `x === true` / `x !== true` on a bool tuple slot: the slot reads `as_bool() == Some(true)`, so the native
      *  bool answers the strict test exactly (Null and a non-bool are `false` on both sides). Never `=== false`. */
     rustBoolSlotTrueTest(n: any): boolean;
