@@ -53139,7 +53139,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const nativeList = this.rustNativeListSource(right);
       const head = nativeList ? `let ${tmpName}: Vec<Value> = ${rhs}.as_array().cloned().unwrap_or_default()` : `let ${tmpName} = ${rhs}`;
       const slotRead = (idx) => nativeList ? this.printTypedVecElementRead(tmpName, idx) : `get_value(&${tmpName}, &Value::Int(${idx}))`;
-      const assignments = left.elements.map((e, idx) => this.printRustNilSlotWrite(e, slotRead(idx), nativeList && /(?:^|[\\/])ts[\\/]src[\\/]pro[\\/]/.test(String(node.getSourceFile().fileName)) ? `${tmpName}.get(${idx}).and_then(Value::as_str)` : void 0) ?? `${this.printNode(e, 0)} = ${slotRead(idx)}`).join("; ");
+      const assignments = left.elements.map((e, idx) => this.printRustNilSlotWrite(
+        e,
+        slotRead(idx),
+        nativeList && /(?:^|[\\/])ts[\\/]src[\\/]pro[\\/]/.test(String(node.getSourceFile().fileName)) ? `${tmpName}.get(${idx}).and_then(Value::as_str)` : void 0,
+        nativeList ? `${tmpName}.get(${idx}).and_then(Value::as_bool)` : void 0
+      ) ?? `${this.printNode(e, 0)} = ${slotRead(idx)}`).join("; ");
       return `{ ${head}; ${assignments}; }`;
     }
     const bookWrite = isAssign ? this.printWsBookMetaWrite(left, right) ?? this.printWsBookMapWrite(left, right) ?? this.printWsBookLocalWrite(left, right) : void 0;
@@ -53437,10 +53442,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   rustNilLocalKindUncached(declaration) {
     const list = declaration.parent;
-    if (declaration.name?.kind !== SyntaxKind7.Identifier || list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations.length !== 1 || (list.flags & NodeFlags4.Const) !== 0 || list.parent?.kind !== SyntaxKind7.VariableStatement)
+    if (declaration.name?.kind !== SyntaxKind7.Identifier || list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations.length !== 1 || list.parent?.kind !== SyntaxKind7.VariableStatement)
       return void 0;
     if (declaration.initializer !== void 0 && this.literalKindOfNode(declaration.initializer) !== "null")
       return void 0;
+    const isConst = (list.flags & NodeFlags4.Const) !== 0;
     let kind;
     if (declaration.type !== void 0) {
       const declared = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
@@ -53476,7 +53482,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
           return false;
         const statement = parent.parent;
         const column = statement.getStart() - String(statement.getSourceFile().text).lastIndexOf("\n", statement.getStart()) - 1;
-        if (column + this.printNode(statement, 0).trim().length + ".as_bool()".length > 400)
+        if (column + this.printNode(statement, 0).trim().length + ".as_bool()".length > 400 && !this.rustNativeListSource(statement.right))
           return false;
         writes++;
         return join3("bool");
@@ -53492,7 +53498,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       }
       return true;
     });
-    if (!ok || writes === 0 || kind === void 0)
+    if (isConst && ok && writes === 0)
+      kind = kind ?? "str";
+    if (!ok || writes === 0 && !isConst || kind === void 0)
       return void 0;
     const readsOk = this.rustLocalUsesAll(declaration, declaration.name.text, false, (n) => {
       if (this.rustIdentifierIsPropertyName(n))
@@ -53684,6 +53692,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (form !== "box")
       return void 0;
     const name = super.printIdentifier(node);
+    if (local.kind === "str" && (local.declaration.parent.flags & NodeFlags4.Const) !== 0)
+      return `Value::from(${name}.as_deref())`;
     return local.kind === "str" ? `${name}.clone().map(Value::from).unwrap_or(Value::Null)` : local.kind === "int" ? `Value::from(${name})` : `${name}.map(Value::from).unwrap_or(Value::Null)`;
   }
   /** `ostr|oint|onum` for an empty local the scalar rule types, else undefined. */
@@ -53764,7 +53774,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const parent = n.parent;
       if (isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.EqualsToken) {
         const rhs = this.unwrapParens(parent.right);
-        if (isIdentifier3(rhs) && !this.rustNilAliasMove(rhs, kind))
+        if (isIdentifier3(rhs) && !this.rustNilAliasMove(rhs, kind) && !this.rustNilLiveAliasCopy(rhs, kind))
           ok = false;
         return true;
       }
@@ -53814,6 +53824,16 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     this.rustNilAliasMoves.add(rhs);
     return true;
+  }
+  /** mc: `x = y` from a typed `Option<..>` local of the same kind that is read again later: the typed write clones
+   *  `y` where the boxed write cloned it too (`y.clone().map(Value::from)..`), so no copy is added. */
+  rustNilLiveAliasCopy(rhs, kind) {
+    if (kind !== "ostr" && kind !== "oint" && kind !== "onum")
+      return false;
+    const source = this.rustDeclarationOfIdentifier(rhs);
+    if (source === void 0 || !isVariableDeclaration3(source) || source.name === rhs || this.rustScalarIdentifierKind(rhs) !== kind)
+      return false;
+    return this.rustEnclosingFunction(source) === this.rustEnclosingFunction(rhs) && !this.rustLocalLastUse(rhs, source);
   }
   /** Every box before the last sits at a `this.` / `super.` argument (where the `Value` form was cloned); no free-function,
    *  `Precise`, `Math` or `new` operand, which read `&Value` and would take a copy only because of the lending. */
@@ -53867,11 +53887,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return list !== void 0 && isArrayLiteralExpression4(list) && write !== void 0 && isBinaryExpression5(write) && write.left === list && write.operatorToken.kind === SyntaxKind7.EqualsToken && write.parent?.kind === SyntaxKind7.ExpressionStatement;
   }
   /** Slot hook: an `Option<String>` local takes the slot's string. */
-  printRustNilSlotWrite(element, read, strRead) {
+  printRustNilSlotWrite(element, read, strRead, boolRead) {
     if (isIdentifier3(element) && this.rustScalarUseForms.get(element) === "bslot" && this.rustScalarLocalOf(element)?.kind === "bool")
       return `${super.printIdentifier(element)} = ${read}.as_bool() == Some(true)`;
     if (isIdentifier3(element) && this.rustNilLocalOfIdentifier(element)?.kind === "bool")
-      return `${super.printIdentifier(element)} = ${read}.as_bool()`;
+      return `${super.printIdentifier(element)} = ${boolRead ?? `${read}.as_bool()`}`;
     if (!isIdentifier3(element) || this.rustScalarLocalOf(element)?.kind !== "ostr" || this.rustScalarUseForms.get(element) !== "slot")
       return void 0;
     return `${super.printIdentifier(element)} = ${strRead ?? `${read}.as_str()`}.map(str::to_owned)`;

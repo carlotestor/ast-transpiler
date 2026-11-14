@@ -346,6 +346,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNilStrStoreBox(n: any): boolean;
     private rustNilAliasMoves;
     rustNilAliasMove(rhs: any, kind: string): boolean;
+    /** mc: `x = y` from a typed `Option<..>` local of the same kind that is read again later: the typed write clones
+     *  `y` where the boxed write cloned it too (`y.clone().map(Value::from)..`), so no copy is added. */
+    rustNilLiveAliasCopy(rhs: any, kind: string): boolean;
     /** Every box before the last sits at a `this.` / `super.` argument (where the `Value` form was cloned); no free-function,
      *  `Precise`, `Math` or `new` operand, which read `&Value` and would take a copy only because of the lending. */
     rustNilStrLendSites(declaration: any): boolean;
@@ -355,7 +358,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `[ x, .. ] = <list>` as its own statement: `x` is written from a tuple slot. */
     rustNilSlotWrite(n: any): boolean;
     /** Slot hook: an `Option<String>` local takes the slot's string. */
-    printRustNilSlotWrite(element: any, read: string, strRead?: string): string | undefined;
+    printRustNilSlotWrite(element: any, read: string, strRead?: string, boolRead?: string): string | undefined;
     /** Declaration hook: `let mut x: Option<..> = None` for an empty scalar local. */
     printRustNilScalarDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** Assignment hook: `x = <rhs>` with the right-hand side unwrapped to the local's payload. */
