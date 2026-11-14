@@ -639,6 +639,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustVenueReturnTypesHas(node: any, name: string): boolean;
     /** `this.milliseconds().toString()`: the decimal text of the `i64`, as `to_string_val` prints an `Int`. */
     rustClockString(node: any): boolean;
+    /** `this.nonce()` where every declaration of the name (base and each override) declares `int`: the trait slot
+     *  answers a `Value` holding that `Int`, and `format!("{}", ..)` of it is the decimal text `to_string_val` gives. */
+    rustNonceCall(node: any): boolean;
     /** A base `sum(a, b, ..)` call shape; whether it is native is decided by rustArithCallKind. */
     rustSumShape(node: any): boolean;
     /** A cast, clock-string or `sum` local must earn a native use, and a string one never copies where the `Value` moved. */
@@ -713,6 +716,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustVenueTypedDecisions;
     rustVenueTypedCall(expr: any): string | undefined;
     rustVenueTypedKindUncached(declaration: any): string | undefined;
+    /** `x = E; return x;`: the returned local holds what the statement right before the return wrote. */
+    rustVenueReturnSource(ret: any): any;
     /** An override whose hidden base method and every venue declaration of the name declare its own return type. */
     rustVenueOverrideAgrees(declaration: any, hidden: any): boolean;
     /** The once-converted native text of a venue typed call (the method keeps `-> Value` and its dispatch arm). */
@@ -848,6 +853,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustScalarLocalEquality(left: any, right: any, op: any): string | undefined;
     /** Condition hook: a `bool` scalar local is its own condition. */
     printRustScalarLocalCondition(node: any): string | undefined;
+    /** The needle of a base `inArray` call outside the test crate: the hand-written `in_array(needle: impl Into<Value>, ..)`
+     *  takes an optional string lent as `&x` (`From<&Option<String>>`: `None` is Null, `Some(s)` a `Str`, as the box gave). */
+    rustInArrayNeedle(node: any): boolean;
     /** Identifier hook: a `box` use converts with the standard `From` impls (scalars are `Copy`). */
     printRustScalarLocalRead(node: any): string | undefined;
     /** The native value of a scalar expression for a local of `kind` (`Some(..)` for optional kinds). */
