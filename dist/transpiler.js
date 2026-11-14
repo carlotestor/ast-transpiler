@@ -70118,7 +70118,7 @@ ${iden}}`;
       if (pattern?.kind !== SyntaxKind7.ArrayBindingPattern || !isVariableDeclaration3(owner) || owner.name !== pattern || owner.parent?.declarations?.length !== 1)
         return false;
       const at = pattern.elements.indexOf(declaration);
-      const allSlot = at >= 0 && this.rustPromiseAllDictSlot(declaration);
+      const allSlot = at >= 0 && (this.rustPromiseAllDictSlot(declaration) || at === 0 && this.rustUntilRequestSlot(declaration));
       if (at !== 1 && !allSlot && !(at >= 0 && this.rustDeclaredDictSlot(declaration)))
         return false;
       if (declaration.dotDotDotToken !== void 0 || declaration.initializer !== void 0 || this.rustTupleSlotKind(declaration) !== void 0)
@@ -70360,6 +70360,26 @@ ${iden}}`;
   rustExtendHeadUse(n) {
     const call = n.parent;
     return isCallExpression6(call) && call.arguments.length === 2 && call.arguments[0] === n && isIdentifier3(n) && this.rustBaseCallNamed(call, _RustTranspiler.RUST_EXTEND_HEAD_CALLS);
+  }
+  /** qe: slot 0 of `const [ x, p ] = this.handleUntilOption (k, r, ..)` with `r` a map literal or a typed map local:
+   *  the base helper hands `r` back (inserting the until key), so the slot is that map on every path. */
+  rustUntilRequestSlot(element) {
+    const owner = element?.parent?.parent;
+    if (element?.parent?.kind !== SyntaxKind7.ArrayBindingPattern || !isVariableDeclaration3(owner) || owner.name !== element.parent)
+      return false;
+    const init = this.rustSkipWrappers(owner.initializer);
+    if (!this.rustBaseCallNamed(init, _RustTranspiler.RUST_REQUEST_TUPLE_HELPERS) || !this.rustNativeListSource(init))
+      return false;
+    const request = this.rustSkipWrappers(init.arguments[1]);
+    if (request === void 0 || !(isObjectLiteralExpression4(request) || this.rustDictBearerDeclaration(request) !== void 0))
+      return false;
+    let head = false;
+    this.rustLocalUsesAll(element, String(element.name.text), false, (n) => {
+      if (this.rustExtendHeadUse(n))
+        head = true;
+      return true;
+    });
+    return !head;
   }
   rustUntilHeadSlot(element) {
     if (element?.kind !== SyntaxKind7.BindingElement)

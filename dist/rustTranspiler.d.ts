@@ -2599,6 +2599,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustExtendHeadUse(n: any): boolean;
     private static readonly RUST_EXTEND_HEAD_CALLS;
     private rustUntilHeadDecisions;
+    /** qe: slot 0 of `const [ x, p ] = this.handleUntilOption (k, r, ..)` with `r` a map literal or a typed map local:
+     *  the base helper hands `r` back (inserting the until key), so the slot is that map on every path. */
+    rustUntilRequestSlot(element: any): boolean;
     rustUntilHeadSlot(element: any): boolean;
     /** Slot 0 of `const [ x, p ] = this.handleUntilOption (k, r, ..)` with `r` a map literal or a typed map local,
      *  used only as an extend head or written at literal keys (`Arc::make_mut(&mut x).insert(..)`). */

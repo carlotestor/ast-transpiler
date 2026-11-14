@@ -18948,7 +18948,7 @@ export class RustTranspiler extends BaseTranspiler {
                 || (owner.parent as any)?.declarations?.length !== 1) return false;
             // slot 1 is the params dict; any other slot only where the callee's own tuple type declares it `Dict`
             const at = pattern.elements.indexOf(declaration);
-            const allSlot = at >= 0 && this.rustPromiseAllDictSlot(declaration);
+            const allSlot = at >= 0 && (this.rustPromiseAllDictSlot(declaration) || at === 0 && this.rustUntilRequestSlot(declaration));
             if (at !== 1 && !allSlot && !(at >= 0 && this.rustDeclaredDictSlot(declaration))) return false;
             if (declaration.dotDotDotToken !== undefined || declaration.initializer !== undefined || this.rustTupleSlotKind(declaration) !== undefined) return false;
             const init: any = this.rustAwaitedCall(owner.initializer);
@@ -19188,6 +19188,21 @@ export class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_EXTEND_HEAD_CALLS = new Set([ 'extend', 'deepExtend' ]);
 
     private rustUntilHeadDecisions = new WeakMap<any, boolean>();
+
+    /** qe: slot 0 of `const [ x, p ] = this.handleUntilOption (k, r, ..)` with `r` a map literal or a typed map local:
+     *  the base helper hands `r` back (inserting the until key), so the slot is that map on every path. */
+    rustUntilRequestSlot(element: any): boolean {
+        const owner: any = element?.parent?.parent;
+        if (element?.parent?.kind !== SyntaxKind.ArrayBindingPattern || !isVariableDeclaration(owner) || owner.name !== element.parent) return false;
+        const init: any = this.rustSkipWrappers(owner.initializer);
+        if (!this.rustBaseCallNamed(init, RustTranspiler.RUST_REQUEST_TUPLE_HELPERS) || !this.rustNativeListSource(init)) return false;
+        const request: any = this.rustSkipWrappers(init.arguments[1]);
+        if (request === undefined || !(isObjectLiteralExpression(request) || this.rustDictBearerDeclaration(request) !== undefined)) return false;
+        // an extend head belongs to the until-head rule (a whole hand-off beside it keeps the box there)
+        let head = false;
+        this.rustLocalUsesAll(element, String(element.name.text), false, (n: any) => { if (this.rustExtendHeadUse(n)) head = true; return true; });
+        return !head;
+    }
 
     rustUntilHeadSlot(element: any): boolean {
         if (element?.kind !== SyntaxKind.BindingElement) return false;
