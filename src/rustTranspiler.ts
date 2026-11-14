@@ -510,7 +510,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (RustTranspiler.RUST_NUMBER_CONSTANT_IMPORTS.has(name) && this.rustIsImportedValueName(node)) {
             return `Value::Int(crate::runtime::${name})`;
         }
-        return this.rustOwnedUseMark(node, this.printRustBytesLocalRead(node) ?? this.printWsBookLocalUse(node) ?? this.printWsCacheLocalUse(node) ?? this.printClientHandleUse(node) ?? this.printTypedFilterParamRead(node) ?? this.printRustNilLocalRead(node) ?? this.printRustScalarLocalRead(node) ?? this.printRustStrSlotBox(node) ?? super.printIdentifier(node));
+        return this.rustOwnedUseMark(node, this.printRustBytesLocalRead(node) ?? this.printWsBookLocalUse(node) ?? this.printWsCacheLocalUse(node) ?? this.printClientHandleUse(node) ?? this.printTypedFilterParamRead(node) ?? this.printRustNilLocalRead(node) ?? this.printRustScalarLocalRead(node) ?? this.printRustStrSlotConcat(node) ?? this.printRustStrSlotBox(node) ?? super.printIdentifier(node));
     }
 
     // ── owned uses (rustOwnedUseMark / rustOwnedUseIsFree) ──
@@ -11869,7 +11869,7 @@ export class RustTranspiler extends BaseTranspiler {
         let copies = 0;
         const safe = this.rustLocalUsesAll(element, name, true, (n: any) => {
             if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn) return false;
-            const ok = kind === 'string' ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n);
+            const ok = kind === 'string' ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) || this.rustStrSlotConcatUse(n, element) : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n);
             if (ok) nativeUses++;
             const box = !ok && kind === 'string' && this.rustStrSlotBoxUse(n) && (isCallExpression(n.parent) || isReturnStatement(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustSlotUseOutsideLoop(n, element));
             if (box && !(isReturnStatement(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustStrSlotLastUse(n, element))) copies++;
@@ -11915,6 +11915,24 @@ export class RustTranspiler extends BaseTranspiler {
         if (!isBinaryExpression(up) || up.operatorToken.kind !== SyntaxKind.PlusToken) return false;
         while (isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.PlusToken) up = up.parent;
         return up?.kind === SyntaxKind.NewExpression && up.parent?.kind === SyntaxKind.ThrowStatement;
+    }
+
+    /** wi: a `format!` concat operand (other side always a string) reads the slot in place with the text the
+     *  boxed `Value::Null` displays (`null`), within the 400-char line budget. */
+    private rustStrSlotConcatUses = new WeakSet<Node>();
+
+    rustStrSlotConcatUse(n: any, element: any): boolean {
+        const ok = !this.rustStrSlotThrownConcat(n) && this.rustNilOptStrConcatUse(n) && this.printNode(n.parent, 0).trim().startsWith('Value::Str(format!(');
+        if (ok) this.rustStrSlotConcatUses.add(n);
+        return ok;
+    }
+
+    /** Read hook: a concat use recorded by the slot decision (no re-print here, the decision already measured it). */
+    printRustStrSlotConcat(node: any): string | undefined {
+        if (!isIdentifier(node) || !this.rustStrSlotConcatUses.has(node)) return undefined;
+        const declaration: any = this.rustDeclaredNode(node);
+        if (declaration?.kind !== SyntaxKind.BindingElement || this.rustTupleSlotKind(declaration) !== 'str') return undefined;
+        return `${super.printIdentifier(node)}.as_deref().unwrap_or("null")`;
     }
 
     /** `x.clone().map(Value::from).unwrap_or(Value::Null)` at a boxed use of a typed string slot. */

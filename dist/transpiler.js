@@ -51607,6 +51607,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // `const [a, b] = this.handleXAndParams (..)` over a proven `Vec<Value>`: a `string` slot used only in
     // null / literal compares is `Option<String>`; a `boolean` slot used only as a condition is `bool`.
     this.rustTupleSlotDecisions = /* @__PURE__ */ new WeakMap();
+    /** wi: a `format!` concat operand (other side always a string) reads the slot in place with the text the
+     *  boxed `Value::Null` displays (`null`), within the 400-char line budget. */
+    this.rustStrSlotConcatUses = /* @__PURE__ */ new WeakSet();
     // ── exact integer / boolean tuple slots ──────────────────────────────────
     // A `number` / `boolean` slot whose callee builds that slot from an Int-or-null (Bool-or-null) producer on every
     // path is `Option<i64>` / `Option<bool>`; its uses go through the scalar-local forms (native tests, conditions,
@@ -51954,7 +51957,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (_RustTranspiler.RUST_NUMBER_CONSTANT_IMPORTS.has(name) && this.rustIsImportedValueName(node)) {
       return `Value::Int(crate::runtime::${name})`;
     }
-    return this.rustOwnedUseMark(node, this.printRustBytesLocalRead(node) ?? this.printWsBookLocalUse(node) ?? this.printWsCacheLocalUse(node) ?? this.printClientHandleUse(node) ?? this.printTypedFilterParamRead(node) ?? this.printRustNilLocalRead(node) ?? this.printRustScalarLocalRead(node) ?? this.printRustStrSlotBox(node) ?? super.printIdentifier(node));
+    return this.rustOwnedUseMark(node, this.printRustBytesLocalRead(node) ?? this.printWsBookLocalUse(node) ?? this.printWsCacheLocalUse(node) ?? this.printClientHandleUse(node) ?? this.printTypedFilterParamRead(node) ?? this.printRustNilLocalRead(node) ?? this.printRustScalarLocalRead(node) ?? this.printRustStrSlotConcat(node) ?? this.printRustStrSlotBox(node) ?? super.printIdentifier(node));
   }
   rustOwnedUseMark(node, text) {
     if (!_RustTranspiler.isBareLocal(text))
@@ -62940,7 +62943,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const safe = this.rustLocalUsesAll(element, name, true, (n) => {
       if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn)
         return false;
-      const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n);
+      const ok = kind === "string" ? this.rustStringLocalUseIsNative(n) || this.rustVenueStrArgSlot(n) || this.rustStrSlotConcatUse(n, element) : this.rustIdentifierUseIsCondition(n) || this.rustBoolSlotTrueTest(n);
       if (ok)
         nativeUses++;
       const box = !ok && kind === "string" && this.rustStrSlotBoxUse(n) && (isCallExpression6(n.parent) || isReturnStatement4(n.parent) || this.rustStrSlotThrownConcat(n) || this.rustSlotUseOutsideLoop(n, element));
@@ -62990,6 +62993,21 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     while (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.PlusToken)
       up = up.parent;
     return up?.kind === SyntaxKind7.NewExpression && up.parent?.kind === SyntaxKind7.ThrowStatement;
+  }
+  rustStrSlotConcatUse(n, element) {
+    const ok = !this.rustStrSlotThrownConcat(n) && this.rustNilOptStrConcatUse(n) && this.printNode(n.parent, 0).trim().startsWith("Value::Str(format!(");
+    if (ok)
+      this.rustStrSlotConcatUses.add(n);
+    return ok;
+  }
+  /** Read hook: a concat use recorded by the slot decision (no re-print here, the decision already measured it). */
+  printRustStrSlotConcat(node) {
+    if (!isIdentifier3(node) || !this.rustStrSlotConcatUses.has(node))
+      return void 0;
+    const declaration = this.rustDeclaredNode(node);
+    if (declaration?.kind !== SyntaxKind7.BindingElement || this.rustTupleSlotKind(declaration) !== "str")
+      return void 0;
+    return `${super.printIdentifier(node)}.as_deref().unwrap_or("null")`;
   }
   /** `x.clone().map(Value::from).unwrap_or(Value::Null)` at a boxed use of a typed string slot. */
   printRustStrSlotBox(node) {

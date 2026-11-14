@@ -1605,6 +1605,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrSlotBoxUse(n: any): boolean;
     /** A `+` operand of a thrown error message: the statement diverges, so the slot moves into its `format!`. */
     rustStrSlotThrownConcat(n: any): boolean;
+    /** wi: a `format!` concat operand (other side always a string) reads the slot in place with the text the
+     *  boxed `Value::Null` displays (`null`), within the 400-char line budget. */
+    private rustStrSlotConcatUses;
+    rustStrSlotConcatUse(n: any, element: any): boolean;
+    /** Read hook: a concat use recorded by the slot decision (no re-print here, the decision already measured it). */
+    printRustStrSlotConcat(node: any): string | undefined;
     /** `x.clone().map(Value::from).unwrap_or(Value::Null)` at a boxed use of a typed string slot. */
     printRustStrSlotBox(node: any): string | undefined;
     /** The slot's final read: no later use, no other use in its statement, no loop or closure since the destructure. */
