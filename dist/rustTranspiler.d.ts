@@ -900,6 +900,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     } | undefined;
     /** Native `String` text of a pad / slice over the `&str` `s`. */
     rustStrPadSliceText(method: string, args: any[], s: string): string;
+    /** The literal width and one-char pad of a native `padStart` / `padEnd` (`format!` width counts chars and never truncates). */
+    rustScalarPadSpec(widthArg: any, padArg: any): {
+        width: number;
+        pad: string;
+    } | undefined;
     /** `indexOf` needle as an `Option<&str>`: a non-empty literal, a typed string local, or a string-typed `Value` expression. */
     rustStrFindNeedle(node: any, syntactic: boolean): string | undefined;
     /** `s.indexOf(n)` on a typed string local: `str::find` (byte index), `-1` when absent or either side is null, as the helper. */

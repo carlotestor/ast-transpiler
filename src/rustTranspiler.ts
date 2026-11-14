@@ -5077,10 +5077,19 @@ export class RustTranspiler extends BaseTranspiler {
         if (recvType === undefined || (recvType.flags & (TypeFlags.Any | TypeFlags.Unknown)) !== 0 || this.getChecker().isArrayType(recvType)) return undefined;
         const field: any = this.getChecker().getPropertyOfType(recvType, String(node.argumentExpression.text));
         if (field === undefined || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== 'string') return undefined;
+        // oe: an `ecdsa(..)` signature (`{ r: string, s: string, .. }`) read while its own borrowed decision is still pending:
+        // `KeyRead` reads it through `&&Dict` and `&&Value` alike, so the text does not wait on that decision
+        if (owner.initializer !== undefined && this.rustEcdsaCall(this.rustSkipWrappers(owner.initializer)) && this.rustBorrowedPending.has(owner)) {
+            return `crate::value::KeyRead::key_read(&&${super.printIdentifier(node.expression)}, "${this.escapeRustStringLiteral(String(node.argumentExpression.text))}").as_str().map(str::to_owned)`;
+        }
         const read = this.printNode(node, 0).trim();
         const tail = '.cloned().unwrap_or(Value::Null)';
         if (read.endsWith(tail) && !read.includes('as_map()')) return `${read.slice(0, -tail.length)}.and_then(Value::as_str).map(str::to_owned)`;
         if (read.startsWith('crate::value::KeyRead::key_read(&&') && read.endsWith(')')) return `${read}.as_str().map(str::to_owned)`;
+        // oe: a row local printed as a plain `Value` (`row.as_map().and_then(|__m| ..)`): the closure-free `KeyRead` read of the same slot
+        if (read.endsWith(tail) && read.startsWith(`${super.printIdentifier(node.expression)}.as_map().and_then(|__m| __m.get(`)) {
+            return `${this.rustTestTierSource(node) ? 'ccxt' : 'crate'}::value::KeyRead::key_read(&&${super.printIdentifier(node.expression)}, "${this.escapeRustStringLiteral(String(node.argumentExpression.text))}").as_str().map(str::to_owned)`;
+        }
         return undefined;
     }
 
@@ -6608,6 +6617,15 @@ export class RustTranspiler extends BaseTranspiler {
         return `format!("{:${pad}${method === 'padStart' ? '>' : '<'}${width}}", ${s})`;
     }
 
+    /** The literal width and one-char pad of a native `padStart` / `padEnd` (`format!` width counts chars and never truncates). */
+    rustScalarPadSpec(widthArg, padArg): { width: number, pad: string } | undefined {
+        const width = this.rustSliceLiteralBound(widthArg);
+        const pad: any = this.unwrapParens(padArg);
+        if (width === undefined || width < 0 || width > 4096 || pad === undefined) return undefined;
+        if ((!isStringLiteral(pad) && !isNoSubstitutionTemplateLiteral(pad)) || !/^[A-Za-z0-9 ]$/.test(pad.text)) return undefined;
+        return { width, pad: pad.text };
+    }
+
     /** `indexOf` needle as an `Option<&str>`: a non-empty literal, a typed string local, or a string-typed `Value` expression. */
     rustStrFindNeedle(node, syntactic: boolean): string | undefined {
         const inner: any = this.unwrapParens(node);
@@ -7258,6 +7276,12 @@ export class RustTranspiler extends BaseTranspiler {
             if (method.method === 'replace' || method.method === 'replaceAll') {
                 if (method.recvKind === 'ostr') return wrap(`(if let Some(__s) = ${name}.as_deref() { Some(__s.replace("${arg(0)}", "${arg(1)}")) } else { None })`);
                 return wrap(`${name}.replace("${arg(0)}", "${arg(1)}")`);
+            }
+            if (method.method === 'padStart' || method.method === 'padEnd') {
+                const spec = this.rustScalarPadSpec(args[0], args[1]);
+                const spec2 = `{:${spec.pad}${method.method === 'padStart' ? '>' : '<'}${spec.width}}`;
+                // a `String` is its own `Display` operand; an optional one pads only when present
+                return wrap(method.recvKind === 'ostr' ? `(if let Some(__s) = ${name}.as_deref() { Some(format!("${spec2}", __s)) } else { None })` : `format!("${spec2}", ${name})`);
             }
             const fn = method.method === 'toLowerCase' ? 'to_lowercase' : 'to_uppercase';
             if (method.recvKind === 'ostr') return wrap(`${name}.as_deref().map(str::${fn})`);

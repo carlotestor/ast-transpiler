@@ -56215,12 +56215,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const field = this.getChecker().getPropertyOfType(recvType, String(node.argumentExpression.text));
     if (field === void 0 || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "string")
       return void 0;
+    if (owner.initializer !== void 0 && this.rustEcdsaCall(this.rustSkipWrappers(owner.initializer)) && this.rustBorrowedPending.has(owner)) {
+      return `crate::value::KeyRead::key_read(&&${super.printIdentifier(node.expression)}, "${this.escapeRustStringLiteral(String(node.argumentExpression.text))}").as_str().map(str::to_owned)`;
+    }
     const read = this.printNode(node, 0).trim();
     const tail = ".cloned().unwrap_or(Value::Null)";
     if (read.endsWith(tail) && !read.includes("as_map()"))
       return `${read.slice(0, -tail.length)}.and_then(Value::as_str).map(str::to_owned)`;
     if (read.startsWith("crate::value::KeyRead::key_read(&&") && read.endsWith(")"))
       return `${read}.as_str().map(str::to_owned)`;
+    if (read.endsWith(tail) && read.startsWith(`${super.printIdentifier(node.expression)}.as_map().and_then(|__m| __m.get(`)) {
+      return `${this.rustTestTierSource(node) ? "ccxt" : "crate"}::value::KeyRead::key_read(&&${super.printIdentifier(node.expression)}, "${this.escapeRustStringLiteral(String(node.argumentExpression.text))}").as_str().map(str::to_owned)`;
+    }
     return void 0;
   }
   /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
@@ -57860,6 +57866,16 @@ ${binding(plan.indent)}` : ""), head: "" };
     const { width, pad } = this.rustStrPadArgs(args);
     return `format!("{:${pad}${method === "padStart" ? ">" : "<"}${width}}", ${s})`;
   }
+  /** The literal width and one-char pad of a native `padStart` / `padEnd` (`format!` width counts chars and never truncates). */
+  rustScalarPadSpec(widthArg, padArg) {
+    const width = this.rustSliceLiteralBound(widthArg);
+    const pad = this.unwrapParens(padArg);
+    if (width === void 0 || width < 0 || width > 4096 || pad === void 0)
+      return void 0;
+    if (!_is.isStringLiteral.call(void 0, pad) && !_is.isNoSubstitutionTemplateLiteral.call(void 0, pad) || !/^[A-Za-z0-9 ]$/.test(pad.text))
+      return void 0;
+    return { width, pad: pad.text };
+  }
   /** `indexOf` needle as an `Option<&str>`: a non-empty literal, a typed string local, or a string-typed `Value` expression. */
   rustStrFindNeedle(node, syntactic) {
     const inner = this.unwrapParens(node);
@@ -58579,6 +58595,11 @@ ${binding(plan.indent)}` : ""), head: "" };
         if (method.recvKind === "ostr")
           return wrap(`(if let Some(__s) = ${name}.as_deref() { Some(__s.replace("${arg(0)}", "${arg(1)}")) } else { None })`);
         return wrap(`${name}.replace("${arg(0)}", "${arg(1)}")`);
+      }
+      if (method.method === "padStart" || method.method === "padEnd") {
+        const spec = this.rustScalarPadSpec(args[0], args[1]);
+        const spec2 = `{:${spec.pad}${method.method === "padStart" ? ">" : "<"}${spec.width}}`;
+        return wrap(method.recvKind === "ostr" ? `(if let Some(__s) = ${name}.as_deref() { Some(format!("${spec2}", __s)) } else { None })` : `format!("${spec2}", ${name})`);
       }
       const fn = method.method === "toLowerCase" ? "to_lowercase" : "to_uppercase";
       if (method.recvKind === "ostr")
