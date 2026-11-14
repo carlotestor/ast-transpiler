@@ -2557,6 +2557,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustNilValueStrAlias(node)) return 'str';
             return this.rustNilLocalOfIdentifier(node)?.kind;
         }
+        // za: `c ? undefined : false` (arms each undefined or a boolean literal, one of each): `None` / `Some(lit)` per arm
+        if (this.rustNilBoolNullTernary(node)) return 'bool';
         if (isBinaryExpression(node) && node.operatorToken.kind === SyntaxKind.PlusToken) {
             return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === 'string' ? 'str' : undefined;
         }
@@ -2585,6 +2587,14 @@ export class RustTranspiler extends BaseTranspiler {
             return args.length === boolBase || (args.length === boolBase + 1 && this.literalKindOfNode(args[boolBase]) === 'boolean') ? 'bool' : undefined;
         }
         return undefined;
+    }
+
+    /** za: a ternary whose arms are an `undefined` and a boolean literal (either order). */
+    rustNilBoolNullTernary(expr): boolean {
+        const node: any = this.unwrapParens(expr);
+        if (node === undefined || !isConditionalExpression(node)) return false;
+        const kinds = [ node.whenTrue, node.whenFalse ].map((a) => this.literalKindOfNode(this.unwrapParens(a)));
+        return kinds.includes('null') && kinds.includes('boolean');
     }
 
     /** A boolean that is never undefined: `!x`, a ternary of boolean literals, or `&&` / `||` / parens over such operands. */
@@ -2643,6 +2653,9 @@ export class RustTranspiler extends BaseTranspiler {
             return this.rustNilBoxCallOk(parent, parent.arguments.indexOf(n)) ? 'box' : undefined;
         }
         if (parent.kind === SyntaxKind.PropertyAssignment && parent.initializer === n) return 'box';
+        // za: `const y = x;` copies a bool nil local into a `Value` local: the box is the Bool / Null the `Value` held
+        if (kind === 'bool' && isVariableDeclaration(parent) && parent.initializer === n && isIdentifier(parent.name)
+            && this.rustScalarLocalKind(parent) === undefined && this.rustNilLocalKind(parent) === undefined) return 'box';
         if (isArrayLiteralExpression(parent) && !(isBinaryExpression(parent.parent) && parent.parent.left === parent)) return 'box';
         if (isReturnStatement(parent) && parent.expression === n) {
             return this.rustNativeStrReturnKind(findAncestor(parent.parent, isFunctionLike) as any) === 'str' ? undefined : 'box';
@@ -3046,6 +3059,10 @@ export class RustTranspiler extends BaseTranspiler {
         const int = this.rustNilIntLiteral(node);
         if (int !== undefined) return `${name} = Some(${int})`;
         if (isIdentifier(node) && local.kind === 'str' && this.rustNilValueStrAlias(node)) return `${name} = ${super.printIdentifier(node)}.into_opt_string()`;
+        if (local.kind === 'bool' && this.rustNilBoolNullTernary(node)) {
+            const arm = (a) => (this.literalKindOfNode(this.unwrapParens(a)) === 'null' ? 'None' : `Some(${this.unwrapParens(a).kind === SyntaxKind.TrueKeyword ? 'true' : 'false'})`);
+            return `${name} = if ${this.printCondition(node.condition, 0)} { ${arm(node.whenTrue)} } else { ${arm(node.whenFalse)} }`;
+        }
         if (isIdentifier(node)) return `${name} = ${super.printIdentifier(node)}.clone()`;
         const text = this.printNode(node, 0).trim();
         if (local.kind === 'str') {

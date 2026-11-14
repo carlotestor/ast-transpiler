@@ -53844,6 +53844,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return "str";
       return this.rustNilLocalOfIdentifier(node)?.kind;
     }
+    if (this.rustNilBoolNullTernary(node))
+      return "bool";
     if (isBinaryExpression5(node) && node.operatorToken.kind === SyntaxKind7.PlusToken) {
       return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string" ? "str" : void 0;
     }
@@ -53876,6 +53878,14 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return args.length === boolBase || args.length === boolBase + 1 && this.literalKindOfNode(args[boolBase]) === "boolean" ? "bool" : void 0;
     }
     return void 0;
+  }
+  /** za: a ternary whose arms are an `undefined` and a boolean literal (either order). */
+  rustNilBoolNullTernary(expr) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0 || !isConditionalExpression4(node))
+      return false;
+    const kinds = [node.whenTrue, node.whenFalse].map((a) => this.literalKindOfNode(this.unwrapParens(a)));
+    return kinds.includes("null") && kinds.includes("boolean");
   }
   /** A boolean that is never undefined: `!x`, a ternary of boolean literals, or `&&` / `||` / parens over such operands. */
   rustNilDefiniteBool(expr) {
@@ -53939,6 +53949,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return this.rustNilBoxCallOk(parent, parent.arguments.indexOf(n)) ? "box" : void 0;
     }
     if (parent.kind === SyntaxKind7.PropertyAssignment && parent.initializer === n)
+      return "box";
+    if (kind === "bool" && isVariableDeclaration3(parent) && parent.initializer === n && isIdentifier3(parent.name) && this.rustScalarLocalKind(parent) === void 0 && this.rustNilLocalKind(parent) === void 0)
       return "box";
     if (isArrayLiteralExpression4(parent) && !(isBinaryExpression5(parent.parent) && parent.parent.left === parent))
       return "box";
@@ -54362,6 +54374,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${name} = Some(${int})`;
     if (isIdentifier3(node) && local.kind === "str" && this.rustNilValueStrAlias(node))
       return `${name} = ${super.printIdentifier(node)}.into_opt_string()`;
+    if (local.kind === "bool" && this.rustNilBoolNullTernary(node)) {
+      const arm = (a) => this.literalKindOfNode(this.unwrapParens(a)) === "null" ? "None" : `Some(${this.unwrapParens(a).kind === SyntaxKind7.TrueKeyword ? "true" : "false"})`;
+      return `${name} = if ${this.printCondition(node.condition, 0)} { ${arm(node.whenTrue)} } else { ${arm(node.whenFalse)} }`;
+    }
     if (isIdentifier3(node))
       return `${name} = ${super.printIdentifier(node)}.clone()`;
     const text = this.printNode(node, 0).trim();

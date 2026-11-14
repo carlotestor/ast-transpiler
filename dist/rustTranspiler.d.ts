@@ -348,6 +348,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSiblingStrBoxesMove(declaration: any, scope: any): boolean;
     /** Static kind of a write's right-hand side: `null`, or the `Option` payload it yields exactly. */
     rustNilWriteKind(rhs: any): string | undefined;
+    /** za: a ternary whose arms are an `undefined` and a boolean literal (either order). */
+    rustNilBoolNullTernary(expr: any): boolean;
     /** A boolean that is never undefined: `!x`, a ternary of boolean literals, or `&&` / `||` / parens over such operands. */
     rustNilDefiniteBool(expr: any): boolean;
     /** `if <cond> { true } else { false }` for a ternary of boolean literals. */
