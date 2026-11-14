@@ -54228,6 +54228,31 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const whole = _is.isVariableDeclaration.call(void 0, parent) && parent.initializer === top && _is.isIdentifier.call(void 0, parent.name) || _is.isBinaryExpression.call(void 0, parent) && parent.right === top && parent.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _is.isIdentifier.call(void 0, parent.left) && _optionalChain([parent, 'access', _8593 => _8593.parent, 'optionalAccess', _8594 => _8594.kind]) === _ast.SyntaxKind.ExpressionStatement;
     return whole && this.rustEnclosingFunction(declaration) === this.rustEnclosingFunction(n) && this.rustLocalLastUse(n, declaration);
   }
+  /** 40i: an arm of `c ? n : z` that is the whole initializer of another local, at the source's last use outside a
+   *  loop (bybit withdraw `defaultAccountType`): only one arm runs and the source is never read again, so it moves. */
+  rustScalarTernaryArmMoveSite(n, declaration) {
+    let top = n;
+    while (_is.isParenthesizedExpression.call(void 0, top.parent))
+      top = top.parent;
+    const ternary = top.parent;
+    if (!_is.isConditionalExpression.call(void 0, ternary) || ternary.condition === top)
+      return false;
+    let up = ternary;
+    while (_is.isParenthesizedExpression.call(void 0, up.parent))
+      up = up.parent;
+    const target = up.parent;
+    if (!_is.isVariableDeclaration.call(void 0, target) || target.initializer !== up || !_is.isIdentifier.call(void 0, target.name) || target === declaration)
+      return false;
+    if (!_is.isVariableDeclaration.call(void 0, declaration) || this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(n))
+      return false;
+    for (let a = n.parent; a !== void 0 && a !== declaration.parent; a = a.parent) {
+      if (_chunkC7C726CWcjs.isFunctionLike.call(void 0, a) || a.kind === _ast.SyntaxKind.ForStatement || a.kind === _ast.SyntaxKind.ForOfStatement || a.kind === _ast.SyntaxKind.ForInStatement || a.kind === _ast.SyntaxKind.WhileStatement || a.kind === _ast.SyntaxKind.DoStatement)
+        return false;
+      if (_is.isBlock.call(void 0, a) && a.parent === this.rustEnclosingFunction(declaration))
+        break;
+    }
+    return this.rustLocalLastUse(n, declaration);
+  }
   /** nc: `x = y` from a typed `Option<String|i64|f64>` local of the same kind that is read again later (one function,
    *  no closure between). A string clones `y` where the boxed write cloned it (`y.clone().map(Value::from)..`); a
    *  number is `Copy` and its write prints `y` owned, so neither adds a copy. */
@@ -60236,7 +60261,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       if (kind === "num" && own === "int")
         return `(${name} as f64)`;
       const source = _optionalChain([this, 'access', _9069 => _9069.rustScalarLocalOf, 'call', _9070 => _9070(node), 'optionalAccess', _9071 => _9071.declaration]);
-      const moved = (own === "str" || own === "ostr") && source !== void 0 && this.rustScalarAliasMoveSite(node, source);
+      const moved = (own === "str" || own === "ostr") && source !== void 0 && (this.rustScalarAliasMoveSite(node, source) || this.rustScalarTernaryArmMoveSite(node, source));
       return wrap(own === "str" || own === "ostr" ? moved ? name : `${name}.clone()` : name);
     }
     if (_is.isBinaryExpression.call(void 0, node)) {
@@ -75314,9 +75339,22 @@ ${iden}}`;
       return false;
     const other = this.unwrapParens(ternary.whenTrue === top ? ternary.whenFalse : ternary.whenTrue);
     const lit = this.literalKindOfNode(other);
-    if (lit !== "string" && lit !== "null")
+    if (lit !== "string" && lit !== "null" && !this.rustStrTernaryOtherArmMoves(other, ternary))
       return false;
     return this.rustLocalLastUse(n, element) || this.rustSlotUseOutsideLoop(n, element);
+  }
+  /** 40i: the other arm is a typed string local of the same function read here for the last time (bybit withdraw
+   *  `defaultAccountType`): the arm moves it into the target, so typing the target adds no copy. */
+  rustStrTernaryOtherArmMoves(other, ternary) {
+    if (other === void 0 || !_is.isIdentifier.call(void 0, other))
+      return false;
+    const declaration = this.rustDeclaredNode(other);
+    if (declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) || !_is.isIdentifier.call(void 0, declaration.name) || declaration.initializer === void 0)
+      return false;
+    if (this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(ternary))
+      return false;
+    const kind = this.rustScalarDecisions.get(declaration);
+    return (kind === "str" || kind === "ostr") && this.rustLocalLastUse(other, declaration) && this.rustSlotUseOutsideLoop(other, declaration);
   }
   /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
    *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
