@@ -53816,6 +53816,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "cond";
     if (kind === "bool" && this.rustNilNegatedBoolWrite(n))
       return "cond";
+    if (kind === "bool" && this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n))
+      return "cond";
     if (isCallExpression6(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
       return this.rustNilBoxCallOk(parent, parent.arguments.indexOf(n)) ? "box" : void 0;
     }
@@ -53891,6 +53893,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   printRustNilLocalCondition(node) {
     const inner = this.unwrapParens(node);
     const local = this.rustNilLocalOfIdentifier(inner);
+    if (local === void 0 && inner !== node && isPrefixUnaryExpression3(inner) && inner.operator === SyntaxKind7.ExclamationToken) {
+      const operand = this.unwrapParens(inner.operand);
+      if (this.rustNilLocalOfIdentifier(operand)?.kind === "bool")
+        return `(!(${super.printIdentifier(operand)} == Some(true)))`;
+    }
     return local?.kind === "bool" ? `(${super.printIdentifier(inner)} == Some(true))` : void 0;
   }
   /** Identifier hook: a box read converts with the standard `From` impls. */

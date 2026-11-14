@@ -2591,6 +2591,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (kind === 'bool' && this.rustIdentifierUseIsCondition(n)) return 'cond';
         // rb: `y = !x` into another typed bool local: `!x` prints `!(x == Some(true))`, the truthiness `is_true` gave
         if (kind === 'bool' && this.rustNilNegatedBoolWrite(n)) return 'cond';
+        // ta: a read inside a `&&` / `||` / `!` chain the printer already prints as a Rust `bool` (a `let x: bool`
+        // initializer, a boxed logical): `(x == Some(true))` is the truthiness `x.as_bool() == Some(true)` gave, None -> false
+        if (kind === 'bool' && this.rustClimbLogicalWrappers(n) !== n && this.rustConditionBoolSlot(n)) return 'cond';
         if (isCallExpression(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
             return this.rustNilBoxCallOk(parent, parent.arguments.indexOf(n)) ? 'box' : undefined;
         }
@@ -2662,6 +2665,11 @@ export class RustTranspiler extends BaseTranspiler {
     printRustNilLocalCondition(node): string | undefined {
         const inner = this.unwrapParens(node);
         const local = this.rustNilLocalOfIdentifier(inner);
+        if (local === undefined && inner !== node && isPrefixUnaryExpression(inner) && inner.operator === SyntaxKind.ExclamationToken) {
+            // ta: `(!x)` of a bool nil local is the negated truthiness, already a Rust bool
+            const operand = this.unwrapParens(inner.operand);
+            if (this.rustNilLocalOfIdentifier(operand)?.kind === 'bool') return `(!(${super.printIdentifier(operand)} == Some(true)))`;
+        }
         return local?.kind === 'bool' ? `(${super.printIdentifier(inner)} == Some(true))` : undefined;
     }
 
