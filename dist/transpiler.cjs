@@ -54150,7 +54150,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const parent = n.parent;
       if (_is.isBinaryExpression.call(void 0, parent) && parent.left === n && parent.operatorToken.kind === _ast.SyntaxKind.EqualsToken) {
         const rhs = this.unwrapParens(parent.right);
-        if (_is.isIdentifier.call(void 0, rhs) && !this.rustNilAliasMove(rhs, kind) && !this.rustNilLiveAliasCopy(rhs, kind) && !(kind === "ostr" && this.rustNilValueStrAlias(rhs)))
+        if (_is.isIdentifier.call(void 0, rhs) && this.literalKindOfNode(rhs) !== "null" && !this.rustNilAliasMove(rhs, kind) && !this.rustNilLiveAliasCopy(rhs, kind) && !(kind === "ostr" && this.rustNilValueStrAlias(rhs)))
           ok = false;
         return true;
       }
@@ -59160,6 +59160,8 @@ ${binding(plan.indent)}` : ""), head: "" };
   printRustScalarLocalWrite(left, right) {
     const local = this.rustScalarLocalOf(left);
     const alias = this.unwrapParens(right);
+    if (local !== void 0 && local.kind.startsWith("o") && _is.isIdentifier.call(void 0, alias) && this.literalKindOfNode(alias) === "null")
+      return `${super.printIdentifier(left)} = None`;
     if (local !== void 0 && _is.isIdentifier.call(void 0, alias) && this.rustNilAliasMoves.has(alias) && this.rustScalarIdentifierKind(alias) === local.kind)
       return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.take()`;
     if (_optionalChain([local, 'optionalAccess', _8972 => _8972.kind]) === "ostr" && _is.isIdentifier.call(void 0, alias) && this.rustScalarIdentifierKind(alias) === void 0 && this.rustNilValueStrAlias(alias))

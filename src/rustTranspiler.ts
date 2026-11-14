@@ -2844,7 +2844,8 @@ export class RustTranspiler extends BaseTranspiler {
                 const rhs: any = this.unwrapParens(parent.right);
                 // nc: a typed source of the same kind still read later copies once where its `Value` box was cloned
                 // (`Option<String>`), or is `Copy` (`Option<i64|f64>`, printed owned: the printer adds no alias clone)
-                if (isIdentifier(rhs) && !this.rustNilAliasMove(rhs, kind) && !this.rustNilLiveAliasCopy(rhs, kind) && !(kind === 'ostr' && this.rustNilValueStrAlias(rhs))) ok = false;
+                // za: `x = undefined` is an Identifier node but writes `None` (no source, no copy)
+                if (isIdentifier(rhs) && this.literalKindOfNode(rhs) !== 'null' && !this.rustNilAliasMove(rhs, kind) && !this.rustNilLiveAliasCopy(rhs, kind) && !(kind === 'ostr' && this.rustNilValueStrAlias(rhs))) ok = false;
                 return true;
             }
             if (kind !== 'ostr') return true;
@@ -7847,6 +7848,8 @@ export class RustTranspiler extends BaseTranspiler {
     printRustScalarLocalWrite(left, right): string | undefined {
         const local = this.rustScalarLocalOf(left);
         const alias: any = this.unwrapParens(right);
+        // za: `x = undefined` (an Identifier node) on an optional scalar local writes `None`: nothing to copy
+        if (local !== undefined && local.kind.startsWith('o') && isIdentifier(alias) && this.literalKindOfNode(alias) === 'null') return `${super.printIdentifier(left)} = \u0004None`;
         if (local !== undefined && isIdentifier(alias) && this.rustNilAliasMoves.has(alias) && this.rustScalarIdentifierKind(alias) === local.kind) return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.take()`;
         if (local?.kind === 'ostr' && isIdentifier(alias) && this.rustScalarIdentifierKind(alias) === undefined && this.rustNilValueStrAlias(alias)) return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.into_opt_string()`;
         const text = local === undefined ? undefined : this.rustScalarNativeText(local.kind, right);
