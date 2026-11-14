@@ -4200,7 +4200,8 @@ describe('rust native container reads on typed receivers', () => {
             '    }\n' +
             '}';
         const output = transpiler.transpileRust(ts).content;
-        expect(output).toContain('let mut entry: Value = get_value(&data, &i);');
+        // ral-zf: the i64 counter keys it as `&Value::Int(i)`, which the write-back pass also matches
+        expect(output).toContain('let mut entry: Value = get_value(&data, &Value::Int(i));');
         expect(output).not.toContain(DYNAMIC);
     });
 
@@ -8841,11 +8842,12 @@ describe('rust ws cache size locals', () => {
     test('an integer size local passes natively to the cache constructor', () => {
         const out = transpiler.transpileRustByPath(path.join (rustFixtureRoot, 'cache-ctor-limit', 'ts/src/pro/venue.ts')).content;
         // the bare size argument is cloned on the file text like any by-value cache constructor argument
-        expect(out).toContain('ArrayCache::new(limit.clone())');
+        // zd: the `Copy` integer is boxed in place (no `.clone()`)
+        expect(out).toContain('ArrayCache::new(Value::from(limit))');
         expect(out).toContain('let mut limit: i64 = ');
         expect(out).toContain('let mut ordersLimit: Option<i64> = ');
         expect(out).toContain('ArrayCacheBySymbolById::new(Value::from(ordersLimit))');
-        expect(out).toContain('ArrayCacheBySymbolById::new(ordersLimit.clone()));');
+        expect(out).not.toContain('ordersLimit.clone()');
         expect(out).not.toMatch(/let mut limit: Value/);
         expect(out).not.toMatch(/let mut ordersLimit: Value/);
     });
@@ -11344,7 +11346,8 @@ describe('rust ternary-initialised scalar locals', () => {
             "        request['limit'] = Math.min (limit, maxLimit);\n        const capped = (limit === undefined) ? maxLimit : Math.min (limit, maxLimit);\n" +
             "        return [ request, capped ];\n");
         expect(out).toContain('let mut maxLimit: i64 = (if ');
-        expect(out).toContain('crate::runtime::Math::min(&limit, &Value::from(maxLimit))');
+        // zb: a typed-signature `limit` makes the cap native (`Option<i64>` min, the helper's Null arm)
+        expect(out).toContain('(if let Some(__m0) = limit.as_i64() { Some(i64::min(__m0, maxLimit)) } else { None })');
         expect(out).not.toContain('maxLimit.clone()');
         expect(out).not.toContain('let mut maxLimit: Value');
     });
@@ -12145,7 +12148,8 @@ describe('od: typed results of other self method calls (third pass)', () => {
         expect(out).toContain('&[Value::Bool(uta)]');
     });
     test('sum with an optional integer operand prints the native Option<i64> sum (Null when an operand is missing)', () => {
-        expect(out).toContain('Value::from((if let Some(__m0) = start { Some((__m0 + 60)) } else { None }))');
+        // zb: the Option sum now types the `end` local itself (Option<i64>), boxed only where it is handed on
+        expect(out).toContain('let mut end: Option<i64> = (if let Some(__m0) = start { Some((__m0 + 60)) } else { None });');
         expect(out).not.toContain('self.sum(');
     });
     test('negative: a string local the method returns keeps the method\'s typed return', () => {
@@ -14223,7 +14227,7 @@ describe('ral-yb: counter-indexed bind not followed by a write-back mutation (ro
     const fn = (body: string) => transpiler.transpileRust("class X {\n    f (p: any) {\n        const r = [];\n        const xs = this.safeValue (p, 'x');\n        for (let i = 0; i < xs.length; i++) {\n" + body + "\n        }\n        return r;\n    }\n}").content;
     const cases: [ string, string, string[], string[] ][] = [
         [ 'next statement is an if reassigning the bind: the key boxes the i64 counter', "            let x = xs[i];\n            if (x['a'] === undefined) { x = this.safeDict (x, 'b'); }\n            r.push (x);", [ 'let mut i: i64 = 0;', 'get_value(&xs, &Value::Int(i))' ], [ 'let mut i: Value' ] ],
-        [ 'next statement writes into the bind: the counter stays Value for the write-back pass', "            const x = xs[i];\n            x['a'] = 1;\n            r.push (x);", [ 'let mut i: Value' ], [ 'let mut i: i64' ] ],
+        [ 'next statement writes into the bind: the i64 counter keys it as &Value::Int(i), which the write-back pass matches (ral-zf)', "            const x = xs[i];\n            x['a'] = 1;\n            r.push (x);", [ 'let mut i: i64', 'get_value(&xs, &Value::Int(i))' ], [ 'let mut i: Value' ] ],
     ];
     test.each(cases)('%s', (_name, body, has, hasNot) => {
         const out = fn(body);
@@ -14475,7 +14479,8 @@ describe('ye: resolve proof for literal-map, cache-field and wildcard-hash resol
     const cases: Array<[ string, string, RegExp ]> = [
         // (1) a map literal is a Dict resolve; negative: a list literal is not
         [ 'map literal', tk + "        client.resolve ({ 'symbol': symbol }, 'ticker:' + symbol);\n    }\n", dictLocal ],
-        [ 'negative: list literal', tk + "        client.resolve ([ symbol ], 'ticker:' + symbol);\n    }\n", valueLocal ],
+        // ral-ze: a list literal is not a Dict resolve; it is now a proven List resolve
+        [ 'negative: list literal', tk + "        client.resolve ([ symbol ], 'ticker:' + symbol);\n    }\n", /let mut ticker: crate::value::List = self\.watch\(/ ],
         // (2) `this.tickers[k]` right after `this.tickers[k] = <Ticker>`; negative: an `any` field
         [ 'cache field read after a typed write', tk + "        const parsed: Ticker = { 'symbol': symbol, 'info': message } as Ticker;\n        this.tickers[symbol] = parsed;\n        client.resolve (this.tickers[symbol], 'ticker:' + symbol);\n    }\n", dictLocal ],
         [ 'negative: any field read', tk + "        this.other[symbol] = message;\n        client.resolve (this.other[symbol], 'ticker:' + symbol);\n    }\n", valueLocal ],
@@ -14569,4 +14574,355 @@ describe('ral-40a: `(x as string)` in a ws watch url slot', () => {
         expect(out).toContain('self.watch(url.as_deref(), ');
         expect(out).not.toContain('url.clone()');
     });
+});
+
+describe('ral-zf: a counter-indexed bind the ccxt write-back pass rewrites keeps the i64 counter', () => {
+    test('const e = xs[i]; e[k] = v: the counter is i64 and the bind keys the helper with Value::Int(i)', () => {
+        const out = transpiler.transpileRust ("class T {\n    m (data: any[]) {\n        for (let i = 0; i < data.length; i++) {\n            const entry = data[i];\n            entry['page'] = 1;\n        }\n        return data;\n    }\n}").content;
+        expect(out).toContain('let mut i: i64 = 0;');
+        expect(out).toContain('let mut entry: Value = get_value(&data, &Value::Int(i));');
+    });
+    test('negative: an untyped counter (arithmetic with an any operand) keeps the Value key', () => {
+        const out = transpiler.transpileRust ("class T {\n    m (data: any[], n) {\n        for (let i = 0; i < data.length; i++) {\n            const entry = data[i];\n            entry['page'] = n - i;\n        }\n        return data;\n    }\n}").content;
+        expect(out).toContain('let mut entry: Value = get_value(&data, &i);');
+    });
+});
+
+describe('ral-zf: Promise.all slots of list producers are shared lists lent to arrayConcat', () => {
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-zf-pall-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport interface Market { id: string }\nexport default class Exchange {\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    arrayConcat (a: any[], b: any[]): any[] { return a.concat (b); }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/abstract/venue.ts'), "import _Exchange from '../base/Exchange.js';\nimport type { List } from '../base/Exchange.js';\nexport default abstract class Exchange extends _Exchange {\n    publicGetA (params = {}): Promise<List> { return this.hold (params); }\n    publicGetC (params = {}): Promise<any> { return this.hold (params); }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './abstract/venue.js';\nimport type { Dict, Market } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    const markets = "    async fetchSpotMarkets (params: Dict = {}): Promise<Market[]> { return this.hold ([]); }\n    async fetchSwapMarkets (params: Dict = {}): Promise<Market[]> { return this.hold ([]); }\n";
+    test('Promise<List> endpoint slots (bound operands or inline): List slots lent to arrayConcat, no copy', () => {
+        const out = mk(markets + "    async fetchAll (params: Dict = {}) {\n        const p1 = this.publicGetA (params);\n        const p2 = this.publicGetA (params);\n        const [ spot, swap ] = await Promise.all ([ p1, p2 ]);\n        return this.arrayConcat (spot, swap);\n    }\n    async fetchRows (params: Dict = {}) {\n        const [ a, b ] = await Promise.all ([ this.publicGetA (params), this.publicGetA (params) ]);\n        return this.arrayConcat (a, b);\n    }");
+        expect(out).toMatch(/let mut spot: crate::value::List = spotswapVariable\.get\(0\)\.cloned\(\)\.unwrap_or\(Value::Null\)\.into_list\(\);/);
+        expect(out).toMatch(/let mut swap: crate::value::List = /);
+        expect(out).toContain('self.arrayConcat(&spot, &swap)');
+        expect(out).toMatch(/let mut a: crate::value::List = /);
+        expect(out).toContain('self.arrayConcat(&a, &b)');
+        expect(out).not.toMatch(/\b(spot|swap|a|b)\.clone\(\)/);
+    });
+    test('negative: an untyped endpoint answer keeps the Value slot', () => {
+        const out = mk(markets + "    async fetchAll (params: Dict = {}) {\n        const [ a, c ] = await Promise.all ([ this.publicGetA (params), this.publicGetC (params) ]);\n        return this.arrayConcat (a, c);\n    }");
+        expect(out).toMatch(/let mut c: Value = /);
+    });
+});
+
+describe('ral-zf: a message field Dict / List stored whole into this.balance / this.options', () => {
+    const mk = (body: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-zf-bo-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base/ws'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    balance: Dict = {};\n    options: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeDict (o: any, k: any, d: Dict = undefined): Dict | undefined { return o[k]; }\n    safeList (o: any, k: any, d: any[] = undefined): any[] | undefined { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/ws/Client.ts'), "export default class Client {\n    resolve (v: any, h: string | undefined = undefined): void {}\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange';\nimport type { Dict } from '../base/Exchange';\nimport Client from '../base/ws/Client';\nexport default class venue extends Exchange {\n" + body + "\n}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    test('a message field list stored into this.options[k] before a later read is shared (Value::Arr(x.clone()), an Arc bump)', () => {
+        const out = mk("    handleBalance (client: Client, message: Dict): void {\n        const data = this.safeDict (message, 'data', {});\n        const rows = this.safeList (message, 'rows', []);\n        this.balance['info'] = data;\n        this.options['rows'] = rows;\n        const total = this.safeString (rows, 0);\n        client.resolve (this.balance, total);\n    }");
+        expect(out).toMatch(/let mut rows: crate::value::List = [^\n]*\.get\(\\?"rows\\?"\)\.cloned\(\)\.unwrap_or_default\(\)\.into_list\(\);/);
+        expect(out).toMatch(/insert\(\\?"rows\\?"\.(?:into|to_string)\(\), Value::Arr\(rows\.clone\(\)\)\)/);
+        expect(out).not.toMatch(/let mut (data|rows): Value = /);
+    });
+    test('negative: a store into another this. field keeps the box', () => {
+        const out = mk("    handleBalance (client: Client, message: Dict): void {\n        const rows = this.safeList (message, 'rows', []);\n        this.orderbooks['x'] = rows;\n        const total = this.safeString (rows, 0);\n        client.resolve (this.balance, total);\n    }");
+        expect(out).toMatch(/let mut rows: Value = /);
+    });
+});
+
+describe('ral-zb: Math.min / max and sum over a typed-signature numeric parameter (round 39)', () => {
+    const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['fetchTrades'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+    let n = 0;
+    const run = (body: string) => {
+        const file = path.join (rustFixtureRoot, 'zb-arith-param', String (n++), 'ts/src/venue.ts');
+        fs.mkdirSync (path.dirname (file), { recursive: true });
+        fs.writeFileSync (file, "type Int = number;\ntype Trade = any;\ninterface Dict { [key: string]: any }\nclass C {\n" +
+            "    async fetchTrades (symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Trade[]> {\n" +
+            body + "    }\n    g (x: any): any { return x; }\n}\n");
+        return typed.transpileRustByPath (file).content;
+    };
+    // [ case, body, expected substrings, forbidden substrings ]
+    const cases: [ string, string, string[], string[] ][] = [
+        [ 'Math.min of an Int parameter and an i64 local: the first assignment decides the local Option<i64>',
+            "        const maxLimit = 1500;\n        let limitValue: Int = 500;\n        if (limit !== undefined) {\n            limitValue = Math.min (limit, maxLimit);\n        }\n        return this.g ({ 'limit': limitValue });\n",
+            [ 'let mut maxLimit: i64 = 1500;', 'let mut limitValue: Option<i64> = Some(500);', 'limitValue = (if let Some(__m0) = limit.as_i64() { Some(i64::min(__m0, maxLimit)) } else { None });' ],
+            [ 'let mut limitValue: Value', 'Math::min(&limit' ] ],
+        [ 'Math.max of an Int parameter and an int literal: Option<i64> with the helper Null arm',
+            "        let start: Int = 0;\n        if (since !== undefined) {\n            start = Math.max (since, 1000);\n        }\n        return this.g ({ 'start': start });\n",
+            [ 'let mut start: Option<i64> = Some(0);', 'start = (if let Some(__m0) = since.as_i64() { Some(i64::max(__m0, 1000)) } else { None });' ],
+            [ 'let mut start: Value', 'Math::max(&since' ] ],
+        [ 'zb lift 2: a dependent first assignment x = now - limit * d decides x with both operands (Option<i64>, never boxing an operand)',
+            "        const duration = 60000;\n        const now = 1700000000000;\n        let sinceResolved = since;\n        if (sinceResolved === undefined) {\n            sinceResolved = now - limit * duration;\n        }\n        return this.g ({ 'since': sinceResolved });\n",
+            [ 'sinceResolved = (if let Some(__r) = ((if let Some(__l) = limit.as_i64() { Some(__l * duration) } else { None })) { Some(now - __r) } else { None });' ],
+            [ 'let mut sinceResolved: Value', 'Value::from(duration)' ] ],
+        [ 'zb negative: an f64 parameter side keeps the runtime arithmetic (a build/ pass keys on that write text)',
+            "        let rest = undefined;\n        rest = 10 - this.g (since);\n        return this.g ({ 'r': rest });\n",
+            [ ], [ 'let mut rest: Option<f64>' ] ],
+        [ 'a Value operand (an any-typed param read) keeps the helper',
+            "        const p = this.g (params);\n        const capped = Math.min (p, 10);\n        return this.g ({ 'c': capped });\n",
+            [ 'Math::min(&' ], [ 'let mut capped: Option<i64>', 'let mut capped: i64' ] ],
+    ];
+    for (const [ name, body, yes, no ] of cases) {
+        test(name, () => {
+            const out = run(body);
+            for (const y of yes) expect(out).toContain(y);
+            for (const x of no) expect(out).not.toContain(x);
+        });
+    }
+});
+
+describe('ral-zb lift 3: a sum local over a typed-signature Int parameter is Option<i64> despite its any checker type', () => {
+    const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['fetchTrades'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+    const root = path.join (rustFixtureRoot, 'zb-sum-local');
+    const base = "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport type Trade = any;\nexport default class Exchange {\n" +
+        "    sum (...args: any[]): any { return args[0] + args[1]; }\n    g (x: any): any { return x; }\n    parseToInt (x: any): any { return x; }\n}\n";
+    const venue = (body: string) => "import Exchange from './base/Exchange.js';\nimport type { Dict, Int, Trade } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" +
+        "    async fetchTrades (symbol: string, since: Int = undefined, limit: Int = undefined, params: Dict = {}): Promise<Trade[]> {\n" + body + "    }\n}\n";
+    let n = 0;
+    const run = (body: string) => {
+        const dir = path.join (root, String (n++));
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue (body));
+        return typed.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('const end = this.sum (since, 60000) prints the Option sum into an Option<i64> local', () => {
+        const out = run ("        const end = this.sum (since, 60000);\n        return this.g ({ 'end': end });\n");
+        expect(out).toContain('let mut end: Option<i64> = (if let Some(__m0) = since.as_i64() { Some((__m0 + 60000)) } else { None });');
+        expect(out).not.toContain('let mut end: Value');
+    });
+    test('negative: a sum over an any-typed operand keeps the box', () => {
+        const out = run ("        const p = this.g (params);\n        const end = this.sum (p, 60000);\n        return this.g ({ 'end': end });\n");
+        expect(out).not.toContain('let mut end: Option<i64>');
+    });
+});
+
+describe('ral-zh: sign params of a venue whose every request-path caller hands a map', () => {
+    const write = (name: string, venue: string, caller: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/abstract'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    omit (x: any, ...args: any): any { return x; }\n    extend (...args: any): any { return {}; }\n    extractParams (s: string): string[] { return []; }\n    urlencode (o: any): string { return ''; }\n    json (o: any): string { return ''; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/abstract/' + name + '.ts'), "import _Exchange from '../base/Exchange.js';\nexport default abstract class Exchange extends _Exchange {\n    publicGetX (params = {}): Promise<any> {\n        return this.omit (params);\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/' + name + '.ts'), "import Exchange from './abstract/" + name + ".js';\nimport type { Dict } from './base/Exchange.js';\nexport default class " + name + " extends Exchange {\n" + caller + venue + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/' + name + '.ts')).content;
+    };
+    const sign = "    sign (path: string, api = 'public', method = 'GET', params = {}, headers: any = undefined, body: any = undefined) {\n        let url = '/' + path;\n        const query = this.omit (params, this.extractParams (path));\n        if (Object.keys (query).length) {\n            url += '?' + this.urlencode (query);\n        }\n        body = this.json (query);\n        return [ url, body ];\n    }\n";
+    test('every implicit-endpoint caller passes a map: the omit of sign params holds the Dict', () => {
+        const out = write ('zhsignok', sign, "    async f (params: Dict = {}) {\n        const request: Dict = { 'a': 1 };\n        return await this.publicGetX (this.extend (request, params));\n    }\n");
+        expect(out).toContain('let mut query: crate::value::Dict = ');
+    });
+    test('negative: one caller passes a list body: the omit keeps its box', () => {
+        const out = write ('zhsignlist', sign, "    async f (params: Dict = {}) {\n        return await this.publicGetX ([ params ]);\n    }\n");
+        expect(out).not.toContain('let mut query: crate::value::Dict = ');
+    });
+    test('negative: a dynamic this[name] call keeps the box', () => {
+        const out = write ('zhsigndyn', sign, "    async f (name: string, params: Dict = {}) {\n        return await this[name] (params);\n    }\n");
+        expect(out).not.toContain('let mut query: crate::value::Dict = ');
+    });
+});
+
+describe('ral-zh: an Object.keys key list with a same-named twin in a sibling block holds the list', () => {
+    test('two throwing branches each list Object.keys (m): both lists are crate::value::List, joined natively', () => {
+        const dir = path.join (rustFixtureRoot, 'zhkeys');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeString (x: any, k: any, d: any = undefined): any { return x; }\n    safeDict (x: any, k: any, d: any = undefined): any { return x; }\n    options: any = {};\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (a: string, b: string) {\n        const accounts = this.safeDict (this.options, 'accountsByType', {});\n        const fromId = this.safeString (accounts, a);\n        if (fromId === undefined) {\n            const keys = Object.keys (accounts);\n            throw new Error ('from must be one of ' + keys.join (', '));\n        }\n        const toId = this.safeString (accounts, b);\n        if (toId === undefined) {\n            const keys = Object.keys (accounts);\n            throw new Error ('to must be one of ' + keys.join (', '));\n        }\n        return [ fromId, toId ];\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out.match(/let mut keys: crate::value::List = /g)?.length).toBe(2);
+        expect(out).not.toContain('let mut keys: Value = ');
+    });
+    test('negative: twin key lists of a this.<field> store (ws cache) keep their box', () => {
+        const dir = path.join (rustFixtureRoot, 'zhkeysn');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    tickers: any = {};\n    bidsasks: any = {};\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    m (t: boolean) {\n        const out = [];\n        if (t) {\n            const symbols = Object.keys (this.tickers);\n            for (let i = 0; i < symbols.length; i++) {\n                out.push (symbols[i]);\n            }\n        } else {\n            const symbols = Object.keys (this.bidsasks);\n            for (let i = 0; i < symbols.length; i++) {\n                out.push (symbols[i]);\n            }\n        }\n        return out;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).not.toContain('let mut symbols: crate::value::List = ');
+    });
+});
+
+describe('zi: tuple slots fifth pass', () => {
+    const fx = (name: string, base: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    const base = "export interface Dict { [key: string]: any }\nconst omit = (x: Dict | undefined, ...args: any) => x;\nconst extend = (...args: any[]) => Object.assign ({}, ...args);\nexport default class Exchange {\n    omit = omit;\n    extend = extend;\n    safeInteger (o: any, k: any): number | undefined { return o; }\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    handleUntilOption (key: string, request: Dict, params: Dict, multiplier: number = 1): [Dict, Dict] {\n        const until = this.safeInteger (params, 'until');\n        if (until !== undefined) {\n            request[key] = until;\n        }\n        const paramsOmitted = (until !== undefined) ? this.omit (params, 'until') : params;\n        return [ request, paramsOmitted ];\n    }\n}\n";
+    test('zi: a slot re-declared by a destructure in a disjoint sibling block is its own block-scoped Dict local', () => {
+        const file = fx ('zi-sibling-slots', base, "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fetchThing (flag: boolean, params: Dict = {}) {\n        const request: Dict = { 'a': 1 };\n        if (flag) {\n            const [ requestUntil, paramsUntil ] = this.handleUntilOption ('before', request, params);\n            return this.hold (this.extend (requestUntil, paramsUntil));\n        } else {\n            const [ requestUntil, paramsUntil ] = this.handleUntilOption ('lastTime', request, params);\n            return this.hold (this.extend (requestUntil, paramsUntil));\n        }\n    }\n    fetchNested (flag: boolean, params: Dict = {}) {\n        const request: Dict = { 'a': 1 };\n        const [ requestUntil, paramsUntil ] = this.handleUntilOption ('before', request, params);\n        if (flag) {\n            const [ requestUntil, paramsUntil ] = this.handleUntilOption ('lastTime', request, params);\n            return this.hold (this.extend (requestUntil, paramsUntil));\n        }\n        return this.hold (this.extend (requestUntil, paramsUntil));\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        const thing = out.slice (out.indexOf ('fn fetchThing'), out.indexOf ('fn fetchNested'));
+        expect(thing.match(/let mut requestUntil: crate::value::Dict = /g)?.length).toBe(2);
+        expect(thing.match(/let mut paramsUntil: crate::value::Dict = /g)?.length).toBe(2);
+        // negative: a nested (shadowing) re-declaration keeps the old walk
+        const nested = out.slice (out.indexOf ('fn fetchNested'));
+        expect(nested).toContain('let mut requestUntil: Value = ');
+    });
+    test('zi: a venue-pair ternary destructure types a slot Dict when both arms declare it Dict', () => {
+        const file = fx ('zi-venue-pair', base, "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    prepareA (params: Dict = {}): [Dict, Dict] {\n        const request: Dict = { 'a': 1 };\n        return [ request, params ];\n    }\n    prepareB (params: Dict = {}): [Dict, Dict] {\n        const request: Dict = { 'b': 1 };\n        return [ request, params ];\n    }\n    prepareC (params: Dict = {}): [any, Dict] {\n        return [ this.hold (params), params ];\n    }\n    fetchThing (flag: boolean, params: Dict = {}) {\n        const [ request, requestParams ] = flag ? this.prepareA (params) : this.prepareB (params);\n        request['id'] = 1;\n        return this.hold (this.extend (request, requestParams));\n    }\n    fetchMixed (flag: boolean, params: Dict = {}) {\n        const [ loose, looseParams ] = flag ? this.prepareA (params) : this.prepareC (params);\n        loose['id'] = 1;\n        return this.hold (this.extend (loose, looseParams));\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        expect(out).toContain('let mut request: crate::value::Dict = ');
+        expect(out).toContain('let mut requestParams: crate::value::Dict = ');
+        // negative: an arm whose callee does not declare slot 0 `Dict` keeps the box
+        expect(out).toContain('let mut loose: Value = ');
+    });
+    test('zi: a string-option slot feeding a ternary arm types the TARGET local Option<String> (literal other arm)', () => {
+        const b2 = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    handleOptionStringAndParams (params: object, methodName: string, optionName: string, defaultValue: Str = undefined): [Str, Dict] {\n        const value = this.safeString (params, optionName, defaultValue);\n        return [ value, params as Dict ];\n    }\n}\n";
+        const file = fx ('zi-ternary-target', b2, "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    watchThing (fut: boolean, params: Dict = {}) {\n        const [ spotMethod, rest ] = this.handleOptionStringAndParams (params, 'watchThing', 'spotMethod', '/m');\n        const method = (fut === true) ? '/f' : spotMethod;\n        const topic = method + ':x';\n        return this.hold ([ topic, rest ]);\n    }\n    watchOther (fut: boolean, params: Dict = {}) {\n        const [ spotOther, rest ] = this.handleOptionStringAndParams (params, 'watchOther', 'spotMethod', '/m');\n        const fallback = fut ? 'a' : 'b';\n        const pick = (spotOther === undefined) ? fallback : spotOther;\n        return this.hold ({ 'p': pick, 'r': rest, 'f': fallback });\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        expect(out).toContain('let mut spotMethod: Option<String> = ');
+        expect(out).toContain('let mut method: Option<String> = ');
+        // negative: the other arm is a typed local (its copy would be an added clone): the target stays Value
+        expect(out).toContain('let mut spotOther: Value = ');
+    });
+});
+
+describe('ral-zg: a Dict[] row next to a differently sourced same-named sibling binding is typed; a row handed on whole takes the optional form', () => {
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-zg-row-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n    safeDict (o: any, k: any, d: any = undefined): any { return d; }\n    safeList (o: any, k: any, d: any = undefined): any { return d; }\n    safeOrder (o: Dict): Dict { return o; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    const body = (sibling: string, use: string) => "    run (response: Dict) {\n        const rows: Dict[] = this.safeList (response, 'data', []);\n        const result = [];\n        if (rows.length > 0) {\n            " + sibling + "\n            result.push (this.safeString (row, 'id'));\n        }\n        for (let i = 0; i < rows.length; i++) {\n            const row = rows[i];\n            " + use + "\n        }\n        return result;\n    }";
+    test('read only by a safe* reader: the plain shared map (a Null row reads Null at every string key, as into_dict leaves)', () => {
+        const out = mk(body("const row = this.safeDict (response, 'first');", "result.push (this.safeString (row, 'id'));"));
+        expect(out).toMatch(/let mut row: crate::value::Dict = rows\.get\(i as usize\)\.cloned\(\)\.unwrap_or\(Value::Null\)\.into_dict\(\);/);
+    });
+    test('handed on whole into a map literal: Option<Dict>, boxed back to exactly Null or the map', () => {
+        const out = mk(body("const row = this.safeDict (response, 'first');", "result.push (this.safeOrder ({ 'info': row, 'id': this.safeString (row, 'id') }));"));
+        expect(out).toMatch(/let mut row: Option<crate::value::Dict> = rows\.get\(i as usize\)\.cloned\(\)\.unwrap_or\(Value::Null\)\.into_opt_dict\(\);/);
+        expect(out).toContain('m.insert(\"info\".to_string(), row.clone().map_or(Value::Null, Value::Dict));');
+    });
+    test('negative: a sibling declared with var (function-scoped) keeps the row Value', () => {
+        const out = mk(body("var row = this.safeDict (response, 'first');", "result.push (this.safeString (row, 'id'));"));
+        expect(out).toMatch(/let mut row: Value = rows\.get\(i as usize\)/);
+    });
+});
+
+describe('ral-zg: a Dict[] row assigned whole into an outer let keeps Option<Dict> and boxes back to exactly Null or the map', () => {
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-zg-assign-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n    safeList (o: any, k: any, d: any = undefined): any { return d; }\n    parseRow (o: Dict): Dict { return o; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    const body = (target: string) => "    pick (response: Dict, id: Str) {\n        const rows: Dict[] = this.safeList (response, 'data', []);\n        " + target + "\n        for (let i = 0; i < rows.length; i++) {\n            const row = rows[i];\n            if (this.safeString (row, 'id') === id) {\n                found = row;\n                break;\n            }\n        }\n        return this.parseRow (found);\n    }";
+    test('found = row: the row is Option<Dict> and the write boxes it back', () => {
+        const out = mk(body('let found: Dict = {};'));
+        expect(out).toMatch(/let mut row: Option<crate::value::Dict> = rows\.get\(i as usize\)\.cloned\(\)\.unwrap_or\(Value::Null\)\.into_opt_dict\(\);/);
+        expect(out).toContain('found = row.map_or(Value::Null, Value::Dict);');
+    });
+    test('negative: a target declared after the row (a var hoisted past it) keeps the row Value', () => {
+        const out = mk(body('var found: Dict = {};'));
+        expect(out).toMatch(/let mut row: Value = rows\.get\(i as usize\)/);
+    });
+});
+
+describe('ral-zg: a Dict[] row appended whole to a cache local takes Option<Dict> (append boxes exactly Null or the map)', () => {
+    const mk = (venueBody: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-zg-append-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return d; }\n    toArray (o: any): any { return o; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venueBody + "\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    const body = (target: string) => "    prune (newCache: any, cache: any, symbol: Str) {\n        const entries: Dict[] = this.toArray (cache);\n        for (let i = 0; i < entries.length; i++) {\n            const entry = entries[i];\n            if (this.safeString (entry, 'symbol') !== symbol) {\n                " + target + ".append (entry);\n            }\n        }\n        return newCache;\n    }";
+    test('newCache.append (entry): Option<Dict> boxed back at the append', () => {
+        const out = mk(body('newCache'));
+        expect(out).toMatch(/let mut entry: Option<crate::value::Dict> = entries\.get\(i as usize\)\.cloned\(\)\.unwrap_or\(Value::Null\)\.into_opt_dict\(\);/);
+        expect(out).toContain('newCache.append(entry.map_or(Value::Null, Value::Dict));');
+    });
+    test('negative: appending to the row itself keeps it Value', () => {
+        const out = mk(body('entry'));
+        expect(out).toMatch(/let mut entry: Value = entries\.get\(i as usize\)/);
+    });
+});
+
+describe('zd: a reader integer that sizes `this.<field> = new ArrayCache*(limit)` types (the cache field is no local)', () => {
+    test('sibling `const limit` reader locals feeding cache-field constructors print i64 and pass bare into ::new', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-zd-cachector-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base/ws'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport default class Exchange {\n    options: Dict = {};\n    orders: any = undefined;\n    myTrades: any = undefined;\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k] ?? d; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/base/ws/Cache.ts'), "export class ArrayCache { constructor (maxSize: any = undefined) {} }\nexport class ArrayCacheBySymbolById extends ArrayCache {}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport { ArrayCacheBySymbolById } from '../base/ws/Cache.js';\nexport default class venue extends Exchange {\n    handleOrders (message: any) {\n        if (this.orders === undefined) {\n            const limit = this.safeInteger (this.options, 'ordersLimit', 1000);\n            this.orders = new ArrayCacheBySymbolById (limit);\n        }\n        if (this.myTrades === undefined) {\n            const limit = this.safeInteger (this.options, 'tradesLimit', 1000);\n            this.myTrades = new ArrayCacheBySymbolById (limit);\n        }\n        return message;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+        expect(out).not.toMatch(/let mut limit: Value = /);
+        expect((out.match(/let mut limit: i64 = /g) ?? []).length).toBe(2);
+    });
+});
+
+describe('zd: a string reader whose default is an options element written only as string literals / undefined types', () => {
+    const mk = (optVal: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-zd-optelem-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    options: Dict = {};\n    safeString2 (o: any, k1: any, k2: any, d: Str = undefined): Str { return o[k1] ?? o[k2] ?? d; }\n    describe (): any { return {}; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    describe (): any {\n        return { 'options': { 'region': " + optVal + " } };\n    }\n    req (params: Dict = {}) {\n        const request: Dict = {};\n        const region = this.safeString2 (params, 'region', 'region', this.options['region']);\n        if (region !== undefined) {\n            request['region'] = region;\n        }\n        return request;\n    }\n}\n");
+        return transpiler.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+    };
+    test('undefined / string literal writes prove Option<String>', () => {
+        expect(mk('undefined')).toMatch(/let mut region: Option<String> = /);
+        expect(mk("'eu'")).toMatch(/let mut region: Option<String> = /);
+    });
+    test('a number write anywhere poisons it (stays Value)', () => {
+        expect(mk('1')).toMatch(/let mut region: Value = /);
+    });
+});
+
+describe('ze: list resolves are a proven List watch result', () => {
+    // one venue with a `watchT` awaiting 'tickers'; `handlers` are the class's resolve sites
+    const base = "export interface Dict { [key: string]: any }\nexport interface Ticker { symbol: string; info: any }\nexport default class Exchange {\n    symbols: string[] = undefined;\n    safeString (o: any, k: any, d: any = undefined): any { return o[k]; }\n    async watch (url: string, messageHash: string, message: any = undefined, subscribeHash: any = undefined, subscription: any = undefined): Promise<any> { return undefined; }\n}\n";
+    const mk = (handlers: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-ze-'));
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict, Ticker } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    async watchT () {\n        const tickers = await this.watch ('u', 'tickers');\n        return this.safeString (tickers, 0);\n    }\n" + handlers + "}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        return t.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+    };
+    const listLocal = /let mut tickers: crate::value::List = self\.watch\(/;
+    const valueLocal = /let mut tickers: Value = self\.watch\(/;
+    const tk = "    handleTickers (client: any, message: Dict) {\n        const symbol: string = this.safeString (message, 's');\n";
+    const cases: Array<[ string, string, RegExp ]> = [
+        [ 'array literal', tk + "        client.resolve ([ symbol ], 'tickers');\n    }\n", listLocal ],
+        [ 'typed list local filled by pushes', tk + "        const result: Ticker[] = [];\n        result.push ({ 'symbol': symbol, 'info': message } as Ticker);\n        client.resolve (result, 'tickers');\n    }\n", listLocal ],
+        [ 'base list field', tk + "        client.resolve (this.symbols, 'tickers');\n    }\n", listLocal ],
+        // a per-symbol map under another hash does not meet 'tickers'
+        [ 'list beside a map under another hash', tk + "        client.resolve ({ 'symbol': symbol }, 'ticker:' + symbol);\n        client.resolve ([ symbol ], 'tickers');\n    }\n", listLocal ],
+        [ 'negative: a list and a map under the same hash', tk + "        client.resolve ({ 'symbol': symbol }, 'tickers');\n        client.resolve ([ symbol ], 'tickers');\n    }\n", valueLocal ],
+        [ 'negative: a list and a resolve with no value', tk + "        client.resolve ([ symbol ], 'tickers');\n    }\n    handleEmpty (client: any) {\n        client.resolve (undefined, 'tickers');\n    }\n", valueLocal ],
+        [ 'negative: a list spread into an array literal', tk + "        const rows = this.safeString (message, 'r');\n        client.resolve ([ ...rows ], 'tickers');\n    }\n", valueLocal ],
+    ];
+    for (const [ name, handlers, want ] of cases) {
+        test(name, () => {
+            expect(mk(handlers)).toMatch(want);
+        });
+    }
 });
