@@ -2044,6 +2044,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     printRustVecPush(node: any, name: string | undefined, parsedArg: string | undefined): string | undefined;
     transformIdentifier(node: any, identifier: any): string;
     private literalKeyHits;
+    /** ral-wf: element reads admitted only through the self-write position rule for the local being decided. */
+    private literalSelfWriteHits;
     /** Same-named sibling bindings `literalLocalUsesAll` skipped for the local being decided. */
     private literalSiblingBindings;
     /** `rustLocalUsesAll` for a literal-initialised `let`/`const`: a same-named
@@ -2152,6 +2154,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `delete` and a call on the read reach the container through a `&mut Value`, so
      *  they keep the box. */
     rustDictBearerElementUse(access: any, name: string): boolean;
+    /** ral-wf: the statement `name[k] = v` (one key, `=`) whose value holds `node`. */
+    rustBearerSelfWriteHost(node: any, name: string): any;
     /** A literal string key, or a checker-proven `string` place. A by-construction
      *  object literal carries no marker key (`__book_id`, `__cacheKind`, `__live_id`)
      *  and no ws client-handle triple, so `get_value`'s store routes cannot fire and

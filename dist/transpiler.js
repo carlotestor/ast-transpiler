@@ -51636,6 +51636,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // A literal-built map / list keeps its native type through `return x as T` and through writes keyed by a
     // string local that still prints as a `Value`.
     this.literalKeyHits = 0;
+    /** ral-wf: element reads admitted only through the self-write position rule for the local being decided. */
+    this.literalSelfWriteHits = 0;
     /** Same-named sibling bindings `literalLocalUsesAll` skipped for the local being decided. */
     this.literalSiblingBindings = 0;
     // ── typed dict bearers ────────────────────────────────────────────────────
@@ -64675,7 +64677,8 @@ ${ind}let ${view}: &${map} = &${arc};
       chain.unshift(current);
       current = current.expression;
     }
-    const nativeAllowed = this.isNativeAccessPositionSafe(node) && !this.isNativeWriteTargetBase(node);
+    const selfWrite = isIdentifier3(current) && this.rustDictBearerDeclaration(current) !== void 0 ? this.rustBearerSelfWriteHost(node, String(current.text)) : void 0;
+    const nativeAllowed = this.isNativeAccessPositionSafe(node, selfWrite) && !this.isNativeWriteTargetBase(node);
     if (nativeAllowed && chain.length === 2 && isIdentifier3(current)) {
       const nested = this.rustNestedBearerRead(current, chain[0].argumentExpression, chain[1].argumentExpression);
       if (nested !== void 0)
@@ -66162,8 +66165,10 @@ ${iden}}`;
     let enumUses = 0;
     const outerWidened = this.literalKeyHits;
     const outerSiblings = this.literalSiblingBindings;
+    const outerSelfWrites = this.literalSelfWriteHits;
     this.literalKeyHits = 0;
     this.literalSiblingBindings = 0;
+    this.literalSelfWriteHits = 0;
     const safe = this.literalLocalUsesAll(declaration, name, (n) => {
       if (this.rustIdentifierIsPropertyName(n)) {
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
@@ -66219,9 +66224,13 @@ ${iden}}`;
     const siblings = this.literalSiblingBindings;
     const keyHits = this.literalKeyHits;
     const widened = this.literalKeyHits > 0 || siblings > 0 || escapes.some((e) => this.rustCastReturnOperand(e));
+    const selfWrites = this.literalSelfWriteHits;
     this.literalKeyHits = outerWidened;
     this.literalSiblingBindings = outerSiblings;
+    this.literalSelfWriteHits = outerSelfWrites;
     if (!safe)
+      return false;
+    if (selfWrites > 0 && (moveEscapes.length > 0 || !escapes.every((e) => this.rustReturnOperand(e) || this.rustVecIsFinalUse(e, name) && !this.loopBetween(e))))
       return false;
     const siblingMove = siblings > 0 && moveEscapes.length === 1 && escapes.length === 0 && rebuilds === 0 && enumUses === 0 && keyHits === 0;
     if (siblings > 0 && elementUses === 0 && !siblingMove)
@@ -66634,11 +66643,28 @@ ${iden}}`;
     }
     if (up !== void 0 && (isDeleteExpression2(up) || isCallExpression6(up) && up.expression === root || up.kind === SyntaxKind7.PrefixUnaryExpression || up.kind === SyntaxKind7.PostfixUnaryExpression))
       return false;
-    if (!this.isNativeAccessPositionSafe(root) || this.isNativeWriteTargetBase(root))
+    if (!this.isNativeAccessPositionSafe(root) && this.isNativeAccessPositionSafe(root, this.rustBearerSelfWriteHost(root, name)))
+      this.literalSelfWriteHits++;
+    else if (!this.isNativeAccessPositionSafe(root))
+      return false;
+    if (this.isNativeWriteTargetBase(root))
       return false;
     if (this.isWriteBackBindRead(access))
       return false;
     return this.rustDictBearerKeyOk(access.argumentExpression);
+  }
+  /** ral-wf: the statement `name[k] = v` (one key, `=`) whose value holds `node`. */
+  rustBearerSelfWriteHost(node, name) {
+    let up = node.parent;
+    while (up !== void 0 && !isStatement(up) && !isFunctionLike(up)) {
+      if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && this.isNodeInsideNode(node, up.right)) {
+        const left = up.left;
+        const ok = isElementAccessExpression4(left) && isIdentifier3(left.expression) && String(left.expression.text) === name && up.parent?.kind === SyntaxKind7.ExpressionStatement;
+        return ok ? up : void 0;
+      }
+      up = up.parent;
+    }
+    return void 0;
   }
   /** A literal string key, or a checker-proven `string` place. A by-construction
    *  object literal carries no marker key (`__book_id`, `__cacheKind`, `__live_id`)

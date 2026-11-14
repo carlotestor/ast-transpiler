@@ -12946,3 +12946,27 @@ describe('ral-wf: tuple-slot map literals hold the shared Dict', () => {
         expect(body).not.toContain('let mut paramsRead: crate::value::Dict = Default::default();');
     });
 });
+
+describe('ral-wf: a literal map read inside the value of a write on itself holds the native map', () => {
+    let out = '';
+    beforeAll(() => {
+        const dir = path.join (rustFixtureRoot, 'ral-wf-selfwrite');
+        const files: Record<string, string> = {"ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nconst extend = (...args: any[]) => Object.assign ({}, ...args);\nexport default class Exchange {\n    extend = extend;\n    hold (x: any): any { return x; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    account (): Dict { return {}; }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    merge (rows: Dict[]) {\n        const result: Dict = { 'info': rows };\n        for (let i = 0; i < rows.length; i++) {\n            const code = this.safeString (rows[i], 'c');\n            if ((code !== undefined) && (code in result)) {\n                result[code] = this.extend (result[code], { 'used': 1 });\n            } else if (code !== undefined) {\n                result[code] = this.account ();\n            }\n        }\n        return this.hold (result);\n    }\n    mergeKept (rows: Dict[]) {\n        const kept: Dict = { 'info': rows };\n        for (let i = 0; i < rows.length; i++) {\n            const code = this.safeString (rows[i], 'c');\n            if (code !== undefined) {\n                kept[code] = this.extend (kept[code], { 'used': 1 });\n                this.hold (kept);\n            }\n        }\n        return kept;\n    }\n}\n"};
+        for (const [ rel, text ] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (dir, rel)), { recursive: true });
+            fs.writeFileSync (path.join (dir, rel), text);
+        }
+        out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    });
+    test('m[k] = f (m[k]): the read is a native get bound before the insert, the map moves at its return', () => {
+        const body = out.slice (out.indexOf ('fn merge'), out.indexOf ('fn mergeKept'));
+        expect(body).toMatch(/let mut result: indexmap::IndexMap<String, Value> = /);
+        expect(body).toMatch(/let __be_tmp = self\.extend\(result\.get\(code\.as_str\(\)\.unwrap_or\(""\)\)\.cloned\(\)\.unwrap_or\(Value::Null\)/);
+        expect(body).toContain('Value::Map(result)');
+        expect(body).not.toContain('result.clone()');
+    });
+    test('negative: an escape before the last use (a boxed copy) keeps the box', () => {
+        const body = out.slice (out.indexOf ('fn mergeKept'));
+        expect(body).toMatch(/let mut kept: Value = /);
+    });
+});

@@ -13585,7 +13585,8 @@ export class RustTranspiler extends BaseTranspiler {
         }
         // One checker proof per chain: the emitted text replaces `get_value` only
         // when it is legal at the position the whole chain occupies.
-        const nativeAllowed = this.isNativeAccessPositionSafe(node) && !this.isNativeWriteTargetBase(node);
+        const selfWrite = isIdentifier(current) && this.rustDictBearerDeclaration(current) !== undefined ? this.rustBearerSelfWriteHost(node, String(current.text)) : undefined;
+        const nativeAllowed = this.isNativeAccessPositionSafe(node, selfWrite) && !this.isNativeWriteTargetBase(node);
         // A two-level bearer reads both levels in one lookup.
         if (nativeAllowed && chain.length === 2 && isIdentifier(current)) {
             const nested = this.rustNestedBearerRead(current, chain[0].argumentExpression, chain[1].argumentExpression);
@@ -14978,6 +14979,9 @@ export class RustTranspiler extends BaseTranspiler {
 
     private literalKeyHits = 0;
 
+    /** ral-wf: element reads admitted only through the self-write position rule for the local being decided. */
+    private literalSelfWriteHits = 0;
+
     /** Same-named sibling bindings `literalLocalUsesAll` skipped for the local being decided. */
     private literalSiblingBindings = 0;
 
@@ -15166,8 +15170,10 @@ export class RustTranspiler extends BaseTranspiler {
         let enumUses = 0;
         const outerWidened = this.literalKeyHits;
         const outerSiblings = this.literalSiblingBindings;
+        const outerSelfWrites = this.literalSelfWriteHits;
         this.literalKeyHits = 0;
         this.literalSiblingBindings = 0;
+        this.literalSelfWriteHits = 0;
         const safe = this.literalLocalUsesAll(declaration, name, (n: any) => {
             if (this.rustIdentifierIsPropertyName(n)) {
                 // `{ x }` shorthand is a value use, not a name; anything else spelled
@@ -15229,9 +15235,13 @@ export class RustTranspiler extends BaseTranspiler {
         const siblings = this.literalSiblingBindings;
         const keyHits = this.literalKeyHits;
         const widened = this.literalKeyHits > 0 || siblings > 0 || escapes.some((e: any) => this.rustCastReturnOperand(e));
+        const selfWrites = this.literalSelfWriteHits;
         this.literalKeyHits = outerWidened;
         this.literalSiblingBindings = outerSiblings;
+        this.literalSelfWriteHits = outerSelfWrites;
         if (!safe) return false;
+        // ral-wf: a map typed by the self-write read rule may escape only as a move (an earlier escape would box a copy)
+        if (selfWrites > 0 && (moveEscapes.length > 0 || !escapes.every((e: any) => this.rustReturnOperand(e) || (this.rustVecIsFinalUse(e, name) && !this.loopBetween(e))))) return false;
         // Built once and handed straight back stays boxed.
         // ral-vf: except a single move at the last use (a list push / ws settle): each sibling `let` is its own Rust block,
         // and the move is the box the helper form made (D11: stored and boxed back is typed)
@@ -15653,10 +15663,29 @@ export class RustTranspiler extends BaseTranspiler {
         if (up !== undefined && (isDeleteExpression(up) || (isCallExpression(up) && up.expression === root)
             || up.kind === SyntaxKind.PrefixUnaryExpression || up.kind === SyntaxKind.PostfixUnaryExpression)) return false;
         // The printer proves the position on the outermost chain node.
-        if (!this.isNativeAccessPositionSafe(root) || this.isNativeWriteTargetBase(root)) return false;
+        // ral-wf: a read inside the value of a one-key write on the same map (`m[k] = f (m[k])`) is evaluated before the
+        // insert takes `&mut m` (rustBearerInsertText binds such a value first)
+        if (!this.isNativeAccessPositionSafe(root) && this.isNativeAccessPositionSafe(root, this.rustBearerSelfWriteHost(root, name))) this.literalSelfWriteHits++;
+        else if (!this.isNativeAccessPositionSafe(root)) return false;
+        if (this.isNativeWriteTargetBase(root)) return false;
         // ccxt's write-back pass matches `get_value` text to write a mutated bind back.
         if (this.isWriteBackBindRead(access)) return false;
         return this.rustDictBearerKeyOk(access.argumentExpression);
+    }
+
+    /** ral-wf: the statement `name[k] = v` (one key, `=`) whose value holds `node`. */
+    rustBearerSelfWriteHost(node: any, name: string): any {
+        let up: any = node.parent;
+        while (up !== undefined && !isStatement(up) && !isFunctionLike(up)) {
+            if (isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.EqualsToken && this.isNodeInsideNode(node, up.right)) {
+                const left: any = up.left;
+                const ok = isElementAccessExpression(left) && isIdentifier(left.expression) && String(left.expression.text) === name
+                    && up.parent?.kind === SyntaxKind.ExpressionStatement;
+                return ok ? up : undefined;
+            }
+            up = up.parent;
+        }
+        return undefined;
     }
 
     /** A literal string key, or a checker-proven `string` place. A by-construction
