@@ -7032,14 +7032,17 @@ export class RustTranspiler extends BaseTranspiler {
      *  one scalar family or `Null` (`Str|Null` / `Int|Null`): `is_equal` on those operands is exactly the
      *  variant compare (`Null == Null`, `Str == Str` by text, `Int == Int`, else false), so the typed side
      *  compares its own `Option` against `p.as_str()` / `p.as_i64()`. Both read in place, no copy. */
-    /** A use that boxes the local outside a call argument and before its last use (an `in` key, a field / element value). */
+    /** A use that boxes the local as the key of an `in` test before its last use (read there by reference, so the box copies). */
     rustScalarBorrowedBox(declaration): boolean {
         let borrowed = false;
         this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
             const form = this.rustScalarUseForms.get(n);
             if (form !== 'box' && form !== 'xbox') return true;
             if (isReturnStatement(n.parent) || this.rustLocalLastUse(n, declaration)) return true;
-            if (!(isCallExpression(n.parent) && n.parent.expression !== n)) borrowed = true;
+            let top: any = n;
+            while (isParenthesizedExpression(top.parent)) top = top.parent;
+            // `k in m` on a field map reads the boxed key by reference: the typed key copies there
+            if (isBinaryExpression(top.parent) && top.parent.left === top && top.parent.operatorToken.kind === SyntaxKind.InKeyword) borrowed = true;
             return true;
         });
         return borrowed;
@@ -7054,8 +7057,8 @@ export class RustTranspiler extends BaseTranspiler {
             const up: any = top.parent;
             if (isBinaryExpression(up) && this.isEqualityOp(up.operatorToken.kind)) {
                 const other: any = this.unwrapParens(up.left === top ? up.right : up.left);
-                if (other !== undefined && isIdentifier(other) && other.text !== 'undefined' && this.rustScalarIdentifierKind(other) === undefined
-                    && this.rustScalarValuePartnerKind(other) !== undefined) pair = true;
+                // independent of the partner's own (jointly solved) decision, so the outcome never depends on solve order
+                if (other !== undefined && isIdentifier(other) && other.text !== 'undefined' && this.rustScalarValuePartnerShape(other)) pair = true;
             }
             return true;
         });
@@ -7109,6 +7112,15 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     private rustScalarPending = new Set<any>();
+
+    /** The partner is a local whose checker type is a string / number and whose initializer is a scalar reader shape. */
+    rustScalarValuePartnerShape(partner): boolean {
+        const declaration: any = this.rustDeclaredNode(partner);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.initializer === undefined) return false;
+        const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
+        return (checked === 'string' || checked === 'number') && this.rustScalarInitShape(declaration.initializer);
+    }
+
 
     rustScalarCompareKind(node): string | undefined {
         if (this.literalKindOfNode(node) === 'string') return node.text in this.StringLiteralReplacements ? undefined : 'slit';

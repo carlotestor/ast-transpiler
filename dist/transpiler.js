@@ -58315,7 +58315,7 @@ ${binding(plan.indent)}` : ""), head: "" };
    *  one scalar family or `Null` (`Str|Null` / `Int|Null`): `is_equal` on those operands is exactly the
    *  variant compare (`Null == Null`, `Str == Str` by text, `Int == Int`, else false), so the typed side
    *  compares its own `Option` against `p.as_str()` / `p.as_i64()`. Both read in place, no copy. */
-  /** A use that boxes the local outside a call argument and before its last use (an `in` key, a field / element value). */
+  /** A use that boxes the local as the key of an `in` test before its last use (read there by reference, so the box copies). */
   rustScalarBorrowedBox(declaration) {
     let borrowed = false;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
@@ -58324,7 +58324,10 @@ ${binding(plan.indent)}` : ""), head: "" };
         return true;
       if (isReturnStatement4(n.parent) || this.rustLocalLastUse(n, declaration))
         return true;
-      if (!(isCallExpression6(n.parent) && n.parent.expression !== n))
+      let top = n;
+      while (isParenthesizedExpression3(top.parent))
+        top = top.parent;
+      if (isBinaryExpression5(top.parent) && top.parent.left === top && top.parent.operatorToken.kind === SyntaxKind7.InKeyword)
         borrowed = true;
       return true;
     });
@@ -58340,7 +58343,7 @@ ${binding(plan.indent)}` : ""), head: "" };
       const up = top.parent;
       if (isBinaryExpression5(up) && this.isEqualityOp(up.operatorToken.kind)) {
         const other = this.unwrapParens(up.left === top ? up.right : up.left);
-        if (other !== void 0 && isIdentifier3(other) && other.text !== "undefined" && this.rustScalarIdentifierKind(other) === void 0 && this.rustScalarValuePartnerKind(other) !== void 0)
+        if (other !== void 0 && isIdentifier3(other) && other.text !== "undefined" && this.rustScalarValuePartnerShape(other))
           pair = true;
       }
       return true;
@@ -58406,6 +58409,14 @@ ${binding(plan.indent)}` : ""), head: "" };
     } finally {
       this.rustScalarPending.delete(declaration);
     }
+  }
+  /** The partner is a local whose checker type is a string / number and whose initializer is a scalar reader shape. */
+  rustScalarValuePartnerShape(partner) {
+    const declaration = this.rustDeclaredNode(partner);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || declaration.initializer === void 0)
+      return false;
+    const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
+    return (checked === "string" || checked === "number") && this.rustScalarInitShape(declaration.initializer);
   }
   rustScalarCompareKind(node) {
     if (this.literalKindOfNode(node) === "string")
