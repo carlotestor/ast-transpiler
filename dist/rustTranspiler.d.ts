@@ -554,7 +554,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrLendSites(declaration: any): boolean;
     /** Every non-moving box of the string is a slot where the `Value` form cloned it (a `this.`/`super.` argument,
      *  an object-literal value, a dict write or an array element), so lending there adds no copy. */
-    rustReaderLendBoxes(declaration: any, nativeKeys?: boolean): boolean;
+    rustReaderLendBoxes(declaration: any, nativeKeys?: boolean, preciseSlots?: boolean): boolean;
     /** Test tier: every non-moving box of the string is a by-value `Value` argument / element of a call (the
      *  harness helpers take `Value`), where the `Value` form printed `x.clone()`: lending there costs that copy. */
     rustTestLendBoxes(declaration: any): boolean;
@@ -710,6 +710,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** True when the initializer or any `x = ..` write is a reader this block admits. */
     rustReaderDefaultTouched(declaration: any): boolean;
     /** A string local that is the source of another local's write: that local then copies at its own uses. */
+    /** sd: a bare string hand-off `y = x` / `const y = x` that needs no veto: `moved` at the local's last use into a
+     *  receiver with a value (the receiver decides alone), or `solved` when that receiver is a scalar-shape candidate of
+     *  the same function, decided together with the local (a copy where both are typed is the copy the `Value` clone made). */
+    rustStrHandOffDecided(n: any, top: any, declaration: any): {
+        moved: boolean;
+        solved: boolean;
+    };
+    /** uc: `const y = c ? x : z` in the local's own function, `y` a scalar-shape candidate: decided with the local. */
+    rustStrTernaryArmSolved(ternary: any, declaration: any): boolean;
     rustReaderStrHandedOn(declaration: any): boolean;
     /** True when the initializer is a reader this block admits (its kind comes from `rustReaderDefaultKind`). */
     rustReaderDefaultInit(init: any): boolean;

@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -55420,8 +55420,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (handOff && isConditionalExpression4(this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === void 0)
       return void 0;
-    if (strKind && copied > 0 && this.rustPrecisionTouched(declaration, scope) && this.rustPreciseOperandLocal(declaration))
-      return void 0;
+    if (strKind && copied > 0 && this.rustPrecisionTouched(declaration, scope) && this.rustPreciseOperandLocal(declaration)) {
+      if (this.rustStrNoLend || this.rustStrReturnedLocal(declaration, scope) || this.rustVenueLocalHandedOn(declaration) || this.rustReaderDeclTooLong(declaration, kind) || !this.rustReaderLendBoxes(declaration, false, true))
+        return void 0;
+      this.rustStrLentLocals.add(declaration);
+    }
     if (this.rustVenueScalarSource(declaration.initializer) && (boxed > 0 && !handOff || this.rustVenueLocalHandedOn(declaration))) {
       if (!strKind || this.rustStrNoLend || this.rustOdExcludedCallee(declaration.initializer) || this.rustStrReturnedLocal(declaration, scope) || this.rustVenueLocalHandedOn(declaration) || this.rustReaderDeclTooLong(declaration, kind) || !this.rustReaderLendBoxes(declaration))
         return void 0;
@@ -55561,7 +55564,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** Every non-moving box of the string is a slot where the `Value` form cloned it (a `this.`/`super.` argument,
    *  an object-literal value, a dict write or an array element), so lending there adds no copy. */
-  rustReaderLendBoxes(declaration, nativeKeys = false) {
+  rustReaderLendBoxes(declaration, nativeKeys = false, preciseSlots = false) {
     let ok = true;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       const form = this.rustScalarUseForms.get(n);
@@ -55573,7 +55576,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (isReturnStatement4(up) || this.rustLocalLastUse(n, declaration))
         return true;
       const selfArg = isCallExpression6(up) && up.expression !== n && isPropertyAccessExpression3(up.expression) && (up.expression.expression.kind === SyntaxKind7.ThisKeyword || up.expression.expression.kind === SyntaxKind7.SuperKeyword);
-      const slot = selfArg || up.kind === SyntaxKind7.PropertyAssignment && up.initializer === n || this.rustDictWriteValue(n) || isArrayLiteralExpression4(up) && !(isBinaryExpression5(up.parent) && up.parent.left === up);
+      const precise = preciseSlots && isCallExpression6(up) && up.expression !== n && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && String(up.expression.expression.text) === "Precise";
+      const slot = selfArg || precise || up.kind === SyntaxKind7.PropertyAssignment && up.initializer === n || this.rustDictWriteValue(n) || isArrayLiteralExpression4(up) && !(isBinaryExpression5(up.parent) && up.parent.left === up);
       if (!slot)
         ok = false;
       return true;
@@ -56560,15 +56564,30 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return touched;
   }
   /** A string local that is the source of another local's write: that local then copies at its own uses. */
+  /** sd: a bare string hand-off `y = x` / `const y = x` that needs no veto: `moved` at the local's last use into a
+   *  receiver with a value (the receiver decides alone), or `solved` when that receiver is a scalar-shape candidate of
+   *  the same function, decided together with the local (a copy where both are typed is the copy the `Value` clone made). */
+  rustStrHandOffDecided(n, top, declaration) {
+    const target = isVariableDeclaration3(top.parent) ? top.parent : isBinaryExpression5(top.parent) && isIdentifier3(top.parent.left) ? this.rustDeclaredNode(top.parent.left) : void 0;
+    const moved = top === n && this.rustLocalLastUse(n, declaration) && target !== void 0 && isVariableDeclaration3(target) && target.initializer !== void 0 && this.literalKindOfNode(target.initializer) !== "null";
+    const solved = !moved && top === n && target !== void 0 && isVariableDeclaration3(target) && target !== declaration && target.initializer !== void 0 && this.literalKindOfNode(target.initializer) !== "null" && this.rustScalarInitShape(target.initializer) && this.rustEnclosingFunction(target) === this.rustEnclosingFunction(declaration);
+    return { moved, solved };
+  }
+  /** uc: `const y = c ? x : z` in the local's own function, `y` a scalar-shape candidate: decided with the local. */
+  rustStrTernaryArmSolved(ternary, declaration) {
+    let up = ternary;
+    while (isParenthesizedExpression3(up.parent))
+      up = up.parent;
+    const target = up.parent;
+    return isVariableDeclaration3(target) && target.initializer === up && target !== declaration && isIdentifier3(target.name) && this.rustScalarInitShape(target.initializer) && this.rustEnclosingFunction(target) === this.rustEnclosingFunction(declaration);
+  }
   rustReaderStrHandedOn(declaration) {
     let handed = false;
     this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
       let top = n;
       while (isParenthesizedExpression3(top.parent) || isConditionalExpression4(top.parent))
         top = top.parent;
-      const target = isVariableDeclaration3(top.parent) ? top.parent : isBinaryExpression5(top.parent) && isIdentifier3(top.parent.left) ? this.rustDeclaredNode(top.parent.left) : void 0;
-      const moved = top === n && this.rustLocalLastUse(n, declaration) && target !== void 0 && isVariableDeclaration3(target) && target.initializer !== void 0 && this.literalKindOfNode(target.initializer) !== "null";
-      const solved = !moved && top === n && target !== void 0 && isVariableDeclaration3(target) && target !== declaration && target.initializer !== void 0 && this.literalKindOfNode(target.initializer) !== "null" && this.rustScalarInitShape(target.initializer) && this.rustEnclosingFunction(target) === this.rustEnclosingFunction(declaration);
+      const { moved, solved } = this.rustStrHandOffDecided(n, top, declaration);
       if (isBinaryExpression5(top.parent) && top.parent.right === top && top.parent.operatorToken.kind === SyntaxKind7.EqualsToken && !isElementAccessExpression4(this.unwrapParens(top.parent.left)) && !isPropertyAccessExpression3(this.unwrapParens(top.parent.left)) && !moved && !solved)
         handed = true;
       if (isVariableDeclaration3(top.parent) && top.parent.initializer === top && !moved && !solved)
@@ -56759,7 +56778,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       while (isParenthesizedExpression3(top.parent))
         top = top.parent;
       const parent = top.parent;
-      if (isBinaryExpression5(parent) && parent.right === top && parent.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(this.unwrapParens(parent.left)) || isVariableDeclaration3(parent) && parent.initializer === top || isConditionalExpression4(parent))
+      const bare2 = isBinaryExpression5(parent) && parent.right === top && parent.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(this.unwrapParens(parent.left)) || isVariableDeclaration3(parent) && parent.initializer === top;
+      if (bare2) {
+        const { moved, solved } = this.rustStrHandOffDecided(n, top, declaration);
+        if (!moved && !solved)
+          handed = true;
+      }
+      if (isConditionalExpression4(parent) && !(parent.condition !== top && this.rustStrTernaryArmSolved(parent, declaration)))
         handed = true;
       return true;
     });
@@ -56923,7 +56948,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** A venue typed string is copied out of the `Value` once: a box short of a moving last use, or a hand-on, would copy it again. */
   rustVenueTypedCostly(declaration, kind, copied) {
-    if (kind === "ostr" && copied > 0 && this.rustPrecisionCall(declaration.initializer) && this.rustPreciseOperandLocal(declaration))
+    if (kind === "ostr" && copied > 0 && this.rustPrecisionCall(declaration.initializer) && this.rustPreciseOperandLocal(declaration) && !this.rustStrLentLocals.has(declaration))
       return true;
     if (this.rustVenueTypedCall(declaration.initializer) === void 0)
       return false;
@@ -68408,7 +68433,7 @@ ${iden}}`;
     if (_RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || _RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee))
       return false;
     if (this.rustTypedParamsSlot(up, at))
-      return literalDict || _RustTranspiler.RUST_BUILT_HELPER_RETURNS[String(init.expression.name.text)] === "dict";
+      return literalDict || _RustTranspiler.RUST_BUILT_HELPER_RETURNS[String(init.expression.name.text)] === "dict" || _RustTranspiler.RUST_BUILT_HELPER_RETURNS[String(init.expression.name.text)] === void 0 && this.rustBuiltReturnSourceKind(init) === "dict";
     return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && this.rustNilBoxSlotOk(up, at);
   }
   /** A base `this.omit (x, keys)` whose head always holds a map: a literal, a built map (`extend`, ..) or a local that
