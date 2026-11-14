@@ -505,7 +505,46 @@ export class RustTranspiler extends BaseTranspiler {
         if (RustTranspiler.RUST_NUMBER_CONSTANT_IMPORTS.has(name) && this.rustIsImportedValueName(node)) {
             return `Value::Int(crate::runtime::${name})`;
         }
-        return this.printRustBytesLocalRead(node) ?? this.printWsBookLocalUse(node) ?? this.printWsCacheLocalUse(node) ?? this.printClientHandleUse(node) ?? this.printTypedFilterParamRead(node) ?? this.printRustNilLocalRead(node) ?? this.printRustScalarLocalRead(node) ?? this.printRustStrSlotBox(node) ?? super.printIdentifier(node);
+        return this.rustOwnedUseMark(node, this.printRustBytesLocalRead(node) ?? this.printWsBookLocalUse(node) ?? this.printWsCacheLocalUse(node) ?? this.printClientHandleUse(node) ?? this.printTypedFilterParamRead(node) ?? this.printRustNilLocalRead(node) ?? this.printRustScalarLocalRead(node) ?? this.printRustStrSlotBox(node) ?? super.printIdentifier(node));
+    }
+
+    // ── owned uses (rustOwnedUseMark / rustOwnedUseIsFree) ──
+    // A by-value call argument or an alias source (`x = y`, `let x = y`) hands its local over. The hand-off needs no
+    // `.clone()` when the printed local is `Copy` (an `i64` / `f64` / `bool` scalar or its `Option`, a lent
+    // `Option<&Market|Currency>` parameter, `None`) or when this use is the local's last one (not in a loop or a
+    // closure below the declaration, never read again): the value moves. Such a use is marked `\u0004` (an owned
+    // use, never cloned by the by-value step) and the mark is stripped from the file text.
+    private static readonly RUST_COPY_SCALAR_KINDS = new Set([ 'int', 'num', 'bool', 'oint', 'onum', 'obool' ]);
+
+    rustOwnedUseMark(node, text: string): string {
+        if (!RustTranspiler.isBareLocal(text)) return text;
+        const parent: any = node.parent;
+        const handOff = (isBinaryExpression(parent) && parent.right === node && isIdentifier(parent.left) && parent.operatorToken.kind === SyntaxKind.EqualsToken && parent.parent?.kind === SyntaxKind.ExpressionStatement)
+            || (isVariableDeclaration(parent) && parent.initializer === node);
+        return handOff && this.rustOwnedUseIsFree(node) ? `\u0004${text}` : text;
+    }
+
+    rustOwnedUseIsFree(node): boolean {
+        if (node.text === 'undefined') return true;
+        const scalar = this.rustScalarLocalOf(node)?.kind;
+        if (scalar !== undefined) return RustTranspiler.RUST_COPY_SCALAR_KINDS.has(scalar);
+        const nil = this.rustNilLocalOfIdentifier(node)?.kind;
+        if (nil === 'int' || nil === 'bool') return true;
+        if (this.rustMarketSlotParamOf(node) !== undefined || this.rustCurrencySlotParamOf(node) !== undefined) return true;
+        const symbol = this.rustSymbolOf(node);
+        if (symbol !== undefined && this.rustI64Counters.get(String(node.text)) === symbol) return true;
+        const declaration: any = this.rustDeclarationOfIdentifier(node);
+        if (declaration === undefined || declaration.name === node || !isIdentifier(declaration.name)) return false;
+        if (!isVariableDeclaration(declaration) && !isParameterDeclaration(declaration)) return false;
+        if (!this.rustLocalLastUse(node, declaration)) return false;
+        // a closure below the declaration that names the local may still hold it
+        const scope: any = this.rustEnclosingFunction(declaration);
+        const own = this.rustSymbolOf(node);
+        for (const n of this.rustScopeNameNodes(scope, String(declaration.name.text)) as any[]) {
+            if (n === node || n === declaration.name || this.rustSymbolOf(n) !== own) continue;
+            if (this.rustEnclosingFunction(n) !== scope) return false;
+        }
+        return true;
     }
 
     /** A bare read of an imported (or top-level destructured) binding: never a callee, member, key or `new` target. */
@@ -9049,11 +9088,13 @@ export class RustTranspiler extends BaseTranspiler {
     // Arguments in a native-`bool` parameter slot print a Rust `bool`, carrying
     // the truthiness the callee's own use sites applied.
     printArgsForCallExpression(node, identation) {
-        const params = this.rustCalleeParams(node);
-        if (params === undefined) {
-            return super.printArgsForCallExpression(node, identation);
-        }
-        return this.rustPrintedArgs(node, identation, params).join(', ');
+        return this.rustPrintedArgs(node, identation).map((text, at) => (at < node.arguments.length ? this.rustOwnedArgText(node.arguments[at], text) : text)).join(', ');
+    }
+
+    /** A bare local argument whose hand-off needs no clone (`rustOwnedUseIsFree`) carries the owned-use mark. */
+    rustOwnedArgText(arg, text: string): string {
+        const inner: any = this.unwrapParens(arg);
+        return isIdentifier(inner) && RustTranspiler.isBareLocal(text) && this.rustOwnedUseIsFree(inner) ? `\u0004${text}` : text;
     }
 
     rustPrintedArgs(node, identation, params = this.rustCalleeParams(node)): string[] {

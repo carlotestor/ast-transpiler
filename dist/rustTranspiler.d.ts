@@ -135,6 +135,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     static readonly RUST_NAME_VALUE_IMPORTS: Set<string>;
     static readonly RUST_NUMBER_CONSTANT_IMPORTS: Set<string>;
     printIdentifier(node: any): string;
+    private static readonly RUST_COPY_SCALAR_KINDS;
+    rustOwnedUseMark(node: any, text: string): string;
+    rustOwnedUseIsFree(node: any): boolean;
     /** A bare read of an imported (or top-level destructured) binding: never a callee, member, key or `new` target. */
     rustIsImportedValueName(node: any): boolean;
     printStringLiteral(node: any): any;
@@ -1185,7 +1188,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     printImplicitApiCall(node: any, methodName: string, identation: number): string | undefined;
     printTranspiledVariadicCall(node: any, receiver: string, methodName: string, identation: number): string | undefined;
     rustTranspiledCalleeParams(node: any, methodName: string): any[] | undefined;
-    printArgsForCallExpression(node: any, identation: any): any;
+    printArgsForCallExpression(node: any, identation: any): string;
+    /** A bare local argument whose hand-off needs no clone (`rustOwnedUseIsFree`) carries the owned-use mark. */
+    rustOwnedArgText(arg: any, text: string): string;
     rustPrintedArgs(node: any, identation: any, params?: any[]): string[];
     private static readonly RUST_PRECISE_TRIMMED;
     printRustNamespaceCall(node: any, identation: any): string | undefined;
