@@ -7,6 +7,7 @@ import * as path from 'path';
 
 // fixture trees used above are written to a temp dir so the suite carries no fixture files
 const rustInlineFixtures: Record<string, Record<string, string>> = {
+ "pb-dict-slots": {"ts/src/base/Exchange.ts": "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface Ticker { symbol: string }\nconst extend = (...args: any[]) => Object.assign ({}, ...args);\nexport default class Exchange {\n    extend = extend;\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    handleMarketTypeAndParams (m: string, market: any = undefined, params: Dict = {}): [string, Dict] { return [ m, params ]; }\n}\n", "ts/src/venue.ts": "import Exchange from './base/Exchange.js';\nimport type { Dict, Str, Ticker } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    prepareRequest (type: Str = undefined, params: Dict = {}): [Dict, Dict] {\n        const request: Dict = {};\n        if (type !== undefined) {\n            request['type'] = type;\n        }\n        return [ request, params ];\n    }\n    prepareLoose (params: Dict = {}): [any, Dict] {\n        return [ this.hold (params), params ];\n    }\n    async fetchThing (params: Dict = {}) {\n        const [ request, query ] = this.prepareRequest ('spot', params);\n        request['limit'] = 5;\n        return this.hold (this.extend (request, query));\n    }\n    async fetchLoose (params: Dict = {}) {\n        const [ loose, query ] = this.prepareLoose (params);\n        loose['limit'] = 5;\n        return this.hold (this.extend (loose, query));\n    }\n    async fetchTicker (symbol: string, params: Dict = {}): Promise<Ticker> {\n        return { 'symbol': symbol } as any;\n    }\n    async fetchOther (symbol: string, params: Dict = {}) {\n        const [ marketType, query ] = this.handleMarketTypeAndParams ('fetchOther', undefined, params);\n        const s = this.safeString (query, 's');\n        return await this.fetchTicker (symbol, query);\n    }\n}\n"},
  "test-tier-harness": {"ts/src/base/Exchange.ts": "export default class Exchange {\n    safeString (o: any, k: any, d: string = undefined): string | undefined { return o[k]; }\n    hold (a: any, b: any = undefined): any { return a; }\n}\n", "ts/src/base/Precise.ts": "export class Precise {\n    static stringGt (a: string, b: string): boolean { return a > b; }\n}\n", "ts/src/test/Exchange/test.harness.ts": "import Exchange from '../../base/Exchange';\nimport { Precise } from '../../base/Precise';\nfunction testHarness (exchange: Exchange, entry: any) {\n    const price = exchange.safeString (entry, 'price');\n    if (price === undefined) {\n        return undefined;\n    }\n    exchange.hold (entry, price);\n    exchange.hold (price);\n    const cost = exchange.safeString (entry, 'cost');\n    if (cost !== undefined && Precise.stringGt (cost, '0')) {\n        return exchange.hold (cost);\n    }\n    return Precise.stringGt (cost, '1');\n}\nexport default testHarness;\n"},
  "test-tier-readers": {"ts/src/base/Exchange.ts": "export default class Exchange {\n    safeString (o: any, k: any, d: string = undefined): string | undefined { return o[k]; }\n    safeValue (o: any, k: any, d: any = undefined): any { return o[k]; }\n    hold (x: any): any { return x; }\n}\n", "ts/src/test/Exchange/test.readers.ts": "import Exchange from '../../base/Exchange';\nfunction testReaders (exchange: Exchange, entry: any) {\n    const a = exchange.safeValue (entry, 'a');\n    const b = exchange.safeValue (entry, 'b');\n    const other = 'ETH/USDT';\n    return exchange.hold ([ a, b, other ]);\n}\nexport default testReaders;\n"},
  "base-predicate-flags": {"ts/src/base/Exchange.ts": "export default class Exchange {\n    httpProxy: any = undefined;\n    socksProxy: any = undefined;\n    valueIsDefined<T> (value: T): value is NonNullable<T> {\n        return value !== undefined && value !== null;\n    }\n    hold (x: any): any { return x; }\n    proxyFlags () {\n        const isHttp = this.valueIsDefined (this.httpProxy);\n        const isSocks = this.valueIsDefined (this.socksProxy);\n        if (isHttp || isSocks) {\n            return this.hold (isHttp ? this.httpProxy : this.socksProxy);\n        }\n        return undefined;\n    }\n}\n"},
@@ -11378,5 +11379,27 @@ describe('ral-ne: market flags, unified-row string fields and padded strings', (
         expect(out).toContain('format!("{: <8}", __s)');
         expect(out).not.toContain('let mut r: Value');
         expect(out).not.toContain('let mut s: Value');
+    });
+});
+
+describe('rust Dict tuple slots: declared Dict slot 0, typed params slot box (ral-pb)', () => {
+    let output = '';
+    beforeAll(() => {
+        const typed = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['fetchTicker'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        output = typed.transpileRustByPath(path.join (rustFixtureRoot, 'pb-dict-slots', 'ts/src/venue.ts')).content;
+    });
+
+    test('a slot 0 the callee declares `Dict` is the shared map: copy-on-write insert, lent to extend', () => {
+        expect(output).toMatch(/let mut request: crate::value::Dict = \w+\.get\(0\)\.cloned\(\)\.unwrap_or\(Value::Null\)\.into_dict\(\)/);
+        expect(output).toContain('std::sync::Arc::make_mut(&mut request).insert("limit".into()');
+    });
+
+    test('a slot 0 declared `any` stays a Value', () => {
+        expect(output).toMatch(/let mut loose: Value = /);
+    });
+
+    test('a params slot handed to a typed unified params slot boxes the shared map (moved at the last use)', () => {
+        expect(output).toMatch(/let mut query: crate::value::Dict = \w+\.get\(1\)/);
+        expect(output).toContain('Value::Dict(query)');
     });
 });

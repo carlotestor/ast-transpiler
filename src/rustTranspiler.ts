@@ -18620,7 +18620,10 @@ export class RustTranspiler extends BaseTranspiler {
             const pattern: any = declaration.parent;
             const owner: any = pattern?.parent;
             if (pattern?.kind !== SyntaxKind.ArrayBindingPattern || !isVariableDeclaration(owner) || owner.name !== pattern
-                || (owner.parent as any)?.declarations?.length !== 1 || pattern.elements.indexOf(declaration) !== 1) return false;
+                || (owner.parent as any)?.declarations?.length !== 1) return false;
+            // slot 1 is the params dict; any other slot only where the callee's own tuple type declares it `Dict`
+            const at = pattern.elements.indexOf(declaration);
+            if (at !== 1 && !(at >= 0 && this.rustDeclaredDictSlot(declaration))) return false;
             if (declaration.dotDotDotToken !== undefined || declaration.initializer !== undefined || this.rustTupleSlotKind(declaration) !== undefined) return false;
             const init: any = this.rustAwaitedCall(owner.initializer);
             const callee: any = init?.expression;
@@ -19647,6 +19650,8 @@ export class RustTranspiler extends BaseTranspiler {
         const callee = String(up.expression.name.text);
         if (RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee)) return false;
         if (this.rustBorrowedDictReader(up) !== undefined || this.rustLentParamsSlot(up, n) || this.rustOptionalParamsSlot(up, n)) return false;
+        // the `impl Into<crate::Params>` slot of a typed unified call takes the boxed map as it took the `Value` local
+        if (this.rustTypedParamsSlot(up, Array.from(up.arguments).indexOf(n))) return true;
         return this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n));
     }
 

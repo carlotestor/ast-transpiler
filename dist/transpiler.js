@@ -69763,7 +69763,10 @@ ${iden}}`;
     if (declaration.kind === SyntaxKind7.BindingElement) {
       const pattern = declaration.parent;
       const owner = pattern?.parent;
-      if (pattern?.kind !== SyntaxKind7.ArrayBindingPattern || !isVariableDeclaration3(owner) || owner.name !== pattern || owner.parent?.declarations?.length !== 1 || pattern.elements.indexOf(declaration) !== 1)
+      if (pattern?.kind !== SyntaxKind7.ArrayBindingPattern || !isVariableDeclaration3(owner) || owner.name !== pattern || owner.parent?.declarations?.length !== 1)
+        return false;
+      const at = pattern.elements.indexOf(declaration);
+      if (at !== 1 && !(at >= 0 && this.rustDeclaredDictSlot(declaration)))
         return false;
       if (declaration.dotDotDotToken !== void 0 || declaration.initializer !== void 0 || this.rustTupleSlotKind(declaration) !== void 0)
         return false;
@@ -70812,6 +70815,8 @@ ${iden}}`;
       return false;
     if (this.rustBorrowedDictReader(up) !== void 0 || this.rustLentParamsSlot(up, n) || this.rustOptionalParamsSlot(up, n))
       return false;
+    if (this.rustTypedParamsSlot(up, Array.from(up.arguments).indexOf(n)))
+      return true;
     return this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n));
   }
   /** No loop or closure between the destructure and this use: a box there copies the slot once. */

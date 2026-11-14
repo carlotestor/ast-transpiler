@@ -69762,7 +69762,10 @@ ${iden}}`;
     if (declaration.kind === _ast.SyntaxKind.BindingElement) {
       const pattern = declaration.parent;
       const owner = _optionalChain([pattern, 'optionalAccess', _9747 => _9747.parent]);
-      if (_optionalChain([pattern, 'optionalAccess', _9748 => _9748.kind]) !== _ast.SyntaxKind.ArrayBindingPattern || !_is.isVariableDeclaration.call(void 0, owner) || owner.name !== pattern || _optionalChain([owner, 'access', _9749 => _9749.parent, 'optionalAccess', _9750 => _9750.declarations, 'optionalAccess', _9751 => _9751.length]) !== 1 || pattern.elements.indexOf(declaration) !== 1)
+      if (_optionalChain([pattern, 'optionalAccess', _9748 => _9748.kind]) !== _ast.SyntaxKind.ArrayBindingPattern || !_is.isVariableDeclaration.call(void 0, owner) || owner.name !== pattern || _optionalChain([owner, 'access', _9749 => _9749.parent, 'optionalAccess', _9750 => _9750.declarations, 'optionalAccess', _9751 => _9751.length]) !== 1)
+        return false;
+      const at = pattern.elements.indexOf(declaration);
+      if (at !== 1 && !(at >= 0 && this.rustDeclaredDictSlot(declaration)))
         return false;
       if (declaration.dotDotDotToken !== void 0 || declaration.initializer !== void 0 || this.rustTupleSlotKind(declaration) !== void 0)
         return false;
@@ -70811,6 +70814,8 @@ ${iden}}`;
       return false;
     if (this.rustBorrowedDictReader(up) !== void 0 || this.rustLentParamsSlot(up, n) || this.rustOptionalParamsSlot(up, n))
       return false;
+    if (this.rustTypedParamsSlot(up, Array.from(up.arguments).indexOf(n)))
+      return true;
     return this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n));
   }
   /** No loop or closure between the destructure and this use: a box there copies the slot once. */
