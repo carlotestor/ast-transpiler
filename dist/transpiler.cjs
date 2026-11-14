@@ -61906,13 +61906,24 @@ ${i1}}`;
     if (!/ts[/]src[/]pro[/]/.test(file) || /ts[/]src[/](pro[/])?test[/]/.test(file))
       return false;
     const init = this.rustSkipWrappers(declaration.initializer);
-    if (init === void 0 || !_is.isElementAccessExpression.call(void 0, init))
-      return false;
     const symbol = _optionalChain([this, 'access', _9269 => _9269.typeOfNodeIfAny, 'call', _9270 => _9270(declaration.name), 'optionalAccess', _9271 => _9271.getSymbol, 'optionalCall', _9272 => _9272()]);
     const scope = this.rustEnclosingFunction(declaration);
-    const bookRecv = this.rustSkipWrappers(init.expression);
-    const bookKey = this.rustSkipWrappers(init.argumentExpression);
-    const offBook = _is.isIdentifier.call(void 0, bookRecv) && _is.isStringLiteralLikeNode.call(void 0, bookKey) && (String(bookKey.text) === "bids" || String(bookKey.text) === "asks") && this.rustWsBookLocal(this.rustDeclarationOfIdentifier(bookRecv)) !== void 0;
+    const sideOf = (e) => {
+      const r = e === void 0 || !_is.isElementAccessExpression.call(void 0, e) ? void 0 : this.rustSkipWrappers(e.expression);
+      const k = r === void 0 ? void 0 : this.rustSkipWrappers(e.argumentExpression);
+      const ok2 = _is.isIdentifier.call(void 0, r) && _is.isStringLiteralLikeNode.call(void 0, k) && (String(k.text) === "bids" || String(k.text) === "asks");
+      const d = ok2 ? this.rustDeclarationOfIdentifier(r) : void 0;
+      return d !== void 0 && this.rustWsBookLocal(d) !== void 0 ? d : void 0;
+    };
+    if (init !== void 0 && _is.isConditionalExpression.call(void 0, init)) {
+      const t = this.rustSkipWrappers(init.whenTrue);
+      const f = this.rustSkipWrappers(init.whenFalse);
+      const book = sideOf(t);
+      if (book === void 0 || sideOf(f) !== book || String(this.rustSkipWrappers(t.argumentExpression).text) === String(this.rustSkipWrappers(f.argumentExpression).text))
+        return false;
+    } else if (init === void 0 || !_is.isElementAccessExpression.call(void 0, init))
+      return false;
+    const offBook = _is.isConditionalExpression.call(void 0, init) || sideOf(init) !== void 0;
     if (!offBook && (symbol === void 0 || !/^(Indexed|Counted)?OrderBookSide$/.test(String(symbol.name)))) {
       let slots = 0;
       const handed = this.rustLocalUsesAll(declaration, String(declaration.name.text), true, (n) => this.rustEnclosingFunction(n) === scope && this.rustBookSideArgSlot(n) && ++slots > 0);
@@ -71251,6 +71262,8 @@ ${iden}}`;
         return "book";
       if (this.rustWsCacheLocal(declaration) !== void 0)
         return "cache";
+      if (declaration !== void 0 && _is.isVariableDeclaration.call(void 0, declaration) && !this.rustLocalReassigned(declaration) && this.rustBorrowedLocalKind(declaration) === "dict")
+        return "dict";
       if (declaration !== void 0 && _is.isVariableDeclaration.call(void 0, declaration) && _is.isIdentifier.call(void 0, declaration.name) && declaration.initializer !== void 0 && !this.rustLocalReassigned(declaration)) {
         const init = this.rustStripWrappers(declaration.initializer);
         if (this.rustWsBookMapRead(init) || this.rustWsBookCtorLike(init))
