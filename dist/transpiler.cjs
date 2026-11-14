@@ -56125,12 +56125,18 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const field = this.getChecker().getPropertyOfType(recvType, String(node.argumentExpression.text));
     if (field === void 0 || this.primitiveKindOfType(this.typeOfNodeIfAny(node)) !== "string")
       return void 0;
+    if (owner.initializer !== void 0 && this.rustEcdsaCall(this.rustSkipWrappers(owner.initializer)) && this.rustBorrowedPending.has(owner)) {
+      return `crate::value::KeyRead::key_read(&&${super.printIdentifier(node.expression)}, "${this.escapeRustStringLiteral(String(node.argumentExpression.text))}").as_str().map(str::to_owned)`;
+    }
     const read = this.printNode(node, 0).trim();
     const tail = ".cloned().unwrap_or(Value::Null)";
     if (read.endsWith(tail) && !read.includes("as_map()"))
       return `${read.slice(0, -tail.length)}.and_then(Value::as_str).map(str::to_owned)`;
     if (read.startsWith("crate::value::KeyRead::key_read(&&") && read.endsWith(")"))
       return `${read}.as_str().map(str::to_owned)`;
+    if (read.endsWith(tail) && read.startsWith(`${super.printIdentifier(node.expression)}.as_map().and_then(|__m| __m.get(`)) {
+      return `crate::value::KeyRead::key_read(&&${super.printIdentifier(node.expression)}, "${this.escapeRustStringLiteral(String(node.argumentExpression.text))}").as_str().map(str::to_owned)`;
+    }
     return void 0;
   }
   /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
