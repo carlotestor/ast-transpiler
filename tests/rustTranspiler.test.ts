@@ -11587,3 +11587,27 @@ describe('ral-qf: the sign override group types its path parameter together', ()
         expect(venue).toMatch(/let mut requestPath: Value = /);
     });
 });
+
+describe('ral-qf: safe-scalar equality partners and `in` keys', () => {
+    const out = (() => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-qfe-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync(path.join(root, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    markets_by_id: Dict = undefined;\n    options: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeBool (o: any, k: any, d: any = undefined): boolean { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    find (rows: any[], name: string) {\n        for (let i = 0; i < rows.length; i++) {\n            const subscriptionName = this.safeString (rows[i], 'name');\n            if (subscriptionName === name) {\n                return rows[i];\n            }\n        }\n        return undefined;\n    }\n    flip (enable: boolean) {\n        const wasSandbox = this.safeBool (this.options, 'sandboxMode', false);\n        if (wasSandbox !== enable) {\n            this.options['x'] = 1;\n        }\n    }\n    known (a: string, b: string) {\n        const marketId = a + b;\n        if ((this.markets_by_id !== undefined) && (marketId in this.markets_by_id)) {\n            return true;\n        }\n        return false;\n    }\n    seenOnce (rows: any[]) {\n        const seen: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const key = this.safeString (rows[i], 'id', '') + ':';\n            if (!(key in seen)) {\n                seen[key] = true;\n            }\n        }\n        return seen;\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        return t.transpileRustByPath(path.join(root, 'ts/src/pro/venue.ts')).content;
+    })();
+    test('a reader local compared with an untyped Value partner is typed; the compare reads the partner payload (None == Null as before)', () => {
+        expect(out).toContain('let mut subscriptionName: Option<String> = ');
+        expect(out).toContain('if ((subscriptionName.as_deref() == name.as_str())) {');
+        expect(out).toContain('let mut wasSandbox: bool = ');
+        expect(out).toContain('if ((Some(wasSandbox) != enable.as_bool())) {');
+    });
+    test('a string key of an `in` test is typed; the native dict test reads it as Option<&str> (None misses like Null)', () => {
+        expect(out).toContain('let mut marketId: String = format!(');
+        expect(out).toContain('matches!((&self.markets_by_id, Some(marketId.as_str())), (Value::Dict(__d), Some(__k)) if __d.contains_key(__k))');
+        expect(out).toContain('let mut key: String = format!(');
+        expect(out).toContain('if !(seen.contains_key(key.as_str())) {');
+    });
+});

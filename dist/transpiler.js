@@ -56842,6 +56842,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n))
       return "kin";
+    if ((kind === "str" || kind === "ostr") && isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.InKeyword && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n))
+      return "inbox";
     if (isCallExpression6(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== void 0)
       return "native";
     if (this.rustVenueStrLocalArg(n))
@@ -57741,6 +57743,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return super.printIdentifier(node);
     if (form === "err")
       return `${super.printIdentifier(node)}.clone()`;
+    if (form === "inbox")
+      return local.kind === "ostr" ? `Value::from(&${super.printIdentifier(node)})` : `Value::from(${super.printIdentifier(node)}.as_str())`;
     if (form !== "box" && form !== "xbox")
       return void 0;
     const name = super.printIdentifier(node);
@@ -58629,12 +58633,57 @@ ${binding(plan.indent)}` : ""), head: "" };
       return void 0;
     const base = kind.startsWith("o") ? kind.slice(1) : kind;
     if (base !== "str" && base !== "int" || this.rustScalarValuePartnerKind(partner) !== base)
-      return void 0;
+      return this.rustScalarPayloadPartnerTest(self, partner, kind, sign, dry);
     if (dry)
       return "_";
     const name = super.printIdentifier(self);
     const own = base === "str" ? kind === "str" ? `Some(${name}.as_str())` : `${name}.as_deref()` : kind === "int" ? `Some(${name})` : name;
     return `(${own} ${sign} ${super.printIdentifier(partner)}.${base === "str" ? "as_str" : "as_i64"}())`;
+  }
+  /** qf: the `Option<&str>` text of a typed string local keying an `in` test (`inbox` use), else undefined:
+   *  `Some(k.as_str())` / `k.as_deref()`, so a native `contains_key` reads it without the box (`None` misses like `Null`). */
+  rustInKeyTypedText(key) {
+    const inner = this.unwrapParens(key);
+    if (!isIdentifier3(inner) || this.rustScalarUseForms.get(inner) !== "inbox")
+      return void 0;
+    const kind = this.rustScalarLocalOf(inner)?.kind;
+    const name = super.printIdentifier(inner);
+    return kind === "str" ? `Some(${name}.as_str())` : kind === "ostr" ? `${name}.as_deref()` : void 0;
+  }
+  /** The key local of an `in` test has a non-null initializer (nil-declared locals are left to their own rule). */
+  rustInKeyInitialised(n) {
+    const declaration = this.rustDeclaredNode(n);
+    return declaration !== void 0 && isVariableDeclaration3(declaration) && declaration.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== "null";
+  }
+  /** qf: a typed local against an untyped `Value` partner (a local or parameter) that the checker types like the local:
+   *  the `Value` pair printed `a.<payload>() == p.<payload>()` (PAYLOAD_ACCESSORS by checker kind), and the typed local
+   *  is exactly `a.<payload>()` (`None` where the `Value` was `Null`), so the same compare reads `own == p.<payload>()`.
+   *  `Option<i64>` is left out (its payload is an `f64`, which needs a closure). */
+  rustScalarPayloadPartnerTest(self, partner, kind, sign, dry) {
+    const forms = {
+      str: ["string", (n) => `Some(${n}.as_str())`],
+      ostr: ["string", (n) => `${n}.as_deref()`],
+      bool: ["boolean", (n) => `Some(${n})`],
+      obool: ["boolean", (n) => n],
+      int: ["number", (n) => `Some(${n} as f64)`],
+      num: ["number", (n) => `Some(${n})`],
+      onum: ["number", (n) => n]
+    };
+    const form = forms[kind];
+    if (form === void 0 || this.rustTestTierSource(partner))
+      return void 0;
+    if (this.rustScalarIdentifierKind(partner) !== void 0 || this.rustScalarParamRead(partner) !== void 0 || !this.printsValueExpression(partner))
+      return void 0;
+    const declaration = this.rustDeclaredNode(partner);
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) && declaration.kind !== SyntaxKind7.Parameter)
+      return void 0;
+    if (isVariableDeclaration3(declaration) && (declaration.initializer === void 0 || this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === "null"))
+      return void 0;
+    if (this.primitiveKindOfType(this.typeOfNodeIfAny(partner)) !== form[0] || this.primitiveKindOfType(this.typeOfNodeIfAny(self)) !== form[0])
+      return void 0;
+    if (dry)
+      return "_";
+    return `(${form[1](super.printIdentifier(self))} ${sign} ${super.printIdentifier(partner)}.${_RustTranspiler.PAYLOAD_ACCESSORS[form[0]]}())`;
   }
   /** `'str'` / `'int'` when `p` is a plain `Value` local (no typed-local rule claims it) whose initializer and every
    *  write is a fresh `str|ostr|null` (`int|oint|null`) producer, written only by whole `p = ..` statements. */
@@ -63100,6 +63149,14 @@ ${ind}let ${view}: &${map} = &${arc};
         closure: `${recvText}.as_map().is_some_and(|__m| __m.contains_key(${literal2}))`
       })})`;
     }
+    const typedKey = this.rustInKeyTypedText(key);
+    if (typedKey !== void 0) {
+      return `Value::Bool(${this.rustDictSite({
+        guarded,
+        helper: `in_op(&${recvText}, &${this.printNode(key, 0).trim()})`,
+        closure: `matches!((${recvText}.as_map(), ${typedKey}), (Some(__m), Some(__k)) if __m.contains_key(__k))`
+      })})`;
+    }
     const printed = this.rustDictKeyText(key);
     if (printed === void 0)
       return void 0;
@@ -65714,6 +65771,9 @@ ${iden}}`;
     const text = this.bearerInOpKeyText(key) ?? (this.rustLiteralBearerKeyArg(recv, key) !== void 0 ? this.printNode(key, 0).trim() : void 0);
     if (text === void 0)
       return void 0;
+    const typedKey = this.rustInKeyTypedText(key);
+    if (typedKey !== void 0)
+      return `Value::Bool(${typedKey.startsWith("Some(") ? `${String(recv.text)}.contains_key(${typedKey.slice(5, -1)})` : `matches!(${typedKey}, Some(__k) if ${String(recv.text)}.contains_key(__k))`})`;
     return `Value::Bool(matches!(&${text}, Value::Str(__k) if ${String(recv.text)}.contains_key(__k.as_ref())))`;
   }
   /** `k in m` with `k` an optional-string scalar local keyed natively (`kin`): `printElemKeyInOp` prints the
@@ -71724,6 +71784,9 @@ ${this.getIden(identation)}}`;
       return void 0;
     }
     const objExpr = this.printNode(obj, 0).trim();
+    const typedKey = this.rustInKeyTypedText(key);
+    if (typedKey !== void 0)
+      return `Value::Bool(matches!((&${objExpr}, ${typedKey}), (Value::Dict(__d), Some(__k)) if __d.contains_key(__k)))`;
     const keyExpr = this.printNode(key, 0).trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyExpr) || keyExpr === "self") {
       return void 0;

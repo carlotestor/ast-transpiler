@@ -998,6 +998,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The local is one side of `x === y` / `x !== y` against a `Value` partner (`rustScalarValuePartnerTest`). */
     rustScalarHasPairEquality(declaration: any): boolean;
     rustScalarValuePartnerTest(typed: any, other: any, kind: string, sign: string, dry: boolean): string | undefined;
+    /** qf: the `Option<&str>` text of a typed string local keying an `in` test (`inbox` use), else undefined:
+     *  `Some(k.as_str())` / `k.as_deref()`, so a native `contains_key` reads it without the box (`None` misses like `Null`). */
+    rustInKeyTypedText(key: any): string | undefined;
+    /** The key local of an `in` test has a non-null initializer (nil-declared locals are left to their own rule). */
+    rustInKeyInitialised(n: any): boolean;
+    /** qf: a typed local against an untyped `Value` partner (a local or parameter) that the checker types like the local:
+     *  the `Value` pair printed `a.<payload>() == p.<payload>()` (PAYLOAD_ACCESSORS by checker kind), and the typed local
+     *  is exactly `a.<payload>()` (`None` where the `Value` was `Null`), so the same compare reads `own == p.<payload>()`.
+     *  `Option<i64>` is left out (its payload is an `f64`, which needs a closure). */
+    rustScalarPayloadPartnerTest(self: any, partner: any, kind: string, sign: string, dry: boolean): string | undefined;
     /** `'str'` / `'int'` when `p` is a plain `Value` local (no typed-local rule claims it) whose initializer and every
      *  write is a fresh `str|ostr|null` (`int|oint|null`) producer, written only by whole `p = ..` statements. */
     rustScalarValuePartnerKind(partner: any): string | undefined;

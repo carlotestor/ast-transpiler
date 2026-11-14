@@ -5671,6 +5671,9 @@ export class RustTranspiler extends BaseTranspiler {
         // an optional-string local keys a proven map read or an `in` test natively (a `None` key misses, as the `Null` did)
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n)) return 'okey';
         if (kind === 'ostr' && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n)) return 'kin';
+        // qf: the key of any other `k in obj` test boxes once (`in_op` reads a `Str` key or misses on `Null`, as the `Value` local did)
+        if ((kind === 'str' || kind === 'ostr') && isBinaryExpression(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind.InKeyword && !this.rustTestTierSource(n)
+            && this.rustInKeyInitialised(n)) return 'inbox';
         if (isCallExpression(parent) && parent.expression !== n && this.rustArithCombinator(parent) && this.rustArithCallKind(parent) !== undefined) return 'native';
         if (this.rustVenueStrLocalArg(n)) return 'targ';
         if (this.rustLimitArgUse(n, kind)) return 'targ';
@@ -6534,6 +6537,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (form === 'targ' && (local.kind === 'str' || local.kind === 'ostr') && this.rustWsKeyUse(node)) return this.rustWsKeyText(node);
         if (form === 'cond' || form === 'concat' || form === 'native' || form === 'targ' || form === 'key' || form === 'okey' || form === 'fin' || form === 'frd' || form === 'kin' || form === 'nkey') return super.printIdentifier(node);
         if (form === 'err') return `${super.printIdentifier(node)}.clone()`;
+        if (form === 'inbox') return local.kind === 'ostr' ? `Value::from(&${super.printIdentifier(node)})` : `Value::from(${super.printIdentifier(node)}.as_str())`;
         if (form !== 'box' && form !== 'xbox') return undefined;
         const name = super.printIdentifier(node);
         const last = isReturnStatement(node.parent) || this.rustWsClientLastUse(node, local.declaration)
@@ -7324,11 +7328,50 @@ export class RustTranspiler extends BaseTranspiler {
         const partner: any = this.unwrapParens(other);
         if (!isIdentifier(self) || !isIdentifier(partner) || this.rustScalarIdentifierKind(self) === undefined) return undefined;
         const base = kind.startsWith('o') ? kind.slice(1) : kind;
-        if ((base !== 'str' && base !== 'int') || this.rustScalarValuePartnerKind(partner) !== base) return undefined;
+        if ((base !== 'str' && base !== 'int') || this.rustScalarValuePartnerKind(partner) !== base) return this.rustScalarPayloadPartnerTest(self, partner, kind, sign, dry);
         if (dry) return '_';
         const name = super.printIdentifier(self);
         const own = base === 'str' ? (kind === 'str' ? `Some(${name}.as_str())` : `${name}.as_deref()`) : (kind === 'int' ? `Some(${name})` : name);
         return `(${own} ${sign} ${super.printIdentifier(partner)}.${base === 'str' ? 'as_str' : 'as_i64'}())`;
+    }
+
+    /** qf: the `Option<&str>` text of a typed string local keying an `in` test (`inbox` use), else undefined:
+     *  `Some(k.as_str())` / `k.as_deref()`, so a native `contains_key` reads it without the box (`None` misses like `Null`). */
+    rustInKeyTypedText(key): string | undefined {
+        const inner: any = this.unwrapParens(key);
+        if (!isIdentifier(inner) || this.rustScalarUseForms.get(inner) !== 'inbox') return undefined;
+        const kind = this.rustScalarLocalOf(inner)?.kind;
+        const name = super.printIdentifier(inner);
+        return kind === 'str' ? `Some(${name}.as_str())` : (kind === 'ostr' ? `${name}.as_deref()` : undefined);
+    }
+
+    /** The key local of an `in` test has a non-null initializer (nil-declared locals are left to their own rule). */
+    rustInKeyInitialised(n): boolean {
+        const declaration: any = this.rustDeclaredNode(n);
+        return declaration !== undefined && isVariableDeclaration(declaration) && declaration.initializer !== undefined
+            && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== 'null';
+    }
+
+    /** qf: a typed local against an untyped `Value` partner (a local or parameter) that the checker types like the local:
+     *  the `Value` pair printed `a.<payload>() == p.<payload>()` (PAYLOAD_ACCESSORS by checker kind), and the typed local
+     *  is exactly `a.<payload>()` (`None` where the `Value` was `Null`), so the same compare reads `own == p.<payload>()`.
+     *  `Option<i64>` is left out (its payload is an `f64`, which needs a closure). */
+    rustScalarPayloadPartnerTest(self, partner, kind: string, sign: string, dry: boolean): string | undefined {
+        const forms: Record<string, [ string, (n: string) => string ]> = {
+            str: [ 'string', (n) => `Some(${n}.as_str())` ], ostr: [ 'string', (n) => `${n}.as_deref()` ],
+            bool: [ 'boolean', (n) => `Some(${n})` ], obool: [ 'boolean', (n) => n ],
+            int: [ 'number', (n) => `Some(${n} as f64)` ], num: [ 'number', (n) => `Some(${n})` ], onum: [ 'number', (n) => n ],
+        };
+        const form = forms[kind];
+        if (form === undefined || this.rustTestTierSource(partner)) return undefined;
+        if (this.rustScalarIdentifierKind(partner) !== undefined || this.rustScalarParamRead(partner) !== undefined || !this.printsValueExpression(partner)) return undefined;
+        const declaration: any = this.rustDeclaredNode(partner);
+        if (declaration === undefined || (!isVariableDeclaration(declaration) && declaration.kind !== SyntaxKind.Parameter)) return undefined;
+        // a nil-declared partner may be typed by its own rule later: leave it to that rule
+        if (isVariableDeclaration(declaration) && (declaration.initializer === undefined || this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === 'null')) return undefined;
+        if (this.primitiveKindOfType(this.typeOfNodeIfAny(partner)) !== form[0] || this.primitiveKindOfType(this.typeOfNodeIfAny(self)) !== form[0]) return undefined;
+        if (dry) return '_';
+        return `(${form[1](super.printIdentifier(self))} ${sign} ${super.printIdentifier(partner)}.${RustTranspiler.PAYLOAD_ACCESSORS[form[0]]}())`;
     }
 
     /** `'str'` / `'int'` when `p` is a plain `Value` local (no typed-local rule claims it) whose initializer and every
@@ -12049,6 +12092,13 @@ export class RustTranspiler extends BaseTranspiler {
                 closure: `${recvText}.as_map().is_some_and(|__m| __m.contains_key(${literal}))`,
             })})`;
         }
+        const typedKey = this.rustInKeyTypedText(key);
+        if (typedKey !== undefined) {
+            return `Value::Bool(${this.rustDictSite({
+                guarded, helper: `in_op(&${recvText}, &${this.printNode(key, 0).trim()})`,
+                closure: `matches!((${recvText}.as_map(), ${typedKey}), (Some(__m), Some(__k)) if __m.contains_key(__k))`,
+            })})`;
+        }
         const printed = this.rustDictKeyText(key);
         if (printed === undefined) return undefined;
         // eslint-disable-next-line prefer-const
@@ -14772,6 +14822,8 @@ export class RustTranspiler extends BaseTranspiler {
         }
         const text = this.bearerInOpKeyText(key) ?? (this.rustLiteralBearerKeyArg(recv, key) !== undefined ? this.printNode(key, 0).trim() : undefined);
         if (text === undefined) return undefined;
+        const typedKey = this.rustInKeyTypedText(key);
+        if (typedKey !== undefined) return `Value::Bool(${typedKey.startsWith('Some(') ? `${String(recv.text)}.contains_key(${typedKey.slice(5, -1)})` : `matches!(${typedKey}, Some(__k) if ${String(recv.text)}.contains_key(__k))`})`;
         return `Value::Bool(matches!(&${text}, Value::Str(__k) if ${String(recv.text)}.contains_key(__k.as_ref())))`;
     }
 
@@ -20509,6 +20561,8 @@ export class RustTranspiler extends BaseTranspiler {
             return undefined;
         }
         const objExpr = this.printNode(obj, 0).trim();
+        const typedKey = this.rustInKeyTypedText(key);
+        if (typedKey !== undefined) return `Value::Bool(matches!((&${objExpr}, ${typedKey}), (Value::Dict(__d), Some(__k)) if __d.contains_key(__k)))`;
         const keyExpr = this.printNode(key, 0).trim();
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyExpr) || keyExpr === 'self') {
             return undefined; // the key is borrowed beside the receiver: plain locals only
