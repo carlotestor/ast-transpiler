@@ -57925,6 +57925,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "okey";
     if (kind === "str" && this.rustStrLiteralTernaryLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
+    if (kind === "str" && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && !this.rust40bProTier(n) && this.rust40bFieldKeyRead(n))
+      return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n))
       return "kin";
     if ((kind === "str" || kind === "ostr") && this.rustInKeyTop(n) !== void 0 && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n))
@@ -58803,6 +58805,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const node = this.unwrapParens(rhs);
     if (node === void 0 || depth > 3)
       return false;
+    if (depth === 0 && this.rustScalarAsWrite(node) !== void 0)
+      return this.rustScalarWriteOk(kind, this.rustScalarAsWrite(node), 0);
     if (this.rustOptParamWriteOk(kind, node))
       return true;
     if (kind === "oint" && this.rustLimitCall(node))
@@ -59292,9 +59296,31 @@ ${binding(plan.indent)}` : ""), head: "" };
       return `${indent}let mut ${varName}: Option<&str> = ${init.slice(0, -".map(str::to_owned)".length)}`;
     return init === void 0 ? void 0 : `${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${init}`;
   }
+  /** 40b: `n` keys a one-level native read of a base-declared `this.<dict field>` (`this.markets[k]`, `this.urls[k]`). */
+  rust40bFieldKeyRead(n) {
+    const read = n.parent;
+    return isElementAccessExpression4(read) && read.argumentExpression === n && this.rustDictField(read.expression) !== void 0 && this.rustOkeyReadUse(n);
+  }
+  /** 40b: a node of the ws tier (`ts/src/pro/`): its subscription / cache keys stay boxed (in_op and ws cache locals must not move). */
+  rust40bProTier(n) {
+    return /ts[\\/]src[\\/]pro[\\/]/.test(String(n.getSourceFile?.()?.fileName ?? ""));
+  }
+  /** 40b: the operand of a top-level `<expr> as T` write source (parens only around it), else undefined. */
+  rustScalarAsWrite(rhs) {
+    const node = this.unwrapParens(rhs);
+    if (node === void 0 || !isAsExpression3(node))
+      return void 0;
+    const inner = this.unwrapParens(node.expression);
+    return inner === void 0 || isAsExpression3(inner) || isIdentifier3(inner) || this.literalKindOfNode(inner) === "null" ? void 0 : inner;
+  }
   /** Assignment hook: `x = <rhs>` in the local's native type. */
   printRustScalarLocalWrite(left, right) {
     const local = this.rustScalarLocalOf(left);
+    if (local !== void 0 && this.rustScalarAsWrite(right) !== void 0) {
+      const decl = local.declaration;
+      const typedDecl = isVariableDeclaration3(decl) && decl.initializer !== void 0 && this.rustScalarNativeText(local.kind, decl.initializer) !== void 0;
+      return typedDecl ? this.printRustScalarLocalWrite(left, this.rustScalarAsWrite(right)) : void 0;
+    }
     const alias = this.unwrapParens(right);
     if (local !== void 0 && local.kind.startsWith("o") && isIdentifier3(alias) && this.literalKindOfNode(alias) === "null")
       return `${super.printIdentifier(left)} = None`;
@@ -59303,8 +59329,9 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (local?.kind === "ostr" && isIdentifier3(alias) && this.rustScalarIdentifierKind(alias) === void 0 && this.rustNilValueStrAlias(alias))
       return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.into_opt_string()`;
     const text = local === void 0 ? void 0 : this.rustScalarNativeText(local.kind, right);
-    const owned = text !== void 0 && isIdentifier3(alias) && text === super.printIdentifier(alias) && _RustTranspiler.RUST_COPY_SCALAR_KINDS.has(local.kind);
-    return text === void 0 ? void 0 : `${super.printIdentifier(left)} = ${owned ? "" : ""}${text}`;
+    const owned = text !== void 0 && isIdentifier3(alias) && text === super.printIdentifier(alias) && _RustTranspiler.RUST_COPY_SCALAR_KINDS.has(local.kind) && !(local.kind === "obool" && text === "None");
+    const ownedNone = local?.kind === "obool" && text === "None";
+    return text === void 0 ? void 0 : `${super.printIdentifier(left)} = ${owned || ownedNone ? "" : ""}${text}`;
   }
   /** Kind of a typed local an identifier reads: a scalar local, or a typed `Option<String>|Option<i64>` of another rule. */
   rustScalarIdentifierKind(node) {
@@ -59819,8 +59846,9 @@ ${binding(plan.indent)}` : ""), head: "" };
       const parent = n.parent;
       if (!isIdentifier3(n) || !isBinaryExpression5(parent) || parent.left !== n || parent.operatorToken.kind !== SyntaxKind7.EqualsToken)
         continue;
-      const write = isIdentifier3(this.unwrapParens(parent.right)) && this.literalKindOfNode(this.unwrapParens(parent.right)) !== "null" ? this.rustScalarIdentifierKind(this.unwrapParens(parent.right)) ?? this.rustOptParamKind(parent.right) : this.rustScalarValueKind(parent.right, true);
-      const next = write === void 0 ? void 0 : this.rustScalarJoinKinds(joined, write);
+      const src = this.rustScalarAsWrite(parent.right) ?? parent.right;
+      const write = isIdentifier3(this.unwrapParens(src)) && this.literalKindOfNode(this.unwrapParens(src)) !== "null" ? this.rustScalarIdentifierKind(this.unwrapParens(src)) ?? this.rustOptParamKind(src) : this.rustScalarValueKind(src, true);
+      const next = write === void 0 ? void 0 : this.rustScalarJoinKinds(joined, write, joined === "bool" && write === "null");
       if (next !== void 0 && (next === joined || next === `o${joined}`))
         joined = next;
     }
