@@ -60974,6 +60974,15 @@ ${ind}];`;
     const init = declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) ? void 0 : this.unwrapParens(declaration.initializer);
     return init !== void 0 && _is.isCallExpression.call(void 0, init) && _is.isPropertyAccessExpression.call(void 0, init.expression) && init.expression.expression.kind === _ast.SyntaxKind.ThisKeyword && String(init.expression.name.text) === "parseToInt";
   }
+  /** 40d: `const n = this.safeInteger* (.., <integer literal>)`: the reader answers an `Int` on every path (parsed or the
+   *  literal default), printed `i64` by the existing int reader form: an exact `i64` bound like a `parseToInt` one. */
+  rustIntReaderLitDefault(declaration) {
+    const init = declaration === void 0 || !_is.isVariableDeclaration.call(void 0, declaration) ? void 0 : this.unwrapParens(declaration.initializer);
+    if (init === void 0 || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression) || init.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword)
+      return false;
+    const base = _RustTranspiler.RUST_SCALAR_INT_HELPERS[String(init.expression.name.text)];
+    return base !== void 0 && init.arguments.length === base + 1 && this.rustScalarIntLiteral(this.unwrapParens(init.arguments[base])) !== void 0;
+  }
   /** wi: a tuple slot whose producer builds an exact Int-or-null on every return (`checkOptionInteger`): an `i64` bound too. */
   rustTbExactIntSlot(declaration) {
     if (declaration === void 0 || !_is.isBindingElement.call(void 0, declaration))
@@ -61034,7 +61043,7 @@ ${ind}];`;
       return void 0;
     if (_RustTranspiler.NATIVE_COMPARISON_OPERATORS[cond.operatorToken.kind] === void 0 || this.isEqualityOp(cond.operatorToken.kind))
       return void 0;
-    if (!_is.isIdentifier.call(void 0, n) || !(this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbExactIntSlot(this.rustDeclaredNode(n))) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond))
+    if (!_is.isIdentifier.call(void 0, n) || !(this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbExactIntSlot(this.rustDeclaredNode(n)) || this.rustIntReaderLitDefault(this.rustDeclaredNode(n))) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond))
       return void 0;
     const counter = cond.left;
     if (!_is.isIdentifier.call(void 0, counter))

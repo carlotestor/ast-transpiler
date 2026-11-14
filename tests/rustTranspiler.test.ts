@@ -14549,3 +14549,15 @@ describe('40d: an integer reader whose default is a typed Option<i64> parameter 
         expect(mk('safeNumber')).toMatch(/let mut sinceValue: Value = /);
     });
 });
+
+describe('40d: an integer reader with an integer-literal default bounding its own for counter types (an exact Int, like a parseToInt bound)', () => {
+    test('const maxPages = this.safeInteger (this.options, k, 20) as a for bound prints i64 and the bound compares natively', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-40d-litbound-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport default class Exchange {\n    options: Dict = {};\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o[k] ?? d; }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n    pages () {\n        const maxPages = this.safeInteger (this.options, 'maxPages', 20);\n        for (let page = 0; page < maxPages; page++) {\n            this.hold (page);\n        }\n        return 1;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        expect(out).toMatch(/let mut maxPages: i64 = .*\.as_i64\(\)\.unwrap_or\(20\);/);
+    });
+});

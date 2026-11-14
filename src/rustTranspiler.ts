@@ -9490,6 +9490,15 @@ export class RustTranspiler extends BaseTranspiler {
             && init.expression.expression.kind === SyntaxKind.ThisKeyword && String(init.expression.name.text) === 'parseToInt';
     }
 
+    /** 40d: `const n = this.safeInteger* (.., <integer literal>)`: the reader answers an `Int` on every path (parsed or the
+     *  literal default), printed `i64` by the existing int reader form: an exact `i64` bound like a `parseToInt` one. */
+    rustIntReaderLitDefault(declaration: any): boolean {
+        const init: any = declaration === undefined || !isVariableDeclaration(declaration) ? undefined : this.unwrapParens(declaration.initializer);
+        if (init === undefined || !isCallExpression(init) || !isPropertyAccessExpression(init.expression) || init.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
+        const base = RustTranspiler.RUST_SCALAR_INT_HELPERS[String(init.expression.name.text)];
+        return base !== undefined && init.arguments.length === base + 1 && this.rustScalarIntLiteral(this.unwrapParens(init.arguments[base])) !== undefined;
+    }
+
     /** wi: a tuple slot whose producer builds an exact Int-or-null on every return (`checkOptionInteger`): an `i64` bound too. */
     rustTbExactIntSlot(declaration: any): boolean {
         if (declaration === undefined || !isBindingElement(declaration)) return false;
@@ -9543,7 +9552,7 @@ export class RustTranspiler extends BaseTranspiler {
     rustTbCounterBound(cond: any, n: any, kind: string): any {
         if ((kind !== 'int' && kind !== 'oint') || !isBinaryExpression(cond) || this.unwrapParens(cond.right) !== n && cond.right !== n) return undefined;
         if (RustTranspiler.NATIVE_COMPARISON_OPERATORS[cond.operatorToken.kind] === undefined || this.isEqualityOp(cond.operatorToken.kind)) return undefined;
-        if (!isIdentifier(n) || !(this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbExactIntSlot(this.rustDeclaredNode(n))) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond)) return undefined;
+        if (!isIdentifier(n) || !(this.rustTbParseToIntInit(this.rustDeclaredNode(n)) || this.rustTbExactIntSlot(this.rustDeclaredNode(n)) || this.rustIntReaderLitDefault(this.rustDeclaredNode(n))) || this.rustTbBoundHasPartner(this.rustDeclaredNode(n), cond)) return undefined;
         const counter: any = cond.left;
         if (!isIdentifier(counter)) return undefined;
         const d: any = this.rustDeclaredNode(counter);
