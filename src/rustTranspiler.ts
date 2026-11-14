@@ -4121,11 +4121,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (handOff && isConditionalExpression(this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === undefined) return undefined;
         if (this.rustVenueScalarSource(declaration.initializer) && ((boxed > 0 && !handOff) || this.rustVenueLocalHandedOn(declaration))) {
             // od: unless every copying box sits at a lending slot (`Value::from(x.as_deref())`: the copy the `Value` clone made)
-            if (!strKind || this.rustStrNoLend || this.rustOdExcludedCallee(declaration.initializer) || this.rustVenueLocalHandedOn(declaration) || this.rustReaderDeclTooLong(declaration, kind) || !this.rustReaderLendBoxes(declaration)) return undefined;
+            if (!strKind || this.rustStrNoLend || this.rustOdExcludedCallee(declaration.initializer) || this.rustStrReturnedLocal(declaration, scope) || this.rustVenueLocalHandedOn(declaration) || this.rustReaderDeclTooLong(declaration, kind) || !this.rustReaderLendBoxes(declaration)) return undefined;
             this.rustStrLentLocals.add(declaration);
         }
         // od: a venue string whose copying boxes all sit at lending slots is lent there (`Value::from(x.as_deref())`: the copy the `Value` clone made)
-        const venueLent = kind === 'ostr' && copied > 0 && !this.rustStrNoLend && this.rustVenueTypedCall(declaration.initializer) !== undefined && !this.rustOdExcludedCallee(declaration.initializer)
+        const venueLent = kind === 'ostr' && copied > 0 && !this.rustStrNoLend && this.rustVenueTypedCall(declaration.initializer) !== undefined && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustStrReturnedLocal(declaration, scope)
             && !this.rustVenueLocalHandedOn(declaration) && !this.rustReaderDeclTooLong(declaration, kind) && this.rustReaderLendBoxes(declaration);
         if (venueLent) this.rustStrLentLocals.add(declaration);
         else if (this.rustVenueTypedCostly(declaration, kind, copied)) return undefined;

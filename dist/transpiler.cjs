@@ -55200,11 +55200,11 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (handOff && _is.isConditionalExpression.call(void 0, this.unwrapParens(declaration.initializer)) && this.rustScalarNativeText(kind, declaration.initializer) === void 0)
       return void 0;
     if (this.rustVenueScalarSource(declaration.initializer) && (boxed > 0 && !handOff || this.rustVenueLocalHandedOn(declaration))) {
-      if (!strKind || this.rustStrNoLend || this.rustOdExcludedCallee(declaration.initializer) || this.rustVenueLocalHandedOn(declaration) || this.rustReaderDeclTooLong(declaration, kind) || !this.rustReaderLendBoxes(declaration))
+      if (!strKind || this.rustStrNoLend || this.rustOdExcludedCallee(declaration.initializer) || this.rustStrReturnedLocal(declaration, scope) || this.rustVenueLocalHandedOn(declaration) || this.rustReaderDeclTooLong(declaration, kind) || !this.rustReaderLendBoxes(declaration))
         return void 0;
       this.rustStrLentLocals.add(declaration);
     }
-    const venueLent = kind === "ostr" && copied > 0 && !this.rustStrNoLend && this.rustVenueTypedCall(declaration.initializer) !== void 0 && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustVenueLocalHandedOn(declaration) && !this.rustReaderDeclTooLong(declaration, kind) && this.rustReaderLendBoxes(declaration);
+    const venueLent = kind === "ostr" && copied > 0 && !this.rustStrNoLend && this.rustVenueTypedCall(declaration.initializer) !== void 0 && !this.rustOdExcludedCallee(declaration.initializer) && !this.rustStrReturnedLocal(declaration, scope) && !this.rustVenueLocalHandedOn(declaration) && !this.rustReaderDeclTooLong(declaration, kind) && this.rustReaderLendBoxes(declaration);
     if (venueLent)
       this.rustStrLentLocals.add(declaration);
     else if (this.rustVenueTypedCostly(declaration, kind, copied))
