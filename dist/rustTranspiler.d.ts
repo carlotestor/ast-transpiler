@@ -1032,7 +1032,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustThisFieldLiteralWrite(n: any): boolean;
     /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
     rustUdNestedBearerValue(n: any): boolean;
-    rustScalarInNestedWrite(n: any): boolean;
+    rustScalarInNestedWrite(n: any, boxUse?: boolean): boolean;
     /** `this.balance|options[..][..]` with at least one hop below the field (the r05 receiver chain). */
     rustNestedFieldChain(access: any): boolean;
     /** The statement write `this.F[..][n] = v` whose last key is `n` and whose other operands never name `n` or `this`
@@ -3199,6 +3199,17 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustParseResultLocal(declaration: any): boolean;
     /** The literal key of a statement write `n['k'] = v` (one level, not a book-meta or replaced key). */
     rustUntilHeadKeyWrite(n: any): string | undefined;
+    /** ral-40f: the literal keys of a statement write `n['k1']..['kN'] = v` (N >= 2) rooted at `n`: every key a plain string
+     *  literal (no replaced, digit, book-meta or `__` tag key), the value not reading `n`. */
+    rustSlotNestedInsertKeys(n: any): string[] | undefined;
+    private static readonly RUST_SLOT_NESTED_TAG_ACCESS;
+    /** ral-40f: the target of a nested write printSlotNestedInsert prints (a typed params slot, literal keys). */
+    rustPrintedSlotNestedWrite(place: any): boolean;
+    /** ral-40f: `p['k1']..['kN'] = v` on a typed params slot (`crate::value::Dict`), in place, no copy: the first hop is the
+     *  map's own `entry("k1").or_insert(Value::Null)` (the very arm `get_value_mut` runs on a `Value::Dict` with a `Str`
+     *  key), every hop below and the write keep their helpers (`get_value_mut` / `add_element_to_object`, so a `Null` /
+     *  non-map inner is skipped and tagged inner maps keep their routes; value.rs nested_slot_insert_tests). */
+    printSlotNestedInsert(left: any, right: any, valueText: string): string | undefined;
     /** `std::sync::Arc::make_mut(&mut x).insert("k".into(), v)` for a literal-key write on a typed request slot. */
     printUntilHeadKeyWrite(left: any, right: any, valueText: string): string | undefined;
     private rustLentListParamDecisions;
