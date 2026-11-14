@@ -51714,6 +51714,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // local holds `Option<Dict>`. Null tests, any-key reads and lengths would tell the variants apart: rejected.
     this.rustNilResponseLocals = /* @__PURE__ */ new WeakSet();
     this.rustByRefParamDecisions = /* @__PURE__ */ new WeakMap();
+    // ── xc: rustVenueContainerReturnKind: results of venue-private methods declared as a container or unified record ──
+    // `[await] this.m (..)` of a venue method (not base, not an override, still printed `-> Value`) whose declared return
+    // (the `Promise` argument when awaited) is `Dict`, `NullableDict`, `List`, `Dict[]` / `any[]`, a unified record already in
+    // the typed signature table (`Ticker`, `Order`, ..: a map at runtime) or a list of one, and every declaration of the name
+    // in its venue family spells the same type. The local is then decided by the existing container-local rules.
+    this.rustVenueContainerDecisions = /* @__PURE__ */ new WeakMap();
     // ── lent string lists ────────────────────────────────────────────────────
     // A string-list local from a never-empty `marketSymbols (.., false, ..)`, `Object.keys/values`, or `marketIds` of
     // such a list holds the shared list (`crate::value::List`, moved out of the box). Length and element reads are
@@ -67540,7 +67546,7 @@ ${iden}}`;
     if (init?.kind === SyntaxKind7.AwaitExpression)
       init = this.rustSkipWrappers(init.expression);
     const nilDeclared = (init === void 0 || this.literalKindOfNode(init) === "null") && (list.flags & NodeFlags4.Const) === 0 && list.parent?.kind === SyntaxKind7.VariableStatement;
-    let from = init !== void 0 && isCallExpression6(init) ? this.rustEcdsaCall(init) ? "dict" : this.rustBorrowedSourceKind(init) ?? this.rustBuiltReturnSourceKind(init) : this.rustDictElementSource(init) ? "dict" : this.rustListElementSource(init) ? "list" : void 0;
+    let from = init !== void 0 && isCallExpression6(init) ? this.rustEcdsaCall(init) ? "dict" : this.rustBorrowedSourceKind(init) ?? this.rustBuiltReturnSourceKind(init) ?? this.rustVenueContainerReturnKind(init)?.kind : this.rustDictElementSource(init) ? "dict" : this.rustListElementSource(init) ? "list" : void 0;
     const endpoint = from === "api";
     if (endpoint)
       from = this.rustDeclaredEndpointKind(init) ?? "api";
@@ -68908,6 +68914,8 @@ ${iden}}`;
   rustOptContainerSourceOk(call, kind) {
     if (kind === "api" || !isCallExpression6(call))
       return false;
+    if (this.rustVenueContainerReturnKind(call)?.kind === kind && this.rustBuiltReturnSourceKind(call) === void 0)
+      return true;
     const name = String(call.expression?.name?.text ?? "");
     if (!/^safe(?:Dict|List)(?:2|N)?$/.test(name))
       return _RustTranspiler.RUST_BORROWED_DICT_SOURCES.has(name);
@@ -69362,6 +69370,61 @@ ${iden}}`;
     if (!isCallExpression6(up) || up.arguments[0] !== n || this.rustScalarInNestedWrite(n))
       return false;
     return this.rustBorrowedDictReader(up) !== void 0 && !/^\d+$/.test(String(this.rustSkipWrappers(up.arguments[1]).text));
+  }
+  rustVenueContainerReturnKind(call) {
+    const callee = call?.expression;
+    if (!isCallExpression6(call) || !isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(callee.name))
+      return void 0;
+    const declaration = this.rustScalarCallee(call);
+    if (declaration === void 0 || !isMethodDeclaration5(declaration) || declaration.body === void 0)
+      return void 0;
+    let up = call;
+    while (isParenthesizedExpression3(up.parent))
+      up = up.parent;
+    if (this.isAsyncFunction(declaration) !== (up.parent?.kind === SyntaxKind7.AwaitExpression))
+      return void 0;
+    let decision = this.rustVenueContainerDecisions.get(declaration);
+    if (decision === void 0) {
+      try {
+        decision = this.rustVenueContainerReturnKindUncached(declaration) ?? null;
+      } catch (e) {
+        decision = null;
+      }
+      this.rustVenueContainerDecisions.set(declaration, decision);
+    }
+    return decision ?? void 0;
+  }
+  rustVenueContainerReturnKindUncached(declaration) {
+    if (!isIdentifier3(declaration.name) || declaration.type === void 0)
+      return void 0;
+    const file = String(declaration.getSourceFile?.()?.fileName ?? "");
+    const at = file.search(/[/\\]ts[/\\]src[/\\]/);
+    if (at < 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(file) || /ts[\\/]src[\\/](?:test|abstract)[\\/]/.test(file) || this.getMethodOverride(declaration) !== void 0)
+      return void 0;
+    const name = String(declaration.name.text);
+    if (this.rustTypedUnified.has(name) || this.rustTypedSignature(declaration) !== void 0)
+      return void 0;
+    const own = String(declaration.type.getText()).replace(/\s+/g, "");
+    const types = this.rustVenueFamilyReturnTypes(file, at, name);
+    if (types === void 0 || ![...types].every((t) => t.replace(/\s+/g, "") === own))
+      return void 0;
+    const async = this.isAsyncFunction(declaration);
+    const m = (async ? /^Promise<(.+)>$/ : /^(.+)$/).exec(own);
+    if (m === null)
+      return void 0;
+    const inner = m[1];
+    if (inner === "Dict")
+      return { kind: "dict", nullable: false };
+    if (inner === "NullableDict")
+      return { kind: "dict", nullable: true };
+    if (inner === "List" || inner === "Dict[]" || inner === "any[]")
+      return { kind: "list", nullable: false };
+    if (_RustTranspiler.RUST_VENUE_RECORD_NAMES.has(inner))
+      return { kind: "dict", nullable: false };
+    const elem = /^(\w+)\[\]$/.exec(inner);
+    if (elem !== null && _RustTranspiler.RUST_VENUE_RECORD_NAMES.has(elem[1]))
+      return { kind: "list", nullable: false };
+    return void 0;
   }
   /** `this.m(..)` of a venue method (no override, every venue declaration of the name returning `Dict`) whose every
    *  return is `this.safeDict (this.<field>, '<key>', {})`: the shared handle of a typed store entry, a map on every path. */
@@ -78628,6 +78691,35 @@ _RustTranspiler.RUST_BASE_FILTER_LISTS = /* @__PURE__ */ new Set([
 // (Null, list, scalar) answers Null, exactly what the same read of the empty map `into_dict()` leaves answers, so the
 // typed local is observably identical. Market / currency records, ws client / cache maps keep their own lanes.
 _RustTranspiler.RUST_SAFE_VALUE_KEY_SOURCES = /* @__PURE__ */ new Set(["safeValue", "safeValue2", "safeValueN"]);
+_RustTranspiler.RUST_VENUE_RECORD_NAMES = /* @__PURE__ */ new Set([
+  "Ticker",
+  "Tickers",
+  "Order",
+  "Trade",
+  "OrderBook",
+  "Position",
+  "Balances",
+  "Transaction",
+  "Transfer",
+  "FundingRate",
+  "FundingRates",
+  "Leverage",
+  "Leverages",
+  "MarginMode",
+  "MarginModes",
+  "MarginModification",
+  "OpenInterest",
+  "TradingFeeInterface",
+  "TradingFees",
+  "DepositAddress",
+  "LedgerEntry",
+  "OHLCV",
+  "Liquidation",
+  "FundingHistory",
+  "FundingRateHistory",
+  "Greeks",
+  "Currencies"
+]);
 // Test-tier readers: the harness `ExchangeOps` readers take `impl KeyRead` like the base ones, so a test's
 // `Value` container argument is lent (`&x`) where the call cloned it.
 _RustTranspiler.RUST_TEST_KEYREAD_READERS = /^safe(?:Value|String|Bool|Dict|List|Number|Integer)$|^safeStringN$/;
