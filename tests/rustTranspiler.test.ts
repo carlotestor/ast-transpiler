@@ -13681,3 +13681,22 @@ describe('ral-yh: a proven-map producer lends its Dict to json', () => {
         expect(out).not.toContain('let mut query: crate::value::Dict = ');
     });
 });
+
+describe('ral-yh: a defaulted safeDict written into another plain local at its last use moves in boxed once', () => {
+    const write = (name: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeDict (x: any, k: any, d: any = undefined): any { return x; }\n    safeString (x: any, k: any, d: any = undefined): any { return x; }\n    parseOrder (o: any): any { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + venue + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('const data = safeDict (r, k, {}) read at a key, then `order = data` last: Dict, moved as Value::Dict(data)', () => {
+        const out = write ('yh-mv', "    m (response: Dict, flag: boolean) {\n        let order: Dict = {};\n        const data = this.safeDict (response, 'data', {});\n        const id = this.safeString (data, 'id');\n        if (flag) {\n            order = response;\n        } else {\n            order = data;\n        }\n        return [ id, this.parseOrder (order) ];\n    }\n");
+        expect(out).toContain('let mut data: crate::value::Dict = ');
+        expect(out).toContain('order = Value::Dict(data);');
+    });
+    test('negative: a later read of the source keeps it a Value (not its last use)', () => {
+        const out = write ('yh-mvn', "    m (response: Dict, flag: boolean) {\n        let order: Dict = {};\n        const data = this.safeDict (response, 'data', {});\n        if (flag) {\n            order = data;\n        }\n        const id = this.safeString (data, 'id');\n        return [ id, this.parseOrder (order), data ];\n    }\n");
+        expect(out).not.toContain('order = Value::Dict(data);');
+    });
+});

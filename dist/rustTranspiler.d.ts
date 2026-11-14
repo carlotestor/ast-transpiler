@@ -2494,6 +2494,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `Value::Dict(x)` / `Value::Arr(x)` at the last use (moved), else `Value::from(&x)` (the Arc bump the copied `Value` paid). */
     printDictElementBox(node: any, text: string): string | undefined;
     rustDefaultedContainerBoxUse(n: any, init: any): boolean;
+    /** ral-yh: `y = x` (statement) into another plain `Value` local `y` at `x`'s last use: `y` takes the container by
+     *  value, so the shared handle moves in boxed once (`Value::Dict(x)` / `Value::Arr(x)`), exactly the value the boxed
+     *  `x` held. A target with its own typed rule stays out (its write proof reads its sources). */
+    rustValueLocalWriteHandOff(n: any): boolean;
+    private rustValueWriteTargets;
+    private rustValueWriteOpen;
     /** ral-ra: `m['k'] = x` / `m.k = x` one level on another local `m` (not `x` itself): the store takes the value by
      *  value, so the shared container is boxed there once (moved at its last use, else the Arc bump the `Value` paid). */
     rustLocalKeyPlace(place: any, n: any): boolean;

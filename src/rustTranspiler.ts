@@ -18028,12 +18028,43 @@ export class RustTranspiler extends BaseTranspiler {
         if (isBinaryExpression(up) && up.right === n && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
             && (isElementAccessExpression(up.left) || isPropertyAccessExpression(up.left)) && (this.rustThisRootedPlace(up.left) || this.rustLocalKeyPlace(up.left, n))) return true;
         if (this.rustLocalStoreHandOff(n)) return true;
+        if (this.rustValueLocalWriteHandOff(n)) return true;
         if (!isCallExpression(up) || up.expression === n || !isPropertyAccessExpression(up.expression) || up.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         const callee = String(up.expression.name.text);
         if (RustTranspiler.RUST_HANDED_DICT_EXTEND.has(callee) || RustTranspiler.RUST_HANDED_DICT_OMIT.has(callee)) return false;
         const at = Array.from(up.arguments).indexOf(n);
         return !this.rustLentResponseSlot(up, n) && !this.rustLentListSlot(up, n) && this.rustNilBoxSlotOk(up, at);
     }
+
+    /** ral-yh: `y = x` (statement) into another plain `Value` local `y` at `x`'s last use: `y` takes the container by
+     *  value, so the shared handle moves in boxed once (`Value::Dict(x)` / `Value::Arr(x)`), exactly the value the boxed
+     *  `x` held. A target with its own typed rule stays out (its write proof reads its sources). */
+    rustValueLocalWriteHandOff(n: any): boolean {
+        const up: any = n.parent;
+        if (!isBinaryExpression(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement || !isIdentifier(up.left)) return false;
+        const own: any = this.rustDeclarationOfIdentifier(n);
+        const target: any = this.rustDeclarationOfIdentifier(up.left);
+        if (own === undefined || own === n || own.name === n || target === undefined || target === own || target.name === up.left || !isVariableDeclaration(target)) return false;
+        if (this.rustEnclosingFunction(target) !== this.rustEnclosingFunction(own) || !this.rustLocalLastUse(n, own)) return false;
+        // a list-literal or nil-declared target is typed from its write sources by its own lane (it would read this write)
+        const tinit: any = this.rustSkipWrappers(target.initializer);
+        if (tinit === undefined || isArrayLiteralExpression(tinit) || this.literalKindOfNode(tinit) === 'null') return false;
+        // the target's own container decision may be open (it reads this very write): its re-entrancy answer is no proof
+        if (this.rustBorrowedPending.has(target) || this.rustValueWriteOpen.has(target)) return false;
+        if (this.rustValueWriteTargets.has(target)) return this.rustValueWriteTargets.get(target) as boolean;
+        this.rustValueWriteOpen.add(target);
+        let stays = false;
+        try {
+            stays = this.rustSlotTargetStaysValue(target) && !this.rustOptContainerLocals.has(target) && !this.rustBorrowedPending.has(target);
+        } finally {
+            this.rustValueWriteOpen.delete(target);
+        }
+        this.rustValueWriteTargets.set(target, stays);
+        return stays;
+    }
+
+    private rustValueWriteTargets = new Map<any, boolean>();
+    private rustValueWriteOpen = new Set<any>();
 
     /** ral-ra: `m['k'] = x` / `m.k = x` one level on another local `m` (not `x` itself): the store takes the value by
      *  value, so the shared container is boxed there once (moved at its last use, else the Arc bump the `Value` paid). */
