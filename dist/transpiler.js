@@ -78043,7 +78043,7 @@ ${iden}}`;
           return false;
         const up = n.parent;
         if (isBinaryExpression5(up) && up.left === n) {
-          return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustDeclaredArrayCallWriteSource(up.right) || this.rustOverloadListCallWriteSource(up.right) || this.rustTypedCoreListCallWriteSource(up.right) || this.rustBuiltHelperListWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
+          return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustBuiltListSelfWrapWrite(up, declaration) || this.rustBuiltListWriteSource(up.right) || this.rustDeclaredArrayCallWriteSource(up.right) || this.rustOverloadListCallWriteSource(up.right) || this.rustTypedCoreListCallWriteSource(up.right) || this.rustBuiltHelperListWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
         }
         if (isElementAccessExpression4(up) && up.expression === n) {
           natives++;
@@ -78054,6 +78054,8 @@ ${iden}}`;
           natives++;
           if (member === "push")
             return this.rustVecPushShape(up.parent, name);
+          if (member === "join")
+            return this.vecJoinUse(up);
           const use = up.parent;
           return member === "length" && use?.kind !== SyntaxKind7.PrefixUnaryExpression && use?.kind !== SyntaxKind7.PostfixUnaryExpression && !(isBinaryExpression5(use) && use.left === up && rustIsAssignmentOperator(use.operatorToken.kind));
         }
@@ -78113,6 +78115,11 @@ ${iden}}`;
           handOffs++;
           return true;
         }
+        if (this.rustBuiltListSelfWrap(n, declaration)) {
+          boxes.push([n, "move"]);
+          handOffs++;
+          return true;
+        }
         if (isCallExpression6(up) && up.expression !== n && up.arguments.some((a) => a === n)) {
           const callee = up.expression;
           if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !short(n) || _RustTranspiler.MUT_SELF_METHODS.has(this.toSnakeCaseName(String(callee.name.text))) || !this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n)))
@@ -78136,6 +78143,19 @@ ${iden}}`;
       this.rustLentListBoxes.set(n, form);
     this.rustBuiltLists.add(declaration);
     return true;
+  }
+  /** ral-56i: `x` as the only element of `x = [ x ]`, an expression statement writing the same list local. */
+  rustBuiltListSelfWrap(n, declaration) {
+    const literal2 = n.parent;
+    if (literal2?.kind !== SyntaxKind7.ArrayLiteralExpression || literal2.elements.length !== 1 || literal2.elements[0] !== n)
+      return false;
+    const write = literal2.parent;
+    return isBinaryExpression5(write) && write.right === literal2 && write.operatorToken.kind === SyntaxKind7.EqualsToken && write.parent?.kind === SyntaxKind7.ExpressionStatement && isIdentifier3(write.left) && this.rustIdentifierRefersToDeclaration(write.left, declaration) && this.rustIdentifierRefersToDeclaration(n, declaration);
+  }
+  /** ral-56i: the whole write `x = [ x ]` of a built-list local (printed `x = Arc::new(vec![Value::Arr(x)])`). */
+  rustBuiltListSelfWrapWrite(write, declaration) {
+    const literal2 = isBinaryExpression5(write) ? write.right : void 0;
+    return literal2?.kind === SyntaxKind7.ArrayLiteralExpression && literal2.elements.length === 1 && isIdentifier3(literal2.elements[0]) && this.rustIdentifierRefersToDeclaration(literal2.elements[0], declaration) && this.rustBuiltListSelfWrap(literal2.elements[0], declaration);
   }
   /** ral-tf: no later statement of the function pushes to or writes the list, and the use is in no loop or closure. */
   rustBuiltListFrozenAfter(node, declaration, name) {
@@ -78698,6 +78718,11 @@ ${iden}}`;
       return `${this.printNode(left, 0).trim()} = ${rhs.text}.into_list()`;
     if (isIdentifier3(rhs) && isBinaryExpression5(rhs.parent) && this.rustArrayGuardedCopies.has(rhs.parent))
       return `${this.printNode(left, 0).trim()} = ${rhs.text}.clone().into_list()`;
+    const own = this.rustBuiltListOf(left);
+    if (isBinaryExpression5(left.parent) && this.rustBuiltListSelfWrapWrite(left.parent, own)) {
+      const name = this.printNode(left, 0).trim();
+      return `${name} = std::sync::Arc::new(vec![Value::Arr(${name})])`;
+    }
     const value = isArrayLiteralExpression4(rhs) ? this.printBuiltListLiteral(rhs) : `${this.printNode(right, 0).trim()}.into_list()`;
     return `${this.printNode(left, 0).trim()} = ${value}`;
   }

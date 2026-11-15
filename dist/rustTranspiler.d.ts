@@ -3682,6 +3682,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsSubscriptionWriteValue(n: any): boolean;
     private rustBuiltLists;
     rustBuiltListLocal(declaration: any): boolean;
+    /** ral-56i: `x` as the only element of `x = [ x ]`, an expression statement writing the same list local. */
+    rustBuiltListSelfWrap(n: any, declaration: any): boolean;
+    /** ral-56i: the whole write `x = [ x ]` of a built-list local (printed `x = Arc::new(vec![Value::Arr(x)])`). */
+    rustBuiltListSelfWrapWrite(write: any, declaration: any): boolean;
     /** ral-tf: no later statement of the function pushes to or writes the list, and the use is in no loop or closure. */
     rustBuiltListFrozenAfter(node: any, declaration: any, name: string): boolean;
     /** `this.inArray (needle, x)` (haystack), `this.arrayConcat (a, b)` (either operand) on the base helpers, or the row of a
