@@ -68993,6 +68993,9 @@ ${iden}}`;
     const keyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && this.rustSafeValueKeyReadSource(init);
     if (keyReadOnly)
       from = "dict";
+    const elemKeyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && this.rustListRowKeyReadSource(init);
+    if (elemKeyReadOnly)
+      from = "dict";
     const sbAlias = from === void 0 && !nilDeclared && this.rustSbDictAliasSource(init);
     if (sbAlias)
       from = "dict";
@@ -69104,7 +69107,7 @@ ${iden}}`;
         plainReads++;
         return true;
       }
-      if (keyReadOnly)
+      if (keyReadOnly || elemKeyReadOnly)
         return this.rustSafeValueKeyReaderUse(n) && ++plainReads > 0 && ++reads > 0;
       if ((from === "dict" || from === "list") && !extendReuse && !sbAlias && init !== void 0 && _is.isCallExpression.call(void 0, init) && this.rustBorrowedIndexReadUse(n))
         return indexReadUses.push(n) > 0 && ++reads > 0;
@@ -69182,7 +69185,7 @@ ${iden}}`;
     const endpointBoxOnly = endpointBoxes > 0 && (nullTests === 0 || declaredDictOnly) && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes && !this.rustNilResponseLocals.has(declaration) && boxedElementUses.every((u) => this.rustBoxLineOk(u));
     if (endpointBoxes > 0 && !endpointBoxOnly)
       return void 0;
-    if (keyReadOnly && (!safe || plainReads === 0 || plainReads !== reads || nullTests + writes + lengths + indexLikeReads + boxedElementUses.length + lentResponses + lentNullable + keySets + keyWrites + extendHeads + jwtLends > 0))
+    if ((keyReadOnly || elemKeyReadOnly) && (!safe || plainReads === 0 || plainReads !== reads || nullTests + writes + lengths + indexLikeReads + boxedElementUses.length + lentResponses + lentNullable + keySets + keyWrites + extendHeads + jwtLends > 0))
       return void 0;
     if (!safe || reads === 0 && !builtBoxOnly && !boxOnly && !endpointBoxOnly && !this.rustNullTestedDictLocal(init, nullTests, writes) || mixed || from === void 0 || (this.rustNilResponseLocals.has(declaration) || from === "api" || this.rustDictElementSource(init)) && (nullTests > 0 || lengths > 0 || indexLikeReads > 0 && !this.rustUrlsMapEntry(init)) || this.rustListElementSource(init) && (nullTests > 0 || lengths > 0))
       return void 0;
@@ -71400,6 +71403,25 @@ ${iden}}`;
       return false;
     const names = (x) => _is.isPropertyAccessExpression.call(void 0, x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text)) || (_nullishCoalesce(x.forEachChild(names), () => ( false)));
     return !names(call.arguments[0]);
+  }
+  /** ral-42g: `xs[i]` (a numeric index) where `xs` is a local or parameter the checker types as a list (`T[]`, never a tuple, an
+   *  ArrayCache or an order book side) outside the test tier: the row a counter loop binds. Read only at literal string keys (the
+   *  ral-qa use rule), a non-map row (Null, list, scalar, out of range) reads Null there exactly as the empty map `into_dict()`
+   *  leaves; the local owns its map (an Arc bump of the row), so nothing borrows the list while it lives. */
+  rustListRowKeyReadSource(init) {
+    if (!_is.isElementAccessExpression.call(void 0, init) || !_is.isIdentifier.call(void 0, init.expression) || this.checkerOrUndefined() === void 0 || this.rustTestTierSource(init))
+      return false;
+    const key = this.rustSkipWrappers(init.argumentExpression);
+    if (key === void 0 || !_is.isNumericLiteral.call(void 0, key) && this.primitiveKindOfType(this.typeOfNodeIfAny(key)) !== "number")
+      return false;
+    const owner = this.rustDeclaredNode(init.expression);
+    if (owner === void 0 || !(_is.isVariableDeclaration.call(void 0, owner) || _is.isParameterDeclaration.call(void 0, owner)))
+      return false;
+    const listType = this.typeOfNodeIfAny(init.expression);
+    if (listType === void 0 || !this.getChecker().isArrayType(listType) || this.getChecker().isTupleType(listType) || this.rustWsCacheMapLike(init.expression))
+      return false;
+    const names = (x) => _is.isPropertyAccessExpression.call(void 0, x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text)) || (_nullishCoalesce(x.forEachChild(names), () => ( false)));
+    return !(_is.isVariableDeclaration.call(void 0, owner) && owner.initializer !== void 0 && names(owner.initializer));
   }
   /** `this.safeX (o, '<k>'[, d])`: a base by-reference reader whose container is `o`, at a literal non-index string key. */
   rustSafeValueKeyReaderUse(n) {
