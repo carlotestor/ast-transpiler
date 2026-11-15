@@ -3571,6 +3571,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBuiltListSelfWriteArg(n: any, name: string): boolean;
     /** A right-hand side that answers a `Value::Arr` on every path. */
     rustBuiltListWriteSource(right: any): boolean;
+    /** ral-54i: `[await] this.m (..)` whose declaration spells an array return (`T[]`, or `Promise<T[]>` awaited here) and whose
+     *  printed body answers a list on every path (rustCallBuildsContainer over its returns; a venue `Promise<Market[]>` by the zf
+     *  table). The callee must not be dispatched virtually, carry a typed signature or be redeclared: a base method no venue
+     *  redeclares, or a venue method with no override whose family spells the same type. Its `-> Value` result then holds a
+     *  `Value::Arr`, so `.into_list()` moves exactly that list. Only a whole reassignment of a built-list local uses it
+     *  (an initializer from such a call keeps its own decision). */
+    private rustDeclaredArrayProof;
+    rustDeclaredArrayCallWriteSource(right: any): boolean;
     /** ral-53i: `[await] this.m (..)` whose venue declaration the printer's typed-return table (rustVenueContainerReturnKind)
      *  proves a never-null list (`Dict[]` / `any[]` / `List` / `Record[]` / literal tuple, the same type in the whole venue
      *  family, no override): the call prints `-> Value` holding a `Value::Arr`, so `.into_list()` moves exactly that list. */
