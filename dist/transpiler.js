@@ -73947,6 +73947,8 @@ ${iden}}`;
       if (p.kind !== SyntaxKind7.PropertyAssignment)
         return false;
       const v = p.initializer;
+      if (v.kind === SyntaxKind7.CallExpression && this.rustHandlerTableRead(v))
+        continue;
       if (!isPropertyAccessExpression3(v) || v.expression.kind !== SyntaxKind7.ThisKeyword)
         return false;
       const member = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(v.name));
@@ -73958,6 +73960,8 @@ ${iden}}`;
       if (isCallExpression6(up) && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && up.expression.expression.kind === SyntaxKind7.ThisKeyword && String(up.expression.name.text) === "safeValue")
         return true;
       if (isCallExpression6(up) && up.arguments.length === 1 && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && String(up.expression.expression.text) === "Object" && String(up.expression.name.text) === "keys")
+        return true;
+      if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.InKeyword)
         return true;
       if (up?.kind !== SyntaxKind7.ElementAccessExpression || up.expression !== n)
         return false;

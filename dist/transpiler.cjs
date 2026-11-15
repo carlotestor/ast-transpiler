@@ -73946,6 +73946,8 @@ ${iden}}`;
       if (p.kind !== _ast.SyntaxKind.PropertyAssignment)
         return false;
       const v = p.initializer;
+      if (v.kind === _ast.SyntaxKind.CallExpression && this.rustHandlerTableRead(v))
+        continue;
       if (!_is.isPropertyAccessExpression.call(void 0, v) || v.expression.kind !== _ast.SyntaxKind.ThisKeyword)
         return false;
       const member = _chunkC7C726CWcjs.symbolValueDeclaration.call(void 0, this.getChecker().getSymbolAtLocation(v.name));
@@ -73957,6 +73959,8 @@ ${iden}}`;
       if (_is.isCallExpression.call(void 0, up) && up.arguments[0] === n && _is.isPropertyAccessExpression.call(void 0, up.expression) && up.expression.expression.kind === _ast.SyntaxKind.ThisKeyword && String(up.expression.name.text) === "safeValue")
         return true;
       if (_is.isCallExpression.call(void 0, up) && up.arguments.length === 1 && up.arguments[0] === n && _is.isPropertyAccessExpression.call(void 0, up.expression) && _is.isIdentifier.call(void 0, up.expression.expression) && String(up.expression.expression.text) === "Object" && String(up.expression.name.text) === "keys")
+        return true;
+      if (_is.isBinaryExpression.call(void 0, up) && up.right === n && up.operatorToken.kind === _ast.SyntaxKind.InKeyword)
         return true;
       if (_optionalChain([up, 'optionalAccess', _10113 => _10113.kind]) !== _ast.SyntaxKind.ElementAccessExpression || up.expression !== n)
         return false;
