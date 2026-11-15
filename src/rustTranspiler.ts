@@ -6440,8 +6440,6 @@ export class RustTranspiler extends BaseTranspiler {
         if (declaration === undefined || !isMethodDeclaration(declaration) || this.isAsyncFunction(declaration) !== awaited) return undefined;
         let kind = this.rustVenueTypedDecisions.get(declaration);
         if (kind === undefined) {
-            // ral-42a: a return proof may ask about a call of the same method (recursion): it is not proven while open
-            this.rustVenueTypedDecisions.set(declaration, null);
             try {
                 kind = this.rustVenueTypedKindUncached(declaration) ?? null;
             } catch (e) {

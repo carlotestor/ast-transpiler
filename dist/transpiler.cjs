@@ -57671,7 +57671,6 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     let kind = this.rustVenueTypedDecisions.get(declaration);
     if (kind === void 0) {
-      this.rustVenueTypedDecisions.set(declaration, null);
       try {
         kind = _nullishCoalesce(this.rustVenueTypedKindUncached(declaration), () => ( null));
       } catch (e) {
