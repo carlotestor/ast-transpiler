@@ -36196,6 +36196,10 @@ ${indent}}`);
       }
       return isEq ? `(${rightText} != nil && *${rightText} == ${leftText})` : `(${rightText} == nil || *${rightText} != ${leftText})`;
     }
+    const numericBoxText = this.goParseToNumericBoxCompare(left, leftText, right, rightText, isEq) ?? this.goParseToNumericBoxCompare(right, rightText, left, leftText, isEq);
+    if (numericBoxText !== void 0) {
+      return numericBoxText;
+    }
     if (!lPtr && !rPtr && lFam !== void 0 && rFam !== void 0 && lFam !== "nil" && rFam !== "nil" && lFam === rFam) {
       return isEq ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
     }
@@ -36260,6 +36264,31 @@ ${indent}}`);
       return isEq ? `(${leftText} == ${rightText})` : `(${leftText} != ${rightText})`;
     }
     return void 0;
+  }
+  // `res === 0` where `const res = this.parseToNumeric (...)`: the Go base method returns
+  // ParseInt(..) (int64) for a string without '.', else ParseFloat(..) (a float64 with a
+  // fraction, never integral), so the box is int64 whenever it can equal an integer constant
+  goParseToNumericBoxCompare(local, localText, other, otherText, isEq) {
+    if (local?.kind !== SyntaxKind5.Identifier || !this.goIsNumericConstant(other) || this.goNumericLiteralKind(other) !== "int") {
+      return void 0;
+    }
+    const decl = this.goAnyBoxLocalDeclaration(local);
+    if (decl?.kind !== SyntaxKind5.VariableDeclaration || decl.parent?.kind !== SyntaxKind5.VariableDeclarationList || (decl.parent.flags & NodeFlags2.Const) === 0) {
+      return void 0;
+    }
+    const init = decl.initializer;
+    const callee = init?.kind === SyntaxKind5.CallExpression ? init.expression : void 0;
+    if (callee?.kind !== SyntaxKind5.PropertyAccessExpression || callee.expression?.kind !== SyntaxKind5.ThisKeyword || callee.name?.text !== "parseToNumeric" || init.arguments?.length !== 1) {
+      return void 0;
+    }
+    let arg = init.arguments[0];
+    while (arg?.kind === SyntaxKind5.ParenthesizedExpression) {
+      arg = arg.expression;
+    }
+    if (arg?.kind !== SyntaxKind5.BinaryExpression || arg.operatorToken?.kind !== SyntaxKind5.PercentToken) {
+      return void 0;
+    }
+    return isEq ? `(${localText} == int64(${otherText}))` : `(${localText} != int64(${otherText}))`;
   }
   // the kind a native `==` compares two numeric operands in; undefined keeps IsEqual. Two
   // constants are left to the helper (nothing to type), as is any mix Go would refuse.
