@@ -19418,7 +19418,8 @@ export class RustTranspiler extends BaseTranspiler {
             return `crate::value::KeyRead::key_read(&${super.printIdentifier(recv)}, "${this.escapeRustStringLiteral(k)}")`;
         }
         const declaration: any = this.rustDeclarationOfIdentifier(recv);
-        if (declaration === undefined || declaration === recv || declaration.name === recv || (this.rustBorrowedLocalKind(declaration) !== 'dict' && !this.rustMutableDictSlot(declaration))) return undefined;
+        if (declaration === undefined || declaration === recv || declaration.name === recv || (this.rustBorrowedLocalKind(declaration) !== 'dict' && !this.rustMutableDictSlot(declaration)
+            && !(declaration.kind === SyntaxKind.BindingElement && this.rustUntilHeadSlot(declaration)))) return undefined;
         const key = isElementAccessExpression(node) ? String((this.rustSkipWrappers(node.argumentExpression) as any).text) : String(node.name.text);
         const name = super.transformIdentifier(recv, this.ReservedKeywordsReplacements[recv.text] ?? recv.text);
         return `crate::value::KeyRead::key_read(&&${name}, "${this.escapeRustStringLiteral(key)}")`;
@@ -23673,7 +23674,8 @@ export class RustTranspiler extends BaseTranspiler {
         // an extend head belongs to the until-head rule (a whole hand-off beside it keeps the box there)
         let head = false;
         this.rustLocalUsesAll(element, String(element.name.text), false, (n: any) => { if (this.rustExtendHeadUse(n)) head = true; return true; });
-        return !head;
+        // 42i: an extend head the until-head rule refuses (a whole endpoint hand-off beside it) is lent as a handed map instead
+        return !head || (element.kind === SyntaxKind.BindingElement && !this.rustUntilHeadSlot(element));
     }
 
     rustUntilHeadSlot(element: any): boolean {
@@ -23714,6 +23716,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustExtendHeadUse(n)) return heads++ >= 0;
             // 41i: the receiver of a base borrowed-key reader (`this.safeInteger (x, 'k', ..)`): lent `&x` (`impl KeyRead`)
             if (this.rustUntilHeadReaderUse(n)) return true;
+            // 42i: a plain literal-key read (an arithmetic operand included) reads the map natively (`KeyRead` on the Dict)
+            if (this.rustDictKeyReadUse(n)) return true;
             return this.rustUntilHeadKeyWrite(n) !== undefined;
         });
         return safe && heads > 0;

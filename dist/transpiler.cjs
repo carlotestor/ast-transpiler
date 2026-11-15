@@ -70564,7 +70564,7 @@ ${iden}}`;
       return `crate::value::KeyRead::key_read(&${super.printIdentifier(recv)}, "${this.escapeRustStringLiteral(k)}")`;
     }
     const declaration = this.rustDeclarationOfIdentifier(recv);
-    if (declaration === void 0 || declaration === recv || declaration.name === recv || this.rustBorrowedLocalKind(declaration) !== "dict" && !this.rustMutableDictSlot(declaration))
+    if (declaration === void 0 || declaration === recv || declaration.name === recv || this.rustBorrowedLocalKind(declaration) !== "dict" && !this.rustMutableDictSlot(declaration) && !(declaration.kind === _ast.SyntaxKind.BindingElement && this.rustUntilHeadSlot(declaration)))
       return void 0;
     const key = _is.isElementAccessExpression.call(void 0, node) ? String(this.rustSkipWrappers(node.argumentExpression).text) : String(node.name.text);
     const name = super.transformIdentifier(recv, _nullishCoalesce(this.ReservedKeywordsReplacements[recv.text], () => ( recv.text)));
@@ -75092,7 +75092,7 @@ ${iden}}`;
         head = true;
       return true;
     });
-    return !head;
+    return !head || element.kind === _ast.SyntaxKind.BindingElement && !this.rustUntilHeadSlot(element);
   }
   rustUntilHeadSlot(element) {
     if (_optionalChain([element, 'optionalAccess', _10182 => _10182.kind]) !== _ast.SyntaxKind.BindingElement)
@@ -75138,6 +75138,8 @@ ${iden}}`;
       if (this.rustExtendHeadUse(n))
         return heads++ >= 0;
       if (this.rustUntilHeadReaderUse(n))
+        return true;
+      if (this.rustDictKeyReadUse(n))
         return true;
       return this.rustUntilHeadKeyWrite(n) !== void 0;
     });
