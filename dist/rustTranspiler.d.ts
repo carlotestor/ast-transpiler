@@ -837,6 +837,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustDerivedScalarKind(call: any): string | undefined;
     rustListLengthInit(node: any): boolean;
     rustSelfRootedLengthRecv(recv: any): boolean;
+    rustLocalRootedLengthRecv(recv: any): boolean;
     rustListLengthText(node: any): string;
     /** ral-52f: `this.handle*AndParams (..)[0]` read inline (bitget `productType`, toobit / okx pro `marketType`) where the
      *  helper's declared tuple slot 0 is a string (`[string, Dict]` / `[Str, Dict]`): the read is that string or undefined,
@@ -2515,7 +2516,11 @@ export declare class RustTranspiler extends BaseTranspiler {
         sign: '+' | '-';
         literal: string;
         symbol: any;
+        start?: any;
     } | undefined;
+    /** ral-58n: the start identifier of a `for (let i = x; ..)` counter when `x` is a local the scalar rule decided `int`
+     *  and the counter's own declaration is no typed local (it prints `Value::from(x)`, an `Int`), else undefined. */
+    rust58nI64CounterStart(declaration: any): any;
     /** True when the identifier is (part of) an assignment target, a `++`/`--` operand or a `for-in/of` head. */
     rustIdentifierIsWritten(id: any): boolean;
     private rustI64Counters;

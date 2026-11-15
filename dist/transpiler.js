@@ -56186,7 +56186,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (this.rustStrCastCall(node) !== void 0 || this.rustClockString(node) || this.rustIdString(node) || this.rustVenueTypedCall(node) !== void 0)
       return true;
     if (isPropertyAccessExpression3(node))
-      return isIdentifier3(node.name) && node.name.text === "length" && (isIdentifier3(node.expression) || this.rustSelfRootedLengthRecv(node.expression));
+      return isIdentifier3(node.name) && node.name.text === "length" && (isIdentifier3(node.expression) || this.rustSelfRootedLengthRecv(node.expression) || this.rustLocalRootedLengthRecv(node.expression));
     if (isElementAccessExpression4(node))
       return isIdentifier3(node.expression) || this.rustInlineHandleStrSlot(node);
     if (isCallExpression6(node) && isIdentifier3(node.expression) && _RustTranspiler.RUST_STR_RUNTIME_FREE.has(String(node.expression.text)))
@@ -57461,7 +57461,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (node === void 0 || !isPropertyAccessExpression3(node) || !isIdentifier3(node.name) || node.name.text !== "length")
       return false;
     if (!isIdentifier3(node.expression))
-      return this.rustSelfRootedLengthRecv(node.expression);
+      return this.rustSelfRootedLengthRecv(node.expression) || this.rustLocalRootedLengthRecv(node.expression);
     return this.checkerOrUndefined() !== void 0 && this.rustScalarLengthRecv(node) === void 0;
   }
   // ral-52n: `this.orders.length` / `this.options['k'].length` print `get_array_length(&..)`, which answers a
@@ -57479,6 +57479,21 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return false;
     const prim = this.primitiveKindOfType(t);
     return prim !== "string" && !(t.flags & TypeFlags6.StringLike);
+  }
+  // ral-58n: `orderbook.cache.length` (a property chain off a local or parameter) prints `get_array_length(&..)` or a native
+  // `len()`, an `Int` for every receiver; a string-typed receiver or an order-book side keeps its own length rule
+  rustLocalRootedLengthRecv(recv) {
+    if (this.checkerOrUndefined() === void 0 || !isPropertyAccessExpression3(recv))
+      return false;
+    let n = recv;
+    while (isPropertyAccessExpression3(n) && isIdentifier3(n.name))
+      n = n.expression;
+    if (!isIdentifier3(n) || this.rustIsOrderBookSide(recv))
+      return false;
+    const t = this.typeOfNodeIfAny(recv);
+    if (t === void 0)
+      return false;
+    return this.primitiveKindOfType(t) !== "string" && !(t.flags & TypeFlags6.StringLike);
   }
   rustListLengthText(node) {
     const text = this.printNode(node, 0).trim();
@@ -62352,7 +62367,9 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return void 0;
     if (isVariableDeclaration3(declaration) && (declaration.initializer === void 0 || this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === "null"))
       return void 0;
-    if (this.primitiveKindOfType(this.typeOfNodeIfAny(partner)) !== form[0] || this.primitiveKindOfType(this.typeOfNodeIfAny(self)) !== form[0])
+    const selfDecl = kind === "int" ? this.rustDeclaredNode(self) : void 0;
+    const lengthSelf = selfDecl !== void 0 && isVariableDeclaration3(selfDecl) && (selfDecl.parent?.flags & NodeFlags4.Const) !== 0 && this.rustListLengthInit(this.unwrapParens(selfDecl.initializer));
+    if (this.primitiveKindOfType(this.typeOfNodeIfAny(partner)) !== form[0] || !lengthSelf && this.primitiveKindOfType(this.typeOfNodeIfAny(self)) !== form[0])
       return void 0;
     if (dry)
       return "_";
@@ -69119,7 +69136,8 @@ ${idn}}`;
         step = `if let Value::Int(${bind}) = &mut ${counter.name} { *${bind} ${counter.sign}= 1; }`;
       }
       if (typed && counter !== void 0 && bound !== void 0) {
-        initStr = initStr.replace(`let mut ${counter.name}: Value = Value::Int(${counter.literal});`, `let mut ${counter.name}: i64 = ${counter.literal};`);
+        initStr = counter.start !== void 0 ? `${this.getIden(identation + 1)}let mut ${counter.name}: i64 = ${super.printIdentifier(counter.start)};
+` : initStr.replace(`let mut ${counter.name}: Value = Value::Int(${counter.literal});`, `let mut ${counter.name}: i64 = ${counter.literal};`);
         condStr = typeof bound === "object" ? bound.cond : `${counter.name} < (${bound}.len() as i64)`;
         step = `${counter.name} += 1;`;
       }
@@ -69145,7 +69163,8 @@ ${idn}}`;
       return void 0;
     const name = String(declaration.name.text);
     const printed = new RegExp(`^let mut ${name}: Value = Value::Int\\((-?\\d+)\\);$`).exec(initStr.trim());
-    if (printed === null)
+    const startNode = printed === null ? this.rust58nI64CounterStart(declaration) : void 0;
+    if (printed === null && startNode === void 0)
       return void 0;
     const sign = ["+", "-"].find((s) => incrStr.trim() === `${name} = ${this.printNativeNumeric(s === "+" ? SyntaxKind7.PlusToken : SyntaxKind7.MinusToken, name, "Value::Int(1)")}`);
     if (sign === void 0)
@@ -69161,7 +69180,17 @@ ${idn}}`;
       if (n.kind === SyntaxKind7.Identifier && this.rustSymbolOf(n) === symbol && this.rustIdentifierIsWritten(n))
         return void 0;
     }
-    return { name, sign, literal: printed[1], symbol };
+    return printed !== null ? { name, sign, literal: printed[1], symbol } : { name, sign, literal: "", symbol, start: startNode };
+  }
+  /** ral-58n: the start identifier of a `for (let i = x; ..)` counter when `x` is a local the scalar rule decided `int`
+   *  and the counter's own declaration is no typed local (it prints `Value::from(x)`, an `Int`), else undefined. */
+  rust58nI64CounterStart(declaration) {
+    const src = declaration.initializer === void 0 ? void 0 : this.unwrapParens(declaration.initializer);
+    if (src === void 0 || !isIdentifier3(src) || this.rustScalarLocalOf(src)?.kind !== "int")
+      return void 0;
+    if (this.rustScalarLocalKind(declaration) !== void 0 || this.rustNilLocalKind(declaration) !== void 0)
+      return void 0;
+    return src;
   }
   /** True when the identifier is (part of) an assignment target, a `++`/`--` operand or a `for-in/of` head. */
   rustIdentifierIsWritten(id) {
