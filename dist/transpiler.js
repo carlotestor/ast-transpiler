@@ -67696,7 +67696,7 @@ ${iden}}`;
         return true;
       }
       if (isBinaryExpression5(parent) && parent.operatorToken.kind === SyntaxKind7.InKeyword && parent.right === n)
-        return this.bearerInOpKeyText(parent.left) !== void 0 || this.literalKeyWidened(this.rustLiteralBearerKeyArg(n, parent.left)) || this.rustBearerOptKeyIn(n, parent.left);
+        return this.bearerInOpKeyText(parent.left) !== void 0 || this.literalKeyWidened(this.rustLiteralBearerKeyArg(n, parent.left)) || this.rustBearerOptKeyIn(n, parent.left) || this.rustBearerLiteralInKey(parent.left) !== void 0 && this.rustUntilRequestLocal(declaration);
       if (this.rustBearerRebuild(n))
         return ++rebuilds > 0;
       const reuse = this.rustProducerReuse(n);
@@ -68536,6 +68536,9 @@ ${iden}}`;
     if (recv === void 0 || !isIdentifier3(recv) || this.rustDictBearerDeclaration(recv) === void 0) {
       return void 0;
     }
+    const literal2 = this.rustBearerLiteralInKey(key);
+    if (literal2 !== void 0)
+      return `Value::Bool(${String(recv.text)}.contains_key(${literal2}))`;
     const text = this.bearerInOpKeyText(key) ?? (this.rustLiteralBearerKeyArg(recv, key) !== void 0 ? this.printNode(key, 0).trim() : void 0);
     if (text === void 0)
       return void 0;
@@ -68556,6 +68559,28 @@ ${iden}}`;
     if (this.rustKeyScalarDecisionOpen(key))
       this.rustBearerSawOpenKey = true;
     return this.rustScalarLocalOf(key)?.kind === "ostr" && this.rustScalarUseForms.get(key) === "kin";
+  }
+  /** 41i: a map-literal local handed as the request of a base `handleUntilOption`-family call (item scope: the request
+   *  of a tuple producer, typed before its slot; other map literals keep their own rules). */
+  rustUntilRequestLocal(declaration) {
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    let handed = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const call = n.parent;
+      if (isCallExpression6(call) && call.arguments[1] === n && this.rustBaseCallNamed(call, _RustTranspiler.RUST_REQUEST_TUPLE_HELPERS))
+        handed = true;
+      return true;
+    });
+    return handed;
+  }
+  /** 41i: `'k' in m` with a plain string-literal key a typed map serves (same key rule as a native bearer read):
+   *  the Rust string literal, else undefined. */
+  rustBearerLiteralInKey(key) {
+    const keyNode = this.rustSkipWrappers(key);
+    if (keyNode === void 0 || !isStringLiteral3(keyNode) || this.isTestSource(keyNode) || !this.rustReadBearerKeyOk("map", keyNode))
+      return void 0;
+    return this.rustStringLiteralOf(this.printStringLiteral(keyNode));
   }
   /** The key half of `bearerInOp`, also used while the receiver's own bearer
    *  proof is still running (its declaration probe answers "not typed" then). */
@@ -71266,6 +71291,8 @@ ${iden}}`;
       return `&${text}`;
     if (this.rustMarketStoreElementOf(node) !== void 0)
       return `&*${text}`;
+    if (this.rustUntilHeadReaderUse(node) && this.rustUntilHeadSlot(declaration))
+      return `&${text}`;
     return this.rustContainerBoxUses.get(node) !== void 0 && this.rustReadBearerKind(node) !== void 0 ? `&${text}` : void 0;
   }
   /** A base `safeDict*` / `extend` / `omit` call, or an implicit-API endpoint call. */
@@ -74773,9 +74800,19 @@ ${iden}}`;
         return false;
       if (this.rustExtendHeadUse(n))
         return heads++ >= 0;
+      if (this.rustUntilHeadReaderUse(n))
+        return true;
       return this.rustUntilHeadKeyWrite(n) !== void 0;
     });
     return safe && heads > 0;
+  }
+  /** 41i: `n` is the first argument of a base borrowed-key reader (`safeInteger` / `safeString` ..) read with a literal key. */
+  rustUntilHeadReaderUse(n) {
+    const call = n.parent;
+    if (!isCallExpression6(call) || call.arguments[0] !== n || !this.rustBorrowedAnyKeyReader(call))
+      return false;
+    const key = this.rustSkipWrappers(call.arguments[1]);
+    return key !== void 0 && isStringLiteralLikeNode4(key);
   }
   /** `x` (moved at its last use) or `&x` for a shared-map local as the head of a base `extend`, else undefined. */
   printExtendHeadArg(node, text) {

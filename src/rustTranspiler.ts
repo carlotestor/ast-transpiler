@@ -16597,7 +16597,7 @@ export class RustTranspiler extends BaseTranspiler {
             }
             // `k in x` — the map's own lookup behind the helper's `Str` test.
             if (isBinaryExpression(parent) && parent.operatorToken.kind === SyntaxKind.InKeyword
-                && parent.right === n) return this.bearerInOpKeyText(parent.left) !== undefined || this.literalKeyWidened(this.rustLiteralBearerKeyArg(n, parent.left)) || this.rustBearerOptKeyIn(n, parent.left);
+                && parent.right === n) return this.bearerInOpKeyText(parent.left) !== undefined || this.literalKeyWidened(this.rustLiteralBearerKeyArg(n, parent.left)) || this.rustBearerOptKeyIn(n, parent.left) || (this.rustBearerLiteralInKey(parent.left) !== undefined && this.rustUntilRequestLocal(declaration));
             // A rebuilt plain literal keeps the bearer (write side).
             if (this.rustBearerRebuild(n)) return ++rebuilds > 0;
             // A rebuild from a fresh-map producer keeps the map type.
@@ -17425,6 +17425,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (recv === undefined || !isIdentifier(recv) || this.rustDictBearerDeclaration(recv) === undefined) {
             return undefined;
         }
+        // 41i: a literal key reads the map's own lookup (`in_op`'s Dict arm with a `Str` key)
+        const literal = this.rustBearerLiteralInKey(key);
+        if (literal !== undefined) return `Value::Bool(${String(recv.text)}.contains_key(${literal}))`;
         const text = this.bearerInOpKeyText(key) ?? (this.rustLiteralBearerKeyArg(recv, key) !== undefined ? this.printNode(key, 0).trim() : undefined);
         if (text === undefined) return undefined;
         const typedKey = this.rustInKeyTypedText(key);
@@ -17443,6 +17446,27 @@ export class RustTranspiler extends BaseTranspiler {
         if (own === undefined || !isVariableDeclaration(own) || own.initializer === undefined || !isObjectLiteralExpression(this.rustSkipWrappers(own.initializer))) return false;
         if (this.rustKeyScalarDecisionOpen(key)) this.rustBearerSawOpenKey = true;
         return this.rustScalarLocalOf(key)?.kind === 'ostr' && this.rustScalarUseForms.get(key) === 'kin';
+    }
+
+    /** 41i: a map-literal local handed as the request of a base `handleUntilOption`-family call (item scope: the request
+     *  of a tuple producer, typed before its slot; other map literals keep their own rules). */
+    rustUntilRequestLocal(declaration: any): boolean {
+        if (declaration === undefined || !isVariableDeclaration(declaration) || !isIdentifier(declaration.name)) return false;
+        let handed = false;
+        this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n: any) => {
+            const call: any = n.parent;
+            if (isCallExpression(call) && call.arguments[1] === n && this.rustBaseCallNamed(call, RustTranspiler.RUST_REQUEST_TUPLE_HELPERS)) handed = true;
+            return true;
+        });
+        return handed;
+    }
+
+    /** 41i: `'k' in m` with a plain string-literal key a typed map serves (same key rule as a native bearer read):
+     *  the Rust string literal, else undefined. */
+    rustBearerLiteralInKey(key: any): string | undefined {
+        const keyNode: any = this.rustSkipWrappers(key);
+        if (keyNode === undefined || !isStringLiteral(keyNode) || this.isTestSource(keyNode) || !this.rustReadBearerKeyOk('map', keyNode)) return undefined;
+        return this.rustStringLiteralOf(this.printStringLiteral(keyNode));
     }
 
     /** The key half of `bearerInOp`, also used while the receiver's own bearer
@@ -20033,6 +20057,7 @@ export class RustTranspiler extends BaseTranspiler {
             || this.rustSafeMarketLocalOf(node) !== undefined || this.rustMarketSlotParamOf(node) !== undefined || this.rustTypedMarketLocalOf(node) !== undefined
             || this.rustCurrencySlotParamOf(node) !== undefined || this.rustCurrencyLocalOf(node) !== undefined) return `&${text}`;
         if (this.rustMarketStoreElementOf(node) !== undefined) return `&*${text}`;
+        if (this.rustUntilHeadReaderUse(node) && this.rustUntilHeadSlot(declaration)) return `&${text}`;
         return this.rustContainerBoxUses.get(node) !== undefined && this.rustReadBearerKind(node) !== undefined ? `&${text}` : undefined;
     }
 
@@ -23348,9 +23373,19 @@ export class RustTranspiler extends BaseTranspiler {
             if (this.rustIdentifierIsPropertyName(n)) return !(n.parent?.kind === SyntaxKind.ShorthandPropertyAssignment && n.parent.name === n);
             if (this.rustDeclaredNode(n) !== element || this.rustEnclosingFunction(n) !== fn) return false;
             if (this.rustExtendHeadUse(n)) return heads++ >= 0;
+            // 41i: the receiver of a base borrowed-key reader (`this.safeInteger (x, 'k', ..)`): lent `&x` (`impl KeyRead`)
+            if (this.rustUntilHeadReaderUse(n)) return true;
             return this.rustUntilHeadKeyWrite(n) !== undefined;
         });
         return safe && heads > 0;
+    }
+
+    /** 41i: `n` is the first argument of a base borrowed-key reader (`safeInteger` / `safeString` ..) read with a literal key. */
+    rustUntilHeadReaderUse(n: any): boolean {
+        const call: any = n.parent;
+        if (!isCallExpression(call) || call.arguments[0] !== n || !this.rustBorrowedAnyKeyReader(call)) return false;
+        const key: any = this.rustSkipWrappers(call.arguments[1]);
+        return key !== undefined && isStringLiteralLikeNode(key);
     }
 
     /** `x` (moved at its last use) or `&x` for a shared-map local as the head of a base `extend`, else undefined. */

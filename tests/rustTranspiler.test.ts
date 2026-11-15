@@ -14904,3 +14904,26 @@ describe('41i: tuple slots seventh pass', () => {
         expect(fetch).toContain('let mut extraParams: crate::value::Dict = ');
     });
 });
+
+describe('41i: handleUntilOption request local and slot', () => {
+    const fx = (name: string, base: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    const b = "export interface Dict { [key: string]: any }\nexport type Int = number | undefined;\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    milliseconds (): number { return 1; }\n    extend (a: any, b: any): Dict { return a; }\n    omit (a: any, k: any): Dict { return a; }\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o; }\n    safeInteger2 (o: any, k1: any, k2: any, d: Int = undefined): Int { return o; }\n    parseToInt (x: any): number { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    handleUntilOption (key: string, request: Dict, params: Dict, multiplier: number = 1): [Dict, Dict] {\n        const until = this.safeInteger2 (params, 'until', 'till');\n        if (until !== undefined) {\n            request[key] = this.parseToInt (until * multiplier);\n        }\n        const paramsOmitted = (until !== undefined) ? this.omit (params, [ 'until', 'till' ]) : params;\n        return [ request, paramsOmitted ];\n    }\n}\n";
+    test('41i: a map-literal request handed to handleUntilOption and tested with a literal `in` key is typed; its slot read by a safe reader is lent', () => {
+        const file = fx ('41i-until', b, "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    fetchThing (symbol: string, since: number = undefined, params: Dict = {}) {\n        const request: Dict = {\n            'symbol': symbol,\n        };\n        const [ requestUntil, paramsUntil ] = this.handleUntilOption ('end_at', request, params);\n        const hasEnd = ('end_at' in request);\n        if (!hasEnd) {\n            requestUntil['start_at'] = since;\n        } else {\n            const endAt = this.safeInteger (requestUntil, 'end_at', this.milliseconds ());\n            requestUntil['start_at'] = endAt - 10;\n        }\n        return this.hold (this.extend (requestUntil, paramsUntil));\n    }\n    otherThing (symbol: string, params: Dict = {}) {\n        const request: Dict = {\n            'symbol': symbol,\n        };\n        const has = ('end_at' in request);\n        return this.hold ([ request, has ]);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        const it = out.slice (out.indexOf ('fn fetchThing'), out.indexOf ('fn otherThing'));
+        expect(it).toContain('let mut request: indexmap::IndexMap<String, Value> = ');
+        expect(it).toContain('request.contains_key("end_at")');
+        expect(it).toContain('let mut requestUntil: crate::value::Dict = ');
+        expect(it).toContain('(&requestUntil, ');
+        // a map literal not handed to handleUntilOption keeps its own rules (no change outside the item)
+        const other = out.slice (out.indexOf ('fn otherThing'));
+        expect(other).not.toContain('request.contains_key("end_at")');
+    });
+});
