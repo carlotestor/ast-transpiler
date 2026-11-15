@@ -76897,13 +76897,13 @@ ${iden}}`;
         let ok;
         try {
           ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+            const p = n.parent;
+            if ((_is.isPropertyAccessExpression.call(void 0, p) || _optionalChain([p, 'optionalAccess', _10349 => _10349.kind]) === _ast.SyntaxKind.PropertyAssignment) && p.name === n)
+              return true;
             if (!this.rustIdentifierRefersToDeclaration(n, declaration)) {
               const other = this.rustDeclarationOfIdentifier(n);
               return other !== void 0 && other !== declaration && this.rustDisjointBinding(other, declaration);
             }
-            const p = n.parent;
-            if ((_is.isPropertyAccessExpression.call(void 0, p) || _optionalChain([p, 'optionalAccess', _10349 => _10349.kind]) === _ast.SyntaxKind.PropertyAssignment) && p.name === n)
-              return true;
             if (kind === "opt" && _is.isBinaryExpression.call(void 0, p) && this.isEqualityOp(p.operatorToken.kind) && this.rustWsCacheUndefined(p.left === n ? p.right : p.left)) {
               forms.set(n, "test");
               return true;
