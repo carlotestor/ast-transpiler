@@ -908,6 +908,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  ral-qd: a venue `parse*` string result lends like any other venue string (`Value::from(x.as_deref())`
      *  at each copying box: the copy the `Value` clone made). */
     rustOdExcludedCallee(init: any): boolean;
+    /** ral-42a: an identifier the checker types exactly `undefined` at this read (narrowed by an `=== undefined` guard). */
+    rustNarrowedUndefined(value: any): boolean;
     /** `x = E; return x;`: the returned local holds what the statement right before the return wrote. */
     rustVenueReturnSource(ret: any): any;
     /** An override whose hidden base method and every venue declaration of the name declare its own return type. */
