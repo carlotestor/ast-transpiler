@@ -9894,7 +9894,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (isIdentifier(self) && (kind === 'int' || kind === 'oint') && this.rustScalarIdentifierKind(self) !== undefined && this.rustIntReaderCall(partner)) {
             if (dry) return '_';
             const name = super.printIdentifier(self);
-            return `(${kind === 'int' ? `Some(${name} as f64)` : `${name}.map(|__v| __v as f64)`} ${sign} ${this.printNode(partner, 0).trim()}.as_f64())`;
+            return `(${kind === 'int' ? `Some(${name} as f64)` : `Value::from(${name}).as_f64()`} ${sign} ${this.printNode(partner, 0).trim()}.as_f64())`;
         }
         if (!isIdentifier(self) || !isIdentifier(partner) || this.rustScalarIdentifierKind(self) === undefined) return undefined;
         const base = kind.startsWith('o') ? kind.slice(1) : kind;

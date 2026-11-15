@@ -18164,7 +18164,7 @@ describe('ral-54n: safeInteger locals ordered against a number Value or each oth
         expect(out).toContain('let mut prevSeqNum: Option<i64> = ');
         expect(out).toContain('let mut orderbookNonce: i64 = ');
         expect(out).toContain('prevSeqNum > Some(orderbookNonce)');
-        expect(out).toContain('(prevSeqNum.map(|__v| __v as f64) == ');
+        expect(out).toContain('(Value::from(prevSeqNum).as_f64() == ');
         expect(out).toContain('let mut batchSize: i64 = ');
         expect(out).toContain('>= (batchSize as f64)');
     });
