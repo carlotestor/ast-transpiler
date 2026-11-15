@@ -53800,7 +53800,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (node.declarations.length === 1 && this.rustBorrowedDictLocal(declaration)) {
       this.rustPrintedBorrowed.add(declaration);
-      const read = this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? (this.rustSbDictAliasDecl(declaration) ? `Value::from(&${parsedValue.trim()})` : this.rustParamsAliasDecl(declaration) ? `${parsedValue.trim().replace(/\.clone\(\)$/, "")}.clone()` : parsedValue);
+      const read = this.rustWsFieldGetText(this.rustSkipWrappers(declaration.initializer), false) ?? (this.rustSbDictAliasDecl(declaration) ? `Value::from(&${parsedValue.trim()})` : this.rustParamsAliasDecl(declaration) ? `${parsedValue.trim().replace(/\.clone\(\)$/, "")}${this.rustParamReadAfter(declaration) ? ".clone()" : ""}` : parsedValue);
       return this.rustBorrowedLocalKind(declaration) === "list" ? `${indent}let mut ${varName}: crate::value::List = ${read}.into_list()` : `${indent}let mut ${varName}: crate::value::Dict = ${read}.into_dict()`;
     }
     if (node.declarations.length === 1 && this.rustHandedDictLocal(declaration)) {
@@ -58142,6 +58142,22 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustSbDictAliasDecl(declaration) {
     const init = this.rustSkipWrappers(declaration?.initializer);
     return init !== void 0 && isIdentifier3(init) && this.rustDeclaredNode(init)?.kind !== SyntaxKind7.Parameter && this.rustBorrowedLocalKind(declaration) === "dict" && this.rustSbDictAliasSource(init);
+  }
+  /** ral-44c: the aliased parameter is read again after the alias declaration (or the alias sits in a loop): the
+   *  alias copies the Arc; otherwise the parameter moves into it, as the boxed alias did at its last use. */
+  rustParamReadAfter(declaration) {
+    const init = this.rustSkipWrappers(declaration.initializer);
+    const param = this.rustDeclaredNode(init);
+    if (findAncestor(declaration, (a) => a.kind === SyntaxKind7.ForStatement || a.kind === SyntaxKind7.ForInStatement || a.kind === SyntaxKind7.ForOfStatement || a.kind === SyntaxKind7.WhileStatement || a.kind === SyntaxKind7.DoStatement || isFunctionLike(a)) !== this.rustEnclosingFunction(declaration))
+      return true;
+    let after = false;
+    const end = declaration.getEnd();
+    const seen = this.rustLocalUsesAll(param, String(param.name.text), true, (n) => {
+      if (n.getStart() >= end || this.rustEnclosingFunction(n) !== this.rustEnclosingFunction(declaration))
+        after = true;
+      return true;
+    });
+    return after || !seen;
   }
   /** ral-44c: write forms of a params alias that answer a map on every path: `omit` of the alias itself, or `extend`
    *  whose every operand is a proven untagged map (`extend` answers `Value::Map`). */
@@ -62948,7 +62964,8 @@ ${i1}}`;
       });
       return ok2 && (valueUses2 === 0 || elemUses === 0) ? "call" : false;
     }
-    const fromOpt = this.rustIsOptMarketCall(declaration.initializer) || this.rustOptMarketTernary(declaration.initializer) !== void 0;
+    const fromSlot = this.rustMarketSlotParamOf(this.rustSkipWrappers(declaration.initializer)) !== void 0 && (declaration.parent.flags & NodeFlags4.Const) === 0;
+    const fromOpt = this.rustIsOptMarketCall(declaration.initializer) || this.rustOptMarketTernary(declaration.initializer) !== void 0 || fromSlot;
     const empty = declaration.initializer === void 0 || this.literalKindOfNode(declaration.initializer) === "null" || fromOpt;
     if (!empty && !this.rustIsTypedMarketCall(declaration.initializer))
       return false;
@@ -63651,7 +63668,8 @@ ${i1}}`;
   printTypedMarketLocal(declaration, indent, varName) {
     const kind = this.rustMarketLocalKind(declaration);
     if (kind === "opt") {
-      const init = this.rustIsOptMarketCall(declaration.initializer) ? this.printNode(declaration.initializer, 0).trim() : this.printOptMarketTernary(declaration.initializer) ?? "None";
+      const slot = this.rustSkipWrappers(declaration.initializer);
+      const init = this.rustIsOptMarketCall(declaration.initializer) ? this.printNode(declaration.initializer, 0).trim() : this.rustMarketSlotParamOf(slot) !== void 0 ? `${super.printIdentifier(slot)}.cloned()` : this.printOptMarketTernary(declaration.initializer) ?? "None";
       return `${indent}let mut ${varName}: Option<crate::types::Market> = ${init}`;
     }
     if (kind === "call") {
