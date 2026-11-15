@@ -1051,6 +1051,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
     rustUdNestedBearerValue(n: any): boolean;
     rustScalarInNestedWrite(n: any, boxUse?: boolean): boolean;
+    /** ral-41f: a local whose kind the nested-write text passes never decide: declared with an initializer that is
+     *  not a safe* reader call, not `undefined` / another identifier (nil-declared and alias locals keep their own
+     *  rules) and not returned by its function (binance pro `stream`: its safeString local written whole into
+     *  `this.options[..][..]` and returned would move the method's return type to `Value` and add a dispatch arm). */
+    rustNestedWriteFreeLocal(n: any): boolean;
     /** `this.balance|options[..][..]` with at least one hop below the field (the r05 receiver chain). */
     rustNestedFieldChain(access: any): boolean;
     /** The statement write `this.F[..][n] = v` whose last key is `n` and whose other operands never name `n` or `this`
