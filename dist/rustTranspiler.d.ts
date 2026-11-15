@@ -3756,10 +3756,6 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsSubscriptionWriteValue(n: any): boolean;
     private rustBuiltLists;
     rustBuiltListLocal(declaration: any): boolean;
-    /** RAL-INT-64: `node` sits in the `then` branch of an `if` whose `else` branch holds every later read of the local (and
-     *  nothing after the `if` reads it); no loop or function lies between that `if` and the declaration. The two branches
-     *  never both run, so `node` is the last read on its path. */
-    rustLastUseBeforeElseOnly(node: any, declaration: any): boolean;
     /** ral-56s: a base `this.arrayConcat (a, b)` (two operands, non-test tier): always a `Value::Arr`. */
     rustBuiltListConcatInit(init: any): boolean;
     /** ral-56s: `t = x` (statement) where `t` is a nil-declared (`let t: T = undefined` / `let t;`) local of the same function
@@ -3780,6 +3776,12 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  items of the `Value::Arr` it is handed and answers a new `Value::Arr` (exchange_stubs.rs sort_by / sort_by2: any
      *  other variant is handed back as it came, and the moved-in box is always an Arr), so `.into_list()` takes exactly it. */
     rustBuiltListSelfSort(write: any, name: string): boolean;
+    /** ral-57i: the target of `y = x`: a `let` local of the same function that is never a built list itself, still printed as the plain
+     *  `Value` binding (no typed local, scalar, nil or borrowed decision). */
+    rustBuiltListAliasTarget(left: any): boolean;
+    private rustBuiltListAliasGuard;
+    /** ral-57i: `this.arraySlice (..)` resolved to the base declaration and redeclared by no venue. */
+    rustBaseArraySliceCall(call: any): boolean;
     /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */
     rustBuiltListSelfWriteArg(n: any, name: string): boolean;
     /** A right-hand side that answers a `Value::Arr` on every path. */
@@ -3819,6 +3821,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  empty list, the landed ral-kc `into_list()` behaviour), or `this.parse<X> (..)` whose declaration returns `T[]`
      *  (every override must return a list too): `.into_list()` moves exactly the list out of the box. */
     rustDeclaredListProducer(rhs: any): boolean;
+    /** ral-57i: a base plural parser (not virtually dispatched) called from a venue file whose venue family declares no
+     *  method of that name: the Rust call resolves to the base body even where another family (derive parseTrades)
+     *  overrides it, so the base's declared `T[]` return holds there. */
+    rustBaseParserFamilyFree(call: any, declaration: any, method: string): boolean;
     private static readonly RUST_LIST_PARSERS;
     /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
      *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so
@@ -3827,6 +3833,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustArrayGuardedCopies;
     /** ral-52i: `id` names a plain `Value` local or parameter of its own function (no typed local form). */
     rustPlainValueBinding(id: any): boolean;
+    /** ral-57i: a `this.X(.., x, ..)` argument in the then-branch of the nearest enclosing if whose later reads all sit in
+     *  that if's else-branch (rustGuardedBranchLastUse), with no other read of x in the same statement: x moves there. */
+    rustBuiltListBranchLastUse(node: any, declaration: any): boolean;
     /** ral-uf: every later read of `node`'s local lies in the else branch of `guard` (a path disjoint from the move) and
      *  nothing reads it after the if statement; no loop or closure sits between the move and the declaration. */
     rustGuardedBranchLastUse(node: any, declaration: any, guard: any): boolean;

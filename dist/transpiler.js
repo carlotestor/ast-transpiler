@@ -51890,6 +51890,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // A local built from an array literal, reassigned only from list producers (array literals, base `toArray` /
     // `arrayConcat`, a `[]`-defaulted `safeList*`) holds the shared list: pushes, length and index reads are native.
     this.rustBuiltLists = /* @__PURE__ */ new WeakSet();
+    this.rustBuiltListAliasGuard = /* @__PURE__ */ new Set();
     /** ral-54i: `[await] this.m (..)` whose declaration spells an array return (`T[]`, or `Promise<T[]>` awaited here) and whose
      *  printed body answers a list on every path (rustCallBuildsContainer over its returns; a venue `Promise<Market[]>` by the zf
      *  table). The callee must not be dispatched virtually, carry a typed signature or be redeclared: a base method no venue
@@ -78655,6 +78656,11 @@ ${iden}}`;
           handOffs++;
           return true;
         }
+        if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && isIdentifier3(up.left) && up.left.text !== name && this.rustLocalLastUse(n, declaration) && short(n) && this.rustBuiltListAliasTarget(up.left)) {
+          boxes.push([n, "move"]);
+          handOffs++;
+          return true;
+        }
         if (this.rustBuiltListSelfWrap(n, declaration)) {
           boxes.push([n, "move"]);
           handOffs++;
@@ -78664,8 +78670,7 @@ ${iden}}`;
           const callee = up.expression;
           if (!isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !short(n) || _RustTranspiler.MUT_SELF_METHODS.has(this.toSnakeCaseName(String(callee.name.text))) || !this.rustNilBoxSlotOk(up, Array.from(up.arguments).indexOf(n)))
             return false;
-          const jsonBranchLast = this.rustIsJsonOperand(n) && this.rustLastUseBeforeElseOnly(n, declaration);
-          boxes.push([n, this.rustLocalLastUse(n, declaration) || this.rustBuiltListSelfWriteArg(n, name) || jsonBranchLast ? "move" : "clone"]);
+          boxes.push([n, this.rustLocalLastUse(n, declaration) || this.rustBuiltListSelfWriteArg(n, name) || this.rustBuiltListBranchLastUse(n, declaration) ? "move" : "clone"]);
           return true;
         }
         return false;
@@ -78683,45 +78688,6 @@ ${iden}}`;
     for (const [n, form] of boxes)
       this.rustLentListBoxes.set(n, form);
     this.rustBuiltLists.add(declaration);
-    return true;
-  }
-  /** RAL-INT-64: `node` sits in the `then` branch of an `if` whose `else` branch holds every later read of the local (and
-   *  nothing after the `if` reads it); no loop or function lies between that `if` and the declaration. The two branches
-   *  never both run, so `node` is the last read on its path. */
-  rustLastUseBeforeElseOnly(node, declaration) {
-    let branch = node;
-    while (branch.parent !== void 0 && !(branch.parent.kind === SyntaxKind7.IfStatement && branch.parent.thenStatement === branch)) {
-      if (isFunctionLike(branch.parent) || branch.parent === declaration.parent)
-        return false;
-      branch = branch.parent;
-    }
-    const ifs = branch.parent;
-    if (ifs === void 0 || ifs.elseStatement === void 0)
-      return false;
-    const own = this.rustSymbolOf(node);
-    const scope = this.rustEnclosingFunction(declaration);
-    if (own === void 0 || scope === void 0)
-      return false;
-    let statement = node;
-    while (statement.parent !== void 0 && !isStatement(statement))
-      statement = statement.parent;
-    for (const n of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
-      if (n === node || n === declaration.name || !isIdentifier3(n) || this.rustIdentifierIsPropertyName(n))
-        continue;
-      if (isMethodDeclaration5(scope) && n === scope.name)
-        continue;
-      const symbol = this.rustSymbolOf(n);
-      if (symbol !== void 0 && symbol !== own)
-        continue;
-      if (n.pos >= statement.pos && n.end <= statement.end)
-        return false;
-      if (n.pos > node.pos && !(n.pos >= ifs.elseStatement.pos && n.end <= ifs.elseStatement.end))
-        return false;
-    }
-    for (let up = node.parent; up !== void 0 && !(up.pos <= declaration.pos && declaration.end <= up.end); up = up.parent) {
-      if (isFunctionLike(up) || up.kind === SyntaxKind7.ForStatement || up.kind === SyntaxKind7.ForOfStatement || up.kind === SyntaxKind7.ForInStatement || up.kind === SyntaxKind7.WhileStatement || up.kind === SyntaxKind7.DoStatement)
-        return false;
-    }
     return true;
   }
   /** ral-56s: a base `this.arrayConcat (a, b)` (two operands, non-test tier): always a `Value::Arr`. */
@@ -78829,10 +78795,33 @@ ${iden}}`;
     if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
     const method = String(call.expression.name.text);
-    if (method !== "sortBy" && method !== "sortBy2" || this.rustTestTierSource(call) || !this.rustListPassthroughCall(call))
+    const slice = method === "arraySlice" && !this.rustTestTierSource(call) && this.rustBaseArraySliceCall(call);
+    if (!slice && (method !== "sortBy" && method !== "sortBy2" || this.rustTestTierSource(call) || !this.rustListPassthroughCall(call)))
       return false;
     const first = this.rustSkipWrappers(call.arguments[0]);
     return first !== void 0 && isIdentifier3(first) && String(first.text) === name && this.rustBuiltListSelfWriteArg(call.arguments[0], name);
+  }
+  /** ral-57i: the target of `y = x`: a `let` local of the same function that is never a built list itself, still printed as the plain
+   *  `Value` binding (no typed local, scalar, nil or borrowed decision). */
+  rustBuiltListAliasTarget(left) {
+    const target = this.rustDeclarationOfIdentifier(left);
+    if (target === void 0 || target.name === left || !isVariableDeclaration3(target) || this.rustBuiltLists.has(target))
+      return false;
+    if (this.rustBuiltListAliasGuard.has(target))
+      return false;
+    this.rustBuiltListAliasGuard.add(target);
+    try {
+      return this.rustPlainValueBinding(left);
+    } finally {
+      this.rustBuiltListAliasGuard.delete(target);
+    }
+  }
+  /** ral-57i: `this.arraySlice (..)` resolved to the base declaration and redeclared by no venue. */
+  rustBaseArraySliceCall(call) {
+    if (call.arguments.length < 2 || call.arguments.some((a) => a.kind === SyntaxKind7.SpreadElement))
+      return false;
+    const member = this.rustScalarCallee(call);
+    return member !== void 0 && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(member.getSourceFile?.()?.fileName ?? "")) && !this.rustVenueReturnTypesHas(call, "arraySlice");
   }
   /** `x = this.m(.., x, ..)` naming `x` only there and on the left: the old list moves into the call before the write. */
   rustBuiltListSelfWriteArg(n, name) {
@@ -79069,7 +79058,23 @@ ${iden}}`;
     if (!_RustTranspiler.RUST_LIST_PARSERS.has(method) || this.rustTestTierSource(rhs) || this.rustVirtualDispatch[this.toSnakeCaseName(method)] !== void 0)
       return false;
     const declaration = this.rustScalarCallee(rhs);
-    return declaration?.kind === SyntaxKind7.MethodDeclaration && declaration.type?.kind === SyntaxKind7.ArrayType && this.rustListPassthroughCallee(rhs, method);
+    return declaration?.kind === SyntaxKind7.MethodDeclaration && declaration.type?.kind === SyntaxKind7.ArrayType && (this.rustListPassthroughCallee(rhs, method) || this.rustBaseParserFamilyFree(rhs, declaration, method));
+  }
+  /** ral-57i: a base plural parser (not virtually dispatched) called from a venue file whose venue family declares no
+   *  method of that name: the Rust call resolves to the base body even where another family (derive parseTrades)
+   *  overrides it, so the base's declared `T[]` return holds there. */
+  rustBaseParserFamilyFree(call, declaration, method) {
+    if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? "")))
+      return false;
+    const file = String(call.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    const at = file.lastIndexOf("/ts/src/");
+    if (at < 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(file))
+      return false;
+    const root = file.slice(0, at) + "/ts/src";
+    const rel = file.slice(at + "/ts/src/".length);
+    const { familyOf, types } = this.rustVenueFamilies(root);
+    const family = familyOf.get(rel);
+    return family !== void 0 && types.get(family)?.get(method) === void 0;
   }
   /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
    *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so
@@ -79124,6 +79129,36 @@ ${iden}}`;
     if (isParameterDeclaration3(declaration))
       return false;
     return !(this.rustLentListLocal(declaration) || this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustScalarLocalKind(declaration) !== void 0 || this.rustNilLocalKind(declaration) !== void 0 || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustReadBearerKindOfDeclaration(declaration) !== false);
+  }
+  /** ral-57i: a `this.X(.., x, ..)` argument in the then-branch of the nearest enclosing if whose later reads all sit in
+   *  that if's else-branch (rustGuardedBranchLastUse), with no other read of x in the same statement: x moves there. */
+  rustBuiltListBranchLastUse(node, declaration) {
+    let statement = node;
+    while (statement.parent !== void 0 && !isStatement(statement))
+      statement = statement.parent;
+    let guard = void 0;
+    for (let up = statement; up !== void 0 && !isFunctionLike(up); up = up.parent) {
+      if (up.parent?.kind === SyntaxKind7.IfStatement && up.parent.thenStatement === up) {
+        guard = up.parent;
+        break;
+      }
+    }
+    if (guard === void 0 || guard.elseStatement === void 0)
+      return false;
+    const own = this.rustSymbolOf(node);
+    const scope = this.rustEnclosingFunction(declaration);
+    if (own === void 0 || scope === void 0)
+      return false;
+    for (const n of this.rustScopeNameNodes(scope, String(declaration.name.text))) {
+      if (n === node || n === declaration.name || !isIdentifier3(n) || this.rustIdentifierIsPropertyName(n))
+        continue;
+      const symbol = this.rustSymbolOf(n);
+      if (symbol !== void 0 && symbol !== own)
+        continue;
+      if (n.pos >= statement.pos && n.end <= statement.end)
+        return false;
+    }
+    return this.rustGuardedBranchLastUse(node, declaration, guard);
   }
   /** ral-uf: every later read of `node`'s local lies in the else branch of `guard` (a path disjoint from the move) and
    *  nothing reads it after the if statement; no loop or closure sits between the move and the declaration. */
