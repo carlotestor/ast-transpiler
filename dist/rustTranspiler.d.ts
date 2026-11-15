@@ -753,6 +753,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  declares `k` a string (a unified `Ticker` / `Trade` / `Order` row): the `Option<String>` the boxed read held
      *  (a non-string slot reads as `None`, like the lf / md market-field rule), only as a `const`/`let` initializer. */
     rustRowFieldStrText(node: any): string | undefined;
+    /** ral-42g: `xs[i]` whose list is a `string[]` / `Strings` parameter rustStrListParam proves (base-declared or every call site). */
+    rustStrListParamElement(init: any): boolean;
     /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
     rustListParamElement(init: any): boolean;
     /** The local's last use is the whole right side of a statement `y = x;`: the boxed local moves there,
@@ -2883,6 +2885,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBorrowedSourceKind(call: any): 'dict' | 'list' | 'api' | undefined;
     private static readonly RUST_SAFE_VALUE_KEY_SOURCES;
     rustSafeValueKeyReadSource(call: any): boolean;
+    /** ral-42g: `xs[i]` (a numeric index) where `xs` is a local or parameter the checker types as a list (`T[]`, never a tuple, an
+     *  ArrayCache or an order book side) outside the test tier: the row a counter loop binds. Read only at literal string keys (the
+     *  ral-qa use rule), a non-map row (Null, list, scalar, out of range) reads Null there exactly as the empty map `into_dict()`
+     *  leaves; the local owns its map (an Arc bump of the row), so nothing borrows the list while it lives. */
+    rustListRowKeyReadSource(init: any): boolean;
     /** `this.safeX (o, '<k>'[, d])`: a base by-reference reader whose container is `o`, at a literal non-index string key. */
     rustSafeValueKeyReaderUse(n: any): boolean;
     private rustVenueContainerDecisions;
