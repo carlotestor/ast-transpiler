@@ -51780,6 +51780,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustContainerBoxUses = /* @__PURE__ */ new WeakMap();
     this.rustBorrowedDictDecisions = /* @__PURE__ */ new WeakMap();
     this.rustBorrowedPending = /* @__PURE__ */ new WeakSet();
+    /** ral-49a: an alias refused while its source was open: no decision derived from that refusal is cached. */
+    this.rustSbAliasReask = /* @__PURE__ */ new WeakSet();
     this.rustBorrowedKinds = /* @__PURE__ */ new WeakMap();
     this.rustOptContainerLocals = /* @__PURE__ */ new WeakSet();
     // ── ral-wh: index / variable-key reads on held Dict / List locals (rustBorrowedIndexReadUse) ──
@@ -58399,7 +58401,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     if (source !== void 0 && source.kind === SyntaxKind7.Parameter)
       return this.rustTypedParamsParam(source);
-    if (source === void 0 || !isVariableDeclaration3(source) || this.rustBorrowedPending.has(source))
+    if (source !== void 0 && isVariableDeclaration3(source) && this.rustBorrowedPending.has(source)) {
+      if (isVariableDeclaration3(init.parent) && init.parent.initializer === init)
+        this.rustSbAliasDeferred.add(init.parent);
+      return false;
+    }
+    if (source === void 0 || !isVariableDeclaration3(source))
       return false;
     return this.rustBorrowedLocalKind(source) === "dict";
   }
@@ -70357,9 +70364,10 @@ ${iden}}`;
       } catch (e) {
         decision = false;
       }
-      if (this.rustBorrowedPending.has(declaration))
+      if (this.rustBorrowedPending.has(declaration) || this.rustSbAliasReask.has(declaration)) {
+        this.rustSbAliasReask.delete(declaration);
         this.rustBorrowedDictDecisions.delete(declaration);
-      else
+      } else
         this.rustBorrowedDictDecisions.set(declaration, decision);
     }
     return decision;
@@ -70388,6 +70396,7 @@ ${iden}}`;
       if (kind === void 0 && this.rustSbAliasDeferred.has(declaration)) {
         this.rustSbAliasDeferred.delete(declaration);
         this.rustBorrowedKinds.delete(declaration);
+        this.rustSbAliasReask.add(declaration);
         return void 0;
       }
     }
