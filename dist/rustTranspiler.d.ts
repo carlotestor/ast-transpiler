@@ -65,7 +65,7 @@ interface RustScopeIndex {
     byName: Map<string, number[]> | undefined;
 }
 export type RustDispatchParamKind = 'value' | 'slice' | 'map' | 'strvec' | 'flag' | 'str' | 'optstr' | 'f64' | 'optf64' | 'opti64' | 'i64' | 'optstrvec' | 'strvecvec' | 'params' | 'orderreqs' | 'dict' | 'list' | 'optdict' | 'optlist' | 'optmarket' | 'optcurrency' | 'side' | 'other';
-export type RustDispatchReturnKind = 'value' | 'void' | 'typed' | 'ostr' | 'oint' | 'keptostr' | 'keptint' | 'keptstr' | 'keptbool' | 'int' | 'string' | 'bool' | 'dict' | 'list' | 'optdict' | 'struct' | 'other';
+export type RustDispatchReturnKind = 'value' | 'void' | 'typed' | 'ostr' | 'oint' | 'keptostr' | 'keptint' | 'keptstr' | 'keptbool' | 'keptstruct' | 'int' | 'string' | 'bool' | 'dict' | 'list' | 'optdict' | 'struct' | 'other';
 export interface RustMethodSignature {
     file: any;
     name: string;
@@ -3921,6 +3921,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustMarketSlotDecisions;
     /** A method declared `safeMarket (..): MarketInterface` with a body in `ts/src` (base or venue). */
     rustReturnsMarket(node: any): boolean;
+    private rustVenueMarketDecisions;
+    /** ral-43e: a venue (not base-tier) method declared `Market` / `MarketInterface`, not async, whose every return is a
+     *  `safeMarket` record (the call itself or a `const` struct local bound to it): it hands the struct back as is. */
+    rustVenueReturnsMarket(node: any, file: string): boolean;
     /** The `market` parameter of a base market-slot reader, read only by key readers, null tests or `Value` hand-offs. */
     rustMarketSlotParam(param: any): boolean;
     private rustMarketDepth;

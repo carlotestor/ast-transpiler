@@ -51375,8 +51375,8 @@ function rustScopeNameTable(index) {
   return byName;
 }
 var RUST_DISPATCH_TYPED_KINDS = /* @__PURE__ */ new Set(["str", "optstr", "f64", "optf64", "opti64", "i64", "optstrvec", "strvecvec", "orderreqs", "params", "flag", "dict", "list", "optdict", "optlist", "optmarket", "optcurrency"]);
-var RUST_DISPATCH_NATIVE_RETURNS = /* @__PURE__ */ new Set(["oint", "keptostr", "keptint", "keptstr", "keptbool", "int", "string", "bool", "dict", "list", "optdict", "struct"]);
-var RUST_DISPATCH_KEPT_RETURNS = /* @__PURE__ */ new Set(["oint", "keptostr", "keptint", "keptstr", "keptbool"]);
+var RUST_DISPATCH_NATIVE_RETURNS = /* @__PURE__ */ new Set(["oint", "keptostr", "keptint", "keptstr", "keptbool", "keptstruct", "int", "string", "bool", "dict", "list", "optdict", "struct"]);
+var RUST_DISPATCH_KEPT_RETURNS = /* @__PURE__ */ new Set(["oint", "keptostr", "keptint", "keptstr", "keptbool", "keptstruct"]);
 var rustDispatch = {
   isTyped: (kind) => RUST_DISPATCH_TYPED_KINDS.has(kind),
   /** Tail of a dynamic-dispatch `args` list as a slice: the whole list, or the tail past index `i`. */
@@ -51508,6 +51508,7 @@ var rustDispatch = {
       case "typed":
       case "ostr":
       case "struct":
+      case "keptstruct":
         return `crate::types::IntoRaw::into_raw(${call})`;
       case "oint":
       case "keptostr":
@@ -51909,6 +51910,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustCurrencyBoxing = /* @__PURE__ */ new Set();
     this.rustCurrencyLocalDecisions = /* @__PURE__ */ new Map();
     this.rustMarketSlotDecisions = /* @__PURE__ */ new WeakMap();
+    this.rustVenueMarketDecisions = /* @__PURE__ */ new WeakMap();
     // Market slot / market local decisions call each other (a helper's slot is typed when its callers lend; a
     // caller's local is typed when its uses are typed slots). A decision taken while a cycle member was still
     // pending (its guard answered `false`) is provisional: it is dropped again unless it is the outermost one.
@@ -62319,6 +62321,8 @@ ${classMethods}
       ret = "keptostr";
     if (ret === "ostr" && this.rustVenueKeptStrArm(node))
       ret = "keptostr";
+    if (ret === "struct" && returnType === "crate::types::Market" && isMethodDeclaration5(node) && isIdentifier3(node.name) && String(node.name.text) !== "safeMarket")
+      ret = "keptstruct";
     this.rustSignatureTable.set(node, {
       file: node.getSourceFile?.(),
       name: this.toSnakeCaseName(name),
@@ -79974,13 +79978,64 @@ ${this.getIden(identation)}}`;
   rustReturnsMarket(node) {
     if (node === void 0 || node.kind !== SyntaxKind7.MethodDeclaration || node.body === void 0 || !isIdentifier3(node.name))
       return false;
-    if (String(node.name.text) !== "safeMarket" || !isClassDeclaration4(node.parent))
+    if (!isClassDeclaration4(node.parent))
       return false;
     const file = String(node.getSourceFile?.()?.fileName ?? "");
     if (!/ts[/]src[/]/.test(file) || /ts[/]src[/](?:pro[/])?test[/]/.test(file))
       return false;
     const ret = node.type;
+    if (String(node.name.text) !== "safeMarket")
+      return this.rustVenueReturnsMarket(node, file);
     return ret?.kind === SyntaxKind7.TypeReference && isIdentifier3(ret.typeName) && String(ret.typeName.text) === "MarketInterface";
+  }
+  /** ral-43e: a venue (not base-tier) method declared `Market` / `MarketInterface`, not async, whose every return is a
+   *  `safeMarket` record (the call itself or a `const` struct local bound to it): it hands the struct back as is. */
+  rustVenueReturnsMarket(node, file) {
+    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(file) || /ts[/]src[/]base[/]/.test(file))
+      return false;
+    const ret = node.type;
+    if (ret?.kind !== SyntaxKind7.TypeReference || !isIdentifier3(ret.typeName) || !/^(?:Market|MarketInterface)$/.test(String(ret.typeName.text)))
+      return false;
+    if ((node.modifiers ?? []).some((m) => m.kind === SyntaxKind7.AsyncKeyword || m.kind === SyntaxKind7.OverrideKeyword))
+      return false;
+    let decision = this.rustVenueMarketDecisions.get(node);
+    if (decision !== void 0)
+      return decision;
+    this.rustVenueMarketDecisions.set(node, true);
+    let ok = true;
+    let returns = 0;
+    const visit = (n) => {
+      if (!ok || n === void 0)
+        return;
+      if (n !== node && isFunctionLike(n))
+        return;
+      if (isReturnStatement4(n)) {
+        returns++;
+        const inner = n.expression === void 0 ? void 0 : this.unwrapParens(n.expression);
+        if (inner === void 0) {
+          ok = false;
+          return;
+        }
+        if (this.rustIsSafeMarketCall(inner))
+          return;
+        if (isIdentifier3(inner)) {
+          const declaration = this.rustDeclarationOfIdentifier(inner);
+          if (declaration?.kind === SyntaxKind7.VariableDeclaration && (declaration.parent.flags & NodeFlags4.Const) !== 0 && this.rustIsSafeMarketCall(declaration.initializer))
+            return;
+        }
+        ok = false;
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    try {
+      node.body.forEachChild(visit);
+    } catch (e) {
+      ok = false;
+    }
+    decision = ok && returns > 0;
+    this.rustVenueMarketDecisions.set(node, decision);
+    return decision;
   }
   /** The `market` parameter of a base market-slot reader, read only by key readers, null tests or `Value` hand-offs. */
   rustMarketSlotParam(param) {
@@ -80281,9 +80336,11 @@ ${this.getIden(identation)}}`;
     if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression))
       return false;
     const recv = call.expression.expression.kind;
-    if (recv !== SyntaxKind7.ThisKeyword && recv !== SyntaxKind7.SuperKeyword || String(call.expression.name.text) !== "safeMarket")
+    if (recv !== SyntaxKind7.ThisKeyword && recv !== SyntaxKind7.SuperKeyword)
       return false;
     let declaration = this.rustScalarCallee(call);
+    if (String(call.expression.name.text) !== "safeMarket")
+      return declaration !== void 0 && isMethodDeclaration5(declaration) && declaration.body !== void 0 && this.rustReturnsMarket(declaration);
     if (declaration !== void 0 && isMethodDeclaration5(declaration) && declaration.body === void 0 && isClassDeclaration4(declaration.parent)) {
       declaration = Array.from(declaration.parent.members).find((m) => isMethodDeclaration5(m) && m.body !== void 0 && isIdentifier3(m.name) && String(m.name.text) === "safeMarket");
     }
@@ -80308,6 +80365,8 @@ ${this.getIden(identation)}}`;
       if (this.rustDictKeyReadUse(n))
         return true;
       if (this.rustMarketKeyOfLookup(n))
+        return true;
+      if (isReturnStatement4(up) && up.expression === n && this.rustReturnsMarket(findAncestor(up.parent, isFunctionLike)))
         return true;
       if (this.rustIsNullTestOf(n) && this.rustNullTestIsCondition(n))
         return true;
@@ -80378,9 +80437,10 @@ ${this.getIden(identation)}}`;
   }
   /** A `safeMarket` call whose result goes to a `Value` place: the typed result boxed once. */
   printSafeMarketCallBox(node, identation) {
-    if (this.rustSafeMarketBoxing.has(node) || !isPropertyAccessExpression3(node.expression) || String(node.expression.name.text) !== "safeMarket")
+    if (this.rustSafeMarketBoxing.has(node) || !isPropertyAccessExpression3(node.expression))
       return void 0;
-    const typed = this.rustIsSafeMarketCall(node) || this.rustCallsTestExchange(node) && this.rustCalleeIsRuntimeBase(node);
+    const named = String(node.expression.name.text) === "safeMarket";
+    const typed = this.rustIsSafeMarketCall(node) || named && this.rustCallsTestExchange(node) && this.rustCalleeIsRuntimeBase(node);
     if (!typed || this.rustSafeMarketCallNative(node))
       return void 0;
     this.rustSafeMarketBoxing.add(node);
