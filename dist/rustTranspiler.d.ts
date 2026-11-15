@@ -3405,9 +3405,16 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsResolvedMap(x: any, depth: number): boolean;
     /** Any write of the local after its declaration (an assignment or an update). */
     rustLocalReassigned(declaration: any): boolean;
+    /** ral-53h: set while the resolve table builds its `rpats` (read only by `await client.future (h)`; watch calls keep `pats`). */
+    private rustWsFoundRefine;
+    /** ral-53h: the literal of a never-rebound `const xs = this.findMessageHashes (client, 'lit')` local that is only read
+     *  (`xs[i]`, `xs.length`); the base method keeps the futures keys whose text contains 'lit'. */
+    rustWsFoundHashesLiteral(list: any): string | undefined;
+    rustWsRefinedHashPatterns(hash: any): Array<Array<string | null>>;
     /** Every resolve of the ws class with its hash patterns and kind; null when the class has ws relatives. */
     rustWsResolveTable(cls: any): Array<{
         pats: Array<Array<string | null>>;
+        rpats?: Array<Array<string | null>>;
         kind: string;
     }> | null;
     /** When `site` sits in a method of `cls` with parameters: the parameter bindings of every call of that method
