@@ -74072,6 +74072,10 @@ ${iden}}`;
           fn.forEachChild(visit);
           return ok;
         }
+        if (d.kind === SyntaxKind7.BindingElement && d.parent?.kind === SyntaxKind7.ArrayBindingPattern && isVariableDeclaration3(d.parent.parent) && d.parent.parent.parent?.flags & NodeFlags4.Const) {
+          const t = this.typeOfNodeIfAny(v);
+          return this.isStringOrNullishType(t) && this.isStringLikeType(t);
+        }
         if (isParameterDeclaration3(d) && isMethodDeclaration5(d.parent) && isIdentifier3(d.parent.name) && findAncestor(d.parent, isClassDeclaration4) === cls) {
           if (d.initializer !== void 0 && !valueOk(d.initializer))
             return false;
@@ -74148,6 +74152,8 @@ ${iden}}`;
       if (p.kind !== SyntaxKind7.PropertyAssignment)
         return false;
       const v = p.initializer;
+      if (v.kind === SyntaxKind7.CallExpression && this.rustHandlerTableRead(v))
+        continue;
       if (!isPropertyAccessExpression3(v) || v.expression.kind !== SyntaxKind7.ThisKeyword)
         return false;
       const member = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(v.name));
@@ -74159,6 +74165,8 @@ ${iden}}`;
       if (isCallExpression6(up) && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && up.expression.expression.kind === SyntaxKind7.ThisKeyword && String(up.expression.name.text) === "safeValue")
         return true;
       if (isCallExpression6(up) && up.arguments.length === 1 && up.arguments[0] === n && isPropertyAccessExpression3(up.expression) && isIdentifier3(up.expression.expression) && String(up.expression.expression.text) === "Object" && String(up.expression.name.text) === "keys")
+        return true;
+      if (isBinaryExpression5(up) && up.right === n && up.operatorToken.kind === SyntaxKind7.InKeyword)
         return true;
       if (up?.kind !== SyntaxKind7.ElementAccessExpression || up.expression !== n)
         return false;
