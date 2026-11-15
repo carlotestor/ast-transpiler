@@ -3368,6 +3368,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  element at the slot's index is a cache: the slot holds that cache. Any other matching resolve (another kind,
      *  a value read through a helper parameter, a Null settle, an unknown hash) leaves the slot `Value`. */
     rustWsTupleCacheSlot(element: any): boolean;
+    /** ral-55w: a resolved value that is a plain map, never a cache / book marker: a fresh or proven map, or an entry of
+     *  the base `balance` field (balances are plain maps), so a numeric slot read off it is Null. */
+    rustWsPlainMapResolve(x: any): boolean;
     /** `x.length` read on an optional cache local: the slot's own `size()`. */
     rustWsCacheLengthRead(n: any): boolean;
     printWsCacheLength(node: any): string | undefined;
@@ -3497,6 +3500,7 @@ export declare class RustTranspiler extends BaseTranspiler {
         rpats?: Array<Array<string | null>>;
         kind: string;
         value?: any;
+        plainMap?: boolean;
     }> | null;
     /** When `site` sits in a method of `cls` with parameters: the parameter bindings of every call of that method
      *  (`this.m (..)`, or `this.spawn (this.m, ..)`), so a hash or value built from a parameter reads each caller's

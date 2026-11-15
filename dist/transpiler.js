@@ -75572,6 +75572,8 @@ ${iden}}`;
     for (const r of table) {
       if (!r.pats.some((rp) => hashes.some((wp) => _RustTranspiler.rustWsPatternsMeet(rp, wp))))
         continue;
+      if (r.kind === "none" || r.kind === "dict" && r.plainMap === true)
+        continue;
       const t = r.kind === "list" && r.value !== void 0 ? tuple(r.value) : void 0;
       const e = t?.elements[index];
       if (e === void 0 || e.kind === SyntaxKind7.SpreadElement || t.elements.some((x) => x.kind === SyntaxKind7.SpreadElement))
@@ -75581,6 +75583,17 @@ ${iden}}`;
       matched++;
     }
     return matched > 0;
+  }
+  /** ral-55w: a resolved value that is a plain map, never a cache / book marker: a fresh or proven map, or an entry of
+   *  the base `balance` field (balances are plain maps), so a numeric slot read off it is Null. */
+  rustWsPlainMapResolve(x) {
+    const n = x === void 0 ? void 0 : this.rustStripWrappers(x);
+    if (n === void 0)
+      return false;
+    if (this.rustWsResolvedMap(n, 0))
+      return true;
+    const f = isElementAccessExpression4(n) ? this.rustStripWrappers(n.expression) : n;
+    return isPropertyAccessExpression3(f) && f.expression.kind === SyntaxKind7.ThisKeyword && String(f.name.text) === "balance" && this.rustWsCacheFieldDictRead(n);
   }
   /** `x.length` read on an optional cache local: the slot's own `size()`. */
   rustWsCacheLengthRead(n) {
@@ -76589,7 +76602,7 @@ ${iden}}`;
     const add = (hash, x, kind, site) => {
       const sites = site !== void 0 ? this.rustWsHelperCallSites(cls, site, [hash, x]) : void 0;
       if (sites === void 0) {
-        table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), rpats: hash === null ? [[null]] : this.rustWsRefinedHashPatterns(hash), kind: kind ?? kindOf(x), value: kind === void 0 ? x : void 0 });
+        table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), rpats: hash === null ? [[null]] : this.rustWsRefinedHashPatterns(hash), kind: kind ?? kindOf(x), value: kind === void 0 ? x : void 0, plainMap: kind === void 0 && this.rustWsPlainMapResolve(x) });
         return;
       }
       for (const env of sites) {
@@ -76600,7 +76613,7 @@ ${iden}}`;
             const d = e !== void 0 && isIdentifier3(this.rustStripWrappers(e)) ? this.rustDeclarationOfIdentifier(this.rustStripWrappers(e)) : void 0;
             return d !== void 0 && env.has(d) ? env.get(d).arg : e;
           };
-          table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), rpats: hash === null ? [[null]] : this.rustWsRefinedHashPatterns(hash), kind: kind ?? kindOf(bound(x)) });
+          table.push({ pats: hash === null ? [[null]] : this.rustWsHashPatterns(hash, 0, /* @__PURE__ */ new Set()), rpats: hash === null ? [[null]] : this.rustWsRefinedHashPatterns(hash), kind: kind ?? kindOf(bound(x)), plainMap: kind === void 0 && this.rustWsPlainMapResolve(bound(x)) });
         } finally {
           this.rustWsHashEnv = save;
         }
