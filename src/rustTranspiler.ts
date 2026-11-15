@@ -18220,6 +18220,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (from === undefined && !nilDeclared && declaration.initializer !== undefined && this.rustWsWatchResultKind(declaration.initializer) === 'dict') from = 'dict';
         // ral-ze: a watch result whose every matching resolve passes a proven list holds that list (`.await.into_list()`)
         if (from === undefined && !nilDeclared && declaration.initializer !== undefined && this.rustWsWatchResultKind(declaration.initializer) === 'list') from = 'list';
+        // ral-43d: a base `toArray` / `arrayConcat` result (a `Value::Arr` on every path) handed whole to a lent list slot
+        const alwaysList = from === undefined && !nilDeclared && init !== undefined && this.rustAlwaysListProducer(init);
+        if (alwaysList) from = 'list';
         let sbMapWrites = 0;
         if (from === undefined && !nilDeclared) return undefined;
         const name = String(declaration.name.text);
@@ -24452,6 +24455,8 @@ export class RustTranspiler extends BaseTranspiler {
     /** A base `safeDict*` / `safeList*` read with an empty literal default: a container on every path. */
     rustLentContainerSource(init: any): boolean {
         if (init === undefined || !isCallExpression(init) || !isPropertyAccessExpression(init.expression)) return false;
+        // ral-43d: base `toArray` / `arrayConcat` answer a `Value::Arr` on every path (rustAlwaysListProducer)
+        if (this.rustAlwaysListProducer(init)) return true;
         const name = String(init.expression.name.text);
         const kind = /^safeDict(?:2|N)?$/.test(name) ? 'map' : (/^safeList(?:2|N)?$/.test(name) ? 'list' : undefined);
         return kind !== undefined && this.rustContainerInitNeverNull(init, kind) && this.rustBorrowedSourceKind(init) === (kind === 'map' ? 'dict' : 'list');

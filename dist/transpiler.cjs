@@ -69372,6 +69372,9 @@ ${iden}}`;
       from = "dict";
     if (from === void 0 && !nilDeclared && declaration.initializer !== void 0 && this.rustWsWatchResultKind(declaration.initializer) === "list")
       from = "list";
+    const alwaysList = from === void 0 && !nilDeclared && init !== void 0 && this.rustAlwaysListProducer(init);
+    if (alwaysList)
+      from = "list";
     let sbMapWrites = 0;
     if (from === void 0 && !nilDeclared)
       return void 0;
@@ -75937,6 +75940,8 @@ ${iden}}`;
   rustLentContainerSource(init) {
     if (init === void 0 || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression))
       return false;
+    if (this.rustAlwaysListProducer(init))
+      return true;
     const name = String(init.expression.name.text);
     const kind = /^safeDict(?:2|N)?$/.test(name) ? "map" : /^safeList(?:2|N)?$/.test(name) ? "list" : void 0;
     return kind !== void 0 && this.rustContainerInitNeverNull(init, kind) && this.rustBorrowedSourceKind(init) === (kind === "map" ? "dict" : "list");

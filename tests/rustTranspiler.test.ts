@@ -15621,4 +15621,14 @@ describe('ral-43d: generated base-method parameters typed from their ts declarat
         const out = run(dictBase, "    override parseOrder (order: Dict, market: any = undefined): any { return order['id']; }\n    m (response: any, fallback: any): any {\n        const order = this.safeDict (response, 'order', fallback) as Dict;\n        return this.parseOrder (order);\n    }\n");
         expect(out).toMatch(/let mut order: Value = /);
     });
+    const listBase = "export type List = any[];\nexport default class Exchange {\n    toArray (o: any): any[] { return Object.values (o); }\n    METHODS_MARKER () {}\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseTrades (trades: List, market: any = undefined): any[] { return trades; }\n}\n";
+    test('a base toArray result handed whole to a plural parse* list slot is a List lent as `&x`', () => {
+        const out = run(listBase, "    m (response: any): any {\n        const rows = this.toArray (response);\n        return this.parseTrades (rows);\n    }\n");
+        expect(out).toMatch(/let mut rows: crate::value::List = self\.toArray\(.*\)\.into_list\(\);/);
+        expect(out).toMatch(/self\.parseTrades\(&rows/);
+    });
+    test('a toArray result also written into stays Value', () => {
+        const out = run(listBase, "    m (response: any): any {\n        const rows = this.toArray (response);\n        rows[0] = 1;\n        return this.parseTrades (rows);\n    }\n");
+        expect(out).toMatch(/let mut rows: Value = /);
+    });
 });
