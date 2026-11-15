@@ -793,6 +793,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  printed off the temp list exactly as the destructured slot 0 (`.and_then(Value::as_str).map(str::to_owned)`). */
     rustInlineHandleStrSlot(node: any): boolean;
     rustElementReadScalarKind(node: any): string | undefined;
+    /** ral-53f: `const t = this.m (..); const x = t[0]` where `t` is a const tuple local (a declared `[string, Str, Dict]`
+     *  return, e.g. binance pro `resolveAuthType`) and the literal-index slot is declared `string`: the read is the slot's
+     *  string or undefined. Non-test sources only. */
+    rustConstTupleStrSlotRead(node: any, owner: any, listType: any): boolean;
     /** xg: the element read prints straight off the list place (`xs.get(..).and_then(Value::as_str)..`), never a helper read
      *  that would leave the declaration `Value` while its uses read a string (the paradex E0599 trap). */
     rustAnyStrPlaceRead(declaration: any): boolean;
@@ -3827,6 +3831,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  (`safeDict (this.options, type, {})`, `extend ({ 'type': type }, ..)`), never that local's value itself (not reached
      *  through parentheses, ternary arms or `||` / `&&` / `??` operands only): the target's typing does not read the slot. */
     rustStrSlotBoxIsNotValueOf(n: any, feeds: any): boolean;
+    /** ral-53f: the boxed read (`x.clone().map(Value::from).unwrap_or(Value::Null)`) keeps every printed line of its
+     *  statement within 400 chars, so the guarded body never boxes a neighbouring typed local back to make room. */
+    rustStrSlotBoxLineFits(n: any): boolean;
     /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
      *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
     rustSlotJoinsSolve(element: any): boolean;
