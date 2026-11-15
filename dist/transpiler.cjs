@@ -68041,7 +68041,7 @@ ${this.getIden(identation)}}`;
   rustSubscriptionPresenceFlag(declaration, parsedValue) {
     const init = this.unwrapParens(_optionalChain([declaration, 'optionalAccess', _9621 => _9621.initializer]));
     if (!_is.isIdentifier.call(void 0, _optionalChain([declaration, 'optionalAccess', _9622 => _9622.name])) || !_is.isCallExpression.call(void 0, init) || !_is.isPropertyAccessExpression.call(void 0, init.expression) || init.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword || init.expression.name.text !== "safeValue" || init.arguments.length !== 2)
-      return false;
+      return this.rustNullTestOnlyFlag(declaration);
     if (!/^self\.safe(?:_v|V)alue(?:_k)?\((?:(?:\(client\)|__ch|client)\.subscriptions\.clone\(\)|client\.subscriptions), [^;\n]*, &\[\]\)$/.test(parsedValue))
       return this.rustNullTestOnlyFlag(declaration);
     const fn = this.rustEnclosingFunction(declaration);
