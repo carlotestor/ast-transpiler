@@ -23343,6 +23343,8 @@ export class RustTranspiler extends BaseTranspiler {
      *  `keysort`, `ordered`, `omit` of a proven map), a `Dict` parameter, a `handle*AndParams` params slot, a method
      *  declared `Dict`, or a local whose every write is one of these. Any list literal, any dynamic `this[name] (..)`
      *  / `callDynamically` call, or anything else unproven fails the venue (fail closed). */
+    private static readonly RUST_SIGN_PARAM_HANDLERS = new Set([ 'handleParamString', 'handleParamString2', 'handleParamInteger', 'handleParamBool' ]);
+
     rustSignParamsProvenMap(fn: any): boolean {
         const file = String(fn.getSourceFile().fileName).replace(/\\/g, '/');
         const m = /^(.*ts\/src\/)((?:prediction\/)?[a-z0-9]+)\.ts$/.exec(file);
@@ -23449,6 +23451,10 @@ export class RustTranspiler extends BaseTranspiler {
             while (x !== undefined && !isFunctionLike(x)) x = x.parent;
             return x;
         };
+        // ral-58a: slot 1 of the base handleParamString / handleParamString2 / handleParamInteger / handleParamBool is its
+        // first argument or an omit of it, so it is a map exactly when that argument is
+        const paramSlotMap = (sf: any, rel: string, call: any, at: number, depth: number): boolean => at === 1 && RustTranspiler.RUST_SIGN_PARAM_HANDLERS.has(String(call.expression.name.text))
+            && call.arguments.length >= 1 && isMap(sf, rel, call.arguments[0], depth + 1);
         const isMap = (sf: any, rel: string, arg: any, depth: number): boolean => {
             if (arg === undefined) return true; // the `{}` default
             if (depth > 6) return false;
@@ -23459,12 +23465,27 @@ export class RustTranspiler extends BaseTranspiler {
                 const callee = String(arg.expression.name.text);
                 if (builders.has(callee)) return true;
                 if (callee === 'omit') return isMap(sf, rel, arg.arguments[0], depth + 1);
+                // ral-58a: base safeDict / safeDict2 / safeDictN with a map default answers the value only when it is a map, else the default
+                const dictDefaultAt = ({ safeDict: 2, safeDict2: 3, safeDictN: 2 } as Record<string, number>)[callee];
+                if (dictDefaultAt !== undefined && arg.arguments.length === dictDefaultAt + 1) return isMap(sf, rel, arg.arguments[dictDefaultAt], depth + 1);
                 return declaredDict(sf, rel, callee);
             }
             if (!isIdentifier(arg)) return false;
             const fnNode = enclosingFn(arg);
             if (fnNode === undefined) return false;
             const p = Array.from(fnNode.parameters ?? []).find((x: any) => isIdentifier(x.name) && x.name.text === arg.text) as any;
+            if (p !== undefined && p.type?.kind === SyntaxKind.AnyKeyword && p.initializer === undefined && target === undefined && fnNode.kind === SyntaxKind.MethodDeclaration && isIdentifier(fnNode.name)) {
+                // ral-58a: an `any` parameter of a venue helper (not a typed unified method) is a map when every in-file caller passes one there
+                const helper = String(fnNode.name.text);
+                const at = fnNode.parameters.indexOf(p);
+                const key = root + rel + '#' + helper + '#' + at + '#any';
+                const hit = RustTranspiler.RUST_SIGN_MAP_PROOF.get(key);
+                if (hit !== undefined) return hit;
+                RustTranspiler.RUST_SIGN_MAP_PROOF.set(key, false); // installed first: a recursive caller chain admits nothing
+                const ok = !(this.rustTypedUnified?.has(helper) ?? true) && /^[a-z][A-Za-z0-9]*$/.test(helper) && this.rustHelperHasCaller(root, rel, helper) && this.rustSignParamsProofUncached(root, rel, { name: helper, at });
+                RustTranspiler.RUST_SIGN_MAP_PROOF.set(key, ok);
+                return ok;
+            }
             if (p !== undefined) return p.type !== undefined && /^Dict\b/.test(String(p.type.getText())) || (p.type === undefined && p.initializer !== undefined && isObjectLiteralExpression(p.initializer));
             let writes = 0;
             let good = true;
@@ -23478,7 +23499,7 @@ export class RustTranspiler extends BaseTranspiler {
                     const init = (n.parent as any)?.parent?.initializer;
                     const slot = (n.parent as any).elements.indexOf(n);
                     good = slot >= 1 && thisCall(init) && (/AndParams/.test(String(init.expression.name.text))
-                        && Array.from(init.arguments).some((x: any) => isMap(sf, rel, x, depth + 1)) || declaredSlotDict(rel, init, slot));
+                        && Array.from(init.arguments).some((x: any) => isMap(sf, rel, x, depth + 1)) || paramSlotMap(sf, rel, init, slot, depth) || declaredSlotDict(rel, init, slot));
                 } else if (isBinaryExpression(n) && n.operatorToken.kind === SyntaxKind.EqualsToken) {
                     if (isIdentifier(n.left) && n.left.text === arg.text) {
                         writes++;
@@ -23488,7 +23509,7 @@ export class RustTranspiler extends BaseTranspiler {
                         const at = n.left.elements.findIndex((e: any) => isIdentifier(e) && e.text === arg.text);
                         const rhs: any = n.right;
                         good = at >= 1 && thisCall(rhs) && (/AndParams/.test(String(rhs.expression.name.text))
-                            && Array.from(rhs.arguments).some((x: any) => isMap(sf, rel, x, depth + 1)) || declaredSlotDict(rel, rhs, at));
+                            && Array.from(rhs.arguments).some((x: any) => isMap(sf, rel, x, depth + 1)) || paramSlotMap(sf, rel, rhs, at, depth) || declaredSlotDict(rel, rhs, at));
                     }
                 }
                 n.forEachChild?.(visit);
