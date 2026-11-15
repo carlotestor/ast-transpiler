@@ -3617,6 +3617,21 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  (an initializer from such a call keeps its own decision). */
     private rustDeclaredArrayProof;
     rustDeclaredArrayCallWriteSource(right: any): boolean;
+    /** ral-55i: `this.m (..)` that the checker resolves to a bodiless overload of a base method (marketIds, marketSymbols):
+     *  the proof reads the real implementation (the same-named member with a body), never the overload's spelled type
+     *  (ccxt compiles without strictNullChecks). Every `return` of the implementation must build a list, or be dead for this
+     *  call: it follows `if (!flag) throw` in its block with `flag` bound to a literal `false` here, or it sits in
+     *  `if (p === undefined)` with `p`'s argument proven present (rustPresentListArg). The callee must not be redeclared by a
+     *  venue, dispatched virtually or typed, so its `-> Value` result holds a `Value::Arr` and `.into_list()` moves it.
+     *  Only a whole reassignment of a built-list local uses it. */
+    rustOverloadListCallWriteSource(right: any): boolean;
+    /** ral-55i: an identifier argument that cannot be `undefined` at the call: it is a `const` local or an unwritten parameter,
+     *  and the call sits in the then branch of `if (a !== undefined)`, or follows `if (a === undefined) throw ..` in an
+     *  enclosing block of the same function. */
+    rustPresentListArg(call: any, arg: any): boolean;
+    /** ral-55i: `await this.m (..)` of a typed unified core whose typed return is `Vec<crate::types::T>`: the printer boxes it
+     *  through `IntoRaw::into_raw`, which always builds a `Value::Arr`, so `.into_list()` moves exactly that list. */
+    rustTypedCoreListCallWriteSource(right: any): boolean;
     /** ral-53i: `[await] this.m (..)` whose venue declaration the printer's typed-return table (rustVenueContainerReturnKind)
      *  proves a never-null list (`Dict[]` / `any[]` / `List` / `Record[]` / literal tuple, the same type in the whole venue
      *  family, no override): the call prints `-> Value` holding a `Value::Arr`, so `.into_list()` moves exactly that list. */
