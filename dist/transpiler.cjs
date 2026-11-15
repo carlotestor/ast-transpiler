@@ -59982,7 +59982,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const field = String(upperAccess.expression.name.text);
     if (ukind !== "str" && ukind !== "ostr" || acc !== `get_value_mut(&mut self.${field}, &${uname})`)
       return void 0;
-    const upperText = ukind === "str" ? `${uname}.clone()` : `${uname}.as_deref().unwrap_or("null").to_string()`;
+    const upperText = ukind === "str" ? `${uname}.to_string()` : `${uname}.as_deref().unwrap_or("null").to_string()`;
     const last = this.rustSkipWrappers(left.argumentExpression);
     const lkind = _is.isIdentifier.call(void 0, last) ? _optionalChain([this, 'access', _9081 => _9081.rustScalarLocalOf, 'call', _9082 => _9082(last), 'optionalAccess', _9083 => _9083.kind]) : void 0;
     const lname = _is.isIdentifier.call(void 0, last) ? super.printIdentifier(last) : "";
@@ -59992,7 +59992,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const bound = /\bself\b/.test(value);
     const chain = `if let Value::Dict(__bf03d0) = &mut self.${field} { let __bf03e1 = std::sync::Arc::make_mut(__bf03d0).entry(${upperText}).or_insert(Value::Null); if let Value::Dict(__r05d) = __bf03e1 { std::sync::Arc::make_mut(__r05d).insert(${lastText}, ${bound ? "__be_tmp" : value}); } }`;
     const insert = bound ? `{ let __be_tmp = ${value}; ${chain} }` : chain;
-    if (insert.split("\n").some((l) => l.length + 40 > 400)) {
+    if (insert.split("\n").some((l) => l.length + 10 > 400)) {
       const lastKey = _is.isStringLiteral.call(void 0, last) ? `Value::Str(${JSON.stringify(String(last.text))}.into())` : `Value::from(${lname}${lkind === "str" ? ".as_str()" : ".as_deref()"})`;
       return `add_element_to_object(get_value_mut(&mut self.${field}, &Value::from(${uname}${ukind === "str" ? ".as_str()" : ".as_deref()"})), &${lastKey}, ${value})`;
     }
