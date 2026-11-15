@@ -54261,6 +54261,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         write = this.rustNilSelfArmTernaryKind(rhs, declaration);
       if (write === void 0 && this.rust45bSelfStrWrite(rhs, declaration))
         write = "ostr";
+      if (write === void 0 && this.rustScalarSeeding && this.rustNilStrPartner(rhs, declaration, scope))
+        write = "ostr";
       joined = this.rustScalarJoinKinds(joined, write);
       if (joined === void 0)
         return void 0;
@@ -54300,6 +54302,22 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (boxed.length > 0)
       this.rustScalarGuarded.add(declaration);
     return kind;
+  }
+  /** ral-47d: `rhs` names another nil-declared (`let y: Str = undefined`) string local of the same function. */
+  rustNilStrPartner(rhs, declaration, scope) {
+    if (rhs === void 0 || !isIdentifier3(rhs) || rhs.text === "undefined")
+      return false;
+    const partner = this.rustDeclaredNode(rhs);
+    if (partner === void 0 || partner === declaration || !isVariableDeclaration3(partner) || !isIdentifier3(partner.name))
+      return false;
+    if (this.rustEnclosingFunction(partner) !== scope || partner.type === void 0)
+      return false;
+    if (partner.initializer !== void 0 && this.literalKindOfNode(this.unwrapParens(partner.initializer)) !== "null")
+      return false;
+    const list = partner.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations.length !== 1 || (list.flags & NodeFlags4.Const) !== 0)
+      return false;
+    return this.primitiveKindOfType(this.typeOfNodeIfAny(partner.name)) === "string";
   }
   /** ral-45b: the local has a `x = x.slice(..)` / case self write or a `x += ..` append (the forms lift 1 / 2 admit). */
   rust45bUsesNewForm(declaration, scope, name) {
