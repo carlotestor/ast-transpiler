@@ -3180,8 +3180,11 @@ export class RustTranspiler extends BaseTranspiler {
             if (name !== undefined && t.includes(inPlace)) return t.length;
             return t.length + '.as_deref().unwrap_or("null")'.length;
         };
-        const longest = Math.max(...this.printNode(statement, 0).split('\n').map(width));
-        return column + longest <= 400;
+        // ral-47f: a printed line already over the budget with the `Value` operand is split by ccxt build/
+        // `splitLongRustLines` either way, and the build/ line guards only veto lines that newly cross 400: the in-place
+        // read keeps the budget when it makes no line newly cross it
+        const lines = this.printNode(statement, 0).split('\n');
+        return lines.every((l: string) => column + width(l) <= 400 || column + l.trim().length > 400);
     }
 
     /** A write that decodes a `Value` result (a call, or a ternary over one). */

@@ -54592,8 +54592,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return t.length;
       return t.length + '.as_deref().unwrap_or("null")'.length;
     };
-    const longest = Math.max(...this.printNode(statement, 0).split("\n").map(width));
-    return column + longest <= 400;
+    const lines = this.printNode(statement, 0).split("\n");
+    return lines.every((l) => column + width(l) <= 400 || column + l.trim().length > 400);
   }
   /** A write that decodes a `Value` result (a call, or a ternary over one). */
   rustNilDecodedWrite(rhs) {
