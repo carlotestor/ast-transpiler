@@ -10929,7 +10929,8 @@ export class RustTranspiler extends BaseTranspiler {
             // the later reads key by other locals and the map's keys are the same strings either way
             // ral-55k: a map also read back by the key local itself is fine too (digifinex): the read prints `m.get(k.as_deref()..)`
             // and the push on the bucket read is printed natively by arrPush (rustLitKeyBearerReadLocal), not by a ccxt pass
-            if (enumerated && keyRead && this.rustSafeCurrencyCodeInit(local.initializer)) return this.rustScalarInsertKeyUse(n);
+            // ral-56k: and a map only enumerated (never read back by key: btse fetchBalance `totals[code] = ..`): same key text
+            if (enumerated && this.rustSafeCurrencyCodeInit(local.initializer)) return this.rustScalarInsertKeyUse(n);
             if (enumerated) return !keyRead && (isElementAccessExpression(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer))
                 && this.rustScalarInsertKeyUse(n);
             return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);

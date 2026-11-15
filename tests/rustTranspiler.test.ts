@@ -18946,3 +18946,23 @@ describe('ral-56k: a later key of a deep bearer write boxes where the Value form
         expect(out).toContain('&Value::Str("info".into())), &Value::from(code.as_deref()), fee.clone())');
     });
 });
+
+describe('ral-56k: safeCurrencyCode key of a map-literal local only enumerated afterwards (btse fetchBalance)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict | undefined { return o; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    hold (x: any, y: any = undefined, z: any = undefined): any { return x; }\n}\n";
+    const write = (name: string, reader: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parse (rows: any[]) {\n        const totals: Dict = {};\n        const useds: Dict = {};\n        for (let i = 0; i < rows.length; i++) {\n            const row = this.safeDict (rows, i);\n            const code = " + reader + " (this.safeString (row, 'currency'));\n            if (code === undefined) {\n                continue;\n            }\n            totals[code] = this.safeString (totals, code, '0') + this.safeString (row, 'balance');\n            useds[code] = this.safeString (useds, code, '0');\n        }\n        const codes = Object.keys (totals);\n        const result: Dict = {};\n        for (let i = 0; i < codes.length; i++) {\n            const code = codes[i];\n            result[code] = this.safeString (totals, code);\n        }\n        return result;\n    }\n}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('the key is Option<String> and inserts by its key text', () => {
+        const out = write ('56k-btse', 'this.safeCurrencyCode');
+        expect(out).toContain('let mut code: Option<String> = ');
+        expect(out).toContain('useds.insert(code.as_deref().unwrap_or("null").to_string(), __be_tmp)');
+    });
+    test('negative: a hold() key stays Value', () => {
+        const out = write ('56k-btse-neg', 'this.hold');
+        expect(out).toMatch(/let mut code: Value = this|let mut code: Value = self/);
+    });
+});
