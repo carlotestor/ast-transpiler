@@ -71340,7 +71340,7 @@ ${iden}}`;
       return void 0;
     if (allSlot !== void 0 ? this.rustTupleSlotKind(declaration) !== void 0 || this.rustHandedDictLocal(declaration) : this.rustReadBearerKindOfDeclaration(declaration) !== false || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustNilLocalKind(declaration) !== void 0 || this.rustScalarLocalKind(declaration) !== void 0)
       return void 0;
-    if (declaration.initializer !== void 0 && String(declaration.initializer.getText()).split("\n")[0].length > 240)
+    if (declaration.initializer !== void 0 && String(declaration.initializer.getText()).split("\n")[0].length > 240 && !this.rustOmitDeclLineFits(declaration))
       return void 0;
     let reads = 0;
     let nullTests = 0;
@@ -74583,6 +74583,8 @@ ${iden}}`;
     if (declaration === void 0 || declaration === node || declaration.name === node)
       return void 0;
     if (this.rustBorrowedLocalKind(declaration) !== void 0 || this.rustLentListLocal(declaration) || this.rustReaderTables.has(declaration) || this.rustSafeMarketLocalOf(node) !== void 0 || this.rustMarketSlotParamOf(node) !== void 0 || this.rustTypedMarketLocalOf(node) !== void 0 || this.rustCurrencySlotParamOf(node) !== void 0 || this.rustCurrencyLocalOf(node) !== void 0)
+      return `&${text}`;
+    if (_is.isVariableDeclaration.call(void 0, declaration) && !this.rustTestTierSource(call) && this.rustHandedDictLocal(declaration) && this.rustLocalIsReassigned(declaration, String(declaration.name.text)))
       return `&${text}`;
     if (this.rustBearerReaderLend(node) && this.rustDictBearerDeclaration(node) !== void 0)
       return `&${text}`;
@@ -78259,7 +78261,7 @@ ${iden}}`;
         return false;
       if (this.rustReadBearerKindOfDeclaration(declaration) !== false || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration) || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false || this.rustNilLocalKind(declaration) !== void 0 || this.rustScalarLocalKind(declaration) !== void 0)
         return false;
-      if (!nilSlot && String(declaration.initializer.getText()).split("\n")[0].length > 240)
+      if (!nilSlot && String(declaration.initializer.getText()).split("\n")[0].length > 240 && !this.rustOmitDeclLineFits(declaration))
         return false;
     }
     const name = String(declaration.name.text);
@@ -78303,7 +78305,7 @@ ${iden}}`;
           boxes++;
         return mutable !== void 0 || this.rustHandedSlotBoxUse(n, declaration);
       }
-      const ok = call.arguments[0] === n && this.rustBorrowedDictReader(call) !== void 0 || call.arguments[0] === n && call.arguments.length === 2 && this.rustBaseCallNamed(call, _RustTranspiler.RUST_HANDED_DICT_OMIT) || this.rustHandedDictExtendOperand(call) === n || this.rustLentParamsSlot(call, n) || this.rustExtendHeadUse(n);
+      const ok = call.arguments[0] === n && this.rustBorrowedDictReader(call) !== void 0 || call.arguments[0] === n && call.arguments.length === 2 && this.rustBaseCallNamed(call, _RustTranspiler.RUST_HANDED_DICT_OMIT) || this.rustHandedDictExtendOperand(call) === n || this.rustLentParamsSlot(call, n) || this.rustExtendHeadUse(n) || rewritten && call.arguments[0] === n && !this.rustTestTierSource(call) && this.rustBorrowedAnyKeyReader(call);
       if (ok)
         uses++;
       const boxed = this.rustOptionalParamsSlot(call, n) || this.rustHandedSlotBoxUse(n, declaration);
@@ -78324,7 +78326,33 @@ ${iden}}`;
     if (!_is.isVariableDeclaration.call(void 0, declaration))
       return false;
     const init = this.rustSkipWrappers(declaration.initializer);
+    if (init !== void 0 && this.rustOmitOfDict(init) && this.rustOmitDeclLineFits(declaration))
+      return true;
     return init !== void 0 && (this.rustBaseCallNamed(init, _RustTranspiler.RUST_ALWAYS_MAP_HELPERS) || this.rustOmitOfDict(init) && this.rustOmitLineFits(init)) && String(declaration.initializer.getText()).split("\n")[0].length <= 240;
+  }
+  /** ral-55a: `let x: Dict = this.omit (y, [ 'a', .. ])` (identifier head, literal keys, one line): the typed declaration
+   *  `let mut x: crate::value::Dict = self.omit(&y, &["a", ..], &[]).into_dict();` measured as printed, indent included,
+   *  stays within the 400-char line budget (the TS-text 240-char guess refuses a long key list that prints narrower). */
+  rustOmitDeclLineFits(declaration) {
+    if (!_is.isVariableDeclaration.call(void 0, declaration) || !_is.isIdentifier.call(void 0, declaration.name))
+      return false;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    if (init === void 0 || !_is.isCallExpression.call(void 0, init) || !this.rustOmitLiteralKeys(init) || String(init.getText()).includes("\n"))
+      return false;
+    const head = this.rustSkipWrappers(init.arguments[0]);
+    if (head === void 0 || !_is.isIdentifier.call(void 0, head))
+      return false;
+    let depth = 0;
+    for (let up = declaration.parent; up !== void 0; up = up.parent)
+      if (_is.isBlock.call(void 0, up))
+        depth++;
+    const keys = init.arguments[1].elements.map((e) => JSON.stringify(String(e.text))).join(", ");
+    const line = `let mut ${declaration.name.text}: crate::value::Dict = self.omit(&${head.text}, &[${keys}], &[]).into_dict();`;
+    return depth * 4 + line.length <= 400;
+  }
+  /** ral-55a: a plain `let x = <map>` (rustHandedMapInit) that is reassigned in its function. */
+  rustHandedReassignedMap(declaration) {
+    return _is.isVariableDeclaration.call(void 0, declaration) && _is.isIdentifier.call(void 0, declaration.name) && !this.rustNilSlotDictCandidate(declaration) && this.rustHandedMapInit(declaration) && this.rustLocalIsReassigned(declaration, String(declaration.name.text));
   }
   /** `n = <map>` as a statement: an always-map helper, an omit of `n` itself, or an omit of a proven map. */
   rustHandedMapWrite(n, declaration) {
@@ -78450,8 +78478,10 @@ ${iden}}`;
       if (_is.isBlock.call(void 0, up))
         depth++;
     let width = 0;
+    let firstLine = "";
     try {
-      width = (depth + 1) * 4 + String(this.printNode(statement, 0)).trim().split("\n")[0].length;
+      firstLine = String(this.printNode(statement, 0)).trim().split("\n")[0];
+      width = (depth + 1) * 4 + firstLine.length;
     } catch (e) {
       return false;
     }
@@ -78472,9 +78502,16 @@ ${iden}}`;
     if (budget <= 400)
       return true;
     const short = ": Vec<Value>".length + ".as_array().cloned().unwrap_or_default()".length - ".into_list()".length;
-    if (write === void 0 || !_is.isBinaryExpression.call(void 0, write) || !_is.isArrayLiteralExpression.call(void 0, write.left) || !this.rustNativeListSource(write.right) || budget - short > 400)
+    const own = _is.isIdentifier.call(void 0, n) ? `${String(n.text)}.clone()` : void 0;
+    const exact = own === void 0 || !firstLine.includes(own) ? void 0 : width + reserve + ".into_dict()".length - (own.length - String(n.text).length - 1) - short;
+    if (write === void 0 || !_is.isBinaryExpression.call(void 0, write) || !_is.isArrayLiteralExpression.call(void 0, write.left) || !this.rustNativeListSource(write.right) || budget - short > 400 && !(exact !== void 0 && exact <= 400 && this.rustDictSlotOfWrite(n)))
       return false;
-    if (!write.left.elements.every((el) => _is.isIdentifier.call(void 0, el) && this.rustNilSlotWrite(el)))
+    const boolSlot = (el) => {
+      const d = this.rustDeclaredNode(el);
+      return d !== void 0 && _is.isVariableDeclaration.call(void 0, d) && d.initializer !== void 0 && (d.initializer.kind === _ast.SyntaxKind.TrueKeyword || d.initializer.kind === _ast.SyntaxKind.FalseKeyword);
+    };
+    const handedSlot = (el) => el === n && write.left.elements.indexOf(el) === 1 && this.rustDictSlotOfWrite(el);
+    if (!write.left.elements.every((el) => _is.isIdentifier.call(void 0, el) && (this.rustNilSlotWrite(el) || handedSlot(el) || el !== n && boolSlot(el))))
       return false;
     this.rustShortDestrHeads.add(write);
     return true;
@@ -79608,11 +79645,13 @@ ${iden}}`;
   }
   rustHandedSlotBoxUse(n, declaration) {
     const up = n.parent;
-    if (_optionalChain([declaration, 'optionalAccess', _10647 => _10647.kind]) !== _ast.SyntaxKind.BindingElement && !this.rustHandedTernaryLocal(declaration) && !this.rustNilSlotDictCandidate(declaration) || up === void 0 || this.rustScalarInNestedWrite(n, true))
+    if (_optionalChain([declaration, 'optionalAccess', _10647 => _10647.kind]) !== _ast.SyntaxKind.BindingElement && !this.rustHandedTernaryLocal(declaration) && !this.rustNilSlotDictCandidate(declaration) && !this.rustHandedReassignedMap(declaration) || up === void 0 || this.rustScalarInNestedWrite(n, true))
       return false;
     if (up.kind === _ast.SyntaxKind.PropertyAssignment)
       return up.initializer === n;
     if (_is.isArrayLiteralExpression.call(void 0, up) && _is.isReturnStatement.call(void 0, up.parent) && this.rustNilSlotDictCandidate(declaration))
+      return true;
+    if (_is.isArrayLiteralExpression.call(void 0, up) && _is.isReturnStatement.call(void 0, up.parent) && this.rustHandedReassignedMap(declaration))
       return true;
     if (_is.isArrayLiteralExpression.call(void 0, up) && _is.isReturnStatement.call(void 0, up.parent) && _optionalChain([declaration, 'optionalAccess', _10648 => _10648.kind]) === _ast.SyntaxKind.BindingElement && _optionalChain([declaration, 'access', _10649 => _10649.parent, 'optionalAccess', _10650 => _10650.elements, 'optionalAccess', _10651 => _10651.indexOf, 'call', _10652 => _10652(declaration)]) === 1)
       return true;
@@ -79651,7 +79690,7 @@ ${iden}}`;
     if (!_is.isIdentifier.call(void 0, node))
       return void 0;
     const declaration = this.rustDeclarationOfIdentifier(node);
-    const local = declaration !== void 0 && _is.isVariableDeclaration.call(void 0, declaration) && declaration.name !== node && (this.rustDictTernaryArmPlace(node, declaration) || (this.rustHandedTernaryLocal(declaration) || this.rustNilSlotDictCandidate(declaration)) && this.rustHandedSlotBoxUse(node, declaration));
+    const local = declaration !== void 0 && _is.isVariableDeclaration.call(void 0, declaration) && declaration.name !== node && (this.rustDictTernaryArmPlace(node, declaration) || (this.rustHandedTernaryLocal(declaration) || this.rustNilSlotDictCandidate(declaration) || this.rustHandedReassignedMap(declaration)) && this.rustHandedSlotBoxUse(node, declaration));
     if (!local && (_optionalChain([declaration, 'optionalAccess', _10655 => _10655.kind]) !== _ast.SyntaxKind.BindingElement || declaration.name === node || !(this.rustHandedSlotBoxUse(node, declaration) || this.rustMutableSlotUse(node, declaration) === "box")))
       return void 0;
     if (!this.rustHandedDictLocal(declaration))

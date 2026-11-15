@@ -3688,6 +3688,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_ALWAYS_MAP_HELPERS;
     /** The initialiser of a reassigned handed local answers a map on every path. */
     rustHandedMapInit(declaration: any): boolean;
+    /** ral-55a: `let x: Dict = this.omit (y, [ 'a', .. ])` (identifier head, literal keys, one line): the typed declaration
+     *  `let mut x: crate::value::Dict = self.omit(&y, &["a", ..], &[]).into_dict();` measured as printed, indent included,
+     *  stays within the 400-char line budget (the TS-text 240-char guess refuses a long key list that prints narrower). */
+    rustOmitDeclLineFits(declaration: any): boolean;
+    /** ral-55a: a plain `let x = <map>` (rustHandedMapInit) that is reassigned in its function. */
+    rustHandedReassignedMap(declaration: any): boolean;
     /** `n = <map>` as a statement: an always-map helper, an omit of `n` itself, or an omit of a proven map. */
     rustHandedMapWrite(n: any, declaration: any): boolean;
     /** `this.omit (x, k)` whose head is the local itself (named nowhere else in the call). */
