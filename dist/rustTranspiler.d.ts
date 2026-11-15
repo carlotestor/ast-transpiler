@@ -1154,6 +1154,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustThisFieldLiteralWrite(n: any): boolean;
     /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
     rustUdNestedBearerValue(n: any): boolean;
+    /** ral-53i: `n` is k1 or k2 of a statement `x[k1][k2] = v` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
+    rustUdNestedBearerKey(n: any): boolean;
+    /** ral-53i: `key` is k1 of a statement bucket seed `x[k1] = {}` or k1 / k2 of a statement write `x[k1][k2] = v` with `x`
+     *  a plain identifier (syntax only: the two-level bearer prints these through rustNestedBearerWriteKey). */
+    rustNestedWriteKeyPosition(key: any): boolean;
+    /** ral-53i: `n` keys a bucket seed `x[n] = {}` or a write `x[k1][k2] = v` of a typed two-level local map `x`. */
+    rustNestedBearerKeySlot(n: any): boolean;
     rustScalarInNestedWrite(n: any, boxUse?: boolean): boolean;
     /** ral-41f: a local whose kind the nested-write text passes never decide: declared with an initializer that is
      *  not a safe* reader call, not `undefined` / another identifier (nil-declared and alias locals keep their own
