@@ -7260,7 +7260,8 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-40h: a container alias asked from inside its source's open decision is re-asked once the source settles
         if (source !== undefined && isVariableDeclaration(source) && this.rustBorrowedPending.has(source) && this.rustContainerAliasAsking.has(init)) { this.rustSbAliasDeferred.add(init.parent); return false; }
         // ral-44c: `let y = params` of a typed unified method's never-rebound `params` (a map on every path, `Into<Params>`)
-        if (source !== undefined && source.kind === SyntaxKind.Parameter) return this.rustTypedParamsParam(source);
+        // ral-54a: or of a venue helper's never-rebound `params: Dict = {}` that every in-file caller proves a map (47g proof)
+        if (source !== undefined && source.kind === SyntaxKind.Parameter) return this.rustProvenMapParam(source);
         // ral-49a: phase 2 of a shared-map alias. Asked while its source's own decision is still open (a box line printed
         // inside it), the alias is refused for now and asked again once the source settles (never cached as Value)
         if (source !== undefined && isVariableDeclaration(source) && this.rustBorrowedPending.has(source)) { if (isVariableDeclaration(init.parent) && init.parent.initializer === init) this.rustSbAliasDeferred.add(init.parent); return false; }
@@ -19978,6 +19979,8 @@ export class RustTranspiler extends BaseTranspiler {
                 if (sbAlias && this.rustParamsAliasWrite(rhs, declaration) && String(rhs.getText()).split('\n')[0].length <= 240) { this.rustSbAliasWrites.add(up); return ++sbMapWrites > 0; }
                 // ral-50a: `y = t[1]` of a never-rebound `const t = this.handle*AndParams (m, ..)` (base helper) lent a proven map
                 if (sbAlias && (this.rustHandleTupleMapSlotRead(rhs) || this.rustHandedSlotIdentifier(rhs)) && String(rhs.getText()).split('\n')[0].length <= 240) { this.rustSbAliasWrites.add(up); return ++sbMapWrites > 0; }
+                // ral-54a: a slot write asked while that slot's own decision is open is asked again once the slot settles
+                if (sbAlias && isIdentifier(rhs) && this.rustDeclaredNode(rhs)?.kind === SyntaxKind.BindingElement && this.rustHandedPending.has(this.rustDeclaredNode(rhs))) { this.rustSbAliasDeferred.add(declaration); return false; }
                 writes++;
                 if (this.literalKindOfNode(rhs) === 'null') return ++nullWrites > 0;
                 // ral-48d: `x = this.omit (x, k)` keeps the container's kind (Null stays Null, a map stays a map; the optional
@@ -26311,7 +26314,8 @@ export class RustTranspiler extends BaseTranspiler {
             // an optional-slice hand-off boxes the shared map back, so it only rides along with a by-reference use
             const boxed = this.rustOptionalParamsSlot(call, n) || this.rustHandedSlotBoxUse(n, declaration);
             if (boxed) boxes++;
-            if (boxed && this.rustInDestructureWrite(n) && (nilSlot ? !this.rustNilSlotLineOk(n) : uses === 0)) longBox = true;
+            // ral-54a: a box in a destructure write is held only when the `__destr_tmp` line would leave the 400-char budget
+            if (boxed && this.rustInDestructureWrite(n) && (nilSlot ? !this.rustNilSlotLineOk(n) : uses === 0 && !this.rustNilSlotLineOk(n))) longBox = true;
             return ok || boxed;
         });
         // a params slot only handed back to `Value` slots shares its map there (moved at the last use, lent before it)
