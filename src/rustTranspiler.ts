@@ -9019,6 +9019,16 @@ export class RustTranspiler extends BaseTranspiler {
         return kind === 'int' || kind === 'num' || kind === 'oint' || kind === 'onum' ? kind : undefined;
     }
 
+    /** 51k: `a % b` over int literals / `int` / `oint` locals with a non-literal divisor (a parseToInt answer, a const int):
+     *  an `Option<i64>` (`mod_val` answers `Int(a % b)`, `Null` for a zero or `Null` operand). */
+    rust51kLitModKind(node: any): string | undefined {
+        if (!isBinaryExpression(node) || node.operatorToken.kind !== SyntaxKind.PercentToken) return undefined;
+        const side = (n: any) => { const i: any = this.unwrapParens(n); if (this.rustScalarIntLiteral(i) !== undefined) return 'lit'; if (!isIdentifier(i)) return undefined; const k = this.rustScalarNumericKind(i); return k === 'int' || k === 'oint' ? k : undefined; };
+        const l = side(node.left), r = side(node.right);
+        if (l === undefined || r === undefined || r === 'lit') return undefined;
+        return 'oint';
+    }
+
     /** The exact kind an expression shape yields over typed operands, else undefined. */
     rustScalarExpressionKind(expr): string | undefined {
         const node: any = this.unwrapParens(expr);
@@ -9047,7 +9057,8 @@ export class RustTranspiler extends BaseTranspiler {
             if (op === SyntaxKind.PercentToken) {
                 const a = this.rustScalarNumericKind(node.left);
                 const k = this.rustScalarIntLiteral(this.unwrapParens(node.right));
-                return (a === 'int' || a === 'oint') && k !== undefined && Number(k) !== 0 ? a : undefined;
+                if ((a === 'int' || a === 'oint') && k !== undefined && Number(k) !== 0) return a;
+                return this.rust51kLitModKind(node);
             }
             if (op === SyntaxKind.SlashToken) {
                 const a = this.rustScalarNumericKind(node.left);
@@ -9808,6 +9819,15 @@ export class RustTranspiler extends BaseTranspiler {
         if (own === undefined) return undefined;
         const optional = kind.startsWith('o');
         const wrap = (t: string) => own === kind ? t : (optional && own === kind.slice(1) ? `Some(${t})` : undefined);
+        // 51k: `a % b` with a typed non-literal divisor: the `i64` remainder (truncating like `mod_val` on Int), `None` for a zero / `None` side
+        if (this.rust51kLitModKind(node) !== undefined) {
+            if (own !== kind) return undefined;
+            const side = (n: any, v: string) => { const i: any = this.unwrapParens(n); const lit = this.rustScalarIntLiteral(i); if (lit !== undefined) return { pat: undefined, use: lit }; const k = this.rustScalarNumericKind(i); const t = this.rustScalarOperandText(k, i); return { pat: [ `Some(${v})`, k === 'oint' ? t : `Some(${t})` ], use: v }; };
+            const l = side(node.left, '__l'), r = side(node.right, '__r');
+            const pats = [ l.pat, r.pat ].filter((p) => p !== undefined);
+            const one = pats.length === 1;
+            return `(if let ${one ? pats[0][0] : `(${pats.map((p) => p[0]).join(', ')})`} = ${one ? pats[0][1] : `(${pats.map((p) => p[1]).join(', ')})`} { if __r != 0 { Some(${l.use} % __r) } else { None } } else { None })`;
+        }
         if (isIdentifier(node)) {
             const name = this.rustI64CounterOperand(node) && this.rustI64CounterUse(node) ? String(node.text) : super.printIdentifier(node);
             if (kind === 'num' && own === 'int') return `(${name} as f64)`;

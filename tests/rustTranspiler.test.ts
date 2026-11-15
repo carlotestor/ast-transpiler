@@ -17404,3 +17404,22 @@ describe('ral-49i: a sign reader default read off the urls api map by a literal 
         expect(out).toContain('let mut baseUrl: Value = ');
     });
 });
+
+describe('ral-51k: a parseToInt local as the divisor of an int-literal remainder stays Option<i64>', () => {
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export type Str = string | undefined;\nexport default class Exchange {\n    parseToInt (n: any): number { return n; }\n    isRoundNumber (n: number): boolean { return true; }\n    safeString (o: any, k: any): Str { return o; }\n    hold (x: any): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('binance parsePositionRisk: `1000 % leverage` is the i64 remainder, None for a zero / None divisor', () => {
+        const out = write ('51k-mod', "    m (position: any) {\n        const leverageString = this.safeString (position, 'leverage');\n        if (leverageString !== undefined) {\n            const leverage = this.parseToInt (leverageString);\n            const rational = this.isRoundNumber (1000 % leverage);\n            return this.hold (rational);\n        }\n        return undefined;\n    }\n");
+        expect(out).toContain('let mut leverage: Option<i64> = self.parseToInt(');
+        expect(out).toContain('Value::from((if let Some(__r) = leverage { if __r != 0 { Some(1000 % __r) } else { None } } else { None }))');
+    });
+    test('negative: a Value divisor keeps the runtime remainder', () => {
+        const out = write ('51k-modn', "    m (position: any) {\n        const leverage = position['x'];\n        return this.hold (this.isRoundNumber (1000 % leverage));\n    }\n");
+        expect(out).toContain('mod_val(&Value::Int(1000), &leverage)');
+    });
+});
