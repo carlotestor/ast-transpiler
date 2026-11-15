@@ -1715,7 +1715,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustIsOptMarketWriteOf(n: any): boolean;
     private static readonly RUST_OPT_MARKET_RETURNS;
     rustReturnsOptMarket(node: any): boolean;
-    /** `this.getMarketFromSymbols (..)` resolving to the typed base method. */
+    private rustVenueOptMarketDecisions;
+    /** ral-46e: a venue (not base-tier) method declared `Market`, not async, no override, never referenced by name as a
+     *  value, whose every return is `undefined` or a `safeMarket` record and that returns at least one of each
+     *  (bitstamp `getMarketFromTrade`): `Option<crate::types::Market>`, `None` for the `undefined` return. Its by-name
+     *  arm boxes with `IntoRaw` (`Null` for `None`, the record's `raw` otherwise), the value the `-> Value` method gave. */
+    rustVenueReturnsOptMarket(node: any): boolean;
+    /** `this.getMarketFromSymbols (..)` resolving to the typed base method (or a venue `rustVenueReturnsOptMarket` one). */
     rustIsOptMarketCall(init: any): boolean;
     /** `c ? undefined : this.market (s)` (either arm order): the `this.market` arm. */
     rustOptMarketTernary(init: any): any;

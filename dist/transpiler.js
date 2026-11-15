@@ -51690,6 +51690,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // marker's own operations, so wrapping any caller value (`Side::of(v)`, once, in the caller or the by-name arm)
     // keeps behaviour; a caller's side local is handed whole.
     this.rustBookSideParams = /* @__PURE__ */ new WeakMap();
+    this.rustVenueOptMarketDecisions = /* @__PURE__ */ new WeakMap();
     this.rustOptMarketBoxing = /* @__PURE__ */ new Set();
     // `const [a, b] = this.handleXAndParams (..)` over a proven `Vec<Value>`: a `string` slot used only in
     // null / literal compares is `Option<String>`; a `boolean` slot used only as a condition is `bool`.
@@ -63534,8 +63535,10 @@ ${i1}}`;
   rustReturnsOptMarket(node) {
     if (node === void 0 || node.kind !== SyntaxKind7.MethodDeclaration || node.body === void 0 || !isIdentifier3(node.name))
       return false;
-    if (!_RustTranspiler.RUST_OPT_MARKET_RETURNS.has(String(node.name.text)) || !isClassDeclaration4(node.parent))
+    if (!isClassDeclaration4(node.parent))
       return false;
+    if (!_RustTranspiler.RUST_OPT_MARKET_RETURNS.has(String(node.name.text)))
+      return this.rustVenueReturnsOptMarket(node);
     if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(String(node.getSourceFile?.()?.fileName ?? "")))
       return false;
     const ret = node.type;
@@ -63557,13 +63560,64 @@ ${i1}}`;
     node.body.forEachChild(visit);
     return ok;
   }
-  /** `this.getMarketFromSymbols (..)` resolving to the typed base method. */
+  /** ral-46e: a venue (not base-tier) method declared `Market`, not async, no override, never referenced by name as a
+   *  value, whose every return is `undefined` or a `safeMarket` record and that returns at least one of each
+   *  (bitstamp `getMarketFromTrade`): `Option<crate::types::Market>`, `None` for the `undefined` return. Its by-name
+   *  arm boxes with `IntoRaw` (`Null` for `None`, the record's `raw` otherwise), the value the `-> Value` method gave. */
+  rustVenueReturnsOptMarket(node) {
+    const file = String(node.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(file) || !/ts[/]src[/]/.test(file) || /ts[/]src[/](?:pro[/])?test[/]/.test(file))
+      return false;
+    const ret = node.type;
+    if (ret?.kind !== SyntaxKind7.TypeReference || !isIdentifier3(ret.typeName) || String(ret.typeName.text) !== "Market")
+      return false;
+    if ((node.modifiers ?? []).some((m) => m.kind === SyntaxKind7.AsyncKeyword || m.kind === SyntaxKind7.OverrideKeyword || m.kind === SyntaxKind7.StaticKeyword))
+      return false;
+    let decision = this.rustVenueOptMarketDecisions.get(node);
+    if (decision !== void 0)
+      return decision;
+    this.rustVenueOptMarketDecisions.set(node, false);
+    let ok = true;
+    let nones = 0;
+    let records = 0;
+    const visit = (n) => {
+      if (!ok || n === void 0)
+        return;
+      if (n !== node && isFunctionLike(n))
+        return;
+      if (isReturnStatement4(n)) {
+        const inner = n.expression === void 0 ? void 0 : this.unwrapParens(n.expression);
+        if (inner !== void 0 && this.literalKindOfNode(inner) === "null") {
+          nones++;
+          return;
+        }
+        if (inner !== void 0 && isCallExpression6(inner) && isPropertyAccessExpression3(inner.expression) && String(inner.expression.name.text) === "safeMarket" && this.rustIsSafeMarketCall(inner)) {
+          records++;
+          return;
+        }
+        ok = false;
+        return;
+      }
+      n.forEachChild(visit);
+    };
+    try {
+      node.body.forEachChild(visit);
+      decision = ok && nones > 0 && records > 0 && this.rustVenueOnlyMethod(node, String(node.name.text)) && !this.rustMethodReferencedAsValue(node);
+    } catch (e) {
+      decision = false;
+    }
+    this.rustVenueOptMarketDecisions.set(node, decision);
+    return decision;
+  }
+  /** `this.getMarketFromSymbols (..)` resolving to the typed base method (or a venue `rustVenueReturnsOptMarket` one). */
   rustIsOptMarketCall(init) {
     const call = this.rustSkipWrappers(init);
     if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
       return false;
-    if (!_RustTranspiler.RUST_OPT_MARKET_RETURNS.has(String(call.expression.name.text)))
-      return false;
+    if (!_RustTranspiler.RUST_OPT_MARKET_RETURNS.has(String(call.expression.name.text))) {
+      const venue = this.rustScalarCallee(call);
+      return venue !== void 0 && isMethodDeclaration5(venue) && venue.body !== void 0 && this.rustVenueReturnsOptMarket(venue);
+    }
     let declaration = this.rustScalarCallee(call);
     if (declaration !== void 0 && isMethodDeclaration5(declaration) && declaration.body === void 0 && isClassDeclaration4(declaration.parent)) {
       const name = String(call.expression.name.text);
@@ -63602,6 +63656,10 @@ ${i1}}`;
       return "None";
     if (this.rustIsTypedMarketCall(inner))
       return `Some(${this.printTypedMarketValue(inner)})`;
+    if (this.rustIsSafeMarketCall(inner)) {
+      const boxed = this.printNode(exp, 0).trim();
+      return `Some(${this.peelValueBox(boxed, "crate::types::IntoRaw::into_raw(") ?? boxed})`;
+    }
     if (isIdentifier3(inner) && this.rustTypedMarketLocalOf(inner) !== void 0)
       return `Some(${super.printIdentifier(inner)})`;
     return `<Option<crate::types::Market> as crate::types::FromRaw>::from_raw(${this.printNode(exp, 0).trim()})`;
