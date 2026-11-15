@@ -5686,7 +5686,10 @@ export class RustTranspiler extends BaseTranspiler {
     rustStrListParamElement(init: any): boolean {
         const node: any = this.unwrapParens(init);
         const owner: any = node !== undefined && isElementAccessExpression(node) && isIdentifier(node.expression) ? this.rustDeclaredNode(node.expression) : undefined;
-        return owner !== undefined && isParameterDeclaration(owner) && this.rustStrListParam(owner, 0);
+        if (owner === undefined || !isParameterDeclaration(owner) || !this.rustStrListParam(owner, 0)) return false;
+        // the element read prints straight off the list (`xs.get(i)..` / `xs.as_array()..`), never through `get_value` (paradex trap)
+        const text = this.rustScalarNativeText('ostr', node);
+        return text !== undefined && text.startsWith(`${super.printIdentifier(node.expression)}.`) && !text.includes('get_value');
     }
 
     /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */

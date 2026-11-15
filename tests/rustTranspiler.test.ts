@@ -15397,3 +15397,21 @@ describe('ral-42g: an element of a proven string[] / Strings parameter types eve
         expect(out).not.toMatch(/let mut name: Option<String>/);
     });
 });
+
+describe('ral-42g: the string-list parameter element lift needs the element read straight off the list', () => {
+    test('negative: xs[idx[0]] with idx a number[] (paradex: the read goes through get_value) keeps Value', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-42g-lpe2-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    urls: Dict = {};\n    safeString (o: any, k: any, d: Str = undefined): Str { return o[k]; }\n    safeDict (o: any, k: any, d: any = undefined): any { return o[k]; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n"
+            + "    pendingOf (names: string[]): number[] {\n        return [ 0 ];\n    }\n"
+            + "    pick (names: string[]) {\n        const r = [];\n        const p = this.pendingOf (names);\n        const name = names[p[0]];\n        const o = this.safeDict (this.urls, name);\n        r.push (this.safeString (o, 'x', name));\n        r.push (names);\n        return r;\n    }\n    run () {\n        const ks = Object.keys (this.urls);\n        return [ this.pick ([ 'a', 'b' ]), this.pick (ks) ];\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        expect(out).toMatch(/let mut name: Value = get_value\(&names, /);
+        // the declaration and its uses agree: no Option form of a `Value` local (the parent printed `name.as_deref()` / `name.map(..)`)
+        expect(out).not.toContain('name.as_deref()');
+        expect(out).not.toContain('name.map(Value::from)');
+    });
+});

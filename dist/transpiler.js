@@ -56919,7 +56919,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   rustStrListParamElement(init) {
     const node = this.unwrapParens(init);
     const owner = node !== void 0 && isElementAccessExpression4(node) && isIdentifier3(node.expression) ? this.rustDeclaredNode(node.expression) : void 0;
-    return owner !== void 0 && isParameterDeclaration3(owner) && this.rustStrListParam(owner, 0);
+    if (owner === void 0 || !isParameterDeclaration3(owner) || !this.rustStrListParam(owner, 0))
+      return false;
+    const text = this.rustScalarNativeText("ostr", node);
+    return text !== void 0 && text.startsWith(`${super.printIdentifier(node.expression)}.`) && !text.includes("get_value");
   }
   /** `xs[i]` over a typed list parameter (the source the element-read rule admits from a parameter). */
   rustListParamElement(init) {
