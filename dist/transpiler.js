@@ -51887,6 +51887,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // A local built from an array literal, reassigned only from list producers (array literals, base `toArray` /
     // `arrayConcat`, a `[]`-defaulted `safeList*`) holds the shared list: pushes, length and index reads are native.
     this.rustBuiltLists = /* @__PURE__ */ new WeakSet();
+    /** ral-54i: `[await] this.m (..)` whose declaration spells an array return (`T[]`, or `Promise<T[]>` awaited here) and whose
+     *  printed body answers a list on every path (rustCallBuildsContainer over its returns; a venue `Promise<Market[]>` by the zf
+     *  table). The callee must not be dispatched virtually, carry a typed signature or be redeclared: a base method no venue
+     *  redeclares, or a venue method with no override whose family spells the same type. Its `-> Value` result then holds a
+     *  `Value::Arr`, so `.into_list()` moves exactly that list. Only a whole reassignment of a built-list local uses it
+     *  (an initializer from such a call keeps its own decision). */
+    this.rustDeclaredArrayProof = false;
     this.rustArrayGuardedCopies = /* @__PURE__ */ new WeakSet();
     this.rustOptListDecisions = /* @__PURE__ */ new WeakMap();
     this.rustOptListBoxes = /* @__PURE__ */ new WeakMap();
@@ -70417,6 +70424,8 @@ ${iden}}`;
       if (method === "safeList" || method === "safeListValue") {
         return args.length < 3 || isArrayLiteralExpression4(this.rustSkipWrappers(args[2])) ? "list" : void 0;
       }
+      if (this.rustDeclaredArrayProof && this.rustAlwaysListProducer(expr))
+        return "list";
       if (this.rustCallBuildsContainer(expr, "map", depth + 1))
         return "map";
       if (this.rustCallBuildsContainer(expr, "list", depth + 1))
@@ -77460,7 +77469,7 @@ ${iden}}`;
           return false;
         const up = n.parent;
         if (isBinaryExpression5(up) && up.left === n) {
-          return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
+          return up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && (this.rustBuiltListWriteSource(up.right) || this.rustDeclaredArrayCallWriteSource(up.right) || this.rustBuiltListSelfSort(up, name) || this.rustArrayGuardedMove(up) || this.rustOptListGuardedMove(up) !== void 0 || this.rustDefaultedAliasMove(up) !== void 0) && String(up.parent.getText()).split("\n")[0].length <= 200;
         }
         if (isElementAccessExpression4(up) && up.expression === n) {
           natives++;
@@ -77647,6 +77656,44 @@ ${iden}}`;
     if (isArrayLiteralExpression4(rhs))
       return !rhs.elements.some((e) => e.kind === SyntaxKind7.SpreadElement || isIdentifier3(this.rustSkipWrappers(e)) && !this.rustBuiltListMovedElement(e)) && (!rhs.elements.some((e) => isIdentifier3(this.rustSkipWrappers(e))) || this.rustBuiltListMovedLiteral(rhs) !== void 0) || this.rustBuiltListBoxedLiteral(rhs) !== void 0;
     return this.rustAlwaysListProducer(rhs) || this.rustDefaultedListRead(rhs) || this.rustDeclaredListProducer(rhs) || this.rustVenueListWriteSource(rhs);
+  }
+  rustDeclaredArrayCallWriteSource(right) {
+    const rhs = this.rustSkipWrappers(right);
+    const awaited = rhs?.kind === SyntaxKind7.AwaitExpression;
+    const call = awaited ? this.rustSkipWrappers(rhs.expression) : rhs;
+    if (call === void 0 || !isCallExpression6(call) || this.rustTestTierSource(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || !isIdentifier3(call.expression.name))
+      return false;
+    const name = String(call.expression.name.text);
+    const declaration = this.rustScalarCallee(call);
+    if (declaration === void 0 || !isMethodDeclaration5(declaration) || declaration.body === void 0 || declaration.type === void 0)
+      return false;
+    const async = this.isAsyncFunction(declaration);
+    if (async !== awaited || this.rustVirtualDispatch?.[this.toSnakeCaseName(name)] !== void 0 || this.rustTypedUnified.has(name) || this.rustTypedSignature(declaration) !== void 0)
+      return false;
+    const own = String(declaration.type.getText()).replace(/\s+/g, "");
+    if (!(async ? /^Promise<[\w.]+\[\]>$/ : /^[\w.]+\[\]$/).test(own))
+      return false;
+    const file = String(declaration.getSourceFile?.()?.fileName ?? "");
+    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(file)) {
+      if (!this.rustListPassthroughCallee(call, name))
+        return false;
+    } else {
+      const at = file.search(/[/\\]ts[/\\]src[/\\]/);
+      if (at < 0 || /ts[\\/]src[\\/](?:test|abstract)[\\/]/.test(file) || this.getMethodOverride(declaration) !== void 0)
+        return false;
+      const types = this.rustVenueFamilyReturnTypes(file, at, name);
+      if (types === void 0 || ![...types].every((t) => t.replace(/\s+/g, "") === own))
+        return false;
+      if (async && this.rustVenueMarketListMethod(declaration))
+        return true;
+    }
+    const saved = this.rustDeclaredArrayProof;
+    this.rustDeclaredArrayProof = true;
+    try {
+      return this.rustCallBuildsContainer(call, "list");
+    } finally {
+      this.rustDeclaredArrayProof = saved;
+    }
   }
   /** ral-53i: `[await] this.m (..)` whose venue declaration the printer's typed-return table (rustVenueContainerReturnKind)
    *  proves a never-null list (`Dict[]` / `any[]` / `List` / `Record[]` / literal tuple, the same type in the whole venue
