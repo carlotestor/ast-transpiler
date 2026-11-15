@@ -18502,3 +18502,16 @@ describe('ral-54x bitstamp: a Precise compare local is a bool', () => {
         expect(out).toContain('.as_bool().unwrap_or(false);');
     });
 });
+
+describe('ral-55x O1: a Precise compare written into a nil-declared local', () => {
+    test('let winnerRaw: Bool = undefined; winnerRaw = Precise.stringEq(..) is an Option<bool>', () => {
+        const dir = path.join (rustFixtureRoot, '55x-o1');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Precise.ts'), "export class Precise {\n    static stringEq (a: string, b: string): boolean { return a === b; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Bool = boolean | undefined;\nexport type Int = number | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: string = undefined): string { return o; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport { Precise } from './base/Precise.js';\nimport type { Dict, Bool, Int } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    po (o: Dict, resolved: boolean) {\n        const price = this.safeString (o, 'price');\n        let handle = undefined;\n        let winnerRaw: Bool = undefined;\n        let settleFractionRaw: Int = undefined;\n        if (resolved && (price !== undefined)) {\n            winnerRaw = Precise.stringEq (price, '1');\n            settleFractionRaw = (winnerRaw) ? 1 : 0;\n            if (winnerRaw) {\n                handle = price;\n            }\n        }\n        const winner = winnerRaw;\n        return { 'winner': winner, 'f': settleFractionRaw, 'h': handle };\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut winnerRaw: Option<bool> = None;');
+        expect(out).not.toContain('let mut winnerRaw: Value');
+    });
+});

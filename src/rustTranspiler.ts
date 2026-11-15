@@ -2886,12 +2886,13 @@ export class RustTranspiler extends BaseTranspiler {
             // neither seeds before the other, so while the solver seeds assume the partner's optional string; the later
             // passes re-prove the write against the partner's settled decision (a partner left `Value` drops both)
             if (write === undefined && this.rustScalarSeeding && this.rustNilStrPartner(rhs, declaration, scope)) write = 'ostr';
-            joined = this.rustScalarJoinKinds(joined, write);
+            // ral-55x O1: `x = Precise.stringEq|..(a, b)` into a nil-declared local: a `Bool` each time, so the local is an `Option<bool>`
+            joined = this.rustScalarJoinKinds(joined, write, write === 'bool' && this.rustPreciseCompareCall(rhs));
             if (joined === undefined) return undefined;
         }
-        if (joined !== 'ostr' && joined !== 'oint' && joined !== 'onum') return undefined;
+        if (joined !== 'ostr' && joined !== 'oint' && joined !== 'onum' && joined !== 'obool') return undefined;
         const declared = declaration.type === undefined ? undefined : this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
-        if (declared !== undefined && declared !== (joined === 'ostr' ? 'string' : 'number')) return undefined;
+        if (declared !== undefined && declared !== (joined === 'ostr' ? 'string' : (joined === 'obool' ? 'boolean' : 'number'))) return undefined;
         const kind = joined;
         if (kind === 'ostr' && !this.rustSiblingStrBoxesMove(declaration, scope)) return undefined;
         // ral-45b: a local the new self-slice / `+=` forms type keeps `Value` when a string-returning method returns it
