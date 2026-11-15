@@ -2211,6 +2211,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A bare counter use that is an argument of a `this.m(..)` call or the value of an `x[k] = i` write. */
     rustI64BoxedUse(id: any): boolean;
     rustBoolSlotWrite(n: any): boolean;
+    rustStrSlotWrite(n: any): boolean;
+    /** The `__destr_tmp` line keeps the 400-char budget with the slot unwrap and the lent self default (`Value::from(&x)`). */
+    private rustStrSlotLineMemo;
+    rustStrSlotLineFits(write: any): boolean;
+    /** Some write of the initialised local is a string tuple slot (`rustStrSlotWrite`). */
+    rustStrSlotWrites(declaration: any): boolean;
+    /** ral-45d: the local's own box as an argument of its string slot write (`[x, p] = this.m (.., x)`): it boxes the value the local
+     *  holds before the slot is read back, lent (`Value::from(&x)`, `From<&Option<String>>`: `None` is the Null, `Some` the Str). */
+    rustStrSlotSelfDefault(n: any): boolean;
     rustBoolSlotUsesOk(declaration: any): boolean;
     /** The destructuring statement keeps the 400-char line budget with the slot's `== Some(true)` read. */
     rustBoolSlotLineLong(n: any): boolean;
