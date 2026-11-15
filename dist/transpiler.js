@@ -69232,7 +69232,20 @@ ${iden}}`;
       return false;
     const last = this.rustSkipWrappers(init.arguments[init.arguments.length - 1]);
     const base = /2$/.test(String(callee.name.text)) ? 3 : 2;
-    return init.arguments.length === base + 1 && (kind === "list" ? isArrayLiteralExpression4(last) : this.rustPlainDictLiteral(last));
+    if (init.arguments.length !== base + 1)
+      return false;
+    if (kind === "list" ? isArrayLiteralExpression4(last) : this.rustPlainDictLiteral(last))
+      return true;
+    return kind === "map" && this.rustNeverNullDictLocalArg(last);
+  }
+  /** An identifier whose local prints a plain `Dict` (borrowed dict route, not the optional form). */
+  rustNeverNullDictLocalArg(node) {
+    if (!isIdentifier3(node))
+      return false;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration?.kind !== SyntaxKind7.VariableDeclaration || declaration.name === node)
+      return false;
+    return this.rustBorrowedLocalKind(declaration) === "dict" && !this.rustOptContainerLocals.has(declaration);
   }
   /** How a non-read use boxes: an argument of a plain `Value` slot of a `this.` method, the value of an object
    *  literal property or array element, or `return x`; a nullable local only feeds base `safe*` readers. */

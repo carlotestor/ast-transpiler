@@ -18065,7 +18065,18 @@ export class RustTranspiler extends BaseTranspiler {
         if (!/^safe(?:Dict|List)(?:2|N)?$/.test(String(callee.name.text))) return false;
         const last: any = this.rustSkipWrappers(init.arguments[init.arguments.length - 1]);
         const base = /2$/.test(String(callee.name.text)) ? 3 : 2;
-        return init.arguments.length === base + 1 && (kind === 'list' ? isArrayLiteralExpression(last) : this.rustPlainDictLiteral(last));
+        if (init.arguments.length !== base + 1) return false;
+        if (kind === 'list' ? isArrayLiteralExpression(last) : this.rustPlainDictLiteral(last)) return true;
+        // ral-43d: the default is a plain (never-null) Dict local: `safeDict` answers the map read or that map
+        return kind === 'map' && this.rustNeverNullDictLocalArg(last);
+    }
+
+    /** An identifier whose local prints a plain `Dict` (borrowed dict route, not the optional form). */
+    rustNeverNullDictLocalArg(node: any): boolean {
+        if (!isIdentifier(node)) return false;
+        const declaration: any = this.rustDeclarationOfIdentifier(node);
+        if (declaration?.kind !== SyntaxKind.VariableDeclaration || declaration.name === node) return false;
+        return this.rustBorrowedLocalKind(declaration) === 'dict' && !this.rustOptContainerLocals.has(declaration);
     }
 
     /** How a non-read use boxes: an argument of a plain `Value` slot of a `this.` method, the value of an object

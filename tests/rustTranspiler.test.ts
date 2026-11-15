@@ -15600,3 +15600,25 @@ describe('ral-42d: a literal-default safeDict / safeList returned through `as T`
         expect(out).toMatch(/let mut rows: Value = /);
     });
 });
+
+describe('ral-43d: generated base-method parameters typed from their ts declarations', () => {
+    const run = (base: string, body: string, file = 'ts/src/venue.ts') => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-43d-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        const out = transpiler.transpileRustByPath(path.join(root, file)).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    const dictBase = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeDict (o: any, k: any, d: Dict = undefined): Dict { return o[k] ?? d; }\n    METHODS_MARKER () {}\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseOrder (order: Dict, market: any = undefined): any { return order; }\n}\n";
+    test('a safeDict whose default is a plain Dict local is a Dict and is lent whole to the venue parseOrder', () => {
+        const out = run(dictBase, "    override parseOrder (order: Dict, market: any = undefined): any { return order['id']; }\n    m (response: any): any {\n        const data = this.safeDict (response, 'data', {});\n        const order = this.safeDict (data, 'order', data) as Dict;\n        return this.parseOrder (order);\n    }\n");
+        expect(out).toMatch(/let mut order: crate::value::Dict = .*\.into_dict\(\);/);
+        expect(out).toMatch(/self\.parseOrder\(&order, /);
+    });
+    test('a safeDict whose default is a parameter (may be anything) stays Value', () => {
+        const out = run(dictBase, "    override parseOrder (order: Dict, market: any = undefined): any { return order['id']; }\n    m (response: any, fallback: any): any {\n        const order = this.safeDict (response, 'order', fallback) as Dict;\n        return this.parseOrder (order);\n    }\n");
+        expect(out).toMatch(/let mut order: Value = /);
+    });
+});

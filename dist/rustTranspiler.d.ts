@@ -2555,6 +2555,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustContainerInitReadsStore(init: any): boolean;
     /** A literal list/dict default (or a reader that always builds one): the local is never `Null`. */
     rustContainerInitNeverNull(init: any, kind: 'list' | 'map'): boolean;
+    /** An identifier whose local prints a plain `Dict` (borrowed dict route, not the optional form). */
+    rustNeverNullDictLocalArg(node: any): boolean;
     /** How a non-read use boxes: an argument of a plain `Value` slot of a `this.` method, the value of an object
      *  literal property or array element, or `return x`; a nullable local only feeds base `safe*` readers. */
     rustContainerBoxForm(n: any, neverNull: boolean): 'clone' | 'move' | undefined;
