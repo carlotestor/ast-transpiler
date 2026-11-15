@@ -57427,7 +57427,57 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string")
       return "ostr";
+    if (this.rust56eIntListVenueElem(node, owner))
+      return "oint";
     return this.rustAnyStrPushElem(node) ? "ostr" : void 0;
+  }
+  /** ral-56e: `const xs = this.m (..)` where `m` is a method of the same class declared `number[]` whose body builds
+   *  one `const r: number[] = []` filled only by `r.push (i)` of a plain int for-counter and answers `return r`; a
+   *  declaration's literal-index `xs[k]` is then an `Int` or (out of range) `Null`: `Option<i64>`. Non-test sources. */
+  rust56eIntListVenueElem(node, owner) {
+    if (!isVariableDeclaration3(owner) || (owner.parent?.flags & NodeFlags4.Const) === 0 || this.rustTestTierSource(node))
+      return false;
+    if (!isNumericLiteral4(this.unwrapParens(node.argumentExpression)))
+      return false;
+    let top = node;
+    while (top.parent !== void 0 && isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    if (!isVariableDeclaration3(top.parent) || top.parent.initializer !== top)
+      return false;
+    const call = this.unwrapParens(owner.initializer);
+    if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const method = symbolDeclarations(this.getChecker().getSymbolAtLocation(call.expression.name))[0];
+    if (method === void 0 || !isMethodDeclaration5(method) || method.getSourceFile() !== node.getSourceFile() || method.body === void 0)
+      return false;
+    if (method.type === void 0 || method.type.getText?.()?.replace(/\s+/g, "") !== "number[]")
+      return false;
+    const statements = Array.from(method.body.statements);
+    const last = statements[statements.length - 1];
+    if (last === void 0 || !isReturnStatement4(last) || last.expression === void 0 || !isIdentifier3(last.expression))
+      return false;
+    const result = this.rustDeclaredNode(last.expression);
+    if (result === void 0 || !isVariableDeclaration3(result) || !isIdentifier3(result.name) || this.rustEnclosingFunction(result) !== method)
+      return false;
+    const init = this.unwrapParens(result.initializer);
+    if (init === void 0 || !isArrayLiteralExpression4(init) || init.elements.length !== 0)
+      return false;
+    let returns = 0;
+    const ok = this.rustLocalUsesAll(result, String(result.name.text), true, (n) => {
+      const up = n.parent;
+      if (isReturnStatement4(up) && up === last) {
+        returns++;
+        return true;
+      }
+      if (!isPropertyAccessExpression3(up) || up.expression !== n || String(up.name.text) !== "push")
+        return false;
+      const c = up.parent;
+      if (!isCallExpression6(c) || c.expression !== up || c.arguments.length !== 1)
+        return false;
+      const arg = this.unwrapParens(c.arguments[0]);
+      return isIdentifier3(arg) && this.rustValueIntCounter(arg);
+    });
+    return ok && returns === 1;
   }
   /** ral-53f: `const t = this.m (..); const x = t[0]` where `t` is a const tuple local (a declared `[string, Str, Dict]`
    *  return, e.g. binance pro `resolveAuthType`) and the literal-index slot is declared `string`: the read is the slot's
@@ -60616,6 +60666,11 @@ ${binding(plan.indent)}` : ""), head: "" };
       const read = this.printNode(node, 0).trim();
       const tail = ".cloned().unwrap_or(Value::Null)";
       return read.endsWith(tail) ? `${read.slice(0, -tail.length)}.and_then(Value::as_bool)` : void 0;
+    }
+    if (kind === "oint" && this.rustElementReadScalarKind(node) === "oint") {
+      const read = this.printNode(node, 0).trim();
+      const tail = ".cloned().unwrap_or(Value::Null)";
+      return read.endsWith(tail) ? `${read.slice(0, -tail.length)}.and_then(Value::as_i64)` : void 0;
     }
     const cast = this.rustStrCastCall(node);
     if (cast !== void 0)

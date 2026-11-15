@@ -820,6 +820,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  printed off the temp list exactly as the destructured slot 0 (`.and_then(Value::as_str).map(str::to_owned)`). */
     rustInlineHandleStrSlot(node: any): boolean;
     rustElementReadScalarKind(node: any): string | undefined;
+    /** ral-56e: `const xs = this.m (..)` where `m` is a method of the same class declared `number[]` whose body builds
+     *  one `const r: number[] = []` filled only by `r.push (i)` of a plain int for-counter and answers `return r`; a
+     *  declaration's literal-index `xs[k]` is then an `Int` or (out of range) `Null`: `Option<i64>`. Non-test sources. */
+    rust56eIntListVenueElem(node: any, owner: any): boolean;
     /** ral-53f: `const t = this.m (..); const x = t[0]` where `t` is a const tuple local (a declared `[string, Str, Dict]`
      *  return, e.g. binance pro `resolveAuthType`) and the literal-index slot is declared `string`: the read is the slot's
      *  string or undefined. Non-test sources only. */
