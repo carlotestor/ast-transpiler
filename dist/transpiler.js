@@ -69439,7 +69439,20 @@ ${iden}}`;
       return false;
     const last = this.rustSkipWrappers(init.arguments[init.arguments.length - 1]);
     const base = /2$/.test(String(callee.name.text)) ? 3 : 2;
-    return init.arguments.length === base + 1 && (kind === "list" ? isArrayLiteralExpression4(last) : this.rustPlainDictLiteral(last));
+    if (init.arguments.length !== base + 1)
+      return false;
+    if (kind === "list" ? isArrayLiteralExpression4(last) : this.rustPlainDictLiteral(last))
+      return true;
+    return kind === "map" && this.rustNeverNullDictLocalArg(last);
+  }
+  /** An identifier whose local prints a plain `Dict` (borrowed dict route, not the optional form). */
+  rustNeverNullDictLocalArg(node) {
+    if (!isIdentifier3(node))
+      return false;
+    const declaration = this.rustDeclarationOfIdentifier(node);
+    if (declaration?.kind !== SyntaxKind7.VariableDeclaration || declaration.name === node)
+      return false;
+    return this.rustBorrowedLocalKind(declaration) === "dict" && !this.rustOptContainerLocals.has(declaration);
   }
   /** How a non-read use boxes: an argument of a plain `Value` slot of a `this.` method, the value of an object
    *  literal property or array element, or `return x`; a nullable local only feeds base `safe*` readers. */
@@ -69569,6 +69582,9 @@ ${iden}}`;
     if (from === void 0 && !nilDeclared && declaration.initializer !== void 0 && this.rustWsWatchResultKind(declaration.initializer) === "dict")
       from = "dict";
     if (from === void 0 && !nilDeclared && declaration.initializer !== void 0 && this.rustWsWatchResultKind(declaration.initializer) === "list")
+      from = "list";
+    const alwaysList = from === void 0 && !nilDeclared && init !== void 0 && this.rustAlwaysListProducer(init);
+    if (alwaysList)
       from = "list";
     let sbMapWrites = 0;
     if (from === void 0 && !nilDeclared)
@@ -70791,8 +70807,9 @@ ${iden}}`;
    *  value, so the shared handle moves in boxed once (`Value::Dict(x)` / `Value::Arr(x)`), exactly the value the boxed
    *  `x` held. A target with its own typed rule stays out (its write proof reads its sources). */
   rustValueLocalWriteHandOff(n) {
-    const up = n.parent;
-    if (!isBinaryExpression5(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !isIdentifier3(up.left))
+    const wrapped = isAsExpression3(n.parent) && n.parent.expression === n ? n.parent : n;
+    const up = wrapped.parent;
+    if (!isBinaryExpression5(up) || up.right !== wrapped || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !isIdentifier3(up.left))
       return false;
     const own = this.rustDeclarationOfIdentifier(n);
     const target = this.rustDeclarationOfIdentifier(up.left);
@@ -76158,6 +76175,8 @@ ${iden}}`;
   rustLentContainerSource(init) {
     if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression))
       return false;
+    if (this.rustAlwaysListProducer(init))
+      return true;
     const name = String(init.expression.name.text);
     const kind = /^safeDict(?:2|N)?$/.test(name) ? "map" : /^safeList(?:2|N)?$/.test(name) ? "list" : void 0;
     return kind !== void 0 && this.rustContainerInitNeverNull(init, kind) && this.rustBorrowedSourceKind(init) === (kind === "map" ? "dict" : "list");
