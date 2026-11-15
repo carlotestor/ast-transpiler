@@ -18590,3 +18590,36 @@ describe('ral-55h: a nullable safeDict local handed to a by-name ws dispatch `me
         expect(out).toMatch(/let mut other: Value = /);
     });
 });
+
+describe('ral-55h: a reply hash echoing a request key written only from this.requestId () is digits', () => {
+    const base: Record<string, string> = {
+        'ts/src/base/ws/Cache.ts': 'export class ArrayCache {\n    constructor (maxSize: any = undefined) {}\n    append (item: any) {}\n}\n',
+        'ts/src/base/ws/Client.ts': 'export default class Client {\n    futures: any = {};\n    resolve (result: any, messageHash: string): any { return result; }\n    future (messageHash: string): any { return undefined; }\n}\n',
+        'ts/src/base/Exchange.ts': "import { ArrayCache } from './ws/Cache.js';\nexport default class Exchange {\n    positions: ArrayCache = undefined;\n    safeString (obj: any, key: any, defaultValue: string = undefined): string { return obj[key]; }\n    parseOrder (o: any): any { return o; }\n}\n",
+    };
+    const venue = (write: string) => "import Exchange from '../base/Exchange.js';\nimport Client from '../base/ws/Client.js';\nimport { ArrayCache } from '../base/ws/Cache.js';\nexport default class venue extends Exchange {\n" +
+        "    requestId (): int {\n        return 1;\n    }\n" +
+        "    async createIt () {\n        const requestId = this.requestId ().toString ();\n        const request: any = { 'op': 'order.create', 'reqId': " + write + " };\n        return request;\n    }\n" +
+        "    async watchPositions (client: Client) {\n        const cache = this.positions;\n        if (cache === undefined) {\n            const snapshot = await client.future ('fetchPositionsSnapshot');\n            return snapshot;\n        }\n        return cache;\n    }\n" +
+        "    loadSnapshot (client: Client, messageHash: string) {\n        this.positions = new ArrayCache ();\n        const cache = this.positions;\n        if (messageHash in client.futures) {\n            const future = client.futures[messageHash];\n            future.resolve (cache);\n        }\n    }\n" +
+        "    handleOrderWs (client: Client, message: any) {\n        const messageHash = this.safeString (message, 'reqId');\n        const order = this.parseOrder (message);\n        client.resolve (order, messageHash);\n    }\n}\n";
+    const run = (tag: string, write: string) => {
+        const root = fs.mkdtempSync (path.join (os.tmpdir (), 'astfx-rs-55h-reqid-' + tag + '-'));
+        const files: Record<string, string> = { ...base, 'ts/src/pro/venue.ts': venue (write) };
+        for (const [rel, text] of Object.entries (files)) {
+            fs.mkdirSync (path.dirname (path.join (root, rel)), { recursive: true });
+            fs.writeFileSync (path.join (root, rel), text);
+        }
+        try {
+            return transpiler.transpileRustByPath(path.join (root, 'ts/src/pro/venue.ts')).content;
+        } finally {
+            fs.rmSync (root, { recursive: true, force: true });
+        }
+    };
+    test('the snapshot awaited under a literal hash is Option<Cache> (the reqId resolve cannot meet it)', () => {
+        expect(run ('p', 'requestId')).toContain('let mut snapshot: Option<crate::pro::cache::Cache> = ');
+    });
+    test('negative: a request key also written from another value (one the future hash can match) keeps the snapshot a Value', () => {
+        expect(run ('n', "'fetchPositions' + requestId")).toContain('let mut snapshot: Value = ');
+    });
+});
