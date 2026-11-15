@@ -4422,7 +4422,8 @@ export class RustTranspiler extends BaseTranspiler {
         const node: any = this.unwrapParens(init);
         if (node === undefined) return false;
         if (this.literalKindOfNode(node) !== undefined || this.rustScalarIntLiteral(node) !== undefined || this.rustScalarFloatLiteral(node) !== undefined) return true;
-        if (isBinaryExpression(node)) return RustTranspiler.RUST_SCALAR_ARITH_OPS.has(node.operatorToken.kind);
+        if (isBinaryExpression(node)) return RustTranspiler.RUST_SCALAR_ARITH_OPS.has(node.operatorToken.kind) || this.rustBoolLeafLogical(node);
+        if (isPrefixUnaryExpression(node) && node.operator === SyntaxKind.ExclamationToken) return this.rustBoolLeafLogical(node);
         if (this.rustSbJoinShape(node)) return true;
         if (isIdentifier(node) || isConditionalExpression(node) || this.rustScalarStrMethod(node, true) !== undefined || this.rustScalarPreciseCall(node) || this.rustArithCombinator(node)) return true;
         if (this.rustStrCastCall(node) !== undefined || this.rustClockString(node) || this.rustVenueTypedCall(node) !== undefined) return true;
@@ -4851,6 +4852,9 @@ export class RustTranspiler extends BaseTranspiler {
         const marketField = fresh ? this.rustMarketFieldScalar(node) : undefined; if (marketField !== undefined) return marketField.kind;
         // a comparison over reader / literal operands that already prints as a native `bool`
         if (fresh && isBinaryExpression(node) && RustTranspiler.COMPARISON_OPS.has(node.operatorToken.kind) && this.rustBoolCompareSeed(node)) return 'bool';
+        // ral-43a: `a || b` / `a && b` / `!a` whose every leaf is a same-function local: `bool` when each leaf is a `bool`
+        // scalar local (the solver's current decision; JS hands back a boolean operand, so the Rust logical is that value)
+        if (fresh && this.rustBoolLeafLogical(node) && this.rustBoolNativeText(node) !== undefined) return 'bool';
         const cast = this.rustStrCastCall(node); if (cast !== undefined) return this.rustScalarValueKind(cast, fresh) === 'ostr' ? 'ostr' : undefined;
         if (fresh && this.rustClockString(node)) return 'str';
         if (fresh && this.rustSbJoinShape(node)) return 'str';
@@ -8930,6 +8934,24 @@ export class RustTranspiler extends BaseTranspiler {
             return isBinaryExpression(inner) && this.isLogicalOp(inner.operatorToken.kind) && (owns(inner.left) || owns(inner.right));
         };
         return owns(node) ? this.rustBoolNativeText(node) : undefined;
+    }
+
+    /** ral-43a: `!x` / `x || y` / `x && y` (nested, parenthesised) whose leaves are identifiers of locals declared in the
+     *  same function (never a parameter or a member): the shape the bool seed above reads through the solver. */
+    rustBoolLeafLogical(expr: any): boolean {
+        const node: any = this.unwrapParens(expr);
+        if (node === undefined) return false;
+        const leaf = (n: any): boolean => {
+            const inner: any = this.unwrapParens(n);
+            if (isIdentifier(inner)) {
+                const d: any = this.rustDeclaredNode(inner);
+                return d !== undefined && isVariableDeclaration(d) && d.name !== inner && this.rustEnclosingFunction(d) === this.rustEnclosingFunction(node);
+            }
+            if (isPrefixUnaryExpression(inner)) return inner.operator === SyntaxKind.ExclamationToken && leaf(inner.operand);
+            return isBinaryExpression(inner) && this.isLogicalOp(inner.operatorToken.kind) && leaf(inner.left) && leaf(inner.right);
+        };
+        if (isPrefixUnaryExpression(node)) return node.operator === SyntaxKind.ExclamationToken && leaf(node.operand);
+        return isBinaryExpression(node) && this.isLogicalOp(node.operatorToken.kind) && leaf(node);
     }
 
     /** Native `bool` text of a comparison proven native, `!x`, a bool local, or `&&`/`||` over those. */

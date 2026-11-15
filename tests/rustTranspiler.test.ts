@@ -15627,3 +15627,16 @@ describe('ral-43a: a declared endpoint answer read natively and handed on whole 
         expect(out).not.toContain('let mut response: crate::value::Dict = ');
     });
 });
+
+describe('ral-43a: a logical over bool scalar locals is a bool local boxed once at its sink', () => {
+    test('`swap || future` and `!swap` over native bool locals print bool and box at the literal value', () => {
+        const dir = path.join (rustFixtureRoot, 'r43a-bool-logical');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    a (market: Dict) {\n        const t = this.safeString (market, 'type');\n        const swap = (t === 'FX');\n        const future = (t === 'F');\n        const contract = swap || future;\n        const spot = !swap;\n        return { 'contract': contract, 'spot': spot };\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut contract: bool = (swap || future);');
+        expect(out).toContain('let mut spot: bool = !(swap);');
+        expect(out).toContain('Value::Bool(contract)');
+    });
+});

@@ -55659,7 +55659,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (this.literalKindOfNode(node) !== void 0 || this.rustScalarIntLiteral(node) !== void 0 || this.rustScalarFloatLiteral(node) !== void 0)
       return true;
     if (isBinaryExpression5(node))
-      return _RustTranspiler.RUST_SCALAR_ARITH_OPS.has(node.operatorToken.kind);
+      return _RustTranspiler.RUST_SCALAR_ARITH_OPS.has(node.operatorToken.kind) || this.rustBoolLeafLogical(node);
+    if (isPrefixUnaryExpression3(node) && node.operator === SyntaxKind7.ExclamationToken)
+      return this.rustBoolLeafLogical(node);
     if (this.rustSbJoinShape(node))
       return true;
     if (isIdentifier3(node) || isConditionalExpression4(node) || this.rustScalarStrMethod(node, true) !== void 0 || this.rustScalarPreciseCall(node) || this.rustArithCombinator(node))
@@ -56106,6 +56108,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (marketField !== void 0)
       return marketField.kind;
     if (fresh && isBinaryExpression5(node) && _RustTranspiler.COMPARISON_OPS.has(node.operatorToken.kind) && this.rustBoolCompareSeed(node))
+      return "bool";
+    if (fresh && this.rustBoolLeafLogical(node) && this.rustBoolNativeText(node) !== void 0)
       return "bool";
     const cast = this.rustStrCastCall(node);
     if (cast !== void 0)
@@ -60377,6 +60381,26 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return isBinaryExpression5(inner) && this.isLogicalOp(inner.operatorToken.kind) && (owns(inner.left) || owns(inner.right));
     };
     return owns(node) ? this.rustBoolNativeText(node) : void 0;
+  }
+  /** ral-43a: `!x` / `x || y` / `x && y` (nested, parenthesised) whose leaves are identifiers of locals declared in the
+   *  same function (never a parameter or a member): the shape the bool seed above reads through the solver. */
+  rustBoolLeafLogical(expr) {
+    const node = this.unwrapParens(expr);
+    if (node === void 0)
+      return false;
+    const leaf = (n) => {
+      const inner = this.unwrapParens(n);
+      if (isIdentifier3(inner)) {
+        const d = this.rustDeclaredNode(inner);
+        return d !== void 0 && isVariableDeclaration3(d) && d.name !== inner && this.rustEnclosingFunction(d) === this.rustEnclosingFunction(node);
+      }
+      if (isPrefixUnaryExpression3(inner))
+        return inner.operator === SyntaxKind7.ExclamationToken && leaf(inner.operand);
+      return isBinaryExpression5(inner) && this.isLogicalOp(inner.operatorToken.kind) && leaf(inner.left) && leaf(inner.right);
+    };
+    if (isPrefixUnaryExpression3(node))
+      return node.operator === SyntaxKind7.ExclamationToken && leaf(node.operand);
+    return isBinaryExpression5(node) && this.isLogicalOp(node.operatorToken.kind) && leaf(node);
   }
   /** Native `bool` text of a comparison proven native, `!x`, a bool local, or `&&`/`||` over those. */
   rustBoolNativeText(expr) {

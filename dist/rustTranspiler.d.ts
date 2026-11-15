@@ -1294,6 +1294,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `a || b` / `a && b` whose every leaf is a native `bool` and one is a `bool` scalar local: JS returns an
      *  operand, which is then a boolean, so the Rust `||` / `&&` value is the same. */
     rustScalarBoolLogicalText(expr: any): string | undefined;
+    /** ral-43a: `!x` / `x || y` / `x && y` (nested, parenthesised) whose leaves are identifiers of locals declared in the
+     *  same function (never a parameter or a member): the shape the bool seed above reads through the solver. */
+    rustBoolLeafLogical(expr: any): boolean;
     /** Native `bool` text of a comparison proven native, `!x`, a bool local, or `&&`/`||` over those. */
     rustBoolNativeText(expr: any): string | undefined;
     /** Native text of an ordered/equality comparison over typed operands (`dry`: shape check only). */
