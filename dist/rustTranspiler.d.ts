@@ -1419,6 +1419,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarExpressionUseForm(n: any, kind: string): string | undefined;
     /** `(x as string).split(..)` on a string local: the split prints from the local itself (`rustStrLocalSplitText`). */
     rustCastSplitRecv(cast: any): boolean;
+    /** 42b: the `(x as string).indexOf("lit") >= 0` call of a scalar contains test. */
+    rust42bCastContainsTest(call: any): boolean;
     /** The ws cache classes whose hand-written `::new` takes `impl Into<Value>`. */
     private static readonly RUST_CACHE_CTORS;
     /** An integer local as the size argument of `new ArrayCache*(limit)`: passed natively (`i64` / `Option<i64>` into `impl Into<Value>`). */

@@ -15348,3 +15348,37 @@ describe('ral-41b item 1: string-method forms with variable / negative bounds an
         });
     }
 });
+
+describe('ral-42b item 1: `(x as string)` cast receivers take the typed local\'s native string forms', () => {
+    const t42 = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+    const root = path.join (rustFixtureRoot, '42b-cast-recv');
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n" +
+        "    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    hold (x: any): any { return x; }\n}\n";
+    const venue = (body: string) => "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n";
+    let n = 0;
+    const run = (body: string) => {
+        const dir = path.join (root, String (n++));
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue (body));
+        return t42.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const cases: [string, string, string[], string[]][] = [
+        [ 'a cast contains test on an Option<String> local reads the local natively',
+            "    parseThing (d: Dict) {\n        const address = this.safeString (d, 'a');\n        let tag = undefined;\n        if ((address as string).indexOf ('?dt=') >= 0) {\n            tag = 'x';\n        }\n        return this.hold ({ 'a': address, 't': tag });\n    }\n",
+            [ 'let mut address: Option<String>', 'address.as_deref().unwrap_or_default().contains("?dt=")' ], [ 'let mut address: Value', 'address.as_str().unwrap_or("").contains' ] ],
+        [ 'a cast startsWith on an Option<String> local',
+            "    parseThing (d: Dict) {\n        let amount = this.safeString (d, 'a');\n        if ((amount as string).startsWith ('-')) {\n            amount = 'neg';\n        }\n        return this.hold ({ 'a': amount });\n    }\n",
+            [ 'let mut amount: Option<String>' ], [ 'let mut amount: Value' ] ],
+        [ 'negative: a cast over a Value parameter keeps the Value path',
+            "    parseThing (d: Dict, address: any) {\n        if ((address as string).indexOf ('?dt=') >= 0) {\n            return this.hold ({ 'a': address });\n        }\n        return this.hold (d);\n    }\n",
+            [ 'address.as_str().unwrap_or("").contains("?dt=")' ], [] ],
+    ];
+    for (const [ name, body, want, no ] of cases) {
+        test(name, () => {
+            const out = run (body);
+            for (const x of want) expect(out).toContain(x);
+            for (const x of no) expect(out).not.toContain(x);
+        });
+    }
+});

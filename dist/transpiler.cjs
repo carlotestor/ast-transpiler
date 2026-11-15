@@ -60554,7 +60554,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     const left = this.unwrapParens(node.left);
     if (!_is.isCallExpression.call(void 0, left) || !_is.isPropertyAccessExpression.call(void 0, left.expression) || left.expression.name.text !== "indexOf" || left.arguments.length !== 1)
       return void 0;
-    const recv = left.expression.expression;
+    const recv = _nullishCoalesce(this.rustStrCastLocal(left.expression.expression), () => ( left.expression.expression));
     const kind = _nullishCoalesce(this.rustScalarIdentifierKind(recv), () => ( _optionalChain([this, 'access', _9091 => _9091.rustScalarParamRead, 'call', _9092 => _9092(recv), 'optionalAccess', _9093 => _9093.kind])));
     const needle = left.arguments[0];
     if (kind !== "str" && kind !== "ostr" || this.rustNativeStringLiteralArg(needle) === void 0 || needle.text === "")
@@ -60578,7 +60578,8 @@ ${binding(plan.indent)}` : ""), head: "" };
   }
   /** An operand printed by this rule: a scalar local, or a `.length` / string-method / `indexOf` of one. */
   rustScalarOwnsOperand(node) {
-    const inner = this.unwrapParens(node);
+    const cast = this.rustStrCastLocal(node);
+    const inner = _nullishCoalesce(cast, () => ( this.unwrapParens(node)));
     if (inner === void 0)
       return false;
     if (_is.isIdentifier.call(void 0, inner))
@@ -61526,7 +61527,14 @@ ${ind}];`;
     while (_is.isParenthesizedExpression.call(void 0, top.parent) || _optionalChain([top, 'access', _9189 => _9189.parent, 'optionalAccess', _9190 => _9190.kind]) === _ast.SyntaxKind.AsExpression)
       top = top.parent;
     const access = top.parent;
-    return _is.isPropertyAccessExpression.call(void 0, access) && access.expression === top && _is.isCallExpression.call(void 0, access.parent) && access.parent.expression === access && (_nullishCoalesce(this.rustStrLocalSplitText(access.parent), () => ( this.rustStrLocalSliceText(access.parent)))) !== void 0;
+    return _is.isPropertyAccessExpression.call(void 0, access) && access.expression === top && _is.isCallExpression.call(void 0, access.parent) && access.parent.expression === access && ((_nullishCoalesce(this.rustStrLocalSplitText(access.parent), () => ( this.rustStrLocalSliceText(access.parent)))) !== void 0 || this.rustStrCastLocal(top) !== void 0 && this.rustScalarStrMethod(access.parent) !== void 0 || this.rustStrCastLocal(top) !== void 0 && this.rust42bCastContainsTest(access.parent));
+  }
+  /** 42b: the `(x as string).indexOf("lit") >= 0` call of a scalar contains test. */
+  rust42bCastContainsTest(call) {
+    let top = call;
+    while (_is.isParenthesizedExpression.call(void 0, top.parent))
+      top = top.parent;
+    return _is.isBinaryExpression.call(void 0, top.parent) && top.parent.left === top && this.rustScalarContainsTest(top.parent, true) !== void 0;
   }
   /** An integer local as the size argument of `new ArrayCache*(limit)`: passed natively (`i64` / `Option<i64>` into `impl Into<Value>`). */
   rustCacheCtorLimitArg(n, kind) {
@@ -76972,7 +76980,8 @@ ${this.getIden(identation)}}`;
       return void 0;
     if (kind === "string" && this.primitiveKindOfType(this.typeOfNodeIfAny(receiver)) !== "string")
       return void 0;
-    if (_is.isIdentifier.call(void 0, receiver) && (this.rustStringLocalIdentifierIsTyped(receiver) || this.rustScalarLocalOf(receiver) !== void 0))
+    const bare2 = _nullishCoalesce(this.rustStrCastLocal(receiver), () => ( receiver));
+    if (_is.isIdentifier.call(void 0, bare2) && (this.rustStringLocalIdentifierIsTyped(bare2) || this.rustScalarLocalOf(bare2) !== void 0))
       return void 0;
     const text = receiverText.trim();
     return /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/.test(text) ? text : `(${text})`;

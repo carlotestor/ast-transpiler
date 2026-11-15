@@ -9126,7 +9126,8 @@ export class RustTranspiler extends BaseTranspiler {
     rustScalarContainsTest(node, dry: boolean): string | undefined {
         const left: any = this.unwrapParens(node.left);
         if (!isCallExpression(left) || !isPropertyAccessExpression(left.expression) || left.expression.name.text !== 'indexOf' || left.arguments.length !== 1) return undefined;
-        const recv: any = left.expression.expression;
+        // 42b: `(x as string).indexOf(..)` tests the local itself
+        const recv: any = this.rustStrCastLocal(left.expression.expression) ?? left.expression.expression;
         const kind = this.rustScalarIdentifierKind(recv) ?? this.rustScalarParamRead(recv)?.kind;
         const needle: any = left.arguments[0];
         if ((kind !== 'str' && kind !== 'ostr') || this.rustNativeStringLiteralArg(needle) === undefined || needle.text === '') return undefined;
@@ -9145,7 +9146,9 @@ export class RustTranspiler extends BaseTranspiler {
 
     /** An operand printed by this rule: a scalar local, or a `.length` / string-method / `indexOf` of one. */
     rustScalarOwnsOperand(node): boolean {
-        const inner: any = this.unwrapParens(node);
+        // 42b: `(x as string)` is `x` itself (a type assertion prints nothing)
+        const cast = this.rustStrCastLocal(node);
+        const inner: any = cast ?? this.unwrapParens(node);
         if (inner === undefined) return false;
         if (isIdentifier(inner)) return this.rustScalarLocalOf(inner) !== undefined || this.rustI64CounterOperand(inner);
         if (isBinaryExpression(inner)) return this.rustScalarOwnsOperand(inner.left) || this.rustScalarOwnsOperand(inner.right);
@@ -10004,7 +10007,17 @@ export class RustTranspiler extends BaseTranspiler {
         while (isParenthesizedExpression(top.parent) || top.parent?.kind === SyntaxKind.AsExpression) top = top.parent;
         const access: any = top.parent;
         return isPropertyAccessExpression(access) && access.expression === top && isCallExpression(access.parent) && access.parent.expression === access
-            && (this.rustStrLocalSplitText(access.parent) ?? this.rustStrLocalSliceText(access.parent)) !== undefined;
+            && ((this.rustStrLocalSplitText(access.parent) ?? this.rustStrLocalSliceText(access.parent)) !== undefined
+                // 42b: a native method of the typed local reads it through the cast (`(x as string).m(..)` prints `x`)
+                || (this.rustStrCastLocal(top) !== undefined && this.rustScalarStrMethod(access.parent) !== undefined)
+                || (this.rustStrCastLocal(top) !== undefined && this.rust42bCastContainsTest(access.parent)));
+    }
+
+    /** 42b: the `(x as string).indexOf("lit") >= 0` call of a scalar contains test. */
+    rust42bCastContainsTest(call): boolean {
+        let top: any = call;
+        while (isParenthesizedExpression(top.parent)) top = top.parent;
+        return isBinaryExpression(top.parent) && top.parent.left === top && this.rustScalarContainsTest(top.parent, true) !== undefined;
     }
 
     /** The ws cache classes whose hand-written `::new` takes `impl Into<Value>`. */
@@ -25472,7 +25485,8 @@ export class RustTranspiler extends BaseTranspiler {
         const receiver = node.expression.expression;
         if (receiver.kind === SyntaxKind.ThisKeyword || receiver.kind === SyntaxKind.SuperKeyword) return undefined;
         if (kind === 'string' && this.primitiveKindOfType(this.typeOfNodeIfAny(receiver)) !== 'string') return undefined;
-        if (isIdentifier(receiver) && (this.rustStringLocalIdentifierIsTyped(receiver) || this.rustScalarLocalOf(receiver) !== undefined)) return undefined;
+        const bare: any = this.rustStrCastLocal(receiver) ?? receiver;
+        if (isIdentifier(bare) && (this.rustStringLocalIdentifierIsTyped(bare) || this.rustScalarLocalOf(bare) !== undefined)) return undefined;
         const text = receiverText.trim();
         return /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/.test(text) ? text : `(${text})`;
     }
