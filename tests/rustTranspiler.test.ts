@@ -18890,3 +18890,15 @@ describe('ral-55x K1: a safeString id inserted as a map key only under its own !
         expect(out).toContain('uniqueResult.insert(id.as_deref().unwrap_or(\"null\").to_string(), ');
     });
 });
+
+describe('ral-56x K1: a nil-declared string local joined to a concat partner', () => {
+    test('signPath = literal concat / Str call, read as `signPath + n.toString () + body` is an Option<String>', () => {
+        const dir = path.join (rustFixtureRoot, '56x-k1a');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    nonce (): number { return 1; }\n    hash (s: any): string { return s; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    cleanPath (p: string): string {\n        return p.replace ('spot', '');\n    }\n    sg (path: string, body: string, pub: boolean) {\n        const nonce = 1000 + body.length;\n        let signPath: Str = undefined;\n        if (pub) {\n            signPath = '/' + path;\n        } else {\n            signPath = this.cleanPath (path);\n        }\n        const payload = signPath + nonce.toString () + body;\n        return this.hash (payload);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut signPath: Option<String> = None;');
+        expect(out).toContain('signPath.as_deref().unwrap_or(\"null\")');
+    });
+});
