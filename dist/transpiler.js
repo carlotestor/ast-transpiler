@@ -56315,7 +56315,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if ((boxed > 0 && !this.rustNumParamBoxesOnly(declaration) || expressionUses && !this.rustCompareOnlyNumUses(declaration)) && this.rustReaderIntDefaultNum(declaration.initializer))
       return void 0;
     const readerTouched = this.rustReaderDefaultTouched(declaration);
-    const readerLent = readerTouched && strKind && boxed > 0 && copied > 0 && !this.rustStrNoLend && (this.rustReaderLendBoxes(declaration) || kind === "ostr" && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, true, false, true));
+    const readerLent = readerTouched && strKind && boxed > 0 && copied > 0 && !this.rustStrNoLend && (this.rustReaderLendBoxes(declaration) || kind === "ostr" && !this.rustTestTierSource(declaration) && this.rustReaderLendBoxes(declaration, true, false, true) || kind === "ostr" && !this.rustTestTierSource(declaration) && this.rustSafeCurrencyCodeInit(declaration.initializer) && this.rustReaderLendBoxes(declaration, true));
     if (readerTouched && strKind && (boxed > 0 && copied > 0 && !readerLent || this.rustReaderStrHandedOn(declaration)))
       return void 0;
     if (readerLent)
@@ -58223,10 +58223,23 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       if (push !== void 0 && isCallExpression6(push) && !this.rustCopyPushPairElement(n, push, trial) && !this.rustPushSelfCallArgUse(n, push, trial))
         return false;
       const write = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken);
-      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write) && !this.rustScalarSumOperandWrite(n, write))
+      if (write !== void 0 && isBinaryExpression5(write) && this.isNodeInsideNode(n, write.right) && !this.rustScalarBoxedField(n, write, declaration) && !this.rustScalarFeedsElementWrite(n, write) && !this.rustScalarPreciseFeed(n, write, declaration) && !this.rustScalarCacheFieldCtor(n, write) && !this.rustScalarSumOperandWrite(n, write) && !this.rust58kDictReaderKeyWrite(n, write))
         return false;
     }
     return true;
+  }
+  /** ral-58k: the key argument of a base `this.safeDict (src, k, dflt)` that is the whole source of a write to a local
+   *  declared `Dict` (bitget pro handleBalance `account = this.safeDict (this.balance, code, account)`): the written local's
+   *  type is its annotation, never this key's, and the reader takes the key as a boxed `Value` either way. */
+  rust58kDictReaderKeyWrite(n, write) {
+    if (write.operatorToken?.kind !== SyntaxKind7.EqualsToken || this.rustTestTierSource(n))
+      return false;
+    const target = this.unwrapParens(write.left);
+    const call = this.unwrapParens(write.right);
+    if (!isIdentifier3(target) || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(call.expression.name.text) !== "safeDict" || call.arguments.length < 2 || this.unwrapParens(call.arguments[1]) !== n)
+      return false;
+    const d = this.rustDeclaredNode(target);
+    return d !== void 0 && isVariableDeclaration3(d) && d.type !== void 0 && String(d.type.getText()) === "Dict";
   }
   /** ral-53s: a direct operand of a base `this.sum (a, b)` that is the whole source of a write to another local
    *  (`endTime = this.sum (startTime, oneWeek)`): with this operand typed the call keeps its own combinator kind
@@ -59184,6 +59197,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "box";
     if ((kind === "str" || kind === "ostr") && this.rustThisFieldLiteralWrite(n) && this.rustLocalLastUse(n, this.rustDeclaredNode(n)))
       return "box";
+    if ((kind === "str" || kind === "ostr") && this.rust58kThisFieldIdentKeyWrite(n))
+      return "box";
     if ((kind === "str" || kind === "ostr") && this.rustNestedFieldKeyUse(n))
       return "nkey";
     if ((kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustNestedFieldValueUse(n))
@@ -60062,6 +60077,17 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (this.rustDictBearerDeclaration(recvNode) !== void 0)
       return `Value::Bool(matches!(${super.printIdentifier(inner)}.as_deref(), Some(__k) if ${String(recvNode.text)}.contains_key(__k)))`;
     return `Value::Bool(matches!((&${recv}, ${super.printIdentifier(inner)}.as_deref()), (Value::Dict(__d), Some(__k)) if __d.contains_key(__k)))`;
+  }
+  /** ral-58k: `n` is the whole right side of a statement `this.f[k] = n`, `k` another identifier (decided from the AST). */
+  rust58kThisFieldIdentKeyWrite(n) {
+    const write = n.parent;
+    if (!isBinaryExpression5(write) || write.right !== n || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const left = write.left;
+    if (!isElementAccessExpression4(left) || !isPropertyAccessExpression3(left.expression) || left.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const key = this.rustSkipWrappers(left.argumentExpression);
+    return key !== void 0 && isIdentifier3(key) && key.text !== n.text && key.text !== "undefined";
   }
   rustThisFieldLiteralWrite(n) {
     const write = n.parent;
@@ -61277,7 +61303,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         return this.rustStrVarNeedle(args[0], method === "includes") === void 0 ? void 0 : { recv, recvKind, method, kind: "bool" };
       if (shape === "vfind")
         return this.rustStrFindNeedle(args[0], false) === void 0 ? void 0 : { recv, recvKind, method, kind: "int" };
-      return args.every((a) => this.rustStrReplaceOperand(a) !== void 0) ? { recv, recvKind, method, kind: recvKind } : void 0;
+      return args.every((a) => this.rustStrReplaceOperand(a) !== void 0) || this.rust58kOptReplaceArgs(args) !== void 0 ? { recv, recvKind, method, kind: recvKind } : void 0;
     }
     if (shape === "find")
       return this.rustStrFindNeedle(args[0], false) === void 0 ? void 0 : { recv, recvKind, method, kind: "int" };
@@ -61360,6 +61386,24 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     if (lit !== void 0)
       return inner.text === "" && !empty ? void 0 : `Some("${lit}")`;
     return this.rustStrFindNeedle(inner, false);
+  }
+  /** ral-58k: `x.replace (o, to)` where exactly one operand `o` is an `Option<String>` local (decided from the AST: a typed
+   *  string identifier) and the other a never-`Null` operand. The boxed form answered the receiver itself when `o` was `Null`
+   *  (`recv.as_str().zip(o.as_deref()).map(..).unwrap_or_else(|| recv.clone())`): the native form keeps that arm. */
+  rust58kOptReplaceArgs(args) {
+    if (args.length !== 2)
+      return void 0;
+    const opt = (a) => {
+      const inner = this.unwrapParens(a);
+      return isIdentifier3(inner) && inner.text !== "undefined" && this.rustScalarIdentifierKind(inner) === "ostr" && !this.rust41bWsKeyLocal(inner) ? inner : void 0;
+    };
+    for (const index of [0, 1]) {
+      const o = opt(args[index]);
+      const other = this.rustStrReplaceOperand(args[1 - index]);
+      if (o !== void 0 && other !== void 0)
+        return { index, opt: `${super.printIdentifier(o)}.as_deref()`, other };
+    }
+    return void 0;
   }
   /** 41b: a replace operand that is never `Null`: a string literal or a `String` local (`&str` text). */
   rustStrReplaceOperand(node) {
@@ -62612,6 +62656,13 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
         return wrap(this.rustStrPadSliceText(method.method, args, name));
       }
       if ((method.method === "replace" || method.method === "replaceAll") && !args.every((a) => this.rustNativeStringLiteralArg(a) !== void 0)) {
+        const optArgs = args.every((a) => this.rustStrReplaceOperand(a) !== void 0) ? void 0 : this.rust58kOptReplaceArgs(args);
+        if (optArgs !== void 0) {
+          const [f, r] = optArgs.index === 0 ? ["__o", optArgs.other] : [optArgs.other, "__o"];
+          if (method.recvKind === "ostr")
+            return wrap(`(if let (Some(__s), Some(__o)) = (${name}.as_deref(), ${optArgs.opt}) { Some(__s.replace(${f}, ${r})) } else { ${name}.clone() })`);
+          return wrap(`(if let Some(__o) = ${optArgs.opt} { ${name}.replace(${f}, ${r}) } else { ${name}.clone() })`);
+        }
         const [from, to] = args.map((a) => this.rustStrReplaceOperand(a));
         if (method.recvKind === "ostr")
           return wrap(`(if let Some(__s) = ${name}.as_deref() { Some(__s.replace(${from}, ${to})) } else { None })`);

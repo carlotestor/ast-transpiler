@@ -951,6 +951,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  local: only uses bound to its own symbol are walked. Any other second binding keeps the plain walk. */
     rustBlockLocalUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean, scalar?: boolean, skipPropertyNames?: boolean): boolean;
     rustBindingUsesWalk(declaration: any, nodes: any[], own: any, home: any, skip: any[], skipPropertyNames: boolean, acceptUse: (n: any) => boolean, scalar: boolean): boolean;
+    /** ral-58k: the key argument of a base `this.safeDict (src, k, dflt)` that is the whole source of a write to a local
+     *  declared `Dict` (bitget pro handleBalance `account = this.safeDict (this.balance, code, account)`): the written local's
+     *  type is its annotation, never this key's, and the reader takes the key as a boxed `Value` either way. */
+    rust58kDictReaderKeyWrite(n: any, write: any): boolean;
     /** ral-53s: a direct operand of a base `this.sum (a, b)` that is the whole source of a write to another local
      *  (`endTime = this.sum (startTime, oneWeek)`): with this operand typed the call keeps its own combinator kind
      *  (`rustArithCallKind`), so the write prints the same native combinator text the other operands decide, and the
@@ -1241,6 +1245,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `m[k] = v` as a statement: the element key of a native insert. */
     rustElemInsertKey(n: any): boolean;
     printElemKeyInOp(key: any, obj: any): string | undefined;
+    /** ral-58k: `n` is the whole right side of a statement `this.f[k] = n`, `k` another identifier (decided from the AST). */
+    rust58kThisFieldIdentKeyWrite(n: any): boolean;
     rustThisFieldLiteralWrite(n: any): boolean;
     /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
     rustUdNestedBearerValue(n: any): boolean;
@@ -1450,6 +1456,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** 41b: an affix / includes needle as `Option<&str>`: any string literal (an empty one included when `empty`), a typed string local
      *  or a string-typed `Value` expression (`None` for `Null`: the helper answers `false`). */
     rustStrVarNeedle(node: any, empty: boolean): string | undefined;
+    /** ral-58k: `x.replace (o, to)` where exactly one operand `o` is an `Option<String>` local (decided from the AST: a typed
+     *  string identifier) and the other a never-`Null` operand. The boxed form answered the receiver itself when `o` was `Null`
+     *  (`recv.as_str().zip(o.as_deref()).map(..).unwrap_or_else(|| recv.clone())`): the native form keeps that arm. */
+    rust58kOptReplaceArgs(args: any[]): {
+        index: number;
+        opt: string;
+        other: string;
+    } | undefined;
     /** 41b: a replace operand that is never `Null`: a string literal or a `String` local (`&str` text). */
     rustStrReplaceOperand(node: any): string | undefined;
     /** ral-55x K1: every leaf of a `+` chain is a string literal or a `str` / `ostr` typed local, and at least one is a literal. */
