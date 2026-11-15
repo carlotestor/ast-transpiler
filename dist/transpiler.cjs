@@ -70223,6 +70223,10 @@ ${iden}}`;
       return true;
     if (_is.isAsExpression.call(void 0, up) && up.expression === n && _is.isReturnStatement.call(void 0, up.parent) && up.parent.expression === up)
       return true;
+    if (_is.isConditionalExpression.call(void 0, up) && up.condition !== n && _is.isVariableDeclaration.call(void 0, up.parent) && up.parent.initializer === up && _is.isIdentifier.call(void 0, up.parent.name) && this.rustDictTernaryArmPlace(n, this.rustDeclarationOfIdentifier(n))) {
+      const target = up.parent;
+      return this.rustBorrowedLocalKind(target) === void 0 && this.rustScalarLocalKind(target) === void 0 && this.rustNilLocalKind(target) === void 0 && !this.rustDictLocalIsTyped(target) && !this.rustVecLocalIsTyped(target) && this.rustMarketLocalKind(target) === false;
+    }
     if (up.kind === _ast.SyntaxKind.ArrayLiteralExpression)
       return !this.rustInDestructureWrite(n);
     if (_is.isBinaryExpression.call(void 0, up) && up.right === n && up.operatorToken.kind === _ast.SyntaxKind.EqualsToken && _optionalChain([up, 'access', _9750 => _9750.parent, 'optionalAccess', _9751 => _9751.kind]) === _ast.SyntaxKind.ExpressionStatement && (_is.isElementAccessExpression.call(void 0, up.left) || _is.isPropertyAccessExpression.call(void 0, up.left)) && (this.rustThisRootedPlace(up.left) || this.rustLocalKeyPlace(up.left, n)))

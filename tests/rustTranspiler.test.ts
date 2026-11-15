@@ -15352,6 +15352,11 @@ describe('ral-42d: a literal-default safeDict / safeList returned through `as T`
         expect(out).toMatch(/let mut order: crate::value::Dict = .*\.into_dict\(\);/s);
         expect(out).toMatch(/return Value::Dict\(order\);/);
     });
+    test('a `{}`-defaulted safeDict as one arm of a ternary initialising a Value local boxes once in that arm', () => {
+        const out = run("    m (t: any, c: boolean): any {\n        const td = this.safeDict (t, 'ticker', {});\n        const data = c ? t : td;\n        return this.hold (data);\n    }\n");
+        expect(out).toMatch(/let mut td: crate::value::Dict = .*\.into_dict\(\);/s);
+        expect(out).toMatch(/else \{ Value::Dict\(td\) \}/);
+    });
     test('`return x as List` of a no-default safeList stays Value (it may be Null)', () => {
         const out = run("    m (r: any): List {\n        const rows = this.safeList (r, 'rows');\n        return rows as List;\n    }\n");
         expect(out).toMatch(/let mut rows: Value = /);
