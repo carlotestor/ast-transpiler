@@ -16367,7 +16367,8 @@ export class RustTranspiler extends BaseTranspiler {
 
     rustCaughtErrorBindingProof(catchClause: any): boolean {
         const name = String(catchClause?.variableDeclaration?.name?.text ?? '');
-        if (name === '' || !isIdentifier(catchClause.variableDeclaration.name)) return false;
+        // test sources print through their own pipeline, which never had the typed binding
+        if (name === '' || !isIdentifier(catchClause.variableDeclaration.name) || this.rustTestTierSource(catchClause)) return false;
         let ok = true;
         const visit = (n: any) => {
             if (!ok) return;

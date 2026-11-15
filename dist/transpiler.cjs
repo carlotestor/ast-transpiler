@@ -67598,7 +67598,7 @@ ${this.getIden(identation)}}`;
   }
   rustCaughtErrorBindingProof(catchClause) {
     const name = String(_nullishCoalesce(_optionalChain([catchClause, 'optionalAccess', _9585 => _9585.variableDeclaration, 'optionalAccess', _9586 => _9586.name, 'optionalAccess', _9587 => _9587.text]), () => ( "")));
-    if (name === "" || !_is.isIdentifier.call(void 0, catchClause.variableDeclaration.name))
+    if (name === "" || !_is.isIdentifier.call(void 0, catchClause.variableDeclaration.name) || this.rustTestTierSource(catchClause))
       return false;
     let ok = true;
     const visit = (n) => {

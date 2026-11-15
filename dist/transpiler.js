@@ -67599,7 +67599,7 @@ ${this.getIden(identation)}}`;
   }
   rustCaughtErrorBindingProof(catchClause) {
     const name = String(catchClause?.variableDeclaration?.name?.text ?? "");
-    if (name === "" || !isIdentifier3(catchClause.variableDeclaration.name))
+    if (name === "" || !isIdentifier3(catchClause.variableDeclaration.name) || this.rustTestTierSource(catchClause))
       return false;
     let ok = true;
     const visit = (n) => {
