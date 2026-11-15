@@ -466,6 +466,12 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  asked while the shared-container rule walks its uses (the copying `IndexMap` bearer rules keep the old walk). */
     rustOwnMethodName(n: any, scope: any): boolean;
     private rustOwnNameSkip;
+    /** ral-52i: set only while the built-list rule walks its uses. */
+    private rustDisjointShadowSkip;
+    private rustDisjointShadowSeen;
+    private rustBuiltListCopiedElement;
+    /** ral-52i: `other` (a variable declaration) and `declaration` sit in two blocks of one function, neither inside the other. */
+    rustDisjointBinding(other: any, declaration: any): boolean;
     rustLocalUsesAcceptBool(declaration: any, sourceName: string): boolean;
     private rustBoolParamDecisions;
     rustParamPrintsBool(param: any): boolean;
@@ -1140,6 +1146,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustElemKeyInUse(n: any): boolean;
     /** An `in`-keyed element local stays `Value` when a boxed use would copy where the `Value` moved or was lent. */
     rustElemKeyInCostly(declaration: any): boolean;
+    /** ral-52i: `n` is a top-level value of the object literal written by `m[k] = { .. }` keyed by the same local `k`. */
+    rustElemKeyInsertLiteralValue(n: any, declaration: any): boolean;
     /** `m[k] = v` as a statement: the element key of a native insert. */
     rustElemInsertKey(n: any): boolean;
     printElemKeyInOp(key: any, obj: any): string | undefined;
@@ -3539,6 +3547,9 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so
      *  `y.into_list()` moves exactly that list (no copy, no other variant to lose). */
     rustArrayGuardedMove(write: any): boolean;
+    private rustArrayGuardedCopies;
+    /** ral-52i: `id` names a plain `Value` local or parameter of its own function (no typed local form). */
+    rustPlainValueBinding(id: any): boolean;
     /** ral-uf: every later read of `node`'s local lies in the else branch of `guard` (a path disjoint from the move) and
      *  nothing reads it after the if statement; no loop or closure sits between the move and the declaration. */
     rustGuardedBranchLastUse(node: any, declaration: any, guard: any): boolean;
