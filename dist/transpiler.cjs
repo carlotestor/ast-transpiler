@@ -77055,7 +77055,7 @@ ${iden}}`;
     table = [];
     this.rustWsResolveTables.set(cls, null);
     const file = String(cls.getSourceFile().fileName).replace(/\\/g, "/");
-    const at = file.search(/(?:^|\/)ts\/src\/pro\/[^/]+\.ts$/);
+    const at = file.search(/(?:^|\/)ts\/src\/(?:pro|prediction)\/[^/]+\.ts$/);
     if (at < 0 || this.rustWsHasWsRelatives(file, at)) {
       this.rustWsResolveTables.set(cls, null);
       return null;
@@ -77206,15 +77206,17 @@ ${iden}}`;
       this.rustWsHashEnv = save;
     }
   }
-  /** A pro venue that extends (through its abstract shim) another pro venue, or that another pro venue extends. */
+  /** A pro venue that extends (through its abstract shim) another pro venue, or that another pro venue extends.
+   *  ral-57w: the same rule over the prediction tier (`ts/src/prediction/`, shims in `abstract/prediction/`). */
   rustWsHasWsRelatives(file, at) {
-    const root = file.slice(0, file.indexOf("ts/src/pro/", at)) + "ts/src";
-    let parents = this.rustWsWsParents.get(root);
+    const tier = file.indexOf("ts/src/prediction/", at) >= 0 ? "prediction" : "pro";
+    const root = file.slice(0, file.indexOf(`ts/src/${tier}/`, at)) + "ts/src";
+    let parents = this.rustWsWsParents.get(`${root}/${tier}`);
     if (parents === void 0) {
       parents = /* @__PURE__ */ new Map();
       let entries = [];
       try {
-        entries = fs3.readdirSync(root + "/pro").filter((f) => f.endsWith(".ts"));
+        entries = fs3.readdirSync(`${root}/${tier}`).filter((f) => f.endsWith(".ts"));
       } catch (e) {
         entries = [];
       }
@@ -77222,27 +77224,27 @@ ${iden}}`;
         const id2 = f.slice(0, -3);
         let parent;
         try {
-          const text = fs3.readFileSync(`${root}/pro/${f}`, "utf8");
+          const text = fs3.readFileSync(`${root}/${tier}/${f}`, "utf8");
           const base = _optionalChain([/export default class \w+ extends (\w+)/, 'access', _10382 => _10382.exec, 'call', _10383 => _10383(text), 'optionalAccess', _10384 => _10384[1]]);
           const from = base === void 0 ? void 0 : _optionalChain([new RegExp(`^import ${base} from '([^']+)'`, "m"), 'access', _10385 => _10385.exec, 'call', _10386 => _10386(text), 'optionalAccess', _10387 => _10387[1]]);
           if (_optionalChain([from, 'optionalAccess', _10388 => _10388.startsWith, 'call', _10389 => _10389("./")]))
             parent = from.slice(2).replace(/\.js$/, "");
-          else if (_optionalChain([from, 'optionalAccess', _10390 => _10390.startsWith, 'call', _10391 => _10391("../abstract/pro/")])) {
-            const shim = fs3.readFileSync(`${root}/abstract/pro/${from.slice("../abstract/pro/".length).replace(/\.js$/, ".ts")}`, "utf8");
-            parent = _optionalChain([/import \w+ from '\.\.\/\.\.\/pro\/(\w+)\.js'/, 'access', _10392 => _10392.exec, 'call', _10393 => _10393(shim), 'optionalAccess', _10394 => _10394[1]]);
+          else if (_optionalChain([from, 'optionalAccess', _10390 => _10390.startsWith, 'call', _10391 => _10391(`../abstract/${tier}/`)])) {
+            const shim = fs3.readFileSync(`${root}/abstract/${tier}/${from.slice(`../abstract/${tier}/`.length).replace(/\.js$/, ".ts")}`, "utf8");
+            parent = _optionalChain([new RegExp(`import \\w+ from '\\.\\./\\.\\./${tier}/(\\w+)\\.js'`), 'access', _10392 => _10392.exec, 'call', _10393 => _10393(shim), 'optionalAccess', _10394 => _10394[1]]);
           }
         } catch (e) {
           parent = "?";
         }
         parents.set(id2, parent);
       }
-      this.rustWsWsParents.set(root, parents);
+      this.rustWsWsParents.set(`${root}/${tier}`, parents);
     }
     const id = file.slice(file.lastIndexOf("/") + 1, -3);
     if (!parents.has(id) || parents.get(id) !== void 0)
       return true;
     for (const [child, p] of parents)
-      if (p === id && !this.rustWsDescribeOnly(`${root}/pro/${child}.ts`) && !this.rustWsRestOnlyChild(`${root}/pro/${child}.ts`, file))
+      if (p === id && !this.rustWsDescribeOnly(`${root}/${tier}/${child}.ts`) && !this.rustWsRestOnlyChild(`${root}/${tier}/${child}.ts`, file))
         return true;
     return false;
   }
