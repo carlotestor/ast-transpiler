@@ -2747,6 +2747,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  proves a map element) in a REST or prediction venue file: the list comes from a parsed response (no ws subscription,
      *  cache or book tag), and the row's copy is written exactly as the boxed copy was (the list is never written back). */
     rustElementKeyWriteOk(n: any, init: any): boolean;
+    /** ral-45c: `row['k'] = v` on `const row = d[k]` of a `Dictionary<Dict>` local `d` read from an untagged REST map, in a REST
+     *  or prediction venue file. Write-back proof: `d` is never read again after the row is taken (its only other uses are its
+     *  declaration and an `Object.keys (d)` ahead of the row's loop), so the map the boxed `add_element_to_object` left unchanged
+     *  in `d` is never observed; the row's copy-on-write insert is exactly the boxed one (an untagged map, no store route). */
+    rustDictRowKeyWriteBackOk(n: any, init: any): boolean;
     rustBuiltKeyWriteLineOk(n: any, extra?: number): boolean;
     rustNullTestedDictLocal(init: any, nullTests: number, writes: number): boolean;
     rustDictElementSource(init: any): boolean;
