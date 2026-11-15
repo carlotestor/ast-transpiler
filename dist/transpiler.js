@@ -72091,7 +72091,28 @@ ${iden}}`;
     const elem = /^(\w+)\[\]$/.exec(inner);
     if (elem !== null && _RustTranspiler.RUST_VENUE_RECORD_NAMES.has(elem[1]))
       return { kind: "list", nullable: false };
+    if (/^\[[^[\]]+\]$/.test(inner) && this.rustTupleLiteralReturns(declaration, inner.slice(1, -1).split(",").length))
+      return { kind: "list", nullable: false };
     return void 0;
+  }
+  /** ral-43g: every `return` in `declaration`'s own body (nested functions excluded) is an array literal of `arity` plain elements. */
+  rustTupleLiteralReturns(declaration, arity) {
+    let returns = 0;
+    let ok = true;
+    const visit = (n) => {
+      if (!ok || n !== declaration.body && isFunctionLike(n))
+        return;
+      if (isReturnStatement4(n)) {
+        const v = this.unwrapParens(n.expression);
+        if (v === void 0 || !isArrayLiteralExpression4(v) || v.elements.length !== arity || v.elements.some((e) => e.kind === SyntaxKind7.SpreadElement))
+          ok = false;
+        else
+          returns++;
+      }
+      n.forEachChild(visit);
+    };
+    declaration.body.forEachChild(visit);
+    return ok && returns > 0;
   }
   /** `this.m(..)` of a venue method (no override, every venue declaration of the name returning `Dict`) whose every
    *  return is `this.safeDict (this.<field>, '<key>', {})`: the shared handle of a typed store entry, a map on every path. */

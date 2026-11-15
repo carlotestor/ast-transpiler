@@ -2921,6 +2921,8 @@ export declare class RustTranspiler extends BaseTranspiler {
         kind: 'dict' | 'list';
         nullable: boolean;
     } | undefined;
+    /** ral-43g: every `return` in `declaration`'s own body (nested functions excluded) is an array literal of `arity` plain elements. */
+    rustTupleLiteralReturns(declaration: any, arity: number): boolean;
     /** `this.m(..)` of a venue method (no override, every venue declaration of the name returning `Dict`) whose every
      *  return is `this.safeDict (this.<field>, '<key>', {})`: the shared handle of a typed store entry, a map on every path. */
     rustStoreDictReturnCall(call: any): boolean;
