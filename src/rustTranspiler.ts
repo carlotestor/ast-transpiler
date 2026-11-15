@@ -9698,7 +9698,8 @@ export class RustTranspiler extends BaseTranspiler {
             const fn = method.method === 'toLowerCase' ? 'to_lowercase' : 'to_uppercase';
             if (method.recvKind === 'ostr' && method.method === 'toString') {
                 const local = this.rustScalarLocalOf(method.recv);
-                return wrap(local !== undefined && this.rustLocalLastUse(method.recv, local.declaration) ? name : `${name}.clone()`);
+                // inside a loop / read again: borrow and copy the text once (the one String the `Value` form's `format!` made)
+                return wrap(local !== undefined && this.rustLocalLastUse(method.recv, local.declaration) ? name : `${name}.as_deref().map(str::to_owned)`);
             }
             if (method.recvKind === 'ostr') return wrap(`${name}.as_deref().map(str::${fn})`);
             if (method.method === 'trim') return wrap(`${name}.trim().to_string()`);

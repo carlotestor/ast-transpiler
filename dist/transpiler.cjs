@@ -61216,7 +61216,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       const fn = method.method === "toLowerCase" ? "to_lowercase" : "to_uppercase";
       if (method.recvKind === "ostr" && method.method === "toString") {
         const local = this.rustScalarLocalOf(method.recv);
-        return wrap(local !== void 0 && this.rustLocalLastUse(method.recv, local.declaration) ? name : `${name}.clone()`);
+        return wrap(local !== void 0 && this.rustLocalLastUse(method.recv, local.declaration) ? name : `${name}.as_deref().map(str::to_owned)`);
       }
       if (method.recvKind === "ostr")
         return wrap(`${name}.as_deref().map(str::${fn})`);
