@@ -16179,3 +16179,24 @@ describe('ral-44g: a ternary whose arms are {} or a base safeDict with a {} defa
         expect(out).toMatch(/let mut network: Value = /);
     });
 });
+
+describe('ral-45g: an any-typed ternary of locals / rows / {} read only at literal keys holds a map (ral-qa invariant)', () => {
+    const mk = (body: string) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-45g-anytern-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeString (o: any, k: any, d: any = undefined): any { return o; }\n    parseJson (s: any): any { return s; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        const out = t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content;
+        fs.rmSync(root, { recursive: true, force: true });
+        return out;
+    };
+    test('two any locals, literal-key reads only: crate::value::Dict', () => {
+        const out = mk("    handle (body: any, response: any) {\n        const parsed = this.parseJson (body);\n        const err = (parsed !== undefined) ? parsed : response;\n        const a = this.safeString (err, 'msg');\n        return this.safeString (err, 'code', a);\n    }\n");
+        expect(out).toContain('let mut err: crate::value::Dict = ');
+    });
+    test('negative: a null test keeps Value', () => {
+        const out = mk("    handle (body: any, response: any) {\n        const parsed = this.parseJson (body);\n        const err = (parsed !== undefined) ? parsed : response;\n        if (err === undefined) { return undefined; }\n        return this.safeString (err, 'msg');\n    }\n");
+        expect(out).toMatch(/let mut err: Value = /);
+    });
+});

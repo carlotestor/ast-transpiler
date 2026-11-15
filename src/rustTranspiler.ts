@@ -18457,7 +18457,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (extendReuse) from = 'dict';
         // ral-qa: a base `safeValue*` result read only at string keys: every non-map value (Null included) reads Null at
         // a string key exactly as the empty map `into_dict()` leaves, so the local holds the shared map
-        const keyReadOnly = from === undefined && !nilDeclared && init !== undefined && this.rustSafeValueKeyReadSource(init);
+        const keyReadOnly = from === undefined && !nilDeclared && init !== undefined && (this.rustSafeValueKeyReadSource(init) || this.rustKeyReadTernarySource(init));
         if (keyReadOnly) from = 'dict';
         // ral-42g: a row `xs[i]` of a checker list (counter-loop binding) read only at literal string keys: the same invariant
         const elemKeyReadOnly = from === undefined && !nilDeclared && init !== undefined && this.rustListRowKeyReadSource(init);
@@ -20885,6 +20885,28 @@ export class RustTranspiler extends BaseTranspiler {
         // the receiver chain names no ws client state nor a market / currency table
         const names = (x: any): boolean => (isPropertyAccessExpression(x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text))) || (x.forEachChild(names) ?? false);
         return !names(call.arguments[0]);
+    }
+
+    /** ral-45g: `c ? a : b` whose arms are each a local / parameter, a numeric-index row, an empty map literal or a ral-qa
+     *  `safeValue` source: whatever kind each arm holds, a string-key read of a non-map answers Null exactly as the empty map
+     *  `into_dict()` leaves, so under ral-qa's use rule (literal-key base reads only) the typed local is observably identical.
+     *  No arm names ws client state nor a market / currency table. */
+    rustKeyReadTernarySource(init: any): boolean {
+        const node: any = this.rustSkipWrappers(init);
+        if (node === undefined || !isConditionalExpression(node) || this.rustTestTierSource(node)) return false;
+        const names = (x: any): boolean => (isPropertyAccessExpression(x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text))) || (x.forEachChild(names) ?? false);
+        const arm = (x: any): boolean => {
+            const a: any = this.rustSkipWrappers(x);
+            if (a === undefined || names(a)) return false;
+            if (isIdentifier(a)) { const d: any = this.rustDeclaredNode(a); return d !== undefined && (isVariableDeclaration(d) || isParameterDeclaration(d)); }
+            if (isObjectLiteralExpression(a)) return a.properties.length === 0;
+            if (isElementAccessExpression(a) && isIdentifier(a.expression)) {
+                const key: any = this.rustSkipWrappers(a.argumentExpression);
+                return key !== undefined && (isNumericLiteral(key) || this.primitiveKindOfType(this.typeOfNodeIfAny(key)) === 'number') && !this.rustWsCacheMapLike(a.expression);
+            }
+            return isCallExpression(a) && this.rustSafeValueKeyReadSource(a);
+        };
+        return arm(node.whenTrue) && arm(node.whenFalse);
     }
 
     /** ral-42g: `xs[i]` (a numeric index) where `xs` is a local or parameter the checker types as a list (`T[]`, never a tuple, an

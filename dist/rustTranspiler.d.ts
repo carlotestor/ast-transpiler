@@ -2924,6 +2924,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustBorrowedSourceKind(call: any): 'dict' | 'list' | 'api' | undefined;
     private static readonly RUST_SAFE_VALUE_KEY_SOURCES;
     rustSafeValueKeyReadSource(call: any): boolean;
+    /** ral-45g: `c ? a : b` whose arms are each a local / parameter, a numeric-index row, an empty map literal or a ral-qa
+     *  `safeValue` source: whatever kind each arm holds, a string-key read of a non-map answers Null exactly as the empty map
+     *  `into_dict()` leaves, so under ral-qa's use rule (literal-key base reads only) the typed local is observably identical.
+     *  No arm names ws client state nor a market / currency table. */
+    rustKeyReadTernarySource(init: any): boolean;
     /** ral-42g: `xs[i]` (a numeric index) where `xs` is a local or parameter the checker types as a list (`T[]`, never a tuple, an
      *  ArrayCache or an order book side) outside the test tier: the row a counter loop binds. Read only at literal string keys (the
      *  ral-qa use rule), a non-map row (Null, list, scalar, out of range) reads Null there exactly as the empty map `into_dict()`

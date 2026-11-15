@@ -69641,7 +69641,7 @@ ${iden}}`;
     const extendReuse = from === void 0 && init !== void 0 && this.rustExtendReuseLiteral(declaration, init);
     if (extendReuse)
       from = "dict";
-    const keyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && this.rustSafeValueKeyReadSource(init);
+    const keyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && (this.rustSafeValueKeyReadSource(init) || this.rustKeyReadTernarySource(init));
     if (keyReadOnly)
       from = "dict";
     const elemKeyReadOnly = from === void 0 && !nilDeclared && init !== void 0 && this.rustListRowKeyReadSource(init);
@@ -72206,6 +72206,33 @@ ${iden}}`;
       return false;
     const names = (x) => isPropertyAccessExpression3(x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text)) || (x.forEachChild(names) ?? false);
     return !names(call.arguments[0]);
+  }
+  /** ral-45g: `c ? a : b` whose arms are each a local / parameter, a numeric-index row, an empty map literal or a ral-qa
+   *  `safeValue` source: whatever kind each arm holds, a string-key read of a non-map answers Null exactly as the empty map
+   *  `into_dict()` leaves, so under ral-qa's use rule (literal-key base reads only) the typed local is observably identical.
+   *  No arm names ws client state nor a market / currency table. */
+  rustKeyReadTernarySource(init) {
+    const node = this.rustSkipWrappers(init);
+    if (node === void 0 || !isConditionalExpression4(node) || this.rustTestTierSource(node))
+      return false;
+    const names = (x) => isPropertyAccessExpression3(x) && /^(?:markets|markets_by_id|currencies|currencies_by_id|clients|futures|subscriptions|orderbooks|cache)$/.test(String(x.name.text)) || (x.forEachChild(names) ?? false);
+    const arm = (x) => {
+      const a = this.rustSkipWrappers(x);
+      if (a === void 0 || names(a))
+        return false;
+      if (isIdentifier3(a)) {
+        const d = this.rustDeclaredNode(a);
+        return d !== void 0 && (isVariableDeclaration3(d) || isParameterDeclaration3(d));
+      }
+      if (isObjectLiteralExpression4(a))
+        return a.properties.length === 0;
+      if (isElementAccessExpression4(a) && isIdentifier3(a.expression)) {
+        const key = this.rustSkipWrappers(a.argumentExpression);
+        return key !== void 0 && (isNumericLiteral4(key) || this.primitiveKindOfType(this.typeOfNodeIfAny(key)) === "number") && !this.rustWsCacheMapLike(a.expression);
+      }
+      return isCallExpression6(a) && this.rustSafeValueKeyReadSource(a);
+    };
+    return arm(node.whenTrue) && arm(node.whenFalse);
   }
   /** ral-42g: `xs[i]` (a numeric index) where `xs` is a local or parameter the checker types as a list (`T[]`, never a tuple, an
    *  ArrayCache or an order book side) outside the test tier: the row a counter loop binds. Read only at literal string keys (the
