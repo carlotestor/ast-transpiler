@@ -57277,11 +57277,26 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (tupleBool !== void 0)
       return tupleBool;
     const listType = this.typeOfNodeIfAny(node.expression);
+    if (listType !== void 0 && this.rustConstTupleStrSlotRead(node, owner, listType))
+      return "ostr";
     if (listType === void 0 || !this.getChecker().isArrayType(listType))
       return void 0;
     if (this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string")
       return "ostr";
     return this.rustAnyStrPushElem(node) ? "ostr" : void 0;
+  }
+  /** ral-53f: `const t = this.m (..); const x = t[0]` where `t` is a const tuple local (a declared `[string, Str, Dict]`
+   *  return, e.g. binance pro `resolveAuthType`) and the literal-index slot is declared `string`: the read is the slot's
+   *  string or undefined. Non-test sources only. */
+  rustConstTupleStrSlotRead(node, owner, listType) {
+    if (!isVariableDeclaration3(owner) || this.rustTestTierSource(node) || !this.getChecker().isTupleType(listType))
+      return false;
+    if (owner.parent === void 0 || (owner.parent.flags & NodeFlags4.Const) === 0)
+      return false;
+    const index = this.unwrapParens(node.argumentExpression);
+    if (index === void 0 || index.kind !== SyntaxKind7.NumericLiteral)
+      return false;
+    return this.primitiveKindOfType(this.typeOfNodeIfAny(node)) === "string";
   }
   /** xg: the element read prints straight off the list place (`xs.get(..).and_then(Value::as_str)..`), never a helper read
    *  that would leave the declaration `Value` while its uses read a string (the paradex E0599 trap). */
@@ -79324,7 +79339,7 @@ ${iden}}`;
           return false;
         const form = plus ? "concat" : this.rustScalarUseForm(n, "ostr");
         this.rustScalarUseForms.set(n, form);
-        if (form === void 0 || form === "err" || form === "key" || form === "okey" || form === "targ" || form === "kin")
+        if (form === void 0 || form === "err" || form === "key" || form === "okey" || form === "targ" && !this.rustWsKeyUse(n) || form === "kin")
           return false;
         const push = findAncestor(n, (m) => isStatement(m) || isCallExpression6(m) && isPropertyAccessExpression3(m.expression) && m.expression.name.text === "push");
         if (push !== void 0 && isCallExpression6(push))
@@ -79344,7 +79359,7 @@ ${iden}}`;
           return true;
         }
         const feeds = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(m.left) || isVariableDeclaration3(m));
-        if (feeds !== void 0 && !isStatement(feeds) && (form === "box" || form === "xbox") && !this.rustStrSlotListElement(n))
+        if (feeds !== void 0 && !isStatement(feeds) && (form === "box" || form === "xbox") && !this.rustStrSlotListElement(n) && !this.rustStrSlotBoxIsNotValueOf(n, feeds))
           return false;
         if (_RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form) || form === "write")
           nativeUses++;
@@ -79406,6 +79421,34 @@ ${iden}}`;
       return false;
     const kind = this.rustScalarDecisions.get(declaration);
     return (kind === "str" || kind === "ostr") && this.rustLocalLastUse(other, declaration) && this.rustSlotUseOutsideLoop(other, declaration);
+  }
+  /** ral-53f: a box that is a call argument or an object-literal value below another local's initializer / write
+   *  (`safeDict (this.options, type, {})`, `extend ({ 'type': type }, ..)`), never that local's value itself (not reached
+   *  through parentheses, ternary arms or `||` / `&&` / `??` operands only): the target's typing does not read the slot. */
+  rustStrSlotBoxIsNotValueOf(n, feeds) {
+    let top = n;
+    for (; ; ) {
+      const up = top.parent;
+      if (up === void 0 || up === feeds)
+        return false;
+      if (isParenthesizedExpression3(up) || isConditionalExpression4(up) && up.condition !== top || isBinaryExpression5(up) && [SyntaxKind7.BarBarToken, SyntaxKind7.AmpersandAmpersandToken, SyntaxKind7.QuestionQuestionToken].includes(up.operatorToken.kind)) {
+        top = up;
+        continue;
+      }
+      if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken)
+        return false;
+      return (isCallExpression6(up) && up.arguments.includes(top) || up.kind === SyntaxKind7.PropertyAssignment && up.initializer === top) && this.rustStrSlotBoxLineFits(n);
+    }
+  }
+  /** ral-53f: the boxed read (`x.clone().map(Value::from).unwrap_or(Value::Null)`) keeps every printed line of its
+   *  statement within 400 chars, so the guarded body never boxes a neighbouring typed local back to make room. */
+  rustStrSlotBoxLineFits(n) {
+    const statement = findAncestor(n, (a) => isStatement(a));
+    if (statement === void 0 || isBlock4(statement))
+      return false;
+    const column = statement.getStart() - String(statement.getSourceFile().text).lastIndexOf("\n", statement.getStart()) - 1;
+    const grow = ".clone().map(Value::from).unwrap_or(Value::Null)".length;
+    return this.printNode(statement, 0).split("\n").every((l) => column + l.trim().length + grow <= 400);
   }
   /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of
    *  another local of the same function: the slot and that local are decided together by `rustScalarSolveScope`. */
