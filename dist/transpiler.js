@@ -63410,11 +63410,11 @@ ${i1}}`;
       }
       if (empty && this.rustIsNullWriteOf(n))
         return true;
-      if (empty && (this.rustIsSafeMarketWriteOf(n) || this.rustIsOptMarketWriteOf(n) || this.rustMarketAliasWriteSource(n) !== void 0)) {
+      if (empty && (this.rustIsSafeMarketWriteOf(n) || this.rustIsOptMarketWriteOf(n) || this.rustMarketAliasWriteSource(n) !== void 0 || this.rustIsSlotParamWriteOf(n))) {
         writes++;
         return true;
       }
-      if (empty && this.rustOptMarketKeyRead(n))
+      if (empty && (this.rustOptMarketKeyRead(n) || this.rustOptMarketKeyAsKey(n)))
         return true;
       if (empty && this.rustMarketSlotUse(n))
         return true;
@@ -63456,7 +63456,7 @@ ${i1}}`;
   /** `crate::value::KeyRead::key_read(&&m, "k")` for a direct read on an `Option<Market>` local. */
   printOptMarketKeyRead(node) {
     const recv = node.expression;
-    if (recv === void 0 || !isIdentifier3(recv) || !this.rustDictKeyReadUse(recv) || this.rustOptMarketLocalOf(recv) === void 0)
+    if (recv === void 0 || !isIdentifier3(recv) || !(this.rustDictKeyReadUse(recv) || this.rustOptMarketKeyAsKey(recv)) || this.rustOptMarketLocalOf(recv) === void 0)
       return void 0;
     const key = isElementAccessExpression4(node) ? String(this.rustSkipWrappers(node.argumentExpression).text) : String(node.name.text);
     return `crate::value::KeyRead::key_read(&&${super.printIdentifier(recv)}, "${this.escapeRustStringLiteral(key)}")`;
@@ -64195,6 +64195,22 @@ ${i1}}`;
       return void 0;
     return this.rustOptMarketLocalOf(up.left);
   }
+  /** ral-50c: `m = market` as its own statement, `market` a lent `Option<&Market>` parameter: stores `market.cloned()`. */
+  rustIsSlotParamWriteOf(n) {
+    const up = n.parent;
+    return up !== void 0 && isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.parent?.kind === SyntaxKind7.ExpressionStatement && isIdentifier3(up.right) && this.rustMarketSlotParamOf(up.right) !== void 0;
+  }
+  /** ral-50c: `d[m['k']]`: a literal-key read of the local used as another map's key (read through `KeyRead`, a `Value`). */
+  rustOptMarketKeyAsKey(n) {
+    const up = n.parent;
+    if (up === void 0 || !isElementAccessExpression4(up) || up.expression !== n)
+      return false;
+    const arg = this.rustSkipWrappers(up.argumentExpression);
+    if (arg === void 0 || !isStringLiteralLikeNode4(arg) || /^\d+$/.test(String(arg.text)))
+      return false;
+    const use = up.parent;
+    return use !== void 0 && isElementAccessExpression4(use) && use.argumentExpression === up;
+  }
   /** `m = undefined` as its own statement. */
   rustIsNullWriteOf(n) {
     const up = n.parent;
@@ -64204,6 +64220,8 @@ ${i1}}`;
   printTypedMarketWrite(left, right) {
     if (isIdentifier3(left) && this.rustIsNullWriteOf(left) && this.rustOptMarketLocalOf(left) !== void 0)
       return `${super.printIdentifier(left)} = None`;
+    if (isIdentifier3(left) && this.rustIsSlotParamWriteOf(left) && this.rustOptMarketLocalOf(left) !== void 0)
+      return `${super.printIdentifier(left)} = ${super.printIdentifier(right)}.cloned()`;
     if (isIdentifier3(left) && this.rustIsSafeMarketWriteOf(left) && this.rustOptMarketLocalOf(left) !== void 0)
       return `${super.printIdentifier(left)} = Some(${this.printNode(right, 0).trim()})`;
     if (isIdentifier3(left) && this.rustIsOptMarketWriteOf(left) && this.rustOptMarketLocalOf(left) !== void 0)
@@ -67165,6 +67183,9 @@ ${ind}let ${view}: &${map} = &${arc};
     }
   }
   printNativeMapAccess(receiverText, receiverNode, keyText) {
+    if (isIdentifier3(receiverNode) && this.rustOptMarketLocalOf(receiverNode) !== void 0 && _RustTranspiler.rustBearerKeyTextOk(keyText)) {
+      return `crate::value::KeyRead::key_read(&&${receiverText}, "${this.escapeRustStringLiteral(keyText)}")`;
+    }
     if (keyText === "url" && this.rustIsWsClientType(this.getCheckedTypeOf(receiverNode)))
       return `${receiverText}.url()`;
     if (this.rustMapParamDeclaration(receiverNode) !== void 0 && _RustTranspiler.rustBearerKeyTextOk(keyText)) {

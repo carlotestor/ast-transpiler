@@ -1806,6 +1806,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustMarketAliasWriteSource(n: any): any;
     /** The `Option<Market>` local an alias write `m = s` stores the struct local `s` into. */
     rustMarketAliasTargetOf(n: any): any;
+    /** ral-50c: `m = market` as its own statement, `market` a lent `Option<&Market>` parameter: stores `market.cloned()`. */
+    rustIsSlotParamWriteOf(n: any): boolean;
+    /** ral-50c: `d[m['k']]`: a literal-key read of the local used as another map's key (read through `KeyRead`, a `Value`). */
+    rustOptMarketKeyAsKey(n: any): boolean;
     /** `m = undefined` as its own statement. */
     rustIsNullWriteOf(n: any): boolean;
     /** A later `m = this.market (y)` on a struct local (`Some(..)` on an `Option<Market>` one). */
