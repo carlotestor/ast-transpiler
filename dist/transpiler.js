@@ -25815,6 +25815,8 @@ var GoTranspiler = class extends BaseTranspiler {
     // inherited method name -> indexes of required `boolean` params that print `bool` on the
     // base and every override (dynamic callers convert through BoolArg)
     this.unifiedBoolParams = {};
+    // inherited methods whose nullable `Int` parameter prints `*int64` on the base and every override
+    this.unifiedNullableInt64Params = {};
     // `<class>.<method>` -> indexes of required `string` params of an exchange-local method that
     // no file in ts/src calls (the call-site proof is vacuous, so the table names the methods whose Go
     // signature may print `string`)
@@ -26186,6 +26188,7 @@ var GoTranspiler = class extends BaseTranspiler {
     this.unifiedStringParams = config["unifiedStringParams"] ?? {};
     this.unifiedSliceParams = config["unifiedSliceParams"] ?? {};
     this.unifiedBoolParams = config["unifiedBoolParams"] ?? {};
+    this.unifiedNullableInt64Params = config["unifiedNullableInt64Params"] ?? {};
     this.uncalledStringParams = config["uncalledStringParams"] ?? {};
     this.stringPointerTupleCalls = config["stringPointerTupleCalls"] ?? [];
     this.predictionMapFields = new Set(config["predictionMapFields"] ?? []);
@@ -32129,6 +32132,13 @@ ${iden}}`;
         throw new Error(`unifiedBoolParams: ${fn.name.text} parameter ${param.name.text} is not a required boolean written only as bool`);
       }
       return "bool";
+    }
+    const nullableIntIndexes = Object.prototype.hasOwnProperty.call(this.unifiedNullableInt64Params, fn.name.text) ? this.unifiedNullableInt64Params[fn.name.text] : void 0;
+    if (Array.isArray(nullableIntIndexes) && nullableIntIndexes.includes(fn.parameters.indexOf(param))) {
+      if (param.type?.getText() !== "Int" || !this.goLocalIsSafeToType(fn.body, param, param.name.text, "*int64")) {
+        throw new Error(`unifiedNullableInt64Params: ${fn.name.text} parameter ${param.name.text} is not an Int written only as *int64`);
+      }
+      return "*int64";
     }
     const frameType = this.goWsFrameParameterType(fn, param);
     if (frameType !== void 0) {
