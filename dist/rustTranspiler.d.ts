@@ -3738,6 +3738,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  empty list, the landed ral-kc `into_list()` behaviour), or `this.parse<X> (..)` whose declaration returns `T[]`
      *  (every override must return a list too): `.into_list()` moves exactly the list out of the box. */
     rustDeclaredListProducer(rhs: any): boolean;
+    /** ral-57i: a base plural parser (not virtually dispatched) called from a venue file whose venue family declares no
+     *  method of that name: the Rust call resolves to the base body even where another family (derive parseTrades)
+     *  overrides it, so the base's declared `T[]` return holds there. */
+    rustBaseParserFamilyFree(call: any, declaration: any, method: string): boolean;
     private static readonly RUST_LIST_PARSERS;
     /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
      *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so

@@ -78470,7 +78470,23 @@ ${iden}}`;
     if (!_RustTranspiler.RUST_LIST_PARSERS.has(method) || this.rustTestTierSource(rhs) || this.rustVirtualDispatch[this.toSnakeCaseName(method)] !== void 0)
       return false;
     const declaration = this.rustScalarCallee(rhs);
-    return declaration?.kind === SyntaxKind7.MethodDeclaration && declaration.type?.kind === SyntaxKind7.ArrayType && this.rustListPassthroughCallee(rhs, method);
+    return declaration?.kind === SyntaxKind7.MethodDeclaration && declaration.type?.kind === SyntaxKind7.ArrayType && (this.rustListPassthroughCallee(rhs, method) || this.rustBaseParserFamilyFree(rhs, declaration, method));
+  }
+  /** ral-57i: a base plural parser (not virtually dispatched) called from a venue file whose venue family declares no
+   *  method of that name: the Rust call resolves to the base body even where another family (derive parseTrades)
+   *  overrides it, so the base's declared `T[]` return holds there. */
+  rustBaseParserFamilyFree(call, declaration, method) {
+    if (!_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName ?? "")))
+      return false;
+    const file = String(call.getSourceFile?.()?.fileName ?? "").replace(/\\/g, "/");
+    const at = file.lastIndexOf("/ts/src/");
+    if (at < 0 || _RustTranspiler.RUST_BASE_TIER_FILE.test(file))
+      return false;
+    const root = file.slice(0, at) + "/ts/src";
+    const rel = file.slice(at + "/ts/src/".length);
+    const { familyOf, types } = this.rustVenueFamilies(root);
+    const family = familyOf.get(rel);
+    return family !== void 0 && types.get(family)?.get(method) === void 0;
   }
   /** ral-sf: `x = y` as the only statement under `if (Array.isArray (y))` (the then-branch, `y` a plain `Value` local or
    *  parameter never written after its declaration), at `y`'s last use: `y` holds a `Value::Arr` there, so
