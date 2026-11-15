@@ -59660,7 +59660,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const recvKind = _nullishCoalesce(this.rustScalarIdentifierKind(recv), () => ( (params ? _optionalChain([this, 'access', _9035 => _9035.rustScalarParamRead, 'call', _9036 => _9036(recv), 'optionalAccess', _9037 => _9037.kind]) : void 0)));
     if (recvKind === "int" && method === "toString")
       return { recv, recvKind, method, kind: "str" };
-    if (recvKind === "oint" && method === "toString" && this.rustScalarLocalOf(recv) !== void 0)
+    if (recvKind === "oint" && method === "toString" && this.rustScalarLocalOf(recv) !== void 0 && !this.rust43bInPlusEquals(call))
       return { recv, recvKind, method, kind: "str" };
     if (recvKind !== "str" && recvKind !== "ostr")
       return void 0;
@@ -77473,6 +77473,12 @@ ${this.getIden(identation)}}`;
     if (digits === void 0 || digits < 0 || digits > 100)
       return void 0;
     return `Value::str(format!("{:.*}", ${digits}, ${receiver}.as_f64().unwrap_or(0.0)))`;
+  }
+  /** ral-43b: `call` sits in the right side of a `+=` (the typed `String` target's push_str join keys on the old operand
+   *  text, bitget / bybit `channel += limit.toString ()` went back to `Value` in gate 14163): keep the old path there. */
+  rust43bInPlusEquals(call) {
+    const top = _chunkC7C726CWcjs.findAncestor.call(void 0, call, (m) => _is.isStatement.call(void 0, m) || _is.isBinaryExpression.call(void 0, m) && m.operatorToken.kind === _ast.SyntaxKind.PlusEqualsToken);
+    return top !== void 0 && _is.isBinaryExpression.call(void 0, top) && this.isNodeInsideNode(call, top.right);
   }
   // `x.indexOf(y)` with a proven-string needle: `-1` when either side is not a `Str` (byte index).
   printNativeStringIndexOfString(node, receiverText) {

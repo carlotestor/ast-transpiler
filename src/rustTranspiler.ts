@@ -8271,7 +8271,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (recvKind === 'int' && method === 'toString') return { recv, recvKind, method, kind: 'str' };
         // ral-43b: `n.toString()` of an `Option<i64>` local displays its box (`format!("{}", Value::from(n))`: the Display the
         // `Value` local printed, `Int` or `Null` alike), so the receiver is a plain read of the Copy integer
-        if (recvKind === 'oint' && method === 'toString' && this.rustScalarLocalOf(recv) !== undefined) return { recv, recvKind, method, kind: 'str' };
+        if (recvKind === 'oint' && method === 'toString' && this.rustScalarLocalOf(recv) !== undefined && !this.rust43bInPlusEquals(call)) return { recv, recvKind, method, kind: 'str' };
         if (recvKind !== 'str' && recvKind !== 'ostr') return undefined;
         if (shape === 'affix') return { recv, recvKind, method, kind: 'bool' };
         // 41b: the new forms read a typed string local receiver only (a parameter read keeps the old paths)
@@ -25907,6 +25907,13 @@ export class RustTranspiler extends BaseTranspiler {
         const digits = this.rustSliceLiteralBound(node.arguments[0]);
         if (digits === undefined || digits < 0 || digits > 100) return undefined;
         return `Value::str(format!("{:.*}", ${digits}, ${receiver}.as_f64().unwrap_or(0.0)))`;
+    }
+
+    /** ral-43b: `call` sits in the right side of a `+=` (the typed `String` target's push_str join keys on the old operand
+     *  text, bitget / bybit `channel += limit.toString ()` went back to `Value` in gate 14163): keep the old path there. */
+    rust43bInPlusEquals(call: any): boolean {
+        const top: any = findAncestor(call, (m: any) => isStatement(m) || (isBinaryExpression(m) && m.operatorToken.kind === SyntaxKind.PlusEqualsToken));
+        return top !== undefined && isBinaryExpression(top) && this.isNodeInsideNode(call, top.right);
     }
 
     // `x.indexOf(y)` with a proven-string needle: `-1` when either side is not a `Str` (byte index).

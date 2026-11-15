@@ -15672,8 +15672,13 @@ describe('ral-43b lift 2: `n.toString()` of an Option<i64> local displays its bo
         expect(out).toContain('let mut limit: Option<i64> = ');
         expect(out).toContain('format!("{}", Value::from(limit))');
     });
+    test('negative: a `+=` operand keeps the typed String target (its join reads the old operand)', () => {
+        const out = run ("    m (o: Dict) {\n        let channel = 'books';\n        const limit = this.safeInteger (o, 'limit');\n        if (limit !== undefined) {\n            channel += limit.toString ();\n        }\n        return this.hold (channel);\n    }\n");
+        expect(out).toContain('let mut channel: String = ');
+    });
     test('negative: an Option<i64> toString() with an argument (radix) is not taken', () => {
         const out = run ("    m (o: Dict) {\n        const limit = this.safeInteger (o, 'limit');\n        return this.hold (limit.toString (16));\n    }\n");
         expect(out).not.toContain('format!("{}", Value::from(limit))');
     });
 });
+

@@ -3597,6 +3597,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     printNativeStringPadStart(node: any, receiverText: string): string | undefined;
     printNativeStringPadEnd(node: any, receiverText: string): string | undefined;
     printNativeToFixed(node: any, receiverText: string): string | undefined;
+    /** ral-43b: `call` sits in the right side of a `+=` (the typed `String` target's push_str join keys on the old operand
+     *  text, bitget / bybit `channel += limit.toString ()` went back to `Value` in gate 14163): keep the old path there. */
+    rust43bInPlusEquals(call: any): boolean;
     printNativeStringIndexOfString(node: any, receiverText: string): string | undefined;
     printNativeStringJoin(node: any, receiverText: string): string | undefined;
     rustOperandKind(node: any): string | undefined;
