@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -58225,6 +58225,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "okey";
     if (kind === "str" && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && !this.rust40bProTier(n) && this.rust40bFieldKeyRead(n))
       return "okey";
+    if ((kind === "str" || kind === "ostr") && this.rustInitKeyLocal(n) && !this.rustTestTierSource(n) && this.rustAnyGetValueKeyUse(n))
+      return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustElemKeyInUse(n))
       return "kin";
     if ((kind === "str" || kind === "ostr") && this.rustInKeyTop(n) !== void 0 && !this.rustTestTierSource(n) && this.rustInKeyInitialised(n))
@@ -61540,6 +61542,29 @@ ${ind}];`;
     const kind = this.rustOkeyKind(read.expression, read);
     return kind === "map" || kind === "value" && RUST_PLAIN_PLACE.test(this.printNode(read.expression, 0).trim());
   }
+  /** ral-43c: a one-level read `m[k]` (no write, chain link, delete or update) on an identifier parameter typed `any` that no
+   *  typed-container rule holds: the boxed read is `get_value(&m, &k)`; the typed key is handed to `get_value` as is
+   *  (`impl ValueKey` boxes it inside, so the lookup is the same `Str` / `Null` key the boxed read took). */
+  rustAnyGetValueKeyUse(n) {
+    const read = n.parent;
+    if (!isElementAccessExpression4(read) || read.argumentExpression !== n || !isIdentifier3(read.expression))
+      return false;
+    const recv = read.expression;
+    const d = this.rustDeclaredNode(recv);
+    if (d === void 0 || d === recv || d.name === recv || !isParameterDeclaration3(d))
+      return false;
+    const t = this.getChecker().getTypeAtLocation(recv);
+    if (t === void 0 || (t.flags & TypeFlags6.Any) === 0)
+      return false;
+    const up = read.parent;
+    if (up === void 0 || isElementAccessExpression4(up) && up.expression === read || up.kind === SyntaxKind7.DeleteExpression || isPrefixUnaryExpression3(up) || up.kind === SyntaxKind7.PostfixUnaryExpression)
+      return false;
+    if (isBinaryExpression5(up) && up.left === read && rustIsAssignmentOperator(up.operatorToken.kind))
+      return false;
+    if (!this.isNativeAccessPositionSafe(read) || this.isNativeWriteTargetBase(read) || this.isWriteBackBindRead(read))
+      return false;
+    return !this.isTestSource(recv) && this.rustMapParamDeclaration(recv) === void 0 && this.rustOkeyKind(recv, read) === void 0 && this.rustReadBearerKind(recv) === void 0 && this.rustParamShadowOf(recv) === void 0 && !this.rustLentListUse(recv) && this.printOptListElement(recv, n) === void 0;
+  }
   /** ral-yg: `this.urls['<lit>'][k]` read only (no write, chain link, delete or update) where `this.urls['<lit>']` is the
    *  base-declared string-keyed map (`rustUrlsMapEntry`): the native read takes the borrowed key off the map the boxed
    *  read reached (a non-map entry or a `None` key reads Null, as `get_value` did on a non-map or a `Null` key). */
@@ -61570,11 +61595,15 @@ ${ind}];`;
       return void 0;
     const recv = this.printNode(node.expression, 0).trim();
     const name = super.printIdentifier(key);
+    if (keyKind === "str" && this.rustAnyGetValueKeyUse(key))
+      return `get_value(&${recv}, ${name}.as_str())`;
     if (keyKind === "str") {
       if (this.rustOkeyKind(node.expression, node) === "map")
         return `${recv}.get(${name}.as_str()).cloned().unwrap_or(Value::Null)`;
       return `(if let Some(__m) = ${recv}.as_map() { __m.get(${name}.as_str()).cloned().unwrap_or(Value::Null) } else { Value::Null })`;
     }
+    if (this.rustAnyGetValueKeyUse(key))
+      return `get_value(&${recv}, ${name}.as_deref())`;
     if (this.rustOkeyKind(node.expression, node) === "map")
       return `${recv}.get(${name}.as_deref().unwrap_or("")).cloned().unwrap_or(Value::Null)`;
     return `(if let (Some(__m), Some(__k)) = (${recv}.as_map(), ${name}.as_deref()) { __m.get(__k).cloned().unwrap_or(Value::Null) } else { Value::Null })`;
@@ -69608,6 +69637,7 @@ ${iden}}`;
     let endpointBoxes = 0;
     let plainReads = 0;
     let aliasBoxes = 0;
+    let optAliasWrites = 0;
     const boxedElementUses = [];
     const indexReadUses = [];
     const accept = (n) => {
@@ -69643,6 +69673,13 @@ ${iden}}`;
           return ++nullWrites > 0;
         if (!nilDeclared && (from === "dict" || from === "list") && this.rustSameKindRewrite(rhs, from))
           return String(rhs.getText()).split("\n")[0].length <= 240;
+        const aliasKind = nilDeclared ? this.rustOptAliasSourceKind(rhs, fn) : void 0;
+        if (aliasKind !== void 0) {
+          if (from !== void 0 && from !== aliasKind)
+            mixed = true;
+          from = from ?? aliasKind;
+          return ++optAliasWrites > 0;
+        }
         const kind = this.rustNilResponseWriteKind(rhs, nilDeclared, declaration);
         const declaredWrite = nilDeclared && this.rustDeclaredEndpointWrite(rhs);
         if (declaredWrite)
@@ -69723,6 +69760,8 @@ ${iden}}`;
         return ++reads > 0;
       if (from === "dict" && this.rustJwtRequestSlot(up, n))
         return ++jwtLends > 0 && ++reads > 0;
+      if (this.rustOptAliasTargetUse(n, declaration, fn))
+        return ++lentNullable > 0 && ++reads > 0;
       if (this.rustContainerAliasInit(n, declaration))
         return ++aliasBoxes > 0 && boxedElementUses.push(n) > 0;
       if (!isCallExpression6(up) || up.arguments[0] !== n)
@@ -69772,7 +69811,7 @@ ${iden}}`;
       return void 0;
     if (lentResponses > 0 && optional && !this.rustLentOptionalOk(declaration, name, fn, init, from))
       return void 0;
-    if (extendHeads > 0 && (optional || from !== "dict" && from !== "api"))
+    if (extendHeads > 0 && (optional ? from !== "dict" : from !== "dict" && from !== "api"))
       return void 0;
     if (optional && boxedElementUses.length > 0 && (this.rustWsFieldRead(init) !== void 0 || defaultedBoxes > 0))
       return void 0;
@@ -69814,6 +69853,46 @@ ${iden}}`;
     for (const w of reuseProducerWrites)
       this.rustReuseProducerWrites.add(w);
     return from === "list" ? "list" : "dict";
+  }
+  // ── ral-43f: optional-container alias fixed point ──
+  // `let t: NullableDict = undefined; .. t = s;` where `s` is `const s = this.safeDict (o, k)` (nullable default) in the
+  // same function: both partners hold `Option<Dict>` (`Option<List>` for `safeList*`). The target's proof is syntactic on
+  // the source's initializer, so the source may ask the target's decision without a cycle; a source that stays `Value`
+  // is converted at the write (`s.into_opt_dict()`), exactly the write the optional form already prints.
+  rustOptAliasSourceKind(rhs, fn) {
+    if (rhs === void 0 || !isIdentifier3(rhs))
+      return void 0;
+    const d = this.rustDeclarationOfIdentifier(rhs);
+    if (d === void 0 || !isVariableDeclaration3(d) || d.name === rhs || !isIdentifier3(d.name) || this.rustEnclosingFunction(d) !== fn)
+      return void 0;
+    const list = d.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations?.length !== 1 || (list.flags & NodeFlags4.Const) === 0)
+      return void 0;
+    const init = this.rustSkipWrappers(d.initializer);
+    if (init === void 0 || !isCallExpression6(init) || !isPropertyAccessExpression3(init.expression) || init.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return void 0;
+    const name = String(init.expression.name.text);
+    const kind = /^safeDict2?$/.test(name) ? "dict" : /^safeList2?$/.test(name) ? "list" : void 0;
+    if (kind === void 0 || !this.rustOptContainerSourceOk(init, kind))
+      return void 0;
+    const at = name.endsWith("2") ? 3 : 2;
+    if (init.arguments.length > at && this.literalKindOfNode(this.rustSkipWrappers(init.arguments[at])) !== "null")
+      return void 0;
+    if (String(init.getText()).split("\n")[0].length > 240)
+      return void 0;
+    return kind;
+  }
+  /** The source side: `t = n` (statement) whose target `t` holds the optional form of n's kind through rustOptAliasSourceKind. */
+  rustOptAliasTargetUse(n, declaration, fn) {
+    const up = n.parent;
+    if (!isBinaryExpression5(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !isIdentifier3(up.left))
+      return false;
+    if (this.rustOptAliasSourceKind(n, fn) === void 0)
+      return false;
+    const t = this.rustDeclarationOfIdentifier(up.left);
+    if (t === void 0 || t === declaration || !isVariableDeclaration3(t) || t.name === up.left || this.rustBorrowedPending.has(t))
+      return false;
+    return this.rustBorrowedLocalKind(t) === this.rustOptAliasSourceKind(n, fn) && this.rustOptContainerLocals.has(t);
   }
   /** `Promise.all ([..])` (an array literal operand): runtime `promise_all` hands its operand back, so it is always a list. */
   rustPromiseAllListKind(call) {
@@ -71302,6 +71381,11 @@ ${iden}}`;
     const rhs = this.rustSkipWrappers(right);
     if (this.literalKindOfNode(rhs) === "null")
       return `${name} = None`;
+    const src = this.rustOptContainerOf(rhs);
+    if (src !== void 0 && src.kind === local.kind && this.rustPrintedOptional.has(src.declaration)) {
+      const s = super.transformIdentifier(rhs, this.ReservedKeywordsReplacements[rhs.text] ?? rhs.text);
+      return `${name} = ${this.rustOwnedLastUse(rhs, src.declaration) ? s : `${s}.clone()`}`;
+    }
     return `${name} = ${this.printNode(right, 0).trim()}.into_opt_${local.kind}()`;
   }
   /** `x.is_some()` / `x.is_none()` for a null test of the optional form. */
@@ -75720,6 +75804,9 @@ ${iden}}`;
     if (declaration === void 0 || declaration === node || declaration.name === node)
       return void 0;
     const shared = this.rustUntilHeadSlot(declaration) || this.rustHandedDictLocal(declaration) || this.rustBorrowedLocalKind(declaration) === "dict" && !this.rustOptContainerLocals.has(declaration);
+    const optHead = !shared && this.rustBorrowedLocalKind(declaration) === "dict" && this.rustOptContainerLocals.has(declaration) && this.rustPrintedOptional.has(declaration);
+    if (optHead)
+      return this.rustLocalLastUse(node, declaration) ? _RustTranspiler.rustLentMark(text) : `&${text}`;
     if (!shared)
       return void 0;
     if (this.rustExtendReuseLocals.has(declaration) && (this.rustSelfExtendHead(node, declaration) || this.rustLocalLastUse(node, declaration)))
