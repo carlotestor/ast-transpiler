@@ -17423,3 +17423,19 @@ describe('ral-50a: a params alias rewritten from slot 1 of a base handle*AndPara
         expect(out).not.toContain('requestParams.clone()');
     });
 });
+
+describe('ral-51a: a params local declared from slot 1 of a base handle*AndParams tuple stays a Dict', () => {
+    const emit = (): string => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-51a-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nconst omit = (x: Dict | undefined, ...args: any) => x;\nconst extend = (...args: any[]) => Object.assign ({}, ...args);\nexport default class Exchange {\n    omit = omit;\n    extend = extend;\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    async privatePostA (p: any = {}): Promise<any> { return p; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    handleParamString (params: Dict, paramName: string, defaultValue: Str = undefined): [Str, Dict] {\n        const value = this.safeString (params, paramName, defaultValue);\n        if (value !== undefined) {\n            params = this.omit (params, paramName);\n        }\n        return [ value, params ];\n    }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async withdraw (code: string, amount: number, address: string, tag: Str = undefined, params: Dict = {}) {\n        const tagAndParams = this.handleParamString (params, 'tag');\n        const tagWithdrawTag: Str = tagAndParams[0];\n        const paramsWithdrawTag: Dict = tagAndParams[1];\n        const request: Dict = { 'asset': code, 'tag': tagWithdrawTag };\n        return await this.privatePostA (this.extend (request, paramsWithdrawTag));\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'typedUnified': ['withdraw'], 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('bitbank withdraw: `const p: Dict = t[1]` declares a Dict lent by reference', () => {
+        const out = emit();
+        expect(out).toContain('let mut paramsWithdrawTag: crate::value::Dict = ');
+        expect(out).not.toContain('paramsWithdrawTag.clone()');
+    });
+});

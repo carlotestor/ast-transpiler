@@ -25563,7 +25563,9 @@ export class RustTranspiler extends BaseTranspiler {
             if (nilSlot) {
                 if (this.rustBorrowedLocalKind(declaration) !== undefined || this.rustNilMapLocal(declaration) || this.rustOptListLocal(declaration)
                     || this.rustCurrencyLocalKind(declaration) !== false) return false;
-            } else if (!this.rustBaseCallNamed(init, RustTranspiler.RUST_HANDED_DICT_SOURCES) && !this.rustDictTernaryInit(init) || this.rustBorrowedDictLocal(declaration)) return false;
+            } else if (!this.rustBaseCallNamed(init, RustTranspiler.RUST_HANDED_DICT_SOURCES) && !this.rustDictTernaryInit(init)
+                // ral-51a: `const p: Dict = t[1]` of a never-rebound `const t = this.handle*AndParams (m, ..)` lent a proven map
+                && !this.rustHandleTupleMapSlotRead(init) || this.rustBorrowedDictLocal(declaration)) return false;
             if (this.rustReadBearerKindOfDeclaration(declaration) !== false || this.rustDictLocalIsTyped(declaration) || this.rustVecLocalIsTyped(declaration)
                 || this.rustNestedDictLocalIsTyped(declaration) || this.rustMarketLocalKind(declaration) !== false
                 || this.rustNilLocalKind(declaration) !== undefined || this.rustScalarLocalKind(declaration) !== undefined) return false;
