@@ -18893,3 +18893,19 @@ describe('ral-56f: a reader string copied into a jointly decided string local an
         expect(out).not.toContain('stringify_param(&type_var)');
     });
 });
+
+describe('ral-56f: a String upper key of two-level this.balance writes prints the bucket entry itself', () => {
+    test('weex pro handleBalance: `accountType` stays String and keys the bf03 entry chain', () => {
+        const dir = path.join (rustFixtureRoot, 'ral56f-balance');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    balance: Dict = {};\n    safeString (o: any, k: any, d: any = undefined): Str { return o[k]; }\n    safeList (o: any, k: any, d: any = undefined): any[] { return o[k]; }\n    safeDict (o: any, k: any, d: any = undefined): Dict { return o[k]; }\n    safeCurrencyCode (id: Str, c: any = undefined): Str { return id; }\n    safeBalance (b: Dict): Dict { return b; }\n    account (): Dict { return {}; }\n    iso8601 (t: any): Str { return ''; }\n    hold (x: any, h: any = undefined): any { return x; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    handleBalance (client: any, message: Dict) {\n        let accountType = 'spot';\n        if (message['s'] === 1) {\n            accountType = 'swap';\n        }\n        const messageHash = accountType + ':balance';\n        if (!(accountType in this.balance)) {\n            this.balance[accountType] = {};\n        }\n        this.balance[accountType]['info'] = message;\n        const rows = this.safeList (message, 'data', []);\n        for (let i = 0; i < rows.length; i++) {\n            const entry = this.safeDict (rows, i, {});\n            const code = this.safeCurrencyCode (this.safeString (entry, 'coin'));\n            const account = this.account ();\n            account['free'] = this.safeString (entry, 'available');\n            if (code !== undefined) {\n                this.balance[accountType][code] = account;\n            }\n        }\n        const timestamp = 1;\n        this.balance[accountType]['timestamp'] = timestamp;\n        this.balance[accountType]['datetime'] = this.iso8601 (timestamp);\n        this.balance[accountType] = this.safeBalance (this.balance[accountType]);\n        this.hold (this.balance[accountType], messageHash);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut accountType: String = "spot".to_string();');
+        expect(out).toContain('if let Value::Dict(__bf03d0) = &mut self.balance { let __bf03e1 = std::sync::Arc::make_mut(__bf03d0).entry(accountType.clone()).or_insert(Value::Null); if let Value::Dict(__r05d) = __bf03e1 { std::sync::Arc::make_mut(__r05d).insert("info".to_string(), ');
+        expect(out).toContain('{ let __be_tmp = self.iso8601(');
+        expect(out).not.toContain('get_value_mut(&mut self.balance, &accountType)');
+        expect(out).not.toContain('stringify_param(&accountType)');
+        for (const line of out.split('\n')) expect(line.length).toBeLessThanOrEqual(400);
+    });
+});
