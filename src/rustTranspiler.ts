@@ -3228,6 +3228,21 @@ export class RustTranspiler extends BaseTranspiler {
         return this.rustOptStrConcatFits(n);
     }
 
+    /** ral-56x K1: `return x` of a literal-seeded string local (never a parameter alias) in a `-> Option<String>` method. */
+    rust56xStrReturnLocal(n: any, fn: any): boolean {
+        if (!isIdentifier(n) || !isReturnStatement(n.parent) || findAncestor(n.parent.parent, isFunctionLike) !== fn) return false;
+        const declaration: any = this.rustDeclaredNode(n);
+        if (declaration === undefined || !isVariableDeclaration(declaration) || declaration.initializer === undefined) return false;
+        return this.literalKindOfNode(this.unwrapParens(declaration.initializer)) === 'string' && this.rustEnclosingFunction(declaration) === fn;
+    }
+
+    rust56xStrReturnText(exp: any, fn: any): string | undefined {
+        if (exp === undefined || !isIdentifier(exp) || !this.rust56xStrReturnLocal(exp, fn)) return undefined;
+        const kind = this.rustScalarLocalOf(exp)?.kind;
+        if (kind === 'str') return `Some(${super.printIdentifier(exp)})`;
+        return kind === 'ostr' ? super.printIdentifier(exp) : undefined;
+    }
+
     /** ral-56x K1: a `+` partner that is itself a concat (or a `.toString()`) the printer already prints as a boxed `Value::Str(format!(..))`
      *  (always a `Str`, never `Null`), so the optional string joins the same `format!` with its `as_deref().unwrap_or("null")` text. */
     rust56xFormatPartner(other): boolean {
@@ -7593,6 +7608,11 @@ export class RustTranspiler extends BaseTranspiler {
         if (isReturnStatement(parent) && parent.expression === n) {
             const fn: any = findAncestor(parent.parent, isFunctionLike);
             const typedReturn = this.rustMethodTypedReturnKind(fn); if (typedReturn !== undefined) return typedReturn === kind || typedReturn === `o${kind}` ? 'native' : undefined;
+            // ral-56x K1: a typed string local returned from a method that already prints `-> Option<String>` is that
+            // payload itself (`Some(x)` / `x`), the same text the boxed `x.as_str().map(str::to_owned)` gave back
+            // ral-57x: decided from the method itself (head + every return path), not from its cached decision: this use is
+            // asked while that decision is still in progress (its return-path walk types this very local)
+            if ((kind === 'str' || kind === 'ostr') && this.rust56xStrReturnLocal(n, fn) && this.rustStrReturnSignature(fn, n) && this.rust57xStrReturnMethod(fn)) return 'native';
             return this.rustNativeStrReturnKind(fn) === 'str' || this.rustStrReturnSignature(fn, n) ? undefined : 'box';
         }
         // ral-ua: the right operand of `acc += x` onto a `Value` string accumulator joins with `format!` like a `+` operand
@@ -11661,7 +11681,38 @@ export class RustTranspiler extends BaseTranspiler {
         return method;
     }
 
+    /** ral-57x: the method prints `-> Option<String>` whatever its literal-seeded string locals become: the signature head
+     *  admits it and every return converts, a returned own literal-seeded local (checker `string`) counted as converting
+     *  (as a `String` it is `Some(x)`; as a `Value` it is a checker-string `Value`: rustStrReturnValueConverts either way). */
+    rust57xStrReturnMethod(fn: any): boolean {
+        if (fn === undefined || fn.kind !== SyntaxKind.MethodDeclaration || !this.rustNativeStrReturnHead(fn)) return false;
+        const body: any = fn.body;
+        const last = body?.statements[body.statements.length - 1];
+        if (last === undefined || !isReturnStatement(last)) return false;
+        let ok = true;
+        const visit = (n: any) => {
+            if (!ok || (n !== body && isFunctionLike(n))) return;
+            if (isReturnStatement(n)) {
+                const inner: any = this.unwrapParensNode(n.expression);
+                // only a local the `-> Option<String>` signature itself held back (rustStrReturnSignature: its return use answered no form);
+                // a local other rules already type keeps the decision it had
+                const own = inner !== undefined && isIdentifier(inner) && this.rust56xStrReturnLocal(inner, fn) && this.rustStrReturnSignature(fn, inner)
+                    && this.primitiveKindOfType(this.getCheckedTypeOf(inner)) === 'string';
+                if (!own && !this.rustStrReturnValueConverts(n.expression)) { ok = false; return; }
+            }
+            n.forEachChild(visit);
+        };
+        body.forEachChild(visit);
+        return ok;
+    }
+
     private rustNativeStrReturnDecisionUncached(node): boolean {
+        // ral-57x: a returned own literal-seeded string local converts whichever form it takes (rust57xStrReturnMethod)
+        return this.rust57xStrReturnMethod(node);
+    }
+
+    /** The signature half of the native-`Str` return decision: a sync `string` method outside the base tier / override groups. */
+    private rustNativeStrReturnHead(node): boolean {
         // An override's base/trait copy prints `-> Value`. The base classes are hand-tuned across the
         // whole tree: their methods are called from ~every derived file (and the hand-written runtime),
         // where the boxed `Value` ABI is load-bearing. Only per-exchange
@@ -11681,7 +11732,7 @@ export class RustTranspiler extends BaseTranspiler {
         } catch (e) {
             return false;
         }
-        return this.primitiveKindOfType(type) === 'string' && this.rustStrReturnPathsConvert(node.body);
+        return this.primitiveKindOfType(type) === 'string';
     }
 
     // Base methods printed `-> Option<String>` in the base tier and in every override (their only hand-written
@@ -18298,6 +18349,8 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustReturnsMarket(fn)) return `${idn}return ${this.printMarketReturnValue(exp)};`;
         if (this.rustReturnsOptMarket(fn)) return `${idn}return ${this.printOptMarketReturnValue(exp)};`;
         if (this.rustReturnsCurrency(fn)) return `${idn}return ${this.printCurrencyReturnValue(exp)};`;
+        // ral-57x: an own literal-seeded string local typed `String` is the payload itself (`Some(x)`); one left `Value` takes the paths below
+        if (this.rustNativeStrReturnKind(fn) === 'str') { const own = this.rust56xStrReturnText(this.unwrapParensNode(exp), fn); if (own !== undefined) return `${idn}return ${own};`; }
         if (this.rustNativeStrReturnKind(fn) === 'str' && this.rustStrReturnValueConverts(exp)) {
             if (this.literalKindOfNode(this.unwrapParensNode(exp)) === 'null') return `${idn}return None;`;
             const local = this.rustVenueStrReturnLocal(this.unwrapParensNode(exp));
