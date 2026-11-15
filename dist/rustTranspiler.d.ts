@@ -956,6 +956,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-56n: `j < n` where `n` is a parseToInt `Option<i64>` local (the oint kind already decided) and `j` a `Value::Int`
      *  counter of this very for-condition: `is_less_than(Int(j), n)` is the `as f64` compare of `Some`, false on `None`. */
     rust56nDecidedOintBound(cond: any, n: any): boolean;
+    /** ral-56n: `cond` is `i OP n` of `for (let i = <int>; ..; i++)` (a `Value::Int` counter) and `n` a const whose initializer is
+     *  a ternary of two identifiers (each arm an `i64` local by its own decision). */
+    rust56nTernaryCounterBound(cond: any, n: any): boolean;
     /** ral-56n: `const b = Math.ceil (x / y)` (whole initializer). */
     rust56nCeilDivConst(d: any): boolean;
     /** ral-56n: an ordered compare (not equality) of a `for` `Value::Int` counter (int-literal start, `++` / `--` its only write)

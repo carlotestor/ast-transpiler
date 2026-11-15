@@ -58183,6 +58183,29 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const loop = d?.parent?.parent;
     return d !== void 0 && isVariableDeclaration3(d) && loop?.kind === SyntaxKind7.ForStatement && loop.condition === cond && this.rustValueIntCounter(counter);
   }
+  /** ral-56n: `cond` is `i OP n` of `for (let i = <int>; ..; i++)` (a `Value::Int` counter) and `n` a const whose initializer is
+   *  a ternary of two identifiers (each arm an `i64` local by its own decision). */
+  rust56nTernaryCounterBound(cond, n) {
+    if (!isBinaryExpression5(cond) || this.isEqualityOp(cond.operatorToken.kind) || _RustTranspiler.NATIVE_COMPARISON_OPERATORS[cond.operatorToken.kind] === void 0)
+      return false;
+    if (this.unwrapParens(cond.right) !== n || !isIdentifier3(n) || !isIdentifier3(cond.left))
+      return false;
+    const d = this.rustDeclaredNode(n);
+    if (d === void 0 || !isVariableDeclaration3(d) || (d.parent?.flags & NodeFlags4.Const) === 0 || d.initializer === void 0)
+      return false;
+    const init = this.unwrapParens(d.initializer);
+    if (!isConditionalExpression4(init))
+      return false;
+    const arm = (a) => {
+      const x = this.unwrapParens(a);
+      return isIdentifier3(x) && this.rustScalarLocalOf(x)?.kind === "int";
+    };
+    if (!arm(init.whenTrue) || !arm(init.whenFalse))
+      return false;
+    const cd = this.rustDeclaredNode(cond.left);
+    const loop = cd?.parent?.parent;
+    return cd !== void 0 && isVariableDeclaration3(cd) && loop?.kind === SyntaxKind7.ForStatement && loop.condition === cond && this.rustValueIntCounter(cond.left);
+  }
   /** ral-56n: `const b = Math.ceil (x / y)` (whole initializer). */
   rust56nCeilDivConst(d) {
     if (d === void 0 || !isVariableDeclaration3(d) || (d.parent?.flags & NodeFlags4.Const) === 0 || d.initializer === void 0)
@@ -62072,7 +62095,7 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       const side = (n) => {
         const k = this.rustScalarNumericKind(n);
         const t = this.rustScalarOperandText(k, n);
-        return k === "oint" ? `${t}.map(|__v| __v as f64)` : k === "onum" ? t : `Some(${this.rustScalarOperandText("num", n)})`;
+        return k === "oint" ? `(if let Some(__v) = ${t} { Some(__v as f64) } else { None })` : k === "onum" ? t : `Some(${this.rustScalarOperandText("num", n)})`;
       };
       return `(if let (Some(__x), Some(__y)) = (${side(slash.left)}, ${side(slash.right)}) { if __y != 0.0 { Some(__x / __y) } else { None } } else { None })`;
     }
@@ -63148,6 +63171,8 @@ ${ind}];`;
       if ((_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) || op === SyntaxKind7.PercentToken) && this.rustScalarExpressionKind(parent) !== void 0)
         return "native";
       if (this.rustTbCounterBound(parent, n, kind) !== void 0)
+        return "native";
+      if (kind === "int" && this.rust56nTernaryCounterBound(parent, n))
         return "native";
       if (kind === "onum" && this.rust56nCeilCounterCompare(parent) !== void 0)
         return "native";
