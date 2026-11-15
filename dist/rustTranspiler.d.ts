@@ -3586,10 +3586,18 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustWsSubscriptionKeyRead(init: any): {
         key: string;
         element: boolean;
+        source?: any;
     } | undefined;
+    /** ral-58w: guard key g when `sub` (the dict a subscription field is read from) is a never-written parameter of a
+     *  method whose every mention is a direct `this.m (..)` call inside the then-branch of `if (this.safeBool (s, 'g', false))`
+     *  with s (a never-written local or parameter) passed for it, and every write of key g in the class is `'g': true` in an
+     *  object literal that, like every literal writing any subscription field read under g, initializes a never-written
+     *  const local only handed to `this.watch` / `this.watchMultiple` as the subscription. The read dict is then one of
+     *  the literals with `'g': true` (the runtime stores the subscription argument itself). Undefined otherwise. */
+    rustWsSubscriptionGuardKey(sub: any): string | undefined;
     /** Patterns of every value the class writes under subscription key `key` (`{ 'key': v }`, `x['key'] = v`); a list
      *  field takes the elements of its array literals. Any other write of the key is an unknown hash. */
-    rustWsSubscriptionKeyPatterns(at: any, key: string, element: boolean, depth: number, seen: Set<Node>): Array<Array<string | null>>;
+    rustWsSubscriptionKeyPatterns(at: any, key: string, element: boolean, depth: number, seen: Set<Node>, guard?: string): Array<Array<string | null>>;
     static rustWsPatternNorm(p: Array<string | null>): Array<string | null>;
     /** ral-55h: the hash text of a request-id echo (`rustWsRequestIdEcho`): some run of decimal digits. */
     private static readonly RUST_WS_DIGITS_HASH;

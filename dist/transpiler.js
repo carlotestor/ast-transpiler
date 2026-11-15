@@ -76853,6 +76853,11 @@ ${iden}}`;
       const keyed2 = this.rustWsSubscriptionKeyRead(n);
       return keyed2 === void 0 ? any : this.rustWsSubscriptionKeyPatterns(n, keyed2.key, keyed2.element, depth, seen);
     }
+    if (isElementAccessExpression4(n)) {
+      const keyed2 = this.rustWsSubscriptionKeyRead(n);
+      const guard = keyed2?.source === void 0 ? void 0 : this.rustWsSubscriptionGuardKey(keyed2.source);
+      return guard === void 0 ? any : this.rustWsSubscriptionKeyPatterns(n, keyed2.key, keyed2.element, depth, seen, guard);
+    }
     if (isCallExpression6(n)) {
       if (isPropertyAccessExpression3(n.expression) && n.expression.expression.kind === SyntaxKind7.ThisKeyword && String(n.expression.name.text) === "safeString" && n.arguments.length >= 2 && n.arguments.length <= 3 && !isStringLiteralLikeNode4(n.arguments[1]) && (n.arguments[2] === void 0 || isStringLiteralLikeNode4(n.arguments[2]))) {
         const list = this.rustWsHashListPatterns(n.arguments[0], 1);
@@ -77047,6 +77052,7 @@ ${iden}}`;
    *  reads an element of field k. Undefined for any other shape. */
   rustWsSubscriptionKeyRead(init) {
     const n = this.rustStripWrappers(init);
+    let source;
     const listKey = (x) => {
       x = this.rustStripWrappers(x);
       if (!isIdentifier3(x))
@@ -77057,6 +77063,7 @@ ${iden}}`;
       const i = this.rustStripWrappers(d.initializer);
       if (!isCallExpression6(i) || !isPropertyAccessExpression3(i.expression) || i.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(i.expression.name.text) !== "safeList" || !isStringLiteralLikeNode4(i.arguments[1]))
         return void 0;
+      source = i.arguments[0];
       return String(i.arguments[1].text);
     };
     if (isCallExpression6(n) && isPropertyAccessExpression3(n.expression) && n.expression.expression.kind === SyntaxKind7.ThisKeyword && String(n.expression.name.text) === "safeString" && n.arguments.length === 2) {
@@ -77067,23 +77074,117 @@ ${iden}}`;
     }
     if (isElementAccessExpression4(n)) {
       const k = listKey(n.expression);
-      return k === void 0 ? void 0 : { key: k, element: true };
+      return k === void 0 ? void 0 : { key: k, element: true, source };
     }
     return void 0;
   }
+  /** ral-58w: guard key g when `sub` (the dict a subscription field is read from) is a never-written parameter of a
+   *  method whose every mention is a direct `this.m (..)` call inside the then-branch of `if (this.safeBool (s, 'g', false))`
+   *  with s (a never-written local or parameter) passed for it, and every write of key g in the class is `'g': true` in an
+   *  object literal that, like every literal writing any subscription field read under g, initializes a never-written
+   *  const local only handed to `this.watch` / `this.watchMultiple` as the subscription. The read dict is then one of
+   *  the literals with `'g': true` (the runtime stores the subscription argument itself). Undefined otherwise. */
+  rustWsSubscriptionGuardKey(sub) {
+    const x = this.rustStripWrappers(sub);
+    const param = x !== void 0 && isIdentifier3(x) ? this.rustDeclarationOfIdentifier(x) : void 0;
+    if (param === void 0 || param.kind !== SyntaxKind7.Parameter || !isIdentifier3(param.name) || this.rustLocalReassigned(param))
+      return void 0;
+    const method = param.parent;
+    const cls = method === void 0 ? void 0 : method.parent;
+    if (!isMethodDeclaration5(method) || !isIdentifier3(method.name) || cls === void 0 || !isClassDeclaration4(cls))
+      return void 0;
+    const index = method.parameters.indexOf(param);
+    const name = String(method.name.text);
+    let guard;
+    let ok = true;
+    let calls = 0;
+    this.rustWalkScope(cls, (n) => {
+      if (!ok)
+        return RUST_WALK_STOP;
+      if (!isPropertyAccessExpression3(n) || String(n.name.text) !== name)
+        return;
+      const call = n.parent;
+      const arg = isCallExpression6(call) && call.expression === n && n.expression.kind === SyntaxKind7.ThisKeyword ? this.rustStripWrappers(call.arguments[index]) : void 0;
+      const argDecl = arg !== void 0 && isIdentifier3(arg) ? this.rustDeclarationOfIdentifier(arg) : void 0;
+      if (argDecl === void 0 || this.rustLocalReassigned(argDecl)) {
+        ok = false;
+        return RUST_WALK_STOP;
+      }
+      let found;
+      for (let up = call; up !== void 0 && up !== cls && found === void 0; up = up.parent) {
+        const st = up.parent;
+        if (st === void 0 || !isIfStatement4(st) || st.thenStatement !== up)
+          continue;
+        const t = this.rustStripWrappers(st.expression);
+        if (isCallExpression6(t) && isPropertyAccessExpression3(t.expression) && t.expression.expression.kind === SyntaxKind7.ThisKeyword && String(t.expression.name.text) === "safeBool" && t.arguments.length === 3 && isStringLiteralLikeNode4(t.arguments[1]) && t.arguments[2].kind === SyntaxKind7.FalseKeyword && isIdentifier3(this.rustStripWrappers(t.arguments[0])) && this.rustDeclarationOfIdentifier(this.rustStripWrappers(t.arguments[0])) === argDecl)
+          found = String(t.arguments[1].text);
+      }
+      if (found === void 0 || guard !== void 0 && guard !== found) {
+        ok = false;
+        return RUST_WALK_STOP;
+      }
+      guard = found;
+      calls++;
+      return void 0;
+    });
+    if (!ok || guard === void 0 || calls === 0)
+      return void 0;
+    const literal2 = (e) => {
+      const v = this.rustStripWrappers(e);
+      const d = v !== void 0 && isIdentifier3(v) ? this.rustDeclarationOfIdentifier(v) : void 0;
+      const lit = d !== void 0 && isVariableDeclaration3(d) && isIdentifier3(d.name) && !!(d.parent?.flags & NodeFlags4.Const) ? this.rustStripWrappers(d.initializer) : void 0;
+      if (lit === void 0 || !isObjectLiteralExpression4(lit))
+        return false;
+      for (const p of Array.from(lit.properties)) {
+        if (p.kind !== SyntaxKind7.PropertyAssignment || !(isStringLiteralLikeNode4(p.name) || isIdentifier3(p.name)))
+          return false;
+        if (String(p.name.text) === guard && p.initializer.kind !== SyntaxKind7.TrueKeyword)
+          return false;
+      }
+      const scope = findAncestor(d, isFunctionLike);
+      if (scope === void 0)
+        return false;
+      for (const r of this.rustScopeNameNodes(scope, String(d.name.text))) {
+        if (!isIdentifier3(r) || r === d.name || this.rustDeclarationOfIdentifier(r) !== d)
+          continue;
+        const c = r.parent;
+        if (!isCallExpression6(c) || c.arguments[4] !== r || !isPropertyAccessExpression3(c.expression) || c.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(c.expression.name.text) !== "watch" && String(c.expression.name.text) !== "watchMultiple")
+          return false;
+      }
+      return true;
+    };
+    this.rustWalkScope(cls, (n) => {
+      if (!ok)
+        return RUST_WALK_STOP;
+      if (isCallExpression6(n) && isPropertyAccessExpression3(n.expression) && n.expression.expression.kind === SyntaxKind7.ThisKeyword && (String(n.expression.name.text) === "watch" || String(n.expression.name.text) === "watchMultiple")) {
+        if (n.arguments.length > 5 || n.arguments[4] !== void 0 && !literal2(n.arguments[4]))
+          ok = false;
+      } else if (isPropertyAccessExpression3(n) && String(n.name.text) === "subscriptions") {
+        let up = n.parent;
+        while (up !== void 0 && isElementAccessExpression4(up) && up.expression !== void 0)
+          up = up.parent;
+        if (isBinaryExpression5(up) && rustIsAssignmentOperator(up.operatorToken.kind) && this.rustStripWrappers(up.left) !== void 0 && (up.left === n || up.left.pos <= n.pos && n.end <= up.left.end))
+          ok = false;
+      }
+      return ok ? void 0 : RUST_WALK_STOP;
+    });
+    return ok ? guard : void 0;
+  }
   /** Patterns of every value the class writes under subscription key `key` (`{ 'key': v }`, `x['key'] = v`); a list
    *  field takes the elements of its array literals. Any other write of the key is an unknown hash. */
-  rustWsSubscriptionKeyPatterns(at, key, element, depth, seen) {
+  rustWsSubscriptionKeyPatterns(at, key, element, depth, seen, guard) {
     const any = [[null]];
     const cls = findAncestor(at, isClassDeclaration4);
     if (cls === void 0)
       return any;
     const values = [];
     let unknown = false;
+    const guarded = (lit) => guard === void 0 || isObjectLiteralExpression4(lit) && Array.from(lit.properties).some((p) => p.kind === SyntaxKind7.PropertyAssignment && (isStringLiteralLikeNode4(p.name) || isIdentifier3(p.name)) && String(p.name.text) === guard && p.initializer.kind === SyntaxKind7.TrueKeyword);
     this.rustWalkScope(cls, (n) => {
-      if (n.kind === SyntaxKind7.PropertyAssignment && isStringLiteralLikeNode4(n.name) && String(n.name.text) === key)
-        values.push(n.initializer);
-      else if (n.kind === SyntaxKind7.ShorthandPropertyAssignment && String(n.name.text) === key)
+      if (n.kind === SyntaxKind7.PropertyAssignment && isStringLiteralLikeNode4(n.name) && String(n.name.text) === key) {
+        if (guarded(n.parent))
+          values.push(n.initializer);
+      } else if (n.kind === SyntaxKind7.ShorthandPropertyAssignment && String(n.name.text) === key)
         unknown = true;
       else if (isBinaryExpression5(n) && rustIsAssignmentOperator(n.operatorToken.kind) && isElementAccessExpression4(this.rustStripWrappers(n.left)) && isStringLiteralLikeNode4(this.rustStripWrappers(n.left).argumentExpression) && String(this.rustStripWrappers(n.left).argumentExpression.text) === key) {
         if (n.operatorToken.kind !== SyntaxKind7.EqualsToken)
