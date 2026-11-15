@@ -18164,3 +18164,21 @@ describe('ral-54x S7: a literal-seeded bool local copied into another local', ()
         expect(out).toContain('let mut active: Value = Value::Bool(swap);');
     });
 });
+describe('ral-54x K1: a cased string reader with a literal default', () => {
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeString (o: any, k: any, d: string = undefined): string { return o; }\n    safeMarket (id: any): any { return id; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    f (info: Dict, word: string) {\n" + body + "    }\n}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    test('read by a native string method: the local is a String', () => {
+        const out = write ('54x-k1', "        const description = this.safeString (info, 'description', '').toLowerCase ();\n        const haystack = description + ' ';\n        return haystack.indexOf (word) >= 0;\n");
+        expect(out).toContain('let mut description: String = ');
+        expect(out).toContain('.as_str().unwrap_or("").to_lowercase();');
+    });
+    test('negative: only boxed straight back keeps the Value', () => {
+        const out = write ('54x-k1n', "        const marketId = this.safeString (info, 'symbol', '').toLowerCase ();\n        return this.safeMarket (marketId);\n");
+        expect(out).toContain('let mut marketId: Value = ');
+    });
+});
