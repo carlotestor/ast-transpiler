@@ -8351,6 +8351,8 @@ export class RustTranspiler extends BaseTranspiler {
         const optional = kind.startsWith('o');
         if (isIdentifier(node) && node.text !== 'undefined') {
             const source = this.rustScalarLocalOf(node)?.kind;
+            // ral-54e: a `for (let i = <int>; ..; i++)` counter read in its own loop (the step its only write) is always an `Int`
+            if (kind === 'int' && depth === 0 && source === undefined && this.rust54eCounterWrite(node)) return true;
             // ya: phase 2 of the solve, a `Value` string local at its last use moves out (`into_opt_string`)
             return source === kind || (optional && source === kind.slice(1)) || (kind === 'ostr' && source === undefined && depth === 0 && this.rustNilValueStrAlias(node));
         }
@@ -8359,6 +8361,15 @@ export class RustTranspiler extends BaseTranspiler {
         // vd: a later write from a venue string method (`status = this.parseStatus (status)`): the same proof the
         // initialiser takes (every venue declaration returns `string` / `Str`), printed through rustVenueStrCallText
         return kind === 'ostr' && value === undefined && this.rustVenueStrCall(node);
+    }
+
+    /** ral-54e: `x = i` (statement write) where `i` is the counter of an enclosing `for (let i = <int>; ..; i++)` that only the
+     *  step writes (rustValueIntCounter: always an `Int`) and the write sits in that loop's body: the `i64` the counter holds. */
+    rust54eCounterWrite(node: any): boolean {
+        if (!isIdentifier(node) || this.rustTestTierSource(node) || !this.rustValueIntCounter(node)) return false;
+        const up: any = this.rustSkipWrappersUp(node.parent);
+        return isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.EqualsToken && up.parent?.kind === SyntaxKind.ExpressionStatement
+            && this.unwrapParens(up.right) === node && isIdentifier(this.unwrapParens(up.left));
     }
 
     /** Plain `Value` argument slots: `this.`/`super.` methods without a native-typed slot, and `Precise.*`. */
@@ -8957,6 +8968,12 @@ export class RustTranspiler extends BaseTranspiler {
         if (local !== undefined && local.kind.startsWith('o') && isIdentifier(alias) && this.literalKindOfNode(alias) === 'null') return `${super.printIdentifier(left)} = \u0004None`;
         if (local !== undefined && isIdentifier(alias) && this.rustNilAliasMoves.has(alias) && this.rustScalarIdentifierKind(alias) === local.kind) return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.take()`;
         if (local?.kind === 'ostr' && isIdentifier(alias) && this.rustScalarIdentifierKind(alias) === undefined && this.rustNilValueStrAlias(alias)) return `${super.printIdentifier(left)} = ${super.printIdentifier(alias)}.into_opt_string()`;
+        // ral-54e: a loop counter written into an `i64` local is the `Copy` `i64` itself (owned: never cloned)
+        // (a counter registered `i64` while the body prints is that name; a `Value` counter is always an `Int` box: its payload)
+        if (local?.kind === 'int' && isIdentifier(alias) && this.rustScalarLocalOf(alias) === undefined && this.rust54eCounterWrite(alias)) {
+            const name = super.transformIdentifier(alias, this.ReservedKeywordsReplacements[alias.text] ?? alias.text);
+            return `${super.printIdentifier(left)} = \u0004${this.rustI64CounterUse(alias) ? name : `${name}.as_i64().unwrap_or_default()`}`;
+        }
         const text = local === undefined ? undefined : this.rustScalarNativeText(local.kind, right);
         // nc: a bare `Copy` source (`i64` / `f64` / `bool` or its `Option`) is owned: the alias-source pass must not clone it
         const owned = text !== undefined && isIdentifier(alias) && text === super.printIdentifier(alias) && RustTranspiler.RUST_COPY_SCALAR_KINDS.has(local.kind)
