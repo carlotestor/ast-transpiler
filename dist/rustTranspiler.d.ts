@@ -1894,6 +1894,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_EXACT_INT_PRODUCERS;
     private static readonly RUST_EXACT_BOOL_PRODUCERS;
     rustExactSlotKind(element: any): string | undefined;
+    /** ral-44f: `oint` / `obool` for a `const [ a, .. ] = this.m (..)` slot the checker types number / boolean whose producer
+     *  is exact at that index (`rustExactSlotCallee`, never the loose `f64` form), else undefined. Syntactic on the producer. */
+    rustExactCopySlotSeed(element: any): string | undefined;
+    /** ral-44f: `n` is the whole source of `let t = n` / `t = n;` (statement), `t` another local of the same function the joint
+     *  scalar solve currently types `kind` (an `Option<i64>` / `Option<bool>` copy of the slot). */
+    rustCopySlotAliasTarget(n: any, kind: string, element: any): boolean;
     private rustExactSlotKindUncached;
     private static readonly RUST_HANDWRITTEN_SLOT_KINDS;
     /** 41i: the primitive (`number` / `string`) slot `at` of `init` holds on every path when the checker only says `any`:

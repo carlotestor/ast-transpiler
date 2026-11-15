@@ -55687,9 +55687,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   rustScalarTry(declaration) {
     if (isBindingElement(declaration)) {
+      const copy = this.rustExactCopySlotSeed(declaration);
       if (this.rustScalarSeeding)
-        return "ostr";
+        return copy ?? "ostr";
       try {
+        if (copy !== void 0)
+          return this.rustExactSlotKindUncached(declaration) ?? null;
         return this.rustStrSlotKind(declaration, this.rustEnclosingFunction(declaration)) ?? null;
       } catch (e) {
         return null;
@@ -65029,6 +65032,35 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     }
     return decision ?? void 0;
   }
+  /** ral-44f: `oint` / `obool` for a `const [ a, .. ] = this.m (..)` slot the checker types number / boolean whose producer
+   *  is exact at that index (`rustExactSlotCallee`, never the loose `f64` form), else undefined. Syntactic on the producer. */
+  rustExactCopySlotSeed(element) {
+    const pattern = element?.parent;
+    const owner = pattern?.parent;
+    if (pattern?.kind !== SyntaxKind7.ArrayBindingPattern || owner === void 0 || !isVariableDeclaration3(owner) || owner.initializer === void 0 || element.initializer !== void 0 || element.dotDotDotToken !== void 0 || !isIdentifier3(element.name))
+      return void 0;
+    const checked = this.rustSlotPrimitiveKind(element);
+    if (checked !== "number" && checked !== "boolean")
+      return void 0;
+    const want = checked === "number" ? "int" : "bool";
+    return this.rustExactSlotCallee(owner.initializer, pattern.elements.indexOf(element), want) ? want === "int" ? "oint" : "obool" : void 0;
+  }
+  /** ral-44f: `n` is the whole source of `let t = n` / `t = n;` (statement), `t` another local of the same function the joint
+   *  scalar solve currently types `kind` (an `Option<i64>` / `Option<bool>` copy of the slot). */
+  rustCopySlotAliasTarget(n, kind, element) {
+    let top = n;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    const parent = top.parent;
+    let target;
+    if (isVariableDeclaration3(parent) && parent.initializer === top && isIdentifier3(parent.name))
+      target = parent;
+    else if (isBinaryExpression5(parent) && parent.right === top && parent.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(parent.left) && parent.parent?.kind === SyntaxKind7.ExpressionStatement)
+      target = this.rustDeclaredNode(parent.left);
+    if (target === void 0 || target === element || !isVariableDeclaration3(target) || this.rustEnclosingFunction(target) !== this.rustEnclosingFunction(n))
+      return false;
+    return this.rustScalarDecisions.get(target) === kind;
+  }
   rustExactSlotKindUncached(element) {
     const pattern = element.parent;
     const owner = pattern?.parent;
@@ -65058,6 +65090,10 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     let nativeUses = 0;
     let boxes = 0;
     this.rustExactSlotDecisions.set(element, kind);
+    const joined = !loose && this.rustScalarSolving.has(scope) && this.rustSlotJoinsSolve(element);
+    const previous = this.rustScalarDecisions.get(element);
+    if (joined)
+      this.rustScalarDecisions.set(element, kind);
     let ok = false;
     try {
       ok = this.rustLocalUsesAll(element, String(element.name.text), true, (n) => {
@@ -65065,6 +65101,11 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
           return true;
         if (this.rustEnclosingFunction(n) !== scope)
           return false;
+        if (joined && this.rustCopySlotAliasTarget(n, kind, element)) {
+          this.rustScalarUseForms.set(n, "native");
+          nativeUses++;
+          return true;
+        }
         const form = this.rustScalarUseForm(n, kind);
         this.rustScalarUseForms.set(n, form);
         if (form === void 0 || form === "xbox" || form === "err" || form === "key" || form === "okey" || form === "targ")
@@ -65085,6 +65126,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       });
     } finally {
       this.rustExactSlotDecisions.set(element, null);
+      if (joined)
+        this.rustScalarDecisions.set(element, previous);
     }
     return ok && (nativeUses > 0 || boxes > 0) ? kind : void 0;
   }
@@ -76950,7 +76993,7 @@ ${iden}}`;
     const scope = this.rustEnclosingFunction(owner);
     if (scope === void 0 || isSourceFile5(scope) || scope.kind !== SyntaxKind7.MethodDeclaration)
       return false;
-    if (this.rustSlotPrimitiveKind(element) !== "string" || this.rustTupleSlotKind(element) !== void 0)
+    if (this.rustSlotPrimitiveKind(element) !== "string" && this.rustExactCopySlotSeed(element) === void 0 || this.rustTupleSlotKind(element) !== void 0)
       return false;
     let alias = false;
     this.rustLocalUsesAll(element, String(element.name.text), false, (n) => {
