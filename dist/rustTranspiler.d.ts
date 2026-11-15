@@ -2521,6 +2521,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustJsonMapProducer(init: any): boolean;
     /** `x[k]`, read only (no write, call, property or nested element target), with a numeric literal key or a key local
      *  that prints as a `Value` (a literal-initialised counter, or an untyped `let`/`const` of number / string type). */
+    /** ral-41h: a key whose checker type is a string / number, or `any` (a `Value` key reads exactly as `get_value` keyed it:
+     *  `KeyRead::read` on the held map / list is the arm `get_value` dispatches to for every key kind). */
+    rustValueKeyType(key: any): boolean;
     rustBorrowedIndexReadUse(n: any): boolean;
     private rustExtendReuseLocals;
     /** A plain map literal (outside the test tier): every `x = ..` write must be `x = this.extend (x, y)`; the
@@ -2768,6 +2771,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** A base `this.omit (x, keys)` whose head always holds a map: a literal, a built map (`extend`, ..) or a local that
      *  prints the shared map. A `Dict`-typed parameter is not enough: a list body (`Array.isArray (params)` in `sign`)
      *  passes `omit` unchanged, and `into_dict()` would turn it into an empty map. */
+    /** ral-41h: the one operand of `this.keysort (x)` is a proven map (the same head proof `omit` takes). */
+    rustKeysortOfDict(call: any): boolean;
     rustOmitOfDict(init: any): boolean;
     /** `this.deepExtend (m, p, ..)` whose every operand is a proven map: a tag-free literal, a built map, an omit of a
      *  proven map, or the `params` of a typed unified method. The runtime then merges map into map on every path. */
