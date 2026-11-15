@@ -74769,14 +74769,6 @@ ${iden}}`;
     const call = new RegExp("this\\." + name + " \\(");
     return [venue, "pro/" + venue].some((rel) => fs3.existsSync(root + rel + ".ts") && call.test(fs3.readFileSync(root + rel + ".ts", "utf8")));
   }
-  /** A venue `sign (path, api, method, params)` whose `params` is a map on every path. `params` reaches `sign` only
-   *  through `fetch2` (from `request`, every implicit endpoint and the venue's own direct calls); the base declares
-   *  it `Dict`, but a list body passes through untouched (`omit` hands a list back, and `into_dict()` would empty
-   *  it). So the venue is proven when every request-path call in its own file, its pro file and each subclass file
-   *  that inherits this `sign` hands over a map: an object literal, a map builder (`extend`, `deepExtend`,
-   *  `keysort`, `ordered`, `omit` of a proven map), a `Dict` parameter, a `handle*AndParams` params slot, a method
-   *  declared `Dict`, or a local whose every write is one of these. Any list literal, any dynamic `this[name] (..)`
-   *  / `callDynamically` call, or anything else unproven fails the venue (fail closed). */
   rustSignParamsProvenMap(fn) {
     const file = String(fn.getSourceFile().fileName).replace(/\\/g, "/");
     const m = /^(.*ts\/src\/)((?:prediction\/)?[a-z0-9]+)\.ts$/.exec(file);
@@ -74904,6 +74896,7 @@ ${iden}}`;
         x = x.parent;
       return x;
     };
+    const paramSlotMap = (sf, rel, call, at, depth) => at === 1 && _RustTranspiler.RUST_SIGN_PARAM_HANDLERS.has(String(call.expression.name.text)) && call.arguments.length >= 1 && isMap(sf, rel, call.arguments[0], depth + 1);
     const isMap = (sf, rel, arg, depth) => {
       if (arg === void 0)
         return true;
@@ -74921,6 +74914,9 @@ ${iden}}`;
           return true;
         if (callee === "omit")
           return isMap(sf, rel, arg.arguments[0], depth + 1);
+        const dictDefaultAt = { safeDict: 2, safeDict2: 3, safeDictN: 2 }[callee];
+        if (dictDefaultAt !== void 0 && arg.arguments.length === dictDefaultAt + 1)
+          return isMap(sf, rel, arg.arguments[dictDefaultAt], depth + 1);
         return declaredDict(sf, rel, callee);
       }
       if (!isIdentifier3(arg))
@@ -74929,6 +74925,18 @@ ${iden}}`;
       if (fnNode === void 0)
         return false;
       const p = Array.from(fnNode.parameters ?? []).find((x) => isIdentifier3(x.name) && x.name.text === arg.text);
+      if (p !== void 0 && p.type?.kind === SyntaxKind7.AnyKeyword && p.initializer === void 0 && target === void 0 && fnNode.kind === SyntaxKind7.MethodDeclaration && isIdentifier3(fnNode.name)) {
+        const helper = String(fnNode.name.text);
+        const at = fnNode.parameters.indexOf(p);
+        const key = root + rel + "#" + helper + "#" + at + "#any";
+        const hit = _RustTranspiler.RUST_SIGN_MAP_PROOF.get(key);
+        if (hit !== void 0)
+          return hit;
+        _RustTranspiler.RUST_SIGN_MAP_PROOF.set(key, false);
+        const ok = !(this.rustTypedUnified?.has(helper) ?? true) && /^[a-z][A-Za-z0-9]*$/.test(helper) && this.rustHelperHasCaller(root, rel, helper) && this.rustSignParamsProofUncached(root, rel, { name: helper, at });
+        _RustTranspiler.RUST_SIGN_MAP_PROOF.set(key, ok);
+        return ok;
+      }
       if (p !== void 0)
         return p.type !== void 0 && /^Dict\b/.test(String(p.type.getText())) || p.type === void 0 && p.initializer !== void 0 && isObjectLiteralExpression4(p.initializer);
       let writes = 0;
@@ -74943,7 +74951,7 @@ ${iden}}`;
           writes++;
           const init = n.parent?.parent?.initializer;
           const slot = n.parent.elements.indexOf(n);
-          good = slot >= 1 && thisCall(init) && (/AndParams/.test(String(init.expression.name.text)) && Array.from(init.arguments).some((x) => isMap(sf, rel, x, depth + 1)) || declaredSlotDict(rel, init, slot));
+          good = slot >= 1 && thisCall(init) && (/AndParams/.test(String(init.expression.name.text)) && Array.from(init.arguments).some((x) => isMap(sf, rel, x, depth + 1)) || paramSlotMap(sf, rel, init, slot, depth) || declaredSlotDict(rel, init, slot));
         } else if (isBinaryExpression5(n) && n.operatorToken.kind === SyntaxKind7.EqualsToken) {
           if (isIdentifier3(n.left) && n.left.text === arg.text) {
             writes++;
@@ -74952,7 +74960,7 @@ ${iden}}`;
             writes++;
             const at = n.left.elements.findIndex((e) => isIdentifier3(e) && e.text === arg.text);
             const rhs = n.right;
-            good = at >= 1 && thisCall(rhs) && (/AndParams/.test(String(rhs.expression.name.text)) && Array.from(rhs.arguments).some((x) => isMap(sf, rel, x, depth + 1)) || declaredSlotDict(rel, rhs, at));
+            good = at >= 1 && thisCall(rhs) && (/AndParams/.test(String(rhs.expression.name.text)) && Array.from(rhs.arguments).some((x) => isMap(sf, rel, x, depth + 1)) || paramSlotMap(sf, rel, rhs, at, depth) || declaredSlotDict(rel, rhs, at));
           }
         }
         n.forEachChild?.(visit);
@@ -86663,6 +86671,15 @@ _RustTranspiler.RUST_BASE_FILTER_LISTS = /* @__PURE__ */ new Set([
 ]);
 _RustTranspiler.RUST_ROUTE_PARAMS_DICT = /* @__PURE__ */ new Set(["handleRouteAndParams"]);
 _RustTranspiler.RUST_SIGN_MAP_PROOF = /* @__PURE__ */ new Map();
+/** A venue `sign (path, api, method, params)` whose `params` is a map on every path. `params` reaches `sign` only
+ *  through `fetch2` (from `request`, every implicit endpoint and the venue's own direct calls); the base declares
+ *  it `Dict`, but a list body passes through untouched (`omit` hands a list back, and `into_dict()` would empty
+ *  it). So the venue is proven when every request-path call in its own file, its pro file and each subclass file
+ *  that inherits this `sign` hands over a map: an object literal, a map builder (`extend`, `deepExtend`,
+ *  `keysort`, `ordered`, `omit` of a proven map), a `Dict` parameter, a `handle*AndParams` params slot, a method
+ *  declared `Dict`, or a local whose every write is one of these. Any list literal, any dynamic `this[name] (..)`
+ *  / `callDynamically` call, or anything else unproven fails the venue (fail closed). */
+_RustTranspiler.RUST_SIGN_PARAM_HANDLERS = /* @__PURE__ */ new Set(["handleParamString", "handleParamString2", "handleParamInteger", "handleParamBool"]);
 // ── ral-qa: rustSafeValueKeyReadSource / rustSafeValueKeyReaderUse ──
 // `const o = this.safeValue (r, k[, d])` (base hand-written reader) whose every use is a base reader at a literal
 // string key (`this.safeX (o, 'k')`) or a `o.k` / `o['k']` read. Invariant: a string-key read of any non-map Value
