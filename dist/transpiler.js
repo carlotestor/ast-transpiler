@@ -56072,7 +56072,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const boolTested = kind === void 0 && this.rustAnyBoolTestedLocal(declaration);
     if (boolTested)
       kind = "obool";
-    if (kind === void 0 && this.rustCounterArithInit(declaration.initializer, declaration) && this.rustCounterArithHasCounter(declaration.initializer, declaration) && this.rustSafeDictKeyOnlyLocal(declaration))
+    if (kind === void 0 && this.rustCounterArithInit(declaration.initializer, declaration) && this.rustCounterArithHasCounter(declaration.initializer, declaration) && (this.rustSafeDictKeyOnlyLocal(declaration) || this.rust56nSliceBoundOnlyLocal(declaration)))
       kind = "int";
     if (kind === void 0 || kind === "null")
       return void 0;
@@ -58146,6 +58146,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const cond = node?.condition;
     if (cond === void 0 || !isBinaryExpression5(cond))
       return void 0;
+    const ceil = this.rust56nCeilCounterCompare(cond);
+    if (ceil !== void 0 && String(ceil.counter.text) === name && this.rustScalarLocalOf(ceil.bound)?.kind === "onum")
+      return this.rust56nCeilCompareText(cond, ceil, `(${name} as f64)`);
     const op = cond.operatorToken.kind;
     const operator = _RustTranspiler.NATIVE_COMPARISON_OPERATORS[op];
     const { left, right } = cond;
@@ -58157,9 +58160,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${name} ${operator} ${super.printIdentifier(bound)}`;
     if (boundKind === "num")
       return `(${name} as f64) ${operator} ${super.printIdentifier(bound)}`;
-    if (boundKind === "oint" && this.rustTbCounterBound(cond, bound, "oint") !== void 0)
-      return `matches!(${super.printIdentifier(bound)}, Some(__b) if (${name} as f64) ${operator} (__b as f64))`;
-    if (boundKind === "oint" && this.rustTbParseToIntInit(this.rustDeclaredNode(bound)) && this.rust55ePtiTypedPartners(this.rustDeclaredNode(bound)))
+    if (boundKind === "oint" && (this.rustTbCounterBound(cond, bound, "oint") !== void 0 || this.rustDecidedOintBound(cond, bound)))
       return `matches!(${super.printIdentifier(bound)}, Some(__b) if (${name} as f64) ${operator} (__b as f64))`;
     const refs = (n) => isIdentifier3(n) && n.text === name || (n.forEachChild(refs) ?? false);
     if (refs(right) || !this.printsValueExpression(left) || !this.printsValueExpression(this.orderedComparisonOperand(right)))
@@ -58169,6 +58170,79 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!this.rustOrderedOperandsProven(op, left, right) || this.nativeIndexOfLiteralTestText(op, left, right) !== void 0)
       return void 0;
     return `(${name} as f64) ${operator} ${this.printNode(right, 0)}.as_f64().unwrap_or(f64::NAN)`;
+  }
+  /** ral-55e + ral-56n (one arm): `i < n` where `n` is a parseToInt `Option<i64>` local whose oint kind is already decided,
+   *  either because every partner is one the ub walk admits (55e, rust55ePtiTypedPartners) or because `i` is a `Value::Int`
+   *  counter of this very for-condition (56n, paradex pro `j < numInGroup`): `is_less_than(Int(i), n)` is the `as f64`
+   *  compare of `Some`, false on `None`. */
+  rustDecidedOintBound(cond, n) {
+    if (!isIdentifier3(n) || !this.rustTbParseToIntInit(this.rustDeclaredNode(n)))
+      return false;
+    if (this.isEqualityOp(cond.operatorToken.kind))
+      return false;
+    if (this.rust55ePtiTypedPartners(this.rustDeclaredNode(n)))
+      return true;
+    const counter = cond.left;
+    if (!isIdentifier3(counter))
+      return false;
+    const d = this.rustDeclaredNode(counter);
+    const loop = d?.parent?.parent;
+    return d !== void 0 && isVariableDeclaration3(d) && loop?.kind === SyntaxKind7.ForStatement && loop.condition === cond && this.rustValueIntCounter(counter);
+  }
+  /** ral-56n: `cond` is `i OP n` of `for (let i = <int>; ..; i++)` (a `Value::Int` counter) and `n` a const whose initializer is
+   *  a ternary of two identifiers (each arm an `i64` local by its own decision). */
+  rust56nTernaryCounterBound(cond, n) {
+    if (!isBinaryExpression5(cond) || this.isEqualityOp(cond.operatorToken.kind) || _RustTranspiler.NATIVE_COMPARISON_OPERATORS[cond.operatorToken.kind] === void 0)
+      return false;
+    if (this.unwrapParens(cond.right) !== n || !isIdentifier3(n) || !isIdentifier3(cond.left))
+      return false;
+    const d = this.rustDeclaredNode(n);
+    if (d === void 0 || !isVariableDeclaration3(d) || (d.parent?.flags & NodeFlags4.Const) === 0 || d.initializer === void 0)
+      return false;
+    const init = this.unwrapParens(d.initializer);
+    if (!isConditionalExpression4(init))
+      return false;
+    const arm = (a) => {
+      const x = this.unwrapParens(a);
+      return isIdentifier3(x) && this.rustScalarLocalOf(x)?.kind === "int";
+    };
+    if (!arm(init.whenTrue) || !arm(init.whenFalse))
+      return false;
+    const cd = this.rustDeclaredNode(cond.left);
+    const loop = cd?.parent?.parent;
+    return cd !== void 0 && isVariableDeclaration3(cd) && loop?.kind === SyntaxKind7.ForStatement && loop.condition === cond && this.rustValueIntCounter(cond.left);
+  }
+  /** ral-56n: `const b = Math.ceil (x / y)` (whole initializer): the const form of 55e's rust55eCeilDivInit (one recogniser). */
+  rust56nCeilDivConst(d) {
+    return d !== void 0 && isVariableDeclaration3(d) && (d.parent?.flags & NodeFlags4.Const) !== 0 && this.rust55eCeilDivInit(d);
+  }
+  /** ral-56n: an ordered compare (not equality) of a `for` `Value::Int` counter (int-literal start, `++` / `--` its only write)
+   *  and a `Math.ceil` division const: the two operands, else undefined. */
+  rust56nCeilCounterCompare(node) {
+    if (!isBinaryExpression5(node) || this.isEqualityOp(node.operatorToken.kind) || _RustTranspiler.NATIVE_COMPARISON_OPERATORS[node.operatorToken.kind] === void 0)
+      return void 0;
+    const l = this.unwrapParens(node.left), r = this.unwrapParens(node.right);
+    for (const [counter, bound] of [[l, r], [r, l]]) {
+      if (isIdentifier3(counter) && isIdentifier3(bound) && this.rust56nCeilDivConst(this.rustDeclaredNode(bound)) && this.rustValueIntCounter(counter))
+        return { counter, bound };
+    }
+    return void 0;
+  }
+  /** ral-56n: `is_less_than` & co. compare both `as_f64` payloads, false for a `Null` side: the `Some` payload against the
+   *  counter's f64 (`(i as f64)` for an `i64`, `i.as_f64().unwrap_or(NAN)` for the `Value::Int` counter). */
+  rust56nCeilCompareText(node, ceil, counterText) {
+    const sign = _RustTranspiler.NATIVE_COMPARISON_OPERATORS[node.operatorToken.kind];
+    const counterLeft = this.unwrapParens(node.left) === ceil.counter;
+    const test = counterLeft ? `${counterText} ${sign} __b` : `__b ${sign} ${counterText}`;
+    return `matches!(${super.printIdentifier(ceil.bound)}, Some(__b) if ${test})`;
+  }
+  print56nCeilCompare(node) {
+    const ceil = this.rust56nCeilCounterCompare(node);
+    if (ceil === void 0 || this.rustScalarLocalOf(ceil.bound)?.kind !== "onum")
+      return void 0;
+    const typed = this.rustI64CounterOperand(ceil.counter) && this.rustI64CounterUse(ceil.counter);
+    const text = this.rust56nCeilCompareText(node, ceil, typed ? `(${String(ceil.counter.text)} as f64)` : `${super.printIdentifier(ceil.counter)}.as_f64().unwrap_or(f64::NAN)`);
+    return this.isBooleanPosition(node) ? text : `Value::Bool(${text})`;
   }
   rustScalarCounterPlan(node, name) {
     const cond = this.rustScalarCounterCond(node, name);
@@ -60338,6 +60412,38 @@ ${binding(plan.indent)}` : ""), head: "" };
     });
     return ok && keys > 0;
   }
+  /** ral-56n: every read of the local is a bound (argument 0 / 1) of a loose `Value` slice (rust44bValueRecvSliceBound), where
+   *  an `i64` reads as the `Int` box the helper's looseI64 match took (paradex pro sbeReadAddress `next = i + 1`). */
+  rust56nSliceBoundOnlyLocal(declaration) {
+    if (!isIdentifier3(declaration?.name))
+      return false;
+    let uses = 0;
+    const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      if (!this.rust44bValueRecvSliceBound(n, "int"))
+        return false;
+      uses++;
+      return true;
+    });
+    return ok && uses > 0;
+  }
+  /** ral-56n: a loop counter read as a bound of a loose `Value` slice (the typed bound text is `i` / `Some(i)`). */
+  rust56nCounterSliceBound(n) {
+    const call = n?.parent;
+    if (call === void 0 || !isCallExpression6(call) || call.expression === n || !isPropertyAccessExpression3(call.expression) || call.expression.name.text !== "slice")
+      return false;
+    const idx = call.arguments.indexOf(n);
+    if (idx < 0 || idx > 1 || call.arguments.length > 2)
+      return false;
+    const recv = this.rustStripWrappers(call.expression.expression);
+    if (!isIdentifier3(recv) || this.rustScalarLocalOf(recv) !== void 0 || this.rustScalarIdentifierKind(recv) !== void 0 || this.rustStringLocalIdentifierIsTyped(recv))
+      return false;
+    return this.rustScalarStrMethod(call) === void 0 && !this.rust41bWsKeyLocal(n);
+  }
+  /** ral-56n: `x = i` as a whole statement into another local (boxed `Value::Int(i)` or the bare i64 of an int local). */
+  rust56nCounterPlainCopy(n) {
+    const up = n?.parent;
+    return up !== void 0 && isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.right === n && isIdentifier3(up.left) && up.parent?.kind === SyntaxKind7.ExpressionStatement;
+  }
   /** ral-51e: `+` / `-` over int literals, `i64` scalar locals and the counter of an enclosing `for (let j = <int>; j < <i64 local>; j++)`
    *  whose body never writes it (the counter the loop prints as an `i64`; while the scope solves it is not registered yet). */
   rustCounterArithInit(expr, declaration) {
@@ -60386,7 +60492,7 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (cond === void 0 || !isBinaryExpression5(cond) || cond.operatorToken.kind !== SyntaxKind7.LessThanToken || !isIdentifier3(cond.left) || String(cond.left.text) !== String(node.text))
       return void 0;
     const bound = this.unwrapParens(cond.right);
-    if (!isIdentifier3(bound) || this.rustScalarLocalOf(bound)?.kind !== "int")
+    if (this.rustScalarIntLiteral(bound) === void 0 && (!isIdentifier3(bound) || this.rustScalarLocalOf(bound)?.kind !== "int"))
       return void 0;
     const symbol = this.rustSymbolOf(counter.name);
     for (const n of this.rustScopeNameNodes(loop.statement, String(node.text))) {
@@ -60395,6 +60501,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       if (n.kind === SyntaxKind7.Identifier && this.rustSymbolOf(n) === symbol && this.rustIdentifierIsWritten(n))
         return void 0;
       if (n.kind === SyntaxKind7.Identifier && this.rustSymbolOf(n) === symbol) {
+        if (this.rust56nCounterSliceBound(n) || this.rust56nCounterPlainCopy(n))
+          continue;
         let up = n.parent;
         while (up !== void 0 && (isBinaryExpression5(up) || isParenthesizedExpression3(up)))
           up = up.parent;
@@ -61138,6 +61246,14 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
     const kind = this.rustScalarExpressionKind(inner);
     return kind === "int" || kind === "num" || kind === "oint" || kind === "onum" ? kind : void 0;
   }
+  /** ral-56n: `node` (parentheses skipped) is the one argument of `Math.ceil (..)`. */
+  rust56nCeilDivisionArg(node) {
+    let top = node;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    const call = top.parent;
+    return call !== void 0 && isCallExpression6(call) && call.arguments.length === 1 && call.arguments[0] === top && isPropertyAccessExpression3(call.expression) && isIdentifier3(call.expression.expression) && call.expression.expression.text === "Math" && call.expression.name.text === "ceil";
+  }
   /** 51k: `a % b` over int literals / `int` / `oint` locals with a non-literal divisor (a parseToInt answer, a const int):
    *  an `Option<i64>` (`mod_val` answers `Int(a % b)`, `Null` for a zero or `Null` operand). */
   rust51kLitModKind(node) {
@@ -61194,6 +61310,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       if (op === SyntaxKind7.SlashToken) {
         const a = this.rustScalarNumericKind(node.left);
         const divisor = this.rustScalarFloatLiteral(node.right);
+        if (divisor === void 0 && isIdentifier3(this.unwrapParens(node.left)) && isIdentifier3(this.unwrapParens(node.right)) && numeric(a) && numeric(this.rustScalarNumericKind(node.right)) && this.rust56nCeilDivisionArg(node))
+          return "onum";
         if (!numeric(a) || divisor === void 0 || Number(divisor) === 0)
           return void 0;
         return a.startsWith("o") ? "onum" : "num";
@@ -62056,6 +62174,17 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       const one = pats.length === 1;
       return `(if let ${one ? pats[0][0] : `(${pats.map((p) => p[0]).join(", ")})`} = ${one ? pats[0][1] : `(${pats.map((p) => p[1]).join(", ")})`} { if __r != 0 { Some(${l.use} % __r) } else { None } } else { None })`;
     }
+    const slash = this.unwrapParens(node);
+    if (isBinaryExpression5(slash) && slash.operatorToken.kind === SyntaxKind7.SlashToken && this.rustScalarFloatLiteral(slash.right) === void 0) {
+      if (own !== "onum" || kind !== "onum")
+        return void 0;
+      const side = (n) => {
+        const k = this.rustScalarNumericKind(n);
+        const t = this.rustScalarOperandText(k, n);
+        return k === "oint" ? `(if let Some(__v) = ${t} { Some(__v as f64) } else { None })` : k === "onum" ? t : `Some(${this.rustScalarOperandText("num", n)})`;
+      };
+      return `(if let (Some(__x), Some(__y)) = (${side(slash.left)}, ${side(slash.right)}) { if __y != 0.0 { Some(__x / __y) } else { None } } else { None })`;
+    }
     if (isIdentifier3(node)) {
       const name = this.rustI64CounterOperand(node) && this.rustI64CounterUse(node) ? String(node.text) : super.printIdentifier(node);
       if (kind === "num" && own === "int")
@@ -62168,6 +62297,9 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
   }
   /** Binary hook: arithmetic/ordered comparisons over typed operands, and `+=`/`-=` on a typed local. */
   printRustScalarBinary(node) {
+    const ceilCompare = this.print56nCeilCompare(node);
+    if (ceilCompare !== void 0)
+      return ceilCompare;
     const counterCompare = this.printI64CounterCompare(node);
     if (counterCompare !== void 0)
       return counterCompare;
@@ -63177,6 +63309,10 @@ ${ind}];`;
       if ((_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(op) || op === SyntaxKind7.PercentToken) && this.rustScalarExpressionKind(parent) !== void 0)
         return "native";
       if (this.rustTbCounterBound(parent, n, kind) !== void 0)
+        return "native";
+      if (kind === "int" && this.rust56nTernaryCounterBound(parent, n))
+        return "native";
+      if (kind === "onum" && this.rust56nCeilCounterCompare(parent) !== void 0)
         return "native";
       if (this.rustScalarValueOperandUse(parent, n, kind))
         return "xbox";
@@ -68529,7 +68665,7 @@ ${idn}}`;
         step = `if let Value::Int(${bind}) = &mut ${counter.name} { *${bind} ${counter.sign}= 1; }`;
       }
       if (typed && counter !== void 0 && bound !== void 0) {
-        initStr = initStr.replace(`let mut ${counter.name}: Value = Value::Int(${counter.literal});`, `let mut ${counter.name}: i64 = ${counter.literal};`);
+        initStr = initStr.replace(`let mut ${counter.name}: Value = Value::Int(${counter.literal});`, `let mut ${counter.name}: i64 = ${counter.literal};`).replace(`let mut ${counter.name}: Value = Value::from(${counter.literal});`, `let mut ${counter.name}: i64 = ${counter.literal};`);
         condStr = typeof bound === "object" ? bound.cond : `${counter.name} < (${bound}.len() as i64)`;
         step = `${counter.name} += 1;`;
       }
@@ -68554,9 +68690,14 @@ ${idn}}`;
     if (!isIdentifier3(declaration.name))
       return void 0;
     const name = String(declaration.name.text);
-    const printed = new RegExp(`^let mut ${name}: Value = Value::Int\\((-?\\d+)\\);$`).exec(initStr.trim());
-    if (printed === null)
-      return void 0;
+    let printed = new RegExp(`^let mut ${name}: Value = Value::Int\\((-?\\d+)\\);$`).exec(initStr.trim());
+    if (printed === null) {
+      const from = new RegExp(`^let mut ${name}: Value = Value::from\\(([A-Za-z_][A-Za-z0-9_]*)\\);$`).exec(initStr.trim());
+      const src = from === null || declaration.initializer === void 0 ? void 0 : this.unwrapParens(declaration.initializer);
+      if (from === null || src === void 0 || !isIdentifier3(src) || super.printIdentifier(src) !== from[1] || this.rustScalarLocalOf(src)?.kind !== "int")
+        return void 0;
+      printed = from;
+    }
     const sign = ["+", "-"].find((s) => incrStr.trim() === `${name} = ${this.printNativeNumeric(s === "+" ? SyntaxKind7.PlusToken : SyntaxKind7.MinusToken, name, "Value::Int(1)")}`);
     if (sign === void 0)
       return void 0;
@@ -68598,7 +68739,7 @@ ${idn}}`;
       if (id.kind !== SyntaxKind7.Identifier || this.rustIdentifierIsPropertyName(id) || this.rustSymbolOf(id) !== counter.symbol)
         continue;
       const up = id.parent;
-      const admissible = isElementAccessExpression4(up) && up.argumentExpression === id || this.rustI64BoxedUse(id) || this.rustI64LiteralCompare(id) !== void 0 || isVariableDeclaration3(up) && up.initializer === id || isBinaryExpression5(up) && (_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(up.operatorToken.kind) || up.operatorToken.kind === SyntaxKind7.PercentToken) || isPropertyAccessExpression3(up) && up.expression === id && up.name.text === "toString" && isCallExpression6(up.parent) && up.parent.expression === up;
+      const admissible = isElementAccessExpression4(up) && up.argumentExpression === id || this.rustI64BoxedUse(id) || this.rustI64LiteralCompare(id) !== void 0 || isVariableDeclaration3(up) && up.initializer === id || this.rust56nCounterSliceBound(id) || isBinaryExpression5(up) && this.rust56nCeilCounterCompare(up)?.counter === id || isBinaryExpression5(up) && (_RustTranspiler.RUST_SCALAR_ARITH_OPS.has(up.operatorToken.kind) || up.operatorToken.kind === SyntaxKind7.PercentToken) || isPropertyAccessExpression3(up) && up.expression === id && up.name.text === "toString" && isCallExpression6(up.parent) && up.parent.expression === up;
       if (!admissible)
         return void 0;
     }
@@ -69395,6 +69536,9 @@ ${this.getIden(identation)}}`;
     return call.arguments.map((a, i) => {
       if (!isIdentifier3(a))
         return void 0;
+      if (i < 2 && call.arguments.length <= 2 && this.rustI64CounterOf(a) !== void 0 && this.rust56nCounterSliceBound(a) && this.rustI64CounterUse(a)) {
+        return i === 0 ? super.printIdentifier(a) : `Some(${super.printIdentifier(a)})`;
+      }
       const typed = this.rustScalarLocalOf(a);
       if (typed === void 0 || this.rustScalarUseForms.get(a) !== "native" || !this.rust44bValueRecvSliceBound(a, typed.kind))
         return void 0;
