@@ -51718,6 +51718,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustI64Counters = /* @__PURE__ */ new Map();
     /** The `__destr_tmp` line keeps the 400-char budget with the slot unwrap and the lent self default (`Value::from(&x)`). */
     this.rustStrSlotLineMemo = /* @__PURE__ */ new WeakMap();
+    /** The destructuring statement keeps the 400-char line budget with the slot's bool read.
+     *  ral-46f: measured on the open print of the write with the bool slot read swapped in (was a length estimate that
+     *  refused every write over 380 chars although the printed block line is split after `; ` by build/ `splitLongRustLines`). */
+    this.rustBoolSlotLineMemo = /* @__PURE__ */ new WeakMap();
     // counter identifiers printed as a `.get(i as usize)` key or a `Value::Int(i)` box while the body prints
     this.rustI64ClosedUses = /* @__PURE__ */ new WeakSet();
     // ── typed caught errors (ral-44h; was ccxt build/ rustTypedCaughtErrors) ──
@@ -67326,15 +67330,24 @@ ${idn}}`;
     }
     return slots === 0 || others;
   }
-  /** The destructuring statement keeps the 400-char line budget with the slot's `== Some(true)` read. */
   rustBoolSlotLineLong(n) {
     const write = n.parent.parent;
-    let depth = 0;
-    for (let up = write.parent; up !== void 0; up = up.parent)
-      if (isBlock4(up))
-        depth++;
-    const slots = write.left.elements.reduce((sum, e) => sum + e.getText().length + 48, 0);
-    return depth * 4 + 72 + this.printNode(write.right, 0).trim().length + slots + 24 > 380;
+    const known = this.rustBoolSlotLineMemo.get(write);
+    if (known !== void 0)
+      return known;
+    this.rustBoolSlotLineMemo.set(write, true);
+    let long = true;
+    try {
+      const column = write.getStart() - String(write.getSourceFile().text).lastIndexOf("\n", write.getStart()) - 1;
+      const slots = new Set(write.left.elements.filter((e) => isIdentifier3(e) && this.rustScalarUseForms.get(e) === "bslot").map((e) => String(e.text)));
+      const text = this.printNode(write, 0);
+      const pieces = text.split("\n").flatMap((l) => l.trim().split("; ")).map((p) => p.length + ([...slots].some((name) => p.startsWith(`${name} = __destr_tmp`)) ? 24 : 0));
+      long = column + 4 + Math.max(...pieces) > 360;
+    } catch (e) {
+      long = true;
+    }
+    this.rustBoolSlotLineMemo.set(write, long);
+    return long;
   }
   // ── typed list index by an `i64` counter (rustI64IndexText) ──
   /** The `usize` index text of a `Value` list read: a registered `i64` counter indexes directly. */
@@ -70543,6 +70556,8 @@ ${iden}}`;
     let rhs = this.rustSkipWrappers(up.right);
     if (rhs?.kind === SyntaxKind7.AwaitExpression)
       rhs = this.rustSkipWrappers(rhs.expression);
+    if (rhs !== void 0 && isIdentifier3(rhs) && rhs.text !== n.text)
+      return this.rustEndpointAliasWrite(up) !== void 0;
     if (rhs === void 0 || !isCallExpression6(rhs) || String(up.getText()).split("\n")[0].length > 240)
       return false;
     const names = (x) => isIdentifier3(x) && x.text === n.text || (x.forEachChild(names) ?? false);
@@ -70574,10 +70589,26 @@ ${iden}}`;
     const call = this.rustSkipWrappers(awaited.expression);
     return call !== void 0 && isCallExpression6(call) && !this.rustTestTierSource(call) && /(?:^|[\\/])ts[\\/]src[\\/][^\\/]+\.ts$/.test(String(call.getSourceFile?.()?.fileName ?? "")) && this.rustBorrowedSourceKind(call) === "api" && this.rustDeclaredEndpointKind(call) === "dict";
   }
+  /** ral-46f: `x = y as Dict` whose previous statement in the same block is `y = await this.<endpoint> (..)` of a REST endpoint
+   *  declared `Promise<Dict>` (`rustReuseEndpointWrite`): `y` definitely holds that parsed response, so the write prints
+   *  `x = y.clone().into_dict()` (the form a declared-endpoint write prints; a non-map answer is the empty map there too).
+   *  Answers the endpoint write. */
+  rustEndpointAliasWrite(write) {
+    const statement = write?.parent;
+    const source = this.rustSkipWrappers(write?.right);
+    if (statement?.kind !== SyntaxKind7.ExpressionStatement || source === void 0 || !isIdentifier3(source) || !isBlock4(statement.parent))
+      return void 0;
+    const index = statement.parent.statements.indexOf(statement);
+    const previous = index > 0 ? statement.parent.statements[index - 1] : void 0;
+    const producer = previous?.kind === SyntaxKind7.ExpressionStatement ? previous.expression : void 0;
+    if (producer === void 0 || !isBinaryExpression5(producer) || producer.operatorToken.kind !== SyntaxKind7.EqualsToken || !isIdentifier3(producer.left) || producer.left.text !== source.text || this.rustDeclaredNode(producer.left) !== this.rustDeclaredNode(source))
+      return void 0;
+    return this.rustReuseEndpointWrite(producer.right) ? producer : void 0;
+  }
   /** The producer of a reuse write builds from untagged operands only: `extend` / `omit` operands proven plain
    *  (`rustUntaggedMapOperand`), `indexBy` / `groupBy` fresh maps, a REST `safeDict` read off a local (parsed JSON). */
   rustReuseProducerUntagged(n, rhs) {
-    if (this.rustReuseEndpointWrite(n.parent.right))
+    if (this.rustReuseEndpointWrite(n.parent.right) || this.rustEndpointAliasWrite(n.parent) !== void 0)
       return true;
     const method = String(rhs.expression?.name?.text ?? "");
     if (method === "indexBy" || method === "groupBy")
@@ -70759,6 +70790,12 @@ ${iden}}`;
     if (declaration === void 0 || !this.rustExtendReuseLocals.has(declaration) || !this.rustPrintedBorrowed.has(declaration) || !(this.rustSelfExtendWrite(left, declaration) || this.rustSelfMergeWrite(left, declaration) || this.rustReuseProducerWrites.has(left.parent)))
       return void 0;
     const name = super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text);
+    const source = this.rustSkipWrappers(right);
+    if (source !== void 0 && isIdentifier3(source) && this.rustEndpointAliasWrite(left.parent) !== void 0) {
+      const sourceDeclaration = this.rustDeclaredNode(source);
+      const moved = sourceDeclaration !== void 0 && this.rustLocalLastUse(source, sourceDeclaration);
+      return `${name} = ${this.printNode(right, 0).trim()}${moved ? "" : ".clone()"}.into_dict()`;
+    }
     return `${name} = ${this.printNode(right, 0).trim()}.into_dict()`;
   }
   // ── literal-key writes on built maps (rustBuiltMapKeyWriteOk) ──
