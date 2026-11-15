@@ -342,6 +342,19 @@ export declare class RustTranspiler extends BaseTranspiler {
     printPadStartCall(node: any, identation: any, name: any, parsedArg: any, parsedArg2: any): string;
     printPadEndCall(node: any, identation: any, name: any, parsedArg: any, parsedArg2: any): string;
     printVariableDeclarationList(node: any, identation: any): string;
+    /** ral-57e: `const lvl = side[i]` off an order-book side handle (`Side::level` hands out the stored level, an `Arr` built
+     *  by `storeArray` / `store`, or `Null` out of range), read only as `const parts = lvl[K]` (numeric literal K) where
+     *  `parts` is itself read only at numeric literal keys. `lvl` holds the list (`into_list()`: the same `Arr`, an empty
+     *  list for `Null`), and `parts` borrows its element (`lvl.get(K).unwrap_or(&Value::Null)`): the same element
+     *  `get_value` cloned, `Null` where it answered `Null`. */
+    printRust57eSideLevel(declaration: any, parsedValue: string, indent: string, varName: string): string | undefined;
+    private rust57eSideLevels;
+    rust57eSideLevelLocal(declaration: any): boolean;
+    rust57eSideLevelLocalUncached(declaration: any): boolean;
+    /** `const e = x[k]` (one const declarator, identifier receiver, same function). */
+    rust57eConstElementOf(declaration: any): boolean;
+    /** Every use of the local is the receiver of an rvalue element read at a numeric literal key (no write-back bind). */
+    rust57eLiteralReadOnly(declaration: any): boolean;
     private static readonly RUST_NIL_INT_HELPERS;
     private static readonly RUST_NIL_BOOL_HELPERS;
     private static readonly RUST_NIL_PRECISE_STR;
@@ -1340,6 +1353,14 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-51e: `+` / `-` over int literals, `i64` scalar locals and the counter of an enclosing `for (let j = <int>; j < <i64 local>; j++)`
      *  whose body never writes it (the counter the loop prints as an `i64`; while the scope solves it is not registered yet). */
     rustCounterArithInit(expr: any, declaration: any): boolean;
+    /** ral-57e: `j * <int literal>` (either order) over a `for (let j = <int>; ..; j++)` counter only the step writes
+     *  (rustValueIntCounter, always an `Int`): the
+     *  printer already spells it `(j * k)` on the `i64` counter, the `Int` the runtime product of two Ints answers. */
+    rust57eCounterProduct(node: any, declaration: any): boolean;
+    /** ral-57e: `n` is an operand of a base `this.sum (n, <int literal>)` that is itself a base `safeDict` key: with `n` an
+     *  `i64` the sum prints as the native `i64` add (rustArithCallKind 'int') and boxes once into the key slot as the Int
+     *  the runtime `sum` of two Ints answers. */
+    rust57eSumKeyOperand(n: any): boolean;
     rustCounterArithHasCounter(expr: any, declaration: any): boolean;
     /** The enclosing `for` whose block-scoped counter `node` reads (int-literal start, `j++` / `++j` step, `j < <i64 local>`, never written in the body). */
     rustCounterLoopOf(node: any, declaration: any): any;

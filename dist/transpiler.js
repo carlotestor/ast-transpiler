@@ -51554,6 +51554,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // non-numbers; with both operands checker-typed numbers the same f64
     // comparison runs natively on `Value::as_f64()` unwraps.
     this.rustNativeCompares = /* @__PURE__ */ new WeakSet();
+    this.rust57eSideLevels = /* @__PURE__ */ new WeakMap();
     this.rustNilLocalDecisions = /* @__PURE__ */ new Map();
     this.rustNilCandidateNames = /* @__PURE__ */ new WeakMap();
     // ral-40a: the nil locals being decided (innermost last) and, per local, those decided while assuming it `bool`
@@ -53826,6 +53827,9 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (scalarDecl !== void 0)
       return scalarDecl;
     const parsedValue = this.printNode(declaration.initializer, identation).trim();
+    const sideLevel = node.declarations.length === 1 ? this.printRust57eSideLevel(declaration, parsedValue, indent, varName) : void 0;
+    if (sideLevel !== void 0)
+      return sideLevel;
     if (node.declarations.length === 1 && this.rustSubscriptionPresenceFlag(declaration, parsedValue))
       return `${indent}let ${varName}: bool = ${parsedValue} != Value::Null`;
     if (declaration.initializer.kind === SyntaxKind7.NewExpression) {
@@ -53905,6 +53909,98 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${indent}let mut ${varName}: Option<String> = ${parsedValue}${nativeStr ? "" : ".as_str().map(str::to_owned)"}`;
     }
     return `${indent}let mut ${varName}: Value = ${nativeStr ? this.rustNativeStrValueBox(parsedValue) : parsedValue}`;
+  }
+  /** ral-57e: `const lvl = side[i]` off an order-book side handle (`Side::level` hands out the stored level, an `Arr` built
+   *  by `storeArray` / `store`, or `Null` out of range), read only as `const parts = lvl[K]` (numeric literal K) where
+   *  `parts` is itself read only at numeric literal keys. `lvl` holds the list (`into_list()`: the same `Arr`, an empty
+   *  list for `Null`), and `parts` borrows its element (`lvl.get(K).unwrap_or(&Value::Null)`): the same element
+   *  `get_value` cloned, `Null` where it answered `Null`. */
+  printRust57eSideLevel(declaration, parsedValue, indent, varName) {
+    if (this.rust57eSideLevelLocal(declaration))
+      return `${indent}let ${varName}: crate::value::List = ${parsedValue}.into_list()`;
+    const init = this.rustSkipWrappers(declaration?.initializer);
+    if (init === void 0 || !isElementAccessExpression4(init) || !isIdentifier3(init.expression))
+      return void 0;
+    const owner = this.rustDeclarationOfIdentifier(init.expression);
+    if (owner === void 0 || owner.name === init.expression || !this.rust57eSideLevelLocal(owner))
+      return void 0;
+    const key = this.rustSkipWrappers(init.argumentExpression);
+    return `${indent}let ${varName}: &Value = ${super.printIdentifier(init.expression)}.get(${Number(key.text)}).unwrap_or(&Value::Null)`;
+  }
+  rust57eSideLevelLocal(declaration) {
+    if (declaration?.kind !== SyntaxKind7.VariableDeclaration)
+      return false;
+    let decision = this.rust57eSideLevels.get(declaration);
+    if (decision === void 0) {
+      this.rust57eSideLevels.set(declaration, false);
+      try {
+        decision = this.rust57eSideLevelLocalUncached(declaration);
+      } catch (e) {
+        decision = false;
+      }
+      this.rust57eSideLevels.set(declaration, decision);
+    }
+    return decision;
+  }
+  rust57eSideLevelLocalUncached(declaration) {
+    if (!this.rust57eConstElementOf(declaration) || this.rustTestTierSource(declaration))
+      return false;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    if (!this.rustBookSideLocalOf(init.expression))
+      return false;
+    let uses = 0;
+    const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const up = n.parent;
+      if (!isElementAccessExpression4(up) || up.expression !== n)
+        return false;
+      const key = this.rustSkipWrappers(up.argumentExpression);
+      if (key === void 0 || !isNumericLiteral4(key) || !Number.isInteger(Number(key.text)) || Number(key.text) < 0)
+        return false;
+      let top = up;
+      while (top.parent !== void 0 && isParenthesizedExpression3(top.parent))
+        top = top.parent;
+      const child = top.parent;
+      if (!isVariableDeclaration3(child) || child.initializer !== top || !this.rust57eConstElementOf(child) || !this.rust57eLiteralReadOnly(child))
+        return false;
+      uses++;
+      return true;
+    });
+    return ok && uses > 0;
+  }
+  /** `const e = x[k]` (one const declarator, identifier receiver, same function). */
+  rust57eConstElementOf(declaration) {
+    if (declaration?.kind !== SyntaxKind7.VariableDeclaration || !isIdentifier3(declaration.name))
+      return false;
+    const list = declaration.parent;
+    if (list?.kind !== SyntaxKind7.VariableDeclarationList || list.declarations.length !== 1 || (list.flags & NodeFlags4.Const) === 0)
+      return false;
+    const init = this.rustSkipWrappers(declaration.initializer);
+    return init !== void 0 && isElementAccessExpression4(init) && isIdentifier3(init.expression);
+  }
+  /** Every use of the local is the receiver of an rvalue element read at a numeric literal key (no write-back bind). */
+  rust57eLiteralReadOnly(declaration) {
+    const written = (n) => {
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind >= SyntaxKind7.FirstAssignment && up.operatorToken.kind <= SyntaxKind7.LastAssignment)
+        return true;
+      return isPrefixUnaryExpression3(up) || isPostfixUnaryExpression3(up) || isDeleteExpression2(up);
+    };
+    let uses = 0;
+    const ok = this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const up = n.parent;
+      if (!isElementAccessExpression4(up) || up.expression !== n || written(up))
+        return false;
+      const key = this.rustSkipWrappers(up.argumentExpression);
+      if (key === void 0 || !isNumericLiteral4(key))
+        return false;
+      if (isElementAccessExpression4(up.parent) && up.parent.expression === up && written(up.parent))
+        return false;
+      if (this.isWriteBackBindRead(up))
+        return false;
+      uses++;
+      return true;
+    });
+    return ok && uses > 0;
   }
   /** `'str' | 'int' | 'bool'` when the nil-declared local prints `Option<..>`, else undefined. */
   rustNilLocalKind(declaration) {
@@ -60606,6 +60702,8 @@ ${binding(plan.indent)}` : ""), head: "" };
         keys++;
         return true;
       }
+      if (this.rust57eSumKeyOperand(n))
+        return true;
       if (!this.rustSafeDictKeyArg(n))
         return false;
       keys++;
@@ -60653,6 +60751,8 @@ ${binding(plan.indent)}` : ""), head: "" };
       return false;
     if (isBinaryExpression5(node)) {
       const op = node.operatorToken.kind;
+      if (op === SyntaxKind7.AsteriskToken)
+        return this.rust57eCounterProduct(node, declaration);
       return (op === SyntaxKind7.PlusToken || op === SyntaxKind7.MinusToken) && this.rustCounterArithInit(node.left, declaration) && this.rustCounterArithInit(node.right, declaration);
     }
     if (this.rustScalarIntLiteral(node) !== void 0)
@@ -60664,10 +60764,30 @@ ${binding(plan.indent)}` : ""), head: "" };
     const target = this.rustDeclaredNode(node);
     return target !== void 0 && target !== declaration && this.rustEnclosingFunction(target) === this.rustEnclosingFunction(declaration) && this.rustScalarLocalOf(node)?.kind === "int";
   }
+  /** ral-57e: `j * <int literal>` (either order) over a `for (let j = <int>; ..; j++)` counter only the step writes
+   *  (rustValueIntCounter, always an `Int`): the
+   *  printer already spells it `(j * k)` on the `i64` counter, the `Int` the runtime product of two Ints answers. */
+  rust57eCounterProduct(node, declaration) {
+    const l = this.unwrapParens(node.left);
+    const r = this.unwrapParens(node.right);
+    const lit = (x) => this.rustScalarIntLiteral(x) !== void 0;
+    const ctr = (x) => isIdentifier3(x) && this.rustValueIntCounter(x);
+    return ctr(l) && lit(r) || lit(l) && ctr(r);
+  }
+  /** ral-57e: `n` is an operand of a base `this.sum (n, <int literal>)` that is itself a base `safeDict` key: with `n` an
+   *  `i64` the sum prints as the native `i64` add (rustArithCallKind 'int') and boxes once into the key slot as the Int
+   *  the runtime `sum` of two Ints answers. */
+  rust57eSumKeyOperand(n) {
+    const call = n?.parent;
+    if (!isCallExpression6(call) || !this.rustSumShape(call) || call.arguments.length !== 2)
+      return false;
+    const other = call.arguments[0] === n ? call.arguments[1] : call.arguments[1] === n ? call.arguments[0] : void 0;
+    return other !== void 0 && this.rustScalarIntLiteral(this.unwrapParens(other)) !== void 0 && this.rustSafeDictKeyArg(call);
+  }
   rustCounterArithHasCounter(expr, declaration) {
     const node = this.unwrapParens(expr);
     if (isBinaryExpression5(node))
-      return this.rustCounterArithHasCounter(node.left, declaration) || this.rustCounterArithHasCounter(node.right, declaration);
+      return node.operatorToken.kind === SyntaxKind7.AsteriskToken && this.rust57eCounterProduct(node, declaration) || this.rustCounterArithHasCounter(node.left, declaration) || this.rustCounterArithHasCounter(node.right, declaration);
     return isIdentifier3(node) && this.rustCounterLoopOf(node, declaration) !== void 0;
   }
   /** The enclosing `for` whose block-scoped counter `node` reads (int-literal start, `j++` / `++j` step, `j < <i64 local>`, never written in the body). */
