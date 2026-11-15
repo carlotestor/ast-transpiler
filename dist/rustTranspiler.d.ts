@@ -999,6 +999,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** sb: `xs.join(sep)` as a local's initializer: every printed join form is `Value::Str(<String>.into())` (a non-list
      *  receiver joins to `""`, never `Null`), so the local is that `String`. Only at a declaration initializer. */
     rustSbJoinShape(node: any): boolean;
+    /** 51k: the join is one arm of a ternary initializer of a plain identifier whose other arm is a string literal. */
+    rust51kStrTernaryJoin(node: any): boolean;
     /** The `String` inside the printed join, printed at emission only (a print inside a decision perturbs other locals);
      *  any other printed form reads its `Str` back (`join` always answers a `Str`). */
     rustSbJoinText(node: any): string;
