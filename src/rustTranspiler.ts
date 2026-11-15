@@ -22296,6 +22296,7 @@ export class RustTranspiler extends BaseTranspiler {
             const member: any = symbolValueDeclaration(this.getChecker().getSymbolAtLocation(e.name));
             return member !== undefined && isMethodDeclaration(member);
         }
+        if (e.kind === SyntaxKind.ElementAccessExpression && this.rustHandlerTable(this.rustSkipWrappers(e.expression))) return true;
         return this.rustHandlerTableRead(e);
     }
 
@@ -22450,8 +22451,16 @@ export class RustTranspiler extends BaseTranspiler {
         // a same-named table in a sibling block is another binding (`rustBlockLocalUsesAll`)
         return this.rustBlockLocalUsesAll(declaration, String(declaration.name.text), (n: any) => {
             const up: any = n.parent;
-            return isCallExpression(up) && up.arguments[0] === n && isPropertyAccessExpression(up.expression) && up.expression.expression.kind === SyntaxKind.ThisKeyword
-                && String(up.expression.name.text) === 'safeValue';
+            if (isCallExpression(up) && up.arguments[0] === n && isPropertyAccessExpression(up.expression) && up.expression.expression.kind === SyntaxKind.ThisKeyword
+                && String(up.expression.name.text) === 'safeValue') return true;
+            // ral-49h: `Object.keys (table)` (the key list) and a `table[k]` element READ (apex / bybit / coinone / hyperliquid /
+            // pacifica fall back to a substring match over the keys); any write through the table fails
+            if (isCallExpression(up) && up.arguments.length === 1 && up.arguments[0] === n && isPropertyAccessExpression(up.expression)
+                && isIdentifier(up.expression.expression) && String(up.expression.expression.text) === 'Object' && String(up.expression.name.text) === 'keys') return true;
+            if (up?.kind !== SyntaxKind.ElementAccessExpression || up.expression !== n) return false;
+            const use: any = up.parent;
+            return (isVariableDeclaration(use) && use.initializer === up)
+                || (isBinaryExpression(use) && use.right === up && use.operatorToken.kind === SyntaxKind.EqualsToken);
         });
     }
 
