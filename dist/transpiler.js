@@ -59054,6 +59054,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "box";
     if ((kind === "str" || kind === "ostr") && this.rustThisFieldLiteralWrite(n) && this.rustLocalLastUse(n, this.rustDeclaredNode(n)))
       return "box";
+    if ((kind === "str" || kind === "ostr") && this.rust58kThisFieldIdentKeyWrite(n))
+      return "box";
     if ((kind === "str" || kind === "ostr") && this.rustNestedFieldKeyUse(n))
       return "nkey";
     if ((kind === "int" || kind === "num" || kind === "oint" || kind === "onum") && this.rustNestedFieldValueUse(n))
@@ -59930,6 +59932,17 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (this.rustDictBearerDeclaration(recvNode) !== void 0)
       return `Value::Bool(matches!(${super.printIdentifier(inner)}.as_deref(), Some(__k) if ${String(recvNode.text)}.contains_key(__k)))`;
     return `Value::Bool(matches!((&${recv}, ${super.printIdentifier(inner)}.as_deref()), (Value::Dict(__d), Some(__k)) if __d.contains_key(__k)))`;
+  }
+  /** ral-58k: `n` is the whole right side of a statement `this.f[k] = n`, `k` another identifier (decided from the AST). */
+  rust58kThisFieldIdentKeyWrite(n) {
+    const write = n.parent;
+    if (!isBinaryExpression5(write) || write.right !== n || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const left = write.left;
+    if (!isElementAccessExpression4(left) || !isPropertyAccessExpression3(left.expression) || left.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const key = this.rustSkipWrappers(left.argumentExpression);
+    return key !== void 0 && isIdentifier3(key) && key.text !== n.text && key.text !== "undefined";
   }
   rustThisFieldLiteralWrite(n) {
     const write = n.parent;
