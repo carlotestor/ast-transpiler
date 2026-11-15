@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -56845,7 +56845,20 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!isCallExpression6(node) || node.arguments.length !== 0 || !isPropertyAccessExpression3(node.expression) || node.expression.name.text !== "toString")
       return false;
     const clock = this.unwrapParens(node.expression.expression);
-    return this.rustClockCall(clock) || this.rustNonceCall(clock);
+    return this.rustClockCall(clock) || this.rustNonceCall(clock) || this.rust46aIntRuntimeCall(clock);
+  }
+  /** ral-46a: `this.incrementingNonce()` / `this.randNumber(n)` of the base runtime (no venue override): the runtime
+   *  answers a bare `i64` (`fn incrementing_nonce(&mut self) -> i64`, `fn rand_number(&self, size: Value) -> i64`), and
+   *  `format!("{}", ..)` of it is the decimal text `to_string_val` gave for the `Int` box. */
+  rust46aIntRuntimeCall(node) {
+    if (!isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || node.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const name = String(node.expression.name.text);
+    if (!(name === "incrementingNonce" && node.arguments.length === 0 || name === "randNumber" && node.arguments.length === 1))
+      return false;
+    if (!this.rustCalleeIsRuntimeBase(node) || this.rustVenueReturnTypesHas(node, name))
+      return false;
+    return this.rustScalarValueKind(node, true) === "int";
   }
   /** `this.nonce()` where every declaration of the name (base and each override) declares `int`: the trait slot
    *  answers a `Value` holding that `Int`, and `format!("{}", ..)` of it is the decimal text `to_string_val` gives. */

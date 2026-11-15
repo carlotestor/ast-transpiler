@@ -735,6 +735,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustRandomBytesCall(node: any): boolean;
     /** `this.milliseconds().toString()`: the decimal text of the `i64`, as `to_string_val` prints an `Int`. */
     rustClockString(node: any): boolean;
+    /** ral-46a: `this.incrementingNonce()` / `this.randNumber(n)` of the base runtime (no venue override): the runtime
+     *  answers a bare `i64` (`fn incrementing_nonce(&mut self) -> i64`, `fn rand_number(&self, size: Value) -> i64`), and
+     *  `format!("{}", ..)` of it is the decimal text `to_string_val` gave for the `Int` box. */
+    rust46aIntRuntimeCall(node: any): boolean;
     /** `this.nonce()` where every declaration of the name (base and each override) declares `int`: the trait slot
      *  answers a `Value` holding that `Int`, and `format!("{}", ..)` of it is the decimal text `to_string_val` gives. */
     rustNonceCall(node: any): boolean;
