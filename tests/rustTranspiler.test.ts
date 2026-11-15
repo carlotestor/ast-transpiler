@@ -18898,3 +18898,51 @@ describe('ral-55k: value of a two-literal-key write on a typed one-level map bea
         expect(out).toMatch(/let mut defaultDex: Value = /);
     });
 });
+
+describe('ral-56k: safeCurrencyCode bucket key of a map-literal local (printer owns the push and its write-back)', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict | undefined { return o; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    hold (x: any, y: any = undefined, z: any = undefined): any { return x; }\n    depositWithdrawFee (info: any): Dict { return {}; }\n}\n";
+    const write = (name: string, body: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n" + body + "}\n");
+        return transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+    };
+    const rates = (reader: string, after = '') => "    parse (response: any[], codes: any, since: any) {\n        const result: Dict = {};\n        for (let i = 0; i < response.length; i++) {\n            const item = this.safeDict (response, i);\n            const code = " + reader + " (this.safeString (item, 'currency'));\n            if ((code !== undefined) && (codes === undefined || this.hold (code, codes))) {\n                if (!(code in result)) {\n                    result[code] = [];\n                }\n                const rate = this.safeDict (item, 'x');\n                const bucket = result[code];\n                bucket.push (rate);\n" + after + "            }\n        }\n        const keys = Object.keys (result);\n        for (let i = 0; i < keys.length; i++) {\n            const code = keys[i];\n            result[code] = this.hold (result[code], code, since);\n        }\n        return result;\n    }\n";
+    test('kucoin borrow-rate shape: the key is Option<String>, the push and its write-back insert are native', () => {
+        const out = write ('56k-br', rates ('this.safeCurrencyCode'));
+        expect(out).toContain('let mut code: Option<String> = ');
+        expect(out).toContain('let mut bucket: Value = result.get(code.as_deref().unwrap_or(""))');
+        expect(out).toContain('if let Value::Arr(__a) = &mut bucket { std::sync::Arc::make_mut(__a).push(rate.map_or(Value::Null, Value::Dict)); } if let Some(__k) = code.as_deref() { result.insert(__k.to_string(), bucket); }');
+        expect(out).not.toContain('append_to_array(&mut bucket');
+    });
+    test('negative: a hold() key stays Value and the push keeps the helper (ccxt write-back pass)', () => {
+        const out = write ('56k-br-neg', rates ('this.hold'));
+        expect(out).toMatch(/let mut code: Value = /);
+        expect(out).toContain('append_to_array(&mut bucket');
+    });
+    test('negative: a bucket mutated again after the push keeps the helper', () => {
+        const out = write ('56k-br-neg2', rates ('this.safeCurrencyCode', "                bucket.push (rate);\n"));
+        expect(out).toContain('append_to_array(&mut bucket');
+    });
+    const fees = "    parse (response: any[], codes: any) {\n        const result: Dict = {};\n        for (let i = 0; i < response.length; i++) {\n            const entry = this.safeDict (response, i);\n            const code = this.safeCurrencyCode (this.safeString (entry, 'ccy'));\n            if ((code !== undefined) && (codes === undefined || this.hold (code, codes))) {\n                if (this.safeDict (result, code) === undefined) {\n                    result[code] = this.depositWithdrawFee ({});\n                }\n                result[code]['info']['x'] = entry;\n            }\n        }\n        return result;\n    }\n";
+    test('okx fee shape: the first key of a three-key write on a map bearer takes the insert-key text', () => {
+        const out = write ('56k-deep', fees);
+        expect(out).toContain('let mut code: Option<String> = ');
+        expect(out).toContain('result.entry(code.as_deref().unwrap_or("null").to_string()).or_default()');
+        expect(out).not.toContain('stringify_param(&code)');
+    });
+});
+
+describe('ral-56k: a later key of a deep bearer write boxes where the Value form cloned', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeDict (o: any, k: any, d: any = undefined): Dict | undefined { return o; }\n    safeCurrencyCode (currencyId: Str, currency: any = undefined): Str { return currencyId; }\n    hold (x: any, y: any = undefined, z: any = undefined): any { return x; }\n    depositWithdrawFee (info: any): Dict { return {}; }\n}\n";
+    test('bitso fee shape: `result[code][\'info\'][code] = fee` keeps code Option<String> (first key text, later key boxed)', () => {
+        const dir = path.join (rustFixtureRoot, '56k-bitso');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parse (response: any, codes: any) {\n        const result: Dict = {};\n        const keys = Object.keys (response);\n        for (let i = 0; i < keys.length; i++) {\n            const currencyId = keys[i];\n            const code = this.safeCurrencyCode (currencyId);\n            if ((code !== undefined) && ((codes === undefined) || this.hold (code, codes))) {\n                const fee = this.hold (response[currencyId]);\n                if (this.safeDict (result, code) === undefined) {\n                    result[code] = this.depositWithdrawFee ({});\n                }\n                result[code]['withdraw']['fee'] = fee;\n                result[code]['info'][code] = fee;\n            }\n        }\n        return result;\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut code: Option<String> = ');
+        expect(out).toContain('&Value::Str("info".into())), &Value::from(code.as_deref()), fee.clone())');
+    });
+});
