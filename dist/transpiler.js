@@ -72837,7 +72837,7 @@ ${iden}}`;
     if (at !== fn.parameters.length - 1 || (fn.modifiers ?? []).some((x) => x.kind === SyntaxKind7.OverrideKeyword))
       return false;
     const name = String(fn.name.text);
-    if (!/^[a-z][A-Za-z0-9]*Request$/.test(name) || this.rustLocalIsReassigned(d, String(d.name.text)))
+    if (!/^[a-z][A-Za-z0-9]*$/.test(name) || this.rustTypedUnified.has(name) || this.rustLocalIsReassigned(d, String(d.name.text)))
       return false;
     const file = String(fn.getSourceFile().fileName).replace(/\\/g, "/");
     const m = /^(.*ts\/src\/)((?:prediction\/)?[a-z0-9]+)\.ts$/.exec(file);
@@ -72976,6 +72976,24 @@ ${iden}}`;
       }
       return false;
     };
+    const declaredSlotDict = (rel, call, at) => {
+      if (!thisCall(call) || at < 1)
+        return false;
+      const name = String(call.expression.name.text);
+      for (let r = rel; r !== void 0; r = parentOf(r)) {
+        const md = ownMethod(classOf(parse(r)), name);
+        if (md === void 0)
+          continue;
+        let t = md.type;
+        if (t !== void 0 && t.kind === SyntaxKind7.TypeReference && String(t.typeName?.getText?.()) === "Promise")
+          t = t.typeArguments?.[0];
+        if (t === void 0 || t.kind !== SyntaxKind7.TupleType)
+          return false;
+        const el = t.elements[at];
+        return el !== void 0 && String(el.getText()) === "Dict";
+      }
+      return false;
+    };
     const enclosingFn = (n) => {
       let x = n.parent;
       while (x !== void 0 && !isFunctionLike(x))
@@ -73020,7 +73038,8 @@ ${iden}}`;
         } else if (isBindingElement(n) && isIdentifier3(n.name) && n.name.text === arg.text) {
           writes++;
           const init = n.parent?.parent?.initializer;
-          good = n.parent.elements.indexOf(n) >= 1 && thisCall(init) && /AndParams/.test(String(init.expression.name.text)) && Array.from(init.arguments).some((x) => isMap(sf, rel, x, depth + 1));
+          const slot = n.parent.elements.indexOf(n);
+          good = slot >= 1 && thisCall(init) && (/AndParams/.test(String(init.expression.name.text)) && Array.from(init.arguments).some((x) => isMap(sf, rel, x, depth + 1)) || declaredSlotDict(rel, init, slot));
         } else if (isBinaryExpression5(n) && n.operatorToken.kind === SyntaxKind7.EqualsToken) {
           if (isIdentifier3(n.left) && n.left.text === arg.text) {
             writes++;
@@ -73029,7 +73048,7 @@ ${iden}}`;
             writes++;
             const at = n.left.elements.findIndex((e) => isIdentifier3(e) && e.text === arg.text);
             const rhs = n.right;
-            good = at >= 1 && thisCall(rhs) && /AndParams/.test(String(rhs.expression.name.text)) && Array.from(rhs.arguments).some((x) => isMap(sf, rel, x, depth + 1));
+            good = at >= 1 && thisCall(rhs) && (/AndParams/.test(String(rhs.expression.name.text)) && Array.from(rhs.arguments).some((x) => isMap(sf, rel, x, depth + 1)) || declaredSlotDict(rel, rhs, at));
           }
         }
         n.forEachChild?.(visit);
