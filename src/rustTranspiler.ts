@@ -8590,7 +8590,8 @@ export class RustTranspiler extends BaseTranspiler {
         const lkind = isIdentifier(last) ? this.rustScalarLocalOf(last)?.kind : undefined;
         const lname = isIdentifier(last) ? super.printIdentifier(last) : '';
         const lastText = isStringLiteral(last) ? `${JSON.stringify(String(last.text))}.to_string()`
-            : this.rustScalarUseForms.get(last) !== 'nkey' ? undefined : lkind === 'str' ? `${lname}.to_string()` : lkind === 'ostr' ? `${lname}.as_deref().unwrap_or("null").to_string()` : undefined;
+            : this.rustScalarUseForms.get(last) !== 'nkey' ? (lkind === undefined && isIdentifier(last) && /^[A-Za-z_]\w*$/.test(lname) ? `crate::runtime::stringify_param(&${lname})` : undefined)
+                : lkind === 'str' ? `${lname}.to_string()` : lkind === 'ostr' ? `${lname}.as_deref().unwrap_or("null").to_string()` : undefined;
         if (lastText === undefined) return undefined;
         const bound = /\bself\b/.test(value);
         const chain = `if let Value::Dict(__bf03d0) = &mut self.${field} { let __bf03e1 = std::sync::Arc::make_mut(__bf03d0).entry(${upperText}).or_insert(Value::Null); `
@@ -8598,7 +8599,7 @@ export class RustTranspiler extends BaseTranspiler {
         const insert = bound ? `{ let __be_tmp = ${value}; ${chain} }` : chain;
         // the entry form is shorter than the ccxt bf03 text it replaces (`stringify_param(&k)`); 10 chars of headroom for renames
         if (insert.split('\n').some((l) => l.length + 10 > 400)) {
-            const lastKey = isStringLiteral(last) ? `Value::Str(${JSON.stringify(String(last.text))}.into())` : `Value::from(${lname}${lkind === 'str' ? '.as_str()' : '.as_deref()'})`;
+            const lastKey = isStringLiteral(last) ? `Value::Str(${JSON.stringify(String(last.text))}.into())` : lkind === undefined ? lname : `Value::from(${lname}${lkind === 'str' ? '.as_str()' : '.as_deref()'})`;
             return `add_element_to_object(get_value_mut(&mut self.${field}, &Value::from(${uname}${ukind === 'str' ? '.as_str()' : '.as_deref()'})), &${lastKey}, ${value})`;
         }
         return insert;
