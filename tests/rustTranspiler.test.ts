@@ -16208,3 +16208,18 @@ describe('ral-45c: a safeMarket ternary initializer is an owned Option<Market>',
         expect(o).not.toContain('from_raw(');
     });
 });
+
+describe('ral-45c: a Dictionary<Dict> row written at a literal key with a write-back proof', () => {
+    test('`const row = d[k]; row[\'k\'] = v; out.push (row)` with d read only by Object.keys before the loop is an Option<Dict> row', () => {
+        const dir = path.join (rustFixtureRoot, 'ral45c-dict-row-write');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport interface Dictionary<T> { [key: string]: T }\nexport type List = any[];\nexport default class Exchange {\n    safeDict (o: any, k: any, d: Dict = undefined): Dict { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Dictionary, List } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    rows (response: Dict): List {\n        const ledger: Dictionary<Dict> = this.safeDict (response, 'ledger', {});\n        const keys = Object.keys (ledger);\n        const items: List = [];\n        for (let i = 0; i < keys.length; i++) {\n            const key = keys[i];\n            const value = ledger[key];\n            value['id'] = key;\n            items.push (value);\n        }\n        return items;\n    }\n    reread (response: Dict): List {\n        const ledger: Dictionary<Dict> = this.safeDict (response, 'ledger', {});\n        const keys = Object.keys (ledger);\n        const items: List = [];\n        for (let i = 0; i < keys.length; i++) {\n            const key = keys[i];\n            const value = ledger[key];\n            value['id'] = key;\n            items.push (ledger[key]);\n        }\n        return items;\n    }\n}\n");
+        const out = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        const t = out.slice(out.indexOf('fn rows'), out.indexOf('fn reread'));
+        expect(t).toContain('let mut value: Option<crate::value::Dict> =');
+        expect(t).not.toContain('add_element_to_object(&mut value');
+        const r = out.slice(out.indexOf('fn reread'));
+        expect(r).toContain('add_element_to_object(&mut value');
+    });
+});

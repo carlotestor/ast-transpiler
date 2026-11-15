@@ -19545,7 +19545,8 @@ export class RustTranspiler extends BaseTranspiler {
     rustElementKeyWriteOk(n: any, init: any): boolean {
         const key = this.rustUntilHeadKeyWrite(n);
         if (key === undefined || key.startsWith('__') || init === undefined || !isElementAccessExpression(init) || this.rustUrlsMapEntry(init)) return false;
-        if (!this.rustDictElementSource(init) || !this.getChecker().isArrayType(this.typeOfNodeIfAny(init.expression))) return false;
+        if (!this.rustDictElementSource(init)) return false;
+        if (!this.getChecker().isArrayType(this.typeOfNodeIfAny(init.expression))) return this.rustDictRowKeyWriteBackOk(n, init);
         if (!/(?:^|[\\/])ts[\\/]src[\\/](?:prediction[\\/])?[^\\/]+\.ts$/.test(String(n.getSourceFile?.()?.fileName ?? ''))) return false;
         const list: any = this.rustDeclarationOfIdentifier(init.expression);
         if (list === undefined || !isVariableDeclaration(list as any)) return false;
@@ -19553,6 +19554,33 @@ export class RustTranspiler extends BaseTranspiler {
         if (source === undefined || this.rustInitReadsTaggedStore(source)) return false;
         // the row must print straight off the list (a typed list's `.get(i)` or a literal index), never through `get_value`
         return isNumericLiteral(this.rustSkipWrappers(init.argumentExpression)) || this.rustReadBearerKindOfDeclaration(list) === 'list' || this.rustBorrowedLocalKind(list) === 'list' || this.rustVecLocalIsTyped(list);
+    }
+
+    /** ral-45c: `row['k'] = v` on `const row = d[k]` of a `Dictionary<Dict>` local `d` read from an untagged REST map, in a REST
+     *  or prediction venue file. Write-back proof: `d` is never read again after the row is taken (its only other uses are its
+     *  declaration and an `Object.keys (d)` ahead of the row's loop), so the map the boxed `add_element_to_object` left unchanged
+     *  in `d` is never observed; the row's copy-on-write insert is exactly the boxed one (an untagged map, no store route). */
+    rustDictRowKeyWriteBackOk(n: any, init: any): boolean {
+        if (!isIdentifier(init.expression) || !this.rustDictOfDictsLocal(init.expression)) return false;
+        if (!/(?:^|[\\/])ts[\\/]src[\\/](?:prediction[\\/])?[^\\/]+\.ts$/.test(String(n.getSourceFile?.()?.fileName ?? ''))) return false;
+        const owner: any = this.rustDeclaredNode(init.expression);
+        if (owner === undefined || !isVariableDeclaration(owner) || (owner.parent.flags & NodeFlags.Const) === 0) return false;
+        const source: any = this.rustSkipWrappers(owner.initializer);
+        if (source === undefined || !isCallExpression(source) || this.rustInitReadsTaggedStore(source) || !this.rustBorrowedDictSource(source)) return false;
+        const rowDecl: any = init.parent;
+        if (!isVariableDeclaration(rowDecl) || rowDecl.initializer === undefined || this.rustSkipWrappers(rowDecl.initializer) !== init) return false;
+        const fn: any = this.rustEnclosingFunction(owner);
+        if (fn === undefined || this.rustEnclosingFunction(rowDecl) !== fn) return false;
+        const loop: any = findAncestor(rowDecl, (a: any) => a === fn || a.kind === SyntaxKind.ForStatement || a.kind === SyntaxKind.ForOfStatement || a.kind === SyntaxKind.ForInStatement || a.kind === SyntaxKind.WhileStatement);
+        const loopStart = loop === undefined || loop === fn ? rowDecl.getStart() : loop.getStart();
+        return this.rustLocalUsesAll(owner, String(init.expression.text), true, (u: any) => {
+            if (u === init.expression) return true;
+            if (this.rustEnclosingFunction(u) !== fn) return false;
+            const call: any = u.parent;
+            return u.getStart() < loopStart && isCallExpression(call) && call.arguments.length === 1 && call.arguments[0] === u
+                && isPropertyAccessExpression(call.expression) && isIdentifier(call.expression.expression) && String(call.expression.expression.text) === 'Object'
+                && String(call.expression.name.text) === 'keys';
+        });
     }
 
     rustBuiltKeyWriteLineOk(n: any, extra = 0): boolean {
