@@ -51716,6 +51716,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     // boxed uses `Value::Int(i)`. The body is printed with the counter registered; if any use printed
     // another way the body is printed again as a `Value` counter.
     this.rustI64Counters = /* @__PURE__ */ new Map();
+    /** The `__destr_tmp` line keeps the 400-char budget with the slot unwrap and the lent self default (`Value::from(&x)`). */
+    this.rustStrSlotLineMemo = /* @__PURE__ */ new WeakMap();
     // counter identifiers printed as a `.get(i as usize)` key or a `Value::Int(i)` box while the body prints
     this.rustI64ClosedUses = /* @__PURE__ */ new WeakSet();
     // `const x = []` locals declared `Vec<Value>` when every use is a statement
@@ -58176,6 +58178,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (kind === "bool" && this.rustBoolSlotWrite(n))
       return "bslot";
+    if (kind === "ostr" && this.rustStrSlotWrite(n))
+      return "slot";
     if (isBinaryExpression5(parent) && parent.left === n && parent.operatorToken.kind === SyntaxKind7.EqualsToken) {
       if (parent.parent?.kind !== SyntaxKind7.ExpressionStatement)
         return void 0;
@@ -59506,6 +59510,8 @@ ${binding(plan.indent)}` : ""), head: "" };
     const lent = !last && (this.rustStrLentLocals.has(local.declaration) || local.kind === "ostr" && this.rustNilStrLentLocals.has(local.declaration));
     if (local.kind === "ostr" && this.rustInArrayNeedle(node))
       return `&${name}`;
+    if (local.kind === "ostr" && !last && this.rustStrSlotSelfDefault(node))
+      return `Value::from(&${name})`;
     if (local.kind === "ostr")
       return lent ? `Value::from(${name}.as_deref())` : `${moved}.map(Value::from).unwrap_or(Value::Null)`;
     if (local.kind === "str")
@@ -60347,6 +60353,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       if (next !== void 0 && (next === joined || next === `o${joined}`))
         joined = next;
     }
+    if ((joined === "str" || joined === "ostr") && this.rustStrSlotWrites(declaration))
+      joined = "ostr";
     return joined;
   }
   // Optional parameters of a typed-signature method: the body rebinds them from the lowered typed
@@ -67009,6 +67017,51 @@ ${idn}}`;
       return false;
     const write = n.parent.parent;
     return this.rustNativeListSource(write.right) && this.primitiveKindOfType(this.typeOfNodeIfAny(n)) === "boolean";
+  }
+  // ral-45d: the string twin of `rustBoolSlotWrite` for an initialised local (`let x = 'lit'; [x, p] = this.handleOptionStringAndParams (..)`):
+  // the slot prints `x = <slot>.as_str().map(str::to_owned)` (the nil-declared `slot` form), a non-string slot reads `None`
+  rustStrSlotWrite(n) {
+    if (!isIdentifier3(n) || !this.rustNilSlotWrite(n))
+      return false;
+    const write = n.parent.parent;
+    return this.rustNativeListSource(write.right) && this.primitiveKindOfType(this.typeOfNodeIfAny(n)) === "string" && (this.rustScalarSeeding || this.rustStrSlotLineFits(write));
+  }
+  rustStrSlotLineFits(write) {
+    const known = this.rustStrSlotLineMemo.get(write);
+    if (known !== void 0)
+      return known;
+    this.rustStrSlotLineMemo.set(write, false);
+    let fits = false;
+    try {
+      const column = write.getStart() - String(write.getSourceFile().text).lastIndexOf("\n", write.getStart()) - 1;
+      const length = column + Math.max(...this.printNode(write, 0).split("\n").map((l) => l.trim().length));
+      fits = length + ".as_str().map(str::to_owned)".length <= 400;
+    } catch (e) {
+      fits = false;
+    }
+    this.rustStrSlotLineMemo.set(write, fits);
+    return fits;
+  }
+  /** Some write of the initialised local is a string tuple slot (`rustStrSlotWrite`). */
+  rustStrSlotWrites(declaration) {
+    if (declaration?.initializer === void 0 || !isIdentifier3(declaration.name))
+      return false;
+    const name = String(declaration.name.text);
+    const hit = this.rustScopeNameNodes(this.rustEnclosingFunction(declaration), name).some((n) => isIdentifier3(n) && this.rustNilSlotWrite(n) && this.rustDeclaredNode(n) === declaration && this.rustStrSlotWrite(n));
+    return hit;
+  }
+  /** ral-45d: the local's own box as an argument of its string slot write (`[x, p] = this.m (.., x)`): it boxes the value the local
+   *  holds before the slot is read back, lent (`Value::from(&x)`, `From<&Option<String>>`: `None` is the Null, `Some` the Str). */
+  rustStrSlotSelfDefault(n) {
+    let up = n;
+    while (up.parent !== void 0 && !isStatement(up.parent)) {
+      const p = up.parent;
+      if (isBinaryExpression5(p) && p.right === up && p.operatorToken.kind === SyntaxKind7.EqualsToken && isArrayLiteralExpression4(p.left)) {
+        return p.left.elements.some((e) => isIdentifier3(e) && this.rustDeclaredNode(e) === this.rustDeclaredNode(n) && this.rustScalarUseForms.get(e) === "slot");
+      }
+      up = p;
+    }
+    return false;
   }
   rustBoolSlotUsesOk(declaration) {
     let slots = 0;
