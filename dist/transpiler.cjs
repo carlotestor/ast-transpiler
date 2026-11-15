@@ -56129,6 +56129,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return this.rustVenueTypedCall(node);
     if (fresh && this.rustNilVenueWrite(node) && this.rustVenueTypedCall(node) === "onum")
       return "onum";
+    if (fresh && this.rustNilVenueWrite(node) && this.rustVenueTypedCall(node) === "oint")
+      return "oint";
     const declaration = this.rustScalarCallee(node);
     if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile().fileName)))
       return void 0;
@@ -57669,6 +57671,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     let kind = this.rustVenueTypedDecisions.get(declaration);
     if (kind === void 0) {
+      this.rustVenueTypedDecisions.set(declaration, null);
       try {
         kind = _nullishCoalesce(this.rustVenueTypedKindUncached(declaration), () => ( null));
       } catch (e) {
@@ -57695,8 +57698,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       declared = promised;
     }
     const name = declared.kind === _ast.SyntaxKind.TypeReference && _is.isIdentifier.call(void 0, declared.typeName) ? String(declared.typeName.text) : "";
-    const numHelper = name === "Num" && !this.isAsyncFunction(declaration);
-    const kind = declared.kind === _ast.SyntaxKind.StringKeyword || name === "Str" ? "ostr" : declared.kind === _ast.SyntaxKind.BooleanKeyword ? "bool" : name === "int" ? "int" : numHelper ? "onum" : void 0;
+    const numHelper = name === "Num";
+    const kind = declared.kind === _ast.SyntaxKind.StringKeyword || name === "Str" ? "ostr" : declared.kind === _ast.SyntaxKind.BooleanKeyword ? "bool" : name === "int" ? "int" : numHelper ? "onum" : name === "Int" ? "oint" : void 0;
     if (kind === void 0)
       return void 0;
     const expected = kind === "ostr" ? "string" : kind === "bool" ? "boolean" : "number";
@@ -57706,9 +57709,16 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return;
       if (_is.isReturnStatement.call(void 0, n)) {
         const value = this.unwrapParens(n.expression);
-        const nullish = value === void 0 || this.literalKindOfNode(value) === "null";
+        const nullish = value === void 0 || this.literalKindOfNode(value) === "null" || (kind === "onum" || kind === "oint") && this.rustNarrowedUndefined(value);
         if (kind === "onum") {
-          if (!nullish && !this.rustParseNumberStrCall(value))
+          if (!nullish && !this.rustParseNumberStrCall(value) && !["num", "onum"].includes(this.rustScalarValueKind(value, false)))
+            ok = false;
+          n.forEachChild(visit);
+          return;
+        }
+        if (kind === "oint") {
+          const vk = nullish ? "null" : this.rustScalarValueKind(value, false);
+          if (vk !== "null" && vk !== "int" && vk !== "oint")
             ok = false;
           n.forEachChild(visit);
           return;
@@ -57730,6 +57740,13 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (_optionalChain([node, 'optionalAccess', _8902 => _8902.kind]) === _ast.SyntaxKind.AwaitExpression)
       node = this.unwrapParens(node.expression);
     return node !== void 0 && _is.isCallExpression.call(void 0, node) && _is.isPropertyAccessExpression.call(void 0, node.expression) && /^handle[A-Z]/.test(String(node.expression.name.text));
+  }
+  /** ral-42a: an identifier the checker types exactly `undefined` at this read (narrowed by an `=== undefined` guard). */
+  rustNarrowedUndefined(value) {
+    if (value === void 0 || !_is.isIdentifier.call(void 0, value))
+      return false;
+    const type = this.getCheckedTypeOf(value);
+    return type !== void 0 && (type.flags & _sync.TypeFlags.Undefined) !== 0 && (type.flags & ~_sync.TypeFlags.Undefined) === 0;
   }
   /** `x = E; return x;`: the returned local holds what the statement right before the return wrote. */
   rustVenueReturnSource(ret) {
@@ -57766,6 +57783,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return `${text}.as_bool().unwrap_or_default()`;
     if (kind === "onum")
       return `${text}.as_f64()`;
+    if (kind === "oint")
+      return `${text}.as_i64()`;
     return `${text}.as_i64().unwrap_or_default()`;
   }
   /** A venue typed string is copied out of the `Value` once: a box short of a moving last use, or a hand-on, would copy it again. */
