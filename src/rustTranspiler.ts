@@ -26122,6 +26122,8 @@ export class RustTranspiler extends BaseTranspiler {
                     const member = String(up.name.text);
                     natives++;
                     if (member === 'push') return this.rustVecPushShape(up.parent, name);
+                    // ral-56i: `x.join ('lit')` of a `string[]` joins the shared list in place (printLentListJoin)
+                    if (member === 'join') return this.vecJoinUse(up);
                     const use: any = up.parent;
                     return member === 'length' && use?.kind !== SyntaxKind.PrefixUnaryExpression && use?.kind !== SyntaxKind.PostfixUnaryExpression
                         && !(isBinaryExpression(use) && use.left === up && rustIsAssignmentOperator(use.operatorToken.kind));
