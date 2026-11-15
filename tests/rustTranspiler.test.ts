@@ -16186,6 +16186,7 @@ describe('ral-45e: a bool local handed to an OPTIONAL native-`bool` venue parame
         + "export default class venue extends Exchange {\n"
         + "    tradeType (isContract: boolean = false, isUnified: boolean = false, params: Dict = {}): string {\n        if (isUnified) {\n            return 'u';\n        }\n        return isContract ? 'c' : 's';\n    }\n"
         + "    viaOptional (params: Dict) {\n        const mode = params['mode'];\n        const isUnified = (mode === 'unified');\n        const t = this.tradeType (true, isUnified, params);\n        if (!isUnified) {\n            return t;\n        }\n        return t + 'x';\n    }\n"
+        + "    aliasOptional (isBuy: boolean) {\n        const roundUp = isBuy;\n        return this.tradeType (false, roundUp);\n    }\n"
         + "    boxedOptional (params: Dict) {\n        const mode = params['mode'];\n        const isWide = (mode === 'wide');\n        const t = this.tradeType (false, isWide);\n        return [ isWide, t ];\n    }\n}\n";
     const out = () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-45e-'));
@@ -16204,5 +16205,10 @@ describe('ral-45e: a bool local handed to an OPTIONAL native-`bool` venue parame
     test('negative: a bool local also read into a Value slot keeps its box', () => {
         const text = out();
         expect(text).toMatch(/let mut isWide: Value = /);
+    });
+    test('negative: an alias / literal bool local (left to ccxt narrowBoolLocals) is boxed once, by its own scalar path', () => {
+        const text = out();
+        expect(text).not.toContain('Value::Bool(Value::Bool(');
+        expect(text).toContain('Value::Bool(roundUp)');
     });
 });

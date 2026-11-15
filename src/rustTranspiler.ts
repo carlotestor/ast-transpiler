@@ -3567,7 +3567,7 @@ export class RustTranspiler extends BaseTranspiler {
             return false;
         }
         const params = this.rustCalleeParams(call);
-        return params !== undefined && (this.rustNativeBoolArgumentSlot(params, at) || this.rustOptionalBoolArgumentSlot(call, params, at));
+        return params !== undefined && (this.rustNativeBoolArgumentSlot(params, at) || this.rustOptionalBoolArgumentSlot(call, params, at) && this.rustOptionalBoolArgLocal(node));
     }
 
     /** ral-45e: the call's `at`-th argument lands in an OPTIONAL venue `boolean` parameter the callee binds
@@ -3578,6 +3578,25 @@ export class RustTranspiler extends BaseTranspiler {
         if (param === undefined || (param.initializer === undefined && param.questionToken === undefined)) return false;
         if (call?.expression?.kind !== SyntaxKind.PropertyAccessExpression || call.expression.expression.kind !== SyntaxKind.ThisKeyword) return false;
         return this.rustParamPrintsBool(param);
+    }
+
+    /** The argument is a local the PRINTER declares `bool` from a bool expression (comparison / logical); literal and
+     *  alias locals are narrowed later by ccxt narrowBoolLocals, which boxes their uses itself. */
+    rustOptionalBoolArgLocal(a): boolean {
+        const inner: any = this.unwrapParens(a);
+        if (inner === undefined || !isIdentifier(inner)) return false;
+        const declaration: any = this.rustDeclaredNode(inner);
+        return declaration !== undefined && isVariableDeclaration(declaration) && declaration.initializer !== undefined
+            && this.rustNodeIsBoolExpression(declaration.initializer) && this.literalKindOfNode(this.unwrapParens(declaration.initializer)) !== 'boolean';
+    }
+
+    /** An argument in an optional native-`bool` slice slot: a bool local the printer still prints bare is boxed once
+     *  (a scalar bool local already prints its own `Value::Bool(x)`). */
+    rustOptionalBoolSlotArgText(call, params, at: number, a): string {
+        const printed = this.printNode(a, 0);
+        if (!this.rustOptionalBoolArgumentSlot(call, params, at) || !this.rustOptionalBoolArgLocal(a)) return printed;
+        const native = this.rustNativeBoolArgumentText(a);
+        return native !== undefined && printed.trim() === native ? `Value::Bool(${native})` : printed;
     }
 
     /** Parameter declarations of a call's resolved callee, when the checker has them. */
@@ -12629,9 +12648,7 @@ export class RustTranspiler extends BaseTranspiler {
                         ? this.rustStrVecArgumentText(a, 0)
                         : (this.rustNativeBoolArgumentSlot(calleeParams, at)
                             ? this.rustBoolArgumentText(a, 0)
-                            : this.rustOptionalBoolArgumentSlot(node, calleeParams, at) && this.rustNativeBoolArgumentText(a) !== undefined
-                                ? `Value::Bool(${this.rustNativeBoolArgumentText(a)})`
-                                : this.printNode(a, 0));
+                            : this.rustOptionalBoolSlotArgText(node, calleeParams, at, a));
                 const printArgs = (list, from = 0) => list.map((a, i) => this.rustWsWatchSlot(node, from + i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, from + i)).join(', ');
                 // a required positional argument is a by-value hand-off: an owned one is marked (the slice tail keeps its clones)
                 const ownedArgs = (list) => list.map((a, i) => this.rustOwnedArgText(a, this.rustWsWatchSlot(node, i) ? this.rustWsWatchSlotText(a, this.printNode(a, 0)) : printArg(a, i))).join(', ');
