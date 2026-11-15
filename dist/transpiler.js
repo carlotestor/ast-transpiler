@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -58535,6 +58535,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "key";
     if (kind === "ostr" && this.rustScalarOptKeyUse(n))
       return "key";
+    if (kind === "ostr" && this.rust48iChainKeyUse(n))
+      return "key";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustOkeyReadUse(n))
       return "okey";
     if (kind === "ostr" && this.rustInitKeyLocal(n) && this.rustUrlsKeyReadUse(n))
@@ -61779,6 +61781,27 @@ ${ind}];`;
     visit(value);
     return !written;
   }
+  /** ral-48i: `x['lit'][k] = v` with `k` a `networkIdToCode` local and `x` a typed one-level map bearer: the chained write
+   *  prints `if let Value::Dict(__d) = x.entry(\"lit\"..).or_default() { make_mut(__d).insert(<key>, v) }`, whose key is the
+   *  `stringify_param` text of the boxed local (`\"null\"` for `None`, as rustScalarOptKeyText prints). The key is taken before
+   *  the value, so a value that only reads the key is fine (rustTbKeyReadOnlyInValue). */
+  rust48iChainKeyUse(n) {
+    if (!isIdentifier3(n))
+      return false;
+    const keyNode = this.rustKeyWrapped(n);
+    const access = keyNode.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== keyNode || !isElementAccessExpression4(access.expression))
+      return false;
+    const hop = access.expression;
+    if (!isStringLiteral3(this.rustSkipWrappers(hop.argumentExpression)) || !isIdentifier3(hop.expression))
+      return false;
+    const write = access.parent;
+    if (!isBinaryExpression5(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    if (this.rustDictBearerDeclaration(hop.expression) === void 0)
+      return false;
+    return this.rustTbKeyReadOnlyInValue(n, write.right);
+  }
   /** tb: `this.networkIdToCode (..)` (the base typed `Str` reader of a network id). */
   rustTbNetworkCodeInit(init) {
     const call = init === void 0 ? void 0 : this.unwrapParens(init);
@@ -61833,7 +61856,7 @@ ${ind}];`;
         return true;
       });
       if (enumerated)
-        return !keyRead && isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) && this.rustScalarInsertKeyUse(n);
+        return !keyRead && (isElementAccessExpression4(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer)) && this.rustScalarInsertKeyUse(n);
       return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);
     }
     return this.rustScalarInsertKeyUse(n);
