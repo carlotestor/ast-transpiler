@@ -1135,6 +1135,32 @@ export declare class RustTranspiler extends BaseTranspiler {
         start: number;
         end: number | undefined;
     } | undefined;
+    /** 41b: `slice(a)` / `slice(a, b)` whose bounds are not both literal, each an `i64` / `Option<i64>` operand (literal, typed
+     *  integer local, arithmetic or `.length` of typed operands): the start as `i64` (a `None` start is the helper's `0`) and the
+     *  end as `i64` or `Option<i64>` (`None` is the helper's missing end, the char length). */
+    rustStrSliceVarBounds(args: any[]): {
+        start: string;
+        end: string | undefined;
+        endOpt: boolean;
+    } | undefined;
+    /** 41b: the char slice of the `&str` `s` with `i64` bounds, clamped as the helper's `Str` arm (a negative bound counts from the
+     *  char length floored at 0, a bound past the end is the length, `b <= a` is empty). */
+    rustStrSliceVarText(s: string, b: {
+        start: string;
+        end: string | undefined;
+        endOpt: boolean;
+    }): string;
+    /** 41b: an affix / includes needle as `Option<&str>`: any string literal (an empty one included when `empty`), a typed string local
+     *  or a string-typed `Value` expression (`None` for `Null`: the helper answers `false`). */
+    rustStrVarNeedle(node: any, empty: boolean): string | undefined;
+    /** 41b: a replace operand that is never `Null`: a string literal or a `String` local (`&str` text). */
+    rustStrReplaceOperand(node: any): string | undefined;
+    private rust41bWsKeyMemo;
+    /** 41b: a local some use of which is a ws subscription / future / cache key, a ws client call argument or a ws cache
+     *  write key: those keep their `Value` (the new string-method forms never decide them). */
+    rust41bWsKeyLocal(node: any): boolean;
+    /** 41b: an argument (bound / needle / operand) of a string method its typed string local receiver prints natively. */
+    rustStrMethodArgNative(n: any, kind: string): boolean;
     /** Native `String` text of a pad / slice over the `&str` `s`. */
     rustStrPadSliceText(method: string, args: any[], s: string): string;
     /** `indexOf` needle as an `Option<&str>`: a non-empty literal, a typed string local, or a string-typed `Value` expression. */
