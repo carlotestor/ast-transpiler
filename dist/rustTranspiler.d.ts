@@ -640,7 +640,7 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrLendSites(declaration: any): boolean;
     /** Every non-moving box of the string is a slot where the `Value` form cloned it (a `this.`/`super.` argument,
      *  an object-literal value, a dict write or an array element), so lending there adds no copy. */
-    rustReaderLendBoxes(declaration: any, nativeKeys?: boolean, preciseSlots?: boolean): boolean;
+    rustReaderLendBoxes(declaration: any, nativeKeys?: boolean, preciseSlots?: boolean, copyDecls?: boolean): boolean;
     /** Test tier: every non-moving box of the string is a by-value `Value` argument / element of a call (the
      *  harness helpers take `Value`), where the `Value` form printed `x.clone()`: lending there costs that copy. */
     rustTestLendBoxes(declaration: any): boolean;
@@ -1209,10 +1209,18 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSafeStrNoDefaultKey(key: any): any;
     /** ral-54k: `this.F[k1][n]` (exactly one upper hop) with `k1` such an int37 key: the upper key, else undefined. */
     rustNestedFieldEntryKey(access: any): any;
+    /** ral-56f: `n` is the one upper key of a statement write `this.F[n][k2] = v` (F balance / options, non-test) whose last
+     *  key is a string literal or an `nkey` local and whose value never names `n`: printNestedFieldKeyWrite prints the
+     *  bucket entry (`entry(<n key text>).or_insert(Null)`) and the insert itself, so no ccxt pass reads a boxed `&n`. */
+    rustNestedFieldUpperKeyUse(n: any): boolean;
     /** `this.F[..]['lit'] = n` (statement): the value slot of a nested plain-field insert. */
     rustNestedFieldValueUse(n: any): boolean;
     /** Assignment hook: the r05 insert of a nested plain-field write keyed by a typed string local. */
     printNestedFieldKeyWrite(left: any, acc: string, value: string): string | undefined;
+    /** ral-56f: the bucket entry of a `ukey` upper key (rustNestedFieldUpperKeyUse), keyed by the local's own text (the
+     *  string `stringify_param` made of the boxed local, `"null"` for `None`); a value reading `self` is bound first. Over
+     *  the line budget the helper chain takes the key as a `Value` (`From<Option<&str>>`, the one allocation). */
+    printNestedFieldUpperKeyWrite(left: any, acc: string, value: string): string | undefined;
     /** `this.f` (one level, no element read in between). */
     rustThisFieldTarget(node: any): boolean;
     /** `n` is (inside) an argument of a call that lies within `root`, the call itself not being `n`. */
@@ -1264,6 +1272,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_BORROW_STR_METHODS;
     /** wg: `k.m (..)` with `m` a pure string method (reads the receiver, returns a fresh value). */
     rustBorrowStrMethodRecv(n: any): boolean;
+    /** ral-56f: `read` (`this.F[k]`) is an argument of a `this.` call that is the whole value of the statement write
+     *  `this.F[k] = this.m (.., this.F[k], ..)` whose key admits the bucket reread. */
+    rustFieldBucketRereadUse(wrapped: any, read: any): boolean;
+    /** ral-56f: every read of `k` in `value` is `this.F[k]` on the written field (no write of `k`), and some other use of
+     *  `k` is a two-level upper key of the same field (rustNestedFieldUpperKeyUse). Non-test sources. */
+    rustFieldBucketReread(n: any, access: any, value: any): boolean;
     /** wg: field-write keys whose write value also reads the key (admitted only for a borrowed element). */
     private rustWgKeyReadInValue;
     rustWgKeyReadInValueUse(declaration: any): boolean;
