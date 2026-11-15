@@ -334,6 +334,17 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `Display` of `Value::Str(s)` is `s`, so the text is identical and the box is gone. */
     rustConcatLiteralText(node: any, text: string, other: any): string;
     printNativeStringConcat(leftText: string, rightText: string): string;
+    rustFormatConcatText(leftText: string, rightText: string): string;
+    /** ral-57x: the `format!(..)` a `+` / `.toString()` node took at its latest print (the printer's own arm decision,
+     *  recorded where the box is built), cleared whenever that node is printed again; never read back from printed text. */
+    private rustFormatPrints;
+    /** The `+` node (or the `+=` node) printed the native concat arm: record its unboxed `format!` and return the box. */
+    rustRecordFormatConcat(node: any, leftText: string, rightText: string): string;
+    /** A `.toString()` call printed as a whole `Value::Str(format!("{}", x).into())`: record the `format!` and return the box. */
+    rustRecordFormatToString(node: any, name: string): string;
+    /** ral-57x: the `format!(..)` that the node's print boxes whole as `Value::Str(format!(..).into())`, else undefined. Decided
+     *  from the node: it is printed (as before) and the arm that printer took for this very node is looked up. */
+    rustUnboxedFormatOf(node: any): string | undefined;
     printNativeNumeric(op: any, leftText: string, rightText: string): string;
     private static readonly RUST_TYPEOF_HELPERS;
     printCustomBinaryExpressionIfAny(node: any, identation: any): string;
@@ -1363,8 +1374,6 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrVarNeedle(node: any, empty: boolean): string | undefined;
     /** 41b: a replace operand that is never `Null`: a string literal or a `String` local (`&str` text). */
     rustStrReplaceOperand(node: any): string | undefined;
-    /** ral-55x K1: `Value::Str(format!(..).into())` -> the `format!(..)` itself, when that macro call spans the whole box. */
-    rustUnboxedFormatText(text: string): string | undefined;
     /** ral-55x K1: every leaf of a `+` chain is a string literal or a `str` / `ostr` typed local, and at least one is a literal. */
     rustStrConcatOperandLeaves(node: any): boolean;
     private rust41bWsKeyMemo;
