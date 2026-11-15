@@ -662,6 +662,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_BASE_STR_FIELDS;
     /** ral-52k: `this.<field>` of the table whose declaration is the base-tier `string` property (no venue redeclares it). */
     rustBaseStrFieldRead(node: any): boolean;
+    /** ral-53k: a ternary whose arms are each a checker-typed string or a unified string key of an `Option<Dict>` local (one at least). */
+    rustOptDictStrKeyTernary(init: any): boolean;
+    /** ral-53k: `c['code']` (a unified string key of a market / currency record) on an `Option<Dict>` local, printed as the
+     *  owned `KeyRead::key_read(&&c, "code")` temporary moved into its string (`into_opt_string`: `None` for a missing key). */
+    rustOptDictStrKeyText(node: any): string | undefined;
     /** True when `node` (through parens) is the `whenTrue`/`whenFalse` arm of a ternary that initialises a declaration. */
     rustTernaryArm(node: any): boolean;
     /** `node` (through parens and ternary arms) is a variable declaration's initializer. */
@@ -1143,6 +1148,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustElemKeyInUse(n: any): boolean;
     /** An `in`-keyed element local stays `Value` when a boxed use would copy where the `Value` moved or was lent. */
     rustElemKeyInCostly(declaration: any): boolean;
+    /** ral-53k: `m[k]` handed as a call argument off a plain map-literal local: the lookup borrows the key's `&str`, no copy. */
+    rustElemPlainMapReadKey(n: any): boolean;
     /** `m[k] = v` as a statement: the element key of a native insert. */
     rustElemInsertKey(n: any): boolean;
     printElemKeyInOp(key: any, obj: any): string | undefined;

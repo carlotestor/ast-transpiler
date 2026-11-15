@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-DSH7DNKY.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -56025,7 +56025,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const expected = kind === "ostr" || kind === "str" ? "string" : kind === "bool" || kind === "obool" ? "boolean" : "number";
     const combinatorKind = this.rustArithCombinator(this.unwrapParens(declaration.initializer)) ? this.rustArithCallKind(declaration.initializer) : void 0;
     const anyLength = kind === "int" && checked === void 0 && this.rustListLengthInit(this.unwrapParens(declaration.initializer));
-    if (checked !== expected && !boolTested && !anyLength && !(kind === "ostr" && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(combinatorKind !== void 0 && combinatorKind === kind && (kind === "int" || checked === void 0)) && !(kind === "int" && checked === void 0 && this.rustSafeDictKeyOnlyLocal(declaration)))
+    if (checked !== expected && !boolTested && !anyLength && !(kind === "ostr" && this.rustOptDictStrKeyTernary(declaration.initializer)) && !(kind === "ostr" && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(combinatorKind !== void 0 && combinatorKind === kind && (kind === "int" || checked === void 0)) && !(kind === "int" && checked === void 0 && this.rustSafeDictKeyOnlyLocal(declaration)))
       return void 0;
     const seeded = kind;
     kind = this.rustScalarWidenedKind(declaration, kind);
@@ -56454,6 +56454,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "int";
     if (fresh && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node))
       return "ostr";
+    if (fresh && this.rustTernaryArm(node) && this.rustOptDictStrKeyText(node) !== void 0)
+      return "ostr";
     if (!isCallExpression6(node))
       return void 0;
     if (isIdentifier3(node.expression) && this.rustStrRuntimeCall(node))
@@ -56548,6 +56550,32 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     }
     member = member?.resolve?.() ?? member;
     return member !== void 0 && member.kind === SyntaxKind7.PropertyDeclaration && member.type?.kind === SyntaxKind7.StringKeyword && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(member.getSourceFile?.()?.fileName ?? ""));
+  }
+  /** ral-53k: a ternary whose arms are each a checker-typed string or a unified string key of an `Option<Dict>` local (one at least). */
+  rustOptDictStrKeyTernary(init) {
+    const node = this.unwrapParens(init);
+    if (node === void 0 || !isConditionalExpression4(node))
+      return false;
+    const arms = [this.unwrapParens(node.whenTrue), this.unwrapParens(node.whenFalse)];
+    const keyed = arms.filter((a) => this.rustOptDictStrKeyText(a) !== void 0).length;
+    return keyed > 0 && arms.every((a) => this.rustOptDictStrKeyText(a) !== void 0 || this.primitiveKindOfType(this.typeOfNodeIfAny(a)) === "string");
+  }
+  /** ral-53k: `c['code']` (a unified string key of a market / currency record) on an `Option<Dict>` local, printed as the
+   *  owned `KeyRead::key_read(&&c, "code")` temporary moved into its string (`into_opt_string`: `None` for a missing key). */
+  rustOptDictStrKeyText(node) {
+    if (node === void 0 || !isElementAccessExpression4(node) || !isIdentifier3(node.expression) || !isStringLiteralLikeNode4(node.argumentExpression))
+      return void 0;
+    if (!_RustTranspiler.RUST_NIL_ELEM_STR_KEYS.has(String(node.argumentExpression.text)))
+      return void 0;
+    if (/[/]test[/]/.test(String(node.getSourceFile?.()?.fileName ?? "")))
+      return void 0;
+    const local = this.rustOptContainerOf(node.expression);
+    if (local === void 0 || local.kind !== "dict")
+      return void 0;
+    const read = this.printNode(node, 0).trim();
+    if (!/^(?:crate|ccxt)::value::KeyRead::key_read\(&{1,2}[A-Za-z_][A-Za-z0-9_]*, "[A-Za-z]+"\)$/.test(read))
+      return void 0;
+    return `${read}.into_opt_string()`;
   }
   /** True when `node` (through parens) is the `whenTrue`/`whenFalse` arm of a ternary that initialises a declaration. */
   rustTernaryArm(node) {
@@ -59483,11 +59511,24 @@ ${binding(plan.indent)}` : ""), head: "" };
         keyed = true;
       const up = n.parent;
       const argCopy = isCallExpression6(up) && up.expression !== n && (form === "box" || form === "xbox");
-      if (form === "err" || form === "key" && !this.rustElemInsertKey(this.rustKeyWrapped(n)) || (form === "box" || form === "xbox") && !argCopy && !this.rustScalarBoxMoves(n, form, declaration))
+      if (form === "err" || form === "key" && !this.rustElemInsertKey(this.rustKeyWrapped(n)) && !this.rustElemPlainMapReadKey(n) || (form === "box" || form === "xbox") && !argCopy && !this.rustScalarBoxMoves(n, form, declaration))
         copied = true;
       return true;
     });
     return keyed && copied;
+  }
+  /** ral-53k: `m[k]` handed as a call argument off a plain map-literal local: the lookup borrows the key's `&str`, no copy. */
+  rustElemPlainMapReadKey(n) {
+    const access = n.parent;
+    if (!isElementAccessExpression4(access) || access.argumentExpression !== n || !isIdentifier3(access.expression))
+      return false;
+    let top = access;
+    while (isParenthesizedExpression3(top.parent) && top.parent.expression === top)
+      top = top.parent;
+    const up = top.parent;
+    if (!isCallExpression6(up) || up.expression === top || !up.arguments.some((a) => a === top))
+      return false;
+    return this.rustDictLocalProof(access.expression) === "plain";
   }
   /** `m[k] = v` as a statement: the element key of a native insert. */
   rustElemInsertKey(n) {
@@ -60182,6 +60223,11 @@ ${binding(plan.indent)}` : ""), head: "" };
       return this.rustListLengthText(node);
     if (kind === "ostr" && this.rustTernaryArm(node) && this.rustBaseStrFieldRead(node))
       return `${this.printNode(node, 0).trim()}.as_str().map(str::to_owned)`;
+    if (kind === "ostr" && this.rustTernaryArm(node)) {
+      const read = this.rustOptDictStrKeyText(node);
+      if (read !== void 0)
+        return read;
+    }
     if (kind === "ostr") {
       const row = this.rustRowFieldStrText(node);
       if (row !== void 0)
@@ -84552,7 +84598,7 @@ _RustTranspiler.RUST_LIST_PARSERS = /* @__PURE__ */ new Set(["parseTrades", "par
 // the slice (`as_deref().map(Vec::as_slice).unwrap_or_default()`, empty for `None`), any-key readers borrow
 // `&x`, and a `Value` slot of a `this.` method gets `x.clone().map_or(Value::Null, Value::Arr)` (the shared
 // handle, no element copy; a move at `return x`). A list that is only handed on keeps its box.
-_RustTranspiler.RUST_OPT_LIST_SOURCES = /* @__PURE__ */ new Set(["marketSymbols", "marketIds", "safeList", "safeList2", "safeListN"]);
+_RustTranspiler.RUST_OPT_LIST_SOURCES = /* @__PURE__ */ new Set(["marketSymbols", "marketIds", "marketCodes", "safeList", "safeList2", "safeListN"]);
 // ── handed-on dict locals ────────────────────────────────────────────────
 // An `extend`/`omit`/`indexBy` result or the params slot of a `handle*AndParams` destructure that is only read,
 // given to `omit`, or lent as the sole extra operand of `extend`/`deepExtend` holds the shared map.
