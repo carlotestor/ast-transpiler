@@ -1,6 +1,6 @@
 import { BaseTranspiler } from "./baseTranspiler.js";
 import { NodeFlags, SyntaxKind, type Block, type CallExpression, type Declaration, type Expression, type Identifier, type Node, type NodeArray, type ParameterDeclaration, type SourceFile, type VariableDeclaration } from "typescript/unstable/ast";
-import { isArrayBindingPattern, isArrayLiteralExpression, isArrowFunction, isAsExpression, isBinaryExpression, isBindingElement, isBlock, isCallExpression, isClassDeclaration, isClassExpression, isConditionalExpression, isDeleteExpression, isElementAccessExpression, isForInStatement, isForOfStatement, isIdentifier, isMethodDeclaration, isNoSubstitutionTemplateLiteral, isNonNullExpression, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPostfixUnaryExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isReturnStatement, isShorthandPropertyAssignment, isSourceFile, isStatement, isStringLiteral, isStringLiteralLikeNode, isTypeAssertion, isVariableDeclaration, isVariableDeclarationList } from "typescript/unstable/ast/is";
+import { isArrayBindingPattern, isArrayLiteralExpression, isArrowFunction, isAsExpression, isBinaryExpression, isBindingElement, isBlock, isCallExpression, isClassDeclaration, isClassExpression, isConditionalExpression, isDeleteExpression, isElementAccessExpression, isForInStatement, isForOfStatement, isIdentifier, isIfStatement, isMethodDeclaration, isNoSubstitutionTemplateLiteral, isNonNullExpression, isNumericLiteral, isObjectLiteralExpression, isParameterDeclaration, isParenthesizedExpression, isPostfixUnaryExpression, isPrefixUnaryExpression, isPropertyAccessExpression, isReturnStatement, isShorthandPropertyAssignment, isSourceFile, isStatement, isStringLiteral, isStringLiteralLikeNode, isTypeAssertion, isVariableDeclaration, isVariableDeclarationList } from "typescript/unstable/ast/is";
 import { IndexKind, ObjectFlags, SignatureKind, SymbolFlags, TypeFlags, type Symbol as TsSymbol, type Type } from "typescript/unstable/sync";
 import { findAncestor, getAllSuperTypeNodes, isFunctionLike, signatureDeclaration, symbolDeclarations, symbolValueDeclaration, typeParts, typeTarget } from "./tsUtils.js";
 import * as fs from 'fs';
@@ -10816,6 +10816,26 @@ export class RustTranspiler extends BaseTranspiler {
     // boxed local is its string, or `"null"` for `Null`; the borrowed `Option` gives the same text.
     // An object-literal receiver is the typed-bearer rule's: its key proof wants a `Value` key, so an
     // optional key there would turn the map back into a `Value`.
+    /** ral-55x K1: `let id = this.safeString(o, k)` inserted as `m[id] = v` only inside an `if (id !== undefined ..)` block: the
+     *  insert never sees a `None` key, so the key text is the `Str` the boxed key held (removeRepeatedTradesFromArray `id`). */
+    rust55xGuardedSafeStringKey(n, local): boolean {
+        const init: any = this.rustSkipWrappers(local.initializer);
+        if (!isCallExpression(init) || !isPropertyAccessExpression(init.expression) || init.expression.expression.kind !== SyntaxKind.ThisKeyword
+            || String(init.expression.name.text) !== 'safeString' || init.arguments.length !== 2) return false;
+        const name = String(n.text);
+        for (let up: any = n.parent; up !== undefined && !isFunctionLike(up); up = up.parent) {
+            if (isIfStatement(up) && up.thenStatement !== undefined && n.pos >= up.thenStatement.pos && n.end <= up.thenStatement.end) {
+                const conjuncts: any[] = [];
+                const split = (e: any) => { e = this.unwrapParens(e); if (isBinaryExpression(e) && e.operatorToken.kind === SyntaxKind.AmpersandAmpersandToken) { split(e.left); split(e.right); } else conjuncts.push(e); };
+                split(up.expression);
+                if (conjuncts.some((c: any) => isBinaryExpression(c) && c.operatorToken.kind === SyntaxKind.ExclamationEqualsEqualsToken
+                    && isIdentifier(this.unwrapParens(c.left)) && String(this.unwrapParens(c.left).text) === name && this.rustDeclaredNode(this.unwrapParens(c.left)) === local
+                    && this.literalKindOfNode(this.unwrapParens(c.right)) === 'null')) return true;
+            }
+        }
+        return false;
+    }
+
     rustScalarOptKeyUse(n): boolean {
         const local: any = this.rustDeclaredNode(n);
         if (local === undefined || !isVariableDeclaration(local) || local.initializer === undefined || this.literalKindOfNode(local.initializer) === 'null') return false;
@@ -10842,7 +10862,8 @@ export class RustTranspiler extends BaseTranspiler {
             // enumerated afterwards: the insert takes the key text (`None` keys as "null", exactly `stringify_param(&Null)`)
             // and the map's own key iterator reads the same keys (a map also read by key keeps the boxed key: its bearer rule leans on it)
             // ral-48i: likewise a `networkIdToCode` result (tb's key-before-value proof is in rustScalarInsertKeyUse)
-            if (enumerated) return !keyRead && (isElementAccessExpression(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer))
+            if (enumerated) return !keyRead && (isElementAccessExpression(this.rustSkipWrappers(local.initializer)) || this.rustTbNetworkCodeInit(local.initializer)
+                || this.rust55xGuardedSafeStringKey(n, local))
                 && this.rustScalarInsertKeyUse(n);
             return this.rustBearerWriteKeyOk(n, name) || this.rustScalarInsertKeyUse(n);
         }
