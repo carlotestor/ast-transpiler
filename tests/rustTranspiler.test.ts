@@ -17443,6 +17443,8 @@ describe('ral-51k: ternary initializers whose two arms share a kind', () => {
     test('bybit: `p === undefined ? n : p` over an Option<i64> local and an i64 local is `p.unwrap_or(n)`', () => {
         const out = write ('51k-oint', "    c (params: any) {\n        const limitParam = this.safeInteger (params, 'limit');\n        let defaultLimit = 500;\n        if (limitParam === undefined) {\n            defaultLimit = 50;\n        }\n        const limit = (limitParam === undefined) ? defaultLimit : limitParam;\n        let channel = 'orderbook.';\n        channel += limit.toString ();\n        return this.hold (channel);\n    }\n");
         expect(out).toContain('let mut limit: i64 = limitParam.unwrap_or(defaultLimit);');
+        expect(out).toContain('let mut channel: String = ');
+        expect(out).toContain('channel.push_str(&limit.to_string());');
     });
     test('negative: arms of different kinds stay Value', () => {
         const out = write ('51k-mixed', "    d (params: any) {\n        const a = this.safeString2 (params, 'a', 'b');\n        const x = (a !== undefined) ? a : params['n'];\n        return this.hold ('p' + x);\n    }\n");

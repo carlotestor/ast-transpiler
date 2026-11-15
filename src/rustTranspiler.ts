@@ -9973,6 +9973,9 @@ export class RustTranspiler extends BaseTranspiler {
             if (isIdentifier(right) && this.rustScalarLocalOf(right)?.kind === 'str') return dry ? '_' : `${name}.push_str(&${super.printIdentifier(right)})`;
             // ral-va: an `Option<String>` operand appends what `Value` Display gave for Str / Null (`null`)
             if (isIdentifier(right) && this.rustScalarLocalOf(right)?.kind === 'ostr') return dry ? '_' : `${name}.push_str(${super.printIdentifier(right)}.as_deref().unwrap_or("null"))`;
+            // 51k: `s += n.toString ()` with `n` an `i64` local: the decimal text `Display` gave its `Int` box
+            if (isCallExpression(right) && right.arguments.length === 0 && isPropertyAccessExpression(right.expression) && String(right.expression.name.text) === 'toString'
+                && isIdentifier(right.expression.expression) && this.rustScalarLocalOf(right.expression.expression)?.kind === 'int') return dry ? '_' : `${name}.push_str(&${super.printIdentifier(right.expression.expression)}.to_string())`;
             const joined = this.rustStrPushValueText(node.left, right, dry);
             if (joined !== undefined) return dry ? '_' : `${name}.push_str(&${joined})`;
             if (!isBinaryExpression(right) || right.operatorToken.kind !== SyntaxKind.PlusToken) return undefined;
