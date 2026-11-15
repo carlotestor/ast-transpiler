@@ -70577,6 +70577,10 @@ ${iden}}`;
           this.rustSbAliasWrites.add(up);
           return ++sbMapWrites > 0;
         }
+        if (sbAlias && (this.rustHandleTupleMapSlotRead(rhs) || this.rustHandedSlotIdentifier(rhs)) && String(rhs.getText()).split("\n")[0].length <= 240) {
+          this.rustSbAliasWrites.add(up);
+          return ++sbMapWrites > 0;
+        }
         writes++;
         if (this.literalKindOfNode(rhs) === "null")
           return ++nullWrites > 0;
@@ -71127,6 +71131,9 @@ ${iden}}`;
     if (declaration === void 0 || !this.rustSbAliasWrites.has(node) || !this.rustPrintedBorrowed.has(declaration) || this.rustBorrowedLocalKind(declaration) !== "dict")
       return void 0;
     const name = super.transformIdentifier(left, this.ReservedKeywordsReplacements[left.text] ?? left.text);
+    const slot = this.rustSkipWrappers(right);
+    if (this.rustHandedSlotIdentifier(slot))
+      return `${name} = ${super.transformIdentifier(slot, this.ReservedKeywordsReplacements[slot.text] ?? slot.text)}`;
     return `${name} = ${this.printNode(right, 0).trim()}.into_dict()`;
   }
   rustReuseDynamicKeyWrite(n, declaration) {
@@ -72747,6 +72754,43 @@ ${iden}}`;
     if (d === void 0 || d === head || d.name === head)
       return this.rustProvenMapParam(d);
     return this.rustProvenMapParam(d) || this.rustHandedDictLocal(d) || this.rustBorrowedLocalKind(d) === "dict" && !this.rustOptContainerLocals.has(d);
+  }
+  /** ral-50a: `t[1]` read off a `const t = this.handle*AndParams (m, ..)` tuple (base helper, PARAMS_SLOT_ARG) whose params
+   *  argument is a proven map (a typed / helper-proven params parameter, a handed slot map or a settled Dict local): the
+   *  base answers `[x, m]` or `[x, omit (m, k)]`, a map on every path. */
+  rustHandleTupleMapSlotRead(rhs) {
+    if (rhs === void 0 || !isElementAccessExpression4(rhs) || !isIdentifier3(rhs.expression) || this.rustTestTierSource(rhs))
+      return false;
+    const idx = this.rustSkipWrappers(rhs.argumentExpression);
+    if (idx === void 0 || !isNumericLiteral4(idx) || String(idx.text) !== "1")
+      return false;
+    const t = this.rustDeclaredNode(rhs.expression);
+    if (t === void 0 || !isVariableDeclaration3(t) || !isIdentifier3(t.name) || !(t.parent?.flags & NodeFlags4.Const))
+      return false;
+    const call = this.rustSkipWrappers(t.initializer);
+    if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword)
+      return false;
+    const index = _RustTranspiler.PARAMS_SLOT_ARG[String(call.expression.name.text)];
+    if (index === void 0 || !this.rustCalleeIsBase(call))
+      return false;
+    const head = this.rustSkipWrappers(call.arguments[index]);
+    if (head === void 0)
+      return call.arguments.length <= index;
+    if (isObjectLiteralExpression4(head))
+      return head.properties.length === 0;
+    if (!isIdentifier3(head))
+      return false;
+    const d = this.rustDeclarationOfIdentifier(head);
+    if (d === void 0 || d === head || d.name === head)
+      return this.rustProvenMapParam(d);
+    return this.rustProvenMapParam(d) || this.rustHandedDictLocal(d) || this.rustBorrowedLocalKind(d) === "dict" && !this.rustOptContainerLocals.has(d);
+  }
+  /** ral-50a: a destructured `handle*AndParams` slot already handed as a map (`requestParams = paramsIsMargin`). */
+  rustHandedSlotIdentifier(rhs) {
+    if (rhs === void 0 || !isIdentifier3(rhs) || this.rustTestTierSource(rhs))
+      return false;
+    const d = this.rustDeclaredNode(rhs);
+    return d !== void 0 && d.kind === SyntaxKind7.BindingElement && !this.rustHandedPending.has(d) && this.rustHandedDictLocal(d);
   }
   rustOmitOfDict(init) {
     if (!this.rustBaseCallNamed(init, _RustTranspiler.RUST_HANDED_DICT_OMIT) || init.arguments.length !== 2)
