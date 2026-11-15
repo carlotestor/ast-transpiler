@@ -3831,6 +3831,14 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  `y.into_list()` moves exactly that list (no copy, no other variant to lose). */
     rustArrayGuardedMove(write: any): boolean;
     private rustArrayGuardedCopies;
+    /** ral-58i: `x = this.safeList (o, k, x)` (safeList / safeList2 / safeListN of the base tier) with the list local itself as
+     *  the default: the base body answers the read value only when it is an array and the default otherwise, so both paths
+     *  hold a `Value::Arr` (the declared `any[]` overload for an array default says the same). */
+    rustSelfDefaultedListRead(right: any, declaration: any): boolean;
+    /** ral-58i: `c ? y : [ .. ]` where `c` is `Array.isArray (y)` or a const local initialised to it, `y` a const local or
+     *  parameter of the same function and the other branch a list source: both paths answer a `Value::Arr`, so the
+     *  printed ternary's `.into_list()` moves exactly that list (no other variant to lose). */
+    rustArrayGuardedTernary(right: any): boolean;
     /** ral-52i: `id` names a plain `Value` local or parameter of its own function (no typed local form). */
     rustPlainValueBinding(id: any): boolean;
     /** ral-57i: a `this.X(.., x, ..)` argument in the then-branch of the nearest enclosing if whose later reads all sit in
@@ -3876,6 +3884,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustOptListName(node: any): string;
     /** The slice an optional list reads through (empty for `None`). */
     rustOptListSlice(node: any): string;
+    /** ral-58i: `let x: T = undefined` / `let x: T;` (one `let` declarator, nil or no initializer). */
+    rustOptListNilInit(declaration: any): boolean;
     printOptListDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     printOptListWrite(left: any, right: any): string | undefined;
     printOptListNullTest(left: any, right: any, op: any): string | undefined;
