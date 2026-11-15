@@ -764,6 +764,23 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** The checker scalar of a default that is a field, parameter or local (never a call: its `Value` may differ). */
     rustReaderFallbackChecked(fallback: any): string | undefined;
     rustReaderDeclTooLong(declaration: any, kind: string): boolean;
+    /** 41d: the declaration's native initializer within the line budget: the plain native text, else (a reader whose
+     *  default is a no-default reader of the same optional kind) the nested reader hoisted into a typed temp on the line
+     *  before (`pre`) and handed to the outer reader as its default `Value::from(__rd_x)`. */
+    rustReaderDeclText(declaration: any, kind: string): {
+        pre?: string;
+        init: string;
+    } | undefined;
+    /** 41d: `this.safeX (o, k.., this.safeY (o2, k2))`, an optional string / integer reader whose default is a no-default
+     *  reader of the same kind: the nested reader prints natively into `tmp` (`Option<String>` / `Option<i64>`) and the
+     *  outer reader takes `Value::from(tmp)` as its default, the same `Str|Null` (`Int|Null`) value the boxed nested
+     *  reader handed it (the nested native form is that reader's own form). Every other argument is a plain local,
+     *  property read or literal, so evaluating the nested reader first changes no order a side effect could see. */
+    private rustReaderSplitKinds;
+    rustReaderDefaultSplit(kind: string, expr: any, tmp: string): {
+        pre: string;
+        init: string;
+    } | undefined;
     /** True when the initializer or any `x = ..` write is a reader this block admits. */
     rustReaderDefaultTouched(declaration: any): boolean;
     /** A string local that is the source of another local's write: that local then copies at its own uses. */

@@ -51577,6 +51577,12 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
      *  literal or `undefined`: a string-or-Null default. Any other value, a dynamic options key write, an options
      *  reassignment or the base Exchange writing `k` poisons it. */
     this.rustOptionsElemKinds = /* @__PURE__ */ new Map();
+    /** 41d: `this.safeX (o, k.., this.safeY (o2, k2))`, an optional string / integer reader whose default is a no-default
+     *  reader of the same kind: the nested reader prints natively into `tmp` (`Option<String>` / `Option<i64>`) and the
+     *  outer reader takes `Value::from(tmp)` as its default, the same `Str|Null` (`Int|Null`) value the boxed nested
+     *  reader handed it (the nested native form is that reader's own form). Every other argument is a plain local,
+     *  property read or literal, so evaluating the nested reader first changes no order a side effect could see. */
+    this.rustReaderSplitKinds = /* @__PURE__ */ new Map();
     /** ud: reader strings admitted only through the lending-slot exemption of `rustBlockLocalUsesAll`. */
     this.rustUdLent = /* @__PURE__ */ new WeakSet();
     // ── venue string-method results (rustVenueStrCall / rustVenueReturnTypes) ──
@@ -57009,14 +57015,67 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     return plain ? this.primitiveKindOfType(this.typeOfNodeIfAny(fallback)) : void 0;
   }
   rustReaderDeclTooLong(declaration, kind) {
-    const init = this.rustScalarNativeText(kind, declaration.initializer);
-    if (init === void 0)
-      return true;
+    return this.rustReaderDeclText(declaration, kind) === void 0;
+  }
+  /** 41d: the declaration's native initializer within the line budget: the plain native text, else (a reader whose
+   *  default is a no-default reader of the same optional kind) the nested reader hoisted into a typed temp on the line
+   *  before (`pre`) and handed to the outer reader as its default `Value::from(__rd_x)`. */
+  rustReaderDeclText(declaration, kind) {
     let depth = 0;
     for (let up = declaration.parent; up !== void 0; up = up.parent)
       if (isBlock4(up))
         depth++;
-    return depth * 4 + `let mut ${declaration.name.text}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${init};`.length > 360;
+    const type = _RustTranspiler.RUST_SCALAR_TYPES[kind];
+    const fits = (name, init2) => init2 !== void 0 && depth * 4 + `let mut ${name}: ${type} = ${init2};`.length <= 360;
+    const init = this.rustScalarNativeText(kind, declaration.initializer);
+    if (init === void 0)
+      return void 0;
+    if (fits(String(declaration.name.text), init))
+      return { init };
+    const split = this.rustReaderDefaultSplit(kind, declaration.initializer, `__rd_${declaration.name.text}`);
+    return split !== void 0 && fits(`__rd_${declaration.name.text}`, split.pre) && fits(String(declaration.name.text), split.init) ? split : void 0;
+  }
+  rustReaderDefaultSplit(kind, expr, tmp) {
+    if (kind !== "ostr" && kind !== "oint")
+      return void 0;
+    const node = this.unwrapParens(expr);
+    if (!isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || !this.rustScalarReceiver(node.expression.expression))
+      return void 0;
+    const args = Array.from(node.arguments ?? []);
+    if (args.length < 2 || this.rustReaderDefaultKind(String(node.expression.name.text), args, true) !== kind)
+      return void 0;
+    const plain = (a) => {
+      const n = this.unwrapParens(a);
+      return isIdentifier3(n) || this.literalKindOfNode(n) !== void 0 || isPropertyAccessExpression3(n) && (isIdentifier3(n.expression) || n.expression.kind === SyntaxKind7.ThisKeyword);
+    };
+    if (!args.slice(0, -1).every(plain))
+      return void 0;
+    const fallback = this.unwrapParens(args[args.length - 1]);
+    const reader = isCallExpression6(fallback) && isPropertyAccessExpression3(fallback.expression) && this.rustScalarReceiver(fallback.expression.expression);
+    let tmpKind = kind;
+    if (reader) {
+      if (!Array.from(fallback.arguments ?? []).every(plain))
+        return void 0;
+      if (this.rustReaderDefaultKind(String(fallback.expression.name.text), Array.from(fallback.arguments ?? []), true) !== void 0)
+        return void 0;
+      if (this.rustScalarValueKind(fallback, true) !== kind)
+        return void 0;
+    } else {
+      tmpKind = kind.slice(1);
+      if (this.rustScalarExpressionKind(fallback) !== tmpKind)
+        return void 0;
+    }
+    if (tmp.length > 0)
+      this.rustReaderSplitKinds.set(tmp, tmpKind);
+    const pre = this.rustScalarNativeText(tmpKind, fallback);
+    const whole = this.rustScalarNativeText(kind, node);
+    const fb = this.printNode(args[args.length - 1], 0).trim();
+    if (pre === void 0 || whole === void 0 || fb.length === 0)
+      return void 0;
+    const at = whole.indexOf(fb);
+    if (at < 0 || whole.indexOf(fb, at + 1) >= 0)
+      return void 0;
+    return { pre, init: `${whole.slice(0, at)}Value::from(${tmp})${whole.slice(at + fb.length)}` };
   }
   /** True when the initializer or any `x = ..` write is a reader this block admits. */
   rustReaderDefaultTouched(declaration) {
@@ -59314,6 +59373,10 @@ ${binding(plan.indent)}` : ""), head: "" };
   /** Declaration hook: `let mut x: <scalar> = <native init>`, else undefined. */
   printRustScalarLocalDeclaration(declaration, varName, indent) {
     const kind = this.rustScalarLocalKind(declaration);
+    const split = kind === void 0 || !this.rustReaderDefaultTouched(declaration) ? void 0 : this.rustReaderDeclText(declaration, kind);
+    if (split?.pre !== void 0)
+      return `${indent}let __rd_${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[this.rustReaderSplitKinds.get(`__rd_${declaration.name.text}`) ?? kind]} = ${split.pre};
+${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${split.init}`;
     const init = kind === void 0 ? void 0 : this.rustScalarNativeText(kind, declaration.initializer);
     const owned = ".and_then(Value::as_str).map(str::to_owned)";
     const recvName = kind === "ostr" && this.rustBorrowedStrElems.has(declaration) ? super.printIdentifier(this.unwrapParens(declaration.initializer).expression) : void 0;
