@@ -870,6 +870,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustUdReaderStr(init: any): boolean;
     /** True when the initializer is a reader this block admits (its kind comes from `rustReaderDefaultKind`). */
     rustReaderDefaultInit(init: any): boolean;
+    /** ral-51n: every use of a number local is a presence test or an operand of a numeric comparison (never boxed, never
+     *  arithmetic): an `Int` reader default read back as `f64` compares exactly as the `Int` did, so no number can change. */
+    rustCompareOnlyNumUses(declaration: any): boolean;
     /** A number reader whose default may be an `Int` (an int literal, or anything not proven a float). */
     rustReaderIntDefaultNum(init: any): boolean;
     rustScalarUsesAll(declaration: any, name: string, acceptUse: (n: any) => boolean): boolean;
@@ -2329,6 +2332,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustI64BodyIsClosed(body: any, name: string): boolean;
     /** `i < X.length` whose condition printed as a native compare over a native `len()`: the place `X`. */
     rustLengthCounterBound(node: any, counter: string): string | undefined;
+    /** ral-51n: numeric ordering only (an `Int` and a `Float` of one value order the same; equality goes through `is_equal`). */
+    private static readonly RUST_NUM_ORDER_OPS;
     private static readonly COMPARISON_OPS;
     private static readonly NATIVE_COMPARISON_OPERATORS;
     isEqualityOp(op: any): boolean;

@@ -56020,7 +56020,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name));
     const expected = kind === "ostr" || kind === "str" ? "string" : kind === "bool" || kind === "obool" ? "boolean" : "number";
     const combinatorKind = this.rustArithCombinator(this.unwrapParens(declaration.initializer)) ? this.rustArithCallKind(declaration.initializer) : void 0;
-    if (checked !== expected && !boolTested && !(kind === "ostr" && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(combinatorKind !== void 0 && combinatorKind === kind && (kind === "int" || checked === void 0)))
+    const anyLength = kind === "int" && checked === void 0 && this.rustListLengthInit(this.unwrapParens(declaration.initializer));
+    if (checked !== expected && !boolTested && !anyLength && !(kind === "ostr" && this.rustAnyStrPushElem(this.unwrapParens(declaration.initializer)) && this.rustAnyStrPlaceRead(declaration)) && !(combinatorKind !== void 0 && combinatorKind === kind && (kind === "int" || checked === void 0)))
       return void 0;
     const seeded = kind;
     kind = this.rustScalarWidenedKind(declaration, kind);
@@ -56069,6 +56070,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const storeOnly = guarded && nativeUses === 0 && boxed === 1 && !handOff;
     const unused = typedUses === 0 && !handOff && this.rustScalarNeedsNativeUse(declaration.initializer) && !this.rustVenueIntReboxed(declaration, kind, boxed);
     const clientOnce = nativeUses === 0 && boxed === 1 && this.rustWsClientOnlyUse(declaration);
+    if (anyLength && typedUses === 0)
+      return void 0;
     if (!ok || unused || storeOnly || clientOnce || guarded && scope.kind !== SyntaxKind7.MethodDeclaration || this.rustOkeyBoxed(declaration, boxed) || this.rustElemKeyInCostly(declaration))
       return void 0;
     if (strKind && this.rustScalarHasPairEquality(declaration) && this.rustScalarBorrowedBox(declaration))
@@ -56092,7 +56095,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return void 0;
     if (typedUses === 0 && this.rustParamAliasSeedKind(declaration) !== void 0 && !_RustTranspiler.RUST_COPY_SCALAR_KINDS.has(kind))
       return void 0;
-    if ((boxed > 0 || expressionUses) && this.rustReaderIntDefaultNum(declaration.initializer))
+    if ((boxed > 0 || expressionUses && !this.rustCompareOnlyNumUses(declaration)) && this.rustReaderIntDefaultNum(declaration.initializer))
       return void 0;
     const readerTouched = this.rustReaderDefaultTouched(declaration);
     const readerLent = readerTouched && strKind && boxed > 0 && copied > 0 && !this.rustStrNoLend && this.rustReaderLendBoxes(declaration);
@@ -57696,6 +57699,26 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     if (!isCallExpression6(node) || !isPropertyAccessExpression3(node.expression) || !this.rustScalarReceiver(node.expression.expression))
       return false;
     return this.rustReaderDefaultKind(String(node.expression.name.text), Array.from(node.arguments ?? []), true) !== void 0;
+  }
+  /** ral-51n: every use of a number local is a presence test or an operand of a numeric comparison (never boxed, never
+   *  arithmetic): an `Int` reader default read back as `f64` compares exactly as the `Int` did, so no number can change. */
+  rustCompareOnlyNumUses(declaration) {
+    let ok = true;
+    this.rustScalarUsesAll(declaration, String(declaration.name.text), (n) => {
+      const form = this.rustScalarUseForms.get(n);
+      let parent = n.parent;
+      while (parent !== void 0 && parent.kind === SyntaxKind7.ParenthesizedExpression)
+        parent = parent.parent;
+      if (form === "test" && parent !== void 0 && isBinaryExpression5(parent)) {
+        const other = this.unwrapParens(parent.left === n || this.unwrapParens(parent.left) === n ? parent.right : parent.left);
+        if (this.literalKindOfNode(other) === "null" || isIdentifier3(other) && other.text === "undefined")
+          return true;
+      }
+      if (form !== "native" || parent === void 0 || !isBinaryExpression5(parent) || !_RustTranspiler.RUST_NUM_ORDER_OPS.has(parent.operatorToken.kind))
+        ok = false;
+      return true;
+    });
+    return ok;
   }
   /** A number reader whose default may be an `Int` (an int literal, or anything not proven a float). */
   rustReaderIntDefaultNum(init) {
@@ -83786,6 +83809,13 @@ _RustTranspiler.RUST_DICT_LOCAL_UNSAFE_KEYS = /* @__PURE__ */ new Set([
   "hashmap",
   "subscriptions",
   "futures"
+]);
+/** ral-51n: numeric ordering only (an `Int` and a `Float` of one value order the same; equality goes through `is_equal`). */
+_RustTranspiler.RUST_NUM_ORDER_OPS = /* @__PURE__ */ new Set([
+  SyntaxKind7.LessThanToken,
+  SyntaxKind7.LessThanEqualsToken,
+  SyntaxKind7.GreaterThanToken,
+  SyntaxKind7.GreaterThanEqualsToken
 ]);
 _RustTranspiler.COMPARISON_OPS = /* @__PURE__ */ new Set([
   SyntaxKind7.EqualsEqualsToken,
