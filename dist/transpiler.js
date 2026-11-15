@@ -69091,20 +69091,33 @@ ${iden}}`;
   }
   /** `x[k]`, read only (no write, call, property or nested element target), with a numeric literal key or a key local
    *  that prints as a `Value` (a literal-initialised counter, or an untyped `let`/`const` of number / string type). */
+  /** ral-41h: a key whose checker type is a string / number, or `any` (a `Value` key reads exactly as `get_value` keyed it:
+   *  `KeyRead::read` on the held map / list is the arm `get_value` dispatches to for every key kind). */
+  rustValueKeyType(key) {
+    const type = this.typeOfNodeIfAny(key);
+    const prim = this.primitiveKindOfType(type);
+    if (prim === "number" || prim === "string")
+      return true;
+    const checked = this.getCheckedTypeOf(key);
+    return checked !== void 0 && (checked.flags & TypeFlags6.Any) !== 0;
+  }
   rustBorrowedIndexReadUse(n) {
     const up = n.parent;
     if (!isElementAccessExpression4(up) || up.expression !== n)
       return false;
-    const use = up.parent;
-    if (use === void 0 || isDeleteExpression2(use) || (isPropertyAccessExpression3(use) || isCallExpression6(use) || isElementAccessExpression4(use)) && use.expression === up)
+    let top = up;
+    while (isElementAccessExpression4(top.parent) && top.parent.expression === top)
+      top = top.parent;
+    const use = top.parent;
+    if (use === void 0 || isDeleteExpression2(use) || (isPropertyAccessExpression3(use) || isCallExpression6(use)) && use.expression === top)
       return false;
-    if (isBinaryExpression5(use) && use.left === up && rustIsAssignmentOperator(use.operatorToken.kind) || use.kind === SyntaxKind7.PrefixUnaryExpression || use.kind === SyntaxKind7.PostfixUnaryExpression)
+    if (isBinaryExpression5(use) && use.left === top && rustIsAssignmentOperator(use.operatorToken.kind) || use.kind === SyntaxKind7.PrefixUnaryExpression || use.kind === SyntaxKind7.PostfixUnaryExpression)
       return false;
-    if (isElementAccessExpression4(use) && use.argumentExpression === up)
+    if (isElementAccessExpression4(use) && use.argumentExpression === top)
       return false;
-    if (isVariableDeclaration3(use) && use.initializer === up && this.primitiveKindOfType(this.typeOfNodeIfAny(use.name)) !== void 0)
+    if (isVariableDeclaration3(use) && use.initializer === top && this.primitiveKindOfType(this.typeOfNodeIfAny(use.name)) !== void 0)
       return false;
-    if (this.isWriteBackBindRead(up) || !this.isNativeAccessPositionSafe(up))
+    if (this.isWriteBackBindRead(up) || !this.isNativeAccessPositionSafe(up) || top !== up && (this.isWriteBackBindRead(top) || !this.isNativeAccessPositionSafe(top)))
       return false;
     const key = this.rustSkipWrappers(up.argumentExpression);
     if (key === void 0 || isStringLiteralLikeNode4(key))
@@ -69118,10 +69131,12 @@ ${iden}}`;
     const keyDecl = this.rustDeclarationOfIdentifier(key);
     if (keyDecl !== void 0 && this.rustBorrowedStrElems.has(keyDecl))
       return true;
+    if (keyDecl !== void 0 && isParameterDeclaration3(keyDecl) && isIdentifier3(keyDecl.name) && keyDecl.dotDotDotToken === void 0 && this.rustEnclosingFunction(keyDecl) === this.rustEnclosingFunction(n)) {
+      return this.rustValueKeyType(key) && this.rustParamType(keyDecl) === "Value" && this.rustScalarParamRead(key) === void 0;
+    }
     if (keyDecl === void 0 || !isVariableDeclaration3(keyDecl) || !isIdentifier3(keyDecl.name) || keyDecl.name === key)
       return false;
-    const prim = this.primitiveKindOfType(this.typeOfNodeIfAny(key));
-    if (prim !== "number" && prim !== "string")
+    if (!this.rustValueKeyType(key))
       return false;
     return this.rustScalarLocalOf(key) === void 0 && this.rustNilLocalKind(keyDecl) === void 0 && !this.rustWsUrlLocal(keyDecl) && this.rustBorrowedLocalKind(keyDecl) === void 0 && !this.rustLentListLocal(keyDecl);
   }

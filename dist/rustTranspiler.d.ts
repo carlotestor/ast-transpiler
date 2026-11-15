@@ -2484,6 +2484,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustJsonMapProducer(init: any): boolean;
     /** `x[k]`, read only (no write, call, property or nested element target), with a numeric literal key or a key local
      *  that prints as a `Value` (a literal-initialised counter, or an untyped `let`/`const` of number / string type). */
+    /** ral-41h: a key whose checker type is a string / number, or `any` (a `Value` key reads exactly as `get_value` keyed it:
+     *  `KeyRead::read` on the held map / list is the arm `get_value` dispatches to for every key kind). */
+    rustValueKeyType(key: any): boolean;
     rustBorrowedIndexReadUse(n: any): boolean;
     private rustExtendReuseLocals;
     /** A plain map literal (outside the test tier): every `x = ..` write must be `x = this.extend (x, y)`; the
