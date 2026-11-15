@@ -16191,3 +16191,20 @@ describe('ral-44c: a let local started from a lent market slot is an owned Optio
         expect(t).not.toContain('from_raw(marketResolved');
     });
 });
+
+describe('ral-45c: a safeMarket ternary initializer is an owned Option<Market>', () => {
+    test('`c ? this.safeMarket (..) : market` and `c ? this.safeMarket (..) : undefined` print Option<Market> with no from_raw', () => {
+        const dir = path.join (rustFixtureRoot, 'ral45c-safe-market-ternary');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    safeMarket (marketId: Str = undefined, market: Market = undefined, delimiter: Str = undefined): MarketInterface { return { 'symbol': marketId } as MarketInterface; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Market } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    parseTicker (ticker: Dict, market: Market = undefined): Dict {\n        return { 'symbol': this.safeString (market, 'symbol') };\n    }\n    parseTrade (trade: Dict, market: Market = undefined): Dict {\n        const marketId = this.safeString (trade, 's');\n        const marketResolved = (marketId !== undefined) ? this.safeMarket (marketId, market) : market;\n        const symbol = this.safeString (marketResolved, 'symbol');\n        return this.parseTicker ({ 'symbol': symbol }, marketResolved);\n    }\n    parseOrder (order: Dict): Dict {\n        const code = this.safeString (order, 'c');\n        const m = (code !== undefined) ? this.safeMarket (code) : undefined;\n        return this.parseTicker (order, m);\n    }\n}\n");
+        const out = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } }).transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        const t = out.slice(out.indexOf('fn parseTrade'), out.indexOf('fn parseOrder'));
+        expect(t).toMatch(/let mut marketResolved: Option<crate::types::Market> = \(if [^\n]*\{ Some\(self\.safeMarket\([^\n]*\} else \{ market\.cloned\(\) \}\);/);
+        expect(t).toContain('marketResolved.as_ref()');
+        expect(t).not.toContain('from_raw(');
+        const o = out.slice(out.indexOf('fn parseOrder'));
+        expect(o).toMatch(/let mut m: Option<crate::types::Market> = \(if [^\n]*\{ Some\(self\.safeMarket\([^\n]*\} else \{ None \}\);/);
+        expect(o).not.toContain('from_raw(');
+    });
+});

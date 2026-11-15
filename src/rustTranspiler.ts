@@ -11690,7 +11690,8 @@ export class RustTranspiler extends BaseTranspiler {
         }
         // ral-44c: `let m = market` of a lent `Option<&Market>` parameter starts as the owned copy (`market.cloned()`)
         const fromSlot = this.rustMarketSlotParamOf(this.rustSkipWrappers(declaration.initializer)) !== undefined && (declaration.parent.flags & NodeFlags.Const) === 0;
-        const fromOpt = this.rustIsOptMarketCall(declaration.initializer) || this.rustOptMarketTernary(declaration.initializer) !== undefined || fromSlot;
+        const fromOpt = this.rustIsOptMarketCall(declaration.initializer) || this.rustOptMarketTernary(declaration.initializer) !== undefined || fromSlot
+            || this.rustOptSafeMarketTernary(declaration.initializer) !== undefined;
         const empty = declaration.initializer === undefined || this.literalKindOfNode(declaration.initializer) === 'null' || fromOpt;
         if (!empty && !this.rustIsTypedMarketCall(declaration.initializer)) return false;
         if (empty && !fromOpt && ((declaration.parent.flags & NodeFlags.Const) !== 0 || this.rustNilLocalKind(declaration) !== undefined)) return false;
@@ -12194,6 +12195,38 @@ export class RustTranspiler extends BaseTranspiler {
         return undefined;
     }
 
+    /** ral-45c: `c ? this.safeMarket (..) : market` (a lent market slot) or `c ? this.safeMarket (..) : undefined` (either arm
+     *  order): the `safeMarket` arm and the other one. `safeMarket` never answers Null, the slot is `Option<&Market>`. */
+    rustOptSafeMarketTernary(init: any): { arm: any, other: any } | undefined {
+        const cond: any = init === undefined ? undefined : this.unwrapParens(init);
+        if (cond === undefined || cond.kind !== SyntaxKind.ConditionalExpression) return undefined;
+        const t: any = this.unwrapParens(cond.whenTrue);
+        const f: any = this.unwrapParens(cond.whenFalse);
+        const otherOk = (o: any) => this.literalKindOfNode(o) === 'null' || this.rustMarketSlotParamOf(this.rustSkipWrappers(o)) !== undefined;
+        const smkt = (a: any) => isCallExpression(this.rustSkipWrappers(a)) && this.rustIsSafeMarketCall(a);
+        if (smkt(t) && otherOk(f)) return { arm: t, other: f };
+        if (smkt(f) && otherOk(t)) return { arm: f, other: t };
+        return undefined;
+    }
+
+    /** `(if c { Some(self.safe_market(..)) } else { market.cloned() })` for the ternary above. */
+    printOptSafeMarketTernary(init: any): string | undefined {
+        const tern = this.rustOptSafeMarketTernary(init);
+        if (tern === undefined) return undefined;
+        const cond: any = this.unwrapParens(init);
+        const call: any = this.rustSkipWrappers(tern.arm);
+        this.rustSafeMarketBoxing.add(call);
+        let some: string;
+        try {
+            some = `Some(${this.printCallExpression(call, 0).trim()})`;
+        } finally {
+            this.rustSafeMarketBoxing.delete(call);
+        }
+        const other = this.literalKindOfNode(tern.other) === 'null' ? 'None' : `${super.printIdentifier(this.rustSkipWrappers(tern.other))}.cloned()`;
+        const armTrue = this.unwrapParens(cond.whenTrue) === tern.arm;
+        return `(if ${this.printCondition(cond.condition, 0)} { ${armTrue ? some : other} } else { ${armTrue ? other : some} })`;
+    }
+
     /** `(if c { None } else { Some(market) })` for an `Option<Market>` ternary initializer. */
     printOptMarketTernary(init: any): string | undefined {
         const arm = this.rustOptMarketTernary(init);
@@ -12361,7 +12394,7 @@ export class RustTranspiler extends BaseTranspiler {
             const slot: any = this.rustSkipWrappers(declaration.initializer);
             const init = this.rustIsOptMarketCall(declaration.initializer) ? this.printNode(declaration.initializer, 0).trim()
                 : this.rustMarketSlotParamOf(slot) !== undefined ? `${super.printIdentifier(slot)}.cloned()`
-                    : (this.printOptMarketTernary(declaration.initializer) ?? 'None');
+                    : (this.printOptMarketTernary(declaration.initializer) ?? this.printOptSafeMarketTernary(declaration.initializer) ?? 'None');
             return `${indent}let mut ${varName}: Option<crate::types::Market> = ${init}`;
         }
         if (kind === 'call') {
