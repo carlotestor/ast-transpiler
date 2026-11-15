@@ -77449,7 +77449,7 @@ ${iden}}`;
     table = [];
     this.rustWsResolveTables.set(cls, null);
     const file = String(cls.getSourceFile().fileName).replace(/\\/g, "/");
-    const at = file.search(/(?:^|\/)ts\/src\/pro\/[^/]+\.ts$/);
+    const at = file.search(/(?:^|\/)ts\/src\/(?:pro|prediction)\/[^/]+\.ts$/);
     if (at < 0 || this.rustWsHasWsRelatives(file, at)) {
       this.rustWsResolveTables.set(cls, null);
       return null;
@@ -77600,15 +77600,17 @@ ${iden}}`;
       this.rustWsHashEnv = save;
     }
   }
-  /** A pro venue that extends (through its abstract shim) another pro venue, or that another pro venue extends. */
+  /** A pro venue that extends (through its abstract shim) another pro venue, or that another pro venue extends.
+   *  ral-57w: the same rule over the prediction tier (`ts/src/prediction/`, shims in `abstract/prediction/`). */
   rustWsHasWsRelatives(file, at) {
-    const root = file.slice(0, file.indexOf("ts/src/pro/", at)) + "ts/src";
-    let parents = this.rustWsWsParents.get(root);
+    const tier = file.indexOf("ts/src/prediction/", at) >= 0 ? "prediction" : "pro";
+    const root = file.slice(0, file.indexOf(`ts/src/${tier}/`, at)) + "ts/src";
+    let parents = this.rustWsWsParents.get(`${root}/${tier}`);
     if (parents === void 0) {
       parents = /* @__PURE__ */ new Map();
       let entries = [];
       try {
-        entries = fs3.readdirSync(root + "/pro").filter((f) => f.endsWith(".ts"));
+        entries = fs3.readdirSync(`${root}/${tier}`).filter((f) => f.endsWith(".ts"));
       } catch (e) {
         entries = [];
       }
@@ -77616,27 +77618,27 @@ ${iden}}`;
         const id2 = f.slice(0, -3);
         let parent;
         try {
-          const text = fs3.readFileSync(`${root}/pro/${f}`, "utf8");
+          const text = fs3.readFileSync(`${root}/${tier}/${f}`, "utf8");
           const base = /export default class \w+ extends (\w+)/.exec(text)?.[1];
           const from = base === void 0 ? void 0 : new RegExp(`^import ${base} from '([^']+)'`, "m").exec(text)?.[1];
           if (from?.startsWith("./"))
             parent = from.slice(2).replace(/\.js$/, "");
-          else if (from?.startsWith("../abstract/pro/")) {
-            const shim = fs3.readFileSync(`${root}/abstract/pro/${from.slice("../abstract/pro/".length).replace(/\.js$/, ".ts")}`, "utf8");
-            parent = /import \w+ from '\.\.\/\.\.\/pro\/(\w+)\.js'/.exec(shim)?.[1];
+          else if (from?.startsWith(`../abstract/${tier}/`)) {
+            const shim = fs3.readFileSync(`${root}/abstract/${tier}/${from.slice(`../abstract/${tier}/`.length).replace(/\.js$/, ".ts")}`, "utf8");
+            parent = new RegExp(`import \\w+ from '\\.\\./\\.\\./${tier}/(\\w+)\\.js'`).exec(shim)?.[1];
           }
         } catch (e) {
           parent = "?";
         }
         parents.set(id2, parent);
       }
-      this.rustWsWsParents.set(root, parents);
+      this.rustWsWsParents.set(`${root}/${tier}`, parents);
     }
     const id = file.slice(file.lastIndexOf("/") + 1, -3);
     if (!parents.has(id) || parents.get(id) !== void 0)
       return true;
     for (const [child, p] of parents)
-      if (p === id && !this.rustWsDescribeOnly(`${root}/pro/${child}.ts`) && !this.rustWsRestOnlyChild(`${root}/pro/${child}.ts`, file))
+      if (p === id && !this.rustWsDescribeOnly(`${root}/${tier}/${child}.ts`) && !this.rustWsRestOnlyChild(`${root}/${tier}/${child}.ts`, file))
         return true;
     return false;
   }

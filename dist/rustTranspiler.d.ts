@@ -3645,7 +3645,8 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  those returns with the method's parameters bound to this call's arguments (defaults when omitted). */
     rustWsReturnPatterns(call: any, depth: number, seen: Set<Node>): Array<Array<string | null>> | undefined;
     private rustWsWsParents;
-    /** A pro venue that extends (through its abstract shim) another pro venue, or that another pro venue extends. */
+    /** A pro venue that extends (through its abstract shim) another pro venue, or that another pro venue extends.
+     *  ral-57w: the same rule over the prediction tier (`ts/src/prediction/`, shims in `abstract/prediction/`). */
     rustWsHasWsRelatives(file: string, at: number): boolean;
     /** ral-56h: the resolve table across a ws class and its ws subclass (kucoin + kucoinfutures) equals the parent's
      *  own table when the subclass adds no resolve and changes no ws path: every method of the subclass other than
