@@ -69868,7 +69868,14 @@ ${iden}}`;
       return this.rustBearerDeleteKey(up) !== void 0;
     if (up !== void 0 && (isDeleteExpression2(up) || isCallExpression6(up) && up.expression === root || up.kind === SyntaxKind7.PrefixUnaryExpression || up.kind === SyntaxKind7.PostfixUnaryExpression))
       return false;
-    if (!this.isNativeAccessPositionSafe(root) && !isStringLiteralLikeNode4(this.rustSkipWrappers(access.argumentExpression)) && this.isNativeAccessPositionSafe(root, this.rustBearerSelfWriteHost(root, name)))
+    const selfHost = this.rustBearerSelfWriteHost(root, name);
+    let hop = selfHost?.left;
+    while (hop !== void 0 && isElementAccessExpression4(hop.expression))
+      hop = hop.expression;
+    const readKey = this.rustSkipWrappers(access.argumentExpression);
+    const hopKey = hop === void 0 || hop === selfHost?.left ? void 0 : this.rustSkipWrappers(hop.argumentExpression);
+    const chainedHost = hopKey !== void 0 && isStringLiteralLikeNode4(readKey) && isStringLiteralLikeNode4(hopKey) && String(readKey.text) !== String(hopKey.text);
+    if (!this.isNativeAccessPositionSafe(root) && (chainedHost || !isStringLiteralLikeNode4(this.rustSkipWrappers(access.argumentExpression))) && this.isNativeAccessPositionSafe(root, selfHost))
       this.literalSelfWriteHits++;
     else if (!this.isNativeAccessPositionSafe(root))
       return false;
@@ -70056,7 +70063,9 @@ ${iden}}`;
     let up = node.parent;
     while (up !== void 0 && !isStatement(up) && !isFunctionLike(up)) {
       if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && this.isNodeInsideNode(node, up.right)) {
-        const left = up.left;
+        let left = up.left;
+        while (isElementAccessExpression4(left) && isElementAccessExpression4(left.expression) && isStringLiteralLikeNode4(this.rustSkipWrappers(left.expression.argumentExpression)))
+          left = left.expression;
         const ok = isElementAccessExpression4(left) && isIdentifier3(left.expression) && String(left.expression.text) === name && up.parent?.kind === SyntaxKind7.ExpressionStatement;
         return ok ? up : void 0;
       }
