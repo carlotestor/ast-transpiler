@@ -64493,7 +64493,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       node.forEachChild(visit);
     };
     method.body.forEachChild(visit);
-    return all && returns > 0 ? kind : void 0;
+    return all && returns > 0 && (kind === "number" || kind === "string") ? kind : void 0;
   }
   /** The checker's primitive kind of a destructured slot, else the producer-side proof (41i). */
   rustSlotPrimitiveKind(element) {

@@ -13297,7 +13297,8 @@ export class RustTranspiler extends BaseTranspiler {
             node.forEachChild(visit);
         };
         method.body.forEachChild(visit);
-        return all && returns > 0 ? kind : undefined;
+        // number / string only: a boolean slot keeps the existing bool-slot routes (their printed forms are matched downstream)
+        return all && returns > 0 && (kind === 'number' || kind === 'string') ? kind : undefined;
     }
 
     /** The checker's primitive kind of a destructured slot, else the producer-side proof (41i). */
