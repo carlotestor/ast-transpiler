@@ -1348,6 +1348,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustStrVarNeedle(node: any, empty: boolean): string | undefined;
     /** 41b: a replace operand that is never `Null`: a string literal or a `String` local (`&str` text). */
     rustStrReplaceOperand(node: any): string | undefined;
+    /** ral-55x K1: `Value::Str(format!(..).into())` -> the `format!(..)` itself, when that macro call spans the whole box. */
+    rustUnboxedFormatText(text: string): string | undefined;
+    /** ral-55x K1: every leaf of a `+` chain is a string literal or a `str` / `ostr` typed local, and at least one is a literal. */
+    rustStrConcatOperandLeaves(node: any): boolean;
     private rust41bWsKeyMemo;
     /** 41b: a local some use of which is a ws subscription / future / cache key, a ws client call argument or a ws cache
      *  write key: those keep their `Value` (the new string-method forms never decide them). */
@@ -1542,6 +1546,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustKeyWrapped(n: any): any;
     /** The insert key of a `String` scalar local, else undefined. */
     rustScalarInsertKeyArg(keyNode: any): string | undefined;
+    /** ral-55x K1: `let id = this.safeString(o, k)` inserted as `m[id] = v` only inside an `if (id !== undefined ..)` block: the
+     *  insert never sees a `None` key, so the key text is the `Str` the boxed key held (removeRepeatedTradesFromArray `id`). */
+    rust55xGuardedSafeStringKey(n: any, local: any): boolean;
     rustScalarOptKeyUse(n: any): boolean;
     rustScalarOptKeyArg(key: any): string | undefined;
     rustScalarOptKeyCount(declaration: any): number;
