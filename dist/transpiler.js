@@ -70536,6 +70536,7 @@ ${iden}}`;
     const boxedElementUses = [];
     const indexReadUses = [];
     const aeoWriteUses = [];
+    let listIndexWrites = 0;
     const accept = (n) => {
       if (this.rustIdentifierIsPropertyName(n))
         return !(n.parent?.kind === SyntaxKind7.ShorthandPropertyAssignment && n.parent.name === n);
@@ -70644,6 +70645,8 @@ ${iden}}`;
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
       if (!sbAlias && this.rustAeoTargetWrite(n) && !this.rustAeoBoxedNative(n))
         return aeoWriteUses.push(n) > 0 && ++reads > 0;
+      if (from === "list" && !nilDeclared && this.rustListIndexLiteralWrite(n))
+        return ++listIndexWrites > 0 && ++reads > 0;
       const handed = () => (optAliasInit && this.rustLocalStoreHandOff(n) && !this.rustScalarInNestedWrite(n, true) && ++optionalBoxes > 0 || this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0 || endpoint && !nilDeclared && (from !== "api" && this.rustDeclaredEndpointWholeBox(n) && ++defaultedBoxes > 0 || from === "dict" && this.rustSafeDictDefaultUse(n))) && boxedElementUses.push(n) > 0;
       const asArg = isAsExpression3(up) && up.expression === n && isCallExpression6(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : void 0;
       if (asArg !== void 0 && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared))
@@ -70746,6 +70749,8 @@ ${iden}}`;
       return void 0;
     if (keyWrites > 0 && aeoWriteUses.length === 0)
       this.rustMutableBuiltLocals.add(declaration);
+    if (listIndexWrites > 0 && (from !== "list" || optional || init === void 0 || !this.rustContainerInitNeverNull(init, "list")))
+      return void 0;
     for (const n of aeoWriteUses)
       this.rustAeoWrites.add(n.parent.parent);
     const declaredListOnly = nilDeclared && from === "list" && !mixed && nullTests === 0 && declaredEndpointWrites > 0 && declaredEndpointWrites + nullWrites === writes;
@@ -71563,6 +71568,15 @@ ${iden}}`;
     } catch (e) {
       return true;
     }
+  }
+  /** ral-50b: `n[<integer literal>] = v` (statement, one level, `=`). */
+  rustListIndexLiteralWrite(n) {
+    const access = n.parent;
+    const write = access?.parent;
+    if (!isElementAccessExpression4(access) || access.expression !== n || !isBinaryExpression5(write) || write.left !== access || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)
+      return false;
+    const key = this.rustSkipWrappers(access.argumentExpression);
+    return key !== void 0 && key.kind === SyntaxKind7.NumericLiteral && /^\d+$/.test(String(key.text)) && String(write.getText()).split("\n")[0].length <= 240;
   }
   /** ral-48b: `n['k'] = v` (statement, literal non-digit key) whose value does not read `n`. */
   rustAeoTargetWrite(n) {

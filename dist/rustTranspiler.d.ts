@@ -2859,6 +2859,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-48b: the boxed local's write is already a native insert (asked while the local's kind is pending, i.e. the
      *  untyped view): that write is not a helper row, and its source proof is the native-insert rule's, not this one. */
     rustAeoBoxedNative(n: any): boolean;
+    /** ral-50b: `n[<integer literal>] = v` (statement, one level, `=`). */
+    rustListIndexLiteralWrite(n: any): boolean;
     /** ral-48b: `n['k'] = v` (statement, literal non-digit key) whose value does not read `n`. */
     rustAeoTargetWrite(n: any): boolean;
     /** The source statement of a box (`Value::Dict(x)`, +13 chars) leaves the printed line within 400 chars. */
