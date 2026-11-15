@@ -1190,6 +1190,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-55k: `n` is the whole right side of a statement `x['a']['b'] = n` with `x` a typed one-level map bearer and both keys
      *  plain string literals (rustBearerChainedWrite prints the two-level guarded native insert). */
     rustBearerLitChainValue(n: any): boolean;
+    /** ral-56k: `n` is a key of a statement `x[k1][k2][k3..] = v` (three or more keys) with `x` a typed one-level map bearer
+     *  (rustBearerChainedWrite's deep form): 'first' for k1, 'later' for any other key, else undefined. */
+    rustDeepBearerChainKey(n: any): 'first' | 'later' | undefined;
     /** ral-53i: `n` is k1 or k2 of a statement `x[k1][k2] = v` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
     rustUdNestedBearerKey(n: any): boolean;
     /** ral-53i: `key` is k1 of a statement bucket seed `x[k1] = {}` or k1 / k2 of a statement write `x[k1][k2] = v` with `x`
@@ -2751,6 +2754,10 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  Null key, and a bearer never holds the empty key, so `""` reads Null too. Never a write-back bind (ccxt's
      *  write-back pass reads only the `as_str()` form). */
     rustBearerTypedStrReadKey(access: any): string | undefined;
+    /** ral-56k: `const b = m[k]; b.push (v);` with `m` a map-literal local, `k` a plain identifier key and `b` never reassigned and
+     *  not mutated again by the statement after the push. The printer prints the push AND the write-back insert itself (arrPush),
+     *  so the bind no longer leans on ccxt's write-back pass (which reads only the boxed `k.as_str()` text). */
+    rustOwnedWriteBackPushBind(access: any): boolean;
     /** ral-xf: `const x = m[k]` mutated by the next statement, where `m` is a map-literal local and `k` a plain
      *  identifier key: the printer's native read (`m.get(k.as_str().unwrap_or("")).cloned()..`) is a form ccxt's
      *  write-back pass (`writeBackIndexedMutations`) and push pass (`rustVecPushInline`) read as the same get. */
