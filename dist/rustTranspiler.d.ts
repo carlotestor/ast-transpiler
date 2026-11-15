@@ -1435,6 +1435,11 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  JS evaluates the key before the value, and so does the printed `insert(key, value)`, so the key text is taken before
      *  any box in the value. Scoped to that initialiser (other key locals keep their own rules). */
     rustTbKeyReadOnlyInValue(n: any, value: any): boolean;
+    /** ral-48i: `x['lit'][k] = v` with `k` a `networkIdToCode` local and `x` a typed one-level map bearer: the chained write
+     *  prints `if let Value::Dict(__d) = x.entry(\"lit\"..).or_default() { make_mut(__d).insert(<key>, v) }`, whose key is the
+     *  `stringify_param` text of the boxed local (`\"null\"` for `None`, as rustScalarOptKeyText prints). The key is taken before
+     *  the value, so a value that only reads the key is fine (rustTbKeyReadOnlyInValue). */
+    rust48iChainKeyUse(n: any): boolean;
     /** tb: `this.networkIdToCode (..)` (the base typed `Str` reader of a network id). */
     rustTbNetworkCodeInit(init: any): boolean;
     /** A key written `m[k as string]` / `m[(k)]`: the cast and parens print nothing, so the key is `k` itself. */
