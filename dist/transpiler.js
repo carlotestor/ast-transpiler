@@ -60195,7 +60195,8 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
   }
   /** `s += v` with `v` a string-typed `Value` (not a `+` chain): `Display` is the text the `add` helper concatenates. */
   rustStrPushValueText(target, right, dry) {
-    if (isBinaryExpression5(right) || this.literalKindOfNode(right) !== void 0 || this.primitiveKindOfType(this.typeOfNodeIfAny(right)) !== "string" || !this.printsValueExpression(right))
+    const anyToString = isCallExpression6(right) && right.arguments.length === 0 && isPropertyAccessExpression3(right.expression) && String(right.expression.name.text) === "toString" && isIdentifier3(right.expression.expression) && (this.typeOfNodeIfAny(right.expression.expression)?.flags & TypeFlags6.Any) !== 0;
+    if (isBinaryExpression5(right) || this.literalKindOfNode(right) !== void 0 || !anyToString && this.primitiveKindOfType(this.typeOfNodeIfAny(right)) !== "string" || !this.printsValueExpression(right))
       return void 0;
     if (this.rustScalarHasTypedOperand(right) || new RegExp(`\\b${String(target.text)}\\b`).test(String(right.getText())))
       return void 0;
