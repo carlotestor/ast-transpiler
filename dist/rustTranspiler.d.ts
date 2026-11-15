@@ -3124,6 +3124,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustHandlerTableLocalUncached(declaration: any): boolean;
     /** `this.safeValue (table, k)` of a base-tier `safeValue` over a handler table. */
     rustHandlerTableRead(expr: any): boolean;
+    private rustSubscriptionMethodFields;
+    rustSubscriptionMethodField(call: any): boolean;
+    rustSubscriptionMethodFieldUncached(call: any): boolean;
     printHandlerTableLocalWrite(left: any, right: any): string | undefined;
     /** A local map literal whose every value is a `this.<method>` reference, only read by `this.safeValue (m, k)`. */
     rustHandlerTable(node: any): boolean;
