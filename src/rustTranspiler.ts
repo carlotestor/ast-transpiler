@@ -12551,7 +12551,9 @@ export class RustTranspiler extends BaseTranspiler {
         'fetchOutcome': 'PredictionOutcomeHandle',
     };
 
-    /** ral-50c: prediction venue methods declared with the outcome record (overrides of `fetchOutcome`, predictfun `outcomeForToken`). */
+    private static readonly RUST_OPT_OUTCOME_BY_NAME = new Set([ 'fetchOutcome', 'outcomeForToken' ]);
+
+    /** ral-50c: prediction venue methods that answer the outcome record (overrides of `fetchOutcome`, predictfun `outcomeForToken`). */
     private static readonly RUST_OPT_OUTCOME_VENUE_RETURNS: Record<string, string> = {
         'fetchOutcome': 'PredictionOutcomeHandle', 'outcomeForToken': 'PredictionOutcomeHandle',
     };
@@ -12564,6 +12566,9 @@ export class RustTranspiler extends BaseTranspiler {
         const want = /ts[/]src[/]base[/]PredictionExchange\.ts$/.test(file) ? RustTranspiler.RUST_OPT_OUTCOME_RETURNS[name]
             : (/ts[/]src[/]prediction[/][^/]+\.ts$/.test(file) ? RustTranspiler.RUST_OPT_OUTCOME_VENUE_RETURNS[name] : undefined);
         if (want === undefined || !isClassDeclaration(node.parent)) return false;
+        // ral-50c: `fetchOutcome` / `outcomeForToken` keep their ts/src declaration (`Promise<any>` / `any` / none: other ports
+        // print it unchanged); every return of theirs is an outcome record, a cache read decoded once, or the base answer
+        if (RustTranspiler.RUST_OPT_OUTCOME_BY_NAME.has(name)) return true;
         let ret: any = node.type;
         if (ret?.kind === SyntaxKind.TypeReference && isIdentifier(ret.typeName) && String(ret.typeName.text) === 'Promise' && ret.typeArguments?.length === 1) ret = ret.typeArguments[0];
         return ret?.kind === SyntaxKind.TypeReference && isIdentifier(ret.typeName) && String(ret.typeName.text) === want;
