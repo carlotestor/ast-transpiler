@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-DSH7DNKY.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -54593,8 +54593,10 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
         return t.length;
       return t.length + '.as_deref().unwrap_or("null")'.length;
     };
-    const longest = Math.max(...this.printNode(statement, 0).split("\n").map(width));
-    return column + longest <= 400;
+    const declaration = isIdentifier3(n) ? this.rustDeclaredNode(n) : void 0;
+    const slot = declaration?.kind === SyntaxKind7.BindingElement && !this.rustTestTierSource(declaration);
+    const lines = this.printNode(statement, 0).split("\n");
+    return lines.every((l) => column + width(l) <= 400 || slot && column + l.trim().length > 400);
   }
   /** A write that decodes a `Value` result (a call, or a ternary over one). */
   rustNilDecodedWrite(rhs) {
