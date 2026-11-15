@@ -668,6 +668,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_BASE_STR_FIELDS;
     /** ral-52k: `this.<field>` of the table whose declaration is the base-tier `string` property (no venue redeclares it). */
     rustBaseStrFieldRead(node: any): boolean;
+    /** ral-53k: a ternary whose arms are each a checker-typed string or a unified string key of an `Option<Dict>` local (one at least). */
+    rustOptDictStrKeyTernary(init: any): boolean;
+    /** ral-53k: `c['code']` (a unified string key of a market / currency record) on an `Option<Dict>` local, printed as the
+     *  owned `KeyRead::key_read(&&c, "code")` temporary moved into its string (`into_opt_string`: `None` for a missing key). */
+    rustOptDictStrKeyText(node: any): string | undefined;
     /** True when `node` (through parens) is the `whenTrue`/`whenFalse` arm of a ternary that initialises a declaration. */
     rustTernaryArm(node: any): boolean;
     /** `node` (through parens and ternary arms) is a variable declaration's initializer. */
@@ -1160,12 +1165,21 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustElemKeyInCostly(declaration: any): boolean;
     /** ral-52i: `n` is a top-level value of the object literal written by `m[k] = { .. }` keyed by the same local `k`. */
     rustElemKeyInsertLiteralValue(n: any, declaration: any): boolean;
+    /** ral-53k: `m[k]` handed as a call argument off a plain map-literal local: the lookup borrows the key's `&str`, no copy. */
+    rustElemPlainMapReadKey(n: any): boolean;
     /** `m[k] = v` as a statement: the element key of a native insert. */
     rustElemInsertKey(n: any): boolean;
     printElemKeyInOp(key: any, obj: any): string | undefined;
     rustThisFieldLiteralWrite(n: any): boolean;
     /** ud: `n` is the whole right side of `x[k1][k2] = n` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
     rustUdNestedBearerValue(n: any): boolean;
+    /** ral-53i: `n` is k1 or k2 of a statement `x[k1][k2] = v` with `x` a typed two-level local map (`rustNestedBearerInsert`). */
+    rustUdNestedBearerKey(n: any): boolean;
+    /** ral-53i: `key` is k1 of a statement bucket seed `x[k1] = {}` or k1 / k2 of a statement write `x[k1][k2] = v` with `x`
+     *  a plain identifier (syntax only: the two-level bearer prints these through rustNestedBearerWriteKey). */
+    rustNestedWriteKeyPosition(key: any): boolean;
+    /** ral-53i: `n` keys a bucket seed `x[n] = {}` or a write `x[k1][k2] = v` of a typed two-level local map `x`. */
+    rustNestedBearerKeySlot(n: any): boolean;
     rustScalarInNestedWrite(n: any, boxUse?: boolean): boolean;
     /** ral-41f: a local whose kind the nested-write text passes never decide: declared with an initializer that is
      *  not a safe* reader call, not `undefined` / another identifier (nil-declared and alias locals keep their own
