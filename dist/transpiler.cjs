@@ -53575,7 +53575,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       const assignments = typedSlots.map((t, idx) => _nullishCoalesce(t, () => ( `${this.printNode(left.elements[idx], 0)} = ${slotRead(idx)}`))).join("; ");
       if (nativeList && typedSlots.every((t) => t !== void 0) && this.rustShortDestrHeads.has(node))
         return `{ let ${tmpName} = ${rhs}.into_list(); ${assignments}; }`;
-      if (nativeList && typedSlots.every((t) => t !== void 0) && this.rustStrSlotShortHead(node, `{ ${head}; ${assignments}; }`))
+      if (nativeList && this.rustStrSlotShortHeadSlots(node, typedSlots, `{ ${head}; ${assignments}; }`) && this.rustStrSlotShortHead(node, `{ ${head}; ${assignments}; }`))
         return `{ let ${tmpName} = ${rhs}.into_list(); ${assignments}; }`;
       return `{ ${head}; ${assignments}; }`;
     }
@@ -67786,6 +67786,18 @@ ${idn}}`;
     }
     this.rustStrSlotLineMemo.set(write, fits);
     return fits;
+  }
+  /** ral-51f: the short head of a string slot write: every slot typed, or slot 0 typed with the boxed rest outside the test tier. */
+  rustStrSlotShortHeadSlots(write, typedSlots, head) {
+    if (typedSlots.every((t) => t !== void 0))
+      return true;
+    if (typedSlots[0] === void 0 || this.rustTestTierSource(write) || /(?:^|[\\/])ts[\\/]src[\\/]test[\\/]/.test(String(write.getSourceFile().fileName)))
+      return false;
+    let depth = 0;
+    for (let up = write; up !== void 0 && !_chunkC7C726CWcjs.isFunctionLike.call(void 0, up); up = up.parent)
+      if (_is.isBlock.call(void 0, up))
+        depth++;
+    return (depth + 1) * 4 + head.length > 400;
   }
   /** ral-50f: the typed destructure line of a string slot write would newly cross 400 chars: the short head keeps it under. */
   rustStrSlotShortHead(write, printed) {
