@@ -58251,6 +58251,8 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
       return "native";
     if (this.rust43bValueRecvFindNeedle(n, kind))
       return "native";
+    if (this.rust44bValueRecvSliceBound(n, kind))
+      return "native";
     if (isCallExpression6(parent) && parent.expression !== n && parent.arguments.some((a) => a === n)) {
       return this.rustNilBoxSlotOk(parent, parent.arguments.indexOf(n)) || this.rustWsClientCallArg(parent, kind) ? "box" : this.rustScalarExpressionUseForm(n, kind);
     }
@@ -67562,7 +67564,43 @@ ${this.getIden(identation)}}`;
     return `pop(${name}.clone())`;
   }
   printSliceCall(node, identation, name = void 0, parsedArg = void 0, parsedArg2 = void 0) {
-    return this.rustStrLocalSliceText(node) ?? this.printNativeStringSlice(node, name) ?? this.looseSlice(name, parsedArg, parsedArg2 ?? "Value::Null");
+    return this.rustStrLocalSliceText(node) ?? this.printNativeStringSlice(node, name) ?? this.looseSlice(name, parsedArg, parsedArg2 ?? "Value::Null", this.rust44bSliceBounds(node));
+  }
+  /** ral-44b: `n` is a bound (argument 0 or 1) of `recv.slice(..)` whose receiver is no typed string local (looseSlice prints
+   *  it), `n` an Int / Option<i64> local (not a ws key): the bound reads as the i64 / Option<i64> the helper's looseI64 match
+   *  would have produced from the `Int` / `Null` box (start: `None` is 0; end: `None` is the length). */
+  rust44bValueRecvSliceBound(n, kind) {
+    if (kind !== "int" && kind !== "oint")
+      return false;
+    const call = n.parent;
+    if (call === void 0 || !isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.name.text !== "slice")
+      return false;
+    const idx = call.arguments.indexOf(n);
+    if (idx < 0 || idx > 1 || call.arguments.length > 2)
+      return false;
+    const recv = this.rustStripWrappers(call.expression.expression);
+    if (isIdentifier3(recv) && (this.rustScalarLocalOf(recv) !== void 0 || this.rustScalarIdentifierKind(recv) !== void 0 || this.rustStringLocalIdentifierIsTyped(recv)))
+      return false;
+    if (this.rustScalarStrMethod(call) !== void 0)
+      return false;
+    return !this.rust41bWsKeyLocal(n);
+  }
+  /** ral-44b: the typed (i64 / Option<i64>) text of each slice bound that rust44bValueRecvSliceBound admitted. */
+  rust44bSliceBounds(node) {
+    const call = this.unwrapParens(node);
+    if (call === void 0 || !isCallExpression6(call))
+      return [];
+    return call.arguments.map((a, i) => {
+      if (!isIdentifier3(a))
+        return void 0;
+      const typed = this.rustScalarLocalOf(a);
+      if (typed === void 0 || this.rustScalarUseForms.get(a) !== "native" || !this.rust44bValueRecvSliceBound(a, typed.kind))
+        return void 0;
+      const name = super.printIdentifier(a);
+      if (i === 0)
+        return typed.kind === "int" ? name : `${name}.unwrap_or(0)`;
+      return typed.kind === "int" ? `Some(${name})` : name;
+    });
   }
   printReplaceCall(node, identation, name = void 0, parsedArg = void 0, parsedArg2 = void 0) {
     return this.printNativeStringReplace(node, name) ?? this.printRustReplace(node, name) ?? this.printReplace(node, name) ?? `replace_str(&${name}, &${parsedArg}, &${parsedArg2})`;
@@ -79305,7 +79343,7 @@ ${this.getIden(identation)}}`;
     const bound = (b) => `if ${b} < 0 { (__l + ${b}).max(0) } else { ${b}.min(__l) }`;
     return `(${variant}, __b, __e) => match (${len}) { __l => match (${bound("__b")}, match __e { None => __l, Some(__k) => ${bound("__k")} }) { (__i, __j) => if __i <= __j { ${take} } else { ${empty} } } }`;
   }
-  looseSlice(name, start, end) {
+  looseSlice(name, start, end, typed = []) {
     const str = this.looseSliceArm(
       "Value::Str(__sv)",
       "__sv.chars().count() as i64",
@@ -79318,7 +79356,7 @@ ${this.getIden(identation)}}`;
       "Value::Array(__a[__i as usize..__j as usize].to_vec())",
       "Value::Array(vec![])"
     );
-    return `(match (&(${name}), ${this.looseI64OrZero(start)}, ${this.looseI64(end)}) { ${str}, ${arr}, _ => Value::Null })`;
+    return `(match (&(${name}), ${typed[0] ?? this.looseI64OrZero(start)}, ${typed[1] ?? this.looseI64(end)}) { ${str}, ${arr}, _ => Value::Null })`;
   }
   looseIndexOf(name, needle) {
     const eq = `match (__it, __nd) { (Value::Null, Value::Null) => true, (Value::Bool(__x), Value::Bool(__y)) => __x == __y, (Value::Str(__x), Value::Str(__y)) => __x == __y, (Value::Int(__x), Value::Int(__y)) => __x == __y, (Value::Float(__x), Value::Float(__y)) => __x == __y, (__p, __q) => match (${this.looseF64("__p")}, ${this.looseF64("__q")}) { (Some(__x), Some(__y)) => __x == __y, _ => false } }`;
