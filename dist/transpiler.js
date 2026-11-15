@@ -51799,6 +51799,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     this.rustReuseProducerWrites = /* @__PURE__ */ new WeakSet();
     /** sb: `y = self.omit(&x, ..).into_dict()` for a shared-map alias (`omit` of a proven map answers `Value::Map`: the Arc moves back). */
     this.rustSbAliasWrites = /* @__PURE__ */ new WeakSet();
+    this.rustSbAliasSlotWrites = /* @__PURE__ */ new WeakSet();
     /** ral-wf: `x[k] = v` (one key, `=`, statement) on a reuse literal with a non-literal key whose printed form is a plain
      *  `Value` place, and the reuse writes' operands proven untagged (same proof as the literal-key writes). */
     this.rustReuseDynamicWrites = /* @__PURE__ */ new WeakSet();
@@ -54662,7 +54663,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
   }
   /** Slot hook: an `Option<String>` local takes the slot's string. */
   printRustNilSlotWrite(element, read, strRead, boolRead) {
-    if (this.rustNilSlotDictOf(element) !== void 0 || this.rustHandedSlotWriteOf(element) !== void 0)
+    if (this.rustNilSlotDictOf(element) !== void 0 || this.rustHandedSlotWriteOf(element) !== void 0 || this.rustSbAliasSlotWriteOf(element))
       return `${super.printIdentifier(element)} = ${read}.into_dict()`;
     if (isIdentifier3(element)) {
       const reuse = this.rustDeclarationOfIdentifier(element);
@@ -71230,6 +71231,10 @@ ${iden}}`;
         nullTests++;
         return true;
       }
+      if (sbAlias && this.rustNilSlotWrite(n) && this.rustDictSlotOfWrite(n) && this.rustDestrBoxLineOk(n)) {
+        this.rustSbAliasSlotWrites.add(n);
+        return ++sbMapWrites > 0;
+      }
       if (isBinaryExpression5(up) && up.left === n && up.operatorToken.kind === SyntaxKind7.EqualsToken) {
         if (up.parent?.kind !== SyntaxKind7.ExpressionStatement)
           return false;
@@ -71840,6 +71845,13 @@ ${iden}}`;
     while (up !== void 0 && (isParenthesizedExpression3(up) || isAsExpression3(up)))
       up = up.parent;
     return isCallExpression6(call) && call.arguments[0] === node && isBinaryExpression5(up) && isIdentifier3(up.left) && this.rustSelfExtendWrite(up.left, declaration);
+  }
+  /** ral-54f: a slot write accepted by the shared-map alias rule, printed typed only when the alias printed as the map. */
+  rustSbAliasSlotWriteOf(element) {
+    if (!isIdentifier3(element) || !this.rustSbAliasSlotWrites.has(element))
+      return false;
+    const declaration = this.rustDeclarationOfIdentifier(element);
+    return declaration !== void 0 && this.rustPrintedBorrowed.has(declaration) && this.rustBorrowedLocalKind(declaration) === "dict";
   }
   printSbAliasWrite(node, left, right) {
     const declaration = this.rustDeclarationOfIdentifier(left);
@@ -77868,7 +77880,7 @@ ${iden}}`;
         return false;
       const at = pattern.elements.indexOf(declaration);
       const allSlot = at >= 0 && (this.rustPromiseAllDictSlot(declaration) || at === 0 && this.rustUntilRequestSlot(declaration) || this.rustTernaryDictSlot(declaration));
-      if (at !== 1 && !allSlot && !(at >= 0 && this.rustDeclaredDictSlot(declaration)))
+      if (at !== 1 && !allSlot && !(at >= 0 && (this.rustDeclaredDictSlot(declaration) || this.rustBaseHandleLastDictSlot(declaration))))
         return false;
       if (declaration.dotDotDotToken !== void 0 || declaration.initializer !== void 0 || this.rustTupleSlotKind(declaration) !== void 0)
         return false;
@@ -77940,7 +77952,7 @@ ${iden}}`;
       const boxed = this.rustOptionalParamsSlot(call, n) || this.rustHandedSlotBoxUse(n, declaration);
       if (boxed)
         boxes++;
-      if (boxed && this.rustInDestructureWrite(n) && (nilSlot ? !this.rustNilSlotLineOk(n) : uses === 0))
+      if (boxed && this.rustInDestructureWrite(n) && (nilSlot ? !this.rustNilSlotLineOk(n) : uses === 0 && !this.rustDestrBoxLineOk(n)))
         longBox = true;
       return ok || boxed;
     });
@@ -78109,6 +78121,25 @@ ${iden}}`;
       return false;
     this.rustShortDestrHeads.add(write);
     return true;
+  }
+  /** ral-54f: a typed params map boxed whole (`Value::Dict(x)`, +13 over the `x.clone()` it replaces) as an argument of a
+   *  `[a, b] = this.m (.., x)` destructure write: admitted when that one printed line stays within 400 (non-test sources). */
+  rustDestrBoxLineOk(n) {
+    const source = n.getSourceFile?.()?.fileName;
+    if (typeof source !== "string" || /[\\/]test[\\/]/.test(source))
+      return false;
+    let statement = n;
+    while (statement.parent !== void 0 && !isStatement(statement))
+      statement = statement.parent;
+    let depth = 0;
+    for (let up = statement; up !== void 0 && !isFunctionLike(up); up = up.parent)
+      if (isBlock4(up))
+        depth++;
+    try {
+      return (depth + 1) * 4 + String(this.printNode(statement, 0)).trim().split("\n")[0].length + "Value::Dict()".length + ".into_dict()".length <= 400;
+    } catch (e) {
+      return false;
+    }
   }
   /** A nil-declared slot local typed as the map. */
   rustNilSlotDictLocal(declaration) {
@@ -79617,6 +79648,27 @@ ${iden}}`;
       return isCallExpression6(c) && isPropertyAccessExpression3(c.expression) && c.expression.expression.kind === SyntaxKind7.ThisKeyword && this.rustCallDeclaresDictSlot(c, at);
     };
     return at >= 0 && arm(init.whenTrue) && arm(init.whenFalse);
+  }
+  /** ral-54f: the last slot of a base `this.handle*AndParams (..)` whose own tuple return declares it a bare `Dict`
+   *  (`handleTriggerPricesAndParams`: `[Str, Str, Str, Dict]`) is the params map handed back, exactly as slot 1 of the
+   *  two-slot helpers. Non-test sources only (the caller checks the tier). */
+  rustBaseHandleLastDictSlot(element) {
+    const owner = element?.parent?.parent;
+    if (element?.parent?.kind !== SyntaxKind7.ArrayBindingPattern || !isVariableDeclaration3(owner) || owner.name !== element.parent)
+      return false;
+    const init = this.rustAwaitedCall(owner.initializer);
+    const callee = init?.expression;
+    if (!isCallExpression6(init) || !isPropertyAccessExpression3(callee) || callee.expression.kind !== SyntaxKind7.ThisKeyword || !/^handle\w*AndParams\d*$/.test(String(callee.name.text)) || !this.rustNativeListSource(init))
+      return false;
+    const declaration = this.rustCalleeDeclaration(init);
+    if (declaration === void 0 || !_RustTranspiler.RUST_BASE_TIER_FILE.test(String(declaration.getSourceFile?.()?.fileName)))
+      return false;
+    const type = declaration.type;
+    if (type?.kind !== SyntaxKind7.TupleType)
+      return false;
+    const at = element.parent.elements.indexOf(element);
+    const slot = type.elements?.[at];
+    return at >= 2 && at === type.elements.length - 1 && slot?.kind === SyntaxKind7.TypeReference && isIdentifier3(slot.typeName) && slot.typeName.text === "Dict" && slot.typeArguments === void 0;
   }
   rustCallDeclaresDictSlot(init, at) {
     const declaration = this.rustCalleeDeclaration(init);

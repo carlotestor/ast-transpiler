@@ -2896,6 +2896,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustSelfExtendHead(node: any, declaration: any): boolean;
     /** sb: `y = self.omit(&x, ..).into_dict()` for a shared-map alias (`omit` of a proven map answers `Value::Map`: the Arc moves back). */
     private rustSbAliasWrites;
+    private rustSbAliasSlotWrites;
+    /** ral-54f: a slot write accepted by the shared-map alias rule, printed typed only when the alias printed as the map. */
+    rustSbAliasSlotWriteOf(element: any): boolean;
     printSbAliasWrite(node: any, left: any, right: any): string | undefined;
     /** ral-wf: `x[k] = v` (one key, `=`, statement) on a reuse literal with a non-literal key whose printed form is a plain
      *  `Value` place, and the reuse writes' operands proven untagged (same proof as the literal-key writes). */
@@ -3656,6 +3659,9 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustNilSlotDictCandidateUncached(declaration: any): boolean;
     rustNilSlotLineOk(n: any): boolean;
     rustShortDestrHeads: WeakSet<any>;
+    /** ral-54f: a typed params map boxed whole (`Value::Dict(x)`, +13 over the `x.clone()` it replaces) as an argument of a
+     *  `[a, b] = this.m (.., x)` destructure write: admitted when that one printed line stays within 400 (non-test sources). */
+    rustDestrBoxLineOk(n: any): boolean;
     /** A nil-declared slot local typed as the map. */
     rustNilSlotDictLocal(declaration: any): boolean;
     /** ral-46g: the reassigned handed map written at slot 1 of `[ a, x ] = this.handle*AndParams (..)`, else undefined. */
@@ -3891,6 +3897,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** zi: `const [ a, b ] = c ? this.f (..) : this.g (..)`: slot `at` is a map when each arm's own callee declares it one
      *  (the venue-pair form of `rustDeclaredDictSlot`; the temp keeps its `Vec<Value>` head). */
     rustTernaryDictSlot(element: any): boolean;
+    /** ral-54f: the last slot of a base `this.handle*AndParams (..)` whose own tuple return declares it a bare `Dict`
+     *  (`handleTriggerPricesAndParams`: `[Str, Str, Str, Dict]`) is the params map handed back, exactly as slot 1 of the
+     *  two-slot helpers. Non-test sources only (the caller checks the tier). */
+    rustBaseHandleLastDictSlot(element: any): boolean;
     rustCallDeclaresDictSlot(init: any, at: number): boolean;
     /** Every `return` of the callee's own body is an array literal whose element `at` is a map literal or a `const`
      *  local initialised with one (a map on every path, whatever keys are written into it). */
