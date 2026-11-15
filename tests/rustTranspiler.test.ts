@@ -17647,3 +17647,24 @@ describe('ral-51a: handleRouteAndParams results typed by name from the venue mem
         expect(out).toContain('let mut paramsResolved: Value = ');
     });
 });
+
+describe('ral-52a: an alias of a shared-map alias is decided on its own (the first alias read whole as its initializer)', () => {
+    const emit = (second: string): string => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-52a-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport type Int = number | undefined;\nconst omit = (x: Dict | undefined, ...args: any) => x;\nconst extend = (...args: any[]) => Object.assign ({}, ...args);\nexport default class Exchange {\n    omit = omit;\n    extend = extend;\n    safeInteger (o: any, k: any, d: Int = undefined): Int { return o; }\n    handleOptionBoolAndParams (params: object, methodName: string, optionName: string, defaultValue: boolean = undefined): [ boolean, Dict ] { return [ defaultValue, params as Dict ]; }\n    async privateGetA (p: any = {}): Promise<any> { return p; }\n}\n");
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict, Int, Str } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async fetchFundingRateHistory (symbol: Str = undefined, since: Int = undefined, limit: Int = undefined, params: Dict = {}) {\n        const paramsResolved = this.handleRouteAndParams ('fetchFundingRateHistory', params);\n        let paramsPaginate: Dict = paramsResolved;\n        if (symbol !== undefined) {\n            const [ paginate, paramsFinal ] = this.handleOptionBoolAndParams (paramsResolved, 'fetchFundingRateHistory', 'paginate', false);\n            if (paginate) {\n                throw new Error ('no');\n            }\n            paramsPaginate = paramsFinal;\n        }\n        const until = this.safeInteger (paramsPaginate, 'until');\n        let paramsOmitted: Dict = " + second + ";\n        if (until !== undefined) {\n            paramsOmitted = this.omit (paramsPaginate, 'until');\n        }\n        const request: Dict = { 'symbol': symbol };\n        return await this.privateGetA (this.extend (request, paramsOmitted));\n    }\n    handleRouteAndParams (methodName: string, params: Dict = {}): Dict {\n        return this.omit (params, 'route');\n    }\n}\n");
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('both aliases stay Dict and the omit operand is lent', () => {
+        const out = emit('paramsPaginate');
+        expect(out).toContain('let mut paramsPaginate: crate::value::Dict = ');
+        expect(out).toContain('let mut paramsOmitted: crate::value::Dict = Value::from(&paramsPaginate).into_dict();');
+        expect(out).not.toContain('paramsOmitted.clone()');
+    });
+    test('guard: an alias of a non-map initializer keeps Value', () => {
+        const out = emit("(until !== undefined) ? paramsPaginate : undefined");
+        expect(out).not.toContain('let mut paramsOmitted: crate::value::Dict');
+    });
+});
