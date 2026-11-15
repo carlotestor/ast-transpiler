@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -71190,6 +71190,10 @@ ${iden}}`;
         return ++lentNullable > 0 && ++reads > 0;
       if (this.rustContainerAliasInit(n, declaration))
         return ++aliasBoxes > 0 && boxedElementUses.push(n) > 0;
+      if (sbAlias && isVariableDeclaration3(up) && up.initializer === n && isIdentifier3(up.name) && up.parent?.declarations?.length === 1 && this.rustEnclosingFunction(up) === fn) {
+        this.rustContainerAliasInits.add(n);
+        return ++aliasBoxes > 0 && boxedElementUses.push(n) > 0;
+      }
       if (!isCallExpression6(up) || up.arguments[0] !== n)
         return handed();
       const keyArgs = up.arguments.slice(1, isPropertyAccessExpression3(up.expression) && /2$/.test(String(up.expression.name.text)) ? 3 : 2).map((a) => this.rustSkipWrappers(a));
