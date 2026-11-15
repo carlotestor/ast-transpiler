@@ -60007,10 +60007,27 @@ ${indent}let mut ${varName}: ${_RustTranspiler.RUST_SCALAR_TYPES[kind]} = ${spli
       return this.rustStrFindNeedle(args[0], false) === void 0 ? void 0 : { recv, recvKind, method, kind: "int" };
     if ((shape === "pad" || shape === "slice") && this.rustScalarIdentifierKind(recv) === void 0 && this.rustScalarParamRead(recv) === void 0)
       return void 0;
-    const ostrSelf = recvKind === "ostr" && method === "toString" && !this.rustTestTierSource(call);
+    const ostrSelf = recvKind === "ostr" && method === "toString" && !this.rustTestTierSource(call) && this.rust48fSlotAliasConcatRecv(call, recv);
     if (recvKind === "ostr" && shape !== "case" && shape !== "replace" && shape !== "pad" && shape !== "slice" && !ostrSelf)
       return void 0;
     return { recv, recvKind, method, kind: recvKind };
+  }
+  /** ral-48f: `x.toString()` read as a `+` operand, `x` a destructured handle*AndParams slot or a local declared `Str` whose
+   *  initializer is such a slot read whole (the slot and the alias are decided together by the joint scalar solve). */
+  rust48fSlotAliasConcatRecv(call, recv) {
+    let top = call;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    if (!isBinaryExpression5(top.parent) || top.parent.operatorToken.kind !== SyntaxKind7.PlusToken)
+      return false;
+    const d = this.rustDeclaredNode(recv);
+    if (d?.kind === SyntaxKind7.BindingElement)
+      return this.rustSlotJoinsSolve(d);
+    if (d === void 0 || !isVariableDeclaration3(d) || d.type === void 0 || String(d.type.getText()) !== "Str")
+      return false;
+    const init = this.unwrapParens(d.initializer);
+    const slot = init !== void 0 && isIdentifier3(init) ? this.rustDeclaredNode(init) : void 0;
+    return slot?.kind === SyntaxKind7.BindingElement && this.rustSlotJoinsSolve(slot);
   }
   /** `padStart(N, "c")` / `padEnd(N, "c")`: a literal width (0..4096) and a one-char alphanumeric / space pad, the
    *  helper's one-char arm, which `format!` width (counted in chars, never truncating) reproduces. */
