@@ -25607,8 +25607,37 @@ export class RustTranspiler extends BaseTranspiler {
         }
         const id = file.slice(file.lastIndexOf('/') + 1, -3);
         if (!parents.has(id) || parents.get(id) !== undefined) return true;
-        for (const [child, p] of parents) if (p === id && !this.rustWsDescribeOnly(`${root}/pro/${child}.ts`)) return true;
+        for (const [child, p] of parents) if (p === id && !this.rustWsDescribeOnly(`${root}/pro/${child}.ts`) && !this.rustWsRestOnlyChild(`${root}/pro/${child}.ts`, file)) return true;
         return false;
+    }
+
+    /** ral-56h: the resolve table across a ws class and its ws subclass (kucoin + kucoinfutures) equals the parent's
+     *  own table when the subclass adds no resolve and changes no ws path: every method of the subclass other than
+     *  `describe` / `describeData` is a REST-only method (no client, future, resolve, reject, spawn, delay, watch,
+     *  subscribe or handler token in its text, no field declaration) that the parent ws file never calls or names. */
+    rustWsRestOnlyChild(path: string, parentFile: string): boolean {
+        let text: string;
+        let parent: string;
+        try {
+            text = fs.readFileSync(path, 'utf8');
+            parent = fs.readFileSync(parentFile, 'utf8');
+        } catch (e) {
+            return false;
+        }
+        // comments and string literals name no ws path
+        const strip = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/'(?:[^'\\\n]|\\.)*'/g, "''");
+        const body = text.slice(text.indexOf('export default class'));
+        if (/^ {4}(?:(?:public|private|protected|static|override|readonly) +)*[A-Za-z_$][\w$]* *[:=]/m.test(body)) return false;
+        const heads = [ ...body.matchAll(/^ {4}(?:(?:public|private|protected|static|override|async|get|set) +)*([A-Za-z_$][\w$]*) *[(<]/gm) ];
+        if (heads.length === 0) return false;
+        for (let i = 0; i < heads.length; i++) {
+            const name = heads[i][1];
+            if (name === 'describe' || name === 'describeData') continue;
+            const seg = strip(body.slice(heads[i].index, i + 1 < heads.length ? heads[i + 1].index : undefined));
+            if (/\b(?:client|Client|futures?|reusableFuture|resolve|reject|spawn|delay|subscriptions|cleanUnsubscription|loadOrderBook|orderbooks?|watch\w*|unWatch\w*|subscribe\w*|handle(?!\w*AndParams)\w*|messageHash\w*)\b/.test(seg)) return false;
+            if (new RegExp(`\\b${name.replace(/\$/g, '\\$')}\\b`).test(strip(parent))) return false;
+        }
+        return true;
     }
 
     /** A ws subclass whose only methods are `describe` / `describeData` adds no handler and no resolve. */
@@ -25797,6 +25826,9 @@ export class RustTranspiler extends BaseTranspiler {
             if (isElementAccessExpression(up) && up.expression === n && !this.isNativeWriteTargetBase(up) && !isDeleteExpression(up.parent)) continue;
             if (up?.kind === SyntaxKind.PropertyAssignment && up.initializer === n) continue;
             if (isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.EqualsEqualsEqualsToken) continue;
+            // ral-56h: `this.safeString (p, i, ..)` reads one element (kucoin unSubscribeMultiple `subscriptionHashes`)
+            if (isCallExpression(up) && up.arguments[0] === n && isPropertyAccessExpression(up.expression) && up.expression.expression.kind === SyntaxKind.ThisKeyword
+                && String(up.expression.name.text) === 'safeString') continue;
             // `const xs = (c) ? p : q` picks it into a const list that is itself only read
             if (isConditionalExpression(up) && up.condition !== n && isVariableDeclaration(up.parent) && up.parent.initializer === up && this.rustWsListParamReadOnly(up.parent, method)) continue;
             if (isCallExpression(up) && isPropertyAccessExpression(up.expression) && up.expression.expression.kind === SyntaxKind.ThisKeyword
