@@ -69128,6 +69128,8 @@ ${iden}}`;
         return ++lentResponses > 0 && ++reads > 0;
       if (this.rustLentOptionalHandOff(up, n, init, from, nilDeclared))
         return ++lentNullable > 0 && ++reads > 0;
+      if (init !== void 0 && isCallExpression6(init) && this.rustVenueContainerReturnKind(init)?.nullable === false && this.rustLentEndpointSlot(up, n, from))
+        return ++lentResponses > 0 && ++reads > 0;
       if (from === "dict" && isCallExpression6(up) && this.rustLentParamsSlot(up, n) && (extendReuse || init !== void 0 && isCallExpression6(init) && this.rustBuiltReturnSourceKind(init) === "dict"))
         return ++reads > 0;
       if (from === "dict" && this.rustJwtRequestSlot(up, n))

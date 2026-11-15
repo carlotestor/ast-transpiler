@@ -15378,6 +15378,15 @@ describe('ral-42h: a never-null venue container result handed on whole is held',
         expect(out).toContain('let mut signature: crate::value::Dict = ');
         expect(out).toContain('Value::Dict(signature)');
     });
+    test('a Dict[] venue result handed to a lent base parse slot is a held List lent there', () => {
+        const dir = path.join (rustFixtureRoot, 'r42h-venue-lent');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    keep (p: any): any { return p; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseLedger (data: any, since: any = undefined): any[] {\n        return data;\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    async rowsOf (x: any): Promise<Dict[]> {\n        const out: Dict[] = [];\n        out.push (x);\n        return out;\n    }\n    async a (x: any) {\n        const rows = await this.rowsOf (x);\n        return this.parseLedger (rows, x);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/venue.ts')).content;
+        expect(out).toContain('let mut rows: crate::value::List = ');
+        expect(out).toContain('parseLedger(&rows');
+    });
     test('negative: a NullableDict venue result stays boxed', () => {
         const out = run ('r42h-venue-nullable', "    signIt (x: any): NullableDict {\n        return undefined;\n    }\n    a (x: any) {\n        const signature = this.signIt (x);\n        return { 'signature': signature };\n    }\n");
         expect(out).not.toContain('let mut signature: crate::value::Dict = ');
