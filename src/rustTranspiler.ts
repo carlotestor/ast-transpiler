@@ -2143,7 +2143,7 @@ export class RustTranspiler extends BaseTranspiler {
         const r20 = this.nativeNumericAdd(op, left, right, leftText, rightText); if (r20 !== undefined) return r20;
         if (op === SyntaxKind.PlusToken && (this.isNativeStringConcatPair(leftType, rightType) || this.concatIsAnchored(left, right, leftType, rightType)
             || this.strOrNullConcatIsAnchored(left, right, leftType, rightType))) {
-            return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText, right), this.rustConcatLiteralText(right, rightText, left));
+            return this.rustRecordFormatConcat(left.parent, this.rustConcatLiteralText(left, leftText, right), this.rustConcatLiteralText(right, rightText, left));
         }
         if (!this.isNumberLikeType(leftType) || !this.isNumberLikeType(rightType)) {
             return this.nativeCoercingArithmetic(op, left, right, leftText, rightText);
@@ -2162,7 +2162,37 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printNativeStringConcat(leftText: string, rightText: string): string {
-        return `Value::Str(format!("{}{}", ${leftText}, ${rightText}).into())`;
+        return `Value::Str(${this.rustFormatConcatText(leftText, rightText)}.into())`;
+    }
+
+    rustFormatConcatText(leftText: string, rightText: string): string {
+        return `format!("{}{}", ${leftText}, ${rightText})`;
+    }
+
+    /** ral-57x: the `format!(..)` a `+` / `.toString()` node took at its latest print (the printer's own arm decision,
+     *  recorded where the box is built), cleared whenever that node is printed again; never read back from printed text. */
+    private rustFormatPrints = new WeakMap<any, string>();
+
+    /** The `+` node (or the `+=` node) printed the native concat arm: record its unboxed `format!` and return the box. */
+    rustRecordFormatConcat(node: any, leftText: string, rightText: string): string {
+        const format = this.rustFormatConcatText(leftText, rightText);
+        if (node !== undefined) this.rustFormatPrints.set(node, format);
+        return `Value::Str(${format}.into())`;
+    }
+
+    /** A `.toString()` call printed as a whole `Value::Str(format!("{}", x).into())`: record the `format!` and return the box. */
+    rustRecordFormatToString(node: any, name: string): string {
+        const format = `format!("{}", ${name})`;
+        if (node !== undefined) this.rustFormatPrints.set(node, format);
+        return `Value::Str(${format}.into())`;
+    }
+
+    /** ral-57x: the `format!(..)` that the node's print boxes whole as `Value::Str(format!(..).into())`, else undefined. Decided
+     *  from the node: it is printed (as before) and the arm that printer took for this very node is looked up. */
+    rustUnboxedFormatOf(node: any): string | undefined {
+        if (node === undefined) return undefined;
+        this.printNode(node, 0);
+        return this.rustFormatPrints.get(node);
     }
 
     // Both operands are `Int`/`Float` at runtime; `-> Value::Null` covers the
@@ -2357,6 +2387,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printBinaryExpression(node, identation) {
+        this.rustFormatPrints.delete(node);
         return this.printCustomBinaryExpressionIfAny(node, identation) || super.printBinaryExpression(node, identation);
     }
 
@@ -3203,7 +3234,7 @@ export class RustTranspiler extends BaseTranspiler {
         const inner: any = this.unwrapParensNode(other);
         if (inner === undefined || !(isBinaryExpression(inner) && inner.operatorToken.kind === SyntaxKind.PlusToken)
             && !(isCallExpression(inner) && isPropertyAccessExpression(inner.expression) && inner.expression.name.text === 'toString' && (inner.arguments?.length ?? 0) === 0)) return false;
-        return this.rustUnboxedFormatText(this.printNode(inner, 0).trim()) !== undefined;
+        return this.rustUnboxedFormatOf(inner) !== undefined;
     }
 
     /** The `as_deref().unwrap_or("null")` read of a concat operand keeps its statement within the 400-char line budget. */
@@ -6967,7 +6998,7 @@ export class RustTranspiler extends BaseTranspiler {
     printRustVenueIntToString(node, name: string): string | undefined {
         const receiver: any = node?.expression?.expression;
         if (receiver === undefined || !isIdentifier(receiver) || this.rustScalarLocalOf(receiver)?.kind !== 'int') return undefined;
-        return `Value::Str(format!("{}", ${name}).into())`;
+        return this.rustRecordFormatToString(node, name);
     }
 
     /** Declared return type texts per method name over the venue sources under `srcRoot`. */
@@ -9359,24 +9390,8 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-55x K1: `'lit' + s` of string literals and typed string locals: the printer's own `format!` concat is a `String`
         // (never `Null`), the same text the boxed `Value::Str(format!(..))` operand held
         if (isBinaryExpression(inner) && inner.operatorToken.kind === SyntaxKind.PlusToken && this.rustStrConcatOperandLeaves(inner)) {
-            const text = this.rustUnboxedFormatText(this.printNode(inner, 0));
+            const text = this.rustUnboxedFormatOf(inner);
             if (text !== undefined) return `${text}.as_str()`;
-        }
-        return undefined;
-    }
-
-    /** ral-55x K1: `Value::Str(format!(..).into())` -> the `format!(..)` itself, when that macro call spans the whole box. */
-    rustUnboxedFormatText(text: string): string | undefined {
-        const head = 'Value::Str(format!(';
-        if (!text.startsWith(head) || !text.endsWith(').into())')) return undefined;
-        let depth = 1;
-        let quoted = false;
-        for (let i = head.length; i < text.length; i++) {
-            const c = text[i];
-            if (quoted) { if (c === '\\') i++; else if (c === '"') quoted = false; continue; }
-            if (c === '"') quoted = true;
-            else if (c === '(') depth++;
-            else if (c === ')' && --depth === 0) return text.slice(i + 1) === '.into())' ? text.slice('Value::Str('.length, i + 1) : undefined;
         }
         return undefined;
     }
@@ -11839,8 +11854,10 @@ export class RustTranspiler extends BaseTranspiler {
     /** Wrap a call text when the callee returns a native `Option<String>`
      *  and the position still needs a `Value`. */
     rustBoxNativeStrCallIfNeeded(node: Node, text: string): string {
-        return this.rustNativeStrCalleeKind(node) === 'str' && !this.rustBaseNativeStrBare.has(node) && this.rustNativeStrCallNeedsBox(node)
-            ? this.rustNativeStrValueBox(text) : text;
+        if (!(this.rustNativeStrCalleeKind(node) === 'str' && !this.rustBaseNativeStrBare.has(node) && this.rustNativeStrCallNeedsBox(node))) return text;
+        // the box wraps the call's print: it is no longer a whole `format!` box
+        this.rustFormatPrints.delete(node);
+        return this.rustNativeStrValueBox(text);
     }
 
     // ── declared-Dict locals (`let x: Value = self.safe_dict_k(..)`) ───────────
@@ -14507,6 +14524,7 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     printCallExpression(node, identation) {
+        this.rustFormatPrints.delete(node);
         const expression = node.expression;
         const bookCall = this.printWsBookMapRead(node) ?? this.printWsBookCtorCall(node, identation); if (bookCall !== undefined) return bookCall;
         const mapLookup = this.printWsCacheMapRead(node); if (mapLookup !== undefined) return mapLookup;
@@ -29763,14 +29781,14 @@ export class RustTranspiler extends BaseTranspiler {
         const receiver = node?.expression?.expression;
         // sb: a Copy number local boxed at its `.toString()` read displays the box (`format!("{}", Value::from(x))`)
         const sbLocal = receiver !== undefined && isIdentifier(receiver) ? this.rustScalarLocalOf(receiver) : undefined;
-        if (sbLocal !== undefined && this.rustScalarUseForms.get(receiver) === 'xbox' && this.rustSbCopyBoxUse(receiver, sbLocal.kind)) return `Value::Str(format!("{}", ${name}).into())`;
+        if (sbLocal !== undefined && this.rustScalarUseForms.get(receiver) === 'xbox' && this.rustSbCopyBoxUse(receiver, sbLocal.kind)) return this.rustRecordFormatToString(node, name);
         // xb: an `i64` counter displays as the `Int` box it replaces (`Display` of `Value::Int(n)` is `n`'s)
-        if (receiver !== undefined && this.rustI64CounterOperand(this.unwrapParens(receiver)) && this.rustI64CounterUse(this.unwrapParens(receiver))) return `Value::Str(format!("{}", ${name}).into())`;
+        if (receiver !== undefined && this.rustI64CounterOperand(this.unwrapParens(receiver)) && this.rustI64CounterUse(this.unwrapParens(receiver))) return this.rustRecordFormatToString(node, name);
         const kind = this.rustOperandKind(receiver);
         if (kind !== 'number' && kind !== 'string') return undefined;
         const inner = this.unwrapParensNode(receiver);
         if (inner !== undefined && (this.rustStringLocalIdentifierIsTyped(inner) || this.rustNativeStrCalleeKind(inner) === 'str')) return undefined;
-        return `Value::Str(format!("{}", ${name}).into())`;
+        return this.rustRecordFormatToString(node, name);
     }
 
     // `Math.floor|round|ceil(n)`: the helper answers `Float(op(x))` for a numeric box, `Null` otherwise.
@@ -29849,7 +29867,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (stringSide === undefined || !this.printsValueExpression(stringSide)) return undefined;
         const inner = this.unwrapParensNode(stringSide);
         if (inner !== undefined && (this.rustStringLocalIdentifierIsTyped(inner) || this.rustNativeStrCalleeKind(inner) === 'str')) return undefined;
-        return this.printNativeStringConcat(this.rustConcatLiteralText(left, leftText, right), this.rustConcatLiteralText(right, rightText, left));
+        return this.rustRecordFormatConcat(left.parent, this.rustConcatLiteralText(left, leftText, right), this.rustConcatLiteralText(right, rightText, left));
     }
 
     // Native reads on receivers the plain-dict proof admits (tag-free literal / `account ()` / `omit` /
@@ -30438,7 +30456,7 @@ export class RustTranspiler extends BaseTranspiler {
     // `x.toString()` on a proven-`Str` local: `stringify_simple` of `Str`/`Null` is `Display`.
     printRustToString(node, receiverText: string): string | undefined {
         const receiver = this.rustReceiver(node, receiverText);
-        return receiver === undefined || (node.arguments?.length ?? 0) !== 0 ? undefined : `Value::Str(format!("{}", ${receiver}).into())`;
+        return receiver === undefined || (node.arguments?.length ?? 0) !== 0 ? undefined : this.rustRecordFormatToString(node, receiver);
     }
 
     // `x.toUpperCase()` / `x.toLowerCase()` on a proven-`Str` local (any TS type).

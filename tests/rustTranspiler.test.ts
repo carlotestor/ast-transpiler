@@ -19192,3 +19192,30 @@ describe('ral-56x K1: a nil-declared string local joined to a concat partner', (
         expect(out).toContain('signPath.as_deref().unwrap_or(\"null\")');
     });
 });
+
+describe('ral-57x: the unboxed format! of a concat operand is the printer arm decision for that node, not a scan of its printed text', () => {
+    test('rustUnboxedFormatOf answers from the node for the `+` replace operand; the text scanner rustUnboxedFormatText is gone', () => {
+        const dir = path.join (rustFixtureRoot, '57x-fmt');
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.mkdirSync (path.join (dir, 'ts/src/pro'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeString (o: any, k: any, d: string = undefined): string { return o; }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/pro/venue.ts'), "import Exchange from '../base/Exchange.js';\nimport type { Dict } from '../base/Exchange.js';\nexport default class venue extends Exchange {\n    client (url: string): any { return url; }\n    async authenticate (params: Dict = {}) {\n        const url = this.safeString (params, 'url');\n        const hostname = this.safeString (params, 'hostname');\n        if (url === undefined || hostname === undefined) {\n            throw new Error ('x');\n        }\n        const relativePath = url.replace ('wss://' + hostname, '');\n        const client = this.client (url);\n        return [ client, relativePath ];\n    }\n}\n");
+        const rt: any = (transpiler as any).rustTranspiler;
+        expect(typeof rt.rustUnboxedFormatOf).toBe('function');
+        expect(rt.rustUnboxedFormatText).toBeUndefined();
+        const seen: string[] = [];
+        const own = rt.rustUnboxedFormatOf;
+        rt.rustUnboxedFormatOf = function (node: any) {
+            const r = own.call(this, node);
+            seen.push(`${node.getText()} => ${r}`);
+            return r;
+        };
+        try {
+            const out = transpiler.transpileRustByPath (path.join (dir, 'ts/src/pro/venue.ts')).content;
+            expect(out).toContain('Some(__s.replace(format!("{}{}", "wss://", hostname.as_deref().unwrap_or("null")).as_str(), ""))');
+        } finally {
+            rt.rustUnboxedFormatOf = own;
+        }
+        expect(seen).toContain("'wss://' + hostname => format!(\"{}{}\", \"wss://\", hostname.as_deref().unwrap_or(\"null\"))");
+    });
+});
