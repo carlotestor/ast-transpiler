@@ -63822,7 +63822,7 @@ ${i1}}`;
       const optKey = this.rustMarketReadKey(node.expression);
       if (optKey === void 0 || !_RustTranspiler.RUST_MARKET_BOOL_FIELDS.has(optKey))
         return void 0;
-      return { kind: "bool", text: `${this.printNode(optMarket.name, 0)}.as_ref().map_or(false, |__m| __m.${optKey})` };
+      return { kind: "bool", text: `matches!(${this.printNode(optMarket.name, 0)}, Some(crate::types::Market { ${optKey}: true, .. }))` };
     }
     const declaration = this.rustTypedMarketLocalOf(node.expression);
     const localKind = declaration === void 0 ? false : this.rustMarketLocalKind(declaration);
