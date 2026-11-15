@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-DSH7DNKY.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -73283,6 +73283,23 @@ ${iden}}`;
       return args.length === 1 && this.rustLentListUse(this.rustSkipWrappers(args[0]));
     return this.rustDefaultedListRead(init);
   }
+  /** ral-48e: `xs[i]['k'] = v` (a statement) on a `[]`-defaulted list local, `i` an i64 counter or a non-negative integer
+   *  literal: the write prints `add_element_to_object(get_value_mut(&mut xs, &Value::Int(i)), ..)` as before, and the
+   *  runtime `get_value_mut` hops a held `List` exactly as the `Value::Arr` arm did (the same padded slot). */
+  rustLentListRowWrite(access) {
+    const outer = access.parent;
+    if (!isElementAccessExpression4(outer) || outer.expression !== access)
+      return false;
+    const assign = outer.parent;
+    if (!isBinaryExpression5(assign) || assign.left !== outer || assign.operatorToken.kind !== SyntaxKind7.EqualsToken || assign.parent?.kind !== SyntaxKind7.ExpressionStatement || this.rustTestTierSource(access))
+      return false;
+    const key = this.rustSkipWrappers(access.argumentExpression);
+    if (key === void 0)
+      return false;
+    if (isNumericLiteral4(key))
+      return Number.isInteger(Number(key.text)) && Number(key.text) >= 0;
+    return this.isRustValueIndexKey(key);
+  }
   /** A base `safeList*` read with an empty `[]` default: a list on every path. */
   rustDefaultedListRead(init) {
     const callee = isCallExpression6(init) && isPropertyAccessExpression3(init.expression) ? init.expression : void 0;
@@ -73327,6 +73344,7 @@ ${iden}}`;
       return false;
     const boxes = [];
     let natives = 0;
+    let rowWrites = 0;
     const objectList = isCallExpression6(init) && isPropertyAccessExpression3(init.expression) && isIdentifier3(init.expression.expression) && init.expression.expression.text === "Object" && init.arguments.length === 1 && isIdentifier3(this.rustSkipWrappers(init.arguments[0]));
     const usesAll = (accept) => defaulted ? this.rustScalarUsesAll(declaration, name, accept) : objectList ? this.rustBlockLocalUsesAll(declaration, name, accept) : this.rustLocalUsesAll(declaration, name, false, accept);
     const safe = usesAll((n) => {
@@ -73341,7 +73359,13 @@ ${iden}}`;
       if (isElementAccessExpression4(up) && up.expression === at) {
         natives++;
         indexed++;
-        return this.rustReadBearerElementUse(up, "list");
+        if (this.rustReadBearerElementUse(up, "list"))
+          return true;
+        if (defaulted && this.rustLentListRowWrite(up)) {
+          rowWrites++;
+          return true;
+        }
+        return false;
       }
       if (at === n && isCallExpression6(up) && up.arguments[0] === n && this.rustBorrowedAnyKeyReader(up)) {
         natives++;
@@ -73379,6 +73403,8 @@ ${iden}}`;
       return false;
     });
     if (!safe || natives === 0 || defaulted && indexed === 0 && boxes.some(([, form]) => form === "clone"))
+      return false;
+    if (rowWrites > 0 && boxes.some(([, form]) => form === "clone"))
       return false;
     for (const [n, form] of boxes)
       this.rustLentListBoxes.set(n, form);

@@ -3083,6 +3083,10 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustLentListLocal(declaration: any): boolean;
     /** A call that yields a string list on every path (never `undefined`). */
     rustLentListSource(init: any): boolean;
+    /** ral-48e: `xs[i]['k'] = v` (a statement) on a `[]`-defaulted list local, `i` an i64 counter or a non-negative integer
+     *  literal: the write prints `add_element_to_object(get_value_mut(&mut xs, &Value::Int(i)), ..)` as before, and the
+     *  runtime `get_value_mut` hops a held `List` exactly as the `Value::Arr` arm did (the same padded slot). */
+    rustLentListRowWrite(access: any): boolean;
     /** A base `safeList*` read with an empty `[]` default: a list on every path. */
     rustDefaultedListRead(init: any): boolean;
     rustLentListLocalUncached(declaration: any): boolean;
