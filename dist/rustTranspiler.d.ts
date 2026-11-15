@@ -3246,6 +3246,15 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustWsFlightLocals;
     rustWsFlightSource(init: any): boolean;
     rustWsFlightLocal(declaration: any): boolean;
+    /** `this.safeValue(client.futures, k)` on the planned handle with a literal or string-local key: the access and key. */
+    rustWsFlightSafeRead(node: any): {
+        access: any;
+        key: any;
+    } | undefined;
+    /** `x === undefined` / `x !== undefined` on a flight local read through `safeValue`: whether it is the `!==` form. */
+    rustWsFlightNullTestOf(n: any): boolean | undefined;
+    /** The null test of a flight local read through `safeValue`: an absent entry reads as the empty `Flight::default()`. */
+    printWsFlightNullTest(left: any, right: any): string | undefined;
     printWsFlightLocalDeclaration(declaration: any, varName: string, indent: string): string | undefined;
     /** A flight handle stays typed where it is awaited, a statement, or a `Flight` local's initializer; elsewhere it is boxed. */
     rustWsFlightBox(node: any, text: string): string;

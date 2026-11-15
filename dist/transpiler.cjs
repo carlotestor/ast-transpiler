@@ -52603,7 +52603,7 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const nilLocal = this.printRustNilLocalEquality(left, right, op);
     if (nilLocal !== void 0)
       return nilLocal;
-    const bookTest = this.printWsBookNullTest(left, right, op);
+    const bookTest = _nullishCoalesce(this.printWsBookNullTest(left, right, op), () => ( this.printWsFlightNullTest(left, right)));
     if (bookTest !== void 0)
       return bookTest;
     const mapTest = this.printWsCacheMapNullTest(left, right, op);
@@ -74574,7 +74574,7 @@ ${iden}}`;
     if (node === void 0)
       return false;
     if (_is.isCallExpression.call(void 0, node))
-      return _is.isPropertyAccessExpression.call(void 0, node.expression) && _is.isIdentifier.call(void 0, node.expression.expression) && this.rustWsFlightCall(node);
+      return _is.isPropertyAccessExpression.call(void 0, node.expression) && _is.isIdentifier.call(void 0, node.expression.expression) && this.rustWsFlightCall(node) || this.rustWsFlightSafeRead(node) !== void 0;
     if (!_is.isElementAccessExpression.call(void 0, node) || this.isNativeWriteTargetBase(node))
       return false;
     const access = this.rustClientHandleAccess(node.expression);
@@ -74593,16 +74593,61 @@ ${iden}}`;
           const p = n.parent;
           const settle = _is.isPropertyAccessExpression.call(void 0, p) && p.expression === n && _is.isCallExpression.call(void 0, p.parent) && p.parent.expression === p && (p.name.text === "resolve" || p.name.text === "reject");
           uses++;
-          return _optionalChain([p, 'optionalAccess', _10177 => _10177.kind]) === _ast.SyntaxKind.AwaitExpression && p.expression === n || settle;
+          const test = this.rustWsFlightSafeRead(this.unwrapParens(declaration.initializer)) !== void 0 && this.rustWsFlightNullTestOf(n) !== void 0;
+          return _optionalChain([p, 'optionalAccess', _10177 => _10177.kind]) === _ast.SyntaxKind.AwaitExpression && p.expression === n || settle || test;
         }) && uses > 0;
       }
       this.rustWsFlightLocals.set(declaration, known);
     }
     return known;
   }
+  /** `this.safeValue(client.futures, k)` on the planned handle with a literal or string-local key: the access and key. */
+  rustWsFlightSafeRead(node) {
+    if (node === void 0 || !_is.isCallExpression.call(void 0, node) || node.arguments.length !== 2 || !_is.isPropertyAccessExpression.call(void 0, node.expression) || node.expression.expression.kind !== _ast.SyntaxKind.ThisKeyword || String(node.expression.name.text) !== "safeValue" || !this.rustCalleeIsRuntimeBase(node))
+      return void 0;
+    const access = this.rustClientHandleAccess(this.unwrapParens(node.arguments[0]));
+    if (access === void 0 || access.write || access.key !== "futures")
+      return void 0;
+    const key = this.unwrapParens(node.arguments[1]);
+    if (!(_is.isStringLiteral.call(void 0, key) && !(key.text in this.StringLiteralReplacements) || this.rustWsStrKey(key)))
+      return void 0;
+    return { access, key };
+  }
+  /** `x === undefined` / `x !== undefined` on a flight local read through `safeValue`: whether it is the `!==` form. */
+  rustWsFlightNullTestOf(n) {
+    let up = n;
+    while (_is.isParenthesizedExpression.call(void 0, up.parent))
+      up = up.parent;
+    const p = up.parent;
+    if (p === void 0 || !_is.isBinaryExpression.call(void 0, p) || !this.isEqualityOp(p.operatorToken.kind))
+      return void 0;
+    const other = p.left === up ? p.right : p.left;
+    if (!this.rustWsCacheUndefined(other))
+      return void 0;
+    const op = p.operatorToken.kind;
+    return op === _ast.SyntaxKind.ExclamationEqualsToken || op === _ast.SyntaxKind.ExclamationEqualsEqualsToken;
+  }
+  /** The null test of a flight local read through `safeValue`: an absent entry reads as the empty `Flight::default()`. */
+  printWsFlightNullTest(left, right) {
+    const l = this.unwrapParens(left);
+    const r = this.unwrapParens(right);
+    const subject = this.rustWsCacheUndefined(r) ? l : this.rustWsCacheUndefined(l) ? r : void 0;
+    if (subject === void 0 || !_is.isIdentifier.call(void 0, subject))
+      return void 0;
+    const declaration = this.rustDeclarationOfIdentifier(subject);
+    if (declaration === void 0 || !this.rustWsFlightLocal(declaration) || this.rustWsFlightSafeRead(this.unwrapParens(declaration.initializer)) === void 0)
+      return void 0;
+    const ne = this.rustWsFlightNullTestOf(subject);
+    if (ne === void 0)
+      return void 0;
+    return `(${super.printIdentifier(subject)} ${ne ? "!=" : "=="} ${_RustTranspiler.RUST_FLIGHT_TYPE}::default())`;
+  }
   printWsFlightLocalDeclaration(declaration, varName, indent) {
     if (!this.rustWsFlightLocal(declaration))
       return void 0;
+    const read = this.rustWsFlightSafeRead(this.unwrapParens(declaration.initializer));
+    if (read !== void 0)
+      return `${indent}let mut ${varName}: ${_RustTranspiler.RUST_FLIGHT_TYPE} = ${this.rustClientHandleReceiver(read.access.plan, false)}.get_future(${this.rustWsKeyText(read.key)})`;
     return `${indent}let mut ${varName}: ${_RustTranspiler.RUST_FLIGHT_TYPE} = ${this.printNode(declaration.initializer, 0).trim()}`;
   }
   /** A flight handle stays typed where it is awaited, a statement, or a `Flight` local's initializer; elsewhere it is boxed. */
