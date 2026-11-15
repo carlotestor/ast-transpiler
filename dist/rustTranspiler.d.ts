@@ -953,6 +953,24 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  already accepted with its own form (box / native / arg). */
     rustScalarFeedsElementWrite(n: any, write: any): boolean;
     rustScalarCounterCond(node: any, name: string): string | undefined;
+    /** ral-56n: `j < n` where `n` is a parseToInt `Option<i64>` local (the oint kind already decided) and `j` a `Value::Int`
+     *  counter of this very for-condition: `is_less_than(Int(j), n)` is the `as f64` compare of `Some`, false on `None`. */
+    rust56nDecidedOintBound(cond: any, n: any): boolean;
+    /** ral-56n: `const b = Math.ceil (x / y)` (whole initializer). */
+    rust56nCeilDivConst(d: any): boolean;
+    /** ral-56n: an ordered compare (not equality) of a `for` `Value::Int` counter (int-literal start, `++` / `--` its only write)
+     *  and a `Math.ceil` division const: the two operands, else undefined. */
+    rust56nCeilCounterCompare(node: any): {
+        counter: any;
+        bound: any;
+    } | undefined;
+    /** ral-56n: `is_less_than` & co. compare both `as_f64` payloads, false for a `Null` side: the `Some` payload against the
+     *  counter's f64 (`(i as f64)` for an `i64`, `i.as_f64().unwrap_or(NAN)` for the `Value::Int` counter). */
+    rust56nCeilCompareText(node: any, ceil: {
+        counter: any;
+        bound: any;
+    }, counterText: string): string;
+    print56nCeilCompare(node: any): string | undefined;
     rustScalarCounterPlan(node: any, name: string): {
         cond: string;
     } | undefined;
@@ -1280,6 +1298,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** ral-50e: a local read only as base `safeDict` keys (its `any` checker type comes from an `any` operand such as
      *  `response.length`): an `i64` the printer proved passes there as the Int its box held, so the checker's `any` is moot. */
     rustSafeDictKeyOnlyLocal(declaration: any): boolean;
+    /** ral-56n: every read of the local is a bound (argument 0 / 1) of a loose `Value` slice (rust44bValueRecvSliceBound), where
+     *  an `i64` reads as the `Int` box the helper's looseI64 match took (paradex pro sbeReadAddress `next = i + 1`). */
+    rust56nSliceBoundOnlyLocal(declaration: any): boolean;
+    /** ral-56n: a loop counter read as a bound of a loose `Value` slice (the typed bound text is `i` / `Some(i)`). */
+    rust56nCounterSliceBound(n: any): boolean;
+    /** ral-56n: `x = i` as a whole statement into another local (boxed `Value::Int(i)` or the bare i64 of an int local). */
+    rust56nCounterPlainCopy(n: any): boolean;
     /** ral-51e: `+` / `-` over int literals, `i64` scalar locals and the counter of an enclosing `for (let j = <int>; j < <i64 local>; j++)`
      *  whose body never writes it (the counter the loop prints as an `i64`; while the scope solves it is not registered yet). */
     rustCounterArithInit(expr: any, declaration: any): boolean;
@@ -1391,6 +1416,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     rustScalarLengthRecv(node: any, params?: boolean): any;
     /** Non-optional numeric operand kind (`int|num`), optional (`oint|onum`), or undefined. */
     rustScalarNumericKind(node: any): string | undefined;
+    /** ral-56n: `node` (parentheses skipped) is the one argument of `Math.ceil (..)`. */
+    rust56nCeilDivisionArg(node: any): boolean;
     /** 51k: `a % b` over int literals / `int` / `oint` locals with a non-literal divisor (a parseToInt answer, a const int):
      *  an `Option<i64>` (`mod_val` answers `Int(a % b)`, `Null` for a zero or `Null` operand). */
     rust51kLitModKind(node: any): string | undefined;
