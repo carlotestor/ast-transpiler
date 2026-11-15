@@ -76508,24 +76508,24 @@ ${iden}}`;
     const file = declaration.getSourceFile();
     if (!/ts[\\/]src[\\/]pro[\\/]/.test(String(file.fileName)))
       return false;
-    const idCall = (e) => {
+    const idCall = (e, depth = 0) => {
       let x = this.rustStripWrappers(e);
       if (x !== void 0 && isCallExpression6(x) && x.arguments.length === 0 && isPropertyAccessExpression3(x.expression) && String(x.expression.name.text) === "toString")
         x = this.rustStripWrappers(x.expression.expression);
-      if (x === void 0 || !isCallExpression6(x) || x.arguments.length !== 0 || !isPropertyAccessExpression3(x.expression) || x.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(x.expression.name.text) !== "requestId")
+      if (x !== void 0 && isIdentifier3(x) && depth < 3) {
+        const d = this.rustDeclarationOfIdentifier(x);
+        return d !== void 0 && isVariableDeclaration3(d) && !!(d.parent?.flags & NodeFlags4.Const) && idCall(d.initializer, depth + 1);
+      }
+      if (x === void 0 || !isCallExpression6(x) || !isPropertyAccessExpression3(x.expression) || x.expression.expression.kind !== SyntaxKind7.ThisKeyword || String(x.expression.name.text) !== "requestId")
         return false;
       const callee = this.rustScalarCallee(x);
       const ret = callee?.type !== void 0 ? String(callee.type.getText?.() ?? "") : "";
       return ret === "int" || ret === "number" || ret === "Int";
     };
-    const value = (e) => {
-      if (idCall(e))
-        return true;
-      const v = this.rustStripWrappers(e);
-      if (v === void 0 || !isIdentifier3(v))
-        return false;
-      const d = this.rustDeclarationOfIdentifier(v);
-      return d !== void 0 && isVariableDeclaration3(d) && !!(d.parent?.flags & NodeFlags4.Const) && idCall(d.initializer);
+    const value = (e) => idCall(e);
+    const structure = (n) => {
+      const m = findAncestor(n, isFunctionLike);
+      return m !== void 0 && isMethodDeclaration5(m) && isIdentifier3(m.name) && /^parse[A-Z]/.test(String(m.name.text)) && !this.isAsyncFunction(m) && findAncestor(m.parent, isFunctionLike) === void 0;
     };
     let writes = 0;
     let ok = true;
@@ -76535,7 +76535,7 @@ ${iden}}`;
       if (n.kind === SyntaxKind7.PropertyAssignment && (isStringLiteralLikeNode4(n.name) || isIdentifier3(n.name)) && String(n.name.text) === key) {
         if (value(n.initializer))
           writes++;
-        else
+        else if (!structure(n))
           ok = false;
         return;
       }
@@ -76545,6 +76545,8 @@ ${iden}}`;
           ok = false;
       }
       if (n.kind === SyntaxKind7.ComputedPropertyName)
+        ok = false;
+      if (n.kind === SyntaxKind7.ShorthandPropertyAssignment && String(n.name.text) === key && !structure(n))
         ok = false;
     });
     return ok && writes > 0;
@@ -77330,9 +77332,43 @@ ${iden}}`;
         continue;
       if (this.rustWsFoundRefine && isCallExpression6(p) && p.arguments.indexOf(r) >= 0 && this.rustWsListArgParamReadOnly(p, p.arguments.indexOf(r)))
         continue;
+      if (this.rustWsFoundRefine && this.rustWsListAliasReadOnly(r, scope, 0))
+        continue;
       return void 0;
     }
     return hashes;
+  }
+  /** ral-56h: `x = r` / `let x = r` in `scope` where x is a local of that method whose every other use is a rebinding
+   *  (`x = ..`), a hash-list argument of `this.watch|watchMultiple`, `x.length`, a plain element read or another such copy:
+   *  the copy never grows or rewrites the list r names. */
+  rustWsListAliasReadOnly(r, scope, depth) {
+    const p = r.parent;
+    let target;
+    if (isBinaryExpression5(p) && p.operatorToken.kind === SyntaxKind7.EqualsToken && p.right === r && isIdentifier3(p.left) && p.parent?.kind === SyntaxKind7.ExpressionStatement)
+      target = this.rustDeclarationOfIdentifier(p.left);
+    else if (isVariableDeclaration3(p) && p.initializer === r && isIdentifier3(p.name))
+      target = p;
+    if (depth > 3 || target === void 0 || !isVariableDeclaration3(target) || !isIdentifier3(target.name) || findAncestor(target, isFunctionLike) !== scope)
+      return false;
+    for (const n of this.rustScopeNameNodes(scope, String(target.name.text))) {
+      if (!isIdentifier3(n) || n === target.name || isPropertyAccessExpression3(n.parent) && n.parent.name === n)
+        continue;
+      if (this.rustDeclarationOfIdentifier(n) !== target)
+        return false;
+      const up = n.parent;
+      if (isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.EqualsToken && up.left === n && up.parent?.kind === SyntaxKind7.ExpressionStatement)
+        continue;
+      if (isPropertyAccessExpression3(up) && up.expression === n && String(up.name.text) === "length" && !this.isNativeWriteTargetBase(up))
+        continue;
+      if (isElementAccessExpression4(up) && up.expression === n && !this.isNativeWriteTargetBase(up) && !isDeleteExpression2(up.parent))
+        continue;
+      if (isCallExpression6(up) && up.arguments.indexOf(n) >= 1 && isPropertyAccessExpression3(up.expression) && up.expression.expression.kind === SyntaxKind7.ThisKeyword && (String(up.expression.name.text) === "watchMultiple" || String(up.expression.name.text) === "watch") && _RustTranspiler.RUST_BASE_TIER_FILE.test(String(this.rustScalarCallee(up)?.getSourceFile?.()?.fileName ?? "")))
+        continue;
+      if (this.rustWsListAliasReadOnly(n, scope, depth + 1))
+        continue;
+      return false;
+    }
+    return true;
   }
   /** `this.F` for a base field declared `Dictionary<WsOrderBook>`. */
   rustWsBookMapField(node) {
