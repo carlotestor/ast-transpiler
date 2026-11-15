@@ -27461,7 +27461,8 @@ export class RustTranspiler extends BaseTranspiler {
                 if (plus && !this.rustNilOptStrConcatUse(n)) return false;
                 const form = plus ? 'concat' : this.rustScalarUseForm(n, 'ostr');
                 this.rustScalarUseForms.set(n, form);
-                if (form === undefined || form === 'err' || form === 'key' || form === 'okey' || form === 'targ' || form === 'kin') return false;
+                // ral-53f: a ws `watch` url / hash / message-hash slot reads the string slot in place (`x.as_deref()`)
+                if (form === undefined || form === 'err' || form === 'key' || form === 'okey' || (form === 'targ' && !this.rustWsKeyUse(n)) || form === 'kin') return false;
                 const push: any = findAncestor(n, (m: any) => isStatement(m) || (isCallExpression(m) && isPropertyAccessExpression(m.expression) && m.expression.name.text === 'push'));
                 if (push !== undefined && isCallExpression(push)) return false;
                 if ((form === 'box' || form === 'xbox') && !this.rustSlotUseOutsideLoop(n, element)) return false;
@@ -27475,7 +27476,8 @@ export class RustTranspiler extends BaseTranspiler {
                 // a box feeding another local's write or initializer would make that local's own typing depend on this slot
                 const feeds: any = findAncestor(n, (m: any) => isStatement(m) || (isBinaryExpression(m) && m.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(m.left)) || isVariableDeclaration(m));
                 // 42i: an element of an array literal is boxed into that list on its own, whatever the target's type
-                if (feeds !== undefined && !isStatement(feeds) && (form === 'box' || form === 'xbox') && !this.rustStrSlotListElement(n)) return false;
+                if (feeds !== undefined && !isStatement(feeds) && (form === 'box' || form === 'xbox') && !this.rustStrSlotListElement(n)
+                    && !this.rustStrSlotBoxIsNotValueOf(n, feeds)) return false;
                 if (RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form) || form === 'write') nativeUses++;
                 else if ((form === 'box' || form === 'xbox') && !(isReturnStatement(n.parent) || this.rustLocalLastUse(n, element))) copies++;
                 return true;
@@ -27529,6 +27531,22 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustEnclosingFunction(declaration) !== this.rustEnclosingFunction(ternary)) return false;
         const kind = this.rustScalarDecisions.get(declaration);
         return (kind === 'str' || kind === 'ostr') && this.rustLocalLastUse(other, declaration) && this.rustSlotUseOutsideLoop(other, declaration);
+    }
+
+    /** ral-53f: a box that is a call argument or an object-literal value below another local's initializer / write
+     *  (`safeDict (this.options, type, {})`, `extend ({ 'type': type }, ..)`), never that local's value itself (not reached
+     *  through parentheses, ternary arms or `||` / `&&` / `??` operands only): the target's typing does not read the slot. */
+    rustStrSlotBoxIsNotValueOf(n: any, feeds: any): boolean {
+        let top: any = n;
+        for (;;) {
+            const up: any = top.parent;
+            if (up === undefined || up === feeds) return false;
+            if (isParenthesizedExpression(up) || (isConditionalExpression(up) && up.condition !== top)
+                || (isBinaryExpression(up) && [SyntaxKind.BarBarToken, SyntaxKind.AmpersandAmpersandToken, SyntaxKind.QuestionQuestionToken].includes(up.operatorToken.kind))) { top = up; continue; }
+            if (isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.EqualsToken) return false;
+            return (isCallExpression(up) && up.arguments.includes(top))
+                || (up.kind === SyntaxKind.PropertyAssignment && up.initializer === top);
+        }
     }
 
     /** pb: a checker-string slot of a native tuple in a method, read whole as the initializer or the statement write of

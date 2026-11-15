@@ -17930,3 +17930,52 @@ describe('ral-52f: an inline handle*AndParams [0] read of a string slot is a str
         expect(output).toMatch(/let mut marketType: Option<String> = /);
     });
 });
+
+describe('ral-53f: a string tuple slot boxed only as a call argument / object value inside another local\'s initializer stays a string local', () => {
+    const src =
+        'class E {\n' +
+        '    options: any = {};\n' +
+        '    safeDict(d: any, k: any, dflt: any = undefined): any { return d; }\n' +
+        '    hold(x: any): any { return x; }\n' +
+        '    resolveAuthType(methodName: string, params: any = {}): [string, string, any] { return [methodName, undefined, params]; }\n' +
+        '    run(params: any) {\n' +
+        "        const [ type, subType, paramsValue ] = this.resolveAuthType ('watchBalance', params);\n" +
+        "        const optionsType = this.safeDict (this.options, type, {});\n" +
+        "        if (type === 'spot') {\n" +
+        "            return this.hold (optionsType);\n" +
+        '        }\n' +
+        "        return this.hold ([ subType, paramsValue ]);\n" +
+        '    }\n' +
+        '}';
+    test('types slot 0 Option<String> and reads it in the reader argument', () => {
+        const output = transpiler.transpileRust(src).content;
+        expect(output).not.toMatch(/let mut type_var: Value/);
+        expect(output).toMatch(/let mut type_var: Option<String> = /);
+    });
+    test('a box that is the other local\'s whole value still keeps the slot Value', () => {
+        const output = transpiler.transpileRust(src.replace("this.safeDict (this.options, type, {})", "(type || 'x')")).content;
+        expect(output).toMatch(/let mut type_var: Value/);
+    });
+    test('binance pro watchBalance: urlType = type, a ws watch message-hash argument, both Option<String>', () => {
+        const ws =
+            'import Exchange from "./base/Exchange";\n' +
+            'class E extends Exchange {\n' +
+            '    resolveAuthType(methodName: string, params: any = {}): [string, string, any] { return [methodName, undefined, params]; }\n' +
+            '    getPrivateWsUrl (type: Str, listenKey: Str): string { return type + listenKey; }\n' +
+            '    async run(params: any) {\n' +
+            "        const [ type, subType, paramsValue ] = this.resolveAuthType ('watchBalance', params);\n" +
+            "        let urlType = type;\n" +
+            "        if (subType === 'x') {\n" +
+            "            urlType = 'papi';\n" +
+            '        }\n' +
+            "        const optionsType = this.safeDict (this.options, type, {});\n" +
+            "        const url = this.getPrivateWsUrl (urlType, this.safeString (optionsType, 'listenKey'));\n" +
+            "        const messageHash = 'balance';\n" +
+            "        return await this.watch (url, messageHash, undefined, type);\n" +
+            '    }\n' +
+            '}';
+        const output = transpiler.transpileRust(ws).content;
+        expect(output).toMatch(/let mut type_var: Option<String> = /);
+        expect(output).toMatch(/let mut urlType: Option<String> = /);
+    });
+});
