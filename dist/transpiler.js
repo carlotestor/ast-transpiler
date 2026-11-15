@@ -58908,9 +58908,14 @@ ${binding(plan.indent)}` : ""), head: "" };
     if (wrapped !== n && isBinaryExpression5(up) && up.operatorToken.kind === SyntaxKind7.InKeyword && up.left === wrapped) {
       return this.rustFieldKeyReceiver(this.rustStripWrappers(up.right)) !== void 0 ? "fin" : void 0;
     }
-    if (!isElementAccessExpression4(up) || up.argumentExpression !== wrapped || this.rustFieldKeyReceiver(up.expression) === void 0)
+    if (!isElementAccessExpression4(up) || up.argumentExpression !== wrapped)
       return void 0;
     const write = up.parent;
+    if (this.rustFieldKeyReceiver(up.expression) === void 0) {
+      if (!this.rustDictShapedFieldInsert(up.expression) || !isBinaryExpression5(write) || write.left !== up || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement || new RegExp(`\\b${String(n.text)}\\b`).test(String(write.right.getText())))
+        return void 0;
+      return "key";
+    }
     if (this.rustOkeyReadUse(wrapped))
       return "frd";
     if (!isBinaryExpression5(write) || write.left !== up || write.operatorToken.kind !== SyntaxKind7.EqualsToken || write.parent?.kind !== SyntaxKind7.ExpressionStatement)

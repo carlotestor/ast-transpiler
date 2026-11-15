@@ -7546,8 +7546,16 @@ export class RustTranspiler extends BaseTranspiler {
         if (wrapped !== n && isBinaryExpression(up) && up.operatorToken.kind === SyntaxKind.InKeyword && up.left === wrapped) {
             return this.rustFieldKeyReceiver(this.rustStripWrappers(up.right)) !== undefined ? 'fin' : undefined;
         }
-        if (!isElementAccessExpression(up) || up.argumentExpression !== wrapped || this.rustFieldKeyReceiver(up.expression) === undefined) return undefined;
+        if (!isElementAccessExpression(up) || up.argumentExpression !== wrapped) return undefined;
         const write: any = up.parent;
+        // ral-46b: a checker dict-shaped field (`fundingRates: Dictionary<FundingRate>`) takes the same native insert
+        // (rustDictShapedFieldInsert: `if let Value::Dict(__d) = &mut self.f { .. insert(<key text>, ..) }`), so a typed key
+        // is a plain insert key there; its reads and `in` tests keep the boxed key
+        if (this.rustFieldKeyReceiver(up.expression) === undefined) {
+            if (!this.rustDictShapedFieldInsert(up.expression) || !isBinaryExpression(write) || write.left !== up || write.operatorToken.kind !== SyntaxKind.EqualsToken
+                || write.parent?.kind !== SyntaxKind.ExpressionStatement || new RegExp(`\\b${String(n.text)}\\b`).test(String(write.right.getText()))) return undefined;
+            return 'key';
+        }
         if (this.rustOkeyReadUse(wrapped)) return 'frd';
         if (!isBinaryExpression(write) || write.left !== up || write.operatorToken.kind !== SyntaxKind.EqualsToken
             || write.parent?.kind !== SyntaxKind.ExpressionStatement) return undefined;
