@@ -71475,7 +71475,10 @@ ${iden}}`;
       return false;
     if (!this.rustValueKeyType(key))
       return false;
-    return this.rustScalarLocalOf(key) === void 0 && this.rustNilLocalKind(keyDecl) === void 0 && !this.rustWsUrlLocal(keyDecl) && this.rustBorrowedLocalKind(keyDecl) === void 0 && !this.rustLentListLocal(keyDecl);
+    const keyScalar = this.rustScalarLocalOf(key);
+    if ((keyScalar?.kind === "int" || keyScalar?.kind === "oint") && this.rust53eElemReadKey(key))
+      return true;
+    return keyScalar === void 0 && this.rustNilLocalKind(keyDecl) === void 0 && !this.rustWsUrlLocal(keyDecl) && this.rustBorrowedLocalKind(keyDecl) === void 0 && !this.rustLentListLocal(keyDecl);
   }
   /** A plain map literal (outside the test tier): every `x = ..` write must be `x = this.extend (x, y)`; the
    *  existing borrowed-dict use rules decide the rest. The `IndexMap` bearer rule claims its locals first. */

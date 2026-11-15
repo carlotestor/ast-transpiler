@@ -20236,7 +20236,10 @@ export class RustTranspiler extends BaseTranspiler {
         }
         if (keyDecl === undefined || !isVariableDeclaration(keyDecl) || !isIdentifier(keyDecl.name) || keyDecl.name === key) return false;
         if (!this.rustValueKeyType(key)) return false;
-        return this.rustScalarLocalOf(key) === undefined && this.rustNilLocalKind(keyDecl) === undefined && !this.rustWsUrlLocal(keyDecl)
+        // ral-53e: an int / Option<i64> local boxed at this key (`Value::from(k)`) keys the read as the Value local did
+        const keyScalar = this.rustScalarLocalOf(key);
+        if ((keyScalar?.kind === 'int' || keyScalar?.kind === 'oint') && this.rust53eElemReadKey(key)) return true;
+        return keyScalar === undefined && this.rustNilLocalKind(keyDecl) === undefined && !this.rustWsUrlLocal(keyDecl)
             && this.rustBorrowedLocalKind(keyDecl) === undefined && !this.rustLentListLocal(keyDecl);
     }
 
