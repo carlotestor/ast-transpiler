@@ -17126,23 +17126,24 @@ describe('ral-47c: a built list local named after its own method', () => {
 });
 
 describe('ral-48c prediction outcome accessors', () => {
-    test('outcome / safeOutcome / loadOutcome print Option<Market> and callers lend the record', () => {
+    test('loadOutcome prints Option<Market> (ral-49c: outcome / safeOutcome stay Value) and callers lend the record', () => {
         const dir = path.join (rustFixtureRoot, 'typed-outcome-accessors');
         fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
-        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseTicker (ticker: Dict, market: Market = undefined): Dict {\n        return this.safeValue (market, 'symbol') ? ticker : ticker;\n    }\n}\n");
-        fs.writeFileSync (path.join (dir, 'ts/src/base/PredictionExchange.ts'), "import Exchange from './Exchange.js';\nimport type { Dict, Market, MarketInterface, Str } from './Exchange.js';\nexport interface PredictionOutcomeHandle extends MarketInterface { outcome?: Str; }\nexport interface PredictionOutcomeMarket extends PredictionOutcomeHandle { outcome: string; }\nexport default class PredictionExchange extends Exchange {\n    outcomes: Dict = undefined;\n    outcome (outcomeSymbol: Str): PredictionOutcomeMarket {\n        return this.safeValue (this.outcomes, outcomeSymbol);\n    }\n    safeOutcome (outcomeIdOrSymbol: Str, market: Market = undefined): PredictionOutcomeHandle {\n        if (market !== undefined) {\n            return market;\n        }\n        return this.safeValue (this.outcomes, outcomeIdOrSymbol);\n    }\n    async loadOutcome (outcomeSymbol: Str, reload = false): Promise<PredictionOutcomeHandle> {\n        return this.safeOutcome (outcomeSymbol);\n    }\n    async fetchTicker (outcome: string, params: Dict = {}): Promise<Dict> {\n        await this.loadOutcome (outcome);\n        const outcomeObj = await this.loadOutcome (outcome);\n        const id = this.safeString (outcomeObj, 'outcomeId');\n        const other = this.outcome (outcome) as any;\n        return this.parseTicker ({ 'id': id, 'o': this.safeString (other, 'id') }, outcomeObj as any);\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), "export interface Dict { [key: string]: any }\nexport type Str = string | undefined;\nexport interface MarketInterface { symbol: string; [key: string]: any }\nexport type Market = MarketInterface | undefined;\nexport default class Exchange {\n    safeValue (o: any, k: any, d: any = undefined): any { return o; }\n    safeString (o: any, k: any, d: Str = undefined): Str { return o; }\n    hold (x: any): any { return x; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseTicker (ticker: Dict, market: Market = undefined): Dict {\n        return this.safeValue (market, 'symbol') ? ticker : ticker;\n    }\n}\n");
+        fs.writeFileSync (path.join (dir, 'ts/src/base/PredictionExchange.ts'), "import Exchange from './Exchange.js';\nimport type { Dict, Market, MarketInterface, Str } from './Exchange.js';\nexport interface PredictionOutcomeHandle extends MarketInterface { outcome?: Str; }\nexport interface PredictionOutcomeMarket extends PredictionOutcomeHandle { outcome: string; }\nexport default class PredictionExchange extends Exchange {\n    outcomes: Dict = undefined;\n    outcome (outcomeSymbol: Str): PredictionOutcomeMarket {\n        return this.safeValue (this.outcomes, outcomeSymbol);\n    }\n    safeOutcome (outcomeIdOrSymbol: Str, market: Market = undefined): PredictionOutcomeHandle {\n        if (market !== undefined) {\n            return market;\n        }\n        return this.safeValue (this.outcomes, outcomeIdOrSymbol);\n    }\n    async loadOutcome (outcomeSymbol: Str, reload = false): Promise<PredictionOutcomeHandle> {\n        return this.safeOutcome (outcomeSymbol);\n    }\n    async fetchTicker (outcome: string, params: Dict = {}): Promise<Dict> {\n        await this.loadOutcome (outcome);\n        const outcomeObj = await this.loadOutcome (outcome);\n        const id = this.safeString (outcomeObj, 'outcomeId');\n        const other = this.outcome (outcome) as any;\n        this.hold (outcomeObj as any);\n        return this.parseTicker ({ 'id': id, 'o': this.safeString (other, 'id') }, outcomeObj as any);\n    }\n}\n");
         const typed = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
         const out = typed.transpileRustByPath (path.join (dir, 'ts/src/base/PredictionExchange.ts')).content;
-        expect(out).toMatch(/fn outcome\(&self, (?:mut )?outcomeSymbol: Value\) -> Option<crate::types::Market>/);
-        expect(out).toContain('market: Option<&crate::types::Market>) -> Option<crate::types::Market>');
-        expect(out).toContain('return market.cloned();');
+        // ral-49c: `outcome` / `safeOutcome` keep their `Value` answer (handed back whole by `Promise<any>` / `any` callers)
+        expect(out).toMatch(/fn outcome\(&self, (?:mut )?outcomeSymbol: Value\) -> Value/);
+        expect(out).toMatch(/market: Option<&crate::types::Market>\) -> Value/);
         expect(out).toMatch(/fn loadOutcome\([^\n]*-> Option<crate::types::Market>/);
-        // a nested `Option<Market>` answer is handed on as is
-        expect(out).toContain('return self.safeOutcome(outcomeSymbol, None);');
+        expect(out).toContain('FromRaw>::from_raw(self.safeOutcome(outcomeSymbol, None))');
         // a discarded warm-up stays unboxed, the local is the typed record lent to the market slot
         expect(out).toMatch(/\n\s*self\.loadOutcome\(outcome\.clone\(\), &\[\]\)\.await;/);
         expect(out).toContain('let mut outcomeObj: Option<crate::types::Market> = self.loadOutcome(outcome.clone(), &[]).await;');
-        expect(out).toContain('let mut other: Option<crate::types::Market> = self.outcome(');
+        expect(out).not.toContain('let mut other: Option<crate::types::Market>');
+        // ral-49c: `x as any` handed whole to a `Value` slot boxes the record's raw (no decode back to Value)
+        expect(out).toContain('self.hold(crate::Value::from(outcomeObj.as_ref()))');
         expect(out).toContain('outcomeObj.as_ref())');
         expect(out).not.toContain('FromRaw>::from_raw(outcomeObj');
     });

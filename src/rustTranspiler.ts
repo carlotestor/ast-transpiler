@@ -11872,6 +11872,13 @@ export class RustTranspiler extends BaseTranspiler {
         return call.arguments.length === 3 && def !== undefined && isStringLiteralLikeNode(def) && String(def.text) === '';
     }
 
+    /** ral-49c: `m as any` (in parentheses or not) as a call argument: the same whole-value hand-off of `m`. */
+    rustMarketValueUseThroughCast(n: any): boolean {
+        let top: any = n;
+        while (top.parent !== undefined && (isAsExpression(top.parent) || isParenthesizedExpression(top.parent))) top = top.parent;
+        return top !== n && isCallExpression(top.parent) && top.parent.expression !== top && Array.from(top.parent.arguments).includes(top);
+    }
+
     /** A whole-value hand-off: a call argument, an array element, a dict value or a returned value. */
     rustMarketValueUse(n: any): boolean {
         const parent: any = n.parent;
@@ -12012,7 +12019,7 @@ export class RustTranspiler extends BaseTranspiler {
             if (empty && this.rustOptMarketKeyRead(n)) return true;
             // a lent market slot takes `m.as_ref()`: not a `Value` hand-off
             if (empty && this.rustMarketSlotUse(n)) return true;
-            if (empty) return this.rustIsNullTestOf(n) || this.rustMarketValueUse(n);
+            if (empty) return this.rustIsNullTestOf(n) || this.rustMarketValueUse(n) || this.rustMarketValueUseThroughCast(n);
             // `this.market (x)` throws on an unknown symbol: a null test of its struct is constant
             if (this.rustIsNullTestOf(n) && this.rustNullTestIsCondition(n)) return true;
             const key = this.rustMarketReadKey(n);
@@ -12482,7 +12489,10 @@ export class RustTranspiler extends BaseTranspiler {
     // ral-48c: the prediction outcome accessors hand back a market-shaped record (a cached outcome token, the fallback
     // market or an identity stub) or nothing: `Option<crate::types::Market>`, so callers lend `.as_ref()` without `from_raw`.
     private static readonly RUST_OPT_OUTCOME_RETURNS: Record<string, string> = {
-        'outcome': 'PredictionOutcomeMarket', 'safeOutcome': 'PredictionOutcomeHandle', 'loadOutcome': 'PredictionOutcomeHandle',
+        // ral-49c: only `loadOutcome`. `outcome` / `safeOutcome` stay `Value`: their answers are handed back whole by the
+        // async-virtual `fetchOutcome` overrides (a `Value` return the dispatch preamble forwards), the kalshi `{}`
+        // ternaries and predictfun `outcomeForToken`, which would box the decoded record straight back.
+        'loadOutcome': 'PredictionOutcomeHandle',
     };
 
     /** ral-48c: `outcome` / `safeOutcome` / `loadOutcome` of the prediction base class, declared with the outcome record. */
@@ -12964,7 +12974,7 @@ export class RustTranspiler extends BaseTranspiler {
         if (this.rustCallLocalOf(node) !== undefined) {
             return this.rustMarketValueUse(node) ? `crate::types::IntoRaw::into_raw(${super.printIdentifier(node)}.clone())` : super.printIdentifier(node);
         }
-        if (this.rustOptMarketLocalOf(node) !== undefined && this.rustMarketValueUse(node)) {
+        if (this.rustOptMarketLocalOf(node) !== undefined && (this.rustMarketValueUse(node) || (this.rustMarketValueUseThroughCast(node) && !this.rustMarketSlotUse(node)))) {
             // the stored record's `raw` (an `Arc` bump), never a struct copy
             return `crate::Value::from(${super.printIdentifier(node)}.as_ref())`;
         }
