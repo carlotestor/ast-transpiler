@@ -18423,7 +18423,9 @@ export class RustTranspiler extends BaseTranspiler {
         // ral-40h: an alias takes the plain container only (an optional one would copy at the box)
         if (aliasBoxes > 0 && (optional || reads === 0 && aliasBoxes === boxedElementUses.length)) return undefined;
         if (lentResponses > 0 && optional && !this.rustLentOptionalOk(declaration, name, fn, init, from)) return undefined;
-        if (extendHeads > 0 && (optional || from !== 'dict' && from !== 'api')) return undefined;
+        // ral-43c: an optional map is an extend head too (`impl ExtendHead for Option<Dict>` / `&Option<Dict>`: `None` merges
+        // onto an empty map, exactly as the boxed Null did); an endpoint answer stays on the plain form
+        if (extendHeads > 0 && (optional ? from !== 'dict' : from !== 'dict' && from !== 'api')) return undefined;
         if (optional && boxedElementUses.length > 0 && (this.rustWsFieldRead(init) !== undefined || defaultedBoxes > 0)) return undefined;
         if (endpointBoxes > 0 && endpointBoxes !== boxedElementUses.length) return undefined;
         // a nullable reader result boxed whole keeps Null apart from the map: only the optional form prints that box
@@ -23987,6 +23989,9 @@ export class RustTranspiler extends BaseTranspiler {
         if (declaration === undefined || declaration === node || declaration.name === node) return undefined;
         const shared = this.rustUntilHeadSlot(declaration) || this.rustHandedDictLocal(declaration)
             || (this.rustBorrowedLocalKind(declaration) === 'dict' && !this.rustOptContainerLocals.has(declaration));
+        // ral-43c: an `Option<Dict>` local is lent (`&x`) or moved at its last use (`impl ExtendHead for Option<Dict>`)
+        const optHead = !shared && this.rustBorrowedLocalKind(declaration) === 'dict' && this.rustOptContainerLocals.has(declaration) && this.rustPrintedOptional.has(declaration);
+        if (optHead) return this.rustLocalLastUse(node, declaration) ? RustTranspiler.rustLentMark(text) : `&${text}`;
         if (!shared) return undefined;
         // a literal shared map moves into the head at its last use or when the statement writes the result back
         if (this.rustExtendReuseLocals.has(declaration) && (this.rustSelfExtendHead(node, declaration) || this.rustLocalLastUse(node, declaration))) return RustTranspiler.rustLentMark(text);

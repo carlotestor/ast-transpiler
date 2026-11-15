@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-MEKZ6QY3.js";
+} from "./chunk-O5MZOAMZ.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -69560,7 +69560,7 @@ ${iden}}`;
       return void 0;
     if (lentResponses > 0 && optional && !this.rustLentOptionalOk(declaration, name, fn, init, from))
       return void 0;
-    if (extendHeads > 0 && (optional || from !== "dict" && from !== "api"))
+    if (extendHeads > 0 && (optional ? from !== "dict" : from !== "dict" && from !== "api"))
       return void 0;
     if (optional && boxedElementUses.length > 0 && (this.rustWsFieldRead(init) !== void 0 || defaultedBoxes > 0))
       return void 0;
@@ -75481,6 +75481,9 @@ ${iden}}`;
     if (declaration === void 0 || declaration === node || declaration.name === node)
       return void 0;
     const shared = this.rustUntilHeadSlot(declaration) || this.rustHandedDictLocal(declaration) || this.rustBorrowedLocalKind(declaration) === "dict" && !this.rustOptContainerLocals.has(declaration);
+    const optHead = !shared && this.rustBorrowedLocalKind(declaration) === "dict" && this.rustOptContainerLocals.has(declaration) && this.rustPrintedOptional.has(declaration);
+    if (optHead)
+      return this.rustLocalLastUse(node, declaration) ? _RustTranspiler.rustLentMark(text) : `&${text}`;
     if (!shared)
       return void 0;
     if (this.rustExtendReuseLocals.has(declaration) && (this.rustSelfExtendHead(node, declaration) || this.rustLocalLastUse(node, declaration)))

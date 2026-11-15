@@ -15574,3 +15574,30 @@ describe('ral-41g: a borrowed string element decides its own uses only (a same-n
         expect((out.match(/let mut key: Option<&str> = keys\.get\(i as usize\)\.and_then\(Value::as_str\);/g) ?? []).length).toBe(1);
     });
 });
+
+describe('ral-43c: an Option<Dict> local as the extend head', () => {
+    const base = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    extend (...args: any[]): any { return Object.assign ({}, ...args); }\n    safeDict (o: any, k: any, d: Dict = undefined): Dict | undefined { return o; }\n    safeString (o: any, k: any, d: string = undefined): string | undefined { return o; }\n    hold (x: any): any { return x; }\n}\n";
+    const venue = "import Exchange from './base/Exchange.js';\nimport type { Dict } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    tested (byCode: Dict, code: string) {\n        const cur = this.safeDict (byCode, code);\n        if (cur === undefined) {\n            return this.hold (code);\n        }\n        return this.hold (this.extend (cur, { 'code': code }));\n    }\n    lentTwice (byCode: Dict, code: string) {\n        const two = this.safeDict (byCode, code);\n        if (two === undefined) {\n            return this.hold (code);\n        }\n        const a = this.extend (two, { 'a': 1 });\n        const b = this.extend (two, { 'b': 2 });\n        return this.hold ([ a, b ]);\n    }\n    aliased (rows: any, i: number) {\n        const raw = this.safeDict (rows, i);\n        const id = this.safeString (raw, 'id');\n        let out = raw;\n        if (id !== undefined) {\n            out = this.extend (raw, { 'x': id });\n        }\n        return this.hold (out);\n    }\n}\n";
+    const out = () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'astfx-43c-'));
+        fs.mkdirSync(path.join(root, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync(path.join(root, 'ts/src/venue.ts'), venue);
+        const t = new Transpiler({ 'verbose': false, 'rust': { 'parser': { 'NUM_LINES_END_FILE': 0 } } });
+        try { return t.transpileRustByPath(path.join(root, 'ts/src/venue.ts')).content; } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    test('a null-tested no-default safeDict local merged as the extend head is Option<Dict>, moved at its last use and lent before', () => {
+        const text = out();
+        const t1 = text.slice(text.indexOf('fn tested'), text.indexOf('fn lentTwice'));
+        expect(t1).toContain('let mut cur: Option<crate::value::Dict> =');
+        expect(t1).toContain('self.extend(cur, ');
+        expect(t1).not.toContain('cur.clone()');
+        const t2 = text.slice(text.indexOf('fn lentTwice'), text.indexOf('fn aliased'));
+        expect(t2).toContain('let mut two: Option<crate::value::Dict> =');
+        expect(t2).toContain('self.extend(&two, ');
+        expect(t2).toContain('self.extend(two, ');
+        // negative: an alias of the row (latoken rawCurrency) keeps the box (alias rule takes plain containers only)
+        const t3 = text.slice(text.indexOf('fn aliased'));
+        expect(t3).toContain('let mut raw: Value =');
+    });
+});
