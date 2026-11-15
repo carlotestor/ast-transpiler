@@ -6830,6 +6830,24 @@ export class RustTranspiler extends BaseTranspiler {
     }
     private rustSbAliasDeferred = new WeakSet<any>();
 
+    /** ral-44c: write forms of a params alias that answer a map on every path: `omit` of the alias itself, or `extend`
+     *  whose every operand is a proven untagged map (`extend` answers `Value::Map`). */
+    rustParamsAliasWrite(rhs: any, declaration: any): boolean {
+        const init: any = this.rustSkipWrappers(declaration?.initializer);
+        if (init === undefined || !isIdentifier(init) || this.rustDeclaredNode(init)?.kind !== SyntaxKind.Parameter) return false;
+        if (this.rustBaseCallNamed(rhs, RustTranspiler.RUST_HANDED_DICT_OMIT) && rhs.arguments.length === 2) {
+            const head: any = this.rustSkipWrappers(rhs.arguments[0]);
+            return head !== undefined && isIdentifier(head) && this.rustDeclaredNode(head) === declaration;
+        }
+        if (this.rustBaseCallNamed(rhs, RustTranspiler.RUST_HANDED_DICT_EXTEND) && rhs.arguments.length >= 1) {
+            return Array.from(rhs.arguments).every((a: any) => {
+                const op: any = this.rustSkipWrappers(a);
+                return (op !== undefined && isIdentifier(op) && this.rustDeclaredNode(op) === declaration) || this.rustUntaggedMapOperand(a);
+            });
+        }
+        return false;
+    }
+
     /** ral-44c: `let y = params` of a typed unified method's `params`: the alias takes the map behind the boxed parameter
      *  (`params.clone().into_dict()`, the same Arc bump the boxed alias paid); the parameter itself stays readable. */
     rustParamsAliasDecl(declaration: any): boolean {
@@ -18487,6 +18505,8 @@ export class RustTranspiler extends BaseTranspiler {
                 const rhs: any = this.rustSkipWrappers(up.right);
                 // sb: an alias of a shared map rewritten only as an `omit` of a proven map holds a map on every path (not optional)
                 if (sbAlias && this.rustOmitOfDict(rhs) && String(rhs.getText()).split('\n')[0].length <= 240) { this.rustSbAliasWrites.add(up); return ++sbMapWrites > 0; }
+                // ral-44c: a params alias also rewritten as `y = this.omit (y, ..)` (its own map) or `y = this.extend (maps..)`
+                if (sbAlias && this.rustParamsAliasWrite(rhs, declaration) && String(rhs.getText()).split('\n')[0].length <= 240) { this.rustSbAliasWrites.add(up); return ++sbMapWrites > 0; }
                 writes++;
                 if (this.literalKindOfNode(rhs) === 'null') return ++nullWrites > 0;
                 // ral-yh: a `safeDict*` / `safeList*` local rewritten only with its own kind: a tag-free map literal / a list

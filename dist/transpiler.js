@@ -58143,6 +58143,24 @@ var _RustTranspiler = class _RustTranspiler extends BaseTranspiler {
     const init = this.rustSkipWrappers(declaration?.initializer);
     return init !== void 0 && isIdentifier3(init) && this.rustDeclaredNode(init)?.kind !== SyntaxKind7.Parameter && this.rustBorrowedLocalKind(declaration) === "dict" && this.rustSbDictAliasSource(init);
   }
+  /** ral-44c: write forms of a params alias that answer a map on every path: `omit` of the alias itself, or `extend`
+   *  whose every operand is a proven untagged map (`extend` answers `Value::Map`). */
+  rustParamsAliasWrite(rhs, declaration) {
+    const init = this.rustSkipWrappers(declaration?.initializer);
+    if (init === void 0 || !isIdentifier3(init) || this.rustDeclaredNode(init)?.kind !== SyntaxKind7.Parameter)
+      return false;
+    if (this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_HANDED_DICT_OMIT) && rhs.arguments.length === 2) {
+      const head = this.rustSkipWrappers(rhs.arguments[0]);
+      return head !== void 0 && isIdentifier3(head) && this.rustDeclaredNode(head) === declaration;
+    }
+    if (this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_HANDED_DICT_EXTEND) && rhs.arguments.length >= 1) {
+      return Array.from(rhs.arguments).every((a) => {
+        const op = this.rustSkipWrappers(a);
+        return op !== void 0 && isIdentifier3(op) && this.rustDeclaredNode(op) === declaration || this.rustUntaggedMapOperand(a);
+      });
+    }
+    return false;
+  }
   /** ral-44c: `let y = params` of a typed unified method's `params`: the alias takes the map behind the boxed parameter
    *  (`params.clone().into_dict()`, the same Arc bump the boxed alias paid); the parameter itself stays readable. */
   rustParamsAliasDecl(declaration) {
@@ -69672,6 +69690,10 @@ ${iden}}`;
         }
         const rhs = this.rustSkipWrappers(up.right);
         if (sbAlias && this.rustOmitOfDict(rhs) && String(rhs.getText()).split("\n")[0].length <= 240) {
+          this.rustSbAliasWrites.add(up);
+          return ++sbMapWrites > 0;
+        }
+        if (sbAlias && this.rustParamsAliasWrite(rhs, declaration) && String(rhs.getText()).split("\n")[0].length <= 240) {
           this.rustSbAliasWrites.add(up);
           return ++sbMapWrites > 0;
         }
