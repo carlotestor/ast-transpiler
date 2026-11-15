@@ -19269,6 +19269,8 @@ export class RustTranspiler extends BaseTranspiler {
         let plainReads = 0;
         let aliasBoxes = 0;
         let optAliasWrites = 0;
+        // ral-48a: writes that rebuild the same never-null container kind (`x = this.extend (x, ..)` on a defaulted safeDict)
+        let sameKindWrites = 0;
         const boxedElementUses: any[] = [];
         const indexReadUses: any[] = [];
         const accept = (n: any) => {
@@ -19298,7 +19300,7 @@ export class RustTranspiler extends BaseTranspiler {
                 if (this.literalKindOfNode(rhs) === 'null') return ++nullWrites > 0;
                 // ral-yh: a `safeDict*` / `safeList*` local rewritten only with its own kind: a tag-free map literal / a list
                 // literal, or a base builder that answers that container on every path (`arrayConcat`, `filterBy`, `extend`, ..)
-                if (!nilDeclared && (from === 'dict' || from === 'list') && this.rustSameKindRewrite(rhs, from)) return String(rhs.getText()).split('\n')[0].length <= 240;
+                if (!nilDeclared && (from === 'dict' || from === 'list') && this.rustSameKindRewrite(rhs, from)) return (this.rustSelfExtendWrite(n, declaration) ? ++sameKindWrites : 1) > 0 && String(rhs.getText()).split('\n')[0].length <= 240;
                 // ral-43f: `t = s` of a `const s = this.safeDict* (..)` / `safeList*` (nullable default) in the same function:
                 // the alias holds the same optional container (syntactic proof, no decision of `s` is read: fixed point in one pass)
                 const aliasKind = nilDeclared ? this.rustOptAliasSourceKind(rhs, fn) : undefined;
@@ -19469,7 +19471,10 @@ export class RustTranspiler extends BaseTranspiler {
         // a nullable source lent whole keeps Null apart from an empty container: the optional form
         // ral-zg: a sibling-admitted map row handed on whole keeps Null apart from the empty map (the optional form)
         const zgRow = this.rustZgSiblingRows.has(declaration) && boxedElementUses.length > 0;
-        const optional = nilDeclared || nullTests > 0 || writes > 0 || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0 || optMapInit;
+        // ral-48a: a never-null `safeDict (o, k, {})` local rewritten only with its own kind (`extend` answers `Value::Map` on
+        // every path) never holds Null: its writes keep the plain form
+        const neverNullRewrites = writes > 0 && writes === sameKindWrites && from === 'dict' && init !== undefined && this.rustContainerInitNeverNull(init, 'map');
+        const optional = nilDeclared || nullTests > 0 || (writes > 0 && !neverNullRewrites) || lentNullable > 0 || optionalBoxes > 0 || zgRow || elementKeyWrites > 0 || optMapInit;
         if (jwtLends > 0 && optional) return undefined;
         // ral-40h: an alias takes the plain container only (an optional one would copy at the box)
         if (aliasBoxes > 0 && (optional || reads === 0 && aliasBoxes === boxedElementUses.length)) return undefined;
@@ -19504,7 +19509,7 @@ export class RustTranspiler extends BaseTranspiler {
             this.rustOptContainerLocals.add(declaration);
         }
         for (const n of boxedElementUses) this.rustDictElementBoxes.set(n, this.rustLocalLastUse(n, declaration) || (n.parent?.kind === SyntaxKind.ConditionalExpression && this.rustOwnedLastUse(n, declaration)) ? 'move' : 'share');
-        if (extendReuse) this.rustExtendReuseLocals.add(declaration);
+        if (extendReuse || neverNullRewrites) this.rustExtendReuseLocals.add(declaration);
         for (const w of reuseProducerWrites) this.rustReuseProducerWrites.add(w);
         return from === 'list' ? 'list' : 'dict';
     }
