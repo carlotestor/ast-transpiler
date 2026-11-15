@@ -3377,6 +3377,11 @@ export declare class RustTranspiler extends BaseTranspiler {
     private rustWsCacheFields;
     private rustWsCacheLocals;
     private rustWsCacheUses;
+    /** ral-56w: the one statement `x = this.filterBy* (x, ..)` of an optional cache local `x` (a watch result) whose
+     *  base filter answers a list on every path, at the declaration's own block level, `x` named once in the call:
+     *  it prints as a fresh `crate::value::List` local of the same name (a Rust shadow), so the cache local before it
+     *  and the list after it are two typed locals. Undefined when there is no such statement or a second write. */
+    rustWsCacheListSplit(declaration: any): any;
     /** `this.F` for a base field declared `ArrayCache | undefined`. */
     rustWsCacheField(node: any): boolean;
     /** `new ArrayCache*(..)` of a class declared in `base/ws/Cache.ts`. */
