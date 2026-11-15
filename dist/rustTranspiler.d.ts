@@ -3044,6 +3044,12 @@ export declare class RustTranspiler extends BaseTranspiler {
      *  passes `omit` unchanged, and `into_dict()` would turn it into an empty map. */
     /** ral-41h: the one operand of `this.keysort (x)` is a proven map (the same head proof `omit` takes). */
     rustKeysortOfDict(call: any): boolean;
+    /** ral-50a: `t[1]` read off a `const t = this.handle*AndParams (m, ..)` tuple (base helper, PARAMS_SLOT_ARG) whose params
+     *  argument is a proven map (a typed / helper-proven params parameter, a handed slot map or a settled Dict local): the
+     *  base answers `[x, m]` or `[x, omit (m, k)]`, a map on every path. */
+    rustHandleTupleMapSlotRead(rhs: any): boolean;
+    /** ral-50a: a destructured `handle*AndParams` slot already handed as a map (`requestParams = paramsIsMargin`). */
+    rustHandedSlotIdentifier(rhs: any): boolean;
     rustOmitOfDict(init: any): boolean;
     /** `this.deepExtend (m, p, ..)` whose every operand is a proven map: a tag-free literal, a built map, an omit of a
      *  proven map, or the `params` of a typed unified method. The runtime then merges map into map on every path. */
