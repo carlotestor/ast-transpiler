@@ -69716,7 +69716,7 @@ ${iden}}`;
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
       if (extendReuse && this.rustReuseDynamicKeyWrite(n, declaration))
         return keyWriteUses.push(n) > 0 && ++keyWrites > 0 && ++reads > 0;
-      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0) && boxedElementUses.push(n) > 0;
+      const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0 || this.rustOptionalParamsSlot(up, n) && (from === "dict" || from === "api" && this.rustDeclaredEndpointKind(init) === "dict") && ++paramsBoxes > 0 || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0 || !nilDeclared && from === "dict" && endpoint && this.rustSafeDictDefaultUse(n)) && boxedElementUses.push(n) > 0;
       const asArg = _is.isAsExpression.call(void 0, up) && up.expression === n && _is.isCallExpression.call(void 0, up.parent) && Array.from(up.parent.arguments).includes(up) ? up : void 0;
       if (asArg !== void 0 && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared))
         return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
@@ -69962,6 +69962,12 @@ ${iden}}`;
     if (this.rustBaseCallNamed(rhs, _RustTranspiler.RUST_REUSE_SAFE_DICT) && this.rustContainerInitNeverNull(rhs, "map") && !this.rustContainerInitReadsStore(rhs) && !this.rustInitReadsTaggedStore(rhs) && this.rustWsFieldRead(rhs) === void 0)
       return true;
     return false;
+  }
+  /** ral-44d: `n` is the default (third) operand of a base `safeDict (o, k, n)`: the `&[Value]` default slot takes the box
+   *  (`Value::from(&n)`, the Arc bump the `.clone()` paid), and `safeDict` hands that very map back when the key misses. */
+  rustSafeDictDefaultUse(n) {
+    const call = n.parent;
+    return call !== void 0 && _is.isCallExpression.call(void 0, call) && call.arguments.length === 3 && call.arguments[2] === n && this.rustBaseCallNamed(call, _RustTranspiler.RUST_REUSE_SAFE_DICT) && !this.rustTestTierSource(call);
   }
   /** ral-44d: `await this.<endpoint> (..)` of a REST endpoint declared `Promise<Dict>`: the declared-endpoint initialiser
    *  already prints `.await.into_dict()`, so the same write into a reuse literal replaces the owned map with the parsed

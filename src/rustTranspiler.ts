@@ -18530,7 +18530,8 @@ export class RustTranspiler extends BaseTranspiler {
             const handed = () => (this.rustDictElementBoxUse(n, init) || this.rustWsFieldBoxUse(n, init) || this.rustDefaultedContainerBoxUse(n, init) && ++defaultedBoxes > 0
                 || this.rustBuiltReturnBoxUse(n, init, extendReuse) && ++defaultedBoxes > 0 || this.rustOptReaderBoxUse(n, init) && ++optionalBoxes > 0
                 || this.rustOptionalParamsSlot(up, n) && (from === 'dict' || from === 'api' && this.rustDeclaredEndpointKind(init) === 'dict') && ++paramsBoxes > 0
-                || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0) && boxedElementUses.push(n) > 0;
+                || nilDeclared && this.rustDeclaredEndpointBoxUse(n) && ++endpointBoxes > 0
+                || !nilDeclared && from === 'dict' && endpoint && this.rustSafeDictDefaultUse(n)) && boxedElementUses.push(n) > 0;
             const asArg: any = isAsExpression(up) && up.expression === n && isCallExpression(up.parent) && Array.from(up.parent.arguments).includes(up) ? up : undefined;
             if (asArg !== undefined && this.rustLentAsHandOff(asArg, init, from, endpoint, nilDeclared)) return ++lentResponses > 0 && ++reads > 0 && (this.rustLentAsNullable(init, nilDeclared, endpoint) ? ++lentNullable > 0 : true);
             // ral-40a: the sole extra operand of a base `extend` takes the optional map lent (`&[&x]`, MergeOperands for
@@ -18790,6 +18791,14 @@ export class RustTranspiler extends BaseTranspiler {
     }
 
     private static readonly RUST_REUSE_SAFE_DICT = new Set([ 'safeDict' ]);
+
+    /** ral-44d: `n` is the default (third) operand of a base `safeDict (o, k, n)`: the `&[Value]` default slot takes the box
+     *  (`Value::from(&n)`, the Arc bump the `.clone()` paid), and `safeDict` hands that very map back when the key misses. */
+    rustSafeDictDefaultUse(n: any): boolean {
+        const call: any = n.parent;
+        return call !== undefined && isCallExpression(call) && call.arguments.length === 3 && call.arguments[2] === n
+            && this.rustBaseCallNamed(call, RustTranspiler.RUST_REUSE_SAFE_DICT) && !this.rustTestTierSource(call);
+    }
 
     /** ral-44d: `await this.<endpoint> (..)` of a REST endpoint declared `Promise<Dict>`: the declared-endpoint initialiser
      *  already prints `.await.into_dict()`, so the same write into a reuse literal replaces the owned map with the parsed
