@@ -15366,3 +15366,20 @@ describe('41i: handleUntilOption request local and slot', () => {
         expect(other).not.toContain('request.contains_key("end_at")');
     });
 });
+
+describe('42i: tuple slots eighth pass', () => {
+    const fx = (name: string, base: string, venue: string) => {
+        const dir = path.join (rustFixtureRoot, name);
+        fs.mkdirSync (path.join (dir, 'ts/src/base'), { recursive: true });
+        fs.writeFileSync (path.join (dir, 'ts/src/base/Exchange.ts'), base);
+        fs.writeFileSync (path.join (dir, 'ts/src/venue.ts'), venue);
+        return path.join (dir, 'ts/src/venue.ts');
+    };
+    test('42i: a string slot aliased into a local and also boxed as an array-literal element joins the alias solve', () => {
+        const file = fx ('42i-alias-list', "export interface Dict { [key: string]: any }\nexport type List = any[];\nexport default class Exchange {\n    hold (x: any): any { return x; }\n    safeString (o: any, k: any, d: any = undefined): string { return o; }\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    handleOptionStringAndParams (params: Dict, method: string, name: string, d: string = undefined): [string, Dict] {\n        const v = this.safeString (params, name, d);\n        return [ v, params ];\n    }\n}\n", "import Exchange from './base/Exchange.js';\nimport type { Dict, List } from './base/Exchange.js';\nexport default class venue extends Exchange {\n    watchThing (marketId: string, limit: number, spot: boolean, params: Dict = {}) {\n        const [ interval, query ] = this.handleOptionStringAndParams (params, 'watchThing', 'interval', '100ms');\n        let payload: List = [];\n        if (spot) {\n            let finalInterval = interval;\n            if (limit === 400) {\n                finalInterval = '400';\n            }\n            payload = [ 'ob.' + marketId + '.' + finalInterval ];\n        } else {\n            payload = [ marketId, interval ];\n        }\n        return this.hold ([ payload, query ]);\n    }\n}\n");
+        const out = transpiler.transpileRustByPath (file).content;
+        expect(out).toContain('let mut interval: Option<String> = ');
+        expect(out).toContain('let mut finalInterval: Option<String> = interval.clone();');
+        expect(out).toContain('interval.map(Value::from).unwrap_or(Value::Null)]');
+    });
+});

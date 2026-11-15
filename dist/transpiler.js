@@ -76229,7 +76229,7 @@ ${iden}}`;
           return true;
         }
         const feeds = findAncestor(n, (m) => isStatement(m) || isBinaryExpression5(m) && m.operatorToken.kind === SyntaxKind7.EqualsToken && isIdentifier3(m.left) || isVariableDeclaration3(m));
-        if (feeds !== void 0 && !isStatement(feeds) && (form === "box" || form === "xbox"))
+        if (feeds !== void 0 && !isStatement(feeds) && (form === "box" || form === "xbox") && !this.rustStrSlotListElement(n))
           return false;
         if (_RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form) || form === "write")
           nativeUses++;
@@ -76248,6 +76248,14 @@ ${iden}}`;
       return void 0;
     this.rustStrLentLocals.add(element);
     return "ostr";
+  }
+  /** 42i: `n` (through parens) is a direct element of an array literal: the list boxes each element itself, so the
+   *  local the list is written to never takes this slot's type. */
+  rustStrSlotListElement(n) {
+    let top = n;
+    while (isParenthesizedExpression3(top.parent))
+      top = top.parent;
+    return isArrayLiteralExpression4(top.parent);
   }
   /** zi: `n` is an arm of `c ? a : b`, the whole initializer of a local the joint solve currently types `Option<String>`
    *  (or `String`), and the other arm prints as that kind too: the target is decided with the slot, never left `Value`. */

@@ -24778,7 +24778,8 @@ export class RustTranspiler extends BaseTranspiler {
                 if (joined && this.rustStrSlotTernaryArmJoined(n, element)) { nativeUses++; return true; }
                 // a box feeding another local's write or initializer would make that local's own typing depend on this slot
                 const feeds: any = findAncestor(n, (m: any) => isStatement(m) || (isBinaryExpression(m) && m.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(m.left)) || isVariableDeclaration(m));
-                if (feeds !== undefined && !isStatement(feeds) && (form === 'box' || form === 'xbox')) return false;
+                // 42i: an element of an array literal is boxed into that list on its own, whatever the target's type
+                if (feeds !== undefined && !isStatement(feeds) && (form === 'box' || form === 'xbox') && !this.rustStrSlotListElement(n)) return false;
                 if (RustTranspiler.RUST_NIL_SCALAR_NATIVE_FORMS.has(form) || form === 'write') nativeUses++;
                 else if ((form === 'box' || form === 'xbox') && !(isReturnStatement(n.parent) || this.rustLocalLastUse(n, element))) copies++;
                 return true;
@@ -24794,6 +24795,14 @@ export class RustTranspiler extends BaseTranspiler {
         if (!ok || joined || this.rustStrNoLend || !this.rustReaderLendBoxes(element)) return undefined;
         this.rustStrLentLocals.add(element);
         return 'ostr';
+    }
+
+    /** 42i: `n` (through parens) is a direct element of an array literal: the list boxes each element itself, so the
+     *  local the list is written to never takes this slot's type. */
+    rustStrSlotListElement(n: any): boolean {
+        let top: any = n;
+        while (isParenthesizedExpression(top.parent)) top = top.parent;
+        return isArrayLiteralExpression(top.parent);
     }
 
     /** zi: `n` is an arm of `c ? a : b`, the whole initializer of a local the joint solve currently types `Option<String>`
