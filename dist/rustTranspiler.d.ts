@@ -1823,6 +1823,13 @@ export declare class RustTranspiler extends BaseTranspiler {
     private static readonly RUST_EXACT_BOOL_PRODUCERS;
     rustExactSlotKind(element: any): string | undefined;
     private rustExactSlotKindUncached;
+    private static readonly RUST_HANDWRITTEN_SLOT_KINDS;
+    /** 41i: the primitive (`number` / `string`) slot `at` of `init` holds on every path when the checker only says `any`:
+     *  a hand-written base producer from the table above (no venue redeclares it), or a venue-local method whose every
+     *  return is an array literal with, at `at`, a `const` tuple slot of its own body proven the same way (depth-bounded). */
+    rustProducerSlotPrimitive(init: any, at: number, depth?: number): string | undefined;
+    /** The checker's primitive kind of a destructured slot, else the producer-side proof (41i). */
+    rustSlotPrimitiveKind(element: any): string | undefined;
     /** The callee builds slot `at` from an exact Int-or-null (`int`) / Bool-or-null (`bool`) producer on every return. */
     rustExactSlotCallee(init: any, at: number, want: string): boolean;
     /** An expression that is exactly Int-or-null / Bool-or-null in the `Value` form. */
@@ -2460,6 +2467,12 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `k in m` with `k` an optional-string scalar local keyed natively (`kin`): `printElemKeyInOp` prints the
      *  bearer's own lookup; an open key decision leaves the bearer decision uncached, like a write key. */
     rustBearerOptKeyIn(recv: any, keyNode: any): boolean;
+    /** 41i: a map-literal local handed as the request of a base `handleUntilOption`-family call (item scope: the request
+     *  of a tuple producer, typed before its slot; other map literals keep their own rules). */
+    rustUntilRequestLocal(declaration: any): boolean;
+    /** 41i: `'k' in m` with a plain string-literal key a typed map serves (same key rule as a native bearer read):
+     *  the Rust string literal, else undefined. */
+    rustBearerLiteralInKey(key: any): string | undefined;
     /** The key half of `bearerInOp`, also used while the receiver's own bearer
      *  proof is still running (its declaration probe answers "not typed" then). */
     bearerInOpKeyText(key: any): string | undefined;
@@ -3253,6 +3266,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** Slot 0 of `const [ x, p ] = this.handleUntilOption (k, r, ..)` with `r` a map literal or a typed map local,
      *  used only as an extend head or written at literal keys (`Arc::make_mut(&mut x).insert(..)`). */
     rustUntilHeadSlotUncached(element: any): boolean;
+    /** 41i: `n` is the first argument of a base borrowed-key reader (`safeInteger` / `safeString` ..) read with a literal key. */
+    rustUntilHeadReaderUse(n: any): boolean;
     /** `x` (moved at its last use) or `&x` for a shared-map local as the head of a base `extend`, else undefined. */
     printExtendHeadArg(node: any, text: string): string | undefined;
     /** ral-qd: a local initialised from a `this.parse*(..)` call. */

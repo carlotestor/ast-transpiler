@@ -14,7 +14,7 @@ import {
   tsUtils_exports,
   typeParts,
   typeTarget
-} from "./chunk-O5MZOAMZ.js";
+} from "./chunk-MEKZ6QY3.js";
 
 // src/dirname.cjs
 var require_dirname = __commonJS({
@@ -64310,7 +64310,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     if (fn === void 0 || isSourceFile5(fn))
       return void 0;
     const name = String(element.name.text);
-    const kind = this.primitiveKindOfType(this.typeOfNodeIfAny(element.name));
+    const kind = this.rustSlotPrimitiveKind(element);
     if (kind !== "string" && kind !== "boolean")
       return void 0;
     let nativeUses = 0;
@@ -64545,7 +64545,7 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     const scope = this.rustEnclosingFunction(owner);
     if (scope === void 0 || isSourceFile5(scope) || scope.kind !== SyntaxKind7.MethodDeclaration)
       return void 0;
-    const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(element.name));
+    const checked = this.rustSlotPrimitiveKind(element);
     if (checked === "string" && this.rustTupleSlotKind(element) === void 0)
       return this.rustStrSlotKind(element, scope);
     if (checked !== "number" && checked !== "boolean")
@@ -64593,6 +64593,70 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
     }
     return ok && (nativeUses > 0 || boxes > 0) ? kind : void 0;
   }
+  /** 41i: the primitive (`number` / `string`) slot `at` of `init` holds on every path when the checker only says `any`:
+   *  a hand-written base producer from the table above (no venue redeclares it), or a venue-local method whose every
+   *  return is an array literal with, at `at`, a `const` tuple slot of its own body proven the same way (depth-bounded). */
+  rustProducerSlotPrimitive(init, at, depth = 0) {
+    const call = this.rustAwaitedCall(init);
+    if (!isCallExpression6(call) || !isPropertyAccessExpression3(call.expression) || call.expression.expression.kind !== SyntaxKind7.ThisKeyword || at < 0)
+      return void 0;
+    const name = String(call.expression.name.text);
+    let method = this.rustCalleeDeclaration(call);
+    if (method !== void 0 && method.body === void 0)
+      method = method.parent?.members?.find((m) => m.kind === SyntaxKind7.MethodDeclaration && m.body !== void 0 && m.name?.text === name);
+    if (method === void 0 || method.body === void 0 || !isBlock4(method.body) || !isClassDeclaration4(method.parent))
+      return void 0;
+    const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
+    const root = file.search(/(?:^|\/)ts\/src\//);
+    if (root < 0)
+      return void 0;
+    const srcRoot = file.slice(0, file.indexOf("ts/src/", root)) + "ts/src";
+    const table = Object.prototype.hasOwnProperty.call(_RustTranspiler.RUST_HANDWRITTEN_SLOT_KINDS, name) ? _RustTranspiler.RUST_HANDWRITTEN_SLOT_KINDS[name] : void 0;
+    if (_RustTranspiler.RUST_BASE_TIER_FILE.test(file))
+      return table !== void 0 && !this.rustVenueMethodNames(srcRoot).has(name) ? table[at] : void 0;
+    if (depth > 3 || !this.rustVenueLocalMethod(method, name))
+      return void 0;
+    let kind;
+    let returns = 0;
+    let all = true;
+    const visit = (node) => {
+      if (!all || node !== method.body && isFunctionLike(node))
+        return;
+      if (isReturnStatement4(node)) {
+        returns++;
+        const list = this.unwrapParens(node.expression);
+        const slot = list !== void 0 && isArrayLiteralExpression4(list) && list.elements.length > at ? this.unwrapParens(list.elements[at]) : void 0;
+        const declaration = slot !== void 0 && isIdentifier3(slot) ? this.rustDeclaredNode(slot) : void 0;
+        const pattern = declaration?.parent;
+        const owner = pattern?.parent;
+        let k = slot === void 0 ? void 0 : this.primitiveKindOfType(this.typeOfNodeIfAny(slot));
+        if (k === void 0 && declaration?.kind === SyntaxKind7.BindingElement && pattern?.kind === SyntaxKind7.ArrayBindingPattern && isVariableDeclaration3(owner) && owner.initializer !== void 0 && (owner.parent.flags & NodeFlags4.Const) !== 0 && declaration.initializer === void 0 && declaration.dotDotDotToken === void 0 && this.rustEnclosingFunction(owner) === method) {
+          k = this.primitiveKindOfType(this.typeOfNodeIfAny(declaration.name)) ?? this.rustProducerSlotPrimitive(owner.initializer, pattern.elements.indexOf(declaration), depth + 1);
+        }
+        all = k !== void 0 && (kind === void 0 || kind === k);
+        kind = k;
+        return;
+      }
+      node.forEachChild(visit);
+    };
+    method.body.forEachChild(visit);
+    return all && returns > 0 && (kind === "number" || kind === "string") ? kind : void 0;
+  }
+  /** The checker's primitive kind of a destructured slot, else the producer-side proof (41i). */
+  rustSlotPrimitiveKind(element) {
+    const checked = this.primitiveKindOfType(this.typeOfNodeIfAny(element.name));
+    if (checked !== void 0)
+      return checked;
+    const pattern = element.parent;
+    const owner = pattern?.parent;
+    if (pattern?.kind !== SyntaxKind7.ArrayBindingPattern || !isVariableDeclaration3(owner) || owner.initializer === void 0)
+      return void 0;
+    try {
+      return this.rustProducerSlotPrimitive(owner.initializer, pattern.elements.indexOf(element));
+    } catch (e) {
+      return void 0;
+    }
+  }
   /** The callee builds slot `at` from an exact Int-or-null (`int`) / Bool-or-null (`bool`) producer on every return. */
   rustExactSlotCallee(init, at, want) {
     let call = this.rustSkipWrappers(init);
@@ -64606,6 +64670,8 @@ ${this.getIden(identation + 1)}let mut ${this.printNode(p.name, 0)}: Value = get
       method = method.parent?.members?.find((m) => m.kind === SyntaxKind7.MethodDeclaration && m.body !== void 0 && m.name?.text === name);
     if (method === void 0 || method.body === void 0 || !isBlock4(method.body) || !isClassDeclaration4(method.parent))
       return false;
+    if (want === "int" && Object.prototype.hasOwnProperty.call(_RustTranspiler.RUST_HANDWRITTEN_SLOT_KINDS, name))
+      return this.rustProducerSlotPrimitive(call, at) === "number";
     const file = String(method.getSourceFile().fileName).replace(/\\/g, "/");
     const root = file.search(/(?:^|\/)ts\/src\//);
     if (root < 0)
@@ -67779,7 +67845,7 @@ ${iden}}`;
         return true;
       }
       if (isBinaryExpression5(parent) && parent.operatorToken.kind === SyntaxKind7.InKeyword && parent.right === n)
-        return this.bearerInOpKeyText(parent.left) !== void 0 || this.literalKeyWidened(this.rustLiteralBearerKeyArg(n, parent.left)) || this.rustBearerOptKeyIn(n, parent.left);
+        return this.bearerInOpKeyText(parent.left) !== void 0 || this.literalKeyWidened(this.rustLiteralBearerKeyArg(n, parent.left)) || this.rustBearerOptKeyIn(n, parent.left) || this.rustBearerLiteralInKey(parent.left) !== void 0 && this.rustUntilRequestLocal(declaration);
       if (this.rustBearerRebuild(n))
         return ++rebuilds > 0;
       const reuse = this.rustProducerReuse(n);
@@ -68619,6 +68685,9 @@ ${iden}}`;
     if (recv === void 0 || !isIdentifier3(recv) || this.rustDictBearerDeclaration(recv) === void 0) {
       return void 0;
     }
+    const literal2 = this.rustBearerLiteralInKey(key);
+    if (literal2 !== void 0)
+      return `Value::Bool(${String(recv.text)}.contains_key(${literal2}))`;
     const text = this.bearerInOpKeyText(key) ?? (this.rustLiteralBearerKeyArg(recv, key) !== void 0 ? this.printNode(key, 0).trim() : void 0);
     if (text === void 0)
       return void 0;
@@ -68639,6 +68708,28 @@ ${iden}}`;
     if (this.rustKeyScalarDecisionOpen(key))
       this.rustBearerSawOpenKey = true;
     return this.rustScalarLocalOf(key)?.kind === "ostr" && this.rustScalarUseForms.get(key) === "kin";
+  }
+  /** 41i: a map-literal local handed as the request of a base `handleUntilOption`-family call (item scope: the request
+   *  of a tuple producer, typed before its slot; other map literals keep their own rules). */
+  rustUntilRequestLocal(declaration) {
+    if (declaration === void 0 || !isVariableDeclaration3(declaration) || !isIdentifier3(declaration.name))
+      return false;
+    let handed = false;
+    this.rustLocalUsesAll(declaration, String(declaration.name.text), false, (n) => {
+      const call = n.parent;
+      if (isCallExpression6(call) && call.arguments[1] === n && this.rustBaseCallNamed(call, _RustTranspiler.RUST_REQUEST_TUPLE_HELPERS))
+        handed = true;
+      return true;
+    });
+    return handed;
+  }
+  /** 41i: `'k' in m` with a plain string-literal key a typed map serves (same key rule as a native bearer read):
+   *  the Rust string literal, else undefined. */
+  rustBearerLiteralInKey(key) {
+    const keyNode = this.rustSkipWrappers(key);
+    if (keyNode === void 0 || !isStringLiteral3(keyNode) || this.isTestSource(keyNode) || !this.rustReadBearerKeyOk("map", keyNode))
+      return void 0;
+    return this.rustStringLiteralOf(this.printStringLiteral(keyNode));
   }
   /** The key half of `bearerInOp`, also used while the receiver's own bearer
    *  proof is still running (its declaration probe answers "not typed" then). */
@@ -71529,6 +71620,8 @@ ${iden}}`;
       return `&${text}`;
     if (this.rustMarketStoreElementOf(node) !== void 0)
       return `&*${text}`;
+    if (this.rustUntilHeadReaderUse(node) && this.rustUntilHeadSlot(declaration))
+      return `&${text}`;
     return this.rustContainerBoxUses.get(node) !== void 0 && this.rustReadBearerKind(node) !== void 0 ? `&${text}` : void 0;
   }
   /** A base `safeDict*` / `extend` / `omit` call, or an implicit-API endpoint call. */
@@ -75045,9 +75138,19 @@ ${iden}}`;
         return false;
       if (this.rustExtendHeadUse(n))
         return heads++ >= 0;
+      if (this.rustUntilHeadReaderUse(n))
+        return true;
       return this.rustUntilHeadKeyWrite(n) !== void 0;
     });
     return safe && heads > 0;
+  }
+  /** 41i: `n` is the first argument of a base borrowed-key reader (`safeInteger` / `safeString` ..) read with a literal key. */
+  rustUntilHeadReaderUse(n) {
+    const call = n.parent;
+    if (!isCallExpression6(call) || call.arguments[0] !== n || !this.rustBorrowedAnyKeyReader(call))
+      return false;
+    const key = this.rustSkipWrappers(call.arguments[1]);
+    return key !== void 0 && isStringLiteralLikeNode4(key);
   }
   /** `x` (moved at its last use) or `&x` for a shared-map local as the head of a base `extend`, else undefined. */
   printExtendHeadArg(node, text) {
@@ -76192,7 +76295,7 @@ ${iden}}`;
     const scope = this.rustEnclosingFunction(owner);
     if (scope === void 0 || isSourceFile5(scope) || scope.kind !== SyntaxKind7.MethodDeclaration)
       return false;
-    if (this.primitiveKindOfType(this.typeOfNodeIfAny(element.name)) !== "string" || this.rustTupleSlotKind(element) !== void 0)
+    if (this.rustSlotPrimitiveKind(element) !== "string" || this.rustTupleSlotKind(element) !== void 0)
       return false;
     let alias = false;
     this.rustLocalUsesAll(element, String(element.name.text), false, (n) => {
@@ -76379,6 +76482,8 @@ ${iden}}`;
       if (d === void 0 || !isVariableDeclaration3(d) || d.name === e || this.rustEnclosingFunction(d) !== declaration)
         return false;
       const list = d.parent;
+      if (this.rustNilSlotDictLocal(d))
+        return true;
       return list?.kind === SyntaxKind7.VariableDeclarationList && (list.flags & NodeFlags4.Const) !== 0 && isObjectLiteralExpression4(this.rustSkipWrappers(d.initializer));
     };
     const visit = (node) => {
@@ -81003,6 +81108,20 @@ _RustTranspiler.RUST_PARSE_HELPERS = {
 // `checkOptionInteger` normalises like the typed ports: Int, an integral Float as Int, null, else a BadRequest panic
 _RustTranspiler.RUST_EXACT_INT_PRODUCERS = /* @__PURE__ */ new Set(["parseToInt", "safeInteger", "safeInteger2", "safeIntegerN", "checkOptionInteger"]);
 _RustTranspiler.RUST_EXACT_BOOL_PRODUCERS = /* @__PURE__ */ new Set(["checkOptionBool", "safeBool", "safeBool2", "safeBoolN"]);
+// 41i: hand-written base producers declared `any[]` (TS reads WASM results typed `any`): the slot kinds every port's
+// own body builds. TS `[ res.txType, res.txInfo ]`; Go `[]any{txInfo.GetTxType() (uint8), txInfoStr (string)}`; C#
+// formatSignedLighterTx {TxType (int), TxInfo (string)}; Python `[tx_type, tx_info]`. The Rust stubs panic
+// (crypto_not_supported) before any slot exists, so the typed read never sees another kind.
+_RustTranspiler.RUST_HANDWRITTEN_SLOT_KINDS = {
+  lighterSignCancelOrder: ["number", "string"],
+  lighterSignWithdraw: ["number", "string"],
+  lighterSignCreateSubAccount: ["number", "string"],
+  lighterSignCancelAllOrders: ["number", "string"],
+  lighterSignModifyOrder: ["number", "string"],
+  lighterSignTransfer: ["number", "string"],
+  lighterSignUpdateLeverage: ["number", "string"],
+  lighterSignUpdateMargin: ["number", "string"]
+};
 // ── pro-tier WS handler `message` shadow ─────────────────────────────────
 // `handle_x (client: Client, message: Dict)` is dispatched by NAME with
 // `Value` args, so the printed signature keeps `Value`; the annotation still
