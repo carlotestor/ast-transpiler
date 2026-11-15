@@ -18062,7 +18062,11 @@ export class RustTranspiler extends BaseTranspiler {
             || (paramsBoxes === boxedElementUses.length && this.rustOmitOfDict(init))
             // a never-null `safeDict*` / `safeList*` container handed on whole (D11): `into_*` keeps the exact map / list
             || (optionalBoxes === 0 && paramsBoxes === 0 && boxedElementUses.every((u: any) => this.rustDefaultedContainerBoxUse(u, init)))
-            || (optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init)));
+            || (optionalBoxes === boxedElementUses.length && nullTests === 0 && writes === 0 && this.rustOptReaderBoxUse(boxedElementUses[0], init))
+            // ral-42h: a never-null same-class venue container result (ral-yc's declared-return proof) handed on whole: every
+            // use is the box rustBuiltReturnBoxUse already admits for it, so `into_*` keeps the exact map / list (D11)
+            || (optionalBoxes === 0 && paramsBoxes === 0 && this.rustVenueContainerReturnKind(init)?.nullable === false
+                && boxedElementUses.every((u: any) => this.rustBuiltReturnBoxUse(u, init))));
         // a map-list element handed on whole (hg), or an element of a typed `Dict[]` / list-of-lists list (ral-kf): every use
         // is a box of the shared container; the element converts once at the declaration (D11)
         const boxOnly = reads === 0 && boxedElementUses.length > 0 && (this.rustDictElementSource(init) || this.rustListElementSource(init)) && nullTests === 0 && writes === 0;
