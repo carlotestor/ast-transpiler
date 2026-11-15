@@ -19416,8 +19416,10 @@ export class RustTranspiler extends BaseTranspiler {
      *  value, so the shared handle moves in boxed once (`Value::Dict(x)` / `Value::Arr(x)`), exactly the value the boxed
      *  `x` held. A target with its own typed rule stays out (its write proof reads its sources). */
     rustValueLocalWriteHandOff(n: any): boolean {
-        const up: any = n.parent;
-        if (!isBinaryExpression(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement || !isIdentifier(up.left)) return false;
+        // ral-43d: `y = x as T` is the same write as `y = x` (`as` prints nothing)
+        const wrapped: any = isAsExpression(n.parent) && n.parent.expression === n ? n.parent : n;
+        const up: any = wrapped.parent;
+        if (!isBinaryExpression(up) || up.right !== wrapped || up.operatorToken.kind !== SyntaxKind.EqualsToken || up.parent?.kind !== SyntaxKind.ExpressionStatement || !isIdentifier(up.left)) return false;
         const own: any = this.rustDeclarationOfIdentifier(n);
         const target: any = this.rustDeclarationOfIdentifier(up.left);
         if (own === undefined || own === n || own.name === n || target === undefined || target === own || target.name === up.left || !isVariableDeclaration(target)) return false;

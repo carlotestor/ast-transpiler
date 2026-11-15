@@ -70595,8 +70595,9 @@ ${iden}}`;
    *  value, so the shared handle moves in boxed once (`Value::Dict(x)` / `Value::Arr(x)`), exactly the value the boxed
    *  `x` held. A target with its own typed rule stays out (its write proof reads its sources). */
   rustValueLocalWriteHandOff(n) {
-    const up = n.parent;
-    if (!isBinaryExpression5(up) || up.right !== n || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !isIdentifier3(up.left))
+    const wrapped = isAsExpression3(n.parent) && n.parent.expression === n ? n.parent : n;
+    const up = wrapped.parent;
+    if (!isBinaryExpression5(up) || up.right !== wrapped || up.operatorToken.kind !== SyntaxKind7.EqualsToken || up.parent?.kind !== SyntaxKind7.ExpressionStatement || !isIdentifier3(up.left))
       return false;
     const own = this.rustDeclarationOfIdentifier(n);
     const target = this.rustDeclarationOfIdentifier(up.left);

@@ -15611,7 +15611,7 @@ describe('ral-43d: generated base-method parameters typed from their ts declarat
         fs.rmSync(root, { recursive: true, force: true });
         return out;
     };
-    const dictBase = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeDict (o: any, k: any, d: Dict = undefined): Dict { return o[k] ?? d; }\n    METHODS_MARKER () {}\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseOrder (order: Dict, market: any = undefined): any { return order; }\n}\n";
+    const dictBase = "export interface Dict { [key: string]: any }\nexport default class Exchange {\n    safeDict (o: any, k: any, d: Dict = undefined): Dict { return o[k] ?? d; }\n    safeString (o: any, k: any, d: string = undefined): string { return o[k] ?? d; }\n    METHODS_MARKER () {}\n    // METHODS BELOW THIS LINE ARE TRANSPILED FROM TYPESCRIPT\n    parseOrder (order: Dict, market: any = undefined): any { return order; }\n}\n";
     test('a safeDict whose default is a plain Dict local is a Dict and is lent whole to the venue parseOrder', () => {
         const out = run(dictBase, "    override parseOrder (order: Dict, market: any = undefined): any { return order['id']; }\n    m (response: any): any {\n        const data = this.safeDict (response, 'data', {});\n        const order = this.safeDict (data, 'order', data) as Dict;\n        return this.parseOrder (order);\n    }\n");
         expect(out).toMatch(/let mut order: crate::value::Dict = .*\.into_dict\(\);/);
@@ -15630,5 +15630,10 @@ describe('ral-43d: generated base-method parameters typed from their ts declarat
     test('a toArray result also written into stays Value', () => {
         const out = run(listBase, "    m (response: any): any {\n        const rows = this.toArray (response);\n        rows[0] = 1;\n        return this.parseTrades (rows);\n    }\n");
         expect(out).toMatch(/let mut rows: Value = /);
+    });
+    test('`y = x as Dict` of a {}-defaulted safeDict into a Value local hands the Dict over once, like `y = x`', () => {
+        const out = run(dictBase, "    m (response: any, c: boolean): any {\n        const data = this.safeDict (response, 'data', {});\n        let result: Dict = {};\n        if (c) {\n            result = response;\n        } else {\n            result = data as Dict;\n        }\n        return this.safeString (result, 'id');\n    }\n");
+        expect(out).toMatch(/let mut data: crate::value::Dict = /);
+        expect(out).toMatch(/result = Value::Dict\(data\);/);
     });
 });
