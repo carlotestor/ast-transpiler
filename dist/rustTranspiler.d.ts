@@ -2989,6 +2989,8 @@ export declare class RustTranspiler extends BaseTranspiler {
     /** `x.is_some()` / `x.is_none()` for a null test of the optional form. */
     printOptContainerNullTest(left: any, right: any, op: any): string | undefined;
     rustBorrowedListUse(node: any): boolean;
+    /** ral-50i: `n` is arg 0 of a base any-key reader call in a non-test source (the dict-bearer lend). */
+    rustBearerReaderLend(n: any): boolean;
     /** A base hand-written reader (`safeString`, `safeValue2`, `safeIntegerN`, ..) with any key. */
     rustBorrowedAnyKeyReader(call: any): boolean;
     private static readonly RUST_BY_REF_GENERATED_READERS;
